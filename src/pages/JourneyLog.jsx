@@ -1,13 +1,16 @@
 /**
- * JourneyLog (route /journeys) — record and track vehicle journeys/trips across
- * the fleet: asset, driver, origin → destination, scheduled/actual times,
- * distance and purpose, with a lightweight status lifecycle (planned →
- * in_progress → completed / cancelled).
+ * JourneyLog (route /journeys) - record and track vehicle journeys: asset,
+ * driver, origin to destination, scheduled/actual times, distance and purpose,
+ * with a status lifecycle (planned, in progress, completed, cancelled).
  *
- * Real data, KPI tiles, search + filters, create/edit modal, delete confirm,
- * Excel/PDF export and full loading/empty/error states. Runs on the `journeys`
- * table (MIGRATIONS_V139_JOURNEYS.sql); a missing relation surfaces an
- * "apply the migration" empty state instead of an error.
+ * Tabs: Register (sortable EnterpriseTable with create/edit/delete) and
+ * Analytics (trend, status, on-time, top performers, data quality, driver /
+ * asset performance). Filters and the KPI strip apply to both.
+ *
+ * Journey maths: src/lib/journeys.js. Page-side filtering, row shaping and
+ * exports: src/lib/journeyLogAnalytics.js. Runs on the `journeys` table
+ * (MIGRATIONS_V139_JOURNEYS.sql); a missing relation shows an "apply the
+ * migration" state instead of an error.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
@@ -16,34 +19,41 @@ import {
 } from 'chart.js'
 import { Line, Doughnut, Bar } from 'react-chartjs-2'
 import {
-  Navigation, Plus, Search, X, Filter, FileSpreadsheet, FileText,
+  Navigation, Plus, Search, X, FileSpreadsheet, FileText,
   AlertTriangle, Loader2, Milestone, PlayCircle, Gauge, Pencil, Trash2, Send,
-  Clock, Timer, CheckCircle2, ArrowUpDown, ShieldAlert, TrendingUp,
+  Clock, Timer, CheckCircle2, ShieldAlert, TrendingUp, List, BarChart3, CalendarDays, Users,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Card, { CardHeader } from '../components/ui/Card'
+import Modal from '../components/ui/Modal'
+import StatTile from '../components/ui/StatTile'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useSettings } from '../contexts/SettingsContext'
 import { toUserMessage } from '../lib/safeError'
+import { listJourneys, createJourney, updateJourney, deleteJourney } from '../lib/api/journeys'
+import { buildJourneyAnalytics, JOURNEY_STATUSES, JOURNEY_STATUS_META, ON_TIME_META, ON_TIME_TOLERANCE_MIN } from '../lib/journeys'
 import {
-  listJourneys, createJourney, updateJourney, deleteJourney,
-} from '../lib/api/journeys'
-import {
-  summarizeJourneys, journeyDurationHours, journeyOnTime, journeyAvgSpeedKmh,
-  buildJourneyAnalytics, JOURNEY_STATUSES, JOURNEY_STATUS_META, ON_TIME_META,
-} from '../lib/journeys'
+  filterJourneys, journeyRow, distanceHeadline, recentActivity, distinctJourneyValues,
+  journeyExportRows, JOURNEY_EXPORT_COLUMNS, perfRows as perfRowsOf, perfExportRows, PERF_EXPORT_COLUMNS,
+  toLocalInput, formatJourneyDateTime,
+} from '../lib/journeyLogAnalytics'
 import { colorAt, categorical, withAlpha } from '../lib/reportColors'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
-import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import { isMissingRelation } from '../lib/api/_client'
 
-ChartJS.register(
-  CategoryScale, LinearScale, BarElement, LineElement, PointElement,
-  ArcElement, Filler, Tooltip, Legend,
-)
+ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement, Filler, Tooltip, Legend)
 
-// Semantic status colours (meaning-carrying, deliberately not palettized).
+const loadExportUtils = () => import('../lib/exportUtils')
+
+// Semantic status / on-time colours (meaning-carrying, deliberately not palettised).
 const STATUS_COLOR = { planned: '#0ea5e9', in_progress: '#f59e0b', completed: '#10b981', cancelled: '#ef4444' }
-// Semantic on-time colours (early sky, on-time green, late red, unknown slate).
 const ON_TIME_COLOR = { early: '#0ea5e9', on_time: '#10b981', late: '#ef4444', unknown: '#64748b' }
+const STATUS_BADGE = {
+  planned: 'bg-sky-900/40 text-sky-300 border border-sky-700/50',
+  in_progress: 'bg-amber-900/40 text-amber-300 border border-amber-700/50',
+  completed: 'bg-green-900/40 text-green-300 border border-green-700/50',
+  cancelled: 'bg-red-900/40 text-red-300 border border-red-700/50',
+}
+const STATUS_ICON = { planned: CalendarDays, in_progress: PlayCircle, completed: CheckCircle2, cancelled: X }
 
 const CHART_OPTS = {
   responsive: true,
@@ -60,14 +70,7 @@ const CHART_OPTS = {
 const DOUGHNUT_OPTS = {
   responsive: true,
   maintainAspectRatio: false,
-  plugins: { legend: { position: 'right', labels: { color: 'var(--text-muted)', font: { size: 11 }, boxWidth: 12 } } },
-}
-
-const STATUS_BADGE = {
-  planned: 'bg-sky-900/40 text-sky-300 border border-sky-700/50',
-  in_progress: 'bg-amber-900/40 text-amber-300 border border-amber-700/50',
-  completed: 'bg-green-900/40 text-green-300 border border-green-700/50',
-  cancelled: 'bg-red-900/40 text-red-300 border border-red-700/50',
+  plugins: { legend: { position: 'bottom', labels: { color: 'var(--text-muted)', font: { size: 11 }, boxWidth: 12 } } },
 }
 
 const EMPTY_FORM = {
@@ -75,30 +78,43 @@ const EMPTY_FORM = {
   start_time: '', end_time: '', distance_km: '', site: '', status: 'planned', notes: '',
 }
 
-function fmtDateTime(v) {
-  if (!v) return 'N/A'
-  const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString()
+const ICON_BTN = 'min-w-[36px] min-h-[36px] inline-flex items-center justify-center rounded text-[var(--text-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
+
+function StatusBadge({ status }) {
+  const Icon = STATUS_ICON[status] || CalendarDays
+  return (
+    <span className={`badge inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded ${STATUS_BADGE[status] || STATUS_BADGE.planned}`}>
+      <Icon size={11} aria-hidden="true" /> {JOURNEY_STATUS_META[status]?.label || status || 'N/A'}
+    </span>
+  )
 }
-// A timestamptz → the value an <input type="datetime-local"> expects (local, no tz).
-function toLocalInput(v) {
-  if (!v) return ''
-  const d = new Date(v)
-  if (Number.isNaN(d.getTime())) return ''
-  const pad = (n) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+
+function Field({ id, label, required, children }) {
+  return (
+    <div>
+      <label htmlFor={id} className="label">{label}{required && <span className="text-red-400" aria-hidden="true"> *</span>}</label>
+      {children}
+    </div>
+  )
 }
 
 export default function JourneyLog() {
-  const { activeCountry } = useSettings()
+  const { activeCountry, appSettings } = useSettings()
+  const company = appSettings?.company_name || ''
   const [rows, setRows] = useState(null)
-  const [error, setError] = useState('')
+  const [loadError, setLoadError] = useState('')
+  const [actionError, setActionError] = useState('')
   const [missing, setMissing] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [updatedAt, setUpdatedAt] = useState(null)
+  const [exporting, setExporting] = useState(false)
+  const [tab, setTab] = useState('register')
 
   const [statusFilter, setStatusFilter] = useState('all')
   const [assetFilter, setAssetFilter] = useState('')
+  const [siteFilter, setSiteFilter] = useState('')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
   const [search, setSearch] = useState('')
 
   const [modalOpen, setModalOpen] = useState(false)
@@ -106,23 +122,19 @@ export default function JourneyLog() {
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
-
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
-
-  const [perfView, setPerfView] = useState('driver') // 'driver' | 'asset'
-  const [sortKey, setSortKey] = useState('distance')
-  const [sortDir, setSortDir] = useState('desc')
+  const [perfView, setPerfView] = useState('driver')
 
   const load = useCallback(async () => {
-    setRefreshing(true); setError(''); setMissing(false)
+    setRefreshing(true); setLoadError(''); setMissing(false)
     try {
       const data = await listJourneys({ country: activeCountry })
       setRows(Array.isArray(data) ? data : [])
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) { setMissing(true); setRows([]) }
-      else { setError(toUserMessage(err, 'Could not load journeys.')); setRows([]) }
+      else { setLoadError(toUserMessage(err, 'Could not load journeys.')); setRows(null) }
     } finally {
       setRefreshing(false)
     }
@@ -130,108 +142,61 @@ export default function JourneyLog() {
 
   useEffect(() => { load() }, [load])
 
-  const summary = useMemo(() => summarizeJourneys(rows || []), [rows])
-  const assetOptions = useMemo(
-    () => [...new Set((rows || []).map((r) => r.asset_no).filter(Boolean))].sort(),
-    [rows],
+  const all = useMemo(() => rows || [], [rows])
+  const assetOptions = useMemo(() => distinctJourneyValues(all, 'asset_no'), [all])
+  const siteOptions = useMemo(() => distinctJourneyValues(all, 'site'), [all])
+
+  const filtered = useMemo(
+    () => filterJourneys(all, { status: statusFilter, asset: assetFilter, site: siteFilter, from: fromDate, to: toDate, search }),
+    [all, statusFilter, assetFilter, siteFilter, fromDate, toDate, search],
   )
+  const tableRows = useMemo(() => filtered.map(journeyRow), [filtered])
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return (rows || []).filter((r) => {
-      if (statusFilter !== 'all' && r.status !== statusFilter) return false
-      if (assetFilter && r.asset_no !== assetFilter) return false
-      if (q) {
-        const hay = `${r.asset_no || ''} ${r.driver_name || ''} ${r.origin || ''} ${r.destination || ''} ${r.purpose || ''} ${r.site || ''}`.toLowerCase()
-        if (!hay.includes(q)) return false
-      }
-      return true
-    })
-  }, [rows, statusFilter, assetFilter, search])
-
-  // Paged, not capped - this register used to stop at 500 rows.
-  // The exports below still walk `filtered` in full.
-  const pager = usePagedRows(filtered)
-
-  // Deep analytics over the FILTERED set so charts + tables respond to filters.
   const analytics = useMemo(() => buildJourneyAnalytics(filtered), [filtered])
+  const distance = useMemo(() => distanceHeadline(filtered), [filtered])
+  const activity = useMemo(() => recentActivity(filtered, new Date()), [filtered])
+  const perfRows = useMemo(() => perfRowsOf(analytics, perfView), [analytics, perfView])
 
   const monthlyChart = useMemo(() => {
     const c = colorAt(0)
     return {
-      data: {
-        labels: analytics.monthly.labels,
-        datasets: [{
-          label: 'Distance (km)', data: analytics.monthly.distance,
-          borderColor: c, backgroundColor: withAlpha(c, 0.15),
-          pointBackgroundColor: c, borderWidth: 2, tension: 0.35, fill: true,
-        }],
-      },
+      labels: analytics.monthly.labels,
+      datasets: [{
+        label: 'Distance (km)', data: analytics.monthly.distance,
+        borderColor: c, backgroundColor: withAlpha(c, 0.15), pointBackgroundColor: c, borderWidth: 2, tension: 0.35, fill: true,
+      }],
     }
   }, [analytics])
 
   const statusChart = useMemo(() => {
-    const rowsF = analytics.funnel.filter((f) => f.count > 0)
+    const f = analytics.funnel.filter((x) => x.count > 0)
     return {
-      data: {
-        labels: rowsF.map((f) => f.label),
-        datasets: [{ data: rowsF.map((f) => f.count), backgroundColor: rowsF.map((f) => STATUS_COLOR[f.status]), borderWidth: 0 }],
-      },
-      total: analytics.funnel.reduce((s, f) => s + f.count, 0),
+      data: { labels: f.map((x) => x.label), datasets: [{ data: f.map((x) => x.count), backgroundColor: f.map((x) => STATUS_COLOR[x.status]), borderWidth: 0 }] },
+      total: f.reduce((s, x) => s + x.count, 0),
+      summary: f.map((x) => `${x.label} ${x.count}`).join(', '),
     }
   }, [analytics])
 
   const onTimeChart = useMemo(() => {
     const order = ['early', 'on_time', 'late']
     return {
-      data: {
-        labels: order.map((k) => ON_TIME_META[k]?.label || k),
-        datasets: [{ label: 'Trips', data: order.map((k) => analytics.onTime[k]), backgroundColor: order.map((k) => ON_TIME_COLOR[k]), borderWidth: 0 }],
-      },
+      labels: order.map((k) => ON_TIME_META[k]?.label || k),
+      datasets: [{ label: 'Trips', data: order.map((k) => analytics.onTime[k]), backgroundColor: order.map((k) => ON_TIME_COLOR[k]), borderWidth: 0 }],
     }
   }, [analytics])
 
   const topDistanceChart = useMemo(() => {
-    const list = (perfView === 'asset' ? analytics.assets : analytics.drivers).slice(0, 8)
-    const colors = categorical(list.length)
+    const list = perfRows.slice(0, 8)
     return {
-      data: {
-        labels: list.map((x) => (perfView === 'asset' ? x.asset : x.driver)),
-        datasets: [{ label: 'Distance (km)', data: list.map((x) => x.distance), backgroundColor: colors, borderWidth: 0 }],
-      },
+      data: { labels: list.map((x) => x.name), datasets: [{ label: 'Distance (km)', data: list.map((x) => x.distance), backgroundColor: categorical(list.length), borderWidth: 0 }] },
       empty: list.length === 0,
     }
-  }, [analytics, perfView])
-
-  const perfRows = useMemo(() => {
-    const list = perfView === 'asset' ? analytics.assets : analytics.drivers
-    const nameKey = perfView === 'asset' ? 'asset' : 'driver'
-    const dir = sortDir === 'asc' ? 1 : -1
-    const val = (r) => {
-      const v = r[sortKey === 'name' ? nameKey : sortKey]
-      return v == null ? -Infinity : v
-    }
-    return [...list].sort((a, b) => {
-      const av = val(a); const bv = val(b)
-      if (typeof av === 'string' || typeof bv === 'string') return String(av).localeCompare(String(bv)) * dir
-      return (av - bv) * dir
-    })
-  }, [analytics, perfView, sortKey, sortDir])
-
-  // Paged, not capped - the performance register used to stop at 200 rows.
-  const perfPager = usePagedRows(perfRows)
-
-  const toggleSort = (key) => {
-    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
-    else { setSortKey(key); setSortDir(key === 'name' ? 'asc' : 'desc') }
-  }
+  }, [perfRows])
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
 
-  const openCreate = () => {
-    setEditing(null); setForm(EMPTY_FORM); setFormError(''); setModalOpen(true)
-  }
-  const openEdit = (j) => {
+  const openCreate = () => { setEditing(null); setForm(EMPTY_FORM); setFormError(''); setModalOpen(true) }
+  const openEdit = useCallback((j) => {
     setEditing(j)
     setForm({
       asset_no: j.asset_no || '', driver_name: j.driver_name || '', origin: j.origin || '',
@@ -241,12 +206,15 @@ export default function JourneyLog() {
       notes: j.notes || '',
     })
     setFormError(''); setModalOpen(true)
-  }
+  }, [])
+  const closeModal = useCallback(() => { if (!saving) setModalOpen(false) }, [saving])
+  const closeDelete = useCallback(() => { if (!deleting) setConfirmDelete(null) }, [deleting])
 
   const submit = useCallback(async (e) => {
     e?.preventDefault?.()
     setFormError('')
     if (!form.asset_no.trim()) { setFormError('An asset (vehicle) number is required.'); return }
+    if (form.start_time && form.end_time && form.end_time < form.start_time) { setFormError('End time must be after the start time.'); return }
     setSaving(true)
     try {
       const payload = { ...form, country: activeCountry !== 'All' ? activeCountry : null }
@@ -273,45 +241,97 @@ export default function JourneyLog() {
       setRows((prev) => (prev || []).filter((r) => r.id !== confirmDelete.id))
       setConfirmDelete(null)
     } catch (err) {
-      setError(toUserMessage(err, 'Could not delete the journey.'))
+      setActionError(toUserMessage(err, 'Could not delete the journey.'))
+      setConfirmDelete(null)
     } finally {
       setDeleting(false)
     }
   }, [confirmDelete])
 
-  const clearFilters = () => { setStatusFilter('all'); setAssetFilter(''); setSearch('') }
-  const hasFilters = statusFilter !== 'all' || assetFilter || search
+  const clearFilters = () => { setStatusFilter('all'); setAssetFilter(''); setSiteFilter(''); setFromDate(''); setToDate(''); setSearch('') }
+  const hasFilters = statusFilter !== 'all' || assetFilter || siteFilter || fromDate || toDate || search
 
-  const EXPORT_COLS = ['asset_no', 'driver_name', 'origin', 'destination', 'purpose', 'start_time', 'end_time', 'distance_km', 'duration_h', 'avg_speed', 'on_time', 'site', 'status']
-  const EXPORT_HEADERS = ['Asset', 'Driver', 'Origin', 'Destination', 'Purpose', 'Start', 'End', 'Distance (km)', 'Duration (h)', 'Avg speed (km/h)', 'On time', 'Site', 'Status']
-  const exportRows = filtered.map((r) => {
-    const dur = journeyDurationHours(r)
-    const spd = journeyAvgSpeedKmh(r)
-    const ot = journeyOnTime(r)
-    return {
-      asset_no: r.asset_no || '', driver_name: r.driver_name || '', origin: r.origin || '',
-      destination: r.destination || '', purpose: r.purpose || '',
-      start_time: fmtDateTime(r.start_time), end_time: fmtDateTime(r.end_time),
-      distance_km: r.distance_km ?? '',
-      duration_h: dur == null ? 'N/A' : dur,
-      avg_speed: spd == null ? 'N/A' : spd,
-      on_time: ot.class === 'unknown' ? 'N/A' : (ON_TIME_META[ot.class]?.label || ot.class),
-      site: r.site || '',
-      status: JOURNEY_STATUS_META[r.status]?.label || r.status || '',
+  const runExport = async (format, which = 'journeys') => {
+    setExporting(true); setActionError('')
+    try {
+      const { exportToExcel, exportToPdf, reportFileName } = await loadExportUtils()
+      const perf = which === 'perf'
+      const cols = perf ? PERF_EXPORT_COLUMNS : JOURNEY_EXPORT_COLUMNS
+      const data = perf ? perfExportRows(perfRows) : journeyExportRows(filtered)
+      const title = perf ? `Journey ${perfView === 'asset' ? 'Asset' : 'Driver'} Performance` : 'Journey Log'
+      const file = reportFileName(title)
+      if (format === 'pdf') await exportToPdf(data, cols, title, file, 'landscape', company)
+      else await exportToExcel(data, cols.map((c) => c.key), cols.map((c) => c.header), file, perf ? 'Performance' : 'Journeys')
+    } catch (e) {
+      setActionError(toUserMessage(e, 'Could not export. Try again.'))
+    } finally {
+      setExporting(false)
     }
-  })
+  }
+
+  const columns = useMemo(() => [
+    { id: 'asset', header: 'Asset', accessorFn: (r) => r.asset_no || undefined, sortUndefined: 'last', size: 110,
+      cell: ({ row }) => <span className="font-mono text-xs text-[var(--text-primary)]">{row.original.asset_no || 'N/A'}</span> },
+    { id: 'driver', header: 'Driver', accessorFn: (r) => r.driver_name || undefined, sortUndefined: 'last', size: 140 },
+    { id: 'route', header: 'Route', accessorFn: (r) => r.route, size: 220,
+      cell: ({ row }) => <span className="text-[var(--text-secondary)]">{row.original.origin || 'N/A'} <span className="text-[var(--text-muted)]">to</span> {row.original.destination || 'N/A'}</span> },
+    { id: 'purpose', header: 'Purpose', accessorFn: (r) => r.purpose || undefined, sortUndefined: 'last', size: 140 },
+    { id: 'start', header: 'Start', accessorFn: (r) => r.start_time || undefined, sortUndefined: 'last', size: 170,
+      meta: { exportValue: (r) => formatJourneyDateTime(r.start_time) },
+      cell: ({ row }) => <span className="whitespace-nowrap">{formatJourneyDateTime(row.original.start_time)}</span> },
+    { id: 'distance', header: 'Distance', accessorFn: (r) => r.distance ?? undefined, sortUndefined: 'last', meta: { align: 'right' }, size: 100,
+      cell: ({ row }) => (row.original.distance == null ? 'N/A' : `${row.original.distance} km`) },
+    { id: 'duration', header: 'Duration', accessorFn: (r) => r.duration ?? undefined, sortUndefined: 'last', meta: { align: 'right' }, size: 100,
+      cell: ({ row }) => (row.original.duration == null ? 'N/A' : `${row.original.duration} h`) },
+    { id: 'speed', header: 'Avg speed', accessorFn: (r) => r.speed ?? undefined, sortUndefined: 'last', meta: { align: 'right', defaultHidden: true }, size: 110,
+      cell: ({ row }) => (row.original.speed == null ? 'N/A' : `${row.original.speed} km/h`) },
+    { id: 'ontime', header: 'On time', accessorFn: (r) => (r.onTimeClass === 'unknown' ? undefined : ON_TIME_META[r.onTimeClass]?.label), sortUndefined: 'last', size: 110,
+      cell: ({ row }) => (row.original.onTimeClass === 'unknown' ? <span className="text-[var(--text-muted)]">N/A</span> : <span className={ON_TIME_META[row.original.onTimeClass]?.tint}>{ON_TIME_META[row.original.onTimeClass]?.label}</span>) },
+    { id: 'site', header: 'Site', accessorFn: (r) => r.site || undefined, sortUndefined: 'last', size: 110, meta: { defaultHidden: true } },
+    { id: 'status', header: 'Status', accessorFn: (r) => JOURNEY_STATUS_META[r.status]?.label || r.status, size: 130,
+      cell: ({ row }) => (
+        <span className="inline-flex items-center gap-1.5">
+          <StatusBadge status={row.original.status} />
+          {row.original.flags.length > 0 && (
+            <span title={row.original.flags.map((f) => f.label).join('; ')} className="inline-flex items-center gap-0.5 text-[11px] text-amber-400">
+              <ShieldAlert size={12} aria-hidden="true" /><span className="sr-only">Data quality issue: </span>{row.original.flags.length}
+            </span>
+          )}
+        </span>
+      ) },
+    { id: 'actions', header: '', enableSorting: false, enableHiding: false, size: 90, meta: { export: false, align: 'right' },
+      cell: ({ row }) => {
+        const r = row.original
+        return (
+          <div className="flex items-center justify-end gap-1">
+            <button type="button" onClick={(e) => { e.stopPropagation(); openEdit(r) }} className={`${ICON_BTN} hover:bg-[var(--input-bg)] hover:text-[var(--text-primary)]`} aria-label={`Edit journey for ${r.asset_no || 'asset'}`} title="Edit"><Pencil size={15} /></button>
+            <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmDelete(r) }} className={`${ICON_BTN} hover:bg-red-900/30 hover:text-red-400`} aria-label={`Delete journey for ${r.asset_no || 'asset'}`} title="Delete"><Trash2 size={15} /></button>
+          </div>
+        )
+      } },
+  ], [openEdit])
+
+  const perfColumns = useMemo(() => [
+    { id: 'name', header: perfView === 'asset' ? 'Asset' : 'Driver', accessorFn: (r) => r.name, size: 170,
+      cell: ({ row }) => <span className="font-mono text-xs text-[var(--text-primary)]">{row.original.name}</span> },
+    { id: 'trips', header: 'Trips', accessorFn: (r) => r.trips, meta: { align: 'right' }, size: 80 },
+    { id: 'distance', header: 'Distance (km)', accessorFn: (r) => r.distance, meta: { align: 'right' }, size: 120 },
+    { id: 'completionRate', header: 'Completion', accessorFn: (r) => r.completionRate, meta: { align: 'right' }, size: 110, cell: ({ row }) => `${row.original.completionRate}%` },
+    { id: 'onTimeRate', header: 'On time', accessorFn: (r) => r.onTimeRate ?? undefined, sortUndefined: 'last', meta: { align: 'right' }, size: 100,
+      cell: ({ row }) => (row.original.onTimeRate == null ? 'N/A' : `${row.original.onTimeRate}%`) },
+    { id: 'avgDurationHours', header: 'Avg duration (h)', accessorFn: (r) => r.avgDurationHours ?? undefined, sortUndefined: 'last', meta: { align: 'right' }, size: 130,
+      cell: ({ row }) => (row.original.avgDurationHours == null ? 'N/A' : row.original.avgDurationHours) },
+  ], [perfView])
 
   const k = analytics.kpis
-  const fmt = (v, suffix = '') => (v == null ? 'N/A' : `${v}${suffix}`)
-  const kpis = [
-    { label: 'Total journeys', value: k.totalTrips, icon: Navigation, tone: 'text-[var(--text-primary)]' },
-    { label: 'Completed', value: k.completedTrips, icon: CheckCircle2, tone: 'text-emerald-400' },
-    { label: 'Active / in progress', value: k.activeTrips, icon: PlayCircle, tone: 'text-amber-400' },
-    { label: 'Total distance', value: fmt(k.totalDistance, ' km'), icon: Milestone, tone: 'text-sky-400' },
-    { label: 'On-time', value: k.onTimePct == null ? 'N/A' : `${k.onTimePct}%`, icon: Clock, tone: 'text-emerald-400' },
-    { label: 'Avg trip duration', value: fmt(k.avgDurationHours, ' h'), icon: Timer, tone: 'text-violet-400' },
-    { label: 'Avg speed', value: fmt(k.avgSpeedKmh, ' km/h'), icon: Gauge, tone: 'text-cyan-400' },
-    { label: 'Distance (12 mo)', value: fmt(k.distance12mo, ' km'), icon: TrendingUp, tone: 'text-indigo-400' },
+  const unknown = rows === null
+  const n = (v) => (unknown ? 'N/A' : v)
+  const nv = (v, suffix) => (unknown || v == null ? 'N/A' : `${v}${suffix}`)
+  const dq = analytics.dataQuality
+
+  const TABS = [
+    { key: 'register', label: 'Register', icon: List, count: filtered.length },
+    { key: 'analytics', label: 'Analytics', icon: BarChart3 },
   ]
 
   return (
@@ -324,355 +344,282 @@ export default function JourneyLog() {
         refreshing={refreshing}
         updatedAt={updatedAt}
         actions={
-          <div className="flex items-center gap-2">
-            <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'journey_log') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
-              <FileSpreadsheet size={14} /> Excel
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => runExport('excel')} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[40px]" disabled={!filtered.length || exporting}>
+              <FileSpreadsheet size={14} aria-hidden="true" /> Excel
             </button>
-            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Journey Log', 'journey_log', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
-              <FileText size={14} /> PDF
+            <button type="button" onClick={() => runExport('pdf')} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[40px]" disabled={!filtered.length || exporting}>
+              <FileText size={14} aria-hidden="true" /> PDF
             </button>
-            <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5">
-              <Plus size={14} /> New journey
+            <button type="button" onClick={openCreate} disabled={missing} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[40px] disabled:opacity-50">
+              <Plus size={14} aria-hidden="true" /> New journey
             </button>
           </div>
         }
       />
 
       {missing && (
-        <div className="card border border-amber-800/50 flex items-start gap-3">
-          <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
+        <Card tone="warn" className="items-start gap-3" style={{ flexDirection: 'row' }}>
+          <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" aria-hidden="true" />
           <div>
-            <p className="text-amber-300 font-medium">Journey Log isn’t enabled on this database yet.</p>
-            <p className="text-[var(--text-muted)] text-sm mt-1">
-              Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V139_JOURNEYS.sql</span>, then reload.
-            </p>
+            <p className="text-amber-300 font-medium">Journey Log is not enabled on this database yet.</p>
+            <p className="text-[var(--text-muted)] text-sm mt-1">Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V139_JOURNEYS.sql</span>, then reload.</p>
+          </div>
+        </Card>
+      )}
+
+      {loadError && (
+        <Card tone="crit" className="items-start gap-3" style={{ flexDirection: 'row' }} role="alert">
+          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
+          <div className="flex-1 min-w-0"><p className="text-red-300 font-medium">Could not load journeys.</p><p className="text-[var(--text-muted)] text-sm mt-1 break-words">{loadError}</p></div>
+          <button type="button" onClick={load} className="btn-secondary text-sm shrink-0 min-h-[40px]">Retry</button>
+        </Card>
+      )}
+      {actionError && (
+        <Card tone="crit" className="items-start gap-3" style={{ flexDirection: 'row' }} role="alert">
+          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
+          <p className="text-sm text-red-300 flex-1 break-words">{actionError}</p>
+          <button type="button" onClick={() => setActionError('')} className={ICON_BTN} aria-label="Dismiss message"><X size={15} /></button>
+        </Card>
+      )}
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <StatTile label="Total journeys" value={n(k.totalTrips)} icon={Navigation} sub={unknown ? undefined : `${activity.today} started today, ${activity.last7Days} in 7 days`} />
+        <StatTile label="Completed" value={n(k.completedTrips)} icon={CheckCircle2} tone="accent" sub={k.totalTrips > 0 ? `${Math.round((k.completedTrips / k.totalTrips) * 100)}% of journeys` : undefined} />
+        <StatTile label="Planned or in progress" value={n(k.activeTrips)} icon={PlayCircle} tone="warn" sub={unknown ? undefined : `${k.inProgress} in progress`} />
+        <StatTile label="Total distance" value={nv(distance.total, ' km')} icon={Milestone} tone="info" sub={unknown ? undefined : `${distance.recorded} of ${filtered.length} journeys carry a distance`} />
+        <StatTile label="On time" value={nv(k.onTimePct, '%')} icon={Clock} tone="accent" sub={k.onTimeEvaluated > 0 ? `${k.onTimeEvaluated} measurable (+/- ${ON_TIME_TOLERANCE_MIN} min)` : 'No scheduled arrivals yet'} />
+        <StatTile label="Avg trip duration" value={nv(k.avgDurationHours, ' h')} icon={Timer} />
+        <StatTile label="Avg speed" value={nv(k.avgSpeedKmh, ' km/h')} icon={Gauge} />
+        <StatTile label="Data quality issues" value={n(dq.rowsFlagged)} icon={ShieldAlert} tone={dq.rowsFlagged > 0 ? 'warn' : 'neutral'} sub={unknown ? undefined : `of ${dq.total} journeys`} />
+      </div>
+
+      <Card>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-[minmax(220px,1fr)_auto_auto_auto_auto_auto_auto] items-end gap-2">
+          <div className="relative sm:col-span-2 lg:col-span-4 xl:col-span-1">
+            <label htmlFor="journey-search" className="sr-only">Search journeys</label>
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+            <input id="journey-search" className="input pl-9 w-full min-h-[40px]" placeholder="Search asset, driver, route, purpose" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          <select className="input min-h-[40px]" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter by status">
+            <option value="all">All statuses</option>
+            {JOURNEY_STATUSES.map((s) => <option key={s} value={s}>{JOURNEY_STATUS_META[s]?.label || s}</option>)}
+          </select>
+          <select className="input min-h-[40px]" value={assetFilter} onChange={(e) => setAssetFilter(e.target.value)} aria-label="Filter by asset">
+            <option value="">All assets</option>
+            {assetOptions.map((a) => <option key={a} value={a}>{a}</option>)}
+          </select>
+          <select className="input min-h-[40px]" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} aria-label="Filter by site">
+            <option value="">All sites</option>
+            {siteOptions.map((a) => <option key={a} value={a}>{a}</option>)}
+          </select>
+          <div>
+            <label htmlFor="journey-from" className="block text-[11px] text-[var(--text-muted)]">Start from</label>
+            <input id="journey-from" type="date" className="input min-h-[40px] w-full" value={fromDate} max={toDate || undefined} onChange={(e) => setFromDate(e.target.value)} />
+          </div>
+          <div>
+            <label htmlFor="journey-to" className="block text-[11px] text-[var(--text-muted)]">Start to</label>
+            <input id="journey-to" type="date" className="input min-h-[40px] w-full" value={toDate} min={fromDate || undefined} onChange={(e) => setToDate(e.target.value)} />
+          </div>
+          <div className="flex items-center gap-2 justify-between sm:justify-end">
+            {hasFilters && <button type="button" onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[40px]"><X size={14} aria-hidden="true" /> Clear</button>}
+            <span className="text-xs text-[var(--text-muted)] whitespace-nowrap" aria-live="polite">{unknown ? 'N/A' : `${filtered.length} of ${all.length}`}</span>
           </div>
         </div>
-      )}
+      </Card>
 
-      {error && (
-        <div className="card border border-red-800/50 flex items-start gap-3">
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-          <div><p className="text-red-300 font-medium">Couldn’t load journeys.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
-        </div>
-      )}
-
-      {/* KPI tiles */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {kpis.map((tile) => {
-          const Icon = tile.icon
+      <div role="tablist" aria-label="Journey views" className="flex flex-wrap items-center gap-1 border-b border-[var(--input-border)]">
+        {TABS.map((t) => {
+          const Icon = t.icon
+          const active = tab === t.key
           return (
-            <div key={tile.label} className="card">
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-[var(--text-muted)]">{tile.label}</p>
-                <Icon size={16} className={tile.tone} />
-              </div>
-              <p className={`text-2xl font-bold mt-1 ${tile.tone}`}>{rows === null ? '...' : tile.value}</p>
-            </div>
+            <button key={t.key} type="button" role="tab" aria-selected={active} onClick={() => setTab(t.key)}
+              className={`inline-flex items-center gap-1.5 px-4 min-h-[44px] text-sm font-medium border-b-2 -mb-px transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] rounded-t ${active ? 'border-brand-bright text-[var(--text-primary)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}>
+              <Icon size={15} aria-hidden="true" /> {t.label}
+              {t.count != null && !unknown && <span className="text-[11px] px-1.5 rounded-full bg-[var(--input-bg)] text-[var(--text-secondary)]">{t.count}</span>}
+            </button>
           )
         })}
       </div>
 
-      {/* Analytics */}
-      {rows !== null && filtered.length > 0 && (
+      {tab === 'register' ? (
+        <EnterpriseTable
+          columns={columns}
+          data={tableRows}
+          getRowId={(r) => String(r.id)}
+          loading={unknown && refreshing}
+          error={loadError || null}
+          onRetry={load}
+          enableGlobalFilter={false}
+          enableColumnFilters={false}
+          enableExport={false}
+          viewKey="journey-log-register"
+          initialPageSize={25}
+          onRowClick={(r) => openEdit(r)}
+          emptyIcon={<Navigation size={24} className="text-[var(--text-muted)]" aria-hidden="true" />}
+          emptyMessage={missing ? 'Journey Log is not enabled yet.' : all.length === 0 ? 'No journeys recorded yet. Use New journey to log the first one.' : 'No journeys match these filters.'}
+        />
+      ) : unknown ? (
+        <Card className="text-center text-sm text-[var(--text-muted)]"><div style={{ paddingBlock: 'var(--space-8)' }}>{refreshing ? 'Loading journeys...' : 'Journeys could not be loaded. Use Retry above.'}</div></Card>
+      ) : filtered.length === 0 ? (
+        <Card className="text-center text-sm text-[var(--text-muted)]"><div style={{ paddingBlock: 'var(--space-8)' }}>{all.length === 0 ? 'No journeys recorded yet, so there is nothing to analyse.' : 'No journeys match these filters.'}</div></Card>
+      ) : (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="card">
-              <div className="flex items-center gap-2 mb-3">
-                <TrendingUp size={16} className="text-[var(--text-muted)]" />
-                <h3 className="font-semibold text-[var(--text-primary)] text-sm">Distance trend (last 12 months)</h3>
-              </div>
-              <div className="h-64"><Line data={monthlyChart.data} options={CHART_OPTS} /></div>
-            </div>
-            <div className="card">
-              <div className="flex items-center gap-2 mb-3">
-                <Navigation size={16} className="text-[var(--text-muted)]" />
-                <h3 className="font-semibold text-[var(--text-primary)] text-sm">Trips by status</h3>
-              </div>
-              {statusChart.total > 0 ? (
-                <div className="h-64"><Doughnut data={statusChart.data} options={DOUGHNUT_OPTS} /></div>
-              ) : (
-                <div className="h-64 flex items-center justify-center text-[var(--text-muted)] text-sm">No trips to chart.</div>
-              )}
-            </div>
-            <div className="card">
-              <div className="flex items-center gap-2 mb-1">
-                <Clock size={16} className="text-[var(--text-muted)]" />
-                <h3 className="font-semibold text-[var(--text-primary)] text-sm">On-time performance</h3>
-              </div>
-              <p className="text-xs text-[var(--text-muted)] mb-3">
-                {analytics.onTime.evaluated > 0
-                  ? `${analytics.onTime.evaluated} of ${filtered.length} trips have a scheduled arrival to measure against (tolerance +/- 15 min).`
-                  : 'No scheduled arrival times captured yet, so on-time cannot be measured. Metric lights up once trips carry a scheduled arrival.'}
-              </p>
-              {analytics.onTime.evaluated > 0 ? (
-                <div className="h-56"><Bar data={onTimeChart.data} options={CHART_OPTS} /></div>
-              ) : (
-                <div className="h-56 flex flex-col items-center justify-center text-center gap-2 text-[var(--text-muted)] text-sm">
-                  <Clock size={24} className="opacity-50" />
-                  <span>On-time breakdown is unavailable.</span>
-                </div>
-              )}
-            </div>
-            <div className="card">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <Milestone size={16} className="text-[var(--text-muted)]" />
-                  <h3 className="font-semibold text-[var(--text-primary)] text-sm">Top {perfView === 'asset' ? 'assets' : 'drivers'} by distance</h3>
-                </div>
-                <div className="flex rounded-lg border border-[var(--input-border)] overflow-hidden text-xs">
-                  {['driver', 'asset'].map((v) => (
-                    <button key={v} onClick={() => setPerfView(v)}
-                      className={`px-3 py-1 ${perfView === v ? 'bg-[var(--input-bg)] text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
-                      {v === 'driver' ? 'Drivers' : 'Assets'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {topDistanceChart.empty ? (
-                <div className="h-56 flex items-center justify-center text-[var(--text-muted)] text-sm">No {perfView} distance recorded.</div>
-              ) : (
-                <div className="h-56"><Bar data={topDistanceChart.data} options={{ ...CHART_OPTS, indexAxis: 'y', plugins: { ...CHART_OPTS.plugins, legend: { display: false } } }} /></div>
-              )}
-            </div>
-          </div>
-
-          {analytics.dataQuality.rowsFlagged > 0 && (
-            <div className="card border border-amber-800/40 flex items-start gap-3">
-              <ShieldAlert size={18} className="text-amber-400 mt-0.5 shrink-0" />
+          {dq.rowsFlagged > 0 && (
+            <Card tone="warn" className="items-start gap-3" style={{ flexDirection: 'row' }}>
+              <ShieldAlert size={18} className="text-amber-400 mt-0.5 shrink-0" aria-hidden="true" />
               <div className="text-sm">
-                <p className="text-amber-300 font-medium">
-                  {analytics.dataQuality.rowsFlagged} of {analytics.dataQuality.total} journeys have data-quality issues.
-                </p>
+                <p className="text-amber-300 font-medium">{dq.rowsFlagged} of {dq.total} journeys have data-quality issues.</p>
                 <p className="text-[var(--text-muted)] mt-1">
                   {[
-                    analytics.dataQuality.byCode.end_before_start && `${analytics.dataQuality.byCode.end_before_start} with an end before start`,
-                    analytics.dataQuality.byCode.nonpositive_distance && `${analytics.dataQuality.byCode.nonpositive_distance} completed with zero or negative distance`,
-                    analytics.dataQuality.byCode.missing_times && `${analytics.dataQuality.byCode.missing_times} completed missing a start or end time`,
+                    dq.byCode.end_before_start && `${dq.byCode.end_before_start} with an end before start`,
+                    dq.byCode.nonpositive_distance && `${dq.byCode.nonpositive_distance} completed with zero or negative distance`,
+                    dq.byCode.missing_times && `${dq.byCode.missing_times} completed missing a start or end time`,
                   ].filter(Boolean).join(' | ') || 'Review flagged rows.'}
+                  {' '}Flagged rows carry a shield marker in the register.
                 </p>
               </div>
-            </div>
+            </Card>
           )}
 
-          {/* Performance table */}
-          <div className="card overflow-hidden !p-0">
-            <div className="px-4 py-3 border-b border-[var(--input-border)] flex items-center gap-2">
-              <ArrowUpDown size={15} className="text-[var(--text-muted)]" />
-              <h3 className="font-semibold text-[var(--text-primary)] text-sm">{perfView === 'asset' ? 'Asset' : 'Driver'} performance</h3>
-              <span className="text-xs text-[var(--text-muted)] ml-auto">{perfRows.length} {perfView === 'asset' ? 'assets' : 'drivers'}</span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                    {[
-                      { key: 'name', label: perfView === 'asset' ? 'Asset' : 'Driver' },
-                      { key: 'trips', label: 'Trips' },
-                      { key: 'distance', label: 'Distance (km)' },
-                      { key: 'completionRate', label: 'Completion %' },
-                      { key: 'onTimeRate', label: 'On-time %' },
-                      { key: 'avgDurationHours', label: 'Avg duration (h)' },
-                    ].map((c) => (
-                      <th key={c.key} className="px-4 py-2.5 font-semibold whitespace-nowrap cursor-pointer select-none hover:text-[var(--text-primary)]" onClick={() => toggleSort(c.key)}>
-                        <span className="inline-flex items-center gap-1">{c.label}{sortKey === c.key && <ArrowUpDown size={11} />}</span>
-                      </th>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader title="Distance trend (last 12 months)" icon={TrendingUp} />
+              <div className="h-64"><Line data={monthlyChart} options={CHART_OPTS} /></div>
+            </Card>
+            <Card>
+              <CardHeader title="Trips by status" icon={Navigation} />
+              {statusChart.total > 0
+                ? <div className="h-64" role="img" aria-label={`Trips by status: ${statusChart.summary}`}><Doughnut data={statusChart.data} options={DOUGHNUT_OPTS} /></div>
+                : <div className="h-64 flex items-center justify-center text-[var(--text-muted)] text-sm">No trips to chart.</div>}
+            </Card>
+            <Card>
+              <CardHeader title="On-time performance" icon={Clock}
+                description={analytics.onTime.evaluated > 0
+                  ? `${analytics.onTime.evaluated} of ${filtered.length} trips have a scheduled arrival to measure against (tolerance +/- ${ON_TIME_TOLERANCE_MIN} min).`
+                  : 'No scheduled arrival times captured yet, so on-time cannot be measured.'} />
+              {analytics.onTime.evaluated > 0
+                ? <div className="h-56"><Bar data={onTimeChart} options={CHART_OPTS} /></div>
+                : <div className="h-56 flex flex-col items-center justify-center text-center gap-2 text-[var(--text-muted)] text-sm"><Clock size={24} className="opacity-50" aria-hidden="true" /><span>On-time breakdown is unavailable.</span></div>}
+            </Card>
+            <Card>
+              <CardHeader title={`Top ${perfView === 'asset' ? 'assets' : 'drivers'} by distance`} icon={Milestone}
+                actions={
+                  <div role="group" aria-label="Rank by" className="flex rounded-lg border border-[var(--input-border)] overflow-hidden text-xs">
+                    {[['driver', 'Drivers', Users], ['asset', 'Assets', Navigation]].map(([val, lbl, Icon]) => (
+                      <button key={val} type="button" onClick={() => setPerfView(val)} aria-pressed={perfView === val}
+                        className={`px-3 min-h-[36px] inline-flex items-center gap-1 ${perfView === val ? 'bg-[var(--input-bg)] text-[var(--text-primary)] font-semibold' : 'text-[var(--text-muted)]'}`}>
+                        <Icon size={12} aria-hidden="true" /> {lbl}
+                      </button>
                     ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {perfPager.pageRows.map((r) => {
-                    const name = perfView === 'asset' ? r.asset : r.driver
-                    return (
-                      <tr key={name} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                        <td className="px-4 py-2 font-mono text-xs text-[var(--text-primary)]">{name}</td>
-                        <td className="px-4 py-2 text-[var(--text-secondary)]">{r.trips}</td>
-                        <td className="px-4 py-2 text-[var(--text-secondary)]">{r.distance}</td>
-                        <td className="px-4 py-2 text-[var(--text-secondary)]">{r.completionRate}%</td>
-                        <td className="px-4 py-2 text-[var(--text-secondary)]">{r.onTimeRate == null ? 'N/A' : `${r.onTimeRate}%`}</td>
-                        <td className="px-4 py-2 text-[var(--text-secondary)]">{r.avgDurationHours == null ? 'N/A' : r.avgDurationHours}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <TablePagination {...perfPager} />
+                  </div>
+                } />
+              {topDistanceChart.empty
+                ? <div className="h-56 flex items-center justify-center text-[var(--text-muted)] text-sm">No {perfView} distance recorded.</div>
+                : <div className="h-56"><Bar data={topDistanceChart.data} options={{ ...CHART_OPTS, indexAxis: 'y', plugins: { ...CHART_OPTS.plugins, legend: { display: false } } }} /></div>}
+            </Card>
           </div>
+
+          <Card>
+            <CardHeader title={`${perfView === 'asset' ? 'Asset' : 'Driver'} performance`} icon={Users}
+              description={`${perfRows.length} ${perfView === 'asset' ? 'assets' : 'drivers'}. Journeys without a ${perfView === 'asset' ? 'asset' : 'driver'} name are not ranked.`}
+              actions={
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => runExport('excel', 'perf')} disabled={!perfRows.length || exporting} className="btn-secondary text-xs inline-flex items-center gap-1 min-h-[36px]"><FileSpreadsheet size={13} aria-hidden="true" /> Excel</button>
+                  <button type="button" onClick={() => runExport('pdf', 'perf')} disabled={!perfRows.length || exporting} className="btn-secondary text-xs inline-flex items-center gap-1 min-h-[36px]"><FileText size={13} aria-hidden="true" /> PDF</button>
+                </div>
+              } />
+            <EnterpriseTable
+              columns={perfColumns}
+              data={perfRows}
+              getRowId={(r) => String(r.name)}
+              enableColumnFilters={false}
+              enableExport={false}
+              searchPlaceholder={`Search ${perfView === 'asset' ? 'assets' : 'drivers'}`}
+              initialPageSize={25}
+              onRowClick={(r) => { if (perfView === 'asset') { setAssetFilter(r.name); setTab('register') } else { setSearch(r.name); setTab('register') } }}
+              emptyMessage={`No ${perfView === 'asset' ? 'asset' : 'driver'} recorded on these journeys.`}
+            />
+          </Card>
         </div>
       )}
 
-      {/* Filters */}
-      <div className="card space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <input className="input pl-9 w-full" placeholder="Search asset, driver, route, purpose…" value={search} onChange={(e) => setSearch(e.target.value)} />
+      <Modal open={modalOpen} onClose={closeModal} size="lg" title={editing ? 'Edit journey' : 'New journey'}>
+        <form onSubmit={submit} className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field id="j-asset" label="Asset (vehicle) no" required>
+              <input id="j-asset" className="input w-full" value={form.asset_no} maxLength={120} onChange={(e) => set('asset_no', e.target.value)} placeholder="e.g. DXB-A-12345" list="j-asset-options" required aria-required="true" />
+              <datalist id="j-asset-options">{assetOptions.map((a) => <option key={a} value={a} />)}</datalist>
+            </Field>
+            <Field id="j-driver" label="Driver">
+              <input id="j-driver" className="input w-full" value={form.driver_name} maxLength={160} onChange={(e) => set('driver_name', e.target.value)} placeholder="Driver name" />
+            </Field>
+            <Field id="j-origin" label="Origin">
+              <input id="j-origin" className="input w-full" value={form.origin} maxLength={240} onChange={(e) => set('origin', e.target.value)} placeholder="Dubai Industrial Area" />
+            </Field>
+            <Field id="j-dest" label="Destination">
+              <input id="j-dest" className="input w-full" value={form.destination} maxLength={240} onChange={(e) => set('destination', e.target.value)} placeholder="Mussafah, Abu Dhabi" />
+            </Field>
+            <Field id="j-start" label="Start time">
+              <input id="j-start" type="datetime-local" className="input w-full" value={form.start_time} onChange={(e) => set('start_time', e.target.value)} />
+            </Field>
+            <Field id="j-end" label="End time">
+              <input id="j-end" type="datetime-local" className="input w-full" value={form.end_time} min={form.start_time || undefined} onChange={(e) => set('end_time', e.target.value)} />
+            </Field>
+            <Field id="j-distance" label="Distance (km)">
+              <input id="j-distance" type="number" min="0" step="0.1" inputMode="decimal" className="input w-full" value={form.distance_km} onChange={(e) => set('distance_km', e.target.value)} placeholder="0" />
+            </Field>
+            <Field id="j-purpose" label="Purpose">
+              <input id="j-purpose" className="input w-full" value={form.purpose} maxLength={240} onChange={(e) => set('purpose', e.target.value)} placeholder="Delivery / Collection / Service" />
+            </Field>
+            <Field id="j-site" label="Site">
+              <input id="j-site" className="input w-full" value={form.site} maxLength={200} onChange={(e) => set('site', e.target.value)} placeholder="Depot / branch" list="j-site-options" />
+              <datalist id="j-site-options">{siteOptions.map((a) => <option key={a} value={a} />)}</datalist>
+            </Field>
+            <Field id="j-status" label="Status">
+              <select id="j-status" className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
+                {JOURNEY_STATUSES.map((s) => <option key={s} value={s}>{JOURNEY_STATUS_META[s]?.label || s}</option>)}
+              </select>
+            </Field>
           </div>
-          <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
-            <option value="all">All statuses</option>
-            {JOURNEY_STATUSES.map((s) => <option key={s} value={s}>{JOURNEY_STATUS_META[s]?.label || s}</option>)}
-          </select>
-          <select className="input" value={assetFilter} onChange={(e) => setAssetFilter(e.target.value)} aria-label="Asset">
-            <option value="">All assets</option>
-            {assetOptions.map((a) => <option key={a} value={a}>{a}</option>)}
-          </select>
-          {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
-          <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {summary.totalTrips}</span>
-        </div>
-      </div>
-
-      {/* Table */}
-      <div className="card overflow-hidden !p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                {['Asset', 'Driver', 'Route', 'Purpose', 'Start', 'Distance', 'Duration', 'Status', ''].map((h) => <th key={h} className="px-4 py-3 font-semibold whitespace-nowrap">{h}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {rows === null ? (
-                [0, 1, 2, 3, 4].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={9} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
-              ) : filtered.length === 0 ? (
-                <tr><td colSpan={9} className="px-4 py-12 text-center text-[var(--text-muted)]">
-                  {(rows.length === 0 && !missing) ? (
-                    <div className="space-y-3">
-                      <Navigation size={26} className="mx-auto opacity-60" />
-                      <p className="text-[var(--text-primary)] font-medium">No journeys recorded yet.</p>
-                      <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5"><Plus size={14} /> Log your first journey</button>
-                    </div>
-                  ) : (
-                    <><Filter size={22} className="mx-auto mb-2 opacity-60" />No journeys match these filters.</>
-                  )}
-                </td></tr>
-              ) : (
-                pager.pageRows.map((r) => {
-                  const dur = journeyDurationHours(r)
-                  return (
-                    <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.asset_no || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.driver_name || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{r.origin || 'N/A'} <span className="text-[var(--text-muted)]">→</span> {r.destination || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.purpose || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDateTime(r.start_time)}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.distance_km == null ? 'N/A' : `${r.distance_km} km`}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{dur == null ? 'N/A' : `${dur} h`}</td>
-                      <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${STATUS_BADGE[r.status] || STATUS_BADGE.planned}`}>{JOURNEY_STATUS_META[r.status]?.label || r.status}</span></td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center gap-1">
-                          <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" title="Edit"><Pencil size={14} /></button>
-                          <button onClick={() => setConfirmDelete(r)} className="p-1.5 rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" title="Delete"><Trash2 size={14} /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-        <TablePagination {...pager} />
-      </div>
-
-      {/* Create / edit modal */}
-      {modalOpen && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-          <div className="bg-[var(--card-bg)] border border-[var(--input-border)] rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
-            <div className="sticky top-0 bg-[var(--card-bg)] border-b border-[var(--input-border)] px-6 py-4 flex items-center justify-between">
-              <h2 className="font-bold text-[var(--text-primary)]">{editing ? 'Edit journey' : 'New journey'}</h2>
-              <button onClick={() => setModalOpen(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
+          <Field id="j-notes" label="Notes">
+            <textarea id="j-notes" className="input w-full min-h-[80px] resize-y" value={form.notes} maxLength={8000} onChange={(e) => set('notes', e.target.value)} placeholder="Waypoints, load, routing constraints" />
+          </Field>
+          {formError && (
+            <div role="alert" className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
+              <AlertTriangle size={15} className="mt-0.5 shrink-0" aria-hidden="true" /> {formError}
             </div>
-            <form onSubmit={submit} className="p-6 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="label">Asset (vehicle) no <span className="text-red-400">*</span></label>
-                  <input className="input w-full" value={form.asset_no} maxLength={120} onChange={(e) => set('asset_no', e.target.value)} placeholder="e.g. DXB-A-12345" />
-                </div>
-                <div>
-                  <label className="label">Driver</label>
-                  <input className="input w-full" value={form.driver_name} maxLength={160} onChange={(e) => set('driver_name', e.target.value)} placeholder="Driver name" />
-                </div>
-                <div>
-                  <label className="label">Origin</label>
-                  <input className="input w-full" value={form.origin} maxLength={240} onChange={(e) => set('origin', e.target.value)} placeholder="Dubai Industrial Area" />
-                </div>
-                <div>
-                  <label className="label">Destination</label>
-                  <input className="input w-full" value={form.destination} maxLength={240} onChange={(e) => set('destination', e.target.value)} placeholder="Mussafah, Abu Dhabi" />
-                </div>
-                <div>
-                  <label className="label">Start time</label>
-                  <input type="datetime-local" className="input w-full" value={form.start_time} onChange={(e) => set('start_time', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">End time</label>
-                  <input type="datetime-local" className="input w-full" value={form.end_time} onChange={(e) => set('end_time', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Distance (km)</label>
-                  <input type="number" min="0" step="0.1" className="input w-full" value={form.distance_km} onChange={(e) => set('distance_km', e.target.value)} placeholder="0" />
-                </div>
-                <div>
-                  <label className="label">Purpose</label>
-                  <input className="input w-full" value={form.purpose} maxLength={240} onChange={(e) => set('purpose', e.target.value)} placeholder="Delivery / Collection / Service…" />
-                </div>
-                <div>
-                  <label className="label">Site</label>
-                  <input className="input w-full" value={form.site} maxLength={200} onChange={(e) => set('site', e.target.value)} placeholder="Depot / branch" />
-                </div>
-                <div>
-                  <label className="label">Status</label>
-                  <select className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
-                    {JOURNEY_STATUSES.map((s) => <option key={s} value={s}>{JOURNEY_STATUS_META[s]?.label || s}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="label">Notes</label>
-                <textarea className="input w-full min-h-[80px] resize-y" value={form.notes} maxLength={8000} onChange={(e) => set('notes', e.target.value)} placeholder="Waypoints, load, routing constraints…" />
-              </div>
-              {formError && (
-                <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
-                  <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {formError}
-                </div>
-              )}
-              <div className="flex items-center gap-3 pt-1">
-                <button type="button" onClick={() => setModalOpen(false)} className="btn-secondary text-sm flex-1">Cancel</button>
-                <button type="submit" disabled={saving} className="btn-primary text-sm flex-1 inline-flex items-center justify-center gap-2 disabled:opacity-60">
-                  {saving ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
-                  {saving ? 'Saving…' : (editing ? 'Save changes' : 'Create journey')}
-                </button>
-              </div>
-            </form>
+          )}
+          <div className="flex items-center gap-3 pt-1">
+            <button type="button" onClick={closeModal} className="btn-secondary text-sm flex-1 min-h-[40px]">Cancel</button>
+            <button type="submit" disabled={saving} className="btn-primary text-sm flex-1 inline-flex items-center justify-center gap-2 disabled:opacity-60 min-h-[40px]">
+              {saving ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Send size={15} aria-hidden="true" />}
+              {saving ? 'Saving...' : (editing ? 'Save changes' : 'Create journey')}
+            </button>
           </div>
-        </div>
-      )}
+        </form>
+      </Modal>
 
-      {/* Delete confirm */}
-      {confirmDelete && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-          <div className="bg-[var(--card-bg)] border border-[var(--input-border)] rounded-2xl w-full max-w-md shadow-2xl p-6 space-y-4">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-xl bg-red-900/30 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" /></div>
-              <div>
-                <h3 className="font-bold text-[var(--text-primary)]">Delete journey?</h3>
-                <p className="text-sm text-[var(--text-muted)] mt-1">
-                  This permanently removes the journey for <span className="font-mono text-[var(--text-secondary)]">{confirmDelete.asset_no || 'this asset'}</span>
-                  {confirmDelete.origin || confirmDelete.destination ? ` (${confirmDelete.origin || 'N/A'} → ${confirmDelete.destination || 'N/A'})` : ''}. This cannot be undone.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <button onClick={() => setConfirmDelete(null)} className="btn-secondary text-sm flex-1" disabled={deleting}>Cancel</button>
-              <button onClick={doDelete} disabled={deleting} className="text-sm flex-1 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 bg-red-600 hover:bg-red-500 text-white font-medium disabled:opacity-60">
-                {deleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
-                {deleting ? 'Deleting…' : 'Delete'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={!!confirmDelete}
+        onClose={closeDelete}
+        size="sm"
+        title="Delete journey?"
+        footer={
+          <>
+            <button type="button" onClick={closeDelete} className="btn-secondary text-sm min-h-[40px]" disabled={deleting}>Cancel</button>
+            <button type="button" onClick={doDelete} disabled={deleting} className="text-sm inline-flex items-center justify-center gap-2 rounded-lg px-4 min-h-[40px] bg-red-600 hover:bg-red-500 text-white font-medium disabled:opacity-60">
+              {deleting ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Trash2 size={15} aria-hidden="true" />}
+              {deleting ? 'Deleting...' : 'Delete'}
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm text-[var(--text-muted)]">
+          This permanently removes the journey for <span className="font-mono text-[var(--text-secondary)]">{confirmDelete?.asset_no || 'this asset'}</span>
+          {confirmDelete?.origin || confirmDelete?.destination ? ` (${confirmDelete.origin || 'N/A'} to ${confirmDelete.destination || 'N/A'})` : ''}. This cannot be undone.
+        </p>
+      </Modal>
     </div>
   )
 }

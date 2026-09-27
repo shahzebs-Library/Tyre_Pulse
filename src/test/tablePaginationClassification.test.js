@@ -66,7 +66,7 @@ describe('production-risk registers remediated in this paging wave', () => {
     'StockReplenishment', 'SupplierManagement', 'UserManagement',
   ]
 
-  const ENTERPRISE_PAGES = new Set(['AssetDisposals'])
+  const ENTERPRISE_PAGES = new Set(['AssetDisposals', 'TcoCalculator'])
 
   for (const page of pages) {
     it(`${page} renders through the shared pager`, () => {

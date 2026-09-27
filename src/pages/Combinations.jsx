@@ -1,64 +1,105 @@
 /**
- * Combinations (route /combinations) — Combination Manager + combined-unit tyre
+ * Combinations (route /combinations) - Combination Manager + combined-unit tyre
  * intelligence. Two tabs:
- *   • Registry: full CRUD on the `asset_combinations` table (V141) — the
+ *   - Registry: full CRUD on the `asset_combinations` table (V141), the
  *     operational units fleets dispatch (a prime-mover asset linked to one or
- *     more trailers) — with KPI tiles, filters, search, Excel/PDF export.
- *   • Unit intelligence: pick a combination and see its resolved member assets
+ *     more trailers), with a KPI strip, search + filters, a sortable
+ *     EnterpriseTable and Excel/PDF export.
+ *   - Unit intelligence: pick a combination and see its resolved member assets
  *     (with data-quality warnings for unresolved ones), blended combined-unit
  *     KPIs (fitted tyres, unit CPK, unit spend, scrap), a position-class
  *     breakdown, and an honest note that live per-tyre pressure/temperature and
- *     the axle schematic need telemetry / wheel-position data this dataset does
- *     not capture (no fabricated gauges).
+ *     the axle schematic need telemetry this dataset does not capture.
  *
- * All tyre maths reuse the canonical calc services (kpiEngine/tco via
- * src/lib/combinations.js) — no second CPK engine.
+ * Tyre maths reuse the canonical calc services (kpiEngine/tco via
+ * src/lib/combinations.js); page-side filtering, KPIs and export shapes live in
+ * src/lib/combinationsAnalytics.js.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
-  Combine, Truck, Link2, Boxes, Search, X, Filter, Plus, Pencil, Trash2,
+  Combine, Truck, Link2, Boxes, Search, X, Plus, Pencil, Trash2,
   FileSpreadsheet, FileText, AlertTriangle, Database, Network, Gauge,
   DollarSign, Recycle, CircleDot, CheckCircle2, XCircle, Info, Activity, Layers,
+  MapPin, Unlink, Copy,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import Card, { CardBody, CardHeader } from '../components/ui/Card'
 import Modal from '../components/ui/Modal'
-import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
+import StatTile from '../components/ui/StatTile'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listCombinations, createCombination, updateCombination, deleteCombination,
   getCombinationIntelligence, COMBINATION_STATUSES,
 } from '../lib/api/combinations'
+import { parseTrailerList, computeCombinationRollup, detectDuplicateTrailers } from '../lib/combinations'
 import {
-  parseTrailerList, summarizeCombinations, computeCombinationRollup,
-  detectDuplicateTrailers,
-} from '../lib/combinations'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+  filterCombinations, combinationKpis, siteOptions as siteOptionsOf, registryRow,
+  combinationExportRows, COMBINATION_EXPORT_COLUMNS, scrapSharePct, positionRows, memberCoverage,
+} from '../lib/combinationsAnalytics'
 import { formatCurrency, fmt } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
+
+const loadExportUtils = () => import('../lib/exportUtils')
 
 const STATUS_STYLES = {
   active: 'bg-green-900/40 text-green-300 border border-green-700/50',
   inactive: 'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]',
 }
 
-const POSITION_LABELS = {
-  steer: 'Steer', drive: 'Drive', trailer: 'Trailer', other: 'Other / Unclassified',
+const EMPTY_FORM = { name: '', prime_mover_no: '', trailer_nos: '', site: '', status: 'active', notes: '' }
+const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s)
+
+function StatusBadge({ status }) {
+  const s = status || 'inactive'
+  const Icon = s === 'active' ? CheckCircle2 : XCircle
+  return (
+    <span className={`badge inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded ${STATUS_STYLES[s] || STATUS_STYLES.inactive}`}>
+      <Icon size={11} aria-hidden="true" /> {cap(s)}
+    </span>
+  )
 }
 
-const EMPTY_FORM = { name: '', prime_mover_no: '', trailer_nos: '', site: '', status: 'active', notes: '' }
+function TabBar({ tabs, value, onChange, label }) {
+  return (
+    <div role="tablist" aria-label={label} className="flex flex-wrap items-center gap-1 border-b border-[var(--input-border)]">
+      {tabs.map((t) => {
+        const Icon = t.icon
+        const active = value === t.key
+        return (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(t.key)}
+            className={`inline-flex items-center gap-1.5 px-4 min-h-[44px] text-sm font-medium border-b-2 -mb-px transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] rounded-t ${
+              active ? 'border-brand-bright text-[var(--text-primary)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+            }`}
+          >
+            <Icon size={15} aria-hidden="true" /> {t.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
 
 export default function Combinations() {
-  const { activeCountry, activeCurrency } = useSettings() || {}
+  const { activeCountry, activeCurrency, appSettings } = useSettings() || {}
+  const company = appSettings?.company_name || ''
   const [rows, setRows] = useState(null)
-  const [error, setError] = useState('')
+  const [loadError, setLoadError] = useState('')
+  const [actionError, setActionError] = useState('')
   const [refreshing, setRefreshing] = useState(false)
   const [updatedAt, setUpdatedAt] = useState(null)
+  const [exporting, setExporting] = useState(false)
 
   const [view, setView] = useState('registry')
 
   const [statusFilter, setStatusFilter] = useState('all')
   const [siteFilter, setSiteFilter] = useState('')
+  const [trailerFilter, setTrailerFilter] = useState('all')
   const [search, setSearch] = useState('')
 
   const [modalOpen, setModalOpen] = useState(false)
@@ -69,23 +110,23 @@ export default function Combinations() {
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
 
-  // Unit-intelligence state
   const [selectedId, setSelectedId] = useState('')
-  const [intel, setIntel] = useState(null) // { vehicles, tyres }
+  const [intel, setIntel] = useState(null)
   const [intelLoading, setIntelLoading] = useState(false)
   const [intelError, setIntelError] = useState('')
 
   const currency = activeCurrency || 'SAR'
 
   const load = useCallback(async () => {
-    setRefreshing(true); setError('')
+    setRefreshing(true); setLoadError('')
     try {
       const data = await listCombinations({ country: activeCountry })
       setRows(Array.isArray(data) ? data : [])
       setUpdatedAt(new Date())
     } catch (err) {
-      setError(toUserMessage(err, 'Could not load combinations.'))
-      setRows([])
+      // A failed read stays unknown (null), never an empty registry.
+      setLoadError(toUserMessage(err, 'Could not load combinations.'))
+      setRows(null)
     } finally {
       setRefreshing(false)
     }
@@ -93,38 +134,24 @@ export default function Combinations() {
 
   useEffect(() => { load() }, [load])
 
-  const summary = useMemo(() => summarizeCombinations(rows || []), [rows])
+  const kpis = useMemo(() => combinationKpis(rows || []), [rows])
   const duplicateTrailers = useMemo(() => detectDuplicateTrailers(rows || []), [rows])
+  const siteOptions = useMemo(() => siteOptionsOf(rows || []), [rows])
 
-  const siteOptions = useMemo(
-    () => [...new Set((rows || []).map((r) => r.site).filter(Boolean))].sort(),
-    [rows],
+  const filtered = useMemo(
+    () => filterCombinations(rows || [], { status: statusFilter, site: siteFilter, trailers: trailerFilter, search }),
+    [rows, statusFilter, siteFilter, trailerFilter, search],
   )
+  const tableRows = useMemo(() => filtered.map(registryRow), [filtered])
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return (rows || []).filter((r) => {
-      if (statusFilter !== 'all' && r.status !== statusFilter) return false
-      if (siteFilter && r.site !== siteFilter) return false
-      if (q) {
-        const hay = `${r.name || ''} ${r.prime_mover_no || ''} ${(parseTrailerList(r.trailer_nos)).join(' ')} ${r.site || ''}`.toLowerCase()
-        if (!hay.includes(q)) return false
-      }
-      return true
-    })
-  }, [rows, statusFilter, siteFilter, search])
+  const clearFilters = () => { setStatusFilter('all'); setSiteFilter(''); setTrailerFilter('all'); setSearch('') }
+  const hasFilters = statusFilter !== 'all' || siteFilter || trailerFilter !== 'all' || search
 
-  const clearFilters = () => { setStatusFilter('all'); setSiteFilter(''); setSearch('') }
-  const hasFilters = statusFilter !== 'all' || siteFilter || search
-  const registryPager = usePagedRows(filtered)
-
-  // ── Selected combination + rollup (Unit intelligence) ───────────────────────
   const selectedCombo = useMemo(
     () => (rows || []).find((r) => String(r.id) === String(selectedId)) || null,
     [rows, selectedId],
   )
 
-  // Default the selector to the first combination once data lands.
   useEffect(() => {
     if (!selectedId && rows && rows.length) setSelectedId(String(rows[0].id))
   }, [rows, selectedId])
@@ -152,21 +179,29 @@ export default function Combinations() {
     return computeCombinationRollup(selectedCombo, intel.tyres, intel.vehicles)
   }, [selectedCombo, intel])
 
-  // ── Export (Registry) ───────────────────────────────────────────────────────
-  const EXPORT_COLS = ['name', 'prime_mover_no', 'trailers', 'site', 'status', 'notes']
-  const EXPORT_HEADERS = ['Name', 'Prime Mover', 'Trailers', 'Site', 'Status', 'Notes']
-  const exportRows = filtered.map((r) => ({
-    name: r.name || '',
-    prime_mover_no: r.prime_mover_no || '',
-    trailers: parseTrailerList(r.trailer_nos).join(', '),
-    site: r.site || '',
-    status: r.status || '',
-    notes: r.notes || '',
-  }))
+  const runExport = async (format) => {
+    setExporting(true); setActionError('')
+    try {
+      const { exportToExcel, exportToPdf, reportFileName } = await loadExportUtils()
+      const data = combinationExportRows(filtered)
+      const file = reportFileName('Asset Combinations')
+      if (format === 'pdf') {
+        await exportToPdf(data, COMBINATION_EXPORT_COLUMNS, 'Asset Combinations', file, 'landscape', company, {
+          meta: { Combinations: kpis.total, Active: kpis.active, 'Trailers linked': kpis.trailers },
+        })
+      } else {
+        await exportToExcel(data, COMBINATION_EXPORT_COLUMNS.map((c) => c.key), COMBINATION_EXPORT_COLUMNS.map((c) => c.header), file, 'Combinations')
+      }
+    } catch (e) {
+      setActionError(toUserMessage(e, 'Could not export. Try again.'))
+    } finally {
+      setExporting(false)
+    }
+  }
 
-  // ── Modal ─────────────────────────────────────────────────────────────────
+  // Modal
   const openCreate = () => { setEditing(null); setForm(EMPTY_FORM); setFormError(''); setModalOpen(true) }
-  const openEdit = (r) => {
+  const openEdit = useCallback((r) => {
     setEditing(r)
     setForm({
       name: r.name || '',
@@ -178,12 +213,7 @@ export default function Combinations() {
     })
     setFormError('')
     setModalOpen(true)
-  }
-  // Stable identities. `useDialogBehavior` currently holds onClose in a ref, so
-  // an inline arrow is safe today — but this form's state lives on the PAGE, and
-  // that is exactly the shape that was untypeable when the callback sat in the
-  // effect's dependency array. Keeping it stable costs nothing and means a future
-  // change to the hook cannot quietly make this dialog lose focus per keystroke.
+  }, [])
   const closeModal = useCallback(() => {
     if (!saving) { setModalOpen(false); setEditing(null) }
   }, [saving])
@@ -223,91 +253,123 @@ export default function Combinations() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setError(toUserMessage(err, 'Could not delete combination.'))
+      setActionError(toUserMessage(err, 'Could not delete combination.'))
+      setConfirmDelete(null)
     } finally {
       setDeleting(false)
     }
   }
 
-  const kpis = [
-    { label: 'Combinations', value: summary.total, icon: Combine, tone: 'text-[var(--text-primary)]' },
-    { label: 'Active', value: summary.active, icon: Truck, tone: 'text-green-400' },
-    { label: 'Trailers linked', value: summary.trailers, icon: Link2, tone: 'text-indigo-400' },
-    { label: 'Total units', value: summary.units, icon: Boxes, tone: 'text-amber-400' },
-  ]
+  const columns = useMemo(() => [
+    {
+      id: 'name', header: 'Name', accessorFn: (r) => r.name || undefined, sortUndefined: 'last', size: 180,
+      cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original.name || 'N/A'}</span>,
+    },
+    {
+      id: 'prime_mover_no', header: 'Prime mover', accessorFn: (r) => r.prime_mover_no || undefined, sortUndefined: 'last', size: 130,
+      cell: ({ row }) => <span className="font-mono text-xs text-[var(--text-secondary)]">{row.original.prime_mover_no || 'N/A'}</span>,
+    },
+    {
+      id: 'trailers', header: 'Trailers', accessorFn: (r) => r.trailerCount, size: 240,
+      meta: { exportValue: (r) => r.trailers.join(', ') },
+      cell: ({ row }) => (row.original.trailers.length ? (
+        <div className="flex flex-wrap gap-1">
+          {row.original.trailers.map((t, i) => (
+            <span key={`${t}-${i}`} className="badge text-[11px] px-2 py-0.5 rounded bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--input-border)] font-mono">{t}</span>
+          ))}
+        </div>
+      ) : <span className="text-[var(--text-muted)]">None linked</span>),
+    },
+    {
+      id: 'site', header: 'Site', accessorFn: (r) => r.site || undefined, sortUndefined: 'last', size: 130,
+      cell: ({ row }) => <span className="text-[var(--text-secondary)]">{row.original.site || 'N/A'}</span>,
+    },
+    {
+      id: 'status', header: 'Status', accessorFn: (r) => r.status || 'inactive', size: 110,
+      cell: ({ row }) => <StatusBadge status={row.original.status} />,
+    },
+    {
+      id: 'actions', header: '', enableSorting: false, enableHiding: false, size: 110, meta: { export: false, align: 'right' },
+      cell: ({ row }) => {
+        const r = row.original
+        const label = r.name || r.prime_mover_no || 'combination'
+        return (
+          <div className="flex items-center justify-end gap-1">
+            <button type="button" onClick={(e) => { e.stopPropagation(); setSelectedId(String(r.id)); setView('intelligence') }}
+              className="min-w-[36px] min-h-[36px] inline-flex items-center justify-center rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+              aria-label={`Analyse ${label}`} title="Unit intelligence"><Network size={15} /></button>
+            <button type="button" onClick={(e) => { e.stopPropagation(); openEdit(r) }}
+              className="min-w-[36px] min-h-[36px] inline-flex items-center justify-center rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+              aria-label={`Edit ${label}`} title="Edit"><Pencil size={15} /></button>
+            <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmDelete(r) }}
+              className="min-w-[36px] min-h-[36px] inline-flex items-center justify-center rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+              aria-label={`Delete ${label}`} title="Delete"><Trash2 size={15} /></button>
+          </div>
+        )
+      },
+    },
+  ], [openEdit])
 
   const TABS = [
     { key: 'registry', label: 'Registry', icon: Boxes },
     { key: 'intelligence', label: 'Unit intelligence', icon: Network },
   ]
+  const unknown = rows === null
+  const v = (n) => (unknown ? 'N/A' : n)
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Combination Manager"
-        subtitle="Prime-mover ↔ trailer combinations: the operational units your fleet dispatches."
+        subtitle="Prime-mover and trailer combinations: the operational units your fleet dispatches."
         icon={Combine}
         onRefresh={load}
         refreshing={refreshing}
         updatedAt={updatedAt}
         actions={
           view === 'registry' ? (
-            <div className="flex items-center gap-2">
-              <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'combinations') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
-                <FileSpreadsheet size={14} /> Excel
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="button" onClick={() => runExport('excel')} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[40px]" disabled={!filtered.length || exporting}>
+                <FileSpreadsheet size={14} aria-hidden="true" /> Excel
               </button>
-              <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Asset Combinations', 'combinations', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
-                <FileText size={14} /> PDF
+              <button type="button" onClick={() => runExport('pdf')} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[40px]" disabled={!filtered.length || exporting}>
+                <FileText size={14} aria-hidden="true" /> PDF
               </button>
-              <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5">
-                <Plus size={14} /> New combination
+              <button type="button" onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[40px]">
+                <Plus size={14} aria-hidden="true" /> New combination
               </button>
             </div>
           ) : null
         }
       />
 
-      {/* Tab bar */}
-      <div className="flex items-center gap-1 border-b border-[var(--input-border)]">
-        {TABS.map((t) => {
-          const Icon = t.icon
-          const active = view === t.key
-          return (
-            <button
-              key={t.key}
-              onClick={() => setView(t.key)}
-              className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
-                active
-                  ? 'border-brand-bright text-[var(--text-primary)]'
-                  : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-              }`}
-            >
-              <Icon size={15} /> {t.label}
-            </button>
-          )
-        })}
-      </div>
+      <TabBar tabs={TABS} value={view} onChange={setView} label="Combination views" />
 
-      {error && (
-        // Card is `flex flex-col`; Tailwind emits .flex-col after .flex-row, so a
-        // `flex-row` class here would silently lose. Direction goes in `style`,
-        // which Card spreads last.
-        <Card tone="crit" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-          <div className="min-w-0">
-            <p className="text-red-300 font-medium">Couldn't load combinations.</p>
-            <p className="text-[var(--text-muted)] text-sm mt-1 break-words">{error}</p>
+      {loadError && view === 'intelligence' && (
+        <Card tone="crit" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }} role="alert">
+          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
+          <div className="min-w-0 flex-1">
+            <p className="text-red-300 font-medium">Could not load combinations.</p>
+            <p className="text-[var(--text-muted)] text-sm mt-1 break-words">{loadError}</p>
             <p className="text-[var(--text-muted)] text-xs mt-2 flex items-center gap-1.5">
-              <Database size={12} /> If this is a missing-table error, apply <span className="font-mono">MIGRATIONS_V141_ASSET_COMBINATIONS.sql</span>.
+              <Database size={12} aria-hidden="true" /> If this is a missing-table error, apply <span className="font-mono">MIGRATIONS_V141_ASSET_COMBINATIONS.sql</span>.
             </p>
           </div>
+          <button type="button" onClick={load} className="btn-secondary text-sm shrink-0 min-h-[40px]">Retry</button>
         </Card>
       )}
 
-      {/* Duplicate-trailer data-quality warning (both tabs) */}
+      {actionError && (
+        <Card tone="crit" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }} role="alert">
+          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
+          <p className="text-sm text-red-300 flex-1 break-words">{actionError}</p>
+          <button type="button" onClick={() => setActionError('')} className="min-w-[36px] min-h-[36px] inline-flex items-center justify-center rounded text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Dismiss message"><X size={15} /></button>
+        </Card>
+      )}
+
       {duplicateTrailers.length > 0 && (
         <Card tone="warn" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
-          <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
+          <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" aria-hidden="true" />
           <div className="min-w-0">
             <p className="text-amber-300 font-medium">
               {duplicateTrailers.length} trailer{duplicateTrailers.length !== 1 ? 's' : ''} assigned to more than one active combination.
@@ -315,9 +377,11 @@ export default function Combinations() {
             <p className="text-[var(--text-muted)] text-sm mt-1">A trailer can only be part of one active unit at a time. Review these registry entries.</p>
             <div className="flex flex-wrap gap-1.5 mt-2">
               {duplicateTrailers.map((d) => (
-                <span key={d.trailer} className="badge text-[11px] px-2 py-0.5 rounded bg-amber-900/30 text-amber-300 border border-amber-700/50 font-mono">
-                  {d.trailer} ×{d.combinations.length}
-                </span>
+                <button type="button" key={d.trailer} onClick={() => { setView('registry'); setSearch(d.trailer) }}
+                  className="badge text-[11px] px-2 py-0.5 rounded bg-amber-900/30 text-amber-300 border border-amber-700/50 font-mono hover:bg-amber-900/50"
+                  title="Show the combinations holding this trailer">
+                  {d.trailer} x{d.combinations.length}
+                </button>
               ))}
             </div>
           </div>
@@ -325,82 +389,120 @@ export default function Combinations() {
       )}
 
       {view === 'registry' ? (
-        <RegistryTab
-          rows={rows} filtered={filtered} summary={summary} kpis={kpis}
-          statusFilter={statusFilter} setStatusFilter={setStatusFilter}
-          siteFilter={siteFilter} setSiteFilter={setSiteFilter}
-          search={search} setSearch={setSearch}
-          siteOptions={siteOptions} hasFilters={hasFilters} clearFilters={clearFilters}
-          openEdit={openEdit} setConfirmDelete={setConfirmDelete}
-          registryPager={registryPager}
-        />
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-[var(--gap-grid)]">
+            <StatTile label="Combinations" value={v(kpis.total)} icon={Combine} sub={kpis.sites ? `${kpis.sites} site${kpis.sites === 1 ? '' : 's'}` : undefined} />
+            <StatTile label="Active" value={v(kpis.active)} icon={Truck} tone="accent" sub={kpis.activePct == null ? 'N/A of registry' : `${kpis.activePct}% of registry`} />
+            <StatTile label="Trailers linked" value={v(kpis.trailers)} icon={Link2} tone="info" sub={kpis.avgTrailersPerUnit == null ? 'Avg N/A per unit' : `Avg ${kpis.avgTrailersPerUnit} per unit`} />
+            <StatTile label="Total units" value={v(kpis.units)} icon={Boxes} sub="Prime movers plus trailers" />
+            <StatTile label="No trailer linked" value={v(kpis.withoutTrailer)} icon={Unlink} tone={kpis.withoutTrailer > 0 ? 'warn' : 'neutral'} sub="Prime mover only" />
+            <StatTile label="Double-booked trailers" value={v(kpis.duplicateTrailers)} icon={Copy} tone={kpis.duplicateTrailers > 0 ? 'crit' : 'neutral'} sub="Across active units" />
+          </div>
+
+          <Card>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(220px,1fr)_auto_auto_auto_auto] items-end gap-2">
+              <div className="relative">
+                <label htmlFor="combo-search" className="sr-only">Search combinations</label>
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+                <input id="combo-search" className="input pl-9 w-full min-h-[40px]" placeholder="Search name, prime mover, trailer, site" value={search} onChange={(e) => setSearch(e.target.value)} />
+              </div>
+              <select className="input min-h-[40px]" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter by status">
+                <option value="all">All statuses</option>
+                {COMBINATION_STATUSES.map((s) => <option key={s} value={s}>{cap(s)}</option>)}
+              </select>
+              <select className="input min-h-[40px]" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} aria-label="Filter by site">
+                <option value="">All sites</option>
+                {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <select className="input min-h-[40px]" value={trailerFilter} onChange={(e) => setTrailerFilter(e.target.value)} aria-label="Filter by trailer link">
+                <option value="all">Any trailer link</option>
+                <option value="with">With trailers</option>
+                <option value="without">No trailer linked</option>
+              </select>
+              <div className="flex items-center gap-2 justify-between sm:justify-end">
+                {hasFilters && (
+                  <button type="button" onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[40px]"><X size={14} aria-hidden="true" /> Clear</button>
+                )}
+                <span className="text-xs text-[var(--text-muted)] whitespace-nowrap" aria-live="polite">{unknown ? 'N/A' : `${filtered.length} of ${kpis.total}`}</span>
+              </div>
+            </div>
+          </Card>
+
+          <EnterpriseTable
+            columns={columns}
+            data={tableRows}
+            getRowId={(r) => String(r.id)}
+            loading={unknown && refreshing}
+            error={loadError ? `${loadError} If this is a missing-table error, apply MIGRATIONS_V141_ASSET_COMBINATIONS.sql.` : null}
+            onRetry={load}
+            enableGlobalFilter={false}
+            enableColumnFilters={false}
+            enableExport={false}
+            viewKey="combinations-registry"
+            initialPageSize={25}
+            onRowClick={(r) => openEdit(r)}
+            emptyMessage={(rows || []).length === 0 ? 'No combinations yet. Create your first prime-mover and trailer link.' : 'No combinations match these filters.'}
+          />
+        </>
       ) : (
         <IntelligenceTab
-          rows={rows}
+          rows={rows} loading={refreshing}
           selectedId={selectedId} setSelectedId={setSelectedId}
           selectedCombo={selectedCombo}
           intelLoading={intelLoading} intelError={intelError}
+          onRetryIntel={() => loadIntel(selectedCombo)}
           rollup={rollup} currency={currency}
         />
       )}
 
-      {/* Create / edit dialog */}
-      <Modal
-        open={modalOpen}
-        onClose={closeModal}
-        size="md"
-        title={editing ? 'Edit combination' : 'New combination'}
-      >
-        {/* The submit button stays INSIDE the form. Moving it to Modal's `footer`
-            would break form association unless it carried form="…", which is a
-            behaviour change, not a migration. */}
+      <Modal open={modalOpen} onClose={closeModal} size="md" title={editing ? 'Edit combination' : 'New combination'}>
         <form onSubmit={submitForm} className="space-y-4">
           <div>
-            <label className="block text-xs text-[var(--text-muted)] mb-1">Name</label>
-            <input className="input w-full" placeholder="e.g. Route 12 rig" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+            <label htmlFor="combo-name" className="block text-xs text-[var(--text-muted)] mb-1">Name</label>
+            <input id="combo-name" className="input w-full" placeholder="e.g. Route 12 rig" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
           </div>
           <div>
-            <label className="block text-xs text-[var(--text-muted)] mb-1">Prime mover number <span className="text-red-400">*</span></label>
-            <input className="input w-full font-mono" placeholder="e.g. PM-1024" value={form.prime_mover_no} onChange={(e) => setForm((f) => ({ ...f, prime_mover_no: e.target.value }))} required />
+            <label htmlFor="combo-pm" className="block text-xs text-[var(--text-muted)] mb-1">Prime mover number <span className="text-red-400" aria-hidden="true">*</span></label>
+            <input id="combo-pm" className="input w-full font-mono" placeholder="e.g. PM-1024" value={form.prime_mover_no} onChange={(e) => setForm((f) => ({ ...f, prime_mover_no: e.target.value }))} required aria-required="true" />
           </div>
           <div>
-            <label className="block text-xs text-[var(--text-muted)] mb-1">Trailer numbers</label>
-            <input className="input w-full font-mono" placeholder="Comma-separated, e.g. TR-01, TR-02" value={form.trailer_nos} onChange={(e) => setForm((f) => ({ ...f, trailer_nos: e.target.value }))} />
-            <p className="text-[11px] text-[var(--text-muted)] mt-1">{parseTrailerList(form.trailer_nos).length} trailer(s)</p>
+            <label htmlFor="combo-trailers" className="block text-xs text-[var(--text-muted)] mb-1">Trailer numbers</label>
+            <input id="combo-trailers" className="input w-full font-mono" placeholder="Comma-separated, e.g. TR-01, TR-02" value={form.trailer_nos} onChange={(e) => setForm((f) => ({ ...f, trailer_nos: e.target.value }))} aria-describedby="combo-trailers-help" />
+            <p id="combo-trailers-help" className="text-[11px] text-[var(--text-muted)] mt-1">{parseTrailerList(form.trailer_nos).length} trailer(s)</p>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs text-[var(--text-muted)] mb-1">Site</label>
-              <input className="input w-full" placeholder="Depot / yard" value={form.site} onChange={(e) => setForm((f) => ({ ...f, site: e.target.value }))} />
+              <label htmlFor="combo-site" className="block text-xs text-[var(--text-muted)] mb-1">Site</label>
+              <input id="combo-site" className="input w-full" placeholder="Depot / yard" value={form.site} onChange={(e) => setForm((f) => ({ ...f, site: e.target.value }))} list="combo-site-options" />
+              <datalist id="combo-site-options">{siteOptions.map((s) => <option key={s} value={s} />)}</datalist>
             </div>
             <div>
-              <label className="block text-xs text-[var(--text-muted)] mb-1">Status</label>
-              <select className="input w-full" value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}>
-                {COMBINATION_STATUSES.map((s) => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
+              <label htmlFor="combo-status" className="block text-xs text-[var(--text-muted)] mb-1">Status</label>
+              <select id="combo-status" className="input w-full" value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}>
+                {COMBINATION_STATUSES.map((s) => <option key={s} value={s}>{cap(s)}</option>)}
               </select>
             </div>
           </div>
           <div>
-            <label className="block text-xs text-[var(--text-muted)] mb-1">Notes</label>
-            <textarea className="input w-full min-h-[72px]" placeholder="Optional context…" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
+            <label htmlFor="combo-notes" className="block text-xs text-[var(--text-muted)] mb-1">Notes</label>
+            <textarea id="combo-notes" className="input w-full min-h-[72px]" placeholder="Optional context" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
           </div>
 
           {formError && (
-            <div className="text-sm text-red-300 bg-red-900/30 border border-red-800/50 rounded px-3 py-2 flex items-start gap-2">
-              <AlertTriangle size={14} className="mt-0.5 shrink-0" /> <span className="break-words">{formError}</span>
+            <div role="alert" className="text-sm text-red-300 bg-red-900/30 border border-red-800/50 rounded px-3 py-2 flex items-start gap-2">
+              <AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden="true" /> <span className="break-words">{formError}</span>
             </div>
           )}
 
           <div className="flex items-center justify-end gap-2 pt-2">
-            <button type="button" onClick={closeModal} disabled={saving} className="btn-secondary text-sm">Cancel</button>
-            <button type="submit" disabled={saving} className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60">
-              {saving ? 'Saving…' : editing ? 'Save changes' : 'Create combination'}
+            <button type="button" onClick={closeModal} disabled={saving} className="btn-secondary text-sm min-h-[40px]">Cancel</button>
+            <button type="submit" disabled={saving} className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60 min-h-[40px]">
+              {saving ? 'Saving...' : editing ? 'Save changes' : 'Create combination'}
             </button>
           </div>
         </form>
       </Modal>
 
-      {/* Delete confirm — no form here, so the actions belong in Modal's footer. */}
       <Modal
         open={!!confirmDelete}
         onClose={closeConfirmDelete}
@@ -408,15 +510,15 @@ export default function Combinations() {
         title="Delete combination"
         footer={
           <>
-            <button onClick={closeConfirmDelete} disabled={deleting} className="btn-secondary text-sm">Cancel</button>
-            <button onClick={doDelete} disabled={deleting} className="btn-primary text-sm !bg-red-600 hover:!bg-red-700 disabled:opacity-60">
-              {deleting ? 'Deleting…' : 'Delete'}
+            <button type="button" onClick={closeConfirmDelete} disabled={deleting} className="btn-secondary text-sm min-h-[40px]">Cancel</button>
+            <button type="button" onClick={doDelete} disabled={deleting} className="btn-primary text-sm !bg-red-600 hover:!bg-red-700 disabled:opacity-60 min-h-[40px]">
+              {deleting ? 'Deleting...' : 'Delete'}
             </button>
           </>
         }
       >
         <p className="text-sm text-[var(--text-muted)] flex items-start gap-2">
-          <Trash2 size={16} className="text-red-400 mt-0.5 shrink-0" />
+          <Trash2 size={16} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
           <span>
             Delete <span className="font-semibold text-[var(--text-secondary)]">{confirmDelete?.name || confirmDelete?.prime_mover_no}</span>? This cannot be undone.
           </span>
@@ -426,188 +528,103 @@ export default function Combinations() {
   )
 }
 
-// ── Registry tab ─────────────────────────────────────────────────────────────
-function RegistryTab({
-  rows, filtered, summary, kpis, statusFilter, setStatusFilter, siteFilter, setSiteFilter,
-  search, setSearch, siteOptions, hasFilters, clearFilters, openEdit, setConfirmDelete,
-  registryPager,
-}) {
-  return (
-    <>
-      {/* KPI tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-[var(--gap-grid)]">
-        {kpis.map((k) => {
-          const Icon = k.icon
-          return (
-            <Card key={k.label}>
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
-                <Icon size={16} className={k.tone} />
-              </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
-            </Card>
-          )
-        })}
-      </div>
-
-      {/* Filters. Deliberately NOT `clip`: this card holds two native <select>
-          dropdowns, and overflow:hidden on their container is the exact bug the
-          Card primitive exists to end. */}
-      <Card>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <input className="input pl-9 w-full" placeholder="Search name, prime mover, trailer, site…" value={search} onChange={(e) => setSearch(e.target.value)} />
-          </div>
-          <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
-            <option value="all">All statuses</option>
-            {COMBINATION_STATUSES.map((s) => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
-          </select>
-          <select className="input" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} aria-label="Site">
-            <option value="">All sites</option>
-            {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-          {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
-          <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {summary.total}</span>
-        </div>
-      </Card>
-
-      {/* Registry table. Kept as raw table markup on purpose: composite cells
-          (trailer badge lists, row actions), its own TablePagination and the
-          page-level Excel/PDF export. EnterpriseTable would add a second search
-          box and a different export alongside the ones already here. */}
-      <Card pad="none" clip>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                {['Name', 'Prime Mover', 'Trailers', 'Site', 'Status', ''].map((h, i) => <th key={i} className="px-4 py-3 font-semibold whitespace-nowrap">{h}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {rows === null ? (
-                [0, 1, 2, 3, 4].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={6} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
-              ) : filtered.length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-12 text-center text-[var(--text-muted)]">
-                  <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 ? 'No combinations yet. Create your first prime-mover ↔ trailer link.' : 'No combinations match these filters.'}
-                </td></tr>
-              ) : (
-                registryPager.pageRows.map((r) => {
-                  const trailers = parseTrailerList(r.trailer_nos)
-                  return (
-                    <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                      <td className="px-4 py-2.5 text-[var(--text-primary)] font-medium">{r.name || 'N/A'}</td>
-                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{r.prime_mover_no || 'N/A'}</td>
-                      <td className="px-4 py-2.5">
-                        {trailers.length ? (
-                          <div className="flex flex-wrap gap-1">
-                            {trailers.map((t, i) => (
-                              <span key={`${t}-${i}`} className="badge text-[11px] px-2 py-0.5 rounded bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--input-border)] font-mono">{t}</span>
-                            ))}
-                          </div>
-                        ) : <span className="text-[var(--text-muted)]">N/A</span>}
-                      </td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || 'N/A'}</td>
-                      <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${STATUS_STYLES[r.status] || STATUS_STYLES.inactive}`}>{r.status || 'inactive'}</span></td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center justify-end gap-1">
-                          <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" title="Edit"><Pencil size={14} /></button>
-                          <button onClick={() => setConfirmDelete(r)} className="p-1.5 rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" title="Delete"><Trash2 size={14} /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-        <TablePagination {...registryPager} />
-      </Card>
-    </>
-  )
-}
-
-// ── Unit-intelligence tab ────────────────────────────────────────────────────
+// Unit-intelligence tab
 function IntelligenceTab({
-  rows, selectedId, setSelectedId, selectedCombo, intelLoading, intelError, rollup, currency,
+  rows, loading, selectedId, setSelectedId, selectedCombo, intelLoading, intelError, onRetryIntel, rollup, currency,
 }) {
+  const posRows = useMemo(() => positionRows(rollup), [rollup])
+  const coverage = useMemo(() => memberCoverage(rollup), [rollup])
+
+  const posColumns = useMemo(() => [
+    { id: 'label', header: 'Position class', accessorFn: (p) => p.label, size: 200 },
+    { id: 'count', header: 'Tyres', accessorFn: (p) => p.count, meta: { align: 'right' }, size: 90 },
+    {
+      id: 'spend', header: 'Spend', accessorFn: (p) => p.spend, meta: { align: 'right' }, size: 140,
+      cell: ({ row }) => formatCurrency(row.original.spend, currency, 0),
+    },
+    {
+      id: 'share', header: 'Share of spend', accessorFn: (p) => p.spendSharePct ?? undefined, sortUndefined: 'last', meta: { align: 'right' }, size: 130,
+      cell: ({ row }) => (row.original.spendSharePct == null ? 'N/A' : `${row.original.spendSharePct}%`),
+    },
+    {
+      id: 'cpk', header: 'CPK (blended)', accessorFn: (p) => p.cpk ?? undefined, sortUndefined: 'last', meta: { align: 'right' }, size: 140,
+      cell: ({ row }) => <span className="font-mono">{row.original.cpk != null ? `${currency} ${fmt(row.original.cpk, 3)}` : 'N/A'}</span>,
+    },
+  ], [currency])
+
   if (rows === null) {
-    return <Card><div className="h-40 bg-[var(--input-bg)] rounded animate-pulse" /></Card>
+    return loading
+      ? <Card><div className="h-40 bg-[var(--input-bg)] rounded animate-pulse" aria-label="Loading combinations" /></Card>
+      : <Card className="text-center text-[var(--text-muted)]"><div style={{ paddingBlock: 'var(--space-8)' }}>Combinations could not be loaded. Use Retry above.</div></Card>
   }
   if (rows.length === 0) {
     return (
-      // The old `py-12` utility would be DEAD here: Card sets `padding` inline
-      // and inline beats a class, so the empty state would silently collapse.
-      // The vertical room goes on an inner element as a token instead.
       <Card className="text-center text-[var(--text-muted)]">
         <div style={{ paddingTop: 'var(--space-8)', paddingBottom: 'var(--space-8)' }}>
-          <Network size={26} className="mx-auto mb-2 opacity-60" />
+          <Network size={26} className="mx-auto mb-2 opacity-60" aria-hidden="true" />
           No combinations yet. Create one in the Registry tab to analyse it as a combined unit.
         </div>
       </Card>
     )
   }
 
+  const scrapPct = scrapSharePct(rollup)
+
   return (
     <div className="space-y-4">
-      {/* Selector. No `clip` — it holds a native <select>. */}
       <Card>
         <div className="flex flex-wrap items-center gap-3">
-          <label className="text-sm text-[var(--text-muted)] inline-flex items-center gap-1.5">
-            <Combine size={15} className="text-brand-bright" /> Combined unit
+          <label htmlFor="combo-select" className="text-sm text-[var(--text-muted)] inline-flex items-center gap-1.5">
+            <Combine size={15} className="text-brand-bright" aria-hidden="true" /> Combined unit
           </label>
-          <select className="input min-w-[240px]" value={selectedId} onChange={(e) => setSelectedId(e.target.value)} aria-label="Select combination">
-            {rows.map((r) => (
-              <option key={r.id} value={r.id}>
-                {(r.name || r.prime_mover_no || 'Unnamed')} · {r.prime_mover_no || 'N/A'} ({parseTrailerList(r.trailer_nos).length} trailer{parseTrailerList(r.trailer_nos).length !== 1 ? 's' : ''})
-              </option>
-            ))}
+          <select id="combo-select" className="input w-full sm:w-auto sm:min-w-[260px] min-h-[40px]" value={selectedId} onChange={(e) => setSelectedId(e.target.value)}>
+            {rows.map((r) => {
+              const n = parseTrailerList(r.trailer_nos).length
+              return (
+                <option key={r.id} value={r.id}>
+                  {(r.name || r.prime_mover_no || 'Unnamed')} | {r.prime_mover_no || 'N/A'} ({n} trailer{n !== 1 ? 's' : ''})
+                </option>
+              )
+            })}
           </select>
-          {selectedCombo && (
-            <span className={`badge text-[11px] px-2 py-0.5 rounded ${STATUS_STYLES[selectedCombo.status] || STATUS_STYLES.inactive}`}>
-              {selectedCombo.status || 'inactive'}
-            </span>
+          {selectedCombo && <StatusBadge status={selectedCombo.status} />}
+          {selectedCombo?.site && (
+            <span className="text-xs text-[var(--text-muted)] inline-flex items-center gap-1"><MapPin size={12} aria-hidden="true" /> {selectedCombo.site}</span>
           )}
-          {selectedCombo?.site && <span className="text-xs text-[var(--text-muted)]">Site: {selectedCombo.site}</span>}
         </div>
       </Card>
 
       {intelError && (
-        <Card tone="crit" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-          <div>
-            <p className="text-red-300 font-medium">Couldn't load combined-unit data.</p>
+        <Card tone="crit" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }} role="alert">
+          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
+          <div className="flex-1">
+            <p className="text-red-300 font-medium">Could not load combined-unit data.</p>
             <p className="text-[var(--text-muted)] text-sm mt-1 break-words">{intelError}</p>
           </div>
+          <button type="button" onClick={onRetryIntel} className="btn-secondary text-sm shrink-0 min-h-[40px]">Retry</button>
         </Card>
       )}
 
       {intelLoading || !rollup ? (
         !intelError && (
-          <div className="grid gap-[var(--gap-grid)]">
+          <div className="grid gap-[var(--gap-grid)]" aria-busy="true" aria-label="Loading combined-unit data">
             <Card><div className="h-24 bg-[var(--input-bg)] rounded animate-pulse" /></Card>
             <Card><div className="h-40 bg-[var(--input-bg)] rounded animate-pulse" /></Card>
           </div>
         )
       ) : (
         <>
-          {/* Combined-unit KPI cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-[var(--gap-grid)]">
-            <IntelKpi icon={CircleDot} tone="text-indigo-400" label="Fitted tyres" value={rollup.fittedTyres}
+            <StatTile label="Fitted tyres" value={rollup.fittedTyres} icon={CircleDot} tone="info"
               sub={`${rollup.tyreCount} record${rollup.tyreCount !== 1 ? 's' : ''} across unit`} />
-            <IntelKpi icon={Gauge} tone="text-brand-bright" label="Unit CPK (blended)"
-              value={rollup.blendedCpk != null ? `${currency} ${fmt(rollup.blendedCpk, 3)}` : 'N/A'}
-              sub={rollup.canonicalCpk?.validCount ? `Canonical avg ${currency} ${fmt(rollup.canonicalCpk.fleetAvgCpk, 3)} · ${rollup.canonicalCpk.validCount} valid` : 'No valid cost/km rows'} />
-            <IntelKpi icon={DollarSign} tone="text-emerald-400" label="Unit tyre spend"
-              value={formatCurrency(rollup.totalSpend, currency, 0)}
+            <StatTile label="Unit CPK (blended)" value={rollup.blendedCpk != null ? `${currency} ${fmt(rollup.blendedCpk, 3)}` : 'N/A'} icon={Gauge} tone="accent"
+              sub={rollup.canonicalCpk?.validCount ? `Canonical avg ${currency} ${fmt(rollup.canonicalCpk.fleetAvgCpk, 3)} (${rollup.canonicalCpk.validCount} valid)` : 'No valid cost per km rows'} />
+            <StatTile label="Unit tyre spend" value={formatCurrency(rollup.totalSpend, currency, 0)} icon={DollarSign}
               sub={rollup.avgTyreLifeKm != null ? `Avg life ${rollup.avgTyreLifeKm.toLocaleString()} km` : 'No km data'} />
-            <IntelKpi icon={Recycle} tone={rollup.scrapTyres > 0 ? 'text-red-400' : 'text-green-400'} label="Scrapped tyres"
-              value={rollup.scrapTyres} sub={rollup.fittedTyres + rollup.scrapTyres > 0 ? `${Math.round((rollup.scrapTyres / (rollup.fittedTyres + rollup.scrapTyres)) * 100)}% of fitted+scrap` : 'No scrap recorded'} />
+            <StatTile label="Scrapped tyres" value={rollup.scrapTyres} icon={Recycle} tone={rollup.scrapTyres > 0 ? 'crit' : 'neutral'}
+              sub={scrapPct == null ? 'No fitted or scrapped tyres' : `${scrapPct}% of fitted plus scrap`} />
           </div>
 
-          {/* Members */}
           <Card>
             <CardHeader
               level={2}
@@ -615,29 +632,28 @@ function IntelligenceTab({
               title="Member assets"
               actions={
                 <span className="text-xs text-[var(--text-muted)]">
-                  {rollup.resolution.resolvedCount}/{rollup.members.length} resolved in fleet master
+                  {coverage.resolved}/{coverage.total} resolved in fleet master{coverage.pct == null ? '' : ` (${coverage.pct}%)`}
                 </span>
               }
             />
             <CardBody>
               {rollup.resolution.unresolvedCount > 0 && (
                 <div className="mb-3 rounded border border-amber-700/50 bg-amber-900/10 px-3 py-2 text-sm text-amber-300 flex items-start gap-2">
-                  <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                  <AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
                   <span>
                     {rollup.resolution.unresolvedCount} member{rollup.resolution.unresolvedCount !== 1 ? 's' : ''} not found in <span className="font-mono">vehicle_fleet</span>:{' '}
                     <span className="font-mono">{rollup.resolution.unresolved.join(', ')}</span>. Add them to fleet master for complete intelligence.
                   </span>
                 </div>
               )}
-
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              <ul className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
                 {rollup.members.map((m) => (
-                  <div key={`${m.role}-${m.asset_no}`} className={`rounded-lg border p-3 ${m.resolved ? 'border-[var(--input-border)] bg-[var(--input-bg)]/40' : 'border-amber-700/50 bg-amber-900/10'}`}>
+                  <li key={`${m.role}-${m.asset_no}`} className={`rounded-lg border p-3 ${m.resolved ? 'border-[var(--input-border)] bg-[var(--input-bg)]/40' : 'border-amber-700/50 bg-amber-900/10'}`}>
                     <div className="flex items-center justify-between">
                       <span className="font-mono text-sm font-semibold text-[var(--text-primary)]">{m.asset_no}</span>
                       {m.resolved
-                        ? <CheckCircle2 size={15} className="text-green-400" />
-                        : <XCircle size={15} className="text-amber-400" />}
+                        ? <span className="inline-flex items-center gap-1 text-[11px] text-green-400"><CheckCircle2 size={14} aria-hidden="true" /> Resolved</span>
+                        : <span className="inline-flex items-center gap-1 text-[11px] text-amber-400"><XCircle size={14} aria-hidden="true" /> Missing</span>}
                     </div>
                     <div className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mt-0.5">
                       {m.role === 'prime_mover' ? 'Prime mover' : 'Trailer'}
@@ -645,70 +661,41 @@ function IntelligenceTab({
                     {m.resolved ? (
                       <div className="text-xs text-[var(--text-secondary)] mt-1.5 space-y-0.5">
                         <div>{[m.make, m.model].filter(Boolean).join(' ') || m.vehicle_type || 'N/A'}</div>
-                        <div className="text-[var(--text-muted)]">{m.vehicle_type || 'N/A'}{m.status ? ` · ${m.status}` : ''}</div>
+                        <div className="text-[var(--text-muted)]">{m.vehicle_type || 'N/A'}{m.status ? ` | ${m.status}` : ''}</div>
                       </div>
                     ) : (
                       <div className="text-xs text-amber-300/80 mt-1.5">Not in fleet master</div>
                     )}
-                  </div>
+                  </li>
                 ))}
-              </div>
+              </ul>
             </CardBody>
           </Card>
 
-          {/* Position-class breakdown. Raw table markup kept on purpose: at most
-              four summary rows, and its CPK cell encodes a null-vs-value
-              distinction (an unmeasurable rate is not a zero) that a generic cell
-              renderer would flatten. */}
-          <Card pad="none" clip>
-            <CardHeader
-              level={2}
-              icon={Layers}
-              title="Position-class breakdown"
-              className="!mb-0 px-[var(--space-4)] py-[var(--space-3)] border-b border-[var(--border-dim)]"
+          <Card>
+            <CardHeader level={2} icon={Layers} title="Position-class breakdown"
+              description={'Positions that do not parse to steer, drive or trailer are grouped honestly as "Other / Unclassified".'} />
+            <EnterpriseTable
+              columns={posColumns}
+              data={posRows}
+              getRowId={(p) => p.positionClass}
+              enableGlobalFilter={false}
+              enableColumnFilters={false}
+              enableColumnVisibility={false}
+              enableExport
+              exportFileName="combination_position_breakdown"
+              reportMeta={{ title: `Position breakdown: ${selectedCombo?.name || selectedCombo?.prime_mover_no || 'unit'}`, currency }}
+              initialPageSize={25}
+              emptyMessage="No tyre records found for this unit's members."
             />
-            {rollup.positionBreakdown.length === 0 ? (
-              <div className="px-4 py-8 text-center text-sm text-[var(--text-muted)]">
-                No tyre records found for this unit's members.
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                      <th className="px-4 py-2.5 font-semibold">Position class</th>
-                      <th className="px-4 py-2.5 font-semibold text-right">Tyres</th>
-                      <th className="px-4 py-2.5 font-semibold text-right">Spend</th>
-                      <th className="px-4 py-2.5 font-semibold text-right">CPK (blended)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rollup.positionBreakdown.map((p) => (
-                      <tr key={p.positionClass} className="border-b border-[var(--input-border)]/50">
-                        <td className="px-4 py-2.5 text-[var(--text-primary)]">{POSITION_LABELS[p.positionClass] || p.positionClass}</td>
-                        <td className="px-4 py-2.5 text-right text-[var(--text-secondary)]">{p.count}</td>
-                        <td className="px-4 py-2.5 text-right text-[var(--text-secondary)]">{formatCurrency(p.spend, currency, 0)}</td>
-                        <td className="px-4 py-2.5 text-right font-mono text-[var(--text-secondary)]">{p.cpk != null ? `${currency} ${fmt(p.cpk, 3)}` : 'N/A'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            <p className="px-4 py-2 text-[11px] text-[var(--text-muted)] border-t border-[var(--input-border)]/60">
-              Positions that don't parse to steer / drive / trailer are grouped honestly as "Other / Unclassified".
-            </p>
           </Card>
 
-          {/* Honest telemetry / schematic panel. The old `border`/`bg-*` classes
-              were dead against Card's inline border and background, so they are
-              gone rather than left as decoration that does nothing. */}
           <Card>
             <div className="flex items-start gap-3">
-              <Info size={18} className="text-[var(--text-muted)] mt-0.5 shrink-0" />
+              <Info size={18} className="text-[var(--text-muted)] mt-0.5 shrink-0" aria-hidden="true" />
               <div className="min-w-0">
                 <h3 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-1.5">
-                  <Activity size={14} /> Live telemetry &amp; axle schematic: not available in this dataset
+                  <Activity size={14} aria-hidden="true" /> Live telemetry and axle schematic: not available in this dataset
                 </h3>
                 <p className="text-sm text-[var(--text-muted)] mt-1.5">
                   Per-tyre pressure (PSI), temperature and the top-down axle / wheel-position diagram require
@@ -719,7 +706,7 @@ function IntelligenceTab({
                 <div className="flex flex-wrap gap-1.5 mt-2.5">
                   {['Live PSI', 'Temperature', 'Pressure target', 'Wheel positions', 'Axle schematic'].map((x) => (
                     <span key={x} className="badge text-[11px] px-2 py-0.5 rounded bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]">
-                      {x} · no source
+                      {x}: no source
                     </span>
                   ))}
                 </div>
@@ -729,18 +716,5 @@ function IntelligenceTab({
         </>
       )}
     </div>
-  )
-}
-
-function IntelKpi({ icon: Icon, tone, label, value, sub }) {
-  return (
-    <Card>
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-[var(--text-muted)]">{label}</p>
-        <Icon size={16} className={tone} />
-      </div>
-      <p className={`text-2xl font-bold mt-1 ${tone}`}>{value}</p>
-      {sub && <p className="text-[11px] text-[var(--text-muted)] mt-1">{sub}</p>}
-    </Card>
   )
 }

@@ -1,5 +1,15 @@
+/**
+ * Tpms (route /tpms) - tyre pressure monitoring and inflation compliance.
+ *
+ * Reads live sensor rows (tpms_readings) and falls back to the tyre-record
+ * pressure baseline (tyre_records.pressure_reading) when no sensor data exists.
+ * Tabs: Overview (KPI strip, under-inflation insight, charts), Alerts (every
+ * out-of-band reading, sortable), Sites and positions, All readings.
+ *
+ * Pressure maths: src/lib/tpms.js + src/lib/tpmsAnalytics.js. Page-side
+ * normalisation / filtering / exports: src/lib/tpmsPageAnalytics.js.
+ */
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { motion } from 'framer-motion'
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement, ArcElement, PointElement, LineElement,
@@ -8,167 +18,108 @@ import {
 import { Doughnut, Bar, Line } from 'react-chartjs-2'
 import {
   Gauge, AlertTriangle, TrendingDown, TrendingUp, Activity,
-  Download, Filter, X, Search, RefreshCw, BarChart3, CheckCircle,
-  XCircle, Radio, Building2, Thermometer, Info, LineChart, Percent,
-  ArrowUpDown, Layers, FileText, ShieldAlert,
+  FileSpreadsheet, X, Search, BarChart3, CheckCircle, Radio, Building2, Info,
+  LineChart, Percent, Layers, FileText, ShieldAlert, List, AlertCircle, CheckCircle2, HelpCircle, ArrowUp,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Card, { CardHeader } from '../components/ui/Card'
+import StatTile from '../components/ui/StatTile'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useSettings } from '../contexts/SettingsContext'
 import { tpms as tpmsApi } from '../lib/api'
-import { classifyPressure, DEFAULT_TARGET_PRESSURE, DEFAULT_TOLERANCE_PCT } from '../lib/tpms'
 import {
   computeKpis, bandDistribution, worstOffenders, complianceTrend,
   siteCompliance, positionBreakdown, underInflationInsights,
 } from '../lib/tpmsAnalytics'
-import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
+import {
+  normalizeReading, deviationPct, deviationLabel, filterReadings, distinctValues,
+  honestCompliance, complianceTone, targetCoverage, tpmsExportRows, TPMS_EXPORT_COLUMNS,
+  BAND_LABEL, DEFAULT_TARGET_PRESSURE, DEFAULT_TOLERANCE_PCT,
+} from '../lib/tpmsPageAnalytics'
 import { toUserMessage } from '../lib/safeError'
-import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, ArcElement, PointElement, LineElement,
   Title, Tooltip, Legend, Filler,
 )
 
-// -- Band presentation ---------------------------------------------------------
+const loadExportUtils = () => import('../lib/exportUtils')
+
+// Semantic band colours (meaning-carrying, deliberately not palettised).
 const BAND_META = {
-  optimal:  { label: 'Optimal',  color: '#22c55e', text: 'text-green-400',  chip: 'bg-green-500/20 text-green-300 border border-green-500/40' },
-  under:    { label: 'Under',    color: '#f97316', text: 'text-orange-400', chip: 'bg-orange-500/20 text-orange-300 border border-orange-500/40' },
-  over:     { label: 'Over',     color: '#eab308', text: 'text-amber-400',  chip: 'bg-amber-500/20 text-amber-300 border border-amber-500/40' },
-  critical: { label: 'Critical', color: '#ef4444', text: 'text-red-400',    chip: 'bg-red-500/20 text-red-300 border border-red-500/40' },
-  unknown:  { label: 'Unknown',  color: '#6b7280', text: 'text-gray-400',   chip: 'bg-gray-800 text-gray-400 border border-gray-700' },
+  optimal:  { color: '#22c55e', text: 'text-green-400',  chip: 'bg-green-500/15 text-green-400 border border-green-500/40', icon: CheckCircle2 },
+  under:    { color: '#f97316', text: 'text-orange-400', chip: 'bg-orange-500/15 text-orange-400 border border-orange-500/40', icon: TrendingDown },
+  over:     { color: '#eab308', text: 'text-amber-400',  chip: 'bg-amber-500/15 text-amber-400 border border-amber-500/40', icon: ArrowUp },
+  critical: { color: '#ef4444', text: 'text-red-400',    chip: 'bg-red-500/15 text-red-400 border border-red-500/40', icon: AlertCircle },
+  unknown:  { color: '#6b7280', text: 'text-[var(--text-muted)]', chip: 'bg-[var(--input-bg)] text-[var(--text-muted)] border border-[var(--input-border)]', icon: HelpCircle },
 }
+const BAND_RANK = { critical: 0, under: 1, over: 2, optimal: 3, unknown: 4 }
+const TONE_TEXT = { good: 'text-green-400', warn: 'text-amber-400', crit: 'text-red-400', neutral: 'text-[var(--text-muted)]' }
 
 function BandChip({ band }) {
   const m = BAND_META[band] ?? BAND_META.unknown
-  return <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${m.chip}`}>{m.label}</span>
-}
-
-// -- KPI tile ------------------------------------------------------------------
-function KpiTile({ title, value, sub, icon: Icon, tone = 'blue', alert }) {
-  const border = {
-    green:  'border-green-700/40 bg-green-950/20',
-    red:    'border-red-700/40 bg-red-950/20',
-    orange: 'border-orange-700/40 bg-orange-950/20',
-    amber:  'border-amber-700/40 bg-amber-950/20',
-    blue:   'border-blue-700/40 bg-blue-950/20',
-  }[tone] ?? 'border-gray-700/40 bg-gray-900/40'
-  const iconColor = { green: 'text-green-400', red: 'text-red-400', orange: 'text-orange-400', amber: 'text-amber-400', blue: 'text-blue-400' }[tone] ?? 'text-gray-400'
-  const valueColor = { green: 'text-green-400', red: 'text-red-400', orange: 'text-orange-400', amber: 'text-amber-400', blue: 'text-blue-300' }[tone] ?? 'text-white'
+  const Icon = m.icon
   return (
-    <div className={`rounded-xl border p-4 flex flex-col gap-2 ${border}`}>
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-2">
-          <Icon size={14} className={iconColor} />
-          <span className="text-xs text-gray-400 font-medium">{title}</span>
-        </div>
-        {alert && <span className="text-xs px-1.5 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/40 font-bold animate-pulse">ALERT</span>}
-      </div>
-      <p className={`text-2xl font-bold leading-tight ${valueColor}`}>{value}</p>
-      {sub && <p className="text-xs text-gray-500">{sub}</p>}
-    </div>
-  )
-}
-
-// -- Select helper -------------------------------------------------------------
-function Select({ value, onChange, options, placeholder, className = '' }) {
-  return (
-    <select
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      className={`bg-gray-800 border border-gray-700 text-gray-200 text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 ${className}`}
-    >
-      <option value="">{placeholder}</option>
-      {options.map(o => (
-        <option key={o.value ?? o} value={o.value ?? o}>{o.label ?? o}</option>
-      ))}
-    </select>
+    <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${m.chip}`}>
+      <Icon size={11} aria-hidden="true" /> {BAND_LABEL[band] || band}
+    </span>
   )
 }
 
 const chartTooltip = {
-  backgroundColor: 'var(--panel)', titleColor: '#f9fafb', bodyColor: '#d1d5db',
+  backgroundColor: 'var(--panel)', titleColor: 'var(--text-primary)', bodyColor: 'var(--text-secondary)',
   borderColor: 'var(--hairline)', borderWidth: 1,
 }
 const axisGrid = { color: 'var(--panel-2)' }
-const axisTick = { color: '#9ca3af', font: { size: 10 } }
+const axisTick = { color: 'var(--text-muted)', font: { size: 10 } }
+const legendLabels = { color: 'var(--text-muted)', font: { size: 11 }, boxWidth: 12 }
 
-// Normalize either data source into one reading shape the page renders.
-function normalize(row, source) {
-  const pressure = source === 'sensor'
-    ? Number(row.pressure)
-    : Number(row.pressure_reading)
-  const target = Number(row.target_pressure) > 0 ? Number(row.target_pressure) : DEFAULT_TARGET_PRESSURE
-  const band = classifyPressure(pressure, target, DEFAULT_TOLERANCE_PCT)
-  return {
-    id: row.id,
-    source,
-    asset_no: row.asset_no ?? null,
-    serial: source === 'sensor' ? (row.tyre_serial ?? null) : (row.serial_no ?? null),
-    position: source === 'sensor' ? (row.tyre_position ?? null) : (row.position ?? null),
-    size: source === 'sensor' ? null : (row.size ?? null),
-    site: row.site ?? null,
-    country: row.country ?? null,
-    pressure: Number.isFinite(pressure) ? pressure : null,
-    temperature: source === 'sensor' && row.temperature != null ? Number(row.temperature) : null,
-    target,
-    band,
-    date: source === 'sensor' ? row.recorded_at : row.issue_date,
-  }
-}
+const TABS = [
+  { key: 'overview', label: 'Overview', icon: BarChart3 },
+  { key: 'alerts', label: 'Alerts', icon: AlertTriangle },
+  { key: 'breakdown', label: 'Sites and positions', icon: Layers },
+  { key: 'readings', label: 'All readings', icon: List },
+]
 
-// Signed deviation for a normalized reading, ready to display.
-function devLabel(r) {
-  if (r.pressure == null || !(r.target > 0)) return 'N/A'
-  const d = ((r.pressure - r.target) / r.target) * 100
-  const sign = d > 0 ? '+' : ''
-  return `${sign}${d.toFixed(0)}%`
+function EmptyChart({ children }) {
+  return <div className="flex items-center justify-center h-64 text-[var(--text-muted)] text-sm text-center px-4">{children}</div>
 }
-
-const SORTS = {
-  worst:    { label: 'Worst first' },
-  pressure: { label: 'Pressure low to high' },
-  deviation:{ label: 'Deviation high to low' },
-  recent:   { label: 'Most recent' },
-}
-const BAND_RANK = { critical: 0, under: 1, over: 2, optimal: 3, unknown: 4 }
-const EXPORT_COLS = ['asset_no', 'serial', 'position', 'size', 'pressure', 'target', 'deviation', 'temperature', 'status', 'site', 'country', 'recorded', 'source']
-const EXPORT_HEADERS = ['Asset No', 'Serial', 'Position', 'Size', 'Pressure (bar)', 'Target (bar)', 'Deviation', 'Temp (C)', 'Status', 'Site', 'Country', 'Recorded', 'Source']
 
 export default function Tpms() {
   const { activeCountry, appSettings } = useSettings()
   const company = appSettings?.company_name || 'TyrePulse'
 
-  const [readings, setReadings] = useState([])
-  const [dataSource, setDataSource] = useState('baseline') // 'sensor' | 'baseline'
+  const [readings, setReadings] = useState(null)
+  const [dataSource, setDataSource] = useState('baseline')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [exportError, setExportError] = useState(null)
   const [exporting, setExporting] = useState(false)
+  const [updatedAt, setUpdatedAt] = useState(null)
+  const [tab, setTab] = useState('overview')
 
-  // Filters
   const [bandFilter, setBandFilter] = useState('')
   const [siteFilter, setSiteFilter] = useState('')
   const [positionFilter, setPositionFilter] = useState('')
   const [search, setSearch] = useState('')
-  const [sortBy, setSortBy] = useState('worst')
 
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const country = activeCountry
-      const sensor = await tpmsApi.listTpmsReadings({ country })
+      const sensor = await tpmsApi.listTpmsReadings({ country: activeCountry })
       if (Array.isArray(sensor) && sensor.length > 0) {
-        setReadings(sensor.map(r => normalize(r, 'sensor')))
+        setReadings(sensor.map((r) => normalizeReading(r, 'sensor')))
         setDataSource('sensor')
       } else {
-        // Fall back to the tyre_records pressure baseline so the page is useful now.
-        const baseline = await tpmsApi.listTyrePressureBaseline({ country })
-        setReadings((baseline || []).map(r => normalize(r, 'baseline')))
+        const baseline = await tpmsApi.listTyrePressureBaseline({ country: activeCountry })
+        setReadings((baseline || []).map((r) => normalizeReading(r, 'baseline')))
         setDataSource('baseline')
       }
+      setUpdatedAt(new Date())
     } catch (e) {
       setError(toUserMessage(e, 'Failed to load TPMS data'))
-      setReadings([])
+      setReadings(null)
     } finally {
       setLoading(false)
     }
@@ -176,71 +127,31 @@ export default function Tpms() {
 
   useEffect(() => { load() }, [load])
 
-  // Filter option lists
-  const sites = useMemo(
-    () => [...new Set(readings.map(r => r.site).filter(Boolean))].sort(),
-    [readings],
-  )
-  const positions = useMemo(
-    () => [...new Set(readings.map(r => r.position).filter(Boolean))].sort(),
-    [readings],
+  const all = useMemo(() => readings || [], [readings])
+  const sites = useMemo(() => distinctValues(all, 'site'), [all])
+  const positions = useMemo(() => distinctValues(all, 'position'), [all])
+
+  const filtered = useMemo(
+    () => filterReadings(all, { band: bandFilter, site: siteFilter, position: positionFilter, search }),
+    [all, bandFilter, siteFilter, positionFilter, search],
   )
 
-  // Apply filters
-  const filtered = useMemo(() => {
-    let d = readings
-    if (bandFilter) d = d.filter(r => r.band === bandFilter)
-    if (siteFilter) d = d.filter(r => r.site === siteFilter)
-    if (positionFilter) d = d.filter(r => r.position === positionFilter)
-    if (search) {
-      const q = search.toLowerCase()
-      d = d.filter(r =>
-        (r.asset_no || '').toLowerCase().includes(q) ||
-        (r.serial || '').toLowerCase().includes(q) ||
-        (r.site || '').toLowerCase().includes(q) ||
-        (r.position || '').toLowerCase().includes(q))
-    }
-    return d
-  }, [readings, bandFilter, siteFilter, positionFilter, search])
-
-  // Analytics engine (single source of truth for all KPIs / charts / tables)
   const kpis = useMemo(() => computeKpis(filtered), [filtered])
+  const compliance = honestCompliance(kpis)
   const dist = useMemo(() => bandDistribution(filtered), [filtered])
   const trend = useMemo(() => complianceTrend(filtered, { months: 12 }), [filtered])
   const sitesRank = useMemo(() => siteCompliance(filtered), [filtered])
   const positionRank = useMemo(() => positionBreakdown(filtered), [filtered])
   const offenders = useMemo(() => worstOffenders(filtered, { limit: 0 }), [filtered])
   const insights = useMemo(() => underInflationInsights(filtered), [filtered])
+  const ownTargetPct = useMemo(() => targetCoverage(filtered), [filtered])
 
-  // Alerts table with a selectable sort. Base set = under / over / critical.
-  const alertRows = useMemo(() => {
-    const rows = offenders.slice()
-    if (sortBy === 'pressure') {
-      rows.sort((a, b) => (a.pressure ?? Infinity) - (b.pressure ?? Infinity))
-    } else if (sortBy === 'deviation') {
-      rows.sort((a, b) => (b.absDeviationPct ?? -1) - (a.absDeviationPct ?? -1))
-    } else if (sortBy === 'recent') {
-      rows.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
-    } else {
-      rows.sort((a, b) =>
-        (BAND_RANK[a.band] ?? 9) - (BAND_RANK[b.band] ?? 9) ||
-        (b.absDeviationPct ?? -1) - (a.absDeviationPct ?? -1))
-    }
-    return rows
-  }, [offenders, sortBy])
-
-  // Paged, not capped. The alert table used to render alertRows.slice(0, 200),
-  // so alert 201 was unreachable. The Excel and PDF exports below still cover
-  // every filtered reading.
-  const alertPager = usePagedRows(alertRows)
-
-  // Charts
   const doughnutData = useMemo(() => ({
-    labels: dist.map(d => d.label),
+    labels: dist.map((d) => d.label),
     datasets: [{
-      data: dist.map(d => d.count),
-      backgroundColor: dist.map(d => BAND_META[d.band]?.color ?? BAND_META.unknown.color),
-      borderColor: 'rgba(17,24,39,0.9)',
+      data: dist.map((d) => d.count),
+      backgroundColor: dist.map((d) => BAND_META[d.band]?.color ?? BAND_META.unknown.color),
+      borderColor: 'transparent',
       borderWidth: 2,
     }],
   }), [dist])
@@ -248,440 +159,349 @@ export default function Tpms() {
   const siteBarData = useMemo(() => {
     const rows = sitesRank.slice(0, 12)
     return {
-      labels: rows.map(r => r.site),
-      datasets: [
-        { label: 'Optimal',  data: rows.map(r => r.optimal),  backgroundColor: BAND_META.optimal.color, stack: 's' },
-        { label: 'Under',    data: rows.map(r => r.under),     backgroundColor: BAND_META.under.color, stack: 's' },
-        { label: 'Over',     data: rows.map(r => r.over),      backgroundColor: BAND_META.over.color, stack: 's' },
-        { label: 'Critical', data: rows.map(r => r.critical),  backgroundColor: BAND_META.critical.color, stack: 's' },
-      ],
+      labels: rows.map((r) => r.site),
+      datasets: ['optimal', 'under', 'over', 'critical'].map((b) => ({
+        label: BAND_LABEL[b], data: rows.map((r) => r[b]), backgroundColor: BAND_META[b].color, stack: 's',
+      })),
     }
   }, [sitesRank])
 
   const trendData = useMemo(() => ({
-    labels: trend.map(m => m.label),
+    labels: trend.map((m) => m.label),
     datasets: [
       {
-        type: 'line',
-        label: 'Compliance %',
-        data: trend.map(m => m.compliancePct),
-        borderColor: '#22c55e',
-        backgroundColor: 'rgba(34,197,94,0.15)',
-        fill: true,
-        tension: 0.35,
-        yAxisID: 'y',
-        pointRadius: 3,
+        type: 'line', label: 'Compliance %', data: trend.map((m) => ((m.optimal + m.under + m.over + m.critical) > 0 ? m.compliancePct : null)),
+        borderColor: BAND_META.optimal.color, backgroundColor: 'rgba(34,197,94,0.15)', fill: true, tension: 0.35, yAxisID: 'y', pointRadius: 3, spanGaps: false,
       },
       {
-        type: 'bar',
-        label: 'Under + Critical',
-        data: trend.map(m => m.under + m.critical),
-        backgroundColor: BAND_META.under.color,
-        yAxisID: 'y1',
-        barPercentage: 0.6,
+        type: 'bar', label: 'Under + Critical', data: trend.map((m) => m.under + m.critical),
+        backgroundColor: BAND_META.under.color, yAxisID: 'y1', barPercentage: 0.6,
       },
     ],
   }), [trend])
 
-  const compliancePct = kpis.compliancePct.toFixed(1)
+  const exportMeta = useMemo(() => ({
+    'Data source': dataSource === 'sensor' ? 'Live sensor (tpms_readings)' : 'Tyre-record baseline',
+    'Compliance %': compliance == null ? 'N/A' : `${compliance}%`,
+    'Under-inflated': kpis.underInflated,
+    'Over-inflated': kpis.overInflated,
+    Critical: kpis.critical,
+    'Target (bar)': DEFAULT_TARGET_PRESSURE.toFixed(1),
+    'Tolerance %': DEFAULT_TOLERANCE_PCT,
+  }), [dataSource, compliance, kpis])
 
-  // -- Exports -----------------------------------------------------------------
-  const exportRows = useMemo(() => filtered.map(r => ({
-    asset_no: r.asset_no || 'N/A',
-    serial: r.serial || 'N/A',
-    position: r.position || 'N/A',
-    size: r.size || 'N/A',
-    pressure: r.pressure ?? 'N/A',
-    target: r.target,
-    deviation: devLabel(r),
-    temperature: r.temperature ?? 'N/A',
-    status: BAND_META[r.band]?.label ?? r.band,
-    site: r.site || 'N/A',
-    country: r.country || 'N/A',
-    recorded: r.date ? String(r.date).slice(0, 10) : 'N/A',
-    source: r.source,
-  })), [filtered])
-
-  const exportExcel = useCallback(async () => {
-    setExporting(true)
+  const runExport = useCallback(async (format) => {
+    setExporting(true); setExportError(null)
     try {
-      await exportToExcel(
-        exportRows, EXPORT_COLS, EXPORT_HEADERS,
-        reportFileName('TPMS Pressure Compliance'),
-        'TPMS Readings',
-        {
-          title: 'TPMS Pressure Compliance',
-          company,
-          meta: {
-            'Data source': dataSource === 'sensor' ? 'Live sensor (tpms_readings)' : 'Tyre-record baseline',
-            'Compliance %': `${compliancePct}%`,
-            'Under-inflated': kpis.underInflated,
-            'Over-inflated': kpis.overInflated,
-            'Critical': kpis.critical,
-            'Target (bar)': DEFAULT_TARGET_PRESSURE.toFixed(1),
-            'Tolerance %': DEFAULT_TOLERANCE_PCT,
-          },
-        },
-      )
-    } catch (e) {
-      setError(toUserMessage(e, 'Export failed'))
-    } finally {
-      setExporting(false)
-    }
-  }, [exportRows, company, dataSource, compliancePct, kpis])
-
-  const exportPdf = useCallback(async () => {
-    setExporting(true)
-    try {
-      const cols = EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] }))
-      await exportToPdf(
-        exportRows, cols,
-        'TPMS Pressure Compliance',
-        reportFileName('TPMS Pressure Compliance'),
-        'landscape',
-        company,
-        {
+      const { exportToExcel, exportToPdf, reportFileName } = await loadExportUtils()
+      const rows = tpmsExportRows(filtered)
+      const file = reportFileName('TPMS Pressure Compliance')
+      if (format === 'pdf') {
+        await exportToPdf(rows, TPMS_EXPORT_COLUMNS, 'TPMS Pressure Compliance', file, 'landscape', company, {
           emptyHint: 'No pressure readings for the selected filters. Adjust the filters and export again.',
-          meta: {
-            'Compliance': `${compliancePct}%`,
-            'Under-inflated': kpis.underInflated,
-            'Critical': kpis.critical,
-          },
-        },
-      )
+          meta: exportMeta,
+        })
+      } else {
+        await exportToExcel(rows, TPMS_EXPORT_COLUMNS.map((c) => c.key), TPMS_EXPORT_COLUMNS.map((c) => c.header), file, 'TPMS Readings', {
+          title: 'TPMS Pressure Compliance', company, meta: exportMeta,
+        })
+      }
     } catch (e) {
-      setError(toUserMessage(e, 'Export failed'))
+      setExportError(toUserMessage(e, 'Export failed'))
     } finally {
       setExporting(false)
     }
-  }, [exportRows, company, compliancePct, kpis])
+  }, [filtered, company, exportMeta])
 
   const clearFilters = () => { setBandFilter(''); setSiteFilter(''); setPositionFilter(''); setSearch('') }
   const hasFilter = bandFilter || siteFilter || positionFilter || search
 
+  // Shared column set for the alert and reading tables.
+  const readingColumns = useMemo(() => [
+    { id: 'asset', header: 'Asset', accessorFn: (r) => r.asset_no || undefined, sortUndefined: 'last', size: 110,
+      cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original.asset_no || 'N/A'}</span> },
+    { id: 'position', header: 'Position', accessorFn: (r) => r.position || undefined, sortUndefined: 'last', size: 90 },
+    { id: 'serial', header: 'Serial', accessorFn: (r) => r.serial || undefined, sortUndefined: 'last', size: 130,
+      cell: ({ row }) => <span className="font-mono text-xs text-[var(--text-secondary)]">{row.original.serial || 'N/A'}</span> },
+    { id: 'pressure', header: 'Pressure', accessorFn: (r) => r.pressure ?? undefined, sortUndefined: 'last', meta: { align: 'right' }, size: 100,
+      cell: ({ row }) => <span className={`font-semibold ${BAND_META[row.original.band]?.text ?? ''}`}>{row.original.pressure != null ? `${row.original.pressure.toFixed(1)} bar` : 'N/A'}</span> },
+    { id: 'target', header: 'Target', accessorFn: (r) => r.target, meta: { align: 'right' }, size: 90,
+      cell: ({ row }) => `${row.original.target.toFixed(1)} bar` },
+    { id: 'deviation', header: 'Deviation', accessorFn: (r) => { const d = deviationPct(r); return d == null ? undefined : Math.abs(d) }, sortUndefined: 'last', meta: { align: 'right', exportValue: (r) => deviationLabel(r) }, size: 100,
+      cell: ({ row }) => <span className={BAND_META[row.original.band]?.text}>{deviationLabel(row.original)}</span> },
+    { id: 'temperature', header: 'Temp', accessorFn: (r) => r.temperature ?? undefined, sortUndefined: 'last', meta: { align: 'right' }, size: 80,
+      cell: ({ row }) => (row.original.temperature != null ? `${row.original.temperature.toFixed(0)} C` : 'N/A') },
+    { id: 'band', header: 'Status', accessorFn: (r) => BAND_RANK[r.band] ?? 9, meta: { exportValue: (r) => BAND_LABEL[r.band] }, size: 140,
+      cell: ({ row }) => <BandChip band={row.original.band} /> },
+    { id: 'site', header: 'Site', accessorFn: (r) => r.site || undefined, sortUndefined: 'last', size: 110 },
+    { id: 'recorded', header: 'Recorded', accessorFn: (r) => (r.date ? String(r.date).slice(0, 10) : undefined), sortUndefined: 'last', size: 110 },
+  ], [])
+
+  const groupColumns = useCallback((keyName, label) => [
+    { id: keyName, header: label, accessorFn: (r) => r[keyName], size: 150,
+      cell: ({ row }) => <span className="text-[var(--text-primary)]">{row.original[keyName]}</span> },
+    { id: 'total', header: 'Readings', accessorFn: (r) => r.total, meta: { align: 'right' }, size: 90 },
+    { id: 'under', header: 'Under', accessorFn: (r) => r.under, meta: { align: 'right' }, size: 80 },
+    { id: 'over', header: 'Over', accessorFn: (r) => r.over, meta: { align: 'right' }, size: 80 },
+    { id: 'critical', header: 'Critical', accessorFn: (r) => r.critical, meta: { align: 'right' }, size: 80 },
+    { id: 'alerts', header: 'Alerts', accessorFn: (r) => r.alerts, meta: { align: 'right' }, size: 80 },
+    { id: 'compliance', header: 'Compliance', accessorFn: (r) => ((r.optimal + r.alerts) > 0 ? r.compliancePct : undefined), sortUndefined: 'last', meta: { align: 'right' }, size: 110,
+      cell: ({ row }) => {
+        const assessed = row.original.optimal + row.original.alerts
+        if (!(assessed > 0)) return <span className="text-[var(--text-muted)]">N/A</span>
+        const tone = complianceTone(row.original.compliancePct)
+        return <span className={`font-semibold ${TONE_TEXT[tone]}`}>{row.original.compliancePct.toFixed(0)}%</span>
+      } },
+  ], [])
+  const siteColumns = useMemo(() => groupColumns('site', 'Site'), [groupColumns])
+  const positionColumns = useMemo(() => groupColumns('position', 'Position'), [groupColumns])
+
+  const unknown = readings === null
+  const tileTone = (n, bad) => (n > 0 ? bad : 'neutral')
+
   return (
-    <div className="text-gray-100 space-y-5">
+    <div className="space-y-5">
       <PageHeader
-        title="TPMS - Tyre Pressure Monitoring"
-        subtitle={`Pressure compliance with under and over-inflation alerts${kpis.total > 0 ? ` · ${kpis.total.toLocaleString()} readings` : ''}`}
+        title="TPMS: Tyre Pressure Monitoring"
+        subtitle={`Pressure compliance with under and over-inflation alerts${kpis.total > 0 ? ` | ${kpis.total.toLocaleString()} readings` : ''}`}
         icon={Radio}
+        onRefresh={load}
+        refreshing={loading}
+        updatedAt={updatedAt}
         actions={
-          <div className="flex items-center gap-2">
-            <button onClick={load} className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5">
-              <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Refresh
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => runExport('excel')} disabled={filtered.length === 0 || exporting} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[40px] disabled:opacity-40">
+              <FileSpreadsheet size={14} aria-hidden="true" /> Excel
             </button>
-            <button onClick={exportExcel} disabled={filtered.length === 0 || exporting} className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-40">
-              <Download size={13} /> Excel
-            </button>
-            <button onClick={exportPdf} disabled={filtered.length === 0 || exporting} className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-40">
-              <FileText size={13} /> PDF
+            <button type="button" onClick={() => runExport('pdf')} disabled={filtered.length === 0 || exporting} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[40px] disabled:opacity-40">
+              <FileText size={14} aria-hidden="true" /> PDF
             </button>
           </div>
         }
       />
 
-      {/* Data source banner */}
-      <div className={`rounded-xl border px-4 py-2.5 flex items-center gap-2 text-xs ${dataSource === 'sensor' ? 'border-blue-700/40 bg-blue-950/20 text-blue-300' : 'border-gray-700/50 bg-gray-900/40 text-gray-400'}`}>
-        <Info size={13} className="shrink-0" />
-        {dataSource === 'sensor'
-          ? <span>Live source: <strong className="text-blue-200">TPMS sensor readings</strong> (tpms_readings). Bands computed against a {DEFAULT_TARGET_PRESSURE.toFixed(1)} bar target with a {DEFAULT_TOLERANCE_PCT}% tolerance.</span>
-          : <span>No live sensor readings yet. Showing the <strong className="text-gray-200">tyre-record pressure baseline</strong> (tyre_records.pressure_reading). Bands computed against a {DEFAULT_TARGET_PRESSURE.toFixed(1)} bar target with a {DEFAULT_TOLERANCE_PCT}% tolerance. Ingest sensor data to enable live monitoring.</span>}
-      </div>
+      {!unknown && (
+        <Card tone={dataSource === 'sensor' ? 'info' : undefined} className="items-start gap-2" style={{ flexDirection: 'row' }}>
+          <Info size={14} className="shrink-0 mt-0.5 text-[var(--text-muted)]" aria-hidden="true" />
+          <p className="text-xs text-[var(--text-secondary)]">
+            {dataSource === 'sensor'
+              ? <>Live source: <strong className="text-[var(--text-primary)]">TPMS sensor readings</strong> (tpms_readings).</>
+              : <>No live sensor readings yet. Showing the <strong className="text-[var(--text-primary)]">tyre-record pressure baseline</strong> (tyre_records.pressure_reading). Ingest sensor data to enable live monitoring.</>}
+            {' '}Bands use each reading's own target where recorded, else the {DEFAULT_TARGET_PRESSURE.toFixed(1)} bar fleet default, with a {DEFAULT_TOLERANCE_PCT}% tolerance.
+            {ownTargetPct != null && ` ${ownTargetPct}% of readings in view carry their own target.`}
+          </p>
+        </Card>
+      )}
 
-      {/* Filters */}
-      <div className="card">
-        <div className="flex items-center gap-2 mb-3">
-          <Filter size={13} className="text-gray-400" />
-          <span className="text-xs font-medium text-gray-400">Filters</span>
-          {hasFilter && (
-            <button onClick={clearFilters} className="ml-auto flex items-center gap-1 text-xs text-red-400 hover:text-red-300">
-              <X size={12} /> Clear
-            </button>
-          )}
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
-          <Select value={bandFilter} onChange={setBandFilter} placeholder="All Statuses"
-            options={[
-              { value: 'optimal', label: 'Optimal' },
-              { value: 'under', label: 'Under-Inflated' },
-              { value: 'over', label: 'Over-Inflated' },
-              { value: 'critical', label: 'Critical' },
-            ]} />
-          <Select value={siteFilter} onChange={setSiteFilter} options={sites} placeholder="All Sites" />
-          <Select value={positionFilter} onChange={setPositionFilter} options={positions} placeholder="All Positions" />
+      {error && (
+        <Card tone="crit" className="items-center justify-between gap-3" style={{ flexDirection: 'row' }} role="alert">
+          <div className="flex items-center gap-3 min-w-0">
+            <AlertTriangle size={16} className="text-red-400 shrink-0" aria-hidden="true" />
+            <p className="text-sm text-red-300 break-words">{error}</p>
+          </div>
+          <button type="button" onClick={load} className="btn-secondary text-sm shrink-0 min-h-[40px]">Retry</button>
+        </Card>
+      )}
+      {exportError && (
+        <Card tone="crit" className="items-center justify-between gap-3" style={{ flexDirection: 'row' }} role="alert">
+          <p className="text-sm text-red-300 break-words">{exportError}</p>
+          <button type="button" onClick={() => setExportError(null)} className="min-w-[36px] min-h-[36px] inline-flex items-center justify-center rounded text-[var(--text-muted)]" aria-label="Dismiss message"><X size={15} /></button>
+        </Card>
+      )}
+
+      {/* Filters apply to every tab. */}
+      <Card>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(220px,1fr)_auto_auto_auto_auto] items-center gap-2">
           <div className="relative">
-            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search asset, serial, position, site..."
-              className="w-full bg-gray-800 border border-gray-700 text-gray-200 text-xs rounded-lg pl-7 pr-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
+            <label htmlFor="tpms-search" className="sr-only">Search readings</label>
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+            <input id="tpms-search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search asset, serial, position, site" className="input pl-9 w-full min-h-[40px]" />
+          </div>
+          <select className="input min-h-[40px]" value={bandFilter} onChange={(e) => setBandFilter(e.target.value)} aria-label="Filter by status">
+            <option value="">All statuses</option>
+            {['optimal', 'under', 'over', 'critical', 'unknown'].map((b) => <option key={b} value={b}>{BAND_LABEL[b]}</option>)}
+          </select>
+          <select className="input min-h-[40px]" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} aria-label="Filter by site">
+            <option value="">All sites</option>
+            {sites.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select className="input min-h-[40px]" value={positionFilter} onChange={(e) => setPositionFilter(e.target.value)} aria-label="Filter by position">
+            <option value="">All positions</option>
+            {positions.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <div className="flex items-center gap-2 justify-between sm:justify-end">
+            {hasFilter && <button type="button" onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[40px]"><X size={14} aria-hidden="true" /> Clear</button>}
+            <span className="text-xs text-[var(--text-muted)] whitespace-nowrap" aria-live="polite">{unknown ? 'N/A' : `${filtered.length} of ${all.length}`}</span>
           </div>
         </div>
+      </Card>
+
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
+        <StatTile label="Readings" value={unknown ? 'N/A' : kpis.total.toLocaleString()} icon={Activity} tone="info" sub={unknown ? undefined : `${kpis.assessed.toLocaleString()} assessed`} />
+        <StatTile label="Compliance" value={compliance == null ? 'N/A' : `${compliance.toFixed(1)}%`} icon={Percent} tone={complianceTone(compliance) === 'good' ? 'accent' : complianceTone(compliance)} sub="Within target band" />
+        <StatTile label="Under-inflated" value={unknown ? 'N/A' : kpis.underInflated.toLocaleString()} icon={TrendingDown} tone={tileTone(kpis.underInflated, 'warn')} sub={kpis.assessed > 0 ? `${kpis.underInflatedPct.toFixed(0)}% of assessed` : 'N/A of assessed'} />
+        <StatTile label="Over-inflated" value={unknown ? 'N/A' : kpis.overInflated.toLocaleString()} icon={TrendingUp} tone={tileTone(kpis.overInflated, 'warn')} sub="Above target band" />
+        <StatTile label="Critical" value={unknown ? 'N/A' : kpis.critical.toLocaleString()} icon={AlertTriangle} tone={tileTone(kpis.critical, 'crit')} sub="Severe under-inflation" />
+        <StatTile label="Avg pressure" value={kpis.avgPressure != null ? kpis.avgPressure.toFixed(1) : 'N/A'} unit={kpis.avgPressure != null ? 'bar' : undefined} icon={Gauge} sub={kpis.avgTarget != null ? `Avg target ${kpis.avgTarget.toFixed(1)} bar` : undefined} />
       </div>
 
-      {/* Loading / Error */}
-      {loading && (
-        <div className="flex items-center justify-center py-20">
-          <RefreshCw size={22} className="text-blue-400 animate-spin mr-2" />
-          <span className="text-gray-400 text-sm">Loading TPMS data...</span>
+      <div role="tablist" aria-label="TPMS views" className="flex flex-wrap items-center gap-1 border-b border-[var(--input-border)]">
+        {TABS.map((t) => {
+          const Icon = t.icon
+          const active = tab === t.key
+          const count = t.key === 'alerts' ? offenders.length : t.key === 'readings' ? filtered.length : null
+          return (
+            <button key={t.key} type="button" role="tab" aria-selected={active} onClick={() => setTab(t.key)}
+              className={`inline-flex items-center gap-1.5 px-4 min-h-[44px] text-sm font-medium border-b-2 -mb-px transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] rounded-t ${active ? 'border-brand-bright text-[var(--text-primary)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}>
+              <Icon size={15} aria-hidden="true" /> {t.label}
+              {count != null && !unknown && <span className="text-[11px] px-1.5 rounded-full bg-[var(--input-bg)] text-[var(--text-secondary)]">{count}</span>}
+            </button>
+          )
+        })}
+      </div>
+
+      {loading && unknown ? (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4" aria-busy="true" aria-label="Loading TPMS data">
+          <Card><div className="h-64 bg-[var(--input-bg)] rounded animate-pulse" /></Card>
+          <Card><div className="h-64 bg-[var(--input-bg)] rounded animate-pulse" /></Card>
         </div>
-      )}
-      {error && !loading && (
-        <div className="bg-red-950/30 border border-red-700/40 rounded-xl p-4 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <XCircle size={16} className="text-red-400" />
-            <p className="text-sm text-red-300">{error}</p>
-          </div>
-          <button onClick={load} className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5 shrink-0">
-            <RefreshCw size={12} /> Retry
-          </button>
-        </div>
-      )}
-
-      {!loading && !error && (
-        <>
-          {kpis.total === 0 ? (
-            <div className="flex flex-col items-center justify-center py-24 gap-3">
-              <Gauge size={40} className="text-gray-700" />
-              <p className="text-gray-500 text-sm">No pressure readings found for the selected filters.</p>
-              {hasFilter && (
-                <button onClick={clearFilters} className="btn-secondary text-xs px-3 py-1.5">Clear filters</button>
-              )}
-            </div>
-          ) : (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-5">
-
-              {/* KPI tiles */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                <KpiTile title="Readings" value={kpis.total.toLocaleString()} sub={`${kpis.assessed.toLocaleString()} assessed`} icon={Activity} tone="blue" />
-                <KpiTile title="Compliance" value={`${compliancePct}%`} sub="Within target band" icon={Percent} tone={kpis.compliancePct >= 90 ? 'green' : kpis.compliancePct >= 75 ? 'amber' : 'red'} />
-                <KpiTile title="Under-Inflated" value={kpis.underInflated.toLocaleString()} sub={`${kpis.underInflatedPct.toFixed(0)}% of assessed`} icon={TrendingDown} tone={kpis.underInflated > 0 ? 'orange' : 'green'} alert={kpis.underInflated > 0} />
-                <KpiTile title="Over-Inflated" value={kpis.overInflated.toLocaleString()} sub="Above target band" icon={TrendingUp} tone={kpis.overInflated > 0 ? 'amber' : 'green'} />
-                <KpiTile title="Critical" value={kpis.critical.toLocaleString()} sub="Severe under-inflation" icon={AlertTriangle} tone={kpis.critical > 0 ? 'red' : 'green'} alert={kpis.critical > 0} />
-                <KpiTile title="Avg Pressure" value={kpis.avgPressure != null ? `${kpis.avgPressure.toFixed(1)} bar` : 'N/A'} sub={`Target ${DEFAULT_TARGET_PRESSURE.toFixed(1)} bar`} icon={Gauge} tone="blue" />
-              </div>
-
-              {/* Under-inflation intelligence callout */}
-              <div className={`rounded-xl border px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs ${insights.underInflatedCount > 0 ? 'border-orange-700/40 bg-orange-950/20' : 'border-green-800/40 bg-green-950/20'}`}>
-                <div className="flex items-center gap-2">
-                  <ShieldAlert size={15} className={insights.underInflatedCount > 0 ? 'text-orange-400' : 'text-green-400'} />
-                  <span className="font-semibold text-gray-200">Under-Inflation Intelligence</span>
-                </div>
+      ) : unknown ? (
+        <Card className="text-center text-sm text-[var(--text-muted)]"><div style={{ paddingBlock: 'var(--space-8)' }}>TPMS data could not be loaded. Use Retry above.</div></Card>
+      ) : tab === 'overview' ? (
+        kpis.total === 0 ? (
+          <Card className="items-center text-center gap-3" style={{ paddingBlock: '4rem' }}>
+            <Gauge size={36} className="text-[var(--text-dim)]" aria-hidden="true" />
+            <p className="text-[var(--text-muted)] text-sm">{all.length === 0 ? 'No pressure readings recorded yet.' : 'No pressure readings match the selected filters.'}</p>
+            {hasFilter && <button type="button" onClick={clearFilters} className="btn-secondary text-sm min-h-[40px]">Clear filters</button>}
+          </Card>
+        ) : (
+          <div className="space-y-4">
+            <Card tone={insights.underInflatedCount > 0 ? 'warn' : undefined}>
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+                <span className="inline-flex items-center gap-2 font-semibold text-[var(--text-primary)]">
+                  <ShieldAlert size={16} className={insights.underInflatedCount > 0 ? 'text-orange-400' : 'text-green-400'} aria-hidden="true" /> Under-inflation intelligence
+                </span>
                 {insights.underInflatedCount > 0 ? (
                   <>
-                    <span className="text-gray-300"><strong className="text-orange-300">{insights.underInflatedCount}</strong> under-inflated ({insights.underInflatedPct.toFixed(0)}% of assessed), {insights.criticalCount} critical</span>
-                    {insights.avgUnderDeviationPct != null && (
-                      <span className="text-gray-400">Avg shortfall <strong className="text-orange-300">{insights.avgUnderDeviationPct.toFixed(0)}%</strong> below target</span>
-                    )}
-                    <span className="text-gray-400">{insights.sitesAffected} site{insights.sitesAffected === 1 ? '' : 's'} affected</span>
-                    {insights.worstSite && (
-                      <span className="text-gray-400">Worst site: <strong className="text-orange-300">{insights.worstSite.site}</strong> ({insights.worstSite.underInflated})</span>
-                    )}
-                    <span className="text-gray-500">Under-inflation raises rolling resistance, fuel burn and blow-out risk. Address critical readings first.</span>
+                    <span className="text-[var(--text-secondary)]"><strong className="text-orange-400">{insights.underInflatedCount}</strong> under-inflated ({insights.underInflatedPct.toFixed(0)}% of assessed), {insights.criticalCount} critical</span>
+                    {insights.avgUnderDeviationPct != null && <span className="text-[var(--text-muted)]">Avg shortfall <strong className="text-orange-400">{insights.avgUnderDeviationPct.toFixed(0)}%</strong> below target</span>}
+                    <span className="text-[var(--text-muted)]">{insights.sitesAffected} site{insights.sitesAffected === 1 ? '' : 's'} affected</span>
+                    {insights.worstSite && <span className="text-[var(--text-muted)]">Worst site: <strong className="text-orange-400">{insights.worstSite.site}</strong> ({insights.worstSite.underInflated})</span>}
+                    <span className="text-[var(--text-muted)] basis-full">Under-inflation raises rolling resistance, fuel burn and blow-out risk. Address critical readings first.</span>
+                    <button type="button" onClick={() => setTab('alerts')} className="btn-secondary text-sm min-h-[40px]">Review alerts</button>
                   </>
                 ) : (
-                  <span className="text-gray-300">No under-inflated readings in the current view. Every assessed tyre is at or above the target band.</span>
+                  <span className="text-[var(--text-secondary)]">No under-inflated readings in the current view. Every assessed tyre is at or above the target band.</span>
                 )}
               </div>
+            </Card>
 
-              {/* Charts row 1 */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <div className="card">
-                  <div className="flex items-center gap-2 mb-3">
-                    <BarChart3 size={14} className="text-blue-400" />
-                    <h3 className="text-sm font-semibold text-[var(--text-primary)]">Pressure Band Split</h3>
-                    <span className="ml-auto text-xs text-gray-500">{kpis.total} readings</span>
-                  </div>
-                  <div className="h-64 flex items-center justify-center">
-                    <Doughnut
-                      data={doughnutData}
-                      options={{
-                        responsive: true, maintainAspectRatio: false, cutout: '62%',
-                        plugins: {
-                          legend: { position: 'bottom', labels: { color: '#9ca3af', font: { size: 10 }, padding: 12 } },
-                          tooltip: chartTooltip,
-                        },
-                      }}
-                    />
-                  </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <Card>
+                <CardHeader title="Pressure band split" icon={BarChart3} actions={<span className="text-xs text-[var(--text-muted)]">{kpis.total} readings</span>} />
+                <div className="h-64" role="img" aria-label={`Band split: ${dist.map((d) => `${d.label} ${d.count}`).join(', ')}`}>
+                  <Doughnut data={doughnutData} options={{ responsive: true, maintainAspectRatio: false, cutout: '62%', plugins: { legend: { position: 'bottom', labels: legendLabels }, tooltip: chartTooltip } }} />
                 </div>
-
-                <div className="card">
-                  <div className="flex items-center gap-2 mb-3">
-                    <LineChart size={14} className="text-green-400" />
-                    <h3 className="text-sm font-semibold text-[var(--text-primary)]">Compliance Trend</h3>
-                    <span className="ml-auto text-xs text-gray-500">{trend.length ? `Last ${trend.length} month${trend.length === 1 ? '' : 's'}` : 'No dated readings'}</span>
-                  </div>
-                  {trend.length === 0 ? (
-                    <div className="flex items-center justify-center h-64 text-gray-600 text-sm">No dated readings to trend</div>
-                  ) : (
-                    <div className="h-64">
-                      <Line
-                        data={trendData}
-                        options={{
-                          responsive: true, maintainAspectRatio: false,
-                          plugins: { legend: { labels: { color: '#9ca3af', font: { size: 10 } } }, tooltip: chartTooltip },
-                          scales: {
-                            x: { grid: axisGrid, ticks: { ...axisTick, font: { size: 9 } } },
-                            y: { position: 'left', min: 0, max: 100, grid: axisGrid, ticks: { ...axisTick, callback: v => `${v}%` }, title: { display: true, text: 'Compliance %', color: '#6b7280', font: { size: 9 } } },
-                            y1: { position: 'right', min: 0, grid: { drawOnChartArea: false }, ticks: axisTick, title: { display: true, text: 'Under + Critical', color: '#6b7280', font: { size: 9 } } },
-                          },
-                        }}
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Charts row 2 */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <div className="card">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Building2 size={14} className="text-purple-400" />
-                    <h3 className="text-sm font-semibold text-[var(--text-primary)]">Readings by Site</h3>
-                    <span className="ml-auto text-xs text-gray-500">Top {Math.min(12, sitesRank.length)} sites</span>
-                  </div>
-                  {sitesRank.length === 0 ? (
-                    <div className="flex items-center justify-center h-64 text-gray-600 text-sm">No site data</div>
-                  ) : (
-                    <div className="h-64">
-                      <Bar
-                        data={siteBarData}
-                        options={{
-                          responsive: true, maintainAspectRatio: false,
-                          plugins: { legend: { labels: { color: '#9ca3af', font: { size: 10 } } }, tooltip: chartTooltip },
-                          scales: {
-                            x: { stacked: true, grid: axisGrid, ticks: { ...axisTick, font: { size: 9 } } },
-                            y: { stacked: true, grid: axisGrid, ticks: axisTick },
-                          },
-                        }}
-                      />
-                    </div>
-                  )}
-                </div>
-
-                {/* Position breakdown table */}
-                <div className="card">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Layers size={14} className="text-blue-400" />
-                    <h3 className="text-sm font-semibold text-[var(--text-primary)]">Compliance by Position</h3>
-                    <span className="ml-auto text-xs text-gray-500">{positionRank.length} position{positionRank.length === 1 ? '' : 's'}</span>
-                  </div>
-                  {positionRank.length === 0 ? (
-                    <div className="flex items-center justify-center h-64 text-gray-600 text-sm">No position data</div>
-                  ) : (
-                    <div className="overflow-x-auto max-h-64">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="border-b border-gray-700/60 text-gray-500">
-                            {['Position', 'Readings', 'Under', 'Over', 'Critical', 'Compliance'].map(h => (
-                              <th key={h} className="text-left pb-2 pr-3 font-medium whitespace-nowrap">{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {positionRank.slice(0, 30).map((p, i) => {
-                            const tone = p.compliancePct >= 90 ? 'text-green-400' : p.compliancePct >= 75 ? 'text-amber-400' : 'text-red-400'
-                            return (
-                              <tr key={p.position ?? i} className="border-b border-gray-800/60 hover:bg-gray-800/30">
-                                <td className="py-1.5 pr-3 text-gray-200 whitespace-nowrap">{p.position}</td>
-                                <td className="py-1.5 pr-3 text-gray-400">{p.total}</td>
-                                <td className="py-1.5 pr-3 text-orange-400">{p.under}</td>
-                                <td className="py-1.5 pr-3 text-amber-400">{p.over}</td>
-                                <td className="py-1.5 pr-3 text-red-400">{p.critical}</td>
-                                <td className={`py-1.5 pr-3 font-bold ${tone}`}>{p.compliancePct.toFixed(0)}%</td>
-                              </tr>
-                            )
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Alerts table */}
-              <div className="card">
-                <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle size={14} className="text-red-400" />
-                    <h3 className="text-sm font-semibold text-[var(--text-primary)]">Inflation Alerts</h3>
-                    <span className="text-xs px-2 py-0.5 bg-red-900/30 text-red-300 border border-red-700/40 rounded-full">{alertRows.length}</span>
-                  </div>
-                  <div className="sm:ml-auto flex items-center gap-2">
-                    <ArrowUpDown size={12} className="text-gray-500" />
-                    <Select value={sortBy === 'worst' ? '' : sortBy} onChange={v => setSortBy(v || 'worst')} placeholder="Worst first"
-                      options={Object.entries(SORTS).filter(([k]) => k !== 'worst').map(([value, m]) => ({ value, label: m.label }))} />
-                  </div>
-                </div>
-
-                {alertRows.length === 0 ? (
-                  <div className="flex flex-col items-center py-12 gap-2">
-                    <CheckCircle size={28} className="text-green-500" />
-                    <p className="text-gray-400 text-sm">No inflation alerts. All readings are within the target band.</p>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="border-b border-gray-700/60">
-                          {['Asset', 'Position', 'Serial', 'Pressure', 'Target', 'Deviation', 'Temp', 'Status', 'Site', 'Recorded'].map(h => (
-                            <th key={h} className="text-left text-gray-500 pb-2 pr-3 font-medium whitespace-nowrap">{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {alertPager.pageRows.map((r, i) => (
-                          <tr key={r.id ?? i} className="border-b border-gray-800/60 hover:bg-gray-800/30 transition-colors">
-                            <td className="py-2 pr-3 text-white font-medium">{r.asset_no || 'N/A'}</td>
-                            <td className="py-2 pr-3 text-gray-300">{r.position || 'N/A'}</td>
-                            <td className="py-2 pr-3 text-gray-400 font-mono">{r.serial || 'N/A'}</td>
-                            <td className={`py-2 pr-3 font-bold ${BAND_META[r.band]?.text ?? ''}`}>{r.pressure != null ? `${r.pressure.toFixed(1)} bar` : 'N/A'}</td>
-                            <td className="py-2 pr-3 text-gray-400">{r.target.toFixed(1)} bar</td>
-                            <td className={`py-2 pr-3 font-medium ${BAND_META[r.band]?.text ?? 'text-gray-400'}`}>{devLabel(r)}</td>
-                            <td className="py-2 pr-3 text-gray-400">{r.temperature != null ? `${r.temperature.toFixed(0)}C` : 'N/A'}</td>
-                            <td className="py-2 pr-3"><BandChip band={r.band} /></td>
-                            <td className="py-2 pr-3 text-gray-400">{r.site || 'N/A'}</td>
-                            <td className="py-2 pr-3 text-gray-500 whitespace-nowrap">{r.date ? String(r.date).slice(0, 10) : 'N/A'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    <TablePagination {...alertPager} />
+              </Card>
+              <Card>
+                <CardHeader title="Compliance trend" icon={LineChart} actions={<span className="text-xs text-[var(--text-muted)]">{trend.length ? `Last ${trend.length} month${trend.length === 1 ? '' : 's'}` : 'No dated readings'}</span>} />
+                {trend.length === 0 ? <EmptyChart>No dated readings to trend.</EmptyChart> : (
+                  <div className="h-64">
+                    <Line data={trendData} options={{
+                      responsive: true, maintainAspectRatio: false,
+                      plugins: { legend: { labels: legendLabels }, tooltip: chartTooltip },
+                      scales: {
+                        x: { grid: axisGrid, ticks: axisTick },
+                        y: { position: 'left', min: 0, max: 100, grid: axisGrid, ticks: { ...axisTick, callback: (v) => `${v}%` }, title: { display: true, text: 'Compliance %', color: 'var(--text-muted)', font: { size: 10 } } },
+                        y1: { position: 'right', min: 0, grid: { drawOnChartArea: false }, ticks: axisTick, title: { display: true, text: 'Under + Critical', color: 'var(--text-muted)', font: { size: 10 } } },
+                      },
+                    }} />
                   </div>
                 )}
-              </div>
+              </Card>
+            </div>
 
-              {/* Site compliance strip */}
-              {sitesRank.length > 0 && (
-                <div className="card">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Thermometer size={14} className="text-amber-400" />
-                    <h3 className="text-sm font-semibold text-[var(--text-primary)]">Compliance by Site</h3>
-                    <span className="ml-auto text-xs text-gray-500">Worst first</span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {sitesRank.slice(0, 9).map(s => {
-                      const pct = s.compliancePct
-                      const tone = pct >= 90 ? 'text-green-400' : pct >= 75 ? 'text-amber-400' : 'text-red-400'
-                      return (
-                        <div key={s.site} className="bg-gray-800/40 rounded-xl p-3 border border-gray-700/40">
-                          <div className="flex items-center justify-between">
-                            <p className="text-xs text-gray-400 truncate">{s.site}</p>
-                            <span className={`text-sm font-bold ${tone}`}>{pct.toFixed(0)}%</span>
-                          </div>
-                          <p className="text-xs text-gray-600 mt-1">{s.total} readings · {s.alerts} alert{s.alerts === 1 ? '' : 's'}</p>
-                        </div>
-                      )
-                    })}
-                  </div>
+            <Card>
+              <CardHeader title="Readings by site" icon={Building2} actions={<span className="text-xs text-[var(--text-muted)]">Top {Math.min(12, sitesRank.length)} sites, worst first</span>} />
+              {sitesRank.length === 0 ? <EmptyChart>No site data.</EmptyChart> : (
+                <div className="h-72">
+                  <Bar data={siteBarData} options={{
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { labels: legendLabels }, tooltip: chartTooltip },
+                    scales: { x: { stacked: true, grid: axisGrid, ticks: axisTick }, y: { stacked: true, grid: axisGrid, ticks: axisTick } },
+                  }} />
                 </div>
               )}
-            </motion.div>
-          )}
-        </>
+            </Card>
+          </div>
+        )
+      ) : tab === 'alerts' ? (
+        <Card>
+          <CardHeader title="Inflation alerts" icon={AlertTriangle} description="Every under, over and critical reading. Worst first; click a header to re-sort." />
+          <EnterpriseTable
+            columns={readingColumns}
+            data={offenders}
+            getRowId={(r, i) => String(r.id ?? i)}
+            enableGlobalFilter={false}
+            enableColumnFilters={false}
+            exportFileName="tpms_inflation_alerts"
+            reportMeta={{ title: 'TPMS Inflation Alerts', company }}
+            viewKey="tpms-alerts"
+            initialPageSize={25}
+            emptyIcon={<CheckCircle size={26} className="text-green-500" aria-hidden="true" />}
+            emptyMessage="No inflation alerts. All assessed readings are within the target band."
+          />
+        </Card>
+      ) : tab === 'breakdown' ? (
+        <div className="space-y-4">
+          <Card>
+            <CardHeader title="Compliance by site" icon={Building2} description="Most alerts first." />
+            <EnterpriseTable
+              columns={siteColumns}
+              data={sitesRank}
+              getRowId={(r) => String(r.site)}
+              enableColumnFilters={false}
+              searchPlaceholder="Search sites"
+              exportFileName="tpms_site_compliance"
+              reportMeta={{ title: 'TPMS Compliance by Site', company }}
+              initialPageSize={25}
+              onRowClick={(r) => { if (r.site && r.site !== 'Unspecified') { setSiteFilter(r.site); setTab('alerts') } }}
+              emptyMessage="No site data for the current filters."
+            />
+          </Card>
+          <Card>
+            <CardHeader title="Compliance by position" icon={Layers} description="Steer positions under-inflated are the highest safety concern." />
+            <EnterpriseTable
+              columns={positionColumns}
+              data={positionRank}
+              getRowId={(r) => String(r.position)}
+              enableColumnFilters={false}
+              searchPlaceholder="Search positions"
+              exportFileName="tpms_position_compliance"
+              reportMeta={{ title: 'TPMS Compliance by Position', company }}
+              initialPageSize={25}
+              emptyMessage="No position data for the current filters."
+            />
+          </Card>
+        </div>
+      ) : (
+        <Card>
+          <CardHeader title="All readings" icon={List} description="Every reading in the current filter, including optimal and not-assessed rows." />
+          <EnterpriseTable
+            columns={readingColumns}
+            data={filtered}
+            getRowId={(r, i) => String(r.id ?? i)}
+            enableGlobalFilter={false}
+            enableColumnFilters={false}
+            exportFileName="tpms_readings"
+            reportMeta={{ title: 'TPMS Readings', company }}
+            viewKey="tpms-readings"
+            virtual={filtered.length > 500}
+            initialPageSize={50}
+            emptyMessage={all.length === 0 ? 'No pressure readings recorded yet.' : 'No readings match the selected filters.'}
+          />
+        </Card>
       )}
     </div>
   )

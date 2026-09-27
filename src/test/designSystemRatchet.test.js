@@ -34,6 +34,10 @@ const PAGES_DIR = resolve(process.cwd(), 'src/pages')
 /**
  * Current, measured debt. LOWER these as pages migrate. Never raise them.
  *
+ * rawOverlay reached 0 on 2026-09-27: KnowledgeBase's document viewer moved
+ * to SideDrawer and DisplayDashboard's picker click catcher became a document
+ * listener. Nothing may reintroduce a hand-rolled overlay.
+ *
  * rawOverlay 130 -> 128 -> 125 -> 121 -> 115 -> 110 -> 103 on 2026-09-21. Wave 1 moved
  * StockManagement and PmPrograms; wave 2 Combinations, HeatIntelligence and
  * SerialTracker; wave 3 FleetRenewal, TechnicianScorecard, FitmentValidation and
@@ -87,7 +91,7 @@ const PAGES_DIR = resolve(process.cwd(), 'src/pages')
  */
 const BASELINE = {
   rawTable: 0,
-  rawOverlay: 2,
+  rawOverlay: 0,
 }
 
 function readAllPages() {

@@ -249,6 +249,28 @@ export default function DisplayDashboard() {
   const [cursorHidden, setCursorHidden] = useState(false)
   const [enabledBoards, setEnabledBoards] = useState(loadEnabledBoards)
   const [showPicker,   setShowPicker]   = useState(false)
+  const pickerRef = useRef(null)
+
+  // Close the board picker on an outside press or Escape. A document listener
+  // replaces the old invisible full-screen click catcher, which also swallowed
+  // the first click on anything behind it.
+  useEffect(() => {
+    if (!showPicker) return undefined
+    const onDown = (e) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target)) setShowPicker(false)
+    }
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.stopPropagation(); setShowPicker(false) }
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('touchstart', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('touchstart', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [showPicker])
 
   // Boards the operator has chosen to show (missing key = on). Never empty:
   // if everything is toggled off we fall back to the full set.
@@ -721,10 +743,12 @@ export default function DisplayDashboard() {
             </p>
           </div>
           {/* Board picker — choose which boards are shown / rotated */}
-          <div className="relative">
+          <div className="relative" ref={pickerRef}>
             <button
               onClick={() => setShowPicker(v => !v)}
               title="Choose boards to display"
+              aria-haspopup="true"
+              aria-expanded={showPicker}
               className={`p-2.5 rounded-xl border transition-colors ${
                 showPicker
                   ? 'bg-emerald-900/30 border-emerald-800/60 text-emerald-300'
@@ -735,7 +759,6 @@ export default function DisplayDashboard() {
             </button>
             {showPicker && (
               <>
-                <div className="fixed inset-0 z-10" onClick={() => setShowPicker(false)} />
                 <div className="absolute right-0 mt-2 z-20 w-64 rounded-xl border border-slate-700 bg-[#0d1420] shadow-2xl p-2">
                   <div className="flex items-center justify-between px-2 py-1.5">
                     <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Displayed boards</p>

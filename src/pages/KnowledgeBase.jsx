@@ -22,6 +22,7 @@ import { generateEmbedding, reindexMissingEmbeddings } from '../lib/embeddingSer
 import PageHeader from '../components/ui/PageHeader'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import Modal from '../components/ui/Modal'
+import SideDrawer from '../components/ui/SideDrawer'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { formatDate } from '../lib/formatters'
 import {
@@ -633,35 +634,46 @@ export default function KnowledgeBase() {
       </div>
 
       {/* Document detail drawer: approval sign-off + gated destructive control */}
-      {viewDoc && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm" onClick={() => setViewDoc(null)}>
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="kb-drawer-title"
-            className="tp-drawer-panel w-full max-w-lg h-full bg-[var(--surface-1)] border-l border-[var(--border-bright)] shadow-2xl flex flex-col"
-            onClick={e => e.stopPropagation()}
-            onKeyDown={e => { if (e.key === 'Escape') setViewDoc(null) }}
-          >
-            <div className="flex items-start justify-between gap-3 p-5 border-b border-[var(--border-dim)]">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h2 id="kb-drawer-title" className="text-[var(--text-primary)] font-semibold truncate">{viewDoc.title}</h2>
-                  <DocTypeBadge type={viewDoc.doc_type} />
-                </div>
-                <div className="flex flex-wrap items-center gap-3 mt-1 text-xs text-[var(--text-muted)]">
-                  <span className="flex items-center gap-1"><Globe className="w-3 h-3" aria-hidden="true" />{viewDoc.site || 'All sites'}</span>
-                  {viewDoc.asset_no && <span className="flex items-center gap-1"><Truck className="w-3 h-3" aria-hidden="true" />{viewDoc.asset_no}</span>}
-                  <EmbedStatusBadge hasEmbedding={!!viewDoc.embedding} />
-                </div>
-                <p className="text-xs text-[var(--text-muted)] mt-1">Part of: {baseTitle(viewDoc.title)}</p>
-              </div>
-              <button type="button" autoFocus onClick={() => setViewDoc(null)} className="inline-flex items-center justify-center w-11 h-11 rounded-lg hover:bg-[var(--surface-2)] transition-colors flex-shrink-0" aria-label="Close document details">
-                <X className="w-5 h-5 text-[var(--text-secondary)]" aria-hidden="true" />
-              </button>
-            </div>
-
-            <div className="overflow-y-auto p-5 flex flex-col gap-5 flex-1">
+      <SideDrawer
+        open={!!viewDoc}
+        onClose={() => setViewDoc(null)}
+        size="md"
+        closeLabel="Close document details"
+        title={viewDoc ? (
+          <span className="flex items-center gap-2 flex-wrap">
+            <span className="truncate">{viewDoc.title}</span>
+            <DocTypeBadge type={viewDoc.doc_type} />
+          </span>
+        ) : null}
+        subtitle={viewDoc ? (
+          <>
+            <span className="flex flex-wrap items-center gap-3 text-xs text-[var(--text-muted)]">
+              <span className="flex items-center gap-1"><Globe className="w-3 h-3" aria-hidden="true" />{viewDoc.site || 'All sites'}</span>
+              {viewDoc.asset_no && <span className="flex items-center gap-1"><Truck className="w-3 h-3" aria-hidden="true" />{viewDoc.asset_no}</span>}
+              <EmbedStatusBadge hasEmbedding={!!viewDoc.embedding} />
+            </span>
+            <span className="block text-xs text-[var(--text-muted)] mt-1">Part of: {baseTitle(viewDoc.title)}</span>
+          </>
+        ) : null}
+        footer={viewDoc && canWrite ? (
+          <div className="flex items-center justify-between gap-3 w-full">
+            {wfLocked
+              ? <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><Lock className="w-3.5 h-3.5" aria-hidden="true" /> Locked, in approval</span>
+              : <span className="text-xs text-[var(--text-muted)]">Removing a document also removes it from AI retrieval.</span>}
+            <button
+              type="button"
+              onClick={() => requestDelete(viewDoc)}
+              disabled={wfLocked}
+              title={wfLocked ? 'Locked: document is in an approval workflow' : 'Delete document'}
+              className="btn-danger text-sm inline-flex items-center gap-2 min-h-[44px] disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Trash2 className="w-4 h-4" aria-hidden="true" /> Delete
+            </button>
+          </div>
+        ) : null}
+      >
+        {viewDoc && (
+          <div className="flex flex-col gap-5">
               {(viewDoc.tags ?? []).length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
                   {(viewDoc.tags ?? []).map(tag => (
@@ -686,27 +698,9 @@ export default function KnowledgeBase() {
                 onStateChange={({ isActive, isLocked: locked }) => setWfLocked(!!(isActive || locked))}
                 title="Document Approval"
               />
-            </div>
-
-            {canWrite && (
-              <div className="p-5 border-t border-[var(--border-dim)] flex items-center justify-between gap-3">
-                {wfLocked
-                  ? <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]"><Lock className="w-3.5 h-3.5" aria-hidden="true" /> Locked, in approval</span>
-                  : <span className="text-xs text-[var(--text-muted)]">Removing a document also removes it from AI retrieval.</span>}
-                <button
-                  type="button"
-                  onClick={() => requestDelete(viewDoc)}
-                  disabled={wfLocked}
-                  title={wfLocked ? 'Locked: document is in an approval workflow' : 'Delete document'}
-                  className="btn-danger text-sm inline-flex items-center gap-2 min-h-[44px] disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  <Trash2 className="w-4 h-4" aria-hidden="true" /> Delete
-                </button>
-              </div>
-            )}
           </div>
-        </div>
-      )}
+        )}
+      </SideDrawer>
 
       {/* Delete confirm */}
       <Modal

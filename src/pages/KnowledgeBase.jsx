@@ -26,7 +26,7 @@ import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { formatDate } from '../lib/formatters'
 import {
   chunkText, filterDocs, hasKbFilters, kbSiteOptions, kbKpis, kbByType, kbTopTags,
-  kbExportRows, baseTitle, docTypeLabel, KB_EXPORT_COLS, KB_EXPORT_HEADERS,
+  kbExportRows, baseTitle, docTypeLabel, KB_EXPORT_COLS, KB_EXPORT_HEADERS, kbTruncationNotice,
 } from '../lib/knowledgeBaseAnalytics'
 import { colorAt, withAlpha } from '../lib/reportColors'
 import { compareValues } from '../lib/consoleTable'
@@ -261,6 +261,7 @@ export default function KnowledgeBase() {
   const [modalOpen, setModalOpen] = useState(false)
   const [reindexing, setReindexing] = useState(false)
   const [notice, setNotice] = useState(null)
+  const [truncatedNotice, setTruncatedNotice] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
   // Per-document detail surface (approval sign-off host).
@@ -277,11 +278,15 @@ export default function KnowledgeBase() {
     try {
       const rows = await knowledgeDocuments.listKnowledgeDocuments()
       setDocs(Array.isArray(rows) ? rows : [])
+      // Captured here, not read off `docs`: a later local delete filters the
+      // array and would drop the hidden `truncated` flag with it.
+      setTruncatedNotice(kbTruncationNotice(rows))
       setNow(Date.now())
       setUpdatedAt(new Date())
     } catch (e) {
       setError(toUserMessage(e, 'Could not load knowledge base documents.'))
       setDocs([])
+      setTruncatedNotice(null)
     } finally {
       setRefreshing(false)
     }
@@ -472,6 +477,12 @@ export default function KnowledgeBase() {
           <AlertCircle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
           <div className="flex-1 min-w-0"><p className="text-red-300 font-medium">Could not load the knowledge base.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
           <button type="button" onClick={fetchDocs} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><RefreshCw size={14} aria-hidden="true" /> Retry</button>
+        </div>
+      )}
+      {truncatedNotice && (
+        <div role="status" className="card border border-amber-700/50 flex items-start gap-3 text-sm">
+          <AlertCircle size={18} className="text-amber-400 mt-0.5 shrink-0" aria-hidden="true" />
+          <p className="text-[var(--text-secondary)]">{truncatedNotice}</p>
         </div>
       )}
       {actionError && <p role="alert" className="card text-sm text-red-300">{actionError}</p>}

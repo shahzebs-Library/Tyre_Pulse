@@ -200,9 +200,13 @@ export async function listAssetOptions(country?: string | null): Promise<string[
 
 /** Org users as display names (full_name || username). */
 export async function listUserOptions(): Promise<string[]> {
-  const { data, error } = await supabase.from('profiles').select('full_name,username').limit(1000)
-  if (error) throw error
-  return uniqSorted((data ?? []).map((r: any) => r.full_name || r.username))
+  // profiles is past 700 rows and PostgREST caps every response at 1,000, so a
+  // bare .limit(1000) would silently drop people once the org grows. Page it,
+  // with the id tiebreak so no row falls between two pages.
+  const rows = await fetchAllRows<any>((from, to) =>
+    supabase.from('profiles').select('id,full_name,username').order('id').range(from, to),
+  { max: 20000 })
+  return uniqSorted(rows.map((r: any) => r.full_name || r.username))
 }
 
 /** Load options for a reference source. */
@@ -630,6 +634,8 @@ export async function listSubmissionHistory(opts: {
   }
 }
 
+const SUBMITTER_NAME_LIMIT = 200
+
 /**
  * Display names for the people who submitted the visible rows, keyed by user id.
  *
@@ -638,11 +644,13 @@ export async function listSubmissionHistory(opts: {
  * row saying so rather than blocking the list.
  */
 export async function listSubmitterNames(ids: (string | null | undefined)[]): Promise<Record<string, string>> {
-  const unique = Array.from(new Set(ids.filter((v): v is string => !!v && !!v.trim()))).slice(0, 200)
+  const unique = Array.from(new Set(ids.filter((v): v is string => !!v && !!v.trim()))).slice(0, SUBMITTER_NAME_LIMIT)
   if (!unique.length) return {}
   try {
+    // At most SUBMITTER_NAME_LIMIT ids are asked for, so the explicit limit is a
+    // real bound (well under the server's 1,000-row cap), not a truncation.
     const { data, error } = await supabase
-      .from('profiles').select('id,full_name,username').in('id', unique)
+      .from('profiles').select('id,full_name,username').in('id', unique).limit(SUBMITTER_NAME_LIMIT)
     if (error) return {}
     const out: Record<string, string> = {}
     for (const r of (data ?? []) as any[]) {

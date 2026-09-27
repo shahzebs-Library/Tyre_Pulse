@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../lib/supabase'
 import { toUserMessage } from '../../lib/safeError'
+import { fetchAllRows } from '../../lib/fetchAllRows'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useTheme } from '../../contexts/ThemeContext'
@@ -69,13 +70,18 @@ function TeamScreen() {
 
   const load = useCallback(async () => {
     try {
-      const { data, error: qErr } = await supabase
-        .from('profiles')
-        .select('id,full_name,username,role,site,country,phone,email,approved,last_login_at')
-        .order('full_name')
-        .limit(1000)
-      if (qErr) throw qErr
-      setRows((data as Member[]) ?? [])
+      // profiles is past 700 rows and PostgREST caps every response at 1,000,
+      // so page it. full_name is not unique, so the id tiebreak is what keeps a
+      // member from falling between two pages.
+      const data = await fetchAllRows<Member>((from, to) =>
+        supabase
+          .from('profiles')
+          .select('id,full_name,username,role,site,country,phone,email,approved,last_login_at')
+          .order('full_name')
+          .order('id')
+          .range(from, to),
+      { max: 20000 })
+      setRows(data)
       setError(null)
     } catch (e: any) {
       if (__DEV__) console.warn('[team] load failed', e)

@@ -178,8 +178,6 @@ const ALLOWED = [
   //     debt stays visible and can only shrink (test 2 fails on a stale entry).
   //     Each names the measured impact so nobody has to re-derive it. ---
   { file: 'src/lib/api/materialMaster.js', why: 'BOUNDED, but the resolver cannot evaluate a Math.min expression: listMaterials clamps to Math.min(limit, MATERIAL_LIST_MAX = 1000) (was 2000 - a lie against the 1,000 cap, fixed) and listMaterialTransactions to Math.min(limit, 500). Both are ranked "top N" views, not totals' },
-  { file: 'mobile/app/(app)/team.tsx', why: 'KNOWN (2026-09-27): profiles .limit(1000) for the team list - profiles is 725 rows, below the cap today; truncates past 1,000. Mobile, left for a mobile pass (builds frozen)' },
-  { file: 'mobile/lib/checklists.ts', why: 'KNOWN (2026-09-27): two profiles reads (assignee/role pickers) - 725 rows today, below the cap; truncate past 1,000. Mobile, left for a mobile pass (builds frozen)' },
   { file: 'mobile/app/(app)/admin/index.tsx', why: 'KNOWN: bare select of accidents (38 rows today) for the admin severity rollup - below the cap now, truncates once the register passes 1,000' },
 ]
 

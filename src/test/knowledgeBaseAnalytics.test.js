@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   chunkText, baseTitle, filterDocs, hasKbFilters, kbSiteOptions, kbKpis, kbByType, kbTopTags,
-  kbExportRows, KB_FILTERS, docTypeLabel, CHUNK_SIZE, CHUNK_OVERLAP,
+  kbExportRows, KB_FILTERS, docTypeLabel, CHUNK_SIZE, CHUNK_OVERLAP, kbTruncationNotice,
 } from '../lib/knowledgeBaseAnalytics'
 
 const NOW = Date.parse('2026-09-27T00:00:00Z')
@@ -56,5 +56,21 @@ describe('knowledgeBaseAnalytics', () => {
     const out = kbExportRows(docs)
     expect(out[0]).toMatchObject({ document: 'Pressure SOP', doc_type: 'SOP / Procedure', status: 'Indexed', tags: 'pressure, heavy', created_at: '2026-09-20' })
     expect(out[2].site).toBe('All sites')
+  })
+})
+
+describe('kbTruncationNotice', () => {
+  const withFlags = (rows, truncated) => {
+    Object.defineProperty(rows, 'truncated', { value: truncated, enumerable: false })
+    return rows
+  }
+  it('returns null for a complete list', () => {
+    expect(kbTruncationNotice(withFlags([{ id: 1 }], false))).toBeNull()
+    expect(kbTruncationNotice([{ id: 1 }])).toBeNull()
+    expect(kbTruncationNotice(null)).toBeNull()
+  })
+  it('names how many documents are shown when the ceiling was hit', () => {
+    const rows = withFlags(Array.from({ length: 1200 }, (_, i) => ({ id: i })), true)
+    expect(kbTruncationNotice(rows)).toBe('Showing the newest 1,200 documents; older ones are not loaded.')
   })
 })

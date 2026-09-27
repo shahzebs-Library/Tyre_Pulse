@@ -134,3 +134,15 @@ export function kbExportRows(docs = []) {
     created_at: text(d?.created_at).slice(0, 10),
   }))
 }
+
+/**
+ * Notice text for a truncated corpus read, or null when the list is complete.
+ * listKnowledgeDocuments returns an array carrying a hidden `truncated` flag
+ * when it hit its row ceiling; without a notice a shortened list reads as
+ * "these are all the documents".
+ */
+export function kbTruncationNotice(rows) {
+  if (!Array.isArray(rows) || rows.truncated !== true) return null
+  const n = rows.length
+  return `Showing the newest ${n.toLocaleString('en-US')} documents; older ones are not loaded.`
+}

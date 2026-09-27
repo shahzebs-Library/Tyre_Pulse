@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
+import Modal from '../components/ui/Modal'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listApiKeys, createApiKey, revokeApiKey,
@@ -516,17 +517,17 @@ export default function DeveloperPortal() {
       </div>
 
       {/* Create / Edit modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={closeModal}>
-          <div className="card w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-[var(--text-primary)] inline-flex items-center gap-2">
-                {tab === 'keys' ? <KeyRound size={18} /> : <Webhook size={18} />}
-                {editing ? 'Edit webhook record' : (tab === 'keys' ? 'Issue API key' : 'New webhook record')}
-              </h3>
-              <button onClick={closeModal} className={`${iconBtn} hover:text-[var(--text-primary)]`} aria-label="Close"><X size={18} aria-hidden="true" /></button>
-            </div>
-
+      <Modal
+        open={showModal}
+        onClose={closeModal}
+        title={(
+          <span className="inline-flex items-center gap-2">
+            {tab === 'keys' ? <KeyRound size={18} aria-hidden="true" /> : <Webhook size={18} aria-hidden="true" />}
+            {editing ? 'Edit webhook record' : (tab === 'keys' ? 'Issue API key' : 'New webhook record')}
+          </span>
+        )}
+        size="md"
+      >
             <form onSubmit={submit} className="space-y-4">
               {tab === 'keys' ? (
                 <>
@@ -596,59 +597,61 @@ export default function DeveloperPortal() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {/* One-time plaintext of a just-issued key */}
-      {newKey && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4">
-          <div className="card w-full max-w-lg" role="dialog" aria-label="New API key">
-            <h3 className="text-lg font-bold text-[var(--text-primary)] inline-flex items-center gap-2"><KeyRound size={18} /> API key issued: {newKey.name}</h3>
-            <p className="text-sm text-amber-300 mt-2">Copy this key now. It is shown only once and cannot be recovered.</p>
+      {/* No onClose: this dialog only closes through the explicit acknowledgement,
+          so Escape or a stray backdrop click can never discard the one-time key. */}
+      <Modal
+        open={Boolean(newKey)}
+        title={newKey ? (
+          <span className="inline-flex items-center gap-2"><KeyRound size={18} aria-hidden="true" /> API key issued: {newKey.name}</span>
+        ) : ''}
+        size="md"
+        closeOnBackdrop={false}
+        footer={(
+          <button type="button" className="btn-primary text-sm min-h-[44px]" onClick={() => { setNewKey(null); setCopied(false) }}>I have copied it</button>
+        )}
+      >
+        {newKey && (
+          <>
+            <p className="text-sm text-amber-300">Copy this key now. It is shown only once and cannot be recovered.</p>
             <div className="mt-3 flex items-center gap-2">
               <code className="flex-1 font-mono text-xs break-all bg-[var(--input-bg)] rounded px-2 py-2 text-[var(--text-primary)]" data-testid="new-api-key">{newKey.key}</code>
               <button
-                className="btn-secondary text-sm inline-flex items-center gap-1.5"
+                type="button"
+                className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"
                 onClick={async () => { try { await navigator.clipboard.writeText(newKey.key); setCopied(true) } catch { setCopied(false) } }}
-              ><Copy size={14} /> {copied ? 'Copied' : 'Copy'}</button>
+              ><Copy size={14} aria-hidden="true" /> {copied ? 'Copied' : 'Copy'}</button>
             </div>
-            <div className="flex justify-end mt-4">
-              <button className="btn-primary text-sm" onClick={() => { setNewKey(null); setCopied(false) }}>I have copied it</button>
-            </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </Modal>
 
       {/* Delete / Revoke confirm */}
-      {confirmDelete && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={() => !deleting && setConfirmDelete(null)}>
-          <div className="card w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-full bg-red-900/30 flex items-center justify-center shrink-0">
-                {confirmDelete._kind === 'key' ? <Ban size={18} className="text-red-400" /> : <Trash2 size={18} className="text-red-400" />}
-              </div>
-              <div>
-                <h3 className="text-[var(--text-primary)] font-semibold">
-                  {confirmDelete._kind === 'key' ? 'Revoke this API key?' : 'Delete this webhook record?'}
-                </h3>
-                <p className="text-sm text-[var(--text-muted)] mt-1">
-                  {confirmDelete._kind === 'key'
-                    ? <>{confirmDelete.key_name || 'Key'} · {maskKey(confirmDelete.key_prefix)}. Any system using this key stops working immediately. The key stays listed as revoked.</>
-                    : <>{confirmDelete.endpoint_name || 'Endpoint'} · {confirmDelete.url || 'N/A'}. This cannot be undone.</>}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center justify-end gap-2 mt-5">
-              <button onClick={() => setConfirmDelete(null)} className="btn-secondary text-sm" disabled={deleting}>Cancel</button>
-              <button onClick={doDelete} className="btn-danger text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={deleting}>
-                {confirmDelete._kind === 'key' ? <Ban size={14} /> : <Trash2 size={14} />}
-                {deleting ? 'Working...' : (confirmDelete._kind === 'key' ? 'Revoke key' : 'Delete record')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={Boolean(confirmDelete)}
+        onClose={() => { if (!deleting) setConfirmDelete(null) }}
+        title={confirmDelete?._kind === 'key' ? 'Revoke this API key?' : 'Delete this webhook record?'}
+        size="sm"
+        footer={confirmDelete ? (
+          <>
+            <button type="button" onClick={() => setConfirmDelete(null)} className="btn-secondary text-sm min-h-[44px]" disabled={deleting}>Cancel</button>
+            <button type="button" onClick={doDelete} className="btn-danger text-sm inline-flex items-center gap-1.5 min-h-[44px] disabled:opacity-60" disabled={deleting}>
+              {confirmDelete._kind === 'key' ? <Ban size={14} aria-hidden="true" /> : <Trash2 size={14} aria-hidden="true" />}
+              {deleting ? 'Working...' : (confirmDelete._kind === 'key' ? 'Revoke key' : 'Delete record')}
+            </button>
+          </>
+        ) : null}
+      >
+        {confirmDelete && (
+          <p className="text-sm text-[var(--text-muted)]">
+            {confirmDelete._kind === 'key'
+              ? <>{confirmDelete.key_name || 'Key'} · {maskKey(confirmDelete.key_prefix)}. Any system using this key stops working immediately. The key stays listed as revoked.</>
+              : <>{confirmDelete.endpoint_name || 'Endpoint'} · {confirmDelete.url || 'N/A'}. This cannot be undone.</>}
+          </p>
+        )}
+      </Modal>
     </div>
   )
 }

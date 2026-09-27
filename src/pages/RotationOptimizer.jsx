@@ -1,81 +1,112 @@
 /**
- * RotationOptimizer (route /rotation-optimizer) — advanced maintenance-planning
- * tool. For every vehicle it analyses the tyres currently fitted and recommends
+ * RotationOptimizer (route /rotation-optimizer) - maintenance-planning tool.
+ * For every vehicle it analyses the tyres currently fitted and recommends
  * rotations/swaps that even out tread wear and extend overall tyre life.
  *
- * Runs entirely on the existing `tyre_records` table (in-service tyres, i.e.
- * removal_date IS NULL) — no new data required. All optimisation logic lives in
- * the pure, unit-tested `src/lib/rotationOptimizer.js`; this page only fetches,
- * filters, and presents. Honest empty/error/loading states — no mock data.
+ * Runs on the existing `tyre_records` table (in-service tyres, removal_date IS
+ * NULL). KPI strip, most-imbalanced chart, status mix, filters + search, a
+ * sortable EnterpriseTable of analysed assets (opening one shows its narrative,
+ * compliance issues, swaps and fitted tyres), a swap work list, and Excel/PDF
+ * export. All optimisation and page shaping lives in the pure, unit-tested
+ * `src/lib/rotationOptimizer.js`. Honest empty/error/loading states, no mock data.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
-  RotateCcw, AlertTriangle, Truck, Search, X, Filter,
-  FileSpreadsheet, FileText, ChevronRight, ArrowRightLeft, CheckCircle2, Info,
-  ShieldAlert, ShieldCheck, Zap, ArrowRight, Scale, BarChart3,
+  RotateCcw, AlertTriangle, Truck, Search, X, FileSpreadsheet, FileText, ArrowRightLeft,
+  CheckCircle2, Info, ShieldAlert, ShieldCheck, Zap, ArrowRight, Scale, BarChart3, Gauge,
 } from 'lucide-react'
-import { Bar } from 'react-chartjs-2'
+import { Bar, Doughnut } from 'react-chartjs-2'
 import {
-  Chart as ChartJS, CategoryScale, LinearScale, BarElement,
+  Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement,
   Title, Tooltip as ChartTooltip, Legend,
 } from 'chart.js'
 import PageHeader from '../components/ui/PageHeader'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import Modal from '../components/ui/Modal'
 import { useSettings } from '../contexts/SettingsContext'
 import { listInServiceTyres } from '../lib/api/rotationOptimizer'
 import {
-  optimizeFleet, serialOf, positionOf, treadOf, DEFAULT_ROTATION_OPTS,
+  optimizeFleet, serialOf, positionOf, treadOf, DEFAULT_ROTATION_OPTS, LEGAL_MIN_TREAD_MM,
+  ROTATION_STATUS_KEYS, ROTATION_STATUS_LABEL, EMPTY_ROTATION_FILTERS, enrichRotationAssets,
+  rotationSiteOptions, activeRotationFilterCount, filterRotationAssets, rotationPageKpis,
+  flattenSwaps, mostImbalanced, rotationExportRows, ROTATION_EXPORT_COLUMNS,
 } from '../lib/rotationOptimizer'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, ChartTooltip, Legend)
+ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, ChartTooltip, Legend)
 
-// Overall-status badge styling (from the deepened engine).
+// Semantic status: colour carries urgency and every badge also names it with an icon.
 const STATUS_META = {
-  critical: { label: 'Critical', cls: 'bg-red-900/40 text-red-300 border border-red-700/50', bar: '#f87171' },
-  warning: { label: 'Warning', cls: 'bg-orange-900/40 text-orange-300 border border-orange-700/50', bar: '#fb923c' },
-  advisory: { label: 'Advisory', cls: 'bg-amber-900/40 text-amber-300 border border-amber-700/50', bar: '#fbbf24' },
-  good: { label: 'Good', cls: 'bg-green-900/40 text-green-300 border border-green-700/50', bar: '#34d399' },
+  critical: { cls: 'bg-red-500/15 text-red-300 border border-red-500/40', color: '#ef4444', icon: ShieldAlert },
+  warning: { cls: 'bg-orange-500/15 text-orange-300 border border-orange-500/40', color: '#f97316', icon: AlertTriangle },
+  advisory: { cls: 'bg-amber-500/15 text-amber-300 border border-amber-500/40', color: '#f59e0b', icon: AlertTriangle },
+  good: { cls: 'bg-green-500/15 text-green-300 border border-green-500/40', color: '#22c55e', icon: ShieldCheck },
 }
-const URGENCY_BAR = { critical: '#f87171', warning: '#fb923c', advisory: '#38bdf8' }
-
-const fmt = (n) => (n == null ? 'N/A' : n)
+const URGENCY_BAR = { critical: '#ef4444', warning: '#f97316', advisory: '#0ea5e9' }
 const treadTone = (mm) =>
-  mm == null ? 'text-[var(--text-muted)]' : mm < 1.6 ? 'text-red-400' : mm < 4 ? 'text-amber-400' : 'text-emerald-400'
+  mm == null ? 'text-[var(--text-muted)]' : mm < LEGAL_MIN_TREAD_MM ? 'text-red-400' : mm < 4 ? 'text-amber-400' : 'text-emerald-400'
 
-/** Compact wear-balance ring (SVG). */
-function BalanceRing({ score }) {
-  const r = 20
-  const c = 2 * Math.PI * r
-  const pct = score == null ? 0 : Math.max(0, Math.min(100, score))
-  const color = score == null ? '#64748b' : pct >= 75 ? '#34d399' : pct >= 50 ? '#fbbf24' : '#f87171'
-  const dash = (pct / 100) * c
+function StatusBadge({ status }) {
+  const m = STATUS_META[status] || STATUS_META.good
+  const Icon = m.icon
   return (
-    <div className="relative w-14 h-14 shrink-0" title="Wear-balance score (0 to 100)">
-      <svg viewBox="0 0 56 56" className="w-full h-full -rotate-90">
-        <circle cx="28" cy="28" r={r} fill="none" stroke="var(--input-border)" strokeWidth="6" />
-        {score != null && (
-          <circle cx="28" cy="28" r={r} fill="none" stroke={color} strokeWidth="6" strokeLinecap="round" strokeDasharray={`${dash} ${c - dash}`} />
-        )}
-      </svg>
-      <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-sm font-bold text-[var(--text-primary)]">{score == null ? 'N/A' : score}</span>
+    <span className={`text-[11px] px-2 py-0.5 rounded shrink-0 inline-flex items-center gap-1 whitespace-nowrap ${m.cls}`}>
+      <Icon size={11} aria-hidden="true" /> {ROTATION_STATUS_LABEL[status] || 'Good'}
+    </span>
+  )
+}
+
+function Kpi({ label, value, icon: Icon, tone, sub, loading }) {
+  return (
+    <div className="card">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-[var(--text-muted)]">{label}</p>
+        <Icon size={16} className={tone} aria-hidden="true" />
       </div>
+      <p className={`text-3xl font-bold mt-1 tabular-nums ${tone}`}>
+        {loading ? <span className="inline-block h-8 w-16 rounded bg-[var(--input-bg)] animate-pulse" aria-label="Loading" /> : (value ?? 'N/A')}
+      </p>
+      {sub && !loading && <p className="text-[11px] text-[var(--text-dim)] mt-0.5">{sub}</p>}
     </div>
   )
 }
+
+const tyreColumns = (stats) => [
+  { id: 'serial', header: 'Serial', accessorFn: (t) => serialOf(t) || '', size: 150, cell: ({ getValue }) => <span className="font-mono text-xs text-[var(--text-primary)]">{getValue() || 'N/A'}</span> },
+  { id: 'position', header: 'Position', accessorFn: (t) => positionOf(t) || '', size: 110, cell: ({ getValue }) => getValue() || 'N/A' },
+  { id: 'brand', header: 'Brand / Size', accessorFn: (t) => `${t.brand || ''} ${t.size || ''}`.trim(), size: 180, cell: ({ row }) => `${row.original.brand || 'N/A'}${row.original.size ? `, ${row.original.size}` : ''}` },
+  {
+    id: 'tread', header: 'Tread', accessorFn: (t) => treadOf(t), size: 120, sortUndefined: 'last', meta: { align: 'right' },
+    cell: ({ getValue }) => {
+      const tr = getValue()
+      if (tr == null) return <span className="text-[var(--text-muted)]">N/A</span>
+      const isMin = tr === stats.min
+      const isMax = tr === stats.max
+      return (
+        <span className={`${treadTone(tr)} ${isMin || isMax ? 'font-semibold' : ''}`}>
+          {tr}mm{isMin ? ' (most worn)' : isMax ? ' (freshest)' : ''}
+        </span>
+      )
+    },
+  },
+  {
+    id: 'km', header: 'Total km', accessorFn: (t) => (t.total_km == null ? null : Number(t.total_km)), size: 110, sortUndefined: 'last', meta: { align: 'right' },
+    cell: ({ getValue }) => (getValue() == null ? 'N/A' : getValue().toLocaleString()),
+  },
+]
 
 export default function RotationOptimizer() {
   const { activeCountry } = useSettings()
   const [rows, setRows] = useState(null)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
   const [refreshing, setRefreshing] = useState(false)
   const [updatedAt, setUpdatedAt] = useState(null)
 
-  const [priorityFilter, setPriorityFilter] = useState('all')
-  const [siteFilter, setSiteFilter] = useState('')
-  const [search, setSearch] = useState('')
-  const [expanded, setExpanded] = useState(() => new Set())
+  const [filters, setFilters] = useState(EMPTY_ROTATION_FILTERS)
+  const setFilter = (k, v) => setFilters((f) => ({ ...f, [k]: v }))
+  const [openAsset, setOpenAsset] = useState(null)
 
   const load = useCallback(async () => {
     setRefreshing(true); setError('')
@@ -93,77 +124,28 @@ export default function RotationOptimizer() {
 
   useEffect(() => { load() }, [load])
 
-  // Attach the site to each analysed asset (dominant site among its tyres) so the
-  // page can filter by site without re-reading the raw rows.
-  const siteByAsset = useMemo(() => {
-    const m = new Map()
-    for (const r of rows || []) {
-      if (r?.asset_no == null || !r.site) continue
-      if (!m.has(r.asset_no)) m.set(r.asset_no, r.site)
-    }
-    return m
-  }, [rows])
+  const loading = rows === null
+  const failed = Boolean(error)
+  const { assets, summary } = useMemo(() => optimizeFleet(rows || [], DEFAULT_ROTATION_OPTS), [rows])
+  const enriched = useMemo(() => enrichRotationAssets(assets, rows || []), [assets, rows])
+  const sites = useMemo(() => rotationSiteOptions(enriched), [enriched])
+  const filtered = useMemo(() => filterRotationAssets(enriched, filters), [enriched, filters])
+  const pageKpi = useMemo(() => rotationPageKpis(filtered), [filtered])
+  const swaps = useMemo(() => flattenSwaps(filtered), [filtered])
+  const top = useMemo(() => mostImbalanced(filtered), [filtered])
+  const filterCount = activeRotationFilterCount(filters)
 
-  const tyresByAsset = useMemo(() => {
-    const m = new Map()
-    for (const r of rows || []) {
-      if (r?.asset_no == null || r.asset_no === '') continue
-      if (!m.has(r.asset_no)) m.set(r.asset_no, [])
-      m.get(r.asset_no).push(r)
-    }
-    return m
-  }, [rows])
-
-  const { assets, summary } = useMemo(
-    () => optimizeFleet(rows || [], DEFAULT_ROTATION_OPTS),
-    [rows],
-  )
-
-  const enriched = useMemo(
-    () => assets.map((a) => ({
-      ...a,
-      site: siteByAsset.get(a.asset_no) || null,
-      priorityKey: a.priority || 'balanced',
-    })),
-    [assets, siteByAsset],
-  )
-
-  const siteOptions = useMemo(
-    () => [...new Set(enriched.map((a) => a.site).filter(Boolean))].sort(),
-    [enriched],
-  )
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return enriched.filter((a) => {
-      if (priorityFilter === 'needs' && !a.eligible) return false
-      if (priorityFilter !== 'all' && priorityFilter !== 'needs' && a.priorityKey !== priorityFilter) return false
-      if (siteFilter && a.site !== siteFilter) return false
-      if (q && !String(a.asset_no || '').toLowerCase().includes(q)) return false
-      return true
-    })
-  }, [enriched, priorityFilter, siteFilter, search])
-
-  const toggle = (assetNo) => setExpanded((prev) => {
-    const next = new Set(prev)
-    if (next.has(assetNo)) next.delete(assetNo)
-    else next.add(assetNo)
-    return next
-  })
-
+  const kv = (v) => (failed ? null : v)
   const kpis = [
-    { label: 'Assets analysed', value: summary.assetsAnalyzed, icon: Truck, tone: 'text-[var(--text-primary)]' },
-    { label: 'Need rotation', value: summary.assetsNeedingRotation, icon: RotateCcw, tone: 'text-amber-400' },
-    { label: 'Critical (safety)', value: summary.criticalAssets ?? 0, icon: ShieldAlert, tone: 'text-red-400' },
-    { label: 'Avg wear balance', value: summary.avgWearBalance == null ? 'N/A' : `${summary.avgWearBalance}/100`, icon: Scale, tone: 'text-[var(--text-primary)]' },
+    { label: 'Assets analysed', value: kv(pageKpi.assets), icon: Truck, tone: 'text-[var(--text-primary)]', sub: failed ? null : `${summary.assetsAnalyzed} in the fleet with 2 or more readings` },
+    { label: 'Need rotation', value: kv(pageKpi.needing), icon: RotateCcw, tone: 'text-amber-400' },
+    { label: 'Critical (safety)', value: kv(pageKpi.critical), icon: ShieldAlert, tone: 'text-red-400' },
+    { label: 'Avg wear balance', value: failed || pageKpi.avgWearBalance == null ? null : `${pageKpi.avgWearBalance}/100`, icon: Scale, tone: 'text-[var(--text-primary)]' },
+    { label: 'Recommended swaps', value: kv(pageKpi.swaps), icon: ArrowRightLeft, tone: 'text-[var(--brand-bright)]', sub: failed || pageKpi.benefitKm == null ? null : `About ${pageKpi.benefitKm.toLocaleString()} km recovered` },
+    { label: `Tyres under ${LEGAL_MIN_TREAD_MM}mm`, value: kv(pageKpi.belowLegal), icon: Gauge, tone: pageKpi.belowLegal ? 'text-red-400' : 'text-green-400', sub: 'Below the legal minimum' },
   ]
 
-  // Top imbalanced assets for the fleet chart (highest tread spread first).
   const chart = useMemo(() => {
-    const top = [...filtered]
-      .filter((a) => a.spread != null)
-      .sort((x, y) => (y.spread ?? 0) - (x.spread ?? 0))
-      .slice(0, 12)
     if (!top.length) return null
     return {
       data: {
@@ -171,7 +153,7 @@ export default function RotationOptimizer() {
         datasets: [{
           label: 'Tread spread (mm)',
           data: top.map((a) => a.spread),
-          backgroundColor: top.map((a) => URGENCY_BAR[a.urgency] || '#38bdf8'),
+          backgroundColor: top.map((a) => URGENCY_BAR[a.urgency] || '#0ea5e9'),
           borderRadius: 4,
           maxBarThickness: 34,
         }],
@@ -181,42 +163,90 @@ export default function RotationOptimizer() {
         maintainAspectRatio: false,
         plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => `${ctx.parsed.y}mm spread` } } },
         scales: {
-          y: { beginAtZero: true, grid: { color: 'rgba(148,163,184,0.12)' }, ticks: { color: '#94a3b8' }, title: { display: true, text: 'mm', color: '#94a3b8' } },
-          x: { grid: { display: false }, ticks: { color: '#94a3b8', maxRotation: 60, minRotation: 0, autoSkip: false } },
+          y: { beginAtZero: true, grid: { color: 'var(--panel-2)' }, ticks: { color: 'var(--text-muted)' }, title: { display: true, text: 'mm', color: 'var(--text-muted)' } },
+          x: { grid: { display: false }, ticks: { color: 'var(--text-muted)', maxRotation: 60, minRotation: 0, autoSkip: false } },
         },
       },
     }
-  }, [filtered])
+  }, [top])
 
-  // One export row per recommended swap (flattened), respecting current filters.
-  // Assets with no swap still emit a summary row so the export is complete.
-  const EXPORT_COLS = ['asset_no', 'site', 'status', 'score', 'spread', 'from', 'to', 'tyre', 'delta', 'benefit_km', 'impact', 'action']
-  const EXPORT_HEADERS = ['Asset', 'Site', 'Status', 'Balance', 'Spread (mm)', 'From', 'To', 'Tyre', 'Δ Tread (mm)', 'Benefit (km)', 'Impact', 'Action / Note']
-  const exportRows = filtered.flatMap((a) => {
-    const base = {
-      asset_no: a.asset_no || '',
-      site: a.site || '',
-      status: (STATUS_META[a.overallStatus] || {}).label || a.overallStatus || '',
-      score: a.wearBalanceScore ?? '',
-      spread: a.spread ?? '',
-    }
-    if (a.swaps && a.swaps.length) {
-      return a.swaps.map((s) => ({
-        ...base,
-        from: s.from_position || '',
-        to: s.to_position || '',
-        tyre: s.tyre || '',
-        delta: s.tread_delta_mm ?? '',
-        benefit_km: s.expected_benefit_km ?? '',
-        impact: s.impact_score ?? '',
-        action: s.reason || '',
-      }))
-    }
-    return [{ ...base, from: '', to: '', tyre: '', delta: '', benefit_km: '', impact: '', action: a.narrative || 'No rotation required. Wear is balanced.' }]
-  })
+  const statusChart = {
+    labels: ROTATION_STATUS_KEYS.map((k) => ROTATION_STATUS_LABEL[k]),
+    datasets: [{ data: ROTATION_STATUS_KEYS.map((k) => pageKpi.byStatus[k]), backgroundColor: ROTATION_STATUS_KEYS.map((k) => STATUS_META[k].color), borderWidth: 0 }],
+  }
+  const statusOpts = { responsive: true, maintainAspectRatio: false, cutout: '58%', plugins: { legend: { position: 'right', labels: { color: 'var(--text-secondary)', boxWidth: 12 } } } }
 
-  const clearFilters = () => { setPriorityFilter('all'); setSiteFilter(''); setSearch('') }
-  const hasFilters = priorityFilter !== 'all' || siteFilter || search
+  const doExport = async (kind) => {
+    const out = rotationExportRows(filtered)
+    const keys = ROTATION_EXPORT_COLUMNS.map(([k]) => k)
+    const headers = ROTATION_EXPORT_COLUMNS.map(([, h]) => h)
+    const name = reportFileName('TyrePulse Rotation Optimizer')
+    try {
+      if (kind === 'excel') await exportToExcel(out, keys, headers, name)
+      else await exportToPdf(out, keys.map((k, i) => ({ key: k, header: headers[i] })), 'Rotation Optimizer', name, 'landscape')
+    } catch (e) { setNotice(toUserMessage(e, 'Could not export. Try again.')) }
+  }
+
+  const assetColumns = useMemo(() => [
+    {
+      id: 'asset', header: 'Asset', accessorFn: (a) => String(a.asset_no || ''), size: 140,
+      cell: ({ row }) => (
+        <span className="font-semibold text-[var(--text-primary)] inline-flex items-center gap-1.5">
+          <Truck size={13} className="text-[var(--text-muted)]" aria-hidden="true" /> {row.original.asset_no}
+        </span>
+      ),
+    },
+    { id: 'site', header: 'Site', accessorFn: (a) => a.site || '', size: 120, cell: ({ getValue }) => getValue() || 'Unassigned site' },
+    { id: 'status', header: 'Status', accessorFn: (a) => ROTATION_STATUS_KEYS.indexOf(a.overallStatus), size: 120, cell: ({ row }) => <StatusBadge status={row.original.overallStatus} /> },
+    {
+      id: 'balance', header: 'Wear balance', accessorFn: (a) => a.wearBalanceScore, size: 130, sortUndefined: 'last', meta: { align: 'right' },
+      cell: ({ getValue }) => (getValue() == null ? <span className="text-[var(--text-muted)]">N/A</span> : <span className="tabular-nums">{getValue()}/100</span>),
+    },
+    {
+      id: 'spread', header: 'Spread', accessorFn: (a) => a.spread, size: 100, sortUndefined: 'last', meta: { align: 'right' },
+      cell: ({ row }) => {
+        const a = row.original
+        if (a.spread == null) return <span className="text-[var(--text-muted)]">N/A</span>
+        return <span className={`font-semibold ${a.urgency === 'critical' ? 'text-red-400' : a.urgency === 'warning' ? 'text-orange-400' : 'text-[var(--text-secondary)]'}`}>{a.spread}mm</span>
+      },
+    },
+    { id: 'range', header: 'Tread range', accessorFn: (a) => a.stats.min, size: 130, sortUndefined: 'last', cell: ({ row }) => (row.original.stats.min == null ? 'N/A' : `${row.original.stats.min} to ${row.original.stats.max}mm`) },
+    { id: 'tyres', header: 'Tyres', accessorFn: (a) => a.stats.count, size: 80, meta: { align: 'right' } },
+    { id: 'swaps', header: 'Swaps', accessorFn: (a) => a.swaps.length, size: 80, meta: { align: 'right' }, cell: ({ getValue }) => (getValue() ? <span className="text-[var(--brand-bright)] font-semibold">{getValue()}</span> : '0') },
+    { id: 'issues', header: 'Issues', accessorFn: (a) => a.violations.length, size: 80, meta: { align: 'right' }, cell: ({ getValue }) => (getValue() ? <span className="text-red-400 font-semibold">{getValue()}</span> : '0') },
+    {
+      id: 'benefit', header: 'Km recovered', accessorFn: (a) => a._benefitKm, size: 130, sortUndefined: 'last', meta: { align: 'right' },
+      cell: ({ getValue }) => (getValue() == null ? <span className="text-[var(--text-muted)]">N/A</span> : `~${getValue().toLocaleString()} km`),
+    },
+  ], [])
+
+  const swapColumns = useMemo(() => [
+    { id: 'asset', header: 'Asset', accessorFn: (s) => String(s.asset_no || ''), size: 120 },
+    { id: 'tyre', header: 'Tyre', accessorFn: (s) => s.tyre || '', size: 150, cell: ({ getValue }) => <span className="font-mono text-xs">{getValue() || 'N/A'}</span> },
+    {
+      id: 'move', header: 'Move', accessorFn: (s) => `${s.from_position || ''} ${s.to_position || ''}`, size: 260,
+      cell: ({ row }) => {
+        const s = row.original
+        return (
+          <span className="inline-flex flex-wrap items-center gap-1.5 text-sm text-[var(--text-secondary)]">
+            <span>{s.from_position || 'unknown position'}</span>
+            <span className={`font-semibold ${treadTone(s.from_tread_mm)}`}>{s.from_tread_mm}mm</span>
+            <ArrowRight size={14} className="text-[var(--brand-bright)]" aria-label="to" />
+            <span>{s.to_position || 'unknown position'}</span>
+            <span className={`font-semibold ${treadTone(s.to_tread_mm)}`}>{s.to_tread_mm}mm</span>
+          </span>
+        )
+      },
+    },
+    { id: 'gain', header: 'Tread gain', accessorFn: (s) => s.tread_delta_mm, size: 110, meta: { align: 'right' }, cell: ({ getValue }) => `+${getValue()}mm` },
+    { id: 'benefit', header: 'Km recovered', accessorFn: (s) => s.expected_benefit_km, size: 130, meta: { align: 'right' }, cell: ({ getValue }) => `~${Number(getValue()).toLocaleString()} km` },
+    {
+      id: 'impact', header: 'Impact', accessorFn: (s) => s.impact_score, size: 100, meta: { align: 'right' },
+      cell: ({ getValue }) => <span className="inline-flex items-center gap-1 tabular-nums"><Zap size={11} aria-hidden="true" /> {getValue()}</span>,
+    },
+  ], [])
+
+  const unavailable = <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">Unavailable: tyre records could not be loaded.</div>
 
   return (
     <div className="space-y-6">
@@ -228,228 +258,233 @@ export default function RotationOptimizer() {
         refreshing={refreshing}
         updatedAt={updatedAt}
         actions={
-          <div className="flex items-center gap-2">
-            <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'rotation_optimizer')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!exportRows.length}>
-              <FileSpreadsheet size={14} /> Excel
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => doExport('excel')} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!filtered.length}>
+              <FileSpreadsheet size={14} aria-hidden="true" /> Excel
             </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Rotation Optimizer', 'rotation_optimizer', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!exportRows.length}>
-              <FileText size={14} /> PDF
+            <button type="button" onClick={() => doExport('pdf')} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!filtered.length}>
+              <FileText size={14} aria-hidden="true" /> PDF
             </button>
           </div>
         }
       />
 
       {error && (
-        <div className="card border border-red-800/50 flex items-start gap-3">
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-          <div><p className="text-red-300 font-medium">Couldn't load tyre records.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
+        <div className="card border border-red-500/40 flex flex-wrap items-start justify-between gap-3" role="alert">
+          <div className="flex items-start gap-3">
+            <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
+            <div>
+              <p className="text-red-300 font-medium">Could not load tyre records.</p>
+              <p className="text-[var(--text-muted)] text-sm mt-1">{error} The figures below are unavailable until the records load.</p>
+            </div>
+          </div>
+          <button type="button" onClick={load} className="btn-secondary text-sm min-h-[44px]" disabled={refreshing}>Retry</button>
         </div>
       )}
 
-      {/* KPI tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {kpis.map((k) => {
-          const Icon = k.icon
-          return (
-            <div key={k.label} className="card">
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
-                <Icon size={16} className={k.tone} />
-              </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
-            </div>
-          )
-        })}
+      {notice && (
+        <div className="card border border-amber-500/40 flex items-start justify-between gap-3" role="status">
+          <p className="text-sm text-amber-300">{notice}</p>
+          <button type="button" onClick={() => setNotice('')} className="inline-flex items-center justify-center w-11 h-11 rounded-lg text-[var(--text-muted)] hover:bg-[var(--input-bg)]" aria-label="Dismiss message"><X size={15} /></button>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+        {kpis.map((k) => <Kpi key={k.label} {...k} loading={loading} />)}
       </div>
 
-      {/* Honest limitation note — axle role is inferred from free-text positions. */}
+      {/* Honest limitation note: axle role is inferred from free-text positions. */}
       <div className="card border border-[var(--input-border)] flex items-start gap-2.5 py-2.5">
-        <Info size={15} className="text-[var(--text-muted)] mt-0.5 shrink-0" />
+        <Info size={15} className="text-[var(--text-muted)] mt-0.5 shrink-0" aria-hidden="true" />
         <p className="text-xs text-[var(--text-muted)] leading-relaxed">
-          Axle roles (steer / drive / trailer) are <span className="text-[var(--text-secondary)]">inferred from each tyre's free-text position label</span>. This dataset has no per-axle, side, or inner/outer wheel data and a single tread value per tyre. Steer-imbalance checks are therefore <span className="text-[var(--text-secondary)]">heuristic</span>; the <span className="text-red-300">below-legal-minimum ({'<'}1.6mm)</span> check is exact. No values are estimated where a signal is missing.
+          Axle roles (steer, drive, trailer) are <span className="text-[var(--text-secondary)]">inferred from each tyre's free-text position label</span>. This dataset has no per-axle, side, or inner/outer wheel data and a single tread value per tyre. Steer-imbalance checks are therefore <span className="text-[var(--text-secondary)]">heuristic</span>; the <span className="text-red-300">below-legal-minimum (under {LEGAL_MIN_TREAD_MM}mm)</span> check is exact. No values are estimated where a signal is missing.
         </p>
       </div>
 
-      {/* Fleet imbalance chart */}
-      {rows !== null && chart && (
-        <div className="card">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1 flex items-center gap-2"><BarChart3 size={15} /> Most imbalanced assets</h3>
-          <p className="text-xs text-[var(--text-muted)] mb-4">Tread spread (max − min) across each vehicle's fitted tyres. Bar colour reflects urgency.</p>
-          <div className="h-64"><Bar data={chart.data} options={chart.options} /></div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="card lg:col-span-2">
+          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-1 flex items-center gap-2"><BarChart3 size={15} aria-hidden="true" /> Most imbalanced assets</h2>
+          <p className="text-xs text-[var(--text-muted)] mb-3">Tread spread (max minus min) across each vehicle's fitted tyres. Red is critical, orange is a warning.</p>
+          <div className="h-64">
+            {loading ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" />
+              : failed ? unavailable
+                : chart ? (
+                  <div className="h-full" role="img" aria-label={top.map((a) => `${a.asset_no} ${a.spread}mm`).join(', ')}>
+                    <Bar data={chart.data} options={chart.options} />
+                  </div>
+                ) : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No assets with a measured spread in this view.</div>}
+          </div>
         </div>
-      )}
+        <div className="card">
+          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2"><ShieldCheck size={15} aria-hidden="true" /> Status mix</h2>
+          <div className="h-64">
+            {loading ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" />
+              : failed ? unavailable
+                : filtered.length ? (
+                  <div className="h-full" role="img" aria-label={ROTATION_STATUS_KEYS.map((k) => `${ROTATION_STATUS_LABEL[k]} ${pageKpi.byStatus[k]}`).join(', ')}>
+                    <Doughnut data={statusChart} options={statusOpts} />
+                  </div>
+                ) : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No assets in this view.</div>}
+          </div>
+        </div>
+      </div>
 
       {/* Filters */}
-      <div className="card space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <input className="input pl-9 w-full" placeholder="Search asset / vehicle…" value={search} onChange={(e) => setSearch(e.target.value)} />
-          </div>
-          <select className="input" value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} aria-label="Priority">
-            <option value="all">All assets</option>
-            <option value="needs">Needs rotation</option>
-            <option value="high">High priority</option>
-            <option value="medium">Medium priority</option>
-            <option value="balanced">Balanced</option>
-          </select>
-          <select className="input" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} aria-label="Site">
-            <option value="">All sites</option>
-            {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-          {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
-          <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {summary.assetsAnalyzed}</span>
+      <div className="card">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(200px,2fr)_1fr_1fr_1fr] gap-3 items-end">
+          <label className="block">
+            <span className="text-xs text-[var(--text-secondary)]">Search</span>
+            <div className="relative mt-1">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+              <input className="input pl-9 w-full min-h-[44px]" placeholder="Asset, site or tyre serial" value={filters.search} onChange={(e) => setFilter('search', e.target.value)} />
+            </div>
+          </label>
+          <label className="block">
+            <span className="text-xs text-[var(--text-secondary)]">Priority</span>
+            <select className="input w-full mt-1 min-h-[44px]" value={filters.priority} onChange={(e) => setFilter('priority', e.target.value)}>
+              <option value="all">All assets</option>
+              <option value="needs">Needs rotation</option>
+              <option value="high">High priority</option>
+              <option value="medium">Medium priority</option>
+              <option value="balanced">Balanced</option>
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-xs text-[var(--text-secondary)]">Status</span>
+            <select className="input w-full mt-1 min-h-[44px]" value={filters.status} onChange={(e) => setFilter('status', e.target.value)}>
+              <option value="all">All statuses</option>
+              {ROTATION_STATUS_KEYS.map((k) => <option key={k} value={k}>{ROTATION_STATUS_LABEL[k]}</option>)}
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-xs text-[var(--text-secondary)]">Site</span>
+            <select className="input w-full mt-1 min-h-[44px]" value={filters.site} onChange={(e) => setFilter('site', e.target.value)}>
+              <option value="">All sites</option>
+              {sites.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </label>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-2 mt-3">
+          <span className="text-xs text-[var(--text-muted)]" aria-live="polite">{filtered.length} of {summary.assetsAnalyzed} assets</span>
+          {filterCount > 0 && (
+            <button type="button" onClick={() => setFilters(EMPTY_ROTATION_FILTERS)} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]">
+              <X size={14} aria-hidden="true" /> Clear filters
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Asset list */}
-      <div className="space-y-3">
-        {rows === null ? (
-          [0, 1, 2, 3].map((i) => <div key={i} className="card"><div className="h-16 bg-[var(--input-bg)] rounded animate-pulse" /></div>)
-        ) : enriched.length === 0 ? (
-          <div className="card py-14 text-center text-[var(--text-muted)]">
-            <Truck size={28} className="mx-auto mb-3 opacity-60" />
-            <p className="font-medium text-[var(--text-secondary)]">No assets to analyse.</p>
-            <p className="text-sm mt-1">Rotation analysis needs at least two fitted tyres with tread readings on a vehicle.</p>
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="card py-12 text-center text-[var(--text-muted)]">
-            <Filter size={22} className="mx-auto mb-2 opacity-60" />No assets match these filters.
-          </div>
-        ) : (
-          filtered.map((a) => {
-            const isOpen = expanded.has(a.asset_no)
-            const tyres = (tyresByAsset.get(a.asset_no) || [])
-              .slice()
-              .sort((x, y) => (treadOf(x) ?? Infinity) - (treadOf(y) ?? Infinity))
-            return (
-              <div key={a.asset_no} className="card !p-0 overflow-hidden">
-                <button
-                  onClick={() => toggle(a.asset_no)}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-[var(--input-bg)]/40 transition-colors"
-                  aria-expanded={isOpen}
-                >
-                  <ChevronRight size={16} className={`text-[var(--text-muted)] shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
-                  <BalanceRing score={a.wearBalanceScore} />
-                  <div className="min-w-0">
-                    <p className="font-semibold text-[var(--text-primary)] truncate flex items-center gap-1.5"><Truck size={13} className="text-[var(--text-muted)]" /> {a.asset_no}</p>
-                    <p className="text-xs text-[var(--text-muted)]">
-                      {a.site || 'Unassigned site'} · {a.stats.count} tyres
-                      {a.swaps.length > 0 && <span className="text-brand-bright"> · {a.swaps.length} swap{a.swaps.length > 1 ? 's' : ''}</span>}
-                      {a.violations.length > 0 && <span className="text-red-400"> · {a.violations.length} issue{a.violations.length > 1 ? 's' : ''}</span>}
-                    </p>
-                  </div>
-                  <div className="ml-auto flex items-center gap-4">
-                    <div className="text-right hidden sm:block">
-                      <p className="text-xs text-[var(--text-muted)]">spread</p>
-                      <p className={`text-sm font-semibold ${a.urgency === 'critical' ? 'text-red-400' : a.urgency === 'warning' ? 'text-orange-400' : 'text-[var(--text-secondary)]'}`}>{fmt(a.spread)}mm</p>
-                    </div>
-                    <div className="text-right hidden md:block">
-                      <p className="text-xs text-[var(--text-muted)]">range</p>
-                      <p className="text-sm text-[var(--text-secondary)]">{fmt(a.stats.min)} to {fmt(a.stats.max)}mm</p>
-                    </div>
-                    <span className={`badge text-[11px] px-2 py-0.5 rounded shrink-0 inline-flex items-center gap-1 ${(STATUS_META[a.overallStatus] || STATUS_META.good).cls}`}>
-                      {a.overallStatus === 'critical' ? <ShieldAlert size={11} /> : a.overallStatus === 'good' ? <ShieldCheck size={11} /> : <AlertTriangle size={11} />}
-                      {(STATUS_META[a.overallStatus] || STATUS_META.good).label}
+      <section aria-labelledby="rotation-assets-heading" className="space-y-2">
+        <h2 id="rotation-assets-heading" className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2"><Truck size={15} aria-hidden="true" /> Analysed assets</h2>
+        <p className="text-xs text-[var(--text-muted)]">Select an asset to see its narrative, compliance issues, swaps and fitted tyres.</p>
+        <EnterpriseTable
+          columns={assetColumns}
+          data={filtered}
+          getRowId={(a) => String(a.asset_no)}
+          loading={loading}
+          enableGlobalFilter={false}
+          enableExport={false}
+          initialPageSize={25}
+          viewKey="rotation-assets"
+          onRowClick={(a) => setOpenAsset(a)}
+          emptyMessage={
+            failed ? 'Tyre records are unavailable.'
+              : enriched.length === 0 ? 'No assets to analyse. Rotation analysis needs at least two fitted tyres with tread readings on a vehicle.'
+                : 'No assets match these filters.'
+          }
+        />
+      </section>
+
+      <section aria-labelledby="rotation-swaps-heading" className="space-y-2">
+        <h2 id="rotation-swaps-heading" className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2"><ArrowRightLeft size={15} aria-hidden="true" /> Swap work list</h2>
+        <p className="text-xs text-[var(--text-muted)]">Every recommended swap in this view, highest impact first. Swaps never cross tyre sizes.</p>
+        <EnterpriseTable
+          columns={swapColumns}
+          data={swaps}
+          getRowId={(s) => s.id}
+          loading={loading}
+          enableGlobalFilter={false}
+          enableExport={false}
+          initialPageSize={25}
+          viewKey="rotation-swaps"
+          onRowClick={(s) => setOpenAsset(filtered.find((a) => a.asset_no === s.asset_no) || null)}
+          emptyMessage={failed ? 'Tyre records are unavailable.' : 'No swaps recommended in this view. Wear is balanced.'}
+        />
+      </section>
+
+      <Modal
+        open={Boolean(openAsset)}
+        onClose={() => setOpenAsset(null)}
+        title={openAsset ? `Asset ${openAsset.asset_no}` : ''}
+        subtitle={openAsset ? `${openAsset.site || 'Unassigned site'}. ${openAsset.stats.count} tyres with readings. Wear balance ${openAsset.wearBalanceScore == null ? 'N/A' : `${openAsset.wearBalanceScore}/100`}.` : ''}
+        size="xl"
+        headerExtra={openAsset ? <StatusBadge status={openAsset.overallStatus} /> : null}
+      >
+        {openAsset && (
+          <div className="space-y-4">
+            <div className="flex items-start gap-2 text-sm bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2.5">
+              {openAsset.overallStatus === 'good'
+                ? <CheckCircle2 size={15} className="text-green-400 mt-0.5 shrink-0" aria-hidden="true" />
+                : <Info size={15} className="text-[var(--brand-bright)] mt-0.5 shrink-0" aria-hidden="true" />}
+              <span className="text-[var(--text-secondary)]">{openAsset.narrative}</span>
+            </div>
+
+            {openAsset.violations.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-red-300 flex items-center gap-1.5"><ShieldAlert size={13} aria-hidden="true" /> Compliance and safety ({openAsset.violations.length})</h3>
+                {openAsset.violations.map((v, i) => (
+                  <div key={i} className="flex items-start gap-2 text-sm text-red-300 bg-red-500/10 border border-red-500/40 rounded-lg px-3 py-2">
+                    <AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
+                    <span>
+                      {v.message}
+                      {v.heuristic && <span className="ml-1.5 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/40">heuristic</span>}
                     </span>
                   </div>
-                </button>
-
-                {isOpen && (
-                  <div className="border-t border-[var(--input-border)] px-4 py-4 space-y-4">
-                    {/* Deterministic narrative */}
-                    <div className="flex items-start gap-2 text-sm bg-[var(--input-bg)]/40 border border-[var(--input-border)] rounded-lg px-3 py-2.5">
-                      {a.overallStatus === 'good'
-                        ? <CheckCircle2 size={15} className="text-green-400 mt-0.5 shrink-0" />
-                        : <Info size={15} className="text-brand-bright mt-0.5 shrink-0" />}
-                      <span className="text-[var(--text-secondary)]">{a.narrative}</span>
-                    </div>
-
-                    {/* Violations (safety / compliance) */}
-                    {a.violations.length > 0 && (
-                      <div className="space-y-2">
-                        <p className="text-xs font-semibold uppercase tracking-wider text-red-300/90 flex items-center gap-1.5"><ShieldAlert size={13} /> Compliance & safety ({a.violations.length})</p>
-                        {a.violations.map((v, i) => (
-                          <div key={i} className="flex items-start gap-2 text-sm text-red-200 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
-                            <AlertTriangle size={14} className="text-red-400 mt-0.5 shrink-0" />
-                            <span>
-                              {v.message}
-                              {v.heuristic && <span className="ml-1.5 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300 border border-amber-700/50">heuristic</span>}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Structured swaps */}
-                    {a.swaps.length > 0 ? (
-                      <div className="space-y-2">
-                        <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-1.5"><ArrowRightLeft size={13} /> Recommended swaps ({a.swaps.length})</p>
-                        {a.swaps.map((s, i) => (
-                          <div key={i} className="bg-[var(--input-bg)]/50 border border-[var(--input-border)] rounded-lg px-3 py-2.5">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-mono text-xs text-[var(--text-primary)] bg-[var(--input-bg)] px-1.5 py-0.5 rounded">{s.tyre || 'unknown'}</span>
-                              <span className="inline-flex items-center gap-1.5 text-sm text-[var(--text-secondary)]">
-                                <span>{s.from_position || 'unknown position'}</span>
-                                <span className={`font-semibold ${treadTone(s.from_tread_mm)}`}>{s.from_tread_mm}mm</span>
-                                <ArrowRight size={14} className="text-brand-bright" />
-                                <span>{s.to_position || 'unknown position'}</span>
-                                <span className={`font-semibold ${treadTone(s.to_tread_mm)}`}>{s.to_tread_mm}mm</span>
-                              </span>
-                              <div className="ml-auto flex items-center gap-1.5">
-                                <span className="text-[11px] px-1.5 py-0.5 rounded bg-emerald-900/30 text-emerald-300 border border-emerald-800/50">+{s.tread_delta_mm}mm · ~{Number(s.expected_benefit_km).toLocaleString()} km</span>
-                                <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-indigo-900/30 text-indigo-300 border border-indigo-800/50" title="Impact score (0 to 100)"><Zap size={11} /> {s.impact_score}</span>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : a.overallStatus !== 'critical' && (
-                      <div className="flex items-center gap-2 text-sm text-green-300">
-                        <CheckCircle2 size={15} /> {a.reason || 'Wear is balanced. No rotation required.'}
-                      </div>
-                    )}
-
-                    {/* Fitted tyres */}
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2 flex items-center gap-1.5"><Info size={13} /> Fitted tyres ({tyres.length})</p>
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                              {['Serial', 'Position', 'Brand / Size', 'Tread', 'Total km'].map((h) => <th key={h} className="px-3 py-2 font-semibold whitespace-nowrap">{h}</th>)}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {tyres.map((t) => {
-                              const tr = treadOf(t)
-                              const isMin = tr != null && tr === a.stats.min
-                              const isMax = tr != null && tr === a.stats.max
-                              return (
-                                <tr key={t.id} className="border-b border-[var(--input-border)]/50">
-                                  <td className="px-3 py-2 font-mono text-xs text-[var(--text-primary)]">{serialOf(t) || 'N/A'}</td>
-                                  <td className="px-3 py-2 text-[var(--text-secondary)]">{positionOf(t) || 'N/A'}</td>
-                                  <td className="px-3 py-2 text-[var(--text-secondary)]">{t.brand || 'N/A'}{t.size ? ` · ${t.size}` : ''}</td>
-                                  <td className="px-3 py-2">
-                                    <span className={isMin ? 'text-red-400 font-semibold' : isMax ? 'text-green-400 font-semibold' : 'text-[var(--text-secondary)]'}>
-                                      {tr == null ? 'N/A' : `${tr}mm`}{isMin ? ' ▼' : isMax ? ' ▲' : ''}
-                                    </span>
-                                  </td>
-                                  <td className="px-3 py-2 text-[var(--text-secondary)]">{t.total_km != null ? Number(t.total_km).toLocaleString() : 'N/A'}</td>
-                                </tr>
-                              )
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                ))}
               </div>
-            )
-          })
+            )}
+
+            {openAsset.swaps.length > 0 ? (
+              <div className="space-y-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-1.5"><ArrowRightLeft size={13} aria-hidden="true" /> Recommended swaps ({openAsset.swaps.length})</h3>
+                {openAsset.swaps.map((s, i) => (
+                  <div key={i} className="border border-[var(--input-border)] rounded-lg px-3 py-2.5 flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-xs text-[var(--text-primary)] bg-[var(--input-bg)] px-1.5 py-0.5 rounded">{s.tyre || 'unknown'}</span>
+                    <span className="inline-flex flex-wrap items-center gap-1.5 text-sm text-[var(--text-secondary)]">
+                      <span>{s.from_position || 'unknown position'}</span>
+                      <span className={`font-semibold ${treadTone(s.from_tread_mm)}`}>{s.from_tread_mm}mm</span>
+                      <ArrowRight size={14} className="text-[var(--brand-bright)]" aria-label="to" />
+                      <span>{s.to_position || 'unknown position'}</span>
+                      <span className={`font-semibold ${treadTone(s.to_tread_mm)}`}>{s.to_tread_mm}mm</span>
+                    </span>
+                    <span className="ml-auto flex flex-wrap items-center gap-1.5">
+                      <span className="text-[11px] px-1.5 py-0.5 rounded bg-green-500/15 text-green-300 border border-green-500/40">+{s.tread_delta_mm}mm, about {Number(s.expected_benefit_km).toLocaleString()} km</span>
+                      <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/40" title="Impact score (0 to 100)"><Zap size={11} aria-hidden="true" /> {s.impact_score}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : openAsset.overallStatus !== 'critical' && (
+              <div className="flex items-center gap-2 text-sm text-green-300">
+                <CheckCircle2 size={15} aria-hidden="true" /> {openAsset.reason || 'Wear is balanced. No rotation required.'}
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-1.5"><Info size={13} aria-hidden="true" /> Fitted tyres ({openAsset.tyres.length})</h3>
+              <EnterpriseTable
+                columns={tyreColumns(openAsset.stats)}
+                data={openAsset.tyres}
+                getRowId={(t) => String(t.id)}
+                initialPageSize={25}
+                exportFileName={reportFileName('TyrePulse Fitted Tyres', String(openAsset.asset_no))}
+                searchPlaceholder="Search fitted tyres"
+                emptyMessage="No fitted tyres recorded."
+              />
+            </div>
+          </div>
         )}
-      </div>
+      </Modal>
     </div>
   )
 }

@@ -11,7 +11,7 @@ import {
 } from 'chart.js'
 import { Bar, Line, Doughnut } from 'react-chartjs-2'
 import {
-  Truck, Plus, Edit2, X, Save, Search, Filter,
+  Truck, Plus, Edit2, Save, Search, Filter,
   FileSpreadsheet, FileText, RefreshCw,
   ChevronDown, ChevronUp, AlertTriangle, Clock,
   DollarSign, Activity, Shield, BarChart2, TrendingUp, Eye,
@@ -28,6 +28,7 @@ import { formatCurrencyCompact, formatDate } from '../lib/formatters'
 import PageHeader from '../components/ui/PageHeader'
 import { TablePagination, PAGE_SIZE_OPTIONS, DEFAULT_PAGE_SIZE } from '../components/ui/TablePagination'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
+import Modal from '../components/ui/Modal'
 import { colorAt, withAlpha } from '../lib/reportColors'
 import {
   enrichAssets, sortAssets, typeCounts, siteRiskBreakdown, summarizeByType,
@@ -190,25 +191,29 @@ function AssetModal({ asset, sites, countries, onSave, onClose, locked = false }
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <motion.div
-        initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-        className="bg-[var(--surface-1)] rounded-2xl border border-[var(--border-dim)] w-full max-w-lg shadow-2xl"
-      >
-        <div className="flex items-center justify-between p-5 border-b border-[var(--border-dim)]">
-          <h2 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
-            <Truck className="w-5 h-5 text-blue-400" />
-            {isEdit ? t('assetmgmt.modal.editTitle') : t('assetmgmt.modal.addTitle')}
-          </h2>
-          <button onClick={onClose} aria-label="Close" className="p-2.5 rounded-lg hover:bg-[var(--surface-2)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
-            <X className="w-5 h-5" aria-hidden="true" />
+    <Modal
+      open
+      onClose={onClose}
+      title={(
+        <span className="flex items-center gap-2">
+          <Truck className="w-5 h-5 text-blue-400" aria-hidden="true" />
+          {isEdit ? t('assetmgmt.modal.editTitle') : t('assetmgmt.modal.addTitle')}
+        </span>
+      )}
+      size="md"
+      footer={(
+        <>
+          <button onClick={onClose} className="px-4 py-2 rounded-lg bg-[var(--surface-2)] text-[var(--text-secondary)] text-sm hover:bg-[var(--surface-3)] transition-colors">{t('assetmgmt.modal.cancel')}</button>
+          <button onClick={handleSave} disabled={saving || (isEdit && locked)}
+            title={isEdit && locked ? 'Locked: in approval' : undefined}
+            className="px-5 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2">
+            {isEdit && locked ? <Lock className="w-4 h-4" /> : saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            {saving ? t('assetmgmt.modal.saving') : t('assetmgmt.modal.save')}
           </button>
-        </div>
-        <div className="p-5 space-y-4">
+        </>
+      )}
+    >
+        <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label htmlFor="am-m-asset" className="text-xs text-[var(--text-secondary)] mb-1 block">{t('assetmgmt.modal.assetNo')}</label>
@@ -274,17 +279,7 @@ function AssetModal({ asset, sites, countries, onSave, onClose, locked = false }
           </div>
           {error && <p className="text-red-400 text-xs bg-red-900/20 rounded-lg px-3 py-2">{error}</p>}
         </div>
-        <div className="flex justify-end gap-3 px-5 pb-5">
-          <button onClick={onClose} className="px-4 py-2 rounded-lg bg-[var(--surface-2)] text-[var(--text-secondary)] text-sm hover:bg-[var(--surface-3)] transition-colors">{t('assetmgmt.modal.cancel')}</button>
-          <button onClick={handleSave} disabled={saving || (isEdit && locked)}
-            title={isEdit && locked ? 'Locked: in approval' : undefined}
-            className="px-5 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2">
-            {isEdit && locked ? <Lock className="w-4 h-4" /> : saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            {saving ? t('assetmgmt.modal.saving') : t('assetmgmt.modal.save')}
-          </button>
-        </div>
-      </motion.div>
-    </motion.div>
+    </Modal>
   )
 }
 

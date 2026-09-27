@@ -18,7 +18,7 @@ const SURFACES = [
 
 // Pages whose registers moved onto EnterpriseTable, which pages ALL rows
 // itself. They must not fall back to a fixed slice either.
-const ENTERPRISE_SURFACES = new Set(['SafetyCompliance.jsx', 'ApprovalMatrix.jsx', 'AccidentWorkflowSettings.jsx', 'Settings.jsx', 'ReportShare.jsx', 'SecurityCenter.jsx'])
+const ENTERPRISE_SURFACES = new Set(['SafetyCompliance.jsx', 'ApprovalMatrix.jsx', 'AccidentWorkflowSettings.jsx', 'Settings.jsx', 'ReportShare.jsx', 'SecurityCenter.jsx', 'SiteManagement.jsx'])
 
 describe('admin and configuration registers expose all rows through shared paging', () => {
   for (const file of SURFACES) {
@@ -45,11 +45,12 @@ describe('admin and configuration registers expose all rows through shared pagin
     expect(source).not.toContain('Plus {fmtInt(extra)} more')
   })
 
-  it('Site Management pages both the site register and each expanded asset register', () => {
+  it('Site Management hands every site, and every asset at a site, to EnterpriseTable', () => {
+    // Both registers moved onto EnterpriseTable, which pages and sorts across
+    // the WHOLE set; neither may clip rows before handing them in.
     const source = read('SiteManagement.jsx')
-    expect(source).toContain('const sitesPager = usePagedRows(filtered')
-    expect(source).toContain('const pager = usePagedRows(assets')
-    expect(source).toContain('sitesPager.pageRows.map')
-    expect(source).toContain('pager.pageRows.map')
+    expect(source).toContain('data={filtered}')
+    expect(source).toContain('data={site.assets || []}')
+    expect(source).not.toMatch(/\.slice\(0,\s*\d+\)\.map/)
   })
 })

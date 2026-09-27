@@ -10,7 +10,7 @@ vi.mock('../lib/api/routePlans', () => ({
   createRoutePlan: vi.fn(), updateRoutePlan: vi.fn(), deleteRoutePlan: vi.fn(),
 }))
 vi.mock('../lib/api/_client', () => ({ isMissingRelation: (err) => err.code === '42P01' }))
-vi.mock('../lib/exportUtils', () => ({ exportToExcel: vi.fn(), exportToPdf: vi.fn() }))
+vi.mock('../lib/exportUtils', () => ({ exportToExcel: vi.fn(), exportToPdf: vi.fn(), reportFileName: (...p) => p.join(' ') }))
 vi.mock('../components/ui/PageHeader', () => ({ default: ({ title, actions }) => <header><h1>{title}</h1>{actions}</header> }))
 
 beforeEach(() => { state.country = 'KSA'; state.list.mockReset() })
@@ -29,7 +29,7 @@ describe('route planning load states', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Excel' }))
     expect(exportToExcel).toHaveBeenLastCalledWith(
       [expect.objectContaining({ savings_km: 40, savings_pct: 40 })],
-      expect.any(Array), expect.any(Array), 'route_plans',
+      expect.any(Array), expect.any(Array), 'TyrePulse Route Optimization',
     )
   })
   it.each([{ code: '42P01' }, new Error('Network unavailable')])('does not turn an unavailable register into zero KPIs or a create-first prompt', async (error) => {
@@ -37,7 +37,8 @@ describe('route planning load states', () => {
     render(<RouteOptimization />)
     await screen.findByText('Route plans are unavailable.')
     expect(screen.queryByText('No route plans yet. Create your first plan.')).not.toBeInTheDocument()
-    expect(screen.getAllByText('N/A')).toHaveLength(4)
+    // Six KPI tiles, every one unavailable rather than zero.
+    expect(screen.getAllByText('N/A')).toHaveLength(6)
     expect(screen.getByRole('button', { name: 'Excel' })).toBeDisabled()
   })
 

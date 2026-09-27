@@ -431,3 +431,170 @@ export function optimizeFleet(tyres, opts = {}) {
 
   return { assets: analyzed, summary }
 }
+
+// ─── Page shaping (pure) ─────────────────────────────────────────────────────
+// Used by the /rotation-optimizer page: attach site + fitted tyres to each
+// analysed asset, filter, compute the extra KPI figures, flatten swaps into a
+// work list, and shape export rows. The optimisation maths above is untouched.
+
+export const ROTATION_STATUS_KEYS = ['critical', 'warning', 'advisory', 'good']
+export const ROTATION_STATUS_LABEL = { critical: 'Critical', warning: 'Warning', advisory: 'Advisory', good: 'Good' }
+export const EMPTY_ROTATION_FILTERS = { search: '', priority: 'all', status: 'all', site: '' }
+
+/**
+ * Attach the dominant site (most frequent among the asset's fitted tyres) and
+ * the fitted tyre rows (most worn first) to every analysed asset.
+ */
+export function enrichRotationAssets(assets = [], rows = []) {
+  const byAsset = new Map()
+  for (const r of Array.isArray(rows) ? rows : []) {
+    if (r?.asset_no == null || r.asset_no === '') continue
+    if (!byAsset.has(r.asset_no)) byAsset.set(r.asset_no, [])
+    byAsset.get(r.asset_no).push(r)
+  }
+  return (Array.isArray(assets) ? assets : []).map((a) => {
+    const tyres = (byAsset.get(a.asset_no) || [])
+      .slice()
+      .sort((x, y) => (treadOf(x) ?? Infinity) - (treadOf(y) ?? Infinity))
+    const siteCounts = new Map()
+    for (const t of tyres) {
+      const s = t?.site ? String(t.site).trim() : ''
+      if (s) siteCounts.set(s, (siteCounts.get(s) || 0) + 1)
+    }
+    const site = [...siteCounts.entries()].sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0]))[0]?.[0] || null
+    const benefitKm = (a.swaps || []).reduce((s, w) => s + (Number(w.expected_benefit_km) || 0), 0)
+    return {
+      ...a,
+      site,
+      tyres,
+      priorityKey: a.priority || 'balanced',
+      _benefitKm: a.swaps?.length ? benefitKm : null,
+      _statusLabel: ROTATION_STATUS_LABEL[a.overallStatus] || 'Good',
+    }
+  })
+}
+
+export function rotationSiteOptions(enriched = []) {
+  return [...new Set((Array.isArray(enriched) ? enriched : []).map((a) => a.site).filter(Boolean))].sort()
+}
+
+export function activeRotationFilterCount(f = EMPTY_ROTATION_FILTERS) {
+  let n = 0
+  if (String(f.search || '').trim()) n++
+  if (f.priority && f.priority !== 'all') n++
+  if (f.status && f.status !== 'all') n++
+  if (f.site) n++
+  return n
+}
+
+export function filterRotationAssets(enriched = [], f = EMPTY_ROTATION_FILTERS) {
+  const q = String(f.search || '').trim().toLowerCase()
+  return (Array.isArray(enriched) ? enriched : []).filter((a) => {
+    if (f.priority === 'needs' && !a.eligible) return false
+    if (f.priority && f.priority !== 'all' && f.priority !== 'needs' && a.priorityKey !== f.priority) return false
+    if (f.status && f.status !== 'all' && a.overallStatus !== f.status) return false
+    if (f.site && a.site !== f.site) return false
+    if (q) {
+      const serials = (a.tyres || []).map((t) => serialOf(t) || '').join(' ')
+      const hay = `${a.asset_no || ''} ${a.site || ''} ${serials}`.toLowerCase()
+      if (!hay.includes(q)) return false
+    }
+    return true
+  })
+}
+
+/** Extra KPI figures over the (filtered) enriched set. Null when nothing measurable. */
+export function rotationPageKpis(enriched = []) {
+  const list = Array.isArray(enriched) ? enriched : []
+  let swaps = 0
+  let benefit = 0
+  let belowLegal = 0
+  let scoreSum = 0
+  let scoreN = 0
+  const byStatus = Object.fromEntries(ROTATION_STATUS_KEYS.map((k) => [k, 0]))
+  for (const a of list) {
+    swaps += a.swaps?.length || 0
+    if (a._benefitKm != null) benefit += a._benefitKm
+    if (byStatus[a.overallStatus] != null) byStatus[a.overallStatus] += 1
+    belowLegal += (a.tyres || []).filter((t) => {
+      const tr = treadOf(t)
+      return tr != null && tr < LEGAL_MIN_TREAD_MM
+    }).length
+    if (a.wearBalanceScore != null) { scoreSum += a.wearBalanceScore; scoreN += 1 }
+  }
+  return {
+    assets: list.length,
+    needing: list.filter((a) => a.eligible).length,
+    critical: byStatus.critical,
+    byStatus,
+    swaps,
+    benefitKm: swaps ? Math.round(benefit) : null,
+    belowLegal,
+    avgWearBalance: scoreN ? Math.round(scoreSum / scoreN) : null,
+  }
+}
+
+/** Every recommended swap as one work-list row, highest impact first. */
+export function flattenSwaps(enriched = []) {
+  const out = []
+  for (const a of Array.isArray(enriched) ? enriched : []) {
+    for (const [i, s] of (a.swaps || []).entries()) {
+      out.push({
+        id: `${a.asset_no}|${i}`,
+        asset_no: a.asset_no,
+        site: a.site,
+        status: a.overallStatus,
+        tyre: s.tyre || null,
+        from_position: s.from_position || null,
+        from_tread_mm: s.from_tread_mm ?? null,
+        to_position: s.to_position || null,
+        to_tread_mm: s.to_tread_mm ?? null,
+        tread_delta_mm: s.tread_delta_mm ?? null,
+        expected_benefit_km: s.expected_benefit_km ?? null,
+        impact_score: s.impact_score ?? null,
+        reason: s.reason || '',
+      })
+    }
+  }
+  return out.sort((x, y) => (y.impact_score ?? 0) - (x.impact_score ?? 0) || String(x.asset_no).localeCompare(String(y.asset_no)))
+}
+
+/** Most imbalanced assets (highest spread first) for the fleet chart. */
+export function mostImbalanced(enriched = [], limit = 12) {
+  return (Array.isArray(enriched) ? enriched : [])
+    .filter((a) => a.spread != null)
+    .sort((x, y) => (y.spread ?? 0) - (x.spread ?? 0) || String(x.asset_no).localeCompare(String(y.asset_no)))
+    .slice(0, limit)
+}
+
+export const ROTATION_EXPORT_COLUMNS = [
+  ['asset_no', 'Asset'], ['site', 'Site'], ['status', 'Status'], ['score', 'Balance'], ['spread', 'Spread (mm)'],
+  ['from', 'From'], ['to', 'To'], ['tyre', 'Tyre'], ['delta', 'Tread gain (mm)'], ['benefit_km', 'Benefit (km)'],
+  ['impact', 'Impact'], ['action', 'Action or note'],
+]
+
+/** One export row per recommended swap; assets with none still emit a summary row. */
+export function rotationExportRows(enriched = []) {
+  return (Array.isArray(enriched) ? enriched : []).flatMap((a) => {
+    const base = {
+      asset_no: a.asset_no || '',
+      site: a.site || '',
+      status: ROTATION_STATUS_LABEL[a.overallStatus] || a.overallStatus || '',
+      score: a.wearBalanceScore ?? 'N/A',
+      spread: a.spread ?? 'N/A',
+    }
+    if (a.swaps && a.swaps.length) {
+      return a.swaps.map((s) => ({
+        ...base,
+        from: s.from_position || '',
+        to: s.to_position || '',
+        tyre: s.tyre || '',
+        delta: s.tread_delta_mm ?? '',
+        benefit_km: s.expected_benefit_km ?? '',
+        impact: s.impact_score ?? '',
+        action: s.reason || '',
+      }))
+    }
+    return [{ ...base, from: '', to: '', tyre: '', delta: '', benefit_km: '', impact: '', action: a.narrative || 'No rotation required. Wear is balanced.' }]
+  })
+}

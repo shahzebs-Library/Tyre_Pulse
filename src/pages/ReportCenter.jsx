@@ -1,9 +1,9 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   FileText, FileSpreadsheet, Presentation, CalendarClock, Palette, Loader2,
-  CheckCircle2, AlertTriangle, X, RefreshCw, Download, Clock, Mail, ArrowRight,
+  CheckCircle2, AlertTriangle, X, RefreshCw, Download, Mail, ArrowRight, Send, Percent, Users, Search,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
@@ -17,8 +17,10 @@ import { safeImageSrc } from '../lib/safeUrl'
 import { exportToPptx, exportToExcel, exportToPdf, exportDailyExecutivePdf } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
 import SectionTabs, { REPORTS_TABS } from '../components/ui/SectionTabs'
-import LoadingState from '../components/LoadingState'
-import EmptyState from '../components/EmptyState'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import {
+  summarizeDeliveryLog, filterDeliveryLog, deliveryStatus, recipientCount, DELIVERY_STATUS_LABEL,
+} from '../lib/reportCenterAnalytics'
 import { Illustration } from '../components/illustrations'
 import { toUserMessage } from '../lib/safeError'
 
@@ -45,11 +47,16 @@ const REPORTS = [
   { id: 'pdf',   label: 'Tyre Records (PDF)',   desc: 'Print-ready landscape table (top 200 records).',               icon: FileText,     tint: 'text-red-400',    bg: 'rgba(239,68,68,0.12)' },
 ]
 
-const STATUS_TINT = {
-  sent: 'text-green-400', success: 'text-green-400',
-  failed: 'text-red-400', error: 'text-red-400',
-  pending: 'text-amber-400', queued: 'text-amber-400',
+// Delivery status: colour plus an icon and a word, never colour alone.
+const DELIVERY_META = {
+  sent: { cls: 'bg-green-900/30 text-green-300 border-green-800/50', icon: CheckCircle2 },
+  failed: { cls: 'bg-red-900/30 text-red-300 border-red-800/50', icon: AlertTriangle },
+  pending: { cls: 'bg-amber-900/30 text-amber-300 border-amber-800/50', icon: RefreshCw },
+  unknown: { cls: 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)]', icon: Mail },
 }
+
+// The delivery log shows the most recent sends; the page says so.
+const HISTORY_LIMIT = 200
 
 export default function ReportCenter() {
   const { t } = useLanguage()
@@ -66,6 +73,9 @@ export default function ReportCenter() {
   const [history, setHistory]   = useState([])
   const [histLoading, setHistLoading] = useState(true)
   const [histError, setHistError] = useState(null)
+  const [histStatus, setHistStatus] = useState('')
+  const [histType, setHistType] = useState('')
+  const [histSearch, setHistSearch] = useState('')
 
   const reportCompany = branding?.legal_name || branding?.display_name || appSettings.company_name || 'TyrePulse'
 
@@ -77,16 +87,50 @@ export default function ReportCenter() {
         .from('report_send_log')
         .select('id,schedule_name,report_type,recipients,status,error,sent_at')
         .order('sent_at', { ascending: false })
-        .limit(50)
+        .order('id')
+        .limit(HISTORY_LIMIT)
       if (error) throw error
       setHistory(data ?? [])
     } catch (e) {
-      setHistError(e.message || t('reportcenter.errors.historyLoadFailed'))
+      setHistError(toUserMessage(e, t('reportcenter.errors.historyLoadFailed')))
     } finally {
       setHistLoading(false)
     }
   }, [t])
   useEffect(() => { loadHistory() }, [loadHistory])
+
+  const histNow = useMemo(() => Date.now(), [history]) // eslint-disable-line react-hooks/exhaustive-deps
+  const histSummary = useMemo(() => summarizeDeliveryLog(history, histNow), [history, histNow])
+  const histFiltered = useMemo(
+    () => filterDeliveryLog(history, { status: histStatus, type: histType, search: histSearch }),
+    [history, histStatus, histType, histSearch],
+  )
+  const histColumns = useMemo(() => [
+    { id: 'sent_at', header: 'Sent', accessorFn: (r) => r.sent_at || '', cell: ({ row }) => <span className="whitespace-nowrap text-xs">{row.original.sent_at ? new Date(row.original.sent_at).toLocaleString() : 'N/A'}</span> },
+    { id: 'schedule_name', header: 'Schedule', accessorFn: (r) => r.schedule_name || '', cell: ({ getValue }) => <span className="text-[var(--text-primary)]">{getValue() || 'N/A'}</span> },
+    { id: 'report_type', header: 'Type', accessorFn: (r) => r.report_type || '', meta: { filterVariant: 'select' }, cell: ({ getValue }) => getValue() || 'N/A' },
+    { id: 'recipients', header: 'Recipients', accessorFn: (r) => recipientCount(r), meta: { align: 'right' }, cell: ({ getValue }) => (getValue() == null ? 'N/A' : getValue()) },
+    {
+      id: 'status', header: 'Status', accessorFn: (r) => DELIVERY_STATUS_LABEL[deliveryStatus(r)],
+      cell: ({ row }) => {
+        const st = deliveryStatus(row.original)
+        const meta = DELIVERY_META[st]
+        const Icon = meta.icon
+        return (
+          <div>
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-medium ${meta.cls}`}>
+              <Icon size={11} aria-hidden="true" /> {row.original.status || DELIVERY_STATUS_LABEL[st]}
+            </span>
+            {row.original.error && (
+              <span className="block text-[11px] text-red-300 truncate max-w-[260px] mt-0.5" title={toUserMessage(row.original.error, 'Delivery failed')}>
+                {toUserMessage(row.original.error, 'Delivery failed')}
+              </span>
+            )}
+          </div>
+        )
+      },
+    },
+  ], [])
 
   // ── Shared data fetch for the executive reports ────────────────────────────
   async function fetchExecData() {
@@ -207,7 +251,7 @@ export default function ReportCenter() {
         await exportToPdf(
           rows.slice(0, PDF_ROW_CAP).map(t => ({ ...t, cost_per_tyre: t.cost_per_tyre || 0 })),
           [{ key: 'issue_date', header: 'Date', width: 24 }, { key: 'asset_no', header: 'Asset No', width: 28 }, { key: 'brand', header: 'Brand', width: 24 }, { key: 'site', header: 'Site', width: 30 }, { key: 'category', header: 'Category', width: 32 }, { key: 'risk_level', header: 'Risk', width: 20 }, { key: 'cost_per_tyre', header: `Cost (${activeCurrency})`, width: 24 }],
-          `${reportCompany}: Tyre Records · ${formatDate(now, activeCountry)}`,
+          `${reportCompany}: Tyre Records, ${formatDate(now, activeCountry)}`,
           `${reportCompany.replace(/\s+/g, '_')}_Tyres_${stamp}`, 'landscape', reportCompany,
           pdfCapped
             ? { subtitleNote: `of ${rows.length.toLocaleString()} matching records, narrow the date range for the rest` }
@@ -251,6 +295,7 @@ export default function ReportCenter() {
         {toast && (
           <motion.div
             initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }}
+            role="status" aria-live="polite"
             className="fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium shadow-lg"
             style={{
               background: toast.type === 'ok' ? 'rgba(22,163,74,0.15)' : 'rgba(239,68,68,0.15)',
@@ -260,7 +305,7 @@ export default function ReportCenter() {
             onAnimationComplete={() => { if (toast) setTimeout(() => setToast(null), 4000) }}>
             {toast.type === 'ok' ? <CheckCircle2 size={15} /> : <AlertTriangle size={15} />}
             <span className="max-w-xs">{toast.text}</span>
-            <button onClick={() => setToast(null)} className="ml-1 opacity-70 hover:opacity-100"><X size={13} /></button>
+            <button type="button" onClick={() => setToast(null)} aria-label="Dismiss message" className="ml-1 min-w-[32px] min-h-[32px] inline-flex items-center justify-center opacity-70 hover:opacity-100"><X size={13} /></button>
           </motion.div>
         )}
       </AnimatePresence>
@@ -269,11 +314,11 @@ export default function ReportCenter() {
       <div className="card flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
         <div className="flex items-center gap-3">
           {safeImageSrc(branding?.logo_url)
-            ? <img src={safeImageSrc(branding.logo_url)} alt={t('reportcenter.branding.logoAlt')} className="h-10 w-10 rounded object-contain bg-white/5" onError={(e) => { e.currentTarget.style.display = 'none' }} />
+            ? <img src={safeImageSrc(branding.logo_url)} alt={t('reportcenter.branding.logoAlt')} className="h-10 w-10 rounded object-contain bg-[var(--input-bg)]" onError={(e) => { e.currentTarget.style.display = 'none' }} />
             : <div className="h-10 w-10 rounded flex items-center justify-center" style={{ background: branding?.primary_color || '#16A34A' }}><Palette size={16} className="text-white/90" /></div>}
           <div>
-            <p className="text-sm font-semibold text-gray-100">{reportCompany}</p>
-            <p className="text-xs text-gray-500">{t('reportcenter.branding.activeBranding')}{orgName ? ` · ${orgName}` : ''} · {t('reportcenter.branding.reportsIdentity')}</p>
+            <p className="text-sm font-semibold text-[var(--text-primary)]">{reportCompany}</p>
+            <p className="text-xs text-[var(--text-muted)]">{t('reportcenter.branding.activeBranding')}{orgName ? `, ${orgName}` : ''}. {t('reportcenter.branding.reportsIdentity')}</p>
           </div>
         </div>
         <Link to="/console/appearance" className="btn-secondary text-xs gap-1.5 self-start sm:self-auto">
@@ -284,15 +329,15 @@ export default function ReportCenter() {
       {/* Filters */}
       <div className="card flex flex-wrap items-end gap-4">
         <div>
-          <label className="block text-xs text-gray-400 mb-1">{t('reportcenter.filters.from')}</label>
-          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="input text-sm" />
+          <label htmlFor="rc-from" className="block text-xs text-[var(--text-muted)] mb-1">{t('reportcenter.filters.from')}</label>
+          <input id="rc-from" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="input text-sm min-h-[44px]" />
         </div>
         <div>
-          <label className="block text-xs text-gray-400 mb-1">{t('reportcenter.filters.to')}</label>
-          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="input text-sm" />
+          <label htmlFor="rc-to" className="block text-xs text-[var(--text-muted)] mb-1">{t('reportcenter.filters.to')}</label>
+          <input id="rc-to" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="input text-sm min-h-[44px]" />
         </div>
-        <div className="text-xs text-gray-500 pb-2">
-          {t('reportcenter.filters.scope')} <span className="text-gray-300 font-medium">{activeCountry === 'All' ? t('reportcenter.filters.allCountries') : activeCountry}</span> · {t('reportcenter.filters.currency')} <span className="text-gray-300 font-medium">{activeCurrency}</span>
+        <div className="text-xs text-[var(--text-muted)] pb-2">
+          {t('reportcenter.filters.scope')} <span className="text-[var(--text-secondary)] font-medium">{activeCountry === 'All' ? t('reportcenter.filters.allCountries') : activeCountry}</span>, {t('reportcenter.filters.currency')} <span className="text-[var(--text-secondary)] font-medium">{activeCurrency}</span>
         </div>
       </div>
 
@@ -301,14 +346,16 @@ export default function ReportCenter() {
         {REPORTS.map(({ id, icon: Icon, tint, bg }) => (
           <div key={id} className="card flex flex-col gap-3">
             <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-lg" style={{ background: bg }}><Icon size={18} className={tint} /></div>
-              <h3 className="text-sm font-semibold text-gray-100">{t(`reportcenter.reports.${id}.label`)}</h3>
+              <div className="p-2 rounded-lg" style={{ background: bg }}><Icon size={18} className={tint} aria-hidden="true" /></div>
+              <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t(`reportcenter.reports.${id}.label`)}</h3>
             </div>
-            <p className="text-xs text-gray-500 flex-1 leading-relaxed">{t(`reportcenter.reports.${id}.desc`)}</p>
+            <p className="text-xs text-[var(--text-muted)] flex-1 leading-relaxed">{t(`reportcenter.reports.${id}.desc`)}</p>
             <button
+              type="button"
               onClick={() => generate(id)}
+              aria-busy={generating === id}
               disabled={!!generating}
-              className="btn-primary text-xs gap-1.5 w-full justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn-primary text-xs gap-1.5 w-full justify-center min-h-[44px] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {generating === id ? <><Loader2 size={13} className="animate-spin" /> {t('reportcenter.generate.building')}</> : <><Download size={13} /> {t('reportcenter.generate.generate')}</>}
             </button>
@@ -321,8 +368,8 @@ export default function ReportCenter() {
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg" style={{ background: 'rgba(59,130,246,0.12)' }}><CalendarClock size={18} className="text-blue-400" /></div>
           <div>
-            <p className="text-sm font-semibold text-gray-100">{t('reportcenter.automatedDelivery.title')}</p>
-            <p className="text-xs text-gray-500">{t('reportcenter.automatedDelivery.desc')}</p>
+            <p className="text-sm font-semibold text-[var(--text-primary)]">{t('reportcenter.automatedDelivery.title')}</p>
+            <p className="text-xs text-[var(--text-muted)]">{t('reportcenter.automatedDelivery.desc')}</p>
           </div>
         </div>
         <Link to="/scheduled-reports" className="btn-secondary text-xs gap-1.5 self-start sm:self-auto">
@@ -331,52 +378,71 @@ export default function ReportCenter() {
       </div>
 
       {/* Delivery history */}
-      <div className="card p-0 overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-700/60 flex items-center justify-between">
+      <section className="space-y-3" aria-labelledby="rc-history-title">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <Mail size={15} className="text-gray-400" />
-            <h2 className="text-base font-semibold text-white">{t('reportcenter.history.title')}</h2>
+            <Mail size={15} className="text-[var(--text-muted)]" aria-hidden="true" />
+            <h2 id="rc-history-title" className="text-base font-semibold text-[var(--text-primary)]">{t('reportcenter.history.title')}</h2>
           </div>
-          <button onClick={loadHistory} className="btn-secondary text-xs gap-1.5"><RefreshCw size={12} /> {t('reportcenter.history.refresh')}</button>
+          <button type="button" onClick={loadHistory} className="btn-secondary text-xs gap-1.5 min-h-[44px]"><RefreshCw size={12} /> {t('reportcenter.history.refresh')}</button>
         </div>
-        {histLoading ? (
-          <LoadingState message={t('reportcenter.history.loading')} />
-        ) : histError ? (
-          <div className="flex flex-col items-center gap-2 py-10 text-center">
-            <AlertTriangle size={28} className="text-red-400" />
-            <p className="text-sm text-red-300">{histError}</p>
-            <button onClick={loadHistory} className="btn-secondary text-xs gap-1.5 mt-1"><RefreshCw size={12} /> {t('reportcenter.history.retry')}</button>
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[
+            { label: 'Sends logged', value: histLoading || histError ? 'N/A' : histSummary.total, hint: histLoading || histError ? null : `${histSummary.last7} in the last 7 days`, icon: Send, tone: 'text-[var(--text-primary)]' },
+            { label: 'Delivery success', value: histLoading || histError || histSummary.successRate == null ? 'N/A' : `${histSummary.successRate}%`, hint: 'Sent of sent plus failed', icon: Percent, tone: 'text-green-400' },
+            { label: 'Failed', value: histLoading || histError ? 'N/A' : histSummary.counts.failed, hint: histSummary.lastFailed ? `Last ${new Date(histSummary.lastFailed).toLocaleDateString()}` : null, icon: AlertTriangle, tone: 'text-red-400' },
+            { label: 'Recipients reached', value: histLoading || histError || histSummary.recipients == null ? 'N/A' : histSummary.recipients, hint: histSummary.lastSent ? `Last send ${new Date(histSummary.lastSent).toLocaleDateString()}` : null, icon: Users, tone: 'text-[var(--text-primary)]' },
+          ].map((k) => {
+            const Icon = k.icon
+            return (
+              <div key={k.label} className="card">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
+                  <Icon size={16} className={k.tone} aria-hidden="true" />
+                </div>
+                <p className={`text-2xl font-bold mt-1 tabular-nums ${k.tone}`}>{k.value}</p>
+                {k.hint && <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{k.hint}</p>}
+              </div>
+            )
+          })}
+        </div>
+
+        <div className="card flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+            <input className="input pl-9 w-full min-h-[44px]" placeholder="Search schedule, type, recipient" aria-label="Search delivery history" value={histSearch} onChange={(e) => setHistSearch(e.target.value)} />
           </div>
-        ) : history.length === 0 ? (
-          <EmptyState illustration="module/reports" icon={Clock} title={t('reportcenter.history.emptyTitle')} description={t('reportcenter.history.emptyDesc')} />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr>
-                  {['sent', 'schedule', 'type', 'recipients', 'status'].map(h => <th key={h} className="table-header text-left">{t(`reportcenter.history.columns.${h}`)}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {history.map(r => (
-                  <tr key={r.id}>
-                    <td className="table-cell text-gray-400 text-xs whitespace-nowrap">{r.sent_at ? new Date(r.sent_at).toLocaleString() : 'N/A'}</td>
-                    <td className="table-cell text-gray-200 text-sm">{r.schedule_name || 'N/A'}</td>
-                    <td className="table-cell text-gray-400 text-xs">{r.report_type || 'N/A'}</td>
-                    <td className="table-cell text-gray-400 text-xs">{Array.isArray(r.recipients) ? t('reportcenter.history.recipientsCount', { count: r.recipients.length }) : 'N/A'}</td>
-                    <td className="table-cell">
-                      <span className={`text-xs font-medium ${STATUS_TINT[String(r.status || '').toLowerCase()] || 'text-gray-400'}`}>
-                        {r.status || t('reportcenter.history.statusUnknown')}
-                      </span>
-                      {r.error && <span className="block text-[10px] text-red-400/80 truncate max-w-[220px]" title={r.error}>{r.error}</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <select className="input min-h-[44px]" value={histStatus} onChange={(e) => setHistStatus(e.target.value)} aria-label="Delivery status">
+            <option value="">All statuses</option>
+            {Object.entries(DELIVERY_STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v} ({histSummary.counts[k]})</option>)}
+          </select>
+          <select className="input min-h-[44px]" value={histType} onChange={(e) => setHistType(e.target.value)} aria-label="Report type">
+            <option value="">All report types</option>
+            {histSummary.byType.map((b) => <option key={b.key} value={b.key}>{b.key} ({b.total})</option>)}
+          </select>
+          {(histStatus || histType || histSearch) && (
+            <button type="button" onClick={() => { setHistStatus(''); setHistType(''); setHistSearch('') }} className="btn-secondary text-xs gap-1.5 min-h-[44px]"><X size={12} /> Clear</button>
+          )}
+          <span className="text-xs text-[var(--text-muted)] ml-auto" aria-live="polite">{histFiltered.length} of {histSummary.total}</span>
+        </div>
+
+        {!histLoading && !histError && history.length >= HISTORY_LIMIT && (
+          <p className="text-xs text-amber-300" role="status">Showing the {HISTORY_LIMIT} most recent sends. Older deliveries are not loaded, so these figures cover those sends only.</p>
         )}
-      </div>
+
+        <EnterpriseTable
+          columns={histColumns}
+          data={histFiltered}
+          getRowId={(r) => String(r.id)}
+          loading={histLoading}
+          error={histError}
+          onRetry={loadHistory}
+          enableGlobalFilter={false}
+          exportFileName={`${reportCompany} Report Deliveries ${fmt(now)}`}
+          emptyMessage={history.length === 0 ? t('reportcenter.history.emptyDesc') : 'No deliveries match these filters.'}
+        />
+      </section>
     </div>
   )
 }

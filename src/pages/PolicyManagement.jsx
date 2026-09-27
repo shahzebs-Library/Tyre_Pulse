@@ -13,16 +13,16 @@
  * CRUD, Excel/PDF export, and full loading / error+Retry / empty states.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement,
   ArcElement, Tooltip, Legend,
 } from 'chart.js'
 import { Bar, Doughnut } from 'react-chartjs-2'
 import {
-  ScrollText, Plus, Pencil, Trash2, Search, X, Filter, FileSpreadsheet,
+  ScrollText, Plus, Pencil, Trash2, Search, X, FileSpreadsheet,
   FileText, AlertTriangle, Loader2, CheckCircle2, ClipboardList, CalendarClock,
-  CalendarX, Archive, Save, ShieldCheck, Wallet, Layers, ArrowUpDown, RefreshCw,
+  CalendarX, Archive, Save, ShieldCheck, Wallet, Layers,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
@@ -45,7 +45,7 @@ import { isMissingRelation } from '../lib/api/_client'
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
 
 const STATUS_STYLES = {
-  draft: 'bg-slate-700/40 text-slate-300 border border-slate-600/50',
+  draft: 'bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--input-border)]',
   active: 'bg-green-900/40 text-green-300 border border-green-700/50',
   under_review: 'bg-amber-900/40 text-amber-300 border border-amber-700/50',
   archived: 'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]',
@@ -287,12 +287,12 @@ export default function PolicyManagement() {
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
   const [search, setSearch] = useState('')
-  const [sortDir, setSortDir] = useState('asc') // soonest renewal first
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
   const [deleting, setDeleting] = useState(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
+  const [actionError, setActionError] = useState('')
 
   const load = useCallback(async () => {
     setRefreshing(true); setError(''); setMissing(false)
@@ -302,7 +302,7 @@ export default function PolicyManagement() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) { setMissing(true); setRows([]) }
-      else { setError(toUserMessage(err, 'Could not load policies.')); setRows([]) }
+      else { setError(toUserMessage(err, 'Could not load policies.')); setRows(null) }
     } finally {
       setRefreshing(false)
     }
@@ -310,7 +310,8 @@ export default function PolicyManagement() {
 
   useEffect(() => { load() }, [load])
 
-  const now = Date.now()
+  // One clock per load, so every memo below agrees on 'today'.
+  const now = useMemo(() => Date.now(), [rows]) // eslint-disable-line react-hooks/exhaustive-deps
   const portfolio = useMemo(() => summarizePolicyPortfolio(rows || [], now), [rows, now])
 
   const categoryOptions = useMemo(
@@ -323,8 +324,9 @@ export default function PolicyManagement() {
       status: statusFilter, category: categoryFilter, band: bandFilter,
       from: fromDate, to: toDate, search,
     }, now)
-    return sortByExpiry(list, sortDir)
-  }, [rows, statusFilter, categoryFilter, bandFilter, fromDate, toDate, search, sortDir, now])
+    // Default order: soonest renewal first. The table re-sorts on any header.
+    return sortByExpiry(list, 'asc')
+  }, [rows, statusFilter, categoryFilter, bandFilter, fromDate, toDate, search, now])
 
   const clearFilters = () => {
     setStatusFilter('all'); setCategoryFilter(''); setBandFilter('all')
@@ -333,7 +335,7 @@ export default function PolicyManagement() {
   const hasFilters = statusFilter !== 'all' || categoryFilter || bandFilter !== 'all' || fromDate || toDate || search
 
   const openCreate = () => { setEditing(null); setModalOpen(true) }
-  const openEdit = (p) => { setEditing(p); setModalOpen(true) }
+  const openEdit = useCallback((p) => { setEditing(p); setModalOpen(true) }, [])
 
   const confirmDelete = useCallback(async () => {
     if (!deleting) return
@@ -343,7 +345,7 @@ export default function PolicyManagement() {
       setDeleting(null)
       await load()
     } catch (err) {
-      setError(toUserMessage(err, 'Could not delete the policy.'))
+      setActionError(toUserMessage(err, 'Could not delete the policy.'))
     } finally {
       setDeleteBusy(false)
     }
@@ -401,7 +403,6 @@ export default function PolicyManagement() {
   // -- export --
   const EXPORT_COLS = ['title', 'category', 'version', 'owner', 'status', 'expiry', 'effective_date', 'review_date', 'premium']
   const EXPORT_HEADERS = ['Title', 'Coverage type', 'Version', 'Owner', 'Status', 'Renewal', 'Effective', 'Renewal date', 'Premium']
-  const policiesPager = usePagedRows(filtered)
   const exportRows = filtered.map((r) => {
     const prem = policyPremium(r)
     return {
@@ -427,6 +428,47 @@ export default function PolicyManagement() {
     { label: 'Archived', value: portfolio.kpis.archived, icon: Archive, tone: 'text-[var(--text-muted)]' },
     { label: 'Total premium', value: premiumKpi, icon: Wallet, tone: 'text-[var(--text-primary)]', isText: true, hint: portfolio.premium.hasAny ? `${portfolio.premium.present} recorded` : 'not recorded' },
   ]
+
+  const columns = useMemo(() => [
+    { id: 'title', header: 'Title', accessorFn: (r) => r.title || '', cell: ({ getValue }) => <span className="font-medium text-[var(--text-primary)]">{getValue() || 'N/A'}</span> },
+    { id: 'category', header: 'Coverage type', accessorFn: (r) => r.category || '', cell: ({ getValue }) => getValue() || 'N/A' },
+    { id: 'version', header: 'Version', accessorFn: (r) => r.version || '', cell: ({ getValue }) => getValue() || 'N/A' },
+    { id: 'owner', header: 'Owner', accessorFn: (r) => r.owner || '', cell: ({ getValue }) => getValue() || 'N/A' },
+    { id: 'effective_date', header: 'Effective', accessorFn: (r) => r.effective_date || '', cell: ({ row }) => fmtDate(row.original.effective_date) },
+    {
+      id: 'review_date', header: 'Renewal', accessorFn: (r) => r.review_date || '',
+      cell: ({ row }) => {
+        const r = row.original
+        const e = policyExpiry(r, now)
+        return (
+          <span className="inline-flex items-center gap-2 whitespace-nowrap">
+            <span>{fmtDate(r.review_date)}</span>
+            {e.hasDate && r.status !== 'archived' && (
+              <span className={`text-[11px] px-1.5 py-0.5 rounded ${BAND_STYLES[e.band]}`}>{BAND_LABEL[e.band]}</span>
+            )}
+          </span>
+        )
+      },
+    },
+    {
+      id: 'premium', header: 'Premium', accessorFn: (r) => policyPremium(r), meta: { align: 'right' },
+      cell: ({ getValue }) => (getValue() == null ? 'N/A' : formatCurrency(getValue(), activeCurrency || 'SAR', 0)),
+    },
+    {
+      id: 'status', header: 'Status', accessorFn: (r) => POLICY_STATUS_META[r.status]?.label || r.status || '',
+      meta: { filterVariant: 'select' },
+      cell: ({ row }) => <span className={`badge text-[11px] px-2 py-0.5 rounded ${STATUS_STYLES[row.original.status] || STATUS_STYLES.draft}`}>{POLICY_STATUS_META[row.original.status]?.label || row.original.status}</span>,
+    },
+    {
+      id: 'actions', header: '', enableSorting: false, enableHiding: false, meta: { export: false },
+      cell: ({ row }) => (
+        <div className="flex items-center justify-end gap-1">
+          <button type="button" onClick={(e) => { e.stopPropagation(); openEdit(row.original) }} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--brand-bright)]" aria-label={`Edit ${row.original.title || 'policy'}`}><Pencil size={15} /></button>
+          <button type="button" onClick={(e) => { e.stopPropagation(); setDeleting(row.original) }} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-300 focus-visible:ring-2 focus-visible:ring-red-400" aria-label={`Delete ${row.original.title || 'policy'}`}><Trash2 size={15} /></button>
+        </div>
+      ),
+    },
+  ], [now, activeCurrency, openEdit])
 
   return (
     <div className="space-y-6">
@@ -464,13 +506,10 @@ export default function PolicyManagement() {
         </div>
       )}
 
-      {error && !missing && (
-        <div className="card border border-red-800/50 flex items-start justify-between gap-3">
-          <div className="flex items-start gap-3">
-            <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-            <div><p className="text-red-300 font-medium">Couldn't load policies.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
-          </div>
-          <button onClick={load} className="btn-secondary text-sm inline-flex items-center gap-1.5 shrink-0"><RefreshCw size={14} /> Retry</button>
+      {actionError && (
+        <div className="card border border-red-800/50 flex items-start justify-between gap-3" role="alert">
+          <p className="text-sm text-red-300 flex items-start gap-2"><AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />{actionError}</p>
+          <button type="button" onClick={() => setActionError('')} aria-label="Dismiss message" className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={16} /></button>
         </div>
       )}
 
@@ -485,7 +524,7 @@ export default function PolicyManagement() {
                 <Icon size={16} className={k.tone} />
               </div>
               <p className={`${k.isText ? 'text-2xl' : 'text-3xl'} font-bold mt-1 ${k.tone}`}>
-                {rows === null ? '...' : k.value}
+                {rows === null ? 'N/A' : k.value}
               </p>
               {k.hint && rows !== null && <p className="text-[10px] text-[var(--text-muted)] mt-0.5">{k.hint}</p>}
             </div>
@@ -523,7 +562,7 @@ export default function PolicyManagement() {
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <input className="input pl-9 w-full" placeholder="Search title, coverage, owner, insurer, version..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input className="input pl-9 w-full" placeholder="Search title, coverage, owner, insurer, version" aria-label="Search policies" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
             <option value="all">All statuses</option>
@@ -541,78 +580,26 @@ export default function PolicyManagement() {
           <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {portfolio.total}</span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <label className="text-xs text-[var(--text-muted)]">Renewal from</label>
-          <input type="date" className="input" value={fromDate} onChange={(e) => setFromDate(e.target.value)} aria-label="Renewal from" />
-          <label className="text-xs text-[var(--text-muted)]">to</label>
-          <input type="date" className="input" value={toDate} onChange={(e) => setToDate(e.target.value)} aria-label="Renewal to" />
+          <label htmlFor="pol-from" className="text-xs text-[var(--text-muted)]">Renewal from</label>
+          <input id="pol-from" type="date" className="input" value={fromDate} onChange={(e) => setFromDate(e.target.value)} aria-label="Renewal from" />
+          <label htmlFor="pol-to" className="text-xs text-[var(--text-muted)]">to</label>
+          <input id="pol-to" type="date" className="input" value={toDate} onChange={(e) => setToDate(e.target.value)} aria-label="Renewal to" />
         </div>
       </div>
 
-      {/* Table */}
-      <div className="card overflow-hidden !p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                <th className="px-4 py-3 font-semibold whitespace-nowrap">Title</th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap">Coverage type</th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap">Version</th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap">Owner</th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap">Effective</th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap">
-                  <button onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))} className="inline-flex items-center gap-1 hover:text-[var(--text-primary)]" title="Sort by renewal date">
-                    Renewal <ArrowUpDown size={12} />
-                  </button>
-                </th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap">Status</th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows === null ? (
-                [0, 1, 2, 3, 4].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={8} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
-              ) : filtered.length === 0 ? (
-                <tr><td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]">
-                  {rows.length === 0 && !missing ? (
-                    <><ScrollText size={24} className="mx-auto mb-2 opacity-60" />No policies yet. Create your first fleet policy or coverage record.</>
-                  ) : (
-                    <><Filter size={22} className="mx-auto mb-2 opacity-60" />No policies match these filters.</>
-                  )}
-                </td></tr>
-              ) : (
-                policiesPager.pageRows.map((r) => {
-                  const e = policyExpiry(r, now)
-                  return (
-                    <tr key={r.id} className={`border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40 ${e.expired ? 'bg-red-900/10' : e.expiringSoon ? 'bg-amber-900/10' : ''}`}>
-                      <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.title}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.category || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.version || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.owner || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtDate(r.effective_date)}</td>
-                      <td className="px-4 py-2.5">
-                        <span className="inline-flex items-center gap-2">
-                          <span className="text-[var(--text-secondary)]">{fmtDate(r.review_date)}</span>
-                          {e.hasDate && r.status !== 'archived' && (
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded ${BAND_STYLES[e.band]}`}>{BAND_LABEL[e.band]}</span>
-                          )}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${STATUS_STYLES[r.status] || STATUS_STYLES.draft}`}>{POLICY_STATUS_META[r.status]?.label || r.status}</span></td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center justify-end gap-1">
-                          <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit policy"><Pencil size={14} /></button>
-                          <button onClick={() => setDeleting(r)} className="p-1.5 rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-300" aria-label="Delete policy"><Trash2 size={14} /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-          <TablePagination {...policiesPager} />
-        </div>
-      </div>
+      {/* Register */}
+      <EnterpriseTable
+        columns={columns}
+        data={filtered}
+        getRowId={(r) => String(r.id)}
+        loading={rows === null && !error}
+        error={error || null}
+        onRetry={load}
+        enableGlobalFilter={false}
+        exportFileName={reportFileName('Policies')}
+        emptyMessage={(rows || []).length === 0 && !missing ? 'No policies yet. Create your first fleet policy or coverage record.' : 'No policies match these filters.'}
+        onRowClick={(r) => openEdit(r)}
+      />
 
       <PolicyModal open={modalOpen} existing={editing} onClose={() => setModalOpen(false)} onSaved={load} />
       <DeleteConfirm policy={deleting} onCancel={() => setDeleting(null)} onConfirm={confirmDelete} busy={deleteBusy} />

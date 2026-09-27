@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import QRCode from 'qrcode'
 import { useSettings } from '../contexts/SettingsContext'
 import { applyCountry } from '../lib/api/_client'
@@ -10,9 +10,13 @@ import { useAuth } from '../contexts/AuthContext'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   QrCode, Printer, Download, Search, CircleDot, Truck,
-  CheckSquare, Square, RefreshCw, Check, Info, X, AlertCircle,
-  ClipboardList, Upload, FileSpreadsheet, ChevronDown, ChevronUp,
+  CheckSquare, RefreshCw, Check, Info, X, AlertCircle,
+  ClipboardList, Upload, FileSpreadsheet, ChevronDown, ChevronUp, Layers, MapPin,
 } from 'lucide-react'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import {
+  labelCode, labelSub, qrState, filterLabelRows, summarizeLabels, QR_STATE_OPTIONS,
+} from '../lib/qrLabelsAnalytics'
 import PageHeader from '../components/ui/PageHeader'
 import { toUserMessage } from '../lib/safeError'
 import { exportToExcel, reportFileName, reportDateLabel } from '../lib/exportUtils'
@@ -80,6 +84,7 @@ export default function QrLabels() {
   const [selected,   setSelected]   = useState(new Set())
   const [search,     setSearch]     = useState('')
   const [filterSite, setFilterSite] = useState('all')
+  const [filterQr,   setFilterQr]   = useState('all')
   const [labelSize,  setLabelSize]  = useState('md')
   const [qrImages,   setQrImages]   = useState({})       // { id: dataURL }
   const [truncated,  setTruncated]  = useState(false)
@@ -165,6 +170,7 @@ export default function QrLabels() {
     setQrImages({})
     setSearch('')
     setFilterSite('all')
+    setFilterQr('all')
     setTruncated(false)
     setBulkText(''); setBulkResult(null); setBulkError(null)
     loadData()
@@ -172,26 +178,17 @@ export default function QrLabels() {
     return () => { loadId.current++ }
   }, [loadData])
 
-  const filtered = data.filter(r => {
-    const val = mode === 'tyres' ? r.serial_number : r.asset_no
-    const q   = search.toLowerCase()
-    const matchSearch = !q
-      || val?.toLowerCase().includes(q)
-      || r.brand?.toLowerCase().includes(q)
-      || r.site?.toLowerCase().includes(q)
-      || r.vehicle_type?.toLowerCase().includes(q)
-    const matchSite = filterSite === 'all' || r.site === filterSite
-    return matchSearch && matchSite
-  })
+  // The filter and the label text live in qrLabelsAnalytics so they are tested.
+  const filtered = useMemo(
+    () => filterLabelRows(data, { mode, search, site: filterSite, qr: filterQr }, { selected, qrImages }),
+    [data, mode, search, filterSite, filterQr, selected, qrImages],
+  )
+  const labelStats = useMemo(() => summarizeLabels(data, mode, selected, qrImages), [data, mode, selected, qrImages])
 
-  function getLabel(item) { return mode === 'tyres' ? (item.serial_number ?? item.asset_no ?? String(item.id)) : item.asset_no }
-  function getSub(item)   {
-    return mode === 'tyres'
-      // ASCII separator: this line is printed onto the label and into the PDF,
-      // where the house rule keeps output to plain characters.
-      ? [item.brand, item.site].filter(Boolean).join(' - ')
-      : [item.vehicle_type, item.site].filter(Boolean).join(' - ')
-  }
+  function getLabel(item) { return labelCode(item, mode) }
+  // ASCII separator: this line is printed onto the label and into the PDF,
+  // where the house rule keeps output to plain characters.
+  function getSub(item)   { return labelSub(item, mode) }
 
   function toggleSelect(id) {
     setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
@@ -235,7 +232,7 @@ export default function QrLabels() {
     // Cleared unconditionally: the preview grid and both exports read the
     // FILTERED set, so a match left behind a site filter would be selected and
     // generated and then quietly missing from the printed sheet.
-    setSearch(''); setFilterSite('all')
+    setSearch(''); setFilterSite('all'); setFilterQr('all')
     if (result.ids.length) {
       setSelected(prev => new Set([...prev, ...result.ids]))
       const rows = result.matched.map(m => m.row)
@@ -433,6 +430,66 @@ export default function QrLabels() {
     }
   }
 
+  // EnterpriseTable speaks { [rowId]: true }; the page keeps a Set of real ids
+  // (qrImages is keyed by them), so translate at the boundary only.
+  const idByKey = useMemo(() => {
+    const m = new Map()
+    for (const r of data) m.set(String(r.id), r.id)
+    return m
+  }, [data])
+  const rowSelection = useMemo(() => {
+    const o = {}
+    for (const id of selected) o[String(id)] = true
+    return o
+  }, [selected])
+  const onRowSelectionChange = useCallback((next) => {
+    setSelected(new Set(Object.keys(next || {}).filter(k => next[k]).map(k => (idByKey.has(k) ? idByKey.get(k) : k))))
+  }, [idByKey])
+
+  const tableColumns = useMemo(() => {
+    const cols = [
+      {
+        id: 'code', header: mode === 'tyres' ? 'Serial No' : 'Asset No', accessorFn: (r) => getLabel(r),
+        cell: ({ row }) => {
+          const r = row.original
+          const noSerial = mode === 'tyres' && !r.serial_number
+          return (
+            <span className="font-mono text-xs text-[var(--text-primary)]">
+              {getLabel(r) || 'N/A'}
+              {noSerial && <span className="ml-2 font-sans text-[11px] text-amber-300">no serial, uses asset code</span>}
+            </span>
+          )
+        },
+      },
+    ]
+    if (mode === 'tyres') {
+      cols.push({ id: 'asset_no', header: 'Asset', accessorFn: (r) => r.asset_no || '', cell: ({ getValue }) => getValue() || 'N/A' })
+      cols.push({ id: 'brand', header: 'Brand', accessorFn: (r) => r.brand || '', cell: ({ getValue }) => getValue() || 'N/A' })
+      cols.push({ id: 'position', header: 'Position', accessorFn: (r) => r.position || '', cell: ({ getValue }) => getValue() || 'N/A' })
+    } else {
+      cols.push({ id: 'vehicle_type', header: 'Vehicle Type', accessorFn: (r) => r.vehicle_type || '', cell: ({ getValue }) => getValue() || 'N/A' })
+      cols.push({ id: 'registration_no', header: 'Registration', accessorFn: (r) => r.registration_no || '', cell: ({ getValue }) => getValue() || 'N/A' })
+    }
+    cols.push({ id: 'site', header: 'Site', accessorFn: (r) => r.site || '', cell: ({ getValue }) => getValue() || 'N/A' })
+    if (mode === 'tyres') {
+      cols.push({ id: 'risk_level', header: 'Risk', accessorFn: (r) => r.risk_level || '', cell: ({ getValue }) => (getValue()
+        ? <span className="text-[11px] px-2 py-0.5 rounded-full bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--input-border)]">{getValue()}</span>
+        : 'N/A') })
+    } else {
+      cols.push({ id: 'status', header: 'Status', accessorFn: (r) => r.ops_status || r.status || '', cell: ({ getValue }) => getValue() || 'N/A' })
+    }
+    cols.push({
+      id: 'qr', header: 'QR', accessorFn: (r) => QR_STATE_OPTIONS.find(o => o.key === qrState(r, selected, qrImages))?.label || '',
+      cell: ({ row }) => {
+        const st = qrState(row.original, selected, qrImages)
+        if (st === 'ready') return <span className="flex items-center gap-1 text-xs text-green-400"><Check size={11} aria-hidden="true" /> Ready</span>
+        if (st === 'pending') return <span className="text-xs text-amber-400">Pending</span>
+        return <span className="text-xs text-[var(--text-muted)]">Not selected</span>
+      },
+    })
+    return cols
+  }, [mode, selected, qrImages]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const selectedItems  = filtered.filter(r => selected.has(r.id))
   const readyItems     = selectedItems.filter(r => qrImages[r.id])
   const pendingItems   = selectedItems.filter(r => !qrImages[r.id])
@@ -544,31 +601,23 @@ export default function QrLabels() {
           }
         />
 
-        {error && (
-          <div className="card border border-red-500/30 flex items-center gap-3">
-            <AlertCircle size={18} className="text-red-400 shrink-0" />
-            <p className="text-sm text-red-300 flex-1">{error}</p>
-            <button onClick={loadData} className="btn-secondary text-xs inline-flex items-center gap-1.5">
-              <RefreshCw size={13} /> Retry
-            </button>
-          </div>
-        )}
-
         {/* ── Controls row ──────────────────────────────────────────────────────── */}
         <div className="flex flex-wrap gap-3 items-center">
           {/* Mode */}
-          <div className="flex p-1 rounded-lg gap-1" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <div className="flex p-1 rounded-lg gap-1" style={{ background: 'var(--input-bg)', border: '1px solid var(--input-border)' }}>
             {[
               { key: 'tyres',  icon: CircleDot, label: 'Tyre Serials' },
               { key: 'assets', icon: Truck,     label: 'Vehicle Assets' },
             ].map(({ key, icon: Icon, label }) => (
               <button
                 key={key}
+                type="button"
+                aria-pressed={mode === key}
                 onClick={() => setMode(key)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                className={`flex items-center gap-2 px-4 min-h-[44px] rounded-md text-sm font-medium transition-all ${
                   mode === key
                     ? 'text-green-300'
-                    : 'text-gray-400 hover:text-gray-200'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                 }`}
                 style={mode === key ? {
                   background: 'rgba(22,163,74,0.16)',
@@ -582,16 +631,18 @@ export default function QrLabels() {
 
           {/* Label size */}
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-600">Label size:</span>
-            <div className="flex p-0.5 rounded-lg gap-0.5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+            <span className="text-xs text-[var(--text-muted)]">Label size:</span>
+            <div className="flex p-0.5 rounded-lg gap-0.5" style={{ background: 'var(--input-bg)', border: '1px solid var(--input-border)' }}>
               {Object.entries(LABEL_SIZES).map(([key, { label, w }]) => (
                 <button
                   key={key}
+                  type="button"
+                  aria-pressed={labelSize === key}
                   onClick={() => setLabelSize(key)}
-                  className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+                  className={`px-3 min-h-[44px] rounded-md text-xs font-semibold transition-all ${
                     labelSize === key
                       ? 'bg-green-600 text-white shadow'
-                      : 'text-gray-500 hover:text-gray-300'
+                      : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                   }`}
                 >
                   {label} <span className="opacity-60">{w} mm</span>
@@ -603,7 +654,7 @@ export default function QrLabels() {
           {/* Generate button - right side */}
           {selected.size > 0 && (
             <div className="flex items-center gap-3 ml-auto">
-              <span className="text-xs text-gray-500">{selected.size} selected</span>
+              <span className="text-xs text-[var(--text-muted)]">{selected.size} selected</span>
               {pendingItems.length > 0 && (
                 <button
                   onClick={() => handleGenerate()}
@@ -629,26 +680,29 @@ export default function QrLabels() {
         {/* ── Bulk intake: paste a list of codes, get their labels ─────────────── */}
         <div className="card p-0 overflow-hidden">
           <button
+            type="button"
+            aria-expanded={bulkOpen}
             onClick={() => setBulkOpen(o => !o)}
-            className="w-full flex items-center gap-2 px-4 py-3 text-left"
+            className="w-full flex items-center gap-2 px-4 py-3 min-h-[44px] text-left"
           >
             <ClipboardList size={14} className="text-green-400 shrink-0" />
-            <span className="text-sm font-semibold text-gray-200">
+            <span className="text-sm font-semibold text-[var(--text-primary)]">
               {mode === 'tyres' ? 'Paste a list of tyre serials' : 'Paste a list of asset codes'}
             </span>
-            <span className="text-xs text-gray-600 hidden sm:inline">
+            <span className="text-xs text-[var(--text-muted)] hidden sm:inline">
               {mode === 'tyres'
                 ? 'one per line, or upload a file - labels are generated for the ones found'
                 : 'like TM360 - one per line, or upload a file, and labels are generated automatically'}
             </span>
             {bulkOpen
-              ? <ChevronUp size={14} className="ml-auto text-gray-500 shrink-0" />
-              : <ChevronDown size={14} className="ml-auto text-gray-500 shrink-0" />}
+              ? <ChevronUp size={14} className="ml-auto text-[var(--text-muted)] shrink-0" />
+              : <ChevronDown size={14} className="ml-auto text-[var(--text-muted)] shrink-0" />}
           </button>
 
           {bulkOpen && (
-            <div className="px-4 pb-4 space-y-3" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+            <div className="px-4 pb-4 space-y-3" style={{ borderTop: '1px solid var(--border-dim)' }}>
               <textarea
+                aria-label={mode === 'tyres' ? 'Tyre serials, one per line' : 'Asset codes, one per line'}
                 className="input w-full text-sm font-mono min-h-28 mt-3"
                 placeholder={mode === 'tyres' ? 'EP060420711\nYMA55312\n...' : 'TM360\nMP093\nBH021\n...'}
                 value={bulkText}
@@ -682,12 +736,12 @@ export default function QrLabels() {
                 {(bulkText || bulkResult) && (
                   <button
                     onClick={() => { setBulkText(''); setBulkResult(null); setBulkError(null) }}
-                    className="text-xs text-gray-500 hover:text-gray-300 inline-flex items-center gap-1"
+                    className="text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)] inline-flex items-center gap-1"
                   >
                     <X size={12} /> Clear list
                   </button>
                 )}
-                <span className="text-xs text-gray-600 ml-auto">
+                <span className="text-xs text-[var(--text-muted)] ml-auto">
                   A CSV, Excel sheet or plain list all work. Every cell is read.
                 </span>
               </div>
@@ -737,13 +791,15 @@ export default function QrLabels() {
                           <div className="flex flex-wrap gap-1.5">
                             {rows.map(r => (
                               <button
+                                type="button"
                                 key={r.id}
+                                aria-pressed={selected.has(r.id)}
                                 onClick={async () => {
                                   setSelected(prev => new Set([...prev, r.id]))
                                   await handleGenerate([r])
                                 }}
-                                className="px-2 py-1 rounded-md text-[11px] transition-colors"
-                                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)' }}
+                                className="px-2 min-h-[44px] rounded-md text-[11px] transition-colors"
+                                style={{ background: 'var(--input-bg)', border: '1px solid var(--input-border)' }}
                               >
                                 {selected.has(r.id) ? <Check size={10} className="inline mr-1 text-green-400" /> : null}
                                 {rowWhere(r)}
@@ -760,24 +816,55 @@ export default function QrLabels() {
           )}
         </div>
 
+        {/* ── KPI strip ─────────────────────────────────────────────────────────── */}
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+          {[
+            { label: mode === 'tyres' ? 'Tyres loaded' : 'Vehicles loaded', value: loading || error ? 'N/A' : labelStats.total.toLocaleString(), hint: truncated ? 'Partial read' : null, icon: Layers },
+            { label: 'Sites', value: loading || error ? 'N/A' : labelStats.sites, icon: MapPin },
+            { label: 'Selected', value: labelStats.selected.toLocaleString(), icon: CheckSquare },
+            { label: 'QR ready', value: labelStats.ready.toLocaleString(), hint: sheets > 0 ? `${sheets} A4 ${sheets === 1 ? 'sheet' : 'sheets'}` : null, icon: QrCode },
+            mode === 'tyres'
+              ? { label: 'No serial recorded', value: loading || error ? 'N/A' : labelStats.noSerial.toLocaleString(), hint: 'Label encodes the asset code', icon: Info }
+              : { label: 'Awaiting a QR', value: labelStats.pending.toLocaleString(), hint: 'Selected, not generated', icon: Info },
+          ].map(k => {
+            const Icon = k.icon
+            return (
+              <div key={k.label} className="card">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
+                  <Icon size={15} className="text-[var(--text-muted)]" aria-hidden="true" />
+                </div>
+                <p className="text-2xl font-bold mt-1 tabular-nums text-[var(--text-primary)]">{k.value}</p>
+                {k.hint && <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{k.hint}</p>}
+              </div>
+            )
+          })}
+        </div>
+
         {/* ── Filters ──────────────────────────────────────────────────────────── */}
         <div className="flex gap-3 flex-wrap">
           <div className="relative flex-1 min-w-52">
-            <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600" />
+            <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
             <input
-              className="input pl-8 text-sm"
+              aria-label={mode === 'tyres' ? 'Search tyres' : 'Search vehicles'}
+              className="input pl-8 text-sm w-full min-h-[44px]"
               placeholder={mode === 'tyres' ? 'Search serial, brand, site...' : 'Search asset, type, site...'}
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
           </div>
-          <select className="input w-44 text-sm" value={filterSite} onChange={e => setFilterSite(e.target.value)}>
+          <select aria-label="Site" className="input w-44 text-sm min-h-[44px]" value={filterSite} onChange={e => setFilterSite(e.target.value)}>
             <option value="all">All Sites</option>
             {sites.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
+          <select aria-label="QR status" className="input w-52 text-sm min-h-[44px]" value={filterQr} onChange={e => setFilterQr(e.target.value)}>
+            <option value="all">Any QR status</option>
+            {QR_STATE_OPTIONS.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+          </select>
           <button
+            type="button"
             onClick={toggleAll}
-            className="btn-secondary text-sm px-4"
+            className="btn-secondary text-sm px-4 min-h-[44px]"
           >
             {selected.size === filtered.length && filtered.length > 0 ? 'Deselect All' : `Select All (${filtered.length})`}
           </button>
@@ -804,11 +891,11 @@ export default function QrLabels() {
               className="space-y-3"
             >
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
+                <h3 className="text-sm font-semibold text-[var(--text-secondary)] flex items-center gap-2">
                   <QrCode size={13} className="text-green-400" />
                   Label Preview - {readyItems.length} generated
                 </h3>
-                <span className="text-xs text-gray-600">
+                <span className="text-xs text-[var(--text-muted)]">
                   {grid.w} mm labels, {grid.cols} x {grid.rows} per A4 sheet
                   {sheets > 0 ? `, ${sheets} ${sheets === 1 ? 'sheet' : 'sheets'} to print` : ''}
                 </span>
@@ -863,9 +950,9 @@ export default function QrLabels() {
                           {/* NOT truncated: the printed label keeps the whole identifier, so a
                               preview that ends in "..." would be showing something the
                               sheet does not print. It wraps here as it wraps there. */}
-                          <p className="text-[11px] font-bold font-mono text-white tracking-tight break-all leading-tight">{val}</p>
+                          <p className="text-[11px] font-bold font-mono text-[var(--text-primary)] tracking-tight break-all leading-tight">{val}</p>
                           {sub && (
-                            <p className="text-[8.5px] text-gray-500 truncate mt-0.5">{sub}</p>
+                            <p className="text-[8.5px] text-[var(--text-muted)] truncate mt-0.5">{sub}</p>
                           )}
                         </div>
                       </div>
@@ -878,98 +965,23 @@ export default function QrLabels() {
         </AnimatePresence>
 
         {/* ── Records table ────────────────────────────────────────────────────── */}
-        <div className="card overflow-hidden p-0">
-          {loading ? (
-            <div className="flex items-center justify-center py-16 text-gray-500 text-sm">Loading records...</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr
-                    className="text-left text-xs text-gray-500 font-semibold uppercase tracking-wider"
-                    style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
-                  >
-                    <th className="px-4 py-3 w-10">
-                      <input
-                        type="checkbox"
-                        checked={selected.size === filtered.length && filtered.length > 0}
-                        onChange={toggleAll}
-                        className="w-4 h-4 rounded accent-green-500 cursor-pointer"
-                      />
-                    </th>
-                    <th className="px-3 py-3">{mode === 'tyres' ? 'Serial No' : 'Asset No'}</th>
-                    {mode === 'tyres'  && <th className="px-3 py-3">Brand</th>}
-                    {mode === 'assets' && <th className="px-3 py-3">Vehicle Type</th>}
-                    <th className="px-3 py-3">Site</th>
-                    {mode === 'tyres' && <th className="px-3 py-3">Status</th>}
-                    <th className="px-3 py-3">QR</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map(item => {
-                    const val    = getLabel(item)
-                    const isSelected = selected.has(item.id)
-                    const hasQr  = !!qrImages[item.id]
-                    return (
-                      <tr
-                        key={item.id}
-                        onClick={() => toggleSelect(item.id)}
-                        className="cursor-pointer transition-colors"
-                        style={{
-                          borderBottom: '1px solid rgba(255,255,255,0.04)',
-                          background: isSelected ? 'rgba(22,163,74,0.07)' : undefined,
-                        }}
-                        onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = 'rgba(255,255,255,0.02)' }}
-                        onMouseLeave={e => { e.currentTarget.style.background = isSelected ? 'rgba(22,163,74,0.07)' : '' }}
-                      >
-                        <td className="px-4 py-2.5">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => {}}
-                            onClick={e => e.stopPropagation()}
-                            className="w-4 h-4 rounded accent-green-500 cursor-pointer"
-                          />
-                        </td>
-                        <td className="px-3 py-2.5 font-mono text-xs text-white">{val || '-'}</td>
-                        {mode === 'tyres'  && <td className="px-3 py-2.5 text-gray-300 text-xs">{item.brand || '-'}</td>}
-                        {mode === 'assets' && <td className="px-3 py-2.5 text-gray-300 text-xs">{item.vehicle_type || '-'}</td>}
-                        <td className="px-3 py-2.5 text-gray-400 text-xs">{item.site || '-'}</td>
-                        {mode === 'tyres' && (
-                          <td className="px-3 py-2.5">
-                            {item.risk_level && (
-                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-800/80 text-gray-400 border border-gray-700/50">
-                                {item.risk_level}
-                              </span>
-                            )}
-                          </td>
-                        )}
-                        <td className="px-3 py-2.5">
-                          {hasQr ? (
-                            <span className="flex items-center gap-1 text-xs text-green-400">
-                              <Check size={11} /> Ready
-                            </span>
-                          ) : isSelected ? (
-                            <span className="text-xs text-yellow-500">Pending</span>
-                          ) : (
-                            <span className="text-xs text-gray-700">-</span>
-                          )}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                  {filtered.length === 0 && (
-                    <tr>
-                      <td colSpan={7} className="py-14 text-center text-gray-600 text-sm">
-                        No records found
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+        <EnterpriseTable
+          columns={tableColumns}
+          data={filtered}
+          getRowId={(r) => String(r.id)}
+          loading={loading}
+          error={error}
+          onRetry={loadData}
+          enableGlobalFilter={false}
+          enableRowSelection
+          rowSelection={rowSelection}
+          onRowSelectionChange={onRowSelectionChange}
+          onRowClick={(r) => toggleSelect(r.id)}
+          initialPageSize={50}
+          pageSizeOptions={[25, 50, 100, 250]}
+          exportFileName={reportFileName('TyrePulse QR', mode === 'tyres' ? 'Tyres' : 'Vehicles', reportDateLabel())}
+          emptyMessage={data.length === 0 ? 'No records in this register yet.' : 'No records match these filters.'}
+        />
 
         {/* ── How-to card ──────────────────────────────────────────────────────── */}
         <div
@@ -979,26 +991,26 @@ export default function QrLabels() {
           <h3 className="text-sm font-semibold text-green-400 flex items-center gap-2">
             <Info size={13} /> How to use
           </h3>
-          <ol className="space-y-1 text-xs text-gray-500 list-decimal list-inside leading-relaxed">
-            <li>Choose <strong className="text-gray-400">Tyre Serials</strong> (serial-level labels) or <strong className="text-gray-400">Vehicle Assets</strong> (vehicle-level labels)</li>
+          <ol className="space-y-1 text-xs text-[var(--text-muted)] list-decimal list-inside leading-relaxed">
+            <li>Choose <strong className="text-[var(--text-muted)]">Tyre Serials</strong> (serial-level labels) or <strong className="text-[var(--text-muted)]">Vehicle Assets</strong> (vehicle-level labels)</li>
             <li>
-              Already have a list? Open <strong className="text-gray-400">{mode === 'tyres' ? 'Paste a list of tyre serials' : 'Paste a list of asset codes'}</strong>,
+              Already have a list? Open <strong className="text-[var(--text-muted)]">{mode === 'tyres' ? 'Paste a list of tyre serials' : 'Paste a list of asset codes'}</strong>,
               paste it or upload the file, and the labels are found and generated for you. Anything not in the register is named rather than skipped.
             </li>
-            <li>Otherwise tick the rows you want, or use <strong className="text-gray-400">Select All</strong>, then click <strong className="text-gray-400">Generate QRs</strong></li>
+            <li>Otherwise tick the rows you want, or use <strong className="text-[var(--text-muted)]">Select All</strong>, then click <strong className="text-[var(--text-muted)]">Generate QRs</strong></li>
             <li>
-              <strong className="text-gray-400">Print Labels</strong> opens the browser print dialog. Or use{' '}
-              <strong className="text-gray-400">Export PDF</strong> for a ready-to-send file: at the {LABEL_SIZES[labelSize].label.toLowerCase()} size
+              <strong className="text-[var(--text-muted)]">Print Labels</strong> opens the browser print dialog. Or use{' '}
+              <strong className="text-[var(--text-muted)]">Export PDF</strong> for a ready-to-send file: at the {LABEL_SIZES[labelSize].label.toLowerCase()} size
               that is {grid.cols} x {grid.rows} = {grid.perPage} labels per A4 sheet.
             </li>
             <li>
-              <strong className="text-gray-400">Export Excel</strong> gives the same selection as a spreadsheet with the
+              <strong className="text-[var(--text-muted)]">Export Excel</strong> gives the same selection as a spreadsheet with the
               {mode === 'tyres' ? ' tyre' : ' vehicle'} details, so a printed run comes with a list naming every code.
             </li>
             <li>Cut and stick labels onto the tyre or vehicle windscreen / chassis plate</li>
-            <li>Scan with the <strong className="text-gray-400">TyrePulse Scanner</strong> to instantly pull up full tyre details</li>
+            <li>Scan with the <strong className="text-[var(--text-muted)]">TyrePulse Scanner</strong> to instantly pull up full tyre details</li>
             <li>
-              Labels carry your <strong className="text-gray-400">company logo</strong> across the top.
+              Labels carry your <strong className="text-[var(--text-muted)]">company logo</strong> across the top.
               {logoUrl
                 ? ' It is loaded from your report branding.'
                 : ' Set one in the console under Report Colors and it appears here automatically.'}

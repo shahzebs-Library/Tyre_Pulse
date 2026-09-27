@@ -1,20 +1,25 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { FileText, ChevronRight, Download, ArrowLeft, Printer, Mail } from 'lucide-react'
-import { SkeletonTable } from '../components/ui/Skeleton'
+import {
+  FileText, ChevronRight, Download, ArrowLeft, Printer, Mail, Layers, DollarSign, Truck, AlertTriangle, MapPin,
+} from 'lucide-react'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import PageHeader from '../components/ui/PageHeader'
 import DateField from '../components/ui/DateField'
 import SectionTabs, { REPORTS_TABS } from '../components/ui/SectionTabs'
 import { supabase } from '../lib/supabase'
-import { useSettings } from '../contexts/SettingsContext'
+import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { applyCountry } from '../lib/countryFilter'
 import { fetchAllPages } from '../lib/fetchAll'
 import EmailReportModal from '../components/EmailReportModal'
 import { formatDate } from '../lib/formatters'
 import { listPmPrograms, listPmServiceRecords } from '../lib/api/pmPrograms'
 import { toUserMessage } from '../lib/safeError'
+import {
+  pmIntervalSummary, groupVehicleHistory, groupCostAnalysis, tyreLineRows, summarizeReport, printableTableHtml,
+} from '../lib/reportsAnalytics'
 
 const REPORT_TYPES = [
   { id: 'Vehicle History',       key: 'vehicleHistory',       desc: 'All tyre changes per vehicle, grouped by asset',  table: 'tyre_records' },
@@ -34,18 +39,7 @@ function tOr(t, key, fallback) {
   return s === key ? (fallback ?? key) : s
 }
 
-// Human-readable recurring interval for a PM program (e.g. "3 months",
-// "10000 km"). Prefers the calendar interval, then the meter interval; empty
-// string when neither is defined (honest blank, no fabricated cadence).
-function pmIntervalSummary(p) {
-  const v = p?.interval_value
-  if (v != null && v !== '' && p?.interval_type) return `${v} ${p.interval_type}`
-  if (p?.meter_interval != null && p?.meter_interval !== '' && p?.meter_source && p.meter_source !== 'none') {
-    const unit = p.meter_source === 'engine_hours' ? 'hours' : 'km'
-    return `${p.meter_interval} ${unit}`
-  }
-  return ''
-}
+// pmIntervalSummary and the tyre grouping live in src/lib/reportsAnalytics.js.
 
 // Looks up the translation key for a REPORT_TYPES.id (used wherever the raw
 // reportType string is shown as UI chrome, without altering the id itself).
@@ -98,8 +92,10 @@ function columnLabel(t, col) {
 }
 
 const RISK_LEVELS = ['High', 'Critical']
-const COUNTRIES   = ['Saudi Arabia', 'UAE', 'Bahrain', 'Kuwait', 'Oman', 'Qatar']
-const PAGE_SIZE   = 100
+// Countries come from the app's own list: the stored values are KSA/UAE/Egypt,
+// so a filter offering 'Saudi Arabia' could never match a row.
+// The print window carries at most this many rows and says so when it bites.
+const PRINT_ROW_CAP = 1000
 
 // Persisted per-report column layout (which columns the user keeps visible).
 // Shape: { [reportType]: string[] }. Survives across sessions, independent of
@@ -170,12 +166,8 @@ export default function Reports() {
   const [loading, setLoading]         = useState(false)
   const [error, setError]             = useState(null)
   const [siteSuggestions, setSiteSuggestions] = useState([])
-  const [previewPage, setPreviewPage] = useState(1)
   const [configRestored, setConfigRestored] = useState(false)
   const [emailModalOpen, setEmailModalOpen] = useState(false)
-
-  const previewRows = allRows.slice((previewPage - 1) * PAGE_SIZE, previewPage * PAGE_SIZE)
-  const totalPages  = Math.max(1, Math.ceil(allRows.length / PAGE_SIZE))
 
   useEffect(() => {
     applyShortcut('This Month', setDateFrom, setDateTo, setDateShortcut)
@@ -191,11 +183,6 @@ export default function Reports() {
     }
     loadSites()
   }, [])
-
-  // Reset preview page when data changes
-  useEffect(() => {
-    setPreviewPage(1)
-  }, [allRows])
 
   function selectType(type) {
     setReportType(type)
@@ -301,14 +288,16 @@ export default function Reports() {
           if (filterCountry)  q = q.eq('country', filterCountry)
           if (filterInspType) q = q.eq('inspection_type', filterInspType)
           if (!filterCountry) q = applyCountry(q, activeCountry)
-          return q.order('scheduled_date', { ascending: false })
+          return q.order('scheduled_date', { ascending: false }).order('id')
         }
-        const { data } = await fetchAllPages((from, to) => buildInsp().range(from, to), { max: 100000 })
+        const { data, error: inspErr } = await fetchAllPages((from, to) => buildInsp().range(from, to), { max: 100000 })
+        // A failed read must not render as 'no records'.
+        if (inspErr) throw inspErr
         rows = data ?? []
       } else {
         const buildTyre = () => {
           let q = supabase.from('tyre_records').select(
-            'issue_date,asset_no,brand,description,serial_no,site,country,cost_per_tyre,qty,risk_level,remarks'
+            'id,issue_date,asset_no,brand,description,serial_no,site,country,cost_per_tyre,qty,risk_level,remarks'
           )
           if (dateFrom)      q = q.gte('issue_date', dateFrom)
           if (dateTo)        q = q.lte('issue_date', dateTo)
@@ -321,62 +310,16 @@ export default function Reports() {
             q = q.ilike('brand', `%${filterBrand}%`)
           if (reportType === 'Risk Summary')
             q = q.in('risk_level', filterRiskLevels.length ? filterRiskLevels : RISK_LEVELS)
-          return q.order('issue_date', { ascending: false })
+          return q.order('issue_date', { ascending: false }).order('id')
         }
-        const { data } = await fetchAllPages((from, to) => buildTyre().range(from, to), { max: 100000 })
+        const { data, error: tyreErr } = await fetchAllPages((from, to) => buildTyre().range(from, to), { max: 100000 })
+        if (tyreErr) throw tyreErr
         const raw = data ?? []
 
-        if (reportType === 'Vehicle History') {
-          const grouped = {}
-          raw.forEach(r => {
-            const key = r.asset_no ?? 'Unknown'
-            if (!grouped[key]) grouped[key] = {
-              asset_no: key,
-              site: r.site ?? '',
-              country: r.country ?? '',
-              count: 0,
-              total_cost: 0,
-              brands: new Set(),
-              last_date: '',
-              risk_levels: [],
-            }
-            grouped[key].count += 1
-            grouped[key].total_cost += (r.cost_per_tyre ?? 0) * (r.qty ?? 1)
-            if (r.brand) grouped[key].brands.add(r.brand)
-            if (!grouped[key].last_date || r.issue_date > grouped[key].last_date)
-              grouped[key].last_date = r.issue_date
-            if (r.risk_level) grouped[key].risk_levels.push(r.risk_level)
-          })
-          rows = Object.values(grouped).map(g => ({
-            asset_no:        g.asset_no,
-            site:            g.site,
-            country:         g.country,
-            count:           g.count,
-            total_cost:      Math.round(g.total_cost),
-            avg_cost:        g.count > 0 ? Math.round(g.total_cost / g.count) : 0,
-            brands:          [...g.brands].join(', '),
-            last_date:       g.last_date,
-            high_risk_count: g.risk_levels.filter(r => r === 'High' || r === 'Critical').length,
-          })).sort((a, b) => b.total_cost - a.total_cost)
-        } else if (reportType === 'Cost Analysis') {
-          const grouped = {}
-          raw.forEach(r => {
-            const key = `${r.site ?? ''}|${r.brand ?? ''}`
-            if (!grouped[key]) grouped[key] = { site: r.site ?? '', brand: r.brand ?? '', country: r.country ?? '', count: 0, total_cost: 0 }
-            grouped[key].count += 1
-            grouped[key].total_cost += (r.cost_per_tyre ?? 0) * (r.qty ?? 1)
-          })
-          rows = Object.values(grouped).map(g => ({
-            ...g,
-            avg_cost:   g.count > 0 ? Math.round(g.total_cost / g.count) : 0,
-            total_cost: Math.round(g.total_cost),
-          })).sort((a, b) => b.total_cost - a.total_cost)
-        } else {
-          rows = raw.map(r => ({
-            ...r,
-            cost: (r.cost_per_tyre ?? 0) * (r.qty ?? 1),
-          }))
-        }
+        // Grouping lives in reportsAnalytics: an unpriced tyre is N/A, not 0.
+        if (reportType === 'Vehicle History') rows = groupVehicleHistory(raw)
+        else if (reportType === 'Cost Analysis') rows = groupCostAnalysis(raw)
+        else rows = tyreLineRows(raw)
       }
 
       setAllRows(rows)
@@ -394,7 +337,7 @@ export default function Reports() {
     const headers = activeCols.map(c => COLUMN_LABELS[c] ?? c)
     exportToExcel(
       allRows, activeCols, headers,
-      `TyrePulse_${reportType.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}`
+      reportFileName('TyrePulse', reportType),
     )
   }
 
@@ -404,8 +347,8 @@ export default function Reports() {
     exportToPdf(
       allRows,
       columns,
-      `TyrePulse · ${reportType}`,
-      `TyrePulse_${reportType.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}`,
+      `TyrePulse: ${reportType}`,
+      reportFileName('TyrePulse', reportType),
       'landscape',
       '',
       { currency: activeCurrency },
@@ -413,16 +356,20 @@ export default function Reports() {
   }
 
   function handlePrint() {
-    const printContent = document.querySelector('#report-preview-table')
-    if (!printContent) { window.print(); return }
+    const cols = (REPORT_COLUMNS[reportType] ?? []).filter(c => selectedCols.includes(c))
+    const printed = allRows.slice(0, PRINT_ROW_CAP)
+    const note = allRows.length > PRINT_ROW_CAP
+      ? `<p>${printed.length.toLocaleString()} of ${allRows.length.toLocaleString()} rows. Use Excel or PDF for the full report.</p>`
+      : ''
     const win = window.open('', '_blank')
+    if (!win) { window.print(); return }
     win.document.write(
-      `<html><head><title>TyrePulse Report · ${reportType}</title>` +
-      `<style>body{font-family:sans-serif;margin:16px}h2{margin-bottom:12px;font-size:14px}` +
+      `<html><head><title>TyrePulse Report: ${reportType}</title>` +
+      `<style>body{font-family:sans-serif;margin:16px}h2{margin-bottom:12px;font-size:14px}p{font-size:12px}` +
       `table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:6px 8px;font-size:12px}` +
       `th{background:#f0f0f0;font-weight:600;text-align:left}</style></head>` +
-      `<body><h2>TyrePulse · ${reportType} · ${formatDate(new Date())}</h2>` +
-      `${printContent.outerHTML}</body></html>`
+      `<body><h2>TyrePulse: ${reportType}: ${formatDate(new Date())}</h2>${note}` +
+      `${printableTableHtml(printed, cols, c => COLUMN_LABELS[c] ?? c)}</body></html>`
     )
     win.document.close()
     win.print()
@@ -439,8 +386,31 @@ export default function Reports() {
   const emailPdfRowCount = Math.min(allRows.length, EMAIL_PDF_ROW_CAP)
   const emailPdfCapped = allRows.length > EMAIL_PDF_ROW_CAP
 
-  const rangeStart = allRows.length === 0 ? 0 : (previewPage - 1) * PAGE_SIZE + 1
-  const rangeEnd   = Math.min(previewPage * PAGE_SIZE, allRows.length)
+  const summary = useMemo(() => summarizeReport(reportType, allRows), [reportType, allRows])
+  const money = (v) => (v == null ? 'N/A' : `${activeCurrency || ''} ${Math.round(v).toLocaleString()}`.trim())
+  const MONEY_COLS = new Set(['total_cost', 'avg_cost', 'cost', 'estimated_cost', 'parts_cost', 'labour_cost'])
+  const previewColumns = useMemo(() => displayCols.map(col => ({
+    id: col,
+    header: columnLabel(t, col),
+    accessorFn: (r) => r[col] ?? null,
+    meta: MONEY_COLS.has(col) || ['count', 'qty', 'high_risk_count'].includes(col) ? { align: 'right' } : undefined,
+    cell: ({ getValue }) => {
+      const v = getValue()
+      if (col === 'risk_level' && v) {
+        return (
+          <span className={`badge text-xs ${
+            v === 'Critical' ? 'bg-red-900/50 text-red-300' :
+            v === 'High' ? 'bg-orange-900/50 text-orange-300' :
+            v === 'Medium' ? 'bg-yellow-900/50 text-yellow-300' :
+            'bg-green-900/50 text-green-300'
+          }`}>{v}</span>
+        )
+      }
+      if (v == null || v === '') return <span className="text-[var(--text-muted)]">N/A</span>
+      if (MONEY_COLS.has(col)) return <span className="tabular-nums">{Number(v).toLocaleString()}</span>
+      return <span className="block max-w-[16rem] truncate" title={String(v)}>{String(v)}</span>
+    },
+  })), [displayCols.join('|'), t]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="space-y-6">
@@ -481,17 +451,17 @@ export default function Reports() {
             <button
               key={rt.id}
               onClick={() => selectType(rt.id)}
-              className="card text-left hover:border-green-600/40 transition-all group"
+              className="card text-left hover:border-green-600/40 transition-all group focus-visible:ring-2 focus-visible:ring-[var(--brand-bright)]"
             >
               <div className="flex items-start gap-3">
                 <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
                   style={{ background: 'rgba(22,163,74,0.12)', border: '1px solid rgba(22,163,74,0.2)' }}>
-                  <FileText size={16} className="text-green-400" />
+                  <FileText size={16} className="text-green-400" aria-hidden="true" />
                 </div>
                 <div>
                   <p className="text-[var(--text-primary)] font-semibold group-hover:text-green-400 transition-colors">{tOr(t, `reports.reportTypes.${rt.key}.label`, rt.id)}</p>
-                  <p className="text-gray-400 text-sm mt-0.5">{tOr(t, `reports.reportTypes.${rt.key}.desc`, rt.desc)}</p>
-                  <p className="text-gray-600 text-xs mt-1">{t('reports.source', { table: rt.table })}</p>
+                  <p className="text-[var(--text-muted)] text-sm mt-0.5">{tOr(t, `reports.reportTypes.${rt.key}.desc`, rt.desc)}</p>
+                  <p className="text-[var(--text-dim)] text-xs mt-1">{t('reports.source', { table: rt.table })}</p>
                 </div>
               </div>
             </button>
@@ -509,7 +479,7 @@ export default function Reports() {
               <span className="text-green-400 font-medium">{t('reports.config.savedRestored')}</span>
               <button
                 onClick={clearSavedConfig}
-                className="ml-auto text-xs text-gray-400 hover:text-white underline underline-offset-2 transition-colors"
+                className="ml-auto text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] underline underline-offset-2 transition-colors"
               >
                 {t('reports.config.clearSaved')}
               </button>
@@ -523,16 +493,18 @@ export default function Reports() {
 
             {/* Date shortcut chips */}
             <div>
-              <label className="label">{t('reports.config.dateRange')}</label>
+              <p className="label">{t('reports.config.dateRange')}</p>
               <div className="flex gap-2 flex-wrap mb-2">
                 {['This Month', 'Last 3 Months', 'This Year', 'Custom'].map(lbl => (
                   <button
                     key={lbl}
+                    type="button"
+                    aria-pressed={dateShortcut === lbl}
                     onClick={() => lbl !== 'Custom' ? applyShortcut(lbl, setDateFrom, setDateTo, setDateShortcut) : setDateShortcut('Custom')}
-                    className={`px-3 py-1 rounded text-xs font-medium border transition-colors ${
+                    className={`min-h-[44px] px-3 py-1 rounded text-xs font-medium border transition-colors ${
                       dateShortcut === lbl
                         ? 'border-green-600 text-green-400'
-                        : 'border-gray-700 text-gray-500 hover:border-gray-500 hover:text-gray-300'
+                        : 'border-[var(--input-border)] text-[var(--text-muted)] hover:border-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                     }`}
                     style={dateShortcut === lbl ? { backgroundColor: 'rgba(22,163,74,0.08)' } : {}}
                   >
@@ -542,7 +514,7 @@ export default function Reports() {
               </div>
               <div className="flex items-center gap-2 flex-wrap">
                 <DateField className="text-sm w-40" value={dateFrom} onChange={v => { setDateFrom(v); setDateShortcut('Custom') }} placeholder="From date" ariaLabel="From date" />
-                <span className="text-gray-600">{t('reports.config.to')}</span>
+                <span className="text-[var(--text-dim)]">{t('reports.config.to')}</span>
                 <DateField className="text-sm w-40" value={dateTo} onChange={v => { setDateTo(v); setDateShortcut('Custom') }} placeholder="To date" ariaLabel="To date" min={dateFrom || undefined} />
               </div>
             </div>
@@ -550,9 +522,9 @@ export default function Reports() {
             {/* Common filters */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="label">{t('reports.config.site')}</label>
+                <label className="label" htmlFor="rp-site">{t('reports.config.site')}</label>
                 <input
-                  list="site-list"
+                  id="rp-site" list="site-list"
                   className="input w-full"
                   placeholder={t('reports.config.siteFilterPlaceholder')}
                   value={filterSite}
@@ -563,8 +535,8 @@ export default function Reports() {
                 </datalist>
               </div>
               <div>
-                <label className="label">{t('reports.config.country')}</label>
-                <select className="input w-full" value={filterCountry} onChange={e => setFilterCountry(e.target.value)}>
+                <label className="label" htmlFor="rp-country">{t('reports.config.country')}</label>
+                <select id="rp-country" className="input w-full" value={filterCountry} onChange={e => setFilterCountry(e.target.value)}>
                   <option value="">{t('reports.config.allCountries')}</option>
                   {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
@@ -574,15 +546,15 @@ export default function Reports() {
             {/* Type-specific filters */}
             {reportType === 'Vehicle History' && (
               <div>
-                <label className="label">{t('reports.config.assetNumber')}</label>
-                <input className="input w-full" placeholder={t('reports.config.assetNoPlaceholder')} value={filterAsset} onChange={e => setFilterAsset(e.target.value)} />
+                <label className="label" htmlFor="rp-asset">{t('reports.config.assetNumber')}</label>
+                <input id="rp-asset" className="input w-full" placeholder={t('reports.config.assetNoPlaceholder')} value={filterAsset} onChange={e => setFilterAsset(e.target.value)} />
               </div>
             )}
 
             {(reportType === 'Cost Analysis' || reportType === 'Tyre Replacement Log') && (
               <div>
-                <label className="label">{t('reports.config.brand')}</label>
-                <input className="input w-full" placeholder={t('reports.config.brandFilterPlaceholder')} value={filterBrand} onChange={e => setFilterBrand(e.target.value)} />
+                <label className="label" htmlFor="rp-brand">{t('reports.config.brand')}</label>
+                <input id="rp-brand" className="input w-full" placeholder={t('reports.config.brandFilterPlaceholder')} value={filterBrand} onChange={e => setFilterBrand(e.target.value)} />
               </div>
             )}
 
@@ -598,7 +570,7 @@ export default function Reports() {
                         onChange={() => toggleRiskLevel(level)}
                         className="rounded"
                       />
-                      <span className="text-sm text-gray-300">{level}</span>
+                      <span className="text-sm text-[var(--text-secondary)]">{level}</span>
                     </label>
                   ))}
                 </div>
@@ -607,8 +579,8 @@ export default function Reports() {
 
             {reportType === 'Inspection Report' && (
               <div>
-                <label className="label">{t('reports.config.inspectionType')}</label>
-                <select className="input w-full" value={filterInspType} onChange={e => setFilterInspType(e.target.value)}>
+                <label className="label" htmlFor="rp-insp">{t('reports.config.inspectionType')}</label>
+                <select id="rp-insp" className="input w-full" value={filterInspType} onChange={e => setFilterInspType(e.target.value)}>
                   <option value="">{t('reports.config.allTypes')}</option>
                   <option value="Routine">Routine</option>
                   <option value="Safety">Safety</option>
@@ -623,16 +595,16 @@ export default function Reports() {
           <div className="card space-y-3">
             <div className="flex items-center gap-3 flex-wrap">
               <h2 className="text-base font-semibold text-[var(--text-primary)]">{t('reports.config.columnsTitle')}</h2>
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-[var(--text-muted)]">
                 {selectedCols.length} / {(REPORT_COLUMNS[reportType] ?? []).length}
               </span>
               <div className="ml-auto flex items-center gap-3 text-xs">
-                <button onClick={showAllCols} className="text-gray-400 hover:text-white underline underline-offset-2 transition-colors">All</button>
-                <button onClick={hideAllCols} className="text-gray-400 hover:text-white underline underline-offset-2 transition-colors">None</button>
-                <button onClick={resetCols} className="text-gray-400 hover:text-white underline underline-offset-2 transition-colors">Reset</button>
+                <button type="button" onClick={showAllCols} className="min-h-[44px] px-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] underline underline-offset-2 transition-colors">All</button>
+                <button type="button" onClick={hideAllCols} className="min-h-[44px] px-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] underline underline-offset-2 transition-colors">None</button>
+                <button type="button" onClick={resetCols} className="min-h-[44px] px-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] underline underline-offset-2 transition-colors">Reset</button>
               </div>
             </div>
-            <p className="text-xs text-gray-500">Your column choice is saved for this report and applied to the table, Excel and PDF.</p>
+            <p className="text-xs text-[var(--text-muted)]">Your column choice is saved for this report and applied to the table, Excel and PDF.</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {(REPORT_COLUMNS[reportType] ?? []).map(col => (
                 <label key={col} className="flex items-center gap-2 cursor-pointer">
@@ -642,7 +614,7 @@ export default function Reports() {
                     onChange={() => toggleCol(col)}
                     className="rounded"
                   />
-                  <span className="text-sm text-gray-300">{columnLabel(t, col)}</span>
+                  <span className="text-sm text-[var(--text-secondary)]">{columnLabel(t, col)}</span>
                 </label>
               ))}
             </div>
@@ -691,97 +663,45 @@ export default function Reports() {
             </button>
           </div>
 
-          {loading ? (
-            <SkeletonTable rows={8} cols={6} />
-          ) : error ? (
-            <div className="card text-center py-12 space-y-3">
-              <p className="text-red-300 text-sm">{error}</p>
-              <button onClick={runQuery} className="btn-secondary text-sm">{t('reports.config.runReport')}</button>
-            </div>
-          ) : (
-            <>
-              <div className="flex items-center gap-3 flex-wrap">
-                <span className="text-sm text-gray-400">
-                  {t('reports.preview.totalRecords', { count: allRows.length.toLocaleString() })}
-                </span>
-                {allRows.length > PAGE_SIZE && (
-                  <span className="text-xs text-gray-500">
-                    {t('reports.preview.showingRange', { from: rangeStart, to: rangeEnd, total: allRows.length.toLocaleString() })}
-                  </span>
-                )}
-              </div>
-
-              {previewRows.length === 0 ? (
-                <div className="card text-center py-12 text-gray-500">
-                  {t('reports.preview.noRecordsForFilters')}
-                </div>
-              ) : (
-                <>
-                  <div className="card overflow-x-auto">
-                    <table id="report-preview-table" className="w-full text-sm">
-                      <thead>
-                        <tr>
-                          {displayCols.map(col => (
-                            <th key={col} className="table-header text-left whitespace-nowrap">
-                              {columnLabel(t, col)}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {previewRows.map((row, i) => (
-                          <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-800/20">
-                            {displayCols.map(col => (
-                              <td key={col} className="table-cell whitespace-nowrap max-w-48 truncate">
-                                {col === 'risk_level' && row[col] ? (
-                                  <span className={`badge text-xs ${
-                                    row[col] === 'Critical' ? 'bg-red-900/50 text-red-300' :
-                                    row[col] === 'High' ? 'bg-orange-900/50 text-orange-300' :
-                                    row[col] === 'Medium' ? 'bg-yellow-900/50 text-yellow-300' :
-                                    'bg-green-900/50 text-green-300'
-                                  }`}>{row[col]}</span>
-                                ) : (
-                                  row[col] ?? '-'
-                                )}
-                              </td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            {[
+              { label: 'Source records', value: loading || error ? 'N/A' : summary.records.toLocaleString(), hint: loading || error ? null : `${summary.rows.toLocaleString()} report lines`, icon: Layers },
+              { label: 'Total cost', value: loading || error || !summary.hasCost ? 'N/A' : money(summary.totalCost), hint: summary.hasCost && !loading && !error ? `${summary.pricedRows.toLocaleString()} of ${summary.rows.toLocaleString()} lines priced` : 'Not a cost report', icon: DollarSign },
+              { label: 'Assets', value: loading || error ? 'N/A' : summary.assets.toLocaleString(), icon: Truck },
+              { label: 'Sites', value: loading || error ? 'N/A' : summary.sites.toLocaleString(), icon: MapPin },
+              { label: 'High or critical risk', value: loading || error ? 'N/A' : summary.highRisk.toLocaleString(), icon: AlertTriangle },
+            ].map(k => {
+              const Icon = k.icon
+              return (
+                <div key={k.label} className="card">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
+                    <Icon size={15} className="text-[var(--text-muted)]" aria-hidden="true" />
                   </div>
+                  <p className="text-xl sm:text-2xl font-bold mt-1 tabular-nums text-[var(--text-primary)]">{k.value}</p>
+                  {k.hint && <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{k.hint}</p>}
+                </div>
+              )
+            })}
+          </div>
 
-                  {/* Pagination controls */}
-                  {totalPages > 1 && (
-                    <div className="flex items-center justify-between flex-wrap gap-3">
-                      <span className="text-xs text-gray-500">
-                        {t('reports.preview.showingRange', { from: rangeStart, to: rangeEnd, total: allRows.length.toLocaleString() })}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setPreviewPage(p => Math.max(1, p - 1))}
-                          disabled={previewPage === 1}
-                          className="btn-secondary text-xs px-3 py-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          {t('reports.preview.prev')}
-                        </button>
-                        <span className="text-sm text-gray-400 px-1">
-                          {t('reports.preview.pageOf', { page: previewPage, total: totalPages })}
-                        </span>
-                        <button
-                          onClick={() => setPreviewPage(p => Math.min(totalPages, p + 1))}
-                          disabled={previewPage === totalPages}
-                          className="btn-secondary text-xs px-3 py-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          {t('reports.preview.next')}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-            </>
-          )}
+          <p className="text-sm text-[var(--text-muted)]" aria-live="polite">
+            {loading || error ? null : t('reports.preview.totalRecords', { count: allRows.length.toLocaleString() })}
+          </p>
+
+          <EnterpriseTable
+            columns={previewColumns}
+            data={allRows}
+            getRowId={(r, i) => String(r.id ?? `${reportType}-${i}`)}
+            loading={loading}
+            error={error}
+            onRetry={runQuery}
+            searchPlaceholder="Search this report"
+            initialPageSize={100}
+            pageSizeOptions={[25, 50, 100, 250]}
+            exportFileName={reportFileName('TyrePulse', reportType)}
+            emptyMessage={t('reports.preview.noRecordsForFilters')}
+          />
         </div>
       )}
 
@@ -792,17 +712,17 @@ export default function Reports() {
         pdfColumns={displayCols.map(c => COLUMN_LABELS[c] ?? c)}
         pdfRows={allRows.slice(0, EMAIL_PDF_ROW_CAP).map(row => displayCols.map(c => row[c] ?? ''))}
         kpiSummary={{
-          'Report Type':    reportType || '-',
+          'Report Type':    reportType || 'N/A',
           'Total Records':  allRows.length.toLocaleString(),
           'Rows In Attached PDF': emailPdfCapped
             ? `${emailPdfRowCount.toLocaleString()} of ${allRows.length.toLocaleString()}, narrow the filters to include the rest`
             : emailPdfRowCount.toLocaleString(),
-          'Date From':      dateFrom || '-',
-          'Date To':        dateTo || '-',
+          'Date From':      dateFrom || 'N/A',
+          'Date To':        dateTo || 'N/A',
           'Site Filter':    filterSite || 'All',
           'Country Filter': filterCountry || 'All',
         }}
-        period={dateShortcut || (dateFrom && dateTo ? `${dateFrom} - ${dateTo}` : 'All Time')}
+        period={dateShortcut || (dateFrom && dateTo ? `${dateFrom} to ${dateTo}` : 'All Time')}
       />
     </div>
   )

@@ -12,8 +12,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   ClipboardList, ShoppingCart, DollarSign, Clock, CheckCircle2, Plus, Pencil,
-  Trash2, Search, X, Filter, Save, Loader2, AlertTriangle, FileSpreadsheet,
-  FileText,
+  Trash2, Search, X, Save, Loader2, AlertTriangle, FileSpreadsheet,
+  FileText, CalendarX, CalendarClock, Users,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
@@ -22,10 +22,13 @@ import {
   listRequisitions, createRequisition, updateRequisition, deleteRequisition,
   REQUISITION_STATUSES, REQUISITION_CATEGORIES,
 } from '../lib/api/requisitions'
-import { summarizeRequisitions } from '../lib/requisitions'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import {
+  summarizeRequisitionRegister, filterRequisitions, lineValue, dueBand, DUE_BANDS,
+} from '../lib/requisitionsAnalytics'
+import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
-import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { probeRelation } from '../lib/api/_client'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 
 const STATUS_META = {
   draft: { label: 'Draft', cls: 'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]' },
@@ -40,11 +43,15 @@ const EMPTY_FORM = {
   est_cost: '', needed_by: '', site: '', status: 'draft', notes: '',
 }
 
-function isMissingRelation(err) {
-  const code = String(err?.code || '')
-  if (code === '42P01' || code === 'PGRST205') return true
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('could not find the table') || m.includes('schema cache')
+// listRequisitions reads at most this many rows; the page says so when it bites.
+const READ_CAP = 500
+
+const DUE_META = {
+  overdue: { label: 'Overdue', cls: 'bg-red-900/40 text-red-300 border border-red-700/50' },
+  due_soon: { label: 'Due soon', cls: 'bg-amber-900/40 text-amber-300 border border-amber-700/50' },
+  later: { label: 'Later', cls: 'bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--input-border)]' },
+  none: { label: 'No date', cls: 'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]' },
+  closed: { label: 'Closed', cls: 'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]' },
 }
 function fmtDate(v) {
   if (!v) return 'N/A'
@@ -111,31 +118,31 @@ function RequisitionModal({ open, initial, onClose, onSaved }) {
             <ClipboardList size={18} className="text-[var(--brand-bright)]" />
             {initial?.id ? 'Edit requisition' : 'New requisition'}
           </h2>
-          <button type="button" onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+          <button type="button" onClick={onClose} aria-label="Close" className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--brand-bright)]">
             <X size={18} />
           </button>
         </div>
 
         <div>
-          <label className="label">Item *</label>
+          <label className="label" htmlFor="req-item">Item *</label>
           <input
-            className="input w-full" placeholder="e.g. 315/80R22.5 drive tyres" maxLength={300}
+            id="req-item" className="input w-full" placeholder="e.g. 315/80R22.5 drive tyres" maxLength={300}
             value={form.item} onChange={(e) => set('item', e.target.value)}
           />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="label">Requisition no.</label>
+            <label className="label" htmlFor="req-no">Requisition no.</label>
             <input
-              className="input w-full" placeholder="e.g. REQ-2026-001" maxLength={120}
+              id="req-no" className="input w-full" placeholder="e.g. REQ-2026-001" maxLength={120}
               value={form.requisition_no} onChange={(e) => set('requisition_no', e.target.value)}
             />
           </div>
           <div>
-            <label className="label">Requester</label>
+            <label className="label" htmlFor="req-requester">Requester</label>
             <input
-              className="input w-full" placeholder="e.g. Workshop Supervisor" maxLength={200}
+              id="req-requester" className="input w-full" placeholder="e.g. Workshop Supervisor" maxLength={200}
               value={form.requester} onChange={(e) => set('requester', e.target.value)}
             />
           </div>
@@ -143,14 +150,14 @@ function RequisitionModal({ open, initial, onClose, onSaved }) {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="label">Category</label>
-            <select className="input w-full" value={form.category} onChange={(e) => set('category', e.target.value)}>
+            <label className="label" htmlFor="req-category">Category</label>
+            <select id="req-category" className="input w-full" value={form.category} onChange={(e) => set('category', e.target.value)}>
               {REQUISITION_CATEGORIES.map((c) => <option key={c} value={c}>{cap(c)}</option>)}
             </select>
           </div>
           <div>
-            <label className="label">Status</label>
-            <select className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
+            <label className="label" htmlFor="req-status">Status</label>
+            <select id="req-status" className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
               {REQUISITION_STATUSES.map((s) => <option key={s} value={s}>{STATUS_META[s]?.label || s}</option>)}
             </select>
           </div>
@@ -158,16 +165,16 @@ function RequisitionModal({ open, initial, onClose, onSaved }) {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="label">Quantity</label>
+            <label className="label" htmlFor="req-qty">Quantity</label>
             <input
-              className="input w-full" type="number" min="0" step="1" placeholder="0"
+              id="req-qty" className="input w-full" type="number" min="0" step="1" placeholder="0"
               value={form.quantity} onChange={(e) => set('quantity', e.target.value)}
             />
           </div>
           <div>
-            <label className="label">Est. unit cost</label>
+            <label className="label" htmlFor="req-unit">Est. unit cost</label>
             <input
-              className="input w-full" type="number" min="0" step="0.01" placeholder="0.00"
+              id="req-unit" className="input w-full" type="number" min="0" step="0.01" placeholder="0.00"
               value={form.est_cost} onChange={(e) => set('est_cost', e.target.value)}
             />
           </div>
@@ -175,16 +182,16 @@ function RequisitionModal({ open, initial, onClose, onSaved }) {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="label">Needed by</label>
+            <label className="label" htmlFor="req-needed">Needed by</label>
             <input
-              className="input w-full" type="date"
+              id="req-needed" className="input w-full" type="date"
               value={form.needed_by || ''} onChange={(e) => set('needed_by', e.target.value)}
             />
           </div>
           <div>
-            <label className="label">Site</label>
+            <label className="label" htmlFor="req-site">Site</label>
             <input
-              className="input w-full" placeholder="e.g. Riyadh Depot" maxLength={200}
+              id="req-site" className="input w-full" placeholder="e.g. Riyadh Depot" maxLength={200}
               value={form.site} onChange={(e) => set('site', e.target.value)}
             />
           </div>
@@ -192,15 +199,15 @@ function RequisitionModal({ open, initial, onClose, onSaved }) {
 
         {estTotal > 0 && (
           <p className="text-xs text-[var(--text-muted)] -mt-1">
-            Estimated total: <span className="font-semibold text-[var(--text-secondary)]">{estTotal.toLocaleString()}</span> (qty × est. unit cost)
+            Estimated total: <span className="font-semibold text-[var(--text-secondary)]">{estTotal.toLocaleString()}</span> (qty x est. unit cost)
           </p>
         )}
 
         <div>
-          <label className="label">Notes</label>
+          <label className="label" htmlFor="req-notes">Notes</label>
           <textarea
-            className="input w-full min-h-[90px] resize-y" maxLength={8000}
-            placeholder="Optional justification or notes for this request…"
+            id="req-notes" className="input w-full min-h-[90px] resize-y" maxLength={8000}
+            placeholder="Optional justification or notes for this request"
             value={form.notes} onChange={(e) => set('notes', e.target.value)}
           />
         </div>
@@ -215,7 +222,7 @@ function RequisitionModal({ open, initial, onClose, onSaved }) {
           <button type="button" onClick={onClose} className="btn-secondary text-sm">Cancel</button>
           <button type="submit" disabled={busy} className="btn-primary text-sm inline-flex items-center gap-2 disabled:opacity-60">
             {busy ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-            {busy ? 'Saving…' : 'Save requisition'}
+            {busy ? 'Saving' : 'Save requisition'}
           </button>
         </div>
       </form>
@@ -257,6 +264,30 @@ function DeleteDialog({ row, onCancel, onConfirm }) {
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
+function Kpi({ label, value, hint, icon: Icon, tone, onClick, active }) {
+  const body = (
+    <>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-[var(--text-muted)]">{label}</p>
+        <Icon size={16} className={tone} aria-hidden="true" />
+      </div>
+      <p className={`text-2xl sm:text-3xl font-bold mt-1 tabular-nums ${tone}`}>{value}</p>
+      {hint && <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{hint}</p>}
+    </>
+  )
+  if (!onClick) return <div className="card">{body}</div>
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={!!active}
+      className={`card text-left min-h-[44px] focus-visible:ring-2 focus-visible:ring-[var(--brand-bright)] ${active ? 'ring-2 ring-[var(--brand-bright)]' : ''}`}
+    >
+      {body}
+    </button>
+  )
+}
+
 export default function Requisitions() {
   const { activeCountry, activeCurrency } = useSettings()
   const [rows, setRows] = useState(null)
@@ -267,6 +298,8 @@ export default function Requisitions() {
 
   const [statusFilter, setStatusFilter] = useState('all')
   const [categoryFilter, setCategoryFilter] = useState('all')
+  const [siteFilter, setSiteFilter] = useState('all')
+  const [dueFilter, setDueFilter] = useState('all')
   const [search, setSearch] = useState('')
 
   const [modalOpen, setModalOpen] = useState(false)
@@ -276,12 +309,19 @@ export default function Requisitions() {
   const load = useCallback(async () => {
     setRefreshing(true); setError(''); setMissing(false)
     try {
-      const data = await listRequisitions({ country: activeCountry })
-      setRows(Array.isArray(data) ? data : [])
+      const data = await listRequisitions({ country: activeCountry, limit: READ_CAP })
+      const list = Array.isArray(data) ? data : []
+      setRows(list)
       setUpdatedAt(new Date())
+      // The service turns a missing table into []; only a definite missing
+      // relation raises the banner, never a permission or network failure.
+      if (list.length === 0) {
+        const probe = await probeRelation('requisitions')
+        if (probe.checked && !probe.exists) setMissing(true)
+      }
     } catch (err) {
-      if (isMissingRelation(err)) { setMissing(true); setRows([]) }
-      else { setError(toUserMessage(err, 'Could not load requisitions.')); setRows([]) }
+      setError(toUserMessage(err, 'Could not load requisitions.'))
+      setRows(null)
     } finally {
       setRefreshing(false)
     }
@@ -289,80 +329,131 @@ export default function Requisitions() {
 
   useEffect(() => { load() }, [load])
 
-  const summary = useMemo(() => summarizeRequisitions(rows || []), [rows])
+  const now = useMemo(() => Date.now(), [rows]) // eslint-disable-line react-hooks/exhaustive-deps
+  const summary = useMemo(() => summarizeRequisitionRegister(rows || [], now), [rows, now])
 
   const categoryOptions = useMemo(
     () => [...new Set((rows || []).map((r) => r.category).filter(Boolean))].sort(),
     [rows],
   )
+  const siteOptions = useMemo(
+    () => [...new Set((rows || []).map((r) => r.site).filter(Boolean))].sort(),
+    [rows],
+  )
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return (rows || []).filter((r) => {
-      if (statusFilter !== 'all' && r.status !== statusFilter) return false
-      if (categoryFilter !== 'all' && r.category !== categoryFilter) return false
-      if (q) {
-        const hay = `${r.item || ''} ${r.requisition_no || ''} ${r.requester || ''} ${r.site || ''} ${r.notes || ''}`.toLowerCase()
-        if (!hay.includes(q)) return false
-      }
-      return true
-    })
-  }, [rows, statusFilter, categoryFilter, search])
+  const filtered = useMemo(() => filterRequisitions(rows || [], {
+    status: statusFilter, category: categoryFilter, site: siteFilter, due: dueFilter, search,
+  }, now), [rows, statusFilter, categoryFilter, siteFilter, dueFilter, search, now])
 
-  // Paged, not capped - this register used to stop at 500 rows.
-  // The exports below still walk `filtered` in full.
-  const pager = usePagedRows(filtered)
-
-  const fmtMoney = useCallback((v) => formatCurrencyCompact(v, activeCurrency), [activeCurrency])
+  const fmtMoney = useCallback((v) => (v == null ? 'N/A' : formatCurrencyCompact(v, activeCurrency)), [activeCurrency])
+  const loaded = rows !== null
+  const show = (v) => (loaded ? v : 'N/A')
 
   const kpis = [
-    { label: 'Total requisitions', value: summary.total, icon: ShoppingCart, tone: 'text-[var(--text-primary)]' },
-    { label: 'Pending approval', value: summary.pending, icon: Clock, tone: 'text-amber-400' },
-    { label: 'Approved', value: summary.approved, icon: CheckCircle2, tone: 'text-sky-400' },
-    { label: 'Total est. cost', value: fmtMoney(summary.totalEstCost), icon: DollarSign, tone: 'text-[var(--brand-bright)]' },
+    { label: 'Total requisitions', value: show(summary.total), icon: ShoppingCart, tone: 'text-[var(--text-primary)]', hint: loaded ? `${summary.requesters} requester${summary.requesters === 1 ? '' : 's'}` : null },
+    { label: 'Pending approval', value: show(summary.pending), icon: Clock, tone: 'text-amber-400', hint: loaded ? `${summary.byStatus.draft} draft, ${summary.byStatus.submitted} submitted` : null },
+    { label: 'Approved', value: show(summary.approved), icon: CheckCircle2, tone: 'text-sky-400', hint: loaded && summary.approvalRate != null ? `${summary.approvalRate}% of decided` : 'No decisions yet', onClick: () => setStatusFilter(statusFilter === 'approved' ? 'all' : 'approved'), active: statusFilter === 'approved' },
+    { label: 'Overdue', value: show(summary.overdue), icon: CalendarX, tone: 'text-red-400', hint: 'Open past needed-by', onClick: () => setDueFilter(dueFilter === 'overdue' ? 'all' : 'overdue'), active: dueFilter === 'overdue' },
+    { label: 'Due in 14 days', value: show(summary.dueSoon), icon: CalendarClock, tone: 'text-amber-300', onClick: () => setDueFilter(dueFilter === 'due_soon' ? 'all' : 'due_soon'), active: dueFilter === 'due_soon' },
+    { label: 'Est. value (qty x unit)', value: loaded ? fmtMoney(summary.totalValue) : 'N/A', icon: DollarSign, tone: 'text-[var(--brand-bright)]', hint: loaded ? `${summary.valued} of ${summary.total} priced` : null },
+    { label: 'Open est. value', value: loaded ? fmtMoney(summary.openValue) : 'N/A', icon: DollarSign, tone: 'text-[var(--text-primary)]', hint: 'Excludes ordered and rejected' },
+    { label: 'Requesters', value: show(summary.requesters), icon: Users, tone: 'text-[var(--text-primary)]' },
   ]
 
-  const EXPORT_COLS = ['requisition_no', 'item', 'category', 'requester', 'quantity', 'est_cost', 'needed_by', 'site', 'status']
-  const EXPORT_HEADERS = ['Req. no.', 'Item', 'Category', 'Requester', 'Qty', 'Est. cost', 'Needed by', 'Site', 'Status']
-  const exportRows = filtered.map((r) => ({
-    requisition_no: r.requisition_no || '', item: r.item || '', category: cap(r.category) || '',
-    requester: r.requester || '', quantity: r.quantity ?? '', est_cost: r.est_cost ?? '',
-    needed_by: r.needed_by || '', site: r.site || '',
-    status: STATUS_META[r.status]?.label || r.status || '',
-  }))
+  const EXPORT_COLS = ['requisition_no', 'item', 'category', 'requester', 'quantity', 'est_cost', 'line_value', 'needed_by', 'due', 'site', 'status']
+  const EXPORT_HEADERS = ['Req. no.', 'Item', 'Category', 'Requester', 'Qty', 'Est. unit cost', 'Est. value', 'Needed by', 'Due', 'Site', 'Status']
+  const exportRows = filtered.map((r) => {
+    const v = lineValue(r)
+    return {
+      requisition_no: r.requisition_no || '', item: r.item || '', category: cap(r.category) || '',
+      requester: r.requester || '', quantity: r.quantity ?? 'N/A', est_cost: r.est_cost ?? 'N/A',
+      line_value: v == null ? 'N/A' : v,
+      needed_by: r.needed_by || 'N/A', due: DUE_META[dueBand(r, now)]?.label || '', site: r.site || '',
+      status: STATUS_META[r.status]?.label || r.status || '',
+    }
+  })
+  const fileName = reportFileName('Requisitions', activeCountry && activeCountry !== 'All' ? activeCountry : '')
 
-  const clearFilters = () => { setStatusFilter('all'); setCategoryFilter('all'); setSearch('') }
-  const hasFilters = statusFilter !== 'all' || categoryFilter !== 'all' || search
+  const clearFilters = () => { setStatusFilter('all'); setCategoryFilter('all'); setSiteFilter('all'); setDueFilter('all'); setSearch('') }
+  const hasFilters = statusFilter !== 'all' || categoryFilter !== 'all' || siteFilter !== 'all' || dueFilter !== 'all' || search
 
   const openCreate = () => { setEditing(null); setModalOpen(true) }
-  const openEdit = (row) => { setEditing(row); setModalOpen(true) }
+  const openEdit = useCallback((row) => { setEditing(row); setModalOpen(true) }, [])
   const onSaved = () => { setModalOpen(false); setEditing(null); load() }
   const confirmDelete = async () => { await deleteRequisition(deleting.id); setDeleting(null); load() }
+
+  const columns = useMemo(() => [
+    {
+      id: 'item', header: 'Item', accessorFn: (r) => r.item || '',
+      cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original.item || 'N/A'}</span>,
+    },
+    { id: 'requisition_no', header: 'Req. no.', accessorFn: (r) => r.requisition_no || '', cell: ({ getValue }) => <span className="font-mono text-xs">{getValue() || 'N/A'}</span> },
+    { id: 'category', header: 'Category', accessorFn: (r) => cap(r.category) || '', cell: ({ getValue }) => getValue() || 'N/A' },
+    { id: 'requester', header: 'Requester', accessorFn: (r) => r.requester || '', cell: ({ getValue }) => getValue() || 'N/A' },
+    { id: 'site', header: 'Site', accessorFn: (r) => r.site || '', cell: ({ getValue }) => getValue() || 'N/A' },
+    { id: 'quantity', header: 'Qty', accessorFn: (r) => (r.quantity == null || r.quantity === '' ? null : Number(r.quantity)), meta: { align: 'right' }, cell: ({ getValue }) => (getValue() == null ? 'N/A' : getValue()) },
+    { id: 'est_cost', header: 'Unit cost', accessorFn: (r) => (r.est_cost == null || r.est_cost === '' ? null : Number(r.est_cost)), meta: { align: 'right' }, cell: ({ getValue }) => fmtMoney(getValue()) },
+    { id: 'line_value', header: 'Est. value', accessorFn: (r) => lineValue(r), meta: { align: 'right' }, cell: ({ getValue }) => <span className="font-medium">{fmtMoney(getValue())}</span> },
+    {
+      id: 'needed_by', header: 'Needed by', accessorFn: (r) => r.needed_by || '',
+      cell: ({ row }) => {
+        const band = dueBand(row.original, now)
+        const d = DUE_META[band]
+        return (
+          <span className="inline-flex items-center gap-2 whitespace-nowrap">
+            <span>{fmtDate(row.original.needed_by)}</span>
+            {(band === 'overdue' || band === 'due_soon') && <span className={`text-[11px] px-1.5 py-0.5 rounded ${d.cls}`}>{d.label}</span>}
+          </span>
+        )
+      },
+    },
+    {
+      id: 'status', header: 'Status', accessorFn: (r) => STATUS_META[r.status]?.label || r.status || '',
+      meta: { filterVariant: 'select' },
+      cell: ({ row }) => {
+        const st = STATUS_META[row.original.status] || STATUS_META.draft
+        return <span className={`badge text-[11px] px-2 py-0.5 rounded ${st.cls}`}>{st.label}</span>
+      },
+    },
+    {
+      id: 'actions', header: '', enableSorting: false, enableHiding: false, meta: { export: false },
+      cell: ({ row }) => (
+        <div className="flex items-center justify-end gap-1">
+          <button type="button" onClick={(e) => { e.stopPropagation(); openEdit(row.original) }} aria-label={`Edit ${row.original.item || 'requisition'}`} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--brand-bright)]"><Pencil size={15} /></button>
+          <button type="button" onClick={(e) => { e.stopPropagation(); setDeleting(row.original) }} aria-label={`Delete ${row.original.item || 'requisition'}`} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400 focus-visible:ring-2 focus-visible:ring-red-400"><Trash2 size={15} /></button>
+        </div>
+      ),
+    },
+  ], [fmtMoney, now, openEdit])
+
+  const capped = loaded && rows.length >= READ_CAP
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Requisitions"
-        subtitle="Raise and track internal purchase requests before they become POs, with approval status and export."
+        subtitle="Raise and track internal purchase requests before they become POs, with approval status, due dates and export."
         icon={ClipboardList}
         onRefresh={load}
         refreshing={refreshing}
         updatedAt={updatedAt}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
-              onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'requisitions', 'Requisitions', { currency: activeCurrency })}
-              className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}
+              type="button"
+              onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, fileName, 'Requisitions', { currency: activeCurrency })}
+              className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!filtered.length}
             >
               <FileSpreadsheet size={14} /> Excel
             </button>
             <button
-              onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Purchase Requisitions', 'requisitions', 'landscape', '', { currency: activeCurrency })}
-              className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}
+              type="button"
+              onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Purchase Requisitions', fileName, 'landscape', '', { currency: activeCurrency })}
+              className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!filtered.length}
             >
               <FileText size={14} /> PDF
             </button>
-            <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5">
+            <button type="button" onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px]">
               <Plus size={15} /> New requisition
             </button>
           </div>
@@ -370,10 +461,10 @@ export default function Requisitions() {
       />
 
       {missing && (
-        <div className="card border border-amber-800/50 flex items-start gap-3">
-          <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
+        <div className="card border border-amber-800/50 flex items-start gap-3" role="status">
+          <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" aria-hidden="true" />
           <div>
-            <p className="text-amber-300 font-medium">Requisitions aren’t enabled on this database yet.</p>
+            <p className="text-amber-300 font-medium">Requisitions are not enabled on this database yet.</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">
               Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V156_REQUISITIONS.sql</span>, then reload.
             </p>
@@ -381,101 +472,85 @@ export default function Requisitions() {
         </div>
       )}
 
-      {error && !missing && (
-        <div className="card border border-red-800/50 flex items-start gap-3">
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-          <div><p className="text-red-300 font-medium">Couldn’t load requisitions.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
+      {capped && (
+        <p className="text-xs text-amber-300" role="status">
+          Showing the {READ_CAP} requisitions needed soonest. Older or later requests are not loaded, so the figures below cover these {READ_CAP} only.
+        </p>
+      )}
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {kpis.map((k) => <Kpi key={k.label} {...k} />)}
+      </div>
+
+      {loaded && summary.byCategory.length > 0 && (
+        <div className="card">
+          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Estimated value by category</h2>
+          <ul className="space-y-2">
+            {summary.byCategory.slice(0, 8).map((c) => {
+              const max = summary.byCategory[0]?.value || 0
+              const pct = c.value != null && max > 0 ? Math.max(2, Math.round((c.value / max) * 100)) : 0
+              return (
+                <li key={c.key}>
+                  <button
+                    type="button"
+                    onClick={() => setCategoryFilter(categoryFilter === c.key ? 'all' : c.key)}
+                    aria-pressed={categoryFilter === c.key}
+                    className="w-full text-left min-h-[44px] rounded-lg px-2 py-1 hover:bg-[var(--input-bg)] focus-visible:ring-2 focus-visible:ring-[var(--brand-bright)]"
+                  >
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-[var(--text-secondary)]">{cap(c.key)} <span className="text-[var(--text-muted)]">({c.count})</span></span>
+                      <span className="tabular-nums text-[var(--text-primary)]">{fmtMoney(c.value)}</span>
+                    </div>
+                    <div className="h-1.5 mt-1 rounded bg-[var(--input-bg)] overflow-hidden" aria-hidden="true">
+                      <div className="h-full rounded bg-[var(--brand-bright)]" style={{ width: `${pct}%` }} />
+                    </div>
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
         </div>
       )}
 
-      {/* KPI tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {kpis.map((k) => {
-          const Icon = k.icon
-          return (
-            <div key={k.label} className="card">
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
-                <Icon size={16} className={k.tone} />
-              </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
-            </div>
-          )
-        })}
-      </div>
-
-      {/* Filters */}
       <div className="card space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <input className="input pl-9 w-full" placeholder="Search item, req. no., requester, site…" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+            <input className="input pl-9 w-full min-h-[44px]" placeholder="Search item, req. no., requester, site" aria-label="Search requisitions" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
+          <select className="input min-h-[44px]" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
             <option value="all">All statuses</option>
             {REQUISITION_STATUSES.map((s) => <option key={s} value={s}>{STATUS_META[s]?.label || s}</option>)}
           </select>
-          <select className="input" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} aria-label="Category">
+          <select className="input min-h-[44px]" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} aria-label="Category">
             <option value="all">All categories</option>
             {categoryOptions.map((c) => <option key={c} value={c}>{cap(c)}</option>)}
           </select>
-          {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
-          <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {summary.total}</span>
+          <select className="input min-h-[44px]" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} aria-label="Site">
+            <option value="all">All sites</option>
+            {siteOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select className="input min-h-[44px]" value={dueFilter} onChange={(e) => setDueFilter(e.target.value)} aria-label="Needed-by">
+            <option value="all">Any needed-by</option>
+            {DUE_BANDS.map((b) => <option key={b.key} value={b.key}>{b.label}</option>)}
+          </select>
+          {hasFilters && <button type="button" onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><X size={14} /> Clear</button>}
+          <span className="text-xs text-[var(--text-muted)] ml-auto" aria-live="polite">{filtered.length} of {summary.total}</span>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="card overflow-hidden !p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                {['Item', 'Req. no.', 'Category', 'Qty', 'Est. cost', 'Needed by', 'Status', ''].map((h, i) => (
-                  <th key={i} className="px-4 py-3 font-semibold whitespace-nowrap">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows === null ? (
-                [0, 1, 2, 3, 4].map((i) => (
-                  <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={8} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>
-                ))
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]">
-                    <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                    {summary.total === 0 ? 'No requisitions yet. Raise the first one.' : 'No requisitions match these filters.'}
-                  </td>
-                </tr>
-              ) : (
-                pager.pageRows.map((r) => {
-                  const st = STATUS_META[r.status] || STATUS_META.draft
-                  return (
-                    <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                      <td className="px-4 py-2.5 text-[var(--text-primary)] font-medium">
-                        <span className="inline-flex items-center gap-2"><ClipboardList size={13} className="text-[var(--text-muted)]" />{r.item || 'N/A'}</span>
-                      </td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] font-mono text-xs">{r.requisition_no || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{cap(r.category) || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.quantity == null || r.quantity === '' ? 'N/A' : r.quantity}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] font-medium">{r.est_cost == null || r.est_cost === '' ? 'N/A' : fmtMoney(r.est_cost)}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtDate(r.needed_by)}</td>
-                      <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${st.cls}`}>{st.label}</span></td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center justify-end gap-1">
-                          <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" title="Edit"><Pencil size={14} /></button>
-                          <button onClick={() => setDeleting(r)} className="p-1.5 rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" title="Delete"><Trash2 size={14} /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-        <TablePagination {...pager} />
-      </div>
+      <EnterpriseTable
+        columns={columns}
+        data={filtered}
+        getRowId={(r) => String(r.id)}
+        loading={rows === null && !error}
+        error={error || null}
+        onRetry={load}
+        enableGlobalFilter={false}
+        exportFileName={fileName}
+        emptyMessage={summary.total === 0 ? 'No requisitions yet. Raise the first one.' : 'No requisitions match these filters.'}
+        onRowClick={(r) => openEdit(r)}
+      />
 
       <RequisitionModal open={modalOpen} initial={editing} onClose={() => { setModalOpen(false); setEditing(null) }} onSaved={onSaved} />
       <DeleteDialog row={deleting} onCancel={() => setDeleting(null)} onConfirm={confirmDelete} />

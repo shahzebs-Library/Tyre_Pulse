@@ -31,7 +31,12 @@ import { categorical, colorAt, withAlpha } from '../lib/reportColors'
 import { safeImageSrc } from '../lib/safeUrl'
 import { normalizeLayout, hasCustomLayout } from '../lib/reportShareLayout'
 import ShareBlockView from '../components/display/ShareBlockView'
-import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import { compareValues } from '../lib/consoleTable'
+import { reportFileName } from '../lib/exportUtils'
+import {
+  jobCardRows, summarizeJobCards, pmDueRows, summarizePmDue, countryCostRows, formatMoney,
+} from '../lib/reportShareAnalytics'
 
 // ── Light chart palette (pinned literals so canvases read on white paper) ──────
 const P = {
@@ -83,13 +88,18 @@ function fmtDueDate(iso) {
   return d.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-// Whole days from now until a due date. Negative = overdue.
-function daysUntil(iso) {
-  if (!iso) return null
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return null
-  const ms = d.setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0)
-  return Math.round(ms / 86400000)
+// Null-last, number/date/text aware sort shared by every board table.
+const valueSort = (a, b, id) => compareValues(a.getValue(id), b.getValue(id))
+const nullable = (v) => (v == null ? undefined : v)
+
+// Board tables: sortable, searchable and exportable (PII-free aggregate rows
+// only), no per-column filter row or column picker to keep a TV screen calm.
+const BOARD_TABLE_PROPS = {
+  enableColumnFilters: false,
+  enableColumnVisibility: false,
+  initialPageSize: 25,
+  pageSizeOptions: [25, 50],
+  stickyHeader: true,
 }
 
 const safeStr = (v) => (v == null || v === '' ? 'N/A' : String(v))
@@ -1271,12 +1281,21 @@ function CostPerUnitPage({ snapshot }) {
   const m3 = arr(c?.trend?.m3)
   const trendEmpty = !labels.length || !someNonZero(total)
   const byCountry = arr(c?.by_country)
-  const countryPager = usePagedRows(byCountry, { pageSize: 25 })
+  const countryRows = useMemo(() => countryCostRows(byCountry), [byCountry])
   // Each country reports in its own currency, so with more than one in scope
   // there is no single total to show - the server returns null rather than a
   // blended figure, and the board shows the countries side by side instead.
   const mixed = Boolean(c?.mixed_currency)
-  const money = (v, cur) => (v == null ? 'N/A' : `${cur ? cur + ' ' : ''}${Math.round(Number(v)).toLocaleString()}`)
+  const moneyCol = (id, header) => ({
+    id, header, accessorFn: (r) => nullable(r[id]), sortingFn: valueSort, sortUndefined: 'last',
+    cell: ({ row }) => formatMoney(row.original[id], row.original.currency),
+    meta: { align: 'right', exportValue: (r) => formatMoney(r[id], r.currency) },
+  })
+  const countryColumns = [
+    { id: 'country', header: 'Country', accessorFn: (r) => nullable(r.country), sortingFn: valueSort, sortUndefined: 'last', cell: ({ getValue }) => safeStr(getValue()) },
+    moneyCol('total', 'Total'), moneyCol('tyre', 'Tyres'), moneyCol('maintenance', 'Maintenance'),
+    moneyCol('sco', 'SCO'), moneyCol('sany', 'SANY'),
+  ]
   const basisNote = [
     c.basis ? `Cost from the ${c.basis}.` : '',
     c.m3_too_thin ? 'Too little production recorded to state a rate per m3.' : '',
@@ -1305,27 +1324,16 @@ function CostPerUnitPage({ snapshot }) {
             </div>
           </div>
           <div className="rs-tablewrap">
-            <table className="rs-table">
-              <thead>
-                <tr>
-                  <th>Country</th><th>Total</th><th>Tyres</th>
-                  <th>Maintenance</th><th>SCO</th><th>SANY</th>
-                </tr>
-              </thead>
-              <tbody>
-                {countryPager.pageRows.map((r) => (
-                  <tr key={r.country}>
-                    <td>{r.country}</td>
-                    <td>{money(r.total, r.currency)}</td>
-                    <td>{money(r.tyre, r.currency)}</td>
-                    <td>{money(r.maintenance, r.currency)}</td>
-                    <td>{money(r.sco, r.currency)}</td>
-                    <td>{money(r.sany, r.currency)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <TablePagination {...countryPager} />
+            <EnterpriseTable
+              {...BOARD_TABLE_PROPS}
+              columns={countryColumns}
+              data={countryRows}
+              getRowId={(r) => r.key}
+              searchPlaceholder="Search countries"
+              exportFileName={reportFileName('Operating cost by country')}
+              reportMeta={{ title: 'Operating cost by country', company: snapshot?.company }}
+              emptyMessage="No country cost recorded."
+            />
             {/* Say what the figures rest on, and where they are thin. A rate
                 withheld for a good reason must say so or it reads as broken. */}
             {basisNote && <p className="rs-table-more">{basisNote}</p>}
@@ -1643,9 +1651,17 @@ function StatTile({ label, value, icon: Icon, tone = 'indigo', accent }) {
 // ── Page: Open Job Cards + today activity ─────────────────────────────────────
 function OpsTodayPage({ snapshot }) {
   const ops = snapshot?.ops || {}
-  const jobs = arr(ops.open_job_cards)
-  const jobsPager = usePagedRows(jobs, { pageSize: 25 })
-  const rows = jobsPager.pageRows
+  const jobList = ops.open_job_cards
+  const rows = useMemo(() => jobCardRows(jobList), [jobList])
+  const jobSummary = useMemo(() => summarizeJobCards(rows), [rows])
+  const jobColumns = [
+    { id: 'wo_no', header: 'Job Card', accessorFn: (r) => nullable(r.wo_no), sortingFn: valueSort, sortUndefined: 'last', cell: ({ getValue }) => <span className="rs-td-strong">{safeStr(getValue())}</span> },
+    { id: 'asset_no', header: 'Asset', accessorFn: (r) => nullable(r.asset_no), sortingFn: valueSort, sortUndefined: 'last', cell: ({ getValue }) => safeStr(getValue()) },
+    { id: 'work_type', header: 'Work Type', accessorFn: (r) => nullable(r.work_type), sortingFn: valueSort, sortUndefined: 'last', cell: ({ getValue }) => safeStr(getValue()) },
+    { id: 'status', header: 'Status', accessorFn: (r) => nullable(r.status), sortingFn: valueSort, sortUndefined: 'last', cell: ({ getValue }) => <span className={`rs-pill ${statusTone(getValue())}`}>{safeStr(getValue())}</span> },
+    { id: 'site', header: 'Site', accessorFn: (r) => nullable(r.site), sortingFn: valueSort, sortUndefined: 'last', cell: ({ getValue }) => safeStr(getValue()) },
+    { id: 'priority', header: 'Priority', accessorFn: (r) => nullable(r.priority), sortingFn: valueSort, sortUndefined: 'last', cell: ({ getValue }) => <span className={`rs-pill ${priorityTone(getValue())}`}>{safeStr(getValue())}</span> },
+  ]
   return (
     <div className="rs-page">
       <div className="rs-stat-strip rs-stat-6">
@@ -1671,31 +1687,19 @@ function OpsTodayPage({ snapshot }) {
           </div>
         ) : (
           <div className="rs-tablewrap">
-            <table className="rs-table">
-              <thead>
-                <tr>
-                  <th>Job Card</th>
-                  <th>Asset</th>
-                  <th>Work Type</th>
-                  <th>Status</th>
-                  <th>Site</th>
-                  <th>Priority</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r, i) => (
-                  <tr key={`${r.wo_no || 'wo'}-${i}`}>
-                    <td className="rs-td-strong">{safeStr(r.wo_no)}</td>
-                    <td>{safeStr(r.asset_no)}</td>
-                    <td>{safeStr(r.work_type)}</td>
-                    <td><span className={`rs-pill ${statusTone(r.status)}`}>{safeStr(r.status)}</span></td>
-                    <td>{safeStr(r.site)}</td>
-                    <td><span className={`rs-pill ${priorityTone(r.priority)}`}>{safeStr(r.priority)}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <TablePagination {...jobsPager} />
+            <p className="rs-table-more">
+              {jobSummary.listed.toLocaleString('en-US')} job cards listed, {jobSummary.highPriority.toLocaleString('en-US')} high or critical priority.
+            </p>
+            <EnterpriseTable
+              {...BOARD_TABLE_PROPS}
+              columns={jobColumns}
+              data={rows}
+              getRowId={(r) => r.key}
+              searchPlaceholder="Search job cards, assets or sites"
+              exportFileName={reportFileName('Open job cards')}
+              reportMeta={{ title: 'Open job cards', company: snapshot?.company }}
+              emptyMessage="No open job cards."
+            />
           </div>
         )}
       </section>
@@ -1706,9 +1710,23 @@ function OpsTodayPage({ snapshot }) {
 // ── Page: Maintenance Due (preventive-maintenance plans) ──────────────────────
 function PmDuePage({ snapshot }) {
   const ops = snapshot?.ops || {}
-  const list = arr(ops.pm_due_list)
-  const plansPager = usePagedRows(list, { pageSize: 25 })
-  const rows = plansPager.pageRows
+  const pmList = ops.pm_due_list
+  const rows = useMemo(() => pmDueRows(pmList, new Date()), [pmList])
+  const pmSummary = useMemo(() => summarizePmDue(rows), [rows])
+  const pmColumns = [
+    { id: 'asset_no', header: 'Asset', accessorFn: (r) => nullable(r.asset_no), sortingFn: valueSort, sortUndefined: 'last', cell: ({ getValue }) => <span className="rs-td-strong">{safeStr(getValue())}</span> },
+    { id: 'name', header: 'Plan', accessorFn: (r) => nullable(r.name), sortingFn: valueSort, sortUndefined: 'last', cell: ({ getValue }) => safeStr(getValue()) },
+    {
+      id: 'next_due', header: 'Next Due', accessorFn: (r) => nullable(r.next_due), sortingFn: valueSort, sortUndefined: 'last',
+      cell: ({ getValue }) => fmtDueDate(getValue()), meta: { exportValue: (r) => fmtDueDate(r.next_due) },
+    },
+    {
+      id: 'days', header: 'Status', accessorFn: (r) => nullable(r.days), sortingFn: valueSort, sortUndefined: 'last',
+      cell: ({ row }) => <span className={`rs-pill ${row.original.overdue ? 'rs-pill-red' : 'rs-pill-amber'}`}>{row.original.due_label}</span>,
+      meta: { exportValue: (r) => r.due_label },
+    },
+    { id: 'priority', header: 'Priority', accessorFn: (r) => nullable(r.priority), sortingFn: valueSort, sortUndefined: 'last', cell: ({ getValue }) => <span className={`rs-pill ${priorityTone(getValue())}`}>{safeStr(getValue())}</span> },
+  ]
   return (
     <div className="rs-page">
       <div className="rs-stat-strip rs-stat-2">
@@ -1730,36 +1748,21 @@ function PmDuePage({ snapshot }) {
           </div>
         ) : (
           <div className="rs-tablewrap">
-            <table className="rs-table">
-              <thead>
-                <tr>
-                  <th>Asset</th>
-                  <th>Plan</th>
-                  <th>Next Due</th>
-                  <th>Status</th>
-                  <th>Priority</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r, i) => {
-                  const d = daysUntil(r.next_due)
-                  const overdue = d != null && d < 0
-                  const dueLabel = d == null ? 'N/A'
-                    : overdue ? `Overdue ${fmtInt(Math.abs(d))}d`
-                      : d === 0 ? 'Due today' : `In ${fmtInt(d)}d`
-                  return (
-                    <tr key={`${r.asset_no || 'pm'}-${i}`} className={overdue ? 'rs-tr-alert' : ''}>
-                      <td className="rs-td-strong">{safeStr(r.asset_no)}</td>
-                      <td>{safeStr(r.name)}</td>
-                      <td>{fmtDueDate(r.next_due)}</td>
-                      <td><span className={`rs-pill ${overdue ? 'rs-pill-red' : 'rs-pill-amber'}`}>{dueLabel}</span></td>
-                      <td><span className={`rs-pill ${priorityTone(r.priority)}`}>{safeStr(r.priority)}</span></td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-            <TablePagination {...plansPager} />
+            <p className="rs-table-more">
+              {pmSummary.listed.toLocaleString('en-US')} plans listed, {pmSummary.overdue.toLocaleString('en-US')} overdue
+              {pmSummary.worstOverdueDays != null ? ` (longest ${pmSummary.worstOverdueDays.toLocaleString('en-US')} days)` : ''}
+              {pmSummary.undated ? `, ${pmSummary.undated.toLocaleString('en-US')} without a due date` : ''}.
+            </p>
+            <EnterpriseTable
+              {...BOARD_TABLE_PROPS}
+              columns={pmColumns}
+              data={rows}
+              getRowId={(r) => r.key}
+              searchPlaceholder="Search assets or plans"
+              exportFileName={reportFileName('Maintenance due')}
+              reportMeta={{ title: 'Maintenance due', company: snapshot?.company }}
+              emptyMessage="No maintenance due."
+            />
           </div>
         )}
       </section>
@@ -1876,6 +1879,8 @@ function ScopedStyle() {
         --card-from:#ffffff; --card-to:#ffffff; --card-text:#0f172a;
         --border-dim:#e5e7eb; --border-bright:#cbd5e1; --border-brand:#e6e9ee;
         --text-primary:#0f172a; --text-secondary:#334155; --text-muted:#64748b; --text-dim:#94a3b8;
+        --input-bg:#ffffff; --input-border:#cbd5e1; --input-text:#0f172a;
+        --shadow-card:0 1px 2px rgba(15,23,42,0.06); --brand-subtle:rgba(99,102,241,0.08);
         min-height:100vh; width:100%;
         background:var(--rs-bg); color:var(--rs-text);
         font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import * as settingsApi from '../lib/api/settings'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -9,17 +9,24 @@ import AppearancePanel from '../components/settings/AppearancePanel'
 import MySignaturePanel from '../components/settings/MySignaturePanel'
 import FeatureFlagsPanel from '../components/settings/FeatureFlagsPanel'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
-import { Save, User, Settings2, Bell, BellRing, Database, Info, Target, Clock, Mail, Phone, Calendar, Trash2, Plus, Play, Lock, Shield, ShieldCheck, ShieldOff, AlertTriangle, Sparkles, Moon } from 'lucide-react'
+import { Save, User, Settings2, Bell, BellRing, Database, Info, Target, Clock, Mail, Phone, Calendar, Trash2, Plus, Play, Lock, Shield, ShieldCheck, ShieldOff, AlertTriangle, Sparkles, Moon, Search } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import Card, { CardHeader, CardBody } from '../components/ui/Card'
-import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { sendReportEmail } from '../lib/emailService'
 import TwoFactorSetup from '../components/TwoFactorSetup'
+import Modal from '../components/ui/Modal'
 import * as notifPrefsApi from '../lib/api/notificationPreferences'
 import * as accountDeletionApi from '../lib/api/accountDeletion'
 import { DEFAULT_PREFS, DIGEST_FREQUENCIES, PRIORITY_ORDER, summarisePrefs } from '../lib/notificationPrefs'
 import { toUserMessage } from '../lib/safeError'
+import { compareValues } from '../lib/consoleTable'
+import { reportFileName } from '../lib/exportUtils'
+import {
+  SETTINGS_TABS, resolveSettingsTab, scheduleLabel, scheduleRows, summarizeSchedules,
+  filterSchedules, thresholdRows, settingsOverview, DOW_TO_NUM,
+} from '../lib/settingsAnalytics'
 import {
   getRecoveryContacts,
   RECOVERY_SMS_ENABLED,
@@ -101,17 +108,10 @@ const EMPTY_SCHEDULE = {
   active: true,
 }
 
-const DOW_TO_NUM = { Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6 }
 const NUM_TO_DOW = Object.fromEntries(Object.entries(DOW_TO_NUM).map(([key, value]) => [value, key]))
 const NAME_TO_TYPE = {
   'Fleet Summary': 'fleet', 'KPI Report': 'kpi', 'Vendor Intelligence': 'cost',
   'Executive Report': 'executive', 'Forecasting': 'kpi', 'Work Orders Summary': 'cost',
-}
-
-function getScheduleLabel(schedule) {
-  if (schedule.frequency === 'Daily') return `Daily at ${schedule.time}`
-  if (schedule.frequency === 'Weekly') return `Weekly · ${schedule.dayOfWeek} at ${schedule.time}`
-  return `Monthly · Day ${schedule.dayOfMonth} at ${schedule.time}`
 }
 
 // Per-user notification channels (§11 Notification engine — preferences slice).
@@ -139,6 +139,77 @@ const DIGEST_LABELS = {
   weekly: 'Weekly digest',
 }
 
+const TAB_ICONS = {
+  general: User,
+  notifications: BellRing,
+  alerts: Target,
+  reports: Clock,
+  security: Shield,
+  about: Info,
+}
+
+/** Null-last, number/date/text aware sort for every EnterpriseTable column. */
+const valueSort = (a, b, id) => compareValues(a.getValue(id), b.getValue(id))
+
+function fmtDateTime(iso) {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return 'N/A'
+  return d.toLocaleString('en-GB', { timeZone: 'Asia/Riyadh', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+}
+
+function KpiTile({ label, value, sub, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="card !p-4 text-left min-h-[44px] hover:border-[var(--accent)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+    >
+      <span className="block text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">{label}</span>
+      <span className="block text-2xl font-bold tabular-nums text-[var(--text-primary)] mt-1">{value}</span>
+      {sub && <span className="block text-xs text-[var(--text-muted)] mt-0.5">{sub}</span>}
+    </button>
+  )
+}
+
+/** Five configuration facts; any figure that could not be read shows N/A. */
+function SettingsKpiStrip({ overview: o, onJump }) {
+  const na = v => (v == null ? 'N/A' : v)
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3" aria-label="Settings summary">
+      <KpiTile
+        label="Active schedules"
+        value={o.schedulesActive == null ? 'N/A' : `${o.schedulesActive} of ${o.schedulesTotal}`}
+        sub={o.nextDelivery ? `Next ${fmtDateTime(o.nextDelivery)}` : o.schedulesActive == null ? 'Could not be read' : 'Nothing queued'}
+        onClick={() => onJump('reports')}
+      />
+      <KpiTile
+        label="KPI targets set"
+        value={o.kpiTargetsSet == null ? 'N/A' : `${o.kpiTargetsSet} of ${o.kpiTargetsTotal}`}
+        sub={`Targets for ${new Date().getFullYear()}`}
+        onClick={() => onJump('alerts')}
+      />
+      <KpiTile
+        label="Notification channels"
+        value={na(o.channelsOn)}
+        sub={o.channelsOn == null ? 'Could not be read' : 'Switched on for you'}
+        onClick={() => onJump('notifications')}
+      />
+      <KpiTile
+        label="Two-factor"
+        value={o.mfaEnabled == null ? 'N/A' : o.mfaEnabled ? 'On' : 'Off'}
+        sub={o.mfaEnabled === false ? 'Recommended: turn it on' : 'Sign-in protection'}
+        onClick={() => onJump('security')}
+      />
+      <KpiTile
+        label="Last data upload"
+        value={o.lastUpload ? new Date(o.lastUpload).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}
+        sub={!o.uploadsKnown ? 'Could not be read' : o.lastUpload ? 'Most recent file' : 'No uploads recorded'}
+        onClick={() => onJump('reports')}
+      />
+    </div>
+  )
+}
+
 function getInitials(name) {
   if (!name) return '?'
   return name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
@@ -160,6 +231,22 @@ export default function Settings() {
   const [appMsg, setAppMsg]            = useState('')
   const [profileMsg, setProfileMsg]    = useState('')
   const [uploadHistory, setUploadHistory] = useState([])
+  const [uploadsLoading, setUploadsLoading] = useState(true)
+  const [uploadsError, setUploadsError] = useState('')
+  const [kpiLoadError, setKpiLoadError] = useState('')
+  const [kpiLoaded, setKpiLoaded] = useState(false)
+  const [thresholdsLoadError, setThresholdsLoadError] = useState('')
+
+  // The active section is URL-borne (?tab=) so a link can open it directly.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tab = resolveSettingsTab(searchParams.get('tab'))
+  const setTab = useCallback((id) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      if (id === SETTINGS_TABS[0].id) next.delete('tab'); else next.set('tab', id)
+      return next
+    }, { replace: true })
+  }, [setSearchParams])
 
   // Local preferences stored in localStorage
   const [dateFormat, setDateFormatState] = useState(() => localStorage.getItem('dateFormat') ?? 'DD/MM/YYYY')
@@ -187,12 +274,18 @@ export default function Settings() {
   // Scheduled Reports page and the pg_cron delivery function use), so
   // schedules made here actually send and are visible to the whole team.
   const [schedules, setSchedules] = useState([])
-  const schedulesPager = usePagedRows(schedules, { pageSize: 25 })
+  const [schedulesLoading, setSchedulesLoading] = useState(true)
+  const [scheduleLoadError, setScheduleLoadError] = useState('')
+  const [scheduleQuery, setScheduleQuery] = useState('')
+  const [scheduleStatus, setScheduleStatus] = useState('all')
+  const [scheduleFrequency, setScheduleFrequency] = useState('all')
   const [scheduleError, setScheduleError] = useState('')
   const [showAddForm, setShowAddForm] = useState(false)
   const [newSchedule, setNewSchedule] = useState({ ...EMPTY_SCHEDULE })
   const [sendingTest, setSendingTest] = useState(null) // schedule id
   const [testMsg, setTestMsg] = useState({}) // { [id]: string }
+  const [confirmDeleteSchedule, setConfirmDeleteSchedule] = useState(null)
+  const [deletingSchedule, setDeletingSchedule] = useState(false)
 
   // Notification preferences (per-user; §11 Notification engine slice).
   // Extends existing notification infrastructure — a preferences store only.
@@ -239,12 +332,32 @@ export default function Settings() {
   }
 
   async function loadUploadHistory() {
-    const { data } = await settingsApi.listUploadHistory()
-    setUploadHistory(data ?? [])
+    setUploadsLoading(true)
+    setUploadsError('')
+    try {
+      const { data, error } = await settingsApi.listUploadHistory()
+      if (error) throw error
+      setUploadHistory(data ?? [])
+    } catch (err) {
+      setUploadsError(toUserMessage(err, 'Could not load the upload history.'))
+    } finally {
+      setUploadsLoading(false)
+    }
   }
 
   const loadKpiTargets = useCallback(async () => {
-    const { data } = await settingsApi.listKpiTargetsByYear(currentYear)
+    setKpiLoadError('')
+    let data
+    try {
+      const res = await settingsApi.listKpiTargetsByYear(currentYear)
+      if (res?.error) throw res.error
+      data = res?.data
+      setKpiLoaded(true)
+    } catch (err) {
+      setKpiLoaded(false)
+      setKpiLoadError(toUserMessage(err, 'Could not load the KPI targets.'))
+      return
+    }
     if (data && data.length > 0) {
       const mapped = { ...KPI_DEFAULTS }
       data.forEach(row => {
@@ -258,7 +371,16 @@ export default function Settings() {
   }, [currentYear])
 
   async function loadAlertThresholds() {
-    const { data } = await settingsApi.getAlertThresholds()
+    setThresholdsLoadError('')
+    let data
+    try {
+      const res = await settingsApi.getAlertThresholds()
+      if (res?.error) throw res.error
+      data = res?.data
+    } catch (err) {
+      setThresholdsLoadError(toUserMessage(err, 'Could not load the saved alert thresholds.'))
+      return
+    }
     if (data?.value) {
       try {
         const parsed = JSON.parse(data.value)
@@ -433,9 +555,17 @@ export default function Settings() {
   }), [])
 
   const loadSchedules = useCallback(async () => {
-    const { data, error } = await settingsApi.listReportSchedules()
-    if (error) { setScheduleError(toUserMessage(error, 'Could not load schedules. Please try again.')); return }
-    setSchedules((data || []).map(rowToUi))
+    setSchedulesLoading(true)
+    setScheduleLoadError('')
+    try {
+      const { data, error } = await settingsApi.listReportSchedules()
+      if (error) throw error
+      setSchedules((data || []).map(rowToUi))
+    } catch (err) {
+      setScheduleLoadError(toUserMessage(err, 'Could not load schedules. Please try again.'))
+    } finally {
+      setSchedulesLoading(false)
+    }
   }, [rowToUi])
 
   useEffect(() => {
@@ -495,12 +625,12 @@ export default function Settings() {
       if (recipients.length === 0) throw new Error('No valid recipients')
       await sendReportEmail({
         to: recipients,
-        subject: `[Test] TyrePulse ${schedule.reportName}: ${getScheduleLabel(schedule)}`,
+        subject: `[Test] TyrePulse ${schedule.reportName}: ${scheduleLabel(schedule)}`,
         bodyHtml: `<p style="font-family:Arial,sans-serif;color:#1e293b;">
           <strong>Test Delivery</strong><br><br>
           This is a test send for your scheduled report:<br><br>
           <strong>Report:</strong> ${schedule.reportName}<br>
-          <strong>Schedule:</strong> ${getScheduleLabel(schedule)}<br>
+          <strong>Schedule:</strong> ${scheduleLabel(schedule)}<br>
           <strong>Delivery:</strong> Email digest<br><br>
           Automated delivery runs every 15 minutes via the send-scheduled-reports function.
         </p>`,
@@ -554,6 +684,108 @@ export default function Settings() {
 
   const initials = getInitials(profileForm.full_name || profile?.full_name)
   const role     = profile?.role ?? 'Viewer'
+
+  // ── Derived views (pure engine: src/lib/settingsAnalytics.js) ──────────────
+  const scheduleRowsAll = useMemo(() => scheduleRows(schedules, new Date()), [schedules])
+  const scheduleSummary = useMemo(() => summarizeSchedules(scheduleRowsAll), [scheduleRowsAll])
+  const visibleSchedules = useMemo(
+    () => filterSchedules(scheduleRowsAll, { q: scheduleQuery, status: scheduleStatus, frequency: scheduleFrequency }),
+    [scheduleRowsAll, scheduleQuery, scheduleStatus, scheduleFrequency],
+  )
+  const readOnlyThresholds = useMemo(
+    () => thresholdRows({ highRiskPct, critCostThresh, lowTreadMm }, alertThresholds, ALERT_THRESHOLD_FIELDS),
+    [highRiskPct, critCostThresh, lowTreadMm, alertThresholds],
+  )
+  const overview = useMemo(() => settingsOverview({
+    schedules: schedulesLoading || scheduleLoadError ? null : scheduleRowsAll,
+    kpiTargets: kpiLoaded && !kpiLoadError ? kpiTargets : null,
+    kpiFields: KPI_FIELDS,
+    channelCount: loadingNotif || notifError ? null : summarisePrefs(notifPrefs).channelCount,
+    mfaEnabled: typeof mfaEnabled === 'boolean' ? mfaEnabled : null,
+    uploads: uploadsLoading || uploadsError ? null : uploadHistory,
+  }), [schedulesLoading, scheduleLoadError, scheduleRowsAll, kpiLoaded, kpiLoadError, kpiTargets,
+    loadingNotif, notifError, notifPrefs, mfaEnabled, uploadsLoading, uploadsError, uploadHistory])
+
+  const scheduleColumns = [
+    {
+      id: 'report', header: 'Report', accessorKey: 'reportName', sortingFn: valueSort,
+      cell: ({ getValue }) => <span className="text-[var(--text-primary)] font-medium">{getValue()}</span>,
+    },
+    { id: 'cadence', header: 'Schedule', accessorKey: 'label', sortingFn: valueSort },
+    {
+      id: 'next', header: 'Next delivery (Riyadh)', accessorFn: r => r.nextRun || undefined, sortingFn: valueSort, sortUndefined: 'last',
+      cell: ({ getValue }) => (getValue() ? fmtDateTime(getValue()) : <span className="text-[var(--text-muted)]">Paused</span>),
+      meta: { exportValue: r => (r.nextRun ? fmtDateTime(r.nextRun) : 'Paused') },
+    },
+    {
+      id: 'recipients', header: 'Recipients', accessorFn: r => r.recipients || undefined, sortingFn: valueSort, sortUndefined: 'last',
+      cell: ({ row }) => (
+        <span className="block max-w-xs">
+          <span className="block text-xs text-[var(--text-secondary)] truncate" title={row.original.recipients || ''}>
+            {row.original.recipients || <span className="italic text-[var(--text-muted)]">No recipients</span>}
+          </span>
+          {row.original.invalidRecipients.length > 0 && (
+            <span className="flex items-center gap-1 text-[11px] text-[var(--text-secondary)]">
+              <AlertTriangle size={11} className="text-amber-400" aria-hidden="true" /> {row.original.invalidRecipients.length} invalid address(es)
+            </span>
+          )}
+        </span>
+      ),
+      meta: { exportValue: r => r.recipients || 'None' },
+    },
+    {
+      id: 'status', header: 'Status', accessorKey: 'status', sortingFn: valueSort,
+      cell: ({ row }) => {
+        const sc = row.original
+        return (
+          <button
+            type="button"
+            onClick={() => toggleScheduleActive(sc.id)}
+            role="switch"
+            aria-checked={sc.active}
+            className="inline-flex items-center gap-2 min-h-[44px] rounded-lg px-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+          >
+            <span className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${sc.active ? 'bg-green-600' : 'bg-[var(--text-dim)]'}`}>
+              <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${sc.active ? 'translate-x-4' : 'translate-x-1'}`} />
+            </span>
+            <span className="sr-only">{sc.reportName} schedule, </span>
+            <span className="text-xs text-[var(--text-secondary)]">{sc.active ? 'Active' : 'Paused'}</span>
+          </button>
+        )
+      },
+    },
+    {
+      id: 'actions', header: 'Actions', enableSorting: false, meta: { export: false, align: 'right' },
+      cell: ({ row }) => {
+        const sc = row.original
+        return (
+          <div className="flex items-center justify-end gap-2">
+            {testMsg[sc.id] && (
+              <span role="status" className={`text-xs ${testMsg[sc.id] === 'Test sent successfully' ? 'text-green-400' : 'text-red-400'}`}>
+                {testMsg[sc.id]}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => handleTestSend(sc)}
+              disabled={sendingTest === sc.id}
+              className="btn-secondary inline-flex items-center gap-1 text-xs min-h-[44px] px-3 disabled:opacity-40"
+            >
+              <Play size={12} aria-hidden="true" /> {sendingTest === sc.id ? 'Sending...' : 'Test Send'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmDeleteSchedule(sc)}
+              aria-label={`Delete ${sc.reportName} schedule`}
+              className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] rounded-lg text-[var(--text-muted)] hover:text-red-400 hover:bg-[var(--surface-2)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+            >
+              <Trash2 size={15} />
+            </button>
+          </div>
+        )
+      },
+    },
+  ]
 
   // ── TyreMan: simplified profile-only view ──────────────────────────────────
   if (isTyreMan) {
@@ -716,15 +948,36 @@ export default function Settings() {
     <div className="space-y-6">
       <PageHeader
         title="Settings"
-        subtitle="Manage your profile, preferences and alert thresholds"
+        subtitle="Manage your profile, preferences, alerts, scheduled reports and account security"
         icon={Settings2}
       />
 
-      <UpdateHistory />
+      <SettingsKpiStrip overview={overview} onJump={setTab} />
 
-      {/* 3-column grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div role="tablist" aria-label="Settings sections" className="flex items-center gap-1 border-b border-[var(--border-bright)] overflow-x-auto">
+        {SETTINGS_TABS.map(tb => {
+          const on = tab === tb.id
+          const Icon = TAB_ICONS[tb.id]
+          return (
+            <button
+              key={tb.id}
+              type="button"
+              role="tab"
+              id={`settings-tab-${tb.id}`}
+              aria-selected={on}
+              aria-controls={`settings-panel-${tb.id}`}
+              onClick={() => setTab(tb.id)}
+              className={`inline-flex items-center gap-1.5 min-h-[44px] px-4 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${on ? 'border-[var(--accent)] text-[var(--text-primary)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
+            >
+              {Icon && <Icon size={15} aria-hidden="true" />} {tb.label}
+            </button>
+          )
+        })}
+      </div>
 
+      <div role="tabpanel" id={`settings-panel-${tab}`} aria-labelledby={`settings-tab-${tab}`} className="space-y-6">
+      {tab === 'general' && (
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {/* Column 1 - Profile */}
         <Card>
           <CardHeader level={2} title="Profile" icon={User} />
@@ -852,10 +1105,10 @@ export default function Settings() {
                 onChange={e => setAppSettings(s => ({ ...s, currency: e.target.value }))}
               >
                 <option value="" disabled>Select currency</option>
-                <option value="SAR">SAR · Saudi Riyal</option>
-                <option value="AED">AED · UAE Dirham</option>
-                <option value="EGP">EGP · Egyptian Pound</option>
-                <option value="USD">USD · US Dollar</option>
+                <option value="SAR">SAR (Saudi Riyal)</option>
+                <option value="AED">AED (UAE Dirham)</option>
+                <option value="EGP">EGP (Egyptian Pound)</option>
+                <option value="USD">USD (US Dollar)</option>
               </select>
             </div>
             <div>
@@ -904,125 +1157,11 @@ export default function Settings() {
           </CardBody>
         </Card>
 
-        {/* Column 3 - Alert Thresholds */}
-        <Card>
-          <CardHeader
-            level={2}
-            title="Alert Thresholds"
-            icon={Bell}
-            description="Controls when risk alerts are triggered. Legacy fields stored locally; extended thresholds synced to database."
-          />
-          <CardBody className="space-y-4">
-          {/* The admin gate is unchanged: admins edit, everyone else reads. */}
-          {isAdmin ? (
-            <form onSubmit={saveThresholds} className="space-y-3">
-              <p className="text-xs text-[var(--text-secondary)] font-medium uppercase tracking-wide">Legacy Thresholds</p>
-              <div>
-                <label className="label">High Risk Threshold (%)</label>
-                <input
-                  aria-label="High Risk Threshold (%)"
-                  type="number"
-                  className="input"
-                  value={highRiskPct}
-                  onChange={e => setHighRiskPct(Number(e.target.value))}
-                  min={0}
-                  max={100}
-                  step={1}
-                />
-                <p className="text-xs text-[var(--text-muted)] mt-1">Flag tyres with risk score above this %</p>
-              </div>
-              <div>
-                <label className="label">Critical Cost Threshold</label>
-                <input
-                  aria-label="Critical Cost Threshold"
-                  type="number"
-                  className="input"
-                  value={critCostThresh}
-                  onChange={e => setCritCostThresh(Number(e.target.value))}
-                  min={0}
-                  step={1000}
-                />
-                <p className="text-xs text-[var(--text-muted)] mt-1">Alert when total repair cost exceeds this value</p>
-              </div>
-              <div>
-                <label className="label">Low Tread Depth (mm)</label>
-                <input
-                  aria-label="Low Tread Depth (mm)"
-                  type="number"
-                  className="input"
-                  value={lowTreadMm}
-                  onChange={e => setLowTreadMm(Number(e.target.value))}
-                  min={0}
-                  max={20}
-                  step={0.5}
-                />
-                <p className="text-xs text-[var(--text-muted)] mt-1">Warn when tread depth falls below this value</p>
-              </div>
-
-              <p className="text-xs text-[var(--text-secondary)] font-medium uppercase tracking-wide pt-2">Extended Thresholds</p>
-              {ALERT_THRESHOLD_FIELDS.map(f => (
-                <div key={f.key}>
-                  <label className="label">{f.label}</label>
-                  <input
-                    aria-label={f.label}
-                    type="number"
-                    className="input"
-                    value={alertThresholds[f.key]}
-                    onChange={e => setAlertThresholds(prev => ({ ...prev, [f.key]: Number(e.target.value) }))}
-                    min={f.min ?? 0}
-                    max={f.max}
-                    step={f.step}
-                  />
-                </div>
-              ))}
-
-              <div className="flex items-center gap-3 pt-1">
-                <button type="submit" disabled={savingThresholds} className="btn-primary flex items-center gap-2 disabled:opacity-50 text-sm">
-                  <Save size={14} /> {savingThresholds ? 'Saving...' : 'Save Thresholds'}
-                </button>
-                {threshMsg && (
-                  <span className={`text-sm ${threshMsg.includes('failed') ? 'text-red-400' : 'text-green-400'}`}>
-                    {threshMsg}
-                  </span>
-                )}
-              </div>
-            </form>
-          ) : (
-            <div className="space-y-3">
-              <p className="text-xs text-[var(--text-secondary)] font-medium uppercase tracking-wide">Legacy Thresholds</p>
-              <table className="w-full text-sm">
-                <tbody className="divide-y divide-[var(--border-dim)]">
-                  <tr>
-                    <td className="py-1.5 text-[var(--text-secondary)]">High Risk Threshold</td>
-                    <td className="py-1.5 text-[var(--text-primary)] text-right">{highRiskPct}%</td>
-                  </tr>
-                  <tr>
-                    <td className="py-1.5 text-[var(--text-secondary)]">Critical Cost Threshold</td>
-                    <td className="py-1.5 text-[var(--text-primary)] text-right">{critCostThresh.toLocaleString()}</td>
-                  </tr>
-                  <tr>
-                    <td className="py-1.5 text-[var(--text-secondary)]">Low Tread Depth</td>
-                    <td className="py-1.5 text-[var(--text-primary)] text-right">{lowTreadMm} mm</td>
-                  </tr>
-                </tbody>
-              </table>
-              <p className="text-xs text-[var(--text-secondary)] font-medium uppercase tracking-wide pt-2">Extended Thresholds</p>
-              <table className="w-full text-sm">
-                <tbody className="divide-y divide-[var(--border-dim)]">
-                  {ALERT_THRESHOLD_FIELDS.map(f => (
-                    <tr key={f.key}>
-                      <td className="py-1.5 text-[var(--text-secondary)]">{f.label}</td>
-                      <td className="py-1.5 text-[var(--text-primary)] text-right">{alertThresholds[f.key]}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          </CardBody>
-        </Card>
       </div>
+      )}
 
+      {tab === 'notifications' && (
+      <>
       {/* Notification Preferences (per-user; §11 Notification engine slice) */}
       <Card>
         {/* ONE element in `actions`, which is what that slot is for - it is
@@ -1042,7 +1181,10 @@ export default function Settings() {
         />
         <CardBody className="space-y-4">
         {notifError && (
-          <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5">{notifError}</p>
+          <p role="alert" className="text-sm text-[var(--text-primary)] bg-red-500/10 border border-red-700/50 rounded-lg p-2.5 flex flex-wrap items-center gap-2">
+            <span className="flex-1 min-w-[10rem]">{notifError}</span>
+            <button type="button" className="btn-secondary text-sm min-h-[44px]" onClick={loadNotifPrefs}>Retry</button>
+          </p>
         )}
 
         {loadingNotif ? (
@@ -1065,19 +1207,19 @@ export default function Settings() {
                       type="button"
                       key={ch.key}
                       onClick={() => toggleNotifChannel(ch.key)}
-                      className={`flex items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 text-left transition-colors ${
+                      className={`flex items-center justify-between gap-3 min-h-[44px] rounded-xl border px-3.5 py-2.5 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${
                         on
-                          ? 'bg-emerald-950/30 border-emerald-700/50'
+                          ? 'bg-emerald-500/10 border-emerald-600/50'
                           : 'bg-[var(--surface-2)] border-[var(--border-bright)] hover:border-[var(--border-bright)]'
                       }`}
                       aria-pressed={on}
                     >
                       <span className="min-w-0">
-                        <span className={`block text-sm font-medium ${on ? 'text-emerald-300' : 'text-[var(--text-primary)]'}`}>{ch.label}</span>
+                        <span className="block text-sm font-medium text-[var(--text-primary)]">{ch.label}{on ? <span className="sr-only"> (on)</span> : null}</span>
                         <span className="block text-xs text-[var(--text-muted)] truncate">{ch.hint}</span>
                       </span>
                       <span
-                        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${on ? 'bg-emerald-600' : 'bg-gray-600'}`}
+                        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${on ? 'bg-emerald-600' : 'bg-[var(--text-dim)]'}`}
                       >
                         <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${on ? 'translate-x-4' : 'translate-x-1'}`} />
                       </span>
@@ -1147,6 +1289,130 @@ export default function Settings() {
         </CardBody>
       </Card>
 
+      </>
+      )}
+
+      {tab === 'alerts' && (
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-1">
+        {/* Column 3 - Alert Thresholds */}
+        <Card>
+          <CardHeader
+            level={2}
+            title="Alert Thresholds"
+            icon={Bell}
+            description="Controls when risk alerts are triggered. Legacy fields stored locally; extended thresholds synced to database."
+          />
+          <CardBody className="space-y-4">
+          {/* The admin gate is unchanged: admins edit, everyone else reads. */}
+          {isAdmin ? (
+            <form onSubmit={saveThresholds} className="space-y-3">
+              {thresholdsLoadError && (
+                <p role="alert" className="text-sm text-[var(--text-primary)] bg-red-500/10 border border-red-700/50 rounded-lg p-2.5 flex flex-wrap items-center gap-2">
+                  <span className="flex-1 min-w-[10rem]">{thresholdsLoadError} Saving now would overwrite the stored values with the defaults shown.</span>
+                  <button type="button" className="btn-secondary text-sm min-h-[44px]" onClick={loadAlertThresholds}>Retry</button>
+                </p>
+              )}
+              <p className="text-xs text-[var(--text-secondary)] font-medium uppercase tracking-wide">Legacy Thresholds</p>
+              <div>
+                <label className="label">High Risk Threshold (%)</label>
+                <input
+                  aria-label="High Risk Threshold (%)"
+                  type="number"
+                  className="input"
+                  value={highRiskPct}
+                  onChange={e => setHighRiskPct(Number(e.target.value))}
+                  min={0}
+                  max={100}
+                  step={1}
+                />
+                <p className="text-xs text-[var(--text-muted)] mt-1">Flag tyres with risk score above this %</p>
+              </div>
+              <div>
+                <label className="label">Critical Cost Threshold</label>
+                <input
+                  aria-label="Critical Cost Threshold"
+                  type="number"
+                  className="input"
+                  value={critCostThresh}
+                  onChange={e => setCritCostThresh(Number(e.target.value))}
+                  min={0}
+                  step={1000}
+                />
+                <p className="text-xs text-[var(--text-muted)] mt-1">Alert when total repair cost exceeds this value</p>
+              </div>
+              <div>
+                <label className="label">Low Tread Depth (mm)</label>
+                <input
+                  aria-label="Low Tread Depth (mm)"
+                  type="number"
+                  className="input"
+                  value={lowTreadMm}
+                  onChange={e => setLowTreadMm(Number(e.target.value))}
+                  min={0}
+                  max={20}
+                  step={0.5}
+                />
+                <p className="text-xs text-[var(--text-muted)] mt-1">Warn when tread depth falls below this value</p>
+              </div>
+
+              <p className="text-xs text-[var(--text-secondary)] font-medium uppercase tracking-wide pt-2">Extended Thresholds</p>
+              {ALERT_THRESHOLD_FIELDS.map(f => (
+                <div key={f.key}>
+                  <label className="label">{f.label}</label>
+                  <input
+                    aria-label={f.label}
+                    type="number"
+                    className="input"
+                    value={alertThresholds[f.key]}
+                    onChange={e => setAlertThresholds(prev => ({ ...prev, [f.key]: Number(e.target.value) }))}
+                    min={f.min ?? 0}
+                    max={f.max}
+                    step={f.step}
+                  />
+                </div>
+              ))}
+
+              <div className="flex items-center gap-3 pt-1">
+                <button type="submit" disabled={savingThresholds} className="btn-primary flex items-center gap-2 disabled:opacity-50 text-sm">
+                  <Save size={14} /> {savingThresholds ? 'Saving...' : 'Save Thresholds'}
+                </button>
+                {threshMsg && (
+                  <span role="status" className={`text-sm ${threshMsg === 'Thresholds saved' ? 'text-green-400' : 'text-red-400'}`}>
+                    {threshMsg}
+                  </span>
+                )}
+              </div>
+            </form>
+          ) : (
+            <div className="space-y-3">
+              {thresholdsLoadError && (
+                <p role="alert" className="text-sm text-[var(--text-primary)] bg-red-500/10 border border-red-700/50 rounded-lg p-2.5 flex flex-wrap items-center gap-2">
+                  <span className="flex-1 min-w-[10rem]">{thresholdsLoadError}</span>
+                  <button type="button" className="btn-secondary text-sm min-h-[44px]" onClick={loadAlertThresholds}>Retry</button>
+                </p>
+              )}
+              {['Legacy', 'Extended'].map(group => (
+                <div key={group}>
+                  <p className="text-xs text-[var(--text-secondary)] font-medium uppercase tracking-wide pt-2">{group} Thresholds</p>
+                  <dl className="divide-y divide-[var(--border-dim)] text-sm">
+                    {readOnlyThresholds.filter(r => r.group === group).map(r => (
+                      <div key={r.key} className="flex items-center justify-between gap-3 py-1.5">
+                        <dt className="text-[var(--text-secondary)]">{r.label}</dt>
+                        <dd className="text-[var(--text-primary)] tabular-nums text-right">
+                          {group === 'Extended' && thresholdsLoadError ? 'N/A' : r.value}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+              ))}
+            </div>
+          )}
+          </CardBody>
+        </Card>
+        </div>
+        <div className="lg:col-span-2">
       {/* KPI Targets Editor */}
       <Card>
         <CardHeader
@@ -1157,13 +1423,20 @@ export default function Settings() {
             <button
               type="button"
               onClick={() => { setDraftKpiTargets(kpiTargets); setEditingKpi(true) }}
-              className="btn-secondary text-sm"
+              disabled={Boolean(kpiLoadError)}
+              className="btn-secondary text-sm min-h-[44px] disabled:opacity-50"
             >
               Edit Targets
             </button>
           ) : null}
         />
         <CardBody>
+        {kpiLoadError && (
+          <p role="alert" className="text-sm text-[var(--text-primary)] bg-red-500/10 border border-red-700/50 rounded-lg p-2.5 mb-3 flex flex-wrap items-center gap-2">
+            <span className="flex-1 min-w-[10rem]">{kpiLoadError}</span>
+            <button type="button" className="btn-secondary text-sm min-h-[44px]" onClick={loadKpiTargets}>Retry</button>
+          </p>
+        )}
         {isAdmin && editingKpi ? (
           <form onSubmit={saveKpiTargets} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1192,7 +1465,7 @@ export default function Settings() {
                 Cancel
               </button>
               {kpiMsg && (
-                <span className={`text-sm ${kpiMsg.includes('failed') ? 'text-red-400' : 'text-green-400'}`}>
+                <span role="status" className={`text-sm ${kpiMsg === 'KPI targets saved' ? 'text-green-400' : 'text-red-400'}`}>
                   {kpiMsg}
                 </span>
               )}
@@ -1210,8 +1483,10 @@ export default function Settings() {
                   <div key={f.key} className="bg-[var(--surface-2)] rounded-lg px-4 py-3 flex items-center justify-between">
                     <span className="text-[var(--text-secondary)] text-sm">{f.label}</span>
                     <span className="text-[var(--text-primary)] font-medium text-sm">
-                      {val === '' || val === null || val === undefined ? (
-                        <span className="text-[var(--text-dim)] text-xs italic">Not set</span>
+                      {kpiLoadError ? (
+                        <span className="text-[var(--text-muted)] text-xs">N/A</span>
+                      ) : val === '' || val === null || val === undefined ? (
+                        <span className="text-[var(--text-muted)] text-xs italic">Not set</span>
                       ) : (
                         Number(val).toLocaleString()
                       )}
@@ -1225,37 +1500,12 @@ export default function Settings() {
         </CardBody>
       </Card>
 
-      {/* Data Management */}
-      <Card>
-        <CardHeader level={2} title="Data Management" icon={Database} />
-        <CardBody>
-        <p className="text-xs text-[var(--text-muted)] mb-3">Last 3 data uploads</p>
-        {uploadHistory.length === 0 ? (
-          <p className="text-[var(--text-muted)] text-sm">No uploads yet</p>
-        ) : (
-          <div className="space-y-2">
-            {uploadHistory.map(u => (
-              <div key={u.id} className="flex items-center justify-between bg-[var(--surface-2)] rounded-lg px-3 py-2 text-sm">
-                <div>
-                  <p className="text-[var(--text-primary)] text-sm">{(u.file_names ?? []).join(', ') || 'Unknown file'}</p>
-                  <p className="text-xs text-[var(--text-muted)]">{new Date(u.uploaded_at).toLocaleString()}</p>
-                </div>
-                <div className="text-right">
-                  <span className="text-green-400 text-xs">+{u.records_added}</span>
-                  {u.records_skipped > 0 && <span className="text-yellow-400 text-xs ml-2">skip {u.records_skipped}</span>}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-        <div className="mt-4">
-          <Link to="/audit" className="btn-secondary text-sm inline-flex items-center gap-2">
-            View Full History
-          </Link>
         </div>
-        </CardBody>
-      </Card>
+      </div>
+      )}
 
+      {tab === 'reports' && (
+      <>
       {/* Scheduled Reports */}
       <Card>
         <CardHeader
@@ -1266,21 +1516,22 @@ export default function Settings() {
             <button
               type="button"
               onClick={() => { setShowAddForm(v => !v); setNewSchedule({ ...EMPTY_SCHEDULE }) }}
-              className="btn-primary text-sm flex items-center gap-2"
+              aria-expanded={showAddForm}
+              className="btn-primary text-sm flex items-center gap-2 min-h-[44px]"
             >
-              <Plus size={14} /> Add Schedule
+              <Plus size={14} aria-hidden="true" /> Add Schedule
             </button>
           )}
         />
         <CardBody>
         {scheduleError && (
-          <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5 mb-4">{scheduleError}</p>
+          <p role="alert" className="text-sm text-[var(--text-primary)] bg-red-500/10 border border-red-700/50 rounded-lg p-2.5 mb-4">{scheduleError}</p>
         )}
 
         {/* Info panel */}
-        <div className="flex items-start gap-3 bg-emerald-950/30 border border-emerald-800/40 rounded-lg px-4 py-3 mb-5">
-          <ShieldCheck size={16} className="text-emerald-400 mt-0.5 shrink-0" />
-          <p className="text-xs text-emerald-300 leading-relaxed">
+        <div className="flex items-start gap-3 bg-emerald-500/5 border border-emerald-700/40 rounded-lg px-4 py-3 mb-5">
+          <ShieldCheck size={16} className="text-emerald-400 mt-0.5 shrink-0" aria-hidden="true" />
+          <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
             <strong>Automated delivery is active.</strong> A scheduled job checks every 15 minutes and
             emails each active schedule to its recipients at the set time (Riyadh timezone). Use
             <strong> Test Send</strong> to receive one right now and confirm the address. If a report
@@ -1353,14 +1604,14 @@ export default function Settings() {
                 type="button"
                 onClick={addSchedule}
                 disabled={!newSchedule.recipients.trim()}
-                className="btn-primary text-sm flex items-center gap-2 disabled:opacity-40"
+                className="btn-primary text-sm flex items-center gap-2 min-h-[44px] disabled:opacity-40"
               >
                 <Plus size={14} /> Save Schedule
               </button>
               <button
                 type="button"
                 onClick={() => setShowAddForm(false)}
-                className="btn-secondary text-sm"
+                className="btn-secondary text-sm min-h-[44px]"
               >
                 Cancel
               </button>
@@ -1368,100 +1619,104 @@ export default function Settings() {
           </div>
         )}
 
-        {/* Schedules table */}
-        {schedules.length === 0 ? (
-          <div className="text-center py-10 border border-dashed border-[var(--border-bright)] rounded-xl">
-            <Clock size={28} className="text-[var(--text-dim)] mx-auto mb-3" />
-            <p className="text-[var(--text-muted)] text-sm">No scheduled reports configured</p>
-            <p className="text-[var(--text-dim)] text-xs mt-1">Click Add Schedule to get started</p>
+        {/* Schedules register */}
+        {scheduleLoadError ? (
+          <div role="alert" className="text-sm text-[var(--text-primary)] bg-red-500/10 border border-red-700/50 rounded-lg p-3 flex flex-wrap items-center gap-2">
+            <span className="flex-1 min-w-[10rem]">{scheduleLoadError}</span>
+            <button type="button" className="btn-secondary text-sm min-h-[44px]" onClick={loadSchedules}>Retry</button>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[var(--border-bright)]">
-                  <th className="text-left py-2 px-3 text-[var(--text-secondary)] font-medium text-xs uppercase tracking-wide">Report</th>
-                  <th className="text-left py-2 px-3 text-[var(--text-secondary)] font-medium text-xs uppercase tracking-wide">Schedule</th>
-                  <th className="text-left py-2 px-3 text-[var(--text-secondary)] font-medium text-xs uppercase tracking-wide">Format</th>
-                  <th className="text-left py-2 px-3 text-[var(--text-secondary)] font-medium text-xs uppercase tracking-wide">Recipients</th>
-                  <th className="text-center py-2 px-3 text-[var(--text-secondary)] font-medium text-xs uppercase tracking-wide">Status</th>
-                  <th className="text-right py-2 px-3 text-[var(--text-secondary)] font-medium text-xs uppercase tracking-wide">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--border-dim)]">
-                {schedulesPager.pageRows.map(schedule => (
-                  <tr key={schedule.id} className="hover:bg-[var(--surface-2)] transition-colors group">
-                    <td className="py-3 px-3">
-                      <span className="text-[var(--text-primary)] font-medium">{schedule.reportName}</span>
-                    </td>
-                    <td className="py-3 px-3">
-                      <span className="text-[var(--text-secondary)]">{getScheduleLabel(schedule)}</span>
-                    </td>
-                    <td className="py-3 px-3">
-                      <span className="text-xs px-2 py-1 rounded bg-[var(--surface-2)] text-[var(--text-secondary)] border border-[var(--border-bright)]">
-                        Email digest
-                      </span>
-                    </td>
-                    <td className="py-3 px-3 max-w-xs">
-                      <span className="text-[var(--text-secondary)] text-xs truncate block">
-                        {schedule.recipients || <span className="italic text-[var(--text-dim)]">No recipients</span>}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3 text-center">
-                      <button
-                        type="button"
-                        onClick={() => toggleScheduleActive(schedule.id)}
-                        title={schedule.active ? 'Pause schedule' : 'Activate schedule'}
-                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
-                          schedule.active ? 'bg-green-600' : 'bg-gray-600'
-                        }`}
-                      >
-                        <span
-                          className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
-                            schedule.active ? 'translate-x-4' : 'translate-x-1'
-                          }`}
-                        />
-                      </button>
-                      <span className={`block text-xs mt-0.5 ${schedule.active ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
-                        {schedule.active ? 'Active' : 'Paused'}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        {testMsg[schedule.id] && (
-                          <span className={`text-xs ${testMsg[schedule.id].startsWith('Failed') ? 'text-red-400' : 'text-green-400'}`}>
-                            {testMsg[schedule.id]}
-                          </span>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => handleTestSend(schedule)}
-                          disabled={sendingTest === schedule.id}
-                          title="Send test email now"
-                          className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-blue-900/40 text-blue-400 border border-blue-800/50 hover:bg-blue-800/50 transition-colors disabled:opacity-40"
-                        >
-                          <Play size={11} /> {sendingTest === schedule.id ? 'Sending...' : 'Test Send'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => deleteSchedule(schedule.id)}
-                          title="Delete schedule"
-                          className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-red-900/30 text-red-400 border border-red-800/40 hover:bg-red-900/50 transition-colors"
-                        >
-                          <Trash2 size={11} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <TablePagination {...schedulesPager} />
+          <div className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <label className="relative block flex-1 min-w-[12rem]">
+                <span className="sr-only">Search schedules by report, recipient or cadence</span>
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] pointer-events-none" aria-hidden="true" />
+                <input
+                  type="search"
+                  className="input pl-9 min-h-[44px]"
+                  placeholder="Search schedules by report, recipient or cadence"
+                  value={scheduleQuery}
+                  onChange={e => setScheduleQuery(e.target.value)}
+                />
+              </label>
+              <select aria-label="Filter schedules by status" className="input min-h-[44px] w-auto" value={scheduleStatus} onChange={e => setScheduleStatus(e.target.value)}>
+                <option value="all">All statuses</option>
+                <option value="active">Active</option>
+                <option value="paused">Paused</option>
+              </select>
+              <select aria-label="Filter schedules by frequency" className="input min-h-[44px] w-auto" value={scheduleFrequency} onChange={e => setScheduleFrequency(e.target.value)}>
+                <option value="all">All frequencies</option>
+                {SCHEDULE_FREQUENCIES.map(f => <option key={f} value={f}>{f}</option>)}
+              </select>
+            </div>
+            {scheduleSummary.withInvalidRecipients > 0 && (
+              <p className="text-xs text-[var(--text-secondary)] flex items-center gap-1.5">
+                <AlertTriangle size={13} className="text-amber-400" aria-hidden="true" />
+                {scheduleSummary.withInvalidRecipients} schedule(s) include an address that does not look like an email and will not be delivered to.
+              </p>
+            )}
+            <EnterpriseTable
+              columns={scheduleColumns}
+              data={visibleSchedules}
+              getRowId={r => String(r.id)}
+              loading={schedulesLoading}
+              enableGlobalFilter={false}
+              enableColumnFilters={false}
+              initialPageSize={25}
+              exportFileName={reportFileName('Scheduled reports')}
+              reportMeta={{ title: 'Scheduled reports' }}
+              emptyMessage={scheduleRowsAll.length === 0 ? 'No scheduled reports configured. Use Add Schedule to create one.' : 'No schedule matches these filters.'}
+            />
           </div>
         )}
         </CardBody>
       </Card>
 
+      {/* Data Management */}
+      <Card>
+        <CardHeader level={2} title="Data Management" icon={Database} />
+        <CardBody>
+        <p className="text-xs text-[var(--text-muted)] mb-3">Last 3 data uploads</p>
+        {uploadsLoading ? (
+          <div className="space-y-2" aria-busy="true" aria-label="Loading upload history">
+            {[0, 1, 2].map(i => <div key={i} className="h-12 rounded-lg bg-[var(--surface-2)] animate-pulse" />)}
+          </div>
+        ) : uploadsError ? (
+          <p role="alert" className="text-sm text-[var(--text-primary)] bg-red-500/10 border border-red-700/50 rounded-lg p-2.5 flex flex-wrap items-center gap-2">
+            <span className="flex-1 min-w-[10rem]">{uploadsError}</span>
+            <button type="button" className="btn-secondary text-sm min-h-[44px]" onClick={loadUploadHistory}>Retry</button>
+          </p>
+        ) : uploadHistory.length === 0 ? (
+          <p className="text-[var(--text-muted)] text-sm">No uploads recorded yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {uploadHistory.map(u => (
+              <div key={u.id} className="flex items-center justify-between bg-[var(--surface-2)] rounded-lg px-3 py-2 text-sm">
+                <div>
+                  <p className="text-[var(--text-primary)] text-sm">{(u.file_names ?? []).join(', ') || 'Unknown file'}</p>
+                  <p className="text-xs text-[var(--text-muted)]">{u.uploaded_at ? new Date(u.uploaded_at).toLocaleString() : 'Date not recorded'}</p>
+                </div>
+                <div className="text-right">
+                  <span className="text-[var(--text-primary)] text-xs tabular-nums">{u.records_added == null ? 'N/A' : `${Number(u.records_added).toLocaleString()} added`}</span>
+                  {u.records_skipped > 0 && <span className="text-[var(--text-secondary)] text-xs ml-2 tabular-nums">{Number(u.records_skipped).toLocaleString()} skipped</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="mt-4">
+          <Link to="/audit" className="btn-secondary text-sm inline-flex items-center gap-2 min-h-[44px]">
+            View Full History
+          </Link>
+        </div>
+        </CardBody>
+      </Card>
+
+      </>
+      )}
+
+      {tab === 'security' && (
+      <>
       <RecoveryContactsCard />
 
       {/* Two-Factor Authentication */}
@@ -1475,6 +1730,15 @@ export default function Settings() {
         msg={mfaMsg}
       />
 
+      {/* Delete My Account (in-app deletion request) */}
+      <AccountDeletionCard userEmail={user?.email} />
+
+      </>
+      )}
+
+      {tab === 'about' && (
+      <>
+      <UpdateHistory />
       {/* About */}
       <Card>
         <CardHeader level={2} title="About" icon={Info} />
@@ -1484,14 +1748,44 @@ export default function Settings() {
         </CardBody>
       </Card>
 
-      {/* Delete My Account (in-app deletion request) */}
-      <AccountDeletionCard userEmail={user?.email} />
+      </>
+      )}
+      </div>
 
       <TwoFactorSetup
         open={showMfaSetup}
         onClose={() => setShowMfaSetup(false)}
         onSuccess={() => { setMfaEnabled(true); setShowMfaSetup(false) }}
       />
+
+      <Modal
+        open={Boolean(confirmDeleteSchedule)}
+        onClose={() => { if (!deletingSchedule) setConfirmDeleteSchedule(null) }}
+        title="Delete scheduled report"
+        size="sm"
+      >
+        <p className="text-sm text-[var(--text-secondary)]">
+          Delete the <span className="text-[var(--text-primary)] font-medium">{confirmDeleteSchedule?.reportName}</span> schedule
+          ({confirmDeleteSchedule ? scheduleLabel(confirmDeleteSchedule) : ''})? Its recipients stop receiving it.
+        </p>
+        <div className="flex flex-wrap items-center justify-end gap-2 mt-4">
+          <button type="button" className="btn-secondary text-sm min-h-[44px]" disabled={deletingSchedule} onClick={() => setConfirmDeleteSchedule(null)}>Cancel</button>
+          <button
+            type="button"
+            disabled={deletingSchedule}
+            onClick={async () => {
+              setDeletingSchedule(true)
+              try { await deleteSchedule(confirmDeleteSchedule.id) } finally {
+                setDeletingSchedule(false)
+                setConfirmDeleteSchedule(null)
+              }
+            }}
+            className="inline-flex items-center gap-1.5 min-h-[44px] px-3 text-sm rounded-lg bg-red-600 hover:bg-red-500 text-white disabled:opacity-60"
+          >
+            <Trash2 size={14} aria-hidden="true" /> {deletingSchedule ? 'Deleting...' : 'Delete schedule'}
+          </button>
+        </div>
+      </Modal>
     </div>
   )
 }

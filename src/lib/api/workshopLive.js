@@ -12,7 +12,7 @@
  * degrades to [] on a missing relation so the page can prompt for the migration
  * instead of throwing.
  */
-import { supabase, unwrap, applyCountry, ServiceError, isMissingRelation } from './_client'
+import { supabase, unwrap, applyCountry, ServiceError, isMissingRelation, fetchAllOrThrow } from './_client'
 import { EVENT_TYPES, buildBoard, computeKpis } from '../workshopLive'
 import { normalizeWoStatus } from '../workOrderStatus'
 import { generateWorkOrderNo } from './workOrders'
@@ -144,9 +144,12 @@ export async function listTechnicians({ site } = {}) {
 
   // 1. Role-based workshop staff.
   try {
-    let q = supabase.from('profiles').select(PROFILE_COLS).in('role', WORKSHOP_ROLES)
-    if (site) q = q.eq('site', site)
-    const rows = unwrap(await q) || []
+    // Paged (profiles is 725 rows and growing; a bare select stops at 1,000).
+    const rows = await fetchAllOrThrow((from, to) => {
+      let q = supabase.from('profiles').select(PROFILE_COLS).in('role', WORKSHOP_ROLES)
+      if (site) q = q.eq('site', site)
+      return q.order('id').range(from, to)
+    }, { max: 20000 })
     for (const r of rows) if (r?.id) byId.set(r.id, mapTechnician(r))
   } catch (err) {
     if (!isMissingRelation(err)) throw err
@@ -157,9 +160,11 @@ export async function listTechnicians({ site } = {}) {
     const skills = unwrap(await supabase.from('technician_skills').select('user_id')) || []
     const ids = [...new Set(skills.map((s) => s.user_id).filter(Boolean))].filter((id) => !byId.has(id))
     if (ids.length) {
-      let q = supabase.from('profiles').select(PROFILE_COLS).in('id', ids)
-      if (site) q = q.eq('site', site)
-      const rows = unwrap(await q) || []
+      const rows = await fetchAllOrThrow((from, to) => {
+        let q = supabase.from('profiles').select(PROFILE_COLS).in('id', ids)
+        if (site) q = q.eq('site', site)
+        return q.order('id').range(from, to)
+      }, { max: 20000 })
       const wanted = new Set(ids)
       for (const r of rows) if (r?.id && wanted.has(r.id)) byId.set(r.id, mapTechnician(r))
     }
@@ -189,9 +194,13 @@ export async function listOpenJobs({ site, country, limit = 500 } = {}) {
     // fraction of the genuinely open jobs (often almost none). status has no DB
     // CHECK, so exclude both the Title Case and lowercase tokenisations; the
     // client-side filter below stays as a net for any other variant.
-    q = q.not('status', 'in', '("Completed","Cancelled","completed","cancelled")')
+    // 'Closed' is the legacy ERP token for a finished job card and is still
+    // stored on 57,228 rows (normalizeWoStatus folds it to Completed on read).
+    // Measured 2026-09-27: without it the newest 500 KSA rows were ALL Closed,
+    // so the 124 genuinely open KSA jobs never reached the live board.
+    q = q.not('status', 'in', '("Completed","Cancelled","Closed","completed","cancelled","closed")')
     const rows = unwrap(await q.order('opened_at', { ascending: false, nullsFirst: false }).limit(limit)) || []
-    const closed = new Set(['completed', 'cancelled'])
+    const closed = new Set(['completed', 'cancelled', 'closed'])
     const open = rows.filter((r) => !closed.has(normStatus(r.status)))
 
     // Jobs COMPLETED TODAY belong on a live board too: they fill the kanban's

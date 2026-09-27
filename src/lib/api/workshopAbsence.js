@@ -15,7 +15,7 @@
  * here - RLS is the authoritative country boundary for staff. We scope shifts /
  * attendance by their scalar country column only.
  */
-import { supabase, unwrap, applyCountry, fetchAllPages, isMissingRelation, ServiceError } from './_client'
+import { supabase, unwrap, applyCountry, fetchAllPages, fetchAllOrThrow, isMissingRelation, ServiceError } from './_client'
 import { toUserMessage } from '../safeError'
 
 export const SHIFT_COLS =
@@ -77,9 +77,10 @@ async function loadAttendance({ from, to, site, country }) {
 /** Load the staff directory (RLS-scoped). Never country-filtered (text[]). */
 async function loadStaff() {
   try {
-    return (
-      unwrap(await supabase.from('profiles').select(STAFF_COLS).limit(5000)) || []
-    )
+    // Paged: `.limit(5000)` was not a bound - the server caps every response
+    // at 1,000, so staff past it silently vanished from the absence roster.
+    return await fetchAllOrThrow((from, to) => supabase
+      .from('profiles').select(STAFF_COLS).order('id').range(from, to), { max: 20000 })
   } catch (err) {
     if (isMissingRelation(err)) return []
     throw err

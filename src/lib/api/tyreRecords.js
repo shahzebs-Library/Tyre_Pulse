@@ -59,6 +59,9 @@ export function listRecords({ page, pageSize, search, siteFilter, brandFilter, r
     .from('tyre_records')
     .select('*', { count: 'exact' })
     .order('issue_date', { ascending: false })
+    // issue_date is not unique (many tyres fitted on one day), so without a
+    // tiebreak the same record can appear on two grid pages and another on none.
+    .order('id', { ascending: true })
     .range(page * pageSize, (page + 1) * pageSize - 1)
   if (search) { const s = sanitizeSearchTerm(search); q = q.or(`asset_no.ilike.%${s}%,serial_no.ilike.%${s}%,mis_number.ilike.%${s}%,job_card.ilike.%${s}%`) }
   if (siteFilter) q = q.eq('site', siteFilter)

@@ -13,12 +13,13 @@ const h = vi.hoisted(() => {
     return state.result
   }
   function from(table) {
-    const calls = { eq: [], or: [], not: [] }
+    const calls = { eq: [], or: [], not: [], order: [], range: [] }
     const b = {
       _table: table,
       _calls: calls,
       select() { return b },
-      order() { return b },
+      order(c, o) { calls.order.push([c, o]); return b },
+      range(f, t) { calls.range.push([f, t]); return b },
       limit() { return b },
       insert(v) { calls.insert = v; return b },
       update(v) { calls.update = v; return b },
@@ -65,6 +66,42 @@ describe('service layer - knowledgeDocuments', () => {
     // d1 has an embedding (truthy), d2 does not (null) - preserves page contract.
     expect(rows.find(r => r.id === 'd1').embedding).toBe(true)
     expect(rows.find(r => r.id === 'd2').embedding).toBeNull()
+  })
+
+  it('pages the list past 1,000 rows with an id tiebreak (no silent cap)', async () => {
+    const page = (n, off) => Array.from({ length: n }, (_, i) => ({ id: `d${off + i}` }))
+    h.state.results = [
+      { data: page(1000, 0), error: null },
+      { data: page(5, 1000), error: null },
+      // fetchAllPages fetches pages 1-4 as one concurrent window
+      { data: [], error: null },
+      { data: [], error: null },
+      { data: [], error: null },
+      { data: [{ id: 'd0' }], error: null },
+    ]
+    const rows = await knowledgeDocuments.listKnowledgeDocuments()
+    expect(rows).toHaveLength(1005)
+    expect(rows.truncated).toBe(false)
+    const b0 = h.state.builders[0]
+    expect(b0._calls.order[0][0]).toBe('created_at')
+    expect(b0._calls.order).toContainEqual(['id', { ascending: true }])
+    expect(b0._calls.range[0]).toEqual([0, 999])
+    expect(h.state.builders[1]._calls.range[0]).toEqual([1000, 1999])
+    // presence pass is paged + ordered too
+    const pres = h.state.builders[5]
+    expect(pres._calls.not).toContainEqual(['embedding', 'is', null])
+    expect(pres._calls.order).toContainEqual(['id', { ascending: true }])
+    expect(rows[0].embedding).toBe(true)
+    expect(rows[1].embedding).toBeNull()
+  })
+
+  it('reports truncation honestly when the ceiling is hit', async () => {
+    const page = Array.from({ length: 1000 }, (_, i) => ({ id: `d${i}` }))
+    h.state.results = [{ data: page, error: null }, { data: [], error: null }]
+    const rows = await knowledgeDocuments.listKnowledgeDocuments({ max: 1000 })
+    expect(rows).toHaveLength(1000)
+    expect(rows.truncated).toBe(true)
+    expect(rows.max).toBe(1000)
   })
 
   it('createKnowledgeDocument passes values through INCLUDING the embedding vector', async () => {

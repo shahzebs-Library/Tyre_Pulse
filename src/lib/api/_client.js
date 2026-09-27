@@ -228,3 +228,24 @@ export function applyCountries(query, countries, { nullSafe = true } = {}) {
   const quoted = list.map((c) => `"${String(c).replace(/(["\\])/g, '\\$1')}"`).join(',')
   return query.or(`country.in.(${quoted}),country.is.null`)
 }
+
+/**
+ * Page a table read past the PostgREST 1,000-row cap and THROW a sanitised
+ * ServiceError on failure (instead of handing back `{ data, error }` for every
+ * caller to remember to check). The page builder MUST end its ORDER BY on a
+ * unique column (normally `id`) or concurrent pages can drop/repeat rows.
+ *
+ * Returns the rows array. When the `max` ceiling was hit the array carries a
+ * non-enumerable `truncated: true`, so a caller that cares can say the list is
+ * incomplete rather than presenting it as the whole set.
+ * @param {(from:number,to:number)=>PromiseLike} pageFn
+ * @param {{max?:number, pageSize?:number, concurrency?:number}} [opts]
+ * @returns {Promise<any[] & {truncated?: boolean}>}
+ */
+export async function fetchAllOrThrow(pageFn, opts = {}) {
+  const { data, error, truncated } = await fetchAllPages(pageFn, opts)
+  if (error) throw toServiceError(error)
+  const rows = data || []
+  Object.defineProperty(rows, 'truncated', { value: !!truncated, enumerable: false })
+  return rows
+}

@@ -48,6 +48,7 @@
  * @module api/savedViews
  */
 import { supabase } from '../supabase'
+import { toServiceError } from './_client'
 import {
   SAVED_REPORTS_KEY, MAX_SAVED_REPORTS, DATASETS,
   fetchSavedReports as fetchLegacyReports,
@@ -199,7 +200,7 @@ export async function listReports() {
 
   if (res.error) {
     if (isMissingTableError(res.error)) return fetchLegacyReports(supabase)
-    throw new Error(res.error.message || 'Could not load saved reports.')
+    throw toServiceError(res.error, 'Could not load saved reports.')
   }
 
   const tableReports = (res.data || []).map(rowToReport)
@@ -247,7 +248,7 @@ export async function saveReport(rec, currentList = []) {
   if (row) {
     const res = await supabase.from(REPORTS_TABLE).upsert(row, { onConflict: 'id' })
     if (!res.error) return rec
-    if (!isMissingTableError(res.error)) throw new Error(res.error.message || 'Could not save report.')
+    if (!isMissingTableError(res.error)) throw toServiceError(res.error, 'Could not save report.')
     // fall through to legacy on missing table
   }
   // Module-mismatch report OR table missing → persist via legacy blob.
@@ -264,7 +265,7 @@ export async function saveReport(rec, currentList = []) {
 export async function deleteReport(id, currentList = []) {
   const res = await supabase.from(REPORTS_TABLE).delete().eq('id', id)
   if (res.error && !isMissingTableError(res.error)) {
-    throw new Error(res.error.message || 'Could not delete report.')
+    throw toServiceError(res.error, 'Could not delete report.')
   }
   // Always reconcile the legacy blob too (the row may live there for
   // module-mismatch datasets, or the table may be absent).
@@ -288,7 +289,7 @@ export async function renameReport(id, name, currentList = []) {
     .update({ name: clean, updated_at: now })
     .eq('id', id)
   if (res.error && !isMissingTableError(res.error)) {
-    throw new Error(res.error.message || 'Could not rename report.')
+    throw toServiceError(res.error, 'Could not rename report.')
   }
   const next = currentList.map(r => (r.id === id ? { ...r, name: clean, updated_at: now } : r))
   // Reconcile legacy blob for module-mismatch / table-absent rows.
@@ -343,7 +344,7 @@ export async function listDashboards() {
 
   if (res.error) {
     if (isMissingTableError(res.error)) return fetchLegacyLayouts(supabase)
-    throw new Error(res.error.message || 'Could not load dashboard layouts.')
+    throw toServiceError(res.error, 'Could not load dashboard layouts.')
   }
 
   const layouts = (res.data || []).map(rowToLayout)
@@ -380,7 +381,7 @@ export async function saveDashboard(layout, currentList = []) {
   const row = layoutToRow(layout, userId)
   const res = await supabase.from(DASHBOARDS_TABLE).upsert(row, { onConflict: 'id' })
   if (!res.error) return rowToLayout({ ...row, created_at: layout.created_at })
-  if (!isMissingTableError(res.error)) throw new Error(res.error.message || 'Could not save dashboard.')
+  if (!isMissingTableError(res.error)) throw toServiceError(res.error, 'Could not save dashboard.')
   // Table missing → legacy blob (validated + capped by saveLegacyLayouts).
   const v = validateLayout(layout)
   const next = [v, ...currentList.filter(l => l.id !== v.id)].slice(0, MAX_LAYOUTS)
@@ -396,7 +397,7 @@ export async function saveDashboard(layout, currentList = []) {
 export async function deleteDashboard(id, currentList = []) {
   const res = await supabase.from(DASHBOARDS_TABLE).delete().eq('id', id)
   if (res.error) {
-    if (!isMissingTableError(res.error)) throw new Error(res.error.message || 'Could not delete dashboard.')
+    if (!isMissingTableError(res.error)) throw toServiceError(res.error, 'Could not delete dashboard.')
     await saveLegacyLayouts(supabase, currentList.filter(l => l.id !== id))
   }
 }
@@ -424,7 +425,7 @@ export async function setDefaultDashboard(id, currentList = [], userId = null) {
     .eq('user_id', uid)
     .eq('is_default', true)
   if (res.error) {
-    if (!isMissingTableError(res.error)) throw new Error(res.error.message || 'Could not set default dashboard.')
+    if (!isMissingTableError(res.error)) throw toServiceError(res.error, 'Could not set default dashboard.')
     await saveLegacyLayouts(supabase, next)
     return next
   }
@@ -433,7 +434,7 @@ export async function setDefaultDashboard(id, currentList = [], userId = null) {
     .update({ is_default: true, updated_at: new Date().toISOString() })
     .eq('id', id)
   if (setRes.error && !isMissingTableError(setRes.error)) {
-    throw new Error(setRes.error.message || 'Could not set default dashboard.')
+    throw toServiceError(setRes.error, 'Could not set default dashboard.')
   }
   return next
 }
@@ -455,7 +456,7 @@ export async function shareDashboard(id, shared, currentList = []) {
     .update({ shared: !!shared, updated_at: now })
     .eq('id', id)
   if (res.error) {
-    if (!isMissingTableError(res.error)) throw new Error(res.error.message || 'Could not update dashboard sharing.')
+    if (!isMissingTableError(res.error)) throw toServiceError(res.error, 'Could not update dashboard sharing.')
     await saveLegacyLayouts(supabase, next)
   }
   return next

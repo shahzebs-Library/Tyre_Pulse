@@ -19,6 +19,7 @@ const h = vi.hoisted(() => {
       delete() { calls.delete = true; return b },
       eq(c, v) { calls.eq.push([c, v]); return b },
       or(e) { calls.or.push(e); return b },
+      in(c, v) { (calls.in = calls.in || []).push([c, v]); return b },
       maybeSingle() { return Promise.resolve(state.result) },
       single() { return Promise.resolve(state.result) },
       // A test may set `state.result` to a FUNCTION to answer per request - that
@@ -61,6 +62,16 @@ describe('accidents owner page - service layer', () => {
     expect(b._calls.select).toContain('claim_amount')
     // ...but never leaks organisation_id (RLS-managed).
     expect(b._calls.select).not.toContain('organisation_id')
+  })
+
+  it('orders every page path by incident_date then a unique id tiebreak', () => {
+    // incident_date is not unique and fetchAllPages pages concurrently, so the
+    // single-country and All paths need the tiebreak too, not just the
+    // multi-country reporting scope (it used to be scope-only).
+    for (const args of [{ country: 'KSA' }, { country: 'All' }, { countries: ['KSA', 'UAE'] }]) {
+      const b = accidents.listAccidentsForPage({ ...args, from: 0, to: 999 })
+      expect(b._calls.order).toEqual(['incident_date', 'id'])
+    }
   })
 
   it('does NOT filter country for "All" on the page list', () => {

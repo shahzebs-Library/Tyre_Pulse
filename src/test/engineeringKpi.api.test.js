@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const h = vi.hoisted(() => {
   const state = { result: { data: [], error: null }, last: null }
   function from(table) {
-    const calls = { eq: [], or: [], gte: [], lte: [], range: null }
+    const calls = { eq: [], or: [], gte: [], lte: [], order: [], range: null }
     const b = {
       _table: table,
       _calls: calls,
@@ -15,6 +15,7 @@ const h = vi.hoisted(() => {
       or(e) { calls.or.push(e); return b },
       gte(c, v) { calls.gte.push([c, v]); return b },
       lte(c, v) { calls.lte.push([c, v]); return b },
+      order(c) { calls.order.push(c); return b },
       range(f, t) { calls.range = [f, t]; return b },
       then(onF, onR) { return Promise.resolve(state.result).then(onF, onR) },
     }
@@ -34,6 +35,20 @@ beforeEach(() => {
 })
 
 describe('service layer - engineeringKpi', () => {
+  it('every KPI read carries an id tiebreak, including the scalar-country and unscoped paths', async () => {
+    // These reads are paged CONCURRENTLY by fetchAllPages and have no other
+    // ORDER BY; measured live, page 2 of an unordered KSA tyre read differed on
+    // 781 of 1,000 rows under another plan. The tiebreak used to be scope-only.
+    await engKpiApi.listKpiTyreRecords({ country: 'KSA', from: 0, to: 999 })
+    expect(h.state.last._calls.order).toEqual(['id'])
+    await engKpiApi.listKpiTyreRecords({ from: 0, to: 999 })
+    expect(h.state.last._calls.order).toEqual(['id'])
+    await engKpiApi.listKpiInspections({ country: 'UAE', from: 0, to: 999 })
+    expect(h.state.last._calls.order).toEqual(['id'])
+    await engKpiApi.listKpiFleet({ from: 0, to: 999 })
+    expect(h.state.last._calls.order).toEqual(['id'])
+  })
+
   it('listKpiTyreRecords applies STRICT eq country, date window, and paged range', async () => {
     await engKpiApi.listKpiTyreRecords({ country: 'KSA', dateFrom: '2026-01-01', dateTo: '2026-06-30', from: 0, to: 999 })
     expect(h.state.last._table).toBe('tyre_records')

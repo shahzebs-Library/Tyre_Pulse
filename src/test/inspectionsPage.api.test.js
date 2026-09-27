@@ -69,6 +69,8 @@ describe('inspections page service - listInspectionsForPage', () => {
     expect(cols).not.toContain('approver_signature')
     // order + paging + scoping mirror the page's fetchAllPages callback
     expect(c.order).toContainEqual(['scheduled_date', { ascending: false }])
+    // id tiebreak: scheduled_date is not unique and the page pages concurrently
+    expect(c.order).toContainEqual(['id', { ascending: true }])
     expect(c.range).toEqual([0, 999])
     expect(c.eq).toContainEqual(['country', 'Oman'])
     expect(c.eq).toContainEqual(['created_by', 'u1'])

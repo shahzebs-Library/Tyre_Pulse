@@ -8,7 +8,7 @@
  * The lifecycle maths live in src/lib/accidentWorkflow.js (pure engine) - do NOT
  * re-derive stages/routing here.
  */
-import { supabase, unwrap } from './_client'
+import { supabase, unwrap, fetchAllOrThrow } from './_client'
 import { statusFromStage } from '../accidentWorkflow'
 
 const DEPT_COLS = 'id,name,code,description,active,sort_order,created_at,updated_at'
@@ -59,10 +59,12 @@ export async function createEmailTemplate(values) {
 }
 
 // ── recipient-preview source (profiles scoped by RLS to the caller's org) ─────
+// Paged: profiles is 725 rows and growing (multi-tenant), and a bare select
+// stops silently at 1,000 - a routed recipient past it would never be previewed.
 export async function listRoutingProfiles() {
-  return unwrap(
-    await supabase.from('profiles').select(PROFILE_COLS).eq('approved', true).eq('locked', false),
-  )
+  return fetchAllOrThrow((from, to) => supabase
+    .from('profiles').select(PROFILE_COLS).eq('approved', true).eq('locked', false)
+    .order('id').range(from, to), { max: 20000 })
 }
 
 // ── guarded stage / VOR / claim mutations (triggers sync status + emit events) ─

@@ -409,14 +409,17 @@ const clientApi = await vi.importActual('../lib/api/_client')
 describe('the widened service functions are byte-identical without `countries`', () => {
   beforeEach(() => { q.state.result = { data: [], error: null }; q.state.last = null })
 
-  it('listKpiTyreRecords still emits the STRICT eq scope and no ordering', async () => {
+  it('listKpiTyreRecords still emits the STRICT eq scope, now with an id tiebreak', async () => {
     await engKpi.listKpiTyreRecords({ country: 'KSA', dateFrom: '2026-01-01', from: 0, to: 999 })
     expect(q.state.last._calls.eq).toEqual([['country', 'KSA']])
     expect(q.state.last._calls.in).toHaveLength(0)
     expect(q.state.last._calls.or).toHaveLength(0)
-    // The multi-country path adds an `id` tiebreak; the single-country path must
-    // NOT, or the query every other page issues would have changed.
-    expect(q.state.last._calls.order).toHaveLength(0)
+    // DELIBERATE CONTRACT CHANGE (2026-09-27): the scalar-country path used to
+    // be kept free of ordering. It is paged concurrently by the Engineering KPI
+    // page exactly like the scope path, and an unordered paged read was measured
+    // returning 781 of 1,000 different rows on page 2, so it now carries the same
+    // `id` tiebreak. The FILTER is unchanged.
+    expect(q.state.last._calls.order).toEqual([['id', undefined]])
     expect(q.state.last._calls.range).toEqual([0, 999])
   })
 
@@ -427,11 +430,16 @@ describe('the widened service functions are byte-identical without `countries`',
     expect(q.state.last._calls.or).toHaveLength(0)
   })
 
-  it('listWorkOrdersPage still emits eq + opened_at ordering, and its date bounds', async () => {
+  it('listWorkOrdersPage still emits eq + opened_at ordering (+ id tiebreak), and its date bounds', async () => {
     await workOrdersApi.listWorkOrdersPage({ country: 'UAE', from: 0, to: 999, openedFrom: '2026-01-01' })
     expect(q.state.last._calls.eq).toEqual([['country', 'UAE']])
     expect(q.state.last._calls.in).toHaveLength(0)
-    expect(q.state.last._calls.order).toEqual([['opened_at', { ascending: false }]])
+    // DELIBERATE CONTRACT CHANGE (2026-09-27): the single-country path now
+    // carries the `id` tiebreak too. opened_at is not unique (89,628 rows, 61,767
+    // distinct) and this read is paged CONCURRENTLY by fetchAllPages, so without
+    // a total order a page boundary inside a tie group drops or repeats rows.
+    // The FILTER is unchanged - ordering cannot change which rows match.
+    expect(q.state.last._calls.order).toEqual([['opened_at', { ascending: false }], ['id', { ascending: true }]])
     expect(q.state.last._calls.range).toEqual([0, 999])
     expect(q.state.last._calls.gte).toContainEqual(['opened_at', '2026-01-01'])
   })

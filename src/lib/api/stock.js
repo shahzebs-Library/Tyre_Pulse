@@ -127,13 +127,19 @@ export async function postStockMovement({ stockId, type, qty, reason, reference 
  * mirrors the page's fleet-wide velocity basis.
  */
 export async function listTyreIssuesSince(sinceDate) {
-  const { data } = await fetchAllPages((from, to) =>
+  // THROWS on failure. It used to discard the error and return [], which the
+  // velocity estimate then read as "no tyres issued" - a failed read rendered as
+  // a measured zero. The caller already treats a throw as "velocity unknown".
+  // The `id` order makes the concurrent paging stable (no dropped/repeated rows).
+  const { data, error } = await fetchAllPages((from, to) =>
     supabase
       .from('tyre_records')
       .select(TYRE_ISSUE_COLS)
       .gte('issue_date', sinceDate)
+      .order('id')
       .range(from, to),
   )
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data ?? []
 }
 

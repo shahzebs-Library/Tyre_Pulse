@@ -9,7 +9,7 @@
  * reshape args here. The page owns the arg construction; this layer only
  * relocates the call and normalises error surfacing.
  */
-import { supabase, unwrap, ServiceError } from './_client'
+import { supabase, unwrap, ServiceError, fetchAllOrThrow } from './_client'
 import { toUserMessage } from '../safeError'
 
 // Least-privilege column set for the admin user list + edit modal. Covers every
@@ -27,18 +27,24 @@ export async function listOrganisations() {
 }
 
 /**
- * List profiles, newest first - mirrors the page's
- * `.from('profiles').select('*').order('created_at', desc)`.
+ * List profiles, newest first (created_at desc, id tiebreak).
  * Returns the rows (throws ServiceError on failure; the page catches and maps
- * RLS/permission codes to its "RLS blocked" state).
+ * RLS/permission codes to its "RLS blocked" state; the original code is kept on
+ * `.code`).
+ *
+ * PAGED: profiles is 725 rows and growing, and the admin user list would stop
+ * silently at 1,000 with no marker. `created_at` is not unique, so the id
+ * tiebreak keeps the concurrent pages stable.
  */
+export const MAX_PROFILE_ROWS = 50000
+
 export async function listProfiles() {
-  return unwrap(
-    await supabase
-      .from('profiles')
-      .select(COLS)
-      .order('created_at', { ascending: false })
-  )
+  return fetchAllOrThrow((from, to) => supabase
+    .from('profiles')
+    .select(COLS)
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: true })
+    .range(from, to), { max: MAX_PROFILE_ROWS })
 }
 
 /**

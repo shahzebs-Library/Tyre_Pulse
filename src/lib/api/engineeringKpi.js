@@ -31,13 +31,16 @@ import { supabase, applyCountries, countryList } from './_client'
  * `id` is a uuid with a unique index on every table read here, so it is a real
  * tiebreak; ordering cannot change WHICH rows match, only that paging is stable.
  *
- * The legacy scalar `country` path is deliberately left byte-identical, so the
- * Engineering KPI page's own queries do not move with this change.
+ * 2026-09-27: the tiebreak now covers the legacy scalar `country` path and the
+ * unscoped path as well. They used to be left byte-identical, but the Engineering
+ * KPI page drives exactly those reads through the same CONCURRENT fetchAllPages,
+ * so the 781-of-1,000 measurement above applied to them too. The FILTER is
+ * unchanged on every path; only the sort key was added.
  */
 function scopeCountry(query, country, countries) {
   const list = countryList(countries)
   if (list.length) return applyCountries(query, list, { nullSafe: false }).order('id')
-  return country ? query.eq('country', country) : query
+  return (country ? query.eq('country', country) : query).order('id')
 }
 
 /**

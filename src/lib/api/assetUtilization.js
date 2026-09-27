@@ -33,6 +33,9 @@ export async function listAssetUtilization({ country } = {}) {
       applyCountry(supabase.from('asset_utilization').select(COLS), country)
         .order('utilization_pct', { ascending: false, nullsFirst: false })
         .order('asset_no', { ascending: true })
+        // asset_no is unique per COUNTRY only (the same code exists in several),
+        // so the id tiebreak is what makes the concurrent paging total.
+        .order('id', { ascending: true })
         .range(from, to),
     )
     if (error) throw new ServiceError(toUserMessage(error), error.code, error)

@@ -12,7 +12,7 @@
  * users' `profiles.role` are keyed by the name string, so a rename would orphan
  * both. Only description/active are editable; access is edited via setRoleModules.
  */
-import { supabase, unwrap } from './_client'
+import { supabase, unwrap, fetchAllOrThrow } from './_client'
 import { saveModulePermissions, listGlobalPermissions } from './modulePermissions'
 import { ACCESS_ROLES, ALL_MODULES } from '../moduleCatalog'
 import { getPermissionOverrides, savePermissionOverrides } from '../permissionMatrix'
@@ -54,9 +54,10 @@ export async function countUsersByRole(names) {
   const clean = (names || []).filter(Boolean)
   if (!clean.length) return {}
   try {
-    const rows = unwrap(
-      await supabase.from('profiles').select('role').in('role', clean),
-    ) || []
+    // Paged: a per-role COUNT over a bare select stops at 1,000 profiles and
+    // would under-report every role past the cap (profiles is 725 and growing).
+    const rows = await fetchAllOrThrow((from, to) => supabase
+      .from('profiles').select('role').in('role', clean).order('id').range(from, to), { max: 50000 })
     return reduceRoleCounts(rows, clean)
   } catch {
     return {}

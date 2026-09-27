@@ -77,21 +77,21 @@ export async function updateAccident(id, patch) {
  */
 export function listAccidentsForPage({ country, countries, from, to } = {}) {
   const list = countryList(countries)
+  // `id` tiebreak on EVERY path (single country, scope and All): `incident_date` is
+  // not unique and fetchAllPages reads pages CONCURRENTLY, so without a total
+  // order a page boundary inside a tie group can drop or repeat rows. The
+  // tiebreak cannot change which rows match, only that paging is stable.
   let q = supabase
     .from('accidents')
     .select(PAGE_COLS)
     .order('incident_date', { ascending: false })
+    .order('id', { ascending: true })
   // Reporting scope: a SET of countries. Absent (every caller but Board
-  // Overview) leaves the query exactly as it was; one country emits the same
-  // `country=eq.X`.
-  //
-  // The `id` tiebreak is added on the WHOLE reporting-scope path, not just the
-  // multi-country one: `incident_date` is not unique (38 rows, 26 distinct
-  // today), and the gate has to be right for the table this grows into, not for
-  // today's row count. It is applied uniformly with work orders and the KPI
-  // reads so one rule covers every scoped read.
+  // Overview) leaves the filter exactly as it was; one country emits the same
+  // `country=eq.X`. The `id` tiebreak above covers this path too
+  // (`incident_date` is not unique: 38 rows, 26 distinct).
   if (list.length) {
-    q = applyCountries(q, list, { nullSafe: false }).order('id')
+    q = applyCountries(q, list, { nullSafe: false })
   } else if (country && country !== 'All') {
     q = q.eq('country', country)
   }

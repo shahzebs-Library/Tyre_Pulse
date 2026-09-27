@@ -12,7 +12,7 @@
  * silently truncated. A missing relation (fresh/partial schema) degrades to an
  * empty list rather than throwing — the page shows an honest empty state.
  */
-import { supabase, applyCountry, fetchAllPages, unwrap, ServiceError } from './_client'
+import { supabase, applyCountry, fetchAllPages, unwrap, ServiceError, toServiceError } from './_client'
 import { toUserMessage } from '../safeError'
 
 // Least-privilege select: only the columns carbon aggregation needs. Mirrors
@@ -91,7 +91,8 @@ export async function listFuelUsage({ country } = {}) {
   } catch (err) {
     if (isMissingRelation(err)) return []
     if (err instanceof ServiceError) throw err
-    throw new ServiceError(err?.message || 'Failed to load fuel usage', err?.code, err)
+    // toServiceError, not err.message: a raw fetch/driver error must not reach the UI.
+    throw toServiceError(err, 'Failed to load fuel usage')
   }
 }
 

@@ -31,7 +31,10 @@ export function listDashboardTyres({ country, from, to, rangeFrom, rangeTo } = {
   )
   if (from) q = q.gte('issue_date', from)
   if (to) q = q.lte('issue_date', to)
-  if (Number.isFinite(rangeFrom) && Number.isFinite(rangeTo)) q = q.range(rangeFrom, rangeTo)
+  // Paged by the caller through fetchAllPages, which reads pages CONCURRENTLY:
+  // without a total order a page boundary can drop or repeat rows, so every
+  // chart and cost total on the Dashboard could double-count or miss a tyre.
+  if (Number.isFinite(rangeFrom) && Number.isFinite(rangeTo)) q = q.order('id').range(rangeFrom, rangeTo)
   return q
 }
 

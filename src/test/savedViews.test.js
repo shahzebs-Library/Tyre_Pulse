@@ -138,7 +138,12 @@ describe('listReports', () => {
 
   it('propagates non-missing-table errors', async () => {
     queue({ data: null, error: { code: '42501', message: 'permission denied' } })
-    await expect(listReports()).rejects.toThrow('permission denied')
+    // Propagated, but SANITISED (2026-09-27): the raw PostgREST text used to be
+    // re-thrown verbatim to the UI. The code survives on .code, the original on .cause.
+    const err = await listReports().catch((e) => e)
+    expect(err.name).toBe('ServiceError')
+    expect(err.code).toBe('42501')
+    expect(err.cause).toMatchObject({ message: 'permission denied' })
   })
 
   it('runs the one-time legacy→table migration only once per session', async () => {

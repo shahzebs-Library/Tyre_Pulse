@@ -19,6 +19,7 @@ const h = vi.hoisted(() => {
       or(e) { calls.or.push(e); return b },
       gte(c, v) { calls.gte.push([c, v]); return b },
       lte(c, v) { calls.lte.push([c, v]); return b },
+      range(f, t) { calls.range = [f, t]; return b },
       then(onF, onR) { return Promise.resolve(state.result).then(onF, onR) },
     }
     state.last = b
@@ -49,6 +50,15 @@ describe('service layer - dashboard', () => {
     expect(h.state.last._calls.eq).toHaveLength(0)
     expect(h.state.last._calls.gte).toContainEqual(['issue_date', '2026-01-01'])
     expect(h.state.last._calls.lte).toContainEqual(['issue_date', '2026-06-30'])
+  })
+
+  it('listDashboardTyres pages with an id tiebreak (concurrent paging must be stable)', async () => {
+    await dashboard.listDashboardTyres({ country: 'KSA', rangeFrom: 0, rangeTo: 999 })
+    expect(h.state.last._calls.order).toEqual([['id', undefined]])
+    expect(h.state.last._calls.range).toEqual([0, 999])
+    // unranged pass-through stays unordered
+    await dashboard.listDashboardTyres({ country: 'KSA' })
+    expect(h.state.last._calls.order).toEqual([])
   })
 
   it('listDashboardTyres omits country OR for "All" and omits date bounds when blank', async () => {

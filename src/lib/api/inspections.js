@@ -103,6 +103,9 @@ export function listInspectionsForPage({ from, to, country, createdBy } = {}) {
     .from('inspections')
     .select(LIST_COLS)
     .order('scheduled_date', { ascending: false })
+    // scheduled_date is not unique (1,479 rows) and the page pages this through
+    // the CONCURRENT fetchAllPages; the id tiebreak keeps page boundaries stable.
+    .order('id', { ascending: true })
     .range(from, to)
   if (country && country !== 'All') q = q.eq('country', country)
   if (createdBy) q = q.eq('created_by', createdBy)

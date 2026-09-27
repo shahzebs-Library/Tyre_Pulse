@@ -15,7 +15,7 @@
  * Writes pass `values` through unchanged, INCLUDING the caller-computed
  * `embedding` vector.
  */
-import { supabase, unwrap } from './_client'
+import { supabase, unwrap, fetchAllPages, toServiceError } from './_client'
 
 // Least-privilege metadata columns for list/detail. Excludes `embedding`
 // (heavy vector; presence is derived separately) and `organisation_id`
@@ -26,40 +26,68 @@ const DETAIL_COLS =
   'id,title,content,doc_type,site,asset_no,country,tags,created_at,updated_at'
 
 /**
- * List knowledge documents, newest first (mirrors the page's
- * `.order('created_at', { ascending: false })`). Each returned row carries a
+ * Safety ceiling on a single corpus read. The table is small today, but a bare
+ * select is silently capped at 1,000 rows by PostgREST; paging with a ceiling
+ * keeps the read complete up to this size and HONEST beyond it.
+ */
+export const KNOWLEDGE_DOCS_MAX = 20000
+
+/**
+ * List knowledge documents, newest first. Each returned row carries a
  * lightweight boolean `embedding` presence flag (true when the row has an
  * embedding vector) so callers can render indexed/pending status without
  * transferring the vector itself.
- * @returns {Promise<Array<object>>}
+ *
+ * Paged past the PostgREST 1,000-row cap via fetchAllPages. `created_at` is not
+ * unique, so the order carries an `id` tiebreak - without it a page boundary
+ * inside a tie group drops or repeats rows.
+ *
+ * The result is still an ARRAY (the page contract), with two extra properties:
+ * `truncated` (true when the ceiling was hit, so the list is NOT the whole
+ * corpus) and `max` (the ceiling). A silently shortened list reads as "these
+ * are all the documents", which is the failure this guards against.
+ * @param {{max?:number}} [opts]
+ * @returns {Promise<Array<object> & {truncated:boolean, max:number}>}
  */
-export async function listKnowledgeDocuments() {
-  const rows =
-    unwrap(
-      await supabase
+export async function listKnowledgeDocuments({ max = KNOWLEDGE_DOCS_MAX } = {}) {
+  const { data, error, truncated } = await fetchAllPages(
+    (from, to) =>
+      supabase
         .from('knowledge_documents')
         .select(LIST_COLS)
-        .order('created_at', { ascending: false }),
-    ) ?? []
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: true })
+        .range(from, to),
+    { max },
+  )
+  if (error) throw toServiceError(error)
+  const rows = data ?? []
 
-  if (rows.length === 0) return rows
+  const finish = list => {
+    Object.defineProperty(list, 'truncated', { value: !!truncated, enumerable: false })
+    Object.defineProperty(list, 'max', { value: max, enumerable: false })
+    return list
+  }
+  if (rows.length === 0) return finish(rows)
 
   // Lightweight presence pass: ids of rows that HAVE an embedding. Returns only
-  // uuids (no vector bytes), so the full corpus stays cheap to load.
-  const indexedIds = new Set(
-    (
-      unwrap(
-        await supabase
-          .from('knowledge_documents')
-          .select('id')
-          .not('embedding', 'is', null),
-      ) ?? []
-    ).map(r => r.id),
+  // uuids (no vector bytes). Paged too - an unpaged read would mark every
+  // indexed document past the 1,000th as "pending".
+  const presence = await fetchAllPages(
+    (from, to) =>
+      supabase
+        .from('knowledge_documents')
+        .select('id')
+        .not('embedding', 'is', null)
+        .order('id', { ascending: true })
+        .range(from, to),
   )
+  if (presence.error) throw toServiceError(presence.error)
+  const indexedIds = new Set((presence.data ?? []).map(r => r.id))
 
   // Preserve the page's `d.embedding` truthiness contract without shipping the
-  // vector: presence → truthy marker, absence → null.
-  return rows.map(r => ({ ...r, embedding: indexedIds.has(r.id) ? true : null }))
+  // vector: presence -> truthy marker, absence -> null.
+  return finish(rows.map(r => ({ ...r, embedding: indexedIds.has(r.id) ? true : null })))
 }
 
 /** Get one knowledge document by id (or null if not found). Excludes embedding. */

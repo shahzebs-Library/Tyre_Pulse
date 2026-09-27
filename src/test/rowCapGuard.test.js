@@ -86,7 +86,15 @@ const LARGE_TABLES = [
   'brain_cache',            //  ~28,284
   'material_master',        //  ~22,162
   'tyre_records',           //  ~11,132
-  'engine_hours_logs',      //   ~4,379
+  'engine_hours_logs',      //   ~4,883  (2026-09-27)
+  'domain_events',          // ~215,695  (2026-09-27, was never policed)
+  'notifications',          //   ~8,553  (2026-09-27)
+  'access_audit',           //   ~3,629  (2026-09-27)
+  'inspection_audit_log',   //   ~3,269  (2026-09-27)
+  'workflow_notifications', //   ~2,030  (2026-09-27)
+  'odometer_logs',          //   ~1,640  (2026-09-27)
+  'cpk_asset_meter',        //   ~1,005  (2026-09-27)
+  'profiles',               //     725   (2026-09-27, was 38 - multi-tenant growth)
   'vehicle_fleet',          //    1,617  (KSA 1,030 / UAE 452 / Egypt 135; 1,377 distinct asset_no)
   'inspections',            //      241  - kept: grows per inspection
   'accidents',              //       38  - kept: grows per incident
@@ -98,7 +106,7 @@ const LARGE_TABLES = [
 // below the cap, so a bare select of either cannot truncate and policing them
 // would only add noise. ADD THEM THE MOMENT EITHER APPROACHES 1,000 - a
 // multi-tenant profiles table gets there fast.
-const BELOW_CAP_NOT_POLICED = { sites: 62, profiles: 38 }
+const BELOW_CAP_NOT_POLICED = { sites: 62 }
 
 // The genuinely massive tables where an uncapped `fetchAllPages` full read is a
 // real hazard (hundreds of thousands of rows into the browser). A `fetchAllPages`
@@ -170,6 +178,8 @@ const ALLOWED = [
   //     debt stays visible and can only shrink (test 2 fails on a stale entry).
   //     Each names the measured impact so nobody has to re-derive it. ---
   { file: 'src/lib/api/materialMaster.js', why: 'BOUNDED, but the resolver cannot evaluate a Math.min expression: listMaterials clamps to Math.min(limit, MATERIAL_LIST_MAX = 1000) (was 2000 - a lie against the 1,000 cap, fixed) and listMaterialTransactions to Math.min(limit, 500). Both are ranked "top N" views, not totals' },
+  { file: 'mobile/app/(app)/team.tsx', why: 'KNOWN (2026-09-27): profiles .limit(1000) for the team list - profiles is 725 rows, below the cap today; truncates past 1,000. Mobile, left for a mobile pass (builds frozen)' },
+  { file: 'mobile/lib/checklists.ts', why: 'KNOWN (2026-09-27): two profiles reads (assignee/role pickers) - 725 rows today, below the cap; truncate past 1,000. Mobile, left for a mobile pass (builds frozen)' },
   { file: 'mobile/app/(app)/admin/index.tsx', why: 'KNOWN: bare select of accidents (38 rows today) for the admin severity rollup - below the cap now, truncates once the register passes 1,000' },
 ]
 

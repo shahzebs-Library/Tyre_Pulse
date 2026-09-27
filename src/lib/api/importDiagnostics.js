@@ -11,7 +11,7 @@
  * the throw-on-error / return-data convention of imports.js.
  */
 import { supabase } from '../supabase'
-import { ServiceError } from './_client'
+import { ServiceError, toServiceError } from './_client'
 import { toUserMessage } from '../safeError'
 
 // Row ids we scan to resolve issues (import_row_issues has no batch_id, so we
@@ -73,7 +73,8 @@ export async function listBatchIssues(batchId, { onlyErrors = true, limit = 500 
     .select('id, source_row_no')
     .eq('batch_id', batchId)
     .limit(ISSUE_ROW_SCAN_LIMIT)
-  if (rowsErr) throw rowsErr
+  // Sanitised: the raw PostgREST error names tables/columns/policies.
+  if (rowsErr) throw toServiceError(rowsErr)
 
   const rowList = rows ?? []
   if (rowList.length === 0) return []
@@ -87,7 +88,7 @@ export async function listBatchIssues(batchId, { onlyErrors = true, limit = 500 
     .in('row_id', ids)
   if (onlyErrors) q = q.eq('severity', 'error')
   const { data: issues, error: issuesErr } = await q.limit(limit)
-  if (issuesErr) throw issuesErr
+  if (issuesErr) throw toServiceError(issuesErr)
 
   return (issues ?? []).map((i) => ({ ...i, source_row_no: rowNoById.get(i.row_id) ?? null }))
 }

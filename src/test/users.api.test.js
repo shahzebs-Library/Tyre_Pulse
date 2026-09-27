@@ -7,12 +7,13 @@ const h = vi.hoisted(() => {
   const state = { result: { data: [], error: null }, last: null, rpc: { data: null, error: null }, lastRpc: null }
   function rpc(name, args) { state.lastRpc = { name, args }; return Promise.resolve(state.rpc) }
   function from(table) {
-    const calls = { eq: [], or: [] }
+    const calls = { eq: [], or: [], order: [] }
     const b = {
       _table: table,
       _calls: calls,
       select() { return b },
-      order() { return b },
+      order(c, o) { calls.order.push([c, o]); return b },
+      range(f, t) { calls.range = [f, t]; return b },
       limit() { return b },
       insert(v) { calls.insert = v; return b },
       update(v) { calls.update = v; return b },
@@ -47,6 +48,10 @@ describe('service layer - users', () => {
     const rows = await users.listProfiles()
     expect(h.state.last._table).toBe('profiles')
     expect(rows).toEqual([{ id: 'u1', full_name: 'Ada' }])
+    // Paged (profiles is 725 rows and growing) with a unique id tiebreak.
+    expect(h.state.last._calls.order).toEqual([['created_at', { ascending: false }], ['id', { ascending: true }]])
+    expect(h.state.last._calls.range).toEqual([0, 999])
+    expect(rows.truncated).toBe(false)
   })
 
   it('listAuditLog reads from audit_log', async () => {

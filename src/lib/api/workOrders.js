@@ -103,23 +103,27 @@ export async function updateWorkOrder(id, patch) {
  */
 export function listWorkOrdersPage({ country, countries, from, to, openedFrom, openedTo, lean = false } = {}) {
   const list = countryList(countries)
+  // `id` tiebreak on EVERY path (single country, scope and All): `opened_at` is
+  // not unique and fetchAllPages reads pages CONCURRENTLY, so without a total
+  // order a page boundary inside a tie group can drop or repeat rows. The
+  // tiebreak cannot change which rows match, only that paging is stable.
   let q = supabase
     .from('work_orders')
     .select(lean ? AGGREGATE_COLS : PAGE_COLS)
     .order('opened_at', { ascending: false })
-  // Reporting scope: a SET of countries. Absent (the Work Orders page) the query
-  // is exactly as it was; one country emits the same `country=eq.X`.
+    .order('id', { ascending: true })
+  // Reporting scope: a SET of countries. Absent (the Work Orders page) the
+  // filter is exactly as it was; one country emits the same `country=eq.X`.
   //
-  // The `id` tiebreak is added on the WHOLE reporting-scope path, not just the
-  // multi-country one. `opened_at` is NOT unique (measured live: 89,628 rows but
-  // only 61,767 distinct timestamps, with tie groups up to 175 rows), so a page
-  // boundary landing inside a tie group lets rows drop or repeat - and
-  // `fetchAllPages` fetches pages CONCURRENTLY, so the two sides of a boundary
-  // can come from different plans. Measured: page 2 of the scoped read returned
-  // 4 rows that differed under a different sort plan without the tiebreak, and 0
-  // with it. A one-country scope still reads 62 pages, so it is exposed too.
+  // The `id` tiebreak above now covers EVERY path. `opened_at` is NOT unique
+  // (measured live: 89,628 rows but only 61,767 distinct timestamps, tie groups
+  // up to 175 rows), and a one-country read still spans ~62 concurrently fetched
+  // pages - measured, page 2 of the scoped read returned 4 rows that differed
+  // under a different sort plan without the tiebreak, and 0 with it. It used to
+  // be applied only when `countries` was passed, which left the Work Orders page's
+  // own single-country read exposed.
   if (list.length) {
-    q = applyCountries(q, list, { nullSafe: false }).order('id')
+    q = applyCountries(q, list, { nullSafe: false })
   } else if (country && country !== 'All') {
     q = q.eq('country', country)
   }

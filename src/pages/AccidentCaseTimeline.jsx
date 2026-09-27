@@ -15,19 +15,29 @@
  * labels (Delivered n/n only when per-recipient delivery is recorded), and the
  * "Manage recipient groups" row routing Admins to the routing rules.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft, Bell, Users as UsersIcon, ListChecks, Mail, Truck, Clock, FileText,
   ShieldCheck, Settings, ChevronRight, PenLine, Megaphone, Circle, AlertTriangle,
-  Loader2, X, Copy, ExternalLink, MoreHorizontal, CheckCircle2,
+  Loader2, X, Copy, ExternalLink, MoreHorizontal, CheckCircle2, Search, RefreshCw,
+  FileSpreadsheet, Activity, Hourglass, RotateCcw,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import CaseSlaHeader from '../components/accidents/CaseSlaHeader'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import Modal from '../components/ui/Modal'
+import useAnchoredPopover from '../components/ui/useAnchoredPopover'
 import { loadCase } from '../lib/api/accidentCase'
 import { loadCaseTimeline } from '../lib/api/caseTimelineFeed'
 import { logCommunication, COMMS_CHANNELS } from '../lib/api/accidentCommunications'
 import { FILTERS, durationLabel, recipientsLabel, deliveryStatusLabel, channelLabel, relatedTabFor } from '../lib/caseTimelineFeed'
+import {
+  summarizeTimeline, filterEntries, sortNotifications, notificationChannels, filterNotifications,
+  notificationRows, timelineExportRows, TIMELINE_EXPORT_COLS, TIMELINE_EXPORT_HEADERS, categoryLabel,
+} from '../lib/accidentCaseTimelineAnalytics'
+import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { TIMELINE_TABS } from '../lib/accidentCaseVocab'
 import { toUserMessage } from '../lib/safeError'
 import { useAuth } from '../contexts/AuthContext'
@@ -87,58 +97,70 @@ export default function AccidentCaseTimeline() {
   const [caseData, setCaseData] = useState(null)
   const [feed, setFeed] = useState(EMPTY_FEED)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [err, setErr] = useState('')
+  const [partial, setPartial] = useState('')
   const [notice, setNotice] = useState('')
   const [tab, setTab] = useState('timeline')
   const [filter, setFilter] = useState('all')
-  const [selected, setSelected] = useState(null) // timeline entry OR notification row shown in the drawer
-  const [menuFor, setMenuFor] = useState(null)   // notification row id whose row menu is open
+  const [search, setSearch] = useState('')
+  const [channel, setChannel] = useState('all')
+  const [selected, setSelected] = useState(null) // timeline entry OR notification row shown in the dialog
   const [noteForm, setNoteForm] = useState(null) // 'note' | 'notify' | null
   const [noteText, setNoteText] = useState('')
   const [noteChannel, setNoteChannel] = useState('in_app')
   const [saving, setSaving] = useState(false)
+  const loadedOnce = useRef(false)
 
   const load = useCallback(async () => {
-    setLoading(true); setErr('')
+    if (loadedOnce.current) setRefreshing(true)
+    else setLoading(true)
+    setErr(''); setPartial('')
     try {
       const { data, error } = await supabase.from('accidents').select('*').eq('id', id).single()
-      if (error || !data) { setErr(toUserMessage(error, 'Accident record not found.')); setLoading(false); return }
+      if (error || !data) { setErr(toUserMessage(error, 'Accident record not found.')); return }
       setAcc(data)
+      let feedFailed = false
       const [cd, tf] = await Promise.all([
         loadCase(id, { country: data.country }).catch(() => null),
-        loadCaseTimeline(data).catch(() => EMPTY_FEED),
+        loadCaseTimeline(data).catch(() => { feedFailed = true; return EMPTY_FEED }),
       ])
       setCaseData(cd)
       setFeed({ ...EMPTY_FEED, ...(tf || {}) })
+      // A failed feed read must not look like a case with no history.
+      if (feedFailed) setPartial('The timeline feed could not be loaded. The lists below may be incomplete.')
+      loadedOnce.current = true
     } catch (e) {
       setErr(toUserMessage(e, 'Could not load the case timeline.'))
     } finally {
-      setLoading(false)
+      setLoading(false); setRefreshing(false)
     }
   }, [id])
 
   useEffect(() => { load() }, [load])
 
-  const entries = useMemo(
-    () => (filter === 'all' ? feed.entries : feed.entries.filter((e) => e.category === filter)),
-    [feed.entries, filter],
-  )
-  const notifications = useMemo(
-    () => [...(feed.notifications || [])].sort((a, b) => new Date(b.occurred_at) - new Date(a.occurred_at)),
-    [feed.notifications],
+  // One clock read per render so every derived figure agrees within a paint.
+  const nowMs = Date.now()
+  const summary = useMemo(() => summarizeTimeline(feed, nowMs), [feed, nowMs])
+  const entries = useMemo(() => filterEntries(feed.entries, { category: filter, search }), [feed.entries, filter, search])
+  const notifications = useMemo(() => sortNotifications(feed.notifications), [feed.notifications])
+  const channelOptions = useMemo(() => notificationChannels(notifications), [notifications])
+  const notificationTableRows = useMemo(
+    () => notificationRows(filterNotifications(notifications, { channel }), feed.groupCounts, nowMs),
+    [notifications, channel, feed.groupCounts, nowMs],
   )
   const canManageRecipients = isAdminProfile(profile)
+  const caseLabel = [acc?.reference_no, acc?.asset_no].filter(Boolean).join(' ') || 'Accident case'
 
-  function openRelatedTab(tabKey) {
+  const openRelatedTab = useCallback((tabKey) => {
     navigate(`/accidents/${id}?tab=${encodeURIComponent(tabKey || 'overview')}`, { state: { openTab: tabKey || 'overview' } })
-  }
+  }, [navigate, id])
 
-  async function copyNotification(n) {
+  const copyNotification = useCallback(async (n) => {
     const ok = await copyText(notificationText(n, feed.groupCounts))
     setNotice(ok ? 'Copied to clipboard.' : 'Could not copy - your browser blocked clipboard access.')
-    setMenuFor(null)
     setTimeout(() => setNotice(''), 2500)
-  }
+  }, [feed.groupCounts])
 
   async function submitNote(e) {
     e.preventDefault()
@@ -161,80 +183,147 @@ export default function AccidentCaseTimeline() {
     }
   }
 
+  function exportTimeline(kind) {
+    const rows = timelineExportRows(entries, fmtTime)
+    const name = reportFileName('Case Timeline', caseLabel)
+    if (kind === 'pdf') {
+      exportToPdf(rows, TIMELINE_EXPORT_COLS.map((key, i) => ({ key, header: TIMELINE_EXPORT_HEADERS[i] })),
+        `Case timeline ${caseLabel}`, name, 'landscape')
+    } else {
+      exportToExcel(rows, TIMELINE_EXPORT_COLS, TIMELINE_EXPORT_HEADERS, name, 'Timeline')
+    }
+  }
+
+  const notificationColumns = useMemo(() => [
+    { id: 'trigger', header: 'Trigger', accessorFn: (r) => r.trigger, size: 260,
+      cell: ({ row }) => <span className="text-[var(--text-primary)]">{row.original.trigger}</span> },
+    { id: 'recipients', header: 'Recipients', accessorFn: (r) => r.recipients, size: 180 },
+    { id: 'channel', header: 'Channel', accessorFn: (r) => r.channelText, size: 110 },
+    { id: 'status', header: 'Status', accessorFn: (r) => r.statusText, size: 130 },
+    { id: 'time', header: 'Time', accessorFn: (r) => r.occurredMs ?? -1, size: 130,
+      cell: ({ row }) => <span className="text-[var(--text-muted)] whitespace-nowrap">{fmtTime(row.original.occurred_at)}</span>,
+      meta: { exportValue: (r) => fmtTime(r.occurred_at) } },
+    { id: 'actions', header: () => <span className="sr-only">Actions</span>, enableSorting: false, size: 64,
+      meta: { export: false, align: 'right' },
+      cell: ({ row }) => (
+        <NotificationRowMenu
+          n={row.original}
+          onCopy={copyNotification}
+          onOpenTab={() => openRelatedTab(relatedTabFor(row.original.workstream_key, 'log'))}
+          onDetails={() => setSelected({ kind: 'notification', row: row.original })}
+        />
+      ) },
+  ], [copyNotification, openRelatedTab])
+
+  const participantColumns = useMemo(() => [
+    { id: 'name', header: 'Participant', accessorFn: (r) => r.name, size: 240,
+      cell: ({ row }) => <span className="text-[var(--text-primary)]">{row.original.name}</span> },
+    { id: 'roles', header: 'Roles on this case', accessorFn: (r) => (r.roles || []).join(', ') || 'Not set' },
+  ], [])
+
   if (loading) {
     return (
-      <div className="p-6 flex items-center gap-2 text-[var(--text-muted)]">
-        <Loader2 size={16} className="animate-spin" /> Loading the case timeline...
+      <div className="p-6 space-y-3" role="status" aria-live="polite">
+        <div className="flex items-center gap-2 text-[var(--text-muted)]">
+          <Loader2 size={16} className="animate-spin" /> Loading the case timeline...
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[0, 1, 2, 3].map((k) => <div key={k} className="h-16 rounded-lg bg-[var(--input-bg)] animate-pulse" />)}
+        </div>
       </div>
     )
   }
   if (!acc) {
     return (
       <div className="p-6 space-y-3">
-        <button onClick={() => navigate('/accidents')} className="inline-flex items-center gap-1.5 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)]"><ArrowLeft size={15} /> Back to Accidents</button>
-        <p className="text-red-400">{err || 'Accident record not found.'}</p>
+        <button onClick={() => navigate('/accidents')} className="inline-flex items-center gap-1.5 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] min-h-[44px]"><ArrowLeft size={15} /> Back to Accidents</button>
+        <div className="card flex items-start gap-3" role="alert">
+          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
+          <div className="flex-1">
+            <p className="text-[var(--text-primary)] font-medium">Could not open this case timeline.</p>
+            <p className="text-sm text-[var(--text-muted)] mt-1">{err || 'Accident record not found.'}</p>
+          </div>
+          <button type="button" onClick={load} className="btn-secondary text-sm inline-flex items-center gap-1.5"><RotateCcw size={14} /> Retry</button>
+        </div>
       </div>
     )
   }
 
-  const NotificationRowMenu = ({ n }) => (
-    <div className="relative">
-      <button
-        type="button"
-        aria-label="Row actions"
-        aria-haspopup="menu"
-        aria-expanded={menuFor === n.id}
-        onClick={() => setMenuFor(menuFor === n.id ? null : n.id)}
-        className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)]"
-      >
-        <MoreHorizontal size={14} />
-      </button>
-      {menuFor === n.id && (
-        <div role="menu" className="absolute right-0 top-full mt-1 z-30 min-w-[190px] rounded-lg border border-[var(--input-border)] bg-[var(--surface-1,var(--input-bg))] shadow-xl overflow-hidden">
-          <button role="menuitem" type="button" onClick={() => copyNotification(n)} className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:bg-[var(--input-bg)] text-[var(--text-primary)]">
-            <Copy size={12} /> Copy
-          </button>
-          <button role="menuitem" type="button" onClick={() => { setMenuFor(null); openRelatedTab(relatedTabFor(n.workstream_key, 'log')) }} className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:bg-[var(--input-bg)] text-[var(--text-primary)]">
-            <ExternalLink size={12} /> Open related tab
-          </button>
-          <button role="menuitem" type="button" onClick={() => { setMenuFor(null); setSelected({ kind: 'notification', row: n }) }} className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:bg-[var(--input-bg)] text-[var(--text-primary)]">
-            <ChevronRight size={12} /> Details
-          </button>
-        </div>
-      )}
-    </div>
-  )
+  const kpis = [
+    { key: 'entries', label: 'Timeline entries', value: summary.entries, icon: ListChecks, sub: `${summary.completed} completed` },
+    { key: 'pending', label: 'Open steps', value: summary.pending + summary.inProgress, icon: Hourglass, sub: `${summary.pending} pending, ${summary.inProgress} in transit` },
+    { key: 'sla', label: 'SLA met', value: summary.slaMetPct == null ? 'N/A' : `${summary.slaMetPct}%`, icon: CheckCircle2, sub: summary.slaEntries ? `${summary.slaMet} of ${summary.slaEntries} SLA entries` : 'No SLA entries yet' },
+    { key: 'notifications', label: 'Notifications logged', value: summary.notifications, icon: Bell, sub: `${summary.outbound} outbound` },
+    { key: 'participants', label: 'Participants', value: summary.participants, icon: UsersIcon, sub: 'Named across the case' },
+    { key: 'last', label: 'Last activity', value: summary.sinceLastActivityLabel ? `${summary.sinceLastActivityLabel} ago` : 'N/A', icon: Activity, sub: summary.spanLabel ? `Case history spans ${summary.spanLabel}` : 'No elapsed history yet' },
+  ]
 
   return (
-    <div className="space-y-4 pb-10 max-w-4xl">
+    <div className="space-y-4 pb-10 max-w-5xl">
       <button
         onClick={() => navigate(`/accidents/${id}`)}
-        className="inline-flex items-center gap-1.5 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+        className="inline-flex items-center gap-1.5 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] min-h-[44px]"
       >
         <ArrowLeft size={15} /> Back to case
       </button>
 
-      <div>
-        <h1 className="text-xl font-bold text-[var(--text-primary)]">Case timeline &amp; notifications</h1>
-        <p className="text-sm text-[var(--text-muted)] mt-0.5 font-mono">
-          {[acc.reference_no, acc.asset_no].filter(Boolean).join(' · ') || 'N/A'}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold text-[var(--text-primary)]">Case timeline &amp; notifications</h1>
+          <p className="text-sm text-[var(--text-muted)] mt-0.5 font-mono break-words">
+            {[acc.reference_no, acc.asset_no].filter(Boolean).join(' · ') || 'N/A'}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={load} disabled={refreshing} className="btn-secondary text-xs inline-flex items-center gap-1.5 min-h-[36px]">
+            <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} /> {refreshing ? 'Refreshing' : 'Refresh'}
+          </button>
+          <button type="button" onClick={() => exportTimeline('excel')} disabled={!entries.length} className="btn-secondary text-xs inline-flex items-center gap-1.5 min-h-[36px]">
+            <FileSpreadsheet size={13} /> Excel
+          </button>
+          <button type="button" onClick={() => exportTimeline('pdf')} disabled={!entries.length} className="btn-secondary text-xs inline-flex items-center gap-1.5 min-h-[36px]">
+            <FileText size={13} /> PDF
+          </button>
+        </div>
       </div>
 
       <CaseSlaHeader acc={acc} workstreams={caseData?.workstreams} />
 
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3" aria-label="Case timeline summary">
+        {kpis.map((k) => {
+          const Icon = k.icon
+          return (
+            <div key={k.key} className="rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 min-w-0">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[11px] text-[var(--text-muted)] truncate">{k.label}</p>
+                <Icon size={13} className="text-[var(--text-muted)] shrink-0" aria-hidden="true" />
+              </div>
+              <p className="text-lg font-bold text-[var(--text-primary)] tabular-nums">{k.value}</p>
+              <p className="text-[10px] text-[var(--text-muted)] truncate" title={k.sub}>{k.sub}</p>
+            </div>
+          )
+        })}
+      </div>
+
       {err && <p className="text-red-400 text-xs flex items-center gap-1.5" role="alert"><AlertTriangle size={12} /> {err}</p>}
+      {partial && (
+        <div className="rounded-lg border border-amber-700/50 px-3 py-2 flex items-center gap-2 text-xs text-[var(--text-secondary)]" role="alert">
+          <AlertTriangle size={13} className="text-amber-400 shrink-0" />
+          <span className="flex-1">{partial}</span>
+          <button type="button" onClick={load} className="btn-secondary text-xs inline-flex items-center gap-1"><RotateCcw size={12} /> Retry</button>
+        </div>
+      )}
       {notice && <p className="text-xs text-[var(--text-muted)]" role="status">{notice}</p>}
 
       {/* Sub-tabs */}
-      <div className="flex gap-6 border-b border-[var(--input-border)]" role="tablist">
+      <div className="flex gap-6 border-b border-[var(--input-border)] overflow-x-auto" role="tablist">
         {TABS.map(({ key, label, icon: Icon }) => (
           <button
             key={key}
             role="tab"
             aria-selected={tab === key}
             onClick={() => setTab(key)}
-            className={`pb-2.5 text-sm font-medium flex items-center gap-1.5 border-b-2 -mb-px ${
+            className={`pb-2.5 pt-2 text-sm font-medium flex items-center gap-1.5 border-b-2 -mb-px whitespace-nowrap focus-visible:outline focus-visible:outline-2 focus-visible:outline-green-500 ${
               tab === key ? 'border-green-500 text-green-400' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
             }`}
           >
@@ -245,23 +334,40 @@ export default function AccidentCaseTimeline() {
 
       {tab === 'timeline' && (
         <>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {FILTERS.map((f) => (
               <button
                 key={f.key}
                 onClick={() => setFilter(f.key)}
                 aria-pressed={filter === f.key}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${
+                className={`px-3 py-1.5 min-h-[36px] rounded-lg text-xs font-medium border ${
                   filter === f.key ? 'bg-[var(--text-primary)] text-[var(--bg-base,#0b0f0d)] border-transparent' : 'border-[var(--input-border)] text-[var(--text-secondary)]'
                 }`}
               >
                 {f.label}
               </button>
             ))}
+            <div className="relative flex-1 min-w-[200px]">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+              <label htmlFor="timeline-search" className="sr-only">Search the timeline</label>
+              <input
+                id="timeline-search"
+                type="search"
+                className="input pl-9 w-full text-sm"
+                placeholder="Search event, actor, details"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <span className="text-xs text-[var(--text-muted)]">{entries.length} of {feed.entries.length}</span>
           </div>
 
           {entries.length === 0 ? (
-            <p className="text-sm text-[var(--text-muted)] py-6 text-center">No timeline entries {filter === 'all' ? 'recorded' : `in "${FILTERS.find((f) => f.key === filter)?.label}"`} yet.</p>
+            <p className="text-sm text-[var(--text-muted)] py-6 text-center">
+              {search.trim()
+                ? 'No timeline entries match that search.'
+                : `No timeline entries ${filter === 'all' ? 'recorded' : `in "${categoryLabel(filter)}"`} yet.`}
+            </p>
           ) : (
             <ol className="mt-2">
               {entries.map((e, i) => {
@@ -271,12 +377,12 @@ export default function AccidentCaseTimeline() {
                 return (
                   <li key={e.id} className="flex gap-3" data-testid="timeline-row">
                     <div className="flex flex-col items-center">
-                      <span className={`mt-1 w-3 h-3 rounded-full border-2 shrink-0 ${DOT_TONE[e.status] || DOT_TONE.completed}`} />
+                      <span className={`mt-1 w-3 h-3 rounded-full border-2 shrink-0 ${DOT_TONE[e.status] || DOT_TONE.completed}`} aria-hidden="true" />
                       {i < entries.length - 1 && <span className="w-px flex-1 bg-[var(--input-border)] my-0.5" />}
                     </div>
                     <div className={`flex-1 min-w-0 flex items-start gap-3 ${i < entries.length - 1 ? 'pb-5' : ''}`}>
                       <div className="w-8 h-8 rounded-full bg-[var(--input-bg)] border border-[var(--input-border)] flex items-center justify-center shrink-0 mt-0.5">
-                        <Icon size={14} className="text-[var(--text-muted)]" />
+                        <Icon size={14} className="text-[var(--text-muted)]" aria-hidden="true" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2 flex-wrap">
@@ -305,7 +411,7 @@ export default function AccidentCaseTimeline() {
                               type="button"
                               aria-label={`Open details for ${e.title}`}
                               onClick={() => setSelected({ kind: 'entry', row: e })}
-                              className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)]"
+                              className="p-2 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)]"
                             >
                               <ChevronRight size={14} />
                             </button>
@@ -322,15 +428,16 @@ export default function AccidentCaseTimeline() {
           {/* Notification delivery log preview */}
           <div className="rounded-lg border border-[var(--input-border)] mt-4">
             <div className="px-3 py-2.5 border-b border-[var(--input-border)] flex items-center gap-2">
-              <Mail size={14} className="text-[var(--text-muted)]" />
+              <Mail size={14} className="text-[var(--text-muted)]" aria-hidden="true" />
               <p className="text-sm font-semibold text-[var(--text-primary)]">Notification delivery log</p>
+              <span className="text-xs text-[var(--text-muted)] ml-auto">Latest {Math.min(3, notifications.length)} of {notifications.length}</span>
             </div>
             {notifications.length === 0 ? (
               <p className="text-sm text-[var(--text-muted)] px-3 py-4">No notifications logged for this case yet.</p>
             ) : (
               <div className="divide-y divide-[var(--input-border)]">
                 {notifications.slice(0, 3).map((n) => (
-                  <div key={n.id} className="px-3 py-2 flex items-center justify-between gap-3 text-xs">
+                  <div key={n.id} className="px-3 py-2 grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-0.5 text-xs">
                     <span className="text-[var(--text-primary)] truncate">{n.subject || channelLabel(n.channel)}</span>
                     <span className="text-[var(--text-muted)] truncate">{recipientsLabel(n, feed.groupCounts).label}</span>
                     <span className="text-[var(--text-muted)] whitespace-nowrap">{deliveryStatusLabel(n)}</span>
@@ -339,7 +446,7 @@ export default function AccidentCaseTimeline() {
                 ))}
               </div>
             )}
-            <button onClick={() => setTab('notifications')} className="w-full text-center text-xs text-blue-400 py-2 border-t border-[var(--input-border)] hover:text-blue-300">
+            <button onClick={() => setTab('notifications')} className="w-full text-center text-xs text-blue-400 py-2.5 border-t border-[var(--input-border)] hover:text-blue-300">
               View all notifications
             </button>
           </div>
@@ -347,50 +454,52 @@ export default function AccidentCaseTimeline() {
       )}
 
       {tab === 'notifications' && (
-        <div className="rounded-lg border border-[var(--input-border)]">
-          {notifications.length === 0 ? (
-            <p className="text-sm text-[var(--text-muted)] px-3 py-6 text-center">No notifications logged for this case yet.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs" data-testid="delivery-log">
-                <thead>
-                  <tr className="text-left text-[var(--text-muted)] border-b border-[var(--input-border)]">
-                    <th className="px-3 py-2 font-medium">Trigger</th>
-                    <th className="px-3 py-2 font-medium">Recipients</th>
-                    <th className="px-3 py-2 font-medium">Channel</th>
-                    <th className="px-3 py-2 font-medium">Status</th>
-                    <th className="px-3 py-2 font-medium">Time</th>
-                    <th className="px-3 py-2 font-medium text-right"><span className="sr-only">Actions</span></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--input-border)]">
-                  {notifications.map((n) => (
-                    <tr key={n.id}>
-                      <td className="px-3 py-2 text-[var(--text-primary)]">{n.subject || 'Not set'}</td>
-                      <td className="px-3 py-2 text-[var(--text-secondary)]">{recipientsLabel(n, feed.groupCounts).label}</td>
-                      <td className="px-3 py-2 text-[var(--text-secondary)]">{channelLabel(n.channel)}</td>
-                      <td className="px-3 py-2 text-[var(--text-secondary)]">{deliveryStatusLabel(n)}</td>
-                      <td className="px-3 py-2 text-[var(--text-muted)] whitespace-nowrap">{fmtTime(n.occurred_at)}</td>
-                      <td className="px-3 py-2 text-right"><NotificationRowMenu n={n} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <label htmlFor="notification-channel" className="text-xs text-[var(--text-muted)]">Channel</label>
+            <select
+              id="notification-channel"
+              className="input text-xs"
+              value={channel}
+              onChange={(e) => setChannel(e.target.value)}
+            >
+              <option value="all">All channels</option>
+              {channelOptions.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+            </select>
+            <span className="text-xs text-[var(--text-muted)] ml-auto">
+              Status reads Sent, Received or Logged. Per-recipient delivery is not recorded yet.
+            </span>
+          </div>
+          <div data-testid="delivery-log" className="rounded-lg border border-[var(--input-border)]">
+            <EnterpriseTable
+              columns={notificationColumns}
+              data={notificationTableRows}
+              getRowId={(r) => String(r.id)}
+              enableColumnFilters={false}
+              searchPlaceholder="Search trigger, recipients, status"
+              emptyMessage={channel === 'all' ? 'No notifications logged for this case yet.' : 'No notifications on this channel.'}
+              emptyIcon={<Bell size={22} className="opacity-60" />}
+              initialPageSize={25}
+              exportFileName={reportFileName('Case Notifications', caseLabel)}
+              reportMeta={{ title: `Case notifications ${caseLabel}` }}
+            />
+          </div>
         </div>
       )}
 
       {tab === 'participants' && (
-        <div className="rounded-lg border border-[var(--input-border)] divide-y divide-[var(--input-border)]">
-          {feed.participants.length === 0 ? (
-            <p className="text-sm text-[var(--text-muted)] px-3 py-6 text-center">No participants recorded for this case yet.</p>
-          ) : feed.participants.map((p) => (
-            <div key={p.name} className="px-3 py-2.5 flex items-center justify-between gap-3">
-              <span className="text-sm text-[var(--text-primary)]">{p.name}</span>
-              <span className="text-xs text-[var(--text-muted)]">{p.roles.join(', ') || 'Not set'}</span>
-            </div>
-          ))}
+        <div className="rounded-lg border border-[var(--input-border)]">
+          <EnterpriseTable
+            columns={participantColumns}
+            data={feed.participants || []}
+            getRowId={(r, i) => `${r.name}-${i}`}
+            enableColumnFilters={false}
+            searchPlaceholder="Search participants or roles"
+            emptyMessage="No participants recorded for this case yet."
+            emptyIcon={<UsersIcon size={22} className="opacity-60" />}
+            exportFileName={reportFileName('Case Participants', caseLabel)}
+            reportMeta={{ title: `Case participants ${caseLabel}` }}
+          />
         </div>
       )}
 
@@ -405,26 +514,30 @@ export default function AccidentCaseTimeline() {
         title={canManageRecipients ? 'Open the accident routing rules' : 'Only an Admin can change recipient groups. Ask an Admin to update the routing rules.'}
         className={`w-full rounded-lg border border-[var(--input-border)] px-3 py-3 flex items-center gap-3 text-left ${canManageRecipients ? 'hover:border-[var(--text-muted)]' : 'opacity-60 cursor-not-allowed'}`}
       >
-        <Settings size={16} className="text-[var(--text-muted)] shrink-0" />
+        <Settings size={16} className="text-[var(--text-muted)] shrink-0" aria-hidden="true" />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-[var(--text-primary)]">Manage recipient groups</p>
           <p className="text-xs text-[var(--text-muted)]">Recipients are set by Admin per event and role.</p>
         </div>
-        <ChevronRight size={16} className="text-[var(--text-muted)] shrink-0" />
+        <ChevronRight size={16} className="text-[var(--text-muted)] shrink-0" aria-hidden="true" />
       </button>
 
       {noteForm && (
         <form onSubmit={submitNote} className="rounded-lg border border-[var(--input-border)] p-3 space-y-2">
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold text-[var(--text-primary)]">{noteForm === 'notify' ? 'Notify participants' : 'Add timeline note'}</p>
-            <button type="button" onClick={() => setNoteForm(null)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={14} /></button>
+            <button type="button" onClick={() => setNoteForm(null)} aria-label="Close the note form" className="p-2 text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={14} /></button>
           </div>
           {noteForm === 'notify' && (
-            <select className="input w-full text-xs" value={noteChannel} onChange={(e) => setNoteChannel(e.target.value)}>
-              {COMMS_CHANNELS.map((c) => <option key={c} value={c}>{c.replace(/_/g, ' ')}</option>)}
-            </select>
+            <>
+              <label htmlFor="note-channel" className="sr-only">Channel</label>
+              <select id="note-channel" className="input w-full text-xs" value={noteChannel} onChange={(e) => setNoteChannel(e.target.value)}>
+                {COMMS_CHANNELS.map((c) => <option key={c} value={c}>{c.replace(/_/g, ' ')}</option>)}
+              </select>
+            </>
           )}
-          <textarea rows={3} className="input w-full text-xs" value={noteText} onChange={(e) => setNoteText(e.target.value)}
+          <label htmlFor="note-text" className="sr-only">{noteForm === 'notify' ? 'Notification message' : 'Timeline note'}</label>
+          <textarea id="note-text" rows={3} className="input w-full text-xs" value={noteText} onChange={(e) => setNoteText(e.target.value)}
             placeholder={noteForm === 'notify' ? 'What should participants be told?' : 'Note for the case timeline'} />
           {noteForm === 'notify' && (
             <p className="text-[11px] text-[var(--text-muted)]">This records the notification on the case log. It does not send a live email/SMS - there is no delivery pipeline wired for this yet.</p>
@@ -436,74 +549,119 @@ export default function AccidentCaseTimeline() {
       )}
 
       {!noteForm && (
-        <div className="flex gap-2">
-          <button onClick={() => setNoteForm('note')} className="btn-secondary text-xs flex-1 inline-flex items-center justify-center gap-1.5">
+        <div className="flex flex-col sm:flex-row gap-2">
+          <button onClick={() => setNoteForm('note')} className="btn-secondary text-xs flex-1 inline-flex items-center justify-center gap-1.5 min-h-[44px]">
             <PenLine size={13} /> Add timeline note
           </button>
-          <button onClick={() => setNoteForm('notify')} className="btn-primary text-xs flex-1 inline-flex items-center justify-center gap-1.5">
+          <button onClick={() => setNoteForm('notify')} className="btn-primary text-xs flex-1 inline-flex items-center justify-center gap-1.5 min-h-[44px]">
             <Megaphone size={13} /> Notify participants
           </button>
         </div>
       )}
 
-      {/* Right-hand detail drawer */}
-      {selected && (
-        <div className="fixed inset-0 z-40" role="presentation">
-          <button type="button" aria-label="Close details" onClick={() => setSelected(null)} className="absolute inset-0 bg-black/50" />
-          <aside
-            role="dialog"
-            aria-label="Timeline entry details"
-            className="absolute right-0 top-0 h-full w-full max-w-md bg-[var(--surface-1,var(--bg-base,#0b0f0d))] border-l border-[var(--input-border)] shadow-2xl p-4 overflow-y-auto"
-          >
-            <div className="flex items-start justify-between gap-3 mb-3">
-              <div className="min-w-0">
-                <p className="text-[11px] uppercase tracking-wider text-[var(--text-muted)]">{selected.kind === 'entry' ? 'Timeline entry' : 'Notification'}</p>
-                <h2 className="text-base font-semibold text-[var(--text-primary)] break-words">
-                  {selected.kind === 'entry' ? selected.row.title : (selected.row.subject || 'Notification')}
-                </h2>
-              </div>
-              <button type="button" onClick={() => setSelected(null)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Close"><X size={16} /></button>
-            </div>
-
-            {selected.kind === 'entry' ? (
-              <dl className="space-y-2 text-xs">
-                <DrawerRow label="When" value={fmtTime(selected.row.at)} />
-                <DrawerRow label="Actor" value={selected.row.actor || 'Not set'} />
-                <DrawerRow label="Category" value={FILTERS.find((f) => f.key === selected.row.category)?.label || 'Not set'} />
-                <DrawerRow label="Status" value={(STATUS_META[selected.row.status] || STATUS_META.completed).label + (selected.row.slaMet ? ' · SLA met' : '')} />
-                <DrawerRow label="Details" value={selected.row.detail || 'Not set'} />
-                {(selected.row.chips || []).length > 0 && <DrawerRow label="Sub-details" value={selected.row.chips.join(' · ')} />}
-                <DrawerRow label="Elapsed since previous" value={durationLabel(selected.row.durationMs) || 'First entry'} />
-              </dl>
-            ) : (
-              <dl className="space-y-2 text-xs">
-                <DrawerRow label="When" value={fmtTime(selected.row.occurred_at)} />
-                <DrawerRow label="Recipients" value={recipientsLabel(selected.row, feed.groupCounts).label} />
-                <DrawerRow label="Channel" value={channelLabel(selected.row.channel)} />
-                <DrawerRow label="Status" value={deliveryStatusLabel(selected.row)} />
-                <DrawerRow label="Logged by" value={selected.row.author_name || 'Not set'} />
-                <DrawerRow label="Body" value={selected.row.body || 'Not set'} />
-              </dl>
-            )}
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => openRelatedTab(selected.kind === 'entry' ? selected.row.relatedTab : relatedTabFor(selected.row.workstream_key, 'log'))}
-                className="btn-secondary text-xs inline-flex items-center gap-1.5"
-              >
-                <ExternalLink size={12} /> Open related tab
+      {/* Detail dialog (shared Modal: focus trap, Escape, backdrop close) */}
+      <Modal
+        open={Boolean(selected)}
+        onClose={() => setSelected(null)}
+        size="md"
+        title={selected?.kind === 'entry' ? 'Timeline entry details' : 'Notification details'}
+        subtitle={selected ? (selected.kind === 'entry' ? selected.row.title : (selected.row.subject || 'Notification')) : null}
+        footer={selected && (
+          <div className="flex flex-wrap gap-2 justify-end">
+            {selected.kind === 'notification' && (
+              <button type="button" onClick={() => copyNotification(selected.row)} className="btn-ghost text-xs inline-flex items-center gap-1.5">
+                <Copy size={12} /> Copy
               </button>
-              {selected.kind === 'notification' && (
-                <button type="button" onClick={() => copyNotification(selected.row)} className="btn-ghost text-xs inline-flex items-center gap-1.5">
-                  <Copy size={12} /> Copy
-                </button>
-              )}
-            </div>
-          </aside>
-        </div>
-      )}
+            )}
+            <button
+              type="button"
+              onClick={() => openRelatedTab(selected.kind === 'entry' ? selected.row.relatedTab : relatedTabFor(selected.row.workstream_key, 'log'))}
+              className="btn-secondary text-xs inline-flex items-center gap-1.5"
+            >
+              <ExternalLink size={12} /> Open related tab
+            </button>
+          </div>
+        )}
+      >
+        {selected?.kind === 'entry' && (
+          <dl className="space-y-2 text-xs">
+            <DrawerRow label="When" value={fmtTime(selected.row.at)} />
+            <DrawerRow label="Actor" value={selected.row.actor || 'Not set'} />
+            <DrawerRow label="Category" value={categoryLabel(selected.row.category)} />
+            <DrawerRow label="Status" value={(STATUS_META[selected.row.status] || STATUS_META.completed).label + (selected.row.slaMet ? ' · SLA met' : '')} />
+            <DrawerRow label="Details" value={selected.row.detail || 'Not set'} />
+            {(selected.row.chips || []).length > 0 && <DrawerRow label="Sub-details" value={selected.row.chips.join(' · ')} />}
+            <DrawerRow label="Elapsed since previous" value={durationLabel(selected.row.durationMs) || 'First entry'} />
+          </dl>
+        )}
+        {selected?.kind === 'notification' && (
+          <dl className="space-y-2 text-xs">
+            <DrawerRow label="When" value={fmtTime(selected.row.occurred_at)} />
+            <DrawerRow label="Recipients" value={recipientsLabel(selected.row, feed.groupCounts).label} />
+            <DrawerRow label="Channel" value={channelLabel(selected.row.channel)} />
+            <DrawerRow label="Status" value={deliveryStatusLabel(selected.row)} />
+            <DrawerRow label="Logged by" value={selected.row.author_name || 'Not set'} />
+            <DrawerRow label="Body" value={selected.row.body || 'Not set'} />
+          </dl>
+        )}
+      </Modal>
     </div>
+  )
+}
+
+/** Row menu for the notification table. Portalled so the table's scroll box
+ *  cannot clip it; arrow keys and focus return come from useAnchoredPopover. */
+function NotificationRowMenu({ n, onCopy, onOpenTab, onDetails }) {
+  const [open, setOpen] = useState(false)
+  const close = useCallback(() => setOpen(false), [])
+  const { triggerRef, panelRef, coords } = useAnchoredPopover(open, { width: 200, height: 130, align: 'right', nav: 'menu', onRequestClose: close })
+
+  useEffect(() => {
+    if (!open) return undefined
+    const onDoc = (e) => {
+      if (triggerRef.current?.contains(e.target) || panelRef.current?.contains(e.target)) return
+      setOpen(false)
+    }
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onKey) }
+  }, [open, triggerRef, panelRef])
+
+  const item = 'w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:bg-[var(--input-bg)] text-[var(--text-primary)]'
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-label="Row actions"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={(e) => { e.stopPropagation(); setOpen((o) => !o) }}
+        className="p-2 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)]"
+      >
+        <MoreHorizontal size={14} />
+      </button>
+      {open && createPortal(
+        <div
+          ref={panelRef}
+          role="menu"
+          className="tp-popover min-w-[190px] overflow-hidden"
+          style={coords ? { top: coords.top, left: coords.left } : undefined}
+        >
+          <button role="menuitem" type="button" onClick={() => { close(); onCopy(n) }} className={item}>
+            <Copy size={12} /> Copy
+          </button>
+          <button role="menuitem" type="button" onClick={() => { close(); onOpenTab() }} className={item}>
+            <ExternalLink size={12} /> Open related tab
+          </button>
+          <button role="menuitem" type="button" onClick={() => { close(); onDetails() }} className={item}>
+            <ChevronRight size={12} /> Details
+          </button>
+        </div>,
+        document.body,
+      )}
+    </>
   )
 }
 

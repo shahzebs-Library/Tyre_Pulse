@@ -48,6 +48,7 @@ import {
   attachmentStatus, recommendedRoute, canSubmit as gateCanSubmit, totals as estimateTotals,
   partsAvailabilityLabel, isTileRoute,
 } from '../../lib/assessmentGating'
+import { summarizeDamageMarks, damageSummaryLine } from '../../lib/workshopAssessmentAnalytics'
 import WorkstreamHeader from './WorkstreamHeader'
 import VehicleMasterCard from './VehicleMasterCard'
 import EvidenceTable from './EvidenceTable'
@@ -266,6 +267,7 @@ export default function WorkshopAssessmentPanel({
 
   const editable = !assessment?.id || assessment.assessment_status === 'draft'
   const damageAreas = useMemo(() => (Array.isArray(assessment?.damage_areas) ? assessment.damage_areas : []), [assessment])
+  const damageSummary = useMemo(() => summarizeDamageMarks(damageAreas), [damageAreas])
   const suggested = recommendedRoute(damageAreas, draft)
   const route = draft?.recommended_route || ''
   const attachments = useMemo(() => attachmentStatus(evidence), [evidence])
@@ -488,48 +490,51 @@ export default function WorkshopAssessmentPanel({
         {damageAreas.length === 0 ? (
           <p className="text-sm text-[var(--text-muted)]">No damage areas marked yet. Use the Mark Damage tab to add marks and photos.</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-left text-[var(--text-muted)] border-b border-[var(--input-border)]">
-                  <th className="px-2 py-1.5 font-medium">Photo</th>
-                  <th className="px-2 py-1.5 font-medium">Component</th>
-                  <th className="px-2 py-1.5 font-medium">Damage</th>
-                  <th className="px-2 py-1.5 font-medium">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--input-border)]">
-                {damageAreas.map((a, i) => {
-                  const level = canonLevel(a.severity)
-                  const type = canonDamageType(a.damage_type)
-                  return (
-                    <tr key={`${a.view}-${a.region_key}-${i}`} data-testid="damage-row">
-                      <td className="px-2 py-1.5"><MarkThumb photoRef={Array.isArray(a.photo_refs) ? a.photo_refs[0] : null} /></td>
-                      <td className="px-2 py-1.5 text-[var(--text-primary)]">
-                        {a.region_label || a.component_label || a.region_key || NOT_SET}
-                        {a.view && <span className="block text-[10px] text-[var(--text-muted)]">{a.view}</span>}
-                      </td>
-                      <td className="px-2 py-1.5 text-[var(--text-secondary)]">
-                        <span className="inline-flex items-center gap-1.5">
-                          <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: SEVERITY_DOT_TONE[level] || 'var(--input-border)' }} aria-label={level ? LEVEL_LABEL[level] : 'No severity'} />
-                          {type ? DAMAGE_TYPE_LABEL[type] || type : NOT_SET}
-                          {level && <span className="text-[10px] text-[var(--text-muted)]">{LEVEL_LABEL[level]}</span>}
-                        </span>
-                      </td>
-                      <td className="px-2 py-1.5">
-                        <select className="input text-xs py-1" value={a.action || ''} disabled={!canEdit || !assessment?.id} aria-label={`Action for ${a.region_label || a.component_label || a.region_key}`}
-                          onChange={(e) => setMarkAction(i, e.target.value)}>
-                          <option value="">{NOT_SET}</option>
-                          {DAMAGE_ACTIONS.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
-                        </select>
-                        {!canEdit && a.action && <span className="sr-only">{ACTION_LABEL[a.action] || a.action}</span>}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+          // A per-mark editing list, not a register: each mark carries its own
+          // Action select that writes straight back to the assessment, and a case
+          // has a handful of marks. Laid out as a responsive list so the select
+          // stays reachable on a phone without sideways scrolling.
+          <>
+            {damageSummary.total > 0 && (
+              <p className="text-xs text-[var(--text-muted)]" data-testid="damage-summary">{damageSummaryLine(damageSummary)}</p>
+            )}
+            <div className="hidden sm:grid grid-cols-[4rem_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3 px-2 text-[11px] font-medium text-[var(--text-muted)]" aria-hidden="true">
+              <span>Photo</span><span>Component</span><span>Damage</span><span>Action</span>
+            </div>
+            <ul className="divide-y divide-[var(--input-border)] border-y border-[var(--input-border)]" aria-label="Damage marks">
+              {damageAreas.map((a, i) => {
+                const level = canonLevel(a.severity)
+                const type = canonDamageType(a.damage_type)
+                const name = a.region_label || a.component_label || a.region_key || NOT_SET
+                return (
+                  <li key={`${a.view}-${a.region_key}-${i}`} data-testid="damage-row"
+                    className="grid grid-cols-[4rem_minmax(0,1fr)] sm:grid-cols-[4rem_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)] gap-x-3 gap-y-1.5 px-2 py-2 text-xs items-center">
+                    <div className="row-span-3 sm:row-span-1"><MarkThumb photoRef={Array.isArray(a.photo_refs) ? a.photo_refs[0] : null} /></div>
+                    <div className="text-[var(--text-primary)] min-w-0">
+                      <span className="sm:hidden text-[10px] text-[var(--text-muted)] block">Component</span>
+                      {name}
+                      {a.view && <span className="block text-[10px] text-[var(--text-muted)]">{a.view}</span>}
+                    </div>
+                    <div className="text-[var(--text-secondary)] min-w-0">
+                      <span className="inline-flex items-center gap-1.5 flex-wrap">
+                        <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: SEVERITY_DOT_TONE[level] || 'var(--input-border)' }} aria-label={level ? LEVEL_LABEL[level] : 'No severity'} />
+                        {type ? DAMAGE_TYPE_LABEL[type] || type : NOT_SET}
+                        {level && <span className="text-[10px] text-[var(--text-muted)]">{LEVEL_LABEL[level]}</span>}
+                      </span>
+                    </div>
+                    <div className="min-w-0">
+                      <select className="input text-xs py-1 w-full min-h-[36px]" value={a.action || ''} disabled={!canEdit || !assessment?.id} aria-label={`Action for ${name}`}
+                        onChange={(e) => setMarkAction(i, e.target.value)}>
+                        <option value="">{NOT_SET}</option>
+                        {DAMAGE_ACTIONS.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
+                      </select>
+                      {!canEdit && a.action && <span className="sr-only">{ACTION_LABEL[a.action] || a.action}</span>}
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          </>
         )}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="Visible damage notes">

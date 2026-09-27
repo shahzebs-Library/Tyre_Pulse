@@ -61,6 +61,9 @@ import { CASE_FLOW } from '../lib/accidentCaseVocab'
 import { updateAccidentForPage } from '../lib/api/accidents'
 import { renderAccidentCasePdf } from '../lib/accidentCasePdf'
 import { toUserMessage } from '../lib/safeError'
+import EnterpriseTable from './ui/EnterpriseTable'
+import useDialogBehavior from './ui/useDialogBehavior'
+import { summarizeAccidentParts, partStatus } from '../lib/accidentPartsAnalytics'
 
 // Vocabularies + canonicalisation come from the single shared source
 // `src/lib/accidentVocab.js` (imported above) — do NOT re-declare them here.
@@ -1262,6 +1265,29 @@ function ActivityTab({ accidentId }) {
 
 function PartsTab({ acc, parts, partsTotal, elevated, profile, reload, setErr, fmtCurrency }) {
   const [adding, setAdding] = useState(false)
+  const partsSummary = useMemo(() => summarizeAccidentParts(parts), [parts])
+  const partColumns = [
+    { id: 'part', header: 'Part', accessorFn: (p) => p.part_name || '', size: 240,
+      meta: { exportValue: (p) => [p.part_name, p.part_number && `#${p.part_number}`, p.supplier].filter(Boolean).join(' | ') },
+      cell: ({ row: { original: p } }) => (
+        <div>
+          <div className="font-medium text-[var(--text-primary)]">{p.part_name}</div>
+          <div className="text-xs text-[var(--text-muted)]">{[p.part_number && `#${p.part_number}`, p.supplier].filter(Boolean).join(' · ')}</div>
+        </div>
+      ) },
+    { id: 'qty', header: 'Qty', accessorFn: (p) => Number(p.quantity) || 0, size: 70, meta: { align: 'right' } },
+    { id: 'unit', header: 'Unit', accessorFn: (p) => Number(p.unit_cost) || 0, size: 110, meta: { align: 'right', exportValue: (p) => fmtCurrency(p.unit_cost) },
+      cell: ({ row: { original: p } }) => <span className="whitespace-nowrap tabular-nums">{fmtCurrency(p.unit_cost)}</span> },
+    { id: 'total', header: 'Total', accessorFn: (p) => Number(p.total_cost) || 0, size: 120, meta: { align: 'right', exportValue: (p) => fmtCurrency(p.total_cost) },
+      cell: ({ row: { original: p } }) => <span className="whitespace-nowrap font-semibold text-[var(--text-primary)] tabular-nums">{fmtCurrency(p.total_cost)}</span> },
+    { id: 'status', header: 'Status', accessorFn: (p) => PART_LABELS[partStatus(p)] || p.status || 'Not set', size: 120,
+      meta: { filterVariant: 'select', filterOptions: PART_STATUSES.map((k) => PART_LABELS[k]) },
+      cell: ({ row: { original: p } }) => <span className={`badge text-xs ${PART_BADGE[p.status] || ''}`}>{PART_LABELS[p.status] || p.status || 'Not set'}</span> },
+    ...(elevated ? [{ id: 'actions', header: () => <span className="sr-only">Actions</span>, enableSorting: false, size: 64, meta: { export: false, align: 'right' },
+      cell: ({ row: { original: p } }) => (
+        <button type="button" onClick={() => remove(p.id)} aria-label={`Remove ${p.part_name || 'part'}`} className="p-2 text-[var(--text-muted)] hover:text-red-400"><Trash2 size={14} /></button>
+      ) }] : []),
+  ]
   const [f, setF] = useState({ part_name: '', part_number: '', quantity: '1', unit_cost: '', supplier: '', status: 'needed' })
   const [saving, setSaving] = useState(false)
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
@@ -1294,42 +1320,31 @@ function PartsTab({ acc, parts, partsTotal, elevated, profile, reload, setErr, f
 
   return (
     <div className="space-y-3">
-      {parts.length === 0 ? (
-        <p className="text-sm text-gray-500">No parts recorded yet.</p>
-      ) : (
-        <div className="card p-0 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead><tr>
-              <th className="table-header">Part</th><th className="table-header">Qty</th>
-              <th className="table-header">Unit</th><th className="table-header">Total</th>
-              <th className="table-header">Status</th>{elevated && <th className="table-header"></th>}
-            </tr></thead>
-            <tbody>
-              {parts.map(p => (
-                <tr key={p.id} className="border-t border-gray-800">
-                  <td className="table-cell">
-                    <div className="font-medium text-white">{p.part_name}</div>
-                    <div className="text-xs text-gray-500">{[p.part_number && `#${p.part_number}`, p.supplier].filter(Boolean).join(' · ')}</div>
-                  </td>
-                  <td className="table-cell">{Number(p.quantity)}</td>
-                  <td className="table-cell whitespace-nowrap">{fmtCurrency(p.unit_cost)}</td>
-                  <td className="table-cell whitespace-nowrap font-semibold text-white">{fmtCurrency(p.total_cost)}</td>
-                  <td className="table-cell"><span className={`badge text-xs ${PART_BADGE[p.status]}`}>{PART_LABELS[p.status]}</span></td>
-                  {elevated && (
-                    <td className="table-cell">
-                      <button onClick={() => remove(p.id)} className="text-gray-500 hover:text-red-400"><Trash2 size={14} /></button>
-                    </td>
-                  )}
-                </tr>
-              ))}
-              <tr className="border-t border-gray-700 bg-gray-800/30">
-                <td className="table-cell font-semibold text-gray-300" colSpan={3}>Total parts cost</td>
-                <td className="table-cell font-bold text-green-400 whitespace-nowrap">{fmtCurrency(partsTotal)}</td>
-                <td className="table-cell" colSpan={elevated ? 2 : 1}></td>
-              </tr>
-            </tbody>
-          </table>
+      {parts.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3" aria-label="Parts summary">
+          <PartsTile label="Parts recorded" value={partsSummary.count} sub={`${partsSummary.byStatus.fitted} fitted`} />
+          <PartsTile label="Outstanding" value={partsSummary.outstanding}
+            sub={partsSummary.outstandingValue == null ? 'No costed outstanding part' : `${fmtCurrency(partsSummary.outstandingValue)} still to fit`} />
+          <PartsTile label="Parts cost" value={fmtCurrency(partsTotal)}
+            sub={partsSummary.uncosted ? `${partsSummary.uncosted} part${partsSummary.uncosted === 1 ? '' : 's'} without a cost` : 'Every part is costed'} />
+          <PartsTile label="Fitted" value={partsSummary.fittedPct == null ? 'N/A' : `${partsSummary.fittedPct}%`} sub="of recorded parts" />
         </div>
+      )}
+      <EnterpriseTable
+        columns={partColumns}
+        data={parts}
+        getRowId={(r) => String(r.id)}
+        searchPlaceholder="Search part, number or supplier"
+        emptyMessage="No parts recorded yet."
+        emptyIcon={<Wrench size={22} className="opacity-60" />}
+        initialPageSize={25}
+        exportFileName={`Accident parts ${acc?.reference_no || acc?.asset_no || ''}`.trim()}
+        reportMeta={{ title: `Accident parts ${acc?.reference_no || acc?.asset_no || ''}`.trim() }}
+      />
+      {parts.length > 0 && (
+        <p className="text-xs text-[var(--text-muted)] flex justify-end gap-2">
+          Total parts cost <span className="font-bold text-green-400 tabular-nums">{fmtCurrency(partsTotal)}</span>
+        </p>
       )}
 
       {elevated && (adding ? (
@@ -1476,10 +1491,27 @@ function ClosureTab({ acc, closure, elevated, busy, onRequest, onApprove, onReje
 
 // ── Small UI helpers ────────────────────────────────────────────────────────────
 
+// Full-case overlay for the legacy modal variant. It keeps its own header and
+// close button (the shared Modal would add a second one), but takes the shared
+// dialog behaviour: Escape closes, focus is trapped and returned, body scroll locks.
 function Backdrop({ children, onClose }) {
+  const panelRef = useRef(null)
+  useDialogBehavior(true, panelRef, onClose)
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-start justify-center z-50 p-4 overflow-y-auto" onClick={onClose}>
-      {children}
+      <div ref={panelRef} role="dialog" aria-modal="true" aria-label="Accident case" tabIndex={-1} className="w-full flex justify-center outline-none">
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function PartsTile({ label, value, sub }) {
+  return (
+    <div className="rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2 min-w-0">
+      <p className="text-[11px] text-[var(--text-muted)] truncate">{label}</p>
+      <p className="text-lg font-bold text-[var(--text-primary)] tabular-nums truncate">{value}</p>
+      {sub && <p className="text-[10px] text-[var(--text-muted)] truncate" title={sub}>{sub}</p>}
     </div>
   )
 }

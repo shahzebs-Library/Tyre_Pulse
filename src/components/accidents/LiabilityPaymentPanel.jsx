@@ -45,6 +45,7 @@ import {
 import {
   summarizeResponsibilityDocs, showTaqdeerWarning, TAQDEER_WARNING, VERIFICATION_LABEL,
 } from '../../lib/responsibilityDocs'
+import EnterpriseTable from '../ui/EnterpriseTable'
 import WorkstreamHeader from './WorkstreamHeader'
 import NotifyRecipientsPanel from './NotifyRecipientsPanel'
 import { safeHref } from '../../lib/safeUrl'
@@ -440,6 +441,54 @@ export default function LiabilityPaymentPanel({ accidentId, elevated, acc, onCha
     )
   }
 
+  // ── Section 4 columns (document checklist with attach / verify actions) ──
+  const docColumns = [
+    { id: 'document', header: 'Document', accessorKey: 'label', size: 200,
+      meta: { exportValue: (r) => `${r.label}${r.required ? '' : ' (Optional)'}` },
+      cell: ({ row: { original: row } }) => {
+        const href = row.evidence ? safeHref(row.evidence.storage_ref) : null
+        return (
+          <span className="font-semibold text-[var(--text-primary)]">
+            {href ? <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">{row.label}</a> : row.label}
+            {!row.required && <span className="ml-1 text-[10px] font-normal text-[var(--text-muted)]">(Optional)</span>}
+          </span>
+        )
+      } },
+    { id: 'status', header: 'Status', accessorFn: (r) => (r.status === 'attached' ? (r.count > 1 ? `Attached (${r.count})` : 'Attached') : 'Missing'), size: 110,
+      cell: ({ row: { original: row } }) => (
+        <span className={row.status === 'attached' ? 'text-green-400' : row.required ? 'text-red-400' : 'text-[var(--text-muted)]'}>
+          {row.status === 'attached' ? (row.count > 1 ? `Attached (${row.count})` : 'Attached') : 'Missing'}
+        </span>
+      ) },
+    { id: 'uploader', header: 'Uploader', accessorFn: (r) => r.uploader || NOT_SET, size: 140 },
+    { id: 'time', header: 'Time', accessorFn: (r) => r.time || '', size: 130,
+      meta: { exportValue: (r) => fmtTime(r.time) },
+      cell: ({ row: { original: row } }) => <span className="text-[var(--text-secondary)] whitespace-nowrap">{fmtTime(row.time)}</span> },
+    { id: 'verification', header: 'Verification', accessorFn: (r) => VERIFICATION_LABEL[r.verification] || NOT_SET, size: 150,
+      cell: ({ row: { original: row } }) => (
+        <span className={`inline-flex items-center gap-2 ${VERIFICATION_TONE[row.verification] || 'text-[var(--text-muted)]'}`}>
+          {VERIFICATION_LABEL[row.verification] || NOT_SET}
+          {elevated && row.evidence && row.verification !== 'verified' && (
+            <button type="button" title={`Verify ${row.label}`} aria-label={`Verify ${row.label}`} className="p-1.5 text-green-400 hover:text-green-300" onClick={() => verifyDoc(row, 'verified')}><Check size={13} /></button>
+          )}
+          {elevated && row.evidence && row.verification !== 'rejected' && (
+            <button type="button" title={`Reject ${row.label}`} aria-label={`Reject ${row.label}`} className="p-1.5 text-red-400 hover:text-red-300" onClick={() => verifyDoc(row, 'rejected')}><X size={13} /></button>
+          )}
+        </span>
+      ) },
+    { id: 'actions', header: () => <span className="sr-only">Actions</span>, enableSorting: false, size: 110,
+      meta: { export: false, align: 'right' },
+      cell: ({ row: { original: row } }) => (elevated ? (
+        <>
+          <input ref={(el) => { fileInputs.current[row.key] = el }} type="file" className="hidden" aria-label={`Attach ${row.label}`} onChange={(e) => onPickDoc(row.key, e)} />
+          <button type="button" className="btn-secondary text-[11px] inline-flex items-center gap-1" disabled={!!uploadingKey}
+            onClick={() => fileInputs.current[row.key]?.click()}>
+            {uploadingKey === row.key ? <Loader2 size={11} className="animate-spin" /> : <Upload size={11} />} {row.evidence ? 'Replace' : 'Attach'}
+          </button>
+        </>
+      ) : null) },
+  ]
+
   return (
     <div className="p-6 space-y-6">
       <WorkstreamHeader accidentId={accidentId} workstreamKey="liability" workstreams={wsRows} ownerName={ownerLine} />
@@ -559,28 +608,21 @@ export default function LiabilityPaymentPanel({ accidentId, elevated, acc, onCha
       {/* 3 Third-party and authority details */}
       <section className="card space-y-3">
         <h3 className="font-semibold text-[var(--text-primary)]">3. Third-party and authority details</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="text-left text-[10px] uppercase tracking-wide text-[var(--text-muted)]">
-                <th className="py-1.5 pr-3 font-medium">Field</th>
-                <th className="py-1.5 pr-3 font-medium">Value</th>
-                <th className="py-1.5 pr-3 font-medium">Recorded by</th>
-                <th className="py-1.5 font-medium">Verification</th>
-              </tr>
-            </thead>
-            <tbody>
-              {AUTHORITY_ROWS.map((row) => (
-                <tr key={row.key} className="border-t border-[var(--input-border)] align-top">
-                  <td className="py-2 pr-3 font-semibold text-[var(--text-primary)] whitespace-nowrap">{row.label}</td>
-                  <td className="py-2 pr-3 text-[var(--text-primary)] min-w-[10rem]">{authorityValue(row)}</td>
-                  <td className="py-2 pr-3">{recordedBy(row)}</td>
-                  <td className="py-2">{verificationCell(row)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        {/* A form, not a register: each row edits one authority field in place.
+            Responsive rows keep every input reachable on a phone. */}
+        <div className="hidden md:grid grid-cols-[minmax(0,10rem)_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3 text-[10px] uppercase tracking-wide text-[var(--text-muted)] font-medium" aria-hidden="true">
+          <span>Field</span><span>Value</span><span>Recorded by</span><span>Verification</span>
         </div>
+        <dl className="divide-y divide-[var(--input-border)] border-t border-[var(--input-border)]" data-testid="authority-rows">
+          {AUTHORITY_ROWS.map((row) => (
+            <div key={row.key} className="grid grid-cols-1 md:grid-cols-[minmax(0,10rem)_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)] gap-x-3 gap-y-1.5 py-2 text-xs items-start">
+              <dt className="font-semibold text-[var(--text-primary)]">{row.label}</dt>
+              <dd className="text-[var(--text-primary)] min-w-0">{authorityValue(row)}</dd>
+              <dd className="min-w-0"><span className="md:hidden text-[10px] text-[var(--text-muted)] block">Recorded by</span>{recordedBy(row)}</dd>
+              <dd className="min-w-0"><span className="md:hidden text-[10px] text-[var(--text-muted)] block">Verification</span>{verificationCell(row)}</dd>
+            </div>
+          ))}
+        </dl>
       </section>
 
       {/* 4 Responsibility documents */}
@@ -589,60 +631,18 @@ export default function LiabilityPaymentPanel({ accidentId, elevated, acc, onCha
           <h3 className="font-semibold text-[var(--text-primary)] flex items-center gap-2"><Paperclip size={16} /> 4. Responsibility documents</h3>
           <span className="text-xs text-[var(--text-secondary)]" data-testid="docs-counter">{docSummary.counterLabel}</span>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="text-left text-[10px] uppercase tracking-wide text-[var(--text-muted)]">
-                <th className="py-1.5 pr-3 font-medium">Document</th>
-                <th className="py-1.5 pr-3 font-medium">Status</th>
-                <th className="py-1.5 pr-3 font-medium">Uploader</th>
-                <th className="py-1.5 pr-3 font-medium">Time</th>
-                <th className="py-1.5 pr-3 font-medium">Verification</th>
-                <th className="py-1.5 font-medium"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {docSummary.rows.map((row) => {
-                const href = row.evidence ? safeHref(row.evidence.storage_ref) : null
-                return (
-                  <tr key={row.key} className="border-t border-[var(--input-border)] align-top">
-                    <td className="py-2 pr-3 font-semibold text-[var(--text-primary)]">
-                      {href ? <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">{row.label}</a> : row.label}
-                      {!row.required && <span className="ml-1 text-[10px] font-normal text-[var(--text-muted)]">(Optional)</span>}
-                    </td>
-                    <td className={`py-2 pr-3 ${row.status === 'attached' ? 'text-green-400' : row.required ? 'text-red-400' : 'text-[var(--text-muted)]'}`}>
-                      {row.status === 'attached' ? (row.count > 1 ? `Attached (${row.count})` : 'Attached') : 'Missing'}
-                    </td>
-                    <td className="py-2 pr-3 text-[var(--text-primary)]">{row.uploader}</td>
-                    <td className="py-2 pr-3 text-[var(--text-secondary)]">{fmtTime(row.time)}</td>
-                    <td className="py-2 pr-3">
-                      <span className={`inline-flex items-center gap-2 ${VERIFICATION_TONE[row.verification] || 'text-[var(--text-muted)]'}`}>
-                        {VERIFICATION_LABEL[row.verification] || NOT_SET}
-                        {elevated && row.evidence && row.verification !== 'verified' && (
-                          <button type="button" title={`Verify ${row.label}`} className="text-green-400 hover:text-green-300" onClick={() => verifyDoc(row, 'verified')}><Check size={13} /></button>
-                        )}
-                        {elevated && row.evidence && row.verification !== 'rejected' && (
-                          <button type="button" title={`Reject ${row.label}`} className="text-red-400 hover:text-red-300" onClick={() => verifyDoc(row, 'rejected')}><X size={13} /></button>
-                        )}
-                      </span>
-                    </td>
-                    <td className="py-2 text-right">
-                      {elevated && (
-                        <>
-                          <input ref={(el) => { fileInputs.current[row.key] = el }} type="file" className="hidden" aria-label={`Attach ${row.label}`} onChange={(e) => onPickDoc(row.key, e)} />
-                          <button type="button" className="btn-secondary text-[11px] inline-flex items-center gap-1" disabled={!!uploadingKey}
-                            onClick={() => fileInputs.current[row.key]?.click()}>
-                            {uploadingKey === row.key ? <Loader2 size={11} className="animate-spin" /> : <Upload size={11} />} {row.evidence ? 'Replace' : 'Attach'}
-                          </button>
-                        </>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+        <EnterpriseTable
+          columns={docColumns}
+          data={docSummary.rows}
+          getRowId={(r) => r.key}
+          enableGlobalFilter={false}
+          enableColumnFilters={false}
+          enableColumnVisibility={false}
+          emptyMessage="No responsibility documents are defined for this case."
+          initialPageSize={25}
+          exportFileName="Responsibility documents"
+          reportMeta={{ title: 'Responsibility documents' }}
+        />
         {docSummary.missingRequired.length > 0 && (
           <p className="text-[11px] text-[var(--text-muted)] flex items-center gap-1.5"><FileText size={11} /> Missing: {docSummary.missingRequired.join(', ')}</p>
         )}

@@ -34,6 +34,16 @@ no-build-unless-the-owner-asks rule above still applies to the Flutter workflow 
 
 ---
 
+# ⚑ FLUTTER = INTERNAL TESTING ONLY. OWNER INSTRUCTION 2026-09-27, STANDING.
+
+**Never publish the Flutter app to Closed/Open/Production, and never into the production app listing.**
+`flutter-release-play.yml` publishes ONLY to Play **Internal testing** of its OWN separate package
+`com.shahzebrahman.tyrepulse` (own signing key, own listing) - NOT the live production app
+`com.shahzebrahman.tyrepulseinspector`. A guard step fails the run if the track or package is ever changed.
+Promotion to production is the owner's explicit call only.
+
+---
+
 # ⚑ ONE MERGE PER SESSION. THE OWNER HAS NOW SAID THIS TWICE.
 
 **Every push to `main` starts a production build.** Seven pushes in one session

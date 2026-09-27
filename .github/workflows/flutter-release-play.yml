@@ -208,6 +208,19 @@ jobs:
             --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
             --dart-define=APP_ENV=staging
 
+      # OWNER RULE 2026-09-27: Flutter runs in Internal testing ONLY until the
+      # owner explicitly approves production. Never change this to alpha/beta/
+      # production; the guard below fails the run if anyone does.
+      - name: Guard - Internal testing only, never production
+        working-directory: .
+        env:
+          PLAY_TRACK: internal
+          PLAY_PACKAGE: com.shahzebrahman.tyrepulse
+        run: |
+          if [ "$PLAY_TRACK" != "internal" ]; then echo "::error::Flutter releases go to Internal testing only (owner rule)."; exit 1; fi
+          if [ "$PLAY_PACKAGE" = "com.shahzebrahman.tyrepulseinspector" ]; then echo "::error::Never publish Flutter into the production app listing."; exit 1; fi
+          if ! grep -q '^          track: internal$' .github/workflows/flutter-release-play.yml; then echo "::error::Publish step track is not internal."; exit 1; fi
+
       - name: Publish to Play Console Internal Testing
         uses: r0adkll/upload-google-play@v1
         with:

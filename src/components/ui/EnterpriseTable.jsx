@@ -38,6 +38,16 @@ import useRegisterView from './useRegisterView'
  *   meta.exportValue    (original) => any  - CSV cell override
  *   meta.align          'right'|'center'   - cell text alignment
  *
+ * Page safety (client pagination): the page index is NEVER reset by a sort or a
+ * parent re-render (TanStack's autoResetPageIndex stays off, so a user who sorts
+ * page 4 keeps looking at page 4). Instead:
+ *   - the index is CLAMPED to the last page whenever the row count shrinks
+ *     below it (new `data`, a background refresh), so a page can never render
+ *     blank while rows exist;
+ *   - it RESETS to page 1 when the table's own search / column filters change,
+ *     and whenever the optional `resetPageKey` prop changes (pass the page's
+ *     outer filter key so a narrowed set starts from the top).
+ *
  * Server-driven tables: pass `manualPagination` with `pageIndex`, `pageCount`,
  * `totalRows`, `onPageChange` (and optional `pageSize`/`onPageSizeChange`);
  * filtering/sorting then applies only to the rows currently loaded.
@@ -76,6 +86,7 @@ export default function EnterpriseTable({
   pageSize,
   onPageSizeChange,
   paginationLabel,
+  resetPageKey,
 
   // virtualization (client-side rows only; replaces pagination)
   virtual = false,
@@ -248,6 +259,26 @@ export default function EnterpriseTable({
     autoResetPageIndex: false,
     manualPagination: manualPagination || virtual,
   })
+
+  // ── page safety (client pagination only) ──────────────────────────────────
+  // Reset to the first page when the filter inputs change. Sorting is
+  // deliberately NOT in this list. `filterSignature` is a string so a new
+  // array/object identity with the same content does not reset the page.
+  const filterSignature = useMemo(
+    () => JSON.stringify([globalFilter, columnFilters, resetPageKey ?? null]),
+    [globalFilter, columnFilters, resetPageKey]
+  )
+  const lastFilterSignature = useRef(filterSignature)
+  if (usePaginationModel && lastFilterSignature.current !== filterSignature) {
+    lastFilterSignature.current = filterSignature
+    if (pagination.pageIndex !== 0) setPagination(p => ({ ...p, pageIndex: 0 }))
+  }
+  // Clamp: never sit past the last page once the row count shrinks. Done in
+  // render (guarded, converges in one pass) so no blank frame is painted.
+  const lastValidPage = usePaginationModel ? Math.max(0, table.getPageCount() - 1) : 0
+  if (usePaginationModel && pagination.pageIndex > lastValidPage) {
+    setPagination(p => (p.pageIndex > lastValidPage ? { ...p, pageIndex: lastValidPage } : p))
+  }
 
   // PERSIST A RESIZE ONLY WHEN THE DRAG ENDS. `columnResizeMode: 'onChange'`
   // fires on every mouse move, so writing from the change handler would post a

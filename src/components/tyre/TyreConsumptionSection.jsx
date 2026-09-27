@@ -30,6 +30,11 @@ import { exportToExcel } from '../../lib/exportUtils'
 import { toUserMessage } from '../../lib/safeError'
 import { colorAt, withAlpha } from '../../lib/reportColors'
 import DateField from '../ui/DateField'
+import EnterpriseTable from '../ui/EnterpriseTable'
+import { compareValues, isBlank } from '../../lib/consoleTable'
+
+const valueSort = (a, b, id) => compareValues(a.getValue(id), b.getValue(id))
+const sortable = { sortingFn: valueSort, sortUndefined: 'last' }
 
 // Registered here rather than relying on the host page, so this section keeps
 // working if it is ever mounted somewhere else. Chart.js registration is
@@ -88,6 +93,27 @@ function Note({ tone = 'info', children }) {
   )
 }
 
+function breakdownColumns(label) {
+  return [
+    {
+      id: 'key', header: label, accessorFn: (r) => (isBlank(r.key) ? undefined : r.key), ...sortable,
+      meta: { exportValue: (r) => `${r.key}${r.resolved ? '' : ' (unattributed)'}` },
+      cell: ({ row: { original: r } }) => (
+        <span style={{ color: r.resolved ? 'var(--text-secondary)' : 'var(--text-dim)' }}>
+          {r.key}{!r.resolved ? <span className="ml-1 text-[10px]">(unattributed)</span> : null}
+        </span>
+      ),
+    },
+    { id: 'fitments', header: 'Tyres', accessorFn: (r) => r.fitments, ...sortable, meta: { align: 'right' }, cell: ({ row: { original: r } }) => <span className="tabular-nums" style={{ color: 'var(--text-primary)' }}>{Number(r.fitments).toLocaleString()}</span> },
+    { id: 'assets', header: 'Assets', accessorFn: (r) => r.assets, ...sortable, meta: { align: 'right' }, cell: ({ row: { original: r } }) => <span className="tabular-nums">{Number(r.assets).toLocaleString()}</span> },
+    {
+      id: 'sharePct', header: 'Share', accessorFn: (r) => (r.sharePct == null ? undefined : r.sharePct), ...sortable,
+      meta: { align: 'right', exportValue: (r) => (r.sharePct == null ? 'N/A' : `${r.sharePct}%`) },
+      cell: ({ row: { original: r } }) => <span className="tabular-nums">{r.sharePct == null ? 'N/A' : `${r.sharePct}%`}</span>,
+    },
+  ]
+}
+
 function BreakdownTable({ title, bd, note, label }) {
   if (!bd || !bd.rows.length) {
     return (
@@ -100,31 +126,16 @@ function BreakdownTable({ title, bd, note, label }) {
   return (
     <div>
       <h4 className="text-sm font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>{title}</h4>
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead>
-            <tr style={{ color: 'var(--text-dim)' }}>
-              <th className="text-left font-medium py-1.5 pr-3">{label}</th>
-              <th className="text-right font-medium py-1.5 px-2">Tyres</th>
-              <th className="text-right font-medium py-1.5 px-2">Assets</th>
-              <th className="text-right font-medium py-1.5 pl-2">Share</th>
-            </tr>
-          </thead>
-          <tbody>
-            {bd.rows.slice(0, 12).map((r) => (
-              <tr key={r.key} style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <td className="py-1.5 pr-3" style={{ color: r.resolved ? 'var(--text-secondary)' : 'var(--text-dim)' }}>
-                  {r.key}
-                  {!r.resolved ? <span className="ml-1 text-[10px]">(unattributed)</span> : null}
-                </td>
-                <td className="py-1.5 px-2 text-right tabular-nums" style={{ color: 'var(--text-primary)' }}>{r.fitments.toLocaleString()}</td>
-                <td className="py-1.5 px-2 text-right tabular-nums" style={{ color: 'var(--text-secondary)' }}>{r.assets.toLocaleString()}</td>
-                <td className="py-1.5 pl-2 text-right tabular-nums" style={{ color: 'var(--text-secondary)' }}>{r.sharePct == null ? 'N/A' : `${r.sharePct}%`}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <EnterpriseTable
+        columns={breakdownColumns(label)}
+        data={bd.rows}
+        getRowId={(r) => String(r.key)}
+        searchPlaceholder={`Search ${String(label).toLowerCase()}...`}
+        enableColumnFilters={false}
+        initialPageSize={25}
+        exportFileName={title}
+        emptyMessage="Nothing matches this search."
+      />
       {note ? <p className="text-[11px] mt-2" style={{ color: 'var(--text-dim)' }}>{note}</p> : null}
     </div>
   )
@@ -284,7 +295,7 @@ export default function TyreConsumptionSection() {
         <div className="py-6">
           <Note tone="warn">
             {toUserMessage(state.reason) || 'This view could not be built.'}{' '}
-            <button onClick={load} className="underline">Try again</button>
+            <button type="button" onClick={load} className="underline min-h-[44px]">Try again</button>
           </Note>
         </div>
       ) : !d ? null : (

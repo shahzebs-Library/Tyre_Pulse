@@ -17,7 +17,15 @@ import { Download } from 'lucide-react'
 import { forecastTableRows } from '../../lib/tyreDemandForecast'
 import { windowFromMonths } from '../../lib/forecastPeriod'
 import { reportFileName, exportToExcel } from '../../lib/exportUtils'
+import { compareValues, isBlank } from '../../lib/consoleTable'
+import EnterpriseTable from '../ui/EnterpriseTable'
 
+const valueSort = (a, b, id) => compareValues(a.getValue(id), b.getValue(id))
+const blank = (v) => (isBlank(v) ? undefined : v)
+const sortable = { sortingFn: valueSort, sortUndefined: 'last' }
+const int = (v) => Number(v).toLocaleString('en-US')
+
+const CONF_ORDER = { high: 3, medium: 2, low: 1, none: 0 }
 const CONF_TONE = {
   high: 'text-emerald-400', medium: 'text-sky-400', low: 'text-amber-400', none: 'text-[var(--text-muted)]',
 }
@@ -40,6 +48,20 @@ export default function TyreForecastSection({ forecast, country, currency = '', 
   // never describe different months. `now` is passed so a data set that has
   // fallen behind the calendar says so.
   const win = windowFromMonths(forecast, new Date())
+  const columns = [
+    { id: 'size', header: 'Size', accessorFn: (r) => blank(r.size), ...sortable, cell: ({ row: { original: r } }) => <span className="text-[var(--text-primary)]">{r.size}</span> },
+    { id: 'total', header: 'Used (12 mo)', accessorFn: (r) => r.total, ...sortable, meta: { align: 'right' }, cell: ({ row: { original: r } }) => <span className="tabular-nums text-[var(--text-secondary)]">{int(r.total)}</span> },
+    { id: 'avgPerMonth', header: 'Avg / mo', accessorFn: (r) => r.avgPerMonth, ...sortable, meta: { align: 'right' }, cell: ({ row: { original: r } }) => <span className="tabular-nums text-[var(--text-secondary)]">{r.avgPerMonth}</span> },
+    { id: 'trend', header: 'Trend', accessorFn: (r) => blank(r.trend), ...sortable },
+    ...fmLabels.map((l, i) => ({
+      id: `f${i}`, header: l, accessorFn: (r) => r.forecast[i], ...sortable, meta: { align: 'right' },
+      cell: ({ row: { original: r } }) => <span className="tabular-nums text-[var(--text-primary)]">{int(r.forecast[i])}</span>,
+    })),
+    { id: 'forecastTotal', header: 'Next total', accessorFn: (r) => r.forecastTotal, ...sortable, meta: { align: 'right' }, cell: ({ row: { original: r } }) => <span className="tabular-nums font-semibold text-[var(--text-primary)]">{int(r.forecastTotal)}</span> },
+    { id: 'avgUnitCost', header: 'Cost/tyre', accessorFn: (r) => blank(r.avgUnitCost), ...sortable, meta: { align: 'right' }, cell: ({ row: { original: r } }) => <span className="tabular-nums text-[var(--text-secondary)]">{r.avgUnitCost == null ? 'N/A' : fmtM(r.avgUnitCost)}</span> },
+    { id: 'projectedSpend', header: 'Projected spend', accessorFn: (r) => blank(r.projectedSpend), ...sortable, meta: { align: 'right' }, cell: ({ row: { original: r } }) => <span className="tabular-nums text-[var(--text-secondary)]">{r.projectedSpend == null ? 'N/A' : fmtM(r.projectedSpend)}</span> },
+    { id: 'confidence', header: 'Confidence', accessorFn: (r) => CONF_ORDER[r.confidence] ?? 0, ...sortable, cell: ({ row: { original: r } }) => <span className={`capitalize ${CONF_TONE[r.confidence] || CONF_TONE.none}`}>{r.confidence}</span> },
+  ]
   function exportXlsx() {
     const keys = ['size', 'total', 'avgPerMonth', 'trend', ...fmLabels.map((_, i) => `f${i}`), 'forecastTotal', 'avgUnitCost', 'pricedPct', 'projectedSpend', 'confidence']
     const headers = ['Size', 'Used (12 mo)', 'Avg / month', 'Trend', ...fmLabels, 'Next months total', `Cost/tyre (${currency})`, 'Priced %', `Projected spend (${currency})`, 'Confidence']
@@ -75,8 +97,8 @@ export default function TyreForecastSection({ forecast, country, currency = '', 
           </p>
         </div>
         <button type="button" onClick={exportXlsx}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--input-border)] px-3 py-1.5 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-hover)]">
-          <Download size={14} /> Excel
+          className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-[var(--input-border)] px-3 py-1.5 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-hover)]">
+          <Download size={14} aria-hidden="true" /> Excel
         </button>
       </div>
       <div className="mb-1 rounded-lg border border-[var(--hairline)] px-3 py-2 text-sm flex flex-wrap gap-x-6 gap-y-1">
@@ -103,38 +125,9 @@ export default function TyreForecastSection({ forecast, country, currency = '', 
           ({gaps.slice(0, 6).map((g) => g.size).join(', ')}{gaps.length > 6 ? '...' : ''}). Add tyre prices to sharpen the cost forecast.
         </div>
       )}
-      <div className="max-h-96 overflow-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-[var(--text-muted)] border-b border-[var(--hairline)]">
-              <th className="py-1.5 pr-3 font-semibold">Size</th>
-              <th className="py-1.5 px-3 font-semibold text-right">Used (12 mo)</th>
-              <th className="py-1.5 px-3 font-semibold text-right">Avg / mo</th>
-              <th className="py-1.5 px-3 font-semibold">Trend</th>
-              {fmLabels.map((l) => <th key={l} className="py-1.5 px-3 font-semibold text-right">{l}</th>)}
-              <th className="py-1.5 px-3 font-semibold text-right">Next total</th>
-              <th className="py-1.5 px-3 font-semibold text-right">Cost/tyre</th>
-              <th className="py-1.5 px-3 font-semibold text-right">Projected spend</th>
-              <th className="py-1.5 px-3 font-semibold">Confidence</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.size} className="border-b border-[var(--hairline)]/40">
-                <td className="py-1.5 pr-3 text-[var(--text-primary)]">{r.size}</td>
-                <td className="py-1.5 px-3 text-right tabular-nums text-[var(--text-secondary)]">{r.total.toLocaleString('en-US')}</td>
-                <td className="py-1.5 px-3 text-right tabular-nums text-[var(--text-secondary)]">{r.avgPerMonth}</td>
-                <td className="py-1.5 px-3 text-[var(--text-secondary)]">{r.trend}</td>
-                {r.forecast.map((v, i) => <td key={i} className="py-1.5 px-3 text-right tabular-nums text-[var(--text-primary)]">{v.toLocaleString('en-US')}</td>)}
-                <td className="py-1.5 px-3 text-right tabular-nums font-semibold text-[var(--text-primary)]">{r.forecastTotal.toLocaleString('en-US')}</td>
-                <td className="py-1.5 px-3 text-right tabular-nums text-[var(--text-secondary)]">{r.avgUnitCost == null ? 'N/A' : fmtM(r.avgUnitCost)}</td>
-                <td className="py-1.5 px-3 text-right tabular-nums text-[var(--text-secondary)]">{r.projectedSpend == null ? 'N/A' : fmtM(r.projectedSpend)}</td>
-                <td className={`py-1.5 px-3 capitalize ${CONF_TONE[r.confidence] || CONF_TONE.none}`}>{r.confidence}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <EnterpriseTable columns={columns} data={rows} getRowId={(r) => String(r.size)}
+        searchPlaceholder="Search size..." enableColumnFilters={false} enableExport={false}
+        maxHeight={420} emptyMessage="No size matches this search." />
     </div>
   )
 }

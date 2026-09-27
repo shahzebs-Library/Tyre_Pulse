@@ -2,7 +2,6 @@
 // WorkOrders.jsx - Workshop Job Card Management · /work-orders
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement,
@@ -12,7 +11,7 @@ import { Bar, Doughnut } from 'react-chartjs-2'
 import {
   Wrench, Plus, Search, Filter, Download, FileText,
   CheckCircle, Clock, AlertTriangle, XCircle, Play,
-  ChevronDown, ChevronUp, X, Edit2, Eye, Printer,
+  ChevronDown, ChevronUp, Edit2, Eye, Printer,
   Package, DollarSign, Calendar, User, Building2,
   AlertOctagon, Loader2, RefreshCw, TrendingUp,
   FileSpreadsheet, Trash2, Lock,
@@ -24,6 +23,7 @@ import { publish } from '../lib/events'
 import PageHeader from '../components/ui/PageHeader'
 import Card, { CardBody, CardHeader } from '../components/ui/Card'
 import Modal from '../components/ui/Modal'
+import SideDrawer from '../components/ui/SideDrawer'
 import DateField from '../components/ui/DateField'
 import StatusBadge from '../components/ui/StatusBadge'
 import CustomFieldsPanel from '../components/CustomFieldsPanel'
@@ -1020,22 +1020,20 @@ export default function WorkOrders() {
         </Modal>
       )}
 
-      {/* ── Detail Drawer ────────────────────────────────────────────────────── */}
-      <AnimatePresence>
+      {/* ── Detail Drawer ────────────────────────────────────────────────────
+          SideDrawer owns the portal, backdrop, Escape, focus trap, scroll lock
+          and focus return; the full-height right-hand rail is unchanged. */}
+      <SideDrawer
+        open={!!viewOrder}
+        onClose={() => setViewOrder(null)}
+        size="md"
+        busy={transitioning}
+        closeLabel="Close work order"
+        title={viewOrder?.work_order_no}
+        subtitle={viewOrder ? `${viewOrder.work_type} · ${viewOrder.asset_no}` : null}
+      >
         {viewOrder && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:justify-end bg-black/60 backdrop-blur-sm">
-            <motion.div initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-              className="tp-drawer-panel w-full sm:w-[480px] h-full bg-[var(--surface-1)] border-l border-[var(--border-bright)] overflow-y-auto shadow-2xl">
-              <div className="sticky top-0 bg-[var(--surface-1)] border-b border-[var(--border-dim)] px-6 py-4 flex items-center justify-between z-10">
-                <div>
-                  <h2 className="text-[var(--text-primary)] font-bold">{viewOrder.work_order_no}</h2>
-                  <p className="text-[var(--text-secondary)] text-sm">{viewOrder.work_type} · {viewOrder.asset_no}</p>
-                </div>
-                <button onClick={() => setViewOrder(null)} className="p-2 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors"><X size={18} /></button>
-              </div>
-              <div className="p-6 space-y-5">
+              <div className="space-y-5">
                 {/* Status + Priority */}
                 <div className="flex items-center gap-3">
                   <StatusBadge status={viewOrder.status} size={30} />
@@ -1156,10 +1154,8 @@ export default function WorkOrders() {
                   </button>
                 </div>
               </div>
-            </motion.div>
-          </motion.div>
         )}
-      </AnimatePresence>
+      </SideDrawer>
     </div>
   )
 }

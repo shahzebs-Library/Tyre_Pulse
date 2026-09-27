@@ -70,7 +70,7 @@ export default function MobileBottomNav({ alertCount, onMenuOpen }) {
                   <Icon size={20} strokeWidth={isActive ? 2.2 : 1.7} />
                   {to === '/alerts' && alertCount > 0 && (
                     <span
-                      className="absolute -top-1.5 -right-2 min-w-[15px] h-[15px] flex items-center justify-center text-[9px] font-bold bg-red-600 text-white rounded-full px-0.5"
+                      className="absolute -top-1.5 -end-2 min-w-[15px] h-[15px] flex items-center justify-center text-[9px] font-bold bg-red-600 text-white rounded-full px-0.5"
                       style={{ boxShadow: '0 0 8px rgba(239,68,68,0.7)' }}
                     >
                       {alertCount > 9 ? '9+' : alertCount}
@@ -84,6 +84,7 @@ export default function MobileBottomNav({ alertCount, onMenuOpen }) {
         ))}
 
         <button
+          type="button"
           onClick={onMenuOpen}
           className="flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors active:opacity-70"
           style={{ color: 'var(--text-muted)' }}

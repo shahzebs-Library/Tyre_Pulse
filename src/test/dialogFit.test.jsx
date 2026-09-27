@@ -98,6 +98,10 @@ describe('global dialog fit net', () => {
 
   it('leaves side drawers full height and only widens them', () => {
     expect(css).toContain('.fixed.inset-0 > .tp-drawer-panel')
+    // The shared SideDrawer overlay is not a `.fixed.inset-0` element, so the
+    // widening ladder names it too; otherwise its rails stay laptop width on a
+    // wall display.
+    expect(css).toContain('.tp-drawer-overlay > .tp-drawer-panel')
   })
 
   it('gives portalled popovers a bounded height so a long menu never runs off screen', () => {

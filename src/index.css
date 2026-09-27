@@ -1194,6 +1194,51 @@ html.light .text-gray-700    { color: #334155 !important; }
    utility in dark mode; the html.light !important rules above keep light mode. */
 .text-gray-600 { color: #808e86; }
 .text-gray-700 { color: #6b776f; }
+/* Sidebar section headings are 9.5px bold caps in text-gray-700, which measured
+   4.32:1 on the sidebar's #030805 - under the 4.5:1 AA floor for small text.
+   Scoped to <aside> so every other dark surface keeps its colour; light mode is
+   unaffected because the html.light !important rule above still wins. */
+aside .text-gray-700 { color: #75817a; }
+
+/* ─── App-shell accessibility utilities ───────────────────────────────────────
+   Skip link: visually hidden until it takes keyboard focus, then pinned to the
+   top-start corner so a keyboard user can jump past ~200 nav links. */
+.tp-skip-link {
+  position: fixed;
+  top: 8px;
+  inset-inline-start: 8px;
+  z-index: 1000;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #ffffff;
+  background: #15803d;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+  transform: translateY(-160%);
+}
+.tp-skip-link:focus,
+.tp-skip-link:focus-visible {
+  transform: translateY(0);
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+
+/* Touch target: grows the HIT area of a small shell control to 44x44 on touch
+   screens without changing its drawn size or the bar's layout. Only for
+   elements that are not already absolutely positioned (it sets relative). */
+@media (pointer: coarse), (max-width: 767px) {
+  .tp-touch-target { position: relative; }
+  .tp-touch-target::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+  }
+}
 html.light .text-slate-300   { color: #1e293b !important; }
 html.light .text-slate-400   { color: #475569 !important; }
 html.light .text-slate-500   { color: #475569 !important; }
@@ -1675,11 +1720,86 @@ html.light .tp-wordmark {
 /* Side drawers: a 480px rail is generous on a laptop and a sliver on a wall
    display, so let it grow with the viewport while staying readable. */
 @media (min-width: 1600px) {
-  .fixed.inset-0 > .tp-drawer-panel {
+  .fixed.inset-0 > .tp-drawer-panel,
+  .tp-drawer-overlay > .tp-drawer-panel {
     width: min(40vw, 52rem);
     /* The panel's own `max-w-*` would otherwise pin it back to laptop width. */
     max-width: min(40vw, 52rem);
   }
+}
+
+/* ─── Shared side drawer (src/components/ui/SideDrawer.jsx) ─────────────────
+   Modal's full-height sibling: a record rail against one edge, the page still
+   visible beside it. Sides are LOGICAL (flex-end follows the document
+   direction), so `end` is the right edge in English and the left in Arabic.
+   `data-edge` is the resolved physical edge, used only to pick the slide
+   direction. Only the body scrolls; head and foot stay reachable. */
+.tp-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  justify-content: flex-end;
+  align-items: stretch;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(2px);
+}
+.tp-drawer-overlay--start { justify-content: flex-start; }
+
+.tp-drawer-shell {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: var(--tp-drawer-w, 30rem);
+  height: 100%;
+  height: 100dvh;
+  min-height: 0;
+  background: var(--surface-1);
+  color: var(--text-primary);
+  border-inline-start: 1px solid var(--border-bright);
+  box-shadow: var(--shadow-float, 0 24px 60px rgba(0, 0, 0, 0.45));
+  overflow: hidden;
+  animation: tp-drawer-in-right 0.22s ease-out;
+}
+.tp-drawer-overlay--start > .tp-drawer-shell {
+  border-inline-start: 0;
+  border-inline-end: 1px solid var(--border-bright);
+}
+.tp-drawer-overlay[data-edge="left"] > .tp-drawer-shell { animation-name: tp-drawer-in-left; }
+
+.tp-drawer-shell--sm { --tp-drawer-w: 24rem; }
+.tp-drawer-shell--md { --tp-drawer-w: 30rem; }
+.tp-drawer-shell--lg { --tp-drawer-w: 36rem; }
+.tp-drawer-shell--xl { --tp-drawer-w: 42rem; }
+
+.tp-drawer-head,
+.tp-drawer-foot {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.9rem clamp(0.9rem, 2vw, 1.5rem);
+  background: var(--surface-1);
+}
+.tp-drawer-head { border-bottom: 1px solid var(--border-dim); align-items: flex-start; }
+.tp-drawer-foot {
+  border-top: 1px solid var(--border-dim);
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+.tp-drawer-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: clamp(0.9rem, 2vw, 1.5rem);
+}
+
+@keyframes tp-drawer-in-right { from { transform: translateX(100%); } to { transform: translateX(0); } }
+@keyframes tp-drawer-in-left  { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .tp-drawer-shell { animation: none; }
 }
 
 /* ─── Shared dialog shell (src/components/ui/Modal.jsx) ──────────────────────

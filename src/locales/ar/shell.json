@@ -57,5 +57,10 @@
   "newTyre": "إطار جديد",
   "contextChanged": "تم تغيير موقع العمل إلى",
   "scopeChanged": "تم تغيير نطاق التقارير إلى",
-  "locationTree": "المواقع حسب الدولة"
+  "locationTree": "المواقع حسب الدولة",
+  "skipToContent": "الانتقال إلى المحتوى الرئيسي",
+  "closeMenu": "إغلاق القائمة",
+  "primaryNav": "التنقل الرئيسي",
+  "commandSearchLabel": "ابحث في الصفحات والإجراءات والسجلات",
+  "notificationsPanel": "الإشعارات"
 }

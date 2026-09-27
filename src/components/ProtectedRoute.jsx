@@ -37,9 +37,9 @@ export default function ProtectedRoute({ children }) {
         <div className="text-center max-w-sm">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-5"
             style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)' }}>
-            <span className="text-4xl">🔒</span>
+            <span aria-hidden="true" className="text-4xl">🔒</span>
           </div>
-          <h2 className="text-xl font-bold text-white mb-3">{t('auth.accountSuspendedTitle')}</h2>
+          <h1 className="text-xl font-bold text-white mb-3">{t('auth.accountSuspendedTitle')}</h1>
           <p className="text-gray-400 text-sm leading-relaxed">{t('auth.login.accessRevokedBanner')}</p>
           <button
             onClick={() => import('../lib/supabase').then(m => m.supabase.auth.signOut())}
@@ -59,9 +59,9 @@ export default function ProtectedRoute({ children }) {
         <div className="text-center max-w-sm">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-5"
             style={{ background: 'rgba(234,179,8,0.12)', border: '1px solid rgba(234,179,8,0.3)' }}>
-            <span className="text-4xl">⏳</span>
+            <span aria-hidden="true" className="text-4xl">⏳</span>
           </div>
-          <h2 className="text-xl font-bold text-white mb-3">{t('auth.awaitingApprovalTitle')}</h2>
+          <h1 className="text-xl font-bold text-white mb-3">{t('auth.awaitingApprovalTitle')}</h1>
           <p className="text-gray-400 text-sm leading-relaxed mb-1">
             {t('auth.awaitingApprovalBody')}
           </p>
@@ -87,9 +87,9 @@ export default function ProtectedRoute({ children }) {
         <div className="text-center max-w-sm">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-5"
             style={{ background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)' }}>
-            <span className="text-4xl">📱</span>
+            <span aria-hidden="true" className="text-4xl">📱</span>
           </div>
-          <h2 className="text-xl font-bold text-white mb-3">Mobile app only</h2>
+          <h1 className="text-xl font-bold text-white mb-3">Mobile app only</h1>
           <p className="text-gray-400 text-sm leading-relaxed">
             This account is set up for the Tyre Pulse mobile app. Please sign in from the mobile app to continue.
           </p>
@@ -117,9 +117,9 @@ export default function ProtectedRoute({ children }) {
         <div className="text-center max-w-sm">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-5"
             style={{ background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)' }}>
-            <span className="text-4xl">🔐</span>
+            <span aria-hidden="true" className="text-4xl">🔐</span>
           </div>
-          <h2 className="text-xl font-bold text-white mb-3">Two-factor authentication required</h2>
+          <h1 className="text-xl font-bold text-white mb-3">Two-factor authentication required</h1>
           <p className="text-gray-400 text-sm leading-relaxed mb-1">
             Your organization requires administrators to secure their account with two-factor authentication before continuing.
           </p>
@@ -232,11 +232,11 @@ function ModuleUnavailable({ status, until, note }) {
     <div className="flex flex-col items-center justify-center h-96 text-center px-4">
       <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-4"
         style={{ background: 'rgba(234,179,8,0.12)', border: '1px solid rgba(234,179,8,0.3)' }}>
-        <span className="text-3xl">{maintenance ? '🛠️' : '🚧'}</span>
+        <span aria-hidden="true" className="text-3xl">{maintenance ? '🛠️' : '🚧'}</span>
       </div>
-      <h2 className="text-xl font-bold text-white mb-2">
+      <h1 className="text-xl font-bold text-white mb-2">
         {maintenance ? 'Under maintenance' : 'Module unavailable'}
-      </h2>
+      </h1>
       <p className="text-gray-400 text-sm max-w-sm">
         {maintenance
           ? 'This module is temporarily under maintenance. Please check back shortly.'
@@ -261,7 +261,7 @@ function ModuleUnavailable({ status, until, note }) {
 export function RouteLoading() {
   const { t } = useLanguage()
   return (
-    <div className="flex items-center justify-center h-64 text-gray-400">{t('common.loading')}</div>
+    <div className="flex items-center justify-center h-64 text-gray-400" role="status" aria-live="polite">{t('common.loading')}</div>
   )
 }
 
@@ -272,9 +272,9 @@ function AccessDenied({ role, allowed, moduleKey }) {
     <div className="flex flex-col items-center justify-center h-96 text-center px-4">
       <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-4"
         style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)' }}>
-        <span className="text-3xl">🔒</span>
+        <span aria-hidden="true" className="text-3xl">🔒</span>
       </div>
-      <h2 className="text-xl font-bold text-white mb-2">{t('auth.accessRestrictedTitle')}</h2>
+      <h1 className="text-xl font-bold text-white mb-2">{t('auth.accessRestrictedTitle')}</h1>
       <p className="text-gray-400 text-sm max-w-sm">
         {allowed
           ? t('auth.accessRequiresRole', { roles: roleNames })

@@ -112,7 +112,7 @@ export default function Breadcrumbs({ navGroups = [], t, className = '' }) {
                 <ChevronRight
                   size={12}
                   aria-hidden="true"
-                  className="flex-shrink-0"
+                  className="flex-shrink-0 rtl:rotate-180"
                   style={{ color: 'var(--text-muted)', opacity: 0.7 }}
                 />
               )}

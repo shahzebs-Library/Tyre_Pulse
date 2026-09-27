@@ -17,8 +17,27 @@ import {
 } from '../../lib/jobCard'
 import { formatDateTime } from '../../lib/formatters'
 import JobCardFlow from './JobCardFlow'
+import EnterpriseTable from '../ui/EnterpriseTable'
+import { compareValues, isBlank } from '../../lib/consoleTable'
 
 const NOT_RECORDED = 'Not recorded'
+
+const valueSort = (a, b, id) => compareValues(a.getValue(id), b.getValue(id))
+const blank = (v) => (isBlank(v) ? undefined : v)
+const sortable = { sortingFn: valueSort, sortUndefined: 'last' }
+const textCell = (key, strong = false) => ({ row: { original: li } }) => (
+  <span className={strong ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}>{li[key] ?? NOT_RECORDED}</span>
+)
+const TASK_COLUMNS = [
+  { id: 'task', header: 'Task', accessorFn: (li) => blank(li.task), ...sortable, meta: { exportValue: (li) => li.task || NOT_RECORDED }, cell: textCell('task', true) },
+  { id: 'detail', header: 'Detail', accessorFn: (li) => blank(li.detail), ...sortable, meta: { exportValue: (li) => li.detail || NOT_RECORDED }, cell: textCell('detail') },
+  { id: 'action', header: 'Action taken', accessorFn: (li) => blank(li.action), ...sortable, meta: { exportValue: (li) => li.action || NOT_RECORDED }, cell: textCell('action') },
+  {
+    id: 'qty', header: 'Qty', accessorFn: (li) => blank(li.qty), ...sortable,
+    meta: { align: 'right', exportValue: (li) => li.qty ?? NOT_RECORDED },
+    cell: ({ row: { original: li } }) => <span className="tabular-nums text-[var(--text-secondary)]">{li.qty ?? NOT_RECORDED}</span>,
+  },
+]
 
 /** Render one field's stored value for display. */
 function displayValue(row, field) {
@@ -46,8 +65,8 @@ export default function JobCardDetail({ row, now = Date.now(), currency = '', on
           </span>
         </div>
         {canEdit && (
-          <button type="button" onClick={onEdit} className="btn-secondary text-xs">
-            <Edit2 size={13} className="inline mr-1" />
+          <button type="button" onClick={onEdit} className="btn-secondary text-xs min-h-[44px]">
+            <Edit2 size={13} className="inline mr-1" aria-hidden="true" />
             Edit job card
           </button>
         )}
@@ -125,28 +144,10 @@ export default function JobCardDetail({ row, now = Date.now(), currency = '', on
           <div className="px-4 py-2 bg-[var(--surface-2)]">
             <div className="text-[var(--text-primary)] text-xs font-semibold">Job card task lines (from ERP)</div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-[var(--text-muted)] text-[10px]">
-                  <th className="text-left px-4 py-2">Task</th>
-                  <th className="text-left px-4 py-2">Detail</th>
-                  <th className="text-left px-4 py-2">Action taken</th>
-                  <th className="text-right px-4 py-2">Qty</th>
-                </tr>
-              </thead>
-              <tbody>
-                {erpTasks.map((li, i) => (
-                  <tr key={i} className="border-t border-[var(--border-bright)]">
-                    <td className="px-4 py-2 text-[var(--text-primary)]">{li.task || NOT_RECORDED}</td>
-                    <td className="px-4 py-2 text-[var(--text-secondary)]">{li.detail || NOT_RECORDED}</td>
-                    <td className="px-4 py-2 text-[var(--text-secondary)]">{li.action || NOT_RECORDED}</td>
-                    <td className="px-4 py-2 text-right text-[var(--text-secondary)]">{li.qty ?? NOT_RECORDED}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <EnterpriseTable columns={TASK_COLUMNS} data={erpTasks} getRowId={(li, i) => `${li.task || 'task'}-${i}`}
+            enableColumnFilters={false} searchPlaceholder="Search task lines..."
+            exportFileName={`Job card ${row.work_order_no || ''} task lines`.trim()}
+            emptyMessage="No task lines on this job card." />
         </div>
       )}
     </div>

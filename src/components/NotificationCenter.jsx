@@ -98,22 +98,29 @@ function NotificationRow({ notification, onMarkRead, onDismiss, relativeTime, on
       exit={{ opacity: 0, x: 12, height: 0, marginBottom: 0 }}
       transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
       className={`
-        relative flex gap-3 px-3 py-2.5 border-l-2 cursor-pointer
+        relative flex gap-3 px-3 py-2.5 border-s-2 cursor-pointer
         transition-colors duration-150
         ${cfg.border}
         ${notification.read ? 'bg-transparent hover:bg-gray-800/40' : `${cfg.bg} hover:bg-gray-800/60`}
       `}
       style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}
       onClick={handleClick}
+      // A clickable row must also be reachable and operable from the keyboard.
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick() }
+      }}
     >
       {/* Unread indicator dot */}
       {!notification.read && (
-        <span className={`absolute top-3 right-8 w-1.5 h-1.5 rounded-full flex-shrink-0 ${cfg.dot}`} />
+        <span aria-hidden="true" className={`absolute top-3 end-8 w-1.5 h-1.5 rounded-full flex-shrink-0 ${cfg.dot}`} />
       )}
 
       {/* Severity icon */}
       <div className="flex-shrink-0 mt-0.5">
-        <Icon size={14} className={cfg.iconCls} />
+        <Icon size={14} aria-hidden="true" className={cfg.iconCls} />
       </div>
 
       {/* Content */}
@@ -138,7 +145,9 @@ function NotificationRow({ notification, onMarkRead, onDismiss, relativeTime, on
 
       {/* Dismiss button */}
       <button
+        type="button"
         onClick={(e) => { e.stopPropagation(); onDismiss(notification.id) }}
+        onKeyDown={(e) => e.stopPropagation()}
         className="flex-shrink-0 self-start mt-0.5 text-gray-700 hover:text-red-400 transition-colors p-0.5 rounded"
         aria-label="Dismiss notification"
       >
@@ -235,14 +244,23 @@ export default function NotificationCenter() {
     return () => document.removeEventListener('mousedown', handleOutsideClick)
   }, [open, handleOutsideClick])
 
-  // Close on Escape
+  // Close on Escape - only while open, and hand focus back to the bell. The
+  // listener used to be attached for the life of the app, so every Escape
+  // pressed anywhere (a modal, the command palette) also ran this, and a
+  // keyboard user who closed the panel was left focused on nothing.
   useEffect(() => {
+    if (!open) return undefined
     function onKey(e) {
-      if (e.key === 'Escape') setOpen(false)
+      if (e.key !== 'Escape') return
+      setOpen(false)
+      const active = document.activeElement
+      if (!active || active === document.body || panelRef.current?.contains(active)) {
+        buttonRef.current?.focus()
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [open])
 
   const hasCritical = notifications.some(n => n.severity === 'Critical' && !n.read)
   const dayGroups = useMemo(() => groupByDay(notifications), [notifications])
@@ -254,14 +272,18 @@ export default function NotificationCenter() {
       {/* Bell button */}
       <button
         ref={buttonRef}
+        type="button"
         onClick={() => setOpen(v => !v)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-controls={open ? 'tp-notification-panel' : undefined}
         className="relative flex items-center justify-center w-7 h-7 rounded-md text-gray-700 hover:text-green-400 transition-colors hover:bg-green-400/10"
         aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
         title="Notifications"
       >
         {unreadCount > 0
-          ? <BellRing size={14} className={hasCritical ? 'text-red-400 animate-pulse' : 'text-orange-400'} />
-          : <Bell size={14} />
+          ? <BellRing size={14} aria-hidden="true" className={hasCritical ? 'text-red-400 animate-pulse' : 'text-orange-400'} />
+          : <Bell size={14} aria-hidden="true" />
         }
 
         {/* Badge */}
@@ -269,7 +291,8 @@ export default function NotificationCenter() {
           <motion.span
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
-            className="absolute -top-1 -right-1 min-w-[14px] h-3.5 flex items-center justify-center rounded-full text-[9px] font-bold text-white bg-red-600 px-0.5 leading-none"
+            aria-hidden="true"
+            className="absolute -top-1 -end-1 min-w-[14px] h-3.5 flex items-center justify-center rounded-full text-[9px] font-bold text-white bg-red-600 px-0.5 leading-none"
             style={{ boxShadow: '0 0 6px rgba(239,68,68,0.7)' }}
           >
             {unreadCount > 9 ? '9+' : unreadCount}
@@ -282,7 +305,10 @@ export default function NotificationCenter() {
         {open && (
           <motion.div
             ref={panelRef}
-            className="absolute right-0 top-9 w-80 bg-gray-900 border border-gray-700/60 rounded-xl shadow-2xl z-50 overflow-hidden"
+            id="tp-notification-panel"
+            role="dialog"
+            aria-label="Notifications"
+            className="absolute end-0 top-9 w-80 max-w-[calc(100vw-1rem)] bg-gray-900 border border-gray-700/60 rounded-xl shadow-2xl z-50 overflow-hidden"
             style={{ boxShadow: '0 20px 60px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.04)' }}
             initial={{ opacity: 0, y: -8, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -374,7 +400,7 @@ export default function NotificationCenter() {
                 className="flex items-center gap-1 text-[11px] font-semibold text-gray-500 hover:text-green-400 transition-colors"
               >
                 View all
-                <ArrowRight size={11} />
+                <ArrowRight size={11} aria-hidden="true" className="rtl:rotate-180" />
               </Link>
             </div>
           </motion.div>

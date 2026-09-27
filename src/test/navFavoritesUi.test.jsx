@@ -102,6 +102,8 @@ vi.mock('framer-motion', async () => {
   return {
     motion: new Proxy({}, { get: (_target, tag) => (typeof tag === 'string' ? factory(tag) : undefined) }),
     AnimatePresence: ({ children }) => children,
+    MotionConfig: ({ children }) => children,
+    useReducedMotion: () => false,
   }
 })
 

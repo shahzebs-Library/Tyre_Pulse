@@ -17,6 +17,7 @@ import {
   Pencil, Trash2, ToggleLeft, ToggleRight, Crown, Star, Boxes, RotateCcw, Timer,
 } from 'lucide-react'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
+import Modal from '../components/ui/Modal'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
 import {
@@ -464,14 +465,15 @@ export default function CustomerPortal() {
         />
       )}
 
-      {/* Create / Edit modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={closeModal}>
-          <div className="card w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-[var(--text-primary)]">{editing ? 'Edit customer account' : 'New customer account'}</h3>
-              <button onClick={closeModal} className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Close"><X size={18} /></button>
-            </div>
+      {/* Create / Edit modal. The shared Modal owns Escape, the backdrop,
+          the focus trap and focus return (none of which the hand-rolled one
+          had); closeModal already refuses while a save is in flight. */}
+      <Modal
+        open={showModal}
+        onClose={closeModal}
+        size="lg"
+        title={editing ? 'Edit customer account' : 'New customer account'}
+      >
             <form onSubmit={submit} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -572,18 +574,21 @@ export default function CustomerPortal() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {/* Delete confirm */}
-      {confirmDelete && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={() => !deleting && setConfirmDelete(null)}>
-          <div className="card w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+      <Modal
+        open={!!confirmDelete}
+        onClose={() => { if (!deleting) setConfirmDelete(null) }}
+        size="sm"
+        labelledBy="cp-delete-title"
+      >
+        {confirmDelete && (
+          <>
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-full bg-red-900/30 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" /></div>
               <div>
-                <h3 className="text-[var(--text-primary)] font-semibold">Delete this account?</h3>
+                <h3 id="cp-delete-title" className="text-[var(--text-primary)] font-semibold">Delete this account?</h3>
                 <p className="text-sm text-[var(--text-muted)] mt-1">
                   {confirmDelete.company_name || 'Account'}{confirmDelete.account_code ? ` (${confirmDelete.account_code})` : ''}. This cannot be undone and revokes portal access.
                 </p>
@@ -595,9 +600,9 @@ export default function CustomerPortal() {
                 <Trash2 size={14} /> {deleting ? 'Deleting' : 'Delete'}
               </button>
             </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </Modal>
     </div>
   )
 }

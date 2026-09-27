@@ -62,11 +62,11 @@ describe('production-risk registers remediated in this paging wave', () => {
     'Checklists', 'ClaimsSummary', 'Contracts', 'FleetUtilization', 'FuelCards',
     'Geofencing', 'IncidentReports', 'InsuranceClaims', 'MyChecklists',
     'PolicyManagement', 'RepairRequests', 'RetreadClaims', 'ScheduledReports',
-    'AiAnalytics', 'ChecklistInsights', 'ContinuousImprovement', 'CorrectiveActions',
+    'ChecklistInsights', 'ContinuousImprovement', 'CorrectiveActions',
     'CustomRolesManager', 'EngineeringKpi', 'GatePass', 'PerformanceBenchmark',
     'TcoCalculator', 'WorkshopAnalytics', 'WorkshopTv', 'AssetDisposals',
     'PartsCatalog', 'RecallDetail', 'RecallTracker', 'StockManagement',
-    'StockReplenishment', 'SupplierManagement', 'UserManagement',
+    'StockReplenishment', 'SupplierManagement',
   ]
 
   const ENTERPRISE_PAGES = new Set(['Geofencing', 'IncidentReports', 'FuelCards', 'GatePass', 'ChecklistSchedules', 'Checklists', 'Contracts', 'AssetDisposals', 'PolicyManagement', 'TcoCalculator', 'ContinuousImprovement', 'ScheduledReports', 'RecallTracker', 'RepairRequests', 'InsuranceClaims', 'RetreadClaims', 'WorkshopAnalytics', 'EngineeringKpi', 'AdvancedSearch', 'AssetBreakdowns', 'AccessGrantsManager'])

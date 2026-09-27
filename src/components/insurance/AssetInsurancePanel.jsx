@@ -11,11 +11,17 @@
  * by a plate or chassis this register does not hold; and a read that failed says
  * so instead of rendering as an empty history.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ShieldCheck, ShieldOff, RefreshCw, AlertTriangle, FileText } from 'lucide-react'
 import { listPolicyAssets, listClaimRegister } from '../../lib/api/insurancePortfolio'
 import { normAssetNo, normPlate, normChassis } from '../../lib/insuranceMatch'
 import { money, count, textOr, dateText, ExpiryPill, Pill, Fact, n } from './InsuranceUi'
+import { compareValues, isBlank } from '../../lib/consoleTable'
+import EnterpriseTable from '../ui/EnterpriseTable'
+
+const valueSort = (a, b, id) => compareValues(a.getValue(id), b.getValue(id))
+const blank = (v) => (isBlank(v) ? undefined : v)
+const sortable = { sortingFn: valueSort, sortUndefined: 'last' }
 
 /** Does this schedule/claim row describe this asset? Same key order as the engine. */
 function describesAsset(row, asset) {
@@ -29,6 +35,7 @@ function describesAsset(row, asset) {
 
 export default function AssetInsurancePanel({ asset, country }) {
   const [state, setState] = useState({ loading: true, error: '', cover: [], claims: [] })
+  const [nonce, setNonce] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -36,7 +43,13 @@ export default function AssetInsurancePanel({ asset, country }) {
     setState((s) => ({ ...s, loading: true, error: '' }))
     ;(async () => {
       const scope = { country: country && country !== 'All' ? country : asset.country }
-      const [sched, claims] = await Promise.all([listPolicyAssets(scope), listClaimRegister(scope)])
+      let sched; let claims
+      try {
+        [sched, claims] = await Promise.all([listPolicyAssets(scope), listClaimRegister(scope)])
+      } catch {
+        if (!cancelled) setState({ loading: false, error: 'Could not load the insurance record.', cover: [], claims: [] })
+        return
+      }
       if (cancelled) return
       const err = sched.error || claims.error || ''
       setState({
@@ -48,9 +61,18 @@ export default function AssetInsurancePanel({ asset, country }) {
       })
     })()
     return () => { cancelled = true }
-  }, [asset, country])
+  }, [asset, country, nonce])
 
   const { loading, error, cover, claims } = state
+  const claimColumns = useMemo(() => [
+    { id: 'claim_no', header: 'Claim no', accessorFn: (c) => blank(c.claim_no), ...sortable, meta: { exportValue: (c) => textOr(c.claim_no) }, cell: ({ row: { original: c } }) => <span className="font-mono text-xs text-[var(--text-primary)]">{textOr(c.claim_no)}</span> },
+    { id: 'accident_date', header: 'Accident', accessorFn: (c) => blank(c.accident_date), ...sortable, meta: { exportValue: (c) => dateText(c.accident_date, country) }, cell: ({ row: { original: c } }) => dateText(c.accident_date, country) },
+    { id: 'cause_of_loss', header: 'Cause of loss', accessorFn: (c) => blank(c.cause_of_loss), ...sortable, meta: { exportValue: (c) => textOr(c.cause_of_loss) }, cell: ({ row: { original: c } }) => <span className="block max-w-[16rem] truncate" title={c.cause_of_loss || ''}>{textOr(c.cause_of_loss)}</span> },
+    // Each claim carries its own currency; the column is never summed.
+    { id: 'estimate_payment', header: 'Insurer estimate', accessorFn: (c) => (n(c.estimate_payment) ?? undefined), ...sortable, meta: { align: 'right', exportValue: (c) => money(c.estimate_payment, c.currency) }, cell: ({ row: { original: c } }) => <span className="tabular-nums">{money(c.estimate_payment, c.currency)}</span> },
+    { id: 'paid_amount', header: 'Paid', accessorFn: (c) => (n(c.paid_amount) ?? undefined), ...sortable, meta: { align: 'right', exportValue: (c) => money(c.paid_amount, c.currency) }, cell: ({ row: { original: c } }) => <span className="tabular-nums">{money(c.paid_amount, c.currency)}</span> },
+    { id: 'survey_no', header: 'Najm survey', accessorFn: (c) => blank(c.survey_no), ...sortable, meta: { exportValue: (c) => textOr(c.survey_no) }, cell: ({ row: { original: c } }) => <span className="font-mono text-xs">{textOr(c.survey_no)}</span> },
+  ], [country])
 
   if (loading) {
     return (
@@ -69,9 +91,12 @@ export default function AssetInsurancePanel({ asset, country }) {
         <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-[var(--text-secondary)]">
           <ShieldCheck className="h-4 w-4 text-blue-400" /> Insurance
         </h3>
-        <p className="flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-          <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {error}
+        <p role="alert" className="flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+          <AlertTriangle size={15} className="mt-0.5 shrink-0" aria-hidden="true" /> {error}
         </p>
+        <button type="button" onClick={() => setNonce((v) => v + 1)} className="btn-secondary mt-3 inline-flex min-h-[44px] items-center gap-1.5 text-xs">
+          <RefreshCw size={13} aria-hidden="true" /> Retry
+        </button>
       </div>
     )
   }
@@ -122,32 +147,9 @@ export default function AssetInsurancePanel({ asset, country }) {
         {claims.length === 0 ? (
           <p className="text-sm text-[var(--text-muted)]">This asset does not appear on the insurer's claim register.</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[520px] text-sm">
-              <thead>
-                <tr className="border-b border-[var(--border-dim)] text-left text-[11px] uppercase tracking-wide text-[var(--text-muted)]">
-                  <th className="py-2 pr-3">Claim no</th>
-                  <th className="py-2 pr-3">Accident</th>
-                  <th className="py-2 pr-3">Cause of loss</th>
-                  <th className="py-2 pr-3 text-right">Insurer estimate</th>
-                  <th className="py-2 pr-3 text-right">Paid</th>
-                  <th className="py-2">Najm survey</th>
-                </tr>
-              </thead>
-              <tbody>
-                {claims.map((c) => (
-                  <tr key={c.id} className="border-b border-[var(--border-dim)] last:border-0">
-                    <td className="py-2 pr-3 font-mono text-xs text-[var(--text-primary)]">{textOr(c.claim_no)}</td>
-                    <td className="py-2 pr-3 text-[var(--text-secondary)]">{dateText(c.accident_date, country)}</td>
-                    <td className="max-w-[16rem] truncate py-2 pr-3 text-[var(--text-secondary)]" title={c.cause_of_loss || ''}>{textOr(c.cause_of_loss)}</td>
-                    <td className="py-2 pr-3 text-right tabular-nums text-[var(--text-secondary)]">{money(c.estimate_payment, c.currency)}</td>
-                    <td className="py-2 pr-3 text-right tabular-nums text-[var(--text-secondary)]">{money(c.paid_amount, c.currency)}</td>
-                    <td className="py-2 font-mono text-xs text-[var(--text-secondary)]">{textOr(c.survey_no)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <EnterpriseTable columns={claimColumns} data={claims} getRowId={(c) => String(c.id)}
+            searchPlaceholder="Search claims..." enableColumnFilters={false}
+            exportFileName={`Insurance claims ${asset?.asset_no || ''}`.trim()} emptyMessage="No claims match this search." />
         )}
         {claims.some((c) => n(c.paid_amount) == null) && claims.length > 0 ? (
           <p className="mt-2 text-[11px] text-[var(--text-muted)]">A blank Paid figure means the insurer's register states none, not that nothing was paid.</p>

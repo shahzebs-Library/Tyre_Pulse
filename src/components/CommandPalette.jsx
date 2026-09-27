@@ -83,7 +83,7 @@ function ResultRow({ item, isActive, index, onSelect, onHover }) {
       className="flex items-center gap-3 px-4 py-2.5 cursor-pointer select-none transition-colors"
       style={{
         background: isActive ? 'var(--brand-subtle)' : 'transparent',
-        borderLeft: isActive ? '2px solid var(--brand)' : '2px solid transparent',
+        borderInlineStart: isActive ? '2px solid var(--brand)' : '2px solid transparent',
       }}
       onMouseEnter={() => onHover(index)}
       onMouseDown={(e) => { e.preventDefault(); onSelect(item) }}
@@ -197,14 +197,28 @@ export default function CommandPalette() {
     return isCommandVisible(src.access, profile, hasPermission, grantedModules, isSuperAdmin)
   }, [recordSourceById, profile, hasPermission, grantedModules, isSuperAdmin])
 
-  // ── Reset on open + focus input ────────────────────────────────────────────
+  // ── Reset on open + focus input; give focus back on close ─────────────────
+  // The palette unmounts on close, which drops focus to <body> and strands a
+  // keyboard user at the top of the page. Remember what opened it (the search
+  // button, or whatever held focus when Ctrl/Cmd+K was pressed) and hand focus
+  // back - but only if focus is actually orphaned, so a navigation that moved
+  // focus on purpose is left alone.
+  const returnFocusRef = useRef(null)
   useEffect(() => {
-    if (open) {
-      setQuery('')
-      setActiveIndex(0)
-      setRecordGroups([])
-      setSearchError(false)
-      requestAnimationFrame(() => inputRef.current?.focus())
+    if (!open) return undefined
+    setQuery('')
+    setActiveIndex(0)
+    setRecordGroups([])
+    setSearchError(false)
+    if (typeof document !== 'undefined') returnFocusRef.current = document.activeElement
+    requestAnimationFrame(() => inputRef.current?.focus())
+    return () => {
+      const back = returnFocusRef.current
+      returnFocusRef.current = null
+      if (typeof document === 'undefined') return
+      const active = document.activeElement
+      const orphaned = !active || active === document.body || !active.isConnected
+      if (orphaned && back && back.isConnected && typeof back.focus === 'function') back.focus()
     }
   }, [open])
 
@@ -392,6 +406,8 @@ export default function CommandPalette() {
             autoComplete="off"
             spellCheck={false}
             role="combobox"
+            aria-label={labelOr(t, 'shell.commandSearchLabel', 'Search pages, actions and records')}
+            aria-controls="cp-listbox"
             aria-expanded={hasResults}
             aria-autocomplete="list"
             aria-activedescendant={flatItems[activeIndex] ? `cp-item-${flatItems[activeIndex].id}` : undefined}
@@ -406,7 +422,7 @@ export default function CommandPalette() {
         </div>
 
         {/* ── Results ───────────────────────────────────────────────────────── */}
-        <div className="max-h-[55vh] overflow-y-auto overscroll-contain pb-1" role="listbox" aria-label="Results">
+        <div id="cp-listbox" className="max-h-[55vh] overflow-y-auto overscroll-contain pb-1" role="listbox" aria-label="Results">
           {groups.map((group) => (
             <div key={group.label}>
               <GroupHeader label={group.label} />

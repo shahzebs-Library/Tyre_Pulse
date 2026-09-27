@@ -169,7 +169,7 @@ export default function ProfileMenu({
         aria-expanded={open}
         aria-label={`${tx(t, 'shell.account', 'Account')}: ${name}`}
         title={name}
-        className={`flex items-center gap-1 rounded-xl transition-colors hover:bg-green-400/10 ps-0.5 pe-1 py-0.5 ${className}`}
+        className={`tp-touch-target flex items-center gap-1 rounded-xl transition-colors hover:bg-green-400/10 ps-0.5 pe-1 py-0.5 ${className}`}
       >
         <span
           className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs font-bold flex-shrink-0"

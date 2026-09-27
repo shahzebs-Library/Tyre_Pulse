@@ -24,10 +24,30 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   Layers, Milestone, Search, FileSpreadsheet, FileText, RefreshCcw,
-  Info, X, ChevronRight, AlertCircle,
+  Info, ChevronRight,
 } from 'lucide-react'
 import { getCpkKmSource } from '../../lib/api/fleetCpk'
 import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../../lib/exportUtils'
+import { compareValues, isBlank } from '../../lib/consoleTable'
+import EnterpriseTable from '../ui/EnterpriseTable'
+import Modal from '../ui/Modal'
+
+const valueSort = (a, b, id) => compareValues(a.getValue(id), b.getValue(id))
+const blank = (v) => (isBlank(v) ? undefined : v)
+const sortable = { sortingFn: valueSort, sortUndefined: 'last' }
+const BTN = 'inline-flex min-h-[44px] items-center gap-1.5 rounded-md border px-3 py-1 text-xs disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]'
+
+/**
+ * Only an explicit "empty" answer is an empty period. Any other refusal
+ * (an RPC error, a scope refusal, an unreachable backend) means the km is
+ * NOT KNOWN, and rendering it as "no tyre km" would state a fact nobody
+ * measured.
+ */
+export function kmSourceOutcome(res) {
+  if (res && res.ok) return 'ok'
+  if (res && res.reason === 'empty') return 'empty'
+  return 'failed'
+}
 
 /* ---------- formatting helpers (ASCII only, honest N/A) ---------- */
 
@@ -60,7 +80,6 @@ function fmtText(v) {
   return v == null || String(v).trim() === '' ? 'N/A' : String(v)
 }
 
-const PAGE_SIZE = 25
 
 export default function KmSourcePanel({ country, from, to, currency } = {}) {
   const countryLabel = country && country !== 'All' ? country : 'All'
@@ -72,7 +91,6 @@ export default function KmSourcePanel({ country, from, to, currency } = {}) {
   const [errored, setErrored] = useState(false)
 
   const [q, setQ] = useState('')
-  const [page, setPage] = useState(0)
 
   /* ----- open asset detail (contributing tyres) ----- */
   const [openAsset, setOpenAsset] = useState(null) // asset_no string
@@ -90,11 +108,11 @@ export default function KmSourcePanel({ country, from, to, currency } = {}) {
     getCpkKmSource({ country, from, to })
       .then((res) => {
         if (cancelled) return
-        if (res && res.ok) {
-          setSummary(res)
-        } else {
+        const outcome = kmSourceOutcome(res)
+        if (outcome === 'ok') setSummary(res)
+        else {
           setSummary({ ok: false })
-          if (res && res.reason && res.reason !== 'empty') setErrored(true)
+          if (outcome === 'failed') setErrored(true)
         }
       })
       .catch(() => {
@@ -123,9 +141,21 @@ export default function KmSourcePanel({ country, from, to, currency } = {}) {
     return rows.sort((a, b) => (num(b?.km) || 0) - (num(a?.km) || 0))
   }, [byAsset, q])
 
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const safePage = Math.min(page, pageCount - 1)
-  const pageRows = filtered.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE)
+  const summaryColumns = [
+    { id: 'asset_no', header: 'Asset', accessorFn: (r) => blank(r.asset_no), ...sortable, meta: { exportValue: (r) => fmtText(r.asset_no) }, cell: ({ row: { original: r } }) => <span className="font-medium whitespace-nowrap">{fmtText(r.asset_no)}</span> },
+    { id: 'tyres', header: 'Tyres', accessorFn: (r) => num(r.tyres) ?? undefined, ...sortable, meta: { align: 'right' }, cell: ({ row: { original: r } }) => <span className="tabular-nums">{fmtInt(r.tyres)}</span> },
+    { id: 'km', header: 'CPK Km', accessorFn: (r) => num(r.km) ?? undefined, ...sortable, meta: { align: 'right' }, cell: ({ row: { original: r } }) => <span className="tabular-nums">{fmtInt(r.km)}</span> },
+    {
+      id: 'view', header: 'View', enableSorting: false, meta: { align: 'right', export: false },
+      cell: ({ row: { original: r } }) => (
+        <button type="button" onClick={(e) => { e.stopPropagation(); openAssetDetail(r.asset_no) }}
+          aria-label={`View tyres for ${fmtText(r.asset_no)}`}
+          className="inline-flex min-h-[36px] items-center gap-1 text-xs" style={{ color: 'var(--accent)' }}>
+          View tyres <ChevronRight size={13} aria-hidden="true" />
+        </button>
+      ),
+    },
+  ]
 
   const totalKm = useMemo(() => filtered.reduce((s, r) => s + (num(r?.km) || 0), 0), [filtered])
   const totalTyres = useMemo(() => filtered.reduce((s, r) => s + (num(r?.tyres) || 0), 0), [filtered])
@@ -282,7 +312,7 @@ export default function KmSourcePanel({ country, from, to, currency } = {}) {
           <button
             type="button"
             onClick={loadSummary}
-            className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs"
+            className={BTN}
             style={{ borderColor: 'var(--border-subtle)' }}
           >
             <RefreshCcw size={12} /> Refresh
@@ -291,7 +321,7 @@ export default function KmSourcePanel({ country, from, to, currency } = {}) {
             type="button"
             onClick={() => exportSummary('excel')}
             disabled={!filtered.length}
-            className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs disabled:opacity-40"
+            className={BTN}
             style={{ borderColor: 'var(--border-subtle)' }}
           >
             <FileSpreadsheet size={12} /> Excel
@@ -300,7 +330,7 @@ export default function KmSourcePanel({ country, from, to, currency } = {}) {
             type="button"
             onClick={() => exportSummary('pdf')}
             disabled={!filtered.length}
-            className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs disabled:opacity-40"
+            className={BTN}
             style={{ borderColor: 'var(--border-subtle)' }}
           >
             <FileText size={12} /> PDF
@@ -315,9 +345,10 @@ export default function KmSourcePanel({ country, from, to, currency } = {}) {
             <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 opacity-50" />
             <input
               value={q}
-              onChange={(e) => { setQ(e.target.value); setPage(0) }}
+              onChange={(e) => setQ(e.target.value)}
+              aria-label="Search asset"
               placeholder="Search asset"
-              className="w-full rounded-md border bg-transparent pl-8 pr-3 py-1.5 text-sm"
+              className="w-full min-h-[44px] rounded-md border bg-transparent pl-8 pr-3 py-1.5 text-sm"
               style={{ borderColor: 'var(--border-subtle)' }}
             />
           </div>
@@ -329,95 +360,20 @@ export default function KmSourcePanel({ country, from, to, currency } = {}) {
       )}
 
       {/* ---------- summary table / states ---------- */}
-      <div className="overflow-x-auto rounded-lg border" style={{ borderColor: 'var(--border-subtle)' }}>
-        <table className="w-full text-sm border-collapse">
-          <thead
-            className="sticky top-0 z-10"
-            style={{ background: 'var(--surface-raised, var(--bg-elevated))' }}
-          >
-            <tr>
-              <th className="px-4 py-2.5 text-left font-semibold whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>Asset</th>
-              <th className="px-4 py-2.5 text-right font-semibold whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>Tyres</th>
-              <th className="px-4 py-2.5 text-right font-semibold whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>CPK Km</th>
-              <th className="px-4 py-2.5 text-right font-semibold whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>View</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={4} className="px-4 py-8 text-center" style={{ color: 'var(--text-secondary)' }}>Loading...</td></tr>
-            ) : errored ? (
-              <tr>
-                <td colSpan={4} className="px-4 py-8 text-center">
-                  <div className="inline-flex flex-col items-center gap-2" style={{ color: 'var(--text-secondary)' }}>
-                    <AlertCircle size={20} />
-                    <span>Could not load the KM source.</span>
-                    <button
-                      type="button"
-                      onClick={loadSummary}
-                      className="mt-1 inline-flex items-center gap-1.5 rounded-md border px-3 py-1 text-xs"
-                      style={{ borderColor: 'var(--border-subtle)' }}
-                    >
-                      <RefreshCcw size={12} /> Retry
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ) : pageRows.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="px-4 py-8 text-center" style={{ color: 'var(--text-secondary)' }}>
-                  No tyre km recorded for this period.
-                </td>
-              </tr>
-            ) : (
-              pageRows.map((r, i) => {
-                const isOpen = openAsset === r.asset_no
-                return (
-                  <tr
-                    key={r.asset_no || i}
-                    onClick={() => openAssetDetail(r.asset_no)}
-                    className="cursor-pointer border-t"
-                    style={{
-                      borderColor: 'var(--border-subtle)',
-                      background: isOpen ? 'var(--surface-raised, var(--bg-elevated))' : undefined,
-                    }}
-                  >
-                    <td className="px-4 py-2.5 text-left whitespace-nowrap font-medium">{fmtText(r.asset_no)}</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums whitespace-nowrap">{fmtInt(r.tyres)}</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums whitespace-nowrap">{fmtInt(r.km)}</td>
-                    <td className="px-4 py-2.5 text-right whitespace-nowrap">
-                      <span className="inline-flex items-center gap-1 text-xs" style={{ color: 'var(--accent)' }}>
-                        View tyres <ChevronRight size={13} />
-                      </span>
-                    </td>
-                  </tr>
-                )
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {pageCount > 1 && (
-        <div className="mt-3 flex items-center justify-between text-xs" style={{ color: 'var(--text-secondary)' }}>
-          <span>Page {safePage + 1} of {pageCount}</span>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              disabled={safePage === 0}
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              className="rounded-md border px-3 py-1 disabled:opacity-40"
-              style={{ borderColor: 'var(--border-subtle)' }}
-            >Prev</button>
-            <button
-              type="button"
-              disabled={safePage >= pageCount - 1}
-              onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
-              className="rounded-md border px-3 py-1 disabled:opacity-40"
-              style={{ borderColor: 'var(--border-subtle)' }}
-            >Next</button>
-          </div>
-        </div>
-      )}
+      <EnterpriseTable
+        columns={summaryColumns}
+        data={filtered}
+        getRowId={(r, i) => String(r.asset_no ?? i)}
+        loading={loading}
+        error={errored ? 'Could not load the KM source. The km is not known, which is not the same as zero.' : null}
+        onRetry={loadSummary}
+        enableGlobalFilter={false}
+        enableColumnFilters={false}
+        enableExport={false}
+        resetPageKey={`${country}|${from}|${to}|${q}`}
+        onRowClick={(r) => openAssetDetail(r.asset_no)}
+        emptyMessage="No tyre km recorded for this period."
+      />
 
       {/* ---------- asset detail (contributing tyres) ---------- */}
       {openAsset && (
@@ -436,123 +392,77 @@ export default function KmSourcePanel({ country, from, to, currency } = {}) {
   )
 }
 
-/* ---------- asset detail sub-view (inline, contributing tyres + subtotal) ---------- */
+const DETAIL_COLUMNS = (currency) => [
+  { id: 'serial_no', header: 'Serial', accessorFn: (t) => blank(t.serial_no), ...sortable, meta: { exportValue: (t) => fmtText(t.serial_no) }, cell: ({ row: { original: t } }) => <span className="font-medium whitespace-nowrap">{fmtText(t.serial_no)}</span> },
+  ...[['position', 'Position'], ['brand', 'Brand'], ['size', 'Size'], ['job_card', 'Job Card']].map(([key, header]) => ({
+    id: key, header, accessorFn: (t) => blank(t[key]), ...sortable, meta: { exportValue: (t) => fmtText(t[key]) },
+    cell: ({ row: { original: t } }) => <span className="whitespace-nowrap">{fmtText(t[key])}</span>,
+  })),
+  ...[['fitment_date', 'Fitment'], ['removal_date', 'Removal'], ['effective_date', 'Effective']].map(([key, header]) => ({
+    id: key, header, accessorFn: (t) => blank(t[key]), ...sortable, meta: { exportValue: (t) => fmtDate(t[key]) },
+    cell: ({ row: { original: t } }) => <span className="whitespace-nowrap">{fmtDate(t[key])}</span>,
+  })),
+  ...[['km_at_fitment', 'Km at Fitment'], ['km_at_removal', 'Km at Removal'], ['total_km', 'Total Km']].map(([key, header]) => ({
+    id: key, header, accessorFn: (t) => num(t[key]) ?? undefined, ...sortable, meta: { align: 'right', exportValue: (t) => num(t[key]) ?? 'N/A' },
+    cell: ({ row: { original: t } }) => <span className={`tabular-nums ${key === 'total_km' ? 'font-semibold' : ''}`}>{fmtInt(t[key])}</span>,
+  })),
+  {
+    id: 'cost_per_tyre', header: `Cost/Tyre (${currency})`, accessorFn: (t) => num(t.cost_per_tyre) ?? undefined, ...sortable,
+    meta: { align: 'right', exportValue: (t) => num(t.cost_per_tyre) ?? 'N/A' },
+    cell: ({ row: { original: t } }) => <span className="tabular-nums">{fmtMoney(t.cost_per_tyre)}</span>,
+  },
+  { id: 'data_source', header: 'Source', accessorFn: (t) => blank(t.data_source), ...sortable, meta: { exportValue: (t) => fmtText(t.data_source) }, cell: ({ row: { original: t } }) => fmtText(t.data_source) },
+]
+
+/* ---------- asset detail dialog (contributing tyres + subtotal) ---------- */
 
 function AssetDetail({ assetNo, detail, loading, errored, currency, onClose, onRetry, onExport }) {
   const tyres = detail && Array.isArray(detail.tyres) ? detail.tyres : []
   const km = detail ? detail.km : null
   // The tyres' total_km sums to this; show it and prove it against detail.km.
   const summed = tyres.reduce((s, t) => s + (num(t?.total_km) || 0), 0)
+  const columns = useMemo(() => DETAIL_COLUMNS(currency), [currency])
 
   return (
-    <section
-      className="mt-5 rounded-xl border p-4"
-      style={{ borderColor: 'var(--border-subtle)', background: 'var(--surface-raised, var(--bg-elevated))' }}
-    >
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h4 className="flex items-center gap-2 text-base font-semibold">
-          <Milestone size={18} /> Contributing tyres
-          <span className="text-sm font-normal" style={{ color: 'var(--text-secondary)' }}>
-            (asset {fmtText(assetNo)})
-          </span>
-        </h4>
+    <Modal
+      open
+      onClose={onClose}
+      size="xl"
+      title={<span className="inline-flex items-center gap-2"><Milestone size={18} aria-hidden="true" /> Contributing tyres</span>}
+      subtitle={`Asset ${fmtText(assetNo)}`}
+      headerExtra={(
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => onExport('excel')}
-            disabled={!tyres.length}
-            className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs disabled:opacity-40"
-            style={{ borderColor: 'var(--border-subtle)' }}
-          >
-            <FileSpreadsheet size={12} /> Excel
+          <button type="button" onClick={() => onExport('excel')} disabled={!tyres.length} className={BTN} style={{ borderColor: 'var(--border-subtle)' }}>
+            <FileSpreadsheet size={12} aria-hidden="true" /> Excel
           </button>
-          <button
-            type="button"
-            onClick={() => onExport('pdf')}
-            disabled={!tyres.length}
-            className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs disabled:opacity-40"
-            style={{ borderColor: 'var(--border-subtle)' }}
-          >
-            <FileText size={12} /> PDF
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs"
-            style={{ borderColor: 'var(--border-subtle)' }}
-          >
-            <X size={12} /> Close
+          <button type="button" onClick={() => onExport('pdf')} disabled={!tyres.length} className={BTN} style={{ borderColor: 'var(--border-subtle)' }}>
+            <FileText size={12} aria-hidden="true" /> PDF
           </button>
         </div>
-      </div>
-
-      {loading ? (
-        <div className="py-8 text-center text-sm" style={{ color: 'var(--text-secondary)' }}>Loading tyres...</div>
-      ) : errored ? (
-        <div className="py-8 text-center">
-          <div className="inline-flex flex-col items-center gap-2" style={{ color: 'var(--text-secondary)' }}>
-            <AlertCircle size={20} />
-            <span>Could not load this asset's tyres.</span>
-            <button
-              type="button"
-              onClick={onRetry}
-              className="mt-1 inline-flex items-center gap-1.5 rounded-md border px-3 py-1 text-xs"
-              style={{ borderColor: 'var(--border-subtle)' }}
-            >
-              <RefreshCcw size={12} /> Retry
-            </button>
-          </div>
-        </div>
-      ) : tyres.length === 0 ? (
-        <div className="py-8 text-center text-sm" style={{ color: 'var(--text-secondary)' }}>
-          No contributing tyres recorded for this asset in this period.
-        </div>
-      ) : (
+      )}
+    >
+      <EnterpriseTable
+        columns={columns}
+        data={tyres}
+        getRowId={(t, i) => `${t.serial_no || ''}-${t.position || ''}-${i}`}
+        loading={loading}
+        error={errored ? 'Could not load this asset\'s tyres. Their km is not known, which is not the same as zero.' : null}
+        onRetry={onRetry}
+        enableColumnFilters={false}
+        enableExport={false}
+        searchPlaceholder="Search serial, brand, job card..."
+        emptyMessage="No contributing tyres recorded for this asset in this period."
+      />
+      {!loading && !errored && tyres.length > 0 && (
         <>
-          <div className="overflow-x-auto rounded-lg border" style={{ borderColor: 'var(--border-subtle)' }}>
-            <table className="w-full text-sm border-collapse">
-              <thead style={{ background: 'var(--bg-elevated)' }}>
-                <tr>
-                  {['Serial', 'Position', 'Brand', 'Size', 'Job Card', 'Fitment', 'Removal', 'Effective'].map((h) => (
-                    <th key={h} className="px-3 py-2 text-left font-semibold whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>{h}</th>
-                  ))}
-                  {['Km at Fitment', 'Km at Removal', 'Total Km', `Cost/Tyre (${currency})`, 'Source'].map((h) => (
-                    <th key={h} className="px-3 py-2 text-right font-semibold whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {tyres.map((t, i) => (
-                  <tr key={(t.serial_no || '') + '-' + (t.position || '') + '-' + i} className="border-t" style={{ borderColor: 'var(--border-subtle)' }}>
-                    <td className="px-3 py-1.5 text-left whitespace-nowrap font-medium">{fmtText(t.serial_no)}</td>
-                    <td className="px-3 py-1.5 text-left whitespace-nowrap">{fmtText(t.position)}</td>
-                    <td className="px-3 py-1.5 text-left whitespace-nowrap">{fmtText(t.brand)}</td>
-                    <td className="px-3 py-1.5 text-left whitespace-nowrap">{fmtText(t.size)}</td>
-                    <td className="px-3 py-1.5 text-left whitespace-nowrap">{fmtText(t.job_card)}</td>
-                    <td className="px-3 py-1.5 text-left whitespace-nowrap">{fmtDate(t.fitment_date)}</td>
-                    <td className="px-3 py-1.5 text-left whitespace-nowrap">{fmtDate(t.removal_date)}</td>
-                    <td className="px-3 py-1.5 text-left whitespace-nowrap">{fmtDate(t.effective_date)}</td>
-                    <td className="px-3 py-1.5 text-right tabular-nums whitespace-nowrap">{fmtInt(t.km_at_fitment)}</td>
-                    <td className="px-3 py-1.5 text-right tabular-nums whitespace-nowrap">{fmtInt(t.km_at_removal)}</td>
-                    <td className="px-3 py-1.5 text-right tabular-nums whitespace-nowrap font-semibold">{fmtInt(t.total_km)}</td>
-                    <td className="px-3 py-1.5 text-right tabular-nums whitespace-nowrap">{fmtMoney(t.cost_per_tyre)}</td>
-                    <td className="px-3 py-1.5 text-right whitespace-nowrap">{fmtText(t.data_source)}</td>
-                  </tr>
-                ))}
-                {/* Subtotal row = the km used in CPK for this asset. */}
-                <tr className="border-t-2" style={{ borderColor: 'var(--accent)', background: 'var(--bg-elevated)' }}>
-                  <td colSpan={10} className="px-3 py-2 text-right font-semibold whitespace-nowrap">
-                    Subtotal (sum of total km)
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap font-bold">{fmtInt(summed)}</td>
-                  <td className="px-3 py-2" />
-                  <td className="px-3 py-2" />
-                </tr>
-              </tbody>
-            </table>
+          {/* Subtotal = the km used in CPK for this asset. */}
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border-t-2 px-3 py-2 text-sm"
+            style={{ borderColor: 'var(--accent)', background: 'var(--surface-raised, var(--bg-elevated))' }}>
+            <span className="font-semibold">Subtotal (sum of total km)</span>
+            <span className="tabular-nums font-bold">{fmtInt(summed)}</span>
           </div>
           <p className="mt-2 flex items-center gap-1.5 text-xs" style={{ color: 'var(--text-secondary)' }}>
-            <Info size={12} className="shrink-0" />
+            <Info size={12} className="shrink-0" aria-hidden="true" />
             This subtotal ({fmtInt(km)} km) is the km used in CPK for this asset.
             {km != null && Math.round(summed) !== Math.round(num(km) || 0) && (
               <span> Displayed tyre rows sum to {fmtInt(summed)} km.</span>
@@ -560,6 +470,6 @@ function AssetDetail({ assetNo, detail, loading, errored, currency, onClose, onR
           </p>
         </>
       )}
-    </section>
+    </Modal>
   )
 }

@@ -129,7 +129,7 @@ export default function TopBar({
         title={toggleTitle}
         aria-label={toggleTitle}
         aria-expanded={isMobile ? undefined : sidebarOpen}
-        className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-xl transition-colors hover:text-green-400 hover:bg-green-400/10"
+        className="tp-touch-target flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-xl transition-colors hover:text-green-400 hover:bg-green-400/10"
         style={{
           color: 'var(--panel-ink-3)',
           background: 'rgba(22,163,74,0.06)',
@@ -210,7 +210,7 @@ export default function TopBar({
               type="button"
               onClick={openSearch}
               aria-label={searchLabel}
-              className="w-8 h-8 flex items-center justify-center rounded-xl transition-colors active:text-green-400"
+              className="tp-touch-target w-8 h-8 flex items-center justify-center rounded-xl transition-colors active:text-green-400"
               style={{ color: 'var(--panel-ink-3)' }}
             >
               <Search size={16} aria-hidden="true" />
@@ -221,7 +221,7 @@ export default function TopBar({
               type="button"
               onClick={() => navigate('/alerts')}
               aria-label={`${tx(t, 'shell.alerts', 'Alerts')}${alertCount > 0 ? ` (${alertCount})` : ''}`}
-              className="relative w-8 h-8 flex items-center justify-center rounded-xl transition-colors active:text-green-400"
+              className="tp-touch-target relative w-8 h-8 flex items-center justify-center rounded-xl transition-colors active:text-green-400"
               style={{ color: 'var(--panel-ink-3)' }}
             >
               <Bell size={16} aria-hidden="true" />

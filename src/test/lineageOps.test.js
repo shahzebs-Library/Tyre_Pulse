@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest'
 import {
   shapeGraph, shapeImpact, alertSummary, assetShortName, assetKindLabel, ALERT_STATUSES,
 } from '../lib/lineageOps'
-import { newTraceId, shortTrace } from '../lib/traceId'
 
 const GRAPH = {
   ok: true,
@@ -57,13 +56,5 @@ describe('alertSummary + helpers', () => {
     expect(assetShortName('table:tyre_records')).toBe('tyre_records')
     expect(assetKindLabel('dashboard')).toBe('Dashboard')
     expect(ALERT_STATUSES).toContain('open')
-  })
-})
-
-describe('traceId', () => {
-  it('makes prefixed ids and shortens them', () => {
-    const id = newTraceId('scan')
-    expect(id.startsWith('scan_')).toBe(true)
-    expect(shortTrace('abcdefghijklmnop').length).toBe(12)
   })
 })

@@ -22,6 +22,13 @@ import {
 import {
   decomposeVariance, narrate, fmtMoney, fmtPct, fmtQty,
 } from '../../lib/costVariance'
+import { compareValues, isBlank } from '../../lib/consoleTable'
+import EnterpriseTable from '../ui/EnterpriseTable'
+
+const valueSort = (a, b, id) => compareValues(a.getValue(id), b.getValue(id))
+const blank = (v) => (isBlank(v) ? undefined : v)
+const sortable = { sortingFn: valueSort, sortUndefined: 'last' }
+const moneyExport = (v) => (v == null ? 'N/A' : v)
 
 /* Cost page convention, same as CostCpkPanels: falling cost is the good
    direction, so down is green and up is red. */
@@ -211,63 +218,49 @@ function PriceVolume({ dec }) {
 /* ------------------------------------------------------------ drill lists */
 
 function ContributionTable({ dim, currency }) {
-  const all = [
+  const all = useMemo(() => [
     ...dim.rows,
     ...(dim.tail ? [{ ...dim.tail, isRemainder: true }] : []),
     ...(dim.remainder ? [dim.remainder] : []),
-  ]
-  if (!all.length) {
-    return <p className="text-xs text-[var(--text-dim)] py-4">Nothing moved on this view.</p>
-  }
+  ], [dim])
   const max = Math.max(...all.map((r) => Math.abs(r.delta)), 1)
+  const columns = useMemo(() => [
+    {
+      id: 'label', header: 'Name', accessorFn: (r) => blank(r.label), ...sortable,
+      cell: ({ row: { original: r } }) => (
+        <span className={r.isRemainder ? 'text-[var(--text-dim)] italic' : 'text-[var(--text-primary)]'}>{r.label}</span>
+      ),
+    },
+    ...[['previous', 'Previous', false], ['current', 'This period', false], ['delta', 'Change', true]].map(([key, header, signed]) => ({
+      id: key, header, accessorFn: (r) => (r[key] == null ? undefined : r[key]), ...sortable,
+      meta: { align: 'right', exportValue: (r) => moneyExport(r[key]) },
+      cell: ({ row: { original: r } }) => (
+        <span className={`font-mono tabular-nums ${signed ? toneFor(r.delta) : ''}`}>
+          <Money value={r[key]} currency={currency} signed={signed} />
+        </span>
+      ),
+    })),
+    {
+      id: 'share', header: 'Share', enableSorting: false, meta: { export: false },
+      cell: ({ row: { original: r } }) => (
+        <div className="h-1.5 w-24 rounded-full bg-[var(--surface-raised)] overflow-hidden" aria-hidden="true">
+          <div className={`h-full rounded-full ${barFor(r.delta)}`} style={{ width: `${(Math.abs(r.delta) / max) * 100}%` }} />
+        </div>
+      ),
+    },
+  ], [currency, max])
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-xs">
-        <thead>
-          <tr className="text-[var(--text-dim)] text-left">
-            <th className="font-medium py-1.5 pr-2">Name</th>
-            <th className="font-medium py-1.5 px-2 text-right">Previous</th>
-            <th className="font-medium py-1.5 px-2 text-right">This period</th>
-            <th className="font-medium py-1.5 px-2 text-right">Change</th>
-            <th className="font-medium py-1.5 pl-2 w-24">Share</th>
-          </tr>
-        </thead>
-        <tbody>
-          {all.map((r, i) => (
-            <tr key={`${r.label}-${i}`}
-              className={`border-t border-[var(--border-subtle)] ${
-                r.isRemainder ? 'text-[var(--text-dim)] italic' : ''}`}>
-              <td className="py-1.5 pr-2 text-[var(--text-primary)]">{r.label}</td>
-              <td className="py-1.5 px-2 text-right font-mono tabular-nums">
-                <Money value={r.previous} currency={currency} />
-              </td>
-              <td className="py-1.5 px-2 text-right font-mono tabular-nums">
-                <Money value={r.current} currency={currency} />
-              </td>
-              <td className={`py-1.5 px-2 text-right font-mono tabular-nums ${toneFor(r.delta)}`}>
-                <Money value={r.delta} currency={currency} signed />
-              </td>
-              <td className="py-1.5 pl-2">
-                <div className="h-1.5 rounded-full bg-[var(--surface-raised)] overflow-hidden">
-                  <div className={`h-full rounded-full ${barFor(r.delta)}`}
-                    style={{ width: `${(Math.abs(r.delta) / max) * 100}%` }} />
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-        <tfoot>
-          <tr className="border-t border-[var(--border-subtle)]">
-            <td className="py-1.5 pr-2 font-medium text-[var(--text-secondary)]">Total change</td>
-            <td /><td />
-            <td className={`py-1.5 px-2 text-right font-mono font-semibold tabular-nums ${toneFor(dim.total)}`}>
-              <Money value={dim.total} currency={currency} signed />
-            </td>
-            <td />
-          </tr>
-        </tfoot>
-      </table>
+    <div>
+      <EnterpriseTable columns={columns} data={all} getRowId={(r, i) => `${r.label}-${i}`}
+        searchPlaceholder="Search name..." enableColumnFilters={false}
+        exportFileName="Cost change contributions" emptyMessage="Nothing moved on this view." />
+      <div className="flex items-center justify-between mt-2 pt-2 border-t border-[var(--border-subtle)] text-xs">
+        <span className="font-medium text-[var(--text-secondary)]">Total change</span>
+        <span className={`font-mono font-semibold tabular-nums ${toneFor(dim.total)}`}>
+          <Money value={dim.total} currency={currency} signed />
+        </span>
+      </div>
       {dim.grossIsLowerBound ? (
         <p className="text-[10px] text-[var(--text-dim)] mt-2">
           The final row nets many members into one figure, so movement within it
@@ -279,59 +272,63 @@ function ContributionTable({ dim, currency }) {
 }
 
 function ItemTable({ items, currency }) {
-  if (!items.length) {
-    return <p className="text-xs text-[var(--text-dim)] py-4">No item moved in this window.</p>
-  }
+  const columns = useMemo(() => [
+    {
+      id: 'label', header: 'Item', accessorFn: (i) => blank(i.label), ...sortable,
+      meta: { exportValue: (i) => `${i.label || 'N/A'} (${i.code || 'N/A'})` },
+      cell: ({ row: { original: i } }) => (
+        <div className="max-w-[16rem]">
+          <div className="text-[var(--text-primary)] truncate" title={i.label}>{i.label}</div>
+          <div className="text-[10px] text-[var(--text-dim)]">{i.code}</div>
+        </div>
+      ),
+    },
+    {
+      id: 'driver', header: 'Driver', accessorFn: (i) => DRIVER_LABEL[i.driver] || i.driver, ...sortable,
+      meta: { filterVariant: 'select' },
+      cell: ({ row: { original: i } }) => (
+        <span className={`text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap ${DRIVER_TONE[i.driver] || DRIVER_TONE.flat}`}>
+          {DRIVER_LABEL[i.driver] || i.driver}
+        </span>
+      ),
+    },
+    {
+      id: 'qty', header: 'Quantity', accessorFn: (i) => (i.qtyCurrent == null ? undefined : i.qtyCurrent), ...sortable,
+      meta: { align: 'right', exportValue: (i) => `${fmtQty(i.qtyPrevious)} to ${fmtQty(i.qtyCurrent)}` },
+      cell: ({ row: { original: i } }) => (
+        <span className="font-mono tabular-nums text-[var(--text-secondary)] whitespace-nowrap">{fmtQty(i.qtyPrevious)} to {fmtQty(i.qtyCurrent)}</span>
+      ),
+    },
+    {
+      id: 'price', header: 'Unit price', accessorFn: (i) => (i.priceCurrent == null ? undefined : i.priceCurrent), ...sortable,
+      meta: {
+        align: 'right',
+        exportValue: (i) => (i.pricePrevious == null || i.priceCurrent == null ? 'N/A' : `${fmtMoney(i.pricePrevious)} to ${fmtMoney(i.priceCurrent)}`),
+      },
+      cell: ({ row: { original: i } }) => (
+        <span className="font-mono tabular-nums text-[var(--text-secondary)] whitespace-nowrap">
+          {i.pricePrevious == null || i.priceCurrent == null
+            // one side is missing, so there is no price change to show
+            ? <span className="text-[var(--text-dim)]">N/A</span>
+            : <>{fmtMoney(i.pricePrevious)} to {fmtMoney(i.priceCurrent)}</>}
+        </span>
+      ),
+    },
+    ...[['priceEffect', 'Price effect', null], ['volumeEffect', 'Volume effect', null], ['delta', 'Change', currency]].map(([key, header, cur]) => ({
+      id: key, header, accessorFn: (i) => (i[key] == null ? undefined : i[key]), ...sortable,
+      meta: { align: 'right', exportValue: (i) => moneyExport(i[key]) },
+      cell: ({ row: { original: i } }) => (
+        <span className={`font-mono tabular-nums ${key === 'delta' ? 'font-medium' : ''} ${toneFor(i[key])}`}>
+          <Money value={i[key]} currency={cur} signed />
+        </span>
+      ),
+    })),
+  ], [currency])
+
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-xs">
-        <thead>
-          <tr className="text-[var(--text-dim)] text-left">
-            <th className="font-medium py-1.5 pr-2">Item</th>
-            <th className="font-medium py-1.5 px-2">Driver</th>
-            <th className="font-medium py-1.5 px-2 text-right">Quantity</th>
-            <th className="font-medium py-1.5 px-2 text-right">Unit price</th>
-            <th className="font-medium py-1.5 px-2 text-right">Price effect</th>
-            <th className="font-medium py-1.5 px-2 text-right">Volume effect</th>
-            <th className="font-medium py-1.5 pl-2 text-right">Change</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((i) => (
-            <tr key={i.code} className="border-t border-[var(--border-subtle)]">
-              <td className="py-1.5 pr-2 max-w-[16rem]">
-                <div className="text-[var(--text-primary)] truncate" title={i.label}>{i.label}</div>
-                <div className="text-[10px] text-[var(--text-dim)]">{i.code}</div>
-              </td>
-              <td className="py-1.5 px-2">
-                <span className={`text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap ${
-                  DRIVER_TONE[i.driver] || DRIVER_TONE.flat}`}>
-                  {DRIVER_LABEL[i.driver] || i.driver}
-                </span>
-              </td>
-              <td className="py-1.5 px-2 text-right font-mono tabular-nums text-[var(--text-secondary)]">
-                {fmtQty(i.qtyPrevious)} to {fmtQty(i.qtyCurrent)}
-              </td>
-              <td className="py-1.5 px-2 text-right font-mono tabular-nums text-[var(--text-secondary)]">
-                {i.pricePrevious == null || i.priceCurrent == null
-                  // one side is missing, so there is no price change to show
-                  ? <span className="text-[var(--text-dim)]">N/A</span>
-                  : <>{fmtMoney(i.pricePrevious)} to {fmtMoney(i.priceCurrent)}</>}
-              </td>
-              <td className={`py-1.5 px-2 text-right font-mono tabular-nums ${toneFor(i.priceEffect)}`}>
-                <Money value={i.priceEffect} currency={null} signed />
-              </td>
-              <td className={`py-1.5 px-2 text-right font-mono tabular-nums ${toneFor(i.volumeEffect)}`}>
-                <Money value={i.volumeEffect} currency={null} signed />
-              </td>
-              <td className={`py-1.5 pl-2 text-right font-mono font-medium tabular-nums ${toneFor(i.delta)}`}>
-                <Money value={i.delta} currency={currency} signed />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <EnterpriseTable columns={columns} data={items} getRowId={(i) => String(i.code)}
+      searchPlaceholder="Search item or code..." exportFileName="Cost change by item"
+      emptyMessage="No item moved in this window." />
   )
 }
 
@@ -424,7 +421,9 @@ export default function CostVariancePanel({ variance, snapshot, loading, error }
               <button
                 key={t.key}
                 onClick={() => setTab(t.key)}
-                className={`h-7 px-2.5 rounded-lg text-[11px] font-medium transition-colors ${
+                type="button"
+                aria-pressed={activeTab === t.key}
+                className={`min-h-[44px] sm:min-h-[32px] px-3 rounded-lg text-[11px] font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] ${
                   activeTab === t.key
                     ? 'bg-[var(--accent)] text-white'
                     : 'bg-[var(--surface-raised)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'

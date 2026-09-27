@@ -12,6 +12,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
+import Modal from '../components/ui/Modal'
 import {
   UserCog, Plus, Pencil, Trash2, X, Check, AlertTriangle, Search, Loader2,
   KeyRound, Info, Copy, Users, Power, CheckCircle2, FileSpreadsheet, FileText, RotateCcw, Layers,
@@ -300,17 +301,9 @@ export default function CustomRolesManager() {
     finally { setTogglingId(null) }
   }, [load])
 
-  // Escape closes the open modal (create/edit first, then delete confirm).
-  useEffect(() => {
-    if (!showModal && !confirmDelete) return undefined
-    const onKey = (e) => {
-      if (e.key !== 'Escape') return
-      if (showModal && !saving) closeModal()
-      else if (confirmDelete && !deleting) setConfirmDelete(null)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [showModal, confirmDelete, saving, deleting, closeModal])
+  // Escape, the backdrop, the focus trap and focus return belong to the
+  // shared Modal now; closeModal and the delete onClose refuse while a write
+  // is in flight, so a half-saved role cannot be abandoned.
 
   const totalModulesSelected = form.moduleKeys.length
   const customRoleNames = (roles || []).map((r) => r.name)
@@ -539,14 +532,14 @@ export default function CustomRolesManager() {
         </div>
       )}
 
-      {/* Create / Edit modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={closeModal}>
-          <div className="card w-full max-w-2xl max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-[var(--text-primary)]">{editing ? `Edit role: ${editing.name}` : 'New custom role'}</h3>
-              <button onClick={closeModal} className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Close"><X size={18} /></button>
-            </div>
+      {/* Create / Edit modal. The shared Modal owns Escape, the backdrop,
+          the focus trap and focus return; closeModal refuses while saving. */}
+      <Modal
+        open={showModal}
+        onClose={closeModal}
+        size="lg"
+        title={editing ? `Edit role: ${editing.name}` : 'New custom role'}
+      >
             <form onSubmit={submit} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -608,18 +601,21 @@ export default function CustomRolesManager() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {/* Delete confirm */}
-      {confirmDelete && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={() => !deleting && setConfirmDelete(null)}>
-          <div className="card w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+      <Modal
+        open={!!confirmDelete}
+        onClose={() => { if (!deleting) setConfirmDelete(null) }}
+        size="sm"
+        labelledBy="cr-delete-title"
+      >
+        {confirmDelete && (
+          <>
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-full bg-red-900/30 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" /></div>
               <div className="flex-1">
-                <h3 className="text-[var(--text-primary)] font-semibold">Delete {confirmDelete.name}?</h3>
+                <h3 id="cr-delete-title" className="text-[var(--text-primary)] font-semibold">Delete {confirmDelete.name}?</h3>
                 <p className="text-sm text-[var(--text-muted)] mt-1">Its module grants are revoked so no stale access lingers. This cannot be undone.</p>
                 <div className="mt-3 text-sm text-[var(--text-secondary)] inline-flex items-center gap-1.5">
                   <Users size={14} className="text-[var(--text-muted)]" />
@@ -649,9 +645,9 @@ export default function CustomRolesManager() {
                 <Trash2 size={14} /> {deleting ? 'Deleting' : 'Delete'}
               </button>
             </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </Modal>
     </div>
   )
 }

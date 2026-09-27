@@ -3,7 +3,6 @@
 // All figures come from src/lib/rotationScheduleAnalytics.js.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
@@ -28,6 +27,7 @@ import {
 import PageHeader from '../components/ui/PageHeader'
 import Card, { CardHeader } from '../components/ui/Card'
 import Modal from '../components/ui/Modal'
+import SideDrawer from '../components/ui/SideDrawer'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import EmptyState from '../components/EmptyState'
@@ -118,16 +118,12 @@ function StatusBadge({ status }) {
 }
 
 // ── Rotation History Drawer ────────────────────────────────────────────────────
-// DELIBERATELY NOT `Modal`: a full-height right-hand rail on the
-// `tp-drawer-panel` contract (`.fixed.inset-0 > .tp-drawer-panel`), which
-// `dialogFit.test.jsx` pins. Same call WorkOrders and RepairRequests made.
+// A full-height right-hand rail on the shared SideDrawer, which keeps the
+// `tp-drawer-panel` contract (`.tp-drawer-overlay > .tp-drawer-panel`) that
+// `dialogFit.test.jsx` pins. It used to be hand rolled because Modal only
+// centres a box; SideDrawer preserves the rail layout and owns Escape, the
+// focus trap, focus return and the scroll lock.
 function RotationDrawer({ vehicle, onClose }) {
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
-
   const tyreColumns = useMemo(() => [
     { id: 'serial', header: 'Serial', accessorFn: (t) => t.serial_number || t.serial_no || '', cell: ({ getValue }) => <span className="font-mono">{getValue() || 'N/A'}</span> },
     { id: 'position', header: 'Position', accessorFn: (t) => normPos(t.position) },
@@ -148,41 +144,24 @@ function RotationDrawer({ vehicle, onClose }) {
   const treadPositions = ['Steer', 'Drive', 'Trailer', 'Lift', 'Tag']
 
   return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-black/60 flex justify-end"
-        onClick={onClose}
-      >
-        <motion.div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="rotation-drawer-title"
-          initial={{ x: '100%' }}
-          animate={{ x: 0 }}
-          exit={{ x: '100%' }}
-          transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-          className="tp-drawer-panel w-full max-w-2xl h-full bg-[var(--surface-1)] border-l border-[var(--input-border)] overflow-y-auto"
-          onClick={e => e.stopPropagation()}
-        >
-          <div className="flex items-center justify-between gap-3 p-4 sm:p-6 border-b border-[var(--input-border)] sticky top-0 bg-[var(--surface-1)] z-10">
-            <div className="min-w-0">
-              <h2 id="rotation-drawer-title" className="flex items-center gap-2 text-[var(--text-primary)] font-semibold text-lg">
-                <Truck size={18} className="text-[var(--text-muted)]" aria-hidden="true" />
-                {vehicle.asset}
-              </h2>
-              <div className="text-sm text-[var(--text-muted)] mt-0.5 flex flex-wrap items-center gap-2">
-                {vehicle.site}, rotation history <StatusBadge status={vehicle.status} />
-              </div>
-            </div>
-            <button type="button" onClick={onClose} aria-label="Close rotation history" className={ICON_BTN}>
-              <X size={18} aria-hidden="true" />
-            </button>
-          </div>
-
-          <div className="p-4 sm:p-6 space-y-6">
+    <SideDrawer
+      open
+      onClose={onClose}
+      size="xl"
+      closeLabel="Close rotation history"
+      title={(
+        <span className="flex items-center gap-2">
+          <Truck size={18} className="text-[var(--text-muted)]" aria-hidden="true" />
+          {vehicle.asset}
+        </span>
+      )}
+      subtitle={(
+        <span className="flex flex-wrap items-center gap-2 text-[var(--text-muted)]">
+          {vehicle.site}, rotation history <StatusBadge status={vehicle.status} />
+        </span>
+      )}
+      bodyClassName="space-y-6"
+    >
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
               {[
                 ['Latest odometer', fmtKm(vehicle.currentKm)],
@@ -275,10 +254,7 @@ function RotationDrawer({ vehicle, onClose }) {
                 emptyMessage="No active tyres with a serial on this vehicle"
               />
             </Card>
-          </div>
-        </motion.div>
-      </motion.div>
-    </AnimatePresence>
+    </SideDrawer>
   )
 }
 
@@ -1271,44 +1247,26 @@ export default function RotationSchedule() {
         <p className="text-sm text-[var(--text-secondary)]">Remove this scheduled rotation?</p>
       </Modal>
 
-      {/* Scheduled Rotation Approval rail (tyre_rotation entity). NOT `Modal`
-          for the same tp-drawer-panel reason as RotationDrawer above. */}
-      <AnimatePresence>
+      {/* Scheduled Rotation Approval rail (tyre_rotation entity), on the
+          shared SideDrawer for the same full-height rail layout. Completing
+          locks dismissal while the status write is in flight. */}
+      <SideDrawer
+        open={!!detailSchedule}
+        onClose={() => setDetailSchedule(null)}
+        size="lg"
+        busy={schedBusy}
+        closeLabel="Close rotation approval"
+        title={detailSchedule ? (
+          <span className="flex items-center gap-2">
+            <RotateCcw size={18} className="text-[var(--text-muted)]" aria-hidden="true" />
+            {detailSchedule.asset}
+          </span>
+        ) : null}
+        subtitle={detailSchedule ? [detailSchedule.site, fmtDate(detailSchedule.scheduledDate), detailSchedule.priority].filter(Boolean).join(', ') : null}
+        bodyClassName="space-y-4"
+      >
         {detailSchedule && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/60 flex justify-end"
-            onClick={() => setDetailSchedule(null)}
-          >
-            <motion.div
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="rotation-approval-title"
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-              className="tp-drawer-panel w-full max-w-lg h-full bg-[var(--surface-1)] border-l border-[var(--input-border)] overflow-y-auto"
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between gap-3 p-4 sm:p-6 border-b border-[var(--input-border)] sticky top-0 bg-[var(--surface-1)] z-10">
-                <div className="min-w-0">
-                  <h2 id="rotation-approval-title" className="flex items-center gap-2 text-[var(--text-primary)] font-semibold text-lg">
-                    <RotateCcw size={18} className="text-[var(--text-muted)]" aria-hidden="true" />
-                    {detailSchedule.asset}
-                  </h2>
-                  <div className="text-sm text-[var(--text-muted)] mt-0.5">
-                    {[detailSchedule.site, fmtDate(detailSchedule.scheduledDate), detailSchedule.priority].filter(Boolean).join(', ')}
-                  </div>
-                </div>
-                <button type="button" onClick={() => setDetailSchedule(null)} aria-label="Close rotation approval" className={ICON_BTN}>
-                  <X size={18} aria-hidden="true" />
-                </button>
-              </div>
-
-              <div className="p-4 sm:p-6 space-y-4">
+          <>
                 <EntityApprovalPanel
                   entityType="tyre_rotation"
                   entityId={detailSchedule.id}
@@ -1342,11 +1300,9 @@ export default function RotationSchedule() {
                   {wfLocked ? <Lock size={14} aria-hidden="true" /> : <CheckCircle size={14} aria-hidden="true" />}
                   {detailSchedule.status === 'Completed' ? 'Completed' : 'Mark Completed'}
                 </button>
-              </div>
-            </motion.div>
-          </motion.div>
+          </>
         )}
-      </AnimatePresence>
+      </SideDrawer>
     </div>
   )
 }

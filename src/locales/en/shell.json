@@ -57,5 +57,10 @@
   "newTyre": "New Tyre",
   "contextChanged": "Working location changed to",
   "scopeChanged": "Reporting scope changed to",
-  "locationTree": "Locations by country"
+  "locationTree": "Locations by country",
+  "skipToContent": "Skip to main content",
+  "closeMenu": "Close menu",
+  "primaryNav": "Main navigation",
+  "commandSearchLabel": "Search pages, actions and records",
+  "notificationsPanel": "Notifications"
 }

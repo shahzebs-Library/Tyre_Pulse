@@ -2,7 +2,7 @@
 // Procurement.jsx - Purchase Order Management · /procurement
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement, PointElement, LineElement,
@@ -27,6 +27,7 @@ import { useTenant } from '../contexts/TenantContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import PageHeader from '../components/ui/PageHeader'
 import Modal from '../components/ui/Modal'
+import SideDrawer from '../components/ui/SideDrawer'
 import { loadAutoTable } from '../lib/pdfEngine'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { colorAt, withAlpha } from '../lib/reportColors'
@@ -1029,32 +1030,25 @@ export default function Procurement() {
       </Modal>
 
       {/* ══════════════════════════════════════════════════════════════════════
-          DETAIL DRAWER
+          DETAIL DRAWER. Shared SideDrawer: the same full-height rail, now
+          with the focus trap, Escape and focus return the hand-rolled one lacked.
       ══════════════════════════════════════════════════════════════════════ */}
-      <AnimatePresence>
+      <SideDrawer
+        open={!!viewPO}
+        onClose={() => setViewPO(null)}
+        size="lg"
+        closeLabel="Close purchase order"
+        title={viewPO ? (
+          <span className="flex items-center gap-2 flex-wrap">
+            {viewPO.po_number}
+            <StatusBadge status={viewPO.status} />
+          </span>
+        ) : null}
+        subtitle={viewPO?.vendor_name}
+        bodyClassName="space-y-5"
+      >
         {viewPO && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-end sm:items-stretch justify-end bg-black/60 backdrop-blur-sm"
-            onClick={() => setViewPO(null)}>
-            <motion.div
-              initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-              className="tp-drawer-panel w-full sm:w-[520px] h-full bg-[var(--surface-1)] border-l border-[var(--border-bright)] overflow-y-auto shadow-2xl"
-              onClick={e => e.stopPropagation()}
-            >
-              {/* Drawer header */}
-              <div className="sticky top-0 bg-[var(--surface-1)] border-b border-[var(--border-dim)] px-6 py-4 flex items-center justify-between z-10">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-[var(--text-primary)] font-bold text-base">{viewPO.po_number}</h2>
-                    <StatusBadge status={viewPO.status} />
-                  </div>
-                  <p className="text-[var(--text-secondary)] text-sm mt-0.5">{viewPO.vendor_name}</p>
-                </div>
-                <button onClick={() => setViewPO(null)} className="p-2 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors"><X size={18} /></button>
-              </div>
-
-              <div className="p-6 space-y-5">
+          <>
 
                 {/* Status timeline */}
                 <div>
@@ -1271,11 +1265,9 @@ export default function Procurement() {
                     <FileText size={15} />{t('procurement.drawer.exportPdf')}
                   </button>
                 </div>
-              </div>
-            </motion.div>
-          </motion.div>
+          </>
         )}
-      </AnimatePresence>
+      </SideDrawer>
     </div>
   )
 }

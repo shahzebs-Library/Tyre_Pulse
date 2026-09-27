@@ -1,8 +1,8 @@
 import { WorkspaceNavigationContext } from '../contexts/WorkspaceNavigationContext'
 import { moduleAvailable } from '../lib/workspaceAccess'
-import { Fragment, useState, useEffect, useCallback, useMemo } from 'react'
+import { Fragment, useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, MotionConfig } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { isChecklistOnlyRole, isChecklistPathAllowed, CHECKLIST_ONLY_ROLES } from '../lib/checklistAccess'
 import { navItemAllowedForCustomRole, NAV_MODULE_KEY, governingModuleKey } from '../lib/navAccess'
@@ -472,6 +472,11 @@ function tOr(t, key, fallback) {
   return (!raw || raw === key) ? fallback : raw
 }
 
+/** DOM-safe id fragment for a nav group key (keys can carry spaces and '&'). */
+function groupDomId(key) {
+  return String(key || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'group'
+}
+
 /** Display label for a nav item's route. */
 function navLabelFor(t, to, fallback) {
   return tOr(t, `nav.items.${to}`, fallback)
@@ -619,10 +624,14 @@ function TyreManShell({ children, alertCount, appIcon, customAppIcon }) {
   }, [retrying])
 
   return (
+    <MotionConfig reducedMotion="user">
     <div
       className="min-h-screen flex flex-col"
       style={{ background: '#f0f5f1' }}
     >
+      <a href="#main-content" className="tp-skip-link">
+        {tOr(t, 'shell.skipToContent', 'Skip to main content')}
+      </a>
       {/* Fixed top header - light */}
       <header
         className="fixed top-0 left-0 right-0 z-30 flex items-center justify-between px-4"
@@ -676,18 +685,18 @@ function TyreManShell({ children, alertCount, appIcon, customAppIcon }) {
           <LanguageSwitcher />
           <ThemeToggle
             size={15}
-            className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-500 hover:text-green-600 transition-colors hover:bg-green-500/10"
+            className="tp-touch-target w-7 h-7 flex items-center justify-center rounded-lg text-gray-500 hover:text-green-600 transition-colors hover:bg-green-500/10"
           />
           <NavLink
             to="/alerts"
-            className="relative w-7 h-7 flex items-center justify-center rounded-lg transition-colors"
+            className="tp-touch-target relative w-7 h-7 flex items-center justify-center rounded-lg transition-colors"
             style={{ color: '#6b7280' }}
             aria-label={`Alerts${alertCount > 0 ? ` (${alertCount})` : ''}`}
           >
             <Bell size={15} />
             {alertCount > 0 && (
               <span
-                className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] flex items-center justify-center text-[8px] font-bold bg-red-500 text-white rounded-full px-0.5"
+                className="absolute -top-0.5 -end-0.5 min-w-[14px] h-[14px] flex items-center justify-center text-[8px] font-bold bg-red-500 text-white rounded-full px-0.5"
                 style={{ boxShadow: '0 0 5px rgba(239,68,68,0.5)' }}
               >
                 {alertCount > 9 ? '9+' : alertCount}
@@ -698,8 +707,9 @@ function TyreManShell({ children, alertCount, appIcon, customAppIcon }) {
             {profile?.full_name}
           </span>
           <button
+            type="button"
             onClick={signOut}
-            className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors"
+            className="tp-touch-target w-7 h-7 flex items-center justify-center rounded-lg transition-colors"
             style={{ color: '#9ca3af' }}
             aria-label="Sign out"
           >
@@ -713,7 +723,9 @@ function TyreManShell({ children, alertCount, appIcon, customAppIcon }) {
 
       {/* Scrollable content */}
       <main
-        className="flex-1 overflow-auto px-3"
+        id="main-content"
+        tabIndex={-1}
+        className="flex-1 overflow-auto px-3 outline-none"
         style={{
           paddingTop: 'calc(52px + env(safe-area-inset-top))',
           paddingBottom: 'calc(66px + env(safe-area-inset-bottom))',
@@ -752,7 +764,7 @@ function TyreManShell({ children, alertCount, appIcon, customAppIcon }) {
                     <Icon size={20} strokeWidth={isActive ? 2.2 : 1.7} />
                     {to === '/alerts' && alertCount > 0 && (
                       <span
-                        className="absolute -top-1.5 -right-2 min-w-[15px] h-[15px] flex items-center justify-center text-[9px] font-bold bg-red-500 text-white rounded-full px-0.5"
+                        className="absolute -top-1.5 -end-2 min-w-[15px] h-[15px] flex items-center justify-center text-[9px] font-bold bg-red-500 text-white rounded-full px-0.5"
                         style={{ boxShadow: '0 0 6px rgba(239,68,68,0.5)' }}
                       >
                         {alertCount > 9 ? '9+' : alertCount}
@@ -767,6 +779,7 @@ function TyreManShell({ children, alertCount, appIcon, customAppIcon }) {
         </div>
       </nav>
     </div>
+    </MotionConfig>
   )
 }
 
@@ -799,7 +812,7 @@ export default function Layout({ children }) {
   const { profile, hasPermission, grantedModules, isSuperAdmin } = auth
   const canLoadAlerts = moduleAvailable(auth, 'alerts')
   const alertModules = ['stock', 'corrective_actions', 'tyre_records', 'inspections'].filter(key => moduleAvailable(auth, key)).join(',')
-  const { t }                               = useLanguage()
+  const { t, isRTL }                        = useLanguage()
   const { branding }                        = useTenant()
   // Org-assigned app icon (V120); falls back to the built-in mark so an
   // unbranded org renders exactly as before. A custom (usually navy/coloured)
@@ -997,6 +1010,40 @@ export default function Layout({ children }) {
     else if (window.innerWidth >= 1024) setSidebarOpen(true)
   }, [location.pathname, isMobile])
 
+  // Mobile drawer keyboard contract. The drawer is an overlay, so it must behave
+  // like one: focus moves INTO it on open (the aside sits before the top bar in
+  // the DOM, so Tab from the menu button would otherwise walk the page behind the
+  // scrim), Escape closes it, and on close focus goes back to whatever opened it
+  // when the drawer took focus with it - exactly the useAnchoredPopover rule, so
+  // a keyboard user is never stranded on <body>. Closed, the aside is `inert`
+  // below, so ~200 off-screen links stop being invisible tab stops.
+  const asideRef = useRef(null)
+  const drawerReturnRef = useRef(null)
+  const drawerOpen = isMobile && sidebarOpen
+  useEffect(() => {
+    if (!drawerOpen || typeof document === 'undefined') return undefined
+    drawerReturnRef.current = document.activeElement
+    const raf = typeof requestAnimationFrame === 'function'
+      ? requestAnimationFrame(() => {
+        const aside = asideRef.current
+        if (aside && !aside.contains(document.activeElement)) {
+          aside.querySelector('nav a[href], nav button')?.focus?.()
+        }
+      })
+      : null
+    function onKey(e) { if (e.key === 'Escape') setSidebarOpen(false) }
+    document.addEventListener('keydown', onKey)
+    return () => {
+      if (raf != null && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(raf)
+      document.removeEventListener('keydown', onKey)
+      const back = drawerReturnRef.current
+      drawerReturnRef.current = null
+      const active = document.activeElement
+      const orphaned = !active || active === document.body || asideRef.current?.contains(active)
+      if (orphaned && back && back.isConnected && typeof back.focus === 'function') back.focus()
+    }
+  }, [drawerOpen])
+
   useEffect(() => {
     let cancelled = false
     setAlertCount(0)
@@ -1050,7 +1097,15 @@ export default function Layout({ children }) {
   }
 
   return (
+    // reducedMotion="user": framer-motion is JS-driven, so the CSS
+    // prefers-reduced-motion rule in index.css never reached the sidebar slide,
+    // the group accordions or the page-enter transition. This makes every motion
+    // component in the shell honour the OS setting; nothing changes otherwise.
+    <MotionConfig reducedMotion="user">
     <div className="flex h-screen overflow-hidden" style={{ background: 'transparent' }}>
+      <a href="#main-content" className="tp-skip-link">
+        {tOr(t, 'shell.skipToContent', 'Skip to main content')}
+      </a>
 
       {/* ── Mobile backdrop ──────────────────────────────────────────────────── */}
       <AnimatePresence>
@@ -1070,10 +1125,18 @@ export default function Layout({ children }) {
 
       {/* ── Sidebar ─────────────────────────────────────────────────────────── */}
       <motion.aside
-        className={`flex-shrink-0 flex flex-col ${isMobile ? 'fixed top-0 left-0 h-full z-50' : 'relative z-20'}`}
+        ref={asideRef}
+        // Off-screen drawer: out of the tab order and the accessibility tree.
+        inert={isMobile && !sidebarOpen ? true : undefined}
+        role={drawerOpen ? 'dialog' : undefined}
+        aria-modal={drawerOpen ? true : undefined}
+        aria-label={drawerOpen ? tOr(t, 'shell.menu', 'Menu') : undefined}
+        // RTL: the drawer belongs to the start edge, which is the RIGHT in
+        // Arabic, and it slides out towards that edge.
+        className={`flex-shrink-0 flex flex-col ${isMobile ? `fixed top-0 ${isRTL ? 'right-0' : 'left-0'} h-full z-50` : 'relative z-20'}`}
         animate={
           isMobile
-            ? { x: sidebarOpen ? 0 : -drawerWidth, width: drawerWidth }
+            ? { x: sidebarOpen ? 0 : (isRTL ? drawerWidth : -drawerWidth), width: drawerWidth }
             : { width: sidebarOpen ? SIDEBAR_EXPANDED : SIDEBAR_COLLAPSED, x: 0 }
         }
         transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
@@ -1125,9 +1188,16 @@ export default function Layout({ children }) {
           </div>
 
           <button
+            type="button"
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
-            className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-lg text-gray-600 hover:text-green-400 transition-all duration-200 hover:bg-green-400/10"
+            title={isMobile
+              ? tOr(t, 'shell.closeMenu', 'Close menu')
+              : (sidebarOpen ? tOr(t, 'shell.collapseSidebar', 'Collapse sidebar') : tOr(t, 'shell.expandSidebar', 'Expand sidebar'))}
+            aria-label={isMobile
+              ? tOr(t, 'shell.closeMenu', 'Close menu')
+              : (sidebarOpen ? tOr(t, 'shell.collapseSidebar', 'Collapse sidebar') : tOr(t, 'shell.expandSidebar', 'Expand sidebar'))}
+            aria-expanded={isMobile ? undefined : sidebarOpen}
+            className="tp-touch-target flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-lg text-gray-600 hover:text-green-400 transition-all duration-200 hover:bg-green-400/10"
           >
             <motion.div animate={{ rotate: sidebarOpen ? 0 : 180 }} transition={{ duration: 0.22 }}>
               {sidebarOpen ? <X size={13} /> : <Menu size={13} />}
@@ -1143,7 +1213,11 @@ export default function Layout({ children }) {
             (operations) and ReportingScopeBar (analytics). */}
 
         {/* ── Nav ────────────────────────────────────────────────────────────── */}
-        <nav className="flex-1 overflow-y-auto py-1.5 px-2" style={{ scrollbarWidth: 'thin' }}>
+        <nav
+          aria-label={tOr(t, 'shell.primaryNav', 'Main navigation')}
+          className="flex-1 overflow-y-auto py-1.5 px-2"
+          style={{ scrollbarWidth: 'thin' }}
+        >
           {/* ── Favourites ───────────────────────────────────────────────────
               Pinned at the top, above the groups, and only when the user has at
               least one favourite they can actually open. Collapsed (icon-only)
@@ -1201,7 +1275,10 @@ export default function Layout({ children }) {
               <div key={groupId} className="mb-0.5">
                 {sidebarOpen && (
                   <button
+                    type="button"
                     onClick={() => toggleGroup(groupId)}
+                    aria-expanded={!isCollapsed}
+                    aria-controls={`nav-group-${groupDomId(groupId)}`}
                     className="w-full flex items-center justify-between px-2.5 pt-3 pb-1.5 group/sec cursor-pointer"
                   >
                     <span className="text-[9.5px] font-bold uppercase tracking-[0.11em] text-gray-700 group-hover/sec:text-gray-500 transition-colors">
@@ -1220,6 +1297,7 @@ export default function Layout({ children }) {
                   {(!isCollapsed || !sidebarOpen) && (
                     <motion.div
                       key={groupId + '-items'}
+                      id={`nav-group-${groupDomId(groupId)}`}
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: 'auto', opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
@@ -1263,20 +1341,26 @@ export default function Layout({ children }) {
                           title={_outOfContext
                             ? `${navLabel} - no data in ${activeCountry}`
                             : (!sidebarOpen ? navLabel : undefined)}
-                          style={_outOfContext ? { opacity: 0.45 } : undefined}
                           className={({ isActive }) =>
                             `relative flex items-center gap-2.5 py-[6.5px] rounded-xl text-[12.5px] font-medium
                              transition-all duration-150 mb-px group
                              ${sidebarOpen ? 'ps-2.5 pe-7' : 'px-2.5 justify-center'}
                              ${isActive ? 'text-green-300' : 'text-gray-600 hover:text-gray-200'}`
                           }
-                          style={({ isActive }) => isActive ? {
-                            background: 'linear-gradient(135deg, rgba(22,163,74,0.16) 0%, rgba(22,163,74,0.07) 100%)',
-                            border: '1px solid rgba(22,163,74,0.24)',
-                            boxShadow: '0 0 18px rgba(22,163,74,0.1), inset 0 1px 0 rgba(22,163,74,0.05)',
-                          } : {
-                            border: '1px solid transparent',
-                          }}
+                          // ONE style prop. There used to be two on this element:
+                          // the out-of-context dimming came first and JSX let the
+                          // later one silently replace it, so the documented
+                          // "dimmed, not removed" state was never actually drawn.
+                          style={({ isActive }) => ({
+                            ...(isActive ? {
+                              background: 'linear-gradient(135deg, rgba(22,163,74,0.16) 0%, rgba(22,163,74,0.07) 100%)',
+                              border: '1px solid rgba(22,163,74,0.24)',
+                              boxShadow: '0 0 18px rgba(22,163,74,0.1), inset 0 1px 0 rgba(22,163,74,0.05)',
+                            } : {
+                              border: '1px solid transparent',
+                            }),
+                            ...(_outOfContext ? { opacity: 0.45 } : null),
+                          })}
                         >
                           {({ isActive }) => (
                             <>
@@ -1284,7 +1368,7 @@ export default function Layout({ children }) {
                               {isActive && (
                                 <motion.span
                                   layoutId="activeBar"
-                                  className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[52%] rounded-r-full"
+                                  className="absolute start-0 top-1/2 -translate-y-1/2 w-[3px] h-[52%] rounded-e-full"
                                   style={{
                                     background: 'linear-gradient(180deg, #86efac, #22c55e, #15803d)',
                                     boxShadow: '0 0 10px rgba(74,222,128,0.8)',
@@ -1309,7 +1393,7 @@ export default function Layout({ children }) {
 
                               {to === '/alerts' && alertCount > 0 && (
                                 <span
-                                  className={`${sidebarOpen ? 'ml-auto' : 'absolute -top-0.5 -right-0.5'} text-[9.5px] font-bold bg-red-600 text-white rounded-full min-w-[15px] h-[15px] flex items-center justify-center px-1`}
+                                  className={`${sidebarOpen ? 'ms-auto' : 'absolute -top-0.5 -end-0.5'} text-[9.5px] font-bold bg-red-600 text-white rounded-full min-w-[15px] h-[15px] flex items-center justify-center px-1`}
                                   style={{ boxShadow: '0 0 10px rgba(239,68,68,0.7)' }}
                                 >
                                   {alertCount > 9 ? '9+' : alertCount}
@@ -1369,7 +1453,9 @@ export default function Layout({ children }) {
         />
 
         <main
-          className="flex-1 overflow-y-auto"
+          id="main-content"
+          tabIndex={-1}
+          className="flex-1 overflow-y-auto outline-none"
           style={{
             scrollbarWidth: 'thin',
             paddingBottom: isMobile ? 'calc(54px + env(safe-area-inset-bottom))' : 0,
@@ -1396,7 +1482,7 @@ export default function Layout({ children }) {
                       border: '1px solid rgba(22,163,74,0.12)',
                     }}
                   >
-                    <ArrowLeft size={13} className="flex-shrink-0" />
+                    <ArrowLeft size={13} aria-hidden="true" className="flex-shrink-0 rtl:rotate-180" />
                     <span className="hidden sm:inline">Back</span>
                   </button>
                 )}
@@ -1446,5 +1532,6 @@ export default function Layout({ children }) {
           search surface, <CommandPalette>, which is the only one that reads
           the shared permission-gated RECORD_SOURCES. */}
     </div>
+    </MotionConfig>
   )
 }

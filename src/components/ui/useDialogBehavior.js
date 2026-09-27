@@ -26,6 +26,24 @@ import { useEffect, useRef } from 'react'
  * @param {object}  panelRef  ref to the dialog panel element
  * @param {() => void} onClose
  */
+// Every open dialog registers here, newest last. Only the TOPMOST one answers
+// Escape and Tab. Without this a dialog opened on top of a drawer (a reject
+// reason over a request rail, say) meant one Escape closed BOTH, and the two
+// focus traps fought over every Tab press. An entry whose panel has left the
+// document is skipped, so a dialog that failed to clean up can never leave a
+// ghost on top that swallows every later key.
+const openStack = []
+
+function isTopmost(entry) {
+  for (let i = openStack.length - 1; i >= 0; i -= 1) {
+    const candidate = openStack[i]
+    const node = candidate.panelRef.current
+    if (node && node.isConnected === false) continue
+    return candidate === entry
+  }
+  return true
+}
+
 export default function useDialogBehavior(open, panelRef, onClose) {
   // Kept current on every render; read only from inside the key handler.
   const onCloseRef = useRef(onClose)
@@ -33,6 +51,9 @@ export default function useDialogBehavior(open, panelRef, onClose) {
 
   useEffect(() => {
     if (!open) return
+
+    const entry = { panelRef }
+    openStack.push(entry)
 
     const previouslyFocused = document.activeElement
     const body = document.body
@@ -51,6 +72,7 @@ export default function useDialogBehavior(open, panelRef, onClose) {
     }
 
     function onKey(e) {
+      if (!isTopmost(entry)) return
       if (e.key === 'Escape') {
         e.stopPropagation()
         onCloseRef.current?.()
@@ -74,6 +96,8 @@ export default function useDialogBehavior(open, panelRef, onClose) {
     document.addEventListener('keydown', onKey, true)
     return () => {
       document.removeEventListener('keydown', onKey, true)
+      const at = openStack.indexOf(entry)
+      if (at !== -1) openStack.splice(at, 1)
       body.style.overflow = priorOverflow
       if (previouslyFocused instanceof HTMLElement) previouslyFocused.focus?.()
     }

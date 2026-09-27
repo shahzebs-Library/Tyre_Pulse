@@ -71,7 +71,7 @@ export default function PageHeader({
             title="Back to previous page"
             className="btn-secondary text-xs px-2.5 sm:px-3 py-1.5 flex items-center gap-1.5 shrink-0"
           >
-            <ArrowLeft className="w-4 h-4" />
+            <ArrowLeft aria-hidden="true" className="w-4 h-4 rtl:rotate-180" />
             <span className="hidden sm:inline">Back</span>
           </button>
         )}
@@ -99,11 +99,12 @@ export default function PageHeader({
       <div className="flex items-center gap-2 flex-wrap">
         {rel && (
           <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] text-muted px-2.5 py-1 rounded-lg bg-gray-800/40 border border-white/5">
-            <Clock className="w-3 h-3 opacity-70" /> Updated {rel}
+            <Clock aria-hidden="true" className="w-3 h-3 opacity-70" /> Updated {rel}
           </span>
         )}
         {onRefresh && (
           <button
+            type="button"
             onClick={onRefresh}
             disabled={refreshing}
             className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-50"

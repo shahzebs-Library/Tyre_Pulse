@@ -63,7 +63,9 @@ export async function getSiteOperatingCost({ country, from, to } = {}) {
  * @param {{countries:string[], from?:string, to?:string}} opts
  * @returns {Promise<{ok:boolean, blocks:Array, refused:string[]}>} never throws
  */
-export async function getSiteOperatingCostMulti({ countries, from, to } = {}) {
+export async function getSiteOperatingCostMulti({ countries, from, to, strict = false } = {}) {
+  // `strict` lets a caller tell "the read failed" apart from "nothing to show".
+  // Without it (the default, unchanged) any failure degrades to ok:false.
   try {
     const res = await callScopedMulti('get_site_operating_cost_multi', countries, {
       p_from: from || null, p_to: to || null,
@@ -78,7 +80,8 @@ export async function getSiteOperatingCostMulti({ countries, from, to } = {}) {
         byStore: Array.isArray(b?.result?.by_store) ? b.result.by_store : [],
       })),
     }
-  } catch {
+  } catch (e) {
+    if (strict) throw e
     return { ok: false, blocks: [], refused: [] }
   }
 }

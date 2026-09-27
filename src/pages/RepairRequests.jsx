@@ -41,6 +41,7 @@ import {
 import PageHeader from '../components/ui/PageHeader'
 import Card, { CardHeader } from '../components/ui/Card'
 import Modal from '../components/ui/Modal'
+import SideDrawer from '../components/ui/SideDrawer'
 import EmptyState from '../components/EmptyState'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useSettings } from '../contexts/SettingsContext'
@@ -1105,33 +1106,28 @@ export default function RepairRequests() {
       )}
 
       {/* ── Drawer: one request ───────────────────────────────────────────────
-          DELIBERATELY still hand-rolled, and the only overlay on this page that
-          is. Modal has no drawer size: its panel is a centred box capped at
-          92dvh, so converting this would turn a full-height right-hand rail
-          into a dialog and change the layout rather than just the plumbing.
-          The same call was already made for the WorkOrders drawer in the first
-          migration wave. The three dialogs below DO use Modal. */}
-      {open && (
-        <div className="fixed inset-0 z-50 flex justify-end" style={{ background: 'rgba(0,0,0,0.5)' }}
-          onClick={() => setOpen(null)}>
-          <div className="w-full max-w-xl h-full overflow-y-auto p-5 space-y-4"
-            style={{ background: 'var(--surface, #0b1220)' }}
-            onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  {open.rfr_no || 'Repair request'}
-                </h2>
-                <div className="flex items-center gap-2 mt-1">
-                  <StatusPill status={open.status} />
-                  <PriorityPill priority={open.priority} />
-                </div>
-              </div>
-              <button onClick={() => setOpen(null)} className="btn-secondary text-xs">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
+          SideDrawer is the full-height rail Modal could not be: it keeps the
+          right-hand layout this page always had and adds the focus trap,
+          Escape, focus return and busy lock that were missing. The three
+          dialogs below are Modals opened on TOP of it; the shared dialog
+          stack makes only the topmost one answer Escape and Tab. */}
+      <SideDrawer
+        open={!!open}
+        onClose={() => setOpen(null)}
+        size="lg"
+        busy={busy}
+        closeLabel="Close repair request"
+        title={open ? (open.rfr_no || 'Repair request') : null}
+        subtitle={open ? (
+          <span className="flex items-center gap-2 mt-1">
+            <StatusPill status={open.status} />
+            <PriorityPill priority={open.priority} />
+          </span>
+        ) : null}
+        bodyClassName="space-y-4"
+      >
+        {open && (
+          <>
             <div className="grid grid-cols-2 gap-3 text-sm">
               {[
                 ['Asset', open.asset_no],
@@ -1230,9 +1226,9 @@ export default function RepairRequests() {
                 )}
               </div>
             )}
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </SideDrawer>
 
       {/* ── Reject, with a reason ─────────────────────────────────────────────
           Modal owns the backdrop, Escape, the focus trap, the scroll lock and

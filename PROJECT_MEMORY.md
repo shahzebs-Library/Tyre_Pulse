@@ -83,10 +83,16 @@ environmental). ~10 parallel agents throughout; each batch committed by pathspec
   hash join (KSA 1.6-4.5 s -> 0.34-0.68 s), 110200 maintenance snapshot index-only (1.4-8.8 s -> 0.33-0.44 s).
 - **Mobile (code only, NO build):** i18nKeyCoverage test, 99 icon buttons labelled, PhotoCapture translated, sanitised
   server errors. Still unbuilt.
-- **OPEN:** edge fns send-email / generate-embedding / send-scheduled-reports changed in repo, deploy+diff in progress;
-  `_cost_dim` has no unique tiebreak (tie order plan-dependent); get_cost_per_m3_trend still uses coalesce(approved,m3)
-  vs approved-only headline; 9 remaining overlays are deliberate side drawers pinned by dialogFit or kiosk/dead pages;
-  UserManagement.jsx + AiAnalytics.jsx dead; vehicle360 photo storage path can collide across countries.
+- **CLOSED late in part 8:** edge fns DEPLOYED live (send-email v17 verify_jwt=false, generate-embedding v15
+  verify_jwt=true, send-scheduled-reports v20 byte-identical) - CORS on send-email/generate-embedding now allowlists only
+  tyrepulse.app, www and localhost:5173/5174. **120000** `_cost_dim` label tiebreak + **120100** get_cost_cpk_overview
+  by_* breakdowns from the scoped pc CTE (one pass, ~23% faster on the 12-month default; 96/96 byte-identical before
+  apply; probe fn dropped) APPLIED LIVE. Shared `src/components/ui/SideDrawer.jsx` now carries the WorkOrders /
+  RepairRequests / RotationSchedule / Procurement / CustomRolesManager / CustomerPortal drawers. Dead code removed
+  (UserManagement.jsx, AiAnalytics.jsx, unused charts/*, DataTable, SummaryCard, adminRoles, displayTokens, etc).
+  App shell a11y (Layout, TopBar, ProfileMenu, NotificationCenter) + honest states on meter/cpk/expense/insurance panels.
+- **OPEN:** `send-scheduled-reports` "Send now" still returns raw `schedErr.message` (~line 1093); get_cost_per_m3_trend
+  still uses coalesce(approved,m3) vs approved-only headline; vehicle360 photo storage path can collide across countries.
 
 ---
 

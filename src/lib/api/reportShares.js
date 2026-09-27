@@ -1,7 +1,7 @@
 /**
  * reportShares - shareable public/TV report links (V251/V252).
  *
- * Mirrors displayTokens.js: elevated users mint / list / revoke share tokens;
+ * Mirrors the retired display-token service: elevated users mint / list / revoke share tokens;
  * the PUBLIC TV viewer reads an org-scoped aggregate snapshot by token via a
  * SECURITY DEFINER RPC that any (even anonymous) client may call. No table is
  * ever exposed to anon; the org is embedded in the token row so nothing leaks.

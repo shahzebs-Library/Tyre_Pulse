@@ -89,12 +89,12 @@ export default class ErrorBoundary extends Component {
     // not the error screen.
     if (this.state.recovering) {
       return (
-        <div style={{
+        <div role="status" aria-live="polite" style={{
           minHeight: '100vh', display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center', background: 'var(--bg-base)',
           padding: '24px 20px', fontFamily: 'system-ui, -apple-system, sans-serif', gap: 14,
         }}>
-          <RefreshCw size={22} className="animate-spin" style={{ color: '#16a34a' }} />
+          <RefreshCw size={22} aria-hidden="true" className="animate-spin" style={{ color: '#16a34a' }} />
           <p style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', maxWidth: 320, lineHeight: 1.6, margin: 0 }}>
             Updating TyrePulse to the latest version...
           </p>
@@ -114,6 +114,7 @@ export default class ErrorBoundary extends Component {
 
     return (
       <div
+        role="alert"
         style={{
           minHeight: '100vh',
           display: 'flex',
@@ -130,11 +131,12 @@ export default class ErrorBoundary extends Component {
           background: 'rgba(239,68,68,0.1)', border: '1.5px solid rgba(239,68,68,0.25)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
-          <span style={{ fontSize: 28 }}>⚠️</span>
+          <span aria-hidden="true" style={{ fontSize: 28 }}>⚠️</span>
         </div>
-        <h2 style={{ color:'var(--panel-ink)', fontSize: 18, fontWeight: 700, margin: '0 0 8px', textAlign: 'center' }}>
+        {/* h1: this screen replaces the whole page, so it is the page's only heading. */}
+        <h1 style={{ color:'var(--panel-ink)', fontSize: 18, fontWeight: 700, margin: '0 0 8px', textAlign: 'center' }}>
           Something went wrong
-        </h2>
+        </h1>
         <p style={{ color:'var(--text-muted)', fontSize: 13, textAlign: 'center', maxWidth: 320, lineHeight: 1.6, margin: '0 0 20px' }}>
           TyrePulse encountered an unexpected error. Please reload to continue, and quote the reference below if you contact support.
         </p>
@@ -154,7 +156,9 @@ export default class ErrorBoundary extends Component {
               </code>
             </div>
             <button
+              type="button"
               onClick={this.handleCopy}
+              aria-live="polite"
               style={{
                 padding: '7px 14px', borderRadius: 8, cursor: 'pointer',
                 border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.05)',

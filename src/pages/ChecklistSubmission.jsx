@@ -3,8 +3,12 @@ import { useParams, useNavigate } from 'react-router-dom'
 import {
   ClipboardCheck, ArrowLeft, ChevronRight, AlertTriangle, AlertOctagon,
   Star, PenLine, RefreshCw, CheckCircle2, XCircle, Download, Loader2, Gauge,
-  Truck, MapPin, User, Hash, ShieldCheck,
+  Truck, MapPin, User, Hash, ShieldCheck, Search, X, FileSpreadsheet,
 } from 'lucide-react'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import {
+  lineRegister, summarizeSubmission, filterLines, LINE_FILTERS, lineExportRows, LINE_EXPORT_COLUMNS,
+} from '../lib/checklistSubmissionAnalytics'
 import { getSubmission } from '../lib/api/checklists'
 import { isReferenceField, referenceSource } from '../lib/checklist/fieldTypes'
 import {
@@ -41,9 +45,9 @@ function prettyStatus(s) {
   return String(s || 'submitted').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 function fmtDateTime(v) {
-  if (!v) return '-'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '-' : d.toLocaleString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString()
 }
 
 // Which points are shown, and what each answer reads as, is decided once in
@@ -103,6 +107,48 @@ export default function ChecklistSubmission() {
   // The sheet's own reference. Null when this template mints no document number,
   // in which case nothing is drawn rather than a placeholder somebody would quote.
   const docNo = sub ? documentNo(sub) : null
+
+  // Every line of the form, answered or not, for the KPI strip and register.
+  const lines = useMemo(() => lineRegister(sub, { template }), [sub, template])
+  const stats = useMemo(() => summarizeSubmission(lines), [lines])
+  const [lineSearch, setLineSearch] = useState('')
+  const [lineShow, setLineShow] = useState('all')
+  const [lineSection, setLineSection] = useState('all')
+  const visibleLines = useMemo(
+    () => filterLines(lines, { search: lineSearch, show: lineShow, section: lineSection }),
+    [lines, lineSearch, lineShow, lineSection],
+  )
+  const lineFiltersActive = Boolean(lineSearch) || lineShow !== 'all' || lineSection !== 'all'
+
+  const lineColumns = useMemo(() => [
+    { id: 'line', header: 'Line', accessorFn: (l) => l.line, size: 60, meta: { align: 'right' } },
+    { id: 'section', header: 'Section', accessorFn: (l) => l.section || '', size: 150 },
+    { id: 'question', header: 'Question', accessorFn: (l) => l.label || '', size: 260 },
+    {
+      id: 'answer', header: 'Answer', accessorFn: (l) => (l.answered ? (l.text || l.markText || '') : ''), size: 200,
+      cell: ({ row }) => (row.original.answered
+        ? <span className="text-[var(--text-primary)]">{row.original.text || row.original.markText || 'Recorded'}</span>
+        : <span className="text-[var(--text-muted)] italic">Not answered</span>),
+    },
+    {
+      id: 'finding', header: 'Finding', accessorFn: (l) => (l.flagged ? 1 : 0), size: 120,
+      cell: ({ row }) => (row.original.flagged
+        ? <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-400"><AlertOctagon size={12} aria-hidden="true" /> {row.original.markText || 'No'}</span>
+        : ''),
+    },
+    { id: 'remark', header: 'Remark', accessorFn: (l) => l.note || '', size: 220, cell: ({ getValue }) => <span className="text-xs text-[var(--text-muted)] line-clamp-2">{getValue()}</span> },
+    { id: 'photos', header: 'Photos', accessorFn: (l) => l.photos?.length || 0, size: 80, meta: { align: 'right' } },
+  ], [])
+
+  const exportLines = useCallback(async () => {
+    const { exportToExcel, reportFileName, reportDateLabel } = await import('../lib/exportUtils')
+    exportToExcel(
+      lineExportRows(visibleLines),
+      LINE_EXPORT_COLUMNS.map((c) => c.key),
+      LINE_EXPORT_COLUMNS.map((c) => c.header),
+      reportFileName('TyrePulse Checklist Lines', docNo || String(sub?.id || '').slice(0, 8), reportDateLabel()),
+    )
+  }, [visibleLines, docNo, sub])
 
   const downloadPdf = useCallback(async () => {
     if (!sub || exporting) return
@@ -184,7 +230,7 @@ export default function ChecklistSubmission() {
       {/* Breadcrumb */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] min-w-0">
-          <button onClick={back} className="inline-flex items-center gap-1 hover:text-[var(--text-primary)] transition-colors">
+          <button type="button" onClick={back} className="inline-flex items-center gap-1 hover:text-[var(--text-primary)] transition-colors min-h-[44px]">
             <ArrowLeft size={13} /> Checklists
           </button>
           <ChevronRight size={12} />
@@ -196,7 +242,8 @@ export default function ChecklistSubmission() {
           {exportError && <span className="text-xs text-red-400">{exportError}</span>}
           {!exportError && exportNote && <span className="text-xs text-amber-400 max-w-[24rem]">{exportNote}</span>}
           <select
-            className="input py-1.5 text-xs"
+            className="input text-xs min-h-[44px]"
+            aria-label="Language of the printed sheet"
             value={pdfLang}
             onChange={(e) => { setPdfLang(e.target.value); setExportNote('') }}
             title="Language of the printed sheet"
@@ -204,13 +251,14 @@ export default function ChecklistSubmission() {
             {CHECKLIST_LANGS.map((l) => <option key={l.code} value={l.code}>{l.label}</option>)}
           </select>
           <button
+            type="button"
             onClick={downloadPdf}
             disabled={exporting}
-            className="btn-secondary text-xs inline-flex items-center gap-1.5 disabled:opacity-60"
+            className="btn-secondary text-xs inline-flex items-center gap-1.5 min-h-[44px] px-3 disabled:opacity-60"
             title="Download this submission as a branded PDF"
           >
             {exporting ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
-            {exporting ? 'Preparing…' : 'Download PDF'}
+            {exporting ? 'Preparing' : 'Download PDF'}
           </button>
         </div>
       </div>
@@ -265,6 +313,24 @@ export default function ChecklistSubmission() {
             {sub.printed_name && <p className="text-xs text-[var(--text-muted)] mt-0.5">by {sub.printed_name}</p>}
           </div>
         </div>
+      </div>
+
+      {/* KPI strip over every line of the form */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+        {[
+          { label: 'Completion', value: stats.completionPct == null ? 'N/A' : `${stats.completionPct}%`, sub: `${stats.answered} of ${stats.total} lines answered` },
+          { label: 'Left blank', value: stats.blank, sub: stats.blank ? 'Lines with no answer' : 'Every line answered', tone: stats.blank ? 'text-amber-400' : '' },
+          { label: 'Findings', value: stats.flagged, sub: 'Blocking marks or a No answer', tone: stats.flagged ? 'text-red-400' : '' },
+          { label: 'Blocking marks', value: stats.blocking, sub: stats.blocking ? 'Must be cleared before close' : 'Nothing stops a close' },
+          { label: 'Photos', value: stats.photos, sub: 'Evidence attached' },
+          { label: 'Remarks', value: stats.remarks, sub: 'Lines with a written remark' },
+        ].map((k) => (
+          <div key={k.label} className="card !p-4 min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] truncate">{k.label}</p>
+            <p className={`text-2xl font-bold tabular-nums mt-1 ${k.tone || 'text-[var(--text-primary)]'}`}>{k.value}</p>
+            <p className="text-xs text-[var(--text-muted)] mt-0.5 truncate" title={k.sub}>{k.sub}</p>
+          </div>
+        ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -347,6 +413,60 @@ export default function ChecklistSubmission() {
             )}
           </div>
 
+          {/* Line register: every line of the form, searchable and exportable. */}
+          <div className="card space-y-3">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <h2 className="text-sm font-semibold text-[var(--text-primary)]">Line register</h2>
+              <button type="button" onClick={exportLines} disabled={!visibleLines.length}
+                className="btn-secondary text-xs inline-flex items-center gap-1.5 min-h-[44px] px-3 disabled:opacity-40">
+                <FileSpreadsheet size={13} aria-hidden="true" /> Excel
+              </button>
+            </div>
+            {stats.sections.length > 1 && (
+              <div className="flex flex-wrap gap-2 text-xs">
+                {stats.sections.map((sec) => (
+                  <button
+                    key={sec.section}
+                    type="button"
+                    onClick={() => setLineSection(lineSection === sec.section ? 'all' : sec.section)}
+                    aria-pressed={lineSection === sec.section}
+                    className={`px-3 min-h-[36px] rounded-full border transition-colors ${lineSection === sec.section ? 'border-[var(--brand-bright)] text-[var(--brand-bright)]' : 'border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+                  >
+                    {sec.section}: {sec.completionPct == null ? 'N/A' : `${sec.completionPct}%`}{sec.flagged ? `, ${sec.flagged} finding${sec.flagged > 1 ? 's' : ''}` : ''}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative flex-1 min-w-[180px] max-w-xs">
+                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+                <input className="input pl-8 text-sm min-h-[44px]" placeholder="Search questions, answers, remarks" value={lineSearch}
+                  onChange={(e) => setLineSearch(e.target.value)} aria-label="Search checklist lines" />
+              </div>
+              <select className="input text-sm w-auto min-h-[44px]" value={lineShow} onChange={(e) => setLineShow(e.target.value)} aria-label="Show lines">
+                {LINE_FILTERS.map(([k, lbl]) => <option key={k} value={k}>{lbl}</option>)}
+              </select>
+              {lineFiltersActive && (
+                <button type="button" onClick={() => { setLineSearch(''); setLineShow('all'); setLineSection('all') }}
+                  className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] inline-flex items-center gap-1 min-h-[44px] px-2">
+                  <X size={12} aria-hidden="true" /> Clear
+                </button>
+              )}
+              <span className="ml-auto text-xs text-[var(--text-muted)]">{visibleLines.length} of {lines.length} lines</span>
+            </div>
+            <EnterpriseTable
+              columns={lineColumns}
+              data={visibleLines}
+              getRowId={(l) => String(l.id)}
+              enableGlobalFilter={false}
+              enableColumnFilters={false}
+              enableExport={false}
+              initialPageSize={25}
+              resetPageKey={`${lineSearch}|${lineShow}|${lineSection}`}
+              emptyMessage={lines.length ? 'No lines match these filters.' : 'This checklist has no lines to list.'}
+            />
+          </div>
+
           {/* Signatures - every one of them. A workshop sheet is signed by the
               mechanic, the auto electrician and the engineer who certifies the
               machine fit for operation; showing one reads as an approval the
@@ -408,7 +528,7 @@ export default function ChecklistSubmission() {
 
 function BackLink({ onClick }) {
   return (
-    <button onClick={onClick} className="inline-flex items-center gap-1.5 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+    <button type="button" onClick={onClick} className="inline-flex items-center gap-1.5 min-h-[44px] text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)]">
       <ArrowLeft size={15} /> Back to Checklists
     </button>
   )

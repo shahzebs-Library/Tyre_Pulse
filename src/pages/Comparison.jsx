@@ -7,14 +7,17 @@ import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement,
   Title, Tooltip, Legend,
 } from 'chart.js'
-import { exportToPdf, exportToExcel } from '../lib/exportUtils'
+import { exportToPdf, exportToExcel, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import { formatCurrencyCompact } from '../lib/formatters'
 import { fetchAllPages } from '../lib/fetchAll'
-import { recordCost } from '../lib/analyticsEngine'
 import { toUserMessage } from '../lib/safeError'
+import { colorAt, withAlpha } from '../lib/reportColors'
+import {
+  MONTHS, MOVEMENTS, buildComparison, filterRows, formatPct, periodText, comparisonExportRows,
+} from '../lib/comparisonAnalytics'
 import {
   GitCompare, Download, FileText, TrendingUp, TrendingDown,
-  ArrowUpRight, ArrowDownRight, BarChart2, RefreshCw, AlertTriangle,
+  ArrowUpRight, ArrowDownRight, BarChart2, RefreshCw, AlertTriangle, Search, X, Info,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import SegmentedControl from '../components/ui/SegmentedControl'
@@ -24,20 +27,20 @@ import { useReportMeta } from '../hooks/useReportMeta'
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
 // ── Constants ──────────────────────────────────────────────────────────────────
-const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 const now    = new Date()
 const YEARS  = Array.from({ length: 6 }, (_, i) => now.getFullYear() - i)
+const ROW_CAP = 50000
 
 const CHART_OPTS = {
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
-    legend: { labels: { color: '#9ca3af', boxWidth: 10, padding: 12 } },
-    tooltip: { backgroundColor: 'var(--panel-2)', titleColor:'var(--panel-ink)', bodyColor: '#9ca3af', borderColor: 'var(--hairline)', borderWidth: 1, padding: 10 },
+    legend: { labels: { color: 'var(--text-muted)', boxWidth: 10, padding: 12 } },
+    tooltip: { backgroundColor: 'var(--panel-2)', titleColor:'var(--panel-ink)', bodyColor: 'var(--text-muted)', borderColor: 'var(--hairline)', borderWidth: 1, padding: 10 },
   },
   scales: {
-    x: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color: 'var(--panel-2)' } },
-    y: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color: '#374151' } },
+    x: { ticks: { color: 'var(--text-muted)', font: { size: 11 } }, grid: { color: 'var(--panel-2)' } },
+    y: { ticks: { color: 'var(--text-muted)', font: { size: 11 } }, grid: { color: 'var(--panel-2)' } },
   },
 }
 
@@ -47,32 +50,34 @@ const DIMENSION_OPTS = [
   { value: 'brand',    label: 'By Brand'   },
 ]
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
-function pctDiff(a, b) {
-  if (a === 0) return b > 0 ? 100 : 0
-  return Math.round(((b - a) / a) * 100)
+const MOVEMENT_TONE = {
+  Up: 'text-red-400',
+  Down: 'text-green-400',
+  New: 'text-amber-400',
+  Stopped: 'text-sky-400',
+  Flat: 'text-[var(--text-muted)]',
 }
 
-function DeltaBadge({ diff, pct, isGoodWhenDown = true }) {
-  if (diff === 0) return <span className="text-gray-500 font-medium">-</span>
+// ── Helpers ────────────────────────────────────────────────────────────────────
+function DeltaBadge({ diff, pct, move, isGoodWhenDown = true }) {
+  if (diff === 0) return <span className="text-[var(--text-muted)] font-medium">No change</span>
+  if (pct == null) return <span className={`font-semibold text-xs ${MOVEMENT_TONE[move] || ''}`}>{move}</span>
   const improve = isGoodWhenDown ? diff < 0 : diff > 0
   const Icon = diff > 0 ? ArrowUpRight : ArrowDownRight
   return (
     <span className={`inline-flex items-center gap-0.5 font-semibold text-xs ${improve ? 'text-green-400' : 'text-red-400'}`}>
-      <Icon size={12} />
-      {diff > 0 ? '+' : ''}{pct}%
+      <Icon size={12} aria-hidden="true" />
+      {formatPct(pct)}
     </span>
   )
 }
 
-function PeriodSummaryCard({ label, total, metric, currency, colorClass }) {
-  const { t } = useLanguage()
-  const formatted = metric === 'cost' ? formatCurrencyCompact(total, currency) : total.toLocaleString()
+function Kpi({ label, value, sub, tone }) {
   return (
-    <div className={`flex-1 min-w-[150px] p-4 rounded-xl border ${colorClass} card`}>
-      <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">{label}</p>
-      <p className="text-2xl font-bold text-white mt-0.5">{formatted}</p>
-      <p className="text-xs text-gray-500 mt-0.5">{metric === 'cost' ? t('comparison.summary.totalCost') : t('comparison.summary.replacements')}</p>
+    <div className="card !p-4 min-w-0">
+      <p className="text-[11px] text-[var(--text-muted)] font-semibold uppercase tracking-wider truncate">{label}</p>
+      <p className={`text-2xl font-bold mt-1 tabular-nums truncate ${tone || 'text-[var(--text-primary)]'}`}>{value}</p>
+      {sub && <p className="text-xs text-[var(--text-muted)] mt-0.5 truncate" title={sub}>{sub}</p>}
     </div>
   )
 }
@@ -94,38 +99,41 @@ function PeriodPicker({ label, period, setPeriod, accentBg, accentText, accentBo
       <div className="flex items-center justify-between mb-3">
         <span className={`font-semibold text-sm ${accentText}`}>{label}</span>
         <select
-          className="input w-24 text-sm py-1"
+          className="input w-24 text-sm min-h-[40px]"
           value={period.year}
-          onChange={e => setPeriod(p => ({ ...p, year: parseInt(e.target.value) }))}
+          aria-label={`${label} year`}
+          onChange={e => setPeriod(p => ({ ...p, year: parseInt(e.target.value, 10) }))}
         >
           {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
         </select>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+      <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5" role="group" aria-label={`${label} months`}>
         {MONTHS.map((m, i) => (
           <button key={m}
+            type="button"
             onClick={() => toggleMonth(i)}
-            className={`py-1.5 rounded-md text-xs font-medium border transition-all ${
+            aria-pressed={period.months.includes(i)}
+            className={`min-h-[40px] rounded-md text-xs font-medium border transition-all ${
               period.months.includes(i)
                 ? `${accentBg} ${accentText} ${accentBorder}`
-                : 'bg-gray-800 text-gray-500 border-gray-700 hover:text-gray-300 hover:border-gray-600'
+                : 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)] hover:text-[var(--text-primary)]'
             }`}
           >{m}</button>
         ))}
       </div>
 
-      <div className="flex items-center justify-between mt-2">
-        <p className="text-xs text-gray-500">
+      <div className="flex items-center justify-between mt-2 gap-2">
+        <p className="text-xs text-[var(--text-muted)]">
           {period.months.length > 0
             ? period.months.map(m => MONTHS[m]).join(', ') + ' ' + period.year
             : t('comparison.noMonthsSelected')}
         </p>
-        <div className="flex gap-2">
-          <button onClick={() => setPeriod(p => ({ ...p, months: [0,1,2,3,4,5,6,7,8,9,10,11] }))}
-            className="text-xs text-gray-500 hover:text-white transition-colors">{t('comparison.all')}</button>
-          <button onClick={() => setPeriod(p => ({ ...p, months: [] }))}
-            className="text-xs text-gray-500 hover:text-red-400 transition-colors">{t('comparison.clear')}</button>
+        <div className="flex gap-1">
+          <button type="button" onClick={() => setPeriod(p => ({ ...p, months: [0,1,2,3,4,5,6,7,8,9,10,11] }))}
+            className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors min-h-[36px] px-2">{t('comparison.all')}</button>
+          <button type="button" onClick={() => setPeriod(p => ({ ...p, months: [] }))}
+            className="text-xs text-[var(--text-muted)] hover:text-red-400 transition-colors min-h-[36px] px-2">{t('comparison.clear')}</button>
         </div>
       </div>
     </div>
@@ -147,6 +155,8 @@ export default function Comparison() {
   const [ran, setRan]         = useState(false)
   const [error, setError]     = useState(null)
   const [capped, setCapped]   = useState(false)
+  const [search, setSearch]   = useState('')
+  const [moveFilter, setMoveFilter] = useState('all')
 
   // The fetched dataset is scoped to activeCountry at query time. If the admin
   // switches active country after running, the on-screen comparison no longer
@@ -178,7 +188,7 @@ export default function Comparison() {
         .order('id', { ascending: false })
       if (activeCountry !== 'All') q = q.eq('country', activeCountry)
       return q.range(from, to)
-    }, { max: 50000 })
+    }, { max: ROW_CAP })
     if (fetchErr) {
       setError(toUserMessage(fetchErr, 'Failed to load comparison data.'))
       setRecords([])
@@ -194,159 +204,125 @@ export default function Comparison() {
   }
 
   // ── Computed ───────────────────────────────────────────────────────────────────
-  const { chartData, tableRows, totals, insight } = useMemo(() => {
-    if (!ran) return { chartData: null, tableRows: [], totals: null, insight: '' }
+  const report = useMemo(
+    () => (ran ? buildComparison(records, { periodA, periodB, metric, dimension }) : null),
+    [ran, records, periodA, periodB, metric, dimension],
+  )
+  const visibleRows = useMemo(
+    () => (report ? filterRows(report.rows, { search, movement: moveFilter }) : []),
+    [report, search, moveFilter],
+  )
+  const fmtVal = (v) => (metric === 'cost' ? formatCurrencyCompact(v, activeCurrency) : Number(v).toLocaleString())
+  const labelHeader = dimension === 'overall' ? t('comparison.table.month') : dimension === 'site' ? t('comparison.table.site') : t('comparison.table.brand')
+  const filtersActive = Boolean(search) || moveFilter !== 'all'
 
-    const getVal = (obj) => metric === 'cost' ? Math.round(obj.cost) : obj.count
-
-    const makeEmpty = (keys) => Object.fromEntries(keys.map(k => [k, { count: 0, cost: 0 }]))
-
-    if (dimension === 'overall') {
-      const allMonths = [...new Set([...periodA.months, ...periodB.months])].sort((a, b) => a - b)
-      const bktA = makeEmpty(allMonths)
-      const bktB = makeEmpty(allMonths)
-
-      records.forEach(r => {
-        if (!r.issue_date) return
-        const d = new Date(r.issue_date)
-        const yr = d.getFullYear(), mo = d.getMonth()
-        const val = recordCost(r)
-        // Only bucket a month if it was selected for that period, so the
-        // "Overall" view honours the month chips (not just the year).
-        if (yr === periodA.year && periodA.months.includes(mo) && bktA[mo] !== undefined) { bktA[mo].count++; bktA[mo].cost += val }
-        if (yr === periodB.year && periodB.months.includes(mo) && bktB[mo] !== undefined) { bktB[mo].count++; bktB[mo].cost += val }
-      })
-
-      const aVals = allMonths.map(m => getVal(bktA[m]))
-      const bVals = allMonths.map(m => getVal(bktB[m]))
-
-      const totalA = aVals.reduce((s, v) => s + v, 0)
-      const totalB = bVals.reduce((s, v) => s + v, 0)
-      const diff   = totalB - totalA
-      const pct    = pctDiff(totalA, totalB)
-      const label  = metric === 'count' ? t('comparison.summary.replacements') : t('comparison.insight.spend')
-      const insight = totalA > 0
-        ? t('comparison.insight.overall', {
-            pct: Math.abs(pct),
-            direction: diff >= 0 ? t('comparison.insight.more') : t('comparison.insight.less'),
-            label,
-            sign: diff >= 0 ? '+' : '',
-            amount: metric === 'cost' ? formatCurrencyCompact(diff, activeCurrency) : diff.toLocaleString(),
-            arrow: diff >= 0 ? '▲' : '▼',
-          })
-        : ''
-
-      const tableRows = allMonths.map((m, i) => ({
-        label: MONTHS[m],
-        a: aVals[i], b: bVals[i],
-        diff: bVals[i] - aVals[i],
-        pct: pctDiff(aVals[i], bVals[i]),
-      }))
-
-      // Totals row
-      const costA = allMonths.reduce((s, m) => s + bktA[m].cost, 0)
-      const costB = allMonths.reduce((s, m) => s + bktB[m].cost, 0)
-
-      const chartData = {
-        labels: allMonths.map(m => MONTHS[m]),
-        datasets: [
-          { label: `Period A - ${periodA.year}`, data: aVals, backgroundColor: 'rgba(22,163,74,0.65)', borderColor: '#16a34a', borderWidth: 1, borderRadius: 4 },
-          { label: `Period B - ${periodB.year}`, data: bVals, backgroundColor: 'rgba(59,130,246,0.65)', borderColor: '#3b82f6', borderWidth: 1, borderRadius: 4 },
-        ],
-      }
-
-      return {
-        chartData,
-        tableRows,
-        totals: { a: totalA, b: totalB, diff, pct, costA, costB },
-        insight,
-      }
-    }
-
-    // By Site or By Brand
-    const dimKey = dimension === 'site' ? 'site' : 'brand'
-    const dimSet = new Set()
-    records.forEach(r => { if (r[dimKey]) dimSet.add(r[dimKey]) })
-    const dims = [...dimSet].sort()
-
-    const bktA = makeEmpty(dims)
-    const bktB = makeEmpty(dims)
-
-    records.forEach(r => {
-      if (!r.issue_date) return
-      const d = new Date(r.issue_date)
-      const yr = d.getFullYear(), mo = d.getMonth()
-      const dim = r[dimKey] ?? '(unknown)'
-      const val = recordCost(r)
-      if (yr === periodA.year && periodA.months.includes(mo) && bktA[dim] !== undefined) { bktA[dim].count++; bktA[dim].cost += val }
-      if (yr === periodB.year && periodB.months.includes(mo) && bktB[dim] !== undefined) { bktB[dim].count++; bktB[dim].cost += val }
-    })
-
-    const aVals = dims.map(d => getVal(bktA[d]))
-    const bVals = dims.map(d => getVal(bktB[d]))
-
-    const tableRows = dims.map((d, i) => ({
-      label: d,
-      a: aVals[i], b: bVals[i],
-      diff: bVals[i] - aVals[i],
-      pct: pctDiff(aVals[i], bVals[i]),
-    })).sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct))
-
-    const totalA = aVals.reduce((s, v) => s + v, 0)
-    const totalB = bVals.reduce((s, v) => s + v, 0)
-    const diff   = totalB - totalA
-    const pct    = pctDiff(totalA, totalB)
-
-    const chartData = {
-      labels: dims.slice(0, 12),
+  const chartData = useMemo(() => {
+    if (!report || !report.rows.length) return null
+    const rows = visibleRows.slice(0, dimension === 'overall' ? 12 : 15)
+    const ca = colorAt(0)
+    const cb = colorAt(1)
+    return {
+      labels: rows.map(r => r.label),
       datasets: [
-        { label: `Period A - ${periodA.year}`, data: aVals.slice(0, 12), backgroundColor: 'rgba(22,163,74,0.65)', borderColor: '#16a34a', borderWidth: 1, borderRadius: 4 },
-        { label: `Period B - ${periodB.year}`, data: bVals.slice(0, 12), backgroundColor: 'rgba(59,130,246,0.65)', borderColor: '#3b82f6', borderWidth: 1, borderRadius: 4 },
+        { label: `Period A - ${periodA.year}`, data: rows.map(r => r.a), backgroundColor: withAlpha(ca, 0.7), borderColor: ca, borderWidth: 1, borderRadius: 4 },
+        { label: `Period B - ${periodB.year}`, data: rows.map(r => r.b), backgroundColor: withAlpha(cb, 0.7), borderColor: cb, borderWidth: 1, borderRadius: 4 },
       ],
     }
+  }, [report, visibleRows, dimension, periodA.year, periodB.year])
 
-    return {
-      chartData,
-      tableRows,
-      totals: { a: totalA, b: totalB, diff, pct },
-      insight: totalA > 0
-        ? t('comparison.insight.byDimension', {
-            count: dims.length,
-            dimLabel: dimKey === 'site' ? t('comparison.insight.sites') : t('comparison.insight.brands'),
-            pct: Math.abs(pct),
-            direction: diff >= 0 ? t('comparison.insight.increase') : t('comparison.insight.decrease'),
-          })
-        : '',
+  const insight = useMemo(() => {
+    if (!report || report.totals.a === 0) return ''
+    const { totals } = report
+    if (dimension === 'overall') {
+      const label = metric === 'count' ? t('comparison.summary.replacements') : t('comparison.insight.spend')
+      return t('comparison.insight.overall', {
+        pct: Math.abs(totals.pct ?? 0),
+        direction: totals.diff >= 0 ? t('comparison.insight.more') : t('comparison.insight.less'),
+        label,
+        sign: totals.diff >= 0 ? '+' : '',
+        amount: fmtVal(totals.diff),
+        arrow: totals.diff >= 0 ? '▲' : '▼',
+      })
     }
-  }, [ran, records, periodA, periodB, metric, dimension, activeCurrency, t])
+    return t('comparison.insight.byDimension', {
+      count: report.rows.length,
+      dimLabel: dimension === 'site' ? t('comparison.insight.sites') : t('comparison.insight.brands'),
+      pct: Math.abs(totals.pct ?? 0),
+      direction: totals.diff >= 0 ? t('comparison.insight.increase') : t('comparison.insight.decrease'),
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [report, dimension, metric, t, activeCurrency])
 
   // ── Exports ────────────────────────────────────────────────────────────────────
+  const fileBase = reportFileName('TyrePulse Comparison', periodA.year, 'vs', periodB.year, reportDateLabel())
+  const scopeNote = `A: ${periodText(periodA)} | B: ${periodText(periodB)} | ${metric === 'cost' ? `Cost (${activeCurrency})` : 'Replacements'}${activeCountry !== 'All' ? ` | ${activeCountry}` : ''}${filtersActive ? ' | filtered' : ''}`
+
   function doExcelExport() {
     exportToExcel(
-      tableRows.map(r => ({ label: r.label, period_a: r.a, period_b: r.b, difference: r.diff, pct_change: `${r.pct > 0 ? '+' : ''}${r.pct}%` })),
-      ['label','period_a','period_b','difference','pct_change'],
-      ['Month / Dimension','Period A','Period B','Difference','% Change'],
-      'TyrePulse_Comparison'
+      comparisonExportRows(visibleRows),
+      ['label','period_a','period_b','difference','pct_change','movement'],
+      [labelHeader, `Period A (${periodA.year})`, `Period B (${periodB.year})`, 'Difference', '% Change', 'Movement'],
+      fileBase
     )
   }
 
   function doPdfExport() {
     exportToPdf(
-      tableRows.map(r => ({ label: r.label, period_a: r.a, period_b: r.b, difference: `${r.diff > 0 ? '+' : ''}${r.diff}`, pct_change: `${r.pct > 0 ? '+' : ''}${r.pct}%` })),
+      comparisonExportRows(visibleRows),
       [
-        { key: 'label',      header: dimension === 'overall' ? 'Month' : dimension === 'site' ? 'Site' : 'Brand' },
+        { key: 'label',      header: labelHeader },
         { key: 'period_a',   header: `Period A (${periodA.year})` },
         { key: 'period_b',   header: `Period B (${periodB.year})` },
         { key: 'difference', header: 'Difference' },
         { key: 'pct_change', header: '% Change' },
+        { key: 'movement',   header: 'Movement' },
       ],
       'Period Comparison Report',
-      'TyrePulse_Comparison',
-      'landscape'
+      fileBase,
+      'landscape',
+      '',
+      { subtitleNote: scopeNote }
     )
   }
 
+  const compColumns = useMemo(() => [
+    {
+      id: 'label', header: labelHeader, accessorFn: r => (dimension === 'overall' ? r.order : r.label), size: 160,
+      cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original.label}</span>,
+    },
+    {
+      id: 'a', header: t('comparison.periodAYear', { year: periodA.year }), accessorFn: r => r.a, size: 120, meta: { align: 'right' },
+      cell: ({ row }) => <span className="text-[var(--text-secondary)] tabular-nums">{fmtVal(row.original.a)}</span>,
+    },
+    {
+      id: 'b', header: t('comparison.periodBYear', { year: periodB.year }), accessorFn: r => r.b, size: 120, meta: { align: 'right' },
+      cell: ({ row }) => <span className="text-[var(--text-secondary)] tabular-nums">{fmtVal(row.original.b)}</span>,
+    },
+    {
+      id: 'diff', header: t('comparison.table.difference'), accessorFn: r => r.diff, size: 120, meta: { align: 'right' },
+      cell: ({ getValue }) => {
+        const val = getValue()
+        const color = val > 0 ? 'text-red-400' : val < 0 ? 'text-green-400' : 'text-[var(--text-muted)]'
+        return <span className={`font-semibold tabular-nums ${color}`}>{val > 0 ? '+' : ''}{fmtVal(val)}</span>
+      },
+    },
+    {
+      id: 'pct', header: t('comparison.table.pctChange'), accessorFn: r => r.pct ?? Number.NEGATIVE_INFINITY, size: 110,
+      cell: ({ row }) => <DeltaBadge diff={row.original.diff} pct={row.original.pct} move={row.original.movement} />,
+    },
+    {
+      id: 'movement', header: 'Movement', accessorFn: r => r.movement, size: 100,
+      cell: ({ getValue }) => <span className={`text-xs font-semibold ${MOVEMENT_TONE[getValue()] || ''}`}>{getValue()}</span>,
+    },
+    {
+      id: 'share', header: 'Share of B', accessorFn: r => r.shareB ?? -1, size: 100, meta: { align: 'right' },
+      cell: ({ row }) => (row.original.shareB == null ? 'N/A' : `${row.original.shareB.toFixed(1)}%`),
+    },
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [labelHeader, dimension, periodA.year, periodB.year, metric, activeCurrency, t])
+
   const canRun = periodA.months.length > 0 && periodB.months.length > 0
+  const totals = report?.totals
 
   return (
     <div className="space-y-5">
@@ -354,6 +330,16 @@ export default function Comparison() {
         title={t('comparison.title')}
         subtitle={t('comparison.subtitle')}
         icon={GitCompare}
+        actions={report && report.rows.length > 0 ? (
+          <div className="flex gap-2 flex-wrap">
+            <button type="button" onClick={doExcelExport} disabled={!visibleRows.length} className="btn-secondary flex items-center gap-1.5 text-sm px-3 min-h-[44px] disabled:opacity-40">
+              <Download size={14} aria-hidden="true" /> {t('comparison.actions.excel')}
+            </button>
+            <button type="button" onClick={doPdfExport} disabled={!visibleRows.length} className="btn-secondary flex items-center gap-1.5 text-sm px-3 min-h-[44px] disabled:opacity-40">
+              <FileText size={14} aria-hidden="true" /> {t('comparison.actions.pdf')}
+            </button>
+          </div>
+        ) : null}
       />
 
       {/* Period selectors */}
@@ -361,18 +347,17 @@ export default function Comparison() {
         <PeriodPicker
           label={t('comparison.periodA')}
           period={periodA} setPeriod={setPeriodA}
-          accentBg="bg-green-900/40" accentText="text-green-300" accentBorder="border-green-700/50"
+          accentBg="bg-green-900/40" accentText="text-green-400" accentBorder="border-green-700/50"
         />
         <PeriodPicker
           label={t('comparison.periodB')}
           period={periodB} setPeriod={setPeriodB}
-          accentBg="bg-blue-900/40" accentText="text-blue-300" accentBorder="border-blue-700/50"
+          accentBg="bg-blue-900/40" accentText="text-blue-400" accentBorder="border-blue-700/50"
         />
       </div>
 
       {/* Options + run */}
       <div className="flex items-center gap-3 flex-wrap">
-        {/* Metric */}
         <SegmentedControl
           ariaLabel={t('comparison.metric.ariaLabel')}
           size="sm"
@@ -383,194 +368,174 @@ export default function Comparison() {
             { value: 'cost', label: t('comparison.metric.cost', { currency: activeCurrency }) },
           ]}
         />
-
-        {/* Dimension */}
         <SegmentedControl
           ariaLabel={t('comparison.dimension.ariaLabel')}
           size="sm"
           value={dimension}
-          onChange={setDimension}
+          onChange={(v) => { setDimension(v); setSearch(''); setMoveFilter('all') }}
           options={DIMENSION_OPTS.map(o => ({ ...o, label: t(`comparison.dimension.${o.value}`) }))}
         />
-
         <button
+          type="button"
           onClick={runComparison}
           disabled={loading || !canRun}
-          className="btn-primary px-6 flex items-center gap-2 disabled:opacity-50"
+          className="btn-primary px-6 min-h-[44px] flex items-center gap-2 disabled:opacity-50"
         >
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} aria-hidden="true" />
           {loading ? t('comparison.run.running') : ran ? t('comparison.run.rerun') : t('comparison.run.run')}
         </button>
-
         {!canRun && (
-          <p className="text-xs text-amber-500">{t('comparison.run.selectMonthWarning')}</p>
+          <p className="text-xs text-amber-500" role="status">{t('comparison.run.selectMonthWarning')}</p>
         )}
       </div>
 
-      {/* Error state */}
+      {loading && !ran && (
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3" aria-busy="true">
+          {Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-[88px] rounded-xl bg-[var(--input-bg)] animate-pulse" />)}
+        </div>
+      )}
+
       {ran && error && (
-        <div className="card flex flex-col items-center justify-center py-14 text-center">
-          <AlertTriangle size={36} className="text-red-400 mb-3" />
-          <p className="text-red-300 font-medium">{t('comparison.empty.noData')}</p>
-          <p className="text-gray-500 text-sm mt-1">{error}</p>
+        <div role="alert" className="card flex flex-col items-center justify-center py-14 text-center">
+          <AlertTriangle size={36} className="text-red-400 mb-3" aria-hidden="true" />
+          <p className="text-[var(--text-primary)] font-medium">Comparison data could not be loaded</p>
+          <p className="text-[var(--text-muted)] text-sm mt-1">{error}</p>
           <button
+            type="button"
             onClick={runComparison}
             disabled={loading || !canRun}
-            className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm rounded-lg transition-colors"
+            className="btn-secondary mt-4 inline-flex items-center gap-2 px-4 min-h-[44px] text-sm disabled:opacity-50"
           >
-            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> {t('comparison.run.rerun')}
+            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} aria-hidden="true" /> Retry
           </button>
         </div>
       )}
 
-      {/* Results */}
-      {ran && !error && chartData && tableRows.length > 0 && (
+      {ran && !error && report && report.rows.length > 0 && (
         <>
           {capped && (
-            <div className="card bg-amber-900/20 border border-amber-700/40 py-3 px-4 flex items-center gap-3">
-              <AlertTriangle size={16} className="text-amber-400 flex-shrink-0" />
-              <p className="text-sm text-amber-300">
-                Capped view: showing the most recent 50,000 tyre records in this range. Narrow the years or country for a complete comparison.
+            <div role="status" className="card border border-amber-700/40 py-3 px-4 flex items-center gap-3">
+              <AlertTriangle size={16} className="text-amber-400 flex-shrink-0" aria-hidden="true" />
+              <p className="text-sm text-amber-400">
+                Capped view: showing the most recent {ROW_CAP.toLocaleString('en-US')} tyre records in this range. Narrow the years or country for a complete comparison.
               </p>
             </div>
           )}
 
-          {/* Summary KPIs */}
-          {totals && (
-            <div className="flex gap-3 flex-wrap">
-              <PeriodSummaryCard
-                label={t('comparison.periodALabel', { year: periodA.year })}
-                total={totals.a} metric={metric} currency={activeCurrency}
-                colorClass="border-green-700/40"
-              />
-              <PeriodSummaryCard
-                label={t('comparison.periodBLabel', { year: periodB.year })}
-                total={totals.b} metric={metric} currency={activeCurrency}
-                colorClass="border-blue-700/40"
-              />
-              <div className="flex-1 min-w-[150px] p-4 rounded-xl border card">
-                <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">{t('comparison.summary.change')}</p>
-                <p className={`text-2xl font-bold mt-0.5 ${totals.diff === 0 ? 'text-gray-500' : totals.diff > 0 ? 'text-red-400' : 'text-green-400'}`}>
-                  {totals.diff > 0 ? '+' : ''}{metric === 'cost' ? formatCurrencyCompact(totals.diff, activeCurrency) : totals.diff.toLocaleString()}
-                </p>
-                <p className="text-xs text-gray-500 mt-0.5">{Math.abs(totals.pct)}% {totals.diff >= 0 ? t('comparison.summary.increase') : t('comparison.summary.decrease')}</p>
-              </div>
-            </div>
-          )}
-
-          {/* Trend insight */}
-          {insight && (
-            <div className="card bg-gray-800/40 py-3 px-4 flex items-center gap-3">
-              {totals?.diff < 0 ? <TrendingDown size={16} className="text-green-400 flex-shrink-0" /> : <TrendingUp size={16} className="text-red-400 flex-shrink-0" />}
-              <p className="text-sm text-gray-300">{insight}</p>
-            </div>
-          )}
-
-          {/* Bar chart */}
-          <div className="card">
-            <div className="flex items-center gap-2 mb-4">
-              <BarChart2 size={15} className="text-blue-400" />
-              <h3 className="text-base font-semibold text-white">
-                {metric === 'count' ? t('comparison.chart.replacements') : t('comparison.chart.cost', { currency: activeCurrency })}
-                {dimension !== 'overall' ? (dimension === 'site' ? t('comparison.chart.bySite') : t('comparison.chart.byBrand')) : t('comparison.chart.byMonth')}
-              </h3>
-            </div>
-            <div style={{ height: 300 }}>
-              <Bar data={chartData} options={CHART_OPTS} />
-            </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+            <Kpi label={t('comparison.periodALabel', { year: periodA.year })} value={fmtVal(totals.a)} sub={`${report.recordsA.toLocaleString()} tyre records`} />
+            <Kpi label={t('comparison.periodBLabel', { year: periodB.year })} value={fmtVal(totals.b)} sub={`${report.recordsB.toLocaleString()} tyre records`} />
+            <Kpi
+              label={t('comparison.summary.change')}
+              value={`${totals.diff > 0 ? '+' : ''}${fmtVal(totals.diff)}`}
+              sub={totals.pct == null ? 'No Period A base to compare' : `${formatPct(totals.pct)} vs Period A`}
+              tone={totals.diff === 0 ? 'text-[var(--text-muted)]' : totals.diff > 0 ? 'text-red-400' : 'text-green-400'}
+            />
+            <Kpi
+              label={dimension === 'overall' ? 'Months up / down' : `${dimension === 'site' ? 'Sites' : 'Brands'} up / down`}
+              value={`${report.up} / ${report.down}`}
+              sub={`${report.added} new, ${report.stopped} stopped`}
+            />
+            <Kpi
+              label="Biggest rise"
+              value={report.biggestRiser ? report.biggestRiser.label : 'None'}
+              sub={report.biggestRiser ? `+${fmtVal(report.biggestRiser.diff)}` : 'Nothing grew'}
+            />
+            <Kpi
+              label="Biggest fall"
+              value={report.biggestFaller ? report.biggestFaller.label : 'None'}
+              sub={report.biggestFaller ? fmtVal(report.biggestFaller.diff) : 'Nothing fell'}
+            />
           </div>
 
-          {/* Table - EnterpriseTable */}
-          {(() => {
-            const labelHeader = dimension === 'overall' ? t('comparison.table.month') : dimension === 'site' ? t('comparison.table.site') : t('comparison.table.brand')
-            const periodAHeader = t('comparison.periodAYear', { year: periodA.year })
-            const periodBHeader = t('comparison.periodBYear', { year: periodB.year })
-            const tableData = totals ? [...tableRows, { ...totals, _isTotal: true }] : tableRows
-            const compColumns = [
-              {
-                id: 'label',
-                header: labelHeader,
-                accessorFn: r => r.label,
-                size: 140,
-                cell: ({ row }) => <span className={row.original._isTotal ? 'font-bold text-white' : 'font-medium text-white'}>{row.original.label}</span>,
-              },
-              {
-                id: 'a',
-                header: periodAHeader,
-                accessorFn: r => metric === 'cost' ? formatCurrencyCompact(r.a, activeCurrency) : r.a.toLocaleString(),
-                size: 120,
-                meta: { align: 'right' },
-                cell: ({ row }) => <span className={row.original._isTotal ? 'text-green-300 font-semibold' : 'text-gray-300'}>{metric === 'cost' ? formatCurrencyCompact(row.original.a, activeCurrency) : row.original.a.toLocaleString()}</span>,
-              },
-              {
-                id: 'b',
-                header: periodBHeader,
-                accessorFn: r => metric === 'cost' ? formatCurrencyCompact(r.b, activeCurrency) : r.b.toLocaleString(),
-                size: 120,
-                meta: { align: 'right' },
-                cell: ({ row }) => <span className={row.original._isTotal ? 'text-blue-300 font-semibold' : 'text-gray-300'}>{metric === 'cost' ? formatCurrencyCompact(row.original.b, activeCurrency) : row.original.b.toLocaleString()}</span>,
-              },
-              {
-                id: 'diff',
-                header: t('comparison.table.difference'),
-                accessorFn: r => r.diff,
-                size: 120,
-                meta: { align: 'right' },
-                cell: ({ getValue, row }) => {
-                  const val = getValue()
-                  const color = val > 0 ? 'text-red-400' : val < 0 ? 'text-green-400' : 'text-gray-500'
-                  const prefix = val > 0 ? '+' : ''
-                  return <span className={`font-semibold ${color}`}>{prefix}{metric === 'cost' ? formatCurrencyCompact(val, activeCurrency) : val.toLocaleString()}</span>
-                },
-              },
-              {
-                id: 'pct',
-                header: t('comparison.table.pctChange'),
-                accessorFn: r => r.pct,
-                size: 100,
-                cell: ({ getValue, row }) => <DeltaBadge diff={row.original.diff} pct={Math.abs(getValue())} />,
-              },
-            ]
-            return (
-              <EnterpriseTable
-                reportMeta={reportMeta}
-                columns={compColumns}
-                data={tableData}
-                enableGlobalFilter={false}
-                enableColumnFilters={false}
-                enableSorting={false}
-                enableColumnVisibility={false}
-                enableExport={false}
-                className="border border-[var(--border-dim)]"
-                toolbarExtras={
-                  <div className="flex gap-2">
-                    <button onClick={doExcelExport} className="btn-secondary flex items-center gap-1.5 text-xs px-2.5 py-1.5">
-                      <Download size={12} /> {t('comparison.actions.excel')}
-                    </button>
-                    <button onClick={doPdfExport} className="btn-secondary flex items-center gap-1.5 text-xs px-2.5 py-1.5">
-                      <FileText size={12} /> {t('comparison.actions.pdf')}
-                    </button>
-                  </div>
-                }
-              />
-            )
-          })()}
+          {metric === 'cost' && (
+            <p className="text-xs text-[var(--text-muted)] flex items-start gap-1.5">
+              <Info size={12} className="mt-0.5 shrink-0" aria-hidden="true" />
+              <span>
+                Priced records: Period A {report.pricedPctA == null ? 'N/A' : `${report.pricedPctA}%`}, Period B {report.pricedPctB == null ? 'N/A' : `${report.pricedPctB}%`}.
+                Average price per priced tyre: A {report.avgCostA == null ? 'N/A' : formatCurrencyCompact(report.avgCostA, activeCurrency)}, B {report.avgCostB == null ? 'N/A' : formatCurrencyCompact(report.avgCostB, activeCurrency)}.
+                An unpriced tyre adds no money, so a low figure can mean missing prices rather than low spend.
+              </span>
+            </p>
+          )}
+
+          {insight && (
+            <div className="card py-3 px-4 flex items-center gap-3">
+              {totals?.diff < 0 ? <TrendingDown size={16} className="text-green-400 flex-shrink-0" aria-hidden="true" /> : <TrendingUp size={16} className="text-red-400 flex-shrink-0" aria-hidden="true" />}
+              <p className="text-sm text-[var(--text-secondary)]">{insight}</p>
+            </div>
+          )}
+
+          {chartData && (
+            <div className="card">
+              <div className="flex items-center gap-2 mb-4">
+                <BarChart2 size={15} className="text-[var(--text-muted)]" aria-hidden="true" />
+                <h3 className="text-base font-semibold text-[var(--text-primary)]">
+                  {metric === 'count' ? t('comparison.chart.replacements') : t('comparison.chart.cost', { currency: activeCurrency })}
+                  {dimension !== 'overall' ? (dimension === 'site' ? t('comparison.chart.bySite') : t('comparison.chart.byBrand')) : t('comparison.chart.byMonth')}
+                </h3>
+              </div>
+              <div style={{ height: 300 }} role="img" aria-label={`Period A ${fmtVal(totals.a)} vs Period B ${fmtVal(totals.b)}`}>
+                <Bar data={chartData} options={CHART_OPTS} />
+              </div>
+              {dimension !== 'overall' && report.rows.length > 15 && (
+                <p className="text-[11px] text-[var(--text-muted)] mt-2">The chart shows the 15 largest movements; the table below lists all {report.rows.length}.</p>
+              )}
+            </div>
+          )}
+
+          <div className="card space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative flex-1 min-w-[200px] max-w-xs">
+                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+                <input className="input pl-8 text-sm min-h-[44px]" placeholder={`Search ${labelHeader.toLowerCase()}`} value={search}
+                  onChange={e => setSearch(e.target.value)} aria-label={`Search ${labelHeader}`} />
+              </div>
+              <select className="input text-sm w-auto min-h-[44px]" value={moveFilter} onChange={e => setMoveFilter(e.target.value)} aria-label="Filter by movement">
+                <option value="all">All movements</option>
+                {MOVEMENTS.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+              {filtersActive && (
+                <button type="button" onClick={() => { setSearch(''); setMoveFilter('all') }} className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] inline-flex items-center gap-1 min-h-[44px] px-2">
+                  <X size={12} aria-hidden="true" /> Clear
+                </button>
+              )}
+              <span className="ml-auto text-xs text-[var(--text-muted)]">{visibleRows.length} of {report.rows.length} rows</span>
+            </div>
+            <EnterpriseTable
+              reportMeta={reportMeta}
+              columns={compColumns}
+              data={visibleRows}
+              getRowId={r => String(r.label)}
+              enableGlobalFilter={false}
+              enableColumnFilters={false}
+              enableSorting={true}
+              enableExport={false}
+              initialPageSize={25}
+              resetPageKey={`${search}|${moveFilter}|${dimension}|${metric}`}
+              emptyMessage="No rows match these filters."
+            />
+            <p className="text-xs text-[var(--text-muted)]">
+              Totals: Period A {fmtVal(totals.a)}, Period B {fmtVal(totals.b)}, change {totals.diff > 0 ? '+' : ''}{fmtVal(totals.diff)} ({formatPct(totals.pct)}).
+              A % change from a zero base is shown as New rather than a made-up percentage.
+            </p>
+          </div>
         </>
       )}
 
-      {ran && !error && (!chartData || tableRows.length === 0) && (
+      {ran && !error && report && report.rows.length === 0 && (
         <div className="card text-center py-14">
-          <GitCompare size={36} className="text-gray-700 mx-auto mb-3" />
-          <p className="text-gray-400 font-medium">{t('comparison.empty.noData')}</p>
-          <p className="text-gray-600 text-sm mt-1">{t('comparison.empty.noDataHint')}</p>
+          <GitCompare size={36} className="text-[var(--text-dim)] mx-auto mb-3" aria-hidden="true" />
+          <p className="text-[var(--text-secondary)] font-medium">{t('comparison.empty.noData')}</p>
+          <p className="text-[var(--text-muted)] text-sm mt-1">{t('comparison.empty.noDataHint')}</p>
         </div>
       )}
 
-      {!ran && (
-        <div className="card text-center py-14 bg-gray-800/20">
-          <GitCompare size={36} className="text-gray-700 mx-auto mb-3" />
-          <p className="text-gray-400 font-medium">{t('comparison.empty.configureTitle')}</p>
-          <p className="text-gray-600 text-sm mt-1">{t('comparison.empty.configureHint')}</p>
+      {!ran && !loading && (
+        <div className="card text-center py-14">
+          <GitCompare size={36} className="text-[var(--text-dim)] mx-auto mb-3" aria-hidden="true" />
+          <p className="text-[var(--text-secondary)] font-medium">{t('comparison.empty.configureTitle')}</p>
+          <p className="text-[var(--text-muted)] text-sm mt-1">{t('comparison.empty.configureHint')}</p>
         </div>
       )}
     </div>

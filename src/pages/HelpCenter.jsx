@@ -15,12 +15,17 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   LifeBuoy, Search, ChevronDown, Send, Inbox, ShieldQuestion, Bug, Lightbulb,
   Database, UserCog, HelpCircle, CheckCircle2, Clock, Loader2, RefreshCw,
-  AlertTriangle, MessageSquare, X,
+  AlertTriangle, MessageSquare, X, Download, FileText,
 } from 'lucide-react'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import {
+  ticketKpis, filterTickets, sortTickets, ticketExportRows, TICKET_EXPORT_COLUMNS,
+  CATEGORY_LABELS, STATUS_LABELS, responseHours, ageDays, formatHours,
+} from '../lib/helpCenterAnalytics'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import {
-  listTickets, createTicket, respondToTicket, updateTicket, summarizeTickets,
+  listTickets, createTicket, respondToTicket, updateTicket,
   TICKET_CATEGORIES, TICKET_SEVERITIES,
 } from '../lib/api/support'
 import { FAQ_CATEGORIES, searchFaqs, groupFaqsByCategory, visibleFaqsForRole } from '../lib/help/faqs'
@@ -50,9 +55,9 @@ const STATUS_META = {
 const TRIAGE_ROLES = ['Admin', 'Manager', 'Director']
 
 function fmtDateTime(v) {
-  if (!v) return '-'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '-' : d.toLocaleString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString()
 }
 
 // ─── FAQ accordion ────────────────────────────────────────────────────────────
@@ -257,8 +262,8 @@ function ReportForm({ onSubmitted }) {
 }
 
 // ─── Ticket card (shared by My tickets + Triage) ──────────────────────────────
-function TicketCard({ ticket, triage, onChanged }) {
-  const [expanded, setExpanded] = useState(false)
+function TicketCard({ ticket, triage, onChanged, defaultExpanded = false }) {
+  const [expanded, setExpanded] = useState(defaultExpanded)
   const [reply, setReply] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -276,7 +281,7 @@ function TicketCard({ ticket, triage, onChanged }) {
   return (
     <div className="card space-y-3">
       <div className="flex items-start justify-between gap-3">
-        <button type="button" onClick={() => setExpanded((o) => !o)} className="flex items-start gap-3 text-left flex-1 min-w-0">
+        <button type="button" onClick={() => setExpanded((o) => !o)} aria-expanded={expanded} className="flex items-start gap-3 text-left flex-1 min-w-0 min-h-[44px]">
           <CatIcon size={18} className={`mt-0.5 shrink-0 ${cat.tint}`} />
           <div className="min-w-0">
             <p className="text-sm font-semibold text-[var(--text-primary)] truncate">{ticket.subject}</p>
@@ -316,7 +321,8 @@ function TicketCard({ ticket, triage, onChanged }) {
             <div className="space-y-2">
               <textarea
                 className="input w-full min-h-[80px] resize-y text-sm"
-                placeholder="Write a response to the reporter…"
+                placeholder="Write a response to the reporter"
+                aria-label="Response to the reporter"
                 value={reply}
                 onChange={(e) => setReply(e.target.value)}
               />
@@ -353,15 +359,35 @@ function TicketCard({ ticket, triage, onChanged }) {
   )
 }
 
+const PAGE_LIMIT = 500
+const TICKET_STATUS_FILTERS = [['all', 'All'], ['open', 'Open'], ['in_progress', 'In progress'], ['resolved', 'Resolved'], ['closed', 'Closed']]
+
+function TicketKpi({ label, value, sub }) {
+  return (
+    <div className="card !p-4 min-w-0">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] truncate">{label}</p>
+      <p className="text-2xl font-bold tabular-nums text-[var(--text-primary)] mt-1.5">{value}</p>
+      {sub && <p className="text-xs text-[var(--text-muted)] mt-1 truncate" title={sub}>{sub}</p>}
+    </div>
+  )
+}
+
 function TicketList({ triage, reloadKey, emptyHint }) {
   const [rows, setRows] = useState(null)
   const [error, setError] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [category, setCategory] = useState('all')
+  const [severity, setSeverity] = useState('all')
+  const [search, setSearch] = useState('')
+  const [awaiting, setAwaiting] = useState(false)
+  const [view, setView] = useState('cards')
+  const [selectedId, setSelectedId] = useState(null)
 
   const load = useCallback(async () => {
     setError('')
+    setRows(null)
     try {
-      setRows(await listTickets(triage ? {} : { mine: true }))
+      setRows(await listTickets(triage ? { limit: PAGE_LIMIT } : { mine: true, limit: PAGE_LIMIT }))
     } catch (err) {
       setError(isMissingRelation(err) ? 'missing' : (toUserMessage(err, 'Could not load tickets.')))
       setRows([])
@@ -370,23 +396,73 @@ function TicketList({ triage, reloadKey, emptyHint }) {
 
   useEffect(() => { load() }, [load, reloadKey])
 
-  const summary = useMemo(() => summarizeTickets(rows || []), [rows])
-  const filtered = useMemo(() => {
-    const list = rows || []
-    return statusFilter === 'all' ? list : list.filter((t) => t.status === statusFilter)
-  }, [rows, statusFilter])
+  const kpi = useMemo(() => ticketKpis(rows || []), [rows])
+  const filtered = useMemo(
+    () => sortTickets(filterTickets(rows || [], { status: statusFilter, category, severity, search, awaiting })),
+    [rows, statusFilter, category, severity, search, awaiting],
+  )
+  const filtersActive = statusFilter !== 'all' || category !== 'all' || severity !== 'all' || Boolean(search) || awaiting
+  const selected = useMemo(() => (rows || []).find((r) => r.id === selectedId) || null, [rows, selectedId])
 
   const patchRow = useCallback((updated) => {
     if (!updated) return
     setRows((prev) => (prev || []).map((r) => (r.id === updated.id ? { ...r, ...updated } : r)))
   }, [])
 
+  function clearFilters() {
+    setStatusFilter('all'); setCategory('all'); setSeverity('all'); setSearch(''); setAwaiting(false)
+  }
+
+  async function doExport(kind) {
+    const { exportToExcel, exportToPdf, reportFileName, reportDateLabel } = await import('../lib/exportUtils')
+    const out = ticketExportRows(filtered)
+    const name = reportFileName('TyrePulse Support Tickets', triage ? 'Triage' : 'Mine', reportDateLabel())
+    if (kind === 'excel') {
+      exportToExcel(out, TICKET_EXPORT_COLUMNS.map((c) => c.key), TICKET_EXPORT_COLUMNS.map((c) => c.header), name)
+    } else {
+      exportToPdf(out, TICKET_EXPORT_COLUMNS, triage ? 'Support Tickets (Triage)' : 'My Support Tickets', name, 'landscape', '',
+        { subtitleNote: `${filtered.length} of ${(rows || []).length} tickets${filtersActive ? ' (filtered)' : ''}` })
+    }
+  }
+
+  const columns = useMemo(() => [
+    {
+      id: 'created', header: 'Raised', accessorFn: (r) => r.created_at || '', size: 150,
+      cell: ({ row }) => fmtDateTime(row.original.created_at),
+    },
+    {
+      id: 'subject', header: 'Subject', accessorFn: (r) => r.subject || '', size: 280,
+      cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original.subject}</span>,
+    },
+    { id: 'category', header: 'Category', accessorFn: (r) => CATEGORY_LABELS[r.category] || 'Other', size: 140 },
+    {
+      id: 'severity', header: 'Severity', accessorFn: (r) => r.severity || '', size: 100,
+      cell: ({ row }) => <span className={`badge text-[11px] px-2 py-0.5 rounded ${SEVERITY_META[row.original.severity] || SEVERITY_META.medium}`}>{row.original.severity}</span>,
+    },
+    {
+      id: 'status', header: 'Status', accessorFn: (r) => STATUS_LABELS[r.status] || r.status, size: 120,
+      cell: ({ row }) => {
+        const st = STATUS_META[row.original.status] || STATUS_META.open
+        return <span className={`badge text-[11px] px-2 py-0.5 rounded ${st.cls}`}>{st.label}</span>
+      },
+    },
+    ...(triage ? [{ id: 'reporter', header: 'Reporter', accessorFn: (r) => r.created_by_name || 'N/A', size: 140 }] : []),
+    {
+      id: 'response', header: 'Time to response', accessorFn: (r) => responseHours(r) ?? -1, size: 130, meta: { align: 'right' },
+      cell: ({ row }) => formatHours(responseHours(row.original)),
+    },
+    {
+      id: 'age', header: 'Open for', accessorFn: (r) => ageDays(r) ?? -1, size: 100, meta: { align: 'right' },
+      cell: ({ row }) => { const d = ageDays(row.original); return d == null ? 'N/A' : `${d} d` },
+    },
+  ], [triage])
+
   if (error === 'missing') {
     return (
       <div className="card border border-amber-800/50 flex items-start gap-3">
-        <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
+        <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" aria-hidden="true" />
         <div>
-          <p className="text-amber-300 font-medium">Support tickets aren’t enabled on this database yet.</p>
+          <p className="text-amber-300 font-medium">Support tickets are not enabled on this database yet.</p>
           <p className="text-[var(--text-muted)] text-sm mt-1">
             Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V127_SUPPORT_TICKETS.sql</span>, then reload.
           </p>
@@ -395,43 +471,142 @@ function TicketList({ triage, reloadKey, emptyHint }) {
     )
   }
 
+  if (error) {
+    return (
+      <div role="alert" className="card text-center py-10 space-y-2">
+        <AlertTriangle size={26} className="mx-auto text-red-400" aria-hidden="true" />
+        <p className="text-[var(--text-primary)] font-medium">Tickets could not be loaded.</p>
+        <p className="text-sm text-[var(--text-muted)]">{error} No ticket list is shown until it can be read.</p>
+        <button type="button" onClick={load} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] px-3">
+          <RefreshCw size={13} aria-hidden="true" /> Retry
+        </button>
+      </div>
+    )
+  }
+
   if (rows === null) {
-    return <div className="space-y-3">{[0, 1, 2].map((i) => <div key={i} className="card animate-pulse h-20" />)}</div>
+    return <div className="space-y-3" aria-busy="true">{[0, 1, 2].map((i) => <div key={i} className="card animate-pulse h-20" />)}</div>
   }
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        {[
-          ['all', `All (${summary.total})`],
-          ['open', `Open (${summary.open})`],
-          ['in_progress', `In progress (${summary.in_progress})`],
-          ['resolved', `Resolved (${summary.resolved})`],
-          ['closed', `Closed (${summary.closed})`],
-        ].map(([k, lbl]) => (
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+        <TicketKpi label="Unresolved" value={kpi.unresolved} sub={`${kpi.total} tickets in total`} />
+        <TicketKpi label="High or critical open" value={kpi.criticalOpen} sub="Needs attention first" />
+        <TicketKpi label="Awaiting response" value={kpi.awaitingResponse} sub="Unresolved, no reply yet" />
+        <TicketKpi label="Median time to response" value={formatHours(kpi.medianResponseHours)} sub="Raised to first reply" />
+        <TicketKpi label="Resolved rate" value={kpi.resolvedRate == null ? 'N/A' : `${kpi.resolvedRate}%`} sub={`Median to resolve ${formatHours(kpi.medianResolutionHours)}`} />
+        <TicketKpi label="Oldest open" value={kpi.oldestOpenDays == null ? 'N/A' : `${kpi.oldestOpenDays} d`} sub={`${kpi.staleOpen} open 7 days or more`} />
+      </div>
+
+      {kpi.byCategory.length > 0 && (
+        <div className="flex flex-wrap gap-2 text-xs text-[var(--text-muted)]" aria-label="Tickets by category">
+          {kpi.byCategory.map((c) => (
+            <button
+              key={c.key}
+              type="button"
+              onClick={() => setCategory(category === c.key ? 'all' : c.key)}
+              aria-pressed={category === c.key}
+              className={`px-3 min-h-[36px] rounded-full border transition-colors ${category === c.key ? 'border-[var(--brand-bright)] text-[var(--brand-bright)]' : 'border-[var(--input-border)] hover:text-[var(--text-primary)]'}`}
+            >
+              {c.label}: <span className="tabular-nums">{c.count}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter by status">
+        {TICKET_STATUS_FILTERS.map(([k, lbl]) => (
           <button
             key={k}
             type="button"
             onClick={() => setStatusFilter(k)}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+            aria-pressed={statusFilter === k}
+            className={`px-3 min-h-[40px] rounded-full text-xs font-medium border transition-colors ${
               statusFilter === k
                 ? 'bg-[var(--brand-subtle)] text-[var(--brand-bright)] border-[var(--brand-bright)]'
                 : 'bg-[var(--card-bg)] text-[var(--text-muted)] border-[var(--input-border)] hover:text-[var(--text-primary)]'
             }`}
           >
-            {lbl}
+            {lbl} ({k === 'all' ? kpi.total : kpi[k]})
           </button>
         ))}
-        <button type="button" onClick={load} className="ml-auto btn-secondary text-xs inline-flex items-center gap-1.5">
-          <RefreshCw size={13} /> Refresh
-        </button>
       </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[200px] max-w-xs">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+          <input className="input pl-8 text-sm min-h-[44px]" placeholder="Search subject, message, reporter" value={search}
+            onChange={(e) => setSearch(e.target.value)} aria-label="Search tickets" />
+        </div>
+        <select className="input text-sm w-auto min-h-[44px]" value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Filter by category">
+          <option value="all">All categories</option>
+          {TICKET_CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABELS[c] || c}</option>)}
+        </select>
+        <select className="input text-sm w-auto min-h-[44px]" value={severity} onChange={(e) => setSeverity(e.target.value)} aria-label="Filter by severity">
+          <option value="all">All severities</option>
+          {TICKET_SEVERITIES.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <label className="text-xs text-[var(--text-secondary)] inline-flex items-center gap-1.5 min-h-[44px]">
+          <input type="checkbox" checked={awaiting} onChange={(e) => setAwaiting(e.target.checked)} /> Awaiting response
+        </label>
+        {filtersActive && (
+          <button type="button" onClick={clearFilters} className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] inline-flex items-center gap-1 min-h-[44px] px-2">
+            <X size={12} aria-hidden="true" /> Clear
+          </button>
+        )}
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-lg border border-[var(--input-border)] overflow-hidden" role="group" aria-label="View">
+            {[['cards', 'Cards'], ['table', 'Table']].map(([k, lbl]) => (
+              <button key={k} type="button" onClick={() => setView(k)} aria-pressed={view === k}
+                className={`px-3 min-h-[44px] text-xs font-medium ${view === k ? 'bg-[var(--brand-subtle)] text-[var(--brand-bright)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}>
+                {lbl}
+              </button>
+            ))}
+          </div>
+          <button type="button" onClick={() => doExport('excel')} disabled={!filtered.length} className="btn-secondary text-xs inline-flex items-center gap-1.5 min-h-[44px] px-3 disabled:opacity-40">
+            <Download size={13} aria-hidden="true" /> Excel
+          </button>
+          <button type="button" onClick={() => doExport('pdf')} disabled={!filtered.length} className="btn-secondary text-xs inline-flex items-center gap-1.5 min-h-[44px] px-3 disabled:opacity-40">
+            <FileText size={13} aria-hidden="true" /> PDF
+          </button>
+          <button type="button" onClick={load} className="btn-secondary text-xs inline-flex items-center gap-1.5 min-h-[44px] px-3">
+            <RefreshCw size={13} aria-hidden="true" /> Refresh
+          </button>
+        </div>
+      </div>
+
+      {rows.length >= PAGE_LIMIT && (
+        <p role="status" className="text-xs text-amber-400">Showing the newest {PAGE_LIMIT} tickets. Figures above cover that set.</p>
+      )}
 
       {filtered.length === 0 ? (
         <div className="card text-center py-10 space-y-2">
-          <Inbox size={26} className="mx-auto text-[var(--text-muted)]" />
-          <p className="text-[var(--text-primary)] font-medium">No tickets here.</p>
-          <p className="text-sm text-[var(--text-muted)]">{emptyHint}</p>
+          <Inbox size={26} className="mx-auto text-[var(--text-muted)]" aria-hidden="true" />
+          <p className="text-[var(--text-primary)] font-medium">{filtersActive ? 'No tickets match these filters.' : 'No tickets here.'}</p>
+          <p className="text-sm text-[var(--text-muted)]">{filtersActive ? 'Clear a filter to see more.' : emptyHint}</p>
+          {filtersActive && (
+            <button type="button" onClick={clearFilters} className="btn-secondary text-xs min-h-[44px] px-3">Clear filters</button>
+          )}
+        </div>
+      ) : view === 'table' ? (
+        <div className="space-y-3">
+          {selected && (
+            <TicketCard key={selected.id} ticket={selected} triage={triage} onChanged={patchRow} defaultExpanded />
+          )}
+          <EnterpriseTable
+            columns={columns}
+            data={filtered}
+            getRowId={(r) => String(r.id)}
+            enableGlobalFilter={false}
+            enableColumnFilters={false}
+            enableExport={false}
+            initialPageSize={25}
+            resetPageKey={`${statusFilter}|${category}|${severity}|${search}|${awaiting}`}
+            onRowClick={(r) => setSelectedId(r.id)}
+            emptyMessage="No tickets match these filters."
+          />
+          <p className="text-[11px] text-[var(--text-muted)]">Select a row to open the ticket{triage ? ' and respond' : ''}.</p>
         </div>
       ) : (
         <div className="space-y-3">

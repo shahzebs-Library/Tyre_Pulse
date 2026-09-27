@@ -46,6 +46,37 @@ Finder _identifierText(String value) =>
     find.text(TpDirection.isolateLtr(value));
 
 void main() {
+  testWidgets('board forwards optional fleet identity to the diagram artwork', (
+    WidgetTester tester,
+  ) async {
+    final DiagramLayout layout = kTyreDiagramLayouts['Bus']!;
+    await _pump(
+      tester,
+      TyreDiagramBoard(
+        vehicleType: 'Bus',
+        make: 'Tata',
+        model: '32 seater',
+        positions: layout.tyres.map((TyreSlot tyre) => tyre.id).toList(),
+        tyreData: const <String, Map<String, Object?>>{},
+      ),
+    );
+
+    final VehicleTyreDiagram diagram = tester.widget<VehicleTyreDiagram>(
+      find.byType(VehicleTyreDiagram),
+    );
+    expect(diagram.make, 'Tata');
+    expect(diagram.model, '32 seater');
+    expect(
+      find.byKey(
+        const ValueKey<String>(
+          'diagram.body.assets/vehicle_multiview_views/'
+          'tata_staff_bus_five_view_v1_top.png',
+        ),
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('the stat row and both mode chips render for a known vehicle',
       (WidgetTester tester) async {
     await _pump(

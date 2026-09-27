@@ -496,6 +496,8 @@ class _TyreReplacementScreenState extends ConsumerState<TyreReplacementScreen> {
                 TyreReplacementPositionPicker(
                   vehicleType: _master?.vehicleType ?? '',
                   assetNo: assetForPositions.isEmpty ? null : assetForPositions,
+                  make: _master?.make,
+                  model: _master?.model,
                   options: positions,
                   selectedCode: selectedPosition,
                   onSelected: _selectPosition,

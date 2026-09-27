@@ -28,6 +28,8 @@ class TyreDiagramBoard extends StatefulWidget {
     required this.positions,
     required this.tyreData,
     this.assetNo,
+    this.make,
+    this.model,
     this.selectedPosition,
     this.onPositionTap,
     this.pending = TyreDiagramPending.none,
@@ -39,6 +41,10 @@ class TyreDiagramBoard extends StatefulWidget {
 
   final String vehicleType;
   final String? assetNo;
+
+  /// Optional fleet-master identity used only to refine vehicle artwork.
+  final String? make;
+  final String? model;
   final List<String> positions;
   final Map<String, Map<String, Object?>> tyreData;
   final String? selectedPosition;
@@ -125,6 +131,8 @@ class _TyreDiagramBoardState extends State<TyreDiagramBoard> {
                   child: VehicleTyreDiagram(
                     vehicleType: widget.vehicleType,
                     assetNo: widget.assetNo,
+                    make: widget.make,
+                    model: widget.model,
                     positions: widget.positions,
                     tyreData: widget.tyreData,
                     selectedPosition: widget.selectedPosition,

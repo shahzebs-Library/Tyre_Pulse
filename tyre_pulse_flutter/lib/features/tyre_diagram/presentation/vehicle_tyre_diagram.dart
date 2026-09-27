@@ -39,6 +39,8 @@ class VehicleTyreDiagram extends StatelessWidget {
     required this.positions,
     required this.tyreData,
     this.assetNo,
+    this.make,
+    this.model,
     this.selectedPosition,
     this.onPositionTap,
     this.pending = TyreDiagramPending.none,
@@ -56,6 +58,11 @@ class VehicleTyreDiagram extends StatelessWidget {
   /// Used only when [vehicleType] identifies nothing (a junk catch-all type
   /// in the register) - see [resolveVehicleType].
   final String? assetNo;
+
+  /// Optional fleet-master identity used only to refine approved artwork.
+  /// It never changes the resolved layout, coordinates or position ids.
+  final String? make;
+  final String? model;
 
   /// The position ids/codes to render. Pass [diagramPositions]'s own output
   /// for the normal case; an inspection detail screen reading an older
@@ -113,6 +120,11 @@ class VehicleTyreDiagram extends StatelessWidget {
     final String resolvedKey = resolveVehicleType(vehicleType, assetNo);
     final DiagramLayout layout =
         kTyreDiagramLayouts[resolvedKey] ?? kTyreDiagramLayouts['Pickup']!;
+    final TyreDiagramPhotoSpec? photo = tyreDiagramVehiclePhotoSpec(
+      layout.bodyKey,
+      make: make,
+      model: model,
+    );
     final List<MatchedTyreSlot> tyres = matchPositionsToLayout(
       layout,
       positions,
@@ -148,6 +160,7 @@ class VehicleTyreDiagram extends StatelessWidget {
     final Widget diagramCanvas = captureMode
         ? _FigmaTyreCaptureStage(
             layout: layout,
+            photo: photo,
             wheels: resolved,
             width: width,
             selectedPosition: selectedPosition,
@@ -156,6 +169,7 @@ class VehicleTyreDiagram extends StatelessWidget {
         : _diagramCanvas(
             context: context,
             layout: layout,
+            photo: photo,
             viewport: viewport,
             hitRects: hitRects,
             wheels: resolved,
@@ -265,6 +279,7 @@ class VehicleTyreDiagram extends StatelessWidget {
   Widget _diagramCanvas({
     required BuildContext context,
     required DiagramLayout layout,
+    required TyreDiagramPhotoSpec? photo,
     required TyreDiagramViewport viewport,
     required Map<String, Rect> hitRects,
     required List<_ResolvedWheel> wheels,
@@ -292,6 +307,7 @@ class VehicleTyreDiagram extends StatelessWidget {
                   TyreDiagramBody(
                     bodyKey: layout.bodyKey,
                     viewport: viewport,
+                    photo: photo,
                   ),
                   CustomPaint(
                     size: Size(viewport.width, viewport.height),
@@ -403,6 +419,7 @@ String? _entryText(Map<String, Object?>? entry, List<String> keys) {
 class _FigmaTyreCaptureStage extends StatelessWidget {
   const _FigmaTyreCaptureStage({
     required this.layout,
+    required this.photo,
     required this.wheels,
     required this.width,
     required this.selectedPosition,
@@ -410,6 +427,7 @@ class _FigmaTyreCaptureStage extends StatelessWidget {
   });
 
   final DiagramLayout layout;
+  final TyreDiagramPhotoSpec? photo;
   final List<_ResolvedWheel> wheels;
   final double width;
   final String? selectedPosition;
@@ -431,10 +449,6 @@ class _FigmaTyreCaptureStage extends StatelessWidget {
         .clamp(width * 0.28, width * (tall ? 0.43 : 0.41))
         .toDouble();
     final double photoLeft = (width - photoWidth) / 2;
-    final TyreDiagramPhotoSpec? photo = tyreDiagramVehiclePhotoSpec(
-      layout.bodyKey,
-    );
-
     final List<_ResolvedWheel> left = <_ResolvedWheel>[];
     final List<_ResolvedWheel> right = <_ResolvedWheel>[];
     for (final _ResolvedWheel wheel in wheels) {

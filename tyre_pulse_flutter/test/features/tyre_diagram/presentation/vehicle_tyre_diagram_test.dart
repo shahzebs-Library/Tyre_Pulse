@@ -447,6 +447,134 @@ void main() {
     }
   });
 
+  test('bus photo selection is identity-aware and fails closed', () {
+    TyreDiagramPhotoSpec? busPhoto({String? make, String? model}) =>
+        tyreDiagramVehiclePhotoSpec(
+          TyreDiagramBodyKey.bus,
+          make: make,
+          model: model,
+        );
+
+    expect(
+      busPhoto(make: 'Tata')?.asset,
+      'assets/vehicle_multiview_views/tata_staff_bus_five_view_v1_top.png',
+    );
+    expect(
+      busPhoto(make: 'Ashok Leyland')?.asset,
+      'assets/vehicle_multiview_views/ashok_leyland_bus_five_view_v1_top.png',
+    );
+    expect(
+      busPhoto(make: 'Toyota', model: 'Hiace')?.asset,
+      'assets/vehicle_multiview_views/toyota_hiace_five_view_v1_top.png',
+    );
+    expect(
+      busPhoto()?.asset,
+      'assets/vehicle_multiview_views/generic_staff_bus_five_view_v1_top.png',
+    );
+    expect(busPhoto(model: 'Ford Transit'), isNull);
+    expect(busPhoto(make: 'Foton'), isNull);
+    expect(busPhoto(make: 'Foton', model: 'Tata 32 seater'), isNull);
+    expect(busPhoto(make: 'Tata', model: 'Xenon'), isNull);
+    expect(
+      tyreDiagramBodyAsset(TyreDiagramBodyKey.bus),
+      'assets/vehicle_diagram/bus.svg',
+    );
+
+    // These keys are branded heavy-truck bodies, not bus variants.
+    expect(
+      tyreDiagramVehiclePhotoSpec(
+        TyreDiagramBodyKey.tata,
+        make: 'Tata',
+      ),
+      isNull,
+    );
+    expect(
+      tyreDiagramVehiclePhotoSpec(
+        TyreDiagramBodyKey.ashokLeyland,
+        make: 'Ashok Leyland',
+      ),
+      isNull,
+    );
+  });
+
+  testWidgets(
+    'bus identity changes artwork without changing position ids or coordinates',
+    (WidgetTester tester) async {
+      final DiagramLayout layout = kTyreDiagramLayouts['Bus']!;
+      final List<String> positions =
+          layout.tyres.map((TyreSlot tyre) => tyre.id).toList(growable: false);
+
+      Future<List<Rect>> pumpFor({String? make}) async {
+        await _pump(
+          tester,
+          VehicleTyreDiagram(
+            vehicleType: 'Bus',
+            make: make,
+            positions: positions,
+            tyreData: const <String, Map<String, Object?>>{},
+            width: 320,
+          ),
+        );
+        final Finder targets = find.descendant(
+          of: find.byType(VehicleTyreDiagram),
+          matching: find.byType(GestureDetector),
+        );
+        expect(targets, findsNWidgets(6));
+        return <Rect>[
+          for (int i = 0; i < positions.length; i++)
+            tester.getRect(targets.at(i)),
+        ];
+      }
+
+      final List<Rect> genericRects = await pumpFor();
+      expect(
+        find.byKey(
+          const ValueKey<String>(
+            'diagram.body.assets/vehicle_multiview_views/'
+            'generic_staff_bus_five_view_v1_top.png',
+          ),
+        ),
+        findsOneWidget,
+      );
+
+      final List<Rect> tataRects = await pumpFor(make: 'Tata');
+      expect(tataRects, genericRects);
+      expect(
+        find.byKey(
+          const ValueKey<String>(
+            'diagram.body.assets/vehicle_multiview_views/'
+            'tata_staff_bus_five_view_v1_top.png',
+          ),
+        ),
+        findsOneWidget,
+      );
+
+      String? tapped;
+      await _pump(
+        tester,
+        VehicleTyreDiagram(
+          vehicleType: 'Bus',
+          make: 'Tata',
+          positions: positions,
+          tyreData: const <String, Map<String, Object?>>{},
+          width: 320,
+          onPositionTap: (String value) => tapped = value,
+        ),
+      );
+      final Finder targets = find.descendant(
+        of: find.byType(VehicleTyreDiagram),
+        matching: find.byType(GestureDetector),
+      );
+      expect(targets, findsNWidgets(6));
+      for (int i = 0; i < positions.length; i++) {
+        tapped = null;
+        tester.widget<GestureDetector>(targets.at(i)).onTap!();
+        expect(tapped, positions[i]);
+      }
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets(
     'capture keeps concrete-pump rear Inner and Outer controls joined by axle',
     (WidgetTester tester) async {

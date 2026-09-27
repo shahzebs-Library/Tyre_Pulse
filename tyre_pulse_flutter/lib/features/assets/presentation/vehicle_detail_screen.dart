@@ -722,6 +722,8 @@ class _AssetTyreMap extends StatelessWidget {
       child: VehicleTyreDiagram(
         vehicleType: vehicleType,
         assetNo: asset.assetNo,
+        make: asset.make,
+        model: asset.model,
         positions: positions,
         tyreData: const <String, Map<String, Object?>>{},
         width: 150,

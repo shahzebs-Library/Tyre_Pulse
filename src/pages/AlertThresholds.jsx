@@ -9,6 +9,7 @@ import * as alertThresholds from '../lib/api/alertThresholds'
 import { toUserMessage } from '../lib/safeError'
 import { useAuth } from '../contexts/AuthContext'
 import { formatDistanceToNow } from 'date-fns'
+import Modal from '../components/ui/Modal'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -137,12 +138,13 @@ function ThresholdCard({ threshold, onEdit, onDelete, onToggle }) {
   const triggered = relativeTime(threshold.last_triggered_at)
   const [deleting, setDeleting] = useState(false)
   const [toggling, setToggling] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   async function handleDelete() {
-    if (!window.confirm(`Delete "${threshold.name}"?`)) return
     setDeleting(true)
     await onDelete(threshold.id)
     setDeleting(false)
+    setConfirmDelete(false)
   }
 
   async function handleToggle() {
@@ -226,19 +228,53 @@ function ThresholdCard({ threshold, onEdit, onDelete, onToggle }) {
             onClick={() => onEdit(threshold)}
             className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg-hover)] transition-all"
             title="Edit"
+            aria-label={`Edit ${threshold.name}`}
           >
             <Edit2 className="w-3.5 h-3.5" />
           </button>
           <button
-            onClick={handleDelete}
+            onClick={() => setConfirmDelete(true)}
             disabled={deleting}
             className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-red-400 hover:bg-red-500/10 transition-all disabled:opacity-50"
             title="Delete"
+            aria-label={`Delete ${threshold.name}`}
           >
             {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
           </button>
         </div>
       </div>
+
+      <Modal
+        open={confirmDelete}
+        onClose={deleting ? undefined : () => setConfirmDelete(false)}
+        title="Delete alert threshold"
+        size="sm"
+        footer={(
+          <>
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(false)}
+              disabled={deleting}
+              className="px-4 py-2 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] rounded-lg border border-[var(--input-border)] transition-all disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={deleting}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-50 transition-all"
+            >
+              {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              Delete
+            </button>
+          </>
+        )}
+      >
+        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+          Delete "{threshold.name}"? This rule stops raising alerts immediately.
+        </p>
+      </Modal>
 
       {/* Inactive overlay */}
       {!threshold.active && (
@@ -262,7 +298,7 @@ const EMPTY_FORM = {
   active: true,
 }
 
-function Modal({ mode, initial, onSave, onClose, saving }) {
+function ThresholdModal({ mode, initial, onSave, onClose, saving }) {
   const [form, setForm] = useState({ ...EMPTY_FORM, ...initial })
   const [errors, setErrors] = useState({})
 
@@ -294,31 +330,43 @@ function Modal({ mode, initial, onSave, onClose, saving }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-
-      <div className="relative w-full max-w-lg bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--input-border)]">
-          <h2 className="text-[var(--text-primary)] font-semibold text-base">
-            {mode === 'edit' ? 'Edit Threshold' : 'New Alert Threshold'}
-          </h2>
-          <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-1 rounded-lg hover:bg-[var(--input-bg)]">
-            <X className="w-5 h-5" />
+    <Modal
+      open
+      onClose={saving ? undefined : onClose}
+      title={mode === 'edit' ? 'Edit Threshold' : 'New Alert Threshold'}
+      size="md"
+      footer={(
+        <>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="px-4 py-2 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] rounded-lg border border-[var(--input-border)] transition-all disabled:opacity-50"
+          >
+            Cancel
           </button>
-        </div>
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="overflow-y-auto flex-1">
-          <div className="px-6 py-5 space-y-5">
+          <button
+            type="submit"
+            form="alert-threshold-form"
+            disabled={saving}
+            className="inline-flex items-center gap-2 px-5 py-2 text-sm font-semibold text-white bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 rounded-lg disabled:opacity-50 transition-all shadow-lg shadow-orange-500/20"
+          >
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            {mode === 'edit' ? 'Save Changes' : 'Create Threshold'}
+          </button>
+        </>
+      )}
+    >
+        <form id="alert-threshold-form" onSubmit={handleSubmit}>
+          <div className="space-y-5">
 
             {/* Name */}
             <div>
-              <label className="block text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">
+              <label htmlFor="at-name" className="block text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">
                 Rule Name <span className="text-orange-500">*</span>
               </label>
               <input
+                id="at-name"
                 type="text"
                 value={form.name}
                 onChange={e => set('name', e.target.value)}
@@ -330,8 +378,9 @@ function Modal({ mode, initial, onSave, onClose, saving }) {
 
             {/* Metric */}
             <div>
-              <label className="block text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">Metric</label>
+              <label htmlFor="at-metric" className="block text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">Metric</label>
               <select
+                id="at-metric"
                 value={form.metric}
                 onChange={e => set('metric', e.target.value)}
                 className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2.5 text-[var(--text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all appearance-none cursor-pointer"
@@ -345,8 +394,9 @@ function Modal({ mode, initial, onSave, onClose, saving }) {
             {/* Condition + Threshold */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">Condition</label>
+                <label htmlFor="at-operator" className="block text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">Condition</label>
                 <select
+                  id="at-operator"
                   value={form.operator}
                   onChange={e => set('operator', e.target.value)}
                   className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2.5 text-[var(--text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all appearance-none cursor-pointer"
@@ -357,10 +407,11 @@ function Modal({ mode, initial, onSave, onClose, saving }) {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">
+                <label htmlFor="at-threshold" className="block text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">
                   Value <span className="text-[var(--text-dim)] normal-case font-normal">({unit})</span>
                 </label>
                 <input
+                  id="at-threshold"
                   type="number"
                   step="any"
                   value={form.threshold}
@@ -383,10 +434,11 @@ function Modal({ mode, initial, onSave, onClose, saving }) {
             {/* Filters */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">
+                <label htmlFor="at-site" className="block text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">
                   Site Filter <span className="text-[var(--text-dim)] font-normal">(optional)</span>
                 </label>
                 <input
+                  id="at-site"
                   type="text"
                   value={form.site_filter}
                   onChange={e => set('site_filter', e.target.value)}
@@ -395,10 +447,11 @@ function Modal({ mode, initial, onSave, onClose, saving }) {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">
+                <label htmlFor="at-brand" className="block text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">
                   Brand Filter <span className="text-[var(--text-dim)] font-normal">(optional)</span>
                 </label>
                 <input
+                  id="at-brand"
                   type="text"
                   value={form.brand_filter}
                   onChange={e => set('brand_filter', e.target.value)}
@@ -446,6 +499,8 @@ function Modal({ mode, initial, onSave, onClose, saving }) {
                 type="button"
                 onClick={() => set('active', !form.active)}
                 className="transition-colors"
+                aria-label={form.active ? 'Deactivate rule' : 'Activate rule'}
+                aria-pressed={form.active}
               >
                 {form.active
                   ? <ToggleRight className="w-8 h-8 text-orange-500" />
@@ -456,27 +511,8 @@ function Modal({ mode, initial, onSave, onClose, saving }) {
 
           </div>
 
-          {/* Footer */}
-          <div className="px-6 py-4 border-t border-[var(--input-border)] flex gap-3 justify-end bg-[var(--surface-1)]/80">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] rounded-lg border border-[var(--input-border)] transition-all"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="inline-flex items-center gap-2 px-5 py-2 text-sm font-semibold text-white bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 rounded-lg disabled:opacity-50 transition-all shadow-lg shadow-orange-500/20"
-            >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              {mode === 'edit' ? 'Save Changes' : 'Create Threshold'}
-            </button>
-          </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -726,7 +762,7 @@ export default function AlertThresholds() {
 
       {/* ── Modal ── */}
       {modal && (
-        <Modal
+        <ThresholdModal
           mode={modal.mode}
           initial={modal.initial}
           onSave={handleSave}

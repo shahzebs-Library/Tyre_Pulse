@@ -25,6 +25,7 @@ import { formatMonthYear } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
 import { colorAt, withAlpha } from '../lib/reportColors'
 import PageHeader from '../components/ui/PageHeader'
+import Modal from '../components/ui/Modal'
 import NotInUseNotice from '../components/ui/NotInUseNotice'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import EmailPdfButton from '../components/EmailPdfButton'
@@ -928,49 +929,38 @@ export default function RetreadManagement() {
         </>
       )}
 
-      {/* ── Detail drawer ── */}
-      <AnimatePresence>
-        {drawer && (
+      {/* ── Detail dialog ── */}
+      <Modal
+        open={!!drawer}
+        onClose={() => setDrawer(null)}
+        size="lg"
+        title={drawer ? (
+          <span className="flex items-center gap-2 flex-wrap">
+            <Recycle className="text-[var(--text-muted)]" size={16} aria-hidden="true" />
+            <span className="font-mono text-sm">{drawer.serial_number || 'No serial recorded'}</span>
+            {riskBadge(drawer.risk_level)}
+            {statusBadge(drawer.status)}
+          </span>
+        ) : null}
+        subtitle={drawer ? ([drawer.brand, drawer.size].filter(Boolean).join(', ') || 'N/A') : null}
+        footer={drawer ? (
           <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 0.5 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black z-40"
-              onClick={() => setDrawer(null)}
-              aria-hidden="true"
-            />
-            <motion.div
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="retread-drawer-title"
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'tween', duration: 0.25 }}
-              className="fixed right-0 top-0 h-full w-full max-w-lg bg-[var(--surface-1)] border-l border-[var(--input-border)] z-50 flex flex-col overflow-hidden"
-            >
-              <div className="p-4 border-b border-[var(--input-border)] flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <Recycle className="text-[var(--text-muted)]" size={16} aria-hidden="true" />
-                    <h2 id="retread-drawer-title" className="font-bold text-[var(--text-secondary)] font-mono text-sm">{drawer.serial_number || 'No serial recorded'}</h2>
-                    {riskBadge(drawer.risk_level)}
-                    {statusBadge(drawer.status)}
-                  </div>
-                  <p className="text-[var(--text-muted)] text-sm">{[drawer.brand, drawer.size].filter(Boolean).join(', ') || 'N/A'}</p>
-                </div>
                 <button
                   type="button"
-                  onClick={() => setDrawer(null)}
-                  aria-label="Close casing detail"
-                  className="inline-flex items-center justify-center w-11 h-11 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--input-bg)] shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                  onClick={() => handleExportCasing(drawer)}
+                  disabled={wfLocked}
+                  title={wfLocked ? 'Locked, in approval' : 'Export casing record'}
+                  className="inline-flex items-center gap-1.5 min-h-[44px] px-4 py-2 bg-[var(--accent)] hover:opacity-90 rounded-lg text-sm font-semibold text-white transition disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2"
                 >
-                  <X size={20} aria-hidden="true" />
+                  {wfLocked ? <Lock size={14} aria-hidden="true" /> : <FileText size={14} aria-hidden="true" />} Export Casing
                 </button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                <button type="button" onClick={() => setDrawer(null)} className={BTN}>Close</button>
+              
+          </>
+        ) : null}
+      >
+        {drawer && (
+              <div className="space-y-4">
                 <div className="bg-[var(--input-bg)] rounded-xl p-4">
                   <p className="text-xs text-[var(--text-muted)] mb-3 font-semibold uppercase tracking-wider">Tyre information</p>
                   <dl className="grid grid-cols-2 gap-3 text-sm">
@@ -1050,23 +1040,8 @@ export default function RetreadManagement() {
                   </div>
                 )}
               </div>
-
-              <div className="p-3 border-t border-[var(--input-border)] flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleExportCasing(drawer)}
-                  disabled={wfLocked}
-                  title={wfLocked ? 'Locked, in approval' : 'Export casing record'}
-                  className="inline-flex items-center gap-1.5 min-h-[44px] px-4 py-2 bg-[var(--accent)] hover:opacity-90 rounded-lg text-sm font-semibold text-white transition disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2"
-                >
-                  {wfLocked ? <Lock size={14} aria-hidden="true" /> : <FileText size={14} aria-hidden="true" />} Export Casing
-                </button>
-                <button type="button" onClick={() => setDrawer(null)} className={BTN}>Close</button>
-              </div>
-            </motion.div>
-          </>
         )}
-      </AnimatePresence>
+      </Modal>
     </div>
   )
 }

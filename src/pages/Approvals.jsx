@@ -17,6 +17,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatDistanceToNow } from 'date-fns'
 import PageHeader from '../components/ui/PageHeader'
+import Modal from '../components/ui/Modal'
 import ApprovalStatusBadge from '../components/workflow/ApprovalStatusBadge'
 import ApprovalAction from '../components/workflow/ApprovalAction'
 import ApprovalTrail from '../components/workflow/ApprovalTrail'
@@ -461,6 +462,7 @@ function LegacyDetailDrawer({ instance, actionable, onClose, onActed }) {
 
   return (
     <DrawerShell
+      busy={busy}
       title={entityLabelOf(instance)}
       badge={<ApprovalStatusBadge status={instance.status} />}
       subtitle={
@@ -691,6 +693,7 @@ function LegacySimpleApprovalDrawer({ item, canAct, onClose, onActed }) {
 
   return (
     <DrawerShell
+      busy={busy}
       title={item.title}
       badge={<SourceBadge source={item.source} />}
       subtitle={meta.label}
@@ -858,42 +861,24 @@ function FeedbackBanner({ feedback }) {
   )
 }
 
-function DrawerShell({ title, badge, subtitle, onClose, children }) {
+function DrawerShell({ title, badge, subtitle, onClose, busy = false, children }) {
+  // The shared dialog shell. While a decision is being recorded it cannot be
+  // dismissed, so a half-written approval is never abandoned mid-flight.
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <motion.aside
-        initial={{ x: '100%' }}
-        animate={{ x: 0 }}
-        exit={{ x: '100%' }}
-        transition={{ type: 'tween', duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-        className="relative w-full max-w-xl h-full overflow-y-auto border-l shadow-2xl"
-        style={{ background: 'var(--surface-1)', borderColor: 'var(--border-dim)' }}
-        role="dialog"
-        aria-label="Approval detail"
-      >
-        <div
-          className="sticky top-0 z-10 flex items-start justify-between gap-3 px-5 py-4 border-b bg-[var(--surface-1)] backdrop-blur"
-          style={{ borderColor: 'var(--border-dim)' }}
-        >
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <h2 className="text-[var(--text-primary)] font-semibold text-sm truncate">{title}</h2>
-              {badge}
-            </div>
-            <p className="text-[var(--text-muted)] text-xs truncate">{subtitle}</p>
-          </div>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            className="shrink-0 text-[var(--text-secondary)] hover:text-[var(--text-primary)] p-1 rounded-lg hover:bg-[var(--surface-2)] transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-        <div className="p-5 space-y-6">{children}</div>
-      </motion.aside>
-    </div>
+    <Modal
+      open
+      onClose={busy ? undefined : onClose}
+      size="lg"
+      title={(
+        <span className="flex flex-wrap items-center gap-2">
+          <span className="truncate">{title}</span>
+          {badge}
+        </span>
+      )}
+      subtitle={subtitle}
+    >
+      <div className="space-y-6">{children}</div>
+    </Modal>
   )
 }
 

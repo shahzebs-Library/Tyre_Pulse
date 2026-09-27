@@ -12,6 +12,7 @@ import { toUserMessage } from '../lib/safeError'
 import { computeSupplierScorecard } from '../lib/analytics/supplierScorecard'
 import { useLanguage } from '../contexts/LanguageContext'
 import PageHeader from '../components/ui/PageHeader'
+import Modal from '../components/ui/Modal'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import {
@@ -285,22 +286,17 @@ function ContractModal({ contract, onSave, onClose, onLockChange }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl w-full max-w-lg shadow-2xl"
-      >
-        <div className="flex items-center justify-between p-5 border-b border-[var(--input-border)]">
-          <h3 className="font-semibold text-[var(--text-primary)]">{contract?.id ? t('suppliers.contractModal.editTitle') : t('suppliers.contractModal.addTitle')}</h3>
-          <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)]"><X size={18} /></button>
-        </div>
-        <form onSubmit={handleSubmit(submit)} noValidate className="p-5 grid grid-cols-2 gap-3">
+    <Modal
+      open
+      onClose={isSubmitting ? undefined : onClose}
+      title={contract?.id ? t('suppliers.contractModal.editTitle') : t('suppliers.contractModal.addTitle')}
+      size="md"
+    >
+        <form onSubmit={handleSubmit(submit)} noValidate className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <FormField
             label={t('suppliers.contractModal.supplierName')}
             required
-            wrapperClassName="col-span-2"
+            wrapperClassName="sm:col-span-2"
             error={errors.supplier_name}
             {...register('supplier_name')}
           />
@@ -336,22 +332,22 @@ function ContractModal({ contract, onSave, onClose, onLockChange }) {
             label={t('suppliers.contractModal.notes')}
             multiline
             rows={2}
-            wrapperClassName="col-span-2"
+            wrapperClassName="sm:col-span-2"
             error={errors.notes}
             {...register('notes')}
           />
           {saveError && (
-            <div className="col-span-2 flex items-center gap-2 text-xs text-red-400 bg-red-900/20 border border-red-800 rounded-lg px-3 py-2">
+            <div className="sm:col-span-2 flex items-center gap-2 text-xs text-red-400 bg-red-900/20 border border-red-800 rounded-lg px-3 py-2">
               <AlertTriangle size={13} className="flex-shrink-0" /> {saveError}
             </div>
           )}
           {contract?.id && wfLocked && (
-            <div className="col-span-2 flex items-center gap-1.5 text-xs text-[var(--accent)] bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2">
+            <div className="sm:col-span-2 flex items-center gap-1.5 text-xs text-[var(--accent)] bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2">
               <Lock size={12} className="flex-shrink-0" /> Locked, in approval
             </div>
           )}
           <FormActions
-            className="col-span-2"
+            className="sm:col-span-2"
             saving={isSubmitting || (!!contract?.id && wfLocked)}
             onCancel={onClose}
             submitLabel={t('suppliers.contractModal.save')}
@@ -362,7 +358,7 @@ function ContractModal({ contract, onSave, onClose, onLockChange }) {
 
         {/* Approval & Workflow — only a persisted contract is an approvable subject */}
         {contract?.id && (
-          <div className="p-5 pt-0">
+          <div className="pt-4">
             <EntityApprovalPanel
               entityType="supplier"
               entityId={contract.id}
@@ -386,8 +382,7 @@ function ContractModal({ contract, onSave, onClose, onLockChange }) {
             />
           </div>
         )}
-      </motion.div>
-    </div>
+    </Modal>
   )
 }
 
@@ -1453,47 +1448,41 @@ export default function SupplierManagement() {
       </AnimatePresence>
 
       {/* Contract Modal */}
-      <AnimatePresence>
-        {contractModal !== null && (
-          <ContractModal
-            contract={contractModal?.id ? contractModal : null}
-            onSave={saveContract}
-            onClose={() => { setContractModal(null); setLockedContractId(null) }}
-            onLockChange={(id, locked) => setLockedContractId(locked ? id : null)}
-          />
-        )}
-      </AnimatePresence>
+      {contractModal !== null && (
+        <ContractModal
+          contract={contractModal?.id ? contractModal : null}
+          onSave={saveContract}
+          onClose={() => { setContractModal(null); setLockedContractId(null) }}
+          onLockChange={(id, locked) => setLockedContractId(locked ? id : null)}
+        />
+      )}
 
       {/* Delete Contract Confirmation */}
-      <AnimatePresence>
-        {contractDeleteTarget && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl w-full max-w-md shadow-2xl p-5"
-            >
-              <div className="flex gap-3 mb-4">
-                <AlertTriangle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-[var(--text-primary)] font-medium">{t('suppliers.deleteContract.confirmTitle', { name: contractDeleteTarget.supplier_name })}</p>
-                  <p className="text-[var(--text-muted)] text-sm mt-1">{t('suppliers.deleteContract.warning')}</p>
-                </div>
-              </div>
-              {contractDeleteError && (
-                <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5 mb-4">{contractDeleteError}</p>
-              )}
-              <div className="flex gap-3">
-                <button onClick={deleteContract} disabled={contractDeleting} className="btn-danger flex items-center gap-2 disabled:opacity-50">
-                  <X size={15} /> {contractDeleting ? t('suppliers.deleteContract.deleting') : t('suppliers.deleteContract.delete')}
-                </button>
-                <button onClick={() => { setContractDeleteTarget(null); setContractDeleteError(null) }} className="btn-secondary">{t('suppliers.deleteContract.cancel')}</button>
-              </div>
-            </motion.div>
-          </div>
+      <Modal
+        open={!!contractDeleteTarget}
+        onClose={contractDeleting ? undefined : () => { setContractDeleteTarget(null); setContractDeleteError(null) }}
+        title={t('suppliers.deleteContract.delete')}
+        size="sm"
+        footer={(
+          <>
+            <button onClick={() => { setContractDeleteTarget(null); setContractDeleteError(null) }} disabled={contractDeleting} className="btn-secondary disabled:opacity-50">{t('suppliers.deleteContract.cancel')}</button>
+            <button onClick={deleteContract} disabled={contractDeleting} className="btn-danger flex items-center gap-2 disabled:opacity-50">
+              <X size={15} /> {contractDeleting ? t('suppliers.deleteContract.deleting') : t('suppliers.deleteContract.delete')}
+            </button>
+          </>
         )}
-      </AnimatePresence>
+      >
+        <div className="flex gap-3 mb-4">
+          <AlertTriangle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-[var(--text-primary)] font-medium">{t('suppliers.deleteContract.confirmTitle', { name: contractDeleteTarget?.supplier_name })}</p>
+            <p className="text-[var(--text-muted)] text-sm mt-1">{t('suppliers.deleteContract.warning')}</p>
+          </div>
+        </div>
+        {contractDeleteError && (
+          <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5">{contractDeleteError}</p>
+        )}
+      </Modal>
     </div>
   )
 }

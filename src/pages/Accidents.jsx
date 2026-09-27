@@ -27,6 +27,7 @@ const DOC_SLOTS = [
 ]
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import Modal from '../components/ui/Modal'
 import DateField from '../components/ui/DateField'
 import ActionMenu from '../components/ui/ActionMenu'
 import EmptyState from '../components/EmptyState'
@@ -658,6 +659,8 @@ export default function Accidents() {
   const [bulkDeleteOpen, setBulkDeleteOpen]    = useState(false)
   const [bulkError, setBulkError]              = useState('')
   const [bulkBusy, setBulkBusy]                = useState(false)
+  const [pendingDeleteId, setPendingDeleteId]  = useState(null)
+  const [deletingOne, setDeletingOne]          = useState(false)
 
   // Asset search combobox
   // Rows for the form combobox (loaded lazily, see below) and, separately, the
@@ -1968,11 +1971,23 @@ export default function Accidents() {
     setSaving(false)
   }
 
-  const handleDelete = useCallback(async (id) => {
-    if (!window.confirm('Delete this incident record?')) return
-    await accidentsApi.deleteAccident(id)
-    loadRecords()
-  }, [loadRecords])
+  // Opens the confirmation dialog; the delete itself runs in confirmDeleteOne.
+  const handleDelete = useCallback((id) => {
+    setPendingDeleteId(id)
+  }, [])
+
+  const confirmDeleteOne = useCallback(async () => {
+    const id = pendingDeleteId
+    if (!id) return
+    setDeletingOne(true)
+    try {
+      await accidentsApi.deleteAccident(id)
+      loadRecords()
+    } finally {
+      setDeletingOne(false)
+      setPendingDeleteId(null)
+    }
+  }, [pendingDeleteId, loadRecords])
 
   // ── Multi-select helpers (Admin only) ─────────────────────────────────────
   const toggleSelect = useCallback((id) => {
@@ -2742,32 +2757,32 @@ export default function Accidents() {
             />
           </div>
 
-          {emailModal.open && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4" onClick={() => !emailModal.busy && setEmailModal(m => ({ ...m, open: false }))}>
-              <div className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5" onClick={(e) => e.stopPropagation()}>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-bold flex items-center gap-2"><Mail size={15} /> Email Analytics PDF</h3>
-                  <button onClick={() => !emailModal.busy && setEmailModal(m => ({ ...m, open: false }))} className="text-[var(--text-muted)] hover:text-[var(--text)]"><X size={16} /></button>
-                </div>
-                <p className="text-xs text-[var(--text-muted)] mb-2">The exact analytics report you see here is attached as a PDF and sent right away.</p>
-                <input autoFocus type="text" value={emailModal.to}
-                  onChange={(e) => setEmailModal(m => ({ ...m, to: e.target.value, msg: '' }))}
-                  placeholder="name@company.com, another@company.com"
-                  className="w-full h-9 rounded-lg px-3 text-sm bg-[var(--surface-2)] border border-[var(--border)] focus:outline-none focus:border-[var(--accent)]" />
-                {emailModal.msg && <p className={`text-xs mt-2 ${emailModal.ok ? 'text-green-400' : 'text-red-400'}`}>{emailModal.msg}</p>}
-                <div className="flex items-center gap-2 mt-4">
-                  <button onClick={() => setEmailModal(m => ({ ...m, open: false }))} disabled={emailModal.busy}
-                    className="btn-secondary flex-1 text-sm px-3 py-2">Cancel</button>
-                  <button onClick={emailAnalyticsPdf} disabled={emailModal.busy || !emailModal.to.trim()}
-                    className="btn-primary flex-1 flex items-center justify-center gap-1.5 text-sm px-3 py-2 disabled:opacity-50">
-                    {emailModal.busy
-                      ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" /> Sending...</>
-                      : <><Mail size={14} /> Send now</>}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+          <Modal
+            open={emailModal.open}
+            onClose={emailModal.busy ? undefined : () => setEmailModal(m => ({ ...m, open: false }))}
+            size="sm"
+            title={<span className="flex items-center gap-2"><Mail size={15} aria-hidden="true" /> Email Analytics PDF</span>}
+            footer={(
+              <>
+                <button onClick={() => setEmailModal(m => ({ ...m, open: false }))} disabled={emailModal.busy}
+                  className="btn-secondary text-sm px-3 py-2">Cancel</button>
+                <button onClick={emailAnalyticsPdf} disabled={emailModal.busy || !emailModal.to.trim()}
+                  className="btn-primary flex items-center justify-center gap-1.5 text-sm px-3 py-2 disabled:opacity-50">
+                  {emailModal.busy
+                    ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" /> Sending...</>
+                    : <><Mail size={14} /> Send now</>}
+                </button>
+              </>
+            )}
+          >
+            <p className="text-xs text-[var(--text-muted)] mb-2">The exact analytics report you see here is attached as a PDF and sent right away.</p>
+            <label htmlFor="accident-analytics-email-to" className="block text-xs font-medium text-[var(--text-secondary)] mb-1">Recipients</label>
+            <input id="accident-analytics-email-to" autoFocus type="text" value={emailModal.to}
+              onChange={(e) => setEmailModal(m => ({ ...m, to: e.target.value, msg: '' }))}
+              placeholder="name@company.com, another@company.com"
+              className="w-full h-9 rounded-lg px-3 text-sm bg-[var(--surface-2)] border border-[var(--border)] focus:outline-none focus:border-[var(--accent)]" />
+            {emailModal.msg && <p className={`text-xs mt-2 ${emailModal.ok ? 'text-green-400' : 'text-red-400'}`}>{emailModal.msg}</p>}
+          </Modal>
 
           {/* Basis first: a reader has to know a figure rests on 2 of 35 records
               BEFORE they read it, not in a footnote afterwards. */}
@@ -3945,50 +3960,72 @@ export default function Accidents() {
       )}
 
       {/* ── Document preview (image or PDF) ─────────────────────────────────── */}
-      {docPreview && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[60] p-4"
-          onClick={() => setDocPreview(null)}>
-          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[var(--input-border)]">
-              <Paperclip size={15} className="text-[var(--text-muted)] shrink-0" />
-              <span className="text-sm text-[var(--text-primary)] truncate flex-1">{docPreview.name || 'Document'}</span>
-              <button type="button" onClick={() => downloadDoc(docPreview)} className="btn-ghost text-xs flex items-center gap-1"><Download size={13} /> Download</button>
-              <button type="button" onClick={() => setDocPreview(null)} className="text-[var(--text-muted)] hover:text-white"><X size={16} /></button>
-            </div>
-            <div className="flex-1 overflow-auto bg-black/20 flex items-center justify-center">
-              {typeof docPreview.url === 'string' && docPreview.url.slice(0, 11).toLowerCase() === 'data:image/'
-                ? <img src={docPreview.url} alt={docPreview.name || 'Document'} className="max-w-full max-h-[78vh] object-contain" />
-                : <iframe title={docPreview.name || 'Document'} src={docPreview.url} className="w-full h-[78vh] bg-white" />}
-            </div>
+      <Modal
+        open={!!docPreview}
+        onClose={() => setDocPreview(null)}
+        size="lg"
+        title={docPreview ? (
+          <span className="flex items-center gap-2 min-w-0">
+            <Paperclip size={15} className="text-[var(--text-muted)] shrink-0" aria-hidden="true" />
+            <span className="truncate">{docPreview.name || 'Document'}</span>
+          </span>
+        ) : null}
+        headerExtra={docPreview ? (
+          <button type="button" onClick={() => downloadDoc(docPreview)} className="btn-ghost text-xs flex items-center gap-1"><Download size={13} /> Download</button>
+        ) : null}
+      >
+        {docPreview && (
+          <div className="bg-black/20 flex items-center justify-center rounded-lg overflow-auto">
+            {typeof docPreview.url === 'string' && docPreview.url.slice(0, 11).toLowerCase() === 'data:image/'
+              ? <img src={docPreview.url} alt={docPreview.name || 'Document'} className="max-w-full max-h-[70vh] object-contain" />
+              : <iframe title={docPreview.name || 'Document'} src={docPreview.url} className="w-full h-[70vh] bg-white" />}
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
 
       {/* ── Bulk Delete Confirmation (Admin only) ───────────────────────────── */}
-      {bulkDeleteOpen && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-          onClick={() => { if (!bulkBusy) { setBulkDeleteOpen(false); setBulkError('') } }}>
-          <div className="bg-[var(--surface-1)] border border-red-800/50 rounded-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
-            <div className="flex gap-3 mb-4">
-              <AlertTriangle size={20} className="text-red-400 shrink-0 mt-0.5" />
-              <div>
-                <p className="text-[var(--text-primary)] font-semibold">Delete {selectedIds.size} incident{selectedIds.size !== 1 ? 's' : ''}?</p>
-                <p className="text-[var(--text-muted)] text-sm mt-1">This permanently removes the selected incident records and their claim data. This cannot be undone.</p>
-              </div>
-            </div>
-            {bulkError && (
-              <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5 mb-4">{bulkError}</p>
-            )}
-            <div className="flex gap-3">
-              <button onClick={confirmBulkDelete} disabled={bulkBusy}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-semibold disabled:opacity-50 transition-colors">
-                <Trash2 size={14} /> {bulkBusy ? 'Deleting...' : `Delete ${selectedIds.size}`}
-              </button>
-              <button onClick={() => { setBulkDeleteOpen(false); setBulkError('') }} disabled={bulkBusy} className="btn-secondary">Cancel</button>
-            </div>
-          </div>
+      <Modal
+        open={bulkDeleteOpen}
+        onClose={bulkBusy ? undefined : () => { setBulkDeleteOpen(false); setBulkError('') }}
+        size="sm"
+        title={`Delete ${selectedIds.size} incident${selectedIds.size !== 1 ? 's' : ''}?`}
+        footer={(
+          <>
+            <button onClick={() => { setBulkDeleteOpen(false); setBulkError('') }} disabled={bulkBusy} className="btn-secondary">Cancel</button>
+            <button onClick={confirmBulkDelete} disabled={bulkBusy}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-semibold disabled:opacity-50 transition-colors">
+              <Trash2 size={14} /> {bulkBusy ? 'Deleting...' : `Delete ${selectedIds.size}`}
+            </button>
+          </>
+        )}
+      >
+        <div className="flex gap-3 mb-4">
+          <AlertTriangle size={20} className="text-red-400 shrink-0 mt-0.5" />
+          <p className="text-[var(--text-muted)] text-sm">This permanently removes the selected incident records and their claim data. This cannot be undone.</p>
         </div>
-      )}
+        {bulkError && (
+          <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5">{bulkError}</p>
+        )}
+      </Modal>
+
+      {/* ── Single incident delete confirmation ─────────────────────────────── */}
+      <Modal
+        open={!!pendingDeleteId}
+        onClose={deletingOne ? undefined : () => setPendingDeleteId(null)}
+        size="sm"
+        title="Delete incident"
+        footer={(
+          <>
+            <button onClick={() => setPendingDeleteId(null)} disabled={deletingOne} className="btn-secondary">Cancel</button>
+            <button onClick={confirmDeleteOne} disabled={deletingOne}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-semibold disabled:opacity-50 transition-colors">
+              <Trash2 size={14} /> {deletingOne ? 'Deleting...' : 'Delete'}
+            </button>
+          </>
+        )}
+      >
+        <p className="text-[var(--text-muted)] text-sm">Delete this incident record?</p>
+      </Modal>
 
       {/* ── Identify Asset scanner (Report Accident wizard step) ─────────── */}
       {showScanner && (

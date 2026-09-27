@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { toUserMessage } from '../lib/safeError'
 import PageHeader from '../components/ui/PageHeader'
+import Modal from '../components/ui/Modal'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { formatCurrency, formatDate } from '../lib/formatters'
 import {
@@ -231,6 +232,7 @@ export default function InsurancePolicies() {
   }
   const [conditionModal, setConditionModal] = useState(null) // { mode:'create'|'edit', row }
   const [busy, setBusy] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(null) // { kind: 'policy'|'condition', id, label }
 
   const loadPolicies = useCallback(async (keepSelection = false) => {
     setLoading(true)
@@ -710,7 +712,7 @@ export default function InsurancePolicies() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => { if (window.confirm(`Delete policy ${detail.policy_no || ''}? Its conditions are removed too.`)) removePolicy(detail.id) }}
+                        onClick={() => setConfirmDelete({ kind: 'policy', id: detail.id, label: detail.policy_no || '' })}
                         className="inline-flex items-center gap-1 rounded-lg border border-red-500/40 px-2.5 py-1.5 text-xs text-red-300 hover:bg-red-500/10"
                       >
                         <Trash2 size={14} /> Delete
@@ -776,7 +778,7 @@ export default function InsurancePolicies() {
                                     <button type="button" onClick={() => setConditionModal({ mode: 'edit', row: c })} className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200" aria-label="Edit condition">
                                       <Pencil size={13} />
                                     </button>
-                                    <button type="button" onClick={() => { if (window.confirm('Delete this condition?')) removeCondition(c.id) }} className="rounded p-1 text-red-400 hover:bg-red-500/10" aria-label="Delete condition">
+                                    <button type="button" onClick={() => setConfirmDelete({ kind: 'condition', id: c.id })} className="rounded p-1 text-red-400 hover:bg-red-500/10" aria-label="Delete condition">
                                       <Trash2 size={13} />
                                     </button>
                                   </div>
@@ -1075,6 +1077,38 @@ export default function InsurancePolicies() {
           onSave={saveCondition}
         />
       )}
+
+      <Modal
+        open={!!confirmDelete}
+        onClose={busy ? undefined : () => setConfirmDelete(null)}
+        title={confirmDelete?.kind === 'policy' ? 'Delete policy' : 'Delete condition'}
+        size="sm"
+        footer={(
+          <>
+            <button type="button" disabled={busy} onClick={() => setConfirmDelete(null)} className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-50">Cancel</button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={async () => {
+                const target = confirmDelete
+                if (!target) return
+                if (target.kind === 'policy') await removePolicy(target.id)
+                else await removeCondition(target.id)
+                setConfirmDelete(null)
+              }}
+              className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50"
+            >
+              <Trash2 size={15} /> {busy ? 'Deleting...' : 'Delete'}
+            </button>
+          </>
+        )}
+      >
+        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+          {confirmDelete?.kind === 'policy'
+            ? `Delete policy ${confirmDelete?.label || ''}? Its conditions are removed too.`
+            : 'Delete this condition?'}
+        </p>
+      </Modal>
     </div>
   )
 }
@@ -1128,19 +1162,11 @@ function CaseText({ label, value, onChange, placeholder, type = 'text' }) {
   )
 }
 
-function ModalShell({ title, onClose, children }) {
+function ModalShell({ title, onClose, busy, footer, children }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-xl">
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-base font-semibold text-slate-100">{title}</h3>
-          <button type="button" onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200" aria-label="Close">
-            <X size={18} />
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
+    <Modal open onClose={busy ? undefined : onClose} title={title} size="lg" footer={footer}>
+      {children}
+    </Modal>
   )
 }
 
@@ -1173,7 +1199,19 @@ function PolicyModal({ mode, row, busy, onClose, onSave }) {
   ]
   const requireCountry = mode !== 'edit'
   return (
-    <ModalShell title={mode === 'edit' ? 'Edit policy' : 'Add policy'} onClose={onClose}>
+    <ModalShell
+      title={mode === 'edit' ? 'Edit policy' : 'Add policy'}
+      onClose={onClose}
+      busy={busy}
+      footer={(
+        <>
+          <button type="button" disabled={busy} onClick={onClose} className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-50">Cancel</button>
+          <button type="button" disabled={busy || (requireCountry && countryUnset)} onClick={() => onSave(form)} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50">
+            <Save size={15} /> {busy ? 'Saving...' : 'Save'}
+          </button>
+        </>
+      )}
+    >
       <div className="grid gap-3 sm:grid-cols-2">
         <Text label="Policy number" value={form.policy_no} onChange={set('policy_no')} />
         <Select label="Type" value={form.policy_type} onChange={set('policy_type')} options={POLICY_TYPE_KEYS.map((k) => ({ value: k, label: POLICY_TYPE_LABELS[k] }))} />
@@ -1196,12 +1234,6 @@ function PolicyModal({ mode, row, busy, onClose, onSave }) {
         <Area label="Coverage summary" value={form.coverage_summary} onChange={set('coverage_summary')} className="sm:col-span-2" />
         <Area label="Notes" value={form.notes} onChange={set('notes')} className="sm:col-span-2" />
       </div>
-      <div className="mt-5 flex justify-end gap-2">
-        <button type="button" onClick={onClose} className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800">Cancel</button>
-        <button type="button" disabled={busy || (requireCountry && countryUnset)} onClick={() => onSave(form)} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50">
-          <Save size={15} /> {busy ? 'Saving...' : 'Save'}
-        </button>
-      </div>
     </ModalShell>
   )
 }
@@ -1216,7 +1248,19 @@ function ConditionModal({ mode, row, busy, onClose, onSave }) {
   })
   const set = (k) => (e) => setForm((s) => ({ ...s, [k]: e.target.value }))
   return (
-    <ModalShell title={mode === 'edit' ? 'Edit condition' : 'Add condition'} onClose={onClose}>
+    <ModalShell
+      title={mode === 'edit' ? 'Edit condition' : 'Add condition'}
+      onClose={onClose}
+      busy={busy}
+      footer={(
+        <>
+          <button type="button" disabled={busy} onClick={onClose} className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-50">Cancel</button>
+          <button type="button" disabled={busy} onClick={() => onSave(form)} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50">
+            <Save size={15} /> {busy ? 'Saving...' : 'Save'}
+          </button>
+        </>
+      )}
+    >
       <div className="grid gap-3 sm:grid-cols-2">
         <Text label="Sequence" type="number" value={form.seq} onChange={set('seq')} />
         <Select label="Category" value={form.category} onChange={set('category')} options={CATEGORY_KEYS.map((k) => ({ value: k, label: CONDITION_CATEGORY_LABELS[k] }))} />
@@ -1229,12 +1273,6 @@ function ConditionModal({ mode, row, busy, onClose, onSave }) {
           <input type="checkbox" checked={form.causes_delay} onChange={(e) => setForm((s) => ({ ...s, causes_delay: e.target.checked }))} className="h-4 w-4 rounded border-slate-600 bg-slate-800 text-amber-500 focus:ring-amber-500" />
           Causes delay
         </label>
-      </div>
-      <div className="mt-5 flex justify-end gap-2">
-        <button type="button" onClick={onClose} className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800">Cancel</button>
-        <button type="button" disabled={busy} onClick={() => onSave(form)} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50">
-          <Save size={15} /> {busy ? 'Saving...' : 'Save'}
-        </button>
       </div>
     </ModalShell>
   )

@@ -46,6 +46,7 @@ import { captureChartOnPaper, paperChartOptions } from '../lib/chartCapture'
 import { useTenant } from '../contexts/TenantContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import PageHeader from '../components/ui/PageHeader'
+import Modal from '../components/ui/Modal'
 import YearlyTrendPanel from '../components/expense/YearlyTrendPanel'
 import PeriodFilter, { filterByPeriodValue, periodLabel as periodValueLabel } from '../components/ui/PeriodFilter'
 import { loadAutoTable } from '../lib/pdfEngine'
@@ -2285,35 +2286,27 @@ export default function ExecutiveReport() {
       {/* ── Customize drawer ─────────────────────────────────────────────
           Show/hide, reorder, remove, and add report blocks. Persisted to
           localStorage. Var-driven surfaces keep it readable on white paper. */}
-      {customizeOpen && (
-        <div className="no-print fixed inset-0 z-50 flex justify-end">
-          <div
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-            onClick={() => setCustomizeOpen(false)}
-          />
-          <div role="dialog" aria-modal="true" aria-label="Customize report" className="relative w-full max-w-md h-full bg-[var(--surface-0)] border-l border-[var(--border-bright)] shadow-2xl flex flex-col">
-            {/* Header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border-dim)]">
-              <div className="flex items-center gap-2.5">
-                <div className="p-1.5 bg-blue-500/10 rounded-lg border border-blue-500/20">
-                  <Settings2 className="w-4 h-4 text-blue-400" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-[var(--text-primary)]">Customize Report</h3>
-                  <p className="text-xs text-[var(--text-secondary)]">Show, hide, reorder and add blocks</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setCustomizeOpen(false)}
-                className="p-1.5 rounded-lg hover:bg-[var(--surface-2)] text-[var(--text-muted)]"
-                title="Close"
-                aria-label="Close customize panel"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6">
+      <Modal
+        open={customizeOpen}
+        onClose={() => setCustomizeOpen(false)}
+        size="md"
+        className="no-print"
+        title={(
+          <span className="flex items-center gap-2.5">
+            <span className="p-1.5 bg-blue-500/10 rounded-lg border border-blue-500/20">
+              <Settings2 className="w-4 h-4 text-blue-400" />
+            </span>
+            Customize Report
+          </span>
+        )}
+        subtitle="Show, hide, reorder and add blocks"
+        footer={(
+          <p className="text-[11px] text-[var(--text-muted)] w-full">
+            Your layout is saved automatically and applies to the on-screen report and PDF, PowerPoint and Excel exports.
+          </p>
+        )}
+      >
+            <div className="space-y-6">
               {/* Layout list */}
               <div>
                 <div className="flex items-center justify-between mb-2">
@@ -2418,13 +2411,7 @@ export default function ExecutiveReport() {
                 </div>
               </div>
             </div>
-
-            <div className="px-5 py-3 border-t border-[var(--border-dim)] text-[11px] text-[var(--text-muted)]">
-              Your layout is saved automatically and applies to the on-screen report and PDF, PowerPoint and Excel exports.
-            </div>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       <EmailReportModal
         isOpen={emailModalOpen}

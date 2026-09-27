@@ -12,6 +12,7 @@ import { Bar, Line, Doughnut } from 'react-chartjs-2'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import PageHeader from '../components/ui/PageHeader'
+import Modal from '../components/ui/Modal'
 import DateField from '../components/ui/DateField'
 import SectionTabs, { REPORTS_TABS } from '../components/ui/SectionTabs'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
@@ -1219,15 +1220,27 @@ export default function ReportBuilder() {
       </div>
 
       {/* Save modal */}
-      {showSaveModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-label="Save report">
-          <div className="card w-full max-w-md">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold text-[var(--text-primary)]">Save report</h2>
-              <button type="button" onClick={() => setShowSaveModal(false)} className="text-muted hover:text-[var(--text-primary)]" aria-label="Close">
-                <X size={16} />
-              </button>
-            </div>
+      <Modal
+        open={showSaveModal}
+        onClose={saving ? undefined : () => setShowSaveModal(false)}
+        title="Save report"
+        size="sm"
+        footer={(
+          <>
+            <button type="button" onClick={() => setShowSaveModal(false)} disabled={saving} className="btn-secondary text-sm disabled:opacity-50">
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              className="btn-primary text-sm text-white disabled:opacity-50 flex items-center gap-1.5"
+            >
+              <Save size={14} /> {saving ? 'Saving...' : 'Save report'}
+            </button>
+          </>
+        )}
+      >
             <label className="block text-xs text-muted mb-1" htmlFor="rb-save-name">Name</label>
             <input
               id="rb-save-name"
@@ -1247,23 +1260,8 @@ export default function ReportBuilder() {
               onChange={e => setSaveDesc(e.target.value)}
               maxLength={500}
             />
-            {saveError && <p className="text-xs text-red-400 mb-3">{saveError}</p>}
-            <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => setShowSaveModal(false)} className="btn-secondary text-sm">
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={saving}
-                className="btn-primary text-sm text-white disabled:opacity-50 flex items-center gap-1.5"
-              >
-                <Save size={14} /> {saving ? 'Saving…' : 'Save report'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            {saveError && <p className="text-xs text-red-400">{saveError}</p>}
+      </Modal>
     </div>
   )
 }

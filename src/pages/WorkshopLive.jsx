@@ -38,6 +38,7 @@ import { taskRollup, jobTaskSummary, qcOutcome, TASK_STATUS, TASK_STATUS_LABEL }
 import { recommendTechnicians } from '../lib/workshopAssign'
 import EChart from '../components/charts/EChart'
 import PageHeader from '../components/ui/PageHeader'
+import Modal from '../components/ui/Modal'
 import WorkshopTvShareButton from '../components/workshop/WorkshopTvShareButton'
 import WorkshopNewJobModal from '../components/workshop/WorkshopNewJobModal'
 import { colorAt, withAlpha } from '../lib/reportColors'
@@ -659,29 +660,24 @@ function AlertsRail({ alerts, onFocus }) {
 }
 
 // ── Modal shell ────────────────────────────────────────────────────────────
-// Fixed overlay (NOT inside a .card, which clips overflow) so pickers are never
-// hidden. Mobile-friendly: full-width sheet on small screens, centred on large.
+// Thin adapter over the shared dialog shell (portalled, so pickers are never
+// clipped by a .card). While an action is in flight it cannot be dismissed.
 
-function ModalShell({ title, icon: Icon, onClose, children, footer }) {
+function ModalShell({ title, icon: Icon, onClose, children, footer, busy = false }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={onClose}>
-      <div
-        className="w-full sm:max-w-lg max-h-[90vh] rounded-t-2xl sm:rounded-2xl border flex flex-col"
-        style={{ background: 'var(--surface-1)', borderColor: 'var(--border-dim)' }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between gap-2 p-4 border-b" style={{ borderColor: 'var(--border-dim)' }}>
-          <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-            {Icon && <Icon className="w-4 h-4" />} {title}
-          </h3>
-          <button type="button" onClick={onClose} className="text-muted hover:text-white" aria-label="Close">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        <div className="p-4 overflow-y-auto flex-1">{children}</div>
-        {footer && <div className="p-3 border-t" style={{ borderColor: 'var(--border-dim)' }}>{footer}</div>}
-      </div>
-    </div>
+    <Modal
+      open
+      onClose={busy ? undefined : onClose}
+      size="md"
+      footer={footer}
+      title={(
+        <span className="flex items-center gap-2">
+          {Icon && <Icon className="w-4 h-4" aria-hidden="true" />} {title}
+        </span>
+      )}
+    >
+      {children}
+    </Modal>
   )
 }
 
@@ -729,7 +725,7 @@ function SmartAssignModal({ job, board, technicians, skillsByUser, assignments, 
   }
 
   return (
-    <ModalShell title={`Smart assign · ${job.work_order_no || 'Job'}`} icon={Sparkles} onClose={onClose}>
+    <ModalShell title={`Smart assign · ${job.work_order_no || 'Job'}`} icon={Sparkles} onClose={onClose} busy={busy}>
       <p className="text-[11px] text-muted mb-3">
         Ranked by skill match, availability, workload and site. {job.work_type ? `Job type: ${job.work_type}.` : 'No job type set - skill match is neutral.'}
       </p>
@@ -769,12 +765,13 @@ function TaskModal({ job, tasks, technicians, busy, onClose, onCreate, onUpdate,
   }
 
   return (
-    <ModalShell title={`Tasks · ${job.work_order_no || 'Job'}`} icon={ClipboardList} onClose={onClose}>
+    <ModalShell title={`Tasks · ${job.work_order_no || 'Job'}`} icon={ClipboardList} onClose={onClose} busy={busy}>
       <div className="flex flex-col gap-2 mb-4">
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Task title (e.g. Remove and inspect steer tyres)"
+          aria-label="Task title"
           className="text-sm rounded-lg px-3 py-2 border w-full"
           style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)', color: 'var(--panel-ink)' }}
         />
@@ -783,6 +780,7 @@ function TaskModal({ job, tasks, technicians, busy, onClose, onCreate, onUpdate,
             value={skill}
             onChange={(e) => setSkill(e.target.value)}
             placeholder="Skill (optional)"
+            aria-label="Skill (optional)"
             className="text-sm rounded-lg px-3 py-2 border flex-1 min-w-0"
             style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)', color: 'var(--panel-ink)' }}
           />
@@ -790,6 +788,7 @@ function TaskModal({ job, tasks, technicians, busy, onClose, onCreate, onUpdate,
             value={est}
             onChange={(e) => setEst(e.target.value.replace(/[^0-9]/g, ''))}
             placeholder="Est. min"
+            aria-label="Estimated minutes"
             inputMode="numeric"
             className="text-sm rounded-lg px-3 py-2 border w-24"
             style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)', color: 'var(--panel-ink)' }}
@@ -870,7 +869,7 @@ function TechDrawer({ tech, meta, assignments, skillsByUser, busy, onClose, onEv
   )
 
   return (
-    <ModalShell title={`Foreman actions · ${tech.name}`} icon={Settings2} onClose={onClose}>
+    <ModalShell title={`Foreman actions · ${tech.name}`} icon={Settings2} onClose={onClose} busy={busy}>
       <div className="flex items-center gap-2 mb-3">
         <StatusPill status={tech.status} />
         {tech.job && <span className="text-[11px] text-muted truncate">on {tech.job.no || 'a job'}</span>}
@@ -923,6 +922,7 @@ function TechDrawer({ tech, meta, assignments, skillsByUser, busy, onClose, onEv
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="Message (logged to their activity feed)"
+            aria-label="Message to technician"
             className="text-sm rounded-lg px-3 py-2 border flex-1 min-w-0"
             style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)', color: 'var(--panel-ink)' }}
           />

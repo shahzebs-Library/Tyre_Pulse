@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -13,7 +13,7 @@ import {
   RefreshCw, CheckCircle, Clock, AlertTriangle, XCircle,
   Edit2, Save, Loader2, Calendar, Tag, Package,
   Building2, Hash, Percent, CreditCard, Activity, Info,
-  ArrowUpRight, Layers, Zap, Target, List, PieChart, Lock,
+  ArrowUpRight, Layers, Zap, Target, List, PieChart, Lock, Trash2,
 } from 'lucide-react'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import * as warranty from '../lib/api/warranty'
@@ -23,6 +23,7 @@ import { useTenant } from '../contexts/TenantContext'
 import { formatDate } from '../lib/formatters'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
+import Modal from '../components/ui/Modal'
 import NotInUseNotice from '../components/ui/NotInUseNotice'
 import EmptyState from '../components/EmptyState'
 import { toUserMessage } from '../lib/safeError'
@@ -405,6 +406,9 @@ export default function WarrantyTracker() {
     }
   }, [claims, editClaim, form, kmRun, upsertClaim, profile, claimLocked])
 
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deletingClaim, setDeletingClaim] = useState(false)
+
   const handleDelete = useCallback(async (id) => {
     // Block deletion of the claim that is currently open in the approval-locked
     // edit modal — a document under approval must not be removed out from under
@@ -413,14 +417,23 @@ export default function WarrantyTracker() {
       window.alert('Locked, in approval. This claim cannot be deleted while an approval is running or the claim is approved.')
       return
     }
-    if (!window.confirm('Delete this warranty claim?')) return
+    setDeleteTarget(id)
+  }, [editClaim, claimLocked])
+
+  const confirmDeleteClaim = useCallback(async () => {
+    const id = deleteTarget
+    if (!id) return
+    setDeletingClaim(true)
     try {
       await removeClaim(id)
       setDrawer(null)
     } catch (e) {
       window.alert(toUserMessage(e, 'Could not delete the claim.'))
+    } finally {
+      setDeletingClaim(false)
+      setDeleteTarget(null)
     }
-  }, [removeClaim, editClaim, claimLocked])
+  }, [deleteTarget, removeClaim])
 
   const exportPDF = useCallback(async () => {
     const { default: jsPDF } = await import('jspdf')
@@ -1093,32 +1106,33 @@ export default function WarrantyTracker() {
         </div>
       )}
 
-      <AnimatePresence>
-        {showAdd && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-            onClick={e => { if (e.target === e.currentTarget) { setShowAdd(false); setEditClaim(null) } }}
-          >
-            <motion.div
-              initial={{ scale: 0.95, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.95, y: 20 }}
-              className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
-            >
-              <div className="sticky top-0 bg-[var(--surface-1)] border-b border-[var(--input-border)] px-6 py-4 flex items-center justify-between z-10">
-                <h2 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2">
-                  <ShieldCheck size={20} className="text-blue-400" />
-                  {editClaim ? 'Edit Warranty Claim' : 'New Warranty Claim'}
-                </h2>
-                <button onClick={() => { setShowAdd(false); setEditClaim(null) }}
-                  className="p-2 text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--input-bg)] rounded-lg transition-colors">
-                  <X size={18} />
-                </button>
-              </div>
-              <div className="p-6 space-y-4">
+      <Modal
+        open={showAdd}
+        onClose={saving ? undefined : () => { setShowAdd(false); setEditClaim(null) }}
+        size="lg"
+        title={(
+          <span className="flex items-center gap-2">
+            <ShieldCheck size={20} className="text-blue-400" />
+            {editClaim ? 'Edit Warranty Claim' : 'New Warranty Claim'}
+          </span>
+        )}
+        footer={(
+          <>
+            <button onClick={() => { setShowAdd(false); setEditClaim(null) }}
+              disabled={saving}
+              className="btn-secondary disabled:opacity-50">
+              Cancel
+            </button>
+            <button onClick={handleSave} disabled={saving || claimLocked}
+              title={claimLocked ? 'Locked, in approval' : undefined}
+              className="btn-primary gap-2 disabled:opacity-50">
+              {claimLocked ? <Lock size={14} /> : saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+              {editClaim ? 'Update Claim' : 'Save Claim'}
+            </button>
+          </>
+        )}
+      >
+              <div className="space-y-4">
                 {formError && (
                   <div className="p-3 bg-red-900/30 border border-red-700/50 rounded-lg text-red-400 text-sm flex items-center gap-2">
                     <AlertTriangle size={14} /> {formError}
@@ -1158,9 +1172,9 @@ export default function WarrantyTracker() {
 
                 <fieldset disabled={claimLocked} className="contents">
                 <div className="space-y-1">
-                  <label className="text-xs text-[var(--text-muted)]">Serial Number *</label>
+                  <label htmlFor="wc-serial-number" className="text-xs text-[var(--text-muted)]">Serial Number *</label>
                   <div className="flex gap-2">
-                    <input
+                    <input id="wc-serial-number"
                       value={form.serial_number}
                       onChange={e => setForm(p => ({ ...p, serial_number: e.target.value }))}
                       placeholder="Enter serial number"
@@ -1179,53 +1193,53 @@ export default function WarrantyTracker() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <label className="text-xs text-[var(--text-muted)]">Brand *</label>
-                    <input value={form.brand} onChange={e => setForm(p => ({ ...p, brand: e.target.value }))}
+                    <label htmlFor="wc-brand" className="text-xs text-[var(--text-muted)]">Brand *</label>
+                    <input id="wc-brand" value={form.brand} onChange={e => setForm(p => ({ ...p, brand: e.target.value }))}
                       className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-500" />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs text-[var(--text-muted)]">Size</label>
-                    <input value={form.size} onChange={e => setForm(p => ({ ...p, size: e.target.value }))}
+                    <label htmlFor="wc-size" className="text-xs text-[var(--text-muted)]">Size</label>
+                    <input id="wc-size" value={form.size} onChange={e => setForm(p => ({ ...p, size: e.target.value }))}
                       className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-500" />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs text-[var(--text-muted)]">Asset No</label>
-                    <input value={form.asset_no} onChange={e => setForm(p => ({ ...p, asset_no: e.target.value }))}
+                    <label htmlFor="wc-asset-no" className="text-xs text-[var(--text-muted)]">Asset No</label>
+                    <input id="wc-asset-no" value={form.asset_no} onChange={e => setForm(p => ({ ...p, asset_no: e.target.value }))}
                       className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-500" />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs text-[var(--text-muted)]">Site</label>
-                    <input value={form.site} onChange={e => setForm(p => ({ ...p, site: e.target.value }))}
+                    <label htmlFor="wc-site" className="text-xs text-[var(--text-muted)]">Site</label>
+                    <input id="wc-site" value={form.site} onChange={e => setForm(p => ({ ...p, site: e.target.value }))}
                       className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-500" />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs text-[var(--text-muted)]">Country</label>
-                    <input value={form.country} onChange={e => setForm(p => ({ ...p, country: e.target.value }))}
+                    <label htmlFor="wc-country" className="text-xs text-[var(--text-muted)]">Country</label>
+                    <input id="wc-country" value={form.country} onChange={e => setForm(p => ({ ...p, country: e.target.value }))}
                       className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-500" />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs text-[var(--text-muted)]">Supplier</label>
-                    <input value={form.supplier} onChange={e => setForm(p => ({ ...p, supplier: e.target.value }))}
+                    <label htmlFor="wc-supplier" className="text-xs text-[var(--text-muted)]">Supplier</label>
+                    <input id="wc-supplier" value={form.supplier} onChange={e => setForm(p => ({ ...p, supplier: e.target.value }))}
                       className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-500" />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs text-[var(--text-muted)]">Fitment Date</label>
-                    <input type="date" value={form.fitment_date} onChange={e => setForm(p => ({ ...p, fitment_date: e.target.value }))}
+                    <label htmlFor="wc-fitment-date" className="text-xs text-[var(--text-muted)]">Fitment Date</label>
+                    <input id="wc-fitment-date" type="date" value={form.fitment_date} onChange={e => setForm(p => ({ ...p, fitment_date: e.target.value }))}
                       className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-500" />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs text-[var(--text-muted)]">Removal Date</label>
-                    <input type="date" value={form.removal_date} onChange={e => setForm(p => ({ ...p, removal_date: e.target.value }))}
+                    <label htmlFor="wc-removal-date" className="text-xs text-[var(--text-muted)]">Removal Date</label>
+                    <input id="wc-removal-date" type="date" value={form.removal_date} onChange={e => setForm(p => ({ ...p, removal_date: e.target.value }))}
                       className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-500" />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs text-[var(--text-muted)]">km at Fitment</label>
-                    <input type="number" value={form.km_at_fitment} onChange={e => setForm(p => ({ ...p, km_at_fitment: e.target.value }))}
+                    <label htmlFor="wc-km-at-fitment" className="text-xs text-[var(--text-muted)]">km at Fitment</label>
+                    <input id="wc-km-at-fitment" type="number" value={form.km_at_fitment} onChange={e => setForm(p => ({ ...p, km_at_fitment: e.target.value }))}
                       className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-500" />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs text-[var(--text-muted)]">km at Removal</label>
-                    <input type="number" value={form.km_at_removal} onChange={e => setForm(p => ({ ...p, km_at_removal: e.target.value }))}
+                    <label htmlFor="wc-km-at-removal" className="text-xs text-[var(--text-muted)]">km at Removal</label>
+                    <input id="wc-km-at-removal" type="number" value={form.km_at_removal} onChange={e => setForm(p => ({ ...p, km_at_removal: e.target.value }))}
                       className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-500" />
                   </div>
                 </div>
@@ -1241,13 +1255,13 @@ export default function WarrantyTracker() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <label className="text-xs text-[var(--text-muted)]">Expected Life km</label>
-                    <input type="number" value={form.expected_life_km} onChange={e => setForm(p => ({ ...p, expected_life_km: e.target.value }))}
+                    <label htmlFor="wc-expected-life-km" className="text-xs text-[var(--text-muted)]">Expected Life km</label>
+                    <input id="wc-expected-life-km" type="number" value={form.expected_life_km} onChange={e => setForm(p => ({ ...p, expected_life_km: e.target.value }))}
                       className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-500" />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs text-[var(--text-muted)]">Failure Type *</label>
-                    <select value={form.failure_type} onChange={e => setForm(p => ({ ...p, failure_type: e.target.value }))}
+                    <label htmlFor="wc-failure-type" className="text-xs text-[var(--text-muted)]">Failure Type *</label>
+                    <select id="wc-failure-type" value={form.failure_type} onChange={e => setForm(p => ({ ...p, failure_type: e.target.value }))}
                       className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-dim)] focus:outline-none focus:border-blue-500">
                       {FAILURE_TYPES.map(f => <option key={f}>{f}</option>)}
                     </select>
@@ -1257,8 +1271,8 @@ export default function WarrantyTracker() {
                 {editClaim && (
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <label className="text-xs text-[var(--text-muted)]">Status</label>
-                      <select value={form.claim_status} onChange={e => setForm(p => ({ ...p, claim_status: e.target.value }))}
+                      <label htmlFor="wc-status" className="text-xs text-[var(--text-muted)]">Status</label>
+                      <select id="wc-status" value={form.claim_status} onChange={e => setForm(p => ({ ...p, claim_status: e.target.value }))}
                         className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-dim)] focus:outline-none focus:border-blue-500">
                         {CLAIM_STATUSES.map(s => <option key={s}>{s}</option>)}
                       </select>
@@ -1266,13 +1280,13 @@ export default function WarrantyTracker() {
                     {form.claim_status === 'Credit Issued' && (
                       <>
                         <div className="space-y-1">
-                          <label className="text-xs text-[var(--text-muted)]">Credit Amount ({cur})</label>
-                          <input type="number" value={form.credit_amount} onChange={e => setForm(p => ({ ...p, credit_amount: e.target.value }))}
+                          <label htmlFor="wc-credit-amount" className="text-xs text-[var(--text-muted)]">Credit Amount ({cur})</label>
+                          <input id="wc-credit-amount" type="number" value={form.credit_amount} onChange={e => setForm(p => ({ ...p, credit_amount: e.target.value }))}
                             className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-500" />
                         </div>
                         <div className="space-y-1">
-                          <label className="text-xs text-[var(--text-muted)]">Credit Date</label>
-                          <input type="date" value={form.credit_date} onChange={e => setForm(p => ({ ...p, credit_date: e.target.value }))}
+                          <label htmlFor="wc-credit-date" className="text-xs text-[var(--text-muted)]">Credit Date</label>
+                          <input id="wc-credit-date" type="date" value={form.credit_date} onChange={e => setForm(p => ({ ...p, credit_date: e.target.value }))}
                             className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-500" />
                         </div>
                       </>
@@ -1281,30 +1295,35 @@ export default function WarrantyTracker() {
                 )}
 
                 <div className="space-y-1">
-                  <label className="text-xs text-[var(--text-muted)]">Notes / Failure Description</label>
-                  <textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
+                  <label htmlFor="wc-notes-failure-description" className="text-xs text-[var(--text-muted)]">Notes / Failure Description</label>
+                  <textarea id="wc-notes-failure-description" value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
                     rows={3} placeholder="Describe the failure, location on tyre, etc."
                     className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500 resize-none" />
                 </div>
                 </fieldset>
-
-                <div className="flex justify-end gap-3 pt-2">
-                  <button onClick={() => { setShowAdd(false); setEditClaim(null) }}
-                    className="btn-secondary">
-                    Cancel
-                  </button>
-                  <button onClick={handleSave} disabled={saving || claimLocked}
-                    title={claimLocked ? 'Locked, in approval' : undefined}
-                    className="btn-primary gap-2 disabled:opacity-50">
-                    {claimLocked ? <Lock size={14} /> : saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                    {editClaim ? 'Update Claim' : 'Save Claim'}
-                  </button>
-                </div>
               </div>
-            </motion.div>
-          </motion.div>
+      </Modal>
+
+      <Modal
+        open={!!deleteTarget}
+        onClose={deletingClaim ? undefined : () => setDeleteTarget(null)}
+        title="Delete warranty claim"
+        size="sm"
+        footer={(
+          <>
+            <button onClick={() => setDeleteTarget(null)} disabled={deletingClaim} className="btn-secondary disabled:opacity-50">
+              Cancel
+            </button>
+            <button onClick={confirmDeleteClaim} disabled={deletingClaim}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-semibold disabled:opacity-50">
+              {deletingClaim ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+              Delete
+            </button>
+          </>
         )}
-      </AnimatePresence>
+      >
+        <p className="text-sm text-[var(--text-secondary)]">Delete this warranty claim?</p>
+      </Modal>
     </div>
   )
 }

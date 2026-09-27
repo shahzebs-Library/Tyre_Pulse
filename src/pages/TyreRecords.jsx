@@ -1,5 +1,4 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -22,6 +21,7 @@ import {
   CircleDot, Loader2, Download,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import DialogModal from '../components/ui/Modal'
 import FilterBar from '../components/ui/FilterBar'
 import { cn } from '../lib/cn'
 import { toUserMessage } from '../lib/safeError'
@@ -98,6 +98,9 @@ export default function TyreRecords() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleteError, setDeleteError]     = useState('')
   const [saving, setSaving]               = useState(false)
+  const [scrapRows, setScrapRows]         = useState(null)   // rows awaiting scrap confirmation
+  const [scrapReason, setScrapReason]     = useState('')
+  const [scrapping, setScrapping]         = useState(false)
   const [formError, setFormError]         = useState('')
   const [bulkForm, setBulkForm]           = useState(EMPTY_BULK)
 
@@ -351,16 +354,31 @@ export default function TyreRecords() {
    * serial. Those fall back to the plain status write and are reported, rather
    * than being silently left in the old unattributed state.
    */
-  async function handleBulkScrap(rows) {
-    if (!window.confirm(t('records.bulk.scrapConfirm', { count: rows.length }))) return
+  function handleBulkScrap(rows) {
+    // Confirmation and the reason are captured in one dialog (below) rather
+    // than a browser confirm followed by a browser prompt.
+    setScrapReason('')
+    setScrapRows(rows)
+  }
 
+  async function confirmBulkScrap() {
+    const rows = scrapRows || []
+    if (!rows.length) { setScrapRows(null); return }
+    setScrapping(true)
+    try {
+      await runBulkScrap(rows, scrapReason)
+    } finally {
+      setScrapping(false)
+      setScrapRows(null)
+    }
+  }
+
+  async function runBulkScrap(rows, reason) {
     const { canScrap } = await getScrapPermissions()
     if (!canScrap) {
       window.alert('You do not have permission to scrap a tyre. An admin can grant it in Access Control.')
       return
     }
-    const reason = window.prompt('Reason for scrapping these tyres (recorded against each one):', '')
-    if (reason === null) return   // cancelled
 
     const serials = [...new Set(rows.map(r => String(r.serial_no || '').trim()).filter(Boolean))]
     const noSerial = rows.filter(r => !String(r.serial_no || '').trim())
@@ -737,7 +755,7 @@ export default function TyreRecords() {
 
       {/* Add / Edit modal */}
       {editRecord !== null && (
-        <Modal title={editRecord.id ? t('records.form.editTitle') : t('records.form.newTitle')} onClose={() => setEditRecord(null)} wide>
+        <Modal title={editRecord.id ? t('records.form.editTitle') : t('records.form.newTitle')} onClose={() => setEditRecord(null)} busy={saving} wide>
           {formError && (
             <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/25 text-red-300 rounded-xl px-4 py-2.5 mb-4 text-sm">
               <AlertTriangle size={14} className="shrink-0" /> {formError}
@@ -804,7 +822,7 @@ export default function TyreRecords() {
 
       {/* Bulk edit modal */}
       {showBulkEdit && (
-        <Modal title={t('records.bulkEdit.title', { count: bulkCount })} onClose={() => setShowBulkEdit(false)}>
+        <Modal title={t('records.bulkEdit.title', { count: bulkCount })} onClose={() => setShowBulkEdit(false)} busy={saving}>
           <p className="text-sm text-muted mb-4">{t('records.bulkEdit.hint')}</p>
           <form onSubmit={saveBulkEdit} className="space-y-3">
             <div>
@@ -847,7 +865,7 @@ export default function TyreRecords() {
 
       {/* Delete confirmation */}
       {showDeleteConfirm && (
-        <Modal title={t('records.delete.title')} onClose={() => { setShowDeleteConfirm(false); setDeleteError('') }}>
+        <Modal title={t('records.delete.title')} onClose={() => { setShowDeleteConfirm(false); setDeleteError('') }} busy={saving}>
           <div className="flex gap-3 mb-5 p-4 rounded-xl bg-red-500/8 border border-red-500/20">
             <AlertTriangle size={18} className="text-red-400 shrink-0 mt-0.5" />
             <div>
@@ -866,7 +884,35 @@ export default function TyreRecords() {
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
               {saving ? t('records.delete.deleting') : t('records.delete.confirm', { count: bulkCount })}
             </button>
-            <button onClick={() => setShowDeleteConfirm(false)} className="btn-secondary">{t('records.form.cancel')}</button>
+            <button onClick={() => setShowDeleteConfirm(false)} disabled={saving} className="btn-secondary disabled:opacity-50">{t('records.form.cancel')}</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Bulk scrap confirmation (reason recorded against each tyre) */}
+      {scrapRows && (
+        <Modal title="Scrap tyres" onClose={() => setScrapRows(null)} busy={scrapping}>
+          <div className="flex gap-3 mb-4 p-4 rounded-xl bg-red-500/8 border border-red-500/20">
+            <AlertTriangle size={18} className="text-red-400 shrink-0 mt-0.5" />
+            <p className="text-sm" style={{ color: 'var(--text-primary)' }}>
+              {t('records.bulk.scrapConfirm', { count: scrapRows.length })}
+            </p>
+          </div>
+          <label htmlFor="bulk-scrap-reason" className="label">Reason for scrapping these tyres (recorded against each one)</label>
+          <textarea
+            id="bulk-scrap-reason"
+            className="input"
+            rows={2}
+            value={scrapReason}
+            onChange={e => setScrapReason(e.target.value)}
+            disabled={scrapping}
+          />
+          <div className="flex gap-3 mt-4">
+            <button onClick={confirmBulkScrap} disabled={scrapping} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-semibold disabled:opacity-50 transition-colors">
+              {scrapping ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+              {scrapping ? 'Scrapping...' : `Scrap ${scrapRows.length}`}
+            </button>
+            <button onClick={() => setScrapRows(null)} disabled={scrapping} className="btn-secondary disabled:opacity-50">{t('records.form.cancel')}</button>
           </div>
         </Modal>
       )}
@@ -874,37 +920,12 @@ export default function TyreRecords() {
   )
 }
 
-function Modal({ title, onClose, children, wide = false }) {
+function Modal({ title, onClose, children, wide = false, busy = false }) {
+  // Thin adapter over the shared dialog shell so every call site above keeps
+  // its props. While a save or delete is running the dialog cannot be dismissed.
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto"
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ opacity: 0, scale: 0.96, y: 8 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.96 }}
-        transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-        className={cn(
-          'bg-surface-1 border border-[var(--border-dim)] rounded-2xl w-full p-6 my-4 shadow-float',
-          wide ? 'max-w-2xl' : 'max-w-lg'
-        )}
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-bold text-white">{title}</h2>
-          <button
-            onClick={onClose}
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-muted hover:text-white hover:bg-surface-3 transition-all"
-          >
-            <X size={15} />
-          </button>
-        </div>
-        {children}
-      </motion.div>
-    </motion.div>
+    <DialogModal open title={title} onClose={busy ? undefined : onClose} size={wide ? 'lg' : 'md'}>
+      {children}
+    </DialogModal>
   )
 }

@@ -300,9 +300,9 @@ function ScheduleCard({ schedule, health, onEdit, onDelete, onToggle, onGenerate
   )
 }
 
-function FieldLabel({ children, required }) {
+function FieldLabel({ children, required, htmlFor }) {
   return (
-    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
+    <label htmlFor={htmlFor} className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
       {children}{required && <span className="text-orange-400 ml-1">*</span>}
     </label>
   )
@@ -310,10 +310,10 @@ function FieldLabel({ children, required }) {
 
 const INPUT_CLASS = 'w-full bg-[var(--surface-3)] border border-[var(--border-bright)] text-[var(--text-primary)] rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500/30'
 
-function SelectField({ value, onChange, children }) {
+function SelectField({ value, onChange, children, id }) {
   return (
     <div className="relative">
-      <select value={value} onChange={e => onChange(e.target.value)} className={`${INPUT_CLASS} appearance-none pr-8`}>
+      <select id={id} value={value} onChange={e => onChange(e.target.value)} className={`${INPUT_CLASS} appearance-none pr-8`}>
         {children}
       </select>
       <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-secondary)] pointer-events-none" />
@@ -321,7 +321,7 @@ function SelectField({ value, onChange, children }) {
   )
 }
 
-function Modal({ title, onClose, onSave, saving, form, setForm, formError, setFormError, onGenerate, generating, record, wfLocked, onWfStateChange, td, layouts = [] }) {
+function ScheduleModal({ title, onClose, onSave, saving, form, setForm, formError, setFormError, onGenerate, generating, record, wfLocked, onWfStateChange, td, layouts = [] }) {
   const toggleFormat = (fmt) => setForm(f => {
     const has = f.output_formats.includes(fmt)
     const next = has ? f.output_formats.filter(x => x !== fmt) : [...f.output_formats, fmt]
@@ -329,23 +329,45 @@ function Modal({ title, onClose, onSave, saving, form, setForm, formError, setFo
   })
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border-bright)]">
-          <h2 className="text-lg font-semibold text-[var(--text-primary)]">{title}</h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--surface-3)] transition-colors">
-            <X className="w-5 h-5 text-[var(--text-secondary)]" />
+    <DialogModal
+      open
+      onClose={saving ? undefined : onClose}
+      title={title}
+      size="md"
+      footer={(
+        <div className="flex w-full flex-wrap items-center justify-between gap-3">
+          <button
+            onClick={() => onGenerate(form)}
+            disabled={generating === 'form'}
+            title={td('schedreports.modal.generateHint', 'Generate this report now and download it')}
+            className="px-4 py-2 text-sm font-medium text-orange-300 bg-orange-500/10 hover:bg-orange-500/20 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
+          >
+            {generating === 'form' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            {td('schedreports.modal.generateNow', 'Generate now')}
           </button>
+          <div className="flex gap-3">
+            <button onClick={onClose} disabled={saving} className="px-4 py-2 text-sm font-medium text-[var(--text-secondary)] bg-[var(--surface-3)] hover:bg-gray-600 rounded-lg transition-colors disabled:opacity-50">
+              {td('schedreports.modal.cancel', 'Cancel')}
+            </button>
+            <button
+              onClick={onSave}
+              disabled={saving || wfLocked}
+              title={wfLocked ? td('schedreports.modal.locked', 'Locked, in approval') : undefined}
+              className="px-5 py-2 text-sm font-medium text-white bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {wfLocked ? <><Lock className="w-4 h-4" />{td('schedreports.modal.save', 'Save Schedule')}</>
+                : saving ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />{td('schedreports.modal.saving', 'Saving...')}</>
+                : <><Save className="w-4 h-4" />{td('schedreports.modal.save', 'Save Schedule')}</>}
+            </button>
+          </div>
         </div>
-
-        {/* Body */}
-        <div className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
+      )}
+    >
+        <div className="space-y-5">
           {/* Name */}
           <div>
-            <FieldLabel required>{td('schedreports.modal.scheduleName', 'Schedule Name')}</FieldLabel>
-            <input
+            <FieldLabel htmlFor="sr-name" required>{td('schedreports.modal.scheduleName', 'Schedule Name')}</FieldLabel>
+            <input id="sr-name"
               type="text"
               placeholder={td('schedreports.modal.namePlaceholder', 'e.g. Weekly Executive Summary')}
               value={form.name}
@@ -356,8 +378,8 @@ function Modal({ title, onClose, onSave, saving, form, setForm, formError, setFo
 
           {/* Report Type */}
           <div>
-            <FieldLabel required>{td('schedreports.modal.reportType', 'Report Type')}</FieldLabel>
-            <SelectField value={form.report_type} onChange={v => setForm(f => ({ ...f, report_type: v }))}>
+            <FieldLabel htmlFor="sr-type" required>{td('schedreports.modal.reportType', 'Report Type')}</FieldLabel>
+            <SelectField id="sr-type" value={form.report_type} onChange={v => setForm(f => ({ ...f, report_type: v }))}>
               <optgroup label={td('schedreports.modal.standardReports', 'Standard reports')}>
                 {REPORT_TYPES.map(r => (
                   <option key={r.value} value={r.value}>{td(`schedreports.reportTypes.${r.value}`, r.label)}</option>
@@ -394,8 +416,8 @@ function Modal({ title, onClose, onSave, saving, form, setForm, formError, setFo
           {/* One-off: exact date + time */}
           {form.frequency === 'once' && (
             <div>
-              <FieldLabel required>{td('schedreports.modal.runAt', 'Run on (date & time)')}</FieldLabel>
-              <input
+              <FieldLabel htmlFor="sr-run-at" required>{td('schedreports.modal.runAt', 'Run on (date & time)')}</FieldLabel>
+              <input id="sr-run-at"
                 type="datetime-local"
                 value={form.run_at}
                 onChange={e => setForm(f => ({ ...f, run_at: e.target.value }))}
@@ -407,8 +429,8 @@ function Modal({ title, onClose, onSave, saving, form, setForm, formError, setFo
           {/* Recurring: day selectors */}
           {form.frequency === 'weekly' && (
             <div>
-              <FieldLabel required>{td('schedreports.modal.dayOfWeek', 'Day of Week')}</FieldLabel>
-              <SelectField value={form.day_of_week} onChange={v => setForm(f => ({ ...f, day_of_week: parseInt(v, 10) }))}>
+              <FieldLabel htmlFor="sr-dow" required>{td('schedreports.modal.dayOfWeek', 'Day of Week')}</FieldLabel>
+              <SelectField id="sr-dow" value={form.day_of_week} onChange={v => setForm(f => ({ ...f, day_of_week: parseInt(v, 10) }))}>
                 {DAYS_OF_WEEK.map(d => (
                   <option key={d} value={d}>{td(`schedreports.daysOfWeek.${d}`, DAY_LABELS[d])}</option>
                 ))}
@@ -417,8 +439,8 @@ function Modal({ title, onClose, onSave, saving, form, setForm, formError, setFo
           )}
           {form.frequency === 'monthly' && (
             <div>
-              <FieldLabel required>{td('schedreports.modal.dayOfMonth', 'Day of Month')}</FieldLabel>
-              <input
+              <FieldLabel htmlFor="sr-dom" required>{td('schedreports.modal.dayOfMonth', 'Day of Month')}</FieldLabel>
+              <input id="sr-dom"
                 type="number" min={1} max={28} value={form.day_of_month}
                 onChange={e => setForm(f => ({ ...f, day_of_month: Math.min(28, Math.max(1, parseInt(e.target.value, 10) || 1)) }))}
                 className={INPUT_CLASS}
@@ -431,20 +453,20 @@ function Modal({ title, onClose, onSave, saving, form, setForm, formError, setFo
           {form.frequency !== 'once' && (
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <FieldLabel required>{td('schedreports.modal.timeOfDay', 'Time of Day')}</FieldLabel>
-                <input type="time" value={form.time_of_day} onChange={e => setForm(f => ({ ...f, time_of_day: e.target.value }))} className={INPUT_CLASS} />
+                <FieldLabel htmlFor="sr-time" required>{td('schedreports.modal.timeOfDay', 'Time of Day')}</FieldLabel>
+                <input id="sr-time" type="time" value={form.time_of_day} onChange={e => setForm(f => ({ ...f, time_of_day: e.target.value }))} className={INPUT_CLASS} />
               </div>
               <div>
-                <FieldLabel>{td('schedreports.modal.startDate', 'Start Date')}</FieldLabel>
-                <input type="date" value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} className={INPUT_CLASS} />
+                <FieldLabel htmlFor="sr-start">{td('schedreports.modal.startDate', 'Start Date')}</FieldLabel>
+                <input id="sr-start" type="date" value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} className={INPUT_CLASS} />
               </div>
             </div>
           )}
 
           {/* Coverage period */}
           <div>
-            <FieldLabel required>{td('schedreports.modal.period', 'Report Covers')}</FieldLabel>
-            <SelectField value={form.period} onChange={v => setForm(f => ({ ...f, period: v }))}>
+            <FieldLabel htmlFor="sr-period" required>{td('schedreports.modal.period', 'Report Covers')}</FieldLabel>
+            <SelectField id="sr-period" value={form.period} onChange={v => setForm(f => ({ ...f, period: v }))}>
               {PERIODS.map(p => (
                 <option key={p.value} value={p.value}>{td(`schedreports.periods.${p.value}`, p.label)}</option>
               ))}
@@ -452,12 +474,12 @@ function Modal({ title, onClose, onSave, saving, form, setForm, formError, setFo
             {form.period === 'custom' && (
               <div className="grid grid-cols-2 gap-3 mt-3">
                 <div>
-                  <FieldLabel required>{td('schedreports.modal.from', 'From')}</FieldLabel>
-                  <input type="date" value={form.period_from} onChange={e => setForm(f => ({ ...f, period_from: e.target.value }))} className={INPUT_CLASS} />
+                  <FieldLabel htmlFor="sr-from" required>{td('schedreports.modal.from', 'From')}</FieldLabel>
+                  <input id="sr-from" type="date" value={form.period_from} onChange={e => setForm(f => ({ ...f, period_from: e.target.value }))} className={INPUT_CLASS} />
                 </div>
                 <div>
-                  <FieldLabel required>{td('schedreports.modal.to', 'To')}</FieldLabel>
-                  <input type="date" value={form.period_to} onChange={e => setForm(f => ({ ...f, period_to: e.target.value }))} className={INPUT_CLASS} />
+                  <FieldLabel htmlFor="sr-to" required>{td('schedreports.modal.to', 'To')}</FieldLabel>
+                  <input id="sr-to" type="date" value={form.period_to} onChange={e => setForm(f => ({ ...f, period_to: e.target.value }))} className={INPUT_CLASS} />
                 </div>
               </div>
             )}
@@ -487,8 +509,8 @@ function Modal({ title, onClose, onSave, saving, form, setForm, formError, setFo
 
           {/* Recipients */}
           <div>
-            <FieldLabel required>{td('schedreports.modal.recipients', 'Recipients')}</FieldLabel>
-            <textarea
+            <FieldLabel htmlFor="sr-recipients" required>{td('schedreports.modal.recipients', 'Recipients')}</FieldLabel>
+            <textarea id="sr-recipients"
               rows={3}
               placeholder={'manager@company.com\nexecutive@company.com'}
               value={form.recipients_raw}
@@ -507,6 +529,9 @@ function Modal({ title, onClose, onSave, saving, form, setForm, formError, setFo
             <button
               type="button"
               onClick={() => setForm(f => ({ ...f, active: !f.active }))}
+              role="switch"
+              aria-checked={!!form.active}
+              aria-label={td('schedreports.modal.activeSchedule', 'Active Schedule')}
               className={`relative w-11 h-6 rounded-full transition-colors ${form.active ? 'bg-orange-500' : 'bg-gray-600'}`}
             >
               <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${form.active ? 'translate-x-5' : 'translate-x-0'}`} />
@@ -542,36 +567,7 @@ function Modal({ title, onClose, onSave, saving, form, setForm, formError, setFo
             </div>
           )}
         </div>
-
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-[var(--border-bright)] flex items-center justify-between gap-3">
-          <button
-            onClick={() => onGenerate(form)}
-            disabled={generating === 'form'}
-            title={td('schedreports.modal.generateHint', 'Generate this report now and download it')}
-            className="px-4 py-2 text-sm font-medium text-orange-300 bg-orange-500/10 hover:bg-orange-500/20 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
-          >
-            {generating === 'form' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-            {td('schedreports.modal.generateNow', 'Generate now')}
-          </button>
-          <div className="flex gap-3">
-            <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-[var(--text-secondary)] bg-[var(--surface-3)] hover:bg-gray-600 rounded-lg transition-colors">
-              {td('schedreports.modal.cancel', 'Cancel')}
-            </button>
-            <button
-              onClick={onSave}
-              disabled={saving || wfLocked}
-              title={wfLocked ? td('schedreports.modal.locked', 'Locked, in approval') : undefined}
-              className="px-5 py-2 text-sm font-medium text-white bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {wfLocked ? <><Lock className="w-4 h-4" />{td('schedreports.modal.save', 'Save Schedule')}</>
-                : saving ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />{td('schedreports.modal.saving', 'Saving...')}</>
-                : <><Save className="w-4 h-4" />{td('schedreports.modal.save', 'Save Schedule')}</>}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+    </DialogModal>
   )
 }
 
@@ -579,13 +575,13 @@ function DeleteConfirmModal({ schedule, onCancel, onConfirm, deleting, td }) {
   return (
     <DialogModal
       open
-      onClose={onCancel}
+      onClose={deleting ? undefined : onCancel}
       size="sm"
       title={td('schedreports.delete.title', 'Delete Schedule')}
       subtitle={td('schedreports.delete.subtitle', 'This action cannot be undone')}
       footer={(
         <div className="flex justify-end gap-3">
-          <button type="button" onClick={onCancel} className="px-4 min-h-[44px] text-sm font-medium text-[var(--text-secondary)] bg-[var(--surface-3)] hover:bg-[var(--surface-2)] rounded-lg transition-colors">
+          <button type="button" onClick={onCancel} disabled={deleting} className="px-4 min-h-[44px] disabled:opacity-50 text-sm font-medium text-[var(--text-secondary)] bg-[var(--surface-3)] hover:bg-[var(--surface-2)] rounded-lg transition-colors">
             {td('schedreports.delete.cancel', 'Cancel')}
           </button>
           <button
@@ -1329,7 +1325,7 @@ export default function ScheduledReports() {
 
       {/* Create / Edit Modal */}
       {modalOpen && (
-        <Modal
+        <ScheduleModal
           title={editTarget ? td('schedreports.modal.editTitle', 'Edit Schedule') : td('schedreports.modal.newTitle', 'New Schedule')}
           onClose={closeModal}
           onSave={handleSave}

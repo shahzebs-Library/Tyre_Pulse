@@ -18,6 +18,7 @@ import { Illustration } from '../components/illustrations'
 import { vehicleArt } from '../lib/brand/vehicleArt'
 import { useReportMeta } from '../hooks/useReportMeta'
 import PageHeader from '../components/ui/PageHeader'
+import DialogModal from '../components/ui/Modal'
 import CustomFieldsPanel from '../components/CustomFieldsPanel'
 
 const DEFAULT_PAGE_SIZE = 25
@@ -654,7 +655,7 @@ export default function FleetMaster() {
 
       {/* ── Add / Edit Modal ──────────────────────────────────────────────── */}
       {editRecord !== null && (
-        <Modal title={editRecord.id ? t('fleetmaster.form.editTitle') : t('fleetmaster.form.addTitle')} onClose={() => setEditRecord(null)} wide>
+        <Modal title={editRecord.id ? t('fleetmaster.form.editTitle') : t('fleetmaster.form.addTitle')} onClose={() => setEditRecord(null)} busy={saving} wide>
           {formError && (
             <div className="bg-red-900/30 border border-red-700 text-red-300 rounded-lg px-4 py-2 mb-4 text-sm">{formError}</div>
           )}
@@ -791,7 +792,7 @@ export default function FleetMaster() {
 
       {/* ── Delete Confirmation ───────────────────────────────────────────── */}
       {showDeleteConfirm && deleteTarget && (
-        <Modal title={t('fleetmaster.delete.title')} onClose={() => { setShowDeleteConfirm(false); setDeleteTarget(null); setDeleteError('') }}>
+        <Modal title={t('fleetmaster.delete.title')} onClose={() => { setShowDeleteConfirm(false); setDeleteTarget(null); setDeleteError('') }} busy={saving}>
           <div className="flex gap-3 mb-4">
             <AlertTriangle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
             <div>
@@ -806,14 +807,14 @@ export default function FleetMaster() {
             <button onClick={deleteRecord} disabled={saving} className="btn-danger flex items-center gap-2 disabled:opacity-50">
               <Trash2 size={15} /> {saving ? t('fleetmaster.delete.deleting') : t('fleetmaster.delete.confirm')}
             </button>
-            <button onClick={() => { setShowDeleteConfirm(false); setDeleteTarget(null); setDeleteError('') }} className="btn-secondary">{t('fleetmaster.delete.cancel')}</button>
+            <button onClick={() => { setShowDeleteConfirm(false); setDeleteTarget(null); setDeleteError('') }} disabled={saving} className="btn-secondary disabled:opacity-50">{t('fleetmaster.delete.cancel')}</button>
           </div>
         </Modal>
       )}
 
       {/* ── Bulk Delete Confirmation (Admin only) ─────────────────────────── */}
       {bulkDeleteOpen && (
-        <Modal title={t('fleetmaster.bulkDelete.title')} onClose={() => { if (!bulkBusy) { setBulkDeleteOpen(false); setBulkError('') } }}>
+        <Modal title={t('fleetmaster.bulkDelete.title')} onClose={() => { if (!bulkBusy) { setBulkDeleteOpen(false); setBulkError('') } }} busy={bulkBusy}>
           <div className="flex gap-3 mb-4">
             <AlertTriangle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
             <div>
@@ -837,22 +838,12 @@ export default function FleetMaster() {
 }
 
 // ── Shared modal shell ─────────────────────────────────────────────────────────
-function Modal({ title, onClose, children, wide = false }) {
+function Modal({ title, onClose, children, wide = false, busy = false }) {
+  // Adapter over the shared dialog shell; while a save or delete runs the
+  // dialog cannot be dismissed.
   return (
-    <div
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto"
-      onClick={onClose}
-    >
-      <div
-        className={`bg-surface-1 border border-[var(--border-dim)] rounded-xl w-full ${wide ? 'max-w-2xl' : 'max-w-lg'} p-6 my-4 shadow-float`}
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-[var(--text-primary)]">{title}</h2>
-          <button onClick={onClose} className="text-muted hover:text-[var(--text-primary)] transition-colors"><X size={18} /></button>
-        </div>
-        {children}
-      </div>
-    </div>
+    <DialogModal open title={title} onClose={busy ? undefined : onClose} size={wide ? 'lg' : 'md'}>
+      {children}
+    </DialogModal>
   )
 }

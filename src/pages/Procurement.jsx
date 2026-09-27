@@ -26,6 +26,7 @@ import { toUserMessage } from '../lib/safeError'
 import { useTenant } from '../contexts/TenantContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import PageHeader from '../components/ui/PageHeader'
+import Modal from '../components/ui/Modal'
 import { loadAutoTable } from '../lib/pdfEngine'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { colorAt, withAlpha } from '../lib/reportColors'
@@ -854,35 +855,47 @@ export default function Procurement() {
       {/* ══════════════════════════════════════════════════════════════════════
           CREATE / EDIT MODAL
       ══════════════════════════════════════════════════════════════════════ */}
-      <AnimatePresence>
-        {showForm && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-            <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
-              className="bg-[var(--surface-1)] border border-[var(--border-bright)] rounded-2xl w-full max-w-4xl max-h-[92vh] overflow-y-auto shadow-2xl">
-
-              {/* Modal header */}
-              <div className="sticky top-0 bg-[var(--surface-1)] border-b border-[var(--border-dim)] px-6 py-4 flex items-center justify-between z-10">
-                <div className="flex items-center gap-3">
-                  <ShoppingCart size={18} className="text-orange-400" />
-                  <h2 className="text-[var(--text-primary)] font-bold text-lg">
-                    {editPO ? t('procurement.modal.editTitle', { poNumber: editPO.po_number }) : t('procurement.modal.newTitle')}
-                  </h2>
-                </div>
-                <button onClick={() => setShowForm(false)} className="p-2 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors"><X size={18} /></button>
-              </div>
-
-              <div className="p-6 space-y-5">
+      <Modal
+        open={showForm}
+        onClose={saving ? undefined : () => setShowForm(false)}
+        size="xl"
+        title={(
+          <span className="flex items-center gap-3">
+            <ShoppingCart size={18} className="text-orange-400" />
+            {editPO ? t('procurement.modal.editTitle', { poNumber: editPO.po_number }) : t('procurement.modal.newTitle')}
+          </span>
+        )}
+        footer={(
+          <div className="flex w-full flex-wrap items-center justify-between gap-3">
+            <div className="text-[var(--text-secondary)] text-sm">
+              {t('procurement.modal.totalLabel')} <span className="text-green-400 font-bold text-base">{fmtCur(formTotal)}</span>
+              {formData.items.length > 0 && <span className="text-[var(--text-muted)] ml-2">{t('procurement.modal.itemsCount', { count: formData.items.length })}</span>}
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setShowForm(false)} disabled={saving} className="px-4 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-sm rounded-lg transition-colors disabled:opacity-50">
+                {t('procurement.modal.cancel')}
+              </button>
+              <button onClick={handleSave} disabled={saving || (editPO && poLocked)}
+                title={editPO && poLocked ? 'Locked, in approval' : undefined}
+                className="flex items-center gap-2 px-5 py-2 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg transition-colors">
+                {saving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
+                {saving ? t('procurement.modal.saving') : editPO ? t('procurement.modal.saveChanges') : t('procurement.modal.createPo')}
+              </button>
+            </div>
+          </div>
+        )}
+      >
+              <div className="space-y-5">
                 {/* Row 1: Vendor + Order Date */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.vendorName')}</label>
-                    <input value={formData.vendor_name} onChange={e => setFormData(f => ({ ...f, vendor_name: e.target.value }))}
+                    <label htmlFor="po-field" className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.vendorName')}</label>
+                    <input id="po-field" value={formData.vendor_name} onChange={e => setFormData(f => ({ ...f, vendor_name: e.target.value }))}
                       placeholder={t('procurement.modal.vendorNamePlaceholder')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
                   </div>
                   <div>
-                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.orderDate')}</label>
-                    <input type="date" value={formData.order_date} onChange={e => setFormData(f => ({ ...f, order_date: e.target.value }))}
+                    <label htmlFor="po-field-2" className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.orderDate')}</label>
+                    <input id="po-field-2" type="date" value={formData.order_date} onChange={e => setFormData(f => ({ ...f, order_date: e.target.value }))}
                       className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
                   </div>
                 </div>
@@ -890,20 +903,20 @@ export default function Procurement() {
                 {/* Row 2: Expected Del + Status */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
-                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.expectedDelivery')}</label>
-                    <input type="date" value={formData.expected_delivery} onChange={e => setFormData(f => ({ ...f, expected_delivery: e.target.value }))}
+                    <label htmlFor="po-field-3" className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.expectedDelivery')}</label>
+                    <input id="po-field-3" type="date" value={formData.expected_delivery} onChange={e => setFormData(f => ({ ...f, expected_delivery: e.target.value }))}
                       className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
                   </div>
                   <div>
-                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.priority')}</label>
-                    <select value={formData.priority} onChange={e => setFormData(f => ({ ...f, priority: e.target.value }))}
+                    <label htmlFor="po-field-4" className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.priority')}</label>
+                    <select id="po-field-4" value={formData.priority} onChange={e => setFormData(f => ({ ...f, priority: e.target.value }))}
                       className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500">
                       {PRIORITIES.map(p => <option key={p}>{p}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.status')}</label>
-                    <select value={formData.status} onChange={e => setFormData(f => ({ ...f, status: e.target.value }))}
+                    <label htmlFor="po-field-5" className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.status')}</label>
+                    <select id="po-field-5" value={formData.status} onChange={e => setFormData(f => ({ ...f, status: e.target.value }))}
                       className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500">
                       {STATUSES.map(s => <option key={s}>{s}</option>)}
                     </select>
@@ -913,18 +926,18 @@ export default function Procurement() {
                 {/* Row 3: Site + Country + Budget Code */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
-                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.site')}</label>
-                    <input value={formData.site} onChange={e => setFormData(f => ({ ...f, site: e.target.value }))}
+                    <label htmlFor="po-field-6" className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.site')}</label>
+                    <input id="po-field-6" value={formData.site} onChange={e => setFormData(f => ({ ...f, site: e.target.value }))}
                       placeholder={t('procurement.modal.sitePlaceholder')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
                   </div>
                   <div>
-                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.country')}</label>
-                    <input value={formData.country} onChange={e => setFormData(f => ({ ...f, country: e.target.value }))}
+                    <label htmlFor="po-field-7" className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.country')}</label>
+                    <input id="po-field-7" value={formData.country} onChange={e => setFormData(f => ({ ...f, country: e.target.value }))}
                       placeholder={t('procurement.modal.countryPlaceholder')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
                   </div>
                   <div>
-                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.budgetCode')}</label>
-                    <input value={formData.budget_code} onChange={e => setFormData(f => ({ ...f, budget_code: e.target.value }))}
+                    <label htmlFor="po-field-8" className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.budgetCode')}</label>
+                    <input id="po-field-8" value={formData.budget_code} onChange={e => setFormData(f => ({ ...f, budget_code: e.target.value }))}
                       placeholder={t('procurement.modal.budgetCodePlaceholder')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
                   </div>
                 </div>
@@ -932,13 +945,13 @@ export default function Procurement() {
                 {/* Row 4: Requested By + Approved By */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.requestedBy')}</label>
-                    <input value={formData.requested_by} onChange={e => setFormData(f => ({ ...f, requested_by: e.target.value }))}
+                    <label htmlFor="po-field-9" className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.requestedBy')}</label>
+                    <input id="po-field-9" value={formData.requested_by} onChange={e => setFormData(f => ({ ...f, requested_by: e.target.value }))}
                       placeholder={t('procurement.modal.namePlaceholder')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
                   </div>
                   <div>
-                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.approvedBy')}</label>
-                    <input value={formData.approved_by} onChange={e => setFormData(f => ({ ...f, approved_by: e.target.value }))}
+                    <label htmlFor="po-field-10" className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.approvedBy')}</label>
+                    <input id="po-field-10" value={formData.approved_by} onChange={e => setFormData(f => ({ ...f, approved_by: e.target.value }))}
                       placeholder={t('procurement.modal.namePlaceholder')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
                   </div>
                 </div>
@@ -968,13 +981,13 @@ export default function Procurement() {
                   {/* Add item row */}
                   <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2">
                     <input value={itemRow.brand} onChange={e => setItemRow(r => ({ ...r, brand: e.target.value }))}
-                      placeholder={t('procurement.modal.brandPlaceholder')} className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
+                      placeholder={t('procurement.modal.brandPlaceholder')} aria-label={t('procurement.modal.brandPlaceholder')} className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
                     <input value={itemRow.size} onChange={e => setItemRow(r => ({ ...r, size: e.target.value }))}
-                      placeholder={t('procurement.modal.sizePlaceholder')} className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
+                      placeholder={t('procurement.modal.sizePlaceholder')} aria-label={t('procurement.modal.sizePlaceholder')} className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
                     <input type="number" min="1" value={itemRow.quantity} onChange={e => setItemRow(r => ({ ...r, quantity: e.target.value }))}
-                      placeholder={t('procurement.modal.qtyPlaceholder')} className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
+                      placeholder={t('procurement.modal.qtyPlaceholder')} aria-label={t('procurement.modal.qtyPlaceholder')} className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
                     <input type="number" min="0" step="0.01" value={itemRow.unit_price} onChange={e => setItemRow(r => ({ ...r, unit_price: e.target.value }))}
-                      placeholder={t('procurement.modal.unitPricePlaceholder')} className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500"
+                      placeholder={t('procurement.modal.unitPricePlaceholder')} aria-label={t('procurement.modal.unitPricePlaceholder')} className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500"
                       onKeyDown={e => e.key === 'Enter' && addItem()} />
                     <button onClick={addItem} className="px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm transition-colors flex items-center justify-center gap-1">
                       <Plus size={14} />{t('procurement.modal.add')}
@@ -991,7 +1004,7 @@ export default function Procurement() {
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-[var(--text-secondary)] flex items-center gap-2">
                           {t('procurement.modal.tax')}
-                          <input type="number" min="0" max="100" value={taxPct} onChange={e => setTaxPct(parseFloat(e.target.value) || 0)}
+                          <input type="number" min="0" max="100" aria-label="Tax percent" value={taxPct} onChange={e => setTaxPct(parseFloat(e.target.value) || 0)}
                             className="w-14 px-2 py-0.5 bg-[var(--surface-3)] border border-[var(--border-bright)] rounded text-[var(--text-primary)] text-xs focus:outline-none" />
                           %
                         </span>
@@ -1007,35 +1020,13 @@ export default function Procurement() {
 
                 {/* Notes */}
                 <div>
-                  <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.notes')}</label>
-                  <textarea value={formData.notes} onChange={e => setFormData(f => ({ ...f, notes: e.target.value }))}
+                  <label htmlFor="po-field-11" className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.notes')}</label>
+                  <textarea id="po-field-11" value={formData.notes} onChange={e => setFormData(f => ({ ...f, notes: e.target.value }))}
                     rows={3} placeholder={t('procurement.modal.notesPlaceholder')}
                     className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500 resize-none" />
                 </div>
               </div>
-
-              {/* Footer */}
-              <div className="sticky bottom-0 bg-[var(--surface-1)] border-t border-[var(--border-dim)] px-6 py-4 flex items-center justify-between">
-                <div className="text-[var(--text-secondary)] text-sm">
-                  {t('procurement.modal.totalLabel')} <span className="text-green-400 font-bold text-base">{fmtCur(formTotal)}</span>
-                  {formData.items.length > 0 && <span className="text-[var(--text-muted)] ml-2">{t('procurement.modal.itemsCount', { count: formData.items.length })}</span>}
-                </div>
-                <div className="flex gap-3">
-                  <button onClick={() => setShowForm(false)} className="px-4 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-sm rounded-lg transition-colors">
-                    {t('procurement.modal.cancel')}
-                  </button>
-                  <button onClick={handleSave} disabled={saving || (editPO && poLocked)}
-                    title={editPO && poLocked ? 'Locked, in approval' : undefined}
-                    className="flex items-center gap-2 px-5 py-2 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg transition-colors">
-                    {saving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
-                    {saving ? t('procurement.modal.saving') : editPO ? t('procurement.modal.saveChanges') : t('procurement.modal.createPo')}
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      </Modal>
 
       {/* ══════════════════════════════════════════════════════════════════════
           DETAIL DRAWER

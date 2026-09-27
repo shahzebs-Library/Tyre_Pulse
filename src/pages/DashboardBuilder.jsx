@@ -37,6 +37,7 @@ import {
   setDefaultDashboard, shareDashboard,
 } from '../lib/api/savedViews'
 import { toUserMessage } from '../lib/safeError'
+import Modal from '../components/ui/Modal'
 
 const REFRESH_MS = 120_000
 
@@ -92,45 +93,42 @@ function NameModal({ title, initial, onSubmit, onClose }) {
   const [value, setValue] = useState(initial || '')
   const trimmed = value.trim()
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.5)' }} onClick={onClose}>
-      <div className="card w-full max-w-sm !p-5" onClick={e => e.stopPropagation()}>
-        <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">{title}</h3>
-        <form onSubmit={e => { e.preventDefault(); if (trimmed) onSubmit(trimmed) }}>
-          <input
-            autoFocus value={value} onChange={e => setValue(e.target.value)}
-            maxLength={80} placeholder="Layout name"
-            className="w-full px-3 py-2 rounded-lg text-sm bg-transparent text-[var(--text-primary)] outline-none focus:border-green-600"
-            style={{ border: '1px solid var(--hairline, rgba(148,163,184,0.25))' }}
-          />
-          <div className="flex justify-end gap-2 mt-4">
-            <button type="button" onClick={onClose} className="btn-secondary text-xs px-3 py-1.5">Cancel</button>
-            <button type="submit" disabled={!trimmed}
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-600 hover:bg-green-500 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-              Confirm
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <Modal
+      open
+      onClose={onClose}
+      title={title}
+      size="sm"
+      footer={(
+        <>
+          <button type="button" onClick={onClose} className="btn-secondary text-xs px-3 py-1.5">Cancel</button>
+          <button type="submit" form="dashboard-layout-name-form" disabled={!trimmed}
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-600 hover:bg-green-500 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+            Confirm
+          </button>
+        </>
+      )}
+    >
+      <form id="dashboard-layout-name-form" onSubmit={e => { e.preventDefault(); if (trimmed) onSubmit(trimmed) }}>
+        <label htmlFor="dashboard-layout-name" className="block text-xs font-semibold text-[var(--text-muted)] mb-1.5">
+          Layout name
+        </label>
+        <input
+          id="dashboard-layout-name"
+          autoFocus value={value} onChange={e => setValue(e.target.value)}
+          maxLength={80} placeholder="Layout name"
+          className="w-full px-3 py-2 rounded-lg text-sm bg-transparent text-[var(--text-primary)] outline-none focus:border-green-600"
+          style={{ border: '1px solid var(--hairline, rgba(148,163,184,0.25))' }}
+        />
+      </form>
+    </Modal>
   )
 }
 
 /* ── Widget catalog drawer ──────────────────────────────────────────────── */
 function CatalogDrawer({ open, onAdd, onClose, placedIds }) {
-  if (!open) return null
   return (
-    <div className="fixed inset-0 z-40" onClick={onClose}>
-      <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.35)' }} />
-      <aside
-        className="absolute right-0 top-0 bottom-0 w-full max-w-sm overflow-y-auto p-5 space-y-5"
-        style={{ background: 'var(--panel, #ffffff)', borderLeft: '1px solid var(--hairline, rgba(148,163,184,0.2))' }}
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider">Widget Catalog</h2>
-          <IconBtn title="Close catalog" onClick={onClose}><X size={15} /></IconBtn>
-        </div>
+    <Modal open={open} onClose={onClose} title="Widget Catalog" size="md">
+      <div className="space-y-5">
         {WIDGET_CATEGORIES.map(cat => (
           <section key={cat}>
             <h3 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2">{cat}</h3>
@@ -159,8 +157,8 @@ function CatalogDrawer({ open, onAdd, onClose, placedIds }) {
             </div>
           </section>
         ))}
-      </aside>
-    </div>
+      </div>
+    </Modal>
   )
 }
 
@@ -256,6 +254,8 @@ export default function DashboardBuilder() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [switcherOpen, setSwitcherOpen] = useState(false)
   const [modal, setModal]         = useState(null)   // { mode: 'new'|'rename'|'saveAs' }
+  const [confirmState, setConfirmState] = useState(null) // { kind: 'delete'|'discard', layout? }
+  const switcherRef = useRef(null)
   const dragIndexRef = useRef(null)
   const loadingDataRef = useRef(false)
   const paramsKeyRef = useRef(null)
@@ -457,9 +457,13 @@ export default function DashboardBuilder() {
     if (saved) setDraft(renamed)
   }
 
-  async function handleDelete() {
+  function handleDelete() {
     if (!draft || !canDelete) return
-    if (!window.confirm(`Delete layout "${draft.name}"? This cannot be undone.`)) return
+    setConfirmState({ kind: 'delete' })
+  }
+
+  async function confirmDeleteLayout() {
+    if (!draft || !canDelete) { setConfirmState(null); return }
     const saved = await persist(async list => {
       await deleteDashboard(draft.id, list)
       return list.filter(l => l.id !== draft.id)
@@ -468,6 +472,7 @@ export default function DashboardBuilder() {
       const next = pickInitialLayout(saved, userId) || DEFAULT_LAYOUT
       setDraft(validateLayout(next)); setDirty(false); setEditMode(false)
     }
+    setConfirmState(null)
   }
 
   async function handleSetDefault() {
@@ -490,12 +495,36 @@ export default function DashboardBuilder() {
     if (saved) setDraft(toggled)
   }
 
-  function handleSwitch(layout) {
-    if (dirty && !window.confirm('Discard unsaved changes to the current layout?')) return
+  function applySwitch(layout) {
     setDraft(validateLayout(layout))
     setDirty(false)
     setSwitcherOpen(false)
   }
+
+  function handleSwitch(layout) {
+    if (dirty) {
+      setSwitcherOpen(false)
+      setConfirmState({ kind: 'discard', layout })
+      return
+    }
+    applySwitch(layout)
+  }
+
+  // Close the layout switcher on an outside press or Escape. Replaces a
+  // full-screen click catcher so the page has no hand-rolled overlay.
+  useEffect(() => {
+    if (!switcherOpen) return undefined
+    function onDown(e) {
+      if (switcherRef.current && !switcherRef.current.contains(e.target)) setSwitcherOpen(false)
+    }
+    function onKey(e) { if (e.key === 'Escape') setSwitcherOpen(false) }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [switcherOpen])
 
   /* ── Drag-to-reorder (enhancement; arrows remain the a11y fallback) ──── */
   const onDragStart = i => e => {
@@ -550,9 +579,10 @@ export default function DashboardBuilder() {
           </div>
           <div className="min-w-0">
             {/* Layout switcher */}
-            <div className="relative">
+            <div className="relative" ref={switcherRef}>
               <button
                 type="button" onClick={() => setSwitcherOpen(o => !o)}
+                aria-haspopup="listbox" aria-expanded={switcherOpen}
                 className="flex items-center gap-1.5 text-sm font-semibold text-[var(--text-primary)] hover:opacity-80 transition-opacity"
               >
                 <span className="truncate max-w-[220px]">{draft?.name || 'Dashboard'}</span>
@@ -562,7 +592,6 @@ export default function DashboardBuilder() {
               </button>
               {switcherOpen && (
                 <>
-                  <div className="fixed inset-0 z-30" onClick={() => setSwitcherOpen(false)} />
                   <div className="absolute left-0 top-full mt-2 z-40 w-64 card !p-2 max-h-80 overflow-y-auto shadow-xl">
                     {[DEFAULT_LAYOUT, ...visible].map(l => (
                       <button
@@ -763,6 +792,40 @@ export default function DashboardBuilder() {
       {modal?.mode === 'rename' && (
         <NameModal title="Rename layout" initial={draft?.name || ''} onSubmit={handleRename} onClose={() => setModal(null)} />
       )}
+
+      {/* ── Confirmations (delete layout / discard unsaved changes) ── */}
+      <Modal
+        open={!!confirmState}
+        onClose={saving ? undefined : () => setConfirmState(null)}
+        title={confirmState?.kind === 'delete' ? 'Delete layout' : 'Discard unsaved changes'}
+        size="sm"
+        footer={(
+          <>
+            <button type="button" onClick={() => setConfirmState(null)} disabled={saving}
+              className="btn-secondary text-xs px-3 py-1.5 disabled:opacity-40">
+              Cancel
+            </button>
+            {confirmState?.kind === 'delete' ? (
+              <button type="button" onClick={confirmDeleteLayout} disabled={saving}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-600 hover:bg-red-500 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                {saving ? 'Deleting...' : 'Delete layout'}
+              </button>
+            ) : (
+              <button type="button"
+                onClick={() => { const l = confirmState?.layout; setConfirmState(null); if (l) applySwitch(l) }}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-600 hover:bg-amber-500 text-white transition-colors">
+                Discard and switch
+              </button>
+            )}
+          </>
+        )}
+      >
+        <p className="text-sm text-[var(--text-secondary)]">
+          {confirmState?.kind === 'delete'
+            ? `Delete layout "${draft?.name || ''}"? This cannot be undone.`
+            : 'Discard unsaved changes to the current layout?'}
+        </p>
+      </Modal>
     </div>
   )
 }

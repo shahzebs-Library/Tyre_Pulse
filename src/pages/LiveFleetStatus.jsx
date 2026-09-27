@@ -22,6 +22,7 @@ import { formatDate } from '../lib/formatters'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import PageHeader from '../components/ui/PageHeader'
+import Modal from '../components/ui/Modal'
 import VehicleTyreDiagram from '../components/VehicleTyreDiagram'
 import { useLanguage } from '../contexts/LanguageContext'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
@@ -414,7 +415,6 @@ export default function LiveFleetStatus() {
   const [selectedAsset,  setSelectedAsset]  = useState(null)
   const [drawerOpen,     setDrawerOpen]     = useState(false)
   const [briefingOpen,   setBriefingOpen]   = useState(true)
-  const drawerRef = useRef(null)
 
   // ── Fetch ────────────────────────────────────────────────────────────────────
   const load = useCallback(async (silent = false) => {
@@ -485,16 +485,8 @@ export default function LiveFleetStatus() {
     return () => clearInterval(autoRefreshRef.current)
   }, [autoRefresh, load])
 
-  // ── Close drawer on outside click ────────────────────────────────────────────
-  useEffect(() => {
-    function handler(e) {
-      if (drawerOpen && drawerRef.current && !drawerRef.current.contains(e.target)) {
-        setDrawerOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [drawerOpen])
+  // Backdrop press, Escape and focus handling for the detail dialog live in the
+  // shared Modal shell.
 
   // ── Derived (pure engine: liveFleetStatusAnalytics) ─────────────────────────
   const vehicles = useMemo(
@@ -1163,61 +1155,33 @@ export default function LiveFleetStatus() {
         </div>
       </div>
 
-      {/* ── Detail Drawer ── */}
-      <AnimatePresence>
-        {drawerOpen && drawerVehicle && (
+      {/* ── Detail dialog ── */}
+      <Modal
+        open={!!(drawerOpen && drawerVehicle)}
+        onClose={() => setDrawerOpen(false)}
+        size="lg"
+        title={drawerVehicle ? (
+          <span className="flex items-center gap-2">
+            <span className="text-2xl" aria-hidden="true">{vehicleEmoji(drawerVehicle.vehicle_type)}</span>
+            {drawerVehicle.asset_no}
+            {drawerVehicle.fleet_number && (
+              <span className="text-[var(--text-muted)] font-mono text-sm">#{drawerVehicle.fleet_number}</span>
+            )}
+          </span>
+        ) : null}
+        subtitle={drawerVehicle ? (
           <>
-            {/* Backdrop */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/60 z-40"
-              onClick={() => setDrawerOpen(false)}
-            />
-
-            {/* Drawer */}
-            <motion.div
-              ref={drawerRef}
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 28, stiffness: 280 }}
-              className="fixed top-0 right-0 h-full w-full sm:w-[540px] lg:w-[620px] z-50 bg-[var(--surface-0)] border-l border-[var(--border-dim)] flex flex-col shadow-2xl"
-            >
-              {/* Drawer header */}
-              <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border-dim)] flex-shrink-0">
-                <div>
-                  <h2 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
-                    <span className="text-2xl">{vehicleEmoji(drawerVehicle.vehicle_type)}</span>
-                    {drawerVehicle.asset_no}
-                    {drawerVehicle.fleet_number && (
-                      <span className="text-[var(--text-muted)] font-mono text-sm">#{drawerVehicle.fleet_number}</span>
-                    )}
-                  </h2>
-                  <p className="text-[var(--text-secondary)] text-sm mt-0.5">
-                    {drawerVehicle.make} {drawerVehicle.model}
-                    {drawerVehicle.site && <span> · {drawerVehicle.site}</span>}
-                    {drawerVehicle.operator_name && (
-                      <span className="ml-1 text-[var(--text-muted)]">· {drawerVehicle.operator_name}</span>
-                    )}
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <HealthCircle score={drawerVehicle.score} size={52} />
-                  <button
-                    type="button"
-                    aria-label="Close vehicle details"
-                    onClick={() => setDrawerOpen(false)}
-                    className="p-2.5 rounded-lg hover:bg-[var(--surface-2)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
-                  >
-                    <X size={18} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Drawer body */}
-              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+            {drawerVehicle.make} {drawerVehicle.model}
+            {drawerVehicle.site && <span> · {drawerVehicle.site}</span>}
+            {drawerVehicle.operator_name && (
+              <span className="ml-1 text-[var(--text-muted)]">· {drawerVehicle.operator_name}</span>
+            )}
+          </>
+        ) : null}
+        headerExtra={drawerVehicle ? <HealthCircle score={drawerVehicle.score} size={52} /> : null}
+      >
+        {drawerVehicle && (
+              <div className="space-y-5">
 
                 {/* Vehicle info badges */}
                 <div className="flex flex-wrap gap-2">
@@ -1417,10 +1381,8 @@ export default function LiveFleetStatus() {
                   </div>
                 </div>
               </div>
-            </motion.div>
-          </>
         )}
-      </AnimatePresence>
+      </Modal>
     </div>
   )
 }

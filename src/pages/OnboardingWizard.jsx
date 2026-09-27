@@ -19,6 +19,7 @@ import {
   Trash2, Circle, PlayCircle, SkipForward, ExternalLink,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Modal from '../components/ui/Modal'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listOnboardingTasks, createOnboardingTask, updateOnboardingTask, deleteOnboardingTask,
@@ -472,50 +473,57 @@ export default function OnboardingWizard() {
       )}
 
       {/* Create / Edit modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={closeModal}>
-          <div className="card w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-[var(--text-primary)]">{editing ? 'Edit task' : 'Add onboarding task'}</h3>
-              <button onClick={closeModal} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
-            </div>
-            <form onSubmit={submit} className="space-y-4">
+      <Modal
+        open={showModal}
+        onClose={saving ? undefined : closeModal}
+        title={editing ? 'Edit task' : 'Add onboarding task'}
+        size="md"
+        footer={(
+          <>
+            <button type="button" onClick={closeModal} className="btn-secondary text-sm" disabled={saving}>Cancel</button>
+            <button type="submit" form="onboarding-task-form" className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={saving}>
+              {saving ? 'Saving...' : editing ? 'Save changes' : 'Add task'}
+            </button>
+          </>
+        )}
+      >
+            <form id="onboarding-task-form" onSubmit={submit} className="space-y-4">
               <div>
-                <label className="label">Task title</label>
-                <input className="input w-full" placeholder="e.g. Import vehicle fleet" value={form.title} maxLength={300} onChange={(e) => set('title', e.target.value)} />
+                <label htmlFor="onb-task-title" className="label">Task title</label>
+                <input id="onb-task-title" className="input w-full" placeholder="e.g. Import vehicle fleet" value={form.title} maxLength={300} onChange={(e) => set('title', e.target.value)} />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="label">Phase</label>
-                  <select className="input w-full" value={form.phase} onChange={(e) => set('phase', e.target.value)}>
+                  <label htmlFor="onb-phase" className="label">Phase</label>
+                  <select id="onb-phase" className="input w-full" value={form.phase} onChange={(e) => set('phase', e.target.value)}>
                     {PHASE_ORDER.map((p) => <option key={p} value={p}>{PHASE_LABELS[p]}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="label">Status</label>
-                  <select className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
+                  <label htmlFor="onb-status" className="label">Status</label>
+                  <select id="onb-status" className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
                     {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{STATUS_META[s].label}</option>)}
                   </select>
                 </div>
               </div>
               <div>
-                <label className="label">Description (optional)</label>
-                <textarea className="input w-full min-h-[70px] resize-y" placeholder="What needs to happen for this task to be done?" value={form.description} maxLength={8000} onChange={(e) => set('description', e.target.value)} />
+                <label htmlFor="onb-description-optional" className="label">Description (optional)</label>
+                <textarea id="onb-description-optional" className="input w-full min-h-[70px] resize-y" placeholder="What needs to happen for this task to be done?" value={form.description} maxLength={8000} onChange={(e) => set('description', e.target.value)} />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="label">Owner (optional)</label>
-                  <input className="input w-full" placeholder="e.g. Fleet Admin" value={form.owner} maxLength={200} onChange={(e) => set('owner', e.target.value)} />
+                  <label htmlFor="onb-owner-optional" className="label">Owner (optional)</label>
+                  <input id="onb-owner-optional" className="input w-full" placeholder="e.g. Fleet Admin" value={form.owner} maxLength={200} onChange={(e) => set('owner', e.target.value)} />
                 </div>
                 <div>
-                  <label className="label">Due date (optional)</label>
-                  <input className="input w-full" type="date" value={form.due_date} onChange={(e) => set('due_date', e.target.value)} />
+                  <label htmlFor="onb-due-date-optional" className="label">Due date (optional)</label>
+                  <input id="onb-due-date-optional" className="input w-full" type="date" value={form.due_date} onChange={(e) => set('due_date', e.target.value)} />
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="label">Order</label>
-                  <input className="input w-full" type="number" step="1" min="0" placeholder="0" value={form.sort_order} onChange={(e) => set('sort_order', e.target.value)} />
+                  <label htmlFor="onb-order" className="label">Order</label>
+                  <input id="onb-order" className="input w-full" type="number" step="1" min="0" placeholder="0" value={form.sort_order} onChange={(e) => set('sort_order', e.target.value)} />
                 </div>
                 <div className="flex items-end pb-1">
                   <label className="inline-flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
@@ -525,12 +533,12 @@ export default function OnboardingWizard() {
                 </div>
               </div>
               <div>
-                <label className="label">Help link (optional)</label>
-                <input className="input w-full" type="url" placeholder="https://…" value={form.help_url} maxLength={1000} onChange={(e) => set('help_url', e.target.value)} />
+                <label htmlFor="onb-help-link-optional" className="label">Help link (optional)</label>
+                <input id="onb-help-link-optional" className="input w-full" type="url" placeholder="https://…" value={form.help_url} maxLength={1000} onChange={(e) => set('help_url', e.target.value)} />
               </div>
               <div>
-                <label className="label">Notes (optional)</label>
-                <textarea className="input w-full min-h-[60px] resize-y" placeholder="Any context for whoever picks this up" value={form.notes} maxLength={8000} onChange={(e) => set('notes', e.target.value)} />
+                <label htmlFor="onb-notes-optional" className="label">Notes (optional)</label>
+                <textarea id="onb-notes-optional" className="input w-full min-h-[60px] resize-y" placeholder="Any context for whoever picks this up" value={form.notes} maxLength={8000} onChange={(e) => set('notes', e.target.value)} />
               </div>
 
               {formError && (
@@ -539,39 +547,33 @@ export default function OnboardingWizard() {
                 </div>
               )}
 
-              <div className="flex items-center justify-end gap-2 pt-1">
-                <button type="button" onClick={closeModal} className="btn-secondary text-sm" disabled={saving}>Cancel</button>
-                <button type="submit" className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={saving}>
-                  {saving ? 'Saving…' : editing ? 'Save changes' : 'Add task'}
-                </button>
-              </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {/* Delete confirm */}
-      {confirmDelete && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={() => !deleting && setConfirmDelete(null)}>
-          <div className="card w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-full bg-red-900/30 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" /></div>
-              <div>
-                <h3 className="text-[var(--text-primary)] font-semibold">Delete this task?</h3>
-                <p className="text-sm text-[var(--text-muted)] mt-1">
-                  {confirmDelete.title || 'Task'} · {PHASE_LABELS[confirmDelete.phase] || confirmDelete.phase}. This can’t be undone.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center justify-end gap-2 mt-5">
-              <button onClick={() => setConfirmDelete(null)} className="btn-secondary text-sm" disabled={deleting}>Cancel</button>
-              <button onClick={doDelete} className="btn-danger text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={deleting}>
-                <Trash2 size={14} /> {deleting ? 'Deleting…' : 'Delete'}
-              </button>
-            </div>
+      <Modal
+        open={!!confirmDelete}
+        onClose={deleting ? undefined : () => setConfirmDelete(null)}
+        title="Delete this task?"
+        size="sm"
+        footer={(
+          <>
+            <button onClick={() => setConfirmDelete(null)} className="btn-secondary text-sm" disabled={deleting}>Cancel</button>
+            <button onClick={doDelete} className="btn-danger text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={deleting}>
+              <Trash2 size={14} /> {deleting ? 'Deleting...' : 'Delete'}
+            </button>
+          </>
+        )}
+      >
+        {confirmDelete && (
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-full bg-red-900/30 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" /></div>
+            <p className="text-sm text-[var(--text-muted)]">
+              {confirmDelete.title || 'Task'} · {PHASE_LABELS[confirmDelete.phase] || confirmDelete.phase}. This cannot be undone.
+            </p>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </div>
   )
 }

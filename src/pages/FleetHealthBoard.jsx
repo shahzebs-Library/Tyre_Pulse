@@ -24,6 +24,7 @@ import { compareValues } from '../lib/consoleTable'
 import { colorAt, withAlpha } from '../lib/reportColors'
 import { useSettings } from '../contexts/SettingsContext'
 import PageHeader from '../components/ui/PageHeader'
+import Modal from '../components/ui/Modal'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import SectionTabs, { FLEET_TABS } from '../components/ui/SectionTabs'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -193,7 +194,6 @@ export default function FleetHealthBoard() {
   const [selectedVehicle, setSelectedVehicle] = useState(null)
   const [drawerOpen, setDrawerOpen]           = useState(false)
   const [trendData, setTrendData]   = useState([])
-  const drawerRef = useRef(null)
   const reqIdRef = useRef(0)
 
   // ── Fetch ───────────────────────────────────────────────────────────────────
@@ -250,20 +250,8 @@ export default function FleetHealthBoard() {
 
   useEffect(() => { load() }, [load])
 
-  // Close drawer on outside click or Escape.
-  useEffect(() => {
-    if (!drawerOpen) return undefined
-    function onDown(e) {
-      if (drawerRef.current && !drawerRef.current.contains(e.target)) setDrawerOpen(false)
-    }
-    function onKey(e) { if (e.key === 'Escape') setDrawerOpen(false) }
-    document.addEventListener('mousedown', onDown)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDown)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [drawerOpen])
+  // Escape, backdrop press and focus handling for the detail dialog live in
+  // the shared Modal shell.
 
   // ── Derived ─────────────────────────────────────────────────────────────────
   const vehicleMap = useMemo(() => groupVehicles(rawRecords), [rawRecords])
@@ -730,43 +718,22 @@ export default function FleetHealthBoard() {
         </aside>
       </div>
 
-      {/* ── Detail Drawer ── */}
-      <AnimatePresence>
-        {drawerOpen && drawerVehicle && (
-          <>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 z-40" aria-hidden="true" onClick={() => setDrawerOpen(false)} />
-            <motion.div
-              ref={drawerRef}
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="fhb-drawer-h"
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 28, stiffness: 280 }}
-              className="fixed top-0 right-0 h-full w-full sm:w-[560px] lg:w-[680px] z-50 bg-[var(--surface-0)] border-l border-[var(--border-dim)] flex flex-col shadow-2xl"
-            >
-              <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border-dim)]">
-                <div>
-                  <h2 id="fhb-drawer-h" className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
-                    <Truck size={18} className="text-green-400" aria-hidden="true" />
-                    {drawerVehicle.asset_no}
-                  </h2>
-                  <p className="text-[var(--text-secondary)] text-sm mt-0.5">
-                    {drawerVehicle.site ?? 'N/A'}, {drawerVehicle.country ?? 'N/A'}. {drawerVehicle.rated} of {drawerVehicle.tyres.length} tyres rated.
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <HealthCircle score={drawerVehicle.score} size={52} />
-                  <button type="button" aria-label="Close vehicle details" onClick={() => setDrawerOpen(false)}
-                    className="w-11 h-11 flex items-center justify-center rounded-lg hover:bg-[var(--surface-2)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
-                    <X size={18} aria-hidden="true" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+      {/* ── Detail dialog ── */}
+      <Modal
+        open={!!(drawerOpen && drawerVehicle)}
+        onClose={() => setDrawerOpen(false)}
+        size="lg"
+        title={drawerVehicle ? (
+          <span className="flex items-center gap-2">
+            <Truck size={18} className="text-green-400" aria-hidden="true" />
+            {drawerVehicle.asset_no}
+          </span>
+        ) : null}
+        subtitle={drawerVehicle ? `${drawerVehicle.site ?? 'N/A'}, ${drawerVehicle.country ?? 'N/A'}. ${drawerVehicle.rated} of ${drawerVehicle.tyres.length} tyres rated.` : null}
+        headerExtra={drawerVehicle ? <HealthCircle score={drawerVehicle.score} size={52} /> : null}
+      >
+        {drawerVehicle && (
+              <div className="space-y-5">
                 <div>
                   <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-2">{t('fleethealth.drawer.activeTyres')}</h3>
                   <EnterpriseTable
@@ -829,10 +796,8 @@ export default function FleetHealthBoard() {
                   </div>
                 </div>
               </div>
-            </motion.div>
-          </>
         )}
-      </AnimatePresence>
+      </Modal>
     </div>
   )
 }

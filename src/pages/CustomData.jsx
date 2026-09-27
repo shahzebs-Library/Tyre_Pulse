@@ -21,6 +21,7 @@ import {
   Download, RefreshCw, Eye, Layers, Tag, Link2, AlertTriangle, Info, Zap, Hash,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Modal from '../components/ui/Modal'
 import StatTile from '../components/ui/StatTile'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
@@ -794,19 +795,22 @@ export default function CustomData() {
       </AnimatePresence>
 
       {/* ── Delete Synonym Confirmation ─────────────────────────────────────── */}
-      {deleteTarget && (
-        <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto"
-          onClick={() => { if (!deleting) closeDeleteSynonym() }}
-        >
-          <div
-            className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl w-full max-w-lg p-6 my-4"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-[var(--text-primary)]">{t('customdata.synonyms.delete.title')}</h2>
-              <button type="button" onClick={closeDeleteSynonym} aria-label="Close" className="min-w-[44px] min-h-[44px] grid place-items-center text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} aria-hidden="true" /></button>
-            </div>
+      <Modal
+        open={!!deleteTarget}
+        onClose={deleting ? undefined : closeDeleteSynonym}
+        title={t('customdata.synonyms.delete.title')}
+        size="md"
+        footer={(
+          <>
+            <button onClick={closeDeleteSynonym} disabled={deleting} className="btn-secondary disabled:opacity-50">{t('customdata.synonyms.delete.cancel')}</button>
+            <button onClick={deleteSynonym} disabled={deleting} className="btn-danger flex items-center gap-2 disabled:opacity-50">
+              <Trash2 size={15} /> {deleting ? t('customdata.synonyms.delete.deleting') : t('customdata.synonyms.delete.confirm')}
+            </button>
+          </>
+        )}
+      >
+        {deleteTarget && (
+          <>
             <div className="flex gap-3 mb-4">
               <AlertTriangle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
               <div>
@@ -825,17 +829,11 @@ export default function CustomData() {
               </div>
             </div>
             {deleteError && (
-              <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5 mb-4">{deleteError}</p>
+              <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5">{deleteError}</p>
             )}
-            <div className="flex gap-3">
-              <button onClick={deleteSynonym} disabled={deleting} className="btn-danger flex items-center gap-2 disabled:opacity-50">
-                <Trash2 size={15} /> {deleting ? t('customdata.synonyms.delete.deleting') : t('customdata.synonyms.delete.confirm')}
-              </button>
-              <button onClick={closeDeleteSynonym} disabled={deleting} className="btn-secondary disabled:opacity-50">{t('customdata.synonyms.delete.cancel')}</button>
-            </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </Modal>
     </div>
   )
 }

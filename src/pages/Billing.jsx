@@ -15,6 +15,7 @@ import { toUserMessage } from '../lib/safeError'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useReportMeta } from '../hooks/useReportMeta'
 import { Illustration } from '../components/illustrations'
+import Modal from '../components/ui/Modal'
 
 const TONE = {
   blue:  'bg-blue-900/40 text-blue-300 border-blue-700/40',
@@ -495,26 +496,32 @@ export default function Billing() {
         )}
       </div>
 
-      {confirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setConfirm(null)}>
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-              <CreditCard size={18} className="text-emerald-400" /> {confirm.direction} to {confirm.plan.name}?
-            </h3>
-            <p className="text-gray-400 text-sm mt-2">
-              Your organisation will move to the <strong className="text-white">{confirm.plan.name}</strong> plan,
-              billed <strong className="text-white">{interval}</strong>. Limits and features take effect immediately.
-              {confirm.direction === 'Downgrade' && " Anything currently over the new limits stays but you won't be able to add more until you're back under the cap."}
-            </p>
-            <div className="flex gap-3 mt-5">
-              <button onClick={() => setConfirm(null)} className="btn-secondary flex-1 justify-center text-sm">Cancel</button>
-              <button onClick={() => applyPlan(confirm.plan)} disabled={pending} className="btn-primary flex-1 justify-center text-sm">
-                {pending ? 'Applying…' : `Confirm ${confirm.direction.toLowerCase()}`}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={!!confirm}
+        onClose={pending ? undefined : () => setConfirm(null)}
+        size="sm"
+        title={confirm ? (
+          <span className="flex items-center gap-2">
+            <CreditCard size={18} className="text-emerald-400" /> {confirm.direction} to {confirm.plan.name}?
+          </span>
+        ) : null}
+        footer={confirm ? (
+          <>
+            <button onClick={() => setConfirm(null)} disabled={pending} className="btn-secondary justify-center text-sm disabled:opacity-50">Cancel</button>
+            <button onClick={() => applyPlan(confirm.plan)} disabled={pending} className="btn-primary justify-center text-sm">
+              {pending ? 'Applying...' : `Confirm ${confirm.direction.toLowerCase()}`}
+            </button>
+          </>
+        ) : null}
+      >
+        {confirm && (
+          <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+            Your organisation will move to the <strong style={{ color: 'var(--text-primary)' }}>{confirm.plan.name}</strong> plan,
+            billed <strong style={{ color: 'var(--text-primary)' }}>{interval}</strong>. Limits and features take effect immediately.
+            {confirm.direction === 'Downgrade' && " Anything currently over the new limits stays but you won't be able to add more until you're back under the cap."}
+          </p>
+        )}
+      </Modal>
     </div>
   )
 }

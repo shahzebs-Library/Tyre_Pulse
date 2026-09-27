@@ -18,6 +18,7 @@ import { listPmPrograms } from '../lib/api/pmPrograms'
 import { pmDueStatus } from '../lib/pmPrograms'
 import { useSettings } from '../contexts/SettingsContext'
 import PageHeader from '../components/ui/PageHeader'
+import Modal from '../components/ui/Modal'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -898,46 +899,20 @@ export default function MaintenanceCalendar() {
       </div>
 
       {/* ── Event Detail Modal ───────────────────────────────────────────────── */}
-      <AnimatePresence>
+      <Modal
+        open={!!selectedEvent}
+        onClose={() => setSelectedEvent(null)}
+        size="md"
+        title={selectedEvent ? (
+          <span className="flex items-center gap-3">
+            <span className={`w-3 h-3 rounded-full flex-shrink-0 ${EVENT_COLORS[selectedEvent.type]?.dot || 'bg-gray-500'}`} aria-hidden="true" />
+            {selectedEvent.title}
+          </span>
+        ) : null}
+        subtitle={selectedEvent ? `${EVENT_COLORS[selectedEvent.type]?.label || ''} · ${fmtDisplay(selectedEvent.date)}` : null}
+      >
         {selectedEvent && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
-            onClick={() => setSelectedEvent(null)}
-          >
-            <motion.div
-              initial={{ scale: 0.94, y: 16 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.94, y: 16 }}
-              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-              onClick={e => e.stopPropagation()}
-              className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl w-full max-w-md shadow-2xl overflow-hidden"
-            >
-              {/* Modal header */}
-              <div className={`px-5 py-4 border-b border-gray-800 flex items-start justify-between ${
-                EVENT_COLORS[selectedEvent.type]?.chip || 'bg-gray-800'
-              }`}>
-                <div className="flex items-center gap-3">
-                  <div className={`w-3 h-3 rounded-full flex-shrink-0 ${EVENT_COLORS[selectedEvent.type]?.dot || 'bg-gray-500'}`} />
-                  <div>
-                    <h3 className="text-white font-bold">{selectedEvent.title}</h3>
-                    <p className="text-gray-400 text-xs mt-0.5">
-                      {EVENT_COLORS[selectedEvent.type]?.label} · {fmtDisplay(selectedEvent.date)}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setSelectedEvent(null)}
-                  className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-
-              {/* Modal body */}
-              <div className="p-5 space-y-4">
+              <div className="space-y-4">
                 {/* Badges */}
                 <div className="flex flex-wrap gap-2">
                   <span className={`text-xs px-2.5 py-1 rounded-full border font-medium ${PRIORITY_BADGE[selectedEvent.priority] || PRIORITY_BADGE.Medium}`}>
@@ -1096,10 +1071,8 @@ export default function MaintenanceCalendar() {
                   </button>
                 </div>
               </div>
-            </motion.div>
-          </motion.div>
         )}
-      </AnimatePresence>
+      </Modal>
     </div>
   )
 }

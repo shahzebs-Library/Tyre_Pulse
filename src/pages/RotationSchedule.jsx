@@ -398,6 +398,7 @@ export default function RotationSchedule() {
   const [schedLoading, setSchedLoading] = useState(true)
   const [schedError, setSchedError] = useState(null)
   const [schedBusy, setSchedBusy] = useState(false)
+  const [pendingRemoveId, setPendingRemoveId] = useState(null)
   const [schedStatusFilter, setSchedStatusFilter] = useState('Open')
   // Approval-engine gate: while the open schedule's workflow is active or
   // locked, completing it is blocked.
@@ -500,8 +501,14 @@ export default function RotationSchedule() {
     }
   }, [fetchSchedules, detailSchedule?.id, wfLocked])
 
-  const removeSchedule = useCallback(async (id) => {
-    if (!window.confirm('Remove this scheduled rotation?')) return
+  // Opens the confirmation dialog; the delete itself runs in confirmRemoveSchedule.
+  const removeSchedule = useCallback((id) => {
+    setPendingRemoveId(id)
+  }, [])
+
+  const confirmRemoveSchedule = useCallback(async () => {
+    const id = pendingRemoveId
+    if (!id) return
     setSchedBusy(true)
     setSchedError(null)
     try {
@@ -511,8 +518,9 @@ export default function RotationSchedule() {
       setSchedError(toUserMessage(e, 'Failed to remove schedule'))
     } finally {
       setSchedBusy(false)
+      setPendingRemoveId(null)
     }
-  }, [fetchSchedules])
+  }, [fetchSchedules, pendingRemoveId])
 
   // ── Analytics (single engine) ──────────────────────────────────────────────
   const analytics = useMemo(() => buildRotationAnalytics(records, interval), [records, interval])
@@ -1242,6 +1250,26 @@ export default function RotationSchedule() {
           onSave={entry => createSchedules([entry])}
         />
       )}
+
+      <Modal
+        open={!!pendingRemoveId}
+        onClose={schedBusy ? undefined : () => setPendingRemoveId(null)}
+        title="Remove scheduled rotation"
+        size="sm"
+        footer={(
+          <>
+            <button type="button" onClick={() => setPendingRemoveId(null)} disabled={schedBusy} className="btn-secondary disabled:opacity-50">
+              Cancel
+            </button>
+            <button type="button" onClick={confirmRemoveSchedule} disabled={schedBusy}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-semibold disabled:opacity-50">
+              {schedBusy ? 'Removing...' : 'Remove'}
+            </button>
+          </>
+        )}
+      >
+        <p className="text-sm text-[var(--text-secondary)]">Remove this scheduled rotation?</p>
+      </Modal>
 
       {/* Scheduled Rotation Approval rail (tyre_rotation entity). NOT `Modal`
           for the same tp-drawer-panel reason as RotationDrawer above. */}

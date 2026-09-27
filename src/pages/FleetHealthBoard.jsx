@@ -13,18 +13,25 @@ import {
   Search, X, ChevronRight, Grid, List,
   Truck, MapPin, Globe, Shield, Circle,
   ExternalLink, Wrench, Clock, TrendingUp,
-  BarChart2, Filter,
+  BarChart2, Filter, Download, FileText,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { toUserMessage } from '../lib/safeError'
 import { fetchAllPages } from '../lib/fetchAll'
 import { formatDate } from '../lib/formatters'
+import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
+import { compareValues } from '../lib/consoleTable'
+import { colorAt, withAlpha } from '../lib/reportColors'
 import { useSettings } from '../contexts/SettingsContext'
-import { useAuth } from '../contexts/AuthContext'
 import PageHeader from '../components/ui/PageHeader'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import SectionTabs, { FLEET_TABS } from '../components/ui/SectionTabs'
 import { useLanguage } from '../contexts/LanguageContext'
-import { severityRank } from '../lib/severity'
+import {
+  RISK_LEVELS, groupVehicles, enrichVehicle, matchesRiskFilter, matchesSearch, isVehicleHealthy,
+  fleetHealthSummary, latestIssueDate, monthlyHealthTrend, criticalVehicles as buildCriticalList,
+  assetRiskTrend, daysSince, vehicleExportRows, isRated,
+} from '../lib/fleetHealthBoardAnalytics'
 
 ChartJS.register(
   CategoryScale, LinearScale,
@@ -32,14 +39,12 @@ ChartJS.register(
   Title, Tooltip, Legend, Filler,
 )
 
-// ── Risk helpers ──────────────────────────────────────────────────────────────
+const TOUCH = 'min-h-[44px]'
+const GRID_PAGE = 60
+
+// ── Risk helpers (semantic colours: the colour carries the risk meaning) ──────
 function riskColor(level) {
-  return {
-    Critical: '#dc2626',
-    High:     '#ea580c',
-    Medium:   '#ca8a04',
-    Low:      '#16a34a',
-  }[level] ?? '#374151'
+  return { Critical: '#dc2626', High: '#ea580c', Medium: '#ca8a04', Low: '#16a34a' }[level] ?? 'var(--text-dim)'
 }
 
 function riskBgClass(level) {
@@ -51,28 +56,8 @@ function riskBgClass(level) {
   }[level] ?? 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)]'
 }
 
-function worstRisk(tyres) {
-  if (!tyres?.length) return null
-  return tyres.reduce((worst, t) => (
-    severityRank(t.risk_level) > severityRank(worst) ? t.risk_level : worst
-  ), tyres[0].risk_level)
-}
-
-// ── Vehicle health score ──────────────────────────────────────────────────────
-function vehicleHealthScore(tyres) {
-  if (!tyres?.length) return 0
-  let score = 0
-  tyres.forEach(t => {
-    const riskScore = { Low: 100, Medium: 65, High: 30, Critical: 0 }[t.risk_level] ?? 50
-    const treadScore = t.tread_depth != null
-      ? Math.min(100, (t.tread_depth / 8) * 100)
-      : 50
-    score += (riskScore * 0.7 + treadScore * 0.3)
-  })
-  return Math.round(score / tyres.length)
-}
-
 function scoreColor(score) {
+  if (score == null) return 'var(--text-muted)'
   if (score >= 80) return '#16a34a'
   if (score >= 60) return '#ca8a04'
   if (score >= 40) return '#ea580c'
@@ -80,41 +65,52 @@ function scoreColor(score) {
 }
 
 function scoreBorderClass(score) {
+  if (score == null) return 'border-[var(--border-bright)]'
   if (score >= 80) return 'border-green-700/40'
   if (score >= 60) return 'border-yellow-700/40'
   if (score >= 40) return 'border-orange-700/40'
   return 'border-red-700/40'
 }
 
-// ── Tyre position mini-diagram ────────────────────────────────────────────────
-const POSITIONS_LAYOUT = [
-  { id: 0, label: 'FL', col: 0, row: 0 },
-  { id: 1, label: 'FR', col: 2, row: 0 },
-  { id: 2, label: 'RLI', col: 0, row: 1 },
-  { id: 3, label: 'RLO', col: 1, row: 1 },
-  { id: 4, label: 'RRI', col: 2, row: 1 },
-  { id: 5, label: 'RRO', col: 3, row: 1 },
-]
+function fmtDate(d) {
+  if (!d) return 'N/A'
+  return formatDate(d, 'All', { day: '2-digit', month: 'short', year: 'numeric' })
+}
 
+function sortNullLast(rowA, rowB, id) {
+  const a = rowA.getValue(id)
+  const b = rowB.getValue(id)
+  const ba = a == null || a === ''
+  const bb = b == null || b === ''
+  if (ba && bb) return 0
+  if (ba) return 1
+  if (bb) return -1
+  return compareValues(a, b)
+}
+
+// ── Tyre position mini-diagram ────────────────────────────────────────────────
 function TyrePositionDot({ tyre, position }) {
   const { t } = useLanguage()
   const [showTip, setShowTip] = useState(false)
-  const color = tyre ? riskColor(tyre.risk_level) : '#374151'
-  const opacity = tyre ? 1 : 0.35
-
+  const label = tyre
+    ? `${position}: ${tyre.risk_level ?? 'not rated'}, ${t('fleethealth.card.tread', { value: tyre.tread_depth != null ? `${tyre.tread_depth}mm` : 'N/A' })}`
+    : `${position}: no tyre recorded`
   return (
     <div className="relative flex items-center justify-center">
       <div
-        className="w-4 h-4 rounded-full cursor-pointer transition-transform hover:scale-110"
-        style={{ backgroundColor: color, opacity }}
+        role="img"
+        aria-label={label}
+        title={label}
+        className="w-4 h-4 rounded-full"
+        style={{ backgroundColor: tyre ? riskColor(tyre.risk_level) : 'var(--text-dim)', opacity: tyre ? 1 : 0.35 }}
         onMouseEnter={() => setShowTip(true)}
         onMouseLeave={() => setShowTip(false)}
       />
       {showTip && tyre && (
-        <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-50 bg-[var(--surface-1)] border border-[var(--border-bright)] rounded-lg p-2 text-xs whitespace-nowrap shadow-xl pointer-events-none">
+        <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-50 bg-[var(--surface-1)] border border-[var(--border-bright)] rounded-lg p-2 text-xs whitespace-nowrap shadow-xl pointer-events-none" aria-hidden="true">
           <p className="text-[var(--text-primary)] font-semibold">{position}</p>
-          <p className="text-[var(--text-secondary)]">{t('fleethealth.card.tread', { value: tyre.tread_depth != null ? `${tyre.tread_depth}mm` : '-' })}</p>
-          <p style={{ color: riskColor(tyre.risk_level) }}>{tyre.risk_level ?? '-'}</p>
+          <p className="text-[var(--text-secondary)]">{t('fleethealth.card.tread', { value: tyre.tread_depth != null ? `${tyre.tread_depth}mm` : 'N/A' })}</p>
+          <p style={{ color: riskColor(tyre.risk_level) }}>{tyre.risk_level ?? 'Not rated'}</p>
         </div>
       )}
     </div>
@@ -122,19 +118,11 @@ function TyrePositionDot({ tyre, position }) {
 }
 
 function MiniTyreDiagram({ tyres }) {
-  const byPos = {}
-  tyres.forEach(t => { if (t.position) byPos[t.position] = t })
-
   const frontLeft  = tyres.find(t => /FL|F1|steer.*l|left.*front/i.test(t.position ?? ''))
   const frontRight = tyres.find(t => /FR|F2|steer.*r|right.*front/i.test(t.position ?? ''))
-  const rearGroup  = tyres.filter(t => !/FL|FR|F1|F2|steer/i.test(t.position ?? ''))
-
-  const frontPair = [frontLeft, frontRight]
-  const rearSlots = rearGroup.slice(0, 4)
+  const rearSlots  = tyres.filter(t => !/FL|FR|F1|F2|steer/i.test(t.position ?? '')).slice(0, 4)
   while (rearSlots.length < 4) rearSlots.push(null)
-
-  const posLabels = ['FL', 'FR', 'RL', 'RLO', 'RR', 'RRO']
-
+  const posLabels = ['RL', 'RLO', 'RR', 'RRO']
   return (
     <div className="flex flex-col items-center gap-1">
       <div className="flex gap-4">
@@ -142,53 +130,40 @@ function MiniTyreDiagram({ tyres }) {
         <TyrePositionDot tyre={frontRight} position={frontRight?.position ?? 'FR'} />
       </div>
       <div className="flex gap-1.5">
-        {rearSlots.map((t, i) => (
-          <TyrePositionDot key={i} tyre={t} position={t?.position ?? posLabels[i + 2]} />
-        ))}
+        {rearSlots.map((t, i) => <TyrePositionDot key={i} tyre={t} position={t?.position ?? posLabels[i]} />)}
       </div>
     </div>
   )
 }
 
-// ── Health score circle ───────────────────────────────────────────────────────
 function HealthCircle({ score, size = 56 }) {
   const r = (size - 8) / 2
   const circ = 2 * Math.PI * r
-  const fill = (score / 100) * circ
+  const fill = ((score ?? 0) / 100) * circ
   const color = scoreColor(score)
-
   return (
-    <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="-rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#1f2937" strokeWidth="4" />
-        <circle
-          cx={size / 2} cy={size / 2} r={r}
-          fill="none" stroke={color} strokeWidth="4"
-          strokeDasharray={`${fill} ${circ}`}
-          strokeLinecap="round"
-          style={{ transition: 'stroke-dasharray 0.6s ease' }}
-        />
+    <div className="relative flex items-center justify-center" style={{ width: size, height: size }}
+      role="img" aria-label={score == null ? 'Health not assessed' : `Health ${score} of 100`}>
+      <svg width={size} height={size} className="-rotate-90" aria-hidden="true">
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" style={{ stroke: 'var(--surface-2)' }} strokeWidth="4" />
+        {score != null && (
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth="4"
+            strokeDasharray={`${fill} ${circ}`} strokeLinecap="round" style={{ transition: 'stroke-dasharray 0.6s ease' }} />
+        )}
       </svg>
-      <span className="absolute text-xs font-bold" style={{ color }}>{score}</span>
+      <span className="absolute text-xs font-bold" style={{ color }}>{score == null ? 'N/A' : score}</span>
     </div>
   )
 }
 
-// ── Loading skeleton ──────────────────────────────────────────────────────────
 function SkeletonCard() {
   return (
-    <div className="card animate-pulse">
+    <div className="card animate-pulse" aria-hidden="true">
       <div className="flex items-start justify-between mb-3">
         <div className="h-5 w-24 bg-[var(--surface-2)] rounded" />
         <div className="h-4 w-16 bg-[var(--surface-2)] rounded-full" />
       </div>
-      <div className="flex items-center justify-between mb-3">
-        <div className="h-14 w-14 bg-[var(--surface-2)] rounded-full" />
-        <div className="flex flex-col gap-1">
-          {[1,2,3].map(i => <div key={i} className="h-3 w-20 bg-[var(--surface-2)] rounded" />)}
-        </div>
-      </div>
-      <div className="h-8 bg-[var(--surface-2)] rounded mt-2" />
+      <div className="h-14 bg-[var(--surface-2)] rounded mt-2" />
     </div>
   )
 }
@@ -198,11 +173,11 @@ export default function FleetHealthBoard() {
   const { t } = useLanguage()
   const navigate = useNavigate()
   const { activeCountry } = useSettings()
-  const { profile } = useAuth()
 
   const [rawRecords, setRawRecords]   = useState([])
   const [loading, setLoading]         = useState(true)
   const [error, setError]             = useState(null)
+  const [exportError, setExportError] = useState('')
   const [lastUpdated, setLastUpdated] = useState(null)
   const [refreshing, setRefreshing]   = useState(false)
   // True when either read hit the 50,000-row ceiling (millions-row safety cap).
@@ -213,15 +188,12 @@ export default function FleetHealthBoard() {
   const [riskFilter, setRiskFilter]     = useState('All')
   const [search, setSearch]             = useState('')
   const [viewMode, setViewMode]         = useState('grid')
+  const [gridLimit, setGridLimit]       = useState(GRID_PAGE)
 
   const [selectedVehicle, setSelectedVehicle] = useState(null)
   const [drawerOpen, setDrawerOpen]           = useState(false)
-
   const [trendData, setTrendData]   = useState([])
   const drawerRef = useRef(null)
-
-  // Guards against a slow earlier response overwriting a newer one after the
-  // active country changes (fetch-race cancellation).
   const reqIdRef = useRef(0)
 
   // ── Fetch ───────────────────────────────────────────────────────────────────
@@ -230,16 +202,13 @@ export default function FleetHealthBoard() {
     if (!silent) setLoading(true)
     else setRefreshing(true)
     setError(null)
-
     try {
-      // Active tyres (current state). Country is scoped SERVER-SIDE. There is no
-      // date window here (an active fitment can be old), so bound the read with a
-      // 50,000-row ceiling + a stable order so paging never drops or repeats a row
-      // at a page boundary and truncation keeps the most recent records.
+      // Active tyres (no removal km). Country scoped SERVER-SIDE, bounded by a
+      // 50,000-row ceiling and a stable order so paging never drops a row.
       const { data, error: err, truncated: mainTruncated } = await fetchAllPages((from, to) => {
         let q = supabase
           .from('tyre_records')
-          .select('id,asset_no,serial_number:serial_no,position,tread_depth,pressure_reading,risk_level,issue_date,km_at_fitment,km_at_removal,cost_per_tyre,site,country,brand,size')
+          .select('id,asset_no,serial_number:serial_no,position,tread_depth,pressure_reading,risk_level,issue_date,km_at_fitment,km_at_removal,site,country,brand,size')
           .is('km_at_removal', null)
           .order('id', { ascending: false })
         if (activeCountry !== 'All') q = q.eq('country', activeCountry)
@@ -251,18 +220,10 @@ export default function FleetHealthBoard() {
       setRawRecords(data ?? [])
       setLastUpdated(new Date())
 
-      // Anchor the 12-month window to the data's latest issue_date (fallback:
-      // today) so historic imports still populate the trend chart.
-      let maxIssue = null
-      for (const r of data ?? []) { if (r.issue_date && (!maxIssue || r.issue_date > maxIssue)) maxIssue = r.issue_date }
-      const anchor = maxIssue ? new Date(maxIssue.slice(0, 10) + 'T00:00:00') : new Date()
-
-      // Trend: last 12 months from ALL records (not filtered by km_at_removal).
-      // PAGED: the window holds 6,696 rows and a bare select stops at 1,000, so
-      // the trend was drawn from the newest 15% - which bends the shape of the
-      // line, not just its height.
+      // Anchor the 12-month trend to the data's latest issue_date (fallback today).
+      const anchor = latestIssueDate(data ?? []) ?? new Date()
       const since = new Date(anchor.getTime() - 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
-      const { data: trendRaw, truncated: trendTruncated } = await fetchAllPages((from, to) => {
+      const { data: trendRaw, error: trendErr, truncated: trendTruncated } = await fetchAllPages((from, to) => {
         let q = supabase
           .from('tyre_records')
           .select('issue_date,risk_level,asset_no')
@@ -274,6 +235,7 @@ export default function FleetHealthBoard() {
         return q
       }, { max: 50000 })
       if (myReq !== reqIdRef.current) return
+      if (trendErr) throw trendErr
       setTrendData(trendRaw ?? [])
       setCapped(Boolean(mainTruncated) || Boolean(trendTruncated))
     } catch (e) {
@@ -288,261 +250,213 @@ export default function FleetHealthBoard() {
 
   useEffect(() => { load() }, [load])
 
-  // ── Close drawer on outside click ──────────────────────────────────────────
+  // Close drawer on outside click or Escape.
   useEffect(() => {
-    function handler(e) {
-      if (drawerOpen && drawerRef.current && !drawerRef.current.contains(e.target)) {
-        setDrawerOpen(false)
-      }
+    if (!drawerOpen) return undefined
+    function onDown(e) {
+      if (drawerRef.current && !drawerRef.current.contains(e.target)) setDrawerOpen(false)
     }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
+    function onKey(e) { if (e.key === 'Escape') setDrawerOpen(false) }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
   }, [drawerOpen])
 
-  // ── Derived: group by asset_no ─────────────────────────────────────────────
-  const vehicleMap = useMemo(() => {
-    const map = {}
-    rawRecords.forEach(r => {
-      if (!r.asset_no) return
-      if (!map[r.asset_no]) map[r.asset_no] = { asset_no: r.asset_no, site: r.site, country: r.country, tyres: [] }
-      map[r.asset_no].tyres.push(r)
-    })
-    return map
-  }, [rawRecords])
+  // ── Derived ─────────────────────────────────────────────────────────────────
+  const vehicleMap = useMemo(() => groupVehicles(rawRecords), [rawRecords])
+  const vehicles = useMemo(() => [...vehicleMap.values()].map(enrichVehicle), [vehicleMap])
 
-  const vehicles = useMemo(() => Object.values(vehicleMap), [vehicleMap])
-
-  // ── Filter options ──────────────────────────────────────────────────────────
-  const sites     = useMemo(() => ['All', ...new Set(vehicles.map(v => v.site).filter(Boolean))], [vehicles])
-  const countries = useMemo(() => ['All', ...new Set(vehicles.map(v => v.country).filter(Boolean))], [vehicles])
-
-  // ── Filtered vehicles ───────────────────────────────────────────────────────
+  const sites     = useMemo(() => ['All', ...[...new Set(vehicles.map(v => v.site).filter(Boolean))].sort()], [vehicles])
+  const countries = useMemo(() => ['All', ...[...new Set(vehicles.map(v => v.country).filter(Boolean))].sort()], [vehicles])
 
   /**
-   * THE VEHICLES EVERY FILTER EXCEPT THE RISK ONE LEAVES.
-   *
-   * Split out because two of the four KPI tiles - "Critical vehicles" and
-   * "At-risk tyres" - report on the risk dimension the risk filter sets. Computed
-   * over the already-risk-filtered vehicles they would simply restate the board's
-   * own count the moment the filter was used, and stop being a number you can aim
-   * at. Site, country and the search box narrow the tiles and the board alike.
+   * THE VEHICLES EVERY FILTER EXCEPT THE RISK ONE LEAVES. Two KPI tiles report
+   * on the risk dimension, so computed over the risk-filtered set they would
+   * restate the board's own count. Site, country and search narrow both.
    */
   const scopedVehicles = useMemo(() => {
-    return vehicles
-      .map(v => ({ ...v, score: vehicleHealthScore(v.tyres), worst: worstRisk(v.tyres) }))
-      .filter(v => {
-        if (siteFilter !== 'All' && v.site !== siteFilter) return false
-        if (countryFilter !== 'All' && v.country !== countryFilter) return false
-        if (search) {
-          const q = search.toLowerCase()
-          if (!v.asset_no?.toLowerCase().includes(q) &&
-              !v.site?.toLowerCase().includes(q) &&
-              !v.country?.toLowerCase().includes(q)) return false
-        }
-        return true
-      })
+    return vehicles.filter(v => {
+      if (siteFilter !== 'All' && v.site !== siteFilter) return false
+      if (countryFilter !== 'All' && v.country !== countryFilter) return false
+      return matchesSearch(v, search)
+    })
   }, [vehicles, siteFilter, countryFilter, search])
 
   const filtered = useMemo(() => {
     return scopedVehicles
-      .filter(v => {
-        if (riskFilter === 'All') return true
-        if (riskFilter === 'Critical') return v.worst === 'Critical'
-        if (riskFilter === 'High') return ['Critical','High'].includes(v.worst)
-        if (riskFilter === 'Medium') return ['Critical','High','Medium'].includes(v.worst)
-        if (riskFilter === 'Low') return v.worst === 'Low'
-        return true
-      })
-      .sort((a, b) => a.score - b.score)
+      .filter(v => matchesRiskFilter(v.worst, riskFilter))
+      .sort((a, b) => (a.score ?? Infinity) - (b.score ?? Infinity) || String(a.asset_no).localeCompare(String(b.asset_no)))
   }, [scopedVehicles, riskFilter])
 
-  // Is the board showing a NARROWED set? Drives the caption under the tiles.
+  useEffect(() => { setGridLimit(GRID_PAGE) }, [siteFilter, countryFilter, riskFilter, search])
+
   const scopeActive = siteFilter !== 'All' || countryFilter !== 'All' || riskFilter !== 'All' || !!search
 
-  // ── KPIs ───────────────────────────────────────────────────────────────────
-  /**
-   * WHAT THE FOUR TILES COUNT: the vehicles the board's own filters leave, minus
-   * the risk dimension (see scopedVehicles). Before this every figure was computed
-   * over `vehicles` / `rawRecords` - the whole loaded country - so filtering the
-   * board to one site left "Fleet health score" and "At-risk tyres" stating
-   * whole-country numbers directly above a caption reading "18 of 604 vehicles".
-   * The two tyre-level figures now read the tyres of THOSE vehicles rather than
-   * every loaded tyre, so tile and board describe one population.
-   */
+  // ── KPIs: the scoped vehicles and their own tyres ─────────────────────────
   const kpis = useMemo(() => {
     const total = scopedVehicles.length
-    const criticalVehicles = scopedVehicles.filter(v =>
-      v.tyres.some(t => t.risk_level === 'Critical')
-    ).length
+    const criticalVehicles = scopedVehicles.filter(v => v.tyres.some(t => t.risk_level === 'Critical')).length
     const scopedTyres = scopedVehicles.flatMap(v => v.tyres)
-    const atRiskCount = scopedTyres.filter(t => ['Critical','High'].includes(t.risk_level)).length
-    const treaded = scopedTyres.filter(t => t.tread_depth != null)
-    const avgTread = treaded.reduce((s, t) => s + t.tread_depth, 0) / Math.max(1, treaded.length)
-    const healthyVehicles = scopedVehicles.filter(v =>
-      !v.tyres.some(t => ['Critical','High'].includes(t.risk_level))
-    ).length
-    const fleetHealth = total > 0 ? Math.round((healthyVehicles / total) * 100) : 0
-    return { total, criticalVehicles, atRiskCount, avgTread: avgTread.toFixed(1), fleetHealth }
+    const healthyVehicles = scopedVehicles.filter(v => isVehicleHealthy(v) === true).length
+    const ratedVehicles = scopedVehicles.filter(v => isVehicleHealthy(v) != null).length
+    return fleetHealthSummary({ total, criticalVehicles, healthyVehicles, ratedVehicles, scopedTyres })
   }, [scopedVehicles])
 
-  // ── Fleet health trend (12 months) ────────────────────────────────────────
+  // ── Trend ─────────────────────────────────────────────────────────────────
+  const trend = useMemo(() => monthlyHealthTrend(trendData, latestIssueDate(trendData) ?? new Date()), [trendData])
+  const trendHasData = trend.values.some(v => v != null)
   const trendChartData = useMemo(() => {
-    // Anchor buckets to the trend data's latest issue_date, not today, so
-    // historic datasets still render (matches Dashboard's dataAnchor pattern).
-    let maxIssue = null
-    for (const r of trendData) { if (r.issue_date && (!maxIssue || r.issue_date > maxIssue)) maxIssue = r.issue_date }
-    const now = maxIssue ? new Date(maxIssue.slice(0, 10) + 'T00:00:00') : new Date()
-    const months = Array.from({ length: 12 }, (_, i) => {
-      const d = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1)
-      return {
-        label: d.toLocaleString('default', { month: 'short', year: '2-digit' }),
-        y: d.getFullYear(),
-        m: d.getMonth() + 1,
-      }
-    })
-
-    const scores = months.map(({ y, m }) => {
-      const monthRecords = trendData.filter(r => {
-        if (!r.issue_date) return false
-        const d = new Date(r.issue_date)
-        return d.getFullYear() === y && d.getMonth() + 1 === m
-      })
-      if (!monthRecords.length) return null
-      const assetGroups = {}
-      monthRecords.forEach(r => {
-        if (!r.asset_no) return
-        if (!assetGroups[r.asset_no]) assetGroups[r.asset_no] = []
-        assetGroups[r.asset_no].push(r)
-      })
-      const vList = Object.values(assetGroups)
-      const healthy = vList.filter(tyres => !tyres.some(t => ['Critical','High'].includes(t.risk_level))).length
-      return vList.length > 0 ? Math.round((healthy / vList.length) * 100) : null
-    })
-
+    const c = colorAt(1)
     return {
-      labels: months.map(m => m.label),
+      labels: trend.months.map(m => {
+        const [y, mo] = m.split('-')
+        return new Date(Number(y), Number(mo) - 1, 1).toLocaleString('default', { month: 'short', year: '2-digit' })
+      }),
       datasets: [{
         label: t('fleethealth.trend.seriesLabel'),
-        data: scores,
-        borderColor: '#16a34a',
-        backgroundColor: 'rgba(22,163,74,0.1)',
-        fill: true,
-        tension: 0.4,
-        pointRadius: 3,
-        pointBackgroundColor: '#16a34a',
-        spanGaps: true,
+        data: trend.values,
+        borderColor: c,
+        backgroundColor: withAlpha(c, 0.12),
+        fill: true, tension: 0.35, pointRadius: 3, pointBackgroundColor: c, spanGaps: true,
       }],
     }
-  }, [trendData, t])
+  }, [trend, t])
 
-  const TICK = { color: '#6b7280', font: { size: 10 } }
-  const GRID = { color:'var(--text-muted)' }
-
+  const TICK = { color: 'var(--text-muted)', font: { size: 10 } }
+  const GRID = { color: 'var(--panel-2)' }
   const trendOpts = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
       legend: { display: false },
       tooltip: {
-        backgroundColor: 'var(--panel)',
-        borderColor: 'var(--hairline)',
-        borderWidth: 1,
-        titleColor: '#f9fafb',
-        bodyColor: '#9ca3af',
-        callbacks: { label: ctx => ` ${ctx.parsed.y ?? '-'}%` },
+        backgroundColor: 'var(--panel)', borderColor: 'var(--hairline)', borderWidth: 1,
+        titleColor: 'var(--text-primary)', bodyColor: 'var(--text-secondary)',
+        callbacks: { label: ctx => ` ${ctx.parsed.y ?? 'N/A'}% of rated vehicles healthy` },
       },
     },
     scales: {
       x: { ticks: TICK, grid: GRID },
-      y: {
-        ticks: { ...TICK, callback: v => `${v}%` },
-        grid: GRID,
-        min: 0,
-        max: 100,
-      },
+      y: { ticks: { ...TICK, callback: v => `${v}%` }, grid: GRID, min: 0, max: 100 },
     },
   }
 
-  // ── Critical alerts panel ──────────────────────────────────────────────────
-  const criticalList = useMemo(() => {
-    return vehicles
-      .filter(v => v.tyres.some(t => t.risk_level === 'Critical'))
-      .map(v => {
-        const worst = v.tyres.filter(t => t.risk_level === 'Critical')
-          .sort((a, b) => (a.tread_depth ?? 99) - (b.tread_depth ?? 99))[0]
-        return { ...v, worstTread: worst?.tread_depth, worstPos: worst?.position }
-      })
-      .sort((a, b) => (a.worstTread ?? 99) - (b.worstTread ?? 99))
-  }, [vehicles])
+  const criticalList = useMemo(() => buildCriticalList(scopedVehicles), [scopedVehicles])
 
-  // ── Detail drawer data ─────────────────────────────────────────────────────
+  // ── Drawer ─────────────────────────────────────────────────────────────────
   const drawerVehicle = useMemo(() => {
     if (!selectedVehicle) return null
-    const v = vehicleMap[selectedVehicle]
+    const v = vehicles.find(x => x.asset_no === selectedVehicle)
     if (!v) return null
-    const tyres = [...v.tyres].sort((a, b) => (a.position ?? '').localeCompare(b.position ?? ''))
-    return { ...v, tyres }
-  }, [selectedVehicle, vehicleMap])
+    return { ...v, tyres: [...v.tyres].sort((a, b) => String(a.position ?? '').localeCompare(String(b.position ?? ''))) }
+  }, [selectedVehicle, vehicles])
 
+  const drawerTrend = useMemo(() => (selectedVehicle ? assetRiskTrend(trendData, selectedVehicle) : []), [selectedVehicle, trendData])
   const drawerTrendData = useMemo(() => {
-    if (!selectedVehicle) return null
-    const allForAsset = trendData.filter(r => r.asset_no === selectedVehicle)
-    const sorted = allForAsset
-      .filter(r => r.issue_date)
-      .sort((a, b) => new Date(a.issue_date) - new Date(b.issue_date))
-      .slice(-6)
-
-    if (!sorted.length) return null
+    if (drawerTrend.length < 2) return null
+    const c = colorAt(2)
     return {
-      labels: sorted.map(r => r.issue_date?.slice(0, 10)),
-      datasets: [{
-        label: t('fleethealth.drawer.riskIndexSeriesLabel'),
-        data: sorted.map(r => ({ Critical: 0, High: 33, Medium: 66, Low: 100 }[r.risk_level] ?? 50)),
-        borderColor: '#f59e0b',
-        backgroundColor: 'rgba(245,158,11,0.1)',
-        fill: true,
-        tension: 0.4,
-        pointRadius: 3,
-      }],
+      labels: drawerTrend.map(p => p.date),
+      datasets: [{ label: t('fleethealth.drawer.riskIndexSeriesLabel'), data: drawerTrend.map(p => p.value), borderColor: c, backgroundColor: withAlpha(c, 0.1), fill: true, tension: 0.35, pointRadius: 3 }],
     }
-  }, [selectedVehicle, trendData, t])
+  }, [drawerTrend, t])
 
   function openDrawer(assetNo) {
     setSelectedVehicle(assetNo)
     setDrawerOpen(true)
   }
 
-  function daysFitted(issueDate) {
-    if (!issueDate) return '-'
-    const diff = Math.floor((Date.now() - new Date(issueDate)) / 86400000)
-    return `${diff}d`
+  function clearFilters() {
+    setSiteFilter('All'); setCountryFilter('All'); setRiskFilter('All'); setSearch('')
   }
 
-  function fmtDate(d) {
-    if (!d) return '-'
-    return formatDate(d, 'All', { day: '2-digit', month: 'short', year: 'numeric' })
+  // ── Exports ─────────────────────────────────────────────────────────────────
+  const EXPORT_COLS = [
+    { key: 'asset_no', header: 'Asset' }, { key: 'site', header: 'Site' }, { key: 'country', header: 'Country' },
+    { key: 'health', header: 'Health score' }, { key: 'worst', header: 'Worst risk' },
+    { key: 'critical', header: 'Critical' }, { key: 'high', header: 'High' }, { key: 'medium', header: 'Medium' },
+    { key: 'low', header: 'Low' }, { key: 'unrated', header: 'Not rated' }, { key: 'tyres', header: 'Active tyres' },
+    { key: 'avgTread', header: 'Avg tread (mm)' }, { key: 'lastIssue', header: 'Last tyre fitted' },
+  ]
+  const scopeLabel = [activeCountry !== 'All' ? activeCountry : 'All countries', siteFilter !== 'All' ? siteFilter : null, riskFilter !== 'All' ? `${riskFilter} risk` : null].filter(Boolean).join(' ')
+
+  async function doExport(kind) {
+    setExportError('')
+    try {
+      const rows = vehicleExportRows(filtered)
+      const file = reportFileName('TyrePulse Fleet Health', scopeLabel)
+      if (kind === 'excel') await exportToExcel(rows, EXPORT_COLS.map(c => c.key), EXPORT_COLS.map(c => c.header), file)
+      else await exportToPdf(rows, EXPORT_COLS, `Fleet Health Board: ${scopeLabel}`, file, 'landscape')
+    } catch (e) {
+      setExportError(toUserMessage(e, 'Could not export. Try again.'))
+    }
   }
+
+  // ── List view columns ───────────────────────────────────────────────────────
+  const countCell = (level) => ({ row }) => {
+    const n = row.original.counts[level]
+    return n > 0
+      ? <span className={`badge border ${riskBgClass(level)}`}>{n}</span>
+      : <span className="text-[var(--text-dim)]">0</span>
+  }
+  const listColumns = [
+    { id: 'asset_no', header: t('fleethealth.list.columns.asset'), accessorFn: v => v.asset_no, size: 120, sortingFn: sortNullLast,
+      cell: ({ row }) => <span className="font-semibold text-[var(--text-primary)]">{row.original.asset_no}</span> },
+    { id: 'site', header: t('fleethealth.list.columns.site'), accessorFn: v => v.site ?? undefined, sortUndefined: 'last', size: 120, cell: ({ getValue }) => getValue() ?? 'N/A' },
+    { id: 'country', header: t('fleethealth.list.columns.country'), accessorFn: v => v.country ?? undefined, sortUndefined: 'last', size: 100, cell: ({ getValue }) => getValue() ?? 'N/A' },
+    { id: 'score', header: t('fleethealth.list.columns.health'), accessorFn: v => v.score ?? undefined, sortUndefined: 'last', size: 100,
+      meta: { align: 'right', exportValue: v => v.score ?? 'Not assessed' },
+      cell: ({ row }) => <span className="font-bold tabular-nums" style={{ color: scoreColor(row.original.score) }}>{row.original.score == null ? 'Not assessed' : `${row.original.score}%`}</span> },
+    { id: 'worst', header: 'Worst risk', accessorFn: v => v.worst ?? undefined, sortUndefined: 'last', size: 110,
+      meta: { exportValue: v => v.worst ?? 'Not rated' },
+      cell: ({ row }) => row.original.worst
+        ? <span className={`badge border text-xs ${riskBgClass(row.original.worst)}`}>{row.original.worst}</span>
+        : <span className="text-[var(--text-muted)] text-xs">Not rated</span> },
+    { id: 'critical', header: t('fleethealth.list.columns.critical'), accessorFn: v => v.counts.Critical, size: 90, meta: { align: 'right' }, cell: countCell('Critical') },
+    { id: 'high', header: t('fleethealth.list.columns.high'), accessorFn: v => v.counts.High, size: 80, meta: { align: 'right' }, cell: countCell('High') },
+    { id: 'medium', header: t('fleethealth.list.columns.medium'), accessorFn: v => v.counts.Medium, size: 90, meta: { align: 'right' }, cell: countCell('Medium') },
+    { id: 'low', header: t('fleethealth.list.columns.low'), accessorFn: v => v.counts.Low, size: 80, meta: { align: 'right' }, cell: countCell('Low') },
+    { id: 'avgTread', header: t('fleethealth.list.columns.avgTread'), accessorFn: v => v.avgTread ?? undefined, sortUndefined: 'last', size: 110,
+      meta: { align: 'right', exportValue: v => (v.avgTread == null ? 'N/A' : v.avgTread.toFixed(1)) },
+      cell: ({ row }) => <span className="tabular-nums text-[var(--text-secondary)]">{row.original.avgTread == null ? 'N/A' : `${row.original.avgTread.toFixed(1)}mm`}</span> },
+    { id: 'lastIssue', header: t('fleethealth.list.columns.lastTyre'), accessorFn: v => v.lastIssue ?? undefined, sortUndefined: 'last', size: 130,
+      cell: ({ row }) => <span className="text-xs text-[var(--text-muted)]">{fmtDate(row.original.lastIssue)}</span> },
+  ]
+
+  const tyreColumns = [
+    { id: 'position', header: t('fleethealth.drawer.tyreColumns.position'), accessorFn: r => r.position ?? undefined, sortUndefined: 'last', size: 90,
+      cell: ({ getValue }) => <span className="font-mono">{getValue() ?? 'N/A'}</span> },
+    { id: 'serial', header: t('fleethealth.drawer.tyreColumns.serial'), accessorFn: r => r.serial_number ?? undefined, sortUndefined: 'last', size: 120,
+      cell: ({ getValue }) => <span className="font-mono">{getValue() ?? 'N/A'}</span> },
+    { id: 'brand', header: t('fleethealth.drawer.tyreColumns.brand'), accessorFn: r => r.brand ?? undefined, sortUndefined: 'last', size: 100, cell: ({ getValue }) => getValue() ?? 'N/A' },
+    { id: 'size', header: t('fleethealth.drawer.tyreColumns.size'), accessorFn: r => r.size ?? undefined, sortUndefined: 'last', size: 110, cell: ({ getValue }) => getValue() ?? 'N/A' },
+    { id: 'tread', header: t('fleethealth.drawer.tyreColumns.tread'), accessorFn: r => (r.tread_depth == null ? undefined : Number(r.tread_depth)), sortUndefined: 'last', size: 80,
+      meta: { align: 'right' }, cell: ({ getValue }) => (getValue() == null ? 'N/A' : `${getValue()}mm`) },
+    { id: 'pressure', header: t('fleethealth.drawer.tyreColumns.pressure'), accessorFn: r => (r.pressure_reading == null ? undefined : Number(r.pressure_reading)), sortUndefined: 'last', size: 90,
+      meta: { align: 'right' }, cell: ({ getValue }) => (getValue() == null ? 'N/A' : getValue()) },
+    { id: 'risk', header: t('fleethealth.drawer.tyreColumns.risk'), accessorFn: r => r.risk_level ?? undefined, sortUndefined: 'last', size: 100,
+      cell: ({ row }) => isRated(row.original)
+        ? <span className={`badge border text-xs ${riskBgClass(row.original.risk_level)}`}>{row.original.risk_level}</span>
+        : <span className="text-[var(--text-muted)] text-xs">Not rated</span> },
+    { id: 'fitted', header: t('fleethealth.drawer.tyreColumns.fitted'), accessorFn: r => daysSince(r.issue_date, new Date()) ?? undefined, sortUndefined: 'last', size: 90,
+      meta: { align: 'right', exportValue: r => daysSince(r.issue_date, new Date()) ?? 'N/A' },
+      cell: ({ getValue }) => <span className="text-[var(--text-muted)] inline-flex items-center gap-1"><Clock size={10} aria-hidden="true" />{getValue() == null ? 'N/A' : `${getValue()}d`}</span> },
+  ]
 
   // ── Render ─────────────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-[var(--text-primary)]">{t('fleethealth.header.title')}</h1>
-            <p className="text-[var(--text-secondary)] text-sm mt-1">{t('fleethealth.header.loading')}</p>
-          </div>
-        </div>
+      <div className="space-y-6" aria-busy="true">
+        <SectionTabs tabs={FLEET_TABS} />
+        <PageHeader title={t('fleethealth.header.title')} subtitle={t('fleethealth.header.loading')} icon={Activity} />
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[1,2,3,4].map(i => (
-            <div key={i} className="card animate-pulse h-24">
-              <div className="h-4 w-24 bg-[var(--surface-2)] rounded mb-2" />
-              <div className="h-7 w-16 bg-[var(--surface-2)] rounded" />
-            </div>
-          ))}
+          {[1, 2, 3, 4].map(i => <div key={i} className="card animate-pulse h-24" />)}
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {Array.from({ length: 12 }).map((_, i) => <SkeletonCard key={i} />)}
+          {Array.from({ length: 8 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
       </div>
     )
@@ -550,480 +464,367 @@ export default function FleetHealthBoard() {
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-64 gap-4">
-        <AlertTriangle size={40} className="text-red-400" />
-        <p className="text-red-300 font-medium">{error}</p>
-        <button onClick={() => load()} className="btn-primary flex items-center gap-2">
-          <RefreshCw size={14} /> {t('fleethealth.actions.retry')}
-        </button>
+      <div className="space-y-6">
+        <SectionTabs tabs={FLEET_TABS} />
+        <PageHeader title={t('fleethealth.header.title')} icon={Activity} />
+        <div role="alert" className="card flex flex-col items-center justify-center min-h-64 gap-4 text-center">
+          <AlertTriangle size={40} className="text-red-400" aria-hidden="true" />
+          <p className="text-red-300 font-medium">{error}</p>
+          <button type="button" onClick={() => load()} className={`btn-primary flex items-center gap-2 px-4 ${TOUCH}`}>
+            <RefreshCw size={14} aria-hidden="true" /> {t('fleethealth.actions.retry')}
+          </button>
+        </div>
       </div>
     )
   }
 
+  const fmtPctOrNA = (v) => (v == null ? 'N/A' : `${v}%`)
+
   return (
     <div className="space-y-6">
-
       <SectionTabs tabs={FLEET_TABS} />
-      {/* ── Header ── */}
       <PageHeader
         title={t('fleethealth.header.title')}
         subtitle={`${t('fleethealth.header.subtitle')}${lastUpdated ? t('fleethealth.header.updated', { time: lastUpdated.toLocaleTimeString() }) : ''}`}
         icon={Activity}
         actions={
-          <button
-            onClick={() => load(true)}
-            disabled={refreshing}
-            className="btn-secondary flex items-center gap-2 text-sm"
-          >
-            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-            {t('fleethealth.actions.refresh')}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => doExport('excel')} disabled={!filtered.length}
+              className={`btn-secondary flex items-center gap-1.5 text-sm px-3 ${TOUCH} disabled:opacity-40`}>
+              <Download size={14} aria-hidden="true" /> Excel
+            </button>
+            <button type="button" onClick={() => doExport('pdf')} disabled={!filtered.length}
+              className={`btn-secondary flex items-center gap-1.5 text-sm px-3 ${TOUCH} disabled:opacity-40`}>
+              <FileText size={14} aria-hidden="true" /> PDF
+            </button>
+            <button type="button" onClick={() => load(true)} disabled={refreshing}
+              className={`btn-secondary flex items-center gap-2 text-sm px-3 ${TOUCH}`}>
+              <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} aria-hidden="true" />
+              {t('fleethealth.actions.refresh')}
+            </button>
+          </div>
         }
       />
 
+      {exportError && <p role="alert" className="text-sm text-red-400">{exportError}</p>}
+
       {/* ── KPI Bar ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <section aria-label="Fleet health KPIs" className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard
           label={t('fleethealth.kpi.fleetHealthScore')}
-          value={`${kpis.fleetHealth}%`}
-          sub={t('fleethealth.kpi.vehiclesCount', { count: kpis.total })}
+          value={fmtPctOrNA(kpis.fleetHealth)}
+          sub={kpis.fleetHealth == null ? `No rated tyres on ${kpis.total} vehicles` : `${kpis.ratedVehicles} of ${kpis.total} vehicles rated`}
           icon={Shield}
-          color={kpis.fleetHealth >= 70 ? 'green' : kpis.fleetHealth >= 40 ? 'yellow' : 'red'}
+          color={kpis.fleetHealth == null ? 'neutral' : kpis.fleetHealth >= 70 ? 'green' : kpis.fleetHealth >= 40 ? 'yellow' : 'red'}
         />
         <KpiCard
           label={t('fleethealth.kpi.criticalVehicles')}
-          value={kpis.criticalVehicles}
-          sub={t('fleethealth.kpi.criticalVehiclesSub')}
+          value={kpis.ratedVehicles === 0 ? 'N/A' : kpis.criticalVehicles}
+          sub={kpis.ratedVehicles === 0 ? 'No risk ratings recorded' : t('fleethealth.kpi.criticalVehiclesSub')}
           icon={AlertTriangle}
-          color={kpis.criticalVehicles > 0 ? 'red' : 'green'}
+          color={kpis.ratedVehicles === 0 ? 'neutral' : kpis.criticalVehicles > 0 ? 'red' : 'green'}
         />
         <KpiCard
           label={t('fleethealth.kpi.atRiskTyres')}
-          value={kpis.atRiskCount}
-          sub={t('fleethealth.kpi.atRiskTyresSub')}
+          value={kpis.atRiskCount == null ? 'N/A' : kpis.atRiskCount}
+          sub={kpis.atRiskCount == null ? `0 of ${kpis.tyreCount} tyres rated` : `${t('fleethealth.kpi.atRiskTyresSub')}, ${kpis.ratedTyres} rated`}
           icon={Circle}
-          color={kpis.atRiskCount > 0 ? 'orange' : 'green'}
+          color={kpis.atRiskCount == null ? 'neutral' : kpis.atRiskCount > 0 ? 'orange' : 'green'}
         />
         <KpiCard
           label={t('fleethealth.kpi.avgTreadDepth')}
-          value={`${kpis.avgTread}mm`}
-          sub={t('fleethealth.kpi.avgTreadDepthSub')}
+          value={kpis.avgTread == null ? 'N/A' : `${kpis.avgTread}mm`}
+          sub={kpis.avgTread == null ? 'No tread depth recorded' : `${kpis.treadCount} of ${kpis.tyreCount} tyres measured`}
           icon={BarChart2}
-          color="blue"
+          color={kpis.avgTread == null ? 'neutral' : 'blue'}
         />
-      </div>
+      </section>
       {scopeActive && (
         <p className="text-xs text-[var(--text-muted)] -mt-2">
           These figures cover the {kpis.total} vehicle{kpis.total === 1 ? '' : 's'} matching your filters, of {vehicles.length} in this view. The risk filter is held out so the risk tiles stay a target you can aim at.
         </p>
       )}
 
-      {/* ── Capped-view note (millions-row safety cap) ── */}
       {capped && (
-        <div className="card py-2.5 flex items-center gap-2 border-yellow-700/40 bg-yellow-950/15">
-          <AlertTriangle size={14} className="text-yellow-400 flex-shrink-0" />
+        <div role="status" className="card py-2.5 flex items-center gap-2 border-yellow-700/40 bg-yellow-950/15">
+          <AlertTriangle size={14} className="text-yellow-400 shrink-0" aria-hidden="true" />
           <p className="text-xs text-yellow-200/80">
             Capped view: showing the most recent 50,000 tyre records for this country. Narrow the country for the full dataset.
           </p>
         </div>
       )}
 
-      {/* ── Main layout: board + sidebar ── */}
-      <div className="flex gap-6">
-
-        {/* ── Left: board ── */}
+      <div className="flex flex-col lg:flex-row gap-6">
+        {/* ── Board ── */}
         <div className="flex-1 min-w-0 space-y-4">
-
-          {/* ── Filters ── */}
-          <div className="card py-3">
-            <div className="flex flex-wrap gap-3 items-center">
-              {/* Search */}
-              <div className="relative flex-1 min-w-48">
-                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+          <section aria-label="Filters" className="card">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap gap-3 lg:items-center">
+              <div className="relative sm:col-span-2 lg:flex-1 lg:min-w-48">
+                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
                 <input
-                  className="input pl-8 w-full text-sm"
+                  type="search"
+                  aria-label="Search vehicles"
+                  className={`input pl-8 w-full text-sm ${TOUCH}`}
                   placeholder={t('fleethealth.filters.searchPlaceholder')}
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                 />
                 {search && (
-                  <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-secondary)]">
-                    <X size={12} />
+                  <button type="button" aria-label="Clear search" onClick={() => setSearch('')}
+                    className="absolute right-1 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-secondary)]">
+                    <X size={12} aria-hidden="true" />
                   </button>
                 )}
               </div>
-
-              {/* Site */}
-              <div className="flex items-center gap-1.5">
-                <MapPin size={13} className="text-[var(--text-muted)]" />
-                <select
-                  className="input text-sm py-1.5"
-                  value={siteFilter}
-                  onChange={e => setSiteFilter(e.target.value)}
-                >
-                  {sites.map(s => <option key={s} value={s}>{s === 'All' ? t('fleethealth.filters.all') : s}</option>)}
+              <label className="flex items-center gap-1.5">
+                <MapPin size={13} className="text-[var(--text-muted)]" aria-hidden="true" />
+                <span className="sr-only">Site</span>
+                <select className={`input text-sm w-full ${TOUCH}`} value={siteFilter} onChange={e => setSiteFilter(e.target.value)}>
+                  {sites.map(s => <option key={s} value={s}>{s === 'All' ? 'All sites' : s}</option>)}
                 </select>
-              </div>
-
-              {/* Country */}
-              <div className="flex items-center gap-1.5">
-                <Globe size={13} className="text-[var(--text-muted)]" />
-                <select
-                  className="input text-sm py-1.5"
-                  value={countryFilter}
-                  onChange={e => setCountryFilter(e.target.value)}
-                >
-                  {countries.map(c => <option key={c} value={c}>{c === 'All' ? t('fleethealth.filters.all') : c}</option>)}
+              </label>
+              <label className="flex items-center gap-1.5">
+                <Globe size={13} className="text-[var(--text-muted)]" aria-hidden="true" />
+                <span className="sr-only">Country</span>
+                <select className={`input text-sm w-full ${TOUCH}`} value={countryFilter} onChange={e => setCountryFilter(e.target.value)}>
+                  {countries.map(c => <option key={c} value={c}>{c === 'All' ? 'All countries' : c}</option>)}
                 </select>
-              </div>
-
-              {/* Risk */}
-              <div className="flex items-center gap-1.5">
-                <Filter size={13} className="text-[var(--text-muted)]" />
-                <select
-                  className="input text-sm py-1.5"
-                  value={riskFilter}
-                  onChange={e => setRiskFilter(e.target.value)}
-                >
-                  {['All','Critical','High','Medium','Low'].map(r => (
-                    <option key={r} value={r}>{r === 'All' ? t('fleethealth.filters.all') : r}</option>
+              </label>
+              <label className="flex items-center gap-1.5">
+                <Filter size={13} className="text-[var(--text-muted)]" aria-hidden="true" />
+                <span className="sr-only">Risk</span>
+                <select className={`input text-sm w-full ${TOUCH}`} value={riskFilter} onChange={e => setRiskFilter(e.target.value)}>
+                  {['All', ...RISK_LEVELS, 'Unrated'].map(r => (
+                    <option key={r} value={r}>{r === 'All' ? 'All risk levels' : r === 'Unrated' ? 'Not rated' : `${r}${r === 'Low' ? '' : ' or worse'}`}</option>
                   ))}
                 </select>
-              </div>
-
-              {/* View toggle */}
-              <div className="flex bg-[var(--surface-2)] rounded-lg border border-[var(--border-bright)] overflow-hidden ml-auto">
-                <button
-                  onClick={() => setViewMode('grid')}
-                  className={`p-2 transition-colors ${viewMode === 'grid' ? 'bg-green-700 text-white' : 'text-[var(--text-secondary)] hover:text-white'}`}
-                >
-                  <Grid size={14} />
+              </label>
+              <div className="flex bg-[var(--surface-2)] rounded-lg border border-[var(--border-bright)] overflow-hidden lg:ml-auto w-fit" role="group" aria-label="View">
+                <button type="button" aria-label="Card view" aria-pressed={viewMode === 'grid'} onClick={() => setViewMode('grid')}
+                  className={`w-11 h-11 flex items-center justify-center transition-colors ${viewMode === 'grid' ? 'bg-green-700 text-white' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}>
+                  <Grid size={14} aria-hidden="true" />
                 </button>
-                <button
-                  onClick={() => setViewMode('list')}
-                  className={`p-2 transition-colors ${viewMode === 'list' ? 'bg-green-700 text-white' : 'text-[var(--text-secondary)] hover:text-white'}`}
-                >
-                  <List size={14} />
+                <button type="button" aria-label="List view" aria-pressed={viewMode === 'list'} onClick={() => setViewMode('list')}
+                  className={`w-11 h-11 flex items-center justify-center transition-colors ${viewMode === 'list' ? 'bg-green-700 text-white' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}>
+                  <List size={14} aria-hidden="true" />
                 </button>
               </div>
             </div>
-
-            {(siteFilter !== 'All' || countryFilter !== 'All' || riskFilter !== 'All' || search) && (
-              <p className="text-xs text-green-500 mt-2">
+            {scopeActive && (
+              <p className="text-xs text-green-500 mt-2" role="status">
                 {t('fleethealth.filters.matchingCount', { filtered: filtered.length, total: vehicles.length })}
               </p>
             )}
-          </div>
+          </section>
 
-          {/* ── Empty state ── */}
           {filtered.length === 0 && (
-            <div className="card flex flex-col items-center justify-center py-16 gap-3">
-              <Truck size={40} className="text-[var(--text-dim)]" />
-              <p className="text-[var(--text-secondary)] font-medium">{t('fleethealth.empty.noMatch')}</p>
-              <p className="text-[var(--text-dim)] text-sm">{t('fleethealth.empty.tryAdjusting')}</p>
-              <button
-                onClick={() => { setSiteFilter('All'); setCountryFilter('All'); setRiskFilter('All'); setSearch('') }}
-                className="btn-secondary text-sm mt-1"
-              >
-                {t('fleethealth.empty.clearFilters')}
-              </button>
-            </div>
-          )}
-
-          {/* ── Grid view ── */}
-          {viewMode === 'grid' && filtered.length > 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              <AnimatePresence mode="popLayout">
-                {filtered.map(v => (
-                  <motion.div
-                    key={v.asset_no}
-                    layout
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.9 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <VehicleCard
-                      vehicle={v}
-                      onClick={() => openDrawer(v.asset_no)}
-                      isSelected={selectedVehicle === v.asset_no && drawerOpen}
-                    />
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-            </div>
-          )}
-
-          {/* ── List view ── */}
-          {viewMode === 'list' && filtered.length > 0 && (
-            <div className="card overflow-hidden p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-[var(--border-dim)]">
-                      {['asset','site','country','health','critical','high','medium','low','avgTread','lastTyre'].map(hKey => (
-                        <th key={hKey} className="text-left px-3 py-3 text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wide whitespace-nowrap">
-                          {t(`fleethealth.list.columns.${hKey}`)}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <AnimatePresence>
-                      {filtered.map((v, i) => {
-                        const counts = { Critical: 0, High: 0, Medium: 0, Low: 0 }
-                        v.tyres.forEach(t => { if (counts[t.risk_level] !== undefined) counts[t.risk_level]++ })
-                        const avgTread = v.tyres.filter(t => t.tread_depth != null)
-                          .reduce((s, t) => s + t.tread_depth, 0) /
-                          Math.max(1, v.tyres.filter(t => t.tread_depth != null).length)
-                        const lastDate = v.tyres.filter(t => t.issue_date)
-                          .sort((a, b) => new Date(b.issue_date) - new Date(a.issue_date))[0]?.issue_date
-
-                        return (
-                          <motion.tr
-                            key={v.asset_no}
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            className="border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)] cursor-pointer transition-colors"
-                            onClick={() => openDrawer(v.asset_no)}
-                          >
-                            <td className="px-3 py-2.5 font-semibold text-[var(--text-primary)]">{v.asset_no}</td>
-                            <td className="px-3 py-2.5 text-[var(--text-secondary)]">{v.site ?? '-'}</td>
-                            <td className="px-3 py-2.5 text-[var(--text-secondary)]">{v.country ?? '-'}</td>
-                            <td className="px-3 py-2.5">
-                              <span className="font-bold tabular-nums" style={{ color: scoreColor(v.score) }}>
-                                {v.score}%
-                              </span>
-                            </td>
-                            <td className="px-3 py-2.5">
-                              {counts.Critical > 0
-                                ? <span className="badge bg-red-900/40 text-red-300 border border-red-800/50">{counts.Critical}</span>
-                                : <span className="text-[var(--text-dim)]">-</span>}
-                            </td>
-                            <td className="px-3 py-2.5">
-                              {counts.High > 0
-                                ? <span className="badge bg-orange-900/40 text-orange-300 border border-orange-800/50">{counts.High}</span>
-                                : <span className="text-[var(--text-dim)]">-</span>}
-                            </td>
-                            <td className="px-3 py-2.5">
-                              {counts.Medium > 0
-                                ? <span className="badge bg-yellow-900/40 text-yellow-300 border border-yellow-800/50">{counts.Medium}</span>
-                                : <span className="text-[var(--text-dim)]">-</span>}
-                            </td>
-                            <td className="px-3 py-2.5">
-                              {counts.Low > 0
-                                ? <span className="badge bg-green-900/40 text-green-300 border border-green-800/50">{counts.Low}</span>
-                                : <span className="text-[var(--text-dim)]">-</span>}
-                            </td>
-                            <td className="px-3 py-2.5 text-[var(--text-secondary)]">
-                              {v.tyres.some(t => t.tread_depth != null) ? `${avgTread.toFixed(1)}mm` : '-'}
-                            </td>
-                            <td className="px-3 py-2.5 text-[var(--text-muted)] text-xs">{fmtDate(lastDate)}</td>
-                          </motion.tr>
-                        )
-                      })}
-                    </AnimatePresence>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* ── Trend chart ── */}
-          <div className="card">
-            <div className="flex items-center gap-2 mb-4">
-              <TrendingUp size={16} className="text-green-400" />
-              <h2 className="text-base font-semibold text-[var(--text-primary)]">{t('fleethealth.trend.title')}</h2>
-            </div>
-            <div className="h-48">
-              <Line data={trendChartData} options={trendOpts} />
-            </div>
-          </div>
-        </div>
-
-        {/* ── Right: critical alerts sidebar ── */}
-        <div className="hidden lg:flex flex-col gap-3 w-64 xl:w-72 flex-shrink-0">
-          <div className="card flex-1 max-h-[calc(100vh-12rem)] overflow-y-auto">
-            <div className="flex items-center gap-2 mb-3">
-              <AlertTriangle size={15} className="text-red-400" />
-              <h2 className="text-sm font-semibold text-[var(--text-primary)]">{t('fleethealth.sidebar.criticalAlerts')}</h2>
-              {criticalList.length > 0 && (
-                <span className="ml-auto bg-red-900/50 text-red-300 text-xs px-2 py-0.5 rounded-full border border-red-800/50">
-                  {criticalList.length}
-                </span>
+            <div className="card flex flex-col items-center justify-center py-16 gap-3 text-center">
+              <Truck size={40} className="text-[var(--text-dim)]" aria-hidden="true" />
+              <p className="text-[var(--text-secondary)] font-medium">
+                {vehicles.length === 0 ? 'No active tyres recorded for this country' : t('fleethealth.empty.noMatch')}
+              </p>
+              {vehicles.length > 0 && (
+                <>
+                  <p className="text-[var(--text-muted)] text-sm">{t('fleethealth.empty.tryAdjusting')}</p>
+                  <button type="button" onClick={clearFilters} className={`btn-secondary text-sm px-4 ${TOUCH}`}>{t('fleethealth.empty.clearFilters')}</button>
+                </>
               )}
             </div>
+          )}
 
-            {criticalList.length === 0 ? (
-              <div className="flex flex-col items-center gap-2 py-8">
-                <CheckCircle size={28} className="text-green-500" />
-                <p className="text-green-400 text-sm font-medium">{t('fleethealth.sidebar.noCriticalAlerts')}</p>
-                <p className="text-[var(--text-dim)] text-xs text-center">{t('fleethealth.sidebar.allSafe')}</p>
+          {viewMode === 'grid' && filtered.length > 0 && (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                <AnimatePresence mode="popLayout">
+                  {filtered.slice(0, gridLimit).map(v => (
+                    <motion.div key={v.asset_no} layout initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}>
+                      <VehicleCard vehicle={v} onClick={() => openDrawer(v.asset_no)} isSelected={selectedVehicle === v.asset_no && drawerOpen} />
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </div>
+              {filtered.length > gridLimit && (
+                <div className="flex flex-col items-center gap-1">
+                  <button type="button" onClick={() => setGridLimit(n => n + GRID_PAGE)} className={`btn-secondary text-sm px-4 ${TOUCH}`}>
+                    Show {Math.min(GRID_PAGE, filtered.length - gridLimit)} more
+                  </button>
+                  <p className="text-xs text-[var(--text-muted)]">Showing {gridLimit} of {filtered.length}. The list view pages and sorts the whole set.</p>
+                </div>
+              )}
+            </>
+          )}
+
+          {viewMode === 'list' && filtered.length > 0 && (
+            <div className="card">
+              <EnterpriseTable
+                columns={listColumns}
+                data={filtered}
+                getRowId={v => String(v.asset_no)}
+                enableColumnFilters={false}
+                enableGlobalFilter={false}
+                initialPageSize={25}
+                onRowClick={v => openDrawer(v.asset_no)}
+                exportFileName={reportFileName('TyrePulse Fleet Health', scopeLabel)}
+                reportMeta={{ title: 'Fleet health board' }}
+                emptyMessage={t('fleethealth.empty.noMatch')}
+              />
+            </div>
+          )}
+
+          <section aria-labelledby="fhb-trend-h" className="card">
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              <TrendingUp size={16} className="text-green-400" aria-hidden="true" />
+              <h2 id="fhb-trend-h" className="text-base font-semibold text-[var(--text-primary)]">{t('fleethealth.trend.title')}</h2>
+              <span className="text-xs text-[var(--text-muted)]">Share of rated vehicles with no High or Critical tyre</span>
+            </div>
+            {trendHasData ? (
+              <div className="h-48">
+                <Line data={trendChartData} options={trendOpts} role="img" aria-label="Line chart of the monthly share of rated vehicles with no high or critical tyre" />
               </div>
             ) : (
-              <div className="space-y-2">
-                {criticalList.map(v => (
-                  <button
-                    key={v.asset_no}
-                    onClick={() => openDrawer(v.asset_no)}
-                    className="w-full text-left bg-red-950/30 border border-red-900/40 rounded-lg px-3 py-2.5 hover:border-red-700/60 transition-colors group"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-[var(--text-primary)] font-semibold text-sm">{v.asset_no}</span>
-                      <ChevronRight size={12} className="text-[var(--text-dim)] group-hover:text-[var(--text-primary)] transition-colors" />
-                    </div>
-                    <p className="text-[var(--text-secondary)] text-xs mt-0.5">{v.site} · {v.country}</p>
-                    {v.worstTread != null && (
-                      <p className="text-red-400 text-xs mt-1">
-                        {t('fleethealth.sidebar.treadAt', { mm: v.worstTread, position: v.worstPos ?? t('fleethealth.sidebar.na') })}
-                      </p>
-                    )}
-                  </button>
-                ))}
+              <p className="text-sm text-[var(--text-muted)] py-10 text-center">Not measured: no tyre in the last 12 months carries a risk level.</p>
+            )}
+          </section>
+        </div>
+
+        {/* ── Critical alerts ── */}
+        <aside aria-labelledby="fhb-crit-h" className="lg:w-64 xl:w-72 shrink-0">
+          <div className="card lg:max-h-[calc(100vh-12rem)] overflow-y-auto">
+            <div className="flex items-center gap-2 mb-3">
+              <AlertTriangle size={15} className="text-red-400" aria-hidden="true" />
+              <h2 id="fhb-crit-h" className="text-sm font-semibold text-[var(--text-primary)]">{t('fleethealth.sidebar.criticalAlerts')}</h2>
+              {criticalList.length > 0 && (
+                <span className="ml-auto bg-red-900/50 text-red-300 text-xs px-2 py-0.5 rounded-full border border-red-800/50">{criticalList.length}</span>
+              )}
+            </div>
+            {kpis.ratedVehicles === 0 ? (
+              <p className="text-xs text-[var(--text-muted)] py-6 text-center">No tyre in this view carries a risk level, so no critical alert can be raised.</p>
+            ) : criticalList.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 py-8 text-center">
+                <CheckCircle size={28} className="text-green-500" aria-hidden="true" />
+                <p className="text-green-400 text-sm font-medium">{t('fleethealth.sidebar.noCriticalAlerts')}</p>
+                <p className="text-[var(--text-muted)] text-xs">{t('fleethealth.sidebar.allSafe')}</p>
               </div>
+            ) : (
+              <ul className="space-y-2">
+                {criticalList.map(v => (
+                  <li key={v.asset_no}>
+                    <button type="button" onClick={() => openDrawer(v.asset_no)}
+                      className="w-full text-left bg-red-950/30 border border-red-900/40 rounded-lg px-3 py-2.5 hover:border-red-700/60 transition-colors group focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[var(--text-primary)] font-semibold text-sm">{v.asset_no}</span>
+                        <ChevronRight size={12} className="text-[var(--text-dim)] group-hover:text-[var(--text-primary)]" aria-hidden="true" />
+                      </div>
+                      <p className="text-[var(--text-secondary)] text-xs mt-0.5">{v.site ?? 'N/A'}, {v.country ?? 'N/A'}</p>
+                      <p className="text-red-400 text-xs mt-1">
+                        {v.worstTread != null
+                          ? t('fleethealth.sidebar.treadAt', { mm: v.worstTread, position: v.worstPos ?? t('fleethealth.sidebar.na') })
+                          : `Critical tyre at ${v.worstPos ?? 'unknown position'}, tread not recorded`}
+                      </p>
+                    </button>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
-        </div>
+        </aside>
       </div>
 
       {/* ── Detail Drawer ── */}
       <AnimatePresence>
         {drawerOpen && drawerVehicle && (
           <>
-            {/* Backdrop */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 z-40"
-              onClick={() => setDrawerOpen(false)}
-            />
-
-            {/* Drawer */}
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 z-40" aria-hidden="true" onClick={() => setDrawerOpen(false)} />
             <motion.div
               ref={drawerRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="fhb-drawer-h"
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 28, stiffness: 280 }}
-              className="fixed top-0 right-0 h-full w-full sm:w-[520px] lg:w-[600px] z-50 bg-[var(--surface-0)] border-l border-[var(--border-dim)] flex flex-col shadow-2xl"
+              className="fixed top-0 right-0 h-full w-full sm:w-[560px] lg:w-[680px] z-50 bg-[var(--surface-0)] border-l border-[var(--border-dim)] flex flex-col shadow-2xl"
             >
-              {/* Drawer header */}
               <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border-dim)]">
                 <div>
-                  <h2 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
-                    <Truck size={18} className="text-green-400" />
+                  <h2 id="fhb-drawer-h" className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
+                    <Truck size={18} className="text-green-400" aria-hidden="true" />
                     {drawerVehicle.asset_no}
                   </h2>
                   <p className="text-[var(--text-secondary)] text-sm mt-0.5">
-                    {drawerVehicle.site ?? '-'} · {drawerVehicle.country ?? '-'}
+                    {drawerVehicle.site ?? 'N/A'}, {drawerVehicle.country ?? 'N/A'}. {drawerVehicle.rated} of {drawerVehicle.tyres.length} tyres rated.
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <HealthCircle score={vehicleHealthScore(drawerVehicle.tyres)} size={52} />
-                  <button
-                    onClick={() => setDrawerOpen(false)}
-                    className="p-1.5 rounded-lg hover:bg-[var(--surface-2)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
-                  >
-                    <X size={18} />
+                  <HealthCircle score={drawerVehicle.score} size={52} />
+                  <button type="button" aria-label="Close vehicle details" onClick={() => setDrawerOpen(false)}
+                    className="w-11 h-11 flex items-center justify-center rounded-lg hover:bg-[var(--surface-2)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
+                    <X size={18} aria-hidden="true" />
                   </button>
                 </div>
               </div>
 
-              {/* Drawer body */}
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
-
-                {/* Tyre table */}
                 <div>
                   <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-2">{t('fleethealth.drawer.activeTyres')}</h3>
-                  <div className="overflow-x-auto rounded-lg border border-[var(--border-dim)]">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="border-b border-[var(--border-dim)] bg-[var(--surface-1)]">
-                          {['position','serial','brand','size','tread','pressure','risk','fitted'].map(hKey => (
-                            <th key={hKey} className="text-left px-2.5 py-2 text-[var(--text-muted)] font-medium whitespace-nowrap">{t(`fleethealth.drawer.tyreColumns.${hKey}`)}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {drawerVehicle.tyres.map(t => (
-                          <tr key={t.id} className="border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)]">
-                            <td className="px-2.5 py-2 text-[var(--text-secondary)] font-mono">{t.position ?? '-'}</td>
-                            <td className="px-2.5 py-2 text-[var(--text-secondary)] font-mono">{t.serial_number?.slice(-8) ?? '-'}</td>
-                            <td className="px-2.5 py-2 text-[var(--text-secondary)]">{t.brand ?? '-'}</td>
-                            <td className="px-2.5 py-2 text-[var(--text-secondary)]">{t.size ?? '-'}</td>
-                            <td className="px-2.5 py-2 text-[var(--text-secondary)]">
-                              {t.tread_depth != null ? `${t.tread_depth}mm` : '-'}
-                            </td>
-                            <td className="px-2.5 py-2 text-[var(--text-secondary)]">
-                              {t.pressure_reading != null ? `${t.pressure_reading}` : '-'}
-                            </td>
-                            <td className="px-2.5 py-2">
-                              <span className={`badge border text-xs ${riskBgClass(t.risk_level)}`}>
-                                {t.risk_level ?? '-'}
-                              </span>
-                            </td>
-                            <td className="px-2.5 py-2 text-[var(--text-muted)] flex items-center gap-1">
-                              <Clock size={10} />
-                              {daysFitted(t.issue_date)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <EnterpriseTable
+                    columns={tyreColumns}
+                    data={drawerVehicle.tyres}
+                    getRowId={r => String(r.id)}
+                    enableColumnFilters={false}
+                    enableGlobalFilter={false}
+                    enableColumnVisibility={false}
+                    initialPageSize={25}
+                    exportFileName={reportFileName('TyrePulse Active Tyres', drawerVehicle.asset_no)}
+                    reportMeta={{ title: `Active tyres ${drawerVehicle.asset_no}` }}
+                    emptyMessage="No active tyre recorded."
+                  />
                 </div>
 
-                {/* Risk trend mini chart */}
-                {drawerTrendData && (
-                  <div>
-                    <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-2">{t('fleethealth.drawer.riskIndexTrend')}</h3>
+                <div>
+                  <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-2">{t('fleethealth.drawer.riskIndexTrend')}</h3>
+                  {drawerTrendData ? (
                     <div className="bg-[var(--surface-1)] rounded-lg border border-[var(--border-dim)] p-3 h-36">
                       <Line
                         data={drawerTrendData}
+                        role="img"
+                        aria-label={`Risk index trend for ${drawerVehicle.asset_no}`}
                         options={{
-                          responsive: true,
-                          maintainAspectRatio: false,
+                          responsive: true, maintainAspectRatio: false,
                           plugins: { legend: { display: false } },
                           scales: {
-                            x: { ticks: { color: '#6b7280', font: { size: 9 } }, grid: GRID },
+                            x: { ticks: { color: 'var(--text-muted)', font: { size: 9 } }, grid: GRID },
                             y: {
                               ticks: {
-                                color: '#6b7280', font: { size: 9 },
-                                callback: v => v === 0 ? t('fleethealth.drawer.riskAxis.critical') : v === 33 ? t('fleethealth.drawer.riskAxis.high') : v === 66 ? t('fleethealth.drawer.riskAxis.medium') : t('fleethealth.drawer.riskAxis.low'),
+                                color: 'var(--text-muted)', font: { size: 9 },
+                                callback: v => (v === 0 ? t('fleethealth.drawer.riskAxis.critical') : v === 33 ? t('fleethealth.drawer.riskAxis.high') : v === 66 ? t('fleethealth.drawer.riskAxis.medium') : t('fleethealth.drawer.riskAxis.low')),
                               },
-                              grid: GRID,
-                              min: 0, max: 100,
+                              grid: GRID, min: 0, max: 100,
                             },
                           },
                         }}
                       />
                     </div>
-                  </div>
-                )}
+                  ) : (
+                    <p className="text-xs text-[var(--text-muted)]">Fewer than two rated readings in the last 12 months.</p>
+                  )}
+                </div>
 
-                {/* Actions */}
                 <div className="space-y-3 pt-1">
-                  {/* Primary: open the dedicated full asset profile page. */}
-                  <button
-                    onClick={() => navigate(`/asset-management/${encodeURIComponent(drawerVehicle.asset_no)}`)}
-                    className="w-full btn-primary flex items-center justify-center gap-2 text-sm"
-                  >
-                    <Truck size={13} /> {t('assetmgmt.detail.openAssetProfile')}
+                  <button type="button" onClick={() => navigate(`/asset-management/${encodeURIComponent(drawerVehicle.asset_no)}`)}
+                    className={`w-full btn-primary flex items-center justify-center gap-2 text-sm ${TOUCH}`}>
+                    <Truck size={13} aria-hidden="true" /> {t('assetmgmt.detail.openAssetProfile')}
                   </button>
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => navigate(`/vehicle-history?asset=${drawerVehicle.asset_no}`)}
-                      className="flex-1 btn-secondary flex items-center justify-center gap-2 text-sm"
-                    >
-                      <ExternalLink size={13} /> {t('fleethealth.drawer.viewInTyreRecords')}
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <button type="button" onClick={() => navigate(`/vehicle-history?asset=${encodeURIComponent(drawerVehicle.asset_no)}`)}
+                      className={`flex-1 btn-secondary flex items-center justify-center gap-2 text-sm ${TOUCH}`}>
+                      <ExternalLink size={13} aria-hidden="true" /> {t('fleethealth.drawer.viewInTyreRecords')}
                     </button>
-                    <button
-                      onClick={() => navigate(`/work-orders?asset=${drawerVehicle.asset_no}`)}
-                      className="flex-1 btn-secondary flex items-center justify-center gap-2 text-sm"
-                    >
-                      <Wrench size={13} /> {t('fleethealth.drawer.createWorkOrder')}
+                    <button type="button" onClick={() => navigate(`/work-orders?asset=${encodeURIComponent(drawerVehicle.asset_no)}`)}
+                      className={`flex-1 btn-secondary flex items-center justify-center gap-2 text-sm ${TOUCH}`}>
+                      <Wrench size={13} aria-hidden="true" /> {t('fleethealth.drawer.createWorkOrder')}
                     </button>
                   </div>
                 </div>
@@ -1039,24 +840,24 @@ export default function FleetHealthBoard() {
 // ── KPI Card ──────────────────────────────────────────────────────────────────
 function KpiCard({ label, value, sub, icon: Icon, color }) {
   const colors = {
-    green:  { icon: 'text-green-400',  value: 'text-green-400',  bg: 'bg-green-900/20' },
-    yellow: { icon: 'text-yellow-400', value: 'text-yellow-400', bg: 'bg-yellow-900/20' },
-    red:    { icon: 'text-red-400',    value: 'text-red-400',    bg: 'bg-red-900/20' },
-    orange: { icon: 'text-orange-400', value: 'text-orange-400', bg: 'bg-orange-900/20' },
-    blue:   { icon: 'text-blue-400',   value: 'text-blue-400',   bg: 'bg-blue-900/20' },
+    green:   { value: 'text-green-400',  bg: 'bg-green-900/20' },
+    yellow:  { value: 'text-yellow-400', bg: 'bg-yellow-900/20' },
+    red:     { value: 'text-red-400',    bg: 'bg-red-900/20' },
+    orange:  { value: 'text-orange-400', bg: 'bg-orange-900/20' },
+    blue:    { value: 'text-blue-400',   bg: 'bg-blue-900/20' },
+    neutral: { value: 'text-[var(--text-primary)]', bg: 'bg-[var(--surface-2)]' },
   }
-  const c = colors[color] ?? colors.blue
-
+  const c = colors[color] ?? colors.neutral
   return (
     <div className="card">
-      <div className="flex items-start justify-between">
-        <div>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
           <p className="text-[var(--text-secondary)] text-xs uppercase tracking-wide font-medium">{label}</p>
           <p className={`text-2xl font-bold mt-1 tabular-nums ${c.value}`}>{value}</p>
-          {sub && <p className="text-[var(--text-dim)] text-xs mt-0.5">{sub}</p>}
+          {sub && <p className="text-[var(--text-muted)] text-xs mt-0.5">{sub}</p>}
         </div>
         <div className={`p-2 rounded-lg ${c.bg}`}>
-          <Icon size={18} className={c.icon} />
+          <Icon size={18} className={c.value} aria-hidden="true" />
         </div>
       </div>
     </div>
@@ -1066,71 +867,40 @@ function KpiCard({ label, value, sub, icon: Icon, color }) {
 // ── Vehicle Card ──────────────────────────────────────────────────────────────
 function VehicleCard({ vehicle, onClick, isSelected }) {
   const { t } = useLanguage()
-  const { asset_no, site, country, tyres, score, worst } = vehicle
-
-  const lastDate = tyres
-    .filter(t => t.issue_date)
-    .sort((a, b) => new Date(b.issue_date) - new Date(a.issue_date))[0]?.issue_date
-
-  function fmtDate(d) {
-    if (!d) return '-'
-    return formatDate(d, 'All', { day: '2-digit', month: 'short', year: 'numeric' })
-  }
-
+  const { asset_no, site, country, tyres, score, worst, lastIssue } = vehicle
   return (
-    <motion.div
-      whileHover={{ y: -2 }}
+    <button
+      type="button"
       onClick={onClick}
-      className={`card cursor-pointer transition-all duration-200 ${scoreBorderClass(score)} ${isSelected ? 'ring-1 ring-green-500/50' : ''}`}
+      aria-label={`${asset_no}, health ${score == null ? 'not assessed' : `${score} of 100`}, worst risk ${worst ?? 'not rated'}. Open details`}
+      className={`card w-full text-left transition-all duration-200 border ${scoreBorderClass(score)} ${isSelected ? 'ring-1 ring-green-500/50' : ''} focus-visible:outline focus-visible:outline-2 focus-visible:outline-green-500`}
     >
-      {/* Asset + location */}
       <div className="flex items-start justify-between mb-3">
         <div>
           <p className="text-[var(--text-primary)] font-bold text-base leading-tight">{asset_no}</p>
           <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-            {site && (
-              <span className="flex items-center gap-1 text-xs text-[var(--text-secondary)] bg-[var(--surface-2)] rounded px-1.5 py-0.5">
-                <MapPin size={9} />{site}
-              </span>
-            )}
-            {country && (
-              <span className="flex items-center gap-1 text-xs text-[var(--text-muted)] bg-[var(--surface-2)] rounded px-1.5 py-0.5">
-                <Globe size={9} />{country}
-              </span>
-            )}
+            {site && <span className="flex items-center gap-1 text-xs text-[var(--text-secondary)] bg-[var(--surface-2)] rounded px-1.5 py-0.5"><MapPin size={9} aria-hidden="true" />{site}</span>}
+            {country && <span className="flex items-center gap-1 text-xs text-[var(--text-muted)] bg-[var(--surface-2)] rounded px-1.5 py-0.5"><Globe size={9} aria-hidden="true" />{country}</span>}
           </div>
         </div>
         <HealthCircle score={score} size={48} />
       </div>
-
-      {/* Mini tyre diagram */}
       {tyres.length > 0 ? (
-        <div className="flex justify-center py-2">
-          <MiniTyreDiagram tyres={tyres} />
-        </div>
+        <div className="flex justify-center py-2"><MiniTyreDiagram tyres={tyres} /></div>
       ) : (
-        <div className="flex items-center justify-center py-4">
-          <span className="text-[var(--text-dim)] text-xs">{t('fleethealth.card.noTyreData')}</span>
-        </div>
+        <div className="flex items-center justify-center py-4"><span className="text-[var(--text-muted)] text-xs">{t('fleethealth.card.noTyreData')}</span></div>
       )}
-
-      {/* Footer row */}
-      <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--border-dim)]">
+      <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--border-dim)] gap-2">
         <span className="text-[var(--text-muted)] text-xs">{t('fleethealth.card.tyresCount', { count: tyres.length })}</span>
-        {worst && (
-          <span className={`badge border text-xs ${riskBgClass(worst)}`}>{worst}</span>
-        )}
-        {!worst && (
-          <span className="text-[var(--text-dim)] text-xs">{t('fleethealth.card.noData')}</span>
-        )}
-        <span className="text-[var(--text-dim)] text-xs">{lastDate ? formatDate(lastDate, 'All', { day:'2-digit', month:'short' }) : '-'}</span>
+        {worst
+          ? <span className={`badge border text-xs ${riskBgClass(worst)}`}>{worst}</span>
+          : <span className="text-[var(--text-muted)] text-xs">Not rated</span>}
+        <span className="text-[var(--text-muted)] text-xs">{lastIssue ? formatDate(lastIssue, 'All', { day: '2-digit', month: 'short' }) : 'N/A'}</span>
       </div>
-
-      {/* Drill-in hint */}
-      <div className="flex items-center justify-end mt-2 gap-1 text-[var(--text-dim)] hover:text-[var(--text-secondary)] transition-colors">
+      <div className="flex items-center justify-end mt-2 gap-1 text-[var(--text-muted)]">
         <span className="text-xs">{t('fleethealth.card.details')}</span>
-        <ChevronRight size={11} />
+        <ChevronRight size={11} aria-hidden="true" />
       </div>
-    </motion.div>
+    </button>
   )
 }

@@ -1,17 +1,21 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { Link } from 'react-router-dom'
 import * as engKpiApi from '../lib/api/engineeringKpi'
 import { fetchAllPages } from '../lib/fetchAll'
 import { toUserMessage } from '../lib/safeError'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { loadGridTyreByAsset } from '../lib/api/costSummary'
 import { loadGovernedCostSplit, COST_SPLIT_TTL_MS } from '../lib/api/governedCost'
-import { COST_MODES, pickCost } from '../lib/costSources'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { COST_MODES } from '../lib/costSources'
+import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
+import { computeAllKpis } from '../lib/kpiEngine'
+import { compareValues } from '../lib/consoleTable'
+import { colorAt, withAlpha } from '../lib/reportColors'
 import {
-  computeAllKpis,
-  computeCpkByBrand,
-  computeWorkshopPerformance,
-} from '../lib/kpiEngine'
+  presetRange, DATE_PRESETS, monthAxis, headlineMetrics, assetCpkRows, brandScorecardRows,
+  gridCostTrend, costModeFigure, failureBySite, inspectionSeries, filterKpiCards, statusCounts,
+  kpiExportRows, cpkStatus, lifeStatus, lowerIsBetterPctStatus, higherIsBetterPctStatus, STATUS_LABEL,
+} from '../lib/engineeringKpiAnalytics'
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale,
@@ -22,12 +26,11 @@ import { Bar, Line } from 'react-chartjs-2'
 import {
   Cpu, Download, FileText, TrendingUp, TrendingDown, Minus,
   AlertTriangle, CheckCircle, XCircle, Info, Mail,
-  Gauge, Search, Clock, Layers, SlidersHorizontal,
+  Gauge, Search, X, RefreshCw,
 } from 'lucide-react'
-import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
-import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import DateField from '../components/ui/DateField'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import ExplainThisNumber from '../components/trust/ExplainThisNumber'
 import YearlyTrendPanel from '../components/expense/YearlyTrendPanel'
 import SectionTabs, { KPI_TABS } from '../components/ui/SectionTabs'
@@ -39,108 +42,68 @@ ChartJS.register(
   Title, Tooltip, Legend, Filler,
 )
 
-// ── Date preset helpers ───────────────────────────────────────────────────────
-function presetRange(preset) {
-  const now = new Date()
-  const pad  = n => String(n).padStart(2, '0')
-  const fmt  = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+// Semantic band colours (the colour carries meaning, so it is not palettized).
+const BAND = { good: '#22c55e', warning: '#eab308', critical: '#ef4444', neutral: '#94a3b8' }
+const TOUCH = 'min-h-[44px]'
 
-  if (preset === '30d') {
-    const from = new Date(now); from.setDate(from.getDate() - 30)
-    return { from: fmt(from), to: fmt(now) }
-  }
-  if (preset === '90d') {
-    const from = new Date(now); from.setDate(from.getDate() - 90)
-    return { from: fmt(from), to: fmt(now) }
-  }
-  if (preset === '6m') {
-    const from = new Date(now); from.setMonth(from.getMonth() - 6)
-    return { from: fmt(from), to: fmt(now) }
-  }
-  if (preset === 'ytd') {
-    return { from: `${now.getFullYear()}-01-01`, to: fmt(now) }
-  }
-  return { from: '', to: '' }
-}
-
-// ── Chart options factory ─────────────────────────────────────────────────────
-function chartOpts(horizontal = false, yLabel = '', xLabel = '') {
+// ── Chart options (theme tokens are resolved per theme by chartVarPlugin) ─────
+function chartOpts({ horizontal = false, yLabel = '', xLabel = '', suffix = '' } = {}) {
+  const tick = { color: 'var(--text-muted)', font: { size: 10 } }
+  const title = (text) => (text ? { display: true, text, color: 'var(--text-muted)', font: { size: 10 } } : { display: false })
   return {
     responsive: true,
     maintainAspectRatio: false,
     indexAxis: horizontal ? 'y' : 'x',
     plugins: {
-      legend: { labels: { color: '#9ca3af', font: { size: 10 } } },
-      title:  { display: false },
-      tooltip: { backgroundColor: 'var(--panel)', titleColor: '#f9fafb', bodyColor: '#d1d5db', borderColor: 'var(--hairline)', borderWidth: 1 },
+      legend: { labels: { color: 'var(--text-secondary)', font: { size: 10 } } },
+      title: { display: false },
+      tooltip: {
+        backgroundColor: 'var(--panel)', titleColor: 'var(--text-primary)', bodyColor: 'var(--text-secondary)',
+        borderColor: 'var(--hairline)', borderWidth: 1,
+        callbacks: suffix ? { label: (ctx) => `${ctx.dataset.label}: ${ctx.formattedValue}${suffix}` } : undefined,
+      },
     },
     scales: {
-      x: {
-        grid: { color: 'rgba(31,41,55,0.8)' },
-        ticks: { color: '#9ca3af', font: { size: 10 } },
-        title: xLabel ? { display: true, text: xLabel, color: '#6b7280', font: { size: 10 } } : { display: false },
-      },
-      y: {
-        grid: { color: 'rgba(31,41,55,0.8)' },
-        ticks: { color: '#9ca3af', font: { size: 10 } },
-        title: yLabel ? { display: true, text: yLabel, color: '#6b7280', font: { size: 10 } } : { display: false },
-      },
+      x: { grid: { color: 'var(--panel-2)' }, ticks: tick, title: title(xLabel) },
+      y: { grid: { color: 'var(--panel-2)' }, ticks: tick, title: title(yLabel) },
     },
   }
 }
 
-// ── Status classifier ─────────────────────────────────────────────────────────
 function statusClass(status) {
   if (status === 'good')     return 'border-green-700/50 bg-green-950/20'
   if (status === 'warning')  return 'border-yellow-700/50 bg-yellow-950/10'
   if (status === 'critical') return 'border-red-700/50 bg-red-950/20'
-  return 'border-gray-700/50 bg-gray-900/30'
-}
-
-function statusBadge(status) {
-  if (status === 'good')     return 'bg-green-900/50 text-green-400'
-  if (status === 'warning')  return 'bg-yellow-900/50 text-yellow-400'
-  if (status === 'critical') return 'bg-red-900/50 text-red-400'
-  return 'bg-gray-800 text-gray-400'
+  return 'border-[var(--border-bright)] bg-[var(--surface-2)]'
 }
 
 function StatusIcon({ status, size = 14 }) {
-  if (status === 'good')     return <CheckCircle size={size} className="text-green-400" />
-  if (status === 'warning')  return <AlertTriangle size={size} className="text-yellow-400" />
-  if (status === 'critical') return <XCircle size={size} className="text-red-400" />
-  return <Info size={size} className="text-gray-400" />
+  if (status === 'good')     return <CheckCircle size={size} className="text-green-400" aria-hidden="true" />
+  if (status === 'warning')  return <AlertTriangle size={size} className="text-yellow-400" aria-hidden="true" />
+  if (status === 'critical') return <XCircle size={size} className="text-red-400" aria-hidden="true" />
+  return <Info size={size} className="text-[var(--text-muted)]" aria-hidden="true" />
 }
 
-// ── KPI Card ──────────────────────────────────────────────────────────────────
-function KpiCard({ title, value, subValue, description, status, icon: Icon, trend, trendLabel }) {
-  const trendColor = trend === 'up'
-    ? (status === 'critical' ? 'text-red-400' : 'text-green-400')
-    : trend === 'down'
-      ? (status === 'critical' ? 'text-green-400' : 'text-red-400')
-      : 'text-gray-500'
-
+// ── KPI Card (status is carried by icon + text, never colour alone) ───────────
+function KpiCard({ title, value, subValue, description, status, trend, trendLabel }) {
+  const trendColor = status === 'critical' ? 'text-red-400' : status === 'good' ? 'text-green-400' : 'text-[var(--text-muted)]'
   return (
     <div className={`rounded-xl border p-4 flex flex-col gap-2 ${statusClass(status)}`}>
       <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          {Icon && <Icon size={15} className="text-gray-400 shrink-0" />}
-          <span className="text-xs text-gray-400 font-medium truncate">{title}</span>
-        </div>
-        <StatusIcon status={status} size={13} />
+        <span className="text-xs text-[var(--text-secondary)] font-medium">{title}</span>
+        <span className="flex items-center gap-1 text-[11px] text-[var(--text-muted)] shrink-0">
+          <StatusIcon status={status} size={13} />
+          {STATUS_LABEL[status] || STATUS_LABEL.neutral}
+        </span>
       </div>
-
       <div>
-        <p className="text-lg font-bold text-white leading-tight">{value}</p>
-        {subValue && <p className="text-xs text-gray-400 mt-0.5">{subValue}</p>}
+        <p className="text-lg font-bold text-[var(--text-primary)] leading-tight tabular-nums">{value}</p>
+        {subValue && <p className="text-xs text-[var(--text-secondary)] mt-0.5">{subValue}</p>}
       </div>
-
-      {description && (
-        <p className="text-xs text-gray-500 leading-snug">{description}</p>
-      )}
-
-      {trend && trendLabel && (
+      {description && <p className="text-xs text-[var(--text-muted)] leading-snug">{description}</p>}
+      {trendLabel && (
         <div className={`flex items-center gap-1 text-xs font-medium ${trendColor}`}>
-          {trend === 'up' ? <TrendingUp size={12} /> : trend === 'down' ? <TrendingDown size={12} /> : <Minus size={12} />}
+          {trend === 'up' ? <TrendingUp size={12} aria-hidden="true" /> : trend === 'down' ? <TrendingDown size={12} aria-hidden="true" /> : <Minus size={12} aria-hidden="true" />}
           {trendLabel}
         </div>
       )}
@@ -153,36 +116,39 @@ function HeadlineCard({ title, value, sub, status, metricId, country }) {
   const valueColor = status === 'good' ? 'text-green-400'
     : status === 'warning' ? 'text-yellow-400'
     : status === 'critical' ? 'text-red-400'
-    : 'text-gray-300'
-
-  const borderColor = status === 'good' ? 'border-green-700/50'
-    : status === 'warning' ? 'border-yellow-700/50'
-    : status === 'critical' ? 'border-red-700/50'
-    : 'border-gray-700/50'
-
+    : 'text-[var(--text-primary)]'
   return (
-    <div className={`card border ${borderColor} flex flex-col gap-1.5`}>
+    <div className={`rounded-xl border p-4 flex flex-col gap-1.5 ${statusClass(status)}`}>
       <div className="flex items-center justify-between gap-1">
-        <p className="text-xs text-gray-400 font-medium">{title}</p>
+        <p className="text-xs text-[var(--text-secondary)] font-medium">{title}</p>
         {metricId && <ExplainThisNumber metricId={metricId} country={country} value={value} label={title} />}
       </div>
-      <p className={`text-2xl font-bold ${valueColor}`}>{value}</p>
-      {sub && <p className="text-xs text-gray-500">{sub}</p>}
+      <p className={`text-2xl font-bold tabular-nums ${valueColor}`}>{value}</p>
+      <p className="text-xs text-[var(--text-muted)] flex items-center gap-1">
+        <StatusIcon status={status} size={11} />
+        <span>{sub || STATUS_LABEL[status]}</span>
+      </p>
+    </div>
+  )
+}
+
+function ChartCard({ title, hint, empty, emptyText, children }) {
+  return (
+    <div className="card">
+      <div className="flex items-start justify-between gap-2 mb-3 flex-wrap">
+        <h3 className="text-sm font-medium text-[var(--text-primary)]">{title}</h3>
+        {hint && <span className="text-xs text-[var(--text-muted)]">{hint}</span>}
+      </div>
+      {empty ? (
+        <div className="flex items-center justify-center h-48 text-[var(--text-muted)] text-sm text-center px-4">{emptyText}</div>
+      ) : (
+        <div style={{ height: 280 }}>{children}</div>
+      )}
     </div>
   )
 }
 
 // ── Helpers for N/A display ───────────────────────────────────────────────────
-function fmtCpk(v, validCount, currency) {
-  if (!validCount || v === 0) return 'N/A (no km data)'
-  return `${currency} ${v.toFixed(4)}/km`
-}
-
-function fmtKm(v, validCount) {
-  if (!validCount || v === 0) return 'N/A (no km data)'
-  return `${Math.round(v).toLocaleString()} km`
-}
-
 // A KPI with no measurable input is legitimately null (e.g. pressure compliance
 // with no recorded PSI). Dereferencing it threw `null.toFixed` and took the whole
 // page down behind the error boundary, so null/non-finite reads N/A. Any real
@@ -192,18 +158,39 @@ function fmtPct(v) {
   return `${Number(v).toFixed(1)}%`
 }
 
-// A nullable KPI rendered as a bare number (exports print the unit in the label).
-function pctOrNA(v, decimals = 1) {
-  return isMeasured(v) ? Number(v).toFixed(decimals) : 'N/A'
-}
-
 function isMeasured(v) {
   return v != null && Number.isFinite(Number(v))
 }
 
+function fmtKm(v) {
+  return isMeasured(v) ? `${Math.round(v).toLocaleString()} km` : 'N/A'
+}
+
+function fmtMoney(v, currency) {
+  return isMeasured(v) ? `${currency} ${Math.round(v).toLocaleString()}` : 'N/A'
+}
+
+// Null-last sort for EnterpriseTable, sharing compareValues with the console lists.
+function sortNullLast(rowA, rowB, id) {
+  const a = rowA.getValue(id)
+  const b = rowB.getValue(id)
+  const ba = a == null || a === ''
+  const bb = b == null || b === ''
+  if (ba && bb) return 0
+  if (ba) return 1
+  if (bb) return -1
+  return compareValues(a, b)
+}
+
+function BandText({ value, band, children }) {
+  const cls = band === 'good' ? 'text-green-400' : band === 'warning' ? 'text-yellow-400' : band === 'critical' ? 'text-red-400' : 'text-[var(--text-muted)]'
+  if (!isMeasured(value)) return <span className="text-[var(--text-muted)]">N/A</span>
+  return <span className={`tabular-nums font-medium ${cls}`}>{children}</span>
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function EngineeringKpi() {
-  const { appSettings, activeCountry, activeCurrency } = useSettings()
+  const { activeCountry, activeCurrency } = useSettings()
 
   // Filter state
   const [countryChip, setCountryChip] = useState('All')
@@ -212,6 +199,8 @@ export default function EngineeringKpi() {
   const [siteOptions, setSiteOptions] = useState([])
   const [dateFrom,    setDateFrom]    = useState('')
   const [dateTo,      setDateTo]      = useState('')
+  const [cardQuery,   setCardQuery]   = useState('')
+  const [cardStatus,  setCardStatus]  = useState('all')
 
   // Data state
   const [records,     setRecords]     = useState([])
@@ -220,25 +209,27 @@ export default function EngineeringKpi() {
   const [fleetSize,   setFleetSize]   = useState(0)
   const [loading,     setLoading]     = useState(true)
   const [error,       setError]       = useState(null)
+  const [truncated,   setTruncated]   = useState(false)
   const [emailModalOpen, setEmailModalOpen] = useState(false)
+  const [exportError, setExportError] = useState('')
 
-  // Tyres vs General(Maintenance) vs Combined cost switch. Surfaces the split so
-  // the total tyre/maintenance spend is visible here (the CPK maths is unchanged).
+  // Tyres vs General(Maintenance) vs Combined cost switch, read from the governed
+  // expense grid (never a cost_per_tyre sum).
   const [costMode, setCostMode] = useState('tyres')
   const [costSplit, setCostSplit] = useState(null)
   const [costSplitLoading, setCostSplitLoading] = useState(true)
+  const [costSplitError, setCostSplitError] = useState(false)
   // Authoritative per-asset tyre cost from the expense grid (V347 RPC). Null when
-  // the grid is unavailable for this scope -> the worst-assets table then falls
-  // back to its tyre_records cost_per_tyre sum. Keyed on country + date range so
-  // it matches the page filters.
+  // the grid is unavailable for this scope; the asset table then reads N/A.
   const [gridByAsset, setGridByAsset] = useState(null)
 
-  // Fleet CPK (cost per km / hour) now lives in its own module at /cpk-intelligence.
+  // Fleet CPK (cost per km / hour) lives in its own module at /cpk-intelligence.
   const effectiveCountry = countryChip !== 'All' ? countryChip : (activeCountry !== 'All' ? activeCountry : undefined)
 
-  useEffect(() => {
+  const loadCost = useCallback(() => {
     let cancelled = false
     setCostSplitLoading(true)
+    setCostSplitError(false)
     loadGovernedCostSplit({
       country: effectiveCountry,
       from: dateFrom || undefined,
@@ -247,10 +238,12 @@ export default function EngineeringKpi() {
       maxAgeMs: COST_SPLIT_TTL_MS,
     })
       .then(res => { if (!cancelled) setCostSplit(res) })
-      .catch(() => { if (!cancelled) setCostSplit(null) })
+      .catch(() => { if (!cancelled) { setCostSplit(null); setCostSplitError(true) } })
       .finally(() => { if (!cancelled) setCostSplitLoading(false) })
     return () => { cancelled = true }
   }, [effectiveCountry, dateFrom, dateTo, siteFilter])
+
+  useEffect(() => loadCost(), [loadCost])
 
   useEffect(() => {
     let cancelled = false
@@ -264,22 +257,24 @@ export default function EngineeringKpi() {
     return () => { cancelled = true }
   }, [effectiveCountry, dateFrom, dateTo])
 
-  const costFigure = costSplit ? pickCost(costMode, { tyre: costSplit.tyre, maintenance: costSplit.maintenance }) : 0
+  const costFigure = useMemo(() => costModeFigure(costSplit, costMode), [costSplit, costMode])
+  const costTrend = useMemo(() => gridCostTrend(costSplit, 'tyres'), [costSplit])
   const costModeOptions = COST_MODES.map(m => ({ ...m, label: m.key === 'maintenance' ? 'General' : m.label }))
 
-
-  // Apply preset date range
   function applyPreset(preset) {
-    const { from, to } = presetRange(preset)
+    const { from, to } = presetRange(preset, new Date())
     setDateFrom(from)
     setDateTo(to)
+  }
+
+  function clearFilters() {
+    setDateFrom(''); setDateTo(''); setSiteFilter(''); setCountryChip('All')
   }
 
   // Guards against a slow earlier response overwriting a newer one after the
   // country/site/date filters change (fetch-race cancellation).
   const reqIdRef = useRef(0)
 
-  // Load data
   const loadData = useCallback(async () => {
     const myReq = ++reqIdRef.current
     setLoading(true)
@@ -291,12 +286,9 @@ export default function EngineeringKpi() {
         fetchAllPages((from, to) =>
           engKpiApi.listKpiTyreRecords({ country, dateFrom, dateTo, from, to })
         , { max: 200000 }),
-        // Site and the date window reach these three too. Without them four of
-        // the seventeen KPIs - pressure compliance, inspection compliance,
-        // workshop performance and fleet availability - were all-time and
-        // fleet-wide while sitting in the same grid as tyre KPIs that had both
-        // applied. Fleet availability was the worst of them: one site's tyres
-        // over the whole country's vehicle count.
+        // Site and the date window reach these three too, so pressure compliance,
+        // inspection compliance, workshop performance and fleet availability
+        // describe the same population as the tyre KPIs beside them.
         fetchAllPages((from, to) =>
           engKpiApi.listKpiInspections({ country, site: siteFilter || undefined, dateFrom, dateTo, from, to })
         , { max: 200000 }),
@@ -315,9 +307,8 @@ export default function EngineeringKpi() {
       if (fleetRes.error) throw fleetRes.error
 
       const allRecs = recRes.data || []
-      // The site list is built from the UNFILTERED rows. Deriving it from the
-      // filtered ones collapsed the dropdown to the single site already chosen,
-      // so the only way to reach a different site was to clear the filter first.
+      // The site list is built from the UNFILTERED rows so a chosen site never
+      // collapses the dropdown to itself.
       setSiteOptions([...new Set(allRecs.map(r => r.site).filter(Boolean))].sort())
       const recs = siteFilter ? allRecs.filter(r => r.site === siteFilter) : allRecs
 
@@ -325,6 +316,7 @@ export default function EngineeringKpi() {
       setInspections(insRes.data || [])
       setActions(actRes.data || [])
       setFleetSize((fleetRes.data || []).length)
+      setTruncated(Boolean(recRes.truncated || insRes.truncated || actRes.truncated || fleetRes.truncated))
     } catch (err) {
       if (myReq === reqIdRef.current) setError(toUserMessage(err, 'Could not load engineering KPIs.'))
     } finally {
@@ -334,341 +326,175 @@ export default function EngineeringKpi() {
 
   useEffect(() => { loadData() }, [loadData])
 
-  // Compute all 17 KPIs
+  // All 17 KPIs from the single engine.
   const kpis = useMemo(() => {
     if (!records.length) return null
     return computeAllKpis(records, inspections, actions, fleetSize)
   }, [records, inspections, actions, fleetSize])
 
-  // Brand CPK chart data
+  const head = useMemo(() => headlineMetrics(kpis, { inspectionsLoaded: inspections.length }), [kpis, inspections.length])
+
+  const assetRows = useMemo(() => assetCpkRows(kpis, records, gridByAsset?.map ?? null), [kpis, records, gridByAsset])
+  const brandRows = useMemo(() => brandScorecardRows(kpis, records), [kpis, records])
+
+  // Brand CPK chart (top 10 by best CPK)
   const cpkBrandChart = useMemo(() => {
-    if (!kpis) return null
-    const top10 = kpis.cpkByBrand.slice(0, 10)
+    if (!kpis?.cpkByBrand?.length) return null
+    const top = kpis.cpkByBrand.filter(b => isMeasured(b.avgCpk)).slice(0, 10)
+    if (!top.length) return null
     return {
-      labels: top10.map(b => `${b.brand} (n=${b.count})`),
+      labels: top.map(b => `${b.brand} (n=${b.count})`),
       datasets: [{
         label: `Avg CPK (${activeCurrency}/km)`,
-        data:  top10.map(b => parseFloat(b.avgCpk.toFixed(4))),
-        backgroundColor: top10.map(b =>
-          b.avgCpk < 1.0 ? 'rgba(34,197,94,0.7)'
-          : b.avgCpk < 2.0 ? 'rgba(234,179,8,0.7)'
-          : 'rgba(239,68,68,0.7)'
-        ),
-        borderColor: top10.map(b =>
-          b.avgCpk < 1.0 ? 'rgb(34,197,94)'
-          : b.avgCpk < 2.0 ? 'rgb(234,179,8)'
-          : 'rgb(239,68,68)'
-        ),
+        data: top.map(b => Number(b.avgCpk.toFixed(4))),
+        backgroundColor: top.map(b => withAlpha(BAND[cpkStatus(b.avgCpk)], 0.7)),
+        borderColor: top.map(b => BAND[cpkStatus(b.avgCpk)]),
         borderWidth: 1,
         borderRadius: 3,
       }],
     }
   }, [kpis, activeCurrency])
 
-  // Monthly cost trend chart (13 months)
+  // Monthly tyre spend from the governed expense grid, with a fitted trend line.
   const costTrendChart = useMemo(() => {
-    if (!kpis) return null
-    const { byMonth, slope, forecastNextMonth } = kpis.costTrend
-
-    const now = new Date()
-    const axis = []
-    for (let i = 12; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-      axis.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
-    }
-    const monthMap = {}
-    byMonth.forEach(m => { monthMap[m.month] = m.totalCost })
-
-    const actuals = axis.map(m => monthMap[m] ?? null)
-
-    // Regression line using index positions
-    let trendLine = null
-    if (byMonth.length >= 2) {
-      // find first axis index matching first data month
-      const startIdx = axis.findIndex(m => m === byMonth[0]?.month)
-      trendLine = axis.map((_, i) => {
-        const x = i - startIdx
-        return Math.max(0, kpis.costTrend.slope * x + (byMonth[0]?.totalCost ?? 0) + kpis.costTrend.slope)
-      })
-    }
-
-    const datasets = [
-      {
-        label: `Actual Cost (${activeCurrency})`,
-        data: actuals,
-        borderColor: 'rgba(59,130,246,1)',
-        backgroundColor: 'rgba(59,130,246,0.08)',
-        fill: true, tension: 0.4, spanGaps: true, pointRadius: 3,
-      },
-    ]
-    if (trendLine) {
+    if (!costTrend?.series?.length) return null
+    const lineColor = colorAt(0)
+    const datasets = [{
+      label: `Tyre spend (${costTrend.currency || activeCurrency})`,
+      data: costTrend.series.map(s => s.value),
+      borderColor: lineColor,
+      backgroundColor: withAlpha(lineColor, 0.1),
+      fill: true, tension: 0.35, pointRadius: 3,
+    }]
+    if (costTrend.fitted) {
       datasets.push({
-        label: 'Trend Line',
-        data: trendLine,
-        borderColor: 'rgba(107,114,128,0.55)',
-        borderDash: [5, 3], fill: false, pointRadius: 0, tension: 0, spanGaps: true,
+        label: 'Trend line',
+        data: costTrend.fitted,
+        borderColor: withAlpha(colorAt(1), 0.7),
+        borderDash: [5, 3], fill: false, pointRadius: 0, tension: 0,
       })
     }
-    return { labels: axis, datasets }
-  }, [kpis, activeCurrency])
+    return { labels: costTrend.series.map(s => s.month), datasets }
+  }, [costTrend, activeCurrency])
 
-  // Failure rate by site chart
+  const failureSites = useMemo(() => failureBySite(kpis, 12), [kpis])
   const failureBySiteChart = useMemo(() => {
-    if (!kpis) return null
-    const sorted = [...kpis.failureRate.bySite].slice(0, 12)
+    if (!failureSites.length) return null
     return {
-      labels: sorted.map(s => s.site),
+      labels: failureSites.map(s => s.site),
       datasets: [{
-        label: 'Failure Rate %',
-        data: sorted.map(s => parseFloat((s.rate * 100).toFixed(1))),
-        backgroundColor: sorted.map(s =>
-          s.rate > 0.30 ? 'rgba(239,68,68,0.75)'
-          : s.rate > 0.15 ? 'rgba(234,179,8,0.75)'
-          : 'rgba(34,197,94,0.75)'
-        ),
-        borderColor: sorted.map(s =>
-          s.rate > 0.30 ? 'rgb(239,68,68)'
-          : s.rate > 0.15 ? 'rgb(234,179,8)'
-          : 'rgb(34,197,94)'
-        ),
+        label: 'Failure rate % (rated tyres)',
+        data: failureSites.map(s => Number(s.pct.toFixed(1))),
+        backgroundColor: failureSites.map(s => withAlpha(BAND[lowerIsBetterPctStatus(s.pct, 15, 30)], 0.75)),
+        borderColor: failureSites.map(s => BAND[lowerIsBetterPctStatus(s.pct, 15, 30)]),
         borderWidth: 1, borderRadius: 3,
       }],
     }
-  }, [kpis])
+  }, [failureSites])
 
-  // Inspection compliance by month chart (12 months)
   const inspCompChart = useMemo(() => {
-    if (!kpis) return null
-    const now = new Date()
-    const axis = []
-    for (let i = 11; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-      axis.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
-    }
-
-    const monthMap = {}
-    kpis.inspectionCompliance.byMonth.forEach(m => { monthMap[m.month] = m.compliancePct })
-
+    if (!kpis || !inspections.length) return null
+    const axis = monthAxis(12, new Date())
+    const data = inspectionSeries(kpis, axis)
+    if (!data.some(v => v != null)) return null
+    const lineColor = colorAt(2)
     return {
       labels: axis,
       datasets: [
         {
           label: 'Compliance %',
-          data: axis.map(m => monthMap[m] ?? null),
-          borderColor: 'rgba(99,102,241,1)',
-          backgroundColor: 'rgba(99,102,241,0.08)',
-          fill: true, tension: 0.4, spanGaps: true, pointRadius: 3,
+          data,
+          borderColor: lineColor,
+          backgroundColor: withAlpha(lineColor, 0.08),
+          fill: true, tension: 0.35, spanGaps: true, pointRadius: 3,
         },
         {
           label: 'Target 85%',
           data: axis.map(() => 85),
-          borderColor: 'rgba(34,197,94,0.5)',
+          borderColor: withAlpha(BAND.good, 0.6),
           borderDash: [6, 3], fill: false, pointRadius: 0,
         },
       ],
     }
-  }, [kpis])
-
-  // Worst assets table
-  const worstAssets = useMemo(() => {
-    if (!kpis) return []
-    return kpis.cpkByAsset.slice(0, 10).map(a => {
-      const assetRecs = records.filter(r => r.asset_no === a.asset_no)
-      const failures = assetRecs.filter(r => ['Critical', 'High'].includes(r.risk_level)).length
-      // Total tyre cost = authoritative expense-grid amount for this asset when the
-      // grid is available and carries it; otherwise fall back to the tyre_records
-      // cost_per_tyre sum (never show 0 where a real number existed before).
-      const gridCost = gridByAsset?.map?.get(String(a.asset_no ?? '').trim().toUpperCase())
-      const totalCost = gridCost != null
-        ? gridCost
-        : assetRecs.reduce((s, r) => s + (r.cost_per_tyre || 0) * (r.qty || 1), 0)
-      const withKm = assetRecs.filter(r => {
-        const fit = Number(r.km_at_fitment), rem = Number(r.km_at_removal)
-        return isFinite(fit) && isFinite(rem) && rem > fit
-      })
-      const avgLife = withKm.length > 0
-        ? withKm.reduce((s, r) => s + (Number(r.km_at_removal) - Number(r.km_at_fitment)), 0) / withKm.length
-        : null
-      return {
-        assetNo:    a.asset_no,
-        cpk:        a.avgCpk,
-        avgLifeKm:  avgLife,
-        totalCost,
-        failureRate: assetRecs.length > 0 ? (failures / assetRecs.length) * 100 : 0,
-        replacements: assetRecs.length,
-      }
-    })
-  }, [kpis, records, gridByAsset])
-
-  // Brand scorecard
-  const brandScorecard = useMemo(() => {
-    if (!kpis) return []
-    return kpis.vendorPerformance.map((b, i) => ({
-      rank: i + 1,
-      brand: b.brand,
-      avgCpk: b.avgCpk,
-      failureRate: b.failureRate,
-      avgLifeKm: b.avgLife,
-      scrapRate: b.scrapRate,
-      score: b.score,
-      count: b.count,
-    }))
-  }, [kpis])
-  const brandsPager = usePagedRows(brandScorecard)
-
-  // ── Export handlers ─────────────────────────────────────────────────────────
-  function handleExcelExport() {
-    if (!kpis) return
-
-    // Sheet 1: KPI Summary
-    const kpiRows = buildKpiSummaryRows(kpis, activeCurrency)
-    exportToExcel(
-      kpiRows,
-      ['kpi', 'value', 'status', 'description'],
-      ['KPI', 'Value', 'Status', 'Description'],
-      'TyrePulse_EngineeringKPIs',
-      'KPI Summary'
-    )
-  }
-
-  function handlePdfExport() {
-    if (!kpis) return
-    const rows = buildKpiSummaryRows(kpis, activeCurrency)
-    exportToPdf(
-      rows,
-      [
-        { key: 'kpi',         header: 'KPI' },
-        { key: 'value',       header: 'Value' },
-        { key: 'status',      header: 'Status' },
-        { key: 'description', header: 'Description' },
-      ],
-      'Engineering KPI Dashboard: All 17 KPIs',
-      'TyrePulse_EngineeringKPIs',
-      'landscape'
-    )
-  }
+  }, [kpis, inspections.length])
 
   // ── 17 KPI card definitions ─────────────────────────────────────────────────
   const kpiCards = useMemo(() => {
-    if (!kpis) return []
+    if (!kpis || !head) return []
     const {
-      cpk, costPerMile, avgTyreLife, fleetTyreLife,
-      removalRate, failureRate, replacementRate,
-      pressureCompliance, inspectionCompliance,
-      retreadPerformance, scrapRate, fleetAvailability,
-      downtimeImpact, costTrend, vendorPerformance,
-      workshopPerformance,
+      cpk, avgTyreLife, fleetTyreLife, removalRate, failureRate, replacementRate,
+      pressureCompliance, inspectionCompliance, retreadPerformance, scrapRate,
+      downtimeImpact, workshopPerformance,
     } = kpis
-
     const currency = activeCurrency
+    const cpkMeasured = head.cpk != null
 
-    // KPI 1: CPK Fleet Avg
-    const cpkStatus = cpk.validCount === 0 ? 'neutral'
-      : cpk.fleetAvgCpk < 1.0 ? 'good'
-      : cpk.fleetAvgCpk < 2.0 ? 'warning' : 'critical'
+    // Failure rate: null means no tyre was rated; `null * 100` would be 0 and
+    // flatter an unmeasured metric to "0.0% good".
+    const failPct = head.failurePct
+    const failStatus = lowerIsBetterPctStatus(failPct, 15, 30)
 
-    // KPI 2: Cost Per Mile
-    const cpmVal = cpk.validCount > 0 ? cpk.fleetAvgCpk * 1.60934 : 0
-
-    // KPI 3: Avg Tyre Life
-    const lifeStatus = avgTyreLife.validCount === 0 ? 'neutral'
-      : avgTyreLife.avgKm > 40000 ? 'good'
-      : avgTyreLife.avgKm > 20000 ? 'warning' : 'critical'
-
-    // KPI 6: Failure Rate
-    // null means no tyre was rated (risk_level populated on none); `null * 100` is
-    // 0, which would flatter an unmeasured metric to "0.0% good". Preserve null and
-    // read neutral, the same honest reading pressure compliance uses below.
-    const failMeasured = failureRate.failureRate != null
-    const failPct = failMeasured ? failureRate.failureRate * 100 : null
-    const failStatus = !failMeasured ? 'neutral'
-      : failPct > 30 ? 'critical' : failPct > 15 ? 'warning' : 'good'
-
-    // KPI 8: Pressure Compliance
+    // Pressure compliance: null means nothing was measurable; `null > 60` is
+    // false, which would paint an unmeasured metric critical.
     const pressPct = pressureCompliance.compliancePct
-    // null means nothing was measurable; `null > 60` is false, which would have
-    // painted an unmeasured metric critical. Neutral is the honest reading.
     const pressMeasured = pressPct != null
-    const pressStatus = !pressMeasured ? 'neutral'
-      : pressPct > 85 ? 'good' : pressPct > 60 ? 'warning' : 'critical'
+    const pressStatus = pressMeasured ? higherIsBetterPctStatus(pressPct, 85, 60) : 'neutral'
 
-    // KPI 9: Inspection Compliance
-    const inspPct = inspectionCompliance.compliancePct
-    const inspStatus = inspPct > 85 ? 'good' : inspPct > 60 ? 'warning' : 'critical'
+    const inspPct = head.inspectionPct
+    const scrapPct = head.scrapPct
+    const availPct = head.availabilityPct
 
-    // KPI 11: Scrap Rate
-    const scrapPct = scrapRate.scrapRate * 100
-    const scrapStatus = scrapPct > 20 ? 'critical' : scrapPct > 10 ? 'warning' : 'good'
-
-    // KPI 12: Fleet Availability
-    const availPct = fleetAvailability.availabilityPct
-    const availStatus = availPct > 90 ? 'good' : availPct > 75 ? 'warning' : 'critical'
-
-    // KPI 14: Cost Trend
-    const trendStatus = costTrend.trend === 'improving' ? 'good'
-      : costTrend.trend === 'stable' ? 'neutral' : 'warning'
-
-    // KPI 15: Vendor Performance
-    const topVendor    = vendorPerformance[0]
-    const bottomVendor = vendorPerformance[vendorPerformance.length - 1]
-
-    // KPI 16: Workshop Performance
+    const topVendor    = brandRows[0]
+    const bottomVendor = brandRows[brandRows.length - 1]
     const bestSite  = workshopPerformance.bySite[0]
     const worstSite = workshopPerformance.bySite[workshopPerformance.bySite.length - 1]
+    const siteFailPct = (site) => {
+      const rate = failureRate.bySite.find(s => s.site === site)?.rate
+      return rate == null ? null : rate * 100
+    }
+    const siteFail = (site) => fmtPct(siteFailPct(site))
 
+    const trendKey = costTrend?.trend
     return [
-      // 1. CPK Fleet Avg
       {
         title: 'CPK Fleet Average',
-        value: cpk.validCount === 0 ? 'N/A (no km data)' : `${currency} ${cpk.fleetAvgCpk.toFixed(4)}/km`,
+        value: cpkMeasured ? `${currency} ${head.cpk.toFixed(4)}/km` : 'N/A (no km data)',
         subValue: `Coverage: ${cpk.validCount} of ${cpk.totalCount} records (${cpk.coveragePct.toFixed(0)}%)`,
-        description: `Median CPK: ${cpk.validCount > 0 ? `${currency} ${cpk.medianCpk.toFixed(4)}/km` : 'N/A'}`,
-        status: cpkStatus,
-        trend: cpk.validCount === 0 ? null : cpk.fleetAvgCpk < 1.5 ? 'down' : 'up',
-        trendLabel: cpk.validCount > 0 ? (cpk.fleetAvgCpk < 1.5 ? 'Optimal range' : 'Above target') : null,
+        description: `Median CPK: ${cpkMeasured && isMeasured(cpk.medianCpk) ? `${currency} ${cpk.medianCpk.toFixed(4)}/km` : 'N/A'}`,
+        status: cpkStatus(head.cpk),
+        trend: cpkMeasured ? (head.cpk < 1.5 ? 'down' : 'up') : null,
+        trendLabel: cpkMeasured ? (head.cpk < 1.5 ? 'Optimal range' : 'Above target') : null,
       },
-      // 2. Cost Per Mile
       {
         title: 'Cost Per Mile',
-        value: cpk.validCount === 0 ? 'N/A (no km data)' : `${currency} ${cpmVal.toFixed(4)}/mile`,
-        subValue: `Derived from CPK × 1.609`,
-        description: cpk.validCount > 0
+        value: cpkMeasured ? `${currency} ${(head.cpk * 1.60934).toFixed(4)}/mile` : 'N/A (no km data)',
+        subValue: 'Derived from CPK x 1.609',
+        description: cpkMeasured && isMeasured(cpk.p10Cpk)
           ? `P10: ${currency} ${(cpk.p10Cpk * 1.60934).toFixed(4)}, P90: ${currency} ${(cpk.p90Cpk * 1.60934).toFixed(4)}`
-          : 'Upload km_at_fitment & km_at_removal data',
-        status: cpk.validCount === 0 ? 'neutral' : cpkStatus,
-        trend: null,
-        trendLabel: null,
+          : 'Upload km at fitment and km at removal',
+        status: cpkStatus(head.cpk),
       },
-      // 3. Avg Tyre Life
       {
         title: 'Average Tyre Life',
-        value: avgTyreLife.validCount === 0 ? 'N/A (no km data)' : `${Math.round(avgTyreLife.avgKm).toLocaleString()} km`,
-        subValue: avgTyreLife.validCount > 0 ? `Median: ${Math.round(avgTyreLife.medianKm).toLocaleString()} km` : '',
-        description: avgTyreLife.validCount > 0
-          ? `Based on ${avgTyreLife.validCount} records with km data`
-          : 'Requires km_at_fitment & km_at_removal',
-        status: lifeStatus,
-        trend: avgTyreLife.validCount > 0 ? (avgTyreLife.avgKm > 40000 ? 'up' : 'down') : null,
-        trendLabel: avgTyreLife.validCount > 0 ? (avgTyreLife.avgKm > 40000 ? 'Above fleet target' : 'Below 40k km target') : null,
+        value: fmtKm(head.avgLifeKm),
+        subValue: head.avgLifeKm != null ? `Median: ${fmtKm(avgTyreLife.medianKm)}` : '',
+        description: head.avgLifeKm != null ? `Based on ${avgTyreLife.validCount} records with km data` : 'Requires km at fitment and km at removal',
+        status: lifeStatus(head.avgLifeKm),
+        trend: head.avgLifeKm != null ? (head.avgLifeKm > 40000 ? 'up' : 'down') : null,
+        trendLabel: head.avgLifeKm != null ? (head.avgLifeKm > 40000 ? 'Above fleet target' : 'Below 40k km target') : null,
       },
-      // 4. Fleet Avg Tyre Life
       {
         title: 'Fleet Avg Tyre Life',
-        value: avgTyreLife.validCount === 0 ? 'N/A (no km data)' : `${Math.round(fleetTyreLife.avgKm).toLocaleString()} km`,
+        value: head.avgLifeKm != null ? fmtKm(fleetTyreLife.avgKm) : 'N/A (no km data)',
         subValue: fleetTyreLife.trend.length > 0 ? `${fleetTyreLife.trend.length} monthly data points` : 'Insufficient time data',
         description: avgTyreLife.byBrand[0]
-          ? `Best brand: ${avgTyreLife.byBrand[0].brand} (${Math.round(avgTyreLife.byBrand[0].avgKm).toLocaleString()} km)`
+          ? `Best brand: ${avgTyreLife.byBrand[0].brand} (${fmtKm(avgTyreLife.byBrand[0].avgKm)})`
           : 'No brand breakdown available',
-        status: lifeStatus,
-        trend: null,
-        trendLabel: null,
+        status: lifeStatus(head.avgLifeKm),
       },
-      // 5. Tyre Removal Rate
       {
         title: 'Tyre Removal Rate',
-        value: removalRate.estimatedFleetKm > 0
-          ? `${removalRate.removalPer1000Km.toFixed(2)} per 1,000 km`
-          : 'N/A (no km data)',
+        value: removalRate.estimatedFleetKm > 0 ? `${removalRate.removalPer1000Km.toFixed(2)} per 1,000 km` : 'N/A (no km data)',
         subValue: `Total removals: ${removalRate.totalRemovals.toLocaleString()}`,
         description: removalRate.estimatedFleetKm > 0
           ? `Fleet km base: ${Math.round(removalRate.estimatedFleetKm).toLocaleString()} km`
@@ -676,36 +502,29 @@ export default function EngineeringKpi() {
         status: removalRate.estimatedFleetKm > 0
           ? (removalRate.removalPer1000Km < 0.05 ? 'good' : removalRate.removalPer1000Km < 0.15 ? 'warning' : 'critical')
           : 'neutral',
-        trend: null,
-        trendLabel: null,
       },
-      // 6. Tyre Failure Rate
       {
         title: 'Tyre Failure Rate',
-        value: `${fmtPct(failPct)}`,
-        subValue: failMeasured
+        value: fmtPct(failPct),
+        subValue: failPct != null
           ? `${failureRate.failureCount} failures of ${failureRate.ratedCount} rated`
           : `No tyres rated of ${failureRate.totalCount} total`,
-        description: failMeasured
-          ? `Critical: ${failureRate.criticalRate > 0 ? fmtPct(failureRate.criticalRate * 100) : '0%'} | High: ${fmtPct(failureRate.highRate * 100)}`
+        description: failPct != null
+          ? `Critical: ${fmtPct(failureRate.criticalRate * 100)} | High: ${fmtPct(failureRate.highRate * 100)}`
           : 'Not measured (no risk level recorded)',
         status: failStatus,
-        trend: failMeasured && failPct > 20 ? 'up' : 'down',
-        trendLabel: !failMeasured ? 'Not measured'
-          : failPct > 20 ? 'Exceeds 20% threshold' : 'Within acceptable range',
+        trend: failPct != null ? (failPct > 20 ? 'up' : 'down') : null,
+        trendLabel: failPct == null ? 'Not measured' : failPct > 20 ? 'Exceeds 20% threshold' : 'Within acceptable range',
       },
-      // 7. Tyre Replacement Rate
       {
         title: 'Tyre Replacement Rate',
-        value: `${replacementRate.avgPerVehiclePerMonth.toFixed(2)} per vehicle/month`,
+        value: replacementRate.activeVehicles > 0 ? `${replacementRate.avgPerVehiclePerMonth.toFixed(2)} per vehicle/month` : 'N/A',
         subValue: `${replacementRate.totalReplacements} total over ${replacementRate.activeVehicles} vehicles`,
         description: `Monthly data: ${replacementRate.byMonth.length} months observed`,
-        status: replacementRate.avgPerVehiclePerMonth < 0.5 ? 'good'
+        status: replacementRate.activeVehicles === 0 ? 'neutral'
+          : replacementRate.avgPerVehiclePerMonth < 0.5 ? 'good'
           : replacementRate.avgPerVehiclePerMonth < 1.5 ? 'warning' : 'critical',
-        trend: null,
-        trendLabel: null,
       },
-      // 8. Pressure Compliance
       {
         title: 'Pressure Compliance %',
         value: inspections.length === 0 ? 'N/A (no inspections)' : fmtPct(pressPct),
@@ -713,21 +532,19 @@ export default function EngineeringKpi() {
           ? `${pressureCompliance.compliantCount} of ${pressureCompliance.totalCount} readings within tolerance`
           : 'No pressure readings recorded',
         description: pressureCompliance.basis,
-        status: inspections.length === 0 || !pressMeasured ? 'neutral' : pressStatus,
+        status: inspections.length === 0 ? 'neutral' : pressStatus,
         trend: pressMeasured ? (pressPct > 85 ? 'up' : 'down') : null,
         trendLabel: pressMeasured ? (pressPct > 85 ? 'Target achieved' : 'Below 85% target') : null,
       },
-      // 9. Inspection Compliance
       {
         title: 'Inspection Compliance %',
-        value: inspections.length === 0 ? 'N/A (no inspections)' : fmtPct(inspPct),
+        value: inspPct == null ? (inspections.length === 0 ? 'N/A (no inspections)' : 'N/A (none scheduled)') : fmtPct(inspPct),
         subValue: `On-time: ${inspectionCompliance.onTimeCount} of ${inspectionCompliance.totalScheduled} scheduled`,
         description: `Overdue: ${inspectionCompliance.overdueCount} | Late: ${inspectionCompliance.lateCount}`,
-        status: inspections.length === 0 ? 'neutral' : inspStatus,
-        trend: inspPct > 85 ? 'up' : 'down',
-        trendLabel: inspPct > 85 ? 'Target achieved' : `${(85 - inspPct).toFixed(1)}% gap to 85% target`,
+        status: higherIsBetterPctStatus(inspPct, 85, 60),
+        trend: inspPct != null ? (inspPct > 85 ? 'up' : 'down') : null,
+        trendLabel: inspPct == null ? null : inspPct > 85 ? 'Target achieved' : `${(85 - inspPct).toFixed(1)}% gap to 85% target`,
       },
-      // 10. Retread Performance
       {
         title: 'Retread Performance',
         value: retreadPerformance === null
@@ -744,172 +561,228 @@ export default function EngineeringKpi() {
         status: retreadPerformance === null ? 'neutral'
           : retreadPerformance.savingsPct > 10 ? 'good'
           : retreadPerformance.savingsPct > 0 ? 'warning' : 'critical',
-        trend: retreadPerformance ? (retreadPerformance.savingsPct > 0 ? 'down' : 'up') : null,
-        trendLabel: retreadPerformance ? (retreadPerformance.savingsPct > 0 ? 'Cost savings confirmed' : 'No cost advantage') : null,
       },
-      // 11. Scrap Rate
       {
         title: 'Scrap Rate',
         value: fmtPct(scrapPct),
         subValue: `${scrapRate.scrapCount} scrapped of ${scrapRate.totalCount} total`,
-        description: `Estimated scrap cost: ${currency} ${scrapRate.estimatedScrapCost.toLocaleString()}`,
-        status: scrapStatus,
-        trend: scrapPct > 15 ? 'up' : 'down',
-        trendLabel: scrapPct > 15 ? 'High scrap, investigate early removal' : 'Scrap within normal range',
+        description: 'Scrap spend is reported from the expense grid in Scrap Management, not summed from tyre prices here.',
+        status: lowerIsBetterPctStatus(scrapPct, 10, 20),
+        trend: scrapPct != null ? (scrapPct > 15 ? 'up' : 'down') : null,
+        trendLabel: scrapPct == null ? null : scrapPct > 15 ? 'High scrap, investigate early removal' : 'Scrap within normal range',
       },
-      // 12. Fleet Availability
       {
         title: 'Fleet Availability Impact',
-        value: fmtPct(availPct),
-        subValue: `${fleetAvailability.unavailableCount} vehicles critical (last 30 days)`,
-        description: `Fleet size: ${fleetAvailability.fleetSize} vehicles`,
-        status: availStatus,
-        trend: availPct > 90 ? 'up' : 'down',
-        trendLabel: availPct > 90 ? 'Fleet available' : `${fleetAvailability.unavailableCount} vehicles at risk`,
+        value: availPct == null ? 'N/A (no risk ratings)' : fmtPct(availPct),
+        subValue: availPct == null
+          ? 'Availability is derived from Critical tyre ratings, and none are recorded'
+          : `${head.unavailableCount} vehicles critical (last 30 days)`,
+        description: `Fleet size: ${kpis.fleetAvailability.fleetSize} vehicles`,
+        status: higherIsBetterPctStatus(availPct, 90, 75),
       },
-      // 13. Downtime Impact
       {
         title: 'Vehicle Downtime Impact',
         value: `${downtimeImpact.totalDowntimeHours.toLocaleString()} hrs estimated`,
         subValue: `Avg ${downtimeImpact.avgDowntimePerVehicle.toFixed(1)} hrs/vehicle`,
-        description: `Based on ${downtimeImpact.worstAssets.reduce((s, a) => s + a.replacements, 0)} replacements × 2 hrs industry avg`,
-        status: downtimeImpact.totalDowntimeHours > 500 ? 'critical'
-          : downtimeImpact.totalDowntimeHours > 100 ? 'warning' : 'good',
-        trend: downtimeImpact.totalDowntimeHours > 200 ? 'up' : 'down',
-        trendLabel: downtimeImpact.totalDowntimeHours > 200 ? 'Significant downtime hours' : 'Downtime within tolerance',
+        description: 'Estimate: tyre replacements x 2 hrs industry average',
+        status: downtimeImpact.totalDowntimeHours > 500 ? 'critical' : downtimeImpact.totalDowntimeHours > 100 ? 'warning' : 'good',
       },
-      // 14. Cost Trend
       {
-        title: 'Cost Trend',
-        value: costTrend.trend === 'improving' ? '▼ Improving'
-          : costTrend.trend === 'worsening' ? '▲ Worsening' : '- Stable',
-        subValue: `Slope: ${costTrend.slope > 0 ? '+' : ''}${currency} ${Math.round(Math.abs(costTrend.slope)).toLocaleString()}/month`,
-        description: `Forecast next month: ${costTrend.forecastNextMonth == null ? 'N/A' : `${currency} ${Math.round(Math.max(0, costTrend.forecastNextMonth)).toLocaleString()}`} | Avg monthly: ${currency} ${Math.round(costTrend.avgMonthlyCost).toLocaleString()}`,
-        status: trendStatus,
-        trend: costTrend.trend === 'improving' ? 'down' : costTrend.trend === 'worsening' ? 'up' : null,
-        trendLabel: costTrend.trend === 'improving' ? 'Costs declining'
-          : costTrend.trend === 'worsening' ? 'Costs increasing, action needed'
-          : 'Costs stable',
+        title: 'Tyre Spend Trend (expense grid)',
+        value: !costTrend ? (costFigure.blended ? 'N/A (mixed currencies)' : 'N/A (no grid data)')
+          : trendKey === 'improving' ? 'Improving'
+          : trendKey === 'worsening' ? 'Worsening'
+          : trendKey === 'stable' ? 'Stable' : 'Not enough months',
+        subValue: costTrend?.slope != null
+          ? `Slope: ${costTrend.slope > 0 ? '+' : '-'}${costTrend.currency || currency} ${Math.round(Math.abs(costTrend.slope)).toLocaleString()}/month`
+          : 'Pick one country for a single-currency trend',
+        description: costTrend
+          ? `Forecast next month: ${fmtMoney(costTrend.forecastNextMonth, costTrend.currency || currency)} | Avg monthly: ${fmtMoney(costTrend.avgMonthly, costTrend.currency || currency)}`
+          : '',
+        status: !costTrend || trendKey === 'insufficient' ? 'neutral'
+          : trendKey === 'improving' ? 'good' : trendKey === 'stable' ? 'neutral' : 'warning',
+        trend: trendKey === 'improving' ? 'down' : trendKey === 'worsening' ? 'up' : null,
+        trendLabel: trendKey === 'improving' ? 'Spend declining' : trendKey === 'worsening' ? 'Spend increasing, action needed' : null,
       },
-      // 15. Vendor Performance
       {
         title: 'Vendor Performance',
-        value: topVendor ? `Top: ${topVendor.brand}` : 'N/A (no km data)',
-        subValue: topVendor && topVendor.avgCpk > 0
-          ? `CPK: ${currency} ${topVendor.avgCpk.toFixed(4)}/km, Score: ${topVendor.score.toFixed(2)}`
+        value: topVendor ? `Top: ${topVendor.brand}` : 'N/A (no brands)',
+        subValue: topVendor && topVendor.avgCpk != null
+          ? `CPK: ${currency} ${topVendor.avgCpk.toFixed(4)}/km, Score: ${topVendor.score?.toFixed(2) ?? 'N/A'}`
           : topVendor ? 'No CPK data for top brand' : 'Upload km data for vendor ranking',
         description: bottomVendor && topVendor && bottomVendor.brand !== topVendor.brand
-          ? `Worst: ${bottomVendor.brand} (CPK: ${bottomVendor.avgCpk > 0 ? `${currency} ${bottomVendor.avgCpk.toFixed(4)}` : 'N/A'})`
-          : vendorPerformance.length > 0 ? `${vendorPerformance.length} brands ranked` : '',
-        status: topVendor && topVendor.avgCpk > 0 && topVendor.avgCpk < 1.0 ? 'good'
-          : topVendor && topVendor.avgCpk < 2.0 ? 'warning' : 'neutral',
-        trend: null,
-        trendLabel: null,
+          ? `Lowest ranked: ${bottomVendor.brand} (CPK: ${bottomVendor.avgCpk != null ? `${currency} ${bottomVendor.avgCpk.toFixed(4)}` : 'N/A'})`
+          : brandRows.length > 0 ? `${brandRows.length} brands ranked` : '',
+        status: topVendor ? cpkStatus(topVendor.avgCpk) : 'neutral',
       },
-      // 16. Workshop Performance
       {
         title: 'Workshop Performance',
         value: bestSite ? `Best: ${bestSite.site}` : 'N/A (no site data)',
-        subValue: bestSite ? `Score: ${bestSite.score.toFixed(2)} | Failure: ${fmtPct(bestSite.highRiskPct)}` : '',
+        subValue: bestSite ? `Score: ${bestSite.score.toFixed(2)} | Failure: ${siteFail(bestSite.site)}` : '',
         description: worstSite && bestSite && worstSite.site !== bestSite.site
-          ? `Worst: ${worstSite.site} (Score: ${worstSite.score.toFixed(2)} | Failure: ${fmtPct(worstSite.highRiskPct)})`
+          ? `Lowest: ${worstSite.site} (Score: ${worstSite.score.toFixed(2)} | Failure: ${siteFail(worstSite.site)})`
           : workshopPerformance.bySite.length > 0 ? `${workshopPerformance.bySite.length} sites evaluated` : '',
-        status: workshopPerformance.bySite.length > 0 ? (bestSite?.highRiskPct < 15 ? 'good' : 'warning') : 'neutral',
-        trend: null,
-        trendLabel: null,
+        status: bestSite ? lowerIsBetterPctStatus(siteFailPct(bestSite.site), 15, 30) : 'neutral',
       },
-      // 17. Fleet CPK Coverage
       {
         title: 'Fleet CPK Coverage',
-        value: `${cpk.coveragePct.toFixed(1)}% of records`,
-        subValue: `${cpk.validCount} valid | ${cpk.totalCount - cpk.validCount} missing km data`,
+        value: cpk.totalCount > 0 ? `${cpk.coveragePct.toFixed(1)}% of records` : 'N/A',
+        subValue: `${cpk.validCount} valid | ${cpk.totalCount - cpk.validCount} missing km or price`,
         description: cpk.coveragePct < 50
-          ? 'Low coverage: CPK metrics unreliable. Upload km_at_fitment & km_at_removal.'
+          ? 'Low coverage: CPK metrics unreliable. Upload km at fitment and km at removal.'
           : cpk.coveragePct < 80
             ? 'Moderate coverage: some CPK calculations may be skewed'
             : 'Good coverage: CPK metrics are reliable',
         status: cpk.coveragePct > 80 ? 'good' : cpk.coveragePct > 50 ? 'warning' : 'critical',
-        trend: cpk.coveragePct > 80 ? 'up' : 'down',
-        trendLabel: cpk.coveragePct > 80 ? 'High data quality' : 'Improve data entry for km fields',
       },
-    ]
-  }, [kpis, activeCurrency, inspections])
+    ].map((c, i) => ({ ...c, title: `${String(i + 1).padStart(2, '0')}. ${c.title}` }))
+  }, [kpis, head, activeCurrency, inspections.length, brandRows, costTrend, costFigure.blended])
 
-  // ── Loading / Error / Empty states ─────────────────────────────────────────
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-80 gap-4">
-        <div className="relative">
-          <div className="w-12 h-12 rounded-full border-2 border-gray-700" />
-          <div className="absolute inset-0 w-12 h-12 rounded-full border-t-2 border-blue-500 animate-spin" />
-        </div>
-        <p className="text-gray-400 text-sm">Computing 17 engineering KPIs...</p>
-      </div>
-    )
+  const counts = useMemo(() => statusCounts(kpiCards), [kpiCards])
+  const visibleCards = useMemo(() => filterKpiCards(kpiCards, { query: cardQuery, status: cardStatus }), [kpiCards, cardQuery, cardStatus])
+
+  // ── Export handlers ─────────────────────────────────────────────────────────
+  const scopeLabel = [
+    countryChip !== 'All' ? countryChip : (activeCountry !== 'All' ? activeCountry : 'All countries'),
+    siteFilter || null,
+    dateFrom || dateTo ? `${dateFrom || 'start'} to ${dateTo || 'today'}` : null,
+  ].filter(Boolean).join(' ')
+
+  async function handleExcelExport() {
+    if (!kpiCards.length) return
+    setExportError('')
+    try {
+      await exportToExcel(
+        kpiExportRows(kpiCards),
+        ['no', 'kpi', 'value', 'status', 'detail'],
+        ['#', 'KPI', 'Value', 'Status', 'Basis'],
+        reportFileName('TyrePulse Engineering KPIs', scopeLabel),
+        'KPI Summary',
+      )
+    } catch (e) {
+      setExportError(toUserMessage(e, 'Could not export. Try again.'))
+    }
   }
 
-  if (error) {
-    return (
-      <div className="flex items-start gap-3 bg-red-950/40 border border-red-700/50 rounded-xl p-4">
-        <XCircle size={18} className="text-red-400 shrink-0 mt-0.5" />
-        <div>
-          <p className="text-red-300 font-medium text-sm">Data load error</p>
-          <p className="text-red-400/80 text-xs mt-1">{error}</p>
-          <button onClick={loadData} className="btn-secondary text-xs mt-3">Retry</button>
-        </div>
-      </div>
-    )
+  async function handlePdfExport() {
+    if (!kpiCards.length) return
+    setExportError('')
+    try {
+      await exportToPdf(
+        kpiExportRows(kpiCards),
+        [
+          { key: 'no', header: '#' },
+          { key: 'kpi', header: 'KPI' },
+          { key: 'value', header: 'Value' },
+          { key: 'status', header: 'Status' },
+          { key: 'detail', header: 'Basis' },
+        ],
+        `Engineering KPI Dashboard: ${scopeLabel}`,
+        reportFileName('TyrePulse Engineering KPIs', scopeLabel),
+        'landscape',
+      )
+    } catch (e) {
+      setExportError(toUserMessage(e, 'Could not export. Try again.'))
+    }
   }
 
-  // ── Main render ─────────────────────────────────────────────────────────────
+  // ── Tables ──────────────────────────────────────────────────────────────────
+  const assetColumns = useMemo(() => [
+    { id: 'rank', header: '#', accessorFn: r => r.rank, size: 56, sortingFn: sortNullLast, meta: { align: 'right' } },
+    { id: 'assetNo', header: 'Asset No', accessorFn: r => r.assetNo, size: 130, sortingFn: sortNullLast,
+      cell: ({ row }) => <span className="font-mono text-[var(--text-primary)]">{row.original.assetNo}</span> },
+    { id: 'cpk', header: `CPK (${activeCurrency}/km)`, accessorFn: r => r.cpk ?? undefined, sortUndefined: 'last', size: 130, meta: { align: 'right', exportValue: r => r.cpk == null ? 'N/A' : r.cpk.toFixed(4) },
+      cell: ({ row }) => <BandText value={row.original.cpk} band={row.original.cpkBand}>{row.original.cpk?.toFixed(4)}</BandText> },
+    { id: 'avgLifeKm', header: 'Avg Life', accessorFn: r => r.avgLifeKm ?? undefined, sortUndefined: 'last', size: 120, meta: { align: 'right', exportValue: r => fmtKm(r.avgLifeKm) },
+      cell: ({ row }) => <span className="tabular-nums text-[var(--text-secondary)]">{fmtKm(row.original.avgLifeKm)}</span> },
+    { id: 'totalCost', header: `Tyre spend (grid, ${activeCurrency})`, accessorFn: r => r.totalCost ?? undefined, sortUndefined: 'last', size: 170, meta: { align: 'right', exportValue: r => r.totalCost == null ? 'N/A' : Math.round(r.totalCost) },
+      cell: ({ row }) => <span className="tabular-nums text-[var(--text-secondary)]">{row.original.totalCost == null ? 'Not in grid' : Math.round(row.original.totalCost).toLocaleString()}</span> },
+    { id: 'failurePct', header: 'Fail % (rated)', accessorFn: r => r.failurePct ?? undefined, sortUndefined: 'last', size: 120, meta: { align: 'right', exportValue: r => fmtPct(r.failurePct) },
+      cell: ({ row }) => <BandText value={row.original.failurePct} band={lowerIsBetterPctStatus(row.original.failurePct, 15, 30)}>{fmtPct(row.original.failurePct)}</BandText> },
+    { id: 'records', header: 'Records', accessorFn: r => r.records, size: 90, meta: { align: 'right' } },
+  ], [activeCurrency])
+
+  const brandColumns = useMemo(() => [
+    { id: 'rank', header: '#', accessorFn: r => r.rank, size: 56, meta: { align: 'right' } },
+    { id: 'brand', header: 'Brand', accessorFn: r => r.brand, size: 150, sortingFn: sortNullLast,
+      cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original.brand}</span> },
+    { id: 'avgCpk', header: `Avg CPK (${activeCurrency}/km)`, accessorFn: r => r.avgCpk ?? undefined, sortUndefined: 'last', size: 140, meta: { align: 'right', exportValue: r => r.avgCpk == null ? 'N/A' : r.avgCpk.toFixed(4) },
+      cell: ({ row }) => <BandText value={row.original.avgCpk} band={cpkStatus(row.original.avgCpk)}>{row.original.avgCpk?.toFixed(4)}</BandText> },
+    { id: 'failurePct', header: 'Fail % (rated)', accessorFn: r => r.failurePct ?? undefined, sortUndefined: 'last', size: 120, meta: { align: 'right', exportValue: r => fmtPct(r.failurePct) },
+      cell: ({ row }) => <BandText value={row.original.failurePct} band={lowerIsBetterPctStatus(row.original.failurePct, 15, 30)}>{fmtPct(row.original.failurePct)}</BandText> },
+    { id: 'avgLifeKm', header: 'Avg Life', accessorFn: r => r.avgLifeKm ?? undefined, sortUndefined: 'last', size: 120, meta: { align: 'right', exportValue: r => fmtKm(r.avgLifeKm) },
+      cell: ({ row }) => <span className="tabular-nums text-[var(--text-secondary)]">{fmtKm(row.original.avgLifeKm)}</span> },
+    { id: 'scrapPct', header: 'Scrap %', accessorFn: r => r.scrapPct ?? undefined, sortUndefined: 'last', size: 100, meta: { align: 'right', exportValue: r => fmtPct(r.scrapPct) },
+      cell: ({ row }) => <span className="tabular-nums text-[var(--text-secondary)]">{fmtPct(row.original.scrapPct)}</span> },
+    { id: 'score', header: 'Score', accessorFn: r => r.score ?? undefined, sortUndefined: 'last', size: 110, meta: { align: 'right', exportValue: r => r.score == null ? 'N/A' : r.score.toFixed(2) },
+      cell: ({ row }) => {
+        const r = row.original
+        const tier = r.tier === 'top' ? 'Top 30%' : r.tier === 'bottom' ? 'Bottom 30%' : ''
+        const cls = r.tier === 'top' ? 'text-green-400' : r.tier === 'bottom' ? 'text-red-400' : 'text-[var(--text-primary)]'
+        return (
+          <span className={`tabular-nums font-semibold ${cls}`}>
+            {r.score == null ? 'N/A' : r.score.toFixed(2)}
+            {tier && <span className="sr-only"> ({tier})</span>}
+          </span>
+        )
+      } },
+    { id: 'count', header: 'Records', accessorFn: r => r.count, size: 90, meta: { align: 'right' } },
+  ], [activeCurrency])
+
+  const filtersActive = Boolean(dateFrom || dateTo || siteFilter || countryChip !== 'All')
+
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
-
       <SectionTabs tabs={KPI_TABS} />
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex items-start justify-between flex-wrap gap-4">
-        <PageHeader
-          title="Engineering KPI Dashboard"
-          subtitle={`17 tyre engineering KPIs computed automatically from fleet data${records.length > 0 ? ` - ${records.length.toLocaleString()} records` : ''}`}
-          icon={Cpu}
-        />
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={handleExcelExport}
-            disabled={!kpis}
-            className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5 disabled:opacity-40"
-          >
-            <Download size={14} /> Excel
-          </button>
-          <button
-            onClick={handlePdfExport}
-            disabled={!kpis}
-            className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5 disabled:opacity-40"
-          >
-            <FileText size={14} /> PDF
-          </button>
-          <button
-            onClick={() => setEmailModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
-          >
-            <Mail size={16} />Email Report
-          </button>
-        </div>
-      </div>
 
-      {/* ── Filters ────────────────────────────────────────────────────────── */}
-      <div className="card flex flex-col gap-3">
-        {/* Country chips */}
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-gray-500 w-14 shrink-0">Country</span>
+      <PageHeader
+        title="Engineering KPI Dashboard"
+        subtitle={`17 tyre engineering KPIs computed from fleet data${records.length > 0 ? `, ${records.length.toLocaleString()} records in scope` : ''}`}
+        icon={Cpu}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={loadData}
+              disabled={loading}
+              aria-label="Refresh engineering KPIs"
+              className={`btn-secondary flex items-center justify-center px-3 ${TOUCH} disabled:opacity-40`}
+            >
+              <RefreshCw size={15} className={loading ? 'animate-spin' : ''} aria-hidden="true" />
+            </button>
+            <button type="button" onClick={handleExcelExport} disabled={!kpiCards.length}
+              className={`btn-secondary flex items-center gap-1.5 text-sm px-3 ${TOUCH} disabled:opacity-40`}>
+              <Download size={14} aria-hidden="true" /> Excel
+            </button>
+            <button type="button" onClick={handlePdfExport} disabled={!kpiCards.length}
+              className={`btn-secondary flex items-center gap-1.5 text-sm px-3 ${TOUCH} disabled:opacity-40`}>
+              <FileText size={14} aria-hidden="true" /> PDF
+            </button>
+            <button type="button" onClick={() => setEmailModalOpen(true)} disabled={!kpis}
+              className={`btn-primary flex items-center gap-2 text-sm px-4 ${TOUCH} disabled:opacity-40`}>
+              <Mail size={16} aria-hidden="true" /> Email Report
+            </button>
+          </div>
+        }
+      />
+
+      {exportError && <p role="alert" className="text-sm text-red-400">{exportError}</p>}
+
+      {/* ── Filters ─────────────────────────────────────────────────────────── */}
+      <section aria-label="Filters" className="card flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Country">
+          <span className="text-xs text-[var(--text-muted)] w-14 shrink-0">Country</span>
           {['All', ...COUNTRIES].map(c => (
             <button
               key={c}
+              type="button"
+              aria-pressed={countryChip === c}
               onClick={() => setCountryChip(c)}
-              className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+              className={`px-3 ${TOUCH} rounded-full text-xs font-medium border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 ${
                 countryChip === c
                   ? 'bg-blue-600 text-white border-blue-500'
-                  : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-gray-500'
+                  : 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)] hover:border-[var(--text-muted)]'
               }`}
             >
               {c}
@@ -917,500 +790,325 @@ export default function EngineeringKpi() {
           ))}
         </div>
 
-        {/* Site + date range */}
-        <div className="flex flex-wrap items-end gap-3">
-          {/* Site */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-end gap-3">
           <div className="flex flex-col gap-1">
-            <label className="label text-xs">Site</label>
-            <select
-              className="input w-44 text-sm"
-              value={siteFilter}
-              onChange={e => setSiteFilter(e.target.value)}
-            >
-              <option value="">All Sites</option>
+            <label htmlFor="ekpi-site" className="label text-xs">Site</label>
+            <select id="ekpi-site" className={`input text-sm lg:w-48 ${TOUCH}`} value={siteFilter} onChange={e => setSiteFilter(e.target.value)}>
+              <option value="">All sites</option>
               {siteOptions.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
-
-          {/* Date From */}
           <div className="flex flex-col gap-1">
-            <label className="label text-xs">From</label>
-            <DateField
-              className="text-sm w-40"
-              value={dateFrom}
-              onChange={setDateFrom}
-              placeholder="From date"
-              ariaLabel="From date"
-            />
+            <span className="label text-xs">From</span>
+            <DateField className="text-sm lg:w-40" value={dateFrom} onChange={setDateFrom} placeholder="From date" ariaLabel="From date" />
           </div>
-
-          {/* Date To */}
           <div className="flex flex-col gap-1">
-            <label className="label text-xs">To</label>
-            <DateField
-              className="text-sm w-40"
-              value={dateTo}
-              onChange={setDateTo}
-              placeholder="To date"
-              ariaLabel="To date"
-              min={dateFrom || undefined}
-            />
+            <span className="label text-xs">To</span>
+            <DateField className="text-sm lg:w-40" value={dateTo} onChange={setDateTo} placeholder="To date" ariaLabel="To date" min={dateFrom || undefined} />
           </div>
-
-          {/* Presets */}
-          <div className="flex items-center gap-1.5 pb-0.5">
-            {[
-              { label: 'Last 30d',  preset: '30d' },
-              { label: 'Last 90d',  preset: '90d' },
-              { label: 'Last 6M',   preset: '6m'  },
-              { label: 'This Year', preset: 'ytd' },
-            ].map(({ label, preset }) => (
-              <button
-                key={preset}
-                onClick={() => applyPreset(preset)}
-                className="px-2.5 py-1 text-xs rounded border border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-500 hover:text-gray-300 transition-colors"
-              >
+          <div className="flex flex-wrap items-center gap-1.5 sm:col-span-2 lg:col-span-1" role="group" aria-label="Date presets">
+            {DATE_PRESETS.map(({ key, label }) => (
+              <button key={key} type="button" onClick={() => applyPreset(key)}
+                className={`px-3 ${TOUCH} text-xs rounded-lg border border-[var(--border-bright)] bg-[var(--surface-2)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors`}>
                 {label}
               </button>
             ))}
-            {(dateFrom || dateTo || siteFilter || countryChip !== 'All') && (
-              <button
-                onClick={() => { setDateFrom(''); setDateTo(''); setSiteFilter(''); setCountryChip('All') }}
-                className="px-2.5 py-1 text-xs rounded border border-gray-700 bg-gray-800 text-red-400 hover:border-red-700 transition-colors"
-              >
-                Clear
+            {filtersActive && (
+              <button type="button" onClick={clearFilters}
+                className={`px-3 ${TOUCH} text-xs rounded-lg border border-[var(--border-bright)] bg-[var(--surface-2)] text-red-400 hover:border-red-700 transition-colors flex items-center gap-1`}>
+                <X size={12} aria-hidden="true" /> Clear filters
               </button>
             )}
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* ── Cost view (Tyres / General / Combined) ───────────────────────────── */}
-      <div className="card flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <p className="text-xs text-gray-400 font-medium">Cost view (respects the country, site, and date filters above)</p>
-          <p className="text-2xl font-bold text-green-400 mt-0.5">
-            {costSplitLoading ? '...' : `${activeCurrency} ${Math.round(costFigure).toLocaleString()}`}
-          </p>
-          <p className="text-xs text-gray-500 mt-0.5">
-            {costMode === 'tyres' ? 'Tyre spend' : costMode === 'maintenance' ? 'General (maintenance) spend' : 'Combined tyre + maintenance spend'}
-            {dateFrom || dateTo ? ` (${dateFrom || 'start'} to ${dateTo || 'today'})` : ' (last 12 months)'}
+      {truncated && !loading && (
+        <div role="status" className="flex items-center gap-2 text-amber-400 text-xs bg-amber-400/10 border border-amber-400/20 rounded-xl px-4 py-2.5">
+          <AlertTriangle size={13} aria-hidden="true" />
+          Capped view: at least one read reached its 200,000-row ceiling. Narrow the country, site or date range for exact figures.
+        </div>
+      )}
+
+      {/* ── Cost view (Tyres / General / Combined) from the expense grid ─────── */}
+      <section aria-label="Cost view" className="card flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs text-[var(--text-secondary)] font-medium">Spend from the expense grid (follows the country, site and date filters)</p>
+          {costSplitLoading ? (
+            <p className="text-2xl font-bold text-[var(--text-muted)] mt-0.5" aria-busy="true">Loading</p>
+          ) : costSplitError ? (
+            <p className="text-sm text-red-400 mt-1 flex items-center gap-2">
+              Could not load spend.
+              <button type="button" onClick={loadCost} className="underline">Retry</button>
+            </p>
+          ) : costFigure.blended ? (
+            <div className="mt-1 flex flex-wrap gap-3">
+              {costFigure.byCountry.length === 0
+                ? <p className="text-sm text-[var(--text-muted)]">No spend recorded for this scope.</p>
+                : costFigure.byCountry.map(r => (
+                  <p key={r.country} className="text-sm text-[var(--text-primary)] tabular-nums">
+                    <span className="text-[var(--text-muted)]">{r.country}: </span>{fmtMoney(r.amount, r.currency || '')}
+                  </p>
+                ))}
+              <p className="text-xs text-[var(--text-muted)] w-full">Each country is shown in its own currency; pick one country for a single total.</p>
+            </div>
+          ) : (
+            <p className="text-2xl font-bold text-green-400 mt-0.5 tabular-nums">{fmtMoney(costFigure.amount, costFigure.currency || activeCurrency)}</p>
+          )}
+          <p className="text-xs text-[var(--text-muted)] mt-0.5">
+            {costMode === 'tyres' ? 'Tyre spend' : costMode === 'maintenance' ? 'General (maintenance) spend' : 'Combined tyre and maintenance spend'}
+            {dateFrom || dateTo ? ` (${dateFrom || 'start'} to ${dateTo || 'today'})` : ' (last 12 calendar months)'}
           </p>
         </div>
-        <div className="flex items-center gap-1 p-1 rounded-lg bg-gray-800 border border-gray-700 w-fit">
+        <div className="flex items-center gap-1 p-1 rounded-lg bg-[var(--surface-2)] border border-[var(--border-bright)] w-fit" role="group" aria-label="Cost view">
           {costModeOptions.map(m => (
-            <button
-              key={m.key}
-              onClick={() => setCostMode(m.key)}
-              className={`px-4 py-1.5 text-xs rounded-md font-medium transition-all ${
-                costMode === m.key ? 'bg-green-700 text-white' : 'text-gray-400 hover:text-gray-200'
-              }`}
-            >
+            <button key={m.key} type="button" aria-pressed={costMode === m.key} onClick={() => setCostMode(m.key)}
+              className={`px-4 ${TOUCH} text-xs rounded-md font-medium transition-all ${
+                costMode === m.key ? 'bg-green-700 text-white' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              }`}>
               {m.label}
             </button>
           ))}
         </div>
-      </div>
+      </section>
 
-      {/* ── Multi-year expense trend + forecast ─────────────────────────────── */}
       <YearlyTrendPanel title="Expense trend by year (tyres / spare / lubricant) + forecast" />
 
-      {/* ── Fleet CPK moved to its own module ────────────────────────────────── */}
-      <a
-        href="/cpk-intelligence"
-        className="card flex items-center justify-between gap-3 border border-gray-700/60 hover:border-blue-500/60 transition-colors no-underline"
+      {/* ── Fleet CPK lives in its own module ────────────────────────────────── */}
+      <Link
+        to="/cpk-intelligence"
+        className="card flex items-center justify-between gap-3 border border-[var(--border-bright)] hover:border-blue-500/60 transition-colors no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500"
       >
         <div className="flex items-center gap-3 min-w-0">
-          <Gauge size={20} className="text-blue-400 shrink-0" />
+          <Gauge size={20} className="text-blue-400 shrink-0" aria-hidden="true" />
           <div className="min-w-0">
-            <h2 className="text-sm font-semibold text-gray-200">CPK Intelligence (its own module)</h2>
-            <p className="text-xs text-gray-500">
+            <h2 className="text-sm font-semibold text-[var(--text-primary)]">CPK Intelligence (its own module)</h2>
+            <p className="text-xs text-[var(--text-muted)]">
               Cost per km (movable) and cost per hour (non-movable), by country and period, with the what-if
-              scenario, brand value and why-it-changed views. Loads one month at a time, not everything.
+              scenario, brand value and why-it-changed views.
             </p>
           </div>
         </div>
-        <span className="text-xs font-medium text-blue-400 whitespace-nowrap">Open &rarr;</span>
-      </a>
+        <span className="text-xs font-medium text-blue-400 whitespace-nowrap">Open</span>
+      </Link>
 
-      {/* ── Empty state ──────────────────────────────────────────────────────── */}
-      {!kpis && !loading && (
-        <div className="card flex flex-col items-center justify-center py-20 gap-4">
-          <Cpu size={40} className="text-gray-600" />
-          <p className="text-gray-400 text-base font-medium">No tyre records found for the selected filters</p>
-          <p className="text-gray-500 text-sm text-center max-w-md">
-            Upload tyre data to see engineering KPIs. All 17 KPIs are computed automatically once records are available.
-          </p>
+      {/* ── States ──────────────────────────────────────────────────────────── */}
+      {loading && (
+        <div aria-busy="true" aria-live="polite" className="space-y-3">
+          <p className="text-[var(--text-muted)] text-sm">Computing 17 engineering KPIs...</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            {Array.from({ length: 5 }).map((_, i) => <div key={i} className="card h-24 animate-pulse" />)}
+          </div>
         </div>
       )}
 
-      {kpis && (
+      {!loading && error && (
+        <div role="alert" className="flex items-start gap-3 bg-red-950/40 border border-red-700/50 rounded-xl p-4">
+          <XCircle size={18} className="text-red-400 shrink-0 mt-0.5" aria-hidden="true" />
+          <div>
+            <p className="text-red-300 font-medium text-sm">Engineering KPIs could not be loaded</p>
+            <p className="text-red-400/80 text-xs mt-1">{error}</p>
+            <button type="button" onClick={loadData} className={`btn-secondary text-xs mt-3 px-4 ${TOUCH}`}>Retry</button>
+          </div>
+        </div>
+      )}
+
+      {!loading && !error && !kpis && (
+        <div className="card flex flex-col items-center justify-center py-16 gap-3 text-center">
+          <Cpu size={40} className="text-[var(--text-dim)]" aria-hidden="true" />
+          <p className="text-[var(--text-secondary)] text-base font-medium">No tyre records for the selected filters</p>
+          <p className="text-[var(--text-muted)] text-sm max-w-md">
+            All 17 KPIs are computed automatically once tyre records exist in this scope.
+          </p>
+          {filtersActive && (
+            <button type="button" onClick={clearFilters} className={`btn-secondary text-sm px-4 ${TOUCH}`}>Clear filters</button>
+          )}
+        </div>
+      )}
+
+      {!loading && !error && kpis && head && (
         <>
-          {/* ── Section 1: Headline Strip ──────────────────────────────────── */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-            {/* 1. Fleet CPK */}
+          {/* ── Headline strip ─────────────────────────────────────────────── */}
+          <section aria-label="Headline KPIs" className="grid grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             <HeadlineCard
               metricId="fleet_cpk"
               country={activeCountry}
               title="Fleet CPK"
-              value={kpis.cpk.validCount === 0 ? 'N/A' : `${activeCurrency} ${kpis.cpk.fleetAvgCpk.toFixed(4)}`}
-              sub={kpis.cpk.validCount === 0 ? 'No km data' : `${activeCurrency}/km | ${kpis.cpk.coveragePct.toFixed(0)}% coverage`}
-              status={
-                kpis.cpk.validCount === 0 ? 'neutral'
-                : kpis.cpk.fleetAvgCpk < 1.0 ? 'good'
-                : kpis.cpk.fleetAvgCpk < 2.0 ? 'warning' : 'critical'
-              }
+              value={head.cpk == null ? 'N/A' : `${activeCurrency} ${head.cpk.toFixed(4)}`}
+              sub={head.cpk == null ? 'No km and price data' : `${activeCurrency}/km, ${head.cpkCoveragePct.toFixed(0)}% coverage`}
+              status={cpkStatus(head.cpk)}
             />
-            {/* 2. Avg Tyre Life */}
             <HeadlineCard
               metricId="avg_tyre_life"
               country={activeCountry}
               title="Avg Tyre Life"
-              value={kpis.avgTyreLife.validCount === 0 ? 'N/A' : `${Math.round(kpis.avgTyreLife.avgKm).toLocaleString()} km`}
-              sub={kpis.avgTyreLife.validCount === 0 ? 'No km data' : `${kpis.avgTyreLife.validCount} records`}
-              status={
-                kpis.avgTyreLife.validCount === 0 ? 'neutral'
-                : kpis.avgTyreLife.avgKm > 40000 ? 'good'
-                : kpis.avgTyreLife.avgKm > 20000 ? 'warning' : 'critical'
-              }
+              value={fmtKm(head.avgLifeKm)}
+              sub={head.avgLifeKm == null ? 'No km data' : `${head.lifeValidCount} records`}
+              status={lifeStatus(head.avgLifeKm)}
             />
-            {/* 3. Failure Rate */}
             <HeadlineCard
               metricId="failure_rate"
               country={activeCountry}
               title="Failure Rate"
-              value={kpis.failureRate.failureRate == null ? 'N/A' : `${(kpis.failureRate.failureRate * 100).toFixed(1)}%`}
-              sub={kpis.failureRate.failureRate == null ? `No tyres rated of ${kpis.failureRate.totalCount} records` : `${kpis.failureRate.failureCount} of ${kpis.failureRate.ratedCount} rated`}
-              status={
-                kpis.failureRate.failureRate == null ? 'neutral'
-                : kpis.failureRate.failureRate * 100 > 30 ? 'critical'
-                : kpis.failureRate.failureRate * 100 > 15 ? 'warning' : 'good'
-              }
+              value={fmtPct(head.failurePct)}
+              sub={head.failurePct == null ? `No tyres rated of ${head.totalCount} records` : `${head.failureCount} of ${head.ratedCount} rated`}
+              status={lowerIsBetterPctStatus(head.failurePct, 15, 30)}
             />
-            {/* 4. Inspection Compliance */}
             <HeadlineCard
               title="Inspection Compliance"
-              value={inspections.length === 0 ? 'N/A' : `${kpis.inspectionCompliance.compliancePct.toFixed(1)}%`}
-              sub={inspections.length === 0 ? 'No inspections' : `${kpis.inspectionCompliance.onTimeCount} on-time`}
-              status={
-                inspections.length === 0 ? 'neutral'
-                : kpis.inspectionCompliance.compliancePct > 85 ? 'good'
-                : kpis.inspectionCompliance.compliancePct > 60 ? 'warning' : 'critical'
-              }
+              value={fmtPct(head.inspectionPct)}
+              sub={head.inspectionPct == null ? 'No scheduled inspections' : `${kpis.inspectionCompliance.onTimeCount} on time`}
+              status={higherIsBetterPctStatus(head.inspectionPct, 85, 60)}
             />
-            {/* 5. Fleet Availability */}
             <HeadlineCard
               title="Fleet Availability"
-              value={`${kpis.fleetAvailability.availabilityPct.toFixed(1)}%`}
-              sub={`${kpis.fleetAvailability.unavailableCount} vehicles critical`}
-              status={
-                kpis.fleetAvailability.availabilityPct > 90 ? 'good'
-                : kpis.fleetAvailability.availabilityPct > 75 ? 'warning' : 'critical'
-              }
+              value={fmtPct(head.availabilityPct)}
+              sub={head.availabilityPct == null ? 'No risk ratings recorded' : `${head.unavailableCount} vehicles critical`}
+              status={higherIsBetterPctStatus(head.availabilityPct, 90, 75)}
             />
-          </div>
+          </section>
 
-          {/* ── Section 2: 17-KPI Cards Grid ──────────────────────────────── */}
-          <div>
-            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">
-              All 17 Engineering KPIs
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {kpiCards.map((card, i) => (
-                <KpiCard
-                  key={i}
-                  title={`${String(i + 1).padStart(2, '0')}. ${card.title}`}
-                  value={card.value}
-                  subValue={card.subValue}
-                  description={card.description}
-                  status={card.status}
-                  trend={card.trend}
-                  trendLabel={card.trendLabel}
-                />
-              ))}
+          {/* ── 17 KPI cards with search + status filter ─────────────────── */}
+          <section aria-labelledby="ekpi-cards-h">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-3">
+              <h2 id="ekpi-cards-h" className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
+                All 17 Engineering KPIs
+              </h2>
+              <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                <div className="relative">
+                  <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+                  <input
+                    type="search"
+                    aria-label="Search KPIs"
+                    className={`input pl-8 text-sm w-full sm:w-56 ${TOUCH}`}
+                    placeholder="Search KPIs"
+                    value={cardQuery}
+                    onChange={e => setCardQuery(e.target.value)}
+                  />
+                </div>
+                <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by status">
+                  {['all', 'critical', 'warning', 'good', 'neutral'].map(s => (
+                    <button key={s} type="button" aria-pressed={cardStatus === s} onClick={() => setCardStatus(s)}
+                      className={`px-3 ${TOUCH} text-xs rounded-full border transition-colors ${
+                        cardStatus === s ? 'bg-blue-600 text-white border-blue-500' : 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)]'
+                      }`}>
+                      {s === 'all' ? 'All' : STATUS_LABEL[s]} ({counts[s]})
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
-          </div>
+            {visibleCards.length === 0 ? (
+              <div className="card text-center py-8 text-sm text-[var(--text-muted)]">
+                No KPI matches the search or status filter.
+                <button type="button" onClick={() => { setCardQuery(''); setCardStatus('all') }} className="underline ml-2">Show all</button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {visibleCards.map(card => <KpiCard key={card.title} {...card} />)}
+              </div>
+            )}
+          </section>
 
-          {/* ── Section 3: 4 Charts ─────────────────────────────────────────── */}
-          <div>
-            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">
+          {/* ── Charts ─────────────────────────────────────────────────────── */}
+          <section aria-labelledby="ekpi-charts-h">
+            <h2 id="ekpi-charts-h" className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-3">
               Analytical Charts
             </h2>
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-
-              {/* Chart 1: CPK by Brand */}
-              <div className="card">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-medium text-gray-300">CPK by Brand: Top 10</h3>
-                  <span className="text-xs text-gray-500">Lower = better | Green &lt;1.0 | Yellow 1-2 | Red ≥2</span>
-                </div>
-                {cpkBrandChart ? (
-                  <div style={{ height: 280 }}>
-                    <Bar
-                      data={cpkBrandChart}
-                      options={chartOpts(true, `${activeCurrency}/km`, '')}
-                    />
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center h-48 text-gray-500 text-sm">
-                    No km data available for CPK chart
-                  </div>
-                )}
-              </div>
-
-              {/* Chart 2: Monthly Cost Trend */}
-              <div className="card">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-medium text-gray-300">Monthly Cost Trend (13 months)</h3>
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded ${
-                    kpis.costTrend.trend === 'improving' ? 'bg-green-900/40 text-green-400'
-                    : kpis.costTrend.trend === 'worsening' ? 'bg-red-900/40 text-red-400'
-                    : 'bg-gray-800 text-gray-400'
-                  }`}>
-                    {kpis.costTrend.trend.charAt(0).toUpperCase() + kpis.costTrend.trend.slice(1)}
-                  </span>
-                </div>
-                {costTrendChart ? (
-                  <div style={{ height: 280 }}>
-                    <Line
-                      data={costTrendChart}
-                      options={chartOpts(false, `Cost (${activeCurrency})`, 'Month')}
-                    />
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center h-48 text-gray-500 text-sm">
-                    No cost data available
-                  </div>
-                )}
-              </div>
-
-              {/* Chart 3: Failure Rate by Site */}
-              <div className="card">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-medium text-gray-300">Failure Rate by Site</h3>
-                  <span className="text-xs text-gray-500">Sorted by rate desc | Red &gt;30% | Yellow &gt;15%</span>
-                </div>
-                {failureBySiteChart && failureBySiteChart.labels.length > 0 ? (
-                  <div style={{ height: 280 }}>
-                    <Bar
-                      data={failureBySiteChart}
-                      options={chartOpts(false, 'Failure Rate %', 'Site')}
-                    />
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center h-48 text-gray-500 text-sm">
-                    No site data available
-                  </div>
-                )}
-              </div>
-
-              {/* Chart 4: Inspection Compliance by Month */}
-              <div className="card">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-medium text-gray-300">Inspection Compliance by Month (12M)</h3>
-                  <span className="text-xs text-gray-500">Target: 85%</span>
-                </div>
-                {inspCompChart ? (
-                  <div style={{ height: 280 }}>
-                    <Line
-                      data={inspCompChart}
-                      options={chartOpts(false, 'Compliance %', 'Month')}
-                    />
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center h-48 text-gray-500 text-sm">
-                    No inspection data available
-                  </div>
-                )}
-              </div>
+              <ChartCard title="CPK by Brand: best 10" hint="Lower is better. Green under 1.0, amber 1 to 2, red 2 and over"
+                empty={!cpkBrandChart} emptyText="No brand has both km and price data yet.">
+                <Bar data={cpkBrandChart} options={chartOpts({ horizontal: true, yLabel: '', xLabel: `${activeCurrency}/km` })}
+                  aria-label="Bar chart of average cost per km by brand" role="img" />
+              </ChartCard>
+              <ChartCard title="Monthly Tyre Spend (expense grid)"
+                hint={costTrend ? `Trend: ${costTrend.trend === 'insufficient' ? 'not enough months' : costTrend.trend}` : 'Single country only'}
+                empty={!costTrendChart}
+                emptyText={costFigure.blended ? 'Spend spans several currencies. Pick one country to chart a single-currency trend.' : 'No tyre spend in the expense grid for this scope.'}>
+                <Line data={costTrendChart} options={chartOpts({ yLabel: `Spend (${costTrend?.currency || activeCurrency})`, xLabel: 'Month' })}
+                  aria-label="Line chart of monthly tyre spend with trend line" role="img" />
+              </ChartCard>
+              <ChartCard title="Failure Rate by Site (rated tyres)" hint="Worst first. Red over 30%, amber over 15%"
+                empty={!failureBySiteChart} emptyText="Not measured: no tyre in this scope carries a risk level.">
+                <Bar data={failureBySiteChart} options={chartOpts({ yLabel: 'Failure rate %', xLabel: 'Site', suffix: '%' })}
+                  aria-label="Bar chart of failure rate by site" role="img" />
+              </ChartCard>
+              <ChartCard title="Inspection Compliance by Month (12 months)" hint="Target 85%"
+                empty={!inspCompChart} emptyText="No scheduled inspections in this scope.">
+                <Line data={inspCompChart} options={chartOpts({ yLabel: 'Compliance %', xLabel: 'Month', suffix: '%' })}
+                  aria-label="Line chart of monthly inspection compliance against an 85 percent target" role="img" />
+              </ChartCard>
             </div>
-          </div>
+          </section>
 
-          {/* ── Section 4: Two Tables ──────────────────────────────────────── */}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-
-            {/* Table Left: Worst Assets by CPK */}
-            <div className="card overflow-x-auto">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-medium text-gray-300">Worst Assets by CPK (Top 10)</h3>
-                <span className="text-xs text-gray-500">{worstAssets.length} assets with km data</span>
-              </div>
-              {worstAssets.length === 0 ? (
-                <p className="text-gray-500 text-sm py-8 text-center">No assets with km data available</p>
-              ) : (
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="text-left border-b border-gray-800">
-                      <th className="table-header pb-2 pr-3">Asset No</th>
-                      <th className="table-header pb-2 pr-3 text-right">CPK ({activeCurrency}/km)</th>
-                      <th className="table-header pb-2 pr-3 text-right">Avg Life</th>
-                      <th className="table-header pb-2 pr-3 text-right">Total Cost</th>
-                      <th className="table-header pb-2 pr-3 text-right">Fail %</th>
-                      <th className="table-header pb-2 text-right">Count</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {worstAssets.map((a, i) => (
-                      <tr key={a.assetNo} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
-                        <td className="table-cell py-2 pr-3 font-mono text-gray-200">{a.assetNo}</td>
-                        <td className="table-cell py-2 pr-3 text-right">
-                          <span className={`font-medium ${
-                            a.cpk < 1.0 ? 'text-green-400' : a.cpk < 2.0 ? 'text-yellow-400' : 'text-red-400'
-                          }`}>
-                            {a.cpk.toFixed(4)}
-                          </span>
-                        </td>
-                        <td className="table-cell py-2 pr-3 text-right text-gray-300">
-                          {a.avgLifeKm != null ? `${Math.round(a.avgLifeKm).toLocaleString()} km` : '-'}
-                        </td>
-                        <td className="table-cell py-2 pr-3 text-right text-gray-300">
-                          {activeCurrency} {Math.round(a.totalCost).toLocaleString()}
-                        </td>
-                        <td className="table-cell py-2 pr-3 text-right">
-                          <span className={a.failureRate > 30 ? 'text-red-400' : a.failureRate > 15 ? 'text-yellow-400' : 'text-green-400'}>
-                            {a.failureRate.toFixed(1)}%
-                          </span>
-                        </td>
-                        <td className="table-cell py-2 text-right text-gray-400">{a.replacements}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+          {/* ── Tables ─────────────────────────────────────────────────────── */}
+          <section aria-labelledby="ekpi-assets-h" className="card">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <h3 id="ekpi-assets-h" className="text-sm font-medium text-[var(--text-primary)]">Asset CPK ranking (worst first)</h3>
+              <span className="text-xs text-[var(--text-muted)]">
+                {assetRows.length} assets with km and price data. Tyre spend is the expense-grid figure; assets not in the grid read "Not in grid".
+              </span>
             </div>
+            <EnterpriseTable
+              columns={assetColumns}
+              data={assetRows}
+              getRowId={r => String(r.assetNo)}
+              enableColumnFilters={false}
+              searchPlaceholder="Search asset"
+              initialPageSize={25}
+              exportFileName={reportFileName('TyrePulse Asset CPK', scopeLabel)}
+              reportMeta={{ title: 'Asset CPK ranking', currency: activeCurrency }}
+              emptyMessage="No asset has both km and price data in this scope."
+            />
+          </section>
 
-            {/* Table Right: Brand Performance Scorecard */}
-            <div className="card overflow-x-auto">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-medium text-gray-300">Brand Performance Scorecard</h3>
-                <span className="text-xs text-gray-500">{brandScorecard.length} brands</span>
-              </div>
-              {brandScorecard.length === 0 ? (
-                <p className="text-gray-500 text-sm py-8 text-center">No brand data available</p>
-              ) : (
-                <>
-                  <table className="w-full text-xs">
-                  <thead>
-                    <tr className="text-left border-b border-gray-800">
-                      <th className="table-header pb-2 pr-2 text-center">#</th>
-                      <th className="table-header pb-2 pr-3">Brand</th>
-                      <th className="table-header pb-2 pr-3 text-right">Avg CPK</th>
-                      <th className="table-header pb-2 pr-3 text-right">Fail %</th>
-                      <th className="table-header pb-2 pr-3 text-right">Avg Life</th>
-                      <th className="table-header pb-2 pr-3 text-right">Scrap %</th>
-                      <th className="table-header pb-2 text-right">Score</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {brandsPager.pageRows.map((b, i) => {
-                      const total = brandScorecard.length
-                      const isTop = i < Math.ceil(total * 0.3)
-                      const isBot = i >= total - Math.floor(total * 0.3)
-                      const scoreColor = isTop ? 'text-green-400' : isBot ? 'text-red-400' : 'text-gray-300'
-
-                      return (
-                        <tr key={b.brand} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
-                          <td className="table-cell py-2 pr-2 text-center text-gray-500">{b.rank}</td>
-                          <td className="table-cell py-2 pr-3 text-gray-200 font-medium">{b.brand}</td>
-                          <td className="table-cell py-2 pr-3 text-right">
-                            {b.avgCpk > 0 ? (
-                              <span className={b.avgCpk < 1.0 ? 'text-green-400' : b.avgCpk < 2.0 ? 'text-yellow-400' : 'text-red-400'}>
-                                {b.avgCpk.toFixed(4)}
-                              </span>
-                            ) : (
-                              <span className="text-gray-600">N/A</span>
-                            )}
-                          </td>
-                          <td className="table-cell py-2 pr-3 text-right">
-                            <span className={b.failureRate > 0.3 ? 'text-red-400' : b.failureRate > 0.15 ? 'text-yellow-400' : 'text-green-400'}>
-                              {(b.failureRate * 100).toFixed(1)}%
-                            </span>
-                          </td>
-                          <td className="table-cell py-2 pr-3 text-right text-gray-300">
-                            {b.avgLifeKm != null && b.avgLifeKm > 0
-                              ? `${Math.round(b.avgLifeKm).toLocaleString()} km`
-                              : <span className="text-gray-600">N/A</span>
-                            }
-                          </td>
-                          <td className="table-cell py-2 pr-3 text-right text-gray-300">
-                            {(b.scrapRate * 100).toFixed(1)}%
-                          </td>
-                          <td className="table-cell py-2 text-right">
-                            <span className={`font-semibold ${scoreColor}`}>
-                              {b.score.toFixed(2)}
-                            </span>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                  </table>
-                  <TablePagination {...brandsPager} />
-                </>
-              )}
+          <section aria-labelledby="ekpi-brands-h" className="card">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <h3 id="ekpi-brands-h" className="text-sm font-medium text-[var(--text-primary)]">Brand Performance Scorecard</h3>
+              <span className="text-xs text-[var(--text-muted)]">{brandRows.length} brands. Green score = top 30%, red = bottom 30%.</span>
             </div>
-          </div>
+            <EnterpriseTable
+              columns={brandColumns}
+              data={brandRows}
+              getRowId={r => String(r.brand)}
+              enableColumnFilters={false}
+              searchPlaceholder="Search brand"
+              initialPageSize={25}
+              exportFileName={reportFileName('TyrePulse Brand Scorecard', scopeLabel)}
+              reportMeta={{ title: 'Brand performance scorecard', currency: activeCurrency }}
+              emptyMessage="No brand data in this scope."
+            />
+          </section>
         </>
       )}
 
-      {kpis && (
+      {kpis && head && (
         <EmailReportModal
           isOpen={emailModalOpen}
           onClose={() => setEmailModalOpen(false)}
           reportTitle="Engineering KPI Report"
-          pdfColumns={['Brand', 'Avg CPK', 'Failure %', 'Avg Life (km)', 'Scrap %', 'Score']}
-          pdfRows={brandScorecard.map(b => [
+          pdfColumns={['Brand', 'Avg CPK', 'Failure % (rated)', 'Avg Life (km)', 'Scrap %', 'Score']}
+          pdfRows={brandRows.map(b => [
             b.brand,
-            b.avgCpk > 0 ? b.avgCpk.toFixed(4) : 'N/A',
-            `${(b.failureRate * 100).toFixed(1)}%`,
-            b.avgLifeKm != null && b.avgLifeKm > 0 ? `${Math.round(b.avgLifeKm).toLocaleString()} km` : 'N/A',
-            `${(b.scrapRate * 100).toFixed(1)}%`,
-            b.score.toFixed(2),
+            b.avgCpk != null ? b.avgCpk.toFixed(4) : 'N/A',
+            fmtPct(b.failurePct),
+            fmtKm(b.avgLifeKm),
+            fmtPct(b.scrapPct),
+            b.score != null ? b.score.toFixed(2) : 'N/A',
           ])}
           kpiSummary={{
-            'Fleet CPK':              kpis.cpk.validCount > 0 ? `${activeCurrency} ${kpis.cpk.fleetAvgCpk.toFixed(4)}/km` : 'N/A',
-            'Avg Tyre Life':          kpis.avgTyreLife.validCount > 0 ? `${Math.round(kpis.avgTyreLife.avgKm).toLocaleString()} km` : 'N/A',
-            'Failure Rate':           kpis.failureRate.failureRate == null ? 'N/A' : `${(kpis.failureRate.failureRate * 100).toFixed(1)}%`,
-            'Inspection Compliance':  `${kpis.inspectionCompliance.compliancePct.toFixed(1)}%`,
-            'Fleet Availability':     `${kpis.fleetAvailability.availabilityPct.toFixed(1)}%`,
-            'Scrap Rate':             `${(kpis.scrapRate.scrapRate * 100).toFixed(1)}%`,
-            'Cost Trend':             kpis.costTrend.trend.charAt(0).toUpperCase() + kpis.costTrend.trend.slice(1),
-            'Downtime Hours':         `${kpis.downtimeImpact.totalDowntimeHours.toLocaleString()} hrs`,
+            'Fleet CPK':             head.cpk != null ? `${activeCurrency} ${head.cpk.toFixed(4)}/km` : 'N/A',
+            'Avg Tyre Life':         fmtKm(head.avgLifeKm),
+            'Failure Rate':          fmtPct(head.failurePct),
+            'Inspection Compliance': fmtPct(head.inspectionPct),
+            'Fleet Availability':    fmtPct(head.availabilityPct),
+            'Scrap Rate':            fmtPct(head.scrapPct),
+            'Tyre Spend Trend':      costTrend ? costTrend.trend : 'N/A',
+            'Downtime Hours':        `${kpis.downtimeImpact.totalDowntimeHours.toLocaleString()} hrs`,
           }}
-          period={dateFrom && dateTo ? `${dateFrom} - ${dateTo}` : 'All Time'}
+          period={dateFrom && dateTo ? `${dateFrom} to ${dateTo}` : 'All time'}
         />
       )}
     </div>
   )
-}
-
-// ── Export helper: build flat KPI summary rows ────────────────────────────────
-function buildKpiSummaryRows(kpis, currency) {
-  if (!kpis) return []
-  const { cpk, avgTyreLife, removalRate, failureRate, replacementRate,
-          pressureCompliance, inspectionCompliance, retreadPerformance,
-          scrapRate, fleetAvailability, downtimeImpact, costTrend,
-          vendorPerformance, workshopPerformance } = kpis
-
-  const n = v => v ?? 'N/A'
-
-  return [
-    { kpi: `CPK Fleet Average (${currency}/km)`,  value: cpk.validCount > 0 ? cpk.fleetAvgCpk.toFixed(4) : 'N/A',              status: cpk.fleetAvgCpk < 1.0 ? 'Good' : cpk.fleetAvgCpk < 2.0 ? 'Warning' : 'Critical', description: `Coverage ${cpk.coveragePct.toFixed(1)}% (${cpk.validCount}/${cpk.totalCount})` },
-    { kpi: `Cost Per Mile (${currency}/mile)`,    value: cpk.validCount > 0 ? (cpk.fleetAvgCpk * 1.60934).toFixed(4) : 'N/A', status: 'Derived',   description: 'CPK × 1.609' },
-    { kpi: 'Average Tyre Life (km)',           value: avgTyreLife.validCount > 0 ? Math.round(avgTyreLife.avgKm) : 'N/A',       status: avgTyreLife.avgKm > 40000 ? 'Good' : avgTyreLife.avgKm > 20000 ? 'Warning' : 'Critical', description: `Median: ${Math.round(avgTyreLife.medianKm).toLocaleString()} km` },
-    { kpi: 'Fleet Avg Tyre Life (km)',         value: avgTyreLife.validCount > 0 ? Math.round(avgTyreLife.avgKm) : 'N/A',       status: 'See Above', description: 'Fleet-wide average' },
-    { kpi: 'Tyre Removal Rate (per 1000 km)', value: removalRate.estimatedFleetKm > 0 ? removalRate.removalPer1000Km.toFixed(4) : 'N/A', status: 'Informational', description: `${removalRate.totalRemovals} removals / ${Math.round(removalRate.estimatedFleetKm).toLocaleString()} km` },
-    { kpi: 'Tyre Failure Rate (%)',            value: failureRate.failureRate == null ? 'N/A' : (failureRate.failureRate * 100).toFixed(2),                                status: failureRate.failureRate == null ? 'Not measured' : failureRate.failureRate > 0.30 ? 'Critical' : failureRate.failureRate > 0.15 ? 'Warning' : 'Good', description: failureRate.failureRate == null ? `No tyres rated of ${failureRate.totalCount} total` : `${failureRate.failureCount} failures (Critical: ${Math.round(failureRate.criticalRate * 100)}%, High: ${Math.round(failureRate.highRate * 100)}%)` },
-    { kpi: 'Tyre Replacement Rate (per veh/mo)', value: replacementRate.avgPerVehiclePerMonth.toFixed(3),                       status: replacementRate.avgPerVehiclePerMonth < 0.5 ? 'Good' : 'Warning', description: `${replacementRate.totalReplacements} total / ${replacementRate.activeVehicles} vehicles` },
-    { kpi: 'Pressure Compliance (%)',          value: pctOrNA(pressureCompliance.compliancePct), status: pressureCompliance.compliancePct == null ? 'Not measured' : pressureCompliance.compliancePct > 85 ? 'Good' : pressureCompliance.compliancePct > 60 ? 'Warning' : 'Critical', description: pressureCompliance.basis },
-    { kpi: 'Inspection Compliance (%)',        value: inspectionCompliance.compliancePct.toFixed(1),                            status: inspectionCompliance.compliancePct > 85 ? 'Good' : inspectionCompliance.compliancePct > 60 ? 'Warning' : 'Critical', description: `On-time: ${inspectionCompliance.onTimeCount}, Overdue: ${inspectionCompliance.overdueCount}` },
-    { kpi: 'Retread Performance',              value: retreadPerformance ? `${retreadPerformance.savingsPct.toFixed(1)}% savings` : 'Insufficient data', status: retreadPerformance && retreadPerformance.savingsPct > 0 ? 'Good' : 'Neutral', description: retreadPerformance ? `Retread CPK: ${retreadPerformance.retreadCpk.toFixed(4)} vs New: ${retreadPerformance.newCpk.toFixed(4)}` : '' },
-    { kpi: 'Scrap Rate (%)',                   value: (scrapRate.scrapRate * 100).toFixed(1),                                   status: scrapRate.scrapRate > 0.20 ? 'Critical' : scrapRate.scrapRate > 0.10 ? 'Warning' : 'Good', description: `${scrapRate.scrapCount} scrapped | Est. cost: ${currency} ${scrapRate.estimatedScrapCost.toLocaleString()}` },
-    { kpi: 'Fleet Availability Impact (%)',    value: fleetAvailability.availabilityPct.toFixed(1),                             status: fleetAvailability.availabilityPct > 90 ? 'Good' : fleetAvailability.availabilityPct > 75 ? 'Warning' : 'Critical', description: `${fleetAvailability.unavailableCount} critical of ${fleetAvailability.fleetSize}` },
-    { kpi: 'Vehicle Downtime Impact (hrs)',    value: downtimeImpact.totalDowntimeHours.toLocaleString(),                       status: downtimeImpact.totalDowntimeHours > 500 ? 'Critical' : 'Informational', description: `Avg ${downtimeImpact.avgDowntimePerVehicle.toFixed(1)} hrs/vehicle` },
-    { kpi: 'Cost Trend',                       value: costTrend.trend,                                                          status: costTrend.trend === 'improving' ? 'Good' : costTrend.trend === 'worsening' ? 'Critical' : 'Neutral', description: `Slope: ${currency} ${Math.round(costTrend.slope)}/month | Forecast: ${costTrend.forecastNextMonth == null ? 'N/A' : `${currency} ${Math.round(Math.max(0, costTrend.forecastNextMonth)).toLocaleString()}`}` },
-    { kpi: 'Vendor Performance (Top Brand)',   value: vendorPerformance[0]?.brand ?? 'N/A',                                     status: 'Informational', description: vendorPerformance[0] ? `Score: ${vendorPerformance[0].score.toFixed(3)} | CPK: ${vendorPerformance[0].avgCpk.toFixed(4)}` : '' },
-    { kpi: 'Workshop Performance (Best Site)', value: workshopPerformance.bySite[0]?.site ?? 'N/A',                            status: 'Informational', description: workshopPerformance.bySite[0] ? `Score: ${workshopPerformance.bySite[0].score.toFixed(3)}` : '' },
-    { kpi: 'Fleet CPK Coverage (%)',           value: cpk.coveragePct.toFixed(1),                                              status: cpk.coveragePct > 80 ? 'Good' : cpk.coveragePct > 50 ? 'Warning' : 'Critical', description: `${cpk.validCount} valid / ${cpk.totalCount - cpk.validCount} missing km data` },
-  ]
 }

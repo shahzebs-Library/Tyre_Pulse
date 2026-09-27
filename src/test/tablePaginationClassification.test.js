@@ -38,16 +38,19 @@ describe('frozen table-without-pagination audit classification', () => {
 describe('AI administration shared table family', () => {
   const source = read('src/pages/AiAdministration.jsx')
 
-  it('pages all four resource tables through the shared paging primitive', () => {
-    expect(source).toContain("import TablePagination, { usePagedRows } from '../components/ui/TablePagination'")
-    expect(source).toContain('const paging = usePagedRows(tableRows, { pageSize: 25 })')
-    expect(source).toContain(') : paging.pageRows}')
-    expect(source).toContain('<TablePagination {...paging} />')
-    expect((source.match(/<DataTable\b/g) || [])).toHaveLength(4)
+  it('pages all four resource tables through the shared EnterpriseTable register', () => {
+    // The four catalogue tabs moved from a hand-built <table> + TablePagination
+    // onto ONE ResourceTable wrapper over EnterpriseTable, which pages and sorts
+    // across the whole filtered set.
+    expect(source).toContain("import EnterpriseTable from '../components/ui/EnterpriseTable'")
+    expect(source).toContain('<EnterpriseTable')
+    expect(source).not.toContain('<table')
+    expect((source.match(/<ResourceTable\b/g) || [])).toHaveLength(4)
+    expect((source.match(/rows=\{filtered\}/g) || [])).toHaveLength(4)
   })
 
   it('keeps exports scoped to each full filtered result rather than the visible page', () => {
-    expect(source).not.toMatch(/exportTo(?:Excel|Pdf)\([^)]*paging\.pageRows/s)
+    expect(source).not.toMatch(/exportTo(?:Excel|Pdf)\([^)]*pageRows/s)
     expect((source.match(/const exportRows = filtered\.map/g) || [])).toHaveLength(4)
     expect(source).toMatch(/exportToExcel\(exportRows/)
   })
@@ -66,7 +69,7 @@ describe('production-risk registers remediated in this paging wave', () => {
     'StockReplenishment', 'SupplierManagement', 'UserManagement',
   ]
 
-  const ENTERPRISE_PAGES = new Set(['AssetDisposals', 'TcoCalculator'])
+  const ENTERPRISE_PAGES = new Set(['AssetDisposals', 'TcoCalculator', 'ContinuousImprovement', 'ScheduledReports', 'RecallTracker', 'RepairRequests', 'InsuranceClaims', 'RetreadClaims', 'WorkshopAnalytics', 'EngineeringKpi'])
 
   for (const page of pages) {
     it(`${page} renders through the shared pager`, () => {
@@ -85,10 +88,12 @@ describe('production-risk registers remediated in this paging wave', () => {
   }
 
   it('RepairRequests no longer hides history after row 500', () => {
+    // Both registers now hand the WHOLE set to EnterpriseTable, which pages
+    // and sorts across it, so nothing past row 500 is dropped.
     const source = read('src/pages/RepairRequests.jsx')
     expect(source).not.toContain('filteredCards.slice(0, 500)')
-    expect(source).toContain('cardsPager.pageRows.map')
-    expect(source).toContain('queuePager.pageRows.map')
+    expect(source).toContain('data={filteredCards}')
+    expect(source).toContain('data={sortedQueue}')
   })
 
   it('every bounded certification carries source anchors, not a bare assertion', () => {

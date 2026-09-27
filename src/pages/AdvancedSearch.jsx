@@ -1,32 +1,41 @@
 /**
- * AdvancedSearch (route /advanced-search) — Advanced / Global Search. A single
+ * AdvancedSearch (route /advanced-search) - Advanced / Global Search. A single
  * command surface that (a) runs *live* cross-entity searches across the fleet's
- * core operational tables — assets (vehicle_fleet), tyres (tyre_records), work
- * orders, and inspections — and (b) lets operators persist named searches they
+ * core operational tables - assets (vehicle_fleet), tyres (tyre_records), work
+ * orders, and inspections - and (b) lets operators persist named searches they
  * re-run on demand.
  *
- * Runs on the new `saved_searches` table (V198) for the saved-search library,
- * and queries the live operational tables through the service for the query
- * builder. Real data, KPI tiles, grouped live results, saved-search library
- * with pin/re-run, create/edit modal, Excel/PDF export, and loading/empty/error
- * states throughout. Pure roll-ups live in `src/lib/advancedSearch.js`.
+ * Runs on the `saved_searches` table (V198) for the saved-search library, and
+ * queries the live operational tables through the service for the query
+ * builder. Real data, KPI tiles, grouped live results, a sortable EnterpriseTable
+ * library with pin/re-run, create/edit dialog, Excel/PDF export, and
+ * loading/empty/error states throughout. Roll-ups live in
+ * `src/lib/advancedSearch.js`; the page shaping (filters, KPI strip with honest
+ * nulls, result summary, table + export rows) in
+ * `src/lib/advancedSearchAnalytics.js`.
  */
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import {
-  Search, X, Filter, FileSpreadsheet, FileText, Plus, Pencil, Trash2, Pin,
+  Search, X, FileSpreadsheet, FileText, Plus, Pencil, Trash2, Pin,
   PinOff, Play, Bookmark, Layers, Database, AlertTriangle, Truck, Package,
-  ClipboardCheck, Wrench, Globe, RefreshCw, Save, Zap,
+  ClipboardCheck, Wrench, Globe, RefreshCw, Save, Zap, History,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import Modal from '../components/ui/Modal'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listSavedSearches, createSavedSearch, updateSavedSearch, deleteSavedSearch,
   setSavedSearchPinned, markSavedSearchRun, runGlobalSearch,
 } from '../lib/api/advancedSearch'
-import { summariseSearches, groupByEntity } from '../lib/advancedSearch'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import {
+  groupByEntity, EMPTY_LIBRARY_FILTERS, STALE_DAYS, activeLibraryFilterCount,
+  filterSavedSearches, savedSearchKpis, resultSummary, savedTableRows,
+  savedExportRows, SAVED_EXPORT_COLUMNS, runStateLabel,
+} from '../lib/advancedSearchAnalytics'
+import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { isMissingRelation } from '../lib/api/_client'
 
 // ── Entity metadata (labels, icons, live-result shaping) ─────────────────────
 const ENTITY_META = {
@@ -49,24 +58,26 @@ const RESULT_GROUPS = [
   {
     key: 'tyres', entity: 'tyres', icon: Package, tone: 'text-amber-400',
     title: (r) => r.serial_no || 'Tyre',
-    sub: (r) => [r.brand, r.size].filter(Boolean).join(' · ') || 'N/A',
+    sub: (r) => [r.brand, r.size].filter(Boolean).join(', ') || 'N/A',
     tags: (r) => [r.asset_no, r.position, r.risk_level].filter(Boolean),
   },
   {
     key: 'workOrders', entity: 'work_orders', icon: Wrench, tone: 'text-violet-400',
     title: (r) => r.work_order_no || 'Work order',
-    sub: (r) => [r.work_type, r.workshop_name].filter(Boolean).join(' · ') || 'N/A',
+    sub: (r) => [r.work_type, r.workshop_name].filter(Boolean).join(', ') || 'N/A',
     tags: (r) => [r.asset_no, r.status, r.priority].filter(Boolean),
   },
   {
     key: 'inspections', entity: 'inspections', icon: ClipboardCheck, tone: 'text-green-400',
     title: (r) => r.title || 'Inspection',
-    sub: (r) => [r.inspection_type, r.inspector].filter(Boolean).join(' · ') || 'N/A',
+    sub: (r) => [r.inspection_type, r.inspector].filter(Boolean).join(', ') || 'N/A',
     tags: (r) => [r.asset_no, r.status, r.severity].filter(Boolean),
   },
 ]
+const GROUP_KEYS = RESULT_GROUPS.map((g) => g.key)
 
 const EMPTY_FORM = { name: '', entity: 'all', query_text: '', notes: '' }
+const ICON_BTN = 'inline-flex items-center justify-center w-11 h-11 rounded-lg text-[var(--text-muted)] hover:bg-[var(--input-bg)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]'
 
 function fmtDateTime(v) {
   if (!v) return 'N/A'
@@ -74,11 +85,19 @@ function fmtDateTime(v) {
   return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString()
 }
 
-function isMissingRelation(err) {
-  if (['42P01', 'PGRST205'].includes(err?.code || err?.cause?.code)) return true
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
+function Kpi({ label, value, icon: Icon, tone, sub, loading }) {
+  return (
+    <div className="card">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-[var(--text-muted)]">{label}</p>
+        <Icon size={16} className={tone} aria-hidden="true" />
+      </div>
+      <p className={`text-3xl font-bold mt-1 tabular-nums ${tone}`}>
+        {loading ? <span className="inline-block h-8 w-16 rounded bg-[var(--input-bg)] animate-pulse" aria-label="Loading" /> : (value ?? 'N/A')}
+      </p>
+      {sub && !loading && <p className="text-[11px] text-[var(--text-dim)] mt-0.5">{sub}</p>}
+    </div>
+  )
 }
 
 export default function AdvancedSearch() {
@@ -87,11 +106,13 @@ export default function AdvancedSearch() {
   // ── Saved-search library state ──────────────────────────────────────────
   const [saved, setSaved] = useState(null)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
   const [notProvisioned, setNotProvisioned] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [updatedAt, setUpdatedAt] = useState(null)
-  const [entityFilter, setEntityFilter] = useState('')
-  const [librarySearch, setLibrarySearch] = useState('')
+  const [nowMs, setNowMs] = useState(() => Date.now())
+  const [filters, setFilters] = useState(EMPTY_LIBRARY_FILTERS)
+  const setFilter = (k, v) => setFilters((f) => ({ ...f, [k]: v }))
 
   // ── Live query-builder state ────────────────────────────────────────────
   const [term, setTerm] = useState('')
@@ -104,7 +125,7 @@ export default function AdvancedSearch() {
   const requestVersion = useRef(0)
   useEffect(() => { requestVersion.current += 1; setResults(null); setSearching(false); setRanTerm('') }, [activeCountry])
 
-  // ── Modal state ─────────────────────────────────────────────────────────
+  // ── Dialog state ────────────────────────────────────────────────────────
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(EMPTY_FORM)
@@ -122,6 +143,7 @@ export default function AdvancedSearch() {
       if (version !== savedRequest.current) return
       setSaved(Array.isArray(data) ? data : [])
       setUpdatedAt(new Date())
+      setNowMs(Date.now())
     } catch (err) {
       if (version !== savedRequest.current) return
       if (isMissingRelation(err)) setNotProvisioned(true)
@@ -134,20 +156,14 @@ export default function AdvancedSearch() {
 
   useEffect(() => { load() }, [load])
 
-  const summary = useMemo(() => summariseSearches(saved || []), [saved])
-  const entityGroups = useMemo(() => groupByEntity(saved || []), [saved])
-
-  const filteredSaved = useMemo(() => {
-    const q = librarySearch.trim().toLowerCase()
-    return (saved || []).filter((r) => {
-      if (entityFilter && r.entity !== entityFilter) return false
-      if (q) {
-        const hay = `${r.name || ''} ${r.query_text || ''} ${r.notes || ''} ${r.entity || ''}`.toLowerCase()
-        if (!hay.includes(q)) return false
-      }
-      return true
-    })
-  }, [saved, entityFilter, librarySearch])
+  const all = useMemo(() => saved || [], [saved])
+  const loading = saved === null
+  const failed = Boolean(error)
+  const kpi = useMemo(() => savedSearchKpis(all, nowMs), [all, nowMs])
+  const entityGroups = useMemo(() => groupByEntity(all), [all])
+  const filteredSaved = useMemo(() => filterSavedSearches(all, filters, nowMs), [all, filters, nowMs])
+  const tableRows = useMemo(() => savedTableRows(filteredSaved, nowMs), [filteredSaved, nowMs])
+  const filterCount = activeLibraryFilterCount(filters)
 
   // ── Live global search ──────────────────────────────────────────────────
   const runSearch = useCallback(async (rawTerm, rawScope) => {
@@ -185,51 +201,59 @@ export default function AdvancedSearch() {
         await markSavedSearchRun(row.id, out.complete ? out.totalMatches : null)
         setSaved((prev) => (prev || []).map((r) =>
           r.id === row.id ? { ...r, last_run_at: new Date().toISOString(), result_count: out.complete ? out.totalMatches : null } : r))
-      } catch (err) { setError(toUserMessage(err, 'Search results loaded, but run history could not be saved.')) }
+        setNowMs(Date.now())
+      } catch (err) { setNotice(toUserMessage(err, 'Search results loaded, but run history could not be saved.')) }
     }
   }, [runSearch, notProvisioned])
 
   const togglePin = useCallback(async (row) => {
     const next = !row.pinned
-    setSaved((prev) => (prev || []).map((r) => r.id === row.id ? { ...r, pinned: next } : r))
+    setSaved((prev) => (prev || []).map((r) => (r.id === row.id ? { ...r, pinned: next } : r)))
     try {
       await setSavedSearchPinned(row.id, next)
     } catch (err) {
-      setSaved((prev) => (prev || []).map((r) => r.id === row.id ? { ...r, pinned: !next } : r))
-      setError(toUserMessage(err, 'Could not update pin.'))
+      setSaved((prev) => (prev || []).map((r) => (r.id === row.id ? { ...r, pinned: !next } : r)))
+      setNotice(toUserMessage(err, 'Could not update pin.'))
     }
   }, [])
 
   // ── KPIs ────────────────────────────────────────────────────────────────
+  const kv = (v) => (failed ? null : v)
   const kpis = [
-    { label: 'Saved searches', value: summary.totalSaved, icon: Bookmark, tone: 'text-[var(--text-primary)]' },
-    { label: 'Pinned', value: summary.pinnedCount, icon: Pin, tone: 'text-amber-400' },
-    { label: 'Entities covered', value: summary.distinctEntities, icon: Layers, tone: 'text-sky-400' },
-    { label: 'Last recorded matches', value: summary.totalResultsIndexed.toLocaleString(), icon: Database, tone: 'text-green-400' },
+    { label: 'Saved searches', value: kv(kpi.totalSaved), icon: Bookmark, tone: 'text-[var(--text-primary)]' },
+    { label: 'Pinned', value: kv(kpi.pinnedCount), icon: Pin, tone: 'text-amber-400' },
+    { label: 'Entities covered', value: kv(kpi.distinctEntities), icon: Layers, tone: 'text-sky-400' },
+    {
+      label: 'Last recorded matches', value: failed || kpi.lastRecordedMatches == null ? null : kpi.lastRecordedMatches.toLocaleString(),
+      icon: Database, tone: 'text-green-400', sub: failed ? null : `${kpi.recordedCount} of ${kpi.totalSaved} searches have a count`,
+    },
+    { label: 'Never run', value: kv(kpi.neverRun), icon: Play, tone: 'text-violet-400' },
+    { label: `Not run in ${STALE_DAYS}+ days`, value: kv(kpi.stale), icon: History, tone: 'text-orange-400' },
   ]
 
-  // ── Export (saved-search library) ───────────────────────────────────────
-  const EXPORT_COLS = ['name', 'entity', 'query_text', 'result_count', 'pinned', 'last_run_at', 'notes']
-  const EXPORT_HEADERS = ['Name', 'Entity', 'Query', 'Last results', 'Pinned', 'Last run', 'Notes']
-  const savedPager = usePagedRows(filteredSaved)
-  const exportRows = filteredSaved.map((r) => ({
-    name: r.name || '', entity: ENTITY_META[r.entity]?.short || r.entity || 'all',
-    query_text: r.query_text || '', result_count: r.result_count ?? '',
-    pinned: r.pinned ? 'Yes' : 'No', last_run_at: r.last_run_at ? fmtDateTime(r.last_run_at) : '',
-    notes: r.notes || '',
-  }))
+  // ── Export (saved-search library, full filtered set) ────────────────────
+  const doExport = async (kind) => {
+    const out = savedExportRows(filteredSaved, nowMs)
+    const keys = SAVED_EXPORT_COLUMNS.map(([k]) => k)
+    const headers = SAVED_EXPORT_COLUMNS.map(([, h]) => h)
+    const name = reportFileName('TyrePulse Saved Searches')
+    try {
+      if (kind === 'excel') await exportToExcel(out, keys, headers, name)
+      else await exportToPdf(out, keys.map((k, i) => ({ key: k, header: headers[i] })), 'Saved Searches', name, 'landscape')
+    } catch (e) { setNotice(toUserMessage(e, 'Could not export. Try again.')) }
+  }
 
-  // ── Modal ───────────────────────────────────────────────────────────────
+  // ── Dialog ──────────────────────────────────────────────────────────────
   const openCreate = () => {
     setEditing(null)
     setForm({ ...EMPTY_FORM, query_text: term, entity: scope })
     setFormError(''); setShowModal(true)
   }
-  const openEdit = (r) => {
+  const openEdit = useCallback((r) => {
     setEditing(r)
     setForm({ name: r.name || '', entity: r.entity || 'all', query_text: r.query_text || '', notes: r.notes || '' })
     setFormError(''); setShowModal(true)
-  }
+  }, [])
   const closeModal = () => { if (!saving) { setShowModal(false); setEditing(null) } }
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
 
@@ -266,17 +290,63 @@ export default function AdvancedSearch() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setError(toUserMessage(err, 'Could not delete the search.'))
+      setNotice(toUserMessage(err, 'Could not delete the search.'))
+      setConfirmDelete(null)
     } finally {
       setDeleting(false)
     }
   }, [confirmDelete, load])
 
-  const clearFilters = () => { setEntityFilter(''); setLibrarySearch('') }
-  const hasFilters = entityFilter || librarySearch
-
-  const totalResults = results?.total ?? 0
+  const summary = useMemo(() => resultSummary(results, GROUP_KEYS), [results])
   const hasRun = results !== null
+  const totalResults = summary?.total ?? 0
+
+  const columns = useMemo(() => [
+    {
+      id: 'pin', header: '', enableSorting: false, size: 60, meta: { export: false },
+      cell: ({ row }) => (
+        <button type="button" onClick={(e) => { e.stopPropagation(); togglePin(row.original) }}
+          className={`${ICON_BTN} ${row.original.pinned ? 'text-amber-400' : 'hover:text-[var(--text-primary)]'}`}
+          aria-pressed={!!row.original.pinned}
+          aria-label={row.original.pinned ? `Unpin ${row.original.name}` : `Pin ${row.original.name}`}>
+          {row.original.pinned ? <Pin size={15} /> : <PinOff size={15} />}
+        </button>
+      ),
+    },
+    { id: 'name', header: 'Name', accessorFn: (r) => r.name || '', size: 200, cell: ({ getValue }) => <span className="font-medium text-[var(--text-primary)]">{getValue()}</span> },
+    {
+      id: 'entity', header: 'Entity', accessorFn: (r) => r._entity, size: 130,
+      cell: ({ row }) => {
+        const meta = ENTITY_META[row.original.entity] || ENTITY_META.all
+        const Icon = meta.icon
+        return <span className="inline-flex items-center gap-1.5 text-xs text-[var(--text-secondary)]"><Icon size={13} className={meta.tone} aria-hidden="true" /> {meta.short}</span>
+      },
+    },
+    { id: 'query', header: 'Query', accessorFn: (r) => r.query_text || '', size: 220, cell: ({ getValue }) => <span className="block max-w-[240px] truncate text-[var(--text-secondary)]">{getValue() || 'N/A'}</span> },
+    {
+      id: 'results', header: 'Last results', accessorFn: (r) => r._results, size: 110, sortUndefined: 'last', meta: { align: 'right' },
+      cell: ({ getValue }) => <span className="tabular-nums">{getValue() == null ? 'Not counted' : Number(getValue()).toLocaleString()}</span>,
+    },
+    {
+      id: 'lastRun', header: 'Last run', accessorFn: (r) => r.last_run_at || '', size: 180,
+      cell: ({ row }) => (
+        <span className={`whitespace-nowrap ${row.original._runState === 'stale' ? 'text-orange-400' : 'text-[var(--text-secondary)]'}`}>
+          {row.original.last_run_at ? fmtDateTime(row.original.last_run_at) : 'Never run'}
+          {row.original._runState === 'stale' && <span className="block text-[11px]">{runStateLabel('stale')}</span>}
+        </span>
+      ),
+    },
+    {
+      id: 'actions', header: '', enableSorting: false, size: 160, meta: { export: false },
+      cell: ({ row }) => (
+        <div className="flex items-center justify-end gap-1">
+          <button type="button" onClick={(e) => { e.stopPropagation(); rerunSaved(row.original) }} className={`${ICON_BTN} hover:text-indigo-400`} aria-label={`Re-run ${row.original.name}`}><Play size={15} /></button>
+          <button type="button" onClick={(e) => { e.stopPropagation(); openEdit(row.original) }} className={`${ICON_BTN} hover:text-[var(--text-primary)]`} aria-label={`Edit ${row.original.name}`}><Pencil size={15} /></button>
+          <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmDelete(row.original) }} className={`${ICON_BTN} hover:text-red-400`} aria-label={`Delete ${row.original.name}`}><Trash2 size={15} /></button>
+        </div>
+      ),
+    },
+  ], [togglePin, rerunSaved, openEdit])
 
   return (
     <div className="space-y-6">
@@ -288,14 +358,14 @@ export default function AdvancedSearch() {
         refreshing={refreshing}
         updatedAt={updatedAt}
         actions={
-          <div className="flex items-center gap-2">
-            <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'saved_searches') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filteredSaved.length}>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => doExport('excel')} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!filteredSaved.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Saved Searches', 'saved_searches', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filteredSaved.length}>
+            <button type="button" onClick={() => doExport('pdf')} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!filteredSaved.length}>
               <FileText size={14} /> PDF
             </button>
-            <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={notProvisioned}>
+            <button type="button" onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={notProvisioned}>
               <Plus size={14} /> Save a search
             </button>
           </div>
@@ -303,171 +373,191 @@ export default function AdvancedSearch() {
       />
 
       {notProvisioned && (
-        <div className="card border border-amber-800/50 flex items-start gap-3">
-          <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
+        <div className="card border border-amber-500/40 flex items-start gap-3" role="status">
+          <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" aria-hidden="true" />
           <div>
-            <p className="text-amber-300 font-medium">Saved searches aren’t enabled on this database yet.</p>
+            <p className="text-amber-300 font-medium">Saved searches are not enabled on this database yet.</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">
-              Saved-search storage is unavailable. Live search results below show which sources can be reached.
+              Saved-search storage is unavailable. Live search below still works and shows which sources can be reached.
             </p>
           </div>
         </div>
       )}
 
       {error && (
-        <div className="card border border-red-800/50 flex items-start gap-3">
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-          <div><p className="text-red-300 font-medium">Something went wrong.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
+        <div className="card border border-red-500/40 flex flex-wrap items-start justify-between gap-3" role="alert">
+          <div className="flex items-start gap-3">
+            <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
+            <div>
+              <p className="text-red-300 font-medium">Could not load saved searches.</p>
+              <p className="text-[var(--text-muted)] text-sm mt-1">{error} Live search still works.</p>
+            </div>
+          </div>
+          <button type="button" onClick={load} className="btn-secondary text-sm min-h-[44px]" disabled={refreshing}>Retry</button>
+        </div>
+      )}
+
+      {notice && (
+        <div className="card border border-amber-500/40 flex items-start justify-between gap-3" role="status">
+          <p className="text-sm text-amber-300">{notice}</p>
+          <button type="button" onClick={() => setNotice('')} className={ICON_BTN} aria-label="Dismiss message"><X size={15} /></button>
         </div>
       )}
 
       {/* ── Live global search builder ─────────────────────────────────────── */}
-      <div className="card space-y-4">
-        <div className="flex items-center gap-2">
-          <Zap size={16} className="text-indigo-400" />
-          <h3 className="text-sm font-semibold text-[var(--text-primary)]">Global query builder</h3>
-          <span className="text-xs text-[var(--text-muted)]">Live search across the fleet’s core tables</span>
+      <section className="card space-y-4" aria-labelledby="global-query-heading">
+        <div className="flex flex-wrap items-center gap-2">
+          <Zap size={16} className="text-indigo-400" aria-hidden="true" />
+          <h2 id="global-query-heading" className="text-sm font-semibold text-[var(--text-primary)]">Global query builder</h2>
+          <span className="text-xs text-[var(--text-muted)]">Live search across the fleet core tables</span>
         </div>
-        <form onSubmit={onSubmitSearch} className="flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[220px]">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <input
-              className="input pl-9 w-full"
-              placeholder="Search asset no, tyre serial, work order, inspection…"
-              value={term}
-              onChange={(e) => setTerm(e.target.value)}
-            />
-            {term && (
-              <button type="button" onClick={clearSearch} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Clear">
-                <X size={15} />
+        <form onSubmit={onSubmitSearch} className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto_auto] gap-2 items-end" role="search">
+          <label className="block">
+            <span className="text-xs text-[var(--text-secondary)]">Search term</span>
+            <div className="relative mt-1">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+              <input
+                className="input pl-9 pr-12 w-full min-h-[44px]"
+                placeholder="Asset no, tyre serial, work order, inspection"
+                value={term}
+                onChange={(e) => setTerm(e.target.value)}
+              />
+              {term && (
+                <button type="button" onClick={clearSearch} className="absolute right-0 top-1/2 -translate-y-1/2 inline-flex items-center justify-center w-11 h-11 text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Clear search">
+                  <X size={15} />
+                </button>
+              )}
+            </div>
+          </label>
+          <label className="block">
+            <span className="text-xs text-[var(--text-secondary)]">Scope</span>
+            <select className="input w-full mt-1 min-h-[44px]" value={scope} onChange={(e) => setScope(e.target.value)}>
+              {ENTITY_ORDER.map((e) => <option key={e} value={e}>{ENTITY_META[e].label}</option>)}
+            </select>
+          </label>
+          <div className="flex gap-2">
+            <button type="submit" className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px] disabled:opacity-60" disabled={searching || !term.trim()}>
+              {searching ? <RefreshCw size={14} className="animate-spin" aria-hidden="true" /> : <Search size={14} aria-hidden="true" />}
+              {searching ? 'Searching...' : 'Search'}
+            </button>
+            {hasRun && !searching && (
+              <button type="button" onClick={openCreate} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={notProvisioned || !term.trim()}>
+                <Save size={14} aria-hidden="true" /> Save this
               </button>
             )}
           </div>
-          <select className="input" value={scope} onChange={(e) => setScope(e.target.value)} aria-label="Scope">
-            {ENTITY_ORDER.map((e) => <option key={e} value={e}>{ENTITY_META[e].label}</option>)}
-          </select>
-          <button type="submit" className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={searching || !term.trim()}>
-            {searching ? <RefreshCw size={14} className="animate-spin" /> : <Search size={14} />}
-            {searching ? 'Searching…' : 'Search'}
-          </button>
-          {hasRun && !searching && (
-            <button type="button" onClick={openCreate} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={notProvisioned || !term.trim()}>
-              <Save size={14} /> Save this
-            </button>
-          )}
         </form>
 
-        {/* Live results / states */}
         {searchError && (
-          <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
-            <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {searchError}
+          <div className="flex flex-wrap items-start justify-between gap-2 text-sm text-red-300 bg-red-500/10 border border-red-500/40 rounded-lg px-3 py-2" role="alert">
+            <span className="flex items-start gap-2"><AlertTriangle size={15} className="mt-0.5 shrink-0" aria-hidden="true" /> {searchError}</span>
+            <button type="button" onClick={() => runSearch(term, scope)} className="btn-secondary text-xs min-h-[44px]">Retry</button>
           </div>
         )}
 
-        {results && Object.keys(results.errors ?? {}).length > 0 && <div role="alert" className="text-sm text-amber-400 space-y-1"><p>Search is incomplete. Some sources could not be checked:</p>{RESULT_GROUPS.filter(group => results.errors[group.key]).map(group => <p key={group.key}>{ENTITY_META[group.entity].label}: {results.errors[group.key]}</p>)}</div>}
+        {summary && summary.failed.length > 0 && (
+          <div role="alert" className="text-sm text-amber-400 space-y-1">
+            <p>Search is incomplete. Some sources could not be checked:</p>
+            {RESULT_GROUPS.filter((g) => results.errors[g.key]).map((g) => <p key={g.key}>{ENTITY_META[g.entity].label}: {results.errors[g.key]}</p>)}
+          </div>
+        )}
 
-        {searching ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            {[0, 1, 2, 3].map((i) => <div key={i} className="h-28 bg-[var(--input-bg)] rounded-lg animate-pulse" />)}
-          </div>
-        ) : !hasRun ? (
-          <div className="text-center py-8 text-[var(--text-muted)]">
-            <Globe size={26} className="mx-auto mb-2 opacity-60" />
-            <p className="text-sm">Enter a term and search to query assets, tyres, work orders and inspections at once.</p>
-          </div>
-        ) : totalResults === 0 && Object.keys(results.errors ?? {}).length > 0 ? (
-          <p className="text-sm text-[var(--text-muted)]">No results returned from the available sources. Failed sources may contain matches.</p>
-        ) : totalResults === 0 ? (
-          <div className="text-center py-8 text-[var(--text-muted)]">
-            <Search size={26} className="mx-auto mb-2 opacity-60" />
-            <p className="text-sm">No matches for <span className="font-semibold text-[var(--text-primary)]">“{ranTerm}”</span>{ranScope !== 'all' ? ` in ${ENTITY_META[ranScope].label.toLowerCase()}` : ''}.</p>
-            <p className="text-xs mt-1">Try a shorter term, widen the scope, or check a different country.</p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="text-[var(--text-muted)]">{totalResults} shown{results.totalMatches !== null ? ` of ${results.totalMatches} matches` : ' (total unavailable)'} for</span>
-              <span className="font-semibold text-[var(--text-primary)]">“{ranTerm}”</span>
-              {RESULT_GROUPS.map((g) => {
-                const n = results[g.key]?.length || 0
-                if (!n) return null
-                const Icon = g.icon
-                return (
-                  <span key={g.key} className="inline-flex items-center gap-1 rounded-full border border-[var(--input-border)] bg-[var(--input-bg)]/40 px-2 py-0.5">
-                    <Icon size={12} className={g.tone} /> {ENTITY_META[g.entity].short} {n}{results.coverage?.[g.key]?.truncated ? '+' : ''}
-                  </span>
-                )
-              })}
+        <div aria-live="polite">
+          {searching ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              {[0, 1, 2, 3].map((i) => <div key={i} className="h-28 bg-[var(--input-bg)] rounded-lg animate-pulse" />)}
             </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {RESULT_GROUPS.map((g) => {
-                const list = results[g.key] || []
-                if (!list.length) return null
-                const Icon = g.icon
-                return (
-                  <div key={g.key} className="rounded-lg border border-[var(--input-border)] overflow-hidden">
-                    <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--input-border)] bg-[var(--input-bg)]/40">
-                      <div className="flex items-center gap-2">
-                        <Icon size={15} className={g.tone} />
-                        <span className="text-sm font-semibold text-[var(--text-primary)]">{ENTITY_META[g.entity].label}{results.coverage?.[g.key]?.truncated ? ` ? showing ${list.length} of ${results.coverage[g.key].count ?? 'more'} matches` : ''}</span>
-                      </div>
-                      <span className="text-xs text-[var(--text-muted)]">{list.length}{list.length >= 25 ? '+' : ''}</span>
-                    </div>
-                    <div className="divide-y divide-[var(--input-border)]/50 max-h-72 overflow-y-auto">
-                      {list.map((r) => (
-                        <div key={r.id} className="px-3 py-2 hover:bg-[var(--input-bg)]/40">
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="text-sm font-medium text-[var(--text-primary)] truncate">{g.title(r)}</p>
-                          </div>
-                          <p className="text-xs text-[var(--text-muted)] truncate">{g.sub(r)}</p>
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {g.tags(r).map((t, i) => (
-                              <span key={i} className="text-[10px] rounded bg-[var(--input-bg)] text-[var(--text-secondary)] px-1.5 py-0.5">{t}</span>
-                            ))}
-                          </div>
+          ) : !hasRun ? (
+            <div className="text-center py-8 text-[var(--text-muted)]">
+              <Globe size={26} className="mx-auto mb-2 opacity-60" aria-hidden="true" />
+              <p className="text-sm">Enter a term and search to query assets, tyres, work orders and inspections at once.</p>
+            </div>
+          ) : totalResults === 0 && summary.failed.length > 0 ? (
+            <p className="text-sm text-[var(--text-muted)]">No results returned from the available sources. The sources that failed may contain matches.</p>
+          ) : totalResults === 0 ? (
+            <div className="text-center py-8 text-[var(--text-muted)]">
+              <Search size={26} className="mx-auto mb-2 opacity-60" aria-hidden="true" />
+              <p className="text-sm">No matches for <span className="font-semibold text-[var(--text-primary)]">"{ranTerm}"</span>{ranScope !== 'all' ? ` in ${ENTITY_META[ranScope].label.toLowerCase()}` : ''}.</p>
+              <p className="text-xs mt-1">Try a shorter term, widen the scope, or check a different country.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="text-[var(--text-muted)]">{totalResults} shown{summary.matches != null ? ` of ${summary.matches} matches` : ' (total unavailable)'} for</span>
+                <span className="font-semibold text-[var(--text-primary)]">"{ranTerm}"</span>
+                {summary.perGroup.map((pg) => {
+                  if (!pg.shown) return null
+                  const g = RESULT_GROUPS.find((x) => x.key === pg.key)
+                  const Icon = g.icon
+                  return (
+                    <span key={pg.key} className="inline-flex items-center gap-1 rounded-full border border-[var(--input-border)] bg-[var(--input-bg)] px-2 py-0.5">
+                      <Icon size={12} className={g.tone} aria-hidden="true" /> {ENTITY_META[g.entity].short} {pg.shown}{pg.truncated ? '+' : ''}
+                    </span>
+                  )
+                })}
+              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {RESULT_GROUPS.map((g) => {
+                  const list = results[g.key] || []
+                  if (!list.length) return null
+                  const Icon = g.icon
+                  const pg = summary.perGroup.find((x) => x.key === g.key)
+                  return (
+                    <div key={g.key} className="rounded-lg border border-[var(--input-border)] overflow-hidden">
+                      <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-[var(--input-border)] bg-[var(--input-bg)]">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Icon size={15} className={g.tone} aria-hidden="true" />
+                          <h3 className="text-sm font-semibold text-[var(--text-primary)] truncate">
+                            {ENTITY_META[g.entity].label}{pg?.truncated ? `, showing ${list.length} of ${pg.count ?? 'more'} matches` : ''}
+                          </h3>
                         </div>
-                      ))}
+                        <span className="text-xs text-[var(--text-muted)] shrink-0">{list.length}{pg?.truncated ? '+' : ''}</span>
+                      </div>
+                      <ul className="divide-y divide-[var(--input-border)] max-h-72 overflow-y-auto">
+                        {list.map((r) => (
+                          <li key={r.id} className="px-3 py-2">
+                            <p className="text-sm font-medium text-[var(--text-primary)] truncate">{g.title(r)}</p>
+                            <p className="text-xs text-[var(--text-muted)] truncate">{g.sub(r)}</p>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {g.tags(r).map((tg, i) => (
+                                <span key={i} className="text-[10px] rounded bg-[var(--input-bg)] text-[var(--text-secondary)] px-1.5 py-0.5">{tg}</span>
+                              ))}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
                     </div>
-                  </div>
-                )
-              })}
+                  )
+                })}
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      </section>
 
       {/* ── KPI tiles (saved-search library) ───────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {kpis.map((k) => {
-          const Icon = k.icon
-          return (
-            <div key={k.label} className="card">
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
-                <Icon size={16} className={k.tone} />
-              </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{saved === null ? 'N/A' : k.value}</p>
-            </div>
-          )
-        })}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+        {kpis.map((k) => <Kpi key={k.label} {...k} loading={loading} />)}
       </div>
 
       {/* Entity coverage chips */}
-      {entityGroups.length > 0 && (
+      {!failed && entityGroups.length > 0 && (
         <div className="card">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2"><Layers size={15} /> Coverage by entity</h3>
+          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2"><Layers size={15} aria-hidden="true" /> Coverage by entity</h2>
           <div className="flex flex-wrap gap-2">
             {entityGroups.map((g) => {
               const meta = ENTITY_META[g.entity] || ENTITY_META.all
               const Icon = meta.icon
-              const active = entityFilter === g.entity
+              const active = filters.entity === g.entity
               return (
                 <button
+                  type="button"
                   key={g.entity}
-                  onClick={() => setEntityFilter(active ? '' : g.entity)}
-                  className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors ${active ? 'border-indigo-500 bg-indigo-500/10 text-[var(--text-primary)]' : 'border-[var(--input-border)] bg-[var(--input-bg)]/40 text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                  onClick={() => setFilter('entity', active ? '' : g.entity)}
+                  aria-pressed={active}
+                  className={`inline-flex items-center gap-1.5 rounded-lg border px-3 min-h-[44px] text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] ${active ? 'border-[var(--accent)] bg-[var(--input-bg)] text-[var(--text-primary)]' : 'border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
                 >
-                  <Icon size={14} className={meta.tone} /> {meta.short}
+                  <Icon size={14} className={meta.tone} aria-hidden="true" /> {meta.short}
                   <span className="text-xs text-[var(--text-muted)]">{g.count}</span>
                 </button>
               )
@@ -477,149 +567,125 @@ export default function AdvancedSearch() {
       )}
 
       {/* Library filters */}
-      <div className="card space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <input className="input pl-9 w-full" placeholder="Filter saved searches by name, query, notes…" value={librarySearch} onChange={(e) => setLibrarySearch(e.target.value)} />
-          </div>
-          <select className="input" value={entityFilter} onChange={(e) => setEntityFilter(e.target.value)} aria-label="Entity">
-            <option value="">All entities</option>
-            {ENTITY_ORDER.filter((e) => e !== 'all').map((e) => <option key={e} value={e}>{ENTITY_META[e].label}</option>)}
-            <option value="all">All-entity searches</option>
-          </select>
-          {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
-          <span className="text-xs text-[var(--text-muted)] ml-auto">{filteredSaved.length} of {summary.totalSaved}</span>
+      <div className="card">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(200px,2fr)_1fr_1fr_auto] gap-3 items-end">
+          <label className="block">
+            <span className="text-xs text-[var(--text-secondary)]">Filter the library</span>
+            <div className="relative mt-1">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+              <input className="input pl-9 w-full min-h-[44px]" placeholder="Name, query, notes" value={filters.search} onChange={(e) => setFilter('search', e.target.value)} />
+            </div>
+          </label>
+          <label className="block">
+            <span className="text-xs text-[var(--text-secondary)]">Entity</span>
+            <select className="input w-full mt-1 min-h-[44px]" value={filters.entity} onChange={(e) => setFilter('entity', e.target.value)}>
+              <option value="">All entities</option>
+              {ENTITY_ORDER.filter((e) => e !== 'all').map((e) => <option key={e} value={e}>{ENTITY_META[e].label}</option>)}
+              <option value="all">All-entity searches</option>
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-xs text-[var(--text-secondary)]">Run history</span>
+            <select className="input w-full mt-1 min-h-[44px]" value={filters.runState} onChange={(e) => setFilter('runState', e.target.value)}>
+              <option value="">Any</option>
+              <option value="recent">Run in the last {STALE_DAYS} days</option>
+              <option value="stale">Not run in {STALE_DAYS}+ days</option>
+              <option value="never">Never run</option>
+            </select>
+          </label>
+          <button
+            type="button"
+            onClick={() => setFilter('pinnedOnly', !filters.pinnedOnly)}
+            aria-pressed={filters.pinnedOnly}
+            className={`text-sm inline-flex items-center justify-center gap-1.5 px-3 min-h-[44px] rounded-lg border ${filters.pinnedOnly ? 'bg-brand-subtle text-brand-bright border-[var(--accent)]' : 'border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+          >
+            <Pin size={14} aria-hidden="true" /> Pinned only
+          </button>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-2 mt-3">
+          <span className="text-xs text-[var(--text-muted)]" aria-live="polite">{filteredSaved.length} of {kpi.totalSaved} saved searches. Pinned first, then most recently run.</span>
+          {filterCount > 0 && (
+            <button type="button" onClick={() => setFilters(EMPTY_LIBRARY_FILTERS)} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><X size={14} /> Clear filters</button>
+          )}
         </div>
       </div>
 
       {/* Saved-search library */}
-      <div className="card overflow-hidden !p-0">
-        <div className="px-4 py-3 border-b border-[var(--input-border)] flex items-center gap-2">
-          <Bookmark size={15} className="text-[var(--text-muted)]" />
-          <h3 className="text-sm font-semibold text-[var(--text-primary)]">Saved search library</h3>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                {['', 'Name', 'Entity', 'Query', 'Last results', 'Last run', ''].map((h, i) => <th key={i} className="px-4 py-3 font-semibold whitespace-nowrap">{h}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {saved === null ? (
-                [0, 1, 2, 3, 4].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={7} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
-              ) : filteredSaved.length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-12 text-center text-[var(--text-muted)]">
-                  <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {error ? 'Saved searches could not be loaded. Refresh to retry.' : (saved.length === 0 && !notProvisioned) ? 'No saved searches yet. Run a search above and save it.' : notProvisioned ? 'Enable saved searches to build a reusable library.' : 'No saved searches match these filters.'}
-                </td></tr>
-              ) : (
-                savedPager.pageRows.map((r) => {
-                  const meta = ENTITY_META[r.entity] || ENTITY_META.all
-                  const Icon = meta.icon
-                  return (
-                    <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                      <td className="px-4 py-2.5">
-                        <button onClick={() => togglePin(r)} className={`p-1 rounded ${r.pinned ? 'text-amber-400' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`} aria-label={r.pinned ? 'Unpin' : 'Pin'}>
-                          {r.pinned ? <Pin size={15} /> : <PinOff size={15} />}
-                        </button>
-                      </td>
-                      <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.name}</td>
-                      <td className="px-4 py-2.5">
-                        <span className="inline-flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
-                          <Icon size={13} className={meta.tone} /> {meta.short}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] max-w-[240px] truncate">{r.query_text || <span className="text-[var(--text-muted)]">N/A</span>}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{r.result_count == null ? 'N/A' : Number(r.result_count).toLocaleString()}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDateTime(r.last_run_at)}</td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center justify-end gap-1">
-                          <button onClick={() => rerunSaved(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-indigo-400" aria-label="Re-run" title="Re-run search"><Play size={14} /></button>
-                          <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit"><Pencil size={14} /></button>
-                          <button onClick={() => setConfirmDelete(r)} className="p-1.5 rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" aria-label="Delete"><Trash2 size={14} /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-          <TablePagination {...savedPager} />
-        </div>
-      </div>
+      <section aria-labelledby="library-heading" className="space-y-2">
+        <h2 id="library-heading" className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+          <Bookmark size={15} className="text-[var(--text-muted)]" aria-hidden="true" /> Saved search library
+        </h2>
+        <EnterpriseTable
+          columns={columns}
+          data={tableRows}
+          getRowId={(r) => String(r.id)}
+          loading={loading}
+          error={failed ? error : null}
+          onRetry={load}
+          enableGlobalFilter={false}
+          enableExport={false}
+          initialPageSize={25}
+          viewKey="advanced-search-library"
+          emptyMessage={
+            notProvisioned ? 'Enable saved searches to build a reusable library.'
+              : all.length === 0 ? 'No saved searches yet. Run a search above and save it.'
+                : 'No saved searches match these filters.'
+          }
+        />
+      </section>
 
-      {/* Create / Edit modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={closeModal}>
-          <div className="card w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-[var(--text-primary)]">{editing ? 'Edit saved search' : 'Save a search'}</h3>
-              <button onClick={closeModal} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
-            </div>
-            <form onSubmit={submit} className="space-y-4">
-              <div>
-                <label className="label">Name</label>
-                <input className="input w-full" placeholder="e.g. Critical steer tyres" value={form.name} maxLength={200} onChange={(e) => set('name', e.target.value)} />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="label">Entity scope</label>
-                  <select className="input w-full" value={form.entity} onChange={(e) => set('entity', e.target.value)}>
-                    {ENTITY_ORDER.map((e) => <option key={e} value={e}>{ENTITY_META[e].label}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="label">Query term</label>
-                  <input className="input w-full" placeholder="e.g. TRK-1042" value={form.query_text} maxLength={2000} onChange={(e) => set('query_text', e.target.value)} />
-                </div>
-              </div>
-              <div>
-                <label className="label">Notes (optional)</label>
-                <textarea className="input w-full min-h-[80px] resize-y" placeholder="e.g. weekly review of high-risk tyres" value={form.notes} maxLength={8000} onChange={(e) => set('notes', e.target.value)} />
-              </div>
-
-              {formError && (
-                <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
-                  <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {formError}
-                </div>
-              )}
-
-              <div className="flex items-center justify-end gap-2 pt-1">
-                <button type="button" onClick={closeModal} className="btn-secondary text-sm" disabled={saving}>Cancel</button>
-                <button type="submit" className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={saving}>
-                  {saving ? 'Saving…' : editing ? 'Save changes' : 'Save search'}
-                </button>
-              </div>
-            </form>
+      <Modal open={showModal} onClose={closeModal} title={editing ? 'Edit saved search' : 'Save a search'} size="md">
+        <form onSubmit={submit} className="space-y-4">
+          <label className="block"><span className="label">Name</span>
+            <input className="input w-full" required placeholder="e.g. Critical steer tyres" value={form.name} maxLength={200} onChange={(e) => set('name', e.target.value)} />
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <label className="block"><span className="label">Entity scope</span>
+              <select className="input w-full" value={form.entity} onChange={(e) => set('entity', e.target.value)}>
+                {ENTITY_ORDER.map((e) => <option key={e} value={e}>{ENTITY_META[e].label}</option>)}
+              </select>
+            </label>
+            <label className="block"><span className="label">Query term</span>
+              <input className="input w-full" placeholder="e.g. TRK-1042" value={form.query_text} maxLength={2000} onChange={(e) => set('query_text', e.target.value)} />
+            </label>
           </div>
-        </div>
-      )}
-
-      {/* Delete confirm */}
-      {confirmDelete && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={() => !deleting && setConfirmDelete(null)}>
-          <div className="card w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-full bg-red-900/30 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" /></div>
-              <div>
-                <h3 className="text-[var(--text-primary)] font-semibold">Delete this saved search?</h3>
-                <p className="text-sm text-[var(--text-muted)] mt-1">
-                  “{confirmDelete.name}” · {ENTITY_META[confirmDelete.entity]?.short || confirmDelete.entity}. This can’t be undone.
-                </p>
-              </div>
+          <label className="block"><span className="label">Notes (optional)</span>
+            <textarea className="input w-full min-h-[80px] resize-y" placeholder="e.g. weekly review of high-risk tyres" value={form.notes} maxLength={8000} onChange={(e) => set('notes', e.target.value)} />
+          </label>
+          {formError && (
+            <div className="flex items-start gap-2 text-sm text-red-300 bg-red-500/10 border border-red-500/40 rounded-lg px-3 py-2" role="alert">
+              <AlertTriangle size={15} className="mt-0.5 shrink-0" aria-hidden="true" /> {formError}
             </div>
-            <div className="flex items-center justify-end gap-2 mt-5">
-              <button onClick={() => setConfirmDelete(null)} className="btn-secondary text-sm" disabled={deleting}>Cancel</button>
-              <button onClick={doDelete} className="btn-danger text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={deleting}>
-                <Trash2 size={14} /> {deleting ? 'Deleting…' : 'Delete'}
-              </button>
-            </div>
+          )}
+          <div className="flex items-center justify-end gap-2 pt-1">
+            <button type="button" onClick={closeModal} className="btn-secondary text-sm min-h-[44px]" disabled={saving}>Cancel</button>
+            <button type="submit" className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px] disabled:opacity-60" disabled={saving}>
+              {saving ? 'Saving...' : editing ? 'Save changes' : 'Save search'}
+            </button>
           </div>
-        </div>
-      )}
+        </form>
+      </Modal>
+
+      <Modal
+        open={Boolean(confirmDelete)}
+        onClose={() => { if (!deleting) setConfirmDelete(null) }}
+        title="Delete this saved search?"
+        size="sm"
+        footer={(
+          <>
+            <button type="button" onClick={() => setConfirmDelete(null)} className="btn-secondary text-sm min-h-[44px]" disabled={deleting}>Cancel</button>
+            <button type="button" onClick={doDelete} className="btn-danger text-sm inline-flex items-center gap-1.5 min-h-[44px] disabled:opacity-60" disabled={deleting}>
+              <Trash2 size={14} /> {deleting ? 'Deleting...' : 'Delete'}
+            </button>
+          </>
+        )}
+      >
+        {confirmDelete && (
+          <p className="text-sm text-[var(--text-muted)]">
+            "{confirmDelete.name}" ({ENTITY_META[confirmDelete.entity]?.short || confirmDelete.entity}). This cannot be undone.
+          </p>
+        )}
+      </Modal>
     </div>
   )
 }

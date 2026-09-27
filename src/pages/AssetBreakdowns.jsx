@@ -14,7 +14,6 @@
  * functions, so a figure on screen and the same figure in Excel cannot drift.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import {
   AlertTriangle, Wrench, Clock, RefreshCw, Filter, X, Plus, Download,
   FileText, CheckCircle2, RotateCcw, Search, MapPin, Timer,
@@ -22,6 +21,7 @@ import {
 import PageHeader from '../components/ui/PageHeader'
 import Card from '../components/ui/Card'
 import Modal from '../components/ui/Modal'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import EmptyState from '../components/EmptyState'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -32,15 +32,21 @@ import {
 import {
   EMPTY_BREAKDOWN_FILTERS, filterBreakdowns, breakdownSummary, severityBands,
   byGroup, repeatOffenders, breakdownFindings, breakdownExportRows,
-  downDays, daysToReturn, isOverdue, severityOf, repairLabel,
 } from '../lib/assetBreakdowns'
+import {
+  breakdownRegisterRows, breakdownSiteOptions, activeBreakdownFilterCount, siteBars,
+  overdueShare, NOT_RECORDED,
+} from '../lib/assetBreakdownsAnalytics'
 import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 
-const TONE = {
-  danger: { bg: 'rgba(239,68,68,0.10)', border: 'rgba(239,68,68,0.30)', text: '#fca5a5' },
-  warning: { bg: 'rgba(245,158,11,0.10)', border: 'rgba(245,158,11,0.30)', text: '#fcd34d' },
-  info: { bg: 'rgba(59,130,246,0.10)', border: 'rgba(59,130,246,0.30)', text: '#93c5fd' },
+// Finding tones as classes, not hex: every text-*-300 here has an html.light
+// override in index.css, so the message keeps contrast on a white page. The
+// old inline #fca5a5 / #fcd34d / #93c5fd washed out to near-invisible there.
+const TONE_CLASS = {
+  danger: 'bg-red-500/10 border-red-500/40 text-red-300',
+  warning: 'bg-amber-500/10 border-amber-500/40 text-amber-300',
+  info: 'bg-sky-500/10 border-sky-500/40 text-sky-300',
 }
 
 const SEVERITY_TONE = {
@@ -98,6 +104,7 @@ export default function AssetBreakdowns() {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
   const [unavailable, setUnavailable] = useState(false)
   const [filters, setFilters] = useState(EMPTY_BREAKDOWN_FILTERS)
   const [showFilters, setShowFilters] = useState(false)
@@ -105,6 +112,7 @@ export default function AssetBreakdowns() {
   const [busy, setBusy] = useState(false)
   const [formError, setFormError] = useState('')
   const [returning, setReturning] = useState(null)
+  const [reopening, setReopening] = useState(null)
 
   // One clock for the whole render, so every "days down" on screen is measured
   // from the same instant rather than drifting row by row.
@@ -126,41 +134,31 @@ export default function AssetBreakdowns() {
   const filtered = useMemo(() => filterBreakdowns(rows, filters, now), [rows, filters, now])
   const summary = useMemo(() => breakdownSummary(filtered, now), [filtered, now])
   const bands = useMemo(() => severityBands(filtered, now), [filtered, now])
-  const bySite = useMemo(() => byGroup(filtered, 'site', now), [filtered, now])
+  const bySite = useMemo(() => siteBars(byGroup(filtered, 'site', now)), [filtered, now])
   const repeats = useMemo(() => repeatOffenders(rows, now), [rows, now])
+  // The chip strip names the worst 20 repeat machines; the full list is a
+  // search away (each chip filters the register to that asset).
+  const repeatChips = useMemo(() => repeats.slice(0, 20), [repeats])
   const findings = useMemo(() => breakdownFindings(filtered, summary, now), [filtered, summary, now])
-
-  const siteOptions = useMemo(
-    () => [...new Set(rows.map((r) => r?.site).filter(Boolean))].sort(),
-    [rows],
-  )
-
-  const activeFilterCount = useMemo(
-    () => Object.entries(filters).filter(([k, v]) => (k === 'state' ? v !== 'open' : !!v)).length,
-    [filters],
-  )
+  const siteOptions = useMemo(() => breakdownSiteOptions(rows), [rows])
+  const activeFilterCount = activeBreakdownFilterCount(filters)
   const setFilter = (k, v) => setFilters((f) => ({ ...f, [k]: v }))
 
-  const sorted = useMemo(
-    () => [...filtered].sort((a, b) => (downDays(b, now) || 0) - (downDays(a, now) || 0)),
-    [filtered, now],
-  )
-  const breakdownPager = usePagedRows(sorted)
+  // Longest down first; unmeasurable downtime sorts last, never as zero.
+  const sorted = useMemo(() => breakdownRegisterRows(filtered, now), [filtered, now])
+  const lateShare = overdueShare(summary)
+  // A failed read must not look like an empty register.
+  const failed = Boolean(error)
 
-  const doExportExcel = () => {
+  const doExport = async (kind) => {
     const { columns, headers, rows: out } = breakdownExportRows(sorted, now)
-    exportToExcel(out, columns, headers, reportFileName('TyrePulse Breakdown Register'))
-  }
-
-  const doExportPdf = () => {
-    const { columns, headers, rows: out } = breakdownExportRows(sorted, now)
-    exportToPdf(
-      out,
-      columns.map((k, i) => ({ key: k, header: headers[i] })),
-      'Breakdown Register',
-      reportFileName('TyrePulse Breakdown Register'),
-      'landscape',
-    )
+    const name = reportFileName('TyrePulse Breakdown Register')
+    try {
+      if (kind === 'excel') await exportToExcel(out, columns, headers, name)
+      else await exportToPdf(out, columns.map((k, i) => ({ key: k, header: headers[i] })), 'Breakdown Register', name, 'landscape')
+    } catch (e) {
+      setNotice(toUserMessage(e, 'Could not export. Try again.'))
+    }
   }
 
   const submit = async (e) => {
@@ -183,9 +181,82 @@ export default function AssetBreakdowns() {
       setReturning(null)
       await load()
     } catch (err) {
-      setError(toUserMessage(err, 'Could not record the return to service.'))
+      setNotice(toUserMessage(err, 'Could not record the return to service.'))
     } finally { setBusy(false) }
   }
+
+  // Reopening used to be a bare `.then(load)` with no catch, so a refused write
+  // failed silently and the row simply stayed closed. It now has its own busy
+  // guard per row and reports a failure in words.
+  const doReopen = useCallback(async (id) => {
+    setReopening(id)
+    try {
+      await reopenAssetBreakdown(id)
+      await load()
+    } catch (err) {
+      setNotice(toUserMessage(err, 'Could not reopen this breakdown.'))
+    } finally { setReopening(null) }
+  }, [load])
+
+  const columns = useMemo(() => [
+    {
+      id: 'asset', header: 'Asset', accessorFn: (r) => r.asset_no || '', size: 120,
+      cell: ({ row }) => (
+        <span className="inline-flex items-center gap-2 font-medium text-[var(--text-primary)]">
+          {row.original._severity && <span className="w-2 h-2 rounded-full" style={{ background: SEVERITY_TONE[row.original._severity] }} aria-hidden="true" />}
+          {row.original.asset_no}
+        </span>
+      ),
+    },
+    { id: 'site', header: 'Site', accessorFn: (r) => r.site || '', size: 120, cell: ({ getValue }) => getValue() || NOT_RECORDED },
+    {
+      id: 'fault', header: 'Fault', accessorFn: (r) => r.details || '', size: 280,
+      cell: ({ getValue }) => <span className="block max-w-md text-[var(--text-secondary)]">{getValue() || NOT_RECORDED}</span>,
+    },
+    {
+      id: 'down', header: 'Days down', accessorFn: (r) => r._down, size: 110, sortUndefined: 'last', meta: { align: 'right' },
+      cell: ({ row }) => (
+        <span className={`tabular-nums ${row.original._down == null ? 'text-[var(--text-muted)]' : 'text-[var(--text-primary)]'}`}>{row.original._downLabel}</span>
+      ),
+    },
+    {
+      id: 'expected', header: 'Expected back', accessorFn: (r) => r.expected_return || '', size: 140,
+      cell: ({ row }) => {
+        const r = row.original
+        return (
+          <span className={r._overdue ? 'text-red-400' : 'text-[var(--text-secondary)]'}>
+            {r.expected_return || 'Not stated'}
+            {r._returnLabel && <span className="block text-[11px]">{r._returnLabel}</span>}
+          </span>
+        )
+      },
+    },
+    { id: 'repair', header: 'Repaired at', accessorFn: (r) => r._repairLabel, size: 140 },
+    { id: 'state', header: 'State', accessorFn: (r) => r._state, size: 140 },
+    { id: 'note', header: 'Note', accessorFn: (r) => r.remark || '', size: 180, cell: ({ getValue }) => <span className="text-[11px] text-[var(--text-dim)]">{getValue()}</span> },
+    {
+      id: 'actions', header: '', enableSorting: false, size: 170, meta: { export: false },
+      cell: ({ row }) => {
+        const r = row.original
+        if (!canEdit) return null
+        return (
+          <div className="flex justify-end">
+            {r.returned_to_service ? (
+              <button type="button" onClick={(e) => { e.stopPropagation(); doReopen(r.id) }} disabled={reopening === r.id}
+                className="btn-secondary text-xs inline-flex items-center gap-1 min-h-[44px]" aria-label={`Reopen breakdown for ${r.asset_no}`}>
+                <RotateCcw className="w-3 h-3" aria-hidden="true" /> {reopening === r.id ? 'Reopening...' : 'Reopen'}
+              </button>
+            ) : (
+              <button type="button" onClick={(e) => { e.stopPropagation(); setReturning({ id: r.id, asset_no: r.asset_no, returned_on: '', remark: r.remark || '' }) }}
+                className="btn-secondary text-xs inline-flex items-center gap-1 min-h-[44px]" aria-label={`Mark ${r.asset_no} back in service`}>
+                <CheckCircle2 className="w-3 h-3" aria-hidden="true" /> Back in service
+              </button>
+            )}
+          </div>
+        )
+      },
+    },
+  ], [canEdit, doReopen, reopening])
 
   return (
     <div className="space-y-6">
@@ -194,28 +265,30 @@ export default function AssetBreakdowns() {
         subtitle="Machines out of service, what is wrong with them, and how long they have been down"
         actions={(
           <div className="flex flex-wrap items-center gap-2">
-            <button onClick={load} className="btn-secondary text-sm inline-flex items-center gap-1.5">
-              <RefreshCw className="w-4 h-4" /> Refresh
+            <button type="button" onClick={load} disabled={loading} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]">
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" /> Refresh
             </button>
             <button
+              type="button"
               onClick={() => setShowFilters((s) => !s)}
-              className="btn-secondary text-sm inline-flex items-center gap-1.5"
+              aria-expanded={showFilters}
+              className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"
             >
-              <Filter className="w-4 h-4" />
+              <Filter className="w-4 h-4" aria-hidden="true" />
               Filters{activeFilterCount ? ` (${activeFilterCount})` : ''}
             </button>
-            <button onClick={doExportExcel} disabled={!sorted.length}
-              className="btn-secondary text-sm inline-flex items-center gap-1.5">
-              <Download className="w-4 h-4" /> Excel
+            <button type="button" onClick={() => doExport('excel')} disabled={!sorted.length}
+              className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]">
+              <Download className="w-4 h-4" aria-hidden="true" /> Excel
             </button>
-            <button onClick={doExportPdf} disabled={!sorted.length}
-              className="btn-secondary text-sm inline-flex items-center gap-1.5">
-              <FileText className="w-4 h-4" /> PDF
+            <button type="button" onClick={() => doExport('pdf')} disabled={!sorted.length}
+              className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]">
+              <FileText className="w-4 h-4" aria-hidden="true" /> PDF
             </button>
             {canEdit && (
-              <button onClick={() => { setFormError(''); setForm({ ...BLANK_FORM }) }}
-                className="btn-primary text-sm inline-flex items-center gap-1.5">
-                <Plus className="w-4 h-4" /> Report a breakdown
+              <button type="button" onClick={() => { setFormError(''); setForm({ ...BLANK_FORM }) }} disabled={unavailable}
+                className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px]">
+                <Plus className="w-4 h-4" aria-hidden="true" /> Report a breakdown
               </button>
             )}
           </div>
@@ -224,14 +297,25 @@ export default function AssetBreakdowns() {
 
       {/* `p-4` was dead here (Card pads inline) - `pad="tight"` is the same
           1rem. The red edge moves to `tone`, which is the one route that
-          reaches the border; the red wash stays inline because that IS an
-          inline declaration and so still wins. Row direction is inline for the
-          same reason: Card is `flex flex-col` and a plain `flex-row` loses. */}
+          reaches the border. Row direction is inline for the same reason:
+          Card is `flex flex-col` and a plain `flex-row` loses. */}
       {error && (
-        <Card tone="crit" pad="tight" className="items-start justify-between gap-3"
-          style={{ flexDirection: 'row', background: TONE.danger.bg }}>
-          <p className="text-sm" style={{ color: TONE.danger.text }}>{error}</p>
-          <button onClick={load} className="btn-secondary text-xs">Retry</button>
+        <Card tone="crit" pad="tight" className="items-start justify-between gap-3 flex-wrap"
+          style={{ flexDirection: 'row' }}>
+          <div role="alert">
+            <p className="text-sm font-medium text-red-300">Could not load the breakdown register.</p>
+            <p className="text-sm text-[var(--text-muted)] mt-0.5">{error} The figures on this page are unavailable until it loads.</p>
+          </div>
+          <button type="button" onClick={load} className="btn-secondary text-xs min-h-[44px]">Retry</button>
+        </Card>
+      )}
+
+      {notice && (
+        <Card pad="tight" className="items-start justify-between gap-3" style={{ flexDirection: 'row' }}>
+          <p className="text-sm text-amber-300" role="status">{notice}</p>
+          <button type="button" onClick={() => setNotice('')} className="inline-flex items-center justify-center w-11 h-11 rounded-lg text-[var(--text-muted)] hover:bg-[var(--input-bg)]" aria-label="Dismiss message">
+            <X className="w-4 h-4" />
+          </button>
         </Card>
       )}
 
@@ -244,19 +328,19 @@ export default function AssetBreakdowns() {
             <label className="block">
               <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Search</span>
               <div className="relative mt-1">
-                <Search className="w-4 h-4 absolute left-2.5 top-2.5" style={{ color: 'var(--text-dim)' }} />
+                <Search className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-dim)' }} aria-hidden="true" />
                 <input
                   value={filters.search}
                   onChange={(e) => setFilter('search', e.target.value)}
                   placeholder="Asset, fault or note"
-                  className="input w-full pl-8"
+                  className="input w-full pl-8 min-h-[44px]"
                 />
               </div>
             </label>
             <label className="block">
               <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Site</span>
               <select value={filters.site} onChange={(e) => setFilter('site', e.target.value)}
-                className="input w-full mt-1">
+                className="input w-full mt-1 min-h-[44px]">
                 <option value="">All sites</option>
                 {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
@@ -264,7 +348,7 @@ export default function AssetBreakdowns() {
             <label className="block">
               <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Repaired at</span>
               <select value={filters.repairLocation} onChange={(e) => setFilter('repairLocation', e.target.value)}
-                className="input w-full mt-1">
+                className="input w-full mt-1 min-h-[44px]">
                 <option value="">Anywhere</option>
                 <option value="In">In-house workshop</option>
                 <option value="Out">Outside workshop</option>
@@ -273,7 +357,7 @@ export default function AssetBreakdowns() {
             <label className="block">
               <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>State</span>
               <select value={filters.state} onChange={(e) => setFilter('state', e.target.value)}
-                className="input w-full mt-1">
+                className="input w-full mt-1 min-h-[44px]">
                 <option value="open">Currently down</option>
                 <option value="overdue">Past the promised date</option>
                 <option value="returned">Back in service</option>
@@ -281,24 +365,19 @@ export default function AssetBreakdowns() {
               </select>
             </label>
           </div>
-          <div className="flex items-center justify-between mt-3">
-            <p className="text-[11px]" style={{ color: 'var(--text-dim)' }}>
+          <div className="flex flex-wrap items-center justify-between gap-2 mt-3">
+            <p className="text-[11px]" style={{ color: 'var(--text-dim)' }} aria-live="polite">
               Showing {filtered.length} of {rows.length} recorded breakdowns.
             </p>
-            <button onClick={() => setFilters(EMPTY_BREAKDOWN_FILTERS)}
-              className="btn-secondary text-xs inline-flex items-center gap-1">
-              <X className="w-3 h-3" /> Clear filters
+            <button type="button" onClick={() => setFilters(EMPTY_BREAKDOWN_FILTERS)}
+              className="btn-secondary text-xs inline-flex items-center gap-1 min-h-[44px]">
+              <X className="w-3 h-3" aria-hidden="true" /> Clear filters
             </button>
           </div>
         </Card>
       )}
 
-      {loading ? (
-        // `p-10` was dead; --space-10 is the same 2.5rem and reaches the card.
-        <Card className="text-center text-sm" style={{ padding: 'var(--space-10)', color: 'var(--text-secondary)' }}>
-          Loading the breakdown register...
-        </Card>
-      ) : unavailable ? (
+      {unavailable ? (
         <EmptyState
           icon={Wrench}
           title="Breakdown register not available"
@@ -306,162 +385,114 @@ export default function AssetBreakdowns() {
         />
       ) : (
         <>
-          <div className="grid gap-3 grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
-            <Tile label="Machines down" value={summary.open} icon={Wrench}
-              sub={summary.assets ? `${summary.assets} distinct assets` : null}
+          <div className="grid gap-3 grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
+            <Tile label="Machines down" value={failed || loading ? null : summary.open} icon={Wrench}
+              sub={!failed && summary.assets ? `${summary.assets} distinct assets` : null}
               tone={summary.open ? SEVERITY_TONE.high : undefined}
               active={filters.state === 'open'}
               onClick={() => setFilter('state', 'open')} />
-            <Tile label="Past promised date" value={summary.overdue} icon={AlertTriangle}
+            <Tile label="Past promised date" value={failed || loading ? null : summary.overdue} icon={AlertTriangle}
+              sub={lateShare == null || failed ? null : `${lateShare}% of machines down`}
               tone={summary.overdue ? SEVERITY_TONE.critical : undefined}
               active={filters.state === 'overdue'}
               onClick={() => setFilter('state', 'overdue')} />
-            <Tile label="Average days down" value={summary.avgDownDays} icon={Clock}
-              sub={summary.avgDownDays == null ? 'Nothing is down' : 'Across machines down now'} />
-            <Tile label="Longest down" value={summary.worst} icon={Timer}
+            <Tile label="Average days down" value={failed || loading ? null : summary.avgDownDays} icon={Clock}
+              sub={summary.avgDownDays == null ? (failed ? null : 'Nothing measurable is down') : 'Across machines down now'} />
+            <Tile label="Longest down" value={failed || loading ? null : summary.worst} icon={Timer}
               sub={summary.worst == null ? null : 'days'} />
-            <Tile label="At outside workshop" value={summary.outsideWorkshop} icon={MapPin}
+            <Tile label="At outside workshop" value={failed || loading ? null : summary.outsideWorkshop} icon={MapPin}
               active={filters.repairLocation === 'Out'}
               onClick={() => setFilter('repairLocation', filters.repairLocation === 'Out' ? '' : 'Out')} />
-            <Tile label="Waiting for parts" value={summary.waitingParts} icon={Clock}
+            <Tile label="Waiting for parts" value={failed || loading ? null : summary.waitingParts} icon={Clock}
               sub="Held by supply, not workshop" />
           </div>
 
-          {findings.length > 0 && (
+          {!failed && findings.length > 0 && (
             <Card pad="tight" className="space-y-2">
-              <h3 className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>What needs attention</h3>
+              <h2 className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>What needs attention</h2>
               {findings.map((f, i) => (
-                <div key={i} className="rounded-lg px-3 py-2 text-sm"
-                  style={{ background: TONE[f.tone]?.bg, border: `1px solid ${TONE[f.tone]?.border}`, color: TONE[f.tone]?.text }}>
+                <div key={i} className={`rounded-lg px-3 py-2 text-sm border ${TONE_CLASS[f.tone] || TONE_CLASS.info}`}>
                   {f.text}
                 </div>
               ))}
             </Card>
           )}
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Card pad="tight">
-              <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--text-primary)' }}>How long they have been down</h3>
-              {bands.every((b) => !b.count) ? (
-                <p className="text-sm" style={{ color: 'var(--text-dim)' }}>No machines are down in this view.</p>
-              ) : bands.map((b) => (
-                <button key={b.key}
-                  onClick={() => setFilter('severity', filters.severity === b.key ? '' : b.key)}
-                  className="w-full flex items-center gap-3 py-1.5 text-left">
-                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: SEVERITY_TONE[b.key] }} />
-                  <span className="text-sm flex-1" style={{ color: 'var(--text-secondary)' }}>{b.label}</span>
-                  <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{b.count}</span>
-                </button>
-              ))}
-            </Card>
+          {!failed && (
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Card pad="tight">
+                <h2 className="text-sm font-medium mb-3" style={{ color: 'var(--text-primary)' }}>How long they have been down</h2>
+                {bands.every((b) => !b.count) ? (
+                  <p className="text-sm" style={{ color: 'var(--text-dim)' }}>No machines are down in this view.</p>
+                ) : bands.map((b) => (
+                  <button type="button" key={b.key}
+                    onClick={() => setFilter('severity', filters.severity === b.key ? '' : b.key)}
+                    aria-pressed={filters.severity === b.key}
+                    className={`w-full flex items-center gap-3 px-2 min-h-[44px] text-left rounded-lg hover:bg-[var(--input-bg)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] ${filters.severity === b.key ? 'bg-[var(--input-bg)]' : ''}`}>
+                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: SEVERITY_TONE[b.key] }} aria-hidden="true" />
+                    <span className="text-sm flex-1" style={{ color: 'var(--text-secondary)' }}>{b.label}</span>
+                    <span className="text-sm font-medium tabular-nums" style={{ color: 'var(--text-primary)' }}>{b.count}</span>
+                  </button>
+                ))}
+              </Card>
 
-            <Card pad="tight">
-              <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--text-primary)' }}>Where they are down</h3>
-              {!bySite.length ? (
-                <p className="text-sm" style={{ color: 'var(--text-dim)' }}>Nothing to show in this view.</p>
-              ) : bySite.slice(0, 8).map((g) => (
-                <button key={g.key}
-                  onClick={() => setFilter('site', filters.site === g.key ? '' : g.key)}
-                  className="w-full flex items-center gap-3 py-1.5 text-left">
-                  <span className="text-sm flex-1 truncate" style={{ color: 'var(--text-secondary)' }}>{g.key}</span>
-                  <span className="text-[11px]" style={{ color: 'var(--text-dim)' }}>{g.days} days lost</span>
-                  <span className="text-sm font-medium w-8 text-right" style={{ color: 'var(--text-primary)' }}>{g.count}</span>
-                </button>
-              ))}
-            </Card>
-          </div>
+              <Card pad="tight">
+                <h2 className="text-sm font-medium mb-3" style={{ color: 'var(--text-primary)' }}>Where they are down</h2>
+                {!bySite.length ? (
+                  <p className="text-sm" style={{ color: 'var(--text-dim)' }}>Nothing to show in this view.</p>
+                ) : bySite.map((g) => (
+                  <button type="button" key={g.key}
+                    onClick={() => setFilter('site', filters.site === g.key ? '' : g.key)}
+                    aria-pressed={filters.site === g.key}
+                    className={`w-full text-left px-2 py-1.5 min-h-[44px] rounded-lg hover:bg-[var(--input-bg)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] ${filters.site === g.key ? 'bg-[var(--input-bg)]' : ''}`}>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm flex-1 truncate" style={{ color: 'var(--text-secondary)' }}>{g.key}</span>
+                      <span className="text-[11px]" style={{ color: 'var(--text-dim)' }}>{g.days} days lost</span>
+                      <span className="text-sm font-medium w-8 text-right tabular-nums" style={{ color: 'var(--text-primary)' }}>{g.count}</span>
+                    </div>
+                    <div className="h-1.5 mt-1 rounded-full bg-[var(--input-bg)] overflow-hidden" aria-hidden="true">
+                      <div className="h-full rounded-full" style={{ width: `${g.widthPct}%`, background: 'var(--accent)' }} />
+                    </div>
+                  </button>
+                ))}
+              </Card>
+            </div>
+          )}
 
-          {repeats.length > 0 && (
+          {!failed && repeats.length > 0 && (
             <Card pad="tight">
-              <h3 className="text-sm font-medium mb-1" style={{ color: 'var(--text-primary)' }}>Machines that keep breaking down</h3>
+              <h2 className="text-sm font-medium mb-1" style={{ color: 'var(--text-primary)' }}>Machines that keep breaking down</h2>
               <p className="text-[11px] mb-3" style={{ color: 'var(--text-dim)' }}>
                 Counted over every breakdown recorded, not just the current view - a repeat is what separates a bad day from a bad machine.
               </p>
               <div className="flex flex-wrap gap-2">
-                {repeats.slice(0, 20).map((a) => (
-                  <button key={a.asset_no}
+                {repeatChips.map((a) => (
+                  <button type="button" key={a.asset_no}
                     onClick={() => setFilters({ ...EMPTY_BREAKDOWN_FILTERS, state: 'all', search: a.asset_no })}
-                    className="px-2.5 py-1 rounded-lg text-xs"
+                    className="px-3 min-h-[44px] rounded-lg text-xs hover:bg-[var(--input-bg)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]"
                     style={{ background: 'var(--panel-2)', color: 'var(--text-secondary)' }}>
-                    {a.asset_no} · {a.breakdowns} times · {a.days} days
+                    {a.asset_no}, {a.breakdowns} times, {a.days} days
                   </button>
                 ))}
               </div>
             </Card>
           )}
 
-          {/* `clip` is the legitimate case: the table is cropped to the card
-              radius. It cannot reach TablePagination's rows-per-page control,
-              which is a native <select> the browser paints outside the page. */}
-          <Card clip>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr style={{ background: 'var(--panel-2)' }}>
-                    {['Asset', 'Site', 'Fault', 'Days down', 'Expected back', 'Repaired at', 'Note', ''].map((h) => (
-                      <th key={h} className="text-left px-3 py-2 text-xs font-medium"
-                        style={{ color: 'var(--text-secondary)' }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {!sorted.length ? (
-                    <tr>
-                      <td colSpan={8} className="px-3 py-10 text-center text-sm" style={{ color: 'var(--text-dim)' }}>
-                        {rows.length
-                          ? 'No breakdown matches these filters.'
-                          : 'No breakdown has been recorded yet.'}
-                      </td>
-                    </tr>
-                  ) : breakdownPager.pageRows.map((r) => {
-                    const d = downDays(r, now)
-                    const dtr = daysToReturn(r, now)
-                    const overdue = isOverdue(r, now)
-                    const sev = severityOf(r, now)
-                    return (
-                      <tr key={r.id} style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                        <td className="px-3 py-2 font-medium" style={{ color: 'var(--text-primary)' }}>
-                          <span className="inline-flex items-center gap-2">
-                            {sev && <span className="w-2 h-2 rounded-full" style={{ background: SEVERITY_TONE[sev] }} />}
-                            {r.asset_no}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2" style={{ color: 'var(--text-secondary)' }}>{r.site || 'Not recorded'}</td>
-                        <td className="px-3 py-2 max-w-md" style={{ color: 'var(--text-secondary)' }}>
-                          {r.details || 'Not recorded'}
-                        </td>
-                        <td className="px-3 py-2" style={{ color: 'var(--text-primary)' }}>{d ?? 'N/A'}</td>
-                        <td className="px-3 py-2" style={{ color: overdue ? SEVERITY_TONE.critical : 'var(--text-secondary)' }}>
-                          {r.expected_return || 'Not stated'}
-                          {dtr != null && !r.returned_to_service && (
-                            <span className="block text-[11px]">
-                              {dtr < 0 ? `${Math.abs(dtr)} days late` : dtr === 0 ? 'due today' : `in ${dtr} days`}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2" style={{ color: 'var(--text-secondary)' }}>{repairLabel(r.repair_location)}</td>
-                        <td className="px-3 py-2 text-[11px]" style={{ color: 'var(--text-dim)' }}>{r.remark || ''}</td>
-                        <td className="px-3 py-2 text-right whitespace-nowrap">
-                          {canEdit && (r.returned_to_service ? (
-                            <button onClick={() => reopenAssetBreakdown(r.id).then(load)}
-                              className="btn-secondary text-xs inline-flex items-center gap-1">
-                              <RotateCcw className="w-3 h-3" /> Reopen
-                            </button>
-                          ) : (
-                            <button onClick={() => setReturning({ id: r.id, asset_no: r.asset_no, returned_on: '', remark: r.remark || '' })}
-                              className="btn-secondary text-xs inline-flex items-center gap-1">
-                              <CheckCircle2 className="w-3 h-3" /> Back in service
-                            </button>
-                          ))}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-              <TablePagination {...breakdownPager} />
-            </div>
-          </Card>
+          <EnterpriseTable
+            columns={columns}
+            data={sorted}
+            getRowId={(r) => String(r.id)}
+            loading={loading}
+            error={failed ? error : null}
+            onRetry={load}
+            enableExport={false}
+            searchPlaceholder="Search this view"
+            initialPageSize={25}
+            viewKey="asset-breakdowns"
+            emptyMessage={rows.length
+              ? 'No breakdown matches these filters.'
+              : 'No breakdown has been recorded yet.'}
+          />
         </>
       )}
 
@@ -522,7 +553,7 @@ export default function AssetBreakdowns() {
                   className="input w-full mt-1" placeholder="Waiting spare parts" />
               </label>
             </div>
-            {formError && <p className="text-sm" style={{ color: TONE.danger.text }}>{formError}</p>}
+            {formError && <p className="text-sm text-red-300" role="alert">{formError}</p>}
             <div className="flex justify-end gap-2 pt-1">
               <button type="button" onClick={() => { if (!busy) setForm(null) }} disabled={busy} className="btn-secondary text-sm">Cancel</button>
               <button type="submit" disabled={busy} className="btn-primary text-sm">

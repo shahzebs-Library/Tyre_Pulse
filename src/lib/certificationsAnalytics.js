@@ -300,3 +300,76 @@ export function buildCertAnalytics(rows = [], now, opts = {}) {
     statusDistribution,
   }
 }
+
+// ─── Register filtering, ordering and export (moved out of the page) ─────────
+
+/** The text a register search looks through. */
+export function certSearchText(r) {
+  return `${r?.subject_name || ''} ${r?.cert_type || ''} ${r?.cert_number || ''} ${r?.issuer || ''}`.toLowerCase()
+}
+
+/** Normalised certificate type, with a stable bucket for blanks. */
+export const certTypeOf = (r) => String(r?.cert_type || '').trim() || 'Unspecified'
+
+/**
+ * Narrow ENRICHED rows (carrying `_status`) by the register filters. Expiry
+ * bounds are inclusive ISO dates; a row with no expiry never passes a bound.
+ */
+export function filterCertifications(rows = [], {
+  status = 'all', subject = 'all', type = 'all', expiryFrom = '', expiryTo = '', query = '',
+} = {}) {
+  const q = String(query || '').trim().toLowerCase()
+  return (Array.isArray(rows) ? rows : []).filter((r) => {
+    if (status !== 'all' && r._status !== status) return false
+    if (subject !== 'all' && r.subject_type !== subject) return false
+    if (type !== 'all' && certTypeOf(r) !== type) return false
+    if (expiryFrom && (!r.expiry_date || r.expiry_date < expiryFrom)) return false
+    if (expiryTo && (!r.expiry_date || r.expiry_date > expiryTo)) return false
+    if (q && !certSearchText(r).includes(q)) return false
+    return true
+  })
+}
+
+export const CERT_SORTS = {
+  soonest: 'Soonest expiry',
+  latest: 'Latest expiry',
+  subject: 'Subject (A-Z)',
+  recent: 'Recently added',
+}
+
+/** Order the register by one of CERT_SORTS. Never mutates the input. */
+export function sortCertifications(rows = [], sortBy = 'soonest', now) {
+  const list = Array.isArray(rows) ? rows : []
+  if (sortBy === 'soonest') return sortBySoonestExpiry(list, now)
+  if (sortBy === 'latest') return sortBySoonestExpiry(list, now).reverse()
+  if (sortBy === 'subject') return [...list].sort((a, b) => String(a.subject_name || '').localeCompare(String(b.subject_name || '')))
+  if (sortBy === 'recent') return [...list].sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
+  return [...list]
+}
+
+export const CERT_EXPORT_COLUMNS = [
+  { key: 'subject_type', header: 'Subject type' },
+  { key: 'subject_name', header: 'Subject' },
+  { key: 'cert_type', header: 'Cert type' },
+  { key: 'cert_number', header: 'Cert number' },
+  { key: 'issuer', header: 'Issuer' },
+  { key: 'issue_date', header: 'Issue date' },
+  { key: 'expiry_date', header: 'Expiry date' },
+  { key: 'days', header: 'Days to expiry' },
+  { key: 'status', header: 'Status' },
+]
+
+/** Flat export rows from ENRICHED certifications. Unknown days export blank. */
+export function certExportRows(rows = []) {
+  return (Array.isArray(rows) ? rows : []).map((r) => ({
+    subject_type: SUBJECT_LABELS[r.subject_type] || r.subject_type || '',
+    subject_name: r.subject_name || '',
+    cert_type: r.cert_type || '',
+    cert_number: r.cert_number || '',
+    issuer: r.issuer || '',
+    issue_date: r.issue_date || '',
+    expiry_date: r.expiry_date || '',
+    days: r._days == null ? '' : r._days,
+    status: CERT_STATUS_META[r._status]?.label || r._status || '',
+  }))
+}

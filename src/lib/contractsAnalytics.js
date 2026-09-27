@@ -289,3 +289,98 @@ export function expiringWithin(rows = [], now = Date.now(), days = 60, opts = {}
     .map((c) => ({ ...c, daysRemaining: c._days }))
     .sort((a, b) => a.daysRemaining - b.daysRemaining)
 }
+
+// ─── Register filtering, ordering, currency and export (moved out of the page) ─
+
+export const CONTRACT_SORTS = [
+  { key: 'expiry', label: 'Soonest expiry' },
+  { key: 'value', label: 'Highest value' },
+  { key: 'recent', label: 'Newest' },
+  { key: 'title', label: 'Title A-Z' },
+]
+
+/** The text a register search looks through. */
+export function contractSearchText(r) {
+  return `${r?.title || ''} ${r?.vendor || ''} ${r?.contract_type || ''} ${r?.notes || ''}`.toLowerCase()
+}
+
+/**
+ * Narrow ENRICHED contracts. `expiryWindow` (days) keeps contracts ending
+ * within that many days from now (not cancelled); `from`/`to` bound the end
+ * (renewal) date inclusively and exclude contracts with no end date.
+ */
+export function filterContracts(rows = [], {
+  status = 'all', type = 'all', vendor = '', expiryWindow = null, from = '', to = '', query = '',
+} = {}) {
+  const q = String(query || '').trim().toLowerCase()
+  const win = expiryWindow == null || expiryWindow === 'all' ? null : Number(expiryWindow)
+  return (Array.isArray(rows) ? rows : []).filter((r) => {
+    if (status !== 'all' && r._status !== status) return false
+    if (type !== 'all' && (r.contract_type || '') !== type) return false
+    if (vendor && r.vendor !== vendor) return false
+    if (win != null && !(r._days != null && r._days >= 0 && r._days <= win && r._status !== 'cancelled')) return false
+    const end = r.end_date ? String(r.end_date).slice(0, 10) : ''
+    if (from && (!end || end < from)) return false
+    if (to && (!end || end > to)) return false
+    if (q && !contractSearchText(r).includes(q)) return false
+    return true
+  })
+}
+
+/** Order ENRICHED contracts by a CONTRACT_SORTS key. Never mutates. */
+export function sortContracts(rows = [], key = 'expiry') {
+  const list = [...(Array.isArray(rows) ? rows : [])]
+  if (key === 'expiry') return list.sort((a, b) => (a._days ?? Infinity) - (b._days ?? Infinity))
+  if (key === 'value') return list.sort((a, b) => (b._value ?? -Infinity) - (a._value ?? -Infinity))
+  if (key === 'title') return list.sort((a, b) => String(a.title || '').localeCompare(String(b.title || '')))
+  return list.sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
+}
+
+/**
+ * Which currencies the valued contracts are in, falling back to the page's
+ * active currency for rows that carry none. Money is only added up when this
+ * returns a single currency.
+ */
+export function contractCurrencyMix(rows = [], fallback = '') {
+  const set = new Set()
+  for (const r of Array.isArray(rows) ? rows : []) {
+    if (numOrNull(r?.value) == null) continue
+    const c = String(r?.currency || fallback || '').trim().toUpperCase()
+    if (c) set.add(c)
+  }
+  const currencies = [...set].sort()
+  return { currencies, single: currencies.length <= 1 ? (currencies[0] || String(fallback || '').toUpperCase() || null) : null, mixed: currencies.length > 1 }
+}
+
+export const CONTRACT_EXPORT_COLUMNS = [
+  { key: 'title', header: 'Title' },
+  { key: 'vendor', header: 'Vendor' },
+  { key: 'contract_type', header: 'Type' },
+  { key: 'start_date', header: 'Start' },
+  { key: 'end_date', header: 'End / renewal' },
+  { key: 'value', header: 'Value' },
+  { key: 'annualized', header: 'Annualized' },
+  { key: 'currency', header: 'Currency' },
+  { key: 'status', header: 'Status' },
+  { key: 'days_remaining', header: 'Days left' },
+]
+
+/** Flat export rows from ENRICHED contracts. Unknowns export as N/A. */
+export function contractExportRows(rows = [], fallbackCurrency = '') {
+  const date = (v) => {
+    const s = v ? String(v).slice(0, 10) : ''
+    return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : 'N/A'
+  }
+  return (Array.isArray(rows) ? rows : []).map((r) => ({
+    title: r.title || '',
+    vendor: r.vendor || '',
+    contract_type: r.contract_type || '',
+    start_date: date(r.start_date),
+    end_date: date(r.end_date),
+    value: r._value ?? '',
+    annualized: r._annualized != null ? Math.round(r._annualized) : 'N/A',
+    currency: r.currency || fallbackCurrency,
+    status: STATUS_BANDS.find((b) => b.key === r._status)?.label || r._status || '',
+    days_remaining: r._days ?? 'N/A',
+  }))
+}

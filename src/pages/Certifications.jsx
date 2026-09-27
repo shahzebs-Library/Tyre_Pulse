@@ -16,9 +16,9 @@ import {
 } from 'chart.js'
 import { Bar, Doughnut } from 'react-chartjs-2'
 import {
-  BadgeCheck, AlertTriangle, Clock, ShieldOff, Search, X, Filter,
+  BadgeCheck, AlertTriangle, Clock, ShieldOff, Search, X,
   Plus, Pencil, Trash2, FileSpreadsheet, FileText, Loader2, Save, CalendarClock,
-  PieChart, BarChart3, Percent, ArrowDownUp,
+  PieChart, BarChart3, Percent, ArrowDownUp, RefreshCw,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import Card, { CardHeader, CardBody } from '../components/ui/Card'
@@ -28,14 +28,16 @@ import {
   listCertifications, createCertification, updateCertification, deleteCertification,
 } from '../lib/api/certifications'
 import {
-  buildCertAnalytics, enrichCertifications, sortBySoonestExpiry,
+  buildCertAnalytics, enrichCertifications,
   CERT_STATUS_META, SUBJECT_TYPES, SUBJECT_LABELS, EXPIRING_SOON_DAYS,
+  filterCertifications, sortCertifications, certExportRows, CERT_SORTS, CERT_EXPORT_COLUMNS,
 } from '../lib/certificationsAnalytics'
 import { colorAt, categorical, withAlpha } from '../lib/reportColors'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
-import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import { probeRelation } from '../lib/api/_client'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import { compareValues, isBlank } from '../lib/consoleTable'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
@@ -65,12 +67,14 @@ const EMPTY_FORM = {
   issuer: '', issue_date: '', expiry_date: '', status: 'valid', notes: '',
 }
 
-const SORTS = {
-  soonest: 'Soonest expiry',
-  latest: 'Latest expiry',
-  subject: 'Subject (A-Z)',
-  recent: 'Recently added',
-}
+const SORTS = CERT_SORTS
+
+/** Column sorting through the shared console comparator (blanks sort last). */
+const sortable = (fn) => ({
+  accessorFn: (r) => { const v = fn(r); return isBlank(v) ? undefined : v },
+  sortingFn: (a, b, id) => compareValues(a.getValue(id), b.getValue(id)),
+  sortUndefined: 'last',
+})
 
 export default function Certifications() {
   const { activeCountry } = useSettings()
@@ -163,26 +167,14 @@ export default function Certifications() {
     return [...set].sort((a, b) => a.localeCompare(b))
   }, [rows])
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    const list = enriched.filter((r) => {
-      if (statusFilter !== 'all' && r._status !== statusFilter) return false
-      if (subjectFilter !== 'all' && r.subject_type !== subjectFilter) return false
-      if (typeFilter !== 'all' && (String(r.cert_type || '').trim() || 'Unspecified') !== typeFilter) return false
-      if (expiryFrom && (!r.expiry_date || r.expiry_date < expiryFrom)) return false
-      if (expiryTo && (!r.expiry_date || r.expiry_date > expiryTo)) return false
-      if (q) {
-        const hay = `${r.subject_name || ''} ${r.cert_type || ''} ${r.cert_number || ''} ${r.issuer || ''}`.toLowerCase()
-        if (!hay.includes(q)) return false
-      }
-      return true
-    })
-    if (sortBy === 'soonest') return sortBySoonestExpiry(list, now)
-    if (sortBy === 'latest') return sortBySoonestExpiry(list, now).reverse()
-    if (sortBy === 'subject') return [...list].sort((a, b) => String(a.subject_name || '').localeCompare(String(b.subject_name || '')))
-    if (sortBy === 'recent') return [...list].sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
-    return list
-  }, [enriched, statusFilter, subjectFilter, typeFilter, expiryFrom, expiryTo, search, sortBy, now])
+  // The register: every filter applies, then the chosen order (the engine owns
+  // both, so the page and its exports can never disagree about which rows).
+  const filtered = useMemo(() => sortCertifications(
+    filterCertifications(enriched, {
+      status: statusFilter, subject: subjectFilter, type: typeFilter, expiryFrom, expiryTo, query: search,
+    }),
+    sortBy, now,
+  ), [enriched, statusFilter, subjectFilter, typeFilter, expiryFrom, expiryTo, search, sortBy, now])
 
   const clearFilters = () => {
     setStatusFilter('all'); setSubjectFilter('all'); setTypeFilter('all')
@@ -223,8 +215,8 @@ export default function Certifications() {
   const chartAxis = {
     plugins: { legend: { display: false }, tooltip: { enabled: true } },
     scales: {
-      x: { ticks: { color: '#9ca3af', font: { size: 11 } }, grid: { color: 'var(--panel-2)' } },
-      y: { beginAtZero: true, ticks: { color: '#9ca3af', font: { size: 11 }, precision: 0 }, grid: { color: 'var(--panel-2)' } },
+      x: { ticks: { color: 'var(--text-muted)', font: { size: 11 } }, grid: { color: 'var(--panel-2)' } },
+      y: { beginAtZero: true, ticks: { color: 'var(--text-muted)', font: { size: 11 }, precision: 0 }, grid: { color: 'var(--panel-2)' } },
     },
     maintainAspectRatio: false,
     responsive: true,
@@ -232,12 +224,12 @@ export default function Certifications() {
   const doughnutOpts = {
     maintainAspectRatio: false,
     responsive: true,
-    plugins: { legend: { position: 'right', labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12 } } },
+    plugins: { legend: { position: 'right', labels: { color: 'var(--text-muted)', font: { size: 11 }, boxWidth: 12 } } },
   }
 
   // CRUD handlers ---------------------------------------------------------------
   const openCreate = () => { setEditing(null); setForm(EMPTY_FORM); setFormError(''); setModalOpen(true) }
-  const openEdit = (r) => {
+  const openEdit = useCallback((r) => {
     setEditing(r)
     setForm({
       subject_type: r.subject_type || 'driver',
@@ -251,7 +243,7 @@ export default function Certifications() {
       notes: r.notes || '',
     })
     setFormError(''); setModalOpen(true)
-  }
+  }, [])
   const setField = (k, v) => setForm((f) => ({ ...f, [k]: v }))
 
   const submit = useCallback(async (e) => {
@@ -299,19 +291,59 @@ export default function Certifications() {
   }, [confirmDelete])
 
   // Export ----------------------------------------------------------------------
-  const EXPORT_COLS = ['subject_type', 'subject_name', 'cert_type', 'cert_number', 'issuer', 'issue_date', 'expiry_date', 'days', 'status']
-  const EXPORT_HEADERS = ['Subject type', 'Subject', 'Cert type', 'Cert number', 'Issuer', 'Issue date', 'Expiry date', 'Days to expiry', 'Status']
-  // Paged, not capped: this table used to render filtered.slice(0, 500) with no
-  // way to reach row 501. The exports below still cover `filtered` in full.
-  const pager = usePagedRows(filtered)
+  const EXPORT_COLS = CERT_EXPORT_COLUMNS.map((c) => c.key)
+  const EXPORT_HEADERS = CERT_EXPORT_COLUMNS.map((c) => c.header)
+  // The WHOLE filtered set is handed to the table, which pages and sorts
+  // across it; the exports cover the same set in full.
+  const exportRows = useMemo(() => certExportRows(filtered), [filtered])
+  const exportName = reportFileName('Certifications', new Date().toISOString().slice(0, 10))
 
-  const exportRows = filtered.map((r) => ({
-    subject_type: SUBJECT_LABELS[r.subject_type] || r.subject_type || '',
-    subject_name: r.subject_name || '', cert_type: r.cert_type || '', cert_number: r.cert_number || '',
-    issuer: r.issuer || '', issue_date: r.issue_date || '', expiry_date: r.expiry_date || '',
-    days: r._days == null ? '' : r._days,
-    status: CERT_STATUS_META[r._status]?.label || r._status || '',
-  }))
+  const columns = useMemo(() => [
+    { id: 'subject', header: 'Subject', ...sortable((r) => r.subject_name), size: 180,
+      cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original.subject_name || 'N/A'}</span> },
+    { id: 'subject_type', header: 'Type', ...sortable((r) => SUBJECT_LABELS[r.subject_type] || r.subject_type), size: 110,
+      cell: ({ row }) => <span className="text-[var(--text-secondary)]">{SUBJECT_LABELS[row.original.subject_type] || row.original.subject_type || 'N/A'}</span> },
+    { id: 'cert_type', header: 'Cert type', ...sortable((r) => r.cert_type), size: 150,
+      cell: ({ row }) => <span className="text-[var(--text-secondary)]">{row.original.cert_type || 'N/A'}</span> },
+    { id: 'cert_number', header: 'Number', ...sortable((r) => r.cert_number), size: 130,
+      cell: ({ row }) => <span className="font-mono text-xs text-[var(--text-secondary)]">{row.original.cert_number || 'N/A'}</span> },
+    { id: 'issuer', header: 'Issuer', ...sortable((r) => r.issuer), size: 150,
+      cell: ({ row }) => <span className="text-[var(--text-secondary)]">{row.original.issuer || 'N/A'}</span> },
+    { id: 'issue_date', header: 'Issue', ...sortable((r) => r.issue_date), size: 110,
+      cell: ({ row }) => <span className="text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(row.original.issue_date)}</span> },
+    { id: 'expiry_date', header: 'Expiry', ...sortable((r) => r.expiry_date), size: 150,
+      cell: ({ row }) => {
+        const r = row.original
+        const expClass = r._status === 'expired' ? 'text-red-400 font-medium' : r._status === 'expiring' ? 'text-amber-400 font-medium' : 'text-[var(--text-secondary)]'
+        return (
+          <span className={`whitespace-nowrap ${expClass}`}>
+            {fmtDate(r.expiry_date)}
+            {r._days != null && r.expiry_date && <span className="ml-1 text-[11px] opacity-80">({daysLabel(r._days)})</span>}
+          </span>
+        )
+      } },
+    { id: 'status', header: 'Status', ...sortable((r) => CERT_STATUS_META[r._status]?.label), size: 130,
+      cell: ({ row }) => {
+        const r = row.original
+        return (
+          <span className={`badge text-[11px] px-2 py-0.5 rounded inline-flex items-center gap-1 ${STATUS_STYLES[r._status]}`}>
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: BAND_COLORS[r._status] }} aria-hidden="true" />
+            {CERT_STATUS_META[r._status]?.label}
+          </span>
+        )
+      } },
+    { id: 'actions', header: '', enableSorting: false, size: 110, meta: { export: false },
+      cell: ({ row }) => {
+        const r = row.original
+        const who = r.subject_name || 'this certification'
+        return (
+          <div className="flex items-center gap-1">
+            <button type="button" onClick={() => openEdit(r)} className="w-11 h-11 inline-flex items-center justify-center rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] focus-visible:ring-2 focus-visible:ring-blue-500" aria-label={`Edit ${who}`}><Pencil size={15} /></button>
+            <button type="button" onClick={() => setConfirmDelete(r)} className="w-11 h-11 inline-flex items-center justify-center rounded-lg hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400 focus-visible:ring-2 focus-visible:ring-red-500" aria-label={`Delete ${who}`}><Trash2 size={15} /></button>
+          </div>
+        )
+      } },
+  ], [openEdit])
 
   const nextExp = analytics.nextExpiry
   const kpis = [
@@ -342,13 +374,13 @@ export default function Certifications() {
         updatedAt={updatedAt}
         actions={
           <div className="flex items-center gap-2">
-            <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'certifications') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, exportName) } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!filtered.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Certifications', 'certifications', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToPdf(exportRows, CERT_EXPORT_COLUMNS, 'Certifications', exportName, 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!filtered.length}>
               <FileText size={14} /> PDF
             </button>
-            <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5">
+            <button type="button" onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={missing}>
               <Plus size={14} /> New certification
             </button>
           </div>
@@ -373,13 +405,13 @@ export default function Certifications() {
       )}
 
       {error && (
-        <Card tone="crit" className="items-start gap-3" style={{ flexDirection: 'row' }}>
+        <Card tone="crit" className="items-start gap-3" style={{ flexDirection: 'row' }} role="alert">
           <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
           <div className="flex-1">
             <p className="text-red-300 font-medium">Something went wrong.</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">{error}</p>
           </div>
-          <button onClick={load} className="btn-secondary text-sm">Retry</button>
+          <button type="button" onClick={load} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><RefreshCw size={14} aria-hidden="true" /> Retry</button>
         </Card>
       )}
 
@@ -412,9 +444,11 @@ export default function Certifications() {
             <Card key={k.label}>
               <div className="flex items-center justify-between">
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
-                <Icon size={16} className={k.tone} />
+                <Icon size={16} className={k.tone} aria-hidden="true" />
               </div>
-              <p className={`text-2xl font-bold mt-1 ${k.tone}`}>{loading ? 'N/A' : k.value}</p>
+              {loading
+                ? <div className="h-7 w-16 mt-2 rounded bg-[var(--input-bg)] animate-pulse" aria-label="Loading" />
+                : <p className={`text-2xl font-bold mt-1 tabular-nums ${k.tone}`}>{k.value}</p>}
               {k.sub && !loading && <p className="text-[11px] text-[var(--text-muted)] mt-0.5 truncate">{k.sub}</p>}
             </Card>
           )
@@ -473,7 +507,7 @@ export default function Certifications() {
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <input className="input pl-9 w-full" placeholder="Search subject, cert type, number, issuer" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input className="input pl-9 w-full" placeholder="Search subject, cert type, number, issuer" aria-label="Search certifications" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
             <option value="all">All statuses</option>
@@ -502,70 +536,31 @@ export default function Certifications() {
           <input type="date" className="input" value={expiryFrom} onChange={(e) => setExpiryFrom(e.target.value)} aria-label="Expiry from" />
           <label className="text-xs text-[var(--text-muted)]">to</label>
           <input type="date" className="input" value={expiryTo} onChange={(e) => setExpiryTo(e.target.value)} aria-label="Expiry to" />
-          {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
-          <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {analytics.total}</span>
+          {hasFilters && <button type="button" onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><X size={14} aria-hidden="true" /> Clear</button>}
+          <span className="text-xs text-[var(--text-muted)] ml-auto" aria-live="polite">{filtered.length} of {(rows || []).length}</span>
         </div>
       </Card>
 
-      {/* Table. `!p-0` is retired to `pad="none"` and `overflow-hidden` to
-          `clip`, which is the one legitimate use: the table must be cropped to
-          the card radius. TablePagination's rows-per-page control is a native
-          <select>, so clipping cannot reach it. */}
+      {/* Register. The WHOLE filtered set goes in; EnterpriseTable pages and
+          sorts across it. `clip` crops the table to the card radius. */}
       <Card pad="none" clip>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                {['Subject', 'Type', 'Cert type', 'Number', 'Issuer', 'Issue', 'Expiry', 'Status', ''].map((h, i) => <th key={i} className="px-4 py-3 font-semibold whitespace-nowrap">{h}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                [0, 1, 2, 3, 4].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={9} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
-              ) : empty ? (
-                <tr><td colSpan={9} className="px-4 py-12 text-center text-[var(--text-muted)]">
-                  <BadgeCheck size={26} className="mx-auto mb-2 opacity-60" />
-                  No certifications tracked yet. Use "New certification" to record a licence, permit or inspection and its expiry.
-                </td></tr>
-              ) : filtered.length === 0 ? (
-                <tr><td colSpan={9} className="px-4 py-12 text-center text-[var(--text-muted)]"><Filter size={22} className="mx-auto mb-2 opacity-60" />No certifications match these filters.</td></tr>
-              ) : (
-                pager.pageRows.map((r) => {
-                  const expClass = r._status === 'expired' ? 'text-red-400 font-medium' : r._status === 'expiring' ? 'text-amber-400 font-medium' : 'text-[var(--text-secondary)]'
-                  return (
-                    <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                      <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.subject_name || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{SUBJECT_LABELS[r.subject_type] || r.subject_type || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.cert_type || 'N/A'}</td>
-                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{r.cert_number || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.issuer || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtDate(r.issue_date)}</td>
-                      <td className={`px-4 py-2.5 ${expClass}`}>
-                        {fmtDate(r.expiry_date)}
-                        {r._days != null && r.expiry_date && (
-                          <span className="ml-1 text-[11px] opacity-80">({daysLabel(r._days)})</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <span className={`badge text-[11px] px-2 py-0.5 rounded inline-flex items-center gap-1 ${STATUS_STYLES[r._status]}`}>
-                          <span className="w-1.5 h-1.5 rounded-full" style={{ background: BAND_COLORS[r._status] }} />
-                          {CERT_STATUS_META[r._status]?.label}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center gap-1.5">
-                          <button onClick={() => openEdit(r)} className="p-1.5 rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit"><Pencil size={14} /></button>
-                          <button onClick={() => setConfirmDelete(r)} className="p-1.5 rounded-lg hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" aria-label="Delete"><Trash2 size={14} /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-        <TablePagination {...pager} />
+        <EnterpriseTable
+          columns={columns}
+          data={filtered}
+          getRowId={(r) => String(r.id)}
+          loading={loading}
+          error={error && !(rows || []).length ? error : null}
+          onRetry={load}
+          enableGlobalFilter={false}
+          enableColumnFilters={false}
+          enableSorting
+          enableExport={false}
+          initialPageSize={25}
+          pageSizeOptions={[25, 50, 100]}
+          emptyMessage={empty
+            ? 'No certifications tracked yet. Use "New certification" to record a licence, permit or inspection and its expiry.'
+            : 'No certifications match these filters.'}
+        />
       </Card>
 
       {/* Create / edit dialog. Every close path - Escape, the backdrop and the

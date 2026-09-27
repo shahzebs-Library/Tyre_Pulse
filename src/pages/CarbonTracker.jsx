@@ -1,23 +1,24 @@
 /**
- * CarbonTracker (route /carbon-tracker) — fleet carbon intelligence.
+ * CarbonTracker (route /carbon-tracker): fleet carbon intelligence.
  *
  * Two complementary views, switchable by tab:
  *
- *  • Lifecycle ESG (default) — restored from the tyre_saas ESG model. Scores the
- *    EMBEDDED / lifecycle carbon of the tyre estate (manufacturing, sea-freight
- *    to the UAE, end-of-life), the CO2 AVOIDED by retreading, and the extra CO2
- *    burned running under-inflated tyres, rolling up into a 0–100 ESG score with
- *    a certification-ready flag. Class is derived by joining each tyre's asset to
- *    vehicle_fleet.vehicle_type. Offsets + reduction initiatives are persisted,
- *    org-isolated records (V210). All maths lives in the pure, unit-tested
- *    src/lib/carbon.js (computeLifecycleCarbon).
+ *  - Lifecycle ESG (default). Scores the EMBEDDED / lifecycle carbon of the
+ *    tyre estate (manufacturing, sea-freight to the UAE, end-of-life), the CO2
+ *    AVOIDED by retreading, and the extra CO2 burned running under-inflated
+ *    tyres, rolling up into a 0 to 100 ESG score with a certification-ready
+ *    flag. Offsets and reduction initiatives are persisted, org-isolated
+ *    records (V210). The view is split into section tabs (Overview, Emissions
+ *    by class, Offsets, Initiatives) so the page is no longer one long wall.
  *
- *  • Fuel emissions — the existing combustion view: CO2 from distance travelled
- *    per tyre record × the IPCC diesel factor, aggregated by month/site/vehicle.
+ *  - Fuel emissions. CO2 from distance travelled per tyre record times the
+ *    IPCC diesel factor, aggregated by month, site and vehicle.
  *
- * No fabricated data: where a signal is missing the page says so (the retread
- * derivation is labelled when it comes only from free-text reasons), and empty
- * tables show honest states.
+ * All carbon maths lives in src/lib/carbon.js; what the page may honestly say
+ * about it (measurability, filters, ledger roll-ups, exports) lives in the pure
+ * src/lib/carbonTrackerAnalytics.js. A figure with no measurable basis renders
+ * N/A, never a fabricated 0. A failed read renders an error with Retry, never
+ * an empty ledger.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
@@ -26,13 +27,16 @@ import {
 } from 'chart.js'
 import { Bar, Doughnut } from 'react-chartjs-2'
 import {
-  Leaf, Gauge, Fuel, Building2, Search, X, Filter, TreePine,
-  FileSpreadsheet, FileText, AlertTriangle, Info, Truck, Award, Recycle,
-  ShieldCheck, TrendingDown, Plus, Loader2, Trash2, Target, BarChart3,
-  Factory, Activity, CircleDollarSign,
+  Leaf, Gauge, Fuel, Building2, Search, X, TreePine, FileSpreadsheet, FileText,
+  AlertTriangle, Info, Truck, Award, Recycle, ShieldCheck, TrendingDown, Plus,
+  Loader2, Trash2, Target, BarChart3, Factory, LayoutDashboard, RotateCcw, Scale,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import Card, { CardHeader } from '../components/ui/Card'
+import Modal from '../components/ui/Modal'
+import StatTile from '../components/ui/StatTile'
+import { Skeleton } from '../components/ui/Skeleton'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import EmailPdfButton from '../components/EmailPdfButton'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -45,70 +49,119 @@ import {
   computeCarbon, treesToOffset, DIESEL_KG_PER_L,
   computeLifecycleCarbon, CO2_FACTORS, KG_CO2_PER_TREE_YEAR,
 } from '../lib/carbon'
+import {
+  PERIODS, INITIATIVE_STATUSES, asTonnes, fmtNum, fmtTonnes, humanize,
+  scopeRowsByPeriod, lifecycleKpis, esgBand, fuelKpis, vehicleRows,
+  filterVehicleRows, siteOptions, offsetsSummary, netAfterOffsetsKg,
+  initiativesSummary, filterOffsets, filterInitiatives, vehicleExportRows,
+} from '../lib/carbonTrackerAnalytics'
+import { colorAt, categorical } from '../lib/reportColors'
 import { toUserMessage } from '../lib/safeError'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
-import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
 
 const WRITE_ROLES = ['Admin', 'Manager', 'Director']
-
-const SITE_PALETTE = [
-  '#22c55e', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6',
-  '#14b8a6', '#ec4899', '#f97316', '#6366f1', '#84cc16',
-]
-
-const PERIODS = [
-  { value: 3, label: '3 months' },
-  { value: 6, label: '6 months' },
-  { value: 12, label: '12 months' },
-  { value: 0, label: 'All time' },
-]
-
-// tonnes, 1 decimal
-const asTonnes = (kg) => (kg == null ? 0 : Math.round((kg / 1000) * 10) / 10)
-const fmt = (n) => (n == null || !Number.isFinite(n) ? '0' : Math.round(n).toLocaleString())
-const cls = (s) => (s || '').replace(/_/g, ' ')
+const GRID = 'rgba(148,163,184,0.14)'
+const FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-1'
 
 function chartTextColor() {
-  return (typeof document !== 'undefined'
-    && getComputedStyle(document.documentElement).getPropertyValue('--text-muted')) || '#9ca3af'
+  if (typeof document === 'undefined') return '#9ca3af'
+  return getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim() || '#9ca3af'
 }
 
-// ── Page shell: tab switch between the two carbon views ──────────────────────
+// ── Shared local pieces ───────────────────────────────────────────────────────
+function TabBar({ tabs, value, onChange, label }) {
+  return (
+    <div role="tablist" aria-label={label} className="flex gap-1 overflow-x-auto border-b border-[var(--input-border)]">
+      {tabs.map((t) => {
+        const Icon = t.icon
+        const active = value === t.key
+        return (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(t.key)}
+            className={`inline-flex items-center gap-1.5 min-h-[44px] px-4 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition-colors ${FOCUS} ${
+              active ? 'border-[var(--accent)] text-[var(--text-primary)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+            }`}
+          >
+            <Icon size={15} aria-hidden="true" /> {t.label}
+            {t.count != null && <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--input-bg)] text-[var(--text-secondary)] tabular-nums">{t.count}</span>}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function KpiStrip({ loading, tiles, cols = 'grid-cols-2 md:grid-cols-3 xl:grid-cols-6' }) {
+  return (
+    <div className={`grid ${cols} gap-[var(--gap-grid)]`}>
+      {tiles.map((k, i) => (
+        loading
+          ? <div key={k.label} className="card !p-4 space-y-3"><Skeleton className="h-3 w-2/3" /><Skeleton className="h-7 w-1/2" /><Skeleton className="h-2.5 w-3/4" /></div>
+          : <StatTile key={k.label} index={i} {...k} />
+      ))}
+    </div>
+  )
+}
+
+function ErrorBanner({ title, message, onRetry }) {
+  return (
+    <Card tone="crit" role="alert">
+      <div className="flex flex-wrap items-start gap-[var(--space-3)]">
+        <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
+        <div className="flex-1 min-w-[12rem]">
+          <p className="text-red-300 font-medium">{title}</p>
+          <p className="text-[var(--text-muted)] text-sm mt-1">{message}</p>
+        </div>
+        {onRetry && (
+          <button type="button" onClick={onRetry} className={`btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] ${FOCUS}`}>
+            <RotateCcw size={14} aria-hidden="true" /> Retry
+          </button>
+        )}
+      </div>
+    </Card>
+  )
+}
+
+function EmptyChart({ empty = 'No data.' }) {
+  return <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)] text-center px-4">{empty}</div>
+}
+
+function Field({ label, id, children }) {
+  return (
+    <div className="flex flex-col gap-1 min-w-0">
+      <label htmlFor={id} className="text-xs font-medium text-[var(--text-muted)]">{label}</label>
+      {children}
+    </div>
+  )
+}
+
+// ── Page shell ────────────────────────────────────────────────────────────────
 export default function CarbonTracker() {
-  const [tab, setTab] = useState('lifecycle')
-  const TABS = [
-    { key: 'lifecycle', label: 'Lifecycle ESG', icon: Leaf },
-    { key: 'fuel', label: 'Fuel emissions', icon: Fuel },
-  ]
+  const [view, setView] = useState('lifecycle')
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-1.5 p-1 bg-[var(--input-bg)] rounded-xl w-fit border border-[var(--input-border)]">
-        {TABS.map((t) => {
-          const Icon = t.icon
-          const active = tab === t.key
-          return (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              aria-pressed={active}
-              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                active ? 'bg-[var(--surface-raised)] text-brand-bright shadow-sm' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-              }`}
-            >
-              <Icon size={15} /> {t.label}
-            </button>
-          )
-        })}
-      </div>
-      {tab === 'lifecycle' ? <LifecycleEsgView /> : <FuelEmissionsView />}
+      <TabBar
+        label="Carbon view"
+        value={view}
+        onChange={setView}
+        tabs={[
+          { key: 'lifecycle', label: 'Lifecycle ESG', icon: Leaf },
+          { key: 'fuel', label: 'Fuel emissions', icon: Fuel },
+        ]}
+      />
+      {view === 'lifecycle' ? <LifecycleEsgView /> : <FuelEmissionsView />}
     </div>
   )
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
- * LIFECYCLE ESG VIEW (restored tyre_saas model)
+ * LIFECYCLE ESG VIEW
  * ═══════════════════════════════════════════════════════════════════════════ */
 function LifecycleEsgView() {
   const { activeCountry } = useSettings()
@@ -116,30 +169,43 @@ function LifecycleEsgView() {
   const canWrite = WRITE_ROLES.includes(profile?.role)
 
   const [data, setData] = useState(null) // { tyres, vehicles } | null = loading
-  const [offsets, setOffsets] = useState([])
-  const [initiatives, setInitiatives] = useState([])
   const [error, setError] = useState('')
+  const [offsets, setOffsets] = useState(null)
+  const [offsetsError, setOffsetsError] = useState('')
+  const [initiatives, setInitiatives] = useState(null)
+  const [initiativesError, setInitiativesError] = useState('')
   const [refreshing, setRefreshing] = useState(false)
   const [updatedAt, setUpdatedAt] = useState(null)
   const [period, setPeriod] = useState(12)
+  const [section, setSection] = useState('overview')
+
+  const loadOffsets = useCallback(async () => {
+    setOffsetsError('')
+    try { setOffsets(await listOffsets({ country: activeCountry })) }
+    catch (e) { setOffsets([]); setOffsetsError(toUserMessage(e, 'Could not load the offsets ledger.')) }
+  }, [activeCountry])
+
+  const loadInitiatives = useCallback(async () => {
+    setInitiativesError('')
+    try { setInitiatives(await listInitiatives({ country: activeCountry })) }
+    catch (e) { setInitiatives([]); setInitiativesError(toUserMessage(e, 'Could not load reduction initiatives.')) }
+  }, [activeCountry])
 
   const load = useCallback(async () => {
     setRefreshing(true); setError('')
     try {
-      const [d, o, i] = await Promise.allSettled([
+      const [d] = await Promise.allSettled([
         getLifecycleCarbonData({ country: activeCountry }),
-        listOffsets({ country: activeCountry }),
-        listInitiatives({ country: activeCountry }),
+        loadOffsets(),
+        loadInitiatives(),
       ])
       if (d.status === 'fulfilled') setData(d.value)
       else { setData({ tyres: [], vehicles: [] }); setError(toUserMessage(d.reason, 'Could not load lifecycle carbon data.')) }
-      setOffsets(o.status === 'fulfilled' ? o.value : [])
-      setInitiatives(i.status === 'fulfilled' ? i.value : [])
       setUpdatedAt(new Date())
     } finally {
       setRefreshing(false)
     }
-  }, [activeCountry])
+  }, [activeCountry, loadOffsets, loadInitiatives])
 
   useEffect(() => { load() }, [load])
 
@@ -147,84 +213,113 @@ function LifecycleEsgView() {
     () => computeLifecycleCarbon({
       tyres: data?.tyres || [],
       vehicles: data?.vehicles || [],
-      periodDays: (period || 36) * 30, // 0 (all time) → ~3y window
+      periodDays: (period || 36) * 30, // 0 (all time) is a ~3 year window
     }),
     [data, period],
   )
-
-  const s = carbon.summary
-  const eq = carbon.equivalents
-  const fs = carbon.fleetStats
+  const k = useMemo(() => lifecycleKpis(carbon), [carbon])
+  const off = useMemo(() => offsetsSummary(offsets), [offsets])
+  const ini = useMemo(() => initiativesSummary(initiatives), [initiatives])
   const loading = data === null
-  const hasData = !loading && (fs.totalVehicles > 0 || carbon.tyreBreakdown.length > 0
-    || fs.retreadsPeriod > 0 || fs.scrappedPeriod > 0 || fs.newTyresPeriod > 0)
+  const failed = !!error
+  const band = esgBand(k.esgScore)
+  const netAfter = netAfterOffsetsKg(k.netCo2Kg, off.totalTonnes)
 
-  // ── KPI tiles ──────────────────────────────────────────────────────────────
-  const kpis = [
-    { label: 'Net lifecycle CO₂', value: `${asTonnes(s.totalCo2NetKg)} t`, sub: `${fmt(s.totalCo2GrossKg)} kg gross`, icon: Factory, tone: 'text-red-400' },
-    { label: 'CO₂ saved retreading', value: `${asTonnes(s.co2SavedRetreadingKg)} t`, sub: `${fmt(fs.retreadsPeriod)} retreads · ${fmt(eq.treesSavedRetreading)} trees`, icon: Recycle, tone: 'text-green-400' },
-    { label: 'Under-inflation CO₂', value: `${asTonnes(s.co2FromUnderinflationKg)} t`, sub: `${fmt(fs.lowPressureCurrently)} low-pressure tyres`, icon: Gauge, tone: 'text-amber-400' },
-    { label: 'Scrapped CO₂', value: `${asTonnes(s.co2FromScrappedKg)} t`, sub: `${fmt(fs.scrappedPeriod)} scrapped tyres`, icon: TrendingDown, tone: 'text-blue-400' },
+  const na = (v) => (failed ? 'N/A' : v)
+  const tiles = [
+    { label: 'Net lifecycle CO2', value: na(fmtTonnes(k.netCo2Kg)), sub: k.grossCo2Kg != null ? `${fmtNum(k.grossCo2Kg)} kg gross` : 'No lifecycle signal', icon: Factory, tone: 'crit' },
+    { label: 'Saved by retreading', value: na(fmtTonnes(k.savedRetreadKg)), sub: `${fmtNum(k.retreads)} retreads`, icon: Recycle, tone: 'accent' },
+    { label: 'Under-inflation CO2', value: na(fmtTonnes(k.underinflationKg)), sub: `${fmtNum(k.lowPressure)} low-pressure tyres`, icon: Gauge, tone: 'warn' },
+    { label: 'Scrapped CO2', value: na(fmtTonnes(k.scrappedKg)), sub: `${fmtNum(k.scrapped)} scrapped tyres`, icon: TrendingDown, tone: 'info' },
+    { label: 'ESG score', value: na(k.esgScore == null ? 'N/A' : `${k.esgScore}/100`), sub: band.label, icon: Award, tone: band.tone },
+    { label: 'Net after offsets', value: na(fmtTonnes(netAfter)), sub: off.totalTonnes != null ? `${off.totalTonnes} t offset` : 'No offsets recorded', icon: Scale, tone: 'neutral' },
   ]
 
-  // ── Charts ──────────────────────────────────────────────────────────────────
+  // Charts
   const chartText = chartTextColor()
   const barOpts = (unit) => ({
     responsive: true, maintainAspectRatio: false,
-    plugins: {
-      legend: { display: false },
-      tooltip: { callbacks: { label: (c) => `${fmt(c.raw)} ${unit}` } },
-    },
+    plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => `${fmtNum(c.raw)} ${unit}` } } },
     scales: {
-      x: { ticks: { color: chartText }, grid: { color: 'rgba(148,163,184,0.12)' } },
-      y: { ticks: { color: chartText }, grid: { color: 'rgba(148,163,184,0.12)' } },
+      x: { ticks: { color: chartText }, grid: { color: GRID } },
+      y: { ticks: { color: chartText }, grid: { color: GRID }, title: { display: true, text: unit, color: chartText } },
     },
   })
-
   const classBar = {
-    labels: carbon.tyreBreakdown.map((r) => cls(r.applicationClass)),
-    datasets: [{ data: carbon.tyreBreakdown.map((r) => r.totalCo2Kg), backgroundColor: '#22c55e', borderRadius: 4 }],
+    labels: carbon.tyreBreakdown.map((r) => humanize(r.applicationClass)),
+    datasets: [{ data: carbon.tyreBreakdown.map((r) => r.totalCo2Kg), backgroundColor: colorAt(0), borderRadius: 4 }],
   }
   const trendBar = {
     labels: carbon.monthlyTrend.map((m) => m.label),
-    datasets: [{ data: carbon.monthlyTrend.map((m) => m.estimatedCo2Kg), backgroundColor: '#3b82f6', borderRadius: 4 }],
+    datasets: [{ data: carbon.monthlyTrend.map((m) => m.estimatedCo2Kg), backgroundColor: colorAt(1), borderRadius: 4 }],
   }
 
-  // ── Export (by-class embedded CO2) ──────────────────────────────────────────
+  // Export (every section in one workbook-friendly shape)
   const EXPORT_COLS = ['applicationClass', 'count', 'co2PerTyreKg', 'totalCo2Kg']
-  const EXPORT_HEADERS = ['Vehicle class', 'New tyres', 'CO₂ / tyre (kg)', 'Total CO₂ (kg)']
+  const EXPORT_HEADERS = ['Vehicle class', 'New tyres', 'CO2 per tyre (kg)', 'Total CO2 (kg)']
+  const exportRows = carbon.tyreBreakdown.map((r) => ({ ...r, applicationClass: humanize(r.applicationClass) }))
+  const fileBase = reportFileName('Carbon Lifecycle ESG', activeCountry !== 'All' ? activeCountry : '')
+  const periodLabel = PERIODS.find((p) => p.value === period)?.label || ''
+  const doExcel = async () => {
+    try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, fileBase, 'Embedded CO2', { title: 'Carbon Lifecycle ESG', dateRange: periodLabel }) }
+    catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) }
+  }
+  const pdfCols = EXPORT_COLS.map((key, i) => ({ key, header: EXPORT_HEADERS[i] }))
+  const doPdf = async () => {
+    try { await exportToPdf(exportRows, pdfCols, 'Carbon Lifecycle ESG', fileBase, 'landscape') }
+    catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) }
+  }
 
-  const esgTone = s.esgScore >= 70 ? 'text-green-400' : s.esgScore >= 50 ? 'text-amber-400' : 'text-red-400'
-  const bandTone = (urgency) => (
-    urgency === 'high' ? 'text-red-400' : urgency === 'medium' ? 'text-amber-400'
-      : urgency === 'low' ? 'text-yellow-400' : 'text-green-400')
+  const classColumns = useMemo(() => [
+    { id: 'cls', header: 'Vehicle class', accessorFn: (r) => humanize(r.applicationClass), cell: ({ getValue }) => <span className="font-semibold text-[var(--text-primary)] capitalize">{getValue()}</span> },
+    { id: 'vehicles', header: 'Vehicles', accessorFn: (r) => r.vehicles, meta: { align: 'right' }, cell: ({ getValue }) => <span className="tabular-nums">{fmtNum(getValue())}</span> },
+    { id: 'km', header: 'Total km', accessorFn: (r) => r.km, meta: { align: 'right' }, cell: ({ getValue }) => <span className="tabular-nums">{fmtNum(getValue())}</span> },
+    { id: 'factor', header: 'Factor (kg/km)', accessorFn: (r) => r.emissionsFactor, meta: { align: 'right' }, cell: ({ getValue }) => <span className="tabular-nums text-[var(--text-muted)]">{getValue()}</span> },
+    { id: 'co2', header: 'CO2 (kg)', accessorFn: (r) => r.co2Kg, meta: { align: 'right' }, cell: ({ getValue }) => <span className="tabular-nums">{fmtNum(getValue())}</span> },
+    { id: 'co2t', header: 'CO2 (t)', accessorFn: (r) => r.co2Tonnes, meta: { align: 'right' }, cell: ({ getValue }) => <span className="tabular-nums font-semibold text-[var(--text-primary)]">{getValue()}</span> },
+  ], [])
+
+  const tyreColumns = useMemo(() => [
+    { id: 'cls', header: 'Vehicle class', accessorFn: (r) => humanize(r.applicationClass), cell: ({ getValue }) => <span className="capitalize">{getValue()}</span> },
+    { id: 'count', header: 'New tyres', accessorFn: (r) => r.count, meta: { align: 'right' } },
+    { id: 'each', header: 'CO2 per tyre (kg)', accessorFn: (r) => r.co2PerTyreKg, meta: { align: 'right' } },
+    { id: 'total', header: 'Total CO2 (kg)', accessorFn: (r) => r.totalCo2Kg, meta: { align: 'right' }, cell: ({ getValue }) => <span className="tabular-nums font-semibold">{fmtNum(getValue())}</span> },
+  ], [])
+
+  const SECTIONS = [
+    { key: 'overview', label: 'Overview', icon: LayoutDashboard },
+    { key: 'classes', label: 'Emissions by class', icon: BarChart3, count: loading ? null : carbon.byClassEmissions.length },
+    { key: 'offsets', label: 'Offsets', icon: TreePine, count: offsets ? offsets.length : null },
+    { key: 'initiatives', label: 'Initiatives', icon: Target, count: initiatives ? initiatives.length : null },
+  ]
 
   return (
     <>
       <PageHeader
         title="Carbon Tracker: Lifecycle ESG"
-        subtitle="Embedded tyre-lifecycle CO₂, retread savings & ESG score: GCC sustainability reporting."
+        subtitle="Embedded tyre-lifecycle CO2, retread savings and an ESG score for GCC sustainability reporting."
         icon={Leaf}
         onRefresh={load}
         refreshing={refreshing}
         updatedAt={updatedAt}
         actions={
-          <div className="flex items-center gap-2">
-            <select className="input" value={period} onChange={(e) => setPeriod(Number(e.target.value))} aria-label="Period">
+          <div className="flex flex-wrap items-center gap-2">
+            <label htmlFor="ct-life-period" className="sr-only">Period</label>
+            <select id="ct-life-period" className={`input min-h-[44px] ${FOCUS}`} value={period} onChange={(e) => setPeriod(Number(e.target.value))}>
               {PERIODS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
             </select>
-            <button onClick={async () => { try { await exportToExcel(carbon.tyreBreakdown, EXPORT_COLS, EXPORT_HEADERS, 'carbon_lifecycle') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!carbon.tyreBreakdown.length}>
-              <FileSpreadsheet size={14} /> Excel
+            <button type="button" onClick={doExcel} className={`btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] ${FOCUS}`} disabled={!exportRows.length}>
+              <FileSpreadsheet size={14} aria-hidden="true" /> Excel
             </button>
-            <button onClick={async () => { try { await exportToPdf(carbon.tyreBreakdown, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Carbon Lifecycle ESG', 'carbon_lifecycle', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!carbon.tyreBreakdown.length}>
-              <FileText size={14} /> PDF
+            <button type="button" onClick={doPdf} className={`btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] ${FOCUS}`} disabled={!exportRows.length}>
+              <FileText size={14} aria-hidden="true" /> PDF
             </button>
             <EmailPdfButton
-              disabled={!carbon.tyreBreakdown.length}
-              className="btn-secondary text-sm inline-flex items-center gap-1.5 disabled:opacity-50"
+              disabled={!exportRows.length}
+              className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] disabled:opacity-50"
               getPdf={async () => ({
-                base64: await exportToPdf(carbon.tyreBreakdown, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Carbon Lifecycle ESG', 'carbon_lifecycle', 'landscape', '', { returnBase64: true }),
-                filename: 'carbon_lifecycle.pdf',
+                base64: await exportToPdf(exportRows, pdfCols, 'Carbon Lifecycle ESG', fileBase, 'landscape', '', { returnBase64: true }),
+                filename: `${fileBase}.pdf`,
                 subject: 'Carbon Lifecycle ESG',
                 bodyHtml: '<p>Attached is the Carbon Lifecycle ESG report.</p>',
               })}
@@ -233,225 +328,193 @@ function LifecycleEsgView() {
         }
       />
 
-      {/* Card owns its border inline, so the old `border-red-800/50` class would be
-          dead here; `tone` carries the red tint instead. The row lives in an inner
-          div because Card is flex-col. */}
-      {error && (
-        <Card tone="crit">
-          <div className="flex items-start gap-[var(--space-3)]">
-            <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-            <div><p className="text-red-300 font-medium">Couldn't load carbon data.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
-          </div>
-        </Card>
-      )}
+      {error && <ErrorBanner title="Could not load carbon data." message={error} onRetry={load} />}
 
-      {/* Methodology disclosure */}
-      <Card tone="warn">
-        <div className="flex items-start gap-[var(--space-3)]">
-          <Info size={16} className="text-amber-400 mt-0.5 shrink-0" />
-          <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
-            <span className="font-semibold text-amber-300">Lifecycle model.</span>{' '}
-            Embedded CO₂ per new tyre = manufacturing (by vehicle class) + {CO2_FACTORS.transport_to_uae} kg transport-to-UAE + {CO2_FACTORS.end_of_life} kg end-of-life.
-            Retreading saves {CO2_FACTORS.retread_saving} kg/tyre; under-inflation adds {CO2_FACTORS.underinflation_per_10k_km} kg per 10,000 km. Vehicle class is
-            derived by joining each tyre's asset to <span className="font-mono text-xs">vehicle_fleet.vehicle_type</span>. Trees ≈ 1 per {KG_CO2_PER_TREE_YEAR} kg CO₂/yr.
-          </p>
-        </div>
-      </Card>
+      <KpiStrip loading={loading} tiles={tiles} />
 
-      {carbon.retreadFromTextOnly && (
-        <Card tone="warn">
-          <div className="flex items-start gap-[var(--space-3)]">
-            <AlertTriangle size={16} className="text-yellow-400 mt-0.5 shrink-0" />
-            <p className="text-sm text-[var(--text-secondary)]">
-              <span className="font-semibold text-yellow-300">Retread signal derived from text.</span>{' '}
-              No explicit <span className="font-mono text-xs">retread</span> category was found; retread counts are inferred from free-text removal reasons and should be treated as indicative.
-            </p>
-          </div>
-        </Card>
-      )}
+      <TabBar label="Lifecycle sections" value={section} onChange={setSection} tabs={SECTIONS} />
 
-      {/* KPI tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-[var(--gap-grid)]">
-        {kpis.map((k) => {
-          const Icon = k.icon
-          return (
-            <Card key={k.label}>
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
-                <Icon size={16} className={k.tone} />
+      {section === 'overview' && (
+        <div className="space-y-[var(--gap-grid)]">
+          <Card tone="warn">
+            <div className="flex items-start gap-[var(--space-3)]">
+              <Info size={16} className="text-amber-400 mt-0.5 shrink-0" aria-hidden="true" />
+              <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
+                <span className="font-semibold text-[var(--text-primary)]">Lifecycle model.</span>{' '}
+                Embedded CO2 per new tyre = manufacturing (by vehicle class) + {CO2_FACTORS.transport_to_uae} kg transport to the UAE + {CO2_FACTORS.end_of_life} kg end of life.
+                Retreading saves {CO2_FACTORS.retread_saving} kg per tyre; under-inflation adds {CO2_FACTORS.underinflation_per_10k_km} kg per 10,000 km. Vehicle class comes from
+                joining each tyre's asset to <span className="font-mono text-xs">vehicle_fleet.vehicle_type</span>. Trees: about 1 per {KG_CO2_PER_TREE_YEAR} kg CO2 per year.
+              </p>
+            </div>
+          </Card>
+
+          {carbon.retreadFromTextOnly && (
+            <Card tone="warn">
+              <div className="flex items-start gap-[var(--space-3)]">
+                <AlertTriangle size={16} className="text-amber-400 mt-0.5 shrink-0" aria-hidden="true" />
+                <p className="text-sm text-[var(--text-secondary)]">
+                  <span className="font-semibold text-[var(--text-primary)]">Retread signal derived from text.</span>{' '}
+                  No explicit retread category was found; retread counts are inferred from free-text removal reasons and are indicative only.
+                </p>
               </div>
-              <p className={`text-2xl font-bold mt-1 truncate ${k.tone}`}>{loading ? 'N/A' : k.value}</p>
-              <p className="text-xs text-[var(--text-muted)] mt-0.5">{loading ? '' : k.sub}</p>
             </Card>
-          )
-        })}
-      </div>
+          )}
 
-      {/* ESG scorecard */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-[var(--gap-grid)]">
-        {/* Card is already `flex flex-col`; only the justification is added here. */}
-        <Card className="justify-between">
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-[var(--text-muted)]">ESG score</p>
-            <Award size={16} className={esgTone} />
-          </div>
-          <div className="mt-1">
-            <p className={`text-4xl font-bold ${esgTone}`}>{loading ? 'N/A' : s.esgScore}<span className="text-lg text-[var(--text-muted)]">/100</span></p>
-            <div className="mt-2 h-2 rounded-full bg-[var(--input-bg)] overflow-hidden">
-              <div className={`h-full rounded-full ${s.esgScore >= 70 ? 'bg-green-500' : s.esgScore >= 50 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${Math.max(0, Math.min(100, s.esgScore))}%` }} />
-            </div>
-            <div className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium">
-              {s.certificationReady
-                ? <><ShieldCheck size={15} className="text-green-400" /><span className="text-green-400">Certification-ready</span></>
-                : <><AlertTriangle size={15} className="text-amber-400" /><span className="text-amber-400">Below certification threshold (70)</span></>}
-            </div>
-          </div>
-        </Card>
+          {!loading && !k.hasData && !failed && (
+            <Card className="text-center" style={{ paddingTop: 'var(--space-12)', paddingBottom: 'var(--space-12)' }}>
+              <Leaf size={28} className="mx-auto mb-2 text-[var(--text-muted)] opacity-60" aria-hidden="true" />
+              <p className="text-[var(--text-secondary)] font-medium">No lifecycle carbon signal for this scope.</p>
+              <p className="text-sm text-[var(--text-muted)] mt-1">Add tyre records and fleet vehicles, or widen the period, to populate the ESG model.</p>
+            </Card>
+          )}
 
-        <Card>
-          <p className="text-xs text-[var(--text-muted)] mb-2">ESG components</p>
-          <ComponentRow label="Retread rate" value={`${s.retreadRatePct}%`} band={carbon.retreadBand.label} tone={bandTone(carbon.retreadBand.urgency)} icon={Recycle} />
-          <ComponentRow label="Pressure compliance" value={`${s.pressureCompliancePct}%`} icon={Gauge} />
-          <ComponentRow label="Fleet intensity" value={carbon.intensity.fleetIntensityKgPerKm != null ? `${carbon.intensity.fleetIntensityKgPerKm} kg/km` : 'N/A'} band={carbon.intensity.band.band !== 'unknown' ? carbon.intensity.band.label : 'No fleet-km data'} tone={bandTone(carbon.intensity.band.urgency)} icon={Activity} last />
-        </Card>
-
-        <Card>
-          <p className="text-xs text-[var(--text-muted)] mb-2">Reduction vs prior period</p>
-          <div className="flex items-center gap-2">
-            <TrendingDown size={22} className={carbon.reductionVsPriorPct != null && carbon.reductionVsPriorPct > 0 ? 'text-green-400' : 'text-[var(--text-muted)]'} />
-            <p className="text-3xl font-bold text-[var(--text-primary)]">{carbon.reductionVsPriorPct != null ? `${carbon.reductionVsPriorPct}%` : 'N/A'}</p>
-          </div>
-          <p className="text-xs text-[var(--text-muted)] mt-1">Last 6 months vs prior 6 months (new-tyre embedded CO₂).</p>
-          <div className="mt-3 pt-3 border-t border-[var(--input-border)] grid grid-cols-3 gap-2 text-center">
-            <Equiv icon={TreePine} tone="text-red-400" value={fmt(eq.treesEmitted)} label="trees emitted" />
-            <Equiv icon={TreePine} tone="text-green-400" value={fmt(eq.treesSavedRetreading)} label="trees saved" />
-            <Equiv icon={Truck} tone="text-blue-400" value={fmt(eq.drivingEquivalentKm)} label="km driving-equiv" />
-          </div>
-        </Card>
-      </div>
-
-      {/* Charts. These stay PADDED, so the canvas never reaches the radius and
-          `clip` would only arm the clipping hazard for a later menu. */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-[var(--gap-grid)]">
-        <Card>
-          <CardHeader level={2} title="Embedded CO₂ by vehicle class (kg)" />
-          <div className="h-64">
-            {loading ? <ChartSkeleton />
-              : carbon.tyreBreakdown.length ? <Bar data={classBar} options={barOpts('kg CO₂')} />
-                : <EmptyChart empty="No new tyres in this period." />}
-          </div>
-        </Card>
-        <Card>
-          <CardHeader level={2} title="Monthly embedded CO₂ (last 12 months, kg)" />
-          <div className="h-64">
-            {loading ? <ChartSkeleton />
-              : carbon.monthlyTrend.some((m) => m.estimatedCo2Kg > 0) ? <Bar data={trendBar} options={barOpts('kg CO₂')} />
-                : <EmptyChart empty="No dated tyre issues to trend." />}
-          </div>
-        </Card>
-      </div>
-
-      {/* By-class emissions table (lifetime odometer × per-km factor).
-          `clip` is correct here: the edge-to-edge table must crop to the radius,
-          and this card holds no menu, select or date picker to clip. */}
-      <Card pad="none" clip>
-        <CardHeader
-          level={2}
-          icon={BarChart3}
-          title="Operational emissions by class"
-          actions={<span className="text-xs text-[var(--text-muted)]">lifetime odometer × per-km factor</span>}
-          className="!mb-0 px-[var(--space-4)] py-[var(--space-3)] border-b border-[var(--border-dim)]"
-        />
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                {['Vehicle class', 'Vehicles', 'Total km', 'Factor (kg/km)', 'CO₂ (kg)', 'CO₂ (t)'].map((h) => (
-                  <th key={h} className="px-4 py-3 font-semibold whitespace-nowrap">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                [0, 1, 2].map((i) => (
-                  <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={6} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>
-                ))
-              ) : carbon.byClassEmissions.length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-12 text-center text-[var(--text-muted)]"><Truck size={22} className="mx-auto mb-2 opacity-60" />No active vehicles with odometer data.</td></tr>
-              ) : (
-                carbon.byClassEmissions.map((r) => (
-                  <tr key={r.applicationClass} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                    <td className="px-4 py-2.5 font-semibold text-[var(--text-primary)] capitalize">{cls(r.applicationClass)}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)] tabular-nums">{fmt(r.vehicles)}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)] tabular-nums">{fmt(r.km)}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-muted)] tabular-nums">{r.emissionsFactor}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)] tabular-nums">{fmt(r.co2Kg)}</td>
-                    <td className="px-4 py-2.5 font-semibold text-red-400 tabular-nums">{r.co2Tonnes}</td>
-                  </tr>
-                ))
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-[var(--gap-grid)]">
+            <Card>
+              <CardHeader level={2} icon={Award} title="ESG score" />
+              {loading ? <Skeleton className="h-24 w-full" /> : (
+                <>
+                  <p className="text-4xl font-bold text-[var(--text-primary)] tabular-nums">{k.esgScore == null ? 'N/A' : k.esgScore}<span className="text-lg text-[var(--text-muted)]">/100</span></p>
+                  <div className="mt-2 h-2 rounded-full bg-[var(--input-bg)] overflow-hidden" role="img" aria-label={`ESG score ${k.esgScore == null ? 'not measured' : `${k.esgScore} of 100`}`}>
+                    {k.esgScore != null && <div className={`h-full rounded-full ${k.esgScore >= 70 ? 'bg-green-500' : k.esgScore >= 50 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${Math.max(0, Math.min(100, k.esgScore))}%` }} />}
+                  </div>
+                  <p className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-[var(--text-secondary)]">
+                    {k.certificationReady ? <ShieldCheck size={15} className="text-green-400" aria-hidden="true" /> : <AlertTriangle size={15} className="text-amber-400" aria-hidden="true" />}
+                    {k.certificationReady == null ? 'Not measured for this scope' : k.certificationReady ? 'Certification-ready (70 or above)' : 'Below certification threshold (70)'}
+                  </p>
+                </>
               )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+            </Card>
 
-      {/* Card sets `padding` INLINE, so a `py-*` utility here would be dead and the
-          empty state would silently collapse. The extra breathing room is a token. */}
-      {!loading && !hasData && (
-        <Card className="text-center" style={{ paddingTop: 'var(--space-12)', paddingBottom: 'var(--space-12)' }}>
-          <Leaf size={28} className="mx-auto mb-2 text-[var(--text-muted)] opacity-60" />
-          <p className="text-[var(--text-secondary)] font-medium">No lifecycle carbon signal for this scope.</p>
-          <p className="text-sm text-[var(--text-muted)] mt-1">Add tyre records and fleet vehicles, or widen the period, to populate the ESG model.</p>
-        </Card>
+            <Card>
+              <CardHeader level={2} icon={Gauge} title="ESG components" />
+              <ComponentRow label="Retread rate" value={k.retreadRatePct == null ? 'N/A' : `${k.retreadRatePct}%`} band={k.retreadRatePct == null ? 'No retread or scrap events' : carbon.retreadBand.label} />
+              <ComponentRow label="Pressure compliance" value={k.pressureCompliancePct == null ? 'N/A' : `${k.pressureCompliancePct}%`} band={k.pressureCompliancePct == null ? 'No active fleet' : null} />
+              <ComponentRow label="Fleet intensity" value={carbon.intensity.fleetIntensityKgPerKm != null ? `${carbon.intensity.fleetIntensityKgPerKm} kg/km` : 'N/A'} band={carbon.intensity.band.band !== 'unknown' ? carbon.intensity.band.label : 'No fleet km data'} last />
+            </Card>
+
+            <Card>
+              <CardHeader level={2} icon={TrendingDown} title="Reduction vs prior period" />
+              <p className="text-3xl font-bold text-[var(--text-primary)] tabular-nums">{carbon.reductionVsPriorPct != null ? `${carbon.reductionVsPriorPct}%` : 'N/A'}</p>
+              <p className="text-xs text-[var(--text-muted)] mt-1">Last 6 months vs the prior 6 months (new-tyre embedded CO2).</p>
+              <dl className="mt-3 pt-3 border-t border-[var(--input-border)] grid grid-cols-3 gap-2 text-center">
+                <Equiv value={k.hasData ? fmtNum(carbon.equivalents.treesEmitted) : 'N/A'} label="trees emitted" />
+                <Equiv value={k.hasData ? fmtNum(carbon.equivalents.treesSavedRetreading) : 'N/A'} label="trees saved" />
+                <Equiv value={k.hasData ? fmtNum(carbon.equivalents.drivingEquivalentKm) : 'N/A'} label="km driving equivalent" />
+              </dl>
+            </Card>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-[var(--gap-grid)]">
+            <Card>
+              <CardHeader level={2} title="Embedded CO2 by vehicle class" description="kg CO2 from new tyres fitted in the period" />
+              <div className="h-64" role="img" aria-label={`Embedded CO2 by vehicle class, ${carbon.tyreBreakdown.length} classes`}>
+                {loading ? <Skeleton className="w-full h-full" />
+                  : carbon.tyreBreakdown.length ? <Bar data={classBar} options={barOpts('kg CO2')} />
+                    : <EmptyChart empty={failed ? 'Could not load this chart.' : 'No new tyres in this period.'} />}
+              </div>
+            </Card>
+            <Card>
+              <CardHeader level={2} title="Monthly embedded CO2" description="Last 12 months, kg CO2" />
+              <div className="h-64" role="img" aria-label="Monthly embedded CO2 over the last 12 months">
+                {loading ? <Skeleton className="w-full h-full" />
+                  : carbon.monthlyTrend.some((m) => m.estimatedCo2Kg > 0) ? <Bar data={trendBar} options={barOpts('kg CO2')} />
+                    : <EmptyChart empty={failed ? 'Could not load this chart.' : 'No dated tyre issues to trend.'} />}
+              </div>
+            </Card>
+          </div>
+        </div>
       )}
 
-      {/* Offsets ledger */}
-      <OffsetsPanel
-        offsets={offsets}
-        canWrite={canWrite}
-        activeCountry={activeCountry}
-        onChange={async () => setOffsets(await listOffsets({ country: activeCountry }).catch(() => []))}
-      />
+      {section === 'classes' && (
+        <div className="space-y-[var(--gap-grid)]">
+          <Card>
+            <CardHeader level={2} icon={BarChart3} title="Operational emissions by class" description="Lifetime odometer times the per-km emission factor for each active vehicle class." />
+            <EnterpriseTable
+              columns={classColumns}
+              data={carbon.byClassEmissions}
+              getRowId={(r) => r.applicationClass}
+              loading={loading}
+              error={failed ? error : null}
+              onRetry={load}
+              emptyMessage="No active vehicles with odometer data."
+              emptyIcon={<Truck size={22} className="opacity-60" />}
+              exportFileName={reportFileName('Carbon Operational Emissions')}
+              reportMeta={{ title: 'Operational emissions by class' }}
+              initialPageSize={25}
+            />
+          </Card>
+          <Card>
+            <CardHeader level={2} icon={Factory} title="Embedded CO2 of new tyres" description={`New tyres fitted in the selected period (${periodLabel}).`} />
+            <EnterpriseTable
+              columns={tyreColumns}
+              data={carbon.tyreBreakdown}
+              getRowId={(r) => r.applicationClass}
+              loading={loading}
+              error={failed ? error : null}
+              onRetry={load}
+              emptyMessage="No new tyres in this period."
+              exportFileName={reportFileName('Carbon Embedded CO2')}
+              reportMeta={{ title: 'Embedded CO2 of new tyres', dateRange: periodLabel }}
+              initialPageSize={25}
+            />
+          </Card>
+        </div>
+      )}
 
-      {/* Reduction initiatives */}
-      <InitiativesPanel
-        initiatives={initiatives}
-        canWrite={canWrite}
-        activeCountry={activeCountry}
-        onChange={async () => setInitiatives(await listInitiatives({ country: activeCountry }).catch(() => []))}
-      />
+      {section === 'offsets' && (
+        <OffsetsPanel
+          offsets={offsets}
+          summary={off}
+          error={offsetsError}
+          canWrite={canWrite}
+          activeCountry={activeCountry}
+          onReload={loadOffsets}
+        />
+      )}
+
+      {section === 'initiatives' && (
+        <InitiativesPanel
+          initiatives={initiatives}
+          summary={ini}
+          error={initiativesError}
+          canWrite={canWrite}
+          activeCountry={activeCountry}
+          onReload={loadInitiatives}
+        />
+      )}
     </>
   )
 }
 
-function ComponentRow({ label, value, band, tone, icon: Icon, last }) {
+function ComponentRow({ label, value, band, last }) {
   return (
-    <div className={`flex items-center gap-2 py-2 ${last ? '' : 'border-b border-[var(--input-border)]/50'}`}>
-      <Icon size={14} className="text-[var(--text-muted)] shrink-0" />
+    <div className={`flex flex-wrap items-center gap-2 py-2 ${last ? '' : 'border-b border-[var(--input-border)]'}`}>
       <span className="text-sm text-[var(--text-secondary)]">{label}</span>
       <span className="ml-auto text-sm font-semibold text-[var(--text-primary)] tabular-nums">{value}</span>
-      {band && <span className={`text-[10px] px-1.5 py-0.5 rounded ${tone} bg-[var(--input-bg)] whitespace-nowrap`}>{band}</span>}
+      {band && <span className="w-full text-[11px] text-[var(--text-muted)] text-right">{band}</span>}
     </div>
   )
 }
 
-function Equiv({ icon: Icon, tone, value, label }) {
+function Equiv({ value, label }) {
   return (
     <div>
-      <Icon size={15} className={`mx-auto ${tone}`} />
-      <p className="text-sm font-bold text-[var(--text-primary)] tabular-nums mt-0.5">{value}</p>
-      <p className="text-[10px] text-[var(--text-muted)] leading-tight">{label}</p>
+      <dt className="sr-only">{label}</dt>
+      <dd className="text-sm font-bold text-[var(--text-primary)] tabular-nums">{value}</dd>
+      <p className="text-[11px] text-[var(--text-muted)] leading-tight" aria-hidden="true">{label}</p>
     </div>
   )
 }
 
 // ── Offsets panel ─────────────────────────────────────────────────────────────
-function OffsetsPanel({ offsets, canWrite, activeCountry, onChange }) {
+function OffsetsPanel({ offsets, summary, error, canWrite, activeCountry, onReload }) {
   const [form, setForm] = useState({ provider: '', project: '', tonnes: '', aed_cost: '' })
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
-  const totalTonnes = offsets.reduce((sum, o) => sum + (Number(o.tonnes) || 0), 0)
-  const totalAed = offsets.reduce((sum, o) => sum + (Number(o.aed_cost) || 0), 0)
+  const [search, setSearch] = useState('')
+  const [confirm, setConfirm] = useState(null)
+  const loading = offsets === null
+  const rows = useMemo(() => filterOffsets(offsets || [], search), [offsets, search])
 
   const submit = async (e) => {
     e.preventDefault(); setMsg('')
@@ -460,87 +523,115 @@ function OffsetsPanel({ offsets, canWrite, activeCountry, onChange }) {
     try {
       await createOffset({ ...form, country: activeCountry !== 'All' ? activeCountry : undefined })
       setForm({ provider: '', project: '', tonnes: '', aed_cost: '' })
-      await onChange()
+      await onReload()
     } catch (err) {
-      setMsg(toUserMessage(err, 'Could not add offset (carbon ESG tables may need migration V210).'))
+      setMsg(toUserMessage(err, 'Could not add the offset.'))
     } finally { setBusy(false) }
   }
 
-  const remove = async (id) => {
+  const remove = async () => {
+    if (!confirm) return
     setBusy(true); setMsg('')
-    try { await deleteOffset(id); await onChange() }
-    catch (err) { setMsg(toUserMessage(err, 'Could not remove offset.')) }
+    try { await deleteOffset(confirm.id); setConfirm(null); await onReload() }
+    catch (err) { setMsg(toUserMessage(err, 'Could not remove the offset.')) }
     finally { setBusy(false) }
   }
 
+  const columns = useMemo(() => [
+    { id: 'provider', header: 'Provider', accessorFn: (o) => o.provider || 'N/A', cell: ({ getValue }) => <span className="font-medium text-[var(--text-primary)]">{getValue()}</span> },
+    { id: 'project', header: 'Project', accessorFn: (o) => o.project || 'N/A' },
+    { id: 'date', header: 'Purchased', accessorFn: (o) => (o.purchased_at || '').slice(0, 10) || 'N/A' },
+    { id: 'tonnes', header: 'Tonnes', accessorFn: (o) => (o.tonnes == null ? null : Number(o.tonnes)), meta: { align: 'right' }, cell: ({ getValue }) => <span className="tabular-nums font-semibold">{getValue() == null ? 'N/A' : `${getValue().toFixed(2)} t`}</span> },
+    { id: 'cost', header: 'Cost (AED)', accessorFn: (o) => (o.aed_cost == null || o.aed_cost === '' ? null : Number(o.aed_cost)), meta: { align: 'right' }, cell: ({ getValue }) => <span className="tabular-nums">{fmtNum(getValue())}</span> },
+    ...(canWrite ? [{
+      id: 'actions', header: '', enableSorting: false, meta: { export: false },
+      cell: ({ row }) => (
+        <button type="button" onClick={() => setConfirm(row.original)} className={`inline-flex items-center justify-center min-h-[44px] min-w-[44px] rounded text-[var(--text-muted)] hover:text-red-400 ${FOCUS}`} aria-label={`Remove offset ${row.original.provider || ''}`.trim()} disabled={busy}>
+          <Trash2 size={15} aria-hidden="true" />
+        </button>
+      ),
+    }] : []),
+  ], [canWrite, busy])
+
   return (
-    // No `clip`: the form below carries a native control, and a clipped card is
-    // exactly the popover bug Card exists to end.
-    <Card>
-      <CardHeader
-        level={2}
-        icon={TreePine}
-        title="Carbon offsets ledger"
-        actions={offsets.length > 0 ? (
-          <span className="text-xs text-[var(--text-muted)]">
-            {totalTonnes.toFixed(2)} t · <CircleDollarSign size={11} className="inline -mt-0.5" /> AED {fmt(totalAed)}
-          </span>
-        ) : null}
-      />
+    <div className="space-y-[var(--gap-grid)]">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-[var(--gap-grid)]">
+        <StatTile label="Offsets recorded" value={loading ? '...' : fmtNum(summary.count)} icon={TreePine} />
+        <StatTile label="Tonnes offset" value={summary.totalTonnes == null ? 'N/A' : `${summary.totalTonnes} t`} icon={Leaf} tone="accent" />
+        <StatTile label="Total cost" value={summary.totalCost == null ? 'N/A' : `AED ${fmtNum(summary.totalCost)}`} sub={summary.count ? `${summary.costedCount} of ${summary.count} costed` : ''} icon={Scale} />
+        <StatTile label="Cost per tonne" value={summary.avgCostPerTonne == null ? 'N/A' : `AED ${summary.avgCostPerTonne}`} sub={`${summary.providers} providers`} icon={BarChart3} />
+      </div>
 
-      {canWrite && (
-        <form onSubmit={submit} className="grid grid-cols-1 md:grid-cols-5 gap-2 mb-4">
-          <input className="input" placeholder="Provider (e.g. Verra)" value={form.provider} onChange={(e) => setForm((f) => ({ ...f, provider: e.target.value }))} />
-          <input className="input" placeholder="Project" value={form.project} onChange={(e) => setForm((f) => ({ ...f, project: e.target.value }))} />
-          <input className="input" type="number" min="0.1" step="0.1" placeholder="Tonnes" value={form.tonnes} onChange={(e) => setForm((f) => ({ ...f, tonnes: e.target.value }))} required />
-          <input className="input" type="number" min="0" step="1" placeholder="AED cost (optional)" value={form.aed_cost} onChange={(e) => setForm((f) => ({ ...f, aed_cost: e.target.value }))} />
-          <button type="submit" className="btn-primary text-sm inline-flex items-center justify-center gap-1.5" disabled={busy}>
-            {busy ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Add offset
-          </button>
-        </form>
-      )}
-
-      {msg && <p className="text-sm text-red-400 mb-3">{msg}</p>}
-
-      {offsets.length === 0 ? (
-        <div className="py-8 text-center text-[var(--text-muted)]">
-          <TreePine size={22} className="mx-auto mb-2 opacity-60" />
-          <p className="text-sm">No offset purchases recorded yet.</p>
-          {!canWrite && <p className="text-xs mt-1">Offsets are added by Admin, Manager or Director roles.</p>}
+      <Card>
+        <CardHeader level={2} icon={TreePine} title="Carbon offsets ledger" />
+        {canWrite ? (
+          <form onSubmit={submit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-4 items-end">
+            <Field label="Provider" id="off-provider"><input id="off-provider" className="input min-h-[44px]" placeholder="e.g. Verra" value={form.provider} onChange={(e) => setForm((f) => ({ ...f, provider: e.target.value }))} /></Field>
+            <Field label="Project" id="off-project"><input id="off-project" className="input min-h-[44px]" value={form.project} onChange={(e) => setForm((f) => ({ ...f, project: e.target.value }))} /></Field>
+            <Field label="Tonnes (required)" id="off-tonnes"><input id="off-tonnes" className="input min-h-[44px]" type="number" min="0.1" step="0.1" value={form.tonnes} onChange={(e) => setForm((f) => ({ ...f, tonnes: e.target.value }))} required /></Field>
+            <Field label="Cost in AED (optional)" id="off-cost"><input id="off-cost" className="input min-h-[44px]" type="number" min="0" step="1" value={form.aed_cost} onChange={(e) => setForm((f) => ({ ...f, aed_cost: e.target.value }))} /></Field>
+            <button type="submit" className={`btn-primary text-sm inline-flex items-center justify-center gap-1.5 min-h-[44px] ${FOCUS}`} disabled={busy}>
+              {busy ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <Plus size={14} aria-hidden="true" />} Add offset
+            </button>
+          </form>
+        ) : (
+          <p className="text-xs text-[var(--text-muted)] mb-3">Offsets are added by Admin, Manager or Director roles.</p>
+        )}
+        {msg && <p role="alert" className="text-sm text-red-400 mb-3">{msg}</p>}
+        <div className="mb-3 relative max-w-md">
+          <label htmlFor="off-search" className="sr-only">Search offsets</label>
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+          <input id="off-search" className={`input pl-9 w-full min-h-[44px] ${FOCUS}`} placeholder="Search provider or project" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-      ) : (
-        <div className="space-y-2">
-          {offsets.map((o) => (
-            <div key={o.id} className="flex items-center justify-between rounded-md border border-[var(--input-border)] bg-[var(--input-bg)]/40 px-3 py-2 text-sm">
-              <div className="min-w-0">
-                <div className="font-semibold text-[var(--text-primary)] truncate">{o.provider || 'Offset'}</div>
-                <div className="text-xs text-[var(--text-muted)] truncate">{[o.project, (o.purchased_at || '').slice(0, 10)].filter(Boolean).join(' · ')}</div>
-              </div>
-              <div className="text-right shrink-0 flex items-center gap-3">
-                <div>
-                  <div className="font-mono font-bold text-green-400 tabular-nums">{Number(o.tonnes).toFixed(2)} t</div>
-                  <div className="text-xs text-[var(--text-muted)]">AED {fmt(o.aed_cost)}</div>
-                </div>
-                {canWrite && (
-                  <button onClick={() => remove(o.id)} className="text-[var(--text-muted)] hover:text-red-400 transition-colors" aria-label="Remove offset" disabled={busy}>
-                    <Trash2 size={15} />
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
+        <EnterpriseTable
+          columns={columns}
+          data={rows}
+          getRowId={(o) => String(o.id)}
+          loading={loading}
+          error={error || null}
+          onRetry={onReload}
+          enableGlobalFilter={false}
+          emptyMessage={search ? 'No offsets match this search.' : 'No offset purchases recorded yet.'}
+          exportFileName={reportFileName('Carbon Offsets Ledger')}
+          reportMeta={{ title: 'Carbon offsets ledger', currency: 'AED' }}
+          initialPageSize={25}
+        />
+      </Card>
+
+      {confirm && (
+        <Modal
+          open
+          size="sm"
+          onClose={() => { if (!busy) setConfirm(null) }}
+          title="Remove this offset?"
+          footer={(
+            <>
+              <button type="button" onClick={() => setConfirm(null)} className="btn-secondary text-sm min-h-[44px]" disabled={busy}>Cancel</button>
+              <button type="button" onClick={remove} className="btn-danger text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={busy}>
+                <Trash2 size={14} aria-hidden="true" /> {busy ? 'Removing...' : 'Remove'}
+              </button>
+            </>
+          )}
+        >
+          <p className="text-sm text-[var(--text-secondary)]">
+            {confirm.provider || 'Offset'}: {confirm.tonnes} t. This cannot be undone.
+          </p>
+        </Modal>
       )}
-    </Card>
+    </div>
   )
 }
 
 // ── Initiatives panel ─────────────────────────────────────────────────────────
-function InitiativesPanel({ initiatives, canWrite, activeCountry, onChange }) {
+function InitiativesPanel({ initiatives, summary, error, canWrite, activeCountry, onReload }) {
   const [form, setForm] = useState({ name: '', description: '', claimed_savings_kg: '', owner: '', status: 'active' })
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
-  const totalKg = initiatives.reduce((sum, i) => sum + (Number(i.claimed_savings_kg) || 0), 0)
+  const [search, setSearch] = useState('')
+  const [status, setStatus] = useState('')
+  const [confirm, setConfirm] = useState(null)
+  const loading = initiatives === null
+  const rows = useMemo(() => filterInitiatives(initiatives || [], { status, search }), [initiatives, status, search])
 
   const submit = async (e) => {
     e.preventDefault(); setMsg('')
@@ -549,81 +640,130 @@ function InitiativesPanel({ initiatives, canWrite, activeCountry, onChange }) {
     try {
       await createInitiative({ ...form, country: activeCountry !== 'All' ? activeCountry : undefined })
       setForm({ name: '', description: '', claimed_savings_kg: '', owner: '', status: 'active' })
-      await onChange()
+      await onReload()
     } catch (err) {
-      setMsg(toUserMessage(err, 'Could not add initiative (carbon ESG tables may need migration V210).'))
+      setMsg(toUserMessage(err, 'Could not add the initiative.'))
     } finally { setBusy(false) }
   }
 
-  const remove = async (id) => {
+  const remove = async () => {
+    if (!confirm) return
     setBusy(true); setMsg('')
-    try { await deleteInitiative(id); await onChange() }
-    catch (err) { setMsg(toUserMessage(err, 'Could not remove initiative.')) }
+    try { await deleteInitiative(confirm.id); setConfirm(null); await onReload() }
+    catch (err) { setMsg(toUserMessage(err, 'Could not remove the initiative.')) }
     finally { setBusy(false) }
   }
 
+  const columns = useMemo(() => [
+    {
+      id: 'name', header: 'Initiative', accessorFn: (i) => i.name || '',
+      cell: ({ row }) => (
+        <div className="min-w-0 max-w-[26rem]">
+          <p className="font-medium text-[var(--text-primary)]">{row.original.name}</p>
+          {row.original.description && <p className="text-xs text-[var(--text-muted)] line-clamp-2">{row.original.description}</p>}
+        </div>
+      ),
+    },
+    { id: 'owner', header: 'Owner', accessorFn: (i) => i.owner || 'N/A' },
+    { id: 'status', header: 'Status', accessorFn: (i) => humanize(i.status) || 'N/A', cell: ({ getValue }) => <span className="text-[11px] px-2 py-0.5 rounded border border-[var(--input-border)] text-[var(--text-secondary)] capitalize">{getValue()}</span> },
+    { id: 'saving', header: 'Claimed saving', accessorFn: (i) => (i.claimed_savings_kg == null || i.claimed_savings_kg === '' ? null : Number(i.claimed_savings_kg)), meta: { align: 'right' }, cell: ({ getValue }) => <span className="tabular-nums font-semibold">{fmtTonnes(getValue())}</span> },
+    { id: 'created', header: 'Added', accessorFn: (i) => (i.created_at || '').slice(0, 10) || 'N/A' },
+    ...(canWrite ? [{
+      id: 'actions', header: '', enableSorting: false, meta: { export: false },
+      cell: ({ row }) => (
+        <button type="button" onClick={() => setConfirm(row.original)} className={`inline-flex items-center justify-center min-h-[44px] min-w-[44px] rounded text-[var(--text-muted)] hover:text-red-400 ${FOCUS}`} aria-label={`Remove initiative ${row.original.name}`} disabled={busy}>
+          <Trash2 size={15} aria-hidden="true" />
+        </button>
+      ),
+    }] : []),
+  ], [canWrite, busy])
+
   return (
-    // No `clip`: the status <select> in the form below must not be clipped.
-    <Card>
-      <CardHeader
-        level={2}
-        icon={Target}
-        title="Reduction initiatives"
-        actions={initiatives.length > 0 ? <span className="text-xs text-[var(--text-muted)]">{asTonnes(totalKg)} t claimed savings</span> : null}
-      />
+    <div className="space-y-[var(--gap-grid)]">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-[var(--gap-grid)]">
+        <StatTile label="Initiatives" value={loading ? '...' : fmtNum(summary.count)} icon={Target} />
+        <StatTile label="Live (active or pilot)" value={loading ? '...' : fmtNum(summary.live)} icon={Leaf} tone="accent" />
+        <StatTile label="Completed" value={loading ? '...' : fmtNum(summary.completed)} icon={ShieldCheck} tone="info" />
+        <StatTile label="Claimed savings" value={fmtTonnes(summary.totalSavingsKg)} sub={summary.count ? `${summary.claimedCount} of ${summary.count} quantified` : ''} icon={TrendingDown} />
+      </div>
 
-      {canWrite && (
-        <form onSubmit={submit} className="grid grid-cols-1 md:grid-cols-6 gap-2 mb-4">
-          <input className="input md:col-span-2" placeholder="Initiative name" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required />
-          <input className="input" placeholder="Owner" value={form.owner} onChange={(e) => setForm((f) => ({ ...f, owner: e.target.value }))} />
-          <input className="input" type="number" min="0" step="1" placeholder="Saving (kg)" value={form.claimed_savings_kg} onChange={(e) => setForm((f) => ({ ...f, claimed_savings_kg: e.target.value }))} />
-          <select className="input" value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}>
-            {['active', 'pilot', 'planned', 'completed', 'on_hold'].map((st) => <option key={st} value={st}>{cls(st)}</option>)}
+      <Card>
+        <CardHeader level={2} icon={Target} title="Reduction initiatives" />
+        {canWrite ? (
+          <form onSubmit={submit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 mb-4 items-end">
+            <div className="lg:col-span-2"><Field label="Initiative name (required)" id="ini-name"><input id="ini-name" className="input min-h-[44px]" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required /></Field></div>
+            <Field label="Owner" id="ini-owner"><input id="ini-owner" className="input min-h-[44px]" value={form.owner} onChange={(e) => setForm((f) => ({ ...f, owner: e.target.value }))} /></Field>
+            <Field label="Saving (kg)" id="ini-saving"><input id="ini-saving" className="input min-h-[44px]" type="number" min="0" step="1" value={form.claimed_savings_kg} onChange={(e) => setForm((f) => ({ ...f, claimed_savings_kg: e.target.value }))} /></Field>
+            <Field label="Status" id="ini-status">
+              <select id="ini-status" className="input min-h-[44px]" value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}>
+                {INITIATIVE_STATUSES.map((st) => <option key={st} value={st}>{humanize(st)}</option>)}
+              </select>
+            </Field>
+            <button type="submit" className={`btn-primary text-sm inline-flex items-center justify-center gap-1.5 min-h-[44px] ${FOCUS}`} disabled={busy}>
+              {busy ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <Plus size={14} aria-hidden="true" />} Add
+            </button>
+            <div className="sm:col-span-2 lg:col-span-6"><Field label="Description (optional)" id="ini-desc"><input id="ini-desc" className="input min-h-[44px]" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} /></Field></div>
+          </form>
+        ) : (
+          <p className="text-xs text-[var(--text-muted)] mb-3">Initiatives are added by Admin, Manager or Director roles.</p>
+        )}
+        {msg && <p role="alert" className="text-sm text-red-400 mb-3">{msg}</p>}
+        <div className="flex flex-wrap items-end gap-2 mb-3">
+          <div className="relative flex-1 min-w-[12rem]">
+            <label htmlFor="ini-search" className="sr-only">Search initiatives</label>
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+            <input id="ini-search" className={`input pl-9 w-full min-h-[44px] ${FOCUS}`} placeholder="Search name, owner or description" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          <label htmlFor="ini-status-filter" className="sr-only">Status</label>
+          <select id="ini-status-filter" className={`input min-h-[44px] ${FOCUS}`} value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="">All statuses</option>
+            {INITIATIVE_STATUSES.map((st) => <option key={st} value={st}>{humanize(st)}</option>)}
           </select>
-          <button type="submit" className="btn-primary text-sm inline-flex items-center justify-center gap-1.5" disabled={busy}>
-            {busy ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Add
-          </button>
-        </form>
-      )}
-
-      {msg && <p className="text-sm text-red-400 mb-3">{msg}</p>}
-
-      {initiatives.length === 0 ? (
-        <div className="py-8 text-center text-[var(--text-muted)]">
-          <Target size={22} className="mx-auto mb-2 opacity-60" />
-          <p className="text-sm">No reduction initiatives recorded yet.</p>
-          {!canWrite && <p className="text-xs mt-1">Initiatives are added by Admin, Manager or Director roles.</p>}
+          {(search || status) && (
+            <button type="button" onClick={() => { setSearch(''); setStatus('') }} className={`btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] ${FOCUS}`}>
+              <X size={14} aria-hidden="true" /> Clear
+            </button>
+          )}
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {initiatives.map((i) => (
-            <div key={i.id} className="rounded-md border border-[var(--input-border)] bg-[var(--input-bg)]/40 p-3">
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-semibold text-[var(--text-primary)] truncate">{i.name}</span>
-                <span className="text-[10px] px-2 py-0.5 rounded bg-brand-subtle text-brand-bright uppercase tracking-wide font-bold shrink-0">{cls(i.status)}</span>
-              </div>
-              {i.description && <p className="mt-1 text-xs text-[var(--text-muted)] line-clamp-2">{i.description}</p>}
-              <div className="mt-2 flex items-center justify-between text-xs">
-                <span className="text-[var(--text-muted)]">{i.owner ? `Owner: ${i.owner}` : 'N/A'}</span>
-                <div className="flex items-center gap-2">
-                  {i.claimed_savings_kg != null && <span className="font-bold text-green-400 tabular-nums">{asTonnes(i.claimed_savings_kg)} t</span>}
-                  {canWrite && (
-                    <button onClick={() => remove(i.id)} className="text-[var(--text-muted)] hover:text-red-400 transition-colors" aria-label="Remove initiative" disabled={busy}>
-                      <Trash2 size={14} />
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+        <EnterpriseTable
+          columns={columns}
+          data={rows}
+          getRowId={(i) => String(i.id)}
+          loading={loading}
+          error={error || null}
+          onRetry={onReload}
+          enableGlobalFilter={false}
+          emptyMessage={search || status ? 'No initiatives match these filters.' : 'No reduction initiatives recorded yet.'}
+          exportFileName={reportFileName('Carbon Reduction Initiatives')}
+          reportMeta={{ title: 'Reduction initiatives' }}
+          initialPageSize={25}
+        />
+      </Card>
+
+      {confirm && (
+        <Modal
+          open
+          size="sm"
+          onClose={() => { if (!busy) setConfirm(null) }}
+          title="Remove this initiative?"
+          footer={(
+            <>
+              <button type="button" onClick={() => setConfirm(null)} className="btn-secondary text-sm min-h-[44px]" disabled={busy}>Cancel</button>
+              <button type="button" onClick={remove} className="btn-danger text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={busy}>
+                <Trash2 size={14} aria-hidden="true" /> {busy ? 'Removing...' : 'Remove'}
+              </button>
+            </>
+          )}
+        >
+          <p className="text-sm text-[var(--text-secondary)]">{confirm.name}. This cannot be undone.</p>
+        </Modal>
       )}
-    </Card>
+    </div>
   )
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
- * FUEL EMISSIONS VIEW (existing port — preserved verbatim)
+ * FUEL EMISSIONS VIEW
  * ═══════════════════════════════════════════════════════════════════════════ */
 function FuelEmissionsView() {
   const { activeCountry } = useSettings()
@@ -631,7 +771,6 @@ function FuelEmissionsView() {
   const [error, setError] = useState('')
   const [refreshing, setRefreshing] = useState(false)
   const [updatedAt, setUpdatedAt] = useState(null)
-
   const [period, setPeriod] = useState(12)
   const [siteFilter, setSiteFilter] = useState('')
   const [search, setSearch] = useState('')
@@ -652,79 +791,41 @@ function FuelEmissionsView() {
 
   useEffect(() => { load() }, [load])
 
-  // Period-scoped rows (by date). period=0 → all time.
-  const scopedRows = useMemo(() => {
-    const all = rows || []
-    if (!period) return all
-    const cutoff = new Date()
-    cutoff.setMonth(cutoff.getMonth() - period)
-    cutoff.setHours(0, 0, 0, 0)
-    return all.filter((r) => {
-      if (!r.date) return false
-      const d = new Date(r.date)
-      return !Number.isNaN(d.getTime()) && d >= cutoff
-    })
-  }, [rows, period])
-
+  const scopedRows = useMemo(() => scopeRowsByPeriod(rows || [], period, new Date()), [rows, period])
   const carbon = useMemo(() => computeCarbon(scopedRows), [scopedRows])
+  const k = useMemo(() => fuelKpis(carbon), [carbon])
+  const allVehicles = useMemo(() => vehicleRows(carbon), [carbon])
+  const sites = useMemo(() => siteOptions(carbon), [carbon])
+  const filtered = useMemo(() => filterVehicleRows(allVehicles, { site: siteFilter, search }), [allVehicles, siteFilter, search])
+  const loading = rows === null
+  const failed = !!error
+  const trees = k.totalCo2Kg != null ? treesToOffset(k.totalCo2Kg) : null
 
-  const siteOptions = useMemo(
-    () => carbon.bySite.map((s) => s.site).sort((a, b) => a.localeCompare(b)),
-    [carbon.bySite],
-  )
-
-  // Filtered vehicle table (site + free-text search).
-  const filteredVehicles = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return carbon.byVehicle.filter((v) => {
-      if (siteFilter && v.site !== siteFilter) return false
-      if (q && !`${v.vehicle} ${v.site}`.toLowerCase().includes(q)) return false
-      return true
-    })
-  }, [carbon.byVehicle, siteFilter, search])
-
-  const hasData = (rows?.length ?? 0) > 0 && carbon.totalCo2 > 0
-  const topSite = carbon.bySite[0] || null
-  const co2PerVehicle = carbon.vehicleCount ? carbon.totalCo2 / carbon.vehicleCount : 0
-
-  // ── KPI tiles ──────────────────────────────────────────────────────────────
-  const kpis = [
-    { label: 'Total CO₂', value: `${asTonnes(carbon.totalCo2)} t`, sub: `${fmt(carbon.totalCo2)} kg`, icon: Leaf, tone: 'text-red-400' },
-    { label: 'CO₂ / vehicle', value: `${asTonnes(co2PerVehicle)} t`, sub: `${carbon.vehicleCount} vehicles`, icon: Gauge, tone: 'text-amber-400' },
-    { label: 'Total diesel', value: `${fmt(carbon.totalLitres)} L`, sub: `${fmt(carbon.totalDistanceKm)} km driven`, icon: Fuel, tone: 'text-blue-400' },
-    { label: 'Top-emitting site', value: topSite ? topSite.site : 'N/A', sub: topSite ? `${asTonnes(topSite.co2)} t CO₂` : 'No sites', icon: Building2, tone: 'text-green-400' },
+  const tiles = [
+    { label: 'Total CO2', value: failed ? 'N/A' : fmtTonnes(k.totalCo2Kg), sub: k.totalCo2Kg != null ? `${fmtNum(k.totalCo2Kg)} kg` : 'No fuel usage in period', icon: Leaf, tone: 'crit' },
+    { label: 'CO2 per vehicle', value: failed ? 'N/A' : fmtTonnes(k.co2PerVehicleKg), sub: `${fmtNum(k.vehicles)} vehicles`, icon: Gauge, tone: 'warn' },
+    { label: 'Diesel', value: failed || k.litres == null ? 'N/A' : `${fmtNum(k.litres)} L`, sub: k.distanceKm != null ? `${fmtNum(k.distanceKm)} km driven` : '', icon: Fuel, tone: 'info' },
+    { label: 'Top-emitting site', value: failed ? 'N/A' : (k.topSite || 'N/A'), sub: k.topSiteSharePct != null ? `${k.topSiteSharePct}% of CO2` : 'No sites', icon: Building2, tone: 'neutral' },
+    { label: 'Trees to offset', value: failed || trees == null ? 'N/A' : trees.toLocaleString(), sub: 'One year of absorption', icon: TreePine, tone: 'accent' },
+    { label: 'Sites emitting', value: failed ? 'N/A' : fmtNum(k.sites), sub: `${fmtNum(filtered.length)} vehicles shown`, icon: Truck, tone: 'neutral' },
   ]
 
-  // ── Charts ───────────────────────────────────────────────────────────────
   const chartText = chartTextColor()
-
   const monthBar = {
     labels: carbon.byMonth.map((m) => m.label),
-    datasets: [{
-      label: 'CO₂ (kg)',
-      data: carbon.byMonth.map((m) => m.co2),
-      backgroundColor: '#22c55e',
-      borderRadius: 4,
-    }],
+    datasets: [{ label: 'CO2 (kg)', data: carbon.byMonth.map((m) => m.co2), backgroundColor: colorAt(0), borderRadius: 4 }],
   }
   const topSites = carbon.bySite.slice(0, 10)
   const siteDoughnut = {
     labels: topSites.map((s) => s.site),
-    datasets: [{
-      data: topSites.map((s) => s.co2),
-      backgroundColor: topSites.map((_, i) => SITE_PALETTE[i % SITE_PALETTE.length]),
-      borderWidth: 0,
-    }],
+    datasets: [{ data: topSites.map((s) => s.co2), backgroundColor: categorical(topSites.length), borderWidth: 0 }],
   }
   const barOpts = {
     responsive: true, maintainAspectRatio: false,
-    plugins: {
-      legend: { labels: { color: chartText, boxWidth: 12 } },
-      tooltip: { callbacks: { label: (c) => `${fmt(c.raw)} kg CO₂` } },
-    },
+    plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => `${fmtNum(c.raw)} kg CO2` } } },
     scales: {
-      x: { ticks: { color: chartText }, grid: { color: 'rgba(148,163,184,0.12)' } },
-      y: { ticks: { color: chartText }, grid: { color: 'rgba(148,163,184,0.12)' } },
+      x: { ticks: { color: chartText }, grid: { color: GRID } },
+      y: { ticks: { color: chartText }, grid: { color: GRID }, title: { display: true, text: 'kg CO2', color: chartText } },
     },
   }
   const doughnutOpts = {
@@ -735,196 +836,128 @@ function FuelEmissionsView() {
     },
   }
 
-  // ── Export ───────────────────────────────────────────────────────────────
-  const EXPORT_COLS = ['vehicle', 'site', 'distanceKm', 'litres', 'co2Kg', 'co2Tonnes']
-  const EXPORT_HEADERS = ['Vehicle', 'Site', 'Distance (km)', 'Diesel (L)', 'CO₂ (kg)', 'CO₂ (t)']
-  // Paged, not capped: this table used to render filteredVehicles.slice(0, 500) with no
-  // way to reach row 501. The exports below still cover `filteredVehicles` in full.
-  const pager = usePagedRows(filteredVehicles)
+  const EXPORT_COLS = ['vehicle', 'site', 'litres', 'co2Kg', 'co2Tonnes', 'sharePct']
+  const EXPORT_HEADERS = ['Vehicle', 'Site', 'Diesel (L)', 'CO2 (kg)', 'CO2 (t)', 'Share (%)']
+  const exportRows = vehicleExportRows(filtered)
+  const fileBase = reportFileName('Carbon Fuel Emissions', activeCountry !== 'All' ? activeCountry : '')
+  const periodLabel = PERIODS.find((p) => p.value === period)?.label || ''
+  const pdfCols = EXPORT_COLS.map((key, i) => ({ key, header: EXPORT_HEADERS[i] }))
 
-  const exportRows = filteredVehicles.map((v) => ({
-    vehicle: v.vehicle,
-    site: v.site,
-    distanceKm: '',
-    litres: v.litres,
-    co2Kg: v.co2,
-    co2Tonnes: asTonnes(v.co2),
-  }))
+  const columns = useMemo(() => [
+    { id: 'rank', header: '#', accessorFn: (v) => v.rank, meta: { align: 'right' }, cell: ({ getValue }) => <span className="font-mono text-xs text-[var(--text-muted)]">{getValue()}</span> },
+    { id: 'vehicle', header: 'Vehicle', accessorFn: (v) => v.vehicle, cell: ({ getValue }) => <span className="font-semibold text-[var(--text-primary)]">{getValue()}</span> },
+    { id: 'site', header: 'Site', accessorFn: (v) => v.site },
+    { id: 'litres', header: 'Diesel (L)', accessorFn: (v) => v.litres, meta: { align: 'right' }, cell: ({ getValue }) => <span className="tabular-nums">{fmtNum(getValue())}</span> },
+    { id: 'co2', header: 'CO2 (kg)', accessorFn: (v) => v.co2Kg, meta: { align: 'right' }, cell: ({ getValue }) => <span className="tabular-nums">{fmtNum(getValue())}</span> },
+    { id: 'co2t', header: 'CO2 (t)', accessorFn: (v) => v.co2Tonnes, meta: { align: 'right' }, cell: ({ getValue }) => <span className="tabular-nums font-semibold text-[var(--text-primary)]">{getValue() == null ? 'N/A' : getValue()}</span> },
+    { id: 'share', header: 'Share', accessorFn: (v) => v.sharePct, meta: { align: 'right' }, cell: ({ getValue }) => <span className="tabular-nums text-[var(--text-muted)]">{getValue() == null ? 'N/A' : `${getValue()}%`}</span> },
+  ], [])
 
-  const clearFilters = () => { setSiteFilter(''); setSearch('') }
   const hasFilters = siteFilter || search
 
   return (
     <>
       <PageHeader
         title="Carbon Tracker: Fuel emissions"
-        subtitle="Fleet CO₂ emissions from real fuel usage: IPCC diesel factor, aggregated by month, site and vehicle."
+        subtitle="Fleet CO2 from real fuel usage with the IPCC diesel factor, aggregated by month, site and vehicle."
         icon={Fuel}
         onRefresh={load}
         refreshing={refreshing}
         updatedAt={updatedAt}
         actions={
-          <div className="flex items-center gap-2">
-            <select className="input" value={period} onChange={(e) => setPeriod(Number(e.target.value))} aria-label="Period">
+          <div className="flex flex-wrap items-center gap-2">
+            <label htmlFor="ct-fuel-period" className="sr-only">Period</label>
+            <select id="ct-fuel-period" className={`input min-h-[44px] ${FOCUS}`} value={period} onChange={(e) => setPeriod(Number(e.target.value))}>
               {PERIODS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
             </select>
-            <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'carbon_tracker') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filteredVehicles.length}>
-              <FileSpreadsheet size={14} /> Excel
+            <button type="button" onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, fileBase, 'Vehicles', { title: 'Carbon Fuel Emissions', dateRange: periodLabel }) } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className={`btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] ${FOCUS}`} disabled={!filtered.length}>
+              <FileSpreadsheet size={14} aria-hidden="true" /> Excel
             </button>
-            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Carbon Tracker', 'carbon_tracker', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filteredVehicles.length}>
-              <FileText size={14} /> PDF
+            <button type="button" onClick={async () => { try { await exportToPdf(exportRows, pdfCols, 'Carbon Fuel Emissions', fileBase, 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className={`btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] ${FOCUS}`} disabled={!filtered.length}>
+              <FileText size={14} aria-hidden="true" /> PDF
             </button>
             <EmailPdfButton
-              disabled={!filteredVehicles.length}
-              className="btn-secondary text-sm inline-flex items-center gap-1.5 disabled:opacity-50"
+              disabled={!filtered.length}
+              className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] disabled:opacity-50"
               getPdf={async () => ({
-                base64: await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Carbon Tracker', 'carbon_tracker', 'landscape', '', { returnBase64: true }),
-                filename: 'carbon_tracker.pdf',
-                subject: 'Carbon Tracker',
-                bodyHtml: '<p>Attached is the Carbon Tracker report.</p>',
+                base64: await exportToPdf(exportRows, pdfCols, 'Carbon Fuel Emissions', fileBase, 'landscape', '', { returnBase64: true }),
+                filename: `${fileBase}.pdf`,
+                subject: 'Carbon Fuel Emissions',
+                bodyHtml: '<p>Attached is the Carbon Fuel Emissions report.</p>',
               })}
             />
           </div>
         }
       />
 
-      {error && (
-        <Card tone="crit">
-          <div className="flex items-start gap-[var(--space-3)]">
-            <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-            <div><p className="text-red-300 font-medium">Couldn't load fuel usage.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
-          </div>
-        </Card>
-      )}
+      {error && <ErrorBanner title="Could not load fuel usage." message={error} onRetry={load} />}
 
-      {/* Methodology disclosure */}
       <Card tone="warn">
         <div className="flex items-start gap-[var(--space-3)]">
-          <Info size={16} className="text-amber-400 mt-0.5 shrink-0" />
+          <Info size={16} className="text-amber-400 mt-0.5 shrink-0" aria-hidden="true" />
           <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
-            <span className="font-semibold text-amber-300">Estimate.</span>{' '}
-            CO₂ is derived from distance travelled per tyre record and the IPCC diesel factor of{' '}
-            <span className="font-semibold">{DIESEL_KG_PER_L} kg/L</span>. Distance is real fleet data; the
-            litres-per-km conversion uses a fleet-average consumption assumption.
+            <span className="font-semibold text-[var(--text-primary)]">Estimate.</span>{' '}
+            CO2 is derived from distance travelled per tyre record and the IPCC diesel factor of{' '}
+            <span className="font-semibold">{DIESEL_KG_PER_L} kg/L</span>. Distance is real fleet data; the litres-per-km conversion uses a fleet-average consumption assumption.
           </p>
         </div>
       </Card>
 
-      {/* KPI tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-[var(--gap-grid)]">
-        {kpis.map((k) => {
-          const Icon = k.icon
-          return (
-            <Card key={k.label}>
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
-                <Icon size={16} className={k.tone} />
-              </div>
-              <p className={`text-2xl font-bold mt-1 truncate ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
-              <p className="text-xs text-[var(--text-muted)] mt-0.5">{rows === null ? '' : k.sub}</p>
-            </Card>
-          )
-        })}
-      </div>
+      <KpiStrip loading={loading} tiles={tiles} />
 
-      {/* Offset banner. Card is `flex flex-col`, and Tailwind emits `.flex-col`
-          AFTER `.flex-row`, so a `flex-row` CLASS would silently lose. The
-          direction is set inline, which Card spreads last. */}
-      {hasData && (
-        <Card className="items-center gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
-          <TreePine size={18} className="text-green-400 shrink-0" />
-          <p className="text-sm text-[var(--text-secondary)]">
-            Offsetting this period's emissions would take an estimated{' '}
-            <span className="font-semibold text-green-400">{treesToOffset(carbon.totalCo2).toLocaleString()}</span>{' '}
-            trees absorbing CO₂ for a year.
-          </p>
-        </Card>
-      )}
-
-      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-[var(--gap-grid)]">
         <Card>
-          <CardHeader level={2} title="Monthly CO₂ emissions (kg)" />
-          <div className="h-64">
-            {rows === null ? <ChartSkeleton />
+          <CardHeader level={2} title="Monthly CO2 emissions" description="kg CO2 per month in the selected period" />
+          <div className="h-64" role="img" aria-label={`Monthly CO2 emissions, ${carbon.byMonth.length} months`}>
+            {loading ? <Skeleton className="w-full h-full" />
               : carbon.byMonth.length ? <Bar data={monthBar} options={barOpts} />
-                : <EmptyChart empty="No dated fuel usage in this period." />}
+                : <EmptyChart empty={failed ? 'Could not load this chart.' : 'No dated fuel usage in this period.'} />}
           </div>
         </Card>
         <Card>
-          <CardHeader level={2} title="CO₂ by site (top 10)" />
-          <div className="h-64">
-            {rows === null ? <ChartSkeleton />
+          <CardHeader level={2} title="CO2 by site" description="Top 10 sites" />
+          <div className="h-64" role="img" aria-label={`CO2 by site, top ${topSites.length} sites`}>
+            {loading ? <Skeleton className="w-full h-full" />
               : topSites.length ? <Doughnut data={siteDoughnut} options={doughnutOpts} />
-                : <EmptyChart empty="No site emissions to show." />}
+                : <EmptyChart empty={failed ? 'Could not load this chart.' : 'No site emissions to show.'} />}
           </div>
         </Card>
       </div>
 
-      {/* Filters. Deliberately NOT clipped: it holds a native <select>. */}
       <Card>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <input className="input pl-9 w-full" placeholder="Search vehicle or site…" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <CardHeader level={2} icon={Truck} title="Vehicle emissions register" />
+        <div className="flex flex-wrap items-end gap-2 mb-3">
+          <div className="relative flex-1 min-w-[12rem]">
+            <label htmlFor="fuel-search" className="sr-only">Search vehicle or site</label>
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+            <input id="fuel-search" className={`input pl-9 w-full min-h-[44px] ${FOCUS}`} placeholder="Search vehicle or site" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <select className="input" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} aria-label="Site">
+          <label htmlFor="fuel-site" className="sr-only">Site</label>
+          <select id="fuel-site" className={`input min-h-[44px] ${FOCUS}`} value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)}>
             <option value="">All sites</option>
-            {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+            {sites.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
-          {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
-          <span className="text-xs text-[var(--text-muted)] ml-auto">{filteredVehicles.length} of {carbon.byVehicle.length} vehicles</span>
+          {hasFilters && (
+            <button type="button" onClick={() => { setSiteFilter(''); setSearch('') }} className={`btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] ${FOCUS}`}>
+              <X size={14} aria-hidden="true" /> Clear
+            </button>
+          )}
+          <span className="text-xs text-[var(--text-muted)] ml-auto self-center" aria-live="polite">{filtered.length} of {allVehicles.length} vehicles</span>
         </div>
-      </Card>
-
-      {/* Vehicle emissions table. `pad="none"` lets the table run edge to edge, but
-          NO `clip`: TablePagination renders a native rows-per-page <select>, and a
-          clipped card is the hazard this primitive exists to retire. */}
-      <Card pad="none">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                {['#', 'Vehicle', 'Site', 'Diesel (L)', 'CO₂ (kg)', 'CO₂ (t)', 'Share'].map((h) => (
-                  <th key={h} className="px-4 py-3 font-semibold whitespace-nowrap">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows === null ? (
-                [0, 1, 2, 3, 4].map((i) => (
-                  <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={7} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>
-                ))
-              ) : filteredVehicles.length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-12 text-center text-[var(--text-muted)]"><Filter size={22} className="mx-auto mb-2 opacity-60" />{hasData ? 'No vehicles match these filters.' : 'No fuel usage data for the selected period.'}</td></tr>
-              ) : (
-                pager.pageRows.map((v, i) => {
-                  const share = carbon.totalCo2 ? (v.co2 / carbon.totalCo2) * 100 : 0
-                  return (
-                    <tr key={v.vehicle} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                      <td className="px-4 py-2.5 text-[var(--text-muted)] font-mono text-xs">{i + 1}</td>
-                      <td className="px-4 py-2.5 font-semibold text-[var(--text-primary)] inline-flex items-center gap-1.5"><Truck size={13} className="text-[var(--text-muted)]" />{v.vehicle}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{v.site}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] tabular-nums">{fmt(v.litres)}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] tabular-nums">{fmt(v.co2)}</td>
-                      <td className="px-4 py-2.5 font-semibold text-red-400 tabular-nums">{asTonnes(v.co2)}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-muted)] tabular-nums">{share.toFixed(1)}%</td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-        <TablePagination {...pager} />
+        <EnterpriseTable
+          columns={columns}
+          data={filtered}
+          getRowId={(v) => String(v.vehicle)}
+          loading={loading}
+          error={failed ? error : null}
+          onRetry={load}
+          enableGlobalFilter={false}
+          enableExport={false}
+          viewKey="carbon-fuel-vehicles"
+          emptyMessage={hasFilters ? 'No vehicles match these filters.' : 'No fuel usage data for the selected period.'}
+          initialPageSize={25}
+        />
       </Card>
     </>
   )
-}
-
-function EmptyChart({ empty = 'No data.' }) {
-  return <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">{empty}</div>
-}
-function ChartSkeleton() {
-  return <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" />
 }

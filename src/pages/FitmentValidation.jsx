@@ -1,22 +1,26 @@
 /**
- * FitmentValidation (route /fitment-validation) — the single home for fitment
+ * FitmentValidation (route /fitment-validation): the single home for fitment
  * assurance. Four tabs:
  *
- *   • Validate         — single-tyre fitment ENGINE (ported from tyre_saas
- *                        fitment_engine.py). Resolve a tyre by serial + target
- *                        asset, run the org's fitment rule (lifecycle, size,
- *                        tread), and either Simulate (preview) or Validate
- *                        (persist to the fitment_validations ledger). Checks that
- *                        need data absent from this dataset (age, retread, dual
- *                        pairing) are surfaced honestly, never fabricated.
- *   • Fleet size audit — the fleet-wide scanner: every asset's fitted tyre size
- *                        vs its specified size (preserved in full).
- *   • Rules            — CRUD for the org's fitment policy (fitment_rules, V208).
- *   • History          — the recent validation ledger.
+ *   - Validate         Single-tyre fitment ENGINE (ported from tyre_saas
+ *                      fitment_engine.py). Resolve a tyre by serial and target
+ *                      asset, run the org's fitment rule (lifecycle, size,
+ *                      tread), and either Simulate (preview) or Validate
+ *                      (persist to the fitment_validations ledger). Checks that
+ *                      need data absent from this dataset (age, retread, dual
+ *                      pairing) are surfaced honestly, never fabricated.
+ *   - Fleet size audit Every asset's fitted tyre size against its spec.
+ *   - Rules            CRUD for the org's fitment policy (fitment_rules, V208).
+ *   - History          The recent validation ledger.
  *
- * Real data only, honest empty/loading/error/not-provisioned states throughout.
- * Classification + the validation engine live in `src/lib/fitmentValidation.js`;
- * Supabase I/O lives in `src/lib/api/fitmentValidation.js`.
+ * A page-level KPI strip spans all four tabs. Classification and the
+ * validation engine live in src/lib/fitmentValidation.js; audit filtering,
+ * ledger and rule summaries and export shapes live in the pure
+ * src/lib/fitmentValidationAnalytics.js; Supabase I/O lives in
+ * src/lib/api/fitmentValidation.js. The provisioning probe keeps its
+ * fail-open contract (`isFitmentProvisioned().catch(() => true)`): an
+ * unreadable probe never claims the engine is missing. A failed rules or
+ * ledger read renders an error with Retry, never "no rules".
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
@@ -26,12 +30,15 @@ import {
 import { Doughnut, Bar } from 'react-chartjs-2'
 import {
   ShieldCheck, AlertTriangle, CheckCircle2, XCircle, HelpCircle, Search, X,
-  Filter, FileSpreadsheet, FileText, Info, FlaskConical, Plus, Pencil, Trash2,
-  History, ListChecks, Play, ScanLine, Layers, Gauge,
+  FileSpreadsheet, FileText, Info, FlaskConical, Plus, Pencil, Trash2,
+  History, ListChecks, Play, ScanLine, Gauge, RotateCcw, Percent,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import Card, { CardHeader } from '../components/ui/Card'
 import Modal from '../components/ui/Modal'
+import StatTile from '../components/ui/StatTile'
+import { Skeleton } from '../components/ui/Skeleton'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   loadFitmentData, listRules, createRule, updateRule, deleteRule,
@@ -42,24 +49,28 @@ import {
   summarizeFitments, FITMENT_BAND_META, validateFitment, matchRules,
   FITMENT_UNAVAILABLE_CHECKS, FITMENT_UNAVAILABLE_NOTE,
 } from '../lib/fitmentValidation'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import {
+  vehicleLabel, auditSiteOptions, filterAuditRows, mismatchBySite, auditSummary,
+  auditExportRows, historyRows, filterHistory, historySummary, rulesSummary, filterRules,
+} from '../lib/fitmentValidationAnalytics'
+import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
-import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
 
-const BAND_STYLES = {
-  mismatch: 'bg-red-900/40 text-red-300 border border-red-700/50',
-  match: 'bg-green-900/40 text-green-300 border border-green-700/50',
-  unknown: 'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]',
-}
+const HISTORY_LIMIT = 100
+const GRID = 'rgba(148,163,184,0.14)'
+const FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-1'
+// Semantic result colours: red = wrong size, green = correct, slate = no data.
+// They carry meaning, so they deliberately do not follow the report palette.
+const SEMANTIC = { mismatch: '#ef4444', match: '#22c55e', unknown: '#64748b' }
 
-const TABS = [
-  { key: 'validate', label: 'Validate', icon: ShieldCheck },
-  { key: 'audit', label: 'Fleet size audit', icon: ScanLine },
-  { key: 'rules', label: 'Rules', icon: ListChecks },
-  { key: 'history', label: 'History', icon: History },
-]
+const BAND_STYLES = {
+  mismatch: 'bg-red-500/15 text-red-400 border border-red-500/30',
+  match: 'bg-green-500/15 text-green-500 border border-green-500/30',
+  unknown: 'bg-[var(--input-bg)] text-[var(--text-muted)] border border-[var(--input-border)]',
+}
+const BAND_ICON = { mismatch: XCircle, match: CheckCircle2, unknown: HelpCircle }
 
 const EMPTY_RULE = {
   rule_name: '', applies_to_vehicle_types: '', applies_to_axle_roles: '',
@@ -70,13 +81,47 @@ const EMPTY_RULE = {
 
 const csv = (v) => (Array.isArray(v) ? v.join(', ') : '')
 
+function chartTextColor() {
+  if (typeof document === 'undefined') return '#9ca3af'
+  return getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim() || '#9ca3af'
+}
+
+function ErrorBanner({ title, message, onRetry }) {
+  return (
+    <Card tone="crit" role="alert">
+      <div className="flex flex-wrap items-start gap-[var(--space-3)]">
+        <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
+        <div className="flex-1 min-w-[12rem]">
+          <p className="text-red-300 font-medium">{title}</p>
+          <p className="text-[var(--text-muted)] text-sm mt-1">{message}</p>
+        </div>
+        {onRetry && (
+          <button type="button" onClick={onRetry} className={`btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] ${FOCUS}`}>
+            <RotateCcw size={14} aria-hidden="true" /> Retry
+          </button>
+        )}
+      </div>
+    </Card>
+  )
+}
+
+function SearchBox({ id, label, value, onChange, placeholder }) {
+  return (
+    <div className="relative flex-1 min-w-[12rem]">
+      <label htmlFor={id} className="sr-only">{label}</label>
+      <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+      <input id={id} className={`input pl-9 w-full min-h-[44px] ${FOCUS}`} placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} />
+    </div>
+  )
+}
+
 export default function FitmentValidation() {
   const { activeCountry } = useSettings()
   const countryParam = activeCountry && activeCountry !== 'All' ? activeCountry : null
 
   const [tab, setTab] = useState('validate')
 
-  // ── Fleet size audit (preserved) ───────────────────────────────────────────
+  // Fleet size audit
   const [data, setData] = useState(null) // { vehicles, tyres }
   const [error, setError] = useState('')
   const [refreshing, setRefreshing] = useState(false)
@@ -85,11 +130,14 @@ export default function FitmentValidation() {
   const [siteFilter, setSiteFilter] = useState('')
   const [search, setSearch] = useState('')
 
-  // ── Engine: rules + provisioning ───────────────────────────────────────────
+  // Engine: rules + provisioning
   const [rules, setRules] = useState(null)
+  const [rulesError, setRulesError] = useState('')
   const [notProvisioned, setNotProvisioned] = useState(false)
+  const [ruleSearch, setRuleSearch] = useState('')
+  const [ruleState, setRuleState] = useState('')
 
-  // ── Validate tab ───────────────────────────────────────────────────────────
+  // Validate tab
   const [vForm, setVForm] = useState({ tyre_serial: '', asset_no: '', position_code: '' })
   const [vResult, setVResult] = useState(null)
   const [vContext, setVContext] = useState(null) // { tyre, vehicle, rule }
@@ -97,7 +145,7 @@ export default function FitmentValidation() {
   const [vSimulating, setVSimulating] = useState(false)
   const [vSaving, setVSaving] = useState(false)
 
-  // ── Rules tab (CRUD) ───────────────────────────────────────────────────────
+  // Rules tab (CRUD)
   const [showRuleModal, setShowRuleModal] = useState(false)
   const [editingRule, setEditingRule] = useState(null)
   const [ruleForm, setRuleForm] = useState(EMPTY_RULE)
@@ -105,26 +153,34 @@ export default function FitmentValidation() {
   const [ruleFormError, setRuleFormError] = useState('')
   const [confirmDeleteRule, setConfirmDeleteRule] = useState(null)
   const [deletingRule, setDeletingRule] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
-  // ── History tab ────────────────────────────────────────────────────────────
+  // History tab
   const [validations, setValidations] = useState(null)
+  const [validationsError, setValidationsError] = useState('')
+  const [historyResult, setHistoryResult] = useState('')
+  const [historySearch, setHistorySearch] = useState('')
 
   // ── Loaders ────────────────────────────────────────────────────────────────
   const loadRules = useCallback(async () => {
+    setRulesError('')
     try {
       const rows = await listRules({ country: activeCountry })
       setRules(Array.isArray(rows) ? rows : [])
-    } catch {
+    } catch (err) {
       setRules([])
+      setRulesError(toUserMessage(err, 'Could not load fitment rules.'))
     }
   }, [activeCountry])
 
   const loadValidations = useCallback(async () => {
+    setValidationsError('')
     try {
-      const rows = await listValidations({ country: activeCountry, limit: 100 })
+      const rows = await listValidations({ country: activeCountry, limit: HISTORY_LIMIT })
       setValidations(Array.isArray(rows) ? rows : [])
-    } catch {
+    } catch (err) {
       setValidations([])
+      setValidationsError(toUserMessage(err, 'Could not load the validation ledger.'))
     }
   }, [activeCountry])
 
@@ -138,94 +194,74 @@ export default function FitmentValidation() {
       setData(res)
       setNotProvisioned(!provisioned)
       setUpdatedAt(new Date())
-      await Promise.all([loadRules(), loadValidations()])
     } catch (err) {
       setError(toUserMessage(err, 'Could not load fleet or tyre data.'))
       setData({ vehicles: [], tyres: [] })
     } finally {
+      await Promise.all([loadRules(), loadValidations()])
       setRefreshing(false)
     }
   }, [activeCountry, loadRules, loadValidations])
 
   useEffect(() => { load() }, [load])
 
-  // ── Audit derivations (preserved) ──────────────────────────────────────────
-  const { rows: enriched, counts, compliancePct } = useMemo(
+  // ── Audit derivations ──────────────────────────────────────────────────────
+  const { rows: enriched, counts } = useMemo(
     () => summarizeFitments(data?.vehicles || [], data?.tyres || []),
     [data],
   )
-
-  const siteOptions = useMemo(
-    () => [...new Set((enriched || []).map((r) => r.site).filter(Boolean))].sort(),
-    [enriched],
+  const audit = useMemo(() => auditSummary(counts), [counts])
+  const siteOptions = useMemo(() => auditSiteOptions(enriched), [enriched])
+  const filtered = useMemo(
+    () => filterAuditRows(enriched, { band: bandFilter, site: siteFilter, search }),
+    [enriched, bandFilter, siteFilter, search],
   )
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return (enriched || []).filter((r) => {
-      if (bandFilter !== 'all' && r.band !== bandFilter) return false
-      if (siteFilter && r.site !== siteFilter) return false
-      if (q) {
-        const hay = `${r.asset_no} ${r.make} ${r.model} ${r.vehicle_type} ${r.spec} ${r.fittedSizes.join(' ')}`.toLowerCase()
-        if (!hay.includes(q)) return false
-      }
-      return true
-    })
-  }, [enriched, bandFilter, siteFilter, search])
-
-  const chartText = getComputedStyle(document.documentElement).getPropertyValue('--text-muted') || '#9ca3af'
+  const bySiteMismatch = useMemo(() => mismatchBySite(enriched, 10), [enriched])
   const loaded = data !== null
-  const hasAny = loaded && (data.vehicles.length > 0)
+  const auditFailed = !!error
+  const hasAny = loaded && data.vehicles.length > 0
 
+  const hist = useMemo(() => historySummary(validations, { now: new Date(), limit: HISTORY_LIMIT }), [validations])
+  const histRows = useMemo(() => historyRows(validations), [validations])
+  const histFiltered = useMemo(() => filterHistory(histRows, { result: historyResult, search: historySearch }), [histRows, historyResult, historySearch])
+  const rs = useMemo(() => rulesSummary(rules), [rules])
+  const rulesFiltered = useMemo(() => filterRules(rules, { state: ruleState, search: ruleSearch }), [rules, ruleState, ruleSearch])
+
+  const chartText = chartTextColor()
   const donutData = {
     labels: ['Wrong size', 'Correct size', 'No data'],
-    datasets: [{
-      data: [counts.mismatch, counts.match, counts.unknown],
-      backgroundColor: ['#ef4444', '#22c55e', '#64748b'],
-      borderWidth: 0,
-    }],
+    datasets: [{ data: [counts.mismatch, counts.match, counts.unknown], backgroundColor: [SEMANTIC.mismatch, SEMANTIC.match, SEMANTIC.unknown], borderWidth: 0 }],
   }
-  const bySiteMismatch = useMemo(() => {
-    const m = new Map()
-    for (const r of enriched) {
-      if (r.band !== 'mismatch') continue
-      const k = r.site || 'Unassigned'
-      m.set(k, (m.get(k) || 0) + 1)
-    }
-    return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10)
-  }, [enriched])
   const barData = {
-    labels: bySiteMismatch.map(([s]) => s),
-    datasets: [{ label: 'Wrong-size assets', data: bySiteMismatch.map(([, n]) => n), backgroundColor: '#ef4444', borderRadius: 4 }],
+    labels: bySiteMismatch.map((r) => r.site),
+    datasets: [{ label: 'Wrong-size assets', data: bySiteMismatch.map((r) => r.count), backgroundColor: SEMANTIC.mismatch, borderRadius: 4 }],
   }
-  const chartOpts = {
+  const donutOpts = {
+    responsive: true, maintainAspectRatio: false, cutout: '60%',
+    plugins: { legend: { position: 'bottom', labels: { color: chartText, boxWidth: 12 } } },
+  }
+  const barOpts = {
     responsive: true, maintainAspectRatio: false,
-    plugins: { legend: { labels: { color: chartText, boxWidth: 12 } } },
-    scales: { x: { ticks: { color: chartText }, grid: { color: 'rgba(148,163,184,0.12)' } }, y: { ticks: { color: chartText }, grid: { color: 'rgba(148,163,184,0.12)' } } },
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: chartText }, grid: { color: GRID } },
+      y: { ticks: { color: chartText, precision: 0 }, grid: { color: GRID }, title: { display: true, text: 'Assets', color: chartText } },
+    },
   }
 
+  // ── Exports (audit tab: every filtered row) ────────────────────────────────
   const EXPORT_COLS = ['asset_no', 'vehicle', 'site', 'spec', 'fitted', 'mismatch', 'fittedCount', 'status']
-  // Paged, not capped: this table used to render filtered.slice(0, 500) with no
-  // way to reach row 501. The exports below still cover `filtered` in full.
-  const pager = usePagedRows(filtered)
-
-  const exportRows = filtered.map((r) => ({
-    asset_no: r.asset_no || '',
-    vehicle: [r.make, r.model].filter(Boolean).join(' ') || r.vehicle_type || '',
-    site: r.site || '',
-    spec: r.spec || '',
-    fitted: r.fittedSizes.join(', '),
-    mismatch: FITMENT_BAND_META[r.band]?.label || r.band,
-    fittedCount: r.fittedCount,
-    status: r.status || '',
-  }))
   const EXPORT_HEADERS = ['Asset', 'Vehicle', 'Site', 'Spec size', 'Fitted size(s)', 'Result', 'Fitted tyres', 'Status']
+  const exportRows = useMemo(() => auditExportRows(filtered), [filtered])
+  const fileBase = reportFileName('Fitment Size Audit', countryParam || '')
 
-  const kpis = [
-    { label: 'Assets checked', value: counts.total, icon: ShieldCheck, tone: 'text-[var(--text-primary)]' },
-    { label: 'Correct size', value: counts.match, icon: CheckCircle2, tone: 'text-green-400' },
-    { label: 'Wrong size', value: counts.mismatch, icon: XCircle, tone: 'text-red-400' },
-    { label: 'No data', value: counts.unknown, icon: HelpCircle, tone: 'text-[var(--text-muted)]' },
+  const tiles = [
+    { label: 'Assets checked', value: auditFailed ? 'N/A' : audit.total.toLocaleString(), sub: audit.coveragePct == null ? 'No fleet in scope' : `${audit.coveragePct}% checkable`, icon: ShieldCheck, tone: 'neutral' },
+    { label: 'Correct size', value: auditFailed ? 'N/A' : audit.match.toLocaleString(), icon: CheckCircle2, tone: 'accent' },
+    { label: 'Wrong size', value: auditFailed ? 'N/A' : audit.mismatch.toLocaleString(), sub: `${audit.unknown.toLocaleString()} without data`, icon: XCircle, tone: 'crit' },
+    { label: 'Size compliance', value: auditFailed || audit.compliancePct == null ? 'N/A' : `${audit.compliancePct}%`, sub: 'Of checkable assets', icon: Percent, tone: 'info' },
+    { label: 'Approval rate', value: validationsError || hist.approvalRatePct == null ? 'N/A' : `${hist.approvalRatePct}%`, sub: `${hist.total} recorded validations`, icon: History, tone: 'neutral' },
+    { label: 'Active rules', value: rulesError ? 'N/A' : String(rs.active), sub: rs.total ? `${rs.inactive} inactive` : 'Default policy in use', icon: ListChecks, tone: 'neutral' },
   ]
 
   const clearFilters = () => { setBandFilter('all'); setSiteFilter(''); setSearch('') }
@@ -264,7 +300,7 @@ export default function FitmentValidation() {
         await loadValidations()
       }
     } catch (err) {
-      setVError(err?.message || 'Validation failed.')
+      setVError(toUserMessage(err, 'Validation failed. Try again.'))
     } finally {
       setVSaving(false); setVSimulating(false)
     }
@@ -272,7 +308,7 @@ export default function FitmentValidation() {
 
   // ── Rule CRUD handlers ─────────────────────────────────────────────────────
   const openRuleCreate = () => { setEditingRule(null); setRuleForm(EMPTY_RULE); setRuleFormError(''); setShowRuleModal(true) }
-  const openRuleEdit = (r) => {
+  const openRuleEdit = useCallback((r) => {
     setEditingRule(r)
     setRuleForm({
       rule_name: r.rule_name || '',
@@ -289,7 +325,7 @@ export default function FitmentValidation() {
       notes: r.notes || '',
     })
     setRuleFormError(''); setShowRuleModal(true)
-  }
+  }, [])
   const closeRuleModal = () => { if (!ruleSaving) { setShowRuleModal(false); setEditingRule(null) } }
   const setRule = (k, v) => setRuleForm((f) => ({ ...f, [k]: v }))
 
@@ -305,7 +341,7 @@ export default function FitmentValidation() {
       setShowRuleModal(false); setEditingRule(null)
       await loadRules()
     } catch (err) {
-      setRuleFormError(err?.message || 'Could not save the rule.')
+      setRuleFormError(toUserMessage(err, 'Could not save the rule.'))
     } finally {
       setRuleSaving(false)
     }
@@ -313,19 +349,106 @@ export default function FitmentValidation() {
 
   const doDeleteRule = useCallback(async () => {
     if (!confirmDeleteRule) return
-    setDeletingRule(true)
+    setDeletingRule(true); setDeleteError('')
     try {
       await deleteRule(confirmDeleteRule.id)
       setConfirmDeleteRule(null)
       await loadRules()
     } catch (err) {
-      setRuleFormError(err?.message || 'Could not delete the rule.')
+      setDeleteError(toUserMessage(err, 'Could not delete the rule.'))
     } finally {
       setDeletingRule(false)
     }
   }, [confirmDeleteRule, loadRules])
 
   const busy = vSimulating || vSaving
+
+  // ── Table columns ──────────────────────────────────────────────────────────
+  const auditColumns = useMemo(() => [
+    { id: 'asset', header: 'Asset', accessorFn: (r) => r.asset_no || 'N/A', cell: ({ getValue }) => <span className="font-mono text-xs text-[var(--text-primary)]">{getValue()}</span> },
+    { id: 'vehicle', header: 'Vehicle', accessorFn: (r) => vehicleLabel(r) || 'N/A' },
+    { id: 'site', header: 'Site', accessorFn: (r) => r.site || 'N/A' },
+    { id: 'spec', header: 'Spec size', accessorFn: (r) => r.spec || 'N/A', cell: ({ getValue }) => <span className="font-mono text-xs">{getValue()}</span> },
+    {
+      id: 'fitted', header: 'Fitted size(s)', accessorFn: (r) => r.fittedSizes.join(', '),
+      cell: ({ row }) => {
+        const r = row.original
+        return (
+          <div className="font-mono text-xs">
+            {r.fittedSizes.length ? <span className={r.band === 'mismatch' ? 'text-red-400' : 'text-[var(--text-secondary)]'}>{r.fittedSizes.join(', ')}</span> : <span className="text-[var(--text-muted)]">N/A</span>}
+            {r.band === 'mismatch' && r.mismatchSizes.length > 0 && <span className="block text-[11px] text-red-400 mt-0.5">Not spec: {r.mismatchSizes.join(', ')}</span>}
+          </div>
+        )
+      },
+    },
+    { id: 'tyres', header: 'Tyres', accessorFn: (r) => r.fittedCount || 0, meta: { align: 'right' } },
+    {
+      id: 'result', header: 'Result', accessorFn: (r) => FITMENT_BAND_META[r.band]?.label || r.band,
+      cell: ({ row }) => {
+        const Icon = BAND_ICON[row.original.band] || HelpCircle
+        return (
+          <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded ${BAND_STYLES[row.original.band]}`}>
+            <Icon size={12} aria-hidden="true" /> {FITMENT_BAND_META[row.original.band]?.label}
+          </span>
+        )
+      },
+    },
+  ], [])
+
+  const historyColumns = useMemo(() => [
+    {
+      id: 'result', header: 'Result', accessorFn: (h) => h.result,
+      cell: ({ row }) => (
+        <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${row.original.is_valid ? 'text-green-500' : 'text-red-400'}`}>
+          {row.original.is_valid ? <CheckCircle2 size={14} aria-hidden="true" /> : <XCircle size={14} aria-hidden="true" />}
+          {row.original.result}
+        </span>
+      ),
+    },
+    { id: 'serial', header: 'Serial', accessorFn: (h) => h.tyre_serial || 'N/A', cell: ({ getValue }) => <span className="font-mono text-xs text-[var(--text-primary)]">{getValue()}</span> },
+    { id: 'asset', header: 'Asset', accessorFn: (h) => h.asset_no || 'N/A', cell: ({ getValue }) => <span className="font-mono text-xs">{getValue()}</span> },
+    { id: 'position', header: 'Position', accessorFn: (h) => h.position_code || 'N/A' },
+    { id: 'issues', header: 'Issues', accessorFn: (h) => h.issueLabel, cell: ({ row }) => <span className={`text-xs ${row.original.violationCount ? 'text-red-400' : row.original.warningCount ? 'text-amber-500' : 'text-[var(--text-muted)]'}`}>{row.original.issueLabel}</span> },
+    { id: 'when', header: 'When', accessorFn: (h) => h.validated_at || '', cell: ({ getValue }) => <span className="text-xs text-[var(--text-muted)] whitespace-nowrap">{getValue() ? new Date(getValue()).toLocaleString() : 'N/A'}</span> },
+  ], [])
+
+  const ruleColumns = useMemo(() => [
+    {
+      id: 'name', header: 'Rule', accessorFn: (r) => r.rule_name || '',
+      cell: ({ row }) => (
+        <div className="min-w-0 max-w-[22rem]">
+          <p className="font-medium text-[var(--text-primary)]">{row.original.rule_name}</p>
+          {row.original.notes && <p className="text-xs text-[var(--text-muted)] line-clamp-2">{row.original.notes}</p>}
+        </div>
+      ),
+    },
+    {
+      id: 'state', header: 'State', accessorFn: (r) => (r.is_active !== false ? 'Active' : 'Inactive'),
+      cell: ({ getValue }) => <span className={`text-[11px] px-2 py-0.5 rounded border ${getValue() === 'Active' ? 'border-green-500/30 text-green-500' : 'border-[var(--input-border)] text-[var(--text-muted)]'}`}>{getValue()}</span>,
+    },
+    { id: 'types', header: 'Vehicle types', accessorFn: (r) => csv(r.applies_to_vehicle_types) || 'All' },
+    { id: 'axles', header: 'Axles', accessorFn: (r) => csv(r.applies_to_axle_roles) || 'All' },
+    { id: 'tread', header: 'Min tread (mm)', accessorFn: (r) => (r.min_tread_depth_mm == null ? null : Number(r.min_tread_depth_mm)), meta: { align: 'right' } },
+    { id: 'age', header: 'Max age (y)', accessorFn: (r) => (r.max_tyre_age_years == null ? null : Number(r.max_tyre_age_years)), meta: { align: 'right' } },
+    { id: 'sizes', header: 'Approved sizes', accessorFn: (r) => (r.approved_sizes?.length ? csv(r.approved_sizes) : 'Any'), cell: ({ getValue }) => <span className="font-mono text-xs line-clamp-2 max-w-[16rem] block">{getValue()}</span> },
+    { id: 'retread', header: 'Retread', accessorFn: (r) => (r.allow_retread !== false ? `Yes, max ${r.max_retread_count ?? 'N/A'}` : 'No') },
+    {
+      id: 'actions', header: '', enableSorting: false, meta: { export: false },
+      cell: ({ row }) => (
+        <div className="flex items-center justify-end gap-1">
+          <button type="button" onClick={() => openRuleEdit(row.original)} className={`inline-flex items-center justify-center min-h-[44px] min-w-[44px] rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] ${FOCUS}`} aria-label={`Edit rule ${row.original.rule_name}`}><Pencil size={14} aria-hidden="true" /></button>
+          <button type="button" onClick={() => { setDeleteError(''); setConfirmDeleteRule(row.original) }} className={`inline-flex items-center justify-center min-h-[44px] min-w-[44px] rounded hover:bg-red-500/10 text-[var(--text-muted)] hover:text-red-400 ${FOCUS}`} aria-label={`Delete rule ${row.original.rule_name}`}><Trash2 size={14} aria-hidden="true" /></button>
+        </div>
+      ),
+    },
+  ], [openRuleEdit])
+
+  const TABS = [
+    { key: 'validate', label: 'Validate', icon: ShieldCheck },
+    { key: 'audit', label: 'Fleet size audit', icon: ScanLine, count: loaded && !auditFailed ? audit.mismatch : null },
+    { key: 'rules', label: 'Rules', icon: ListChecks, count: rules && !rulesError ? rs.total : null },
+    { key: 'history', label: 'History', icon: History, count: validations && !validationsError ? hist.total : null },
+  ]
 
   return (
     <div className="space-y-6">
@@ -337,55 +460,56 @@ export default function FitmentValidation() {
         refreshing={refreshing}
         updatedAt={updatedAt}
         actions={tab === 'audit' ? (
-          <div className="flex items-center gap-2">
-            <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'fitment_validation') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
-              <FileSpreadsheet size={14} /> Excel
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, fileBase, 'Size audit', { title: 'Fitment Size Audit' }) } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className={`btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] ${FOCUS}`} disabled={!filtered.length}>
+              <FileSpreadsheet size={14} aria-hidden="true" /> Excel
             </button>
-            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Fitment Validation', 'fitment_validation', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
-              <FileText size={14} /> PDF
+            <button type="button" onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((key, i) => ({ key, header: EXPORT_HEADERS[i] })), 'Fitment Size Audit', fileBase, 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className={`btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] ${FOCUS}`} disabled={!filtered.length}>
+              <FileText size={14} aria-hidden="true" /> PDF
             </button>
           </div>
         ) : tab === 'rules' ? (
-          <button onClick={openRuleCreate} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={notProvisioned}>
-            <Plus size={14} /> New rule
+          <button type="button" onClick={openRuleCreate} className={`btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px] ${FOCUS}`} disabled={notProvisioned}>
+            <Plus size={14} aria-hidden="true" /> New rule
           </button>
         ) : null}
       />
 
-      {/* Tabs */}
-      <div className="flex flex-wrap gap-1 border-b border-[var(--input-border)]">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-[var(--gap-grid)]">
+        {tiles.map((k, i) => (
+          !loaded
+            ? <div key={k.label} className="card !p-4 space-y-3"><Skeleton className="h-3 w-2/3" /><Skeleton className="h-7 w-1/2" /><Skeleton className="h-2.5 w-3/4" /></div>
+            : <StatTile key={k.label} index={i} {...k} />
+        ))}
+      </div>
+
+      <div role="tablist" aria-label="Fitment sections" className="flex gap-1 overflow-x-auto border-b border-[var(--input-border)]">
         {TABS.map((t) => {
           const Icon = t.icon
           const active = tab === t.key
           return (
             <button
               key={t.key}
+              type="button"
+              role="tab"
+              aria-selected={active}
               onClick={() => setTab(t.key)}
-              className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${active ? 'border-indigo-500 text-[var(--text-primary)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
+              className={`inline-flex items-center gap-1.5 min-h-[44px] px-4 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition-colors ${FOCUS} ${active ? 'border-[var(--accent)] text-[var(--text-primary)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
             >
-              <Icon size={15} /> {t.label}
+              <Icon size={15} aria-hidden="true" /> {t.label}
+              {t.count != null && <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--input-bg)] text-[var(--text-secondary)] tabular-nums">{t.count}</span>}
             </button>
           )
         })}
       </div>
 
-      {error && (
-        /* `border border-red-800/50` would be DEAD on a Card - Card sets
-           `border`/`borderColor` inline and inline beats a plain utility - so
-           the red edge comes from `tone`. Card is also `flex flex-col` and
-           Tailwind emits .flex-col AFTER .flex-row, so the row direction has to
-           go in `style`, which Card spreads last. */
-        <Card tone="crit" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-          <div><p className="text-red-300 font-medium">Couldn't load fitment data.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
-        </Card>
-      )}
+      {error && <ErrorBanner title="Could not load fitment data." message={error} onRetry={load} />}
 
       {notProvisioned && (tab === 'rules' || tab === 'history') && (
         <Card tone="warn" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
-          <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
+          <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" aria-hidden="true" />
           <div>
-            <p className="text-amber-300 font-medium">The fitment rule engine isn't enabled on this database yet.</p>
+            <p className="text-[var(--text-primary)] font-medium">The fitment rule engine is not enabled on this database yet.</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">
               Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V208_FITMENT_RULES.sql</span>, then reload. The Validate tab still runs against the built-in default policy.
             </p>
@@ -397,109 +521,100 @@ export default function FitmentValidation() {
       {tab === 'validate' && (
         <div className="space-y-4">
           <Card>
-            <CardHeader icon={Gauge} title="Pre-installation check" />
+            <CardHeader icon={Gauge} title="Pre-installation check" description={rules && rules.length ? `${rs.active} active rule${rs.active === 1 ? '' : 's'} available; the best match for the target vehicle is applied.` : 'No custom rules yet, so the built-in default policy applies.'} />
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="label">Tyre serial</label>
-                <input className="input w-full" placeholder="e.g. AA10293" value={vForm.tyre_serial} maxLength={120} onChange={(e) => setV('tyre_serial', e.target.value)} />
+                <label className="label" htmlFor="fv-serial">Tyre serial (required)</label>
+                <input id="fv-serial" className={`input w-full min-h-[44px] ${FOCUS}`} placeholder="e.g. AA10293" value={vForm.tyre_serial} maxLength={120} onChange={(e) => setV('tyre_serial', e.target.value)} />
               </div>
               <div>
-                <label className="label">Target asset no. (optional)</label>
-                <input className="input w-full" placeholder="e.g. TM517" value={vForm.asset_no} maxLength={120} onChange={(e) => setV('asset_no', e.target.value)} />
+                <label className="label" htmlFor="fv-asset">Target asset no. (optional)</label>
+                <input id="fv-asset" className={`input w-full min-h-[44px] ${FOCUS}`} placeholder="e.g. TM517" value={vForm.asset_no} maxLength={120} onChange={(e) => setV('asset_no', e.target.value)} />
               </div>
               <div>
-                <label className="label">Position code (optional)</label>
-                <input className="input w-full" placeholder="e.g. A2LO" value={vForm.position_code} maxLength={60} onChange={(e) => setV('position_code', e.target.value)} />
+                <label className="label" htmlFor="fv-position">Position code (optional)</label>
+                <input id="fv-position" className={`input w-full min-h-[44px] ${FOCUS}`} placeholder="e.g. A2LO" value={vForm.position_code} maxLength={60} onChange={(e) => setV('position_code', e.target.value)} />
               </div>
             </div>
-            {/* This button group stays on its OWN wrapping row rather than in
-                CardHeader's `actions` slot: that slot is flex-shrink-0 and
-                cannot wrap, so a multi-button group there pushes a phone-width
-                card into horizontal page scroll. */}
             <div className="mt-4 flex flex-wrap gap-2">
-              <button onClick={() => runValidation(false)} className="btn-secondary text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={busy}>
-                <FlaskConical size={14} /> {vSimulating ? 'Simulating…' : 'Simulate'}
+              <button type="button" onClick={() => runValidation(false)} className={`btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] disabled:opacity-60 ${FOCUS}`} disabled={busy}>
+                <FlaskConical size={14} aria-hidden="true" /> {vSimulating ? 'Simulating...' : 'Simulate'}
               </button>
-              <button onClick={() => runValidation(true)} className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={busy}>
-                <Play size={14} /> {vSaving ? 'Validating…' : 'Validate & record'}
+              <button type="button" onClick={() => runValidation(true)} className={`btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px] disabled:opacity-60 ${FOCUS}`} disabled={busy}>
+                <Play size={14} aria-hidden="true" /> {vSaving ? 'Validating...' : 'Validate and record'}
               </button>
               <span className="text-xs text-[var(--text-muted)] inline-flex items-center gap-1.5 ml-auto self-center">
-                <Info size={12} /> Simulate previews only. Validate & record writes to the ledger.
+                <Info size={12} aria-hidden="true" /> Simulate previews only. Validate and record writes to the ledger.
               </span>
             </div>
           </Card>
 
           {vError && (
-            <Card tone="crit" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
-              <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-              <p className="text-red-300 text-sm">{vError}</p>
+            <Card tone="crit" role="alert" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
+              <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
+              <p className="text-red-400 text-sm">{vError}</p>
             </Card>
           )}
 
           {vResult && (
-            /* The old `border-2 border-emerald-600/40 | border-red-600/40` was a
-               DEAD utility on a Card - Card sets `border` AND `borderColor`
-               inline, so the pass/fail edge would have silently vanished on the
-               one card whose colour carries a safety verdict. `tone` is the live
-               equivalent. */
-            <Card tone={vResult.is_valid ? 'good' : 'crit'}>
+            <Card tone={vResult.is_valid ? 'good' : 'crit'} aria-live="polite">
               <div className="flex items-center gap-2 flex-wrap">
                 {vResult.is_valid
-                  ? <CheckCircle2 size={20} className="text-emerald-400" />
-                  : <XCircle size={20} className="text-red-400" />}
-                <span className={`text-base font-semibold ${vResult.is_valid ? 'text-emerald-300' : 'text-red-300'}`}>
+                  ? <CheckCircle2 size={20} className="text-green-500" aria-hidden="true" />
+                  : <XCircle size={20} className="text-red-400" aria-hidden="true" />}
+                <span className={`text-base font-semibold ${vResult.is_valid ? 'text-green-500' : 'text-red-400'}`}>
                   {vResult.is_valid ? 'Fitment approved' : 'Fitment rejected'}
                 </span>
                 {vResult.preview && (
-                  <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
-                    Preview, not saved
-                  </span>
+                  <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border border-[var(--input-border)] text-[var(--text-secondary)]">Preview, not saved</span>
                 )}
                 {vContext?.rule?._default && (
-                  <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded bg-slate-500/15 text-slate-300 border border-slate-500/30">
-                    Default policy
-                  </span>
+                  <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border border-[var(--input-border)] text-[var(--text-muted)]">Default policy</span>
                 )}
               </div>
 
-              {/* Resolved context */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 text-sm">
-                <div><span className="text-[var(--text-muted)] block text-xs">Serial</span><span className="font-mono text-[var(--text-primary)]">{vForm.tyre_serial || 'N/A'}</span></div>
-                <div><span className="text-[var(--text-muted)] block text-xs">Size</span><span className="font-mono text-[var(--text-secondary)]">{vContext?.tyre?.size || 'N/A'}</span></div>
-                <div><span className="text-[var(--text-muted)] block text-xs">Tread</span><span className="text-[var(--text-secondary)]">{vContext?.tyre?.tread_depth != null ? `${vContext.tyre.tread_depth} mm` : 'N/A'}</span></div>
-                <div><span className="text-[var(--text-muted)] block text-xs">Status</span><span className="text-[var(--text-secondary)]">{vContext?.tyre?.status || 'N/A'}</span></div>
-                <div><span className="text-[var(--text-muted)] block text-xs">Target asset</span><span className="font-mono text-[var(--text-secondary)]">{vForm.asset_no || 'N/A'}</span></div>
-                <div><span className="text-[var(--text-muted)] block text-xs">Vehicle type</span><span className="text-[var(--text-secondary)]">{vContext?.vehicle?.vehicle_type || 'N/A'}</span></div>
-                <div><span className="text-[var(--text-muted)] block text-xs">Spec size</span><span className="font-mono text-[var(--text-secondary)]">{vContext?.vehicle?.tyre_size || 'N/A'}</span></div>
-                <div><span className="text-[var(--text-muted)] block text-xs">Rule</span><span className="text-[var(--text-secondary)]">{vContext?.rule?.rule_name || 'N/A'}</span></div>
-              </div>
+              <dl className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 text-sm">
+                {[
+                  ['Serial', vForm.tyre_serial, true],
+                  ['Size', vContext?.tyre?.size, true],
+                  ['Tread', vContext?.tyre?.tread_depth != null ? `${vContext.tyre.tread_depth} mm` : null],
+                  ['Status', vContext?.tyre?.status],
+                  ['Target asset', vForm.asset_no, true],
+                  ['Vehicle type', vContext?.vehicle?.vehicle_type],
+                  ['Spec size', vContext?.vehicle?.tyre_size, true],
+                  ['Rule', vContext?.rule?.rule_name],
+                ].map(([label, value, mono]) => (
+                  <div key={label}>
+                    <dt className="text-[var(--text-muted)] text-xs">{label}</dt>
+                    <dd className={`${mono ? 'font-mono' : ''} text-[var(--text-secondary)]`}>{value || 'N/A'}</dd>
+                  </div>
+                ))}
+              </dl>
 
-              {/* Violations */}
               {vResult.violations?.length > 0 && (
                 <div className="mt-4 space-y-2">
                   <div className="text-xs font-semibold text-red-400 uppercase tracking-wide">Violations ({vResult.violations.length})</div>
                   {vResult.violations.map((v, i) => (
-                    <div key={i} className="flex items-start gap-2 p-2.5 rounded bg-red-900/20 border border-red-800/40">
-                      <XCircle size={16} className="text-red-400 mt-0.5 shrink-0" />
+                    <div key={i} className="flex items-start gap-2 p-2.5 rounded border border-red-500/30">
+                      <XCircle size={16} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
                       <div>
                         <div className="text-sm text-[var(--text-primary)]">{v.message}</div>
-                        <span className="text-[10px] font-mono text-red-400/80">{v.rule}</span>
+                        <span className="text-[11px] font-mono text-red-400">{v.rule}</span>
                       </div>
                     </div>
                   ))}
                 </div>
               )}
 
-              {/* Warnings */}
               {vResult.warnings?.length > 0 && (
                 <div className="mt-4 space-y-2">
-                  <div className="text-xs font-semibold text-amber-400 uppercase tracking-wide">Warnings ({vResult.warnings.length})</div>
+                  <div className="text-xs font-semibold text-amber-500 uppercase tracking-wide">Warnings ({vResult.warnings.length})</div>
                   {vResult.warnings.map((w, i) => (
-                    <div key={i} className="flex items-start gap-2 p-2.5 rounded bg-amber-900/20 border border-amber-800/40">
-                      <AlertTriangle size={16} className="text-amber-400 mt-0.5 shrink-0" />
+                    <div key={i} className="flex items-start gap-2 p-2.5 rounded border border-amber-500/30">
+                      <AlertTriangle size={16} className="text-amber-500 mt-0.5 shrink-0" aria-hidden="true" />
                       <div>
                         <div className="text-sm text-[var(--text-primary)]">{w.message}</div>
-                        <span className="text-[10px] font-mono text-amber-400/80">{w.rule}</span>
+                        <span className="text-[11px] font-mono text-amber-500">{w.rule}</span>
                       </div>
                     </div>
                   ))}
@@ -507,20 +622,19 @@ export default function FitmentValidation() {
               )}
 
               {vResult.is_valid && !vResult.violations?.length && !vResult.warnings?.length && (
-                <div className="mt-4 text-emerald-300 text-sm flex items-center gap-2">
-                  <CheckCircle2 size={16} /> All available checks passed. Safe to install.
+                <div className="mt-4 text-green-500 text-sm flex items-center gap-2">
+                  <CheckCircle2 size={16} aria-hidden="true" /> All available checks passed. Safe to install.
                 </div>
               )}
 
-              {/* Honest note about checks that cannot run on this dataset */}
-              <div className="mt-4 p-3 rounded bg-[var(--input-bg)]/60 border border-[var(--input-border)]">
+              <div className="mt-4 p-3 rounded border border-[var(--input-border)]">
                 <div className="text-xs font-semibold text-[var(--text-secondary)] flex items-center gap-1.5 mb-1.5">
-                  <Info size={13} /> Not evaluated (data unavailable)
+                  <Info size={13} aria-hidden="true" /> Not evaluated (data unavailable)
                 </div>
                 <p className="text-xs text-[var(--text-muted)] mb-2">{FITMENT_UNAVAILABLE_NOTE}</p>
                 <ul className="flex flex-wrap gap-1.5">
                   {FITMENT_UNAVAILABLE_CHECKS.map((c) => (
-                    <li key={c.rule} className="text-[10px] px-2 py-0.5 rounded border border-[var(--input-border)] text-[var(--text-muted)]" title={`needs ${c.needs}`}>
+                    <li key={c.rule} className="text-[11px] px-2 py-0.5 rounded border border-[var(--input-border)] text-[var(--text-muted)]" title={`needs ${c.needs}`}>
                       {c.label}
                     </li>
                   ))}
@@ -531,221 +645,141 @@ export default function FitmentValidation() {
         </div>
       )}
 
-      {/* ── FLEET SIZE AUDIT TAB (preserved) ─────────────────────────────────── */}
+      {/* ── FLEET SIZE AUDIT TAB ─────────────────────────────────────────────── */}
       {tab === 'audit' && (
         <div className="space-y-6">
-          {/* KPI tiles */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            {kpis.map((k) => {
-              const Icon = k.icon
-              return (
-                <Card key={k.label}>
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
-                    <Icon size={16} className={k.tone} />
-                  </div>
-                  <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{!loaded ? 'N/A' : k.value}</p>
-                </Card>
-              )
-            })}
-          </div>
-
-          {/* Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <Card>
-              <CardHeader title="Fitment breakdown" />
-              <div className="h-64">{hasAny ? <Doughnut data={donutData} options={{ ...chartOpts, scales: undefined }} /> : <EmptyChart loading={!loaded} empty="No fleet assets in scope." />}</div>
-              {compliancePct != null && <p className="text-xs text-[var(--text-muted)] mt-3 flex items-center gap-1.5"><Info size={12} /> Correct-size rate (of checkable assets): <span className="font-semibold text-[var(--text-secondary)]">{compliancePct}%</span></p>}
+              <CardHeader title="Fitment breakdown" description={audit.compliancePct != null ? `Correct-size rate of checkable assets: ${audit.compliancePct}%` : 'No checkable assets yet'} />
+              <div className="h-64" role="img" aria-label={`Fitment breakdown: ${audit.mismatch} wrong size, ${audit.match} correct size, ${audit.unknown} no data`}>
+                {!loaded ? <Skeleton className="w-full h-full" /> : hasAny ? <Doughnut data={donutData} options={donutOpts} /> : <EmptyChart empty={auditFailed ? 'Could not load this chart.' : 'No fleet assets in scope.'} />}
+              </div>
             </Card>
             <Card>
-              <CardHeader title="Wrong-size assets by site (top 10)" />
-              <div className="h-64">{bySiteMismatch.length ? <Bar data={barData} options={chartOpts} /> : <EmptyChart loading={!loaded} empty="No wrong-size fitments found." />}</div>
+              <CardHeader title="Wrong-size assets by site" description="Top 10 sites" />
+              <div className="h-64" role="img" aria-label={`Wrong-size assets by site, ${bySiteMismatch.length} sites`}>
+                {!loaded ? <Skeleton className="w-full h-full" /> : bySiteMismatch.length ? <Bar data={barData} options={barOpts} /> : <EmptyChart empty={auditFailed ? 'Could not load this chart.' : 'No wrong-size fitments found.'} />}
+              </div>
             </Card>
           </div>
 
-          {/* Filters — the two result/site pickers are NATIVE <select>s, which the
-              browser paints as OS-level popups outside the page's overflow
-              context, so this card needs no un-clipping treatment (and Card does
-              not clip by default anyway). */}
-          <Card className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative flex-1 min-w-[200px]">
-                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-                <input className="input pl-9 w-full" placeholder="Search asset, make/model, size…" value={search} onChange={(e) => setSearch(e.target.value)} />
-              </div>
-              <select className="input" value={bandFilter} onChange={(e) => setBandFilter(e.target.value)} aria-label="Result">
+          <Card>
+            <CardHeader icon={ScanLine} title="Fleet size register" />
+            <div className="flex flex-wrap items-end gap-2 mb-3">
+              <SearchBox id="fv-audit-search" label="Search assets" value={search} onChange={setSearch} placeholder="Search asset, make or model, size" />
+              <label htmlFor="fv-band" className="sr-only">Result</label>
+              <select id="fv-band" className={`input min-h-[44px] ${FOCUS}`} value={bandFilter} onChange={(e) => setBandFilter(e.target.value)}>
                 <option value="all">All results</option>
                 <option value="mismatch">Wrong size</option>
                 <option value="match">Correct size</option>
                 <option value="unknown">No data</option>
               </select>
-              <select className="input" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} aria-label="Site">
+              <label htmlFor="fv-site" className="sr-only">Site</label>
+              <select id="fv-site" className={`input min-h-[44px] ${FOCUS}`} value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)}>
                 <option value="">All sites</option>
                 {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
-              {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
-              <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {counts.total}</span>
+              {hasFilters && <button type="button" onClick={clearFilters} className={`btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] ${FOCUS}`}><X size={14} aria-hidden="true" /> Clear</button>}
+              <span className="text-xs text-[var(--text-muted)] ml-auto self-center" aria-live="polite">{filtered.length} of {counts.total}</span>
             </div>
-          </Card>
-
-          {/* Table. `!p-0` becomes pad="none" and `overflow-hidden` becomes
-              `clip`, so the table still crops to the card radius. */}
-          <Card pad="none" clip>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                    {['Asset', 'Vehicle', 'Site', 'Spec size', 'Fitted size(s)', 'Tyres', 'Result'].map((h) => <th key={h} className="px-4 py-3 font-semibold whitespace-nowrap">{h}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {!loaded ? (
-                    [0, 1, 2, 3, 4].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={7} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
-                  ) : filtered.length === 0 ? (
-                    <tr><td colSpan={7} className="px-4 py-12 text-center text-[var(--text-muted)]"><Filter size={22} className="mx-auto mb-2 opacity-60" />{hasAny ? 'No assets match these filters.' : 'No fleet assets found for this country.'}</td></tr>
-                  ) : (
-                    pager.pageRows.map((r) => (
-                      <tr key={r.asset_no || Math.random()} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                        <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.asset_no || 'N/A'}</td>
-                        <td className="px-4 py-2.5 text-[var(--text-secondary)]">{[r.make, r.model].filter(Boolean).join(' ') || r.vehicle_type || 'N/A'}</td>
-                        <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || 'N/A'}</td>
-                        <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{r.spec || 'N/A'}</td>
-                        <td className="px-4 py-2.5 font-mono text-xs">
-                          {r.fittedSizes.length ? (
-                            <span className={r.band === 'mismatch' ? 'text-red-300' : 'text-[var(--text-secondary)]'}>{r.fittedSizes.join(', ')}</span>
-                          ) : <span className="text-[var(--text-muted)]">N/A</span>}
-                          {r.band === 'mismatch' && r.mismatchSizes.length > 0 && (
-                            <span className="block text-[10px] text-red-400/80 mt-0.5">≠ spec: {r.mismatchSizes.join(', ')}</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.fittedCount || 0}</td>
-                        <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${BAND_STYLES[r.band]}`}>{FITMENT_BAND_META[r.band]?.label}</span></td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <TablePagination {...pager} />
+            <EnterpriseTable
+              columns={auditColumns}
+              data={filtered}
+              getRowId={(r, i) => String(r.asset_no || `row-${i}`)}
+              loading={!loaded}
+              error={auditFailed ? error : null}
+              onRetry={load}
+              enableGlobalFilter={false}
+              enableExport={false}
+              viewKey="fitment-size-audit"
+              emptyMessage={hasAny ? 'No assets match these filters.' : 'No fleet assets found for this country.'}
+              initialPageSize={25}
+            />
           </Card>
         </div>
       )}
 
       {/* ── RULES TAB ────────────────────────────────────────────────────────── */}
       {tab === 'rules' && (
-        <div className="space-y-3">
-          {rules === null ? (
-            <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-20 bg-[var(--input-bg)] rounded animate-pulse" />)}</div>
-          ) : rules.length === 0 ? (
-            /* `py-12` would be DEAD on a Card - Card sets `padding` inline and
-               an inline declaration beats a plain utility, so this empty state
-               would silently collapse to --pad-card. The roominess goes in
-               `style`, which Card spreads last. */
-            <Card className="text-center text-[var(--text-muted)]" style={{ paddingBlock: 'var(--space-12)' }}>
-              <ListChecks size={26} className="mx-auto mb-2 opacity-60" />
-              <p className="text-sm">{notProvisioned ? 'Enable the engine (apply V208) to configure rules.' : 'No fitment rules yet. The Validate tab uses a built-in default policy until you add one.'}</p>
-              {!notProvisioned && (
-                <button onClick={openRuleCreate} className="btn-primary text-sm inline-flex items-center gap-1.5 mt-4">
-                  <Plus size={14} /> Create the first rule
-                </button>
-              )}
-            </Card>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              {rules.map((r) => (
-                <Card key={r.id}>
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-[var(--text-primary)]">{r.rule_name}</span>
-                        <span className={`text-[10px] uppercase tracking-wide px-2 py-0.5 rounded border ${r.is_active !== false ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' : 'text-[var(--text-muted)] border-[var(--input-border)]'}`}>
-                          {r.is_active !== false ? 'Active' : 'Inactive'}
-                        </span>
-                      </div>
-                      <div className="text-xs text-[var(--text-muted)] mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
-                        <span className="inline-flex items-center gap-1"><Layers size={11} /> Types: {csv(r.applies_to_vehicle_types) || 'All'}</span>
-                        <span>Axles: {csv(r.applies_to_axle_roles) || 'All'}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button onClick={() => openRuleEdit(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit rule"><Pencil size={14} /></button>
-                      <button onClick={() => setConfirmDeleteRule(r)} className="p-1.5 rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" aria-label="Delete rule"><Trash2 size={14} /></button>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-3 text-xs">
-                    <RuleStat label="Min tread" value={`${r.min_tread_depth_mm} mm`} />
-                    <RuleStat label="Max age" value={`${r.max_tyre_age_years} y`} />
-                    <RuleStat label="Approved sizes" value={r.approved_sizes?.length ? String(r.approved_sizes.length) : 'Any'} />
-                    <RuleStat label="Allow retread" value={r.allow_retread !== false ? 'Yes' : 'No'} />
-                    <RuleStat label="Max retreads" value={String(r.max_retread_count)} />
-                    <RuleStat label="Match pair" value={r.require_matching_pair !== false ? 'Yes' : 'No'} />
-                  </div>
-                  {r.approved_sizes?.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {r.approved_sizes.slice(0, 8).map((s) => <span key={s} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--input-border)]">{s}</span>)}
-                      {r.approved_sizes.length > 8 && <span className="text-[10px] text-[var(--text-muted)]">+{r.approved_sizes.length - 8} more</span>}
-                    </div>
-                  )}
-                  {r.notes && <p className="text-xs text-[var(--text-muted)] mt-2">{r.notes}</p>}
-                </Card>
-              ))}
-            </div>
-          )}
-        </div>
+        <Card>
+          <CardHeader icon={ListChecks} title="Fitment policy" description="Age, retread and dual-pair fields are stored for policy completeness; size, tread and lifecycle checks are enforced." />
+          <div className="flex flex-wrap items-end gap-2 mb-3">
+            <SearchBox id="fv-rule-search" label="Search rules" value={ruleSearch} onChange={setRuleSearch} placeholder="Search name, types, sizes, notes" />
+            <label htmlFor="fv-rule-state" className="sr-only">Rule state</label>
+            <select id="fv-rule-state" className={`input min-h-[44px] ${FOCUS}`} value={ruleState} onChange={(e) => setRuleState(e.target.value)}>
+              <option value="">All rules</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+            {(ruleSearch || ruleState) && <button type="button" onClick={() => { setRuleSearch(''); setRuleState('') }} className={`btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] ${FOCUS}`}><X size={14} aria-hidden="true" /> Clear</button>}
+            {!notProvisioned && (
+              <button type="button" onClick={openRuleCreate} className={`btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px] ${FOCUS}`}><Plus size={14} aria-hidden="true" /> New rule</button>
+            )}
+          </div>
+          <EnterpriseTable
+            columns={ruleColumns}
+            data={rulesFiltered}
+            getRowId={(r) => String(r.id)}
+            loading={rules === null}
+            error={rulesError || null}
+            onRetry={loadRules}
+            enableGlobalFilter={false}
+            exportFileName={reportFileName('Fitment Rules')}
+            reportMeta={{ title: 'Fitment rules' }}
+            emptyMessage={
+              ruleSearch || ruleState ? 'No rules match these filters.'
+                : notProvisioned ? 'Enable the engine (apply V208) to configure rules.'
+                  : 'No fitment rules yet. The Validate tab uses a built-in default policy until you add one.'
+            }
+            initialPageSize={25}
+          />
+        </Card>
       )}
 
       {/* ── HISTORY TAB ──────────────────────────────────────────────────────── */}
       {tab === 'history' && (
-        <Card pad="none" clip>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                  {['Result', 'Serial', 'Asset', 'Position', 'Issues', 'When'].map((h) => <th key={h} className="px-4 py-3 font-semibold whitespace-nowrap">{h}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {validations === null ? (
-                  [0, 1, 2, 3].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={6} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
-                ) : validations.length === 0 ? (
-                  <tr><td colSpan={6} className="px-4 py-12 text-center text-[var(--text-muted)]"><History size={22} className="mx-auto mb-2 opacity-60" />{notProvisioned ? 'Enable the engine (apply V208) to record validations.' : 'No validations recorded yet. Run a check on the Validate tab.'}</td></tr>
-                ) : (
-                  validations.map((h) => {
-                    const vCount = Array.isArray(h.violations) ? h.violations.length : 0
-                    const wCount = Array.isArray(h.warnings) ? h.warnings.length : 0
-                    return (
-                      <tr key={h.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                        <td className="px-4 py-2.5">
-                          <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${h.is_valid ? 'text-emerald-300' : 'text-red-300'}`}>
-                            {h.is_valid ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
-                            {h.is_valid ? 'Approved' : 'Rejected'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{h.tyre_serial || 'N/A'}</td>
-                        <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{h.asset_no || 'N/A'}</td>
-                        <td className="px-4 py-2.5 text-[var(--text-secondary)]">{h.position_code || 'N/A'}</td>
-                        <td className="px-4 py-2.5 text-xs">
-                          {vCount > 0 && <span className="text-red-400 mr-2">{vCount} violation{vCount === 1 ? '' : 's'}</span>}
-                          {wCount > 0 && <span className="text-amber-400">{wCount} warning{wCount === 1 ? '' : 's'}</span>}
-                          {vCount === 0 && wCount === 0 && <span className="text-[var(--text-muted)]">Clean</span>}
-                        </td>
-                        <td className="px-4 py-2.5 text-xs text-[var(--text-muted)] whitespace-nowrap">{h.validated_at ? new Date(h.validated_at).toLocaleString() : 'N/A'}</td>
-                      </tr>
-                    )
-                  })
-                )}
-              </tbody>
-            </table>
+        <Card>
+          <CardHeader icon={History} title="Validation ledger" description={hist.capped ? `Showing the latest ${HISTORY_LIMIT} validations; older records exist but are not loaded here.` : `Latest validations (up to ${HISTORY_LIMIT}).`} />
+          {validations && !validationsError && hist.total > 0 && (
+            <dl className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 text-sm">
+              <div><dt className="text-xs text-[var(--text-muted)]">Approved</dt><dd className="font-semibold text-[var(--text-primary)] tabular-nums">{hist.approved}</dd></div>
+              <div><dt className="text-xs text-[var(--text-muted)]">Rejected</dt><dd className="font-semibold text-[var(--text-primary)] tabular-nums">{hist.rejected}</dd></div>
+              <div><dt className="text-xs text-[var(--text-muted)]">Last 7 days</dt><dd className="font-semibold text-[var(--text-primary)] tabular-nums">{hist.last7Days}</dd></div>
+              <div><dt className="text-xs text-[var(--text-muted)]">Most common violation</dt><dd className="font-mono text-xs text-[var(--text-primary)]">{hist.topViolation ? `${hist.topViolation.rule} (${hist.topViolation.count})` : 'None'}</dd></div>
+            </dl>
+          )}
+          <div className="flex flex-wrap items-end gap-2 mb-3">
+            <SearchBox id="fv-hist-search" label="Search validations" value={historySearch} onChange={setHistorySearch} placeholder="Search serial, asset or position" />
+            <label htmlFor="fv-hist-result" className="sr-only">Result</label>
+            <select id="fv-hist-result" className={`input min-h-[44px] ${FOCUS}`} value={historyResult} onChange={(e) => setHistoryResult(e.target.value)}>
+              <option value="">All results</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+            </select>
+            {(historySearch || historyResult) && <button type="button" onClick={() => { setHistorySearch(''); setHistoryResult('') }} className={`btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] ${FOCUS}`}><X size={14} aria-hidden="true" /> Clear</button>}
           </div>
+          <EnterpriseTable
+            columns={historyColumns}
+            data={histFiltered}
+            getRowId={(h) => String(h.id)}
+            loading={validations === null}
+            error={validationsError || null}
+            onRetry={loadValidations}
+            enableGlobalFilter={false}
+            exportFileName={reportFileName('Fitment Validation Ledger')}
+            reportMeta={{ title: 'Fitment validation ledger' }}
+            emptyMessage={
+              historySearch || historyResult ? 'No validations match these filters.'
+                : notProvisioned ? 'Enable the engine (apply V208) to record validations.'
+                  : 'No validations recorded yet. Run a check on the Validate tab.'
+            }
+            initialPageSize={25}
+          />
         </Card>
       )}
 
-      {/* Rule create / edit modal. `max-h-[90vh] overflow-y-auto` is dropped on
-          purpose: Modal already caps the panel to the viewport and scrolls the
-          BODY only, so the heading and the action row stay reachable. The submit
-          button stays INSIDE the <form> rather than moving to Modal's footer -
-          hoisting it would need a `form="id"` association, which is a behaviour
-          change, not a migration. */}
+      {/* Rule create / edit modal. The submit button stays INSIDE the form; Modal
+          caps the panel to the viewport and scrolls the body only. */}
       {showRuleModal && (
         <Modal
           open
@@ -755,81 +789,79 @@ export default function FitmentValidation() {
         >
           <form onSubmit={submitRule} className="space-y-4">
             <div>
-              <label className="label">Rule name</label>
-              <input className="input w-full" placeholder="e.g. Steer axle, highway tractors" value={ruleForm.rule_name} maxLength={200} onChange={(e) => setRule('rule_name', e.target.value)} />
+              <label className="label" htmlFor="fr-name">Rule name (required)</label>
+              <input id="fr-name" className="input w-full min-h-[44px]" placeholder="e.g. Steer axle, highway tractors" value={ruleForm.rule_name} maxLength={200} onChange={(e) => setRule('rule_name', e.target.value)} />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="label">Applies to vehicle types (comma-separated, blank = all)</label>
-                <input className="input w-full" placeholder="e.g. tractor, rigid_truck" value={ruleForm.applies_to_vehicle_types} onChange={(e) => setRule('applies_to_vehicle_types', e.target.value)} />
+                <label className="label" htmlFor="fr-types">Applies to vehicle types (comma-separated, blank = all)</label>
+                <input id="fr-types" className="input w-full min-h-[44px]" placeholder="e.g. tractor, rigid_truck" value={ruleForm.applies_to_vehicle_types} onChange={(e) => setRule('applies_to_vehicle_types', e.target.value)} />
               </div>
               <div>
-                <label className="label">Applies to axle roles (comma-separated, blank = all)</label>
-                <input className="input w-full" placeholder="e.g. steer, drive" value={ruleForm.applies_to_axle_roles} onChange={(e) => setRule('applies_to_axle_roles', e.target.value)} />
+                <label className="label" htmlFor="fr-axles">Applies to axle roles (comma-separated, blank = all)</label>
+                <input id="fr-axles" className="input w-full min-h-[44px]" placeholder="e.g. steer, drive" value={ruleForm.applies_to_axle_roles} onChange={(e) => setRule('applies_to_axle_roles', e.target.value)} />
               </div>
             </div>
             <div>
-              <label className="label">Approved sizes (comma-separated, blank = any)</label>
-              <input className="input w-full" placeholder="e.g. 315/80R22.5, 295/80R22.5" value={ruleForm.approved_sizes} onChange={(e) => setRule('approved_sizes', e.target.value)} />
+              <label className="label" htmlFor="fr-sizes">Approved sizes (comma-separated, blank = any)</label>
+              <input id="fr-sizes" className="input w-full min-h-[44px]" placeholder="e.g. 315/80R22.5, 295/80R22.5" value={ruleForm.approved_sizes} onChange={(e) => setRule('approved_sizes', e.target.value)} />
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div>
-                <label className="label">Min tread (mm)</label>
-                <input className="input w-full" type="number" step="0.1" min="0" value={ruleForm.min_tread_depth_mm} onChange={(e) => setRule('min_tread_depth_mm', e.target.value)} />
+                <label className="label" htmlFor="fr-tread">Min tread (mm)</label>
+                <input id="fr-tread" className="input w-full min-h-[44px]" type="number" step="0.1" min="0" value={ruleForm.min_tread_depth_mm} onChange={(e) => setRule('min_tread_depth_mm', e.target.value)} />
               </div>
               <div>
-                <label className="label">Max age (years)</label>
-                <input className="input w-full" type="number" step="0.5" min="0" value={ruleForm.max_tyre_age_years} onChange={(e) => setRule('max_tyre_age_years', e.target.value)} />
+                <label className="label" htmlFor="fr-age">Max age (years)</label>
+                <input id="fr-age" className="input w-full min-h-[44px]" type="number" step="0.5" min="0" value={ruleForm.max_tyre_age_years} onChange={(e) => setRule('max_tyre_age_years', e.target.value)} />
               </div>
               <div>
-                <label className="label">Max retreads</label>
-                <input className="input w-full" type="number" step="1" min="0" value={ruleForm.max_retread_count} onChange={(e) => setRule('max_retread_count', e.target.value)} />
+                <label className="label" htmlFor="fr-retreads">Max retreads</label>
+                <input id="fr-retreads" className="input w-full min-h-[44px]" type="number" step="1" min="0" value={ruleForm.max_retread_count} onChange={(e) => setRule('max_retread_count', e.target.value)} />
               </div>
               <div>
-                <label className="label">Max dual Δ (mm)</label>
-                <input className="input w-full" type="number" step="0.1" min="0" value={ruleForm.max_tread_delta_dual_mm} onChange={(e) => setRule('max_tread_delta_dual_mm', e.target.value)} />
+                <label className="label" htmlFor="fr-dual">Max dual difference (mm)</label>
+                <input id="fr-dual" className="input w-full min-h-[44px]" type="number" step="0.1" min="0" value={ruleForm.max_tread_delta_dual_mm} onChange={(e) => setRule('max_tread_delta_dual_mm', e.target.value)} />
               </div>
             </div>
-            <div className="flex flex-wrap gap-4">
-              <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
-                <input type="checkbox" className="accent-indigo-500" checked={ruleForm.allow_retread} onChange={(e) => setRule('allow_retread', e.target.checked)} /> Allow retread
+            <fieldset className="flex flex-wrap gap-4">
+              <legend className="sr-only">Policy switches</legend>
+              <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer min-h-[44px]">
+                <input type="checkbox" className="accent-[var(--accent)] w-4 h-4" checked={ruleForm.allow_retread} onChange={(e) => setRule('allow_retread', e.target.checked)} /> Allow retread
               </label>
-              <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
-                <input type="checkbox" className="accent-indigo-500" checked={ruleForm.require_matching_pair} onChange={(e) => setRule('require_matching_pair', e.target.checked)} /> Require matching pair
+              <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer min-h-[44px]">
+                <input type="checkbox" className="accent-[var(--accent)] w-4 h-4" checked={ruleForm.require_matching_pair} onChange={(e) => setRule('require_matching_pair', e.target.checked)} /> Require matching pair
               </label>
-              <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
-                <input type="checkbox" className="accent-indigo-500" checked={ruleForm.is_active} onChange={(e) => setRule('is_active', e.target.checked)} /> Active
+              <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer min-h-[44px]">
+                <input type="checkbox" className="accent-[var(--accent)] w-4 h-4" checked={ruleForm.is_active} onChange={(e) => setRule('is_active', e.target.checked)} /> Active
               </label>
-            </div>
+            </fieldset>
             <div>
-              <label className="label">Notes (optional)</label>
-              <textarea className="input w-full min-h-[60px] resize-y" placeholder="e.g. GCC steer-axle policy" value={ruleForm.notes} maxLength={8000} onChange={(e) => setRule('notes', e.target.value)} />
+              <label className="label" htmlFor="fr-notes">Notes (optional)</label>
+              <textarea id="fr-notes" className="input w-full min-h-[60px] resize-y" placeholder="e.g. GCC steer-axle policy" value={ruleForm.notes} maxLength={8000} onChange={(e) => setRule('notes', e.target.value)} />
             </div>
 
             <p className="text-[11px] text-[var(--text-muted)] flex items-start gap-1.5">
-              <Info size={12} className="mt-0.5 shrink-0" />
+              <Info size={12} className="mt-0.5 shrink-0" aria-hidden="true" />
               Age, retread and dual-pair fields are stored for policy completeness but are not evaluated on this dataset (source data absent). Size, tread and lifecycle checks are enforced.
             </p>
 
             {ruleFormError && (
-              <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
-                <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {ruleFormError}
+              <div role="alert" className="flex items-start gap-2 text-sm text-red-400 border border-red-500/30 rounded-lg px-3 py-2">
+                <AlertTriangle size={15} className="mt-0.5 shrink-0" aria-hidden="true" /> {ruleFormError}
               </div>
             )}
 
             <div className="flex items-center justify-end gap-2 pt-1">
-              <button type="button" onClick={closeRuleModal} className="btn-secondary text-sm" disabled={ruleSaving}>Cancel</button>
-              <button type="submit" className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={ruleSaving}>
-                {ruleSaving ? 'Saving…' : editingRule ? 'Save changes' : 'Create rule'}
+              <button type="button" onClick={closeRuleModal} className="btn-secondary text-sm min-h-[44px]" disabled={ruleSaving}>Cancel</button>
+              <button type="submit" className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px] disabled:opacity-60" disabled={ruleSaving}>
+                {ruleSaving ? 'Saving...' : editingRule ? 'Save changes' : 'Create rule'}
               </button>
             </div>
           </form>
         </Modal>
       )}
 
-      {/* Delete rule confirm. No <form> here, so the actions belong in Modal's
-          footer. The in-flight guard from the old backdrop handler is preserved
-          on onClose, so Escape and the backdrop still cannot close mid-delete. */}
       {confirmDeleteRule && (
         <Modal
           open
@@ -838,36 +870,24 @@ export default function FitmentValidation() {
           title="Delete fitment rule"
           footer={(
             <>
-              <button onClick={() => setConfirmDeleteRule(null)} className="btn-secondary text-sm" disabled={deletingRule}>Cancel</button>
-              <button onClick={doDeleteRule} className="btn-danger text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={deletingRule}>
-                {deletingRule ? 'Deleting…' : 'Delete rule'}
+              <button type="button" onClick={() => setConfirmDeleteRule(null)} className="btn-secondary text-sm min-h-[44px]" disabled={deletingRule}>Cancel</button>
+              <button type="button" onClick={doDeleteRule} className="btn-danger text-sm inline-flex items-center gap-1.5 min-h-[44px] disabled:opacity-60" disabled={deletingRule}>
+                {deletingRule ? 'Deleting...' : 'Delete rule'}
               </button>
             </>
           )}
         >
           <div className="flex items-start gap-3">
-            <Trash2 size={18} className="text-red-400 mt-0.5 shrink-0" />
+            <Trash2 size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
             <p className="text-sm text-[var(--text-secondary)]">Delete <span className="font-semibold text-[var(--text-primary)]">{confirmDeleteRule.rule_name}</span>? This cannot be undone.</p>
           </div>
+          {deleteError && <p role="alert" className="mt-3 text-sm text-red-400">{deleteError}</p>}
         </Modal>
       )}
     </div>
   )
 }
 
-function RuleStat({ label, value }) {
-  return (
-    <div className="rounded bg-[var(--input-bg)]/50 border border-[var(--input-border)] px-2 py-1.5">
-      <div className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">{label}</div>
-      <div className="text-[var(--text-primary)] font-medium">{value}</div>
-    </div>
-  )
-}
-
-function EmptyChart({ loading, empty = 'No data.' }) {
-  return (
-    <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">
-      {loading ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" /> : empty}
-    </div>
-  )
+function EmptyChart({ empty = 'No data.' }) {
+  return <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)] text-center px-4">{empty}</div>
 }

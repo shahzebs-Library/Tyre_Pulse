@@ -32,11 +32,17 @@ import WorkOrderApprovalGate from '../components/workorders/WorkOrderApprovalGat
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useTenant } from '../contexts/TenantContext'
-import { resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
+import { resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import { useLanguage } from '../contexts/LanguageContext'
 import { formatCurrency as _fmtCurrencyBase, formatDate, formatDateTime } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
-import { WO_STATUSES, normalizeWoStatus, isClosedWoStatus } from '../lib/workOrderStatus'
+import { WO_STATUSES, normalizeWoStatus } from '../lib/workOrderStatus'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import {
+  SORT_FIELDS, pageStats, compactMoney, breakdownEntries, isOverdue as isOverdueAt, daysOpen as daysOpenAt,
+  totalPages as totalPagesOf, selectionFromIds, mergeSelection, activeFilterCount,
+} from '../lib/workOrdersAnalytics'
+import { categorical } from '../lib/reportColors'
 import { editableFields, toPayload, readField } from '../lib/jobCard'
 import JobCardForm from '../components/workorders/JobCardForm'
 import JobCardDetail from '../components/workorders/JobCardDetail'
@@ -137,16 +143,8 @@ const EMPTY_FORM = emptyForm()
 // ── Helper ────────────────────────────────────────────────────────────────────
 const fmtDate = (d) => formatDate(d)
 const fmtDateTime = (d) => formatDateTime(d)
-function isOverdue(wo) {
-  if (!wo.target_completion) return false
-  if (isClosedWoStatus(wo.status)) return false
-  return new Date(wo.target_completion) < new Date()
-}
-function daysOpen(wo) {
-  const start = new Date(wo.opened_at)
-  const end = wo.completed_at ? new Date(wo.completed_at) : new Date()
-  return Math.floor((end - start) / 86400000)
-}
+const isOverdue = (wo) => isOverdueAt(wo, Date.now())
+const daysOpen = (wo) => daysOpenAt(wo, Date.now())
 
 // ─────────────────────────────────────────────────────────────────────────────
 export default function WorkOrders() {
@@ -302,30 +300,23 @@ export default function WorkOrders() {
   // ── Computed ──────────────────────────────────────────────────────────────
   // The server already returned exactly this page, filtered and sorted.
   const paginated = orders
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const totalPages = totalPagesOf(total, PAGE_SIZE)
 
   // KPI tiles read the FULL-window aggregate, never the 20 rows on screen -
   // deriving them from the page would silently turn every headline into a
   // per-page number.
-  const stats = useMemo(() => ({
-    open:           statsData?.open ?? 0,
-    inProgress:     statsData?.in_progress ?? 0,
-    awaitParts:     statsData?.waiting_parts ?? 0,
-    overdue:        statsData?.overdue ?? 0,
-    completedToday: statsData?.completed_today ?? 0,
-    totalCost:      Number(statsData?.total_cost ?? 0),
-    avgDaysOpen:    Number(statsData?.avg_days_open ?? 0),
-  }), [statsData])
+  // A failed aggregate read leaves every tile null (N/A), never a flattering 0.
+  const stats = useMemo(() => pageStats(statsData), [statsData])
 
   // ── Chart data ────────────────────────────────────────────────────────────
   const typeChartData = useMemo(() => {
-    const entries = (statsData?.by_type ?? []).map(b => [b.label, b.n])
+    const entries = breakdownEntries(statsData?.by_type)
     return {
       labels: entries.map(([k]) => k),
       datasets: [{
         label: 'Count',
         data: entries.map(([, v]) => v),
-        backgroundColor: ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#84cc16','#f97316'],
+        backgroundColor: categorical(entries.length),
       }],
     }
   }, [statsData])
@@ -337,7 +328,7 @@ export default function WorkOrders() {
       'Quality Inspection': '#8b5cf6', 'Completed': '#10b981', 'Cancelled': '#ef4444', 'On Hold': '#6b7280',
     }
     // Already folded to the canonical vocabulary server-side.
-    const entries = (statsData?.by_status ?? []).map(b => [b.label, b.n])
+    const entries = breakdownEntries(statsData?.by_status)
     return {
       labels: entries.map(([k]) => k),
       datasets: [{
@@ -348,16 +339,6 @@ export default function WorkOrders() {
       }],
     }
   }, [statsData])
-
-  // ── Sort helper ───────────────────────────────────────────────────────────
-  function handleSort(field) {
-    if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
-    else { setSortField(field); setSortDir('asc') }
-  }
-  function SortIcon({ field }) {
-    if (sortField !== field) return <ChevronDown size={14} className="text-[var(--text-dim)]" />
-    return sortDir === 'asc' ? <ChevronUp size={14} className="text-blue-400" /> : <ChevronDown size={14} className="text-blue-400" />
-  }
 
   // ── Dialog close handlers ─────────────────────────────────────────────────
   // Stable identities on purpose. Modal's behaviour hook lists `onClose` in its
@@ -397,23 +378,70 @@ export default function WorkOrders() {
   }
 
   // ── Multi-select helpers ────────────────────────────────────────────────────
-  function toggleSelect(id) {
-    setSelectedIds(prev => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
-    })
-  }
-  const pageIds = paginated.map(o => o.id)
-  const allPageSelected = pageIds.length > 0 && pageIds.every(id => selectedIds.has(id))
-  function toggleSelectPage() {
-    setSelectedIds(prev => {
-      const next = new Set(prev)
-      if (allPageSelected) pageIds.forEach(id => next.delete(id))
-      else pageIds.forEach(id => next.add(id))
-      return next
-    })
-  }
+  // Selection is held as a Set of ids across SERVER pages; the table only sees
+  // the ids on the page it is showing.
+  const pageIds = useMemo(() => paginated.map(o => o.id), [paginated])
+  const tableSelection = useMemo(() => selectionFromIds([...selectedIds].filter(id => pageIds.includes(id))), [selectedIds, pageIds])
+  const onTableSelection = useCallback((next) => {
+    setSelectedIds(prev => mergeSelection(prev, next, pageIds))
+  }, [pageIds])
+
+  // Register columns. Sorting is SERVER-SIDE (the RPC orders the whole filtered
+  // set), so the table's own header sort is off and a sort control drives the
+  // server instead: sorting only the 20 rows on screen would mislead.
+  const woColumns = [
+    { id: 'work_order_no', header: t('workorders.columns.wo'), accessorFn: o => o.work_order_no, size: 150,
+      cell: ({ row }) => (
+        <span className="inline-flex flex-wrap items-center gap-2">
+          <span className="text-blue-400 font-mono text-xs">{row.original.work_order_no || 'N/A'}</span>
+          {isOverdue(row.original) && <span className="text-xs text-red-400 font-medium">{t('workorders.states.overdue')}</span>}
+        </span>
+      ) },
+    { id: 'asset_no', header: t('workorders.columns.asset'), accessorFn: o => o.asset_no, size: 110,
+      cell: ({ getValue }) => <span className="text-[var(--text-primary)] font-medium">{getValue() || 'N/A'}</span> },
+    { id: 'work_type', header: t('workorders.columns.type'), accessorFn: o => o.work_type, size: 130,
+      cell: ({ getValue }) => <span className="text-[var(--text-secondary)]">{getValue() || 'N/A'}</span> },
+    { id: 'priority', header: t('workorders.columns.priority'), accessorFn: o => o.priority, size: 110,
+      cell: ({ getValue }) => {
+        const pc = PRIORITY_CONFIG[getValue()] || PRIORITY_CONFIG.Medium
+        return (
+          <span className={`flex items-center gap-1.5 ${pc.color}`}>
+            <span className={`w-2 h-2 rounded-full ${pc.dot}`} aria-hidden="true" />
+            {getValue() || 'N/A'}
+          </span>
+        )
+      } },
+    { id: 'status', header: t('workorders.columns.status'), accessorFn: o => o.status, size: 150,
+      cell: ({ getValue }) => {
+        const sc = STATUS_CONFIG[getValue()] || STATUS_CONFIG.New
+        return <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${sc.color} ${sc.bg} ${sc.border}`}>{getValue() || 'N/A'}</span>
+      } },
+    { id: 'technician_name', header: t('workorders.columns.technician'), accessorFn: o => o.technician_name, size: 140,
+      cell: ({ getValue }) => <span className="text-[var(--text-secondary)]">{getValue() || 'N/A'}</span> },
+    { id: 'opened_at', header: t('workorders.columns.opened'), accessorFn: o => o.opened_at, size: 120,
+      cell: ({ getValue }) => <span className="text-[var(--text-secondary)] whitespace-nowrap tabular-nums">{fmtDate(getValue())}</span> },
+    { id: 'target_completion', header: t('workorders.columns.target'), accessorFn: o => o.target_completion, size: 120,
+      cell: ({ row }) => <span className={`whitespace-nowrap tabular-nums ${isOverdue(row.original) ? 'text-red-400 font-medium' : 'text-[var(--text-secondary)]'}`}>{fmtDate(row.original.target_completion)}</span> },
+    { id: 'total_cost', header: t('workorders.columns.totalCost'), accessorFn: o => o.total_cost, size: 120, meta: { align: 'right' },
+      cell: ({ getValue }) => <span className="text-green-500 font-medium tabular-nums">{getValue() === null || getValue() === undefined ? 'N/A' : fmtCurrency(getValue())}</span> },
+    { id: 'actions', header: t('workorders.columns.actions'), enableSorting: false, size: 170, meta: { export: false },
+      cell: ({ row }) => {
+        const order = row.original
+        const label = order.work_order_no || order.id
+        const btn = 'min-h-[36px] min-w-[36px] inline-flex items-center justify-center rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-3)] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500'
+        return (
+          <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+            <button type="button" onClick={() => setViewOrder(order)} aria-label={`View work order ${label}`} title="View" className={btn}><Eye size={14} aria-hidden="true" /></button>
+            <button type="button" onClick={() => openEdit(order)} aria-label={`Edit work order ${label}`} title="Edit" className={btn}><Edit2 size={14} aria-hidden="true" /></button>
+            {isAdmin && (
+              <button type="button" onClick={() => { setDeleteTarget(order); setDeleteError('') }} aria-label={`Delete work order ${label}`} title="Delete work order (Admin only)"
+                className={`${btn} hover:text-red-400`}><Trash2 size={14} aria-hidden="true" /></button>
+            )}
+            <button type="button" onClick={() => exportJobCard(order)} aria-label={`Download job card ${label}`} title="Job card PDF" className={btn}><FileText size={14} aria-hidden="true" /></button>
+          </div>
+        )
+      } },
+  ]
 
   async function confirmBulkDelete() {
     if (selectedIds.size === 0) return
@@ -626,57 +654,79 @@ export default function WorkOrders() {
   }
 
   // ── Excel export ──────────────────────────────────────────────────────────
-  async function exportExcel() {
-    const XLSX = await import('xlsx')
-    // Export the whole FILTERED set, not the page on screen: the grid now holds
-    // only 20 rows, so mapping those would ship a file that looks complete and
-    // is not.
-    const { rows: matching, truncated } = await workOrders.getAllWorkOrdersMatching({
-      country: activeCountry,
-      openedFrom: dateFrom || undefined,
-      openedTo: dateTo || undefined,
-      search: debouncedSearch,
-      status: statusFilter,
-      priority: priorityFilter,
-      type: typeFilter,
-      sortField, sortDir,
-    })
-    if (truncated) setError(t('workorders.exportTruncated', { defaultValue: 'The export was capped; narrow the filters for the full set.' }))
-    const rows = matching.map(o => ({
-      'Work Order No': o.work_order_no,
-      'Asset No': o.asset_no,
-      'Tyre Serial': o.tyre_serial || '',
-      'Position': o.tyre_position || '',
-      'Work Type': o.work_type,
-      'Status': o.status,
-      'Priority': o.priority,
-      'Description': o.description || '',
-      'Technician': o.technician_name || '',
-      'Workshop': o.workshop_name || '',
-      'Site': o.site || '',
-      'Country': o.country || '',
-      'Opened': fmtDate(o.opened_at),
-      'Started': fmtDate(o.started_at),
-      'Completed': fmtDate(o.completed_at),
-      'Target': fmtDate(o.target_completion),
-      'Labour Hrs': o.labour_hours || 0,
-      'Labour Cost': o.labour_cost || 0,
-      'Parts Cost': o.parts_cost || 0,
-      'Total Cost': o.total_cost || 0,
-      'Days Open': daysOpen(o),
-    }))
-    const ws = XLSX.utils.json_to_sheet(rows)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Work Orders')
-    XLSX.writeFile(wb, `work-orders-${new Date().toISOString().slice(0, 10)}.xlsx`)
+  const [exporting, setExporting] = useState(false)
+  async function exportRegister(kind = 'excel') {
+    if (exporting) return
+    setExporting(true)
+    try {
+      // Export the whole FILTERED set, not the page on screen: the grid holds
+      // only 20 rows, so mapping those would ship a file that looks complete and
+      // is not.
+      const { rows: matching, truncated } = await workOrders.getAllWorkOrdersMatching({
+        country: activeCountry,
+        openedFrom: dateFrom || undefined,
+        openedTo: dateTo || undefined,
+        search: debouncedSearch,
+        status: statusFilter,
+        priority: priorityFilter,
+        type: typeFilter,
+        sortField, sortDir,
+      })
+      if (truncated) setError(t('workorders.exportTruncated', { defaultValue: 'The export was capped; narrow the filters for the full set.' }))
+      const money = (v) => (v === null || v === undefined || v === '' ? 'N/A' : Number(v))
+      const rows = matching.map(o => {
+        const d = daysOpen(o)
+        return {
+          'Work Order No': o.work_order_no,
+          'Asset No': o.asset_no,
+          'Tyre Serial': o.tyre_serial || '',
+          'Position': o.tyre_position || '',
+          'Work Type': o.work_type,
+          'Status': o.status,
+          'Priority': o.priority,
+          'Description': o.description || '',
+          'Technician': o.technician_name || '',
+          'Workshop': o.workshop_name || '',
+          'Site': o.site || '',
+          'Country': o.country || '',
+          'Opened': fmtDate(o.opened_at),
+          'Started': fmtDate(o.started_at),
+          'Completed': fmtDate(o.completed_at),
+          'Target': fmtDate(o.target_completion),
+          'Labour Hrs': money(o.labour_hours),
+          'Labour Cost': money(o.labour_cost),
+          'Parts Cost': money(o.parts_cost),
+          'Total Cost': money(o.total_cost),
+          'Days Open': d === null ? 'N/A' : d,
+        }
+      })
+      const name = reportFileName('Work Orders', reportDateLabel())
+      if (kind === 'pdf') {
+        const { exportToPdf } = await import('../lib/exportUtils')
+        const keys = ['Work Order No', 'Asset No', 'Work Type', 'Status', 'Priority', 'Technician', 'Site', 'Opened', 'Target', 'Total Cost', 'Days Open']
+        await exportToPdf(rows, keys.map(k => ({ key: k, header: k })), 'Work Orders', name, 'landscape', company)
+      } else {
+        const XLSX = await import('xlsx')
+        const ws = XLSX.utils.json_to_sheet(rows)
+        const wb = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(wb, ws, 'Work Orders')
+        XLSX.writeFile(wb, `${name}.xlsx`)
+      }
+    } catch (e) {
+      setError(toUserMessage(e, 'Export failed. Please try again.'))
+    } finally {
+      setExporting(false)
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
   // RENDER
   // ─────────────────────────────────────────────────────────────────────────
-  if (loading) {
+  // Full-page loader on the FIRST load only; later filter/page changes keep the
+  // page on screen and show the table's own loading state.
+  if (loading && statsData === null && orders.length === 0 && !error) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-[var(--surface-0)]">
+      <div className="flex items-center justify-center min-h-[60vh]" role="status">
         <div className="text-center">
           <Loader2 className="animate-spin text-blue-400 mx-auto mb-3" size={40} />
           <p className="text-[var(--text-secondary)]">{t('workorders.loading')}</p>
@@ -696,12 +746,15 @@ export default function WorkOrders() {
         icon={Wrench}
         onRefresh={load}
         actions={
-          <div className="flex items-center gap-2">
-            <button onClick={exportExcel} className="btn-secondary flex items-center gap-2 text-xs px-3 py-1.5">
-              <FileSpreadsheet size={14} /> {t('workorders.actions.excel')}
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => exportRegister('excel')} disabled={exporting || total === 0} className="btn-secondary flex items-center gap-2 text-xs px-3 min-h-[40px] disabled:opacity-40">
+              <FileSpreadsheet size={14} aria-hidden="true" /> {t('workorders.actions.excel')}
             </button>
-            <button onClick={openNew} className="btn-primary flex items-center gap-2 text-sm px-4">
-              <Plus size={15} /> {t('workorders.actions.newWorkOrder')}
+            <button type="button" onClick={() => exportRegister('pdf')} disabled={exporting || total === 0} className="btn-secondary flex items-center gap-2 text-xs px-3 min-h-[40px] disabled:opacity-40">
+              <FileText size={14} aria-hidden="true" /> PDF
+            </button>
+            <button type="button" onClick={openNew} className="btn-primary flex items-center gap-2 text-sm px-4 min-h-[40px]">
+              <Plus size={15} aria-hidden="true" /> {t('workorders.actions.newWorkOrder')}
             </button>
           </div>
         }
@@ -710,9 +763,12 @@ export default function WorkOrders() {
       <PeriodNotice period={defaultPeriod} onShowAll={() => { setDateFrom(''); setDateTo('') }} />
 
       {error && (
-        <div className="bg-red-900/30 border border-red-700 rounded-xl p-4 flex items-center gap-3 text-red-300">
-          <AlertTriangle size={18} />
+        <div role="alert" className="bg-red-900/30 border border-red-700 rounded-xl p-4 flex flex-wrap items-center gap-3 text-red-300">
+          <AlertTriangle size={18} aria-hidden="true" />
           <span className="text-sm">{error}</span>
+          <button type="button" onClick={load} className="ml-auto btn-secondary text-xs px-3 min-h-[36px] inline-flex items-center gap-1">
+            <RefreshCw size={13} aria-hidden="true" /> Retry
+          </button>
         </div>
       )}
 
@@ -724,9 +780,9 @@ export default function WorkOrders() {
           { label: t('workorders.kpi.awaitingParts'), value: stats.awaitParts, color: 'orange', icon: Package },
           { label: t('workorders.kpi.overdue'), value: stats.overdue, color: 'red', icon: AlertOctagon },
           { label: t('workorders.kpi.completedToday'), value: stats.completedToday, color: 'green', icon: CheckCircle },
-          { label: t('workorders.kpi.avgDaysOpen'), value: stats.avgDaysOpen, color: 'purple', icon: Calendar },
-          { label: t('workorders.kpi.totalCostAll'), value: `${activeCurrency} ${(stats.totalCost / 1000).toFixed(1)}k`, color: 'teal', icon: DollarSign },
-        ].map(({ label, value, color, icon: Icon }) => (
+          { label: t('workorders.kpi.avgDaysOpen'), value: stats.avgDaysOpen === null ? null : Math.round(stats.avgDaysOpen * 10) / 10, color: 'purple', icon: Calendar },
+          { label: t('workorders.kpi.totalCostAll'), value: stats.totalCost === null ? null : compactMoney(stats.totalCost, activeCurrency), color: 'teal', icon: DollarSign },
+        ].map(({ label, value: raw, color, icon: Icon }) => ({ label, value: raw === null || raw === undefined ? 'N/A' : raw, color, icon: Icon })).map(({ label, value, color, icon: Icon }) => (
           <Card key={label} pad="tight">
             <div className="flex items-center gap-[var(--space-2)] mb-[var(--space-2)]">
               <Icon size={16} className={KPI_TEXT_COLOR[color]} />
@@ -803,9 +859,9 @@ export default function WorkOrders() {
             placeholder="From date" ariaLabel="From date" />
           <DateField className="text-sm w-40" value={dateTo} onChange={v => { setDateTo(v); setPage(1) }}
             placeholder="To date" ariaLabel="To date" min={dateFrom || undefined} />
-          {(search || statusFilter !== 'All' || priorityFilter !== 'All' || typeFilter !== 'All' || dateFrom || dateTo) && (
-            <button onClick={() => { setSearch(''); setStatus('All'); setPriority('All'); setType('All'); setDateFrom(''); setDateTo(''); setPage(1) }}
-              className="px-3 py-2 bg-red-900/30 border border-red-700 rounded-lg text-red-400 text-sm hover:bg-red-900/50 transition-colors">
+          {activeFilterCount({ search, status: statusFilter, priority: priorityFilter, type: typeFilter, from: dateFrom, to: dateTo }) > 0 && (
+            <button type="button" onClick={() => { setSearch(''); setStatus('All'); setPriority('All'); setType('All'); setDateFrom(''); setDateTo(''); setPage(1) }}
+              className="px-3 min-h-[40px] bg-red-900/30 border border-red-700 rounded-lg text-red-400 text-sm hover:bg-red-900/50 transition-colors">
               {t('workorders.filters.clear')}
             </button>
           )}
@@ -828,116 +884,51 @@ export default function WorkOrders() {
       )}
 
       <Card pad="none" clip>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--border-dim)]">
-                {isAdmin && (
-                  <th className="px-4 py-3 w-10">
-                    <input type="checkbox" checked={allPageSelected} onChange={toggleSelectPage}
-                      aria-label={t('workorders.columns.selectAllTitle')}
-                      title={t('workorders.columns.selectAllTitle')}
-                      className="w-4 h-4 rounded border-[var(--border-bright)] bg-[var(--surface-2)] accent-blue-600 cursor-pointer" />
-                  </th>
-                )}
-                {[
-                  { label: t('workorders.columns.wo'),        field: 'work_order_no' },
-                  { label: t('workorders.columns.asset'),       field: 'asset_no'      },
-                  { label: t('workorders.columns.type'),        field: 'work_type'     },
-                  { label: t('workorders.columns.priority'),    field: 'priority'      },
-                  { label: t('workorders.columns.status'),      field: 'status'        },
-                  { label: t('workorders.columns.technician'),  field: 'technician_name' },
-                  { label: t('workorders.columns.opened'),      field: 'opened_at'     },
-                  { label: t('workorders.columns.target'),      field: 'target_completion' },
-                  { label: t('workorders.columns.totalCost'),  field: 'total_cost'    },
-                  { label: t('workorders.columns.actions'),     field: null             },
-                ].map(({ label, field }) => (
-                  <th key={label}
-                    className={`px-4 py-3 text-left text-[var(--text-secondary)] font-medium ${field ? 'cursor-pointer hover:text-[var(--text-primary)]' : ''}`}
-                    onClick={() => field && handleSort(field)}
-                  >
-                    <div className="flex items-center gap-1">
-                      {label}
-                      {field && <SortIcon field={field} />}
-                    </div>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {paginated.length === 0 && (
-                <tr>
-                  <td colSpan={isAdmin ? 11 : 10} className="text-center py-16 text-[var(--text-muted)]">
-                    <Wrench size={40} className="mx-auto mb-3 opacity-30" />
-                    <p>{t('workorders.states.empty')}</p>
-                    <button onClick={openNew} className="mt-3 text-blue-400 hover:text-blue-300 text-sm">{t('workorders.states.createFirst')}</button>
-                  </td>
-                </tr>
-              )}
-              {paginated.map(order => {
-                const sc = STATUS_CONFIG[order.status] || STATUS_CONFIG.Open
-                const pc = PRIORITY_CONFIG[order.priority] || PRIORITY_CONFIG.Medium
-                const overdue = isOverdue(order)
-                return (
-                  <tr key={order.id} className={`border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)] transition-colors ${selectedIds.has(order.id) ? 'bg-blue-950/20' : overdue ? 'bg-red-950/10' : ''}`}>
-                    {isAdmin && (
-                      <td className="px-4 py-3">
-                        <input type="checkbox" checked={selectedIds.has(order.id)} onChange={() => toggleSelect(order.id)}
-                          aria-label={`Select work order ${order.work_order_no || order.id}`}
-                          className="w-4 h-4 rounded border-[var(--border-bright)] bg-[var(--surface-2)] accent-blue-600 cursor-pointer" />
-                      </td>
-                    )}
-                    <td className="px-4 py-3">
-                      <span className="text-blue-400 font-mono text-xs">{order.work_order_no}</span>
-                      {overdue && <span className="ml-2 text-xs text-red-400 font-medium">{t('workorders.states.overdue')}</span>}
-                    </td>
-                    <td className="px-4 py-3 text-[var(--text-primary)] font-medium">{order.asset_no}</td>
-                    <td className="px-4 py-3 text-[var(--text-secondary)]">{order.work_type}</td>
-                    <td className="px-4 py-3">
-                      <span className={`flex items-center gap-1.5 ${pc.color}`}>
-                        <span className={`w-2 h-2 rounded-full ${pc.dot}`} />
-                        {order.priority}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${sc.color} ${sc.bg} ${sc.border}`}>
-                        {order.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-[var(--text-secondary)]">{order.technician_name || '-'}</td>
-                    <td className="px-4 py-3 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(order.opened_at)}</td>
-                    <td className={`px-4 py-3 whitespace-nowrap ${overdue ? 'text-red-400 font-medium' : 'text-[var(--text-secondary)]'}`}>{fmtDate(order.target_completion)}</td>
-                    <td className="px-4 py-3 text-green-400 font-medium">{fmtCurrency(order.total_cost)}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => setViewOrder(order)} className="p-1.5 rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-3)] transition-colors"><Eye size={14} /></button>
-                        <button onClick={() => openEdit(order)} className="p-1.5 rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-3)] transition-colors"><Edit2 size={14} /></button>
-                        {isAdmin && (
-                          <button onClick={() => { setDeleteTarget(order); setDeleteError('') }} title="Delete work order (Admin only)"
-                            className="p-1.5 rounded text-[var(--text-secondary)] hover:text-red-400 hover:bg-[var(--surface-3)] transition-colors"><Trash2 size={14} /></button>
-                        )}
-                        <button onClick={() => exportJobCard(order)} className="p-1.5 rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-3)] transition-colors"><FileText size={14} /></button>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--border-dim)]">
-            <span className="text-[var(--text-secondary)] text-sm">{t('workorders.pagination.summary', { page, totalPages, count: total })}</span>
-            <div className="flex gap-2">
-              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-                className="px-3 py-1.5 bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-secondary)] text-sm rounded disabled:opacity-40">{t('workorders.pagination.prev')}</button>
-              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-                className="px-3 py-1.5 bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-secondary)] text-sm rounded disabled:opacity-40">{t('workorders.pagination.next')}</button>
+        <div className="p-3">
+          <EnterpriseTable
+            columns={woColumns}
+            data={paginated}
+            getRowId={o => String(o.id)}
+            loading={loading}
+            error={error && orders.length === 0 ? error : null}
+            onRetry={load}
+            emptyMessage={t('workorders.states.empty')}
+            enableGlobalFilter={false}
+            enableColumnFilters={false}
+            enableSorting={false}
+            enableExport={false}
+            enableRowSelection={isAdmin}
+            rowSelection={tableSelection}
+            onRowSelectionChange={onTableSelection}
+            manualPagination
+            pageIndex={page - 1}
+            pageCount={totalPages}
+            totalRows={total}
+            pageSize={PAGE_SIZE}
+            onPageChange={(i) => setPage(i + 1)}
+            onRowClick={(o) => o && setViewOrder(o)}
+            viewKey="work-orders"
+            toolbarExtras={(
+              <div className="flex items-center gap-2">
+                <label className="sr-only" htmlFor="wo-sort-field">Sort work orders by</label>
+                <select id="wo-sort-field" value={sortField} onChange={e => setSortField(e.target.value)}
+                  className="px-3 min-h-[40px] bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500">
+                  {SORT_FIELDS.map(f => <option key={f.key} value={f.key}>Sort: {f.label}</option>)}
+                </select>
+                <button type="button" onClick={() => setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))}
+                  aria-label={sortDir === 'asc' ? 'Sorted ascending, switch to descending' : 'Sorted descending, switch to ascending'}
+                  className="min-h-[40px] min-w-[40px] inline-flex items-center justify-center bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
+                  {sortDir === 'asc' ? <ChevronUp size={16} aria-hidden="true" /> : <ChevronDown size={16} aria-hidden="true" />}
+                </button>
+              </div>
+            )}
+          />
+          {!loading && total === 0 && !error && (
+            <div className="text-center pb-4">
+              <button type="button" onClick={openNew} className="mt-1 text-blue-400 hover:text-blue-300 text-sm min-h-[40px]">{t('workorders.states.createFirst')}</button>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </Card>
 
       {/* ── Create / Edit Modal ─────────────────────────────────────────────── */}

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { dataCleaning } from '../lib/api'
 import useLatestRequest from '../lib/useLatestRequest'
 import { useAuth } from '../contexts/AuthContext'
@@ -8,79 +8,75 @@ import {
   Wand2, Info, ChevronLeft, ChevronRight, Check, X, RefreshCw, CheckCheck,
   ShieldAlert, AlertTriangle, BarChart2, Gauge, ClipboardList, Truck,
   Activity, ChevronDown, ChevronUp, Edit2, Hash, Layers, CheckCircle2,
+  MapPin, Tag, Calendar, FileSpreadsheet, FileText,
 } from 'lucide-react'
 import { SkeletonTable } from '../components/ui/Skeleton'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import { formatDate } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
+import { reportFileName } from '../lib/exportUtils'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import StatTile from '../components/ui/StatTile'
+import Modal from '../components/ui/Modal'
+import {
+  QUALITY_CHECKS, checkBadCount, computeQualityScore, scoreBand, scoreVerdict,
+  detectSerialIssues, groupDuplicateSerials, findInvalidPressure, summarizeMissingTread,
+  inspectionCutoff, findMissingInspections, detectOdometerIssues, detectUnrealisticLife,
+  odometerEditVerdict, searchCleaned, summarizeCleaned, cleanedShare, qualityIssueExportRows,
+} from '../lib/dataCleaningAnalytics'
 
 const PAGE_SIZE = 50
 
-// ─── Quality Score helpers ────────────────────────────────────────────────────
-const QUALITY_WEIGHTS = {
-  odometer:        0.25,
-  duplicateSerial: 0.20,
-  missingTread:    0.15,
-  invalidPressure: 0.15,
-  serialIssues:    0.10,
-  unrealisticLife: 0.10,
-  missingInspect:  0.05,
+const SCORE_TEXT = { good: 'text-green-400', warn: 'text-yellow-400', crit: 'text-red-400' }
+const SCORE_BG = { good: 'bg-green-900/30 border-green-700/50', warn: 'bg-yellow-900/30 border-yellow-700/50', crit: 'bg-red-900/30 border-red-700/50' }
+function scoreColor(s) { return SCORE_TEXT[scoreBand(s)] || 'text-[var(--text-muted)]' }
+function scoreBg(s) { return SCORE_BG[scoreBand(s)] || 'border-[var(--card-border)]' }
+function readCachedScore(key) {
+  try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null } catch { return null }
 }
-
-function computeQualityScore(checks, totalRecords) {
-  if (!totalRecords) return 100
-  const ratios = {
-    odometer:        checks.odometer?.issues?.length        ?? 0,
-    duplicateSerial: checks.duplicateSerial?.affectedCount  ?? 0,
-    missingTread:    checks.missingTread?.count             ?? 0,
-    invalidPressure: checks.invalidPressure?.count          ?? 0,
-    serialIssues:    checks.serialIssues?.count             ?? 0,
-    unrealisticLife: checks.unrealisticLife?.count          ?? 0,
-    missingInspect:  checks.missingInspect?.count           ?? 0,
-  }
-  let penalty = 0
-  Object.entries(QUALITY_WEIGHTS).forEach(([k, w]) => {
-    const badRatio = Math.min((ratios[k] ?? 0) / Math.max(totalRecords, 1), 1)
-    penalty += w * badRatio
-  })
-  return Math.round(Math.max(0, (1 - penalty) * 100))
-}
-
-function scoreColor(s) {
-  if (s >= 85) return 'text-green-400'
-  if (s >= 70) return 'text-yellow-400'
-  return 'text-red-400'
-}
-function scoreBg(s) {
-  if (s >= 85) return 'bg-green-900/30 border-green-700/50'
-  if (s >= 70) return 'bg-yellow-900/30 border-yellow-700/50'
-  return 'bg-red-900/30 border-red-700/50'
+function writeCachedScore(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)) } catch { /* storage unavailable: history is a convenience */ }
 }
 
 // ─── IssueSection component ───────────────────────────────────────────────────
-function IssueSection({ icon: Icon, title, count, color = 'text-yellow-400', bgColor = 'bg-yellow-900/20 border-yellow-700/40', children, loading, action }) {
+function IssueSection({ icon: Icon, title, count, color = 'text-yellow-400', bgColor = 'bg-yellow-900/20 border-yellow-700/40', children, loading, action, failed = false, notApplicable = false, onRetry }) {
   const [expanded, setExpanded] = useState(false)
+  const canExpand = !loading && !failed && (count > 0 || notApplicable)
+  let badge
+  if (loading) badge = <span className="text-xs text-[var(--text-muted)] animate-pulse">Checking...</span>
+  else if (failed) badge = <span className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-red-900/20 border-red-700/40 text-red-400">Could not check</span>
+  else if (notApplicable) badge = <span className="text-xs font-semibold px-2 py-0.5 rounded-full border border-[var(--card-border)] text-[var(--text-muted)]">Not applicable</span>
+  else badge = (
+    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${count > 0 ? bgColor + ' ' + color : 'bg-green-900/20 border-green-700/40 text-green-400'}`}>
+      {count > 0 ? `${count.toLocaleString()} issue${count !== 1 ? 's' : ''}` : 'Clean'}
+    </span>
+  )
   return (
     <div className="card">
-      <div className="flex items-center justify-between cursor-pointer select-none" onClick={() => count > 0 && setExpanded(e => !e)}>
-        <div className="flex items-center gap-3">
-          <Icon size={18} className={color} />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={() => canExpand && setExpanded(e => !e)}
+          aria-expanded={canExpand ? expanded : undefined}
+          disabled={!canExpand}
+          className="flex flex-1 min-w-0 items-center gap-3 min-h-[44px] text-left rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] disabled:cursor-default"
+        >
+          <Icon size={18} className={color} aria-hidden="true" />
           <span className="font-medium text-[var(--text-primary)]">{title}</span>
-          {loading ? (
-            <span className="text-xs text-[var(--text-muted)] animate-pulse">Checking...</span>
-          ) : (
-            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${count > 0 ? bgColor + ' ' + color : 'bg-green-900/20 border-green-700/40 text-green-400'}`}>
-              {count > 0 ? `${count} issue${count !== 1 ? 's' : ''}` : 'Clean'}
-            </span>
-          )}
-        </div>
+          {badge}
+          {canExpand && (expanded ? <ChevronUp size={16} className="text-[var(--text-muted)] ml-auto" aria-hidden="true" /> : <ChevronDown size={16} className="text-[var(--text-muted)] ml-auto" aria-hidden="true" />)}
+        </button>
         <div className="flex items-center gap-2">
           {action}
-          {count > 0 && (expanded ? <ChevronUp size={16} className="text-[var(--text-muted)]" /> : <ChevronDown size={16} className="text-[var(--text-muted)]" />)}
+          {failed && onRetry && (
+            <button type="button" onClick={onRetry} className="btn-secondary min-h-[36px] text-xs inline-flex items-center gap-1">
+              <RefreshCw size={12} aria-hidden="true" /> Retry
+            </button>
+          )}
         </div>
       </div>
-      {expanded && count > 0 && (
+      {expanded && canExpand && (
         <div className="mt-3 border-t border-[var(--card-border)] pt-3">
           {children}
         </div>
@@ -101,8 +97,9 @@ function ExpandableList({ items, renderItem, pageSize = 10 }) {
       </div>
       {items.length > show && (
         <button
+          type="button"
           onClick={() => setShow(s => s + pageSize)}
-          className="mt-3 text-xs text-blue-400 hover:text-blue-300 underline"
+          className="mt-3 min-h-[36px] text-xs text-[var(--accent)] underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]"
         >
           Show {Math.min(pageSize, items.length - show)} more ({items.length - show} remaining)
         </button>
@@ -118,29 +115,15 @@ function Toast({ message, type = 'error', onClose }) {
     return () => clearTimeout(t)
   }, [onClose])
   return (
-    <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-lg border shadow-xl text-sm font-medium
+    <div role={type === 'error' ? 'alert' : 'status'} aria-live="polite" className={`fixed bottom-6 right-6 left-6 sm:left-auto z-50 flex items-center gap-3 px-4 py-3 rounded-lg border shadow-xl text-sm font-medium
       ${type === 'error' ? 'bg-red-900/90 border-red-700 text-red-200' : 'bg-green-900/90 border-green-700 text-green-200'}`}>
       {type === 'error' ? <AlertTriangle size={16} /> : <CheckCircle2 size={16} />}
       {message}
-      <button onClick={onClose}><X size={14} /></button>
+      <button type="button" onClick={onClose} aria-label="Dismiss message" className="ml-auto min-h-[32px] min-w-[32px] inline-flex items-center justify-center"><X size={14} aria-hidden="true" /></button>
     </div>
   )
 }
 
-// ─── Modal scaffold ────────────────────────────────────────────────────────────
-function Modal({ title, onClose, children }) {
-  return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-[var(--surface-1)] border border-[var(--card-border)] rounded-xl w-full max-w-2xl max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--card-border)]">
-          <h2 className="text-lg font-semibold text-[var(--text-primary)]">{title}</h2>
-          <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
-        </div>
-        <div className="flex-1 overflow-y-auto p-6">{children}</div>
-      </div>
-    </div>
-  )
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 export default function DataCleaning() {
@@ -164,10 +147,9 @@ export default function DataCleaning() {
   const [filterConf, setFilterConf]         = useState('')
   const [filterSite, setFilterSite]         = useState('')
   const [sites, setSites]                   = useState([])
-  const [stats, setStats]                   = useState({ pending: 0, cleaned: 0 })
+  const [stats, setStats]                   = useState({ pending: null, cleaned: null })
+  const [statsError, setStatsError]         = useState(false)
   const [cleanedSearch, setCleanedSearch]   = useState('')
-  const [cleanedPage, setCleanedPage]       = useState(1)
-  const CLEANED_PAGE_SIZE = 50
 
   const [approveAllProgress, setApproveAllProgress] = useState(null)
   const [showApproveAllConfirm, setShowApproveAllConfirm] = useState(false)
@@ -177,7 +159,7 @@ export default function DataCleaning() {
 
   // ── Quality Intelligence state ──────────────────────────────────────────────
   const [qiLoading, setQiLoading]         = useState(false)
-  const [totalRecords, setTotalRecords]   = useState(0)
+  const [totalRecords, setTotalRecords]   = useState(null)
   const [qualityScore, setQualityScore]   = useState(null)
   const [prevScore, setPrevScore]         = useState(null)
   const [toast, setToast]                 = useState(null)
@@ -206,8 +188,8 @@ export default function DataCleaning() {
 
   // Load previous score from localStorage
   useEffect(() => {
-    const cached = localStorage.getItem('tp_dq_score_prev')
-    if (cached) setPrevScore(JSON.parse(cached))
+    const cached = readCachedScore('tp_dq_score_prev')
+    if (cached && Number.isFinite(cached.score)) setPrevScore(cached)
   }, [])
 
   // ── Existing loaders ─────────────────────────────────────────────────────────
@@ -216,7 +198,13 @@ export default function DataCleaning() {
       dataCleaning.countTyreRecords({ country: activeCountry, cleaned: false }),
       dataCleaning.countTyreRecords({ country: activeCountry, cleaned: true }),
     ])
-    if (p.error || c.error) { setToast({ message: toUserMessage(p.error || c.error), type: 'error' }); return }
+    if (p.error || c.error) {
+      setStatsError(true)
+      setStats({ pending: null, cleaned: null })
+      setToast({ message: toUserMessage(p.error || c.error), type: 'error' })
+      return
+    }
+    setStatsError(false)
     setStats({ pending: p.count ?? 0, cleaned: c.count ?? 0 })
   }, [activeCountry])
 
@@ -273,35 +261,7 @@ export default function DataCleaning() {
     try {
       const { data, error } = await dataCleaning.listSerialRecords({ country: activeCountry })
       if (error) throw error
-
-      const issues = (data ?? []).filter(r => {
-        const s = r.tyre_serial
-        if (!s || s.trim() === '') return true
-        if (s.trim().length < 4) return true
-        if (!/[a-zA-Z0-9]/.test(s)) return true
-        return false
-      })
-
-      // Detect serial reuse: same serial across different asset_nos
-        const serialMap = {}
-      ;(data ?? []).forEach(r => {
-        if (!r.tyre_serial || r.tyre_serial.trim() === '') return
-        const key = r.tyre_serial.trim()
-        if (!serialMap[key]) serialMap[key] = new Set()
-        serialMap[key].add(r.asset_no)
-      })
-      const reuseIssues = (data ?? []).filter(r => {
-        if (!r.tyre_serial) return false
-        const key = r.tyre_serial.trim()
-        return serialMap[key] && serialMap[key].size > 1
-      }).map(r => ({ ...r, issue_type: 'Serial reused across vehicles' }))
-
-      const combined = [
-        ...issues.map(r => ({ ...r, issue_type: !r.tyre_serial || r.tyre_serial.trim() === '' ? 'Empty/null serial' : r.tyre_serial.trim().length < 4 ? 'Too short (<4 chars)' : 'Non-alphanumeric pattern' })),
-        ...reuseIssues.filter(r => !issues.find(i => i.id === r.id)),
-      ]
-
-      setSerialIssues({ count: combined.length, issues: combined })
+      setSerialIssues(detectSerialIssues(data ?? []))
     } catch {
       setSerialIssues({ count: 0, issues: [], error: true })
     }
@@ -314,26 +274,7 @@ export default function DataCleaning() {
       const { data, error } = await dataCleaning.listActiveSerialRecords({ country: activeCountry })
       if (error) throw error
 
-      const groups = {}
-      ;(data ?? []).forEach(r => {
-        if (!r.tyre_serial || r.tyre_serial.trim() === '') return
-        const key = r.tyre_serial.trim()
-        if (!groups[key]) groups[key] = []
-        groups[key].push(r)
-      })
-
-      const dupeGroups = Object.entries(groups)
-        .filter(([, records]) => records.length > 1)
-        .map(([serial, records]) => ({
-          serial,
-          count: records.length,
-          records,
-          asset_nos: [...new Set(records.map(r => r.asset_no).filter(Boolean))],
-          dates: records.map(r => r.issue_date).filter(Boolean),
-        }))
-
-      const affectedCount = dupeGroups.reduce((s, g) => s + g.count, 0)
-      setDuplicateSerial({ groups: dupeGroups, affectedCount, groupCount: dupeGroups.length })
+      setDuplicateSerial(groupDuplicateSerials(data ?? []))
     } catch {
       setDuplicateSerial({ groups: [], affectedCount: 0, groupCount: 0, error: true })
     }
@@ -352,11 +293,8 @@ export default function DataCleaning() {
         return
       }
 
-      const invalid = (data ?? []).filter(r => {
-        const v = parseFloat(r.pressure_reading)
-        return isNaN(v) || v < 20 || v > 200
-      })
-      setInvalidPressure({ count: invalid.length, records: invalid })
+      if (error) throw error
+      setInvalidPressure(findInvalidPressure(data ?? []))
     } catch {
       setInvalidPressure({ count: 0, records: [], error: true })
     }
@@ -370,23 +308,15 @@ export default function DataCleaning() {
       const { data, error } = await dataCleaning.listTreadRecords({ country: activeCountry })
 
       if (error && error.message?.includes('column')) {
-        setMissingTread({ count: 0, pct: 0, bySite: [], notApplicable: true })
+        setMissingTread({ count: 0, pct: null, bySite: [], notApplicable: true })
         setCheckLoading(p => ({ ...p, missingTread: false }))
         return
       }
 
-      const all = data ?? []
-      const missing = all.filter(r => r.tread_depth === null || r.tread_depth === 0)
-      const bySiteMap = {}
-      missing.forEach(r => {
-        const s = r.site ?? 'Unknown'
-        bySiteMap[s] = (bySiteMap[s] ?? 0) + 1
-      })
-      const bySite = Object.entries(bySiteMap).sort((a, b) => b[1] - a[1]).map(([site, count]) => ({ site, count }))
-      const pct = all.length > 0 ? ((missing.length / all.length) * 100).toFixed(1) : 0
-      setMissingTread({ count: missing.length, pct, bySite, records: missing })
+      if (error) throw error
+      setMissingTread(summarizeMissingTread(data ?? []))
     } catch {
-      setMissingTread({ count: 0, pct: 0, bySite: [], records: [], error: true })
+      setMissingTread({ count: 0, pct: null, bySite: [], records: [], error: true })
     }
     setCheckLoading(p => ({ ...p, missingTread: false }))
   }, [activeCountry])
@@ -397,20 +327,13 @@ export default function DataCleaning() {
       // Get all distinct asset_nos from tyre_records
       const { data: tyreData, error: tyreError } = await dataCleaning.listAssetNumbers({ country: activeCountry })
       if (tyreError) throw tyreError
-      const allAssets = [...new Set((tyreData ?? []).map(r => r.asset_no))]
-
-      // Try inspections table - graceful fallback
-      const thirtyDaysAgo = new Date()
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-      const cutoff = thirtyDaysAgo.toISOString().split('T')[0]
+      const cutoff = inspectionCutoff(new Date())
 
       const { data: inspData, error: inspError } = await dataCleaning.listRecentInspections({ cutoff, country: activeCountry })
 
       if (inspError) throw inspError
 
-      const inspectedAssets = new Set((inspData ?? []).map(r => r.asset_no))
-      const missing = allAssets.filter(a => !inspectedAssets.has(a))
-      setMissingInspect({ count: missing.length, asset_nos: missing })
+      setMissingInspect(findMissingInspections(tyreData ?? [], inspData ?? []))
     } catch {
       setMissingInspect({ count: 0, asset_nos: [], error: true })
     }
@@ -423,42 +346,7 @@ export default function DataCleaning() {
       const { data, error } = await dataCleaning.listOdometerRecords({ country: activeCountry })
       if (error) throw error
 
-      const issues = []
-
-      ;(data ?? []).forEach(r => {
-        const fit = parseFloat(r.km_at_fitment)
-        const rem = parseFloat(r.km_at_removal)
-        if (isNaN(fit) || isNaN(rem)) return
-        if (rem < fit) {
-          issues.push({ ...r, issue_type: 'Removal < Fitment (impossible)', severity: 'critical' })
-        } else if (rem - fit > 500000) {
-          issues.push({ ...r, issue_type: `Life ${(rem - fit).toLocaleString()} km exceeds 500,000 km`, severity: 'high' })
-        }
-      })
-
-      // Non-sequential check: group by asset_no, sort by km_at_fitment
-      const byAsset = {}
-      ;(data ?? []).forEach(r => {
-        if (!r.asset_no) return
-        if (!byAsset[r.asset_no]) byAsset[r.asset_no] = []
-        byAsset[r.asset_no].push(r)
-      })
-      Object.values(byAsset).forEach(records => {
-        const sorted = [...records].sort((a, b) => parseFloat(a.km_at_fitment) - parseFloat(b.km_at_fitment))
-        sorted.forEach((r, i) => {
-          if (i === 0) return
-          const prev = sorted[i - 1]
-          const prevRem = parseFloat(prev.km_at_removal)
-          const curFit = parseFloat(r.km_at_fitment)
-          if (!isNaN(prevRem) && !isNaN(curFit) && curFit < prevRem) {
-            if (!issues.find(x => x.id === r.id)) {
-              issues.push({ ...r, issue_type: `Fitment (${curFit.toLocaleString()}) < previous removal (${prevRem.toLocaleString()})`, severity: 'medium' })
-            }
-          }
-        })
-      })
-
-      setOdometerIssues({ count: issues.length, issues })
+      setOdometerIssues(detectOdometerIssues(data ?? []))
     } catch {
       setOdometerIssues({ count: 0, issues: [], error: true })
     }
@@ -471,28 +359,7 @@ export default function DataCleaning() {
       const { data, error } = await dataCleaning.listLifeRecords({ country: activeCountry })
       if (error) throw error
 
-      const issues = [];
-      ;(data ?? []).forEach(r => {
-        const fit = parseFloat(r.km_at_fitment)
-        const rem = parseFloat(r.km_at_removal)
-        if (isNaN(fit) || isNaN(rem)) return
-        const life = rem - fit
-        if (life >= 0 && life < 500) {
-          issues.push({ ...r, life, issue_type: `Life only ${life} km - likely entry error` })
-        } else if (life > 400000) {
-          issues.push({ ...r, life, issue_type: `Life ${life.toLocaleString()} km - unrealistically high` })
-        }
-      })
-
-      // Cost anomalies if column exists
-      const costIssues = (data ?? []).filter(r => {
-        if (r.cost_per_tyre === null || r.cost_per_tyre === undefined) return false
-        const c = parseFloat(r.cost_per_tyre)
-        return !isNaN(c) && (c > 50000 || c < 50)
-      }).map(r => ({ ...r, issue_type: `Cost ${parseFloat(r.cost_per_tyre).toLocaleString()} - outside normal range (50-50,000)` }))
-
-      const combined = [...issues, ...costIssues.filter(r => !issues.find(i => i.id === r.id))]
-      setUnrealisticLife({ count: combined.length, issues: combined })
+      setUnrealisticLife(detectUnrealisticLife(data ?? []))
     } catch {
       setUnrealisticLife({ count: 0, issues: [], error: true })
     }
@@ -503,8 +370,9 @@ export default function DataCleaning() {
     setQiLoading(true)
     setCheckLoading({ serialIssues: true, duplicateSerial: true, invalidPressure: true, missingTread: true, missingInspect: true, odometer: true, unrealisticLife: true })
 
-    const { count: total } = await dataCleaning.countTyreRecords({ country: activeCountry })
-    setTotalRecords(total ?? 0)
+    const { count: total, error: totalError } = await dataCleaning.countTyreRecords({ country: activeCountry })
+    // An unreadable total must not score as "0 records": null keeps the score N/A.
+    setTotalRecords(totalError ? null : (total ?? 0))
 
     await Promise.all([
       checkSerialIssues(),
@@ -542,22 +410,20 @@ export default function DataCleaning() {
     }
     if (Object.values(checks).some(check => check.error || check.notApplicable)) { setQualityScore(null); return }
     const score = computeQualityScore(checks, totalRecords)
-    const now = new Date().toISOString()
+    setQualityScore(score)
+    if (score === null) return
+    const now = new Date()
 
-    // Cache previous before overwriting
-    const storedThis = localStorage.getItem('tp_dq_score_current')
-    if (storedThis) {
-      const parsed = JSON.parse(storedThis)
-      // If stored timestamp is more than 6 days ago treat as "last week"
-      const diff = (Date.now() - new Date(parsed.ts).getTime()) / (1000 * 60 * 60 * 24)
-      if (diff >= 1) {
-        localStorage.setItem('tp_dq_score_prev', storedThis)
-        setPrevScore(parsed)
+    // Keep the previous day's score so the page can show the movement.
+    const stored = readCachedScore('tp_dq_score_current')
+    if (stored?.ts && Number.isFinite(stored.score)) {
+      const diffDays = (now.getTime() - new Date(stored.ts).getTime()) / 86400000
+      if (diffDays >= 1) {
+        writeCachedScore('tp_dq_score_prev', stored)
+        setPrevScore(stored)
       }
     }
-
-    localStorage.setItem('tp_dq_score_current', JSON.stringify({ score, ts: now }))
-    setQualityScore(score)
+    writeCachedScore('tp_dq_score_current', { score, ts: now.toISOString() })
   }, [serialIssues, duplicateSerial, invalidPressure, missingTread, missingInspect, odometerIssues, unrealisticLife, totalRecords])
 
   // ── Bulk fix handlers ────────────────────────────────────────────────────────
@@ -680,7 +546,7 @@ export default function DataCleaning() {
   }
 
   function runReclassify() {
-    const toReclassify = cleanedRecords.filter(r => cleanedSelected.has(r.id))
+    const toReclassify = cleanedRecords.filter(r => cleanedSelected.has(String(r.id)))
     const results      = batchClassify(toReclassify.map(r => ({ id: r.id, description: r.description, remarks: r.remarks })))
     const proposed     = results.map(r => {
       const orig = cleanedRecords.find(c => c.id === r.id)
@@ -716,17 +582,16 @@ export default function DataCleaning() {
   const totalPages = Math.ceil(totalPending / PAGE_SIZE)
   const allSelected = classified.length > 0 && classified.every(r => selected.has(r.id))
 
-  let cleanedFiltered = cleanedRecords
-  if (cleanedSearch) {
-    const q = cleanedSearch.toLowerCase()
-    cleanedFiltered = cleanedFiltered.filter(r =>
-      r.asset_no?.toLowerCase().includes(q) ||
-      r.brand?.toLowerCase().includes(q) ||
-      r.site?.toLowerCase().includes(q) ||
-      r.serial_no?.toLowerCase().includes(q)
-    )
-  }
-  const cleanedPaged = cleanedFiltered.slice((cleanedPage - 1) * CLEANED_PAGE_SIZE, cleanedPage * CLEANED_PAGE_SIZE)
+  const cleanedFiltered = useMemo(() => searchCleaned(cleanedRecords, cleanedSearch), [cleanedRecords, cleanedSearch])
+  const cleanedSummary = useMemo(() => summarizeCleaned(cleanedRecords), [cleanedRecords])
+  const cleanedRowSelection = useMemo(() => {
+    const o = {}
+    cleanedSelected.forEach(id => { o[String(id)] = true })
+    return o
+  }, [cleanedSelected])
+  const onCleanedSelection = useCallback(next => {
+    setCleanedSelected(new Set(Object.keys(next).filter(k => next[k])))
+  }, [])
 
   // Severity badge
   function severityBadge(s) {
@@ -743,50 +608,103 @@ export default function DataCleaning() {
   const [dupNewSerial, setDupNewSerial] = useState({})
   useEffect(() => { if (dupModal) setDupNewSerial({}) }, [dupModal])
 
+  const qualityChecks = {
+    odometer: odometerIssues, duplicateSerial, missingTread, invalidPressure,
+    serialIssues, unrealisticLife, missingInspect,
+  }
+  const shareCleaned = cleanedShare(stats.pending, stats.cleaned)
+  const fmtCount = (v) => (v === null || v === undefined ? (statsError ? 'N/A' : '...') : Number(v).toLocaleString())
+
+  async function exportQualityIssues(kind) {
+    const rows = qualityIssueExportRows(qualityChecks)
+    const keys = ['check', 'serial', 'asset_no', 'site', 'issue_date', 'issue']
+    const headers = ['Check', 'Serial', 'Asset No', 'Site', 'Issue Date', 'Issue']
+    const name = reportFileName('Data Quality Issues', activeCountry || 'All')
+    try {
+      const { exportToExcel, exportToPdf } = await import('../lib/exportUtils')
+      if (kind === 'pdf') await exportToPdf(rows, keys.map((k, i) => ({ key: k, header: headers[i] })), 'Data Quality Issues', name, 'landscape')
+      else await exportToExcel(rows, keys, headers, name, 'Issues')
+    } catch (e) {
+      setToast({ message: toUserMessage(e, 'Export failed. Please try again.'), type: 'error' })
+    }
+  }
+
+  const cleanedColumns = [
+    { id: 'asset_no', header: 'Asset No', accessorFn: r => r.asset_no ?? 'N/A', size: 110,
+      cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original.asset_no ?? 'N/A'}</span> },
+    { id: 'brand', header: 'Brand', accessorFn: r => r.brand ?? 'N/A', size: 110, meta: { filterVariant: 'select' } },
+    { id: 'site', header: 'Site', accessorFn: r => r.site ?? 'N/A', size: 110, meta: { filterVariant: 'select' } },
+    { id: 'category', header: 'Category', accessorFn: r => r.category ?? 'N/A', size: 150, meta: { filterVariant: 'select' } },
+    { id: 'risk_level', header: 'Risk Level', accessorFn: r => r.risk_level ?? 'N/A', size: 110, meta: { filterVariant: 'select' },
+      cell: ({ row }) => row.original.risk_level
+        ? <span className={`badge ${RISK_COLOUR[row.original.risk_level] ?? ''}`}>{row.original.risk_level}</span>
+        : <span className="text-[var(--text-muted)]">N/A</span> },
+    { id: 'remarks_cleaned', header: 'Cleaned Remarks', accessorFn: r => r.remarks_cleaned ?? 'N/A', size: 220,
+      cell: ({ row }) => <span className="text-[var(--text-muted)] text-xs block max-w-xs truncate" title={row.original.remarks_cleaned ?? ''}>{row.original.remarks_cleaned ?? 'N/A'}</span> },
+    { id: 'original', header: 'Original Remarks', accessorFn: r => r.remarks || r.description || 'N/A', size: 220,
+      cell: ({ row }) => {
+        const text = row.original.remarks || row.original.description || 'N/A'
+        return <span className="text-[var(--text-muted)] text-xs block max-w-xs truncate" title={text}>{text}</span>
+      } },
+    { id: 'issue_date', header: 'Date', accessorFn: r => r.issue_date ?? null, size: 110,
+      cell: ({ row }) => <span className="text-[var(--text-muted)] tabular-nums">{row.original.issue_date ? formatDate(row.original.issue_date) : 'N/A'}</span> },
+    { id: 'undo', header: '', enableSorting: false, size: 90, meta: { export: false },
+      cell: ({ row }) => (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); undoClassification(row.original) }}
+          disabled={saving}
+          className="text-xs min-h-[36px] px-3 rounded bg-yellow-900/20 text-yellow-400 hover:bg-yellow-900/40 border border-yellow-700/40 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] disabled:opacity-40"
+          title="Move back to Pending"
+        >
+          Undo
+        </button>
+      ) },
+  ]
+
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <PageHeader
-          title="Data Cleaning Engine"
-          subtitle="Rule-based auto-classification + Quality Intelligence, zero AI tokens required"
-          icon={Wand2}
-        />
-        <div className="flex gap-3">
-          <div className="card py-2 px-4 text-center">
-            <p className="text-xl font-bold text-yellow-400">{stats.pending.toLocaleString()}</p>
-            <p className="text-xs text-[var(--text-muted)]">Pending</p>
-          </div>
-          <div className="card py-2 px-4 text-center">
-            <p className="text-xl font-bold text-green-400">{stats.cleaned.toLocaleString()}</p>
-            <p className="text-xs text-[var(--text-muted)]">Cleaned</p>
-          </div>
-          {qualityScore !== null && (
-            <div className={`card py-2 px-4 text-center border ${scoreBg(qualityScore)}`}>
-              <p className={`text-xl font-bold ${scoreColor(qualityScore)}`}>{qualityScore}%</p>
-              <p className="text-xs text-[var(--text-muted)]">Quality</p>
-            </div>
-          )}
-        </div>
+      <PageHeader
+        title="Data Cleaning Engine"
+        subtitle="Rule-based auto-classification + Quality Intelligence, zero AI tokens required"
+        icon={Wand2}
+      />
+
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" aria-label="Data cleaning summary">
+        <StatTile label="Pending classification" value={fmtCount(stats.pending)} tone={stats.pending > 0 ? 'warn' : 'neutral'} icon={ClipboardList} index={0} />
+        <StatTile label="Already cleaned" value={fmtCount(stats.cleaned)} tone="accent" icon={CheckCircle2} index={1} />
+        <StatTile label="Classified share" value={shareCleaned === null ? 'N/A' : shareCleaned} unit={shareCleaned === null ? undefined : '%'}
+          sub={shareCleaned === null ? (statsError ? 'Counts could not be read' : 'No tyre records in scope') : 'of all tyre records'} tone="info" icon={Layers} index={2} />
+        <StatTile label="Data quality score" value={qualityScore === null ? 'N/A' : qualityScore} unit={qualityScore === null ? undefined : '%'}
+          sub={qualityScore === null ? 'Open Quality Intelligence to score' : scoreVerdict(qualityScore)}
+          tone={{ good: 'accent', warn: 'warn', crit: 'crit' }[scoreBand(qualityScore)] || 'neutral'} icon={Gauge} index={3} />
       </div>
+      {statsError && (
+        <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-red-700/40 bg-red-900/20 px-4 py-2 text-sm text-red-300">
+          <AlertTriangle size={15} aria-hidden="true" /> Record counts could not be read, so the totals above show N/A.
+          <button type="button" onClick={loadStats} className="btn-secondary ml-auto min-h-[36px] text-xs">Retry</button>
+        </div>
+      )}
 
       {/* Info */}
       <div className="bg-green-900/20 border border-green-800/50 rounded-lg px-4 py-3 flex gap-3">
-        <Info size={16} className="text-green-400 flex-shrink-0 mt-0.5" />
-        <p className="text-sm text-green-300">
+        <Info size={16} className="text-green-400 flex-shrink-0 mt-0.5" aria-hidden="true" />
+        <p className="text-sm text-[var(--text-secondary)]">
           Matches tyre description + remarks against 13 failure categories using keyword patterns. Confidence reflects keyword match strength. Review, adjust dropdowns if needed, then approve.
         </p>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-0 border-b border-[var(--card-border)]">
+      <div role="tablist" aria-label="Data cleaning views" className="flex gap-0 border-b border-[var(--card-border)] overflow-x-auto">
         {[
           ['pending', 'Pending Classification'],
           ['cleaned', 'Already Cleaned'],
           ['quality', 'Quality Intelligence'],
         ].map(([val, label]) => (
-          <button key={val} onClick={() => { setTab(val); setPage(0) }}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === val ? 'border-green-500 text-green-400' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}>
+          <button key={val} type="button" role="tab" aria-selected={tab === val} onClick={() => { setTab(val); setPage(0) }}
+            className={`min-h-[44px] px-4 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] ${tab === val ? 'border-green-500 text-green-400' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}>
             {val === 'quality' && qualityScore !== null ? (
               <span className="flex items-center gap-1.5">
                 {label}
@@ -801,49 +719,54 @@ export default function DataCleaning() {
       {tab === 'pending' && (
         <>
           <div className="flex flex-wrap gap-3 items-center">
-            <select className="input w-auto" value={filterSite} onChange={e => { setFilterSite(e.target.value); setPage(0) }}>
+            <select aria-label="Filter by site" className="input w-auto min-h-[44px]" value={filterSite} onChange={e => { setFilterSite(e.target.value); setPage(0) }}>
               <option value="">All Sites</option>
               {sites.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
-            <select className="input w-auto" value={filterConf} onChange={e => { setFilterConf(e.target.value); setPage(0) }}>
+            <select aria-label="Filter by confidence" className="input w-auto min-h-[44px]" value={filterConf} onChange={e => { setFilterConf(e.target.value); setPage(0) }}>
               <option value="">All Confidence</option>
               {['High', 'Medium', 'Low'].map(c => <option key={c} value={c}>{c}</option>)}
             </select>
             <div className="flex-1" />
             {totalPending > 0 && !loadError && (
-              <button onClick={() => setShowApproveAllConfirm(true)} disabled={saving}
-                className="btn-secondary flex items-center gap-2 text-sm disabled:opacity-40">
-                <CheckCheck size={15} className="text-green-400" /> Approve All {totalPending.toLocaleString()}
+              <button type="button" onClick={() => setShowApproveAllConfirm(true)} disabled={saving}
+                className="btn-secondary flex items-center gap-2 text-sm min-h-[44px] disabled:opacity-40">
+                <CheckCheck size={15} className="text-green-400" aria-hidden="true" /> Approve All {totalPending.toLocaleString()}
               </button>
             )}
-            <span className="text-sm text-[var(--text-muted)]">{selected.size} selected</span>
-            <button onClick={() => allSelected ? setSelected(new Set()) : setSelected(new Set(classified.map(r => r.id)))}
-              className="btn-secondary py-1.5 px-3 text-sm">
+            <span className="text-sm text-[var(--text-muted)]" aria-live="polite">{selected.size} selected</span>
+            <button type="button" onClick={() => allSelected ? setSelected(new Set()) : setSelected(new Set(classified.map(r => r.id)))}
+              className="btn-secondary min-h-[44px] px-3 text-sm">
               {allSelected ? 'Clear' : 'Select All'}
             </button>
-            <button onClick={approveSelected} disabled={selected.size === 0 || saving}
-              className="btn-primary flex items-center gap-2 disabled:opacity-40">
-              <Check size={15} /> {saving ? 'Saving...' : `Approve ${selected.size > 0 ? selected.size : ''}`}
+            <button type="button" onClick={approveSelected} disabled={selected.size === 0 || saving}
+              className="btn-primary flex items-center gap-2 min-h-[44px] disabled:opacity-40">
+              <Check size={15} aria-hidden="true" /> {saving ? 'Saving...' : `Approve ${selected.size > 0 ? selected.size : ''}`}
             </button>
           </div>
 
           {approveAllProgress && (
-            <div className="card">
+            <div className="card" role="status">
               <p className="text-[var(--text-primary)] font-medium mb-2">Approving all pending records...</p>
-              <div className="h-3 bg-gray-700 rounded-full overflow-hidden">
-                <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${(approveAllProgress.done / approveAllProgress.total) * 100}%` }} />
+              <div className="h-3 bg-[var(--input-bg)] rounded-full overflow-hidden">
+                <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${approveAllProgress.total ? (approveAllProgress.done / approveAllProgress.total) * 100 : 0}%` }} />
               </div>
               <p className="text-[var(--text-muted)] text-sm mt-1">{approveAllProgress.done.toLocaleString()} / {approveAllProgress.total.toLocaleString()}</p>
             </div>
           )}
 
           {loading ? (
-            <div className="text-center py-16 text-[var(--text-muted)]">Classifying records...</div>
+            <SkeletonTable rows={6} cols={4} />
           ) : loadError ? (
-            <p className="text-center py-16 text-red-400">Records could not be loaded. Refresh to retry.</p>
+            <div role="alert" className="card text-center py-12 space-y-3">
+              <p className="text-red-400">Pending records could not be loaded.</p>
+              <button type="button" onClick={loadPending} className="btn-secondary min-h-[44px] inline-flex items-center gap-2"><RefreshCw size={14} aria-hidden="true" /> Retry</button>
+            </div>
           ) : classified.length === 0 ? (
-            <div className="text-center py-16 text-[var(--text-muted)]">
-              {totalPending === 0 ? '✅ All records have been classified!' : 'No records match the current filter.'}
+            <div className="card text-center py-16 text-[var(--text-muted)]">
+              {totalPending === 0
+                ? <span className="inline-flex items-center gap-2"><CheckCircle2 size={16} className="text-green-400" aria-hidden="true" /> All records have been classified.</span>
+                : 'No records match the current filter.'}
             </div>
           ) : (
             <div className="space-y-2">
@@ -851,24 +774,27 @@ export default function DataCleaning() {
                 const result = getResult(r.id)
                 const isSel  = selected.has(r.id)
                 return (
-                  <div key={r.id} className={`card cursor-pointer transition-all ${isSel ? 'border-green-600/60 bg-green-950/20' : 'hover:border-[var(--card-border)]'}`}
-                    onClick={() => toggleSelect(r.id)}>
-                    <div className="flex items-start gap-4">
-                      <div className={`w-5 h-5 rounded border flex-shrink-0 mt-0.5 flex items-center justify-center transition-colors ${isSel ? 'bg-green-700 border-green-600' : 'border-gray-600'}`}>
+                  <div key={r.id} role="checkbox" aria-checked={isSel} tabIndex={0}
+                    aria-label={`Select ${r.asset_no || 'record'}: ${r.original_description || 'no description'}`}
+                    className={`card cursor-pointer transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] ${isSel ? 'border-green-600/60 bg-green-950/20' : 'hover:border-[var(--card-border)]'}`}
+                    onClick={() => toggleSelect(r.id)}
+                    onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggleSelect(r.id) } }}>
+                    <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+                      <div className={`w-5 h-5 rounded border flex-shrink-0 mt-0.5 flex items-center justify-center transition-colors ${isSel ? 'bg-green-700 border-green-600' : 'border-[var(--input-border)]'}`} aria-hidden="true">
                         {isSel && <Check size={12} className="text-white" />}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap gap-2 items-baseline">
-                          <span className="font-medium text-[var(--text-primary)]">{r.original_description || '-'}</span>
+                          <span className="font-medium text-[var(--text-primary)] break-words">{r.original_description || 'No description'}</span>
                           {r.original_remarks && r.original_remarks !== r.original_description && (
                             <span className="text-[var(--text-muted)] text-xs">"{r.original_remarks.slice(0, 80)}{r.original_remarks.length > 80 ? '...' : ''}"</span>
                           )}
                         </div>
                         <div className="flex gap-3 mt-1 text-xs text-[var(--text-muted)] flex-wrap">
-                          {r.site && <span>📍 {r.site}</span>}
-                          {r.asset_no && <span>🚛 {r.asset_no}</span>}
-                          {r.brand && <span>🏷 {r.brand}</span>}
-                          {r.issue_date && <span>🗓 {r.issue_date}</span>}
+                          {r.site && <span className="inline-flex items-center gap-1"><MapPin size={11} aria-hidden="true" /> {r.site}</span>}
+                          {r.asset_no && <span className="inline-flex items-center gap-1"><Truck size={11} aria-hidden="true" /> {r.asset_no}</span>}
+                          {r.brand && <span className="inline-flex items-center gap-1"><Tag size={11} aria-hidden="true" /> {r.brand}</span>}
+                          {r.issue_date && <span className="inline-flex items-center gap-1"><Calendar size={11} aria-hidden="true" /> {formatDate(r.issue_date)}</span>}
                         </div>
                         {result?.matched_keywords?.length > 0 && (
                           <div className="flex gap-1 mt-2 flex-wrap">
@@ -881,17 +807,17 @@ export default function DataCleaning() {
                           </div>
                         )}
                       </div>
-                      <div className="flex-shrink-0 flex flex-col gap-2 items-end" onClick={e => e.stopPropagation()}>
-                        <span className={`text-xs font-medium ${CONFIDENCE_COLOUR[result?.confidence] ?? 'text-[var(--text-muted)]'}`}>{result?.confidence ?? '-'} confidence</span>
-                        <select className="bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-primary)] text-xs rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-green-600"
+                      <div className="flex-shrink-0 flex flex-row sm:flex-col flex-wrap gap-2 sm:items-end" onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
+                        <span className={`text-xs font-medium ${CONFIDENCE_COLOUR[result?.confidence] ?? 'text-[var(--text-muted)]'}`}>{result?.confidence ?? 'Unknown'} confidence</span>
+                        <select aria-label={`Category for ${r.asset_no || 'record'}`} className="bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-primary)] text-xs rounded px-2 min-h-[36px] focus:outline-none focus:ring-2 focus:ring-green-600"
                           value={result?.category ?? ''} onChange={e => setOverride(r.id, 'category', e.target.value)}>
                           {ALL_CATEGORY_LABELS.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
-                        <select className="bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-primary)] text-xs rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-green-600"
+                        <select aria-label={`Risk level for ${r.asset_no || 'record'}`} className="bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-primary)] text-xs rounded px-2 min-h-[36px] focus:outline-none focus:ring-2 focus:ring-green-600"
                           value={result?.risk_level ?? ''} onChange={e => setOverride(r.id, 'risk_level', e.target.value)}>
                           {['Critical', 'High', 'Medium', 'Low'].map(l => <option key={l} value={l}>{l}</option>)}
                         </select>
-                        <span className={`badge text-xs ${RISK_COLOUR[result?.risk_level] ?? 'bg-[var(--input-bg)] text-[var(--text-muted)]'}`}>{result?.risk_level ?? '-'}</span>
+                        <span className={`badge text-xs ${RISK_COLOUR[result?.risk_level] ?? 'bg-[var(--input-bg)] text-[var(--text-muted)]'}`}>{result?.risk_level ?? 'Unrated'}</span>
                       </div>
                     </div>
                   </div>
@@ -901,14 +827,14 @@ export default function DataCleaning() {
           )}
 
           {totalPages > 1 && (
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm text-[var(--text-muted)]">
                 Showing {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, totalPending)} of {totalPending.toLocaleString()} pending
               </p>
               <div className="flex items-center gap-2">
-                <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="btn-secondary py-1.5 px-3 disabled:opacity-40"><ChevronLeft size={16} /></button>
+                <button type="button" aria-label="Previous page" onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="btn-secondary min-h-[44px] min-w-[44px] px-3 disabled:opacity-40"><ChevronLeft size={16} aria-hidden="true" /></button>
                 <span className="text-sm text-[var(--text-muted)]">Page {page + 1} of {totalPages}</span>
-                <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="btn-secondary py-1.5 px-3 disabled:opacity-40"><ChevronRight size={16} /></button>
+                <button type="button" aria-label="Next page" onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="btn-secondary min-h-[44px] min-w-[44px] px-3 disabled:opacity-40"><ChevronRight size={16} aria-hidden="true" /></button>
               </div>
             </div>
           )}
@@ -918,24 +844,42 @@ export default function DataCleaning() {
       {/* ── Cleaned tab ───────────────────────────────────────────────────── */}
       {tab === 'cleaned' && (
         <>
+          {!loading && !loadError && cleanedRecords.length > 0 && (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" aria-label="Cleaned register summary">
+              <StatTile label="Cleaned records" value={cleanedSummary.total.toLocaleString()} tone="accent" icon={CheckCircle2} index={0} />
+              <StatTile label="Critical or high risk" value={cleanedSummary.highRisk.toLocaleString()}
+                sub={cleanedSummary.highRiskPct === null ? 'N/A' : `${cleanedSummary.highRiskPct}% of cleaned`} tone={cleanedSummary.highRisk > 0 ? 'crit' : 'neutral'} icon={ShieldAlert} index={1} />
+              <StatTile label="Unrated" value={cleanedSummary.byRisk.Unrated.toLocaleString()} tone={cleanedSummary.byRisk.Unrated > 0 ? 'warn' : 'neutral'} icon={AlertTriangle} index={2} />
+              <StatTile label="Top category" value={cleanedSummary.topCategory?.category ?? 'N/A'}
+                sub={cleanedSummary.topCategory ? `${cleanedSummary.topCategory.count.toLocaleString()} records` : undefined} tone="info" icon={BarChart2} index={3} />
+            </div>
+          )}
+
           <div className="flex items-center gap-3 flex-wrap">
-            <input
-              className="input flex-1 min-w-48"
-              placeholder="Search asset, brand, site..."
-              value={cleanedSearch}
-              onChange={e => { setCleanedSearch(e.target.value); setCleanedPage(1) }}
-            />
+            <label className="flex-1 min-w-48">
+              <span className="sr-only">Search cleaned records</span>
+              <input
+                className="input w-full min-h-[44px]"
+                placeholder="Search asset, brand, site, serial, category..."
+                value={cleanedSearch}
+                onChange={e => setCleanedSearch(e.target.value)}
+              />
+            </label>
+            <select aria-label="Filter cleaned records by site" className="input w-auto min-h-[44px]" value={filterSite} onChange={e => setFilterSite(e.target.value)}>
+              <option value="">All Sites</option>
+              {sites.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">
-            <span className="text-sm text-[var(--text-muted)]">{cleanedSelected.size} selected</span>
+            <span className="text-sm text-[var(--text-muted)]" aria-live="polite">{cleanedSelected.size} selected</span>
             {cleanedSelected.size > 0 && (
               <>
-                <button onClick={runReclassify} disabled={saving}
-                  className="btn-secondary flex items-center gap-2 text-sm disabled:opacity-40">
-                  <RefreshCw size={14} /> Re-classify {cleanedSelected.size} Selected
+                <button type="button" onClick={runReclassify} disabled={saving}
+                  className="btn-secondary flex items-center gap-2 text-sm min-h-[44px] disabled:opacity-40">
+                  <RefreshCw size={14} aria-hidden="true" /> Re-classify {cleanedSelected.size} Selected
                 </button>
-                <button onClick={() => setCleanedSelected(new Set())} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-sm">Clear</button>
+                <button type="button" onClick={() => setCleanedSelected(new Set())} className="min-h-[44px] px-3 text-[var(--text-muted)] hover:text-[var(--text-primary)] text-sm">Clear</button>
               </>
             )}
           </div>
@@ -945,14 +889,14 @@ export default function DataCleaning() {
               <h3 className="font-semibold text-[var(--text-primary)] mb-3">Proposed Re-classification</h3>
               <div className="space-y-2 mb-4">
                 {reclassifyProposed.map(r => (
-                  <div key={r.id} className={`flex items-center gap-4 px-3 py-2 rounded-lg text-sm ${r.changed ? 'bg-yellow-900/20 border border-yellow-700/40' : 'bg-[var(--input-bg)]/40'}`}>
-                    <span className="text-[var(--text-secondary)] flex-1">{r.original_description?.slice(0, 60) ?? '-'}</span>
+                  <div key={r.id} className={`flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 rounded-lg text-sm ${r.changed ? 'bg-yellow-900/20 border border-yellow-700/40' : 'bg-[var(--input-bg)]/40'}`}>
+                    <span className="text-[var(--text-secondary)] flex-1 min-w-0">{r.original_description?.slice(0, 60) ?? 'No description'}</span>
                     {r.changed ? (
                       <>
-                        <span className="text-[var(--text-muted)] line-through text-xs">{r.orig_category}</span>
-                        <span className="text-yellow-300 text-xs">→ {r.category}</span>
-                        <span className="text-[var(--text-muted)] line-through text-xs">{r.orig_risk}</span>
-                        <span className="text-yellow-300 text-xs">→ {r.risk_level}</span>
+                        <span className="text-[var(--text-muted)] line-through text-xs">{r.orig_category ?? 'N/A'}</span>
+                        <span className="text-yellow-500 text-xs">to {r.category}</span>
+                        <span className="text-[var(--text-muted)] line-through text-xs">{r.orig_risk ?? 'N/A'}</span>
+                        <span className="text-yellow-500 text-xs">to {r.risk_level}</span>
                       </>
                     ) : (
                       <span className="text-[var(--text-muted)] text-xs">No change</span>
@@ -961,85 +905,31 @@ export default function DataCleaning() {
                 ))}
               </div>
               <div className="flex gap-3">
-                <button onClick={approveReclassify} disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
-                  <Check size={15} /> {saving ? 'Saving...' : 'Apply Changes'}
+                <button type="button" onClick={approveReclassify} disabled={saving} className="btn-primary flex items-center gap-2 min-h-[44px] disabled:opacity-50">
+                  <Check size={15} aria-hidden="true" /> {saving ? 'Saving...' : 'Apply Changes'}
                 </button>
-                <button onClick={() => setReclassifyProposed(null)} className="btn-secondary">Cancel</button>
+                <button type="button" onClick={() => setReclassifyProposed(null)} className="btn-secondary min-h-[44px]">Cancel</button>
               </div>
             </div>
           )}
 
-          {loading ? <SkeletonTable rows={8} cols={6} /> : loadError ? (
-            <p className="text-center py-16 text-red-400">Records could not be loaded. Refresh to retry.</p>
-          ) : cleanedRecords.length === 0 ? (
-            <div className="text-center py-12 text-[var(--text-muted)]">No cleaned records yet</div>
-          ) : (
-            <div className="card p-0 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr>
-                      <th className="table-header w-10">
-                        <input type="checkbox" className="rounded border-gray-600 bg-gray-700"
-                          checked={cleanedPaged.length > 0 && cleanedPaged.every(r => cleanedSelected.has(r.id))}
-                          onChange={() => {
-                            if (cleanedPaged.every(r => cleanedSelected.has(r.id))) setCleanedSelected(new Set())
-                            else setCleanedSelected(new Set(cleanedPaged.map(r => r.id)))
-                          }} />
-                      </th>
-                      {['Asset No', 'Brand', 'Site', 'Category', 'Risk Level', 'Cleaned Remarks', 'Original Remarks', 'Date', ''].map(h => <th key={h} className="table-header">{h}</th>)}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {cleanedPaged.map(r => (
-                      <tr key={r.id} className={`transition-colors ${cleanedSelected.has(r.id) ? 'bg-green-950/30' : 'hover:bg-[var(--input-bg)]/30'}`}>
-                        <td className="table-cell">
-                          <input type="checkbox" className="rounded border-gray-600 bg-gray-700"
-                            checked={cleanedSelected.has(r.id)} onChange={() => setCleanedSelected(s => { const n = new Set(s); n.has(r.id) ? n.delete(r.id) : n.add(r.id); return n })} />
-                        </td>
-                        <td className="table-cell font-medium text-[var(--text-primary)]">{r.asset_no ?? '-'}</td>
-                        <td className="table-cell">{r.brand ?? '-'}</td>
-                        <td className="table-cell">{r.site ?? '-'}</td>
-                        <td className="table-cell">{r.category ?? '-'}</td>
-                        <td className="table-cell">{r.risk_level ? <span className={`badge ${RISK_COLOUR[r.risk_level]}`}>{r.risk_level}</span> : '-'}</td>
-                        <td className="table-cell text-[var(--text-muted)] text-xs max-w-xs truncate">{r.remarks_cleaned ?? '-'}</td>
-                        <td className="py-2 pr-3 text-[var(--text-muted)] text-xs max-w-48 truncate" title={r.remarks || r.description}>
-                          {(r.remarks || r.description || '-').slice(0, 60)}{(r.remarks || r.description || '').length > 60 ? '...' : ''}
-                        </td>
-                        <td className="table-cell text-[var(--text-muted)]">{r.issue_date ?? '-'}</td>
-                        <td className="table-cell">
-                          <button
-                            onClick={() => undoClassification(r)}
-                            className="text-xs px-2 py-1 rounded bg-yellow-900/20 text-yellow-400 hover:bg-yellow-900/40 border border-yellow-700/40 transition-colors"
-                            title="Move back to Pending"
-                          >
-                            Undo
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {cleanedFiltered.length > CLEANED_PAGE_SIZE && (
-                <div className="flex items-center justify-between mt-3 px-4 pb-3 text-sm text-[var(--text-muted)]">
-                  <span>{cleanedFiltered.length} records · page {cleanedPage} of {Math.ceil(cleanedFiltered.length / CLEANED_PAGE_SIZE)}</span>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setCleanedPage(p => Math.max(1, p - 1))}
-                      disabled={cleanedPage === 1}
-                      className="px-3 py-1 rounded bg-[var(--input-bg)] border border-[var(--input-border)] disabled:opacity-40 hover:bg-[var(--input-bg-hover)]"
-                    >← Prev</button>
-                    <button
-                      onClick={() => setCleanedPage(p => Math.min(Math.ceil(cleanedFiltered.length / CLEANED_PAGE_SIZE), p + 1))}
-                      disabled={cleanedPage >= Math.ceil(cleanedFiltered.length / CLEANED_PAGE_SIZE)}
-                      className="px-3 py-1 rounded bg-[var(--input-bg)] border border-[var(--input-border)] disabled:opacity-40 hover:bg-[var(--input-bg-hover)]"
-                    >Next →</button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+          <EnterpriseTable
+            columns={cleanedColumns}
+            data={cleanedFiltered}
+            getRowId={r => String(r.id)}
+            loading={loading}
+            error={loadError ? 'Cleaned records could not be loaded.' : null}
+            onRetry={loadCleaned}
+            emptyMessage={cleanedSearch ? 'No cleaned records match this search.' : 'No cleaned records yet'}
+            enableGlobalFilter={false}
+            enableRowSelection
+            rowSelection={cleanedRowSelection}
+            onRowSelectionChange={onCleanedSelection}
+            initialPageSize={50}
+            viewKey="data-cleaning-cleaned"
+            exportFileName={reportFileName('Cleaned Tyre Records', activeCountry || 'All')}
+            reportMeta={{ title: 'Cleaned Tyre Records' }}
+          />
         </>
       )}
 
@@ -1051,12 +941,12 @@ export default function DataCleaning() {
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-4">
                 <div className="relative w-20 h-20 flex-shrink-0">
-                  <svg viewBox="0 0 36 36" className="w-20 h-20 -rotate-90">
-                    <circle cx="18" cy="18" r="15.9" fill="none" stroke="#374151" strokeWidth="3.8" />
+                  <svg viewBox="0 0 36 36" className="w-20 h-20 -rotate-90" role="img" aria-label={qualityScore === null ? 'Quality score not available' : `Quality score ${qualityScore} percent`}>
+                    <circle cx="18" cy="18" r="15.9" fill="none" style={{ stroke: 'var(--input-bg)' }} strokeWidth="3.8" />
                     {qualityScore !== null && (
                       <circle
                         cx="18" cy="18" r="15.9" fill="none"
-                        stroke={qualityScore >= 85 ? '#22c55e' : qualityScore >= 70 ? '#eab308' : '#ef4444'}
+                        stroke={{ good: '#22c55e', warn: '#eab308', crit: '#ef4444' }[scoreBand(qualityScore)]}
                         strokeWidth="3.8"
                         strokeDasharray={`${qualityScore} ${100 - qualityScore}`}
                         strokeLinecap="round"
@@ -1067,17 +957,14 @@ export default function DataCleaning() {
                     {qualityScore !== null ? (
                       <span className={`text-lg font-bold ${scoreColor(qualityScore)}`}>{qualityScore}%</span>
                     ) : (
-                      <span className="text-[var(--text-muted)] text-sm animate-pulse">...</span>
+                      <span className="text-[var(--text-muted)] text-sm">{qiLoading ? '...' : 'N/A'}</span>
                     )}
                   </div>
                 </div>
                 <div>
                   <h2 className="text-lg font-bold text-[var(--text-primary)]">Overall Data Quality Score</h2>
                   <p className="text-[var(--text-muted)] text-sm">
-                    {qualityIncomplete ? 'Quality checks incomplete. Refresh to retry failed reads.' : qualityScore === null ? 'Computing across 7 quality checks...' :
-                      qualityScore >= 85 ? 'Fleet data quality is healthy' :
-                      qualityScore >= 70 ? 'Moderate quality issues detected - action recommended' :
-                      'Significant data quality problems - immediate attention required'}
+                    {qiLoading && qualityScore === null ? 'Computing across 7 quality checks...' : scoreVerdict(qualityScore, { incomplete: qualityIncomplete || totalRecords === null, totalRecords })}
                   </p>
                   {prevScore && qualityScore !== null && (
                     <div className="mt-1 flex items-center gap-2">
@@ -1093,10 +980,10 @@ export default function DataCleaning() {
 
               <div className="flex flex-wrap gap-3">
                 {[
-                  { label: 'Total Records', value: totalRecords.toLocaleString(), color: 'text-blue-400' },
-                  { label: 'Serial Issues', value: serialIssues?.count ?? '...', color: (serialIssues?.count ?? 0) > 0 ? 'text-yellow-400' : 'text-green-400' },
-                  { label: 'Duplicates', value: duplicateSerial?.groupCount ?? '...', color: (duplicateSerial?.groupCount ?? 0) > 0 ? 'text-orange-400' : 'text-green-400' },
-                  { label: 'Odometer Errors', value: odometerIssues?.count ?? '...', color: (odometerIssues?.count ?? 0) > 0 ? 'text-red-400' : 'text-green-400' },
+                  { label: 'Total Records', value: totalRecords === null ? (qiLoading ? '...' : 'N/A') : totalRecords.toLocaleString(), color: 'text-[var(--text-primary)]' },
+                  { label: 'Serial Issues', value: serialIssues?.error ? 'N/A' : (serialIssues?.count ?? '...'), color: (serialIssues?.count ?? 0) > 0 ? 'text-yellow-400' : 'text-green-400' },
+                  { label: 'Duplicates', value: duplicateSerial?.error ? 'N/A' : (duplicateSerial?.groupCount ?? '...'), color: (duplicateSerial?.groupCount ?? 0) > 0 ? 'text-orange-400' : 'text-green-400' },
+                  { label: 'Odometer Errors', value: odometerIssues?.error ? 'N/A' : (odometerIssues?.count ?? '...'), color: (odometerIssues?.count ?? 0) > 0 ? 'text-red-400' : 'text-green-400' },
                 ].map(s => (
                   <div key={s.label} className="card py-2 px-3 text-center bg-[var(--input-bg)]/60 border-[var(--card-border)] min-w-[90px]">
                     <p className={`text-base font-bold ${s.color}`}>{s.value}</p>
@@ -1105,35 +992,43 @@ export default function DataCleaning() {
                 ))}
               </div>
 
-              <button
-                onClick={runAllChecks}
-                disabled={qiLoading}
-                className="btn-secondary flex items-center gap-2 text-sm disabled:opacity-40"
-              >
-                <RefreshCw size={14} className={qiLoading ? 'animate-spin' : ''} />
-                {qiLoading ? 'Scanning...' : 'Re-scan'}
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={runAllChecks}
+                  disabled={qiLoading}
+                  className="btn-secondary flex items-center gap-2 text-sm min-h-[44px] disabled:opacity-40"
+                >
+                  <RefreshCw size={14} className={qiLoading ? 'animate-spin' : ''} aria-hidden="true" />
+                  {qiLoading ? 'Scanning...' : 'Re-scan'}
+                </button>
+                <button type="button" onClick={() => exportQualityIssues('excel')} disabled={qiLoading}
+                  className="btn-secondary flex items-center gap-2 text-sm min-h-[44px] disabled:opacity-40">
+                  <FileSpreadsheet size={14} aria-hidden="true" /> Excel
+                </button>
+                <button type="button" onClick={() => exportQualityIssues('pdf')} disabled={qiLoading}
+                  className="btn-secondary flex items-center gap-2 text-sm min-h-[44px] disabled:opacity-40">
+                  <FileText size={14} aria-hidden="true" /> PDF
+                </button>
+              </div>
             </div>
 
             {/* Weight breakdown */}
             <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
-              {[
-                { key: 'odometer', label: 'Odometer', weight: 25, count: odometerIssues?.count },
-                { key: 'duplicateSerial', label: 'Duplicates', weight: 20, count: duplicateSerial?.affectedCount },
-                { key: 'missingTread', label: 'Tread', weight: 15, count: missingTread?.count },
-                { key: 'invalidPressure', label: 'Pressure', weight: 15, count: invalidPressure?.count },
-                { key: 'serialIssues', label: 'Serials', weight: 10, count: serialIssues?.count },
-                { key: 'unrealisticLife', label: 'Tyre Life', weight: 10, count: unrealisticLife?.count },
-                { key: 'missingInspect', label: 'Inspections', weight: 5, count: missingInspect?.count },
-              ].map(w => (
-                <div key={w.key} className="bg-[var(--input-bg)]/60 rounded-lg px-2 py-2 text-center">
-                  <p className={`text-sm font-semibold ${(w.count ?? 0) > 0 ? 'text-yellow-400' : 'text-green-400'}`}>
-                    {w.count === null || w.count === undefined ? <span className="text-[var(--text-dim)] animate-pulse">...</span> : w.count}
-                  </p>
-                  <p className="text-xs text-[var(--text-muted)]">{w.label}</p>
-                  <p className="text-xs text-[var(--text-dim)] mt-0.5">{w.weight}% weight</p>
-                </div>
-              ))}
+              {QUALITY_CHECKS.map(w => {
+                const check = qualityChecks[w.key]
+                const count = check ? checkBadCount(w.key, check) : null
+                const state = check?.error ? 'failed' : check?.notApplicable ? 'na' : count === null ? 'loading' : count > 0 ? 'issues' : 'clean'
+                return (
+                  <div key={w.key} className="bg-[var(--input-bg)]/60 rounded-lg px-2 py-2 text-center">
+                    <p className={`text-sm font-semibold ${state === 'issues' ? 'text-yellow-500' : state === 'clean' ? 'text-green-500' : state === 'failed' ? 'text-red-400' : 'text-[var(--text-muted)]'}`}>
+                      {state === 'loading' ? <span className="animate-pulse">...</span> : state === 'failed' || state === 'na' ? 'N/A' : count.toLocaleString()}
+                    </p>
+                    <p className="text-xs text-[var(--text-muted)]">{w.label}</p>
+                    <p className="text-xs text-[var(--text-dim)] mt-0.5">{state === 'failed' ? 'Could not check' : state === 'na' ? 'Not applicable' : `${w.weight}% weight`}</p>
+                  </div>
+                )
+              })}
             </div>
           </div>
 
@@ -1142,6 +1037,9 @@ export default function DataCleaning() {
             icon={Hash}
             title="Incorrect Tyre Serials"
             count={serialIssues?.count ?? 0}
+            failed={!!serialIssues?.error}
+            notApplicable={!!serialIssues?.notApplicable}
+            onRetry={checkSerialIssues}
             loading={checkLoading.serialIssues}
             color="text-yellow-400"
             bgColor="bg-yellow-900/20 border-yellow-700/40"
@@ -1153,8 +1051,8 @@ export default function DataCleaning() {
                 renderItem={(r) => (
                   <div className="flex flex-wrap items-center gap-3 px-3 py-2 bg-[var(--input-bg)]/50 rounded-lg text-xs">
                     <span className="text-[var(--text-primary)] font-mono">{r.tyre_serial || <span className="text-[var(--text-dim)] italic">empty</span>}</span>
-                    <span className="text-[var(--text-muted)]">{r.asset_no ?? '-'}</span>
-                    <span className="text-[var(--text-muted)]">{r.site ?? '-'}</span>
+                    <span className="text-[var(--text-muted)]">{r.asset_no ?? 'N/A'}</span>
+                    <span className="text-[var(--text-muted)]">{r.site ?? 'N/A'}</span>
                     <span className="text-[var(--text-dim)]">{r.issue_date ?? ''}</span>
                     <span className="ml-auto text-yellow-400 font-medium">{r.issue_type}</span>
                   </div>
@@ -1168,6 +1066,9 @@ export default function DataCleaning() {
             icon={Layers}
             title="Duplicate Active Tyre Serials"
             count={duplicateSerial?.groupCount ?? 0}
+            failed={!!duplicateSerial?.error}
+            notApplicable={!!duplicateSerial?.notApplicable}
+            onRetry={checkDuplicateSerials}
             loading={checkLoading.duplicateSerial}
             color="text-orange-400"
             bgColor="bg-orange-900/20 border-orange-700/40"
@@ -1197,7 +1098,7 @@ export default function DataCleaning() {
                     <div className="mt-1.5 flex flex-wrap gap-1">
                       {g.records.map(r => (
                         <span key={r.id} className="bg-gray-700/50 px-2 py-0.5 rounded text-[var(--text-muted)]">
-                          {r.asset_no ?? '-'} · {r.issue_date ?? 'no date'}
+                          {r.asset_no ?? 'N/A'} · {r.issue_date ?? 'no date'}
                         </span>
                       ))}
                     </div>
@@ -1212,6 +1113,9 @@ export default function DataCleaning() {
             icon={Gauge}
             title="Invalid Pressure Readings"
             count={invalidPressure?.notApplicable ? 0 : (invalidPressure?.count ?? 0)}
+            failed={!!invalidPressure?.error}
+            notApplicable={!!invalidPressure?.notApplicable}
+            onRetry={checkInvalidPressure}
             loading={checkLoading.invalidPressure}
             color="text-red-400"
             bgColor="bg-red-900/20 border-red-700/40"
@@ -1226,9 +1130,9 @@ export default function DataCleaning() {
                     items={invalidPressure.records}
                     renderItem={(r) => (
                       <div className="flex flex-wrap items-center gap-3 px-3 py-2 bg-[var(--input-bg)]/50 rounded-lg text-xs">
-                        <span className="text-[var(--text-primary)] font-mono">{r.tyre_serial || '-'}</span>
-                        <span className="text-[var(--text-muted)]">{r.asset_no ?? '-'}</span>
-                        <span className="text-[var(--text-muted)]">{r.site ?? '-'}</span>
+                        <span className="text-[var(--text-primary)] font-mono">{r.tyre_serial || 'N/A'}</span>
+                        <span className="text-[var(--text-muted)]">{r.asset_no ?? 'N/A'}</span>
+                        <span className="text-[var(--text-muted)]">{r.site ?? 'N/A'}</span>
                         <span className="ml-auto text-red-400 font-semibold">{r.pressure_reading} PSI</span>
                       </div>
                     )}
@@ -1243,6 +1147,9 @@ export default function DataCleaning() {
             icon={Activity}
             title="Missing Tread Depth Readings"
             count={missingTread?.notApplicable ? 0 : (missingTread?.count ?? 0)}
+            failed={!!missingTread?.error}
+            notApplicable={!!missingTread?.notApplicable}
+            onRetry={checkMissingTread}
             loading={checkLoading.missingTread}
             color="text-yellow-400"
             bgColor="bg-yellow-900/20 border-yellow-700/40"
@@ -1253,7 +1160,7 @@ export default function DataCleaning() {
               <>
                 <div className="flex items-center gap-4 mb-3">
                   <p className="text-xs text-[var(--text-muted)]">Records where tread_depth is null or 0.</p>
-                  {missingTread?.pct !== undefined && (
+                  {missingTread?.pct !== null && missingTread?.pct !== undefined && (
                     <span className="text-sm font-semibold text-yellow-400">{missingTread.pct}% missing</span>
                   )}
                 </div>
@@ -1274,9 +1181,9 @@ export default function DataCleaning() {
                     items={missingTread.records}
                     renderItem={(r) => (
                       <div className="flex flex-wrap items-center gap-3 px-3 py-2 bg-[var(--input-bg)]/50 rounded-lg text-xs">
-                        <span className="text-[var(--text-primary)] font-mono">{r.tyre_serial || '-'}</span>
-                        <span className="text-[var(--text-muted)]">{r.asset_no ?? '-'}</span>
-                        <span className="text-[var(--text-muted)]">{r.site ?? '-'}</span>
+                        <span className="text-[var(--text-primary)] font-mono">{r.tyre_serial || 'N/A'}</span>
+                        <span className="text-[var(--text-muted)]">{r.asset_no ?? 'N/A'}</span>
+                        <span className="text-[var(--text-muted)]">{r.site ?? 'N/A'}</span>
                         <span className="text-[var(--text-dim)]">{r.issue_date ?? ''}</span>
                         <span className="ml-auto text-yellow-400">tread: {r.tread_depth ?? 'null'}</span>
                       </div>
@@ -1292,6 +1199,9 @@ export default function DataCleaning() {
             icon={ClipboardList}
             title="Vehicles Missing Inspections (Last 30 Days)"
             count={missingInspect?.notApplicable ? 0 : (missingInspect?.count ?? 0)}
+            failed={!!missingInspect?.error}
+            notApplicable={!!missingInspect?.notApplicable}
+            onRetry={checkMissingInspections}
             loading={checkLoading.missingInspect}
             color="text-blue-400"
             bgColor="bg-blue-900/20 border-blue-700/40"
@@ -1322,6 +1232,9 @@ export default function DataCleaning() {
             icon={BarChart2}
             title="Inconsistent Odometer Readings"
             count={odometerIssues?.count ?? 0}
+            failed={!!odometerIssues?.error}
+            notApplicable={!!odometerIssues?.notApplicable}
+            onRetry={checkOdometerIssues}
             loading={checkLoading.odometer}
             color="text-red-400"
             bgColor="bg-red-900/20 border-red-700/40"
@@ -1332,10 +1245,10 @@ export default function DataCleaning() {
                 items={odometerIssues.issues}
                 renderItem={(r) => (
                   <div className="flex flex-wrap items-center gap-3 px-3 py-2 bg-[var(--input-bg)]/50 rounded-lg text-xs border border-red-900/20">
-                    <span className="text-[var(--text-primary)] font-mono">{r.tyre_serial || '-'}</span>
-                    <span className="text-[var(--text-muted)]">{r.asset_no ?? '-'}</span>
-                    <span className="text-[var(--text-muted)]">Fit: {parseFloat(r.km_at_fitment)?.toLocaleString() ?? '-'}</span>
-                    <span className="text-[var(--text-muted)]">Rem: {parseFloat(r.km_at_removal)?.toLocaleString() ?? '-'}</span>
+                    <span className="text-[var(--text-primary)] font-mono">{r.tyre_serial || 'N/A'}</span>
+                    <span className="text-[var(--text-muted)]">{r.asset_no ?? 'N/A'}</span>
+                    <span className="text-[var(--text-muted)]">Fit: {parseFloat(r.km_at_fitment)?.toLocaleString() ?? 'N/A'}</span>
+                    <span className="text-[var(--text-muted)]">Rem: {parseFloat(r.km_at_removal)?.toLocaleString() ?? 'N/A'}</span>
                     <span className={`ml-auto font-medium text-xs px-2 py-0.5 rounded border ${severityBadge(r.severity)}`}>{r.issue_type}</span>
                     {isAdmin && (
                       <button
@@ -1356,6 +1269,9 @@ export default function DataCleaning() {
             icon={ShieldAlert}
             title="Unrealistic Tyre Life Values"
             count={unrealisticLife?.count ?? 0}
+            failed={!!unrealisticLife?.error}
+            notApplicable={!!unrealisticLife?.notApplicable}
+            onRetry={checkUnrealisticLife}
             loading={checkLoading.unrealisticLife}
             color="text-orange-400"
             bgColor="bg-orange-900/20 border-orange-700/40"
@@ -1366,8 +1282,8 @@ export default function DataCleaning() {
                 items={unrealisticLife.issues}
                 renderItem={(r) => (
                   <div className="flex flex-wrap items-center gap-3 px-3 py-2 bg-[var(--input-bg)]/50 rounded-lg text-xs border border-orange-900/20">
-                    <span className="text-[var(--text-primary)] font-mono">{r.tyre_serial || '-'}</span>
-                    <span className="text-[var(--text-muted)]">{r.asset_no ?? '-'}</span>
+                    <span className="text-[var(--text-primary)] font-mono">{r.tyre_serial || 'N/A'}</span>
+                    <span className="text-[var(--text-muted)]">{r.asset_no ?? 'N/A'}</span>
                     {r.life !== undefined && <span className="text-[var(--text-muted)]">{r.life?.toLocaleString()} km life</span>}
                     {r.cost_per_tyre && <span className="text-[var(--text-muted)]">Cost: {parseFloat(r.cost_per_tyre)?.toLocaleString()}</span>}
                     <span className="text-orange-400 font-medium ml-auto text-right">{r.issue_type}</span>
@@ -1388,28 +1304,30 @@ export default function DataCleaning() {
       )}
 
       {/* ── Approve-all confirm modal ──────────────────────────────────────── */}
-      {showApproveAllConfirm && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowApproveAllConfirm(false)}>
-          <div className="bg-[var(--surface-1)] border border-[var(--card-border)] rounded-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
-            <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-2">Approve All Pending Records</h2>
-            <p className="text-[var(--text-muted)] text-sm mb-4">
-              The classifier will run on all <strong className="text-[var(--text-primary)]">{totalPending.toLocaleString()}</strong> pending records and save the results automatically.
-              {filterSite && ` Only records from "${filterSite}" will be processed.`}
-            </p>
-            <p className="text-yellow-300 text-sm mb-4">Low-confidence classifications will still be saved, no manual review step.</p>
-            <div className="flex gap-3">
-              <button onClick={approveAll} className="btn-primary flex items-center gap-2">
-                <CheckCheck size={15} /> Approve All
-              </button>
-              <button onClick={() => setShowApproveAllConfirm(false)} className="btn-secondary">Cancel</button>
-            </div>
+      <Modal
+        open={showApproveAllConfirm}
+        onClose={() => setShowApproveAllConfirm(false)}
+        title="Approve All Pending Records"
+        size="sm"
+        footer={(
+          <div className="flex flex-wrap gap-3 justify-end">
+            <button type="button" onClick={() => setShowApproveAllConfirm(false)} className="btn-secondary min-h-[44px]">Cancel</button>
+            <button type="button" onClick={approveAll} className="btn-primary flex items-center gap-2 min-h-[44px]">
+              <CheckCheck size={15} aria-hidden="true" /> Approve All
+            </button>
           </div>
-        </div>
-      )}
+        )}
+      >
+        <p className="text-[var(--text-muted)] text-sm mb-4">
+          The classifier will run on all <strong className="text-[var(--text-primary)]">{totalPending.toLocaleString()}</strong> pending records and save the results automatically.
+          {filterSite && ` Only records from "${filterSite}" will be processed.`}
+        </p>
+        <p className="text-yellow-500 text-sm">Low-confidence classifications will still be saved, with no manual review step.</p>
+      </Modal>
 
       {/* ── Duplicate serial fix modal ──────────────────────────────────────── */}
       {dupModal && (
-        <Modal title={`Fix Duplicate Serial: ${dupModal.group.serial}`} onClose={() => setDupModal(null)}>
+        <Modal open title={`Fix Duplicate Serial: ${dupModal.group.serial}`} onClose={() => setDupModal(null)} size="lg">
           <div className="space-y-4">
             <p className="text-sm text-[var(--text-muted)]">
               This serial appears on <strong className="text-[var(--text-primary)]">{dupModal.group.count}</strong> active records across vehicles: <strong className="text-[var(--text-primary)]">{dupModal.group.asset_nos.join(', ')}</strong>.
@@ -1421,7 +1339,7 @@ export default function DataCleaning() {
               {dupModal.group.records.map((r, i) => (
                 <div key={r.id} className="flex items-center gap-3 text-xs">
                   <span className="text-[var(--text-muted)] w-5">{i + 1}.</span>
-                  <span className="text-[var(--text-muted)]">{r.asset_no ?? '-'}</span>
+                  <span className="text-[var(--text-muted)]">{r.asset_no ?? 'N/A'}</span>
                   <span className="text-[var(--text-dim)]">{r.issue_date ?? ''}</span>
                   <input className="input ml-auto" aria-label={`Verified serial for ${r.asset_no ?? r.id}, record ${i + 1}`}
                     value={dupNewSerial[r.id] ?? ''} placeholder={r.tyre_serial ?? ''}
@@ -1445,18 +1363,19 @@ export default function DataCleaning() {
 
       {/* ── Odometer edit modal ──────────────────────────────────────────────── */}
       {odomModal && (
-        <Modal title="Edit Odometer Values" onClose={() => { setOdomModal(null); setOdomEdits({}) }}>
+        <Modal open title="Edit Odometer Values" onClose={() => { setOdomModal(null); setOdomEdits({}) }} size="md">
           <div className="space-y-4">
             <div className="bg-[var(--input-bg)]/60 rounded-lg p-3 text-xs space-y-1">
               <div className="flex justify-between"><span className="text-[var(--text-muted)]">Record ID</span><span className="text-[var(--text-primary)] font-mono">{odomModal.record.id}</span></div>
-              <div className="flex justify-between"><span className="text-[var(--text-muted)]">Serial</span><span className="text-[var(--text-primary)]">{odomModal.record.tyre_serial || '-'}</span></div>
-              <div className="flex justify-between"><span className="text-[var(--text-muted)]">Asset</span><span className="text-[var(--text-primary)]">{odomModal.record.asset_no || '-'}</span></div>
+              <div className="flex justify-between"><span className="text-[var(--text-muted)]">Serial</span><span className="text-[var(--text-primary)]">{odomModal.record.tyre_serial || 'N/A'}</span></div>
+              <div className="flex justify-between"><span className="text-[var(--text-muted)]">Asset</span><span className="text-[var(--text-primary)]">{odomModal.record.asset_no || 'N/A'}</span></div>
               <div className="flex justify-between"><span className="text-[var(--text-muted)]">Issue</span><span className="text-red-400">{odomModal.record.issue_type}</span></div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm text-[var(--text-muted)] mb-1">km at Fitment</label>
+                <label htmlFor="dc-odo-fit" className="block text-sm text-[var(--text-muted)] mb-1">km at Fitment</label>
                 <input
+                  id="dc-odo-fit"
                   type="number"
                   className="input w-full"
                   value={odomEdits[odomModal.record.id]?.km_at_fitment ?? odomModal.record.km_at_fitment ?? ''}
@@ -1464,8 +1383,9 @@ export default function DataCleaning() {
                 />
               </div>
               <div>
-                <label className="block text-sm text-[var(--text-muted)] mb-1">km at Removal</label>
+                <label htmlFor="dc-odo-rem" className="block text-sm text-[var(--text-muted)] mb-1">km at Removal</label>
                 <input
+                  id="dc-odo-rem"
                   type="number"
                   className="input w-full"
                   value={odomEdits[odomModal.record.id]?.km_at_removal ?? odomModal.record.km_at_removal ?? ''}
@@ -1474,17 +1394,10 @@ export default function DataCleaning() {
               </div>
             </div>
             {(() => {
-              const f = parseFloat(odomEdits[odomModal.record.id]?.km_at_fitment)
-              const r = parseFloat(odomEdits[odomModal.record.id]?.km_at_removal)
-              if (!isNaN(f) && !isNaN(r)) {
-                const life = r - f
-                return (
-                  <p className={`text-xs font-medium ${life < 0 ? 'text-red-400' : life < 500 ? 'text-yellow-400' : life > 400000 ? 'text-yellow-400' : 'text-green-400'}`}>
-                    Computed life: {life.toLocaleString()} km {life < 0 ? '- still invalid' : life >= 500 && life <= 400000 ? '- looks valid' : '- unusual value'}
-                  </p>
-                )
-              }
-              return null
+              const v = odometerEditVerdict(odomEdits[odomModal.record.id]?.km_at_fitment, odomEdits[odomModal.record.id]?.km_at_removal)
+              if (!v) return null
+              const tone = { crit: 'text-red-400', warn: 'text-yellow-500', good: 'text-green-500' }[v.tone]
+              return <p className={`text-xs font-medium ${tone}`} aria-live="polite">Computed life: {v.life.toLocaleString()} km, {v.note}</p>
             })()}
             <div className="flex gap-3">
               <button

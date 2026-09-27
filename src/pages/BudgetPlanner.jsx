@@ -5,9 +5,15 @@ import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useTenant } from '../contexts/TenantContext'
 import { useLanguage } from '../contexts/LanguageContext'
-import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
+import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import useLatestRequest from '../lib/useLatestRequest'
+import { categorical } from '../lib/reportColors'
+import {
+  MONTHS, normaliseRecords, recordsForYear, monthlyActuals as monthlyActualsOf, derivedAnnualBudget,
+  ytdThroughMonth, budgetPosition, siteAllocation, brandAnalysis, historicalTrend, averageCpk,
+  scenarioProjection as scenarioProjectionOf, quarterSummary, cpkImprovementSaving, monthlyExportRows, filterSites,
+} from '../lib/budgetPlannerAnalytics'
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
@@ -33,7 +39,6 @@ ChartJS.register(
 )
 
 // ── Constants ────────────────────────────────────────────────────────────────
-const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
 // Persistence model on the existing `budgets` table:
 // The UI works with a single ANNUAL figure per site plus one fleet-wide annual
@@ -51,10 +56,6 @@ const DEFAULT_REGION = 'KSA'
 const BUDGET_WRITE_COLS = ['site', 'region', 'monthly_budget', 'year', 'month', 'created_by', 'country', 'status']
 const pickBudgetCols = (row) =>
   BUDGET_WRITE_COLS.reduce((acc, k) => { if (row[k] !== undefined) acc[k] = row[k]; return acc }, {})
-const PALETTE = [
-  '#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6',
-  '#ec4899','#14b8a6','#f97316','#6366f1','#84cc16',
-]
 const CHART_BASE = {
   responsive: true,
   maintainAspectRatio: false,
@@ -76,7 +77,7 @@ const CHART_BASE = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmt = (v, cur) => {
-  if (v == null || !isFinite(v)) return `${cur} 0`
+  if (v == null || !isFinite(v)) return 'N/A'
   const abs = Math.abs(v)
   const sign = v < 0 ? '-' : ''
   if (abs >= 1_000_000) return `${sign}${cur} ${(abs / 1_000_000).toFixed(2)}M`
@@ -85,19 +86,6 @@ const fmt = (v, cur) => {
 }
 const fmtPct = v => (v == null || !isFinite(v) ? 'N/A' : `${v.toFixed(1)}%`)
 const fmtCpk = (v, cur) => (v == null || !isFinite(v) ? 'N/A' : `${cur} ${v.toFixed(4)}/km`)
-
-function linearRegression(data) {
-  const n = data.length
-  if (n < 2) return { slope: 0, intercept: data[0] ?? 0 }
-  const xm = (n - 1) / 2
-  const ym = data.reduce((s, v) => s + v, 0) / n
-  const num = data.reduce((s, v, i) => s + (i - xm) * (v - ym), 0)
-  const den = data.reduce((s, _, i) => s + (i - xm) ** 2, 0)
-  const slope = den === 0 ? 0 : num / den
-  return { slope, intercept: ym - slope * xm, predict: i => slope * i + ym - slope * xm }
-}
-
-function getQuarter(month) { return Math.floor(month / 3) }
 
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function BudgetPlanner() {
@@ -109,7 +97,9 @@ export default function BudgetPlanner() {
   const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
   const isAdmin = profile?.role === 'Admin'
 
-  const currentYear = new Date().getFullYear()
+  const now = useMemo(() => new Date(), [])
+  const currentYear = now.getFullYear()
+  const nowMonth = now.getMonth()
   const [selectedYear, setSelectedYear] = useState(currentYear)
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
@@ -132,6 +122,8 @@ export default function BudgetPlanner() {
   const [annualEditValue, setAnnualEditValue] = useState('')
 
   // What-if
+  const [siteSearch, setSiteSearch] = useState('')
+  const [siteStatus, setSiteStatus] = useState('all')
   const [cpkTarget, setCpkTarget] = useState(1.5)
   const [volumeChange, setVolumeChange] = useState(0)
   const [brandSwitchPct, setBrandSwitchPct] = useState(0)
@@ -214,200 +206,51 @@ export default function BudgetPlanner() {
 
   useEffect(() => { fetchBudgets() }, [fetchBudgets])
 
-  // ── Derived: normalise ─────────────────────────────────────────────────────
-  const normalised = useMemo(() =>
-    records.map(r => ({
-      ...r,
-      cost: parseFloat(r.cost_per_tyre) || 0,
-      year: r.issue_date ? new Date(r.issue_date).getFullYear() : null,
-      month: r.issue_date ? new Date(r.issue_date).getMonth() : null,
-      kmFit: parseFloat(r.km_at_fitment) || 0,
-      kmRem: parseFloat(r.km_at_removal) || 0,
-    }))
-  , [records])
-
-  const yearRecords = useMemo(() => normalised.filter(r => r.year === selectedYear), [normalised, selectedYear])
-  const prevYearRecords = useMemo(() => normalised.filter(r => r.year === selectedYear - 1), [normalised, selectedYear])
-
-  // ── Monthly actuals ────────────────────────────────────────────────────────
-  const monthlyActuals = useMemo(() => {
-    const arr = Array(12).fill(0)
-    yearRecords.forEach(r => { if (r.month != null) arr[r.month] += r.cost })
-    return arr
-  }, [yearRecords])
-
-  const monthlyActualsPrev = useMemo(() => {
-    const arr = Array(12).fill(0)
-    prevYearRecords.forEach(r => { if (r.month != null) arr[r.month] += r.cost })
-    return arr
-  }, [prevYearRecords])
+  // ── Derived: all maths live in src/lib/budgetPlannerAnalytics.js ─────────
+  const normalised = useMemo(() => normaliseRecords(records), [records])
+  const yearRecords = useMemo(() => recordsForYear(normalised, selectedYear), [normalised, selectedYear])
+  const prevYearRecords = useMemo(() => recordsForYear(normalised, selectedYear - 1), [normalised, selectedYear])
+  const monthlyActuals = useMemo(() => monthlyActualsOf(yearRecords), [yearRecords])
 
   // ── Translated month labels (chart display only; exports keep English MONTHS) ──
   const monthLabels = useMemo(() => MONTHS.map((_, i) => t(`budgetplanner.months.${i}`)), [t])
 
-  // ── Sites ──────────────────────────────────────────────────────────────────
-  const sites = useMemo(() => {
-    const s = new Set(normalised.map(r => r.site).filter(Boolean))
-    return [...s].sort()
-  }, [normalised])
-
-  // ── Annual budget ──────────────────────────────────────────────────────────
-  const derivedAnnualFromHistorical = useMemo(() => {
-    const yearsData = {}
-    normalised.forEach(r => {
-      if (r.year) yearsData[r.year] = (yearsData[r.year] || 0) + r.cost
-    })
-    const prevYears = Object.keys(yearsData)
-      .map(Number)
-      .filter(y => y < selectedYear)
-      .sort()
-      .slice(-3)
-    if (prevYears.length === 0) return 0
-    const avg = prevYears.reduce((s, y) => s + yearsData[y], 0) / prevYears.length
-    return Math.round(avg * 1.05) // 5% growth assumption
-  }, [normalised, selectedYear])
-
+  const derivedAnnualFromHistorical = useMemo(() => derivedAnnualBudget(normalised, selectedYear), [normalised, selectedYear])
   // storedAnnual comes from the `budgets` ANNUAL sentinel row (state, loaded above).
+  // With neither a stored nor a derivable budget the figure is null (N/A), never 0.
   const annualBudget = storedAnnual ?? derivedAnnualFromHistorical
+  const annualIsDerived = storedAnnual == null && derivedAnnualFromHistorical != null
+  const hasBudget = Number.isFinite(annualBudget) && annualBudget > 0
 
-  // ── YTD & projections ─────────────────────────────────────────────────────
-  const currentMonth = selectedYear === currentYear ? new Date().getMonth() : 11
-  const ytdActual = useMemo(() => monthlyActuals.slice(0, currentMonth + 1).reduce((s, v) => s + v, 0), [monthlyActuals, currentMonth])
+  const currentMonth = ytdThroughMonth(selectedYear, currentYear, nowMonth)
+  const position = useMemo(
+    () => budgetPosition({ actuals: monthlyActuals, annualBudget, throughMonth: currentMonth }),
+    [monthlyActuals, annualBudget, currentMonth],
+  )
+  const { ytdActual, monthlyBudget, variance, pctUsed, monthsElapsed } = position
+  const projectedYearEnd = position.projectedYearEnd
 
-  const monthlyBudget = annualBudget / 12
-  const ytdBudget = monthlyBudget * (currentMonth + 1)
-  const variance = ytdBudget - ytdActual
-  const pctUsed = annualBudget > 0 ? (ytdActual / annualBudget) * 100 : 0
-  const monthsElapsed = currentMonth + 1
-  const monthlyRun = monthsElapsed > 0 ? ytdActual / monthsElapsed : 0
-  const projectedYearEnd = monthlyRun * 12
-
-  // ── Monthly budget array (even distribution) ───────────────────────────────
   const monthlyBudgets = useMemo(() => Array(12).fill(monthlyBudget), [monthlyBudget])
 
-  // ── Site allocation ────────────────────────────────────────────────────────
-  const siteData = useMemo(() => {
-    const map = {}
-    yearRecords.forEach(r => {
-      if (!r.site) return
-      if (!map[r.site]) map[r.site] = { site: r.site, actual: 0, count: 0 }
-      map[r.site].actual += r.cost
-      map[r.site].count += 1
-    })
-    const prevMap = {}
-    prevYearRecords.forEach(r => {
-      if (!r.site) return
-      prevMap[r.site] = (prevMap[r.site] || 0) + r.cost
-    })
+  const siteData = useMemo(() => siteAllocation({
+    yearRows: yearRecords, prevYearRows: prevYearRecords, siteBudgets, annualBudget, monthsElapsed,
+  }), [yearRecords, prevYearRecords, siteBudgets, annualBudget, monthsElapsed])
 
-    return Object.values(map).map(s => {
-      const budget = siteBudgets[s.site]
-        ? parseFloat(siteBudgets[s.site])
-        : (annualBudget > 0 && Object.keys(map).length > 0 ? annualBudget / Object.keys(map).length : 0)
-      const siteVariance = budget - s.actual
-      const sitePct = budget > 0 ? (s.actual / budget) * 100 : 0
-      const siteProj = monthsElapsed > 0 ? (s.actual / monthsElapsed) * 12 : 0
-      const prevActual = prevMap[s.site] || 0
-      const cpkRecords = yearRecords.filter(r => r.site === s.site && r.kmRem > r.kmFit && r.cost > 0)
-      const cpk = cpkRecords.length > 0
-        ? cpkRecords.reduce((sum, r) => sum + r.cost / (r.kmRem - r.kmFit), 0) / cpkRecords.length
-        : null
-      const prevCpkRecords = prevYearRecords.filter(r => r.site === s.site && r.kmRem > r.kmFit && r.cost > 0)
-      const prevCpk = prevCpkRecords.length > 0
-        ? prevCpkRecords.reduce((sum, r) => sum + r.cost / (r.kmRem - r.kmFit), 0) / prevCpkRecords.length
-        : null
-      const status = sitePct > 100 ? 'Over Budget' : sitePct >= 90 ? 'Warning' : 'On Track'
-      return { ...s, budget, variance: siteVariance, pct: sitePct, projection: siteProj, prevActual, cpk, prevCpk, status }
-    }).sort((a, b) => b.actual - a.actual)
-  }, [yearRecords, prevYearRecords, siteBudgets, annualBudget, monthsElapsed])
-
-  // ── CPK efficiency for over-budget sites ──────────────────────────────────
   const overBudgetSites = useMemo(() => siteData.filter(s => s.status === 'Over Budget'), [siteData])
+  const brandData = useMemo(() => brandAnalysis(yearRecords, prevYearRecords), [yearRecords, prevYearRecords])
 
-  // ── Brand analysis ─────────────────────────────────────────────────────────
-  const brandData = useMemo(() => {
-    const thisYear = {}
-    const lastYear = {}
-    yearRecords.forEach(r => {
-      const b = r.brand || 'Unknown'
-      thisYear[b] = (thisYear[b] || 0) + r.cost
-    })
-    prevYearRecords.forEach(r => {
-      const b = r.brand || 'Unknown'
-      lastYear[b] = (lastYear[b] || 0) + r.cost
-    })
-    const allBrands = [...new Set([...Object.keys(thisYear), ...Object.keys(lastYear)])]
-    return allBrands.map(b => {
-      const ty = thisYear[b] || 0
-      const ly = lastYear[b] || 0
-      const change = ly > 0 ? ((ty - ly) / ly) * 100 : null
-      const cpkRecords = yearRecords.filter(r => r.brand === b && r.kmRem > r.kmFit && r.cost > 0)
-      const cpk = cpkRecords.length > 0
-        ? cpkRecords.reduce((s, r) => s + r.cost / (r.kmRem - r.kmFit), 0) / cpkRecords.length
-        : null
-      const prevCpkRecs = prevYearRecords.filter(r => r.brand === b && r.kmRem > r.kmFit && r.cost > 0)
-      const prevCpk = prevCpkRecs.length > 0
-        ? prevCpkRecs.reduce((s, r) => s + r.cost / (r.kmRem - r.kmFit), 0) / prevCpkRecs.length
-        : null
-      const cpkChange = prevCpk && cpk ? ((cpk - prevCpk) / prevCpk) * 100 : null
-      return { brand: b, thisYear: ty, lastYear: ly, change, cpk, prevCpk, cpkChange }
-    }).sort((a, b) => b.thisYear - a.thisYear)
-  }, [yearRecords, prevYearRecords])
+  const { trendYears, trendValues, nextYearProjection } = useMemo(() => historicalTrend(normalised), [normalised])
 
-  // ── Historical trend (last 3 years) ───────────────────────────────────────
-  const historicalYears = useMemo(() => {
-    const map = {}
-    normalised.forEach(r => { if (r.year) map[r.year] = (map[r.year] || 0) + r.cost })
-    return map
-  }, [normalised])
+  const currentAvgCpk = useMemo(() => averageCpk(yearRecords), [yearRecords])
+  const scenarioProjection = useMemo(() => scenarioProjectionOf({
+    projectedYearEnd, currentAvgCpk, cpkTarget, volumeChange, brandSwitchPct, brandSwitchSaving,
+  }), [projectedYearEnd, currentAvgCpk, cpkTarget, volumeChange, brandSwitchPct, brandSwitchSaving])
 
-  const trendYears = useMemo(() => {
-    const years = Object.keys(historicalYears).map(Number).sort().slice(-4)
-    return years
-  }, [historicalYears])
+  const quarters = useMemo(() => quarterSummary({
+    actuals: monthlyActuals, monthlyBudget, selectedYear, currentYear, currentMonth: nowMonth,
+  }), [monthlyActuals, monthlyBudget, selectedYear, currentYear, nowMonth])
 
-  const trendValues = useMemo(() => trendYears.map(y => historicalYears[y] || 0), [trendYears, historicalYears])
-
-  const nextYearProjection = useMemo(() => {
-    if (trendValues.length < 2) return null
-    const { predict } = linearRegression(trendValues)
-    return Math.max(0, predict(trendValues.length))
-  }, [trendValues])
-
-  // ── What-if scenario ──────────────────────────────────────────────────────
-  const scenarioProjection = useMemo(() => {
-    if (projectedYearEnd <= 0) return null
-    const currentCpkRecords = yearRecords.filter(r => r.kmRem > r.kmFit && r.cost > 0)
-    const currentAvgCpk = currentCpkRecords.length > 0
-      ? currentCpkRecords.reduce((s, r) => s + r.cost / (r.kmRem - r.kmFit), 0) / currentCpkRecords.length
-      : null
-
-    let adjusted = projectedYearEnd
-    // CPK improvement
-    if (currentAvgCpk && cpkTarget < currentAvgCpk) {
-      const cpkFactor = cpkTarget / currentAvgCpk
-      adjusted = adjusted * cpkFactor
-    }
-    // Volume change
-    adjusted = adjusted * (1 + volumeChange / 100)
-    // Brand switch saving
-    adjusted = adjusted * (1 - (brandSwitchPct / 100) * (brandSwitchSaving / 100))
-
-    return { projected: Math.max(0, adjusted), saving: projectedYearEnd - adjusted, currentAvgCpk }
-  }, [projectedYearEnd, cpkTarget, volumeChange, brandSwitchPct, brandSwitchSaving, yearRecords])
-
-  // ── Quarters ──────────────────────────────────────────────────────────────
-  const quarters = useMemo(() => [0, 1, 2, 3].map(q => {
-    const months = [q * 3, q * 3 + 1, q * 3 + 2]
-    const qActual = months.reduce((s, m) => s + (monthlyActuals[m] || 0), 0)
-    const qBudget = monthlyBudget * 3
-    const qVar = qBudget - qActual
-    const qPct = qBudget > 0 ? (qActual / qBudget) * 100 : 0
-    const isComplete = selectedYear < currentYear || (selectedYear === currentYear && months[2] <= currentMonth)
-    const inProgress = selectedYear === currentYear && months.some(m => m === currentMonth)
-    const status = qPct > 100 ? 'Over' : qPct >= 90 ? 'Warning' : isComplete ? 'Complete' : inProgress ? 'Active' : 'Pending'
-    return { label: `Q${q + 1}`, months, actual: qActual, budget: qBudget, variance: qVar, pct: qPct, status, isComplete }
-  }), [monthlyActuals, monthlyBudget, currentMonth, selectedYear, currentYear])
+  const visibleSites = useMemo(() => filterSites(siteData, { query: siteSearch, status: siteStatus }), [siteData, siteSearch, siteStatus])
 
   // ── Chart: Budget vs Actual monthly ───────────────────────────────────────
   const monthlyChartData = useMemo(() => {
@@ -484,7 +327,7 @@ export default function BudgetPlanner() {
       labels: top.map(b => b.brand),
       datasets: [{
         data: top.map(b => b.thisYear),
-        backgroundColor: PALETTE.slice(0, top.length),
+        backgroundColor: categorical(top.length),
         borderColor: 'var(--panel)',
         borderWidth: 2,
       }],
@@ -497,7 +340,7 @@ export default function BudgetPlanner() {
       labels: top.map(b => b.brand),
       datasets: [{
         data: top.map(b => b.lastYear),
-        backgroundColor: PALETTE.slice(0, top.length),
+        backgroundColor: categorical(top.length),
         borderColor: 'var(--panel)',
         borderWidth: 2,
       }],
@@ -534,7 +377,7 @@ export default function BudgetPlanner() {
   // ── Inline edit: site budget ───────────────────────────────────────────────
   function startEditSite(site, currentBudget) {
     setEditingSite(site)
-    setEditValue(String(Math.round(currentBudget)))
+    setEditValue(currentBudget == null ? '' : String(Math.round(currentBudget)))
   }
   function cancelEditSite() { setEditingSite(null); setEditValue(''); setSaveError(null) }
 
@@ -599,21 +442,21 @@ export default function BudgetPlanner() {
     brandData.filter(b => b.cpkChange > 10).forEach(b => {
       recs.push(t('budgetplanner.recommendations.brandCpkWorsened', { brand: b.brand, pct: fmtPct(b.cpkChange) }))
     })
-    if (projectedYearEnd > annualBudget * 1.1) {
+    if (hasBudget && projectedYearEnd != null && projectedYearEnd > annualBudget * 1.1) {
       recs.push(t('budgetplanner.recommendations.projectedExceeds', { value: fmt(projectedYearEnd, activeCurrency) }))
     }
     if (scenarioProjection?.saving > 0) {
       recs.push(t('budgetplanner.recommendations.whatIfSaves', { value: fmt(scenarioProjection.saving, activeCurrency) }))
     }
     return recs.slice(0, 5)
-  }, [overBudgetSites, brandData, projectedYearEnd, annualBudget, activeCurrency, scenarioProjection, t])
+  }, [overBudgetSites, brandData, projectedYearEnd, annualBudget, hasBudget, activeCurrency, scenarioProjection, t])
 
   // ── PDF Export ────────────────────────────────────────────────────────────
   async function handleExportPdf() {
-    const { default: jsPDF } = await import('jspdf')
-    const autoTable = await loadAutoTable()
     setExporting(true)
     try {
+      const { default: jsPDF } = await import('jspdf')
+      const autoTable = await loadAutoTable()
       const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
       const brand = await resolvePdfBrand(branding)
 
@@ -624,7 +467,7 @@ export default function BudgetPlanner() {
         addHeader('Budget Summary')
         pdfEmptyState(doc, 'No budget data for the selected year')
         pdfFooter(doc, 1, 1, company, brand)
-        doc.save(`TyrePulse_BudgetPlanner_${selectedYear}.pdf`)
+        doc.save(`${reportFileName('Budget Planner', selectedYear)}.pdf`)
         return
       }
 
@@ -704,24 +547,22 @@ export default function BudgetPlanner() {
 
       const totalPages = doc.internal.getNumberOfPages()
       for (let p = 1; p <= totalPages; p++) { doc.setPage(p); pdfFooter(doc, p, totalPages, company, brand) }
-      doc.save(`TyrePulse_BudgetPlanner_${selectedYear}.pdf`)
+      doc.save(`${reportFileName('Budget Planner', selectedYear)}.pdf`)
+    } catch (e) {
+      setSaveError(toUserMessage(e, 'PDF export failed. Please try again.'))
     } finally { setExporting(false) }
   }
 
   // ── Excel Export ──────────────────────────────────────────────────────────
   async function handleExportExcel() {
-    const XLSX = await import('xlsx')
     setExporting(true)
     try {
+      const XLSX = await import('xlsx')
       const wb = XLSX.utils.book_new()
 
       // Sheet 1: Monthly budget vs actual
-      const monthlyRows = MONTHS.map((m, i) => ({
-        Month: m,
-        Budget: Math.round(monthlyBudget),
-        Actual: Math.round(monthlyActuals[i]),
-        Variance: Math.round(monthlyBudget - monthlyActuals[i]),
-        'Variance %': monthlyBudget > 0 ? ((monthlyActuals[i] / monthlyBudget) * 100).toFixed(1) + '%' : 'N/A',
+      const monthlyRows = monthlyExportRows(monthlyActuals, monthlyBudget).map(r => ({
+        Month: r.month, Budget: r.budget, Actual: r.actual, Variance: r.variance, 'Variance %': r.used,
       }))
       const ws1 = XLSX.utils.json_to_sheet(monthlyRows)
       ws1['!cols'] = [{ wch: 10 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 12 }]
@@ -730,11 +571,11 @@ export default function BudgetPlanner() {
       // Sheet 2: Site allocation
       const siteRows = siteData.map(s => ({
         Site: s.site,
-        'Annual Budget': Math.round(s.budget),
+        'Annual Budget': s.budget == null ? 'N/A' : Math.round(s.budget),
         'YTD Actual': Math.round(s.actual),
-        Variance: Math.round(s.variance),
+        Variance: s.variance == null ? 'N/A' : Math.round(s.variance),
         '% Used': fmtPct(s.pct),
-        'Projection': Math.round(s.projection),
+        'Projection': s.projection == null ? 'N/A' : Math.round(s.projection),
         Status: s.status,
       }))
       const ws2 = XLSX.utils.json_to_sheet(siteRows)
@@ -760,7 +601,9 @@ export default function BudgetPlanner() {
       ws4['!cols'] = [{ wch: 4 }, { wch: 80 }]
       XLSX.utils.book_append_sheet(wb, ws4, 'Recommendations')
 
-      XLSX.writeFile(wb, `TyrePulse_BudgetPlanner_${selectedYear}.xlsx`)
+      XLSX.writeFile(wb, `${reportFileName('Budget Planner', selectedYear)}.xlsx`)
+    } catch (e) {
+      setSaveError(toUserMessage(e, 'Excel export failed. Please try again.'))
     } finally { setExporting(false) }
   }
 
@@ -773,6 +616,7 @@ export default function BudgetPlanner() {
     'Active': 'active',
     'Over': 'over',
     'Pending': 'pending',
+    'No Budget': 'noBudget',
   }
   const statusBadge = (status) => {
     const map = {
@@ -783,6 +627,7 @@ export default function BudgetPlanner() {
       'Active': 'bg-purple-900/60 text-purple-400 border border-purple-800',
       'Over': 'bg-red-900/60 text-red-400 border border-red-800',
       'Pending': 'bg-[var(--input-bg)] text-[var(--text-muted)] border border-[var(--input-border)]',
+      'No Budget': 'bg-[var(--input-bg)] text-[var(--text-muted)] border border-[var(--input-border)]',
     }
     return (
       <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${map[status] ?? 'bg-[var(--input-bg)] text-[var(--text-muted)]'}`}>
@@ -791,7 +636,7 @@ export default function BudgetPlanner() {
     )
   }
 
-  const varColor = (v) => v >= 0 ? 'text-green-400' : 'text-red-400'
+  const varColor = (v) => (v == null ? 'text-[var(--text-muted)]' : v >= 0 ? 'text-green-400' : 'text-red-400')
   const varIcon = (v) => v >= 0
     ? <ArrowDownRight className="w-4 h-4 text-green-400 inline" />
     : <ArrowUpRight className="w-4 h-4 text-red-400 inline" />
@@ -828,6 +673,87 @@ export default function BudgetPlanner() {
     },
   ], [activeCurrency, t])
 
+  // Site allocation columns for EnterpriseTable (inline budget edit kept for Admins).
+  const siteColumns = useMemo(() => {
+    const pctTone = (p) => (p == null ? 'text-[var(--text-muted)]' : p > 100 ? 'text-red-400' : p >= 90 ? 'text-amber-400' : 'text-green-400')
+    const barTone = (p) => (p == null ? 'bg-[var(--input-border)]' : p > 100 ? 'bg-red-500' : p >= 90 ? 'bg-amber-500' : 'bg-green-500')
+    const cols = [
+      { id: 'site', header: t('budgetplanner.site.columns.site'), accessorFn: r => r.site, size: 150,
+        cell: ({ getValue }) => <span className="text-[var(--text-primary)] font-medium">{getValue()}</span> },
+      { id: 'budget', header: t('budgetplanner.site.columns.annualBudget'), accessorFn: r => r.budget, size: 190, meta: { align: 'right', exportValue: r => (r.budget == null ? 'N/A' : Math.round(r.budget)) },
+        cell: ({ row }) => {
+          const s = row.original
+          if (editingSite === s.site) {
+            return (
+              <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                <label className="sr-only" htmlFor={`site-budget-${s.site}`}>Annual budget for {s.site}</label>
+                <input
+                  id={`site-budget-${s.site}`}
+                  type="number"
+                  min="0"
+                  value={editValue}
+                  onChange={e => setEditValue(e.target.value)}
+                  className="w-28 bg-[var(--input-bg)] border border-blue-600 text-[var(--text-primary)] rounded px-2 min-h-[36px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  autoFocus
+                  onKeyDown={e => { if (e.key === 'Enter') saveEditSite(s.site); if (e.key === 'Escape') cancelEditSite() }}
+                />
+                <button type="button" onClick={() => saveEditSite(s.site)} disabled={saving} aria-label={`Save budget for ${s.site}`} className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center text-green-400 hover:text-green-300 disabled:opacity-50">
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <Save className="w-4 h-4" aria-hidden="true" />}
+                </button>
+                <button type="button" onClick={cancelEditSite} aria-label="Cancel edit" className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-secondary)]">
+                  <X className="w-4 h-4" aria-hidden="true" />
+                </button>
+              </div>
+            )
+          }
+          return (
+            <span className="inline-flex items-center gap-1">
+              <span className="text-blue-400 font-medium tabular-nums">{fmt(s.budget, activeCurrency)}</span>
+              {s.budgetSource === 'even-share' && <span className="text-[10px] text-[var(--text-dim)]" title="No site budget stored: an even share of the annual budget">(share)</span>}
+            </span>
+          )
+        } },
+      { id: 'actual', header: t('budgetplanner.site.columns.ytdActual'), accessorFn: r => r.actual, size: 130, meta: { align: 'right' },
+        cell: ({ getValue }) => <span className="text-[var(--text-primary)] tabular-nums">{fmt(getValue(), activeCurrency)}</span> },
+      { id: 'variance', header: t('budgetplanner.site.columns.variance'), accessorFn: r => r.variance, size: 130, meta: { align: 'right', exportValue: r => (r.variance == null ? 'N/A' : Math.round(r.variance)) },
+        cell: ({ getValue }) => <span className={`font-medium tabular-nums ${varColor(getValue())}`}>{fmt(getValue(), activeCurrency)}</span> },
+      { id: 'pct', header: t('budgetplanner.site.columns.pctUsed'), accessorFn: r => r.pct, size: 140, meta: { exportValue: r => fmtPct(r.pct) },
+        cell: ({ getValue }) => {
+          const p = getValue()
+          return (
+            <div className="flex items-center gap-2">
+              <div className="w-16 h-1.5 bg-[var(--input-bg)] rounded-full overflow-hidden" aria-hidden="true">
+                <div className={`h-full rounded-full ${barTone(p)}`} style={{ width: `${Math.min(100, p ?? 0)}%` }} />
+              </div>
+              <span className={`tabular-nums ${pctTone(p)}`}>{fmtPct(p)}</span>
+            </div>
+          )
+        } },
+      { id: 'projection', header: t('budgetplanner.site.columns.projection'), accessorFn: r => r.projection, size: 130, meta: { align: 'right', exportValue: r => (r.projection == null ? 'N/A' : Math.round(r.projection)) },
+        cell: ({ row }) => {
+          const s = row.original
+          const over = s.budget != null && s.projection != null && s.projection > s.budget
+          return <span className={`font-medium tabular-nums ${over ? 'text-red-400' : 'text-[var(--text-secondary)]'}`}>{fmt(s.projection, activeCurrency)}</span>
+        } },
+      { id: 'cpk', header: t('budgetplanner.site.columns.cpk'), accessorFn: r => r.cpk, size: 140, meta: { align: 'right', exportValue: r => (r.cpk == null ? 'N/A' : r.cpk.toFixed(4)) },
+        cell: ({ getValue }) => <span className="text-[var(--text-secondary)] tabular-nums">{fmtCpk(getValue(), activeCurrency)}</span> },
+      { id: 'status', header: t('budgetplanner.site.columns.status'), accessorFn: r => r.status, size: 120, meta: { filterVariant: 'select' },
+        cell: ({ getValue }) => statusBadge(getValue()) },
+    ]
+    if (isAdmin) {
+      cols.push({ id: 'edit', header: '', enableSorting: false, size: 60, meta: { export: false },
+        cell: ({ row }) => (editingSite !== row.original.site ? (
+          <button type="button" onClick={(e) => { e.stopPropagation(); startEditSite(row.original.site, row.original.budget) }}
+            aria-label={`Edit budget for ${row.original.site}`}
+            className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center text-[var(--text-dim)] hover:text-[var(--text-secondary)] hover:bg-[var(--input-bg)] rounded transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]">
+            <Edit2 className="w-3.5 h-3.5" aria-hidden="true" />
+          </button>
+        ) : null) })
+    }
+    return cols
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCurrency, t, isAdmin, editingSite, editValue, saving])
+
   if (loading || budgetsLoading) return (
     <div className="flex items-center justify-center h-96">
       <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
@@ -837,13 +763,14 @@ export default function BudgetPlanner() {
 
   if (error || budgetsError) return (
     <div className="flex items-center justify-center h-96">
-      <div className="bg-red-900/30 border border-red-800 rounded-xl p-6 text-center">
+      <div role="alert" className="bg-red-900/30 border border-red-800 rounded-xl p-6 text-center">
         <AlertTriangle className="w-8 h-8 text-red-400 mx-auto mb-2" />
         <p className="text-red-300 font-medium">{t('budgetplanner.error.title')}</p>
         <p className="text-red-400/70 text-sm mt-1">{error || budgetsError}</p>
         <button
           onClick={() => { if (error) fetchRecords(); if (budgetsError) fetchBudgets() }}
-          className="mt-4 px-4 py-2 bg-red-800 hover:bg-red-700 text-white rounded-lg text-sm"
+          type="button"
+          className="mt-4 px-4 min-h-[44px] bg-red-800 hover:bg-red-700 text-white rounded-lg text-sm"
         >{t('budgetplanner.error.retry')}</button>
       </div>
     </div>
@@ -860,8 +787,9 @@ export default function BudgetPlanner() {
         icon={DollarSign}
         actions={<>
           <div className="flex items-center gap-1 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-1.5">
-            <Calendar className="w-4 h-4 text-blue-400" />
+            <Calendar className="w-4 h-4 text-blue-400" aria-hidden="true" />
             <select
+              aria-label="Budget year"
               value={selectedYear}
               onChange={e => setSelectedYear(Number(e.target.value))}
               className="bg-transparent text-[var(--text-primary)] text-sm focus:outline-none"
@@ -871,7 +799,7 @@ export default function BudgetPlanner() {
               ))}
             </select>
           </div>
-          <button onClick={fetchRecords} className="p-2 bg-[var(--input-bg)] border border-[var(--input-border)] hover:bg-[var(--input-bg-hover)] rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
+          <button type="button" onClick={() => { fetchRecords(); fetchBudgets() }} aria-label="Refresh budget data" className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center p-2 bg-[var(--input-bg)] border border-[var(--input-border)] hover:bg-[var(--input-bg-hover)] rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
             <RefreshCw className="w-4 h-4" />
           </button>
           <button
@@ -904,9 +832,9 @@ export default function BudgetPlanner() {
         <span className="text-[var(--text-dim)]">|</span>
         <span className="text-[var(--text-muted)]">{t('budgetplanner.statusBar.variance')} <span className={`font-semibold ${varColor(variance)}`}>{fmt(variance, activeCurrency)}</span></span>
         <span className="text-[var(--text-dim)]">|</span>
-        <span className="text-[var(--text-muted)]">{t('budgetplanner.statusBar.pctUsed')} <span className={`font-semibold ${pctUsed > 100 ? 'text-red-400' : pctUsed > 90 ? 'text-amber-400' : 'text-green-400'}`}>{fmtPct(pctUsed)}</span></span>
+        <span className="text-[var(--text-muted)]">{t('budgetplanner.statusBar.pctUsed')} <span className={`font-semibold ${pctUsed == null ? 'text-[var(--text-secondary)]' : pctUsed > 100 ? 'text-red-400' : pctUsed > 90 ? 'text-amber-400' : 'text-green-400'}`}>{fmtPct(pctUsed)}</span></span>
         <span className="text-[var(--text-dim)]">|</span>
-        <span className="text-[var(--text-muted)]">{t('budgetplanner.statusBar.projectedYe')} <span className={`font-semibold ${projectedYearEnd > annualBudget ? 'text-red-400' : 'text-green-400'}`}>{fmt(projectedYearEnd, activeCurrency)}</span></span>
+        <span className="text-[var(--text-muted)]">{t('budgetplanner.statusBar.projectedYe')} <span className={`font-semibold ${!hasBudget || projectedYearEnd == null ? 'text-[var(--text-secondary)]' : projectedYearEnd > annualBudget ? 'text-red-400' : 'text-green-400'}`}>{fmt(projectedYearEnd, activeCurrency)}</span></span>
       </motion.div>
 
       {/* ── Save Error Banner ── */}
@@ -951,28 +879,29 @@ export default function BudgetPlanner() {
             color: 'blue',
             editable: isAdmin,
             editing: editingAnnual,
-            onEdit: () => { setAnnualEditValue(String(Math.round(annualBudget))); setEditingAnnual(true) },
+            sub: annualIsDerived ? 'Suggested from the last 3 years + 5%' : !hasBudget ? 'No budget set' : undefined,
+            onEdit: () => { setAnnualEditValue(hasBudget ? String(Math.round(annualBudget)) : ''); setEditingAnnual(true) },
           },
           { label: t('budgetplanner.kpi.actualYtd'), value: fmt(ytdActual, activeCurrency), icon: BarChart2, color: 'purple' },
           {
             label: t('budgetplanner.kpi.budgetVariance'),
             value: fmt(variance, activeCurrency),
-            icon: variance >= 0 ? TrendingDown : TrendingUp,
-            color: variance >= 0 ? 'green' : 'red',
-            sub: variance >= 0 ? t('budgetplanner.kpi.underBudget') : t('budgetplanner.kpi.overBudget'),
+            icon: variance == null || variance >= 0 ? TrendingDown : TrendingUp,
+            color: variance == null ? 'blue' : variance >= 0 ? 'green' : 'red',
+            sub: variance == null ? 'Set a budget to measure variance' : variance >= 0 ? t('budgetplanner.kpi.underBudget') : t('budgetplanner.kpi.overBudget'),
           },
           {
             label: t('budgetplanner.kpi.pctBudgetUsed'),
             value: fmtPct(pctUsed),
             icon: PieIcon,
-            color: pctUsed > 100 ? 'red' : pctUsed > 90 ? 'amber' : 'green',
+            color: pctUsed == null ? 'blue' : pctUsed > 100 ? 'red' : pctUsed > 90 ? 'amber' : 'green',
           },
           {
             label: t('budgetplanner.kpi.projectedYe'),
             value: fmt(projectedYearEnd, activeCurrency),
             icon: Zap,
-            color: projectedYearEnd > annualBudget ? 'red' : 'green',
-            sub: projectedYearEnd > annualBudget ? t('budgetplanner.kpi.overTrajectory') : t('budgetplanner.kpi.onTrajectory'),
+            color: !hasBudget || projectedYearEnd == null ? 'blue' : projectedYearEnd > annualBudget ? 'red' : 'green',
+            sub: projectedYearEnd == null ? 'No months elapsed yet' : !hasBudget ? 'No budget to compare' : projectedYearEnd > annualBudget ? t('budgetplanner.kpi.overTrajectory') : t('budgetplanner.kpi.onTrajectory'),
           },
         ].map((kpi, i) => {
           const colorMap = {
@@ -1099,86 +1028,29 @@ export default function BudgetPlanner() {
         {siteData.length === 0 ? (
           <div className="p-10 text-center text-[var(--text-muted)]">{t('budgetplanner.site.empty', { year: selectedYear })}</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[var(--input-border)]">
-                  {[
-                    t('budgetplanner.site.columns.site'),
-                    t('budgetplanner.site.columns.annualBudget'),
-                    t('budgetplanner.site.columns.ytdActual'),
-                    t('budgetplanner.site.columns.variance'),
-                    t('budgetplanner.site.columns.pctUsed'),
-                    t('budgetplanner.site.columns.projection'),
-                    t('budgetplanner.site.columns.cpk'),
-                    t('budgetplanner.site.columns.status'),
-                    isAdmin ? '' : null,
-                  ]
-                    .filter(Boolean)
-                    .map(h => (
-                      <th key={h} className="text-left text-[var(--text-muted)] font-medium px-4 py-3 whitespace-nowrap">{h}</th>
-                    ))}
-                </tr>
-              </thead>
-              <tbody>
-                {siteData.map((s, i) => (
-                  <motion.tr
-                    key={s.site}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: i * 0.03 }}
-                    className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/30 transition-colors"
-                  >
-                    <td className="px-4 py-3 text-[var(--text-primary)] font-medium">{s.site}</td>
-                    <td className="px-4 py-3">
-                      {editingSite === s.site ? (
-                        <div className="flex items-center gap-1">
-                          <input
-                            type="number"
-                            value={editValue}
-                            onChange={e => setEditValue(e.target.value)}
-                            className="w-32 bg-[var(--input-bg)] border border-blue-600 text-[var(--text-primary)] rounded px-2 py-1 text-sm focus:outline-none"
-                            autoFocus
-                            onKeyDown={e => { if (e.key === 'Enter') saveEditSite(s.site); if (e.key === 'Escape') cancelEditSite() }}
-                          />
-                          <button onClick={() => saveEditSite(s.site)} disabled={saving} className="p-1 text-green-400 hover:text-green-300 disabled:opacity-50">
-                            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                          </button>
-                          <button onClick={cancelEditSite} className="p-1 text-[var(--text-muted)] hover:text-[var(--text-secondary)]">
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="text-blue-400 font-medium">{fmt(s.budget, activeCurrency)}</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-[var(--text-primary)]">{fmt(s.actual, activeCurrency)}</td>
-                    <td className={`px-4 py-3 font-medium ${varColor(s.variance)}`}>{fmt(s.variance, activeCurrency)}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="w-16 h-1.5 bg-[var(--input-bg)] rounded-full overflow-hidden">
-                          <div className={`h-full rounded-full ${s.pct > 100 ? 'bg-red-500' : s.pct >= 90 ? 'bg-amber-500' : 'bg-green-500'}`}
-                            style={{ width: `${Math.min(100, s.pct)}%` }} />
-                        </div>
-                        <span className={s.pct > 100 ? 'text-red-400' : s.pct >= 90 ? 'text-amber-400' : 'text-green-400'}>{fmtPct(s.pct)}</span>
-                      </div>
-                    </td>
-                    <td className={`px-4 py-3 font-medium ${s.projection > s.budget ? 'text-red-400' : 'text-[var(--text-secondary)]'}`}>{fmt(s.projection, activeCurrency)}</td>
-                    <td className="px-4 py-3 text-[var(--text-secondary)]">{fmtCpk(s.cpk, activeCurrency)}</td>
-                    <td className="px-4 py-3">{statusBadge(s.status)}</td>
-                    {isAdmin && (
-                      <td className="px-4 py-3">
-                        {editingSite !== s.site && (
-                          <button onClick={() => startEditSite(s.site, s.budget)} className="p-1.5 text-[var(--text-dim)] hover:text-[var(--text-secondary)] hover:bg-[var(--input-bg)] rounded transition-colors">
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </td>
-                    )}
-                  </motion.tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="p-4 space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="flex-1 min-w-[200px]">
+                <span className="sr-only">Search sites</span>
+                <input type="search" value={siteSearch} onChange={e => setSiteSearch(e.target.value)} placeholder="Search sites..." className="input w-full min-h-[44px]" />
+              </label>
+              <select aria-label="Filter sites by budget status" value={siteStatus} onChange={e => setSiteStatus(e.target.value)} className="input w-auto min-h-[44px]">
+                <option value="all">All statuses</option>
+                {['Over Budget', 'Warning', 'On Track', 'No Budget'].map(st => <option key={st} value={st}>{t(`budgetplanner.status.${STATUS_KEY_MAP[st]}`)}</option>)}
+              </select>
+              <span className="text-xs text-[var(--text-muted)]" aria-live="polite">{visibleSites.length} of {siteData.length} sites</span>
+            </div>
+            <EnterpriseTable
+              columns={siteColumns}
+              data={visibleSites}
+              getRowId={r => String(r.site)}
+              enableGlobalFilter={false}
+              initialPageSize={25}
+              emptyMessage="No sites match these filters."
+              viewKey="budget-planner-sites"
+              exportFileName={reportFileName('Budget Planner Sites', selectedYear)}
+              reportMeta={{ ...reportMeta, title: `Site Budget Allocation ${selectedYear}` }}
+            />
           </div>
         )}
       </motion.div>
@@ -1193,10 +1065,7 @@ export default function BudgetPlanner() {
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {overBudgetSites.map(s => {
-              const cpkImproved = s.cpk ? Math.max(0, s.cpk * 0.85) : null
-              const saving = cpkImproved && s.cpk
-                ? (s.actual / s.cpk) * (s.cpk - cpkImproved)
-                : null
+              const { target: cpkImproved, saving } = cpkImprovementSaving(s, 0.15)
               return (
                 <div key={s.site} className="bg-[var(--input-bg)] rounded-xl p-4 border border-red-900/30">
                   <div className="flex items-center justify-between mb-2">

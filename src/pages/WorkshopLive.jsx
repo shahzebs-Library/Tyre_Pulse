@@ -22,7 +22,7 @@ import {
   Coffee, UserX, X, Gauge, Timer, TrendingUp, CheckCircle2, Car, UserCheck,
   Bell, User, Zap, ExternalLink, ListChecks, Plus, ChevronDown, ChevronUp,
   Phone, Send, GraduationCap, PauseCircle, Sparkles, Settings2, Layers,
-  ClipboardList, XCircle,
+  ClipboardList, XCircle, FileSpreadsheet, FileText,
 } from 'lucide-react'
 
 import { supabase } from '../lib/supabase'
@@ -38,49 +38,22 @@ import { taskRollup, jobTaskSummary, qcOutcome, TASK_STATUS, TASK_STATUS_LABEL }
 import { recommendTechnicians } from '../lib/workshopAssign'
 import EChart from '../components/charts/EChart'
 import PageHeader from '../components/ui/PageHeader'
-import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import WorkshopTvShareButton from '../components/workshop/WorkshopTvShareButton'
 import WorkshopNewJobModal from '../components/workshop/WorkshopNewJobModal'
 import { colorAt, withAlpha } from '../lib/reportColors'
 import { safeImageSrc, safeHref } from '../lib/safeUrl'
 import { toUserMessage } from '../lib/safeError'
+import { normalizeWoStatus, WO_STATUSES, KANBAN_COLUMNS as WO_KANBAN_COLUMNS } from '../lib/workOrderStatus'
 import {
-  normalizeWoStatus, woKanbanColumn, WO_STATUSES,
-  KANBAN_COLUMNS as WO_KANBAN_COLUMNS,
-} from '../lib/workOrderStatus'
+  toTs, fmtMins, relTime, pct, jobColumnKey, siteOptions as buildSiteOptions,
+  filterBoard, filterJobs, bucketJobs, boardExportRows, BOARD_EXPORT_KEYS, BOARD_EXPORT_HEADERS, delayTotals,
+} from '../lib/workshopLiveAnalytics'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import { reportFileName } from '../lib/exportUtils'
 
 // ── Small pure helpers ─────────────────────────────────────────────────────────
 
-const toTs = (v) => {
-  if (v == null) return NaN
-  if (typeof v === 'number') return v
-  const t = new Date(v).getTime()
-  return Number.isNaN(t) ? NaN : t
-}
 const normStatus = (s) => String(s || '').toLowerCase().replace(/\s+/g, '_')
-
-/** minutes -> "1h 5m" / "45m" / "0m". */
-function fmtMins(m) {
-  const n = Math.max(0, Math.round(Number(m) || 0))
-  if (!n) return '0m'
-  const h = Math.floor(n / 60)
-  const mm = n % 60
-  return h ? (mm ? `${h}h ${mm}m` : `${h}h`) : `${mm}m`
-}
-
-/** epoch ms -> relative "just now / 5m ago / 2h ago". */
-function relTime(tsMs) {
-  if (!tsMs) return 'N/A'
-  const s = Math.max(0, Math.round((Date.now() - tsMs) / 1000))
-  if (s < 45) return 'just now'
-  const m = Math.round(s / 60)
-  if (m < 60) return `${m}m ago`
-  const h = Math.round(m / 60)
-  if (h < 24) return `${h}h ago`
-  return `${Math.round(h / 24)}d ago`
-}
-
-const pct = (v) => (v == null ? 'N/A' : `${v}%`)
 
 // ── Work-order status vocabulary (canonical Title Case) ────────────────────────
 // work_orders.status is free text (no DB CHECK). The kanban + the Move control
@@ -105,14 +78,6 @@ const ALERT_TONE = { critical: TONE_COLOR.red, warning: TONE_COLOR.amber, info: 
 const TASK_TONE = {
   pending: TONE_COLOR.grey, in_progress: TONE_COLOR.blue, blocked: TONE_COLOR.amber,
   done: TONE_COLOR.green, qc: TONE_COLOR.purple,
-}
-
-/** Column a job belongs to (overdue derived from target_completion). */
-function jobColumnKey(job, now) {
-  const canonical = normalizeWoStatus(job.status)
-  const tgt = toTs(job.target_completion)
-  const overdue = canonical !== 'Completed' && canonical !== 'Cancelled' && Number.isFinite(tgt) && tgt < now
-  return woKanbanColumn(canonical, { overdue })
 }
 
 // ── KPI strip config (values come straight from the engine `kpis`) ─────────────
@@ -183,7 +148,7 @@ function KpiCard({ def, active, onClick }) {
 
 // ── Technician card ─────────────────────────────────────────────────────────
 
-function TechCard({ tech, events, jobs, techById, busy, onAssign, onReassign, onConfirm, onOpenDrawer, highlight }) {
+function TechCard({ tech, now, events, jobs, techById, busy, onAssign, onReassign, onConfirm, onOpenDrawer, highlight }) {
   const [assignTo, setAssignTo] = useState('')
   const band = statusColor(tech.status)
   const openForAssign = jobs // pre-filtered open jobs
@@ -265,7 +230,7 @@ function TechCard({ tech, events, jobs, techById, busy, onAssign, onReassign, on
 
       <div className="flex items-center justify-between text-[11px] text-muted">
         <span>Utilization <span className="text-white font-semibold">{util == null ? 'N/A' : `${util}%`}</span></span>
-        <span>Last activity {relTime(tech.lastActivityAt)}</span>
+        <span>Last activity {relTime(tech.lastActivityAt, now)}</span>
       </div>
 
       {/* Actions */}
@@ -561,8 +526,10 @@ function JobCard({
 
 // ── Delay / root-cause panel ────────────────────────────────────────────────
 
+const PRI_TONE = { high: TONE_COLOR.red, medium: TONE_COLOR.amber, low: TONE_COLOR.grey }
+
 function DelayPanel({ delays }) {
-  const delaysPager = usePagedRows(delays)
+  const totals = useMemo(() => delayTotals(delays), [delays])
   const option = useMemo(() => {
     const rows = [...delays].reverse() // ECharts hbar renders bottom-up
     return {
@@ -585,54 +552,55 @@ function DelayPanel({ delays }) {
     }
   }, [delays])
 
+  const delayColumns = useMemo(() => [
+    { id: 'cause', header: 'Cause', accessorFn: (d) => labelReason(d.reason), size: 170 },
+    { id: 'hours', header: 'Hours lost', accessorFn: (d) => Number(d.hoursLost) || 0, size: 100, meta: { align: 'right' },
+      cell: ({ row }) => <span className="tabular-nums">{row.original.hoursLost}</span> },
+    { id: 'jobs', header: 'Jobs affected', accessorFn: (d) => Number(d.affectedJobs) || 0, size: 110, meta: { align: 'right' },
+      cell: ({ row }) => <span className="tabular-nums">{row.original.affectedJobs ?? 'N/A'}</span> },
+    { id: 'cost', header: 'Cost impact', accessorFn: (d) => (d.costImpact == null ? null : Number(d.costImpact)), size: 120, meta: { align: 'right', exportValue: (d) => (d.costImpact == null ? 'N/A' : Number(d.costImpact)) },
+      cell: ({ row }) => <span className="tabular-nums">{row.original.costImpact != null ? Number(row.original.costImpact).toLocaleString() : 'N/A'}</span> },
+    { id: 'dept', header: 'Responsible', accessorFn: (d) => d.responsibleDept || 'N/A', size: 140, meta: { filterVariant: 'select' } },
+    { id: 'action', header: 'Suggested action', accessorFn: (d) => d.suggestedAction || 'N/A', size: 240,
+      cell: ({ row }) => <span className="text-muted">{row.original.suggestedAction || 'N/A'}</span> },
+    { id: 'priority', header: 'Priority', accessorFn: (d) => d.priority || 'low', size: 100, meta: { filterVariant: 'select' },
+      cell: ({ row }) => {
+        const p = row.original.priority || 'low'
+        const c = PRI_TONE[p] || TONE_COLOR.grey
+        return <span className="px-1.5 py-0.5 rounded text-[11px] font-semibold capitalize" style={{ background: `${c}22`, color: c }}>{p}</span>
+      } },
+  ], [])
+
   if (!delays.length) {
     return (
       <div className="card p-6 text-center">
-        <Timer className="w-8 h-8 mx-auto mb-2 opacity-40" />
+        <Timer className="w-8 h-8 mx-auto mb-2 opacity-40" aria-hidden="true" />
         <div className="text-sm text-white font-medium">No blocked time recorded today</div>
         <div className="text-xs text-muted mt-1">Delay causes appear here as technicians log waiting time.</div>
       </div>
     )
   }
-  const priTone = { high: TONE_COLOR.red, medium: TONE_COLOR.amber, low: TONE_COLOR.grey }
   return (
     <div className="card p-4">
       <h3 className="text-sm font-semibold text-white mb-1">Delay and Root Cause</h3>
-      <p className="text-[11px] text-muted mb-3">Hours lost to blocked time, by cause (today).</p>
+      <p className="text-[11px] text-muted mb-3">
+        Hours lost to blocked time, by cause (today): {totals.hours}h across {totals.causes} cause{totals.causes === 1 ? '' : 's'},
+        {' '}cost impact {totals.cost == null ? 'N/A' : totals.cost.toLocaleString()}.
+      </p>
       <div style={{ height: Math.max(160, delays.length * 42) }}>
         <EChart option={option} ariaLabel="Delay hours by cause" />
       </div>
-      <div className="mt-3 overflow-x-auto">
-        <table className="w-full text-[11px]">
-          <thead className="text-muted">
-            <tr className="text-left">
-              <th className="py-1 pr-2">Cause</th>
-              <th className="py-1 pr-2">Hours</th>
-              <th className="py-1 pr-2">Cost impact</th>
-              <th className="py-1 pr-2">Responsible</th>
-              <th className="py-1 pr-2">Action</th>
-              <th className="py-1">Priority</th>
-            </tr>
-          </thead>
-          <tbody className="text-white">
-            {delaysPager.pageRows.map((d) => (
-              <tr key={d.reason} className="border-t border-[var(--border)]">
-                <td className="py-1 pr-2">{labelReason(d.reason)}</td>
-                <td className="py-1 pr-2 tabular-nums">{d.hoursLost}</td>
-                <td className="py-1 pr-2 tabular-nums">{d.costImpact != null ? Number(d.costImpact).toLocaleString() : 'N/A'}</td>
-                <td className="py-1 pr-2">{d.responsibleDept || 'N/A'}</td>
-                <td className="py-1 pr-2 text-muted">{d.suggestedAction || 'N/A'}</td>
-                <td className="py-1">
-                  <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold"
-                    style={{ background: `${priTone[d.priority] || TONE_COLOR.grey}22`, color: priTone[d.priority] || TONE_COLOR.grey }}>
-                    {d.priority || 'low'}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <TablePagination {...delaysPager} />
+      <div className="mt-3">
+        <EnterpriseTable
+          columns={delayColumns}
+          data={delays}
+          getRowId={(d) => String(d.reason)}
+          initialPageSize={25}
+          searchPlaceholder="Search causes..."
+          emptyMessage="No blocked time recorded today"
+          exportFileName={reportFileName('Workshop Delay Causes')}
+          reportMeta={{ title: 'Workshop Delay and Root Cause' }}
+        />
       </div>
     </div>
   )
@@ -1018,6 +986,7 @@ export default function WorkshopLive() {
   const [busy, setBusy] = useState(false)
   const [flash, setFlash] = useState(null)      // { type:'ok'|'err', msg }
   const [filter, setFilter] = useState(null)     // { scope, key }
+  const [search, setSearch] = useState('')
   const [siteFilter, setSiteFilter] = useState('All')
   const [nowTs, setNowTs] = useState(() => Date.now())
   const [highlightRef, setHighlightRef] = useState(null)
@@ -1144,49 +1113,52 @@ export default function WorkshopLive() {
   const techMetaById = useMemo(() => Object.fromEntries((raw?.technicians || []).map((t) => [t.id, t])), [raw])
 
   // Site options (client-side filter over the loaded board + jobs).
-  const siteOptions = useMemo(() => {
-    const s = new Set()
-    board.forEach((b) => b.site && s.add(b.site))
-    ;(raw?.jobs || []).forEach((j) => j.site && s.add(j.site))
-    return ['All', ...[...s].sort()]
-  }, [board, raw])
+  const siteOptions = useMemo(() => buildSiteOptions(board, raw?.jobs || []), [board, raw])
 
   const techById = useMemo(() => Object.fromEntries(board.map((b) => [b.userId, b])), [board])
 
-  // Apply site + KPI filter to the two surfaces.
+  // Apply site + KPI + search filters to the two surfaces (engine does the work).
   const bySite = useCallback(
     (site) => siteFilter === 'All' || site === siteFilter,
     [siteFilter],
   )
 
-  const filteredBoard = useMemo(() => {
-    let list = board.filter((b) => bySite(b.site))
-    if (filter?.scope === 'tech') {
-      const def = kpiDefs.find((d) => d.key === filter.key)
-      if (def?.pred) list = list.filter(def.pred)
-    }
-    return list
-  }, [board, bySite, filter, kpiDefs])
+  const activeDef = useMemo(() => (filter ? kpiDefs.find((d) => d.key === filter.key) : null), [filter, kpiDefs])
 
-  const filteredJobs = useMemo(() => {
-    let list = (raw?.jobs || []).filter((j) => bySite(j.site))
-    if (filter?.scope === 'job') {
-      const def = kpiDefs.find((d) => d.key === filter.key)
-      if (def?.jobPred) list = list.filter(def.jobPred)
-      else if (def?.jobCol) list = list.filter((j) => jobColumnKey(j, nowTs) === def.jobCol)
-      // openJobs (jobCol null) keeps every open job already returned by the service.
-    }
-    return list
-  }, [raw, bySite, filter, kpiDefs, nowTs])
+  const filteredBoard = useMemo(() => filterBoard(board, {
+    site: siteFilter,
+    pred: filter?.scope === 'tech' ? activeDef?.pred : null,
+    query: search,
+  }), [board, siteFilter, filter, activeDef, search])
 
-  const columns = useMemo(() => {
-    const buckets = Object.fromEntries(KANBAN_COLUMNS.map((c) => [c.key, []]))
-    for (const j of filteredJobs) {
-      const key = jobColumnKey(j, nowTs)
-      ;(buckets[key] || buckets['Awaiting Assignment']).push(j)
+  const filteredJobs = useMemo(() => filterJobs(raw?.jobs || [], {
+    site: siteFilter,
+    // openJobs (jobCol null) keeps every open job already returned by the service.
+    pred: filter?.scope === 'job' ? activeDef?.jobPred : null,
+    column: filter?.scope === 'job' && !activeDef?.jobPred ? activeDef?.jobCol : null,
+    query: search,
+    now: nowTs,
+  }), [raw, siteFilter, filter, activeDef, search, nowTs])
+
+  const columns = useMemo(
+    () => bucketJobs(filteredJobs, KANBAN_COLUMNS.map((c) => c.key), nowTs),
+    [filteredJobs, nowTs],
+  )
+
+  const exportBoard = useCallback(async (kind) => {
+    const rows = boardExportRows(filteredBoard, nowTs)
+    const name = reportFileName('Workshop Technician Board', siteFilter === 'All' ? 'All sites' : siteFilter)
+    try {
+      const { exportToExcel, exportToPdf } = await import('../lib/exportUtils')
+      if (kind === 'pdf') {
+        await exportToPdf(rows, BOARD_EXPORT_KEYS.map((k, i) => ({ key: k, header: BOARD_EXPORT_HEADERS[i] })), 'Workshop Technician Board', name, 'landscape')
+      } else {
+        await exportToExcel(rows, BOARD_EXPORT_KEYS, BOARD_EXPORT_HEADERS, name, 'Technicians')
+      }
+    } catch (e) {
+      setFlash({ type: 'err', msg: toUserMessage(e, 'Export failed. Please try again.') })
     }
-    return buckets
-  }, [filteredJobs, nowTs])
+  }, [filteredBoard, nowTs, siteFilter])
 
   const openJobsForAssign = useMemo(
     () => (raw?.jobs || []).filter((j) => bySite(j.site)),
@@ -1354,12 +1326,12 @@ export default function WorkshopLive() {
         refreshing={refreshing}
         updatedAt={updatedAt}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {siteOptions.length > 1 && (
               <select
                 value={siteFilter}
                 onChange={(e) => setSiteFilter(e.target.value)}
-                className="btn-secondary text-xs px-3 py-1.5"
+                className="btn-secondary text-xs px-3 min-h-[44px]"
                 style={{ color: 'var(--panel-ink)' }}
                 aria-label="Filter by site"
               >
@@ -1369,9 +1341,9 @@ export default function WorkshopLive() {
             <button
               type="button"
               onClick={() => setNewJobOpen(true)}
-              className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-slate-100 hover:bg-white/10"
+              className="btn-primary inline-flex items-center gap-2 min-h-[44px] px-3 text-sm font-semibold"
             >
-              <Plus className="w-4 h-4" /> New Job
+              <Plus className="w-4 h-4" aria-hidden="true" /> New Job
             </button>
             <WorkshopTvShareButton />
           </div>
@@ -1410,6 +1382,27 @@ export default function WorkshopLive() {
         </button>
       )}
 
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="flex-1 min-w-[220px]">
+          <span className="sr-only">Search technicians and job cards</span>
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search technician, job card, asset, plate..."
+            className="input w-full min-h-[44px]"
+          />
+        </label>
+        <button type="button" onClick={() => exportBoard('excel')} disabled={!filteredBoard.length}
+          className="btn-secondary inline-flex items-center gap-2 min-h-[44px] px-3 text-sm disabled:opacity-40">
+          <FileSpreadsheet className="w-4 h-4" aria-hidden="true" /> Excel
+        </button>
+        <button type="button" onClick={() => exportBoard('pdf')} disabled={!filteredBoard.length}
+          className="btn-secondary inline-flex items-center gap-2 min-h-[44px] px-3 text-sm disabled:opacity-40">
+          <FileText className="w-4 h-4" aria-hidden="true" /> PDF
+        </button>
+      </div>
+
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6">
         <div className="space-y-6 min-w-0">
           {/* 2. Technician live board */}
@@ -1432,6 +1425,7 @@ export default function WorkshopLive() {
                   <TechCard
                     key={tech.userId}
                     tech={tech}
+                    now={nowTs}
                     events={raw.eventsByUser?.[tech.userId]}
                     jobs={openJobsForAssign}
                     techById={techById}

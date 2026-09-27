@@ -15,7 +15,13 @@ import { useLanguage } from '../contexts/LanguageContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
 import SegmentedControl from '../components/ui/SegmentedControl'
-import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import StatTile from '../components/ui/StatTile'
+import DialogModal from '../components/ui/Modal'
+import {
+  filterSchedules, recipientCountOf, shortReason, validateEmails, nextRunBucket, scheduleKpis,
+  deliveryRows, scheduleExportRows, SCHEDULE_EXPORT_KEYS, SCHEDULE_EXPORT_HEADERS,
+} from '../lib/scheduledReportsAnalytics'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { exportToPdf, exportToExcel, exportSheetsToExcel, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import {
@@ -85,15 +91,14 @@ function useT() {
   }, [t])
 }
 
-function formatNextRun(nextRunAt, td) {
-  if (!nextRunAt) return '-'
-  const d = new Date(nextRunAt)
-  if (Number.isNaN(d.getTime())) return '-'
+function formatNextRun(nextRunAt, td, now = Date.now()) {
+  const nb = nextRunBucket(nextRunAt, now)
+  if (!nb) return 'N/A'
+  const d = nb.date
   const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  const diff = d - new Date()
-  if (diff < 0) return td('schedreports.time.due', 'Due now')
-  if (diff < 24 * 3600_000) return td('schedreports.time.today', 'Today at {time}', { time })
-  if (diff < 48 * 3600_000) return td('schedreports.time.tomorrow', 'Tomorrow at {time}', { time })
+  if (nb.bucket === 'due') return td('schedreports.time.due', 'Due now')
+  if (nb.bucket === 'today') return td('schedreports.time.today', 'Today at {time}', { time })
+  if (nb.bucket === 'tomorrow') return td('schedreports.time.tomorrow', 'Tomorrow at {time}', { time })
   return `${d.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })} | ${time}`
 }
 
@@ -114,26 +119,8 @@ function formatRunStamp(ts) {
   return `${d.toLocaleDateString([], { day: 'numeric', month: 'short' })}, ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
 }
 
-/** Recipient count for a report_send_log row (recipients stored as jsonb array). */
-function recipientCountOf(row) {
-  const r = row?.recipients
-  if (Array.isArray(r)) return r.length
-  return 0
-}
 
-/** Trim an internal delivery error to a short, admin-safe reason. */
-function shortReason(text) {
-  const s = String(text || '').replace(/\s+/g, ' ').trim()
-  if (!s) return ''
-  return s.length > 120 ? `${s.slice(0, 117)}...` : s
-}
 
-function validateEmails(raw) {
-  const lines = raw.split('\n').map(l => l.trim()).filter(Boolean)
-  const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  const invalid = lines.filter(e => !re.test(e))
-  return { emails: lines, invalid }
-}
 
 function coverageLabel(s, td) {
   if (s.period === 'custom') return `${s.period_from || '...'} to ${s.period_to || '...'}`
@@ -236,32 +223,39 @@ function ScheduleCard({ schedule, health, onEdit, onDelete, onToggle, onGenerate
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
           <button
+            type="button"
             onClick={() => onSendNow(schedule)}
             disabled={sending}
             title={td('schedreports.card.sendNow', 'Send now: email this report to its recipients immediately')}
-            className="p-1.5 rounded-lg hover:bg-[var(--surface-3)] transition-colors disabled:opacity-50"
+            aria-label={`${td('schedreports.card.sendNowShort', 'Send now')}: ${schedule.name || ''}`}
+            className="min-h-[40px] min-w-[40px] inline-flex items-center justify-center rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 p-1.5 hover:bg-[var(--surface-3)] transition-colors disabled:opacity-50"
           >
             {sending ? <Loader2 className="w-4 h-4 text-green-400 animate-spin" /> : <Send className="w-4 h-4 text-[var(--text-secondary)] hover:text-green-400" />}
           </button>
           <button
+            type="button"
             onClick={() => onGenerate(schedule)}
             disabled={busy}
             title={td('schedreports.card.generate', 'Generate & download now')}
-            className="p-1.5 rounded-lg hover:bg-[var(--surface-3)] transition-colors disabled:opacity-50"
+            aria-label={`${td('schedreports.card.generate', 'Generate & download now')}: ${schedule.name || ''}`}
+            className="min-h-[40px] min-w-[40px] inline-flex items-center justify-center rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 p-1.5 hover:bg-[var(--surface-3)] transition-colors disabled:opacity-50"
           >
             {busy ? <Loader2 className="w-4 h-4 text-orange-400 animate-spin" /> : <Download className="w-4 h-4 text-[var(--text-secondary)] hover:text-orange-400" />}
           </button>
           <button
+            type="button"
             onClick={() => onToggle(schedule)}
             title={schedule.active ? td('schedreports.card.deactivate', 'Deactivate') : td('schedreports.card.activate', 'Activate')}
-            className="p-1.5 rounded-lg hover:bg-[var(--surface-3)] transition-colors"
+            aria-label={`${schedule.active ? td('schedreports.card.deactivate', 'Deactivate') : td('schedreports.card.activate', 'Activate')}: ${schedule.name || ''}`}
+            aria-pressed={!!schedule.active}
+            className="min-h-[40px] min-w-[40px] inline-flex items-center justify-center rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 p-1.5 hover:bg-[var(--surface-3)] transition-colors"
           >
             {schedule.active ? <Eye className="w-4 h-4 text-green-400" /> : <EyeOff className="w-4 h-4 text-[var(--text-muted)]" />}
           </button>
-          <button onClick={() => onEdit(schedule)} className="p-1.5 rounded-lg hover:bg-[var(--surface-3)] transition-colors">
+          <button type="button" onClick={() => onEdit(schedule)} aria-label={`${td('schedreports.card.edit', 'Edit')}: ${schedule.name || ''}`} title={td('schedreports.card.edit', 'Edit')} className="min-h-[40px] min-w-[40px] inline-flex items-center justify-center rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 p-1.5 hover:bg-[var(--surface-3)] transition-colors">
             <Edit2 className="w-4 h-4 text-[var(--text-secondary)] hover:text-[var(--text-primary)]" />
           </button>
-          <button onClick={() => onDelete(schedule)} className="p-1.5 rounded-lg hover:bg-red-500/10 transition-colors">
+          <button type="button" onClick={() => onDelete(schedule)} aria-label={`${td('schedreports.card.delete', 'Delete')}: ${schedule.name || ''}`} title={td('schedreports.card.delete', 'Delete')} className="min-h-[40px] min-w-[40px] inline-flex items-center justify-center rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 p-1.5 hover:bg-red-500/10 transition-colors">
             <Trash2 className="w-4 h-4 text-[var(--text-secondary)] hover:text-red-400" />
           </button>
         </div>
@@ -583,37 +577,34 @@ function Modal({ title, onClose, onSave, saving, form, setForm, formError, setFo
 
 function DeleteConfirmModal({ schedule, onCancel, onConfirm, deleting, td }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onCancel} />
-      <div className="relative bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-2xl w-full max-w-sm shadow-2xl p-6">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center">
-            <Trash2 className="w-5 h-5 text-red-400" />
-          </div>
-          <div>
-            <p className="text-[var(--text-primary)] font-semibold">{td('schedreports.delete.title', 'Delete Schedule')}</p>
-            <p className="text-[var(--text-secondary)] text-sm">{td('schedreports.delete.subtitle', 'This action cannot be undone')}</p>
-          </div>
-        </div>
-        <p className="text-[var(--text-secondary)] text-sm mb-6">
-          {td('schedreports.delete.questionPrefix', 'Are you sure you want to delete "')}
-          <span className="text-[var(--text-primary)] font-medium">{schedule?.name}</span>
-          {td('schedreports.delete.questionSuffix', '"? Recipients will no longer receive this report.')}
-        </p>
+    <DialogModal
+      open
+      onClose={onCancel}
+      size="sm"
+      title={td('schedreports.delete.title', 'Delete Schedule')}
+      subtitle={td('schedreports.delete.subtitle', 'This action cannot be undone')}
+      footer={(
         <div className="flex justify-end gap-3">
-          <button onClick={onCancel} className="px-4 py-2 text-sm font-medium text-[var(--text-secondary)] bg-[var(--surface-3)] hover:bg-gray-600 rounded-lg transition-colors">
+          <button type="button" onClick={onCancel} className="px-4 min-h-[44px] text-sm font-medium text-[var(--text-secondary)] bg-[var(--surface-3)] hover:bg-[var(--surface-2)] rounded-lg transition-colors">
             {td('schedreports.delete.cancel', 'Cancel')}
           </button>
           <button
+            type="button"
             onClick={onConfirm} disabled={deleting}
-            className="px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+            className="px-4 min-h-[44px] text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
           >
-            {deleting ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Trash2 className="w-4 h-4" />}
+            {deleting ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <Trash2 className="w-4 h-4" aria-hidden="true" />}
             {td('schedreports.delete.confirm', 'Delete')}
           </button>
         </div>
-      </div>
-    </div>
+      )}
+    >
+      <p className="text-[var(--text-secondary)] text-sm">
+        {td('schedreports.delete.questionPrefix', 'Are you sure you want to delete "')}
+        <span className="text-[var(--text-primary)] font-medium">{schedule?.name}</span>
+        {td('schedreports.delete.questionSuffix', '"? Recipients will no longer receive this report.')}
+      </p>
+    </DialogModal>
   )
 }
 
@@ -628,20 +619,41 @@ function DeliveryStatusPill({ status, td }) {
   )
 }
 
-/** Expandable delivery-history panel: recent report_send_log runs in a table. */
+/** Expandable delivery-history panel: recent report_send_log runs in a sortable register. */
 function DeliveryHistory({ runs, summary, loading, error, open, onToggle, onRefresh, td }) {
-  const runsPager = usePagedRows(runs)
+  const rows = useMemo(() => deliveryRows(runs), [runs])
+  const columns = useMemo(() => [
+    { id: 'schedule', header: td('schedreports.history.colSchedule', 'Schedule'), accessorFn: (r) => r.schedule, size: 220,
+      cell: ({ getValue }) => <span className="text-[var(--text-primary)] block max-w-[16rem] truncate" title={getValue()}>{getValue()}</span> },
+    { id: 'sent_at', header: td('schedreports.history.colWhen', 'When'), accessorFn: (r) => r.sent_at, size: 140,
+      meta: { exportValue: (r) => r.sent_at || 'N/A' },
+      cell: ({ row }) => <span className="text-[var(--text-secondary)] whitespace-nowrap tabular-nums">{formatRunStamp(row.original.sent_at) || 'N/A'}</span> },
+    { id: 'status', header: td('schedreports.history.colStatus', 'Status'), accessorFn: (r) => r.status, size: 110, meta: { filterVariant: 'select' },
+      cell: ({ row }) => <DeliveryStatusPill status={row.original.raw.status} td={td} /> },
+    { id: 'recipients', header: td('schedreports.history.colRecipients', 'Recipients'), accessorFn: (r) => r.recipients, size: 110, meta: { align: 'right' },
+      cell: ({ getValue }) => <span className="text-[var(--text-secondary)] tabular-nums">{getValue()}</span> },
+    { id: 'reason', header: td('schedreports.history.colReason', 'Reason'), accessorFn: (r) => r.reason, size: 280,
+      cell: ({ row }) => (row.original.raw.status === 'sent'
+        ? <span className="text-[var(--text-dim)] text-xs">N/A</span>
+        : <span className="text-[var(--text-muted)] text-xs block max-w-[20rem] truncate" title={row.original.raw.error || undefined}>{row.original.reason}</span>) },
+  ], [td])
+
   return (
     <div className="bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-xl overflow-hidden">
-      <div className="flex items-center justify-between px-5 py-4">
-        <button onClick={onToggle} className="flex items-center gap-3 min-w-0 text-left">
-          <div className="w-9 h-9 rounded-xl bg-blue-400/10 flex items-center justify-center flex-shrink-0">
-            <History className="w-4 h-4 text-blue-400" />
+      <div className="flex items-center justify-between gap-3 px-5 py-4">
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={open}
+          className="flex items-center gap-3 min-w-0 flex-1 text-left min-h-[44px] rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
+        >
+          <div className="w-10 h-10 rounded-xl bg-[var(--surface-3)] flex items-center justify-center flex-shrink-0">
+            <History className="w-5 h-5 text-[var(--text-secondary)]" aria-hidden="true" />
           </div>
           <div className="min-w-0">
             <p className="text-[var(--text-primary)] font-semibold flex items-center gap-2">
               {td('schedreports.history.title', 'Delivery history')}
-              <ChevronDown className={`w-4 h-4 text-[var(--text-secondary)] transition-transform ${open ? 'rotate-180' : ''}`} />
+              <ChevronDown className={`w-4 h-4 text-[var(--text-secondary)] transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
             </p>
             <p className="text-[var(--text-secondary)] text-xs mt-0.5">
               {summary && summary.total > 0
@@ -653,29 +665,23 @@ function DeliveryHistory({ runs, summary, loading, error, open, onToggle, onRefr
           </div>
         </button>
         <button
+          type="button"
           onClick={onRefresh}
           disabled={loading}
           title={td('schedreports.history.refresh', 'Refresh delivery history')}
-          className="p-2 rounded-lg hover:bg-[var(--surface-3)] transition-colors disabled:opacity-50 flex-shrink-0"
+          aria-label={td('schedreports.history.refresh', 'Refresh delivery history')}
+          className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg hover:bg-[var(--surface-3)] transition-colors disabled:opacity-50 flex-shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
         >
-          <RefreshCw className={`w-4 h-4 text-[var(--text-secondary)] ${loading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`w-4 h-4 text-[var(--text-secondary)] ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
         </button>
       </div>
 
       {open && (
-        <div className="border-t border-[var(--border-bright)]">
-          {error ? (
-            <div className="px-5 py-4 flex items-center gap-2 text-sm text-red-400">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />{error}
-            </div>
-          ) : loading ? (
-            <div className="px-5 py-8 flex items-center justify-center gap-2 text-sm text-[var(--text-secondary)]">
-              <Loader2 className="w-4 h-4 animate-spin" />{td('schedreports.history.loading', 'Loading delivery history...')}
-            </div>
-          ) : runs.length === 0 ? (
+        <div className="border-t border-[var(--border-bright)] p-4">
+          {!loading && !error && rows.length === 0 ? (
             <div className="px-5 py-10 flex flex-col items-center justify-center text-center">
               <div className="w-12 h-12 rounded-xl bg-[var(--surface-3)] flex items-center justify-center mb-3">
-                <History className="w-6 h-6 text-[var(--text-dim)]" />
+                <History className="w-6 h-6 text-[var(--text-dim)]" aria-hidden="true" />
               </div>
               <p className="text-[var(--text-primary)] font-medium text-sm">{td('schedreports.history.emptyTitle', 'No deliveries yet')}</p>
               <p className="text-[var(--text-secondary)] text-xs mt-1 max-w-sm">
@@ -683,37 +689,20 @@ function DeliveryHistory({ runs, summary, loading, error, open, onToggle, onRefr
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-[var(--text-muted)] border-b border-[var(--border-bright)]">
-                    <th className="px-5 py-2.5 font-medium">{td('schedreports.history.colSchedule', 'Schedule')}</th>
-                    <th className="px-5 py-2.5 font-medium">{td('schedreports.history.colWhen', 'When')}</th>
-                    <th className="px-5 py-2.5 font-medium">{td('schedreports.history.colStatus', 'Status')}</th>
-                    <th className="px-5 py-2.5 font-medium text-right">{td('schedreports.history.colRecipients', 'Recipients')}</th>
-                    <th className="px-5 py-2.5 font-medium">{td('schedreports.history.colReason', 'Reason')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {runsPager.pageRows.map((r) => (
-                    <tr key={r.id} className="border-b border-[var(--border-bright)] last:border-0 hover:bg-[var(--surface-3)]/40">
-                      <td className="px-5 py-2.5 text-[var(--text-primary)] max-w-[16rem] truncate">
-                        {r.schedule_name || td('schedreports.history.unnamed', 'Unnamed schedule')}
-                      </td>
-                      <td className="px-5 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{formatRunStamp(r.sent_at) || 'N/A'}</td>
-                      <td className="px-5 py-2.5"><DeliveryStatusPill status={r.status} td={td} /></td>
-                      <td className="px-5 py-2.5 text-[var(--text-secondary)] text-right">{recipientCountOf(r)}</td>
-                      <td className="px-5 py-2.5 text-[var(--text-muted)] text-xs max-w-[20rem]">
-                        {r.status === 'sent'
-                          ? <span className="text-[var(--text-dim)]">N/A</span>
-                          : <span className="truncate block" title={r.error || undefined}>{shortReason(r.error) || td('schedreports.history.noReason', 'No reason recorded')}</span>}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <TablePagination {...runsPager} />
-            </div>
+            <EnterpriseTable
+              columns={columns}
+              data={rows}
+              getRowId={(r) => String(r.id)}
+              loading={loading}
+              error={error || null}
+              onRetry={onRefresh}
+              searchPlaceholder={td('schedreports.history.search', 'Search deliveries...')}
+              emptyMessage={td('schedreports.history.emptyTitle', 'No deliveries yet')}
+              initialPageSize={25}
+              viewKey="scheduled-reports-deliveries"
+              exportFileName={reportFileName('Report Delivery History', reportDateLabel())}
+              reportMeta={{ title: 'Scheduled Report Delivery History' }}
+            />
           )}
         </div>
       )}
@@ -1083,28 +1072,39 @@ export default function ScheduledReports() {
   }
 
   // ── Filtered view ─────────────────────────────────────────────────────────
-  const filtered = schedules.filter(s => {
-    if (filterFreq !== 'all' && s.frequency !== filterFreq) return false
-    if (filterActive === 'active' && !s.active) return false
-    if (filterActive === 'inactive' && s.active) return false
-    if (search && !(s.name || '').toLowerCase().includes(search.toLowerCase())) return false
-    return true
-  })
+  const filtered = useMemo(
+    () => filterSchedules(schedules, { search, frequency: filterFreq, status: filterActive, typeLabelFor }),
+    [schedules, search, filterFreq, filterActive, typeLabelFor],
+  )
+  const kpis = useMemo(() => scheduleKpis(schedules, jobRuns), [schedules, jobRuns])
+  const activeCount = kpis.active
 
-  const activeCount = schedules.filter(s => s.active).length
+  const exportSchedules = async (kind) => {
+    const rows = scheduleExportRows(filtered, { typeLabelFor, health: healthById })
+    const name = reportFileName('Scheduled Reports', reportDateLabel())
+    try {
+      if (kind === 'pdf') {
+        await exportToPdf(rows, SCHEDULE_EXPORT_KEYS.map((k, i) => ({ key: k, header: SCHEDULE_EXPORT_HEADERS[i] })), 'Scheduled Reports', name, 'landscape', reportCompany)
+      } else {
+        await exportToExcel(rows, SCHEDULE_EXPORT_KEYS, SCHEDULE_EXPORT_HEADERS, name, 'Schedules')
+      }
+    } catch (e) {
+      setToast({ type: 'err', text: toUserMessage(e, 'Export failed. Please try again.') })
+    }
+  }
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
       {/* Toast */}
       {toast && (
-        <div className={`fixed top-4 right-4 z-[60] flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium shadow-lg border ${
+        <div role={toast.type === 'ok' ? 'status' : 'alert'} aria-live="polite" className={`fixed top-4 right-4 left-4 sm:left-auto z-[60] flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium shadow-lg border ${
           toast.type === 'ok' ? 'bg-green-500/15 border-green-500/40 text-green-300'
             : toast.type === 'warn' ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
               : 'bg-red-500/15 border-red-500/40 text-red-300'}`}>
           {toast.type === 'ok' ? <CheckCircle className="w-4 h-4" /> : toast.type === 'warn' ? <AlertTriangle className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
           <span className="max-w-xs">{toast.text}</span>
-          <button onClick={() => setToast(null)} className="ml-1 opacity-70 hover:opacity-100"><X className="w-3.5 h-3.5" /></button>
+          <button type="button" onClick={() => setToast(null)} aria-label="Dismiss message" className="ml-auto min-h-[32px] min-w-[32px] inline-flex items-center justify-center opacity-70 hover:opacity-100"><X className="w-3.5 h-3.5" aria-hidden="true" /></button>
         </div>
       )}
 
@@ -1120,28 +1120,43 @@ export default function ScheduledReports() {
                 : td('schedreports.header.summaryOne', '{count} active schedule | {total} total', { count: activeCount, total: schedules.length }))}
           </p>
         </div>
-        <button
-          onClick={openCreate}
-          className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 rounded-xl shadow-lg shadow-orange-500/20 transition-all active:scale-95"
-        >
-          <Plus className="w-4 h-4" />{td('schedreports.header.newSchedule', 'New Schedule')}
+        <div className="flex flex-wrap items-center gap-2">
+        <button type="button" onClick={() => exportSchedules('excel')} disabled={loading || filtered.length === 0}
+          className="inline-flex items-center gap-2 px-3 min-h-[44px] text-sm font-medium text-[var(--text-secondary)] bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-xl hover:text-[var(--text-primary)] disabled:opacity-40">
+          <FileSpreadsheet className="w-4 h-4" aria-hidden="true" /> Excel
         </button>
+        <button type="button" onClick={() => exportSchedules('pdf')} disabled={loading || filtered.length === 0}
+          className="inline-flex items-center gap-2 px-3 min-h-[44px] text-sm font-medium text-[var(--text-secondary)] bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-xl hover:text-[var(--text-primary)] disabled:opacity-40">
+          <FileText className="w-4 h-4" aria-hidden="true" /> PDF
+        </button>
+        <button
+          type="button"
+          onClick={openCreate}
+          className="inline-flex items-center gap-2 px-4 min-h-[44px] text-sm font-semibold text-white bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 rounded-xl shadow-lg shadow-orange-500/20 transition-all active:scale-95"
+        >
+          <Plus className="w-4 h-4" aria-hidden="true" />{td('schedreports.header.newSchedule', 'New Schedule')}
+        </button>
+        </div>
       </div>
 
       {/* Error banner */}
       {error && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 flex items-center gap-3">
-          <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+        <div role="alert" className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 flex flex-wrap items-center gap-3">
+          <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" aria-hidden="true" />
           <p className="text-red-400 text-sm">{error}</p>
-          <button onClick={() => setError(null)} className="ml-auto"><X className="w-4 h-4 text-red-400" /></button>
+          <button type="button" onClick={fetchSchedules} className="ml-auto inline-flex items-center gap-1 px-3 min-h-[36px] text-xs font-medium rounded-lg border border-red-500/40 text-red-400 hover:bg-red-500/10">
+            <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" /> {td('schedreports.errors.retry', 'Retry')}
+          </button>
+          <button type="button" onClick={() => setError(null)} aria-label="Dismiss error" className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center"><X className="w-4 h-4 text-red-400" aria-hidden="true" /></button>
         </div>
       )}
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         <input
-          type="text"
-          placeholder={td('schedreports.search.placeholder', 'Search schedules...')}
+          type="search"
+          aria-label={td('schedreports.search.placeholder', 'Search schedules...')}
+          placeholder={td('schedreports.search.placeholder', 'Search schedules, report types, recipients...')}
           value={search}
           onChange={e => setSearch(e.target.value)}
           className="flex-1 bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-primary)] rounded-xl px-4 py-2.5 text-sm placeholder-gray-500 focus:outline-none focus:border-orange-500"
@@ -1150,8 +1165,10 @@ export default function ScheduledReports() {
           {['all', 'once', 'daily', 'weekly', 'monthly'].map(f => (
             <button
               key={f}
+              type="button"
+              aria-pressed={filterFreq === f}
               onClick={() => setFilterFreq(f)}
-              className={`px-3 py-2 rounded-lg text-xs font-medium border transition-all capitalize ${
+              className={`px-3 min-h-[40px] rounded-lg text-xs font-medium border transition-all capitalize ${
                 filterFreq === f ? 'bg-orange-500 border-orange-500 text-white'
                   : 'bg-[var(--surface-2)] border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
               }`}
@@ -1162,8 +1179,10 @@ export default function ScheduledReports() {
           {[['all', td('schedreports.filters.allStatus', 'All Status')], ['active', td('schedreports.filters.active', 'Active')], ['inactive', td('schedreports.filters.inactive', 'Paused')]].map(([val, lbl]) => (
             <button
               key={val}
+              type="button"
+              aria-pressed={filterActive === val}
               onClick={() => setFilterActive(val)}
-              className={`px-3 py-2 rounded-lg text-xs font-medium border transition-all ${
+              className={`px-3 min-h-[40px] rounded-lg text-xs font-medium border transition-all ${
                 filterActive === val ? 'bg-orange-500 border-orange-500 text-white'
                   : 'bg-[var(--surface-2)] border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
               }`}
@@ -1173,6 +1192,18 @@ export default function ScheduledReports() {
           ))}
         </div>
       </div>
+
+      {/* KPI strip */}
+      {!loading && !error && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" aria-label="Scheduled report summary">
+          <StatTile label="Active schedules" value={kpis.active} sub={`${kpis.paused} paused of ${kpis.total}`} tone="accent" icon={CalendarClock} index={0} />
+          <StatTile label="Delivery success (60d)" value={kpis.successRate === null ? 'N/A' : kpis.successRate} unit={kpis.successRate === null ? undefined : '%'}
+            sub={jobsError ? 'Delivery history could not be read' : kpis.deliveries ? `${kpis.sent} sent, ${kpis.failed} failed` : 'No deliveries yet'}
+            tone={kpis.successRate === null ? 'neutral' : kpis.successRate >= 95 ? 'accent' : kpis.successRate >= 80 ? 'warn' : 'crit'} icon={Send} index={1} />
+          <StatTile label="Failing schedules" value={jobsError ? 'N/A' : kpis.failingSchedules} sub="Last delivery failed" tone={kpis.failingSchedules > 0 ? 'crit' : 'neutral'} icon={AlertTriangle} index={2} />
+          <StatTile label="Next run" value={kpis.nextRun ? formatNextRun(kpis.nextRun.at, td) : 'N/A'} sub={kpis.nextRun?.name || 'Nothing scheduled'} tone="info" icon={Clock} index={3} />
+        </div>
+      )}
 
       {/* Summary stats */}
       {!loading && schedules.length > 0 && (

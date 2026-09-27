@@ -56,7 +56,8 @@
     "complete": "Complete",
     "active": "Active",
     "over": "Over",
-    "pending": "Pending"
+    "pending": "Pending",
+    "noBudget": "No Budget"
   },
   "site": {
     "heading": "Site Budget Allocation",

@@ -16,7 +16,6 @@ describe('operational registers expose honest paging', () => {
 
   it.each([
     'UploadApprovals',
-    'WorkshopLive',
     'TyreScrapManagement',
     'DataIntakeHistory',
     'CustomData',
@@ -25,6 +24,12 @@ describe('operational registers expose honest paging', () => {
     const source = pageSource(page)
     expect(source).toContain('usePagedRows')
     expect(source).toContain('TablePagination')
+  })
+
+  it('WorkshopLive delay register pages the whole set inside EnterpriseTable', () => {
+    const source = pageSource('WorkshopLive')
+    expect(source).toContain('<EnterpriseTable')
+    expect(source).not.toContain('delaysPager.pageRows')
   })
 
   it('RFID registers page through PostgREST instead of silently capping rows', () => {

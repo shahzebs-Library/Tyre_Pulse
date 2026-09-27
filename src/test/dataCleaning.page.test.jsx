@@ -41,7 +41,7 @@ describe('Administration cleaning outcomes', () => {
   })
   it('undo uses the transaction and retains classification history', async () => {
     render(<DataCleaning />)
-    fireEvent.click(screen.getByRole('button', { name: 'Already Cleaned' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Already Cleaned' }))
     fireEvent.click(await screen.findByRole('button', { name: /Undo/ }))
     await screen.findByText('Classification reverted; history retained')
     expect(h.api.correctTyreRecords).toHaveBeenCalledWith(expect.any(Array), expect.objectContaining({ country: 'KSA', action: 'undo' }))

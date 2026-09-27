@@ -1633,7 +1633,7 @@ function ChecklistFillScreen() {
               <AppText variant="label" style={{ color: c.info.on, flex: 1, textAlign }}>
                 {t('modules.checklistDraft.unfinishedTitle')}
               </AppText>
-              <TouchableOpacity onPress={dismissOffer} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.close')} onPress={dismissOffer} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Ionicons name="close" size={18} color={c.info.on} />
               </TouchableOpacity>
             </View>
@@ -1699,7 +1699,7 @@ function ChecklistFillScreen() {
                   ? `${t('modules.checklistDraft.restoredPartial')} ${restoredNotice.dropped} ${t('modules.checklistDraft.photosLost')}`
                   : t('modules.checklistDraft.restoredOk')}
               </AppText>
-              <TouchableOpacity onPress={() => setRestoredNotice(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.close')} onPress={() => setRestoredNotice(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Ionicons
                   name="close"
                   size={18}
@@ -1779,7 +1779,7 @@ function ChecklistFillScreen() {
                   autoCorrect={false}
                 />
                 {assetQuery.length > 0 && (
-                  <TouchableOpacity onPress={() => setAssetQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.clearSearch')} onPress={() => setAssetQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                     <Ionicons name="close-circle" size={16} color={c.textMuted} />
                   </TouchableOpacity>
                 )}

@@ -139,7 +139,7 @@ function WorkOrdersScreen() {
   return (
     <Screen edges={['top']}>
       <View style={[styles.header, isRTL && styles.rowR]}>
-        <TouchableOpacity onPress={() => backTo(router, '/(app)')} style={styles.backBtn}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.back')} onPress={() => backTo(router, '/(app)')} style={styles.backBtn}>
           <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={theme.color.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
@@ -147,7 +147,7 @@ function WorkOrdersScreen() {
           <AppText variant="caption" color="muted" style={{ textAlign }}>{openCount} {t('modules.workOrders.active')}</AppText>
         </View>
         {mayEdit && (
-          <TouchableOpacity style={styles.newBtn} onPress={() => setShowForm(true)}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.add')} style={styles.newBtn} onPress={() => setShowForm(true)}>
             <Ionicons name="add" size={20} color={theme.color.onPrimary} />
           </TouchableOpacity>
         )}
@@ -208,7 +208,7 @@ function WorkOrdersScreen() {
           <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
             <View style={[styles.sheetHead, isRTL && styles.rowR]}>
               <AppText variant="h3">{t('modules.workOrders.new')}</AppText>
-              <TouchableOpacity onPress={() => setShowForm(false)}><Ionicons name="close" size={24} color={theme.color.textMuted} /></TouchableOpacity>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.close')} onPress={() => setShowForm(false)}><Ionicons name="close" size={24} color={theme.color.textMuted} /></TouchableOpacity>
             </View>
             <ScrollView keyboardShouldPersistTaps="handled">
               <AppText style={styles.label}>{t('modules.common.asset')}</AppText>

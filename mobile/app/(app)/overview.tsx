@@ -248,7 +248,7 @@ function OverviewScreen() {
 
   const header = (
     <View style={[s.header, isRTL && s.rowReverse]}>
-      <TouchableOpacity onPress={() => backTo(router, '/(app)')} style={s.backBtn} activeOpacity={0.7}>
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.back')} onPress={() => backTo(router, '/(app)')} style={s.backBtn} activeOpacity={0.7}>
         <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={c.text} />
       </TouchableOpacity>
       <View style={{ flex: 1 }}>

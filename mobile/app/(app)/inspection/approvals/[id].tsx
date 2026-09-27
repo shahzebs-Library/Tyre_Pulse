@@ -158,7 +158,7 @@ function InspectionApprovalReviewScreen() {
 
   const nav = (title: string) => (
     <View style={[styles.nav, isRTL && styles.rowR]}>
-      <TouchableOpacity onPress={goBack} style={styles.navBack}>
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.back')} onPress={goBack} style={styles.navBack}>
         <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={c.text} />
       </TouchableOpacity>
       <Text style={[styles.navTitle, { textAlign }]} numberOfLines={1}>{title}</Text>

@@ -74,7 +74,7 @@ export default function TyreDetailModal({ visible, position, data, onChange, onC
                 </Text>
               </View>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn} hitSlop={8}>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.close')} onPress={onClose} style={styles.closeBtn} hitSlop={8}>
               <Ionicons name="close" size={22} color={theme.color.textSecondary} />
             </TouchableOpacity>
           </View>

@@ -158,7 +158,7 @@ function AlertsScreen() {
   return (
     <Screen edges={['top']}>
       <View style={[s.header, isRTL && s.rowR]}>
-        <TouchableOpacity onPress={() => backTo(router, '/(app)')} style={s.backBtn} activeOpacity={0.7}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.back')} onPress={() => backTo(router, '/(app)')} style={s.backBtn} activeOpacity={0.7}>
           <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={theme.color.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>

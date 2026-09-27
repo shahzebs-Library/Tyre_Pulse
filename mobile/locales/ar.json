@@ -1846,5 +1846,41 @@
     "replaceSaved": "استبدل توقيعي المحفوظ بهذا التوقيع",
     "remembered": "تم الحفظ. سيتم ملؤه في المرة القادمة.",
     "notRemembered": "تعذر حفظه للمرة القادمة. لا يؤثر ذلك على هذه الموافقة."
+  },
+  "a11y": {
+    "back": "رجوع",
+    "close": "إغلاق",
+    "clear": "مسح",
+    "clearSearch": "مسح البحث",
+    "delete": "حذف",
+    "exportPdf": "تصدير PDF",
+    "send": "إرسال",
+    "add": "إضافة",
+    "edit": "تعديل",
+    "clearChat": "مسح المحادثة",
+    "torch": "تشغيل أو إيقاف الكشاف",
+    "search": "بحث",
+    "decrease": "إنقاص الكمية",
+    "increase": "زيادة الكمية",
+    "resolve": "تحديد كمحلول",
+    "call": "اتصال",
+    "email": "إرسال بريد إلكتروني",
+    "showPassword": "إظهار كلمة المرور",
+    "hidePassword": "إخفاء كلمة المرور",
+    "rateStar": "تقييم",
+    "removePhoto": "إزالة الصورة",
+    "previousPhoto": "الصورة السابقة",
+    "nextPhoto": "الصورة التالية"
+  },
+  "photoCapture": {
+    "addPhoto": "إضافة صورة",
+    "takePhoto": "التقاط صورة",
+    "chooseFromGallery": "اختيار من المعرض",
+    "cameraNeededTitle": "يلزم الوصول إلى الكاميرا",
+    "cameraNeededMsg": "فعّل الوصول إلى الكاميرا لإرفاق الصور.",
+    "photosNeededTitle": "يلزم الوصول إلى الصور",
+    "photosNeededMsg": "فعّل الوصول إلى مكتبة الصور لإرفاق الصور.",
+    "maxPhotosTitle": "الحد الأقصى للصور",
+    "maxPhotosMsg": "حتى {max} صور."
   }
 }

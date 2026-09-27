@@ -99,7 +99,7 @@ function InspectionDetailScreen() {
         {/* Fallback is History, this screen's REAL parent: History is the only
             place in the app that opens an inspection detail (notificationRoute
             never returns this route). Home would have been a guess. */}
-        <TouchableOpacity onPress={() => backTo(router, '/(app)/history')} style={styles.backBtn}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.back')} onPress={() => backTo(router, '/(app)/history')} style={styles.backBtn}>
           <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={theme.color.text} />
         </TouchableOpacity>
         <Text style={[styles.title, { textAlign }]} numberOfLines={1}>{t('modules.inspectionDetail.title')}</Text>

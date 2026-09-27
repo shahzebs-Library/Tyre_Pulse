@@ -285,7 +285,7 @@ function AccidentDashboardScreen() {
                 clearButtonMode="while-editing"
               />
               {search.length > 0 && (
-                <TouchableOpacity onPress={() => setSearch('')}>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.clearSearch')} onPress={() => setSearch('')}>
                   <Ionicons name="close-circle" size={16} color={c.textMuted} />
                 </TouchableOpacity>
               )}

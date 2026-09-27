@@ -230,7 +230,7 @@ function AccidentDetailScreen() {
     <Screen>
       {/* -- Header -------------------------------------------------------- */}
       <View style={[styles.header, isRTL && { flexDirection: 'row-reverse' }]}>
-        <TouchableOpacity style={styles.iconBtn} onPress={goBack}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.back')} style={styles.iconBtn} onPress={goBack}>
           <Ionicons name={isRTL ? 'chevron-forward' : 'chevron-back'} size={22} color={c.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
@@ -253,7 +253,7 @@ function AccidentDetailScreen() {
         </View>
 
         {/* Export PDF */}
-        <TouchableOpacity style={[styles.iconBtn, { backgroundColor: c.danger.soft }]} onPress={handleExportPdf} disabled={exporting}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.exportPdf')} style={[styles.iconBtn, { backgroundColor: c.danger.soft }]} onPress={handleExportPdf} disabled={exporting}>
           {exporting
             ? <ActivityIndicator size="small" color={c.danger.base} />
             : <Ionicons name="share-outline" size={18} color={c.danger.base} />}
@@ -261,7 +261,7 @@ function AccidentDetailScreen() {
 
         {/* Admin: delete button */}
         {canDelete && (
-          <TouchableOpacity
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.delete')}
             style={[styles.iconBtn, { backgroundColor: c.danger.soft }]}
             onPress={confirmDelete}
             disabled={deleting}
@@ -555,7 +555,7 @@ function AccidentDetailScreen() {
         onRequestClose={() => setLightboxIndex(null)}
       >
         <View style={styles.lightbox}>
-          <TouchableOpacity style={styles.lightboxClose} onPress={() => setLightboxIndex(null)}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.close')} style={styles.lightboxClose} onPress={() => setLightboxIndex(null)}>
             <Ionicons name="close-circle" size={36} color="#fff" />
           </TouchableOpacity>
           {lightboxIndex !== null && (
@@ -568,7 +568,7 @@ function AccidentDetailScreen() {
               <AppText style={styles.lightboxCounter}>{lightboxIndex + 1} / {photos.length}</AppText>
               <View style={styles.lightboxNav}>
                 {lightboxIndex > 0 && (
-                  <TouchableOpacity
+                  <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.previousPhoto')}
                     style={styles.lightboxNavBtn}
                     onPress={() => setLightboxIndex(i => (i ?? 1) - 1)}
                   >
@@ -578,7 +578,7 @@ function AccidentDetailScreen() {
                   </TouchableOpacity>
                 )}
                 {lightboxIndex < photos.length - 1 && (
-                  <TouchableOpacity
+                  <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.nextPhoto')}
                     style={[styles.lightboxNavBtn, styles.lightboxNavRight]}
                     onPress={() => setLightboxIndex(i => (i ?? 0) + 1)}
                   >

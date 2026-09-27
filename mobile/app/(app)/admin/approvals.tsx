@@ -354,7 +354,7 @@ export default function AdminApprovalsScreen() {
       <StatusBar barStyle="light-content" />
 
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => backTo(router, '/(app)/admin')}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back" style={styles.backBtn} onPress={() => backTo(router, '/(app)/admin')}>
           <Ionicons name="chevron-back" size={22} color="#fff" />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>

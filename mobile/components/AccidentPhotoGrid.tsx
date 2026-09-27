@@ -343,7 +343,7 @@ export default function AccidentPhotoGrid({ entries, onChange, onUploadingChange
               )}
 
               {!busy && (
-                <TouchableOpacity style={styles.deleteBtn} onPress={() => removeEntry(entry)}
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.removePhoto')} style={styles.deleteBtn} onPress={() => removeEntry(entry)}
                   hitSlop={{ top: 6, right: 6, bottom: 6, left: 6 }}>
                   <Ionicons name="close-circle" size={22} color="#fff" />
                 </TouchableOpacity>

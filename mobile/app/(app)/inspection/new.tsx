@@ -648,7 +648,7 @@ function NewInspectionScreen() {
         <StatusBar barStyle={statusBarStyle} />
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={[styles.nav, isRTL && styles.navRTL]}>
-            <TouchableOpacity onPress={() => backTo(router, '/(app)')} style={styles.navBack}>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.back')} onPress={() => backTo(router, '/(app)')} style={styles.navBack}>
               <Ionicons name={backIcon} size={22} color={theme.color.text} />
             </TouchableOpacity>
             <Text style={styles.navTitle}>{t('inspection.navTitle')}</Text>
@@ -722,7 +722,7 @@ function NewInspectionScreen() {
                         returnKeyType="search"
                       />
                       {vehicleQuery.length > 0 && (
-                        <TouchableOpacity onPress={() => setVehicleQuery('')}>
+                        <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.clearSearch')} onPress={() => setVehicleQuery('')}>
                           <Ionicons name="close-circle" size={18} color={theme.color.borderStrong} />
                         </TouchableOpacity>
                       )}
@@ -1034,7 +1034,7 @@ function NewInspectionScreen() {
             <View style={styles.pickerHandle} />
             <View style={[styles.pickerHeader, isRTL && styles.navRTL]}>
               <Text style={styles.pickerTitle}>{t('inspection.sitePickerTitle')}</Text>
-              <TouchableOpacity onPress={() => setSitePickerOpen(false)} hitSlop={8}>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.close')} onPress={() => setSitePickerOpen(false)} hitSlop={8}>
                 <Ionicons name="close" size={22} color={theme.color.textMuted} />
               </TouchableOpacity>
             </View>
@@ -1050,7 +1050,7 @@ function NewInspectionScreen() {
                 autoCorrect={false}
               />
               {siteSearch.length > 0 && (
-                <TouchableOpacity onPress={() => setSiteSearch('')}>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.clearSearch')} onPress={() => setSiteSearch('')}>
                   <Ionicons name="close-circle" size={18} color={theme.color.borderStrong} />
                 </TouchableOpacity>
               )}
@@ -1121,7 +1121,7 @@ function NewInspectionScreen() {
       <SafeAreaView style={styles.safe}>
         <StatusBar barStyle={statusBarStyle} />
         <View style={[styles.nav, isRTL && styles.navRTL]}>
-          <TouchableOpacity onPress={() => setStep('header')} style={styles.navBack}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.back')} onPress={() => setStep('header')} style={styles.navBack}>
             <Ionicons name={backIcon} size={22} color={theme.color.text} />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
@@ -1278,7 +1278,7 @@ function NewInspectionScreen() {
         <StatusBar barStyle={statusBarStyle} />
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={[styles.nav, isRTL && styles.navRTL]}>
-            <TouchableOpacity onPress={() => setStep('tyres')} style={styles.navBack}>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.back')} onPress={() => setStep('tyres')} style={styles.navBack}>
               <Ionicons name={backIcon} size={22} color={theme.color.text} />
             </TouchableOpacity>
             <View style={{ flex: 1 }}>

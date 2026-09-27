@@ -85,7 +85,7 @@ function ReportIssueScreen() {
     <SafeAreaView style={s.safe}>
       <StatusBar barStyle={theme.mode === 'dark' ? 'light-content' : 'dark-content'} />
       <View style={[s.header, isRTL && s.rowR]}>
-        <TouchableOpacity onPress={() => backTo(router, '/(app)')} style={s.backBtn}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.back')} onPress={() => backTo(router, '/(app)')} style={s.backBtn}>
           <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={theme.mode === 'dark' ? theme.color.text : '#0f172a'} />
         </TouchableOpacity>
         <Text style={[s.title, { textAlign }]}>{t('modules.reportIssue.title')}</Text>

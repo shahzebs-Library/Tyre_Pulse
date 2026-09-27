@@ -299,7 +299,7 @@ export default function ChecklistItemSheet({
         return (
           <View style={styles.starRow}>
             {[1, 2, 3, 4, 5].map(star => (
-              <TouchableOpacity
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel={`${t('a11y.rateStar')} ${star}`}
                 key={star}
                 onPress={() => onChange(n === star ? 0 : star)}
                 hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}

@@ -284,7 +284,7 @@ function HistoryScreen() {
           returnKeyType="search"
         />
         {query.length > 0 && (
-          <TouchableOpacity onPress={() => setQuery('')}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.clearSearch')} onPress={() => setQuery('')}>
             <Ionicons name="close-circle" size={18} color={theme.color.textMuted} />
           </TouchableOpacity>
         )}

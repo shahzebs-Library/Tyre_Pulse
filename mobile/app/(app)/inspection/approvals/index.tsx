@@ -28,7 +28,7 @@ export default withModuleGuard(InspectionApprovalsScreen, 'approvals')
 
 function InspectionApprovalsScreen() {
   const { profile, canAccess } = useAuth()
-  const { isRTL } = useLanguage()
+  const { isRTL, t } = useLanguage()
   const { theme } = useTheme()
   const styles = useMemo(() => makeStyles(theme), [theme])
   const c = theme.color
@@ -75,7 +75,7 @@ function InspectionApprovalsScreen() {
 
   const header = (
     <View style={[styles.header, isRTL && styles.rowR]}>
-      <TouchableOpacity onPress={goBack} style={styles.backBtn}>
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.back')} onPress={goBack} style={styles.backBtn}>
         <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={c.text} />
       </TouchableOpacity>
       <View style={{ flex: 1 }}>

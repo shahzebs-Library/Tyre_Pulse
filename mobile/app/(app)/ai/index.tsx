@@ -519,7 +519,7 @@ function AICommandCenter() {
           </View>
         </View>
         {!isEmpty && (
-          <TouchableOpacity onPress={clearChat} style={ds.clearBtn}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Clear conversation" onPress={clearChat} style={ds.clearBtn}>
             <Ionicons name="refresh-outline" size={18} color="#7c3aed" />
           </TouchableOpacity>
         )}
@@ -610,7 +610,7 @@ function AICommandCenter() {
               onSubmitEditing={() => send()}
               editable={!thinking}
             />
-            <TouchableOpacity
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Send"
               style={[ds.sendBtn, (!input.trim() || thinking) && ds.sendBtnDisabled]}
               onPress={() => send()}
               disabled={!input.trim() || thinking}

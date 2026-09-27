@@ -220,7 +220,7 @@ function MaintenanceScreen() {
     <Screen>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.back')}
           onPress={() => backTo(router, '/(app)')}
           style={styles.backBtn}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -331,7 +331,7 @@ function MaintenanceScreen() {
               <AppText variant="h3" numberOfLines={1} style={styles.modalTitle}>
                 {t('modules.pm.recordService')}
               </AppText>
-              <TouchableOpacity onPress={() => !saving && setTarget(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.close')} onPress={() => !saving && setTarget(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Ionicons name="close" size={24} color={theme.color.textMuted} />
               </TouchableOpacity>
             </View>

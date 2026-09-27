@@ -451,7 +451,7 @@ function ChecklistsScreen() {
   return (
     <Screen>
       <View style={[styles.header, isRTL && styles.rowR]}>
-        <TouchableOpacity onPress={() => backTo(router, '/(app)')} style={styles.backBtn}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.back')} onPress={() => backTo(router, '/(app)')} style={styles.backBtn}>
           <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={theme.color.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
@@ -659,7 +659,7 @@ function TyreManChecklistFlow() {
   return (
     <Screen>
       <View style={[styles.header, isRTL && styles.rowR]}>
-        <TouchableOpacity
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.back')}
           onPress={() => (selectedAsset ? setSelectedAsset(null) : backTo(router, '/(app)'))}
           style={styles.backBtn}
         >
@@ -702,7 +702,7 @@ function TyreManChecklistFlow() {
               returnKeyType="search"
             />
             {search.length > 0 && (
-              <TouchableOpacity onPress={() => setSearch('')} hitSlop={8}>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.clearSearch')} onPress={() => setSearch('')} hitSlop={8}>
                 <Ionicons name="close-circle" size={18} color={theme.color.textMuted} />
               </TouchableOpacity>
             )}

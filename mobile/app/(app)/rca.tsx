@@ -120,7 +120,7 @@ function RcaScreen() {
   return (
     <Screen>
       <View style={[styles.header, isRTL && styles.rowR]}>
-        <TouchableOpacity onPress={() => backTo(router, '/(app)')} style={styles.backBtn}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.back')} onPress={() => backTo(router, '/(app)')} style={styles.backBtn}>
           <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={c.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
@@ -128,7 +128,7 @@ function RcaScreen() {
           <AppText variant="caption" color="secondary" style={{ textAlign, marginTop: 2 }}>{rows.length} {t('modules.rca.records')}</AppText>
         </View>
         {mayCreate && (
-          <TouchableOpacity style={styles.newBtn} onPress={() => setShowForm(true)}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.add')} style={styles.newBtn} onPress={() => setShowForm(true)}>
             <Ionicons name="add" size={20} color={c.onPrimary} />
           </TouchableOpacity>
         )}
@@ -168,7 +168,7 @@ function RcaScreen() {
           <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
             <View style={[styles.sheetHead, isRTL && styles.rowR]}>
               <AppText variant="h3">{t('modules.rca.new')}</AppText>
-              <TouchableOpacity onPress={() => setShowForm(false)}><Ionicons name="close" size={24} color={c.textSecondary} /></TouchableOpacity>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.close')} onPress={() => setShowForm(false)}><Ionicons name="close" size={24} color={c.textSecondary} /></TouchableOpacity>
             </View>
             <ScrollView keyboardShouldPersistTaps="handled">
               <View style={styles.row2}>

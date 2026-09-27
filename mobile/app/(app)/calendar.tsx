@@ -186,7 +186,7 @@ function CalendarScreen() {
   return (
     <Screen edges={['top']}>
       <View style={[styles.header, isRTL && styles.rowR]}>
-        <TouchableOpacity onPress={() => backTo(router, '/(app)')} style={styles.backBtn}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.back')} onPress={() => backTo(router, '/(app)')} style={styles.backBtn}>
           <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={theme.color.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>

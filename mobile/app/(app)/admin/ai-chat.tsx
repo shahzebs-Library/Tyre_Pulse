@@ -167,10 +167,10 @@ export default function AiChatScreen() {
       if (error) {
         // Surface the function's real error (e.g. missing API key)
         let detail = toUserMessage(error)
-        try { const body = await (error as any).context?.json?.(); if (body?.error) detail = body.error } catch { /* keep */ }
+        try { const body = await (error as any).context?.json?.(); if (body?.error) detail = toUserMessage(String(body.error), detail) } catch { /* keep */ }
         reply = `AI unavailable: ${detail}`
       } else {
-        reply = (data as any)?.error ? `AI unavailable: ${(data as any).error}` : ((data as any)?.content ?? 'No response.')
+        reply = (data as any)?.error ? `AI unavailable: ${toUserMessage(String((data as any).error))}` : ((data as any)?.content ?? 'No response.')
       }
       setMessages(prev => [
         ...prev.slice(0, -1),
@@ -199,7 +199,7 @@ export default function AiChatScreen() {
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => backTo(router, '/(app)/admin')}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back" style={styles.backBtn} onPress={() => backTo(router, '/(app)/admin')}>
           <Ionicons name="chevron-back" size={22} color="#fff" />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
@@ -207,7 +207,7 @@ export default function AiChatScreen() {
           <Text style={styles.headerSub}>{cfg.label} Agent active</Text>
         </View>
         {messages.length > 0 && (
-          <TouchableOpacity onPress={clearChat} style={styles.clearBtn}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Clear conversation" onPress={clearChat} style={styles.clearBtn}>
             <Ionicons name="trash-outline" size={16} color="rgba(255,255,255,0.7)" />
           </TouchableOpacity>
         )}
@@ -298,7 +298,7 @@ export default function AiChatScreen() {
             returnKeyType="send"
             blurOnSubmit
           />
-          <TouchableOpacity
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Send"
             style={[styles.sendBtn, { backgroundColor: cfg.color }, (!input.trim() || sending) && styles.sendBtnDisabled]}
             onPress={() => send()}
             disabled={!input.trim() || sending}

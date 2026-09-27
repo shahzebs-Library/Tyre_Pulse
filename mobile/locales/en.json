@@ -1846,5 +1846,41 @@
     "replaceSaved": "Replace my saved signature with this one",
     "remembered": "Saved. It will be filled in next time.",
     "notRemembered": "Could not save it for next time. This approval is not affected."
+  },
+  "a11y": {
+    "back": "Go back",
+    "close": "Close",
+    "clear": "Clear",
+    "clearSearch": "Clear search",
+    "delete": "Delete",
+    "exportPdf": "Export PDF",
+    "send": "Send",
+    "add": "Add",
+    "edit": "Edit",
+    "clearChat": "Clear conversation",
+    "torch": "Toggle flashlight",
+    "search": "Search",
+    "decrease": "Decrease quantity",
+    "increase": "Increase quantity",
+    "resolve": "Mark as resolved",
+    "call": "Call",
+    "email": "Send email",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "rateStar": "Rate",
+    "removePhoto": "Remove photo",
+    "previousPhoto": "Previous photo",
+    "nextPhoto": "Next photo"
+  },
+  "photoCapture": {
+    "addPhoto": "Add Photo",
+    "takePhoto": "Take Photo",
+    "chooseFromGallery": "Choose from Gallery",
+    "cameraNeededTitle": "Camera needed",
+    "cameraNeededMsg": "Enable camera access to attach photos.",
+    "photosNeededTitle": "Photos needed",
+    "photosNeededMsg": "Enable photo library access to attach photos.",
+    "maxPhotosTitle": "Maximum photos",
+    "maxPhotosMsg": "Up to {max} photos."
   }
 }

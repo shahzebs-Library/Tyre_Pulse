@@ -73,7 +73,7 @@ function useStyles() {
 
 export default function AccidentClaimsPanel({ accident, onChanged }: Props) {
   const { profile } = useAuth()
-  const { isRTL } = useLanguage()
+  const { isRTL, t } = useLanguage()
   const { theme } = useTheme()
   const c = theme.color
   const styles = useStyles()
@@ -353,7 +353,7 @@ export default function AccidentClaimsPanel({ accident, onChanged }: Props) {
                     </View>
                   </View>
                   {canManage && (
-                    <TouchableOpacity onPress={() => deletePart(p.id)} hitSlop={8} style={{ marginLeft: spacing.xs }}>
+                    <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.delete')} onPress={() => deletePart(p.id)} hitSlop={8} style={{ marginLeft: spacing.xs }}>
                       <Ionicons name="trash-outline" size={16} color={c.textMuted} />
                     </TouchableOpacity>
                   )}
@@ -387,7 +387,7 @@ export default function AccidentClaimsPanel({ accident, onChanged }: Props) {
               placeholderTextColor={c.textMuted}
               multiline
             />
-            <TouchableOpacity
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.send')}
               style={[styles.remarkSend, { backgroundColor: c.danger.base }, !newRemark.trim() && { opacity: 0.4 }]}
               onPress={addRemark}
               disabled={!newRemark.trim() || busy}

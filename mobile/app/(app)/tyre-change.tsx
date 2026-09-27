@@ -83,7 +83,7 @@ function TyreChangeScreen() {
   return (
     <Screen padded={false}>
       <View style={[styles.header, isRTL && styles.rowR]}>
-        <TouchableOpacity onPress={() => backTo(router, '/(app)')} style={styles.backBtn}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.back')} onPress={() => backTo(router, '/(app)')} style={styles.backBtn}>
           <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={theme.color.text} />
         </TouchableOpacity>
         <Text style={[styles.title, { textAlign }]}>{t('modules.tyreChange.title')}</Text>

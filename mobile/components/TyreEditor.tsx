@@ -158,7 +158,7 @@ export default function TyreEditor({ data, onChange }: Props) {
             autoCapitalize="characters"
             returnKeyType="search"
           />
-          <TouchableOpacity
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.search')}
             style={styles.lookupBtn}
             onPress={runSerialLookup}
             disabled={lookupState === 'searching' || !data.serial_number.trim()}

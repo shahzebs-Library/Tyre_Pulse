@@ -196,7 +196,7 @@ function SerialSearchScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {/* Nav header */}
         <View style={[s.nav, isRTL && s.rowR]}>
-          <TouchableOpacity onPress={() => backTo(router, '/(app)')} style={s.navBack}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.back')} onPress={() => backTo(router, '/(app)')} style={s.navBack}>
             <Ionicons name={backIcon} size={22} color={theme.mode === 'dark' ? theme.color.text : '#0f172a'} />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
@@ -229,12 +229,12 @@ function SerialSearchScreen() {
                   onSubmitEditing={() => runSearch()}
                 />
                 {query.length > 0 && (
-                  <TouchableOpacity onPress={clearSearch} hitSlop={8}>
+                  <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.clearSearch')} onPress={clearSearch} hitSlop={8}>
                     <Ionicons name="close-circle-outline" size={18} color={theme.color.textMuted} />
                   </TouchableOpacity>
                 )}
               </View>
-              <TouchableOpacity
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.search')}
                 style={[s.searchBtn, !canSearch && s.searchBtnDisabled]}
                 onPress={() => runSearch()}
                 disabled={!canSearch}
@@ -394,7 +394,7 @@ function SerialSearchScreen() {
             <View style={s.modalCard}>
               <View style={[s.modalHead, isRTL && s.rowR]}>
                 <Text style={[s.modalTitle, { textAlign }]}>{t('modules.serialSearch.scrapModalTitle')}</Text>
-                <TouchableOpacity onPress={() => !scrapBusy && setScrapModal(false)} hitSlop={8}>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.close')} onPress={() => !scrapBusy && setScrapModal(false)} hitSlop={8}>
                   <Ionicons name="close" size={22} color={theme.color.textSecondary} />
                 </TouchableOpacity>
               </View>

@@ -18,6 +18,7 @@ import {
 import { Ionicons } from '@expo/vector-icons'
 import { uploadModulePhoto } from '../lib/photoUpload'
 import { safeImageSrc } from '../lib/safeUrl'
+import { useLanguage } from '../contexts/LanguageContext'
 import * as ImagePicker from 'expo-image-picker'
 
 interface Props {
@@ -32,7 +33,10 @@ interface Props {
 
 const isPending = (u?: string) => !!u && u.startsWith('file://')
 
-export default function PhotoCapture({ value, onChange, module = 'module', tint = '#16a34a', max = 6, label = 'Add Photo' }: Props) {
+export default function PhotoCapture({ value, onChange, module = 'module', tint = '#16a34a', max = 6, label }: Props) {
+  const { t } = useLanguage()
+  // The caller's label wins; otherwise the localized default.
+  const addLabel = label || t('photoCapture.addPhoto')
   // local preview URIs, parallel to `value`
   const [localUris, setLocalUris] = useState<string[]>([])
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null)
@@ -67,7 +71,7 @@ export default function PhotoCapture({ value, onChange, module = 'module', tint 
 
   async function takePhoto() {
     const { status } = await ImagePicker.requestCameraPermissionsAsync()
-    if (status !== 'granted') { Alert.alert('Camera needed', 'Enable camera access to attach photos.'); return }
+    if (status !== 'granted') { Alert.alert(t('photoCapture.cameraNeededTitle'), t('photoCapture.cameraNeededMsg')); return }
     // quality 0.55 keeps photos legible while roughly halving file size vs 0.7.
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.55, allowsEditing: false,
@@ -78,7 +82,7 @@ export default function PhotoCapture({ value, onChange, module = 'module', tint 
 
   async function pickFromGallery() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
-    if (status !== 'granted') { Alert.alert('Photos needed', 'Enable photo library access to attach photos.'); return }
+    if (status !== 'granted') { Alert.alert(t('photoCapture.photosNeededTitle'), t('photoCapture.photosNeededMsg')); return }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.55,
       allowsMultipleSelection: true, selectionLimit: Math.max(1, max - value.length),
@@ -88,11 +92,11 @@ export default function PhotoCapture({ value, onChange, module = 'module', tint 
   }
 
   function addPhoto() {
-    if (value.length >= max) { Alert.alert('Maximum photos', `Up to ${max} photos.`); return }
-    Alert.alert(label, undefined, [
-      { text: 'Take Photo', onPress: takePhoto },
-      { text: 'Choose from Gallery', onPress: pickFromGallery },
-      { text: 'Cancel', style: 'cancel' },
+    if (value.length >= max) { Alert.alert(t('photoCapture.maxPhotosTitle'), t('photoCapture.maxPhotosMsg').replace('{max}', String(max))); return }
+    Alert.alert(addLabel, undefined, [
+      { text: t('photoCapture.takePhoto'), onPress: takePhoto },
+      { text: t('photoCapture.chooseFromGallery'), onPress: pickFromGallery },
+      { text: t('common.cancel'), style: 'cancel' },
     ])
   }
 
@@ -116,16 +120,16 @@ export default function PhotoCapture({ value, onChange, module = 'module', tint 
             <View style={styles.pending}><Ionicons name="cloud-offline" size={12} color="#fff" /></View>
           ) : null}
           {uploadingIndex !== index && (
-            <TouchableOpacity style={styles.del} onPress={() => remove(index)} hitSlop={{ top: 4, right: 4, bottom: 4, left: 4 }}>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.removePhoto')} style={styles.del} onPress={() => remove(index)} hitSlop={{ top: 4, right: 4, bottom: 4, left: 4 }}>
               <Ionicons name="close-circle" size={20} color="#fff" />
             </TouchableOpacity>
           )}
         </View>
       ))}
       {value.length < max && (
-        <TouchableOpacity style={[styles.add, { borderColor: tint + '55', backgroundColor: tint + '0d' }]} onPress={addPhoto} activeOpacity={0.7}>
+        <TouchableOpacity style={[styles.add, { borderColor: tint + '55', backgroundColor: tint + '0d' }]} onPress={addPhoto} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={addLabel}>
           <Ionicons name="camera-outline" size={24} color={tint} />
-          <Text style={[styles.addText, { color: tint }]}>{label}</Text>
+          <Text style={[styles.addText, { color: tint }]}>{addLabel}</Text>
         </TouchableOpacity>
       )}
     </View>

@@ -113,7 +113,7 @@ function TeamScreen() {
   return (
     <Screen edges={['top']}>
       <View style={[s.header, isRTL && s.rowR]}>
-        <TouchableOpacity onPress={() => backTo(router, '/(app)')} style={s.backBtn} activeOpacity={0.7}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.back')} onPress={() => backTo(router, '/(app)')} style={s.backBtn} activeOpacity={0.7}>
           <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={theme.color.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
@@ -153,7 +153,7 @@ function TeamScreen() {
           returnKeyType="search"
         />
         {query.length > 0 && (
-          <TouchableOpacity onPress={() => setQuery('')}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.clearSearch')} onPress={() => setQuery('')}>
             <Ionicons name="close-circle" size={18} color={theme.color.textMuted} />
           </TouchableOpacity>
         )}
@@ -202,12 +202,12 @@ function TeamScreen() {
                   </View>
                   <View style={[s.actions, isRTL && s.rowR]}>
                     {item.phone ? (
-                      <TouchableOpacity style={[s.actBtn, { backgroundColor: theme.color.success.soft }]} onPress={() => Linking.openURL(`tel:${item.phone}`)} activeOpacity={0.7}>
+                      <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.call')} style={[s.actBtn, { backgroundColor: theme.color.success.soft }]} onPress={() => Linking.openURL(`tel:${item.phone}`)} activeOpacity={0.7}>
                         <Ionicons name="call" size={18} color={theme.color.success.base} />
                       </TouchableOpacity>
                     ) : null}
                     {item.email ? (
-                      <TouchableOpacity style={[s.actBtn, { backgroundColor: theme.color.info.soft }]} onPress={() => Linking.openURL(`mailto:${item.email}`)} activeOpacity={0.7}>
+                      <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.email')} style={[s.actBtn, { backgroundColor: theme.color.info.soft }]} onPress={() => Linking.openURL(`mailto:${item.email}`)} activeOpacity={0.7}>
                         <Ionicons name="mail" size={18} color={theme.color.info.base} />
                       </TouchableOpacity>
                     ) : null}

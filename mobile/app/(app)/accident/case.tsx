@@ -95,7 +95,7 @@ function AccidentCaseScreen() {
 
   const header = (
     <View style={[styles.header, isRTL && { flexDirection: 'row-reverse' }]}>
-      <TouchableOpacity style={styles.iconBtn} onPress={goBack}>
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.back')} style={styles.iconBtn} onPress={goBack}>
         <Ionicons name={isRTL ? 'chevron-forward' : 'chevron-back'} size={22} color={c.text} />
       </TouchableOpacity>
       <View style={{ flex: 1 }}>

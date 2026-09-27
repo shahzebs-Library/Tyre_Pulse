@@ -171,7 +171,7 @@ export default function AccessConsoleScreen() {
             <View style={[styles.banner, { backgroundColor: c.danger.soft, borderColor: c.danger.base }]}>
               <Ionicons name="warning-outline" size={16} color={c.danger.base} />
               <AppText variant="caption" style={{ color: c.danger.on, flex: 1 }}>{banner}</AppText>
-              <TouchableOpacity onPress={() => setBanner(null)} hitSlop={8}>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close" onPress={() => setBanner(null)} hitSlop={8}>
                 <Ionicons name="close" size={16} color={c.danger.base} />
               </TouchableOpacity>
             </View>
@@ -323,7 +323,7 @@ function ScreenHeader({ title, subtitle, onBack }: { title: string; subtitle?: s
   return (
     <View style={[styles.header, { borderBottomColor: c.border }]}>
       {onBack ? (
-        <TouchableOpacity
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back"
           onPress={onBack}
           hitSlop={10}
           style={[styles.backBtn, { backgroundColor: c.surfaceAlt }]}

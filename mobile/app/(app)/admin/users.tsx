@@ -151,7 +151,7 @@ export default function UserManagementScreen() {
         throw rpcErr
       }
       if (data && (data as any).success === false) {
-        Alert.alert('Not allowed', (data as any).error || 'That action could not be completed.')
+        Alert.alert('Not allowed', toUserMessage((data as any).error, 'That action could not be completed.'))
         return
       }
       // Reflect the change locally (matches the server-side effect).
@@ -335,7 +335,7 @@ export default function UserManagementScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => backTo(router, '/(app)/admin')}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back" style={styles.backBtn} onPress={() => backTo(router, '/(app)/admin')}>
           <Ionicons name="chevron-back" size={22} color="#fff" />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>

@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { ReferenceSource } from '../lib/checklistFields'
 import { listReferenceOptions } from '../lib/checklists'
 import { toUserMessage } from '../lib/safeError'
+import { useLanguage } from '../contexts/LanguageContext'
 
 interface Props {
   source: ReferenceSource
@@ -40,6 +41,7 @@ export default function ChecklistReferencePicker({
 }: Props) {
   const meta = SOURCE_META[source] ?? SOURCE_META.asset
   const insets = useSafeAreaInsets()
+  const { t } = useLanguage()
 
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -150,7 +152,7 @@ export default function ChecklistReferencePicker({
               autoCapitalize="none"
             />
             {search.length > 0 && (
-              <TouchableOpacity onPress={() => setSearch('')} hitSlop={8}>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.clearSearch')} onPress={() => setSearch('')} hitSlop={8}>
                 <Ionicons name="close-circle" size={18} color="#cbd5e1" />
               </TouchableOpacity>
             )}

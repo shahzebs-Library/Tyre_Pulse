@@ -314,11 +314,11 @@ export default function SitesManagementScreen() {
 
       {/* Header */}
       <View style={s.header}>
-        <TouchableOpacity onPress={() => backTo(router, '/(app)/admin')} style={s.back}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back" onPress={() => backTo(router, '/(app)/admin')} style={s.back}>
           <Ionicons name="arrow-back" size={22} color="#0f172a" />
         </TouchableOpacity>
         <Text style={s.title}>Sites & Fleet</Text>
-        <TouchableOpacity
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Add"
           style={s.addBtn}
           onPress={tab === 'sites' ? openAddSite : openAddVehicle}
         >
@@ -389,10 +389,10 @@ export default function SitesManagementScreen() {
                     </Text>
                   </View>
                   {!site.active && <Text style={s.inactiveTag}>Inactive</Text>}
-                  <TouchableOpacity style={s.iconBtn} onPress={() => openEditSite(site)}>
+                  <TouchableOpacity accessibilityRole="button" accessibilityLabel="Edit" style={s.iconBtn} onPress={() => openEditSite(site)}>
                     <Ionicons name="create-outline" size={18} color="#64748b" />
                   </TouchableOpacity>
-                  <TouchableOpacity style={s.iconBtn} onPress={() => toggleSiteActive(site)}>
+                  <TouchableOpacity accessibilityRole="button" accessibilityLabel="Activate or deactivate" style={s.iconBtn} onPress={() => toggleSiteActive(site)}>
                     <Ionicons name={site.active ? 'eye-off-outline' : 'eye-outline'} size={18} color={site.active ? '#94a3b8' : '#16a34a'} />
                   </TouchableOpacity>
                 </View>
@@ -494,13 +494,13 @@ export default function SitesManagementScreen() {
                   </Text>
                 </View>
                 {!v.is_active && <Text style={s.inactiveTag}>Off</Text>}
-                <TouchableOpacity style={s.iconBtn} onPress={() => openEditVehicle(v)}>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Edit" style={s.iconBtn} onPress={() => openEditVehicle(v)}>
                   <Ionicons name="create-outline" size={18} color="#64748b" />
                 </TouchableOpacity>
-                <TouchableOpacity style={s.iconBtn} onPress={() => toggleVehicleActive(v)}>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Activate or deactivate" style={s.iconBtn} onPress={() => toggleVehicleActive(v)}>
                   <Ionicons name={v.is_active ? 'eye-off-outline' : 'eye-outline'} size={18} color={v.is_active ? '#94a3b8' : '#16a34a'} />
                 </TouchableOpacity>
-                <TouchableOpacity style={s.iconBtn} onPress={() => deleteVehicle(v)}>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Delete" style={s.iconBtn} onPress={() => deleteVehicle(v)}>
                   <Ionicons name="trash-outline" size={18} color="#ef4444" />
                 </TouchableOpacity>
               </View>
@@ -514,7 +514,7 @@ export default function SitesManagementScreen() {
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <SafeAreaView style={m.safe}>
             <View style={m.header}>
-              <TouchableOpacity onPress={() => setSiteModal(false)}>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close" onPress={() => setSiteModal(false)}>
                 <Ionicons name="close" size={24} color="#0f172a" />
               </TouchableOpacity>
               <Text style={m.title}>{editingSite ? 'Edit Site' : 'Add Site'}</Text>
@@ -550,7 +550,7 @@ export default function SitesManagementScreen() {
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <SafeAreaView style={m.safe}>
             <View style={m.header}>
-              <TouchableOpacity onPress={() => setVehicleModal(false)}>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close" onPress={() => setVehicleModal(false)}>
                 <Ionicons name="close" size={24} color="#0f172a" />
               </TouchableOpacity>
               <Text style={m.title}>{editingVehicle ? 'Edit Vehicle' : 'Add Vehicle'}</Text>

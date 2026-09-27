@@ -107,7 +107,7 @@ function ScannerScreen() {
           barStyle={theme.mode === 'dark' ? 'light-content' : 'dark-content'}
         />
         <View style={[styles.nav, isRTL && styles.navRTL]}>
-          <TouchableOpacity onPress={() => backTo(router, '/(app)')} style={styles.navBack}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.back')} onPress={() => backTo(router, '/(app)')} style={styles.navBack}>
             <Ionicons name={backIcon} size={22} color={theme.color.text} />
           </TouchableOpacity>
           <AppText variant="title">{t('scanner.title')}</AppText>
@@ -134,7 +134,7 @@ function ScannerScreen() {
           barStyle={theme.mode === 'dark' ? 'light-content' : 'dark-content'}
         />
         <View style={[styles.nav, isRTL && styles.navRTL]}>
-          <TouchableOpacity onPress={() => backTo(router, '/(app)')} style={styles.navBack}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.back')} onPress={() => backTo(router, '/(app)')} style={styles.navBack}>
             <Ionicons name={backIcon} size={22} color={theme.color.text} />
           </TouchableOpacity>
           <AppText variant="title">{t('scanner.title')}</AppText>
@@ -174,11 +174,11 @@ function ScannerScreen() {
       {/* Top bar (over the live camera feed - kept high-contrast on dark) */}
       <SafeAreaView style={styles.overlayTop} edges={['top']}>
         <View style={[styles.nav, isRTL && styles.navRTL]}>
-          <TouchableOpacity onPress={() => backTo(router, '/(app)')} style={styles.navBackDark}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.back')} onPress={() => backTo(router, '/(app)')} style={styles.navBackDark}>
             <Ionicons name={backIcon} size={22} color="#FFFFFF" />
           </TouchableOpacity>
           <Text style={styles.navTitleDark}>{t('scanner.title')}</Text>
-          <TouchableOpacity onPress={() => setTorch(v => !v)} style={styles.navBackDark}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.torch')} onPress={() => setTorch(v => !v)} style={styles.navBackDark}>
             <Ionicons name={torch ? 'flash' : 'flash-off'} size={20} color="#FFFFFF" />
           </TouchableOpacity>
         </View>

@@ -592,7 +592,7 @@ function AccidentReportScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {/* -- Header -- */}
         <View style={[styles.nav, isRTL && { flexDirection: 'row-reverse' }]}>
-          <TouchableOpacity onPress={goBack} style={styles.navBack}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.back')} onPress={goBack} style={styles.navBack}>
             <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={c.danger.base} />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
@@ -661,7 +661,7 @@ function AccidentReportScreen() {
                       autoCorrect={false}
                     />
                     {vehicleQuery.length > 0 && (
-                      <TouchableOpacity onPress={() => setVehicleQuery('')}>
+                      <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.clearSearch')} onPress={() => setVehicleQuery('')}>
                         <Ionicons name="close-circle" size={16} color={c.borderStrong} />
                       </TouchableOpacity>
                     )}
@@ -1063,7 +1063,7 @@ function DateField({
           {value || (mode === 'date' ? 'YYYY-MM-DD' : 'HH:MM')}
         </AppText>
         {allowClear && !!value ? (
-          <TouchableOpacity onPress={() => { setOpen(false); onChange('') }}
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.clear')} onPress={() => { setOpen(false); onChange('') }}
             hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}>
             <Ionicons name="close-circle" size={16} color={c.borderStrong} />
           </TouchableOpacity>

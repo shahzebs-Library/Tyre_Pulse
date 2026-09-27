@@ -342,7 +342,7 @@ function WorkshopScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {/* Nav */}
         <View style={[styles.nav, isRTL && styles.rowR]}>
-          <TouchableOpacity onPress={() => backTo(router, '/(app)')} style={styles.navBack}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.back')} onPress={() => backTo(router, '/(app)')} style={styles.navBack}>
             <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={theme.color.text} />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>

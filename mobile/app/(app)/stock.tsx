@@ -338,7 +338,7 @@ function StockScreen() {
   return (
     <Screen edges={['top']}>
       <View style={[s.header, isRTL && s.rowR]}>
-        <TouchableOpacity onPress={() => backTo(router, '/(app)')} style={s.backBtn} activeOpacity={0.7}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.back')} onPress={() => backTo(router, '/(app)')} style={s.backBtn} activeOpacity={0.7}>
           <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={theme.color.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
@@ -348,7 +348,7 @@ function StockScreen() {
           </AppText>
         </View>
         {mayAdjust && (
-          <TouchableOpacity onPress={openAdd} style={s.addBtn} activeOpacity={0.85}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.add')} onPress={openAdd} style={s.addBtn} activeOpacity={0.85}>
             <Ionicons name="add" size={22} color={theme.color.onPrimary} />
           </TouchableOpacity>
         )}
@@ -382,7 +382,7 @@ function StockScreen() {
           returnKeyType="search"
         />
         {query.length > 0 && (
-          <TouchableOpacity onPress={() => setQuery('')}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.clearSearch')} onPress={() => setQuery('')}>
             <Ionicons name="close-circle" size={18} color={theme.color.textMuted} />
           </TouchableOpacity>
         )}
@@ -521,7 +521,7 @@ function StockScreen() {
                   </View>
                   <View style={[s.qtyBox, isRTL && s.rowR]}>
                     {mayAdjust && (
-                      <TouchableOpacity style={[s.qtyBtn, { backgroundColor: theme.color.danger.soft }]} onPress={() => quickAdjust(item, -1)} disabled={busyId === item.id} activeOpacity={0.7}>
+                      <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.decrease')} style={[s.qtyBtn, { backgroundColor: theme.color.danger.soft }]} onPress={() => quickAdjust(item, -1)} disabled={busyId === item.id} activeOpacity={0.7}>
                         <Ionicons name="remove" size={18} color={theme.color.danger.base} />
                       </TouchableOpacity>
                     )}
@@ -530,7 +530,7 @@ function StockScreen() {
                       {mayAdjust && <AppText variant="micro" color="info">{t('modules.stock.tapToCount')}</AppText>}
                     </TouchableOpacity>
                     {mayAdjust && (
-                      <TouchableOpacity style={[s.qtyBtn, { backgroundColor: theme.color.success.soft }]} onPress={() => quickAdjust(item, 1)} disabled={busyId === item.id} activeOpacity={0.7}>
+                      <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.increase')} style={[s.qtyBtn, { backgroundColor: theme.color.success.soft }]} onPress={() => quickAdjust(item, 1)} disabled={busyId === item.id} activeOpacity={0.7}>
                         <Ionicons name="add" size={18} color={theme.color.success.base} />
                       </TouchableOpacity>
                     )}

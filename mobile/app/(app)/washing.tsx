@@ -253,7 +253,7 @@ function WashingScreen() {
     <Screen padded={false}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={[styles.nav, isRTL && styles.rowR]}>
-          <TouchableOpacity onPress={() => backTo(router, '/(app)')} style={styles.navBack}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.back')} onPress={() => backTo(router, '/(app)')} style={styles.navBack}>
             <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={theme.color.text} />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
@@ -493,11 +493,11 @@ function WashingScreen() {
         <View style={styles.camRoot}>
           <SafeAreaView edges={['top']}>
             <View style={[styles.camNav, isRTL && styles.rowR]}>
-              <TouchableOpacity onPress={closeScanner} style={styles.camBtn}>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.close')} onPress={closeScanner} style={styles.camBtn}>
                 <Ionicons name="close" size={22} color="#FFFFFF" />
               </TouchableOpacity>
               <Text style={styles.camTitle}>{t('modules.washing.scanAsset')}</Text>
-              <TouchableOpacity onPress={() => setTorch(v => !v)} style={styles.camBtn} disabled={cameraError}>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.torch')} onPress={() => setTorch(v => !v)} style={styles.camBtn} disabled={cameraError}>
                 <Ionicons name={torch ? 'flash' : 'flash-off'} size={20} color="#FFFFFF" />
               </TouchableOpacity>
             </View>

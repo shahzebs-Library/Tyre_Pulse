@@ -118,7 +118,7 @@ function TasksScreen() {
     <SafeAreaView style={s.safe}>
       <StatusBar barStyle={theme.mode === 'dark' ? 'light-content' : 'dark-content'} />
       <View style={[s.header, isRTL && s.rowR]}>
-        <TouchableOpacity onPress={() => backTo(router, '/(app)')} style={s.backBtn}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.back')} onPress={() => backTo(router, '/(app)')} style={s.backBtn}>
           <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={theme.mode === 'dark' ? theme.color.text : '#0f172a'} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
@@ -126,7 +126,7 @@ function TasksScreen() {
           <Text style={[s.sub, { textAlign }]}>{openCount} {t('modules.tasks.open')}</Text>
         </View>
         {canResolve && (
-          <TouchableOpacity style={s.newBtn} onPress={() => router.push('/(app)/report-issue')}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.add')} style={s.newBtn} onPress={() => router.push('/(app)/report-issue')}>
             <Ionicons name="add" size={20} color={theme.color.onPrimary} />
           </TouchableOpacity>
         )}
@@ -214,7 +214,7 @@ function TasksScreen() {
                   </View>
                 </View>
                 {!closed && canResolve && (
-                  <TouchableOpacity style={s.resolveBtn} onPress={() => resolve(item)} disabled={busyId === item.id}>
+                  <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.resolve')} style={s.resolveBtn} onPress={() => resolve(item)} disabled={busyId === item.id}>
                     {busyId === item.id
                       ? <ActivityIndicator size="small" color={theme.color.primary} />
                       : <Ionicons name="checkmark-circle" size={26} color={theme.color.primary} />}

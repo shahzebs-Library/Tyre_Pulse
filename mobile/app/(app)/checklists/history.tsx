@@ -302,7 +302,7 @@ export default function ChecklistHistoryScreen() {
               autoCorrect={false}
             />
             {!!search && (
-              <TouchableOpacity onPress={() => setSearch('')} accessibilityRole="button">
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('a11y.clearSearch')} onPress={() => setSearch('')}>
                 <Ionicons name="close-circle" size={16} color={c.textMuted} />
               </TouchableOpacity>
             )}

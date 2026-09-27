@@ -1,38 +1,36 @@
 /// The Home branch root - the real Home hub.
 ///
-/// # Replaces the earlier stopgap, deliberately, not by extension
+/// # Layout: owner-approved mock 07 ("Home - Today's work")
 ///
-/// The screen this file used to hold was a single Work-Orders tile plus a
-/// dashed "nothing available" fallback, and its own library comment already
-/// said what it was: "a deliberately minimal, single-tile placeholder ...
-/// not the eventual Home hub design", closing with "A LATER Home phase
-/// should REPLACE this screen builder entirely - not extend it - once a
-/// real design exists." This is that replacement.
+/// Top to bottom: a header (initials avatar, greeting and first name,
+/// site and country, and the offline-queue sync status), a full-width
+/// "New inspection" call to action, the accident command shortcut, a
+/// "Today's work" timeline and the quick actions. The bottom bar is NOT
+/// drawn here: the shared shell bar (`app/router/shell_tabs.dart`, Home /
+/// Inspect / Approvals / Accidents / Profile) is exactly the bar the mock
+/// shows, and `app/router/app_shell.dart` no longer hides it on Home.
 ///
-/// # What was verified before this was written
+/// # Real data only (AGENTS.md rules 1, 4 and 6)
 ///
-/// The production React Native app's own Home screen,
-/// `mobile/app/(app)/index.tsx`, was read in full and is the behavioural
-/// spec this mirrors: a greeting header, a primary "Start Inspection" call
-/// to action, a Scan shortcut, a small stats row, and access-gated quick
-/// actions grouped into labelled operational sections. The presentation is
-/// responsive rather than a fixed square grid: action names wrap in full and
-/// the sections become one, two or three columns only when their available
-/// width can carry them without clipping.
+/// Every timeline row comes from a real source, and only that source:
 ///
-/// The catalogue below contains every permission-gated module that currently
-/// has a concrete Flutter destination. It intentionally exposes the complete
-/// PMV surface through More, including accident reporting and case control.
-/// Registry-only modules with no implemented screen remain excluded so a Home
-/// control can never lead to a placeholder.
+/// - DRAFT - the newest inspection draft with progress for this user
+///   ([homeLatestInspectionDraftProvider], read-only over the inspections
+///   feature's local draft store).
+/// - CRITICAL - the first critical tyre alert ([tyreAlertsProvider]).
+/// - AWAITING SIGNATURE - pending inspection approvals
+///   ([homePendingInspectionApprovalsProvider]).
 ///
-/// `InspectionHistoryScreen` ("My Inspections") is a further, sharper case:
-/// `features/inspections/inspections_screen_registrations.dart`'s own
-/// library comment states it "deliberately has NO entry here: it is
-/// reached from inside `NewInspectionScreen` by an ordinary `Navigator`
-/// push", i.e. it is reachable only as a step inside the New Inspection
-/// flow, never as an independent destination - so it is not a Home tile
-/// either, by the same rule as `tyreChange` above.
+/// The mock's "Scheduled daily checklist" row, its "Fleet pulse"
+/// Good/Attention/Critical/Not-checked counts and its "Recent assets" photo
+/// strip have NO data source this app can read, so they are not rendered.
+/// There is no connectivity provider either, so the header never claims
+/// "Online": it states only what the local queue knows (all synced, N
+/// waiting, or could not check).
+///
+/// A source that failed is said to have failed ("Could not check"), never
+/// rendered as an empty timeline, because "we could not look" and "there
+/// is nothing" are opposite claims.
 ///
 /// # Navigation: push within Home's own branch, `go` across a branch
 ///
@@ -40,15 +38,16 @@
 /// branches: `home`, `newInspection`, `inspectionApprovals`,
 /// `accidentDashboard`, `meterLog`, `washing`, `activityHistory`,
 /// `checklists`, `profile`. A routeId that owns one of those branches is
-/// reached with `context.go(...)` - the same choice
-/// `vehicle_detail_screen.dart`'s own `_startInspection` makes for exactly
-/// this reason, quoted by the earlier stopgap screen's own comment: it
-/// "genuinely crosses from branch 0 into branch 1". A routeId with NO
-/// branch of its own - `serialSearch`, `tyreRecords`, `vehicles`,
-/// `workOrders`, `checklistApprovals`, `scanner`, `tyreChange` - is nested
-/// inside Home's OWN branch (0), the same shape `WorkOrdersRoute` had in the
-/// stopgap this file replaces, and is reached with `context.push(...)` so
-/// Home stays on the stack underneath it with real history.
+/// reached with `context.go(...)` - it genuinely crosses from branch 0 into
+/// another branch. A routeId with NO branch of its own - `serialSearch`,
+/// `tyreRecords`, `vehicles`, `workOrders`, `checklistApprovals`, `scanner`,
+/// `tyreChange` - is nested inside Home's OWN branch (0) and is reached with
+/// `context.push(...)` so Home stays on the stack underneath it with real
+/// history.
+///
+/// The full permission-gated module catalogue ([_kHomeSections]) is reached
+/// from the "More" quick action. Registry-only modules with no implemented
+/// screen are excluded so a Home control can never lead to a placeholder.
 library;
 
 import 'package:flutter/material.dart';
@@ -66,35 +65,36 @@ import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/alerts/alerts_providers.dart';
 import 'package:tyre_pulse/features/alerts/domain/tyre_alert.dart';
 import 'package:tyre_pulse/features/approvals/data/inspection_approval_item.dart';
-import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
 import 'package:tyre_pulse/features/home/home_layout.dart';
 import 'package:tyre_pulse/features/home/home_providers.dart';
+import 'package:tyre_pulse/features/inspections/domain/inspection_draft_summary.dart';
 import 'package:tyre_pulse/features/notifications/notifications_providers.dart';
-import 'package:tyre_pulse/features/tasks/data/task_item.dart';
-import 'package:tyre_pulse/features/tasks/domain/task_board.dart';
-import 'package:tyre_pulse/features/tasks/presentation/tasks_copy.dart';
 
-/// Real local time in production; overridden for deterministic header goldens.
+/// Real local time in production; overridden for deterministic goldens.
+///
+/// Drives the greeting and every relative time on the timeline, so a golden
+/// that pins it renders the same "10m ago" on every run.
 final homeHeaderClockProvider = Provider<DateTime Function()>(
   (Ref ref) => DateTime.now,
 );
 
-/// Stable finders for Home's responsive visual regions.
+/// Stable finders for Home's visual regions.
 @visibleForTesting
 abstract final class HomeScreenKeys {
   static const Key hero = Key('home.hero');
-  static const Key pmvHero = Key('home.pmv.hero');
-  static const Key pmvHeroImage = Key('home.pmv.hero.image');
-  static const Key stats = Key('home.stats');
-  static const Key darkDashboard = Key('home.dark.dashboard');
-  static const Key darkJobs = Key('home.dark.jobs');
+  static const Key syncStatus = Key('home.sync');
+  static const Key newInspection = Key('home.newInspection');
+  static const Key todaysWork = Key('home.todaysWork');
 
-  static Key section(String id) => Key('home.section.$id');
+  /// One timeline row: `draft`, `critical`, `approvals`, `unavailable`,
+  /// `loading` or `empty`.
+  static Key workRow(String id) => Key('home.work.$id');
 
   static Key action(String id) => Key('home.action.$id');
 }
 
-/// The tile catalogue this screen renders, filtered by [visibleHomeSections].
+/// The tile catalogue the "More" sheet lists, filtered by
+/// [visibleHomeSections].
 ///
 /// `const`, and deliberately declared ONCE at file scope rather than rebuilt
 /// per frame - it carries no `BuildContext` and nothing here changes at
@@ -170,17 +170,10 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  final ScrollController _scrollController = ScrollController();
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
     final bool canInspect = ref.watch(
       canAccessModuleProvider(ModuleKey.inspect),
     );
@@ -216,173 +209,110 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       (ModuleKey module) => ref.watch(canAccessModuleProvider(module)),
     );
     final WorkspaceContext? workspace = ref.watch(workspaceContextProvider);
-    final String? fullName = workspace?.fullName;
+    final DateTime now = ref.watch(homeHeaderClockProvider)();
+    final AsyncValue<InspectionDraftSummary?>? draft =
+        canInspect ? ref.watch(homeLatestInspectionDraftProvider) : null;
     final AsyncValue<List<InspectionApprovalItem>>? approvals = canSeeApprovals
         ? ref.watch(homePendingInspectionApprovalsProvider)
         : null;
     final AsyncValue<List<TyreAlert>>? alerts =
         canSeeAlerts ? ref.watch(tyreAlertsProvider) : null;
-    final AsyncValue<List<TaskItem>>? tasks =
-        canSeeTasks ? ref.watch(homeTaskPreviewProvider) : null;
+    final AsyncValue<int> pendingSync = ref.watch(homePendingSyncCountProvider);
     final AsyncValue<int> notificationCount =
         ref.watch(unreadNotificationsCountProvider);
 
-    if (Theme.of(context).brightness == Brightness.dark) {
-      return _DarkHomeDashboard(
-        l10n: l10n,
-        scrollController: _scrollController,
-        fullName: fullName,
-        approvals: approvals,
-        alerts: alerts,
-        tasks: tasks,
-        notificationCount: _scalarCountText(notificationCount),
-        canInspect: canInspect,
-        canSeeVehicles: canSeeVehicles,
-        canSeeAlerts: canSeeAlerts,
-        onNotifications: () =>
-            context.push(const NotificationsRoute().location),
-        onApprovals: canSeeApprovals
-            ? () => context.go(const InspectionApprovalsRoute().location)
-            : null,
-        onAlerts: canSeeAlerts
-            ? () => context.push(const AlertsRoute().location)
-            : null,
-        onTasks: canSeeTasks
-            ? () => context.push(const TasksRoute().location)
-            : null,
-        onAssets: canSeeVehicles
-            ? () => context.push(const VehiclesRoute().location)
-            : null,
-        onInspect: canInspect
-            ? () => context.go(const NewInspectionRoute().location)
-            : null,
-        onScanner:
-            canScan ? () => context.push(const ScannerRoute().location) : null,
-        onHome: _scrollToTop,
-        onMore: () => _showServices(sections, l10n),
-      );
-    }
+    final _TodaysWork work = _buildTodaysWork(
+      l10n: l10n,
+      palette: palette,
+      now: now,
+      draft: draft,
+      alerts: alerts,
+      approvals: approvals,
+    );
 
     return TpScaffold(
-      backgroundColor: TpPalette.of(context).surface,
-      appBar: _HomeDashboardAppBar(
-        l10n: l10n,
-        alertCount: _scalarCountText(notificationCount),
-        onMenu: () => _showServices(sections, l10n),
-        onAlerts: () => context.push(const NotificationsRoute().location),
-      ),
-      bottomNavigationBar: _HomeDashboardNavigation(
-        l10n: l10n,
-        canInspect: canInspect,
-        canSeeTasks: canSeeTasks,
-        canSeeAlerts: canSeeAlerts,
-        onHome: _scrollToTop,
-        onMyWork: () => context.push(const TasksRoute().location),
-        onInspect: () => context.go(const NewInspectionRoute().location),
-        onAlerts: () => context.push(const AlertsRoute().location),
-        onMore: () => _showServices(sections, l10n),
-      ),
+      backgroundColor: palette.background,
       body: ListView(
-        controller: _scrollController,
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        padding: EdgeInsets.zero,
         children: <Widget>[
-          Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 720),
+          _Band(
+            color: palette.surface,
+            padding: const EdgeInsetsDirectional.fromSTEB(16, 14, 8, 14),
+            child: _HomeHeader(
+              l10n: l10n,
+              workspace: workspace,
+              now: now,
+              pendingSync: pendingSync,
+              notificationCount: _scalarCountText(notificationCount),
+              onSiteTap: () => _showSite(workspace, l10n),
+              onNotifications: () =>
+                  context.push(const NotificationsRoute().location),
+            ),
+          ),
+          Divider(height: 1, thickness: 1, color: palette.border),
+          if (canInspect || canSeeAccidents) ...<Widget>[
+            _Band(
+              color: palette.surface,
+              padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
-                  _DashboardGreeting(
-                    l10n: l10n,
-                    fullName: fullName,
-                    workspace: workspace,
-                    onSiteTap: () => _showSite(workspace, l10n),
-                  ),
-                  const SizedBox(height: 14),
-                  _PmvOperationsHero(
-                    l10n: l10n,
-                    onTap: canScan
-                        ? () => context.push(const ScannerRoute().location)
-                        : null,
-                  ),
-                  const SizedBox(height: 14),
-                  SizedBox(
-                    height: 42,
-                    child: _DashboardSearchField(
-                      hint: l10n.homeSearchAssetsHint,
-                      onSubmitted: _openAssetSearch,
+                  if (canInspect)
+                    _NewInspectionButton(
+                      label: l10n.inspectionNewInspection,
+                      onTap: () =>
+                          context.go(const NewInspectionRoute().location),
                     ),
-                  ),
-                  if (canSeeAccidents) ...<Widget>[
-                    const SizedBox(height: 12),
+                  if (canInspect && canSeeAccidents) const SizedBox(height: 12),
+                  if (canSeeAccidents)
                     _AccidentCommandShortcut(
                       l10n: l10n,
                       onTap: () => context.go(
                         const AccidentDashboardRoute().location,
                       ),
                     ),
-                  ],
-                  const SizedBox(height: 20),
-                  _AttentionRow(
-                    l10n: l10n,
-                    approvals: approvals,
-                    tasks: tasks,
-                    alerts: alerts,
-                    onViewAll: _attentionDestination(
-                      canSeeAlerts: canSeeAlerts,
-                      canSeeApprovals: canSeeApprovals,
-                      canSeeTasks: canSeeTasks,
-                    ),
-                    onApprovals: canSeeApprovals
-                        ? () => context.go(
-                              const InspectionApprovalsRoute().location,
-                            )
-                        : null,
-                    onTasks: canSeeTasks
-                        ? () => context.push(const TasksRoute().location)
-                        : null,
-                    onAlerts: canSeeAlerts
-                        ? () => context.push(const AlertsRoute().location)
-                        : null,
-                  ),
-                  const SizedBox(height: 14),
-                  _TyreIssuePreview(
-                    l10n: l10n,
-                    alerts: alerts,
-                    onOpen: canSeeAlerts
-                        ? () => context.push(const AlertsRoute().location)
-                        : null,
-                  ),
-                  const SizedBox(height: 20),
-                  _HomeSectionHeader(title: l10n.homeMyWork),
-                  const SizedBox(height: 10),
-                  _MyWorkPreview(
-                    l10n: l10n,
-                    tasks: tasks,
-                    assigneeId: workspace?.userId,
-                    assigneeName: fullName,
-                    onOpen: canSeeTasks
-                        ? () => context.push(const TasksRoute().location)
-                        : null,
-                  ),
-                  const SizedBox(height: 14),
-                  _HomeSectionHeader(title: l10n.homeQuickActions),
-                  const SizedBox(height: 10),
-                  _DashboardQuickActions(
-                    l10n: l10n,
-                    canWash: canWash,
-                    canSeeVehicles: canSeeVehicles,
-                    canReportIssue: canReportIssue,
-                    canReportAccident: canReportAccident,
-                    onWashing: () => context.go(const WashingRoute().location),
-                    onAsset: () => context.push(const VehiclesRoute().location),
-                    onReportIssue: () =>
-                        context.push(const ReportIssueRoute().location),
-                    onAccident: () =>
-                        context.push(const AccidentReportRoute().location),
-                  ),
                 ],
               ),
+            ),
+            Divider(height: 1, thickness: 1, color: palette.border),
+          ],
+          _Band(
+            color: palette.background,
+            padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                _HomeSectionHeader(
+                  title: l10n.homeTodaysWork,
+                  action: l10n.homeViewAll,
+                  onAction: _seeAllDestination(
+                    canSeeAlerts: canSeeAlerts,
+                    canSeeApprovals: canSeeApprovals,
+                    canSeeTasks: canSeeTasks,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                _TodaysWorkCard(work: work),
+                const SizedBox(height: 22),
+                _HomeSectionHeader(title: l10n.homeQuickActions),
+                const SizedBox(height: 10),
+                _DashboardQuickActions(
+                  l10n: l10n,
+                  canScan: canScan,
+                  canWash: canWash,
+                  canSeeVehicles: canSeeVehicles,
+                  canReportIssue: canReportIssue,
+                  canReportAccident: canReportAccident,
+                  onScanner: () => context.push(const ScannerRoute().location),
+                  onWashing: () => context.go(const WashingRoute().location),
+                  onAsset: () => context.push(const VehiclesRoute().location),
+                  onReportIssue: () =>
+                      context.push(const ReportIssueRoute().location),
+                  onAccident: () =>
+                      context.push(const AccidentReportRoute().location),
+                  onMore: () => _showServices(sections, l10n),
+                ),
+              ],
             ),
           ),
         ],
@@ -390,7 +320,145 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  VoidCallback? _attentionDestination({
+  /// Builds the timeline rows from the three real sources, in the mock's
+  /// order: unfinished work first, then safety, then sign-off.
+  _TodaysWork _buildTodaysWork({
+    required AppLocalizations l10n,
+    required TpPalette palette,
+    required DateTime now,
+    required AsyncValue<InspectionDraftSummary?>? draft,
+    required AsyncValue<List<TyreAlert>>? alerts,
+    required AsyncValue<List<InspectionApprovalItem>>? approvals,
+  }) {
+    final List<_WorkRowData> rows = <_WorkRowData>[];
+    final List<String> failed = <String>[];
+    bool loading = false;
+
+    switch (draft) {
+      case AsyncData<InspectionDraftSummary?>(:final value):
+        if (value != null) rows.add(_draftRow(l10n, palette, now, value));
+      case AsyncError<InspectionDraftSummary?>():
+        failed.add(l10n.inspectionDraftLabel);
+      case null:
+        break;
+      default:
+        loading = true;
+    }
+
+    switch (alerts) {
+      case AsyncData<List<TyreAlert>>(:final value):
+        final TyreAlert? critical = value
+            .cast<TyreAlert?>()
+            .firstWhere((TyreAlert? a) => a!.isCritical, orElse: () => null);
+        if (critical != null) {
+          rows.add(_criticalRow(l10n, palette, critical));
+        }
+      case AsyncError<List<TyreAlert>>():
+        failed.add(l10n.homeCriticalMetric);
+      case null:
+        break;
+      default:
+        loading = true;
+    }
+
+    switch (approvals) {
+      case AsyncData<List<InspectionApprovalItem>>(:final value):
+        if (value.isNotEmpty) {
+          rows.add(_approvalsRow(l10n, palette, now, value));
+        }
+      case AsyncError<List<InspectionApprovalItem>>():
+        failed.add(l10n.homeApprovalsMetric);
+      case null:
+        break;
+      default:
+        loading = true;
+    }
+
+    return _TodaysWork(rows: rows, failed: failed, loading: loading);
+  }
+
+  _WorkRowData _draftRow(
+    AppLocalizations l10n,
+    TpPalette palette,
+    DateTime now,
+    InspectionDraftSummary draft,
+  ) {
+    final String asset = draft.assetNo.trim();
+    final String? site = draft.site?.trim();
+    return _WorkRowData(
+      id: 'draft',
+      tone: palette.info,
+      icon: Icons.edit_outlined,
+      tag: l10n.inspectionDraftLabel,
+      title: l10n.homeResumeInspection,
+      detail: _joinParts(<String?>[asset, draft.vehicleType, site]),
+      secondary: draft.total > 0
+          ? l10n.inspectionResumeProgress(draft.filled, draft.total)
+          : null,
+      time: _relativeTime(l10n, context, draft.updatedAt, now),
+      onTap: () => context.go(
+        NewInspectionRoute(
+          assetNo: AssetNo(asset),
+          siteName: site == null || site.isEmpty ? null : SiteName(site),
+        ).location,
+      ),
+    );
+  }
+
+  _WorkRowData _criticalRow(
+    AppLocalizations l10n,
+    TpPalette palette,
+    TyreAlert alert,
+  ) {
+    final num? tread = alert.treadDepthMm;
+    final DateTime? issued = DateTime.tryParse(alert.issueDate ?? '');
+    return _WorkRowData(
+      id: 'critical',
+      tone: palette.critical,
+      icon: Icons.warning_amber_rounded,
+      tag: l10n.statusCritical,
+      title: l10n.homeTyreIssueNeedsAttention,
+      detail: _joinParts(<String?>[alert.position, alert.assetNo, alert.site]),
+      secondary: tread == null
+          ? null
+          : '${l10n.tyreDetailStatTread}: '
+              '${tread % 1 == 0 ? tread.toInt() : tread.toStringAsFixed(1)} mm',
+      // `issue_date` is the tyre record's own date, not when the alert was
+      // raised, so it is shown as a date rather than as "N minutes ago".
+      time: issued == null
+          ? null
+          : MaterialLocalizations.of(context).formatShortDate(issued.toLocal()),
+      timeIsAlert: true,
+      onTap: () => context.push(const AlertsRoute().location),
+    );
+  }
+
+  _WorkRowData _approvalsRow(
+    AppLocalizations l10n,
+    TpPalette palette,
+    DateTime now,
+    List<InspectionApprovalItem> items,
+  ) {
+    DateTime? newest;
+    for (final InspectionApprovalItem item in items) {
+      final DateTime? created = DateTime.tryParse(item.createdAt ?? '');
+      if (created != null && (newest == null || created.isAfter(newest))) {
+        newest = created;
+      }
+    }
+    return _WorkRowData(
+      id: 'approvals',
+      tone: palette.warning,
+      icon: Icons.assignment_turned_in_outlined,
+      tag: l10n.homeAwaitingSignatureTag,
+      title: l10n.inspectionApprovalsTitle,
+      detail: l10n.inspectionApprovalsAwaitingCount(items.length),
+      time: newest == null ? null : _relativeTime(l10n, context, newest, now),
+      onTap: () => context.go(const InspectionApprovalsRoute().location),
+    );
+  }
+
+  VoidCallback? _seeAllDestination({
     required bool canSeeAlerts,
     required bool canSeeApprovals,
     required bool canSeeTasks,
@@ -405,22 +473,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       return () => context.push(const TasksRoute().location);
     }
     return null;
-  }
-
-  void _scrollToTop() {
-    if (!_scrollController.hasClients) return;
-    _scrollController.animateTo(
-      0,
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOut,
-    );
-  }
-
-  void _openAssetSearch(String raw) {
-    final String query = raw.trim();
-    context.push(
-      VehiclesRoute(assetNo: query.isEmpty ? null : AssetNo(query)).location,
-    );
   }
 
   Future<void> _showSite(
@@ -466,6 +518,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.72,
           ),
           child: ListView(
+            key: HomeScreenKeys.action('servicesSheet'),
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
             children: <Widget>[
               Text(
@@ -478,7 +531,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ListTile(
                     leading: Icon(_tileMeta(l10n, tile.id).icon),
                     title: Text(_tileMeta(l10n, tile.id).label),
-                    trailing: const Icon(Icons.chevron_right_rounded),
+                    trailing: Icon(
+                      Directionality.of(context) == TextDirection.rtl
+                          ? Icons.chevron_left_rounded
+                          : Icons.chevron_right_rounded,
+                    ),
                     onTap: () {
                       Navigator.of(sheetContext).pop();
                       _openHomeTile(context, tile.id);
@@ -492,35 +549,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
-String _countText<T>(
-  AsyncValue<List<T>>? state, {
-  required int cap,
-  required bool Function(T item) where,
-}) {
-  if (state == null) return '—';
-  return switch (state) {
-    AsyncData<List<T>>(:final value) => () {
-        final int count = value.where(where).length;
-        return value.length >= cap ? '$count+' : '$count';
-      }(),
-    _ => '—',
-  };
-}
-
 String _scalarCountText(AsyncValue<int> state) => switch (state) {
       AsyncData<int>(:final value) => value > 99 ? '99+' : '$value',
       _ => '—',
     };
-
-List<T>? _asyncItems<T>(AsyncValue<List<T>>? state) => switch (state) {
-      AsyncData<List<T>>(:final value) => value,
-      _ => null,
-    };
-
-bool _isOverdueTask(TaskItem task) {
-  final DateTime? due = task.dueDate;
-  return !isTaskCompleted(task) && due != null && due.isBefore(DateTime.now());
-}
 
 String? _workspaceSiteLabel(WorkspaceContext? workspace) {
   if (workspace == null) return null;
@@ -536,727 +568,767 @@ String? _workspaceSiteLabel(WorkspaceContext? workspace) {
   return null;
 }
 
-/// Night-shift rendering of the approved dark Dashboard mock. It deliberately
-/// consumes the same verified providers as the light Home dashboard; only the
-/// information hierarchy changes with the theme.
-class _DarkHomeDashboard extends StatelessWidget {
-  const _DarkHomeDashboard({
-    required this.l10n,
-    required this.scrollController,
-    required this.fullName,
-    required this.approvals,
-    required this.alerts,
-    required this.tasks,
-    required this.notificationCount,
-    required this.canInspect,
-    required this.canSeeVehicles,
-    required this.canSeeAlerts,
-    required this.onNotifications,
-    required this.onApprovals,
-    required this.onAlerts,
-    required this.onTasks,
-    required this.onAssets,
-    required this.onInspect,
-    required this.onScanner,
-    required this.onHome,
-    required this.onMore,
+/// Joins the non-blank [parts] with the mock's bullet separator.
+String _joinParts(List<String?> parts) => parts
+    .whereType<String>()
+    .map((String value) => value.trim())
+    .where((String value) => value.isNotEmpty)
+    .join(' • ');
+
+/// "Just now", "10m ago", "3h ago", "2d ago", then a short date - the same
+/// wording the notification inbox already ships in all three locales.
+String _relativeTime(
+  AppLocalizations l10n,
+  BuildContext context,
+  DateTime then,
+  DateTime now,
+) {
+  final DateTime local = then.toLocal();
+  final Duration diff = now.difference(local);
+  final String catalog = l10n.notificationInboxCopyCatalog;
+  String count(String key, int value) =>
+      _catalogLabel(catalog, key).replaceAll('%count%', '$value');
+  if (diff.isNegative || diff.inMinutes < 1) {
+    return _catalogLabel(catalog, 'justNow');
+  }
+  if (diff.inHours < 1) return count('minutesAgo', diff.inMinutes);
+  if (diff.inDays < 1) return count('hoursAgo', diff.inHours);
+  if (diff.inDays < 7) return count('daysAgo', diff.inDays);
+  return MaterialLocalizations.of(context).formatShortDate(local);
+}
+
+/// Up to two initials from [fullName]; null when there is no usable name.
+String? _initials(String? fullName) {
+  final List<String> words = (fullName ?? '')
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((String word) => word.isNotEmpty)
+      .toList(growable: false);
+  if (words.isEmpty) return null;
+  final String first = words.first.characters.first;
+  final String last = words.length > 1 ? words.last.characters.first : '';
+  return '$first$last'.toUpperCase();
+}
+
+String? _firstName(String? raw) {
+  final String value = raw?.trim() ?? '';
+  if (value.isEmpty) return null;
+  final String first = value.split(RegExp(r'\s+')).first;
+  if (first.isEmpty) return null;
+  return '${first[0].toUpperCase()}${first.substring(1)}';
+}
+
+/// A full-width horizontal band with centred, width-capped content, so a
+/// tablet does not stretch the mock's phone layout edge to edge.
+class _Band extends StatelessWidget {
+  const _Band({
+    required this.color,
+    required this.padding,
+    required this.child,
   });
 
-  final AppLocalizations l10n;
-  final ScrollController scrollController;
-  final String? fullName;
-  final AsyncValue<List<InspectionApprovalItem>>? approvals;
-  final AsyncValue<List<TyreAlert>>? alerts;
-  final AsyncValue<List<TaskItem>>? tasks;
-  final String notificationCount;
-  final bool canInspect;
-  final bool canSeeVehicles;
-  final bool canSeeAlerts;
-  final VoidCallback onNotifications;
-  final VoidCallback? onApprovals;
-  final VoidCallback? onAlerts;
-  final VoidCallback? onTasks;
-  final VoidCallback? onAssets;
-  final VoidCallback? onInspect;
-  final VoidCallback? onScanner;
-  final VoidCallback onHome;
-  final VoidCallback onMore;
+  final Color color;
+  final EdgeInsetsGeometry padding;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    final TpPalette palette = TpPalette.of(context);
-    return TpScaffold(
-      key: HomeScreenKeys.darkDashboard,
-      backgroundColor: palette.background,
-      bottomNavigationBar: _DarkHomeNavigation(
-        l10n: l10n,
-        canInspect: canInspect,
-        canSeeVehicles: canSeeVehicles,
-        canSeeAlerts: canSeeAlerts,
-        onAssets: onAssets,
-        onInspect: onInspect,
-        onAlerts: onAlerts,
-        onHome: onHome,
-        onMore: onMore,
-      ),
-      body: SafeArea(
-        bottom: false,
-        child: ListView(
-          controller: scrollController,
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
-          children: <Widget>[
-            _DarkDashboardHeader(
-              l10n: l10n,
-              fullName: fullName,
-              notificationCount: notificationCount,
-              onNotifications: onNotifications,
-            ),
-            const SizedBox(height: 14),
-            _PmvOperationsHero(
-              l10n: l10n,
-              onTap: onScanner,
-            ),
-            const SizedBox(height: 16),
-            _DarkMetricsGrid(
-              l10n: l10n,
-              approvals: approvals,
-              alerts: alerts,
-              tasks: tasks,
-              onApprovals: onApprovals,
-              onAlerts: onAlerts,
-              onTasks: onTasks,
-            ),
-            const SizedBox(height: 16),
-            _HomeSectionHeader(
-              title: l10n.homeMyWork,
-              action: l10n.homeViewAll,
-              onAction: onTasks,
-            ),
-            const SizedBox(height: 6),
-            _DarkJobsList(
-              l10n: l10n,
-              tasks: tasks,
-              onOpen: onTasks,
-            ),
-          ],
+    return ColoredBox(
+      color: color,
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 720),
+          child: Padding(padding: padding, child: child),
         ),
       ),
     );
   }
 }
 
-class _DarkDashboardHeader extends ConsumerWidget {
-  const _DarkDashboardHeader({
+class _HomeHeader extends StatelessWidget {
+  const _HomeHeader({
     required this.l10n,
-    required this.fullName,
+    required this.workspace,
+    required this.now,
+    required this.pendingSync,
     required this.notificationCount,
+    required this.onSiteTap,
     required this.onNotifications,
   });
 
   final AppLocalizations l10n;
-  final String? fullName;
+  final WorkspaceContext? workspace;
+  final DateTime now;
+  final AsyncValue<int> pendingSync;
   final String notificationCount;
+  final VoidCallback onSiteTap;
   final VoidCallback onNotifications;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final DateTime now = ref.watch(homeHeaderClockProvider)();
+  Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
-    final List<String> brandWords = l10n.appTitle.trim().split(
-          RegExp(r'\s+'),
-        );
-    final String brandAccent = brandWords.isEmpty ? '' : brandWords.last;
-    final String brandLead = brandWords.length < 2
-        ? ''
-        : brandWords.take(brandWords.length - 1).join(' ');
-    final String name = fullName?.trim().isNotEmpty == true
-        ? fullName!.trim()
-        : l10n.homeFallbackUser;
-    final String greeting = now.hour < 12
+    final TextTheme text = Theme.of(context).textTheme;
+    final int hour = now.hour;
+    final String greeting = hour < 12
         ? l10n.homeGoodMorning
-        : now.hour < 17
+        : hour < 17
             ? l10n.homeGoodAfternoon
             : l10n.homeGoodEvening;
-    final int? numericCount = int.tryParse(
-      notificationCount.replaceAll('+', ''),
-    );
-    final bool showBadge = numericCount != null && numericCount > 0;
+    final String? fullName = workspace?.fullName;
+    final String name = _firstName(fullName) ?? l10n.homeFallbackUser;
+    final String? initials = _initials(fullName);
+    final String site =
+        _workspaceSiteLabel(workspace) ?? l10n.homeSiteStatUnavailable;
+    final String? country = workspace?.activeCountry?.trim();
+    final bool showBadge = notificationCount != '—' && notificationCount != '0';
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
+      key: HomeScreenKeys.hero,
       children: <Widget>[
-        Row(
-          children: <Widget>[
-            Expanded(
-              child: Text.rich(
-                TextSpan(
-                  children: <InlineSpan>[
-                    if (brandLead.isNotEmpty)
-                      TextSpan(
-                        text: '${brandLead.toUpperCase()} ',
-                        style: TextStyle(color: palette.text),
-                      ),
-                    TextSpan(
-                      text: brandAccent.toUpperCase(),
-                      style: TextStyle(color: palette.primary),
-                    ),
-                  ],
-                ),
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontStyle: FontStyle.italic,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.5,
-                    ),
-              ),
-            ),
-            IconButton(
-              tooltip: l10n.homeNotificationsTooltip,
-              onPressed: onNotifications,
-              icon: Badge(
-                isLabelVisible: showBadge,
-                label: Text(notificationCount),
-                child: const Icon(Icons.notifications_none_rounded),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: <Widget>[
-            CircleAvatar(
-              radius: 22,
-              backgroundColor: palette.primarySoft,
-              foregroundColor: palette.primary,
-              child: const Icon(Icons.person_outline_rounded),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    greeting,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: palette.textSecondary,
-                        ),
+        Container(
+          width: 52,
+          height: 52,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: palette.primarySoft,
+            shape: BoxShape.circle,
+            border: Border.all(color: palette.border),
+          ),
+          child: initials == null
+              ? Icon(Icons.person_outline_rounded, color: palette.primary)
+              : Text(
+                  initials,
+                  style: text.titleMedium?.copyWith(
+                    color: palette.primary,
+                    fontWeight: FontWeight.w800,
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: palette.text,
-                          fontWeight: FontWeight.w800,
-                        ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Text(
-          MaterialLocalizations.of(context).formatFullDate(now),
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: palette.textSecondary,
-              ),
-        ),
-      ],
-    );
-  }
-}
-
-class _DarkMetricsGrid extends StatelessWidget {
-  const _DarkMetricsGrid({
-    required this.l10n,
-    required this.approvals,
-    required this.alerts,
-    required this.tasks,
-    required this.onApprovals,
-    required this.onAlerts,
-    required this.onTasks,
-  });
-
-  final AppLocalizations l10n;
-  final AsyncValue<List<InspectionApprovalItem>>? approvals;
-  final AsyncValue<List<TyreAlert>>? alerts;
-  final AsyncValue<List<TaskItem>>? tasks;
-  final VoidCallback? onApprovals;
-  final VoidCallback? onAlerts;
-  final VoidCallback? onTasks;
-
-  @override
-  Widget build(BuildContext context) {
-    return GridView.count(
-      key: HomeScreenKeys.stats,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 2,
-      mainAxisSpacing: 6,
-      crossAxisSpacing: 6,
-      childAspectRatio: 2.25,
-      children: <Widget>[
-        _DarkMetricCard(
-          value: _countText<InspectionApprovalItem>(
-            approvals,
-            cap: 100,
-            where: (_) => true,
-          ),
-          label: l10n.homeApprovalsMetric,
-          colors: const <Color>[Color(0xFFB91C1C), Color(0xFF7F1D1D)],
-          onTap: onApprovals,
-        ),
-        _DarkMetricCard(
-          value: _countText<TyreAlert>(
-            alerts,
-            cap: 300,
-            where: (TyreAlert alert) => alert.isCritical,
-          ),
-          label: l10n.homeCriticalMetric,
-          colors: const <Color>[Color(0xFFB56B00), Color(0xFF7C4300)],
-          onTap: onAlerts,
-        ),
-        _DarkMetricCard(
-          value: _countText<TaskItem>(
-            tasks,
-            cap: 100,
-            where: _isOverdueTask,
-          ),
-          label: l10n.homeOverdueMetric,
-          colors: const <Color>[Color(0xFF17457B), Color(0xFF102F57)],
-          onTap: onTasks,
-        ),
-        _DarkMetricCard(
-          value: _countText<TaskItem>(
-            tasks,
-            cap: 100,
-            where: (TaskItem task) => !isTaskCompleted(task),
-          ),
-          label: l10n.workOrdersNavTitle,
-          colors: const <Color>[Color(0xFF176B34), Color(0xFF104923)],
-          onTap: onTasks,
-        ),
-      ],
-    );
-  }
-}
-
-class _DarkMetricCard extends StatelessWidget {
-  const _DarkMetricCard({
-    required this.value,
-    required this.label,
-    required this.colors,
-    required this.onTap,
-  });
-
-  final String value;
-  final String label;
-  final List<Color> colors;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(TpRadius.sm),
-      clipBehavior: Clip.antiAlias,
-      child: Ink(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(colors: colors),
-          borderRadius: BorderRadius.circular(TpRadius.sm),
-        ),
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsetsDirectional.fromSTEB(13, 8, 10, 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-                Text(
-                  value,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        color: Colors.white,
-                        height: 1,
-                        fontWeight: FontWeight.w900,
-                      ),
                 ),
-                const SizedBox(height: 5),
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
-                ),
-              ],
-            ),
-          ),
         ),
-      ),
-    );
-  }
-}
-
-class _DarkJobsList extends StatelessWidget {
-  const _DarkJobsList({
-    required this.l10n,
-    required this.tasks,
-    required this.onOpen,
-  });
-
-  final AppLocalizations l10n;
-  final AsyncValue<List<TaskItem>>? tasks;
-  final VoidCallback? onOpen;
-
-  @override
-  Widget build(BuildContext context) {
-    final List<TaskItem>? loaded = _asyncItems(tasks);
-    final List<TaskItem> items = loaded
-            ?.where((TaskItem item) => !isTaskCompleted(item))
-            .take(3)
-            .toList(growable: false) ??
-        const <TaskItem>[];
-    final TpPalette palette = TpPalette.of(context);
-
-    if (loaded == null || items.isEmpty) {
-      return Container(
-        key: HomeScreenKeys.darkJobs,
-        constraints: const BoxConstraints(minHeight: 74),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: palette.surfaceAlt,
-          borderRadius: BorderRadius.circular(TpRadius.sm),
-          border: Border.all(color: palette.border),
-        ),
-        alignment: AlignmentDirectional.centerStart,
-        child: Text(
-          loaded == null
-              ? l10n.homeStatUnavailableCaption
-              : l10n.homeNoUrgentWorkTitle,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: palette.textSecondary,
-              ),
-        ),
-      );
-    }
-
-    return Container(
-      key: HomeScreenKeys.darkJobs,
-      decoration: BoxDecoration(
-        color: palette.surfaceAlt,
-        borderRadius: BorderRadius.circular(TpRadius.sm),
-        border: Border.all(color: palette.border),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: <Widget>[
-          for (int index = 0; index < items.length; index++) ...<Widget>[
-            _DarkJobRow(task: items[index], onTap: onOpen),
-            if (index != items.length - 1)
-              Divider(height: 1, color: palette.border),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _DarkJobRow extends StatelessWidget {
-  const _DarkJobRow({required this.task, required this.onTap});
-
-  final TaskItem task;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final TpPalette palette = TpPalette.of(context);
-    final DateTime? due = task.dueDate;
-    final String supporting = <String?>[task.assetNo, task.description]
-        .whereType<String>()
-        .where((String value) => value.trim().isNotEmpty)
-        .join(' • ');
-    return InkWell(
-      onTap: onTap,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 62),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-          child: Row(
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: palette.surfaceSunken,
-                  borderRadius: BorderRadius.circular(7),
-                ),
-                alignment: Alignment.center,
-                child: Icon(
-                  Icons.local_shipping_outlined,
-                  color: palette.primary,
-                  size: 23,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      task.title,
+              Row(
+                children: <Widget>[
+                  Flexible(
+                    child: Text(
+                      greeting,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                            color: palette.text,
-                            fontWeight: FontWeight.w800,
-                          ),
-                    ),
-                    if (supporting.isNotEmpty) ...<Widget>[
-                      const SizedBox(height: 2),
-                      Text(
-                        supporting,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: palette.textSecondary,
-                            ),
+                      style: text.titleMedium?.copyWith(
+                        color: palette.text,
+                        fontWeight: FontWeight.w700,
                       ),
-                    ],
-                  ],
-                ),
-              ),
-              if (due != null) ...<Widget>[
-                const SizedBox(width: 8),
-                Text(
-                  MaterialLocalizations.of(context).formatTimeOfDay(
-                    TimeOfDay.fromDateTime(due.toLocal()),
+                    ),
                   ),
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: palette.textSecondary,
-                      ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DarkHomeNavigation extends StatelessWidget {
-  const _DarkHomeNavigation({
-    required this.l10n,
-    required this.canInspect,
-    required this.canSeeVehicles,
-    required this.canSeeAlerts,
-    required this.onAssets,
-    required this.onInspect,
-    required this.onAlerts,
-    required this.onHome,
-    required this.onMore,
-  });
-
-  final AppLocalizations l10n;
-  final bool canInspect;
-  final bool canSeeVehicles;
-  final bool canSeeAlerts;
-  final VoidCallback? onAssets;
-  final VoidCallback? onInspect;
-  final VoidCallback? onAlerts;
-  final VoidCallback onHome;
-  final VoidCallback onMore;
-
-  @override
-  Widget build(BuildContext context) {
-    final TpPalette palette = TpPalette.of(context);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: palette.background,
-        border: Border(top: BorderSide(color: palette.border)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: 66,
-          child: Row(
-            children: <Widget>[
-              Expanded(
-                child: _HomeNavItem(
-                  icon: Icons.home_rounded,
-                  label: l10n.homeNavTitle,
-                  selected: true,
-                  onTap: onHome,
-                ),
-              ),
-              Expanded(
-                child: _HomeNavItem(
-                  icon: Icons.directions_car_outlined,
-                  label: l10n.homeAssetAction,
-                  onTap: canSeeVehicles ? onAssets : null,
-                ),
-              ),
-              Expanded(
-                child: _HomeNavItem(
-                  icon: Icons.add_rounded,
-                  label: l10n.homeInspectAction,
-                  raised: true,
-                  onTap: canInspect ? onInspect : null,
-                ),
-              ),
-              Expanded(
-                child: _HomeNavItem(
-                  icon: Icons.notifications_none_rounded,
-                  label: l10n.homeAlertsAction,
-                  onTap: canSeeAlerts ? onAlerts : null,
-                ),
-              ),
-              Expanded(
-                child: _HomeNavItem(
-                  icon: Icons.menu_rounded,
-                  label: l10n.homeMoreAction,
-                  onTap: onMore,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _HomeDashboardAppBar extends StatelessWidget
-    implements PreferredSizeWidget {
-  const _HomeDashboardAppBar({
-    required this.l10n,
-    required this.alertCount,
-    required this.onMenu,
-    required this.onAlerts,
-  });
-
-  final AppLocalizations l10n;
-  final String alertCount;
-  final VoidCallback onMenu;
-  final VoidCallback? onAlerts;
-
-  @override
-  Size get preferredSize => const Size.fromHeight(54);
-
-  @override
-  Widget build(BuildContext context) {
-    final TpPalette palette = TpPalette.of(context);
-    final bool showBadge = alertCount != '—' && alertCount != '0';
-    return AppBar(
-      toolbarHeight: 54,
-      automaticallyImplyLeading: false,
-      elevation: 0,
-      surfaceTintColor: Colors.transparent,
-      backgroundColor: palette.surface,
-      foregroundColor: palette.text,
-      leadingWidth: 52,
-      leading: IconButton(
-        tooltip: l10n.homeMenuTooltip,
-        onPressed: onMenu,
-        icon: const Icon(Icons.menu_rounded, size: 22),
-      ),
-      titleSpacing: 0,
-      title: Text(
-        l10n.appTitle,
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w800,
-            ),
-      ),
-      actions: <Widget>[
-        IconButton(
-          tooltip: l10n.homeNotificationsTooltip,
-          onPressed: onAlerts,
-          icon: Stack(
-            clipBehavior: Clip.none,
-            children: <Widget>[
-              const Icon(Icons.notifications_none_rounded, size: 23),
-              if (showBadge)
-                PositionedDirectional(
-                  top: -5,
-                  end: -7,
-                  child: Container(
-                    constraints: const BoxConstraints(minWidth: 16),
-                    height: 16,
-                    padding: const EdgeInsets.symmetric(horizontal: 3),
-                    decoration: BoxDecoration(
-                      color: palette.critical.base,
-                      borderRadius: BorderRadius.circular(TpRadius.pill),
-                      border: Border.all(color: palette.surface, width: 1.5),
-                    ),
-                    alignment: Alignment.center,
+                  const SizedBox(width: 4),
+                  Flexible(
                     child: Text(
-                      alertCount,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 8,
-                        height: 1,
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.titleMedium?.copyWith(
+                        color: palette.text,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                   ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              InkWell(
+                onTap: onSiteTap,
+                borderRadius: BorderRadius.circular(TpRadius.sm),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    children: <Widget>[
+                      Icon(
+                        Icons.location_on_outlined,
+                        size: 16,
+                        color: palette.textSecondary,
+                      ),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          site,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.bodySmall?.copyWith(
+                            color: palette.textSecondary,
+                          ),
+                        ),
+                      ),
+                      if (country != null && country.isNotEmpty) ...<Widget>[
+                        Text(
+                          '  •  ',
+                          style: text.bodySmall?.copyWith(
+                            color: palette.textMuted,
+                          ),
+                        ),
+                        Flexible(
+                          child: Text(
+                            country,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: text.bodySmall?.copyWith(
+                              color: palette.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
+              ),
             ],
           ),
         ),
-        const SizedBox(width: 4),
+        const SizedBox(width: 8),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            IconButton(
+              tooltip: l10n.homeNotificationsTooltip,
+              visualDensity: VisualDensity.compact,
+              onPressed: onNotifications,
+              icon: Stack(
+                clipBehavior: Clip.none,
+                children: <Widget>[
+                  Icon(
+                    Icons.notifications_none_rounded,
+                    size: 22,
+                    color: palette.text,
+                  ),
+                  if (showBadge)
+                    PositionedDirectional(
+                      top: -5,
+                      end: -7,
+                      child: Container(
+                        constraints: const BoxConstraints(minWidth: 16),
+                        height: 16,
+                        padding: const EdgeInsets.symmetric(horizontal: 3),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: palette.critical.base,
+                          borderRadius: BorderRadius.circular(TpRadius.pill),
+                          border: Border.all(
+                            color: palette.surface,
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Text(
+                          notificationCount,
+                          style: TextStyle(
+                            color: palette.critical.onBase,
+                            fontSize: 8,
+                            height: 1,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            _HomeSyncStatus(l10n: l10n, pending: pendingSync),
+          ],
+        ),
       ],
     );
   }
 }
 
-class _DashboardSearchField extends StatelessWidget {
-  const _DashboardSearchField({
-    required this.hint,
-    required this.onSubmitted,
-  });
+/// What the local offline queue knows, and nothing more.
+///
+/// There is no connectivity provider in this app, so this never says
+/// "Online": it says all changes are synced, how many are waiting, or that
+/// the queue could not be read.
+class _HomeSyncStatus extends StatelessWidget {
+  const _HomeSyncStatus({required this.l10n, required this.pending});
 
-  final String hint;
-  final ValueChanged<String> onSubmitted;
+  final AppLocalizations l10n;
+  final AsyncValue<int> pending;
 
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
-    return TextField(
-      textInputAction: TextInputAction.search,
-      onSubmitted: onSubmitted,
-      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: palette.text,
-            fontWeight: FontWeight.w600,
-          ),
-      decoration: InputDecoration(
-        hintText: hint,
-        hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: palette.textMuted,
-              fontWeight: FontWeight.w500,
+    final (IconData icon, TpStatusColors tone, String label) =
+        switch (pending) {
+      AsyncData<int>(:final value) when value > 0 => (
+          Icons.cloud_upload_outlined,
+          palette.info,
+          l10n.syncPendingChanges(value),
+        ),
+      AsyncData<int>() => (
+          Icons.cloud_done_outlined,
+          palette.ok,
+          l10n.syncAllSynced,
+        ),
+      AsyncError<int>() => (
+          Icons.sync_problem_rounded,
+          palette.unknown,
+          l10n.homeStatUnavailableCaption,
+        ),
+      _ => (Icons.sync, palette.unknown, l10n.homeStatLoadingCaption),
+    };
+    return ConstrainedBox(
+      key: HomeScreenKeys.syncStatus,
+      constraints: const BoxConstraints(maxWidth: 116),
+      child: Padding(
+        padding: const EdgeInsetsDirectional.only(end: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(icon, size: 15, color: tone.base),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: palette.textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
             ),
-        prefixIcon: Icon(Icons.search_rounded, color: palette.textSecondary),
-        filled: true,
-        fillColor: palette.surfaceAlt,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(TpRadius.sm),
-          borderSide: BorderSide.none,
+          ],
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(TpRadius.sm),
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(TpRadius.sm),
-          borderSide: BorderSide(
-            color: palette.primary,
-            width: TpBorderWidth.strong,
+      ),
+    );
+  }
+}
+
+class _NewInspectionButton extends StatelessWidget {
+  const _NewInspectionButton({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return Semantics(
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      child: Material(
+        key: HomeScreenKeys.newInspection,
+        color: palette.primary,
+        borderRadius: BorderRadius.circular(TpRadius.md),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: SizedBox(
+            height: 64,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: palette.onPrimary,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.add_rounded,
+                      color: palette.primary,
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: palette.onPrimary,
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _HomeSectionHeader extends StatelessWidget {
+  const _HomeSectionHeader({
+    required this.title,
+    this.action,
+    this.onAction,
+  });
+
+  final String title;
+  final String? action;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: Text(
+            title,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: palette.text,
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+        ),
+        if (action != null && onAction != null)
+          TextButton(
+            onPressed: onAction,
+            style: TextButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              foregroundColor: palette.primary,
+            ),
+            child: Text(
+              action!,
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// One timeline row, already resolved from a real source.
+class _WorkRowData {
+  const _WorkRowData({
+    required this.id,
+    required this.tone,
+    required this.icon,
+    required this.tag,
+    required this.title,
+    required this.detail,
+    this.secondary,
+    this.time,
+    this.timeIsAlert = false,
+    this.onTap,
+  });
+
+  final String id;
+  final TpStatusColors tone;
+  final IconData icon;
+  final String tag;
+  final String title;
+  final String detail;
+  final String? secondary;
+  final String? time;
+  final bool timeIsAlert;
+  final VoidCallback? onTap;
+}
+
+/// The timeline's rows plus what could not be read.
+class _TodaysWork {
+  const _TodaysWork({
+    required this.rows,
+    required this.failed,
+    required this.loading,
+  });
+
+  final List<_WorkRowData> rows;
+
+  /// Localised names of the sources whose read failed.
+  final List<String> failed;
+
+  /// True while any source is still loading.
+  final bool loading;
+}
+
+class _TodaysWorkCard extends StatelessWidget {
+  const _TodaysWorkCard({required this.work});
+
+  final _TodaysWork work;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    final List<_WorkRowData> rows = <_WorkRowData>[
+      ...work.rows,
+      if (work.failed.isNotEmpty)
+        _WorkRowData(
+          id: 'unavailable',
+          tone: palette.unknown,
+          icon: Icons.sync_problem_rounded,
+          tag: l10n.homeStatUnavailableCaption,
+          title: l10n.homeStatUnavailableCaption,
+          detail: work.failed.join(' • '),
+        ),
+      if (work.rows.isEmpty && work.failed.isEmpty && work.loading)
+        _WorkRowData(
+          id: 'loading',
+          tone: palette.unknown,
+          icon: Icons.hourglass_empty_rounded,
+          tag: l10n.homeStatLoadingCaption,
+          title: l10n.homeStatLoadingCaption,
+          detail: '',
+        ),
+      if (work.rows.isEmpty && work.failed.isEmpty && !work.loading)
+        _WorkRowData(
+          id: 'empty',
+          tone: palette.ok,
+          icon: Icons.task_alt_rounded,
+          tag: '',
+          title: l10n.checklistApprovalsEmptyMineTitle,
+          detail: '',
+        ),
+    ];
+
+    return DecoratedBox(
+      key: HomeScreenKeys.todaysWork,
+      decoration: BoxDecoration(
+        color: palette.surface,
+        borderRadius: BorderRadius.circular(TpRadius.md),
+        border: Border.all(color: palette.border),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(TpRadius.md),
+        child: Column(
+          children: <Widget>[
+            for (int i = 0; i < rows.length; i++)
+              _WorkTimelineRow(
+                key: HomeScreenKeys.workRow(rows[i].id),
+                data: rows[i],
+                isFirst: i == 0,
+                isLast: i == rows.length - 1,
+                // Status rows (loading, empty, unavailable) carry no tag:
+                // the title already says it, and a tag repeating the title
+                // is noise.
+                showTag: work.rows.contains(rows[i]),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WorkTimelineRow extends StatelessWidget {
+  const _WorkTimelineRow({
+    required this.data,
+    required this.isFirst,
+    required this.isLast,
+    required this.showTag,
+    super.key,
+  });
+
+  final _WorkRowData data;
+  final bool isFirst;
+  final bool isLast;
+  final bool showTag;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final TextTheme text = Theme.of(context).textTheme;
+    final bool rtl = Directionality.of(context) == TextDirection.rtl;
+    final String? time = data.time;
+
+    Widget connector(bool visible) => Expanded(
+          child: Center(
+            child: SizedBox(
+              width: 2,
+              height: double.infinity,
+              child: ColoredBox(
+                color: visible ? palette.border : Colors.transparent,
+              ),
+            ),
+          ),
+        );
+
+    return Semantics(
+      button: data.onTap != null,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: data.onTap,
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                SizedBox(
+                  width: 68,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: <Widget>[
+                      Column(
+                        children: <Widget>[
+                          connector(!isFirst),
+                          connector(!isLast),
+                        ],
+                      ),
+                      Center(
+                        child: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: data.tone.soft,
+                            shape: BoxShape.circle,
+                            border:
+                                Border.all(color: palette.surface, width: 3),
+                          ),
+                          child: Icon(
+                            data.icon,
+                            color: data.tone.base,
+                            size: 22,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      border: isLast
+                          ? null
+                          : Border(
+                              bottom: BorderSide(color: palette.border),
+                            ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsetsDirectional.fromSTEB(
+                        0,
+                        12,
+                        8,
+                        12,
+                      ),
+                      child: Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: <Widget>[
+                                if (showTag || time != null) ...<Widget>[
+                                  Row(
+                                    children: <Widget>[
+                                      Expanded(
+                                        child: showTag
+                                            ? Align(
+                                                alignment: AlignmentDirectional
+                                                    .centerStart,
+                                                child: _StatusTag(
+                                                  label: data.tag,
+                                                  tone: data.tone,
+                                                ),
+                                              )
+                                            : const SizedBox.shrink(),
+                                      ),
+                                      if (time != null) ...<Widget>[
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          time,
+                                          maxLines: 1,
+                                          style: text.labelSmall?.copyWith(
+                                            color: data.timeIsAlert
+                                                ? data.tone.base
+                                                : palette.textSecondary,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                ],
+                                Text(
+                                  data.title,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: text.titleSmall?.copyWith(
+                                    color: palette.text,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                if (data.detail.isNotEmpty) ...<Widget>[
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    data.detail,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: text.bodySmall?.copyWith(
+                                      color: palette.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                                if (data.secondary != null) ...<Widget>[
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    data.secondary!,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: text.bodySmall?.copyWith(
+                                      color: palette.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          if (data.onTap != null) ...<Widget>[
+                            const SizedBox(width: 6),
+                            Icon(
+                              rtl
+                                  ? Icons.chevron_left_rounded
+                                  : Icons.chevron_right_rounded,
+                              color: palette.text,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusTag extends StatelessWidget {
+  const _StatusTag({required this.label, required this.tone});
+
+  final String label;
+  final TpStatusColors tone;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: tone.soft,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        label.toUpperCase(),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: tone.onSoft,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.3,
+            ),
       ),
     );
   }
@@ -1347,984 +1419,49 @@ class _AccidentCommandShortcut extends StatelessWidget {
   }
 }
 
-class _PmvOperationsHero extends StatelessWidget {
-  const _PmvOperationsHero({required this.l10n, required this.onTap});
-
-  final AppLocalizations l10n;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final TpPalette palette = TpPalette.of(context);
-    final BorderRadius radius = BorderRadius.circular(TpRadius.lg);
-    return Semantics(
-      button: onTap != null,
-      label: '${l10n.scannerTitle}: ${l10n.homeAssetAction}',
-      child: Material(
-        key: HomeScreenKeys.pmvHero,
-        color: const Color(0xFFF4F8F6),
-        borderRadius: radius,
-        clipBehavior: Clip.antiAlias,
-        child: SizedBox(
-          height: 154,
-          child: LayoutBuilder(
-            builder: (BuildContext context, BoxConstraints constraints) {
-              final double cardWidth = constraints.maxWidth * 0.59;
-              final BorderRadius tapRadius =
-                  Directionality.of(context) == TextDirection.rtl
-                      ? const BorderRadius.only(
-                          topLeft: Radius.circular(TpRadius.xl),
-                          bottomLeft: Radius.circular(TpRadius.xl),
-                        )
-                      : const BorderRadius.only(
-                          topRight: Radius.circular(TpRadius.xl),
-                          bottomRight: Radius.circular(TpRadius.xl),
-                        );
-              return Stack(
-                fit: StackFit.expand,
-                children: <Widget>[
-                  PositionedDirectional(
-                    top: 0,
-                    bottom: 0,
-                    start: 0,
-                    width: cardWidth,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        borderRadius: const BorderRadiusDirectional.only(
-                          topEnd: Radius.circular(TpRadius.xl),
-                          bottomEnd: Radius.circular(TpRadius.xl),
-                        ),
-                        gradient: LinearGradient(
-                          begin: AlignmentDirectional.topStart,
-                          end: AlignmentDirectional.bottomEnd,
-                          colors: <Color>[
-                            Color.lerp(
-                              palette.primary,
-                              const Color(0xFF006B36),
-                              0.25,
-                            )!,
-                            Color.lerp(
-                              palette.primary,
-                              palette.ok.base,
-                              0.34,
-                            )!,
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  PositionedDirectional(
-                    top: 20,
-                    bottom: 20,
-                    end: 20,
-                    width: constraints.maxWidth * 0.34,
-                    child: IgnorePointer(
-                      child: DecoratedBox(
-                        key: HomeScreenKeys.pmvHeroImage,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.94),
-                          borderRadius: BorderRadius.circular(TpRadius.lg),
-                          boxShadow: <BoxShadow>[
-                            BoxShadow(
-                              color:
-                                  palette.primaryDark.withValues(alpha: 0.12),
-                              blurRadius: 16,
-                              offset: const Offset(0, 6),
-                            ),
-                          ],
-                        ),
-                        child: Icon(
-                          Icons.qr_code_scanner_rounded,
-                          color: palette.primary,
-                          size: 62,
-                        ),
-                      ),
-                    ),
-                  ),
-                  PositionedDirectional(
-                    top: 0,
-                    bottom: 0,
-                    start: 0,
-                    width: cardWidth,
-                    child: InkWell(
-                      onTap: onTap,
-                      borderRadius: tapRadius,
-                      child: Padding(
-                        padding: const EdgeInsetsDirectional.fromSTEB(
-                          18,
-                          18,
-                          28,
-                          16,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Container(
-                              width: 38,
-                              height: 38,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(
-                                  TpRadius.sm,
-                                ),
-                              ),
-                              child: Stack(
-                                clipBehavior: Clip.none,
-                                children: <Widget>[
-                                  Center(
-                                    child: Icon(
-                                      Icons.document_scanner_outlined,
-                                      color: palette.primary,
-                                      size: 23,
-                                    ),
-                                  ),
-                                  PositionedDirectional(
-                                    end: -4,
-                                    bottom: -4,
-                                    child: Container(
-                                      width: 17,
-                                      height: 17,
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        shape: BoxShape.circle,
-                                        border: Border.all(
-                                          color: palette.primary,
-                                          width: 1.5,
-                                        ),
-                                      ),
-                                      child: Icon(
-                                        Icons.center_focus_strong_rounded,
-                                        color: palette.primary,
-                                        size: 13,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const Spacer(),
-                            Text(
-                              l10n.scannerTitle,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
-                                  ?.copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                            ),
-                            const SizedBox(height: 2),
-                            Row(
-                              children: <Widget>[
-                                Expanded(
-                                  child: Text(
-                                    l10n.homeSearchAssetsHint,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .labelSmall
-                                        ?.copyWith(
-                                          color: Colors.white.withValues(
-                                            alpha: 0.86,
-                                          ),
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                  ),
-                                ),
-                                const SizedBox(width: 5),
-                                Icon(
-                                  Directionality.of(context) ==
-                                          TextDirection.rtl
-                                      ? Icons.arrow_back_rounded
-                                      : Icons.arrow_forward_rounded,
-                                  color: Colors.white,
-                                  size: 18,
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DashboardGreeting extends ConsumerWidget {
-  const _DashboardGreeting({
-    required this.l10n,
-    required this.fullName,
-    required this.workspace,
-    required this.onSiteTap,
-  });
-
-  final AppLocalizations l10n;
-  final String? fullName;
-  final WorkspaceContext? workspace;
-  final VoidCallback onSiteTap;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final DateTime now = ref.watch(homeHeaderClockProvider)();
-    final TpPalette palette = TpPalette.of(context);
-    final int hour = now.hour;
-    final String greeting = hour < 12
-        ? l10n.homeGoodMorning
-        : hour < 17
-            ? l10n.homeGoodAfternoon
-            : l10n.homeGoodEvening;
-    final String name = _firstName(fullName) ?? l10n.homeFallbackUser;
-    final String site =
-        _workspaceSiteLabel(workspace) ?? l10n.homeSiteStatUnavailable;
-
-    return Row(
-      key: HomeScreenKeys.hero,
-      children: <Widget>[
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                greeting,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: palette.textSecondary,
-                      fontWeight: FontWeight.w500,
-                    ),
-              ),
-              Text(
-                name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: palette.text,
-                      fontWeight: FontWeight.w800,
-                    ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 10),
-        Material(
-          color: palette.surfaceAlt,
-          borderRadius: BorderRadius.circular(TpRadius.sm),
-          child: InkWell(
-            onTap: onSiteTap,
-            borderRadius: BorderRadius.circular(TpRadius.sm),
-            child: Container(
-              constraints: const BoxConstraints(minHeight: 40, maxWidth: 138),
-              padding: const EdgeInsetsDirectional.fromSTEB(10, 6, 7, 6),
-              decoration: BoxDecoration(
-                border: Border.all(color: palette.border),
-                borderRadius: BorderRadius.circular(TpRadius.sm),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Flexible(
-                    child: Text(
-                      site,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: palette.text,
-                            fontWeight: FontWeight.w700,
-                          ),
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    Icons.keyboard_arrow_down_rounded,
-                    size: 16,
-                    color: palette.textSecondary,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  String? _firstName(String? raw) {
-    final String value = raw?.trim() ?? '';
-    if (value.isEmpty) return null;
-    final String first = value.split(RegExp(r'\s+')).first;
-    if (first.isEmpty) return null;
-    return '${first[0].toUpperCase()}${first.substring(1)}';
-  }
-}
-
-class _HomeSectionHeader extends StatelessWidget {
-  const _HomeSectionHeader({
-    required this.title,
-    this.action,
-    this.onAction,
-  });
-
-  final String title;
-  final String? action;
-  final VoidCallback? onAction;
-
-  @override
-  Widget build(BuildContext context) {
-    final TpPalette palette = TpPalette.of(context);
-    return SizedBox(
-      height: 20,
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: Text(
-              title.toUpperCase(),
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: palette.text,
-                    fontSize: 10,
-                    letterSpacing: 0.15,
-                    fontWeight: FontWeight.w800,
-                  ),
-            ),
-          ),
-          if (action != null && onAction != null)
-            InkWell(
-              onTap: onAction,
-              borderRadius: BorderRadius.circular(TpRadius.sm),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
-                child: Text(
-                  action!,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: palette.primary,
-                        fontWeight: FontWeight.w800,
-                      ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AttentionRow extends StatelessWidget {
-  const _AttentionRow({
-    required this.l10n,
-    required this.approvals,
-    required this.tasks,
-    required this.alerts,
-    required this.onViewAll,
-    required this.onApprovals,
-    required this.onTasks,
-    required this.onAlerts,
-  });
-
-  final AppLocalizations l10n;
-  final AsyncValue<List<InspectionApprovalItem>>? approvals;
-  final AsyncValue<List<TaskItem>>? tasks;
-  final AsyncValue<List<TyreAlert>>? alerts;
-  final VoidCallback? onViewAll;
-  final VoidCallback? onApprovals;
-  final VoidCallback? onTasks;
-  final VoidCallback? onAlerts;
-
-  @override
-  Widget build(BuildContext context) {
-    final TpPalette palette = TpPalette.of(context);
-    return DecoratedBox(
-      key: HomeScreenKeys.stats,
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: BorderRadius.circular(TpRadius.md),
-        border: Border.all(color: palette.border),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: palette.text.withValues(alpha: 0.045),
-            blurRadius: 14,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: Column(
-        children: <Widget>[
-          Padding(
-            padding: const EdgeInsetsDirectional.fromSTEB(13, 10, 8, 9),
-            child: Row(
-              children: <Widget>[
-                Icon(Icons.monitor_heart_outlined, color: palette.primary),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    l10n.homeAttentionRequired.toUpperCase(),
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: palette.text,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0.15,
-                        ),
-                  ),
-                ),
-                if (onViewAll != null)
-                  TextButton.icon(
-                    onPressed: onViewAll,
-                    iconAlignment: IconAlignment.end,
-                    icon: Icon(
-                      Directionality.of(context) == TextDirection.rtl
-                          ? Icons.chevron_left_rounded
-                          : Icons.chevron_right_rounded,
-                      size: 17,
-                    ),
-                    label: Text(l10n.homeViewAll),
-                  ),
-              ],
-            ),
-          ),
-          Divider(height: 1, color: palette.border),
-          IntrinsicHeight(
-            child: Row(
-              children: <Widget>[
-                Expanded(
-                  child: _AttentionMetric(
-                    value: _countText<InspectionApprovalItem>(
-                      approvals,
-                      cap: 100,
-                      where: (_) => true,
-                    ),
-                    label: l10n.homeApprovalsMetric,
-                    icon: Icons.assignment_turned_in_outlined,
-                    background: const Color(0xFFFFF0DC),
-                    foreground: const Color(0xFFEA580C),
-                    onTap: onApprovals,
-                  ),
-                ),
-                VerticalDivider(width: 1, color: palette.border),
-                Expanded(
-                  child: _AttentionMetric(
-                    value: _countText<TaskItem>(
-                      tasks,
-                      cap: 100,
-                      where: _isOverdueTask,
-                    ),
-                    label: l10n.homeOverdueMetric,
-                    icon: Icons.timer_outlined,
-                    background: const Color(0xFFFFF7D6),
-                    foreground: const Color(0xFFD97706),
-                    onTap: onTasks,
-                  ),
-                ),
-                VerticalDivider(width: 1, color: palette.border),
-                Expanded(
-                  child: _AttentionMetric(
-                    value: _countText<TyreAlert>(
-                      alerts,
-                      cap: 300,
-                      where: (TyreAlert alert) => alert.isCritical,
-                    ),
-                    label: l10n.homeCriticalMetric,
-                    icon: Icons.warning_rounded,
-                    background: const Color(0xFFFDE6E8),
-                    foreground: const Color(0xFFDC2626),
-                    onTap: onAlerts,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AttentionMetric extends StatelessWidget {
-  const _AttentionMetric({
-    required this.value,
-    required this.label,
-    required this.icon,
-    required this.background,
-    required this.foreground,
-    required this.onTap,
-  });
-
-  final String value;
-  final String label;
-  final IconData icon;
-  final Color background;
-  final Color foreground;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: SizedBox(
-          height: 110,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 9),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-                Container(
-                  width: 29,
-                  height: 29,
-                  decoration: BoxDecoration(
-                    color: background,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(icon, color: foreground, size: 18),
-                ),
-                const SizedBox(height: 5),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
-                  children: <Widget>[
-                    Flexible(
-                      child: Text(
-                        value,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              color: foreground,
-                              fontSize: 22,
-                              height: 1,
-                              fontWeight: FontWeight.w900,
-                            ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  label,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: const Color(0xFF111827),
-                        fontSize: 9.5,
-                        height: 1.05,
-                        fontWeight: FontWeight.w700,
-                      ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TyreIssuePreview extends StatelessWidget {
-  const _TyreIssuePreview({
-    required this.l10n,
-    required this.alerts,
-    required this.onOpen,
-  });
-
-  final AppLocalizations l10n;
-  final AsyncValue<List<TyreAlert>>? alerts;
-  final VoidCallback? onOpen;
-
-  @override
-  Widget build(BuildContext context) {
-    final TpPalette palette = TpPalette.of(context);
-    final List<TyreAlert>? items = _asyncItems(alerts);
-    final TyreAlert? alert = items == null || items.isEmpty
-        ? null
-        : items.cast<TyreAlert?>().firstWhere(
-              (TyreAlert? item) => item?.isCritical == true,
-              orElse: () => items.first,
-            );
-    final bool loadingOrFailed = alerts != null && items == null;
-    final String title = loadingOrFailed
-        ? l10n.homeStatUnavailableCaption
-        : alert == null
-            ? l10n.homeNoCriticalIssueTitle
-            : l10n.homeTyreIssueDetected;
-    final String asset = alert?.assetNo?.trim().isNotEmpty == true
-        ? alert!.assetNo!.trim()
-        : l10n.valueNotMeasured;
-    final String details = alert == null
-        ? l10n.homeNoCriticalIssueMessage
-        : <String?>[
-            alert.position,
-            alert.site,
-          ]
-            .whereType<String>()
-            .where((String value) => value.isNotEmpty)
-            .join(' • ');
-    final TpStatusColors tone = loadingOrFailed
-        ? palette.unknown
-        : alert == null
-            ? palette.ok
-            : alert.isCritical
-                ? palette.critical
-                : palette.warning;
-    final IconData icon = loadingOrFailed
-        ? Icons.sync_problem_rounded
-        : alert == null
-            ? Icons.verified_rounded
-            : alert.isCritical
-                ? Icons.warning_amber_rounded
-                : Icons.error_outline_rounded;
-    final DateTime? issueDate = DateTime.tryParse(alert?.issueDate ?? '');
-    final String? when = issueDate == null
-        ? null
-        : MaterialLocalizations.of(context)
-            .formatShortDate(issueDate.toLocal());
-
-    return Material(
-      color: palette.surface,
-      borderRadius: BorderRadius.circular(TpRadius.sm),
-      child: InkWell(
-        onTap: onOpen,
-        borderRadius: BorderRadius.circular(TpRadius.sm),
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 112),
-          padding: const EdgeInsets.all(11),
-          decoration: BoxDecoration(
-            border: Border.all(color: palette.border),
-            borderRadius: BorderRadius.circular(TpRadius.sm),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: <Widget>[
-              Align(
-                alignment: Alignment.center,
-                child: Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: tone.soft,
-                    borderRadius: BorderRadius.circular(TpRadius.sm),
-                  ),
-                  child: Icon(
-                    icon,
-                    color: tone.base,
-                    size: 19,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Row(
-                        children: <Widget>[
-                          Expanded(
-                            child: Text(
-                              title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .labelMedium
-                                  ?.copyWith(
-                                    color: palette.text,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                            ),
-                          ),
-                          if (when != null) ...<Widget>[
-                            const SizedBox(width: 6),
-                            Text(
-                              when,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .labelSmall
-                                  ?.copyWith(fontSize: 9),
-                            ),
-                          ],
-                        ],
-                      ),
-                      if (alert != null) ...<Widget>[
-                        const SizedBox(height: 2),
-                        Text(
-                          asset,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style:
-                              Theme.of(context).textTheme.labelSmall?.copyWith(
-                                    color: palette.text,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                        ),
-                      ],
-                      const SizedBox(height: 2),
-                      Text(
-                        details.isEmpty ? l10n.valueNotMeasured : details,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: palette.textSecondary,
-                              fontSize: 10,
-                              height: 1.2,
-                            ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              if (onOpen != null)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    const SizedBox(width: 8),
-                    Text(
-                      l10n.homeReviewAction,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: palette.primary,
-                            fontWeight: FontWeight.w800,
-                          ),
-                    ),
-                    Icon(
-                      Icons.chevron_right_rounded,
-                      color: palette.primary,
-                      size: 17,
-                    ),
-                  ],
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MyWorkPreview extends StatelessWidget {
-  const _MyWorkPreview({
-    required this.l10n,
-    required this.tasks,
-    required this.assigneeId,
-    required this.assigneeName,
-    required this.onOpen,
-  });
-
-  final AppLocalizations l10n;
-  final AsyncValue<List<TaskItem>>? tasks;
-  final String? assigneeId;
-  final String? assigneeName;
-  final VoidCallback? onOpen;
-
-  @override
-  Widget build(BuildContext context) {
-    final List<TaskItem>? items = _asyncItems(tasks);
-    final TasksCopy taskCopy = TasksCopy.of(context);
-    final Set<String> assignees = <String>{
-      if (assigneeId?.trim().isNotEmpty == true)
-        assigneeId!.trim().toLowerCase(),
-      if (assigneeName?.trim().isNotEmpty == true)
-        assigneeName!.trim().toLowerCase(),
-    };
-    final List<TaskItem> mine = items
-            ?.where(
-              (TaskItem item) => assignees.contains(
-                item.assignedTo?.trim().toLowerCase(),
-              ),
-            )
-            .toList(growable: false) ??
-        const <TaskItem>[];
-    final TaskItem? task = mine.cast<TaskItem?>().firstWhere(
-          (TaskItem? item) =>
-              item != null && isTaskUrgent(item, DateTime.now()),
-          orElse: () => mine.cast<TaskItem?>().firstWhere(
-                (TaskItem? item) => item != null && !isTaskCompleted(item),
-                orElse: () => null,
-              ),
-        );
-    final bool loadingOrFailed = tasks != null && items == null;
-    final String title = loadingOrFailed
-        ? l10n.homeStatUnavailableCaption
-        : task?.title ?? l10n.homeNoUrgentWorkTitle;
-    final String detail = task == null
-        ? l10n.homeNoUrgentWorkMessage
-        : <String?>[task.assetNo, task.description]
-            .whereType<String>()
-            .where((String value) => value.isNotEmpty)
-            .join(' • ');
-    final TpPalette palette = TpPalette.of(context);
-    final bool urgent = task != null && isTaskUrgent(task, DateTime.now());
-    final TpStatusColors tone = urgent ? palette.critical : palette.ok;
-    final String? due = task?.dueDate == null
-        ? null
-        : MaterialLocalizations.of(context)
-            .formatMediumDate(task!.dueDate!.toLocal());
-    final String meta = <String?>[due, task?.site]
-        .whereType<String>()
-        .where((String value) => value.trim().isNotEmpty)
-        .join(' • ');
-
-    return Material(
-      color: palette.surface,
-      borderRadius: BorderRadius.circular(TpRadius.sm),
-      child: InkWell(
-        onTap: onOpen,
-        borderRadius: BorderRadius.circular(TpRadius.sm),
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 96),
-          padding: const EdgeInsets.all(11),
-          decoration: BoxDecoration(
-            border: Border.all(color: palette.border),
-            borderRadius: BorderRadius.circular(TpRadius.sm),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: <Widget>[
-              Align(
-                alignment: Alignment.center,
-                child: Icon(
-                  urgent ? Icons.bolt_rounded : Icons.work_outline_rounded,
-                  color: tone.base,
-                  size: 18,
-                ),
-              ),
-              const SizedBox(width: 7),
-              Expanded(
-                child: Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Row(
-                        children: <Widget>[
-                          Expanded(
-                            child: Text(
-                              title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .labelMedium
-                                  ?.copyWith(
-                                    color: palette.text,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                            ),
-                          ),
-                          if (urgent)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: tone.base,
-                                borderRadius:
-                                    BorderRadius.circular(TpRadius.pill),
-                              ),
-                              child: Text(
-                                (task.priority ?? taskCopy('urgent'))
-                                    .toUpperCase(),
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .labelSmall
-                                    ?.copyWith(
-                                      color: tone.onBase,
-                                      fontSize: 8,
-                                      height: 1,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        detail,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: palette.textSecondary,
-                              fontSize: 10,
-                              height: 1.2,
-                            ),
-                      ),
-                      if (meta.isNotEmpty) ...<Widget>[
-                        const SizedBox(height: 2),
-                        Text(
-                          meta,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style:
-                              Theme.of(context).textTheme.labelSmall?.copyWith(
-                                    color: palette.textSecondary,
-                                    fontSize: 9,
-                                    height: 1.2,
-                                  ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-              if (onOpen != null) ...<Widget>[
-                const SizedBox(width: 8),
-                Text(
-                  l10n.homeOpenAction,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: palette.primary,
-                        fontWeight: FontWeight.w800,
-                      ),
-                ),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  color: palette.primary,
-                  size: 17,
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
+/// Secondary field actions under the timeline. "More" is always present: it
+/// is the only Home entry into the full permission-gated module catalogue
+/// now that Home no longer draws its own bottom bar.
 class _DashboardQuickActions extends StatelessWidget {
   const _DashboardQuickActions({
     required this.l10n,
+    required this.canScan,
     required this.canWash,
     required this.canSeeVehicles,
     required this.canReportIssue,
     required this.canReportAccident,
+    required this.onScanner,
     required this.onWashing,
     required this.onAsset,
     required this.onReportIssue,
     required this.onAccident,
+    required this.onMore,
   });
 
   final AppLocalizations l10n;
+  final bool canScan;
   final bool canWash;
   final bool canSeeVehicles;
   final bool canReportIssue;
   final bool canReportAccident;
+  final VoidCallback onScanner;
   final VoidCallback onWashing;
   final VoidCallback onAsset;
   final VoidCallback onReportIssue;
   final VoidCallback onAccident;
+  final VoidCallback onMore;
 
   @override
   Widget build(BuildContext context) {
     final actions =
         <({String id, String label, IconData icon, VoidCallback onTap})>[
+      if (canScan)
+        (
+          id: 'scanner',
+          label: l10n.scannerTitle,
+          icon: Icons.qr_code_scanner_rounded,
+          onTap: onScanner,
+        ),
       if (canWash)
         (
           id: 'washing',
@@ -2353,16 +1490,18 @@ class _DashboardQuickActions extends StatelessWidget {
           icon: Icons.car_crash_outlined,
           onTap: onAccident,
         ),
+      (
+        id: 'more',
+        label: l10n.homeMoreAction,
+        icon: Icons.apps_rounded,
+        onTap: onMore,
+      ),
     ];
 
-    if (actions.isEmpty) return const SizedBox.shrink();
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
-        final int columns = actions.length == 1
-            ? 1
-            : constraints.maxWidth >= 280
-                ? actions.length
-                : 2;
+        final int perRow = constraints.maxWidth >= 280 ? 3 : 2;
+        final int columns = actions.length < perRow ? actions.length : perRow;
         final double width =
             (constraints.maxWidth - (columns - 1) * 8) / columns;
         return Wrap(
@@ -2403,619 +1542,46 @@ class _DashboardActionCard extends StatelessWidget {
     final TpPalette palette = TpPalette.of(context);
     return Material(
       color: palette.surface,
-      borderRadius: BorderRadius.circular(TpRadius.sm),
+      borderRadius: BorderRadius.circular(TpRadius.md),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(TpRadius.sm),
+        borderRadius: BorderRadius.circular(TpRadius.md),
         child: Container(
-          height: 104,
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 9),
+          constraints: const BoxConstraints(minHeight: 92),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
           decoration: BoxDecoration(
             border: Border.all(color: palette.border),
-            borderRadius: BorderRadius.circular(TpRadius.sm),
+            borderRadius: BorderRadius.circular(TpRadius.md),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: <Widget>[
               Container(
-                width: 31,
-                height: 31,
+                width: 34,
+                height: 34,
                 decoration: BoxDecoration(
                   color: palette.primarySoft,
                   shape: BoxShape.circle,
                 ),
-                child: Icon(icon, color: palette.primary, size: 18),
+                child: Icon(icon, color: palette.primary, size: 19),
               ),
-              const Spacer(),
+              const SizedBox(height: 10),
               Text(
                 label,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: palette.text,
-                      fontSize: 9.5,
-                      height: 1.05,
-                      fontWeight: FontWeight.w800,
-                    ),
-              ),
-              const SizedBox(height: 3),
-              Align(
-                alignment: AlignmentDirectional.centerEnd,
-                child: Icon(
-                  Directionality.of(context) == TextDirection.rtl
-                      ? Icons.chevron_left_rounded
-                      : Icons.chevron_right_rounded,
-                  color: palette.primary,
-                  size: 16,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _HomeDashboardNavigation extends StatelessWidget {
-  const _HomeDashboardNavigation({
-    required this.l10n,
-    required this.canInspect,
-    required this.canSeeTasks,
-    required this.canSeeAlerts,
-    required this.onHome,
-    required this.onMyWork,
-    required this.onInspect,
-    required this.onAlerts,
-    required this.onMore,
-  });
-
-  final AppLocalizations l10n;
-  final bool canInspect;
-  final bool canSeeTasks;
-  final bool canSeeAlerts;
-  final VoidCallback onHome;
-  final VoidCallback onMyWork;
-  final VoidCallback onInspect;
-  final VoidCallback onAlerts;
-  final VoidCallback onMore;
-
-  @override
-  Widget build(BuildContext context) {
-    final TpPalette palette = TpPalette.of(context);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: palette.surface,
-        border: Border(top: BorderSide(color: palette.border)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: 66,
-          child: Row(
-            children: <Widget>[
-              Expanded(
-                child: _HomeNavItem(
-                  icon: Icons.home_rounded,
-                  label: l10n.homeNavTitle,
-                  selected: true,
-                  onTap: onHome,
-                ),
-              ),
-              Expanded(
-                child: _HomeNavItem(
-                  icon: Icons.assignment_outlined,
-                  label: l10n.homeMyWork,
-                  onTap: canSeeTasks ? onMyWork : null,
-                ),
-              ),
-              Expanded(
-                child: _HomeNavItem(
-                  icon: Icons.add_rounded,
-                  label: l10n.homeInspectAction,
-                  raised: true,
-                  onTap: canInspect ? onInspect : null,
-                ),
-              ),
-              Expanded(
-                child: _HomeNavItem(
-                  icon: Icons.notifications_none_rounded,
-                  label: l10n.homeAlertsAction,
-                  onTap: canSeeAlerts ? onAlerts : null,
-                ),
-              ),
-              Expanded(
-                child: _HomeNavItem(
-                  icon: Icons.menu_rounded,
-                  label: l10n.homeMoreAction,
-                  onTap: onMore,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _HomeNavItem extends StatelessWidget {
-  const _HomeNavItem({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.selected = false,
-    this.raised = false,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback? onTap;
-  final bool selected;
-  final bool raised;
-
-  @override
-  Widget build(BuildContext context) {
-    final TpPalette palette = TpPalette.of(context);
-    final Color ink = selected ? palette.primary : palette.textSecondary;
-    return InkResponse(
-      onTap: onTap,
-      radius: 30,
-      child: Opacity(
-        opacity: onTap == null ? 0.45 : 1,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Container(
-              width: raised ? 39 : 28,
-              height: raised ? 39 : 28,
-              decoration: raised
-                  ? BoxDecoration(
-                      color: palette.primary,
-                      shape: BoxShape.circle,
-                    )
-                  : null,
-              alignment: Alignment.center,
-              child: Icon(
-                icon,
-                size: raised ? 23 : 20,
-                color: raised ? palette.onPrimary : ink,
-              ),
-            ),
-            SizedBox(height: raised ? 1 : 2),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: selected ? palette.primary : palette.textSecondary,
-                    fontSize: 9,
-                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                  ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// The page's visual anchor: product scope first, then only the two genuinely
-/// reachable high-frequency field actions admitted by the access resolver.
-// Kept temporarily as a compatibility reference for older Home goldens while
-// the approved dashboard replaces it.
-// ignore: unused_element
-class _HomeHero extends StatelessWidget {
-  const _HomeHero({
-    required this.l10n,
-    required this.workspace,
-    required this.canInspect,
-    required this.canScan,
-    required this.canSeeVehicles,
-  });
-
-  final AppLocalizations l10n;
-  final WorkspaceContext? workspace;
-  final bool canInspect;
-  final bool canScan;
-  final bool canSeeVehicles;
-
-  @override
-  Widget build(BuildContext context) {
-    final TpPalette palette = TpPalette.of(context);
-    final TextTheme text = Theme.of(context).textTheme;
-
-    final String? site = workspace?.legacySite?.trim();
-
-    return Column(
-      key: HomeScreenKeys.hero,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    l10n.homeGreeting,
-                    style: text.bodyMedium?.copyWith(
-                      color: palette.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    l10n.loginOperationsTitle,
-                    style: text.headlineSmall?.copyWith(
-                      color: palette.text,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: TpSpace.sm),
-            Container(
-              constraints: const BoxConstraints(maxWidth: 136),
-              padding: const EdgeInsets.symmetric(
-                horizontal: TpSpace.md,
-                vertical: TpSpace.sm,
-              ),
-              decoration: BoxDecoration(
-                color: palette.surfaceAlt,
-                border: Border.all(color: palette.border),
-                borderRadius: BorderRadius.circular(TpRadius.md),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Icon(
-                    Icons.location_on_outlined,
-                    size: TpSizing.iconSm,
-                    color: palette.primary,
-                  ),
-                  const SizedBox(width: TpSpace.xs),
-                  Flexible(
-                    child: Text(
-                      site?.isNotEmpty == true ? site! : l10n.valueNotMeasured,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: text.labelMedium?.copyWith(color: palette.text),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        if (canInspect || canScan || canSeeVehicles) ...<Widget>[
-          const SizedBox(height: TpSpace.xl),
-          _PrimaryActionGrid(
-            l10n: l10n,
-            canInspect: canInspect,
-            canScan: canScan,
-            canSeeVehicles: canSeeVehicles,
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-class _PrimaryActionGrid extends StatelessWidget {
-  const _PrimaryActionGrid({
-    required this.l10n,
-    required this.canInspect,
-    required this.canScan,
-    required this.canSeeVehicles,
-  });
-
-  final AppLocalizations l10n;
-  final bool canInspect;
-  final bool canScan;
-  final bool canSeeVehicles;
-
-  @override
-  Widget build(BuildContext context) {
-    final List<({String label, IconData icon, VoidCallback onTap})> actions =
-        <({String label, IconData icon, VoidCallback onTap})>[
-      if (canInspect)
-        (
-          label: l10n.inspectionNavTitle,
-          icon: Icons.search_rounded,
-          onTap: () => context.go(const NewInspectionRoute().location),
-        ),
-      if (canScan)
-        (
-          label: l10n.scannerTitle,
-          icon: Icons.qr_code_scanner_rounded,
-          onTap: () => context.push(const ScannerRoute().location),
-        ),
-      if (canSeeVehicles)
-        (
-          label: l10n.vehiclesTitle,
-          icon: Icons.local_shipping_outlined,
-          onTap: () => context.push(const VehiclesRoute().location),
-        ),
-    ];
-
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        final int columns = constraints.maxWidth >= 340 ? 3 : 2;
-        final double width =
-            (constraints.maxWidth - TpSpace.sm * (columns - 1)) / columns;
-        return Wrap(
-          spacing: TpSpace.sm,
-          runSpacing: TpSpace.sm,
-          children: <Widget>[
-            for (final action in actions)
-              SizedBox(
-                width: width,
-                child: _PrimaryActionCard(
-                  label: action.label,
-                  icon: action.icon,
-                  onTap: action.onTap,
-                ),
-              ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _PrimaryActionCard extends StatelessWidget {
-  const _PrimaryActionCard({
-    required this.label,
-    required this.icon,
-    required this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final TpPalette palette = TpPalette.of(context);
-    return TpCard(
-      onTap: onTap,
-      padding: const EdgeInsets.symmetric(
-        horizontal: TpSpace.sm,
-        vertical: TpSpace.md,
-      ),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 72),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Icon(icon, color: palette.primary, size: TpSizing.iconLg),
-            const SizedBox(height: TpSpace.sm),
-            Text(
-              label,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: palette.text,
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Real operational context cards with adaptive widths. Unlike the former
-/// stretched Row, this remains finite inside a vertical scroll view and lets
-/// each card grow naturally when Arabic, Urdu or a long site name needs it.
-// ignore: unused_element
-class _ResponsiveStats extends StatelessWidget {
-  const _ResponsiveStats({required this.cards});
-
-  final List<Widget> cards;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      key: HomeScreenKeys.stats,
-      builder: (BuildContext context, BoxConstraints constraints) {
-        final int columns = constraints.maxWidth >= 720
-            ? cards.length
-            : constraints.maxWidth >= 360
-                ? (cards.length < 2 ? cards.length : 2)
-                : 1;
-        final int safeColumns = columns < 1 ? 1 : columns;
-        final double width =
-            (constraints.maxWidth - TpSpace.md * (safeColumns - 1)) /
-                safeColumns;
-
-        return Wrap(
-          spacing: TpSpace.md,
-          runSpacing: TpSpace.md,
-          children: <Widget>[
-            for (final Widget card in cards)
-              SizedBox(width: width, child: card),
-          ],
-        );
-      },
-    );
-  }
-}
-
-// ignore: unused_element
-class _ServiceSection extends StatelessWidget {
-  const _ServiceSection({required this.section, required this.l10n});
-
-  final HomeSectionSpec section;
-  final AppLocalizations l10n;
-
-  @override
-  Widget build(BuildContext context) {
-    final TpPalette palette = TpPalette.of(context);
-    final ({IconData icon, TpStatusColors tone}) meta = _sectionMeta(
-      palette,
-      section.id,
-    );
-
-    return Column(
-      key: HomeScreenKeys.section(section.id),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        Row(
-          children: <Widget>[
-            Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                color: meta.tone.soft,
-                borderRadius: BorderRadius.circular(TpRadius.sm),
-              ),
-              child: Icon(
-                meta.icon,
-                size: TpSizing.iconSm,
-                color: meta.tone.onSoft,
-              ),
-            ),
-            const SizedBox(width: TpSpace.sm),
-            Expanded(
-              child: Text(
-                _sectionHeading(l10n, section.id),
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
+                      color: palette.text,
+                      height: 1.15,
+                      fontWeight: FontWeight.w700,
                     ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: TpSpace.sm),
-        LayoutBuilder(
-          builder: (BuildContext context, BoxConstraints constraints) {
-            final int columns = constraints.maxWidth >= 700
-                ? 3
-                : constraints.maxWidth >= 380
-                    ? 2
-                    : 1;
-            final double tileWidth =
-                (constraints.maxWidth - TpSpace.sm * (columns - 1)) / columns;
-
-            return Wrap(
-              spacing: TpSpace.sm,
-              runSpacing: TpSpace.sm,
-              children: <Widget>[
-                for (final HomeTileSpec tile in section.tiles)
-                  SizedBox(
-                    width: tileWidth,
-                    child: _QuickActionTile(id: tile.id, l10n: l10n),
-                  ),
-              ],
-            );
-          },
-        ),
-      ],
-    );
-  }
-}
-
-/// One reachable action. Its width is chosen by [_ServiceSection], while its
-/// height is content-driven so translated labels are never clipped or replaced
-/// with an ellipsis.
-class _QuickActionTile extends StatelessWidget {
-  const _QuickActionTile({required this.id, required this.l10n});
-
-  final String id;
-  final AppLocalizations l10n;
-
-  @override
-  Widget build(BuildContext context) {
-    final ({String label, IconData icon, bool approve}) meta = _tileMeta(
-      l10n,
-      id,
-    );
-    final TpPalette palette = TpPalette.of(context);
-    // Type inferred deliberately - the tone object's own class name was not
-    // independently confirmed while writing this, and `palette.ok`/
-    // `palette.info` are both proven shapes already (see this file's own
-    // `.soft`/`.onSoft` usage below, mirroring the pattern the file this
-    // screen replaces used for its one tile).
-    final tone = meta.approve ? palette.ok : palette.info;
-
-    return Semantics(
-      button: true,
-      label: meta.label,
-      child: TpCard(
-        key: HomeScreenKeys.action(id),
-        onTap: () => _openHomeTile(context, id),
-        background: palette.surface,
-        padding: const EdgeInsets.symmetric(
-          horizontal: TpSpace.md,
-          vertical: TpSpace.sm,
-        ),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            minHeight: TpSizing.minTouchTarget,
-          ),
-          child: Row(
-            children: <Widget>[
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  color: tone.soft,
-                  shape: BoxShape.circle,
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(TpSpace.sm),
-                  child: Icon(
-                    meta.icon,
-                    size: TpSizing.iconMd,
-                    color: tone.onSoft,
-                  ),
-                ),
-              ),
-              const SizedBox(width: TpSpace.md),
-              Expanded(
-                child: Text(
-                  meta.label,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                ),
-              ),
-              const SizedBox(width: TpSpace.xs),
-              Icon(
-                Directionality.of(context) == TextDirection.rtl
-                    ? Icons.chevron_left
-                    : Icons.chevron_right,
-                size: TpSizing.iconMd,
-                color: palette.textMuted,
               ),
             ],
           ),
         ),
       ),
     );
-  }
-}
-
-({IconData icon, TpStatusColors tone}) _sectionMeta(
-  TpPalette palette,
-  String id,
-) {
-  switch (id) {
-    case 'field':
-      return (icon: Icons.engineering_outlined, tone: palette.ok);
-    case 'fleet':
-      return (icon: Icons.local_shipping_outlined, tone: palette.info);
-    case 'maintenance':
-      return (icon: Icons.handyman_outlined, tone: palette.warning);
-    case 'management':
-      return (icon: Icons.insights_outlined, tone: palette.info);
-    case 'approvals':
-      return (icon: Icons.verified_outlined, tone: palette.ok);
-    default:
-      return (icon: Icons.apps_outlined, tone: palette.neutral);
   }
 }
 
@@ -3313,114 +1879,4 @@ void _openHomeTile(BuildContext context, String id) {
       context.go(const InspectionApprovalsRoute().location);
       return;
   }
-}
-
-/// The localised heading for one section [id] in [_kHomeSections].
-String _sectionHeading(AppLocalizations l10n, String id) {
-  switch (id) {
-    case 'field':
-      return l10n.homeFieldSectionHeading;
-    case 'fleet':
-      return l10n.homeFleetSectionHeading;
-    case 'maintenance':
-      return l10n.homeMaintenanceSectionHeading;
-    case 'management':
-      return _catalogLabel(l10n.managementCopyCatalog, 'overviewTitle');
-    case 'approvals':
-      return l10n.tabApprovals;
-    default:
-      return id;
-  }
-}
-
-/// The "Site" stat card - a real, stored value
-/// ([WorkspaceContext.legacySite]), never a fabricated one. Honestly
-/// [TpStatCard.unavailable] when the profile carries no site at all, which
-/// `workspace_context.dart` itself documents as a real, common state (its
-/// own comment: "carried for form pre-fill only").
-// ignore: unused_element
-Widget _siteStatCard(AppLocalizations l10n, WorkspaceContext? workspace) {
-  final String? site = workspace?.legacySite;
-  if (site == null || site.trim().isEmpty) {
-    return TpStatCard.unavailable(
-      label: l10n.homeSiteStatLabel,
-      caption: l10n.homeSiteStatUnavailable,
-      icon: Icons.location_on_outlined,
-    );
-  }
-  return TpStatCard.text(
-    label: l10n.homeSiteStatLabel,
-    value: site,
-    icon: Icons.location_on_outlined,
-  );
-}
-
-/// The "Pending sync" stat card, sourced from
-/// [homePendingSyncCountProvider] - the same "not synced, failed included"
-/// count [QueueDao.pendingCount] itself documents.
-// ignore: unused_element
-Widget _pendingSyncStatCard(AppLocalizations l10n, AsyncValue<int> pending) {
-  return pending.when(
-    data: (int count) => TpStatCard.count(
-      label: l10n.homeSyncStatLabel,
-      count: count,
-      icon: Icons.sync,
-    ),
-    loading: () => TpStatCard.unavailable(
-      label: l10n.homeSyncStatLabel,
-      caption: l10n.homeStatLoadingCaption,
-      icon: Icons.sync,
-    ),
-    error: (Object _, StackTrace __) => TpStatCard.unavailable(
-      label: l10n.homeSyncStatLabel,
-      caption: l10n.homeStatUnavailableCaption,
-      icon: Icons.sync,
-    ),
-  );
-}
-
-/// The "Fleet size" stat card - only ever built when the caller has already
-/// confirmed [ModuleKey.vehicles] access, so an unreadable fleet-list load
-/// renders [TpStatCard.unavailable] rather than a fabricated 0, matching
-/// `VehicleFleetRepository`'s own three-outcome contract: a live count
-/// ([VehicleFleetListLoaded]), a cached count ([VehicleFleetListFromCache] -
-/// still a real, previously-measured number, so it is shown the same way),
-/// or [VehicleFleetListFailed], which is honestly "not measured".
-// ignore: unused_element
-Widget _fleetSizeStatCard(
-  AppLocalizations l10n,
-  AsyncValue<VehicleFleetListOutcome> fleet,
-) {
-  return fleet.when(
-    data: (VehicleFleetListOutcome outcome) {
-      int? count;
-      if (outcome is VehicleFleetListLoaded) {
-        count = outcome.assets.length;
-      } else if (outcome is VehicleFleetListFromCache) {
-        count = outcome.assets.length;
-      }
-      if (count == null) {
-        return TpStatCard.unavailable(
-          label: l10n.homeFleetSizeStatLabel,
-          caption: l10n.homeStatUnavailableCaption,
-          icon: Icons.local_shipping_outlined,
-        );
-      }
-      return TpStatCard.count(
-        label: l10n.homeFleetSizeStatLabel,
-        count: count,
-        icon: Icons.local_shipping_outlined,
-      );
-    },
-    loading: () => TpStatCard.unavailable(
-      label: l10n.homeFleetSizeStatLabel,
-      caption: l10n.homeStatLoadingCaption,
-      icon: Icons.local_shipping_outlined,
-    ),
-    error: (Object _, StackTrace __) => TpStatCard.unavailable(
-      label: l10n.homeFleetSizeStatLabel,
-      caption: l10n.homeStatUnavailableCaption,
-      icon: Icons.local_shipping_outlined,
-    ),
-  );
 }

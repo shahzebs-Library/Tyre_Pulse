@@ -21,6 +21,8 @@ import 'package:tyre_pulse/core/database/dao/cache_dao.dart';
 import 'package:tyre_pulse/core/network/supabase_client_provider.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
+import 'package:tyre_pulse/features/inspections/domain/inspection_draft_summary.dart';
+import 'package:tyre_pulse/features/inspections/inspections_providers.dart';
 
 /// The remote source. Real by default - unlike the permission and workspace
 /// dependency providers, there is nothing to override to make the app work:
@@ -82,4 +84,40 @@ final FutureProviderFamily<VehicleDetailOutcome, String> vehicleDetailProvider =
     assetNo: assetNo,
     country: workspace?.activeCountry,
   );
+});
+
+/// The signed-in user's own unfinished inspection draft for ONE asset, or
+/// null when there is none.
+///
+/// Read-only over the inspections feature's `InspectionDraftRepository`
+/// (`draftsForUser`, newest first) - the asset screen never writes a draft.
+/// This is what lets the asset hero show a real "N of M checked" readiness
+/// ring: the numbers are the wizard's own progress counters for a draft that
+/// genuinely exists on this device, never a derived or invented score. With
+/// no draft (or no signed-in user) there is honestly nothing to show, so the
+/// ring is simply absent rather than rendered as 0%.
+///
+/// Only a draft with real progress counts, the same rule
+/// `homeLatestInspectionDraftProvider` applies: a sheet that was merely
+/// opened is not work in progress. The asset number is compared trimmed and
+/// case-insensitively because `vehicle_fleet.asset_no` is normalised upper
+/// case server-side while a draft keeps what the wizard was given.
+final FutureProviderFamily<InspectionDraftSummary?, String>
+    vehicleInspectionDraftProvider =
+    FutureProvider.family<InspectionDraftSummary?, String>(
+        (ref, assetNo) async {
+  final workspace = ref.watch(workspaceContextProvider);
+  final String userId = workspace?.userId.trim() ?? '';
+  final String wanted = assetNo.trim().toUpperCase();
+  if (userId.isEmpty || wanted.isEmpty) return null;
+  final List<InspectionDraftSummary> drafts =
+      await ref.watch(inspectionDraftRepositoryProvider).draftsForUser(userId);
+  for (final InspectionDraftSummary draft in drafts) {
+    if (draft.hasProgress &&
+        draft.total > 0 &&
+        draft.assetNo.trim().toUpperCase() == wanted) {
+      return draft;
+    }
+  }
+  return null;
 });

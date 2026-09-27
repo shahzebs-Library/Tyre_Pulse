@@ -46,7 +46,7 @@ const List<_CountryCase> _countries = <_CountryCase>[
   _CountryCase(
     country: LoginCountry.unitedArabEmirates,
     englishName: 'United Arab Emirates',
-    assetPath: 'assets/login/united_arab_emirates_pmv_hero.webp',
+    assetPath: 'assets/login/united_arab_emirates_hero.png',
   ),
   _CountryCase(
     country: LoginCountry.egypt,
@@ -362,7 +362,7 @@ void main() {
       expect(repository.value, LoginCountry.egypt);
       expect(_heroAsset('assets/login/egypt_hero.png'), findsOneWidget);
       expect(
-        _heroAsset('assets/login/united_arab_emirates_pmv_hero.webp'),
+        _heroAsset('assets/login/united_arab_emirates_hero.png'),
         findsNothing,
       );
       expect(find.byType(SnackBar), findsOneWidget);

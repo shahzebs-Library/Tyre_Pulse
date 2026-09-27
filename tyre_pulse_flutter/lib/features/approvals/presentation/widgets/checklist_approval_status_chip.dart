@@ -34,6 +34,11 @@ import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/features/approvals/domain/checklist_approval.dart';
 
+/// The [TpStatus] a [summary] is drawn in - public so the queue's
+/// uppercase status tag and this chip can never disagree on colour.
+TpStatus checklistApprovalStatusTone(ApprovalStatusSummary summary) =>
+    _toneToStatus(summary.tone);
+
 TpStatus _toneToStatus(ApprovalStatusTone tone) => switch (tone) {
       ApprovalStatusTone.good => TpStatus.ok,
       ApprovalStatusTone.bad => TpStatus.critical,

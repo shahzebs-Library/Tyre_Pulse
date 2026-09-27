@@ -2963,4 +2963,84 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get workshopCopyCatalog =>
       'title=مهامي~onDuty=في المناوبة~offDuty=خارج المناوبة~checkIn=تسجيل الحضور~checkOut=تسجيل الانصراف~checkInHint=سجّل حضورك للمناوبة قبل تسجيل العمل.~myJobs=مهامي~emptyTitle=لا توجد مهام مفتوحة~emptyMessage=لا توجد مهمة مفتوحة مسندة إليك حاليًا.~loadError=تعذر تحميل مهامك الآن.~selectJobTitle=اختر مهمة~selectJobMsg=اختر إحدى مهامك أولًا.~checkInFirstTitle=سجّل الحضور أولًا~selectTaskTitle=اختر خطوة~selectTaskMsg=اختر الخطوة التي تعمل عليها أولًا.~tasks=الخطوات~confirmTitle=إكمال الخطوة؟~confirmMsg=سيتم تسجيل الخطوة كمكتملة وإرسالها للفحص.~cancel=إلغاء~noteHint=أضف ملاحظة (اختياري)~record=تسجيل~queued=تم الحفظ على هذا الجهاز. ستتم المزامنة تلقائيًا.~saveFailed=تعذر حفظ النشاط على هذا الجهاز. حاول مرة أخرى.~todayTitle=إنتاجيتي اليوم~productive=منتج~blocked=متوقف~unassigned=غير مسند~breakTime=استراحة~completed=الخطوات المكتملة~due=الاستحقاق~ok=حسنًا~a_start_job=بدء العمل~a_pause_job=إيقاف مؤقت~a_resume_job=استئناف العمل~a_complete_task=إكمال الخطوة~a_request_parts=طلب قطع غيار~a_request_assistance=طلب مساعدة~a_waiting_approval=بانتظار الموافقة~a_waiting_vehicle=بانتظار المركبة~a_waiting_tools=بانتظار الأدوات~a_start_break=بدء الاستراحة~a_end_break=إنهاء الاستراحة~a_report_problem=الإبلاغ عن مشكلة~s_working=يعمل~s_available=متاح~s_waiting_parts=بانتظار القطع~s_waiting_approval=بانتظار الموافقة~s_waiting_tools=بانتظار الأدوات~s_waiting_vehicle=بانتظار المركبة~s_on_break=في استراحة~s_training=تدريب~s_awaiting_inspection=بانتظار الفحص~s_off_duty=خارج المناوبة~s_absent=غائب~photoLabel=صورة (اختياري)~takePhoto=الكاميرا~pickPhoto=المعرض~removePhoto=إزالة الصورة~photoLimit=حتى 3 صور~photoNotAttached=تم التسجيل. تعذّر إرفاق الصورة بدون اتصال.';
+
+  @override
+  String get homeTodaysWork => 'عمل اليوم';
+
+  @override
+  String get homeAwaitingSignatureTag => 'بانتظار التوقيع';
+
+  @override
+  String get homeResumeInspection => 'استئناف الفحص';
+
+  @override
+  String get homeTyreIssueNeedsAttention => 'مشكلة في الإطار تحتاج إلى متابعة';
+
+  @override
+  String get profileSectionWorkspace => 'مساحة العمل';
+
+  @override
+  String get profileEmployeeIdLabel => 'الرقم الوظيفي';
+
+  @override
+  String get profileLanguageLabel => 'لغة التطبيق';
+
+  @override
+  String get profileSectionDisplay => 'اللغة والعرض';
+
+  @override
+  String get profileThemeLabel => 'المظهر';
+
+  @override
+  String get profileThemeLight => 'فاتح';
+
+  @override
+  String get profileThemeDark => 'داكن';
+
+  @override
+  String get profileThemeSystem => 'إعداد النظام';
+
+  @override
+  String get profileSectionOffline => 'العمل دون اتصال والبيانات';
+
+  @override
+  String get profileUnsyncedFooter =>
+      'تبقى المسودات غير المتزامنة محفوظة بأمان على هذا الجهاز';
+
+  @override
+  String get loginHeroTitle => 'عمليات PMV متكاملة';
+
+  @override
+  String get loginSignInSubtitle => 'سجّل الدخول إلى العمليات المسندة إليك';
+
+  @override
+  String get vehiclesInspectNow => 'افحص الآن';
+
+  @override
+  String get inspectionPreviousTyre => 'السابق';
+
+  @override
+  String get inspectionNextTyre => 'التالي';
+
+  @override
+  String get inspectionProgressTitle => 'تقدم الفحص';
+
+  @override
+  String inspectionPercentComplete(int percent) {
+    return 'مكتمل بنسبة $percent%';
+  }
+
+  @override
+  String inspectionAxleNumber(int number) {
+    return 'المحور $number';
+  }
+
+  @override
+  String get inspectionTyresLabel => 'الإطارات';
+
+  @override
+  String get inspectionScanAssetButton => 'مسح الأصل';
+
+  @override
+  String get inspectionSelectedAssetTitle => 'الأصل المحدد';
 }

@@ -19,13 +19,17 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
+import 'package:tyre_pulse/app/theme/tp_display_settings.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
 import 'package:tyre_pulse/core/auth/auth_controller.dart';
+import 'package:tyre_pulse/core/auth/auth_dependency_providers.dart';
 import 'package:tyre_pulse/core/auth/auth_profile_repository.dart';
 import 'package:tyre_pulse/core/auth/auth_repository.dart';
 import 'package:tyre_pulse/core/auth/auth_state.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
+import 'package:tyre_pulse/features/home/home_providers.dart';
+import 'package:tyre_pulse/features/notifications/notifications_providers.dart';
 import 'package:tyre_pulse/features/profile/presentation/profile_screen.dart';
 
 import '../../../core/auth/auth_test_support.dart';
@@ -45,6 +49,9 @@ Future<_Pumped> _pumpSignedIn(
   List<String> countries = const <String>['ALL'],
   List<String> sites = const <String>['ALL'],
   Locale locale = const Locale('en'),
+  AsyncValue<int> pendingSync = const AsyncData<int>(0),
+  int unread = 0,
+  String appVersion = '2.0.0',
 }) async {
   final FakeAuthRepository auth = FakeAuthRepository();
   final FakeProfileRepository profiles = FakeProfileRepository();
@@ -75,6 +82,18 @@ Future<_Pumped> _pumpSignedIn(
         foreground: FakeForegroundSignal(),
         restoreTimeout: const Duration(seconds: 5),
       ),
+      // Read-only counts the screen shows. Overridden so the test never
+      // touches the offline database or the live Supabase inbox.
+      homePendingSyncCountProvider.overrideWith(
+        (Ref ref) => switch (pendingSync) {
+          AsyncData<int>(:final int value) => Future<int>.value(value),
+          _ => Future<int>.error(StateError('queue unreadable')),
+        },
+      ),
+      unreadNotificationsCountProvider.overrideWithValue(
+        AsyncData<int>(unread),
+      ),
+      currentAppVersionProvider.overrideWithValue(appVersion),
     ],
   );
   addTearDown(container.dispose);
@@ -125,11 +144,23 @@ void main() {
       expect(find.text('EMP-1048'), findsOneWidget);
       expect(find.text('Manager'), findsWidgets);
       expect(find.text('NHC'), findsWidgets);
-      expect(find.text('One platform for every PMV asset'), findsOneWidget);
+      expect(find.text('Employee ID'), findsOneWidget);
+      expect(find.text('Workspace'), findsOneWidget);
+      expect(find.text('Language & display'), findsOneWidget);
+      expect(find.text('App language'), findsOneWidget);
+      expect(find.text('English'), findsOneWidget);
+      expect(find.text('Theme'), findsOneWidget);
+      expect(find.text('Light'), findsOneWidget);
+      expect(find.text('Offline & data'), findsOneWidget);
       expect(find.text('All'), findsNWidgets(2));
       expect(find.text('Platform administrator'), findsNothing);
       expect(find.byKey(ProfileScreenKeys.status), findsOneWidget);
-      expect(find.text('Synced'), findsWidgets);
+      // The old header wrongly reused an inspection's "Synced" status as an
+      // account-verified line. It is gone, not replaced by an invented one.
+      expect(find.text('Synced'), findsNothing);
+      expect(find.text('All changes synced'), findsOneWidget);
+      expect(find.text('Version 2.0.0'), findsOneWidget);
+      expect(find.byKey(ProfileScreenKeys.unsyncedFooter), findsNothing);
     },
   );
 
@@ -234,9 +265,9 @@ void main() {
 
       // The button sits below the driver workspace panel on a phone-height
       // surface; scroll it into view the way a person would.
-      await tester.ensureVisible(find.widgetWithText(TpButton, 'Sign out'));
+      await tester.ensureVisible(find.byKey(ProfileScreenKeys.signOut));
       await tester.pump();
-      await tester.tap(find.widgetWithText(TpButton, 'Sign out'));
+      await tester.tap(find.byKey(ProfileScreenKeys.signOut));
       await tester.pumpAndSettle();
       expect(find.text('Sign out?'), findsOneWidget);
 
@@ -259,14 +290,14 @@ void main() {
 
       // The button sits below the driver workspace panel on a phone-height
       // surface; scroll it into view the way a person would.
-      await tester.ensureVisible(find.widgetWithText(TpButton, 'Sign out'));
+      await tester.ensureVisible(find.byKey(ProfileScreenKeys.signOut));
       await tester.pump();
-      await tester.tap(find.widgetWithText(TpButton, 'Sign out'));
+      await tester.tap(find.byKey(ProfileScreenKeys.signOut));
       await tester.pumpAndSettle();
 
-      // Two "Sign out" TpButtons now exist: the screen's own action and the
-      // dialog's confirm button. The dialog's is the LAST one built.
-      await tester.tap(find.widgetWithText(TpButton, 'Sign out').last);
+      // The screen's own action is an outlined button; the dialog's confirm
+      // is the only "Sign out" TpButton.
+      await tester.tap(find.widgetWithText(TpButton, 'Sign out'));
       // NOT pumpAndSettle from here: a successful sign-out clears
       // AuthState.profile, and this screen honestly renders TpLoadingState
       // - the design system's ONE spinner-bearing widget - for that
@@ -285,6 +316,142 @@ void main() {
         p.container.read(authControllerProvider).sessionPhase,
         AuthSessionPhase.signedOut,
       );
+    },
+  );
+
+  testWidgets(
+    'queued work shows its real count in the strip and the Offline row, '
+    'and the footer line appears only while something is queued',
+    (WidgetTester tester) async {
+      await _pumpSignedIn(tester, pendingSync: const AsyncData<int>(2));
+
+      expect(
+        find.descendant(
+          of: find.byKey(ProfileScreenKeys.status),
+          matching: find.text('2'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(ProfileScreenKeys.pendingSyncRow),
+          matching: find.text('2 changes waiting to sync'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.byKey(ProfileScreenKeys.unsyncedFooter), findsOneWidget);
+      expect(
+        find.text('Unsynced drafts remain safely on this device'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'an unreadable queue renders a dash and Unavailable, never a zero',
+    (WidgetTester tester) async {
+      await _pumpSignedIn(
+        tester,
+        pendingSync: AsyncError<int>(StateError('x'), StackTrace.empty),
+      );
+
+      expect(
+        find.descendant(
+          of: find.byKey(ProfileScreenKeys.status),
+          matching: find.text('-'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(ProfileScreenKeys.pendingSyncRow),
+          matching: find.text('Unavailable'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.byKey(ProfileScreenKeys.unsyncedFooter), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'the bell badge shows unread notifications and hides at zero',
+    (WidgetTester tester) async {
+      await _pumpSignedIn(tester, unread: 3);
+      expect(
+        tester
+            .widget<Badge>(find.byKey(ProfileScreenKeys.notificationsBadge))
+            .isLabelVisible,
+        isTrue,
+      );
+    },
+  );
+
+  testWidgets(
+    'no unread notifications leaves the bell badge hidden',
+    (WidgetTester tester) async {
+      await _pumpSignedIn(tester);
+      expect(
+        tester
+            .widget<Badge>(find.byKey(ProfileScreenKeys.notificationsBadge))
+            .isLabelVisible,
+        isFalse,
+      );
+    },
+  );
+
+  testWidgets(
+    'the language row opens the three shipped languages and writes the '
+    'choice through localeProvider',
+    (WidgetTester tester) async {
+      final _Pumped p = await _pumpSignedIn(tester);
+
+      await tester.ensureVisible(find.byKey(ProfileScreenKeys.languageRow));
+      await tester.pump();
+      await tester.tap(find.byKey(ProfileScreenKeys.languageRow));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('profile.language.en')), findsOneWidget);
+      expect(find.byKey(const Key('profile.language.ur')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('profile.language.ar')));
+      await tester.pumpAndSettle();
+
+      expect(p.container.read(localeProvider), const Locale('ar'));
+    },
+  );
+
+  testWidgets(
+    'the theme row offers light, dark and system and writes the choice '
+    'through themeModeProvider',
+    (WidgetTester tester) async {
+      final _Pumped p = await _pumpSignedIn(tester);
+
+      await tester.ensureVisible(find.byKey(ProfileScreenKeys.themeRow));
+      await tester.pump();
+      await tester.tap(find.byKey(ProfileScreenKeys.themeRow));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('profile.theme.light')), findsOneWidget);
+      expect(find.byKey(const Key('profile.theme.system')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('profile.theme.dark')));
+      await tester.pumpAndSettle();
+
+      expect(p.container.read(themeModeProvider), ThemeMode.dark);
+      expect(
+        find.descendant(
+          of: find.byKey(ProfileScreenKeys.themeRow),
+          matching: find.text('Dark'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'a placeholder build version is not shown as the app version',
+    (WidgetTester tester) async {
+      await _pumpSignedIn(tester, appVersion: '999.0.0');
+
+      expect(find.byKey(ProfileScreenKeys.appVersionRow), findsNothing);
     },
   );
 }

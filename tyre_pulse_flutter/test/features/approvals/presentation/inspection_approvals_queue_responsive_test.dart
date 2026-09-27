@@ -24,6 +24,8 @@ const InspectionApprovalItem _pendingItem = InspectionApprovalItem(
 Future<void> _pumpQueue(
   WidgetTester tester, {
   Locale locale = const Locale('en'),
+  ThemeData? theme,
+  InspectionApprovalRepository repository = const _FakeApprovalRepository(),
 }) async {
   tester.view.physicalSize = const Size(320, 720);
   tester.view.devicePixelRatio = 1;
@@ -33,12 +35,12 @@ Future<void> _pumpQueue(
     ProviderScope(
       overrides: <Override>[
         inspectionApprovalRepositoryProvider.overrideWithValue(
-          const _FakeApprovalRepository(),
+          repository,
         ),
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
-        theme: TpTheme.light,
+        theme: theme ?? TpTheme.light,
         locale: locale,
         supportedLocales: TpLocalizations.supportedLocales,
         localizationsDelegates: TpLocalizations.delegates,
@@ -69,6 +71,61 @@ void main() {
     );
     expect(heading.maxLines, isNull);
     expect(heading.overflow, isNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('row follows the mock list shape: status tag and site line', (
+    WidgetTester tester,
+  ) async {
+    await _pumpQueue(tester);
+
+    final Finder row = find.byKey(
+      InspectionApprovalsQueueKeys.row(_pendingItem.id),
+    );
+    expect(
+      find.descendant(of: row, matching: find.text('PENDING')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: row,
+        matching: find.text(
+          '${_pendingItem.site} \u2022 ${_pendingItem.inspector}',
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('quiet status filters still read each real approval status', (
+    WidgetTester tester,
+  ) async {
+    final _RecordingApprovalRepository repository =
+        _RecordingApprovalRepository();
+    await _pumpQueue(tester, repository: repository);
+
+    await tester.tap(find.text('Approved'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(repository.statuses, contains('approved'));
+
+    await tester.tap(find.text('Returned'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(repository.statuses, contains('rejected'));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('dark theme renders the queue without layout errors', (
+    WidgetTester tester,
+  ) async {
+    await _pumpQueue(tester, theme: TpTheme.dark);
+
+    expect(
+      find.byKey(InspectionApprovalsQueueKeys.row(_pendingItem.id)),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -111,4 +168,19 @@ final class _FakeApprovalRepository implements InspectionApprovalRepository {
     String? country,
   }) async =>
       const <InspectionApprovalItem>[];
+}
+
+final class _RecordingApprovalRepository extends _FakeApprovalRepository {
+  _RecordingApprovalRepository();
+
+  final List<String> statuses = <String>[];
+
+  @override
+  Future<List<InspectionApprovalItem>> listByStatus(
+    String status, {
+    String? country,
+  }) async {
+    statuses.add(status);
+    return const <InspectionApprovalItem>[];
+  }
 }

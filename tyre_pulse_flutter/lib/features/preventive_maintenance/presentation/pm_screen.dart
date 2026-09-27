@@ -17,6 +17,7 @@ import 'package:tyre_pulse/core/permissions/permission_providers.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
+import 'package:tyre_pulse/features/notifications/notifications_providers.dart';
 import 'package:tyre_pulse/features/preventive_maintenance/domain/pm_plan.dart';
 import 'package:tyre_pulse/features/preventive_maintenance/pm_providers.dart';
 import 'package:tyre_pulse/features/preventive_maintenance/presentation/pm_copy.dart';
@@ -40,6 +41,13 @@ class _PreventiveMaintenanceScreenState
     final PmCopy copy = PmCopy.of(context);
     final AsyncValue<List<PmPlan>> state = ref.watch(activePmPlansProvider);
     final String fallback = TpBackFallbacks.forRoute(widget.route);
+    // The bell badge is driven by the real unread inbox. It is shown only
+    // when the inbox has actually been read AND holds unread rows: a loading
+    // or failed inbox is not "you have mail", and zero is not a dot.
+    final int unread = switch (ref.watch(unreadNotificationsCountProvider)) {
+      AsyncData<int>(:final int value) => value,
+      _ => 0,
+    };
     return TpScaffold(
       backFallback: fallback,
       appBar: AppBar(
@@ -50,11 +58,14 @@ class _PreventiveMaintenanceScreenState
         title: const TpBrandLockup(),
         actions: <Widget>[
           IconButton(
+            key: const Key('pm.notifications'),
             tooltip: MaterialLocalizations.of(context).showMenuTooltip,
             onPressed: () => context.push(const NotificationsRoute().location),
-            icon: const Badge(
-              smallSize: 8,
-              child: Icon(Icons.notifications_none_rounded),
+            icon: Badge(
+              key: const Key('pm.notificationsBadge'),
+              isLabelVisible: unread > 0,
+              label: Text(unread > 99 ? '99+' : '$unread'),
+              child: const Icon(Icons.notifications_none_rounded),
             ),
           ),
           const SizedBox(width: TpSpace.sm),
@@ -98,10 +109,12 @@ class _PreventiveMaintenanceScreenState
             )
             .toList(growable: false)
         : plans;
-    final bool canWorkOrders =
-        ref.watch(canAccessModuleProvider(ModuleKey.workorders));
-    final bool canInspect =
-        ref.watch(canAccessModuleProvider(ModuleKey.inspect));
+    final bool canWorkOrders = ref.watch(
+      canAccessModuleProvider(ModuleKey.workorders),
+    );
+    final bool canInspect = ref.watch(
+      canAccessModuleProvider(ModuleKey.inspect),
+    );
     final bool canStock = ref.watch(canAccessModuleProvider(ModuleKey.stock));
     final bool canTyres = ref.watch(canAccessModuleProvider(ModuleKey.records));
     final TpPalette palette = TpPalette.of(context);
@@ -120,24 +133,42 @@ class _PreventiveMaintenanceScreenState
           TpSpace.xxxl,
         ),
         children: <Widget>[
-          Text(
-            copy('title'),
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: -0.6,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      copy('title'),
+                      style:
+                          Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: -0.4,
+                              ),
+                    ),
+                    const SizedBox(height: TpSpace.xs),
+                    Text(
+                      copy('subtitle'),
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(color: palette.textSecondary),
+                    ),
+                  ],
                 ),
-          ),
-          const SizedBox(height: TpSpace.xs),
-          Text(
-            copy('subtitle'),
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: palette.textSecondary,
-                ),
+              ),
+              const SizedBox(width: TpSpace.md),
+              _PmInitialsAvatar(
+                fullName: ref.watch(workspaceContextProvider)?.fullName,
+              ),
+            ],
           ),
           const SizedBox(height: TpSpace.lg),
           if (canWorkOrders) ...<Widget>[
             SizedBox(
-              height: 72,
+              height: 56,
               child: FilledButton(
                 key: const Key('pm.createWorkOrder'),
                 onPressed: () => unawaited(_createWorkOrder()),
@@ -184,12 +215,10 @@ class _PreventiveMaintenanceScreenState
             ),
             const SizedBox(height: TpSpace.xl),
           ],
-          TpCard(
-            padding: const EdgeInsets.symmetric(
-              horizontal: TpSpace.xs,
-              vertical: TpSpace.lg,
-            ),
+          IntrinsicHeight(
             child: Row(
+              key: const Key('pm.kpis'),
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
                 Expanded(
                   child: _PmMetric(
@@ -229,7 +258,9 @@ class _PreventiveMaintenanceScreenState
               ],
             ),
           ),
-          const SizedBox(height: TpSpace.xl),
+          const SizedBox(height: TpSpace.md),
+          const _SectionDivider(),
+          const SizedBox(height: TpSpace.sm),
           _SectionHeading(
             title: copy('priorityQueue'),
             action: copy('viewAll'),
@@ -237,73 +268,70 @@ class _PreventiveMaintenanceScreenState
                 ? () => context.push(const WorkOrdersRoute().location)
                 : null,
           ),
-          const SizedBox(height: TpSpace.sm),
-          SegmentedButton<bool>(
-            style: const ButtonStyle(
-              visualDensity: VisualDensity.compact,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-            segments: <ButtonSegment<bool>>[
-              ButtonSegment<bool>(value: true, label: Text(copy('due'))),
-              ButtonSegment<bool>(value: false, label: Text(copy('all'))),
-            ],
-            selected: <bool>{dueOnly},
-            onSelectionChanged: (Set<bool> value) =>
-                setState(() => dueOnly = value.single),
+          // A quiet filter, not a control that competes with the queue. The
+          // PM schedule quick-access tile flips it to "All plans".
+          _QuietFilter(
+            dueLabel: copy('due'),
+            allLabel: copy('all'),
+            dueOnly: dueOnly,
+            onChanged: (bool value) => setState(() => dueOnly = value),
           ),
-          const SizedBox(height: TpSpace.sm),
-          Container(
-            decoration: BoxDecoration(
-              color: palette.surface,
-              border: Border.all(color: palette.border),
-              borderRadius: BorderRadius.circular(TpRadius.md),
+          const _SectionDivider(),
+          if (visible.isEmpty)
+            SizedBox(
+              height: 220,
+              child: TpEmptyState(
+                icon: Icons.build_circle_outlined,
+                title: copy('empty'),
+                message: dueOnly ? copy('emptyDue') : copy('emptyAll'),
+              ),
+            )
+          else
+            for (int index = 0; index < visible.length; index++)
+              _PmPlanRow(
+                plan: visible[index],
+                now: now,
+                copy: copy,
+                showDivider: index < visible.length - 1,
+                onRecord: () => unawaited(_record(visible[index], copy)),
+              ),
+          const _SectionDivider(),
+          if (canWorkOrders) ...<Widget>[
+            const SizedBox(height: TpSpace.xs),
+            Center(
+              child: TextButton.icon(
+                key: const Key('pm.allWorkOrders'),
+                onPressed: () => context.push(const WorkOrdersRoute().location),
+                iconAlignment: IconAlignment.end,
+                style: TextButton.styleFrom(foregroundColor: palette.primary),
+                icon: Icon(
+                  Directionality.of(context) == TextDirection.rtl
+                      ? Icons.chevron_left_rounded
+                      : Icons.chevron_right_rounded,
+                ),
+                label: Text(
+                  copy('allWorkOrders'),
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
             ),
-            clipBehavior: Clip.antiAlias,
-            child: visible.isEmpty
-                ? SizedBox(
-                    height: 220,
-                    child: TpEmptyState(
-                      icon: Icons.build_circle_outlined,
-                      title: copy('empty'),
-                      message: dueOnly ? copy('emptyDue') : copy('emptyAll'),
-                    ),
-                  )
-                : Column(
-                    children: <Widget>[
-                      for (int index = 0; index < visible.length; index++)
-                        _PmPlanCard(
-                          plan: visible[index],
-                          now: now,
-                          copy: copy,
-                          showDivider: index < visible.length - 1,
-                          onRecord: () =>
-                              unawaited(_record(visible[index], copy)),
-                        ),
-                    ],
-                  ),
-          ),
-          if (canWorkOrders)
-            TpButton.text(
-              label: copy('allWorkOrders'),
-              icon: Directionality.of(context) == TextDirection.rtl
-                  ? Icons.chevron_left_rounded
-                  : Icons.chevron_right_rounded,
-              onPressed: () => context.push(const WorkOrdersRoute().location),
-              isFullWidth: true,
-            ),
+            const SizedBox(height: TpSpace.xs),
+            const _SectionDivider(),
+          ],
           const SizedBox(height: TpSpace.lg),
           Text(
             copy('quickAccess'),
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w900,
-                ),
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: TpSpace.sm),
           Row(
             children: <Widget>[
               Expanded(
                 child: _QuickAccessTile(
-                  icon: Icons.assignment_rounded,
+                  icon: Icons.assignment,
                   label: copy('workOrders'),
                   hint: copy('workOrdersHint'),
                   onTap: canWorkOrders
@@ -314,7 +342,7 @@ class _PreventiveMaintenanceScreenState
               const SizedBox(width: TpSpace.xs),
               Expanded(
                 child: _QuickAccessTile(
-                  icon: Icons.calendar_month_rounded,
+                  icon: Icons.calendar_month,
                   label: copy('pmSchedule'),
                   hint: copy('pmScheduleHint'),
                   onTap: () => setState(() => dueOnly = false),
@@ -323,7 +351,7 @@ class _PreventiveMaintenanceScreenState
               const SizedBox(width: TpSpace.xs),
               Expanded(
                 child: _QuickAccessTile(
-                  icon: Icons.verified_user_outlined,
+                  icon: Icons.verified_user,
                   label: copy('inspections'),
                   hint: copy('inspectionsHint'),
                   onTap: canInspect
@@ -334,7 +362,7 @@ class _PreventiveMaintenanceScreenState
               const SizedBox(width: TpSpace.xs),
               Expanded(
                 child: _QuickAccessTile(
-                  icon: Icons.inventory_2_outlined,
+                  icon: Icons.inventory_2,
                   label: copy('parts'),
                   hint: copy('partsHint'),
                   onTap: canStock
@@ -371,10 +399,8 @@ class _PreventiveMaintenanceScreenState
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (BuildContext context) => _RecordServiceSheet(
-        plan: plan,
-        copy: copy,
-      ),
+      builder: (BuildContext context) =>
+          _RecordServiceSheet(plan: plan, copy: copy),
     );
     if (saved == true) ref.invalidate(activePmPlansProvider);
   }
@@ -396,31 +422,50 @@ class _PmMetric extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TpStatusColors colors = TpPalette.of(context).forStatus(status);
-    return Column(
-      children: <Widget>[
-        DecoratedBox(
-          decoration: BoxDecoration(color: colors.soft, shape: BoxShape.circle),
-          child: Padding(
-            padding: const EdgeInsets.all(TpSpace.sm),
-            child: Icon(icon, color: colors.onSoft, size: TpSizing.iconLg),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: colors.soft,
+              shape: BoxShape.circle,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(TpSpace.sm),
+              child: Icon(icon, color: colors.onSoft, size: TpSizing.iconLg),
+            ),
           ),
-        ),
-        const SizedBox(height: TpSpace.xs),
-        Text(
-          '$value',
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                color: colors.base,
-                fontWeight: FontWeight.w900,
-              ),
-        ),
-        Text(
-          label,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.labelSmall,
-        ),
-      ],
+          const SizedBox(height: TpSpace.xs),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              '$value',
+              maxLines: 1,
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    color: colors.base,
+                    fontWeight: FontWeight.w900,
+                    height: 1.1,
+                  ),
+            ),
+          ),
+          const SizedBox(height: 2),
+          // Two short lines at most, balanced and centred, so "Active plans"
+          // or an Arabic label never breaks mid-word into a ragged stack.
+          Text(
+            label,
+            maxLines: 2,
+            softWrap: true,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: Theme.of(context)
+                .textTheme
+                .labelMedium
+                ?.copyWith(height: 1.15, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -429,11 +474,70 @@ class _PmMetricDivider extends StatelessWidget {
   const _PmMetricDivider();
 
   @override
-  Widget build(BuildContext context) => Container(
-        width: 1,
-        height: 82,
-        color: TpPalette.of(context).border,
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: TpSpace.sm),
+        child: SizedBox(
+          width: 1,
+          child: ColoredBox(color: TpPalette.of(context).border),
+        ),
       );
+}
+
+/// A full-bleed hairline between sections, as in the mock.
+class _SectionDivider extends StatelessWidget {
+  const _SectionDivider();
+
+  @override
+  Widget build(BuildContext context) =>
+      Divider(height: 1, thickness: 1, color: TpPalette.of(context).border);
+}
+
+/// The signed-in user's initials beside the page title. Falls back to a
+/// person glyph when the profile carries no usable name - never invented
+/// letters.
+class _PmInitialsAvatar extends StatelessWidget {
+  const _PmInitialsAvatar({required this.fullName});
+
+  final String? fullName;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final String? initials = pmInitials(fullName);
+    return Container(
+      key: const Key('pm.avatar'),
+      width: 48,
+      height: 48,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: palette.primary,
+        borderRadius: BorderRadius.circular(TpRadius.md),
+      ),
+      child: initials == null
+          ? Icon(Icons.person_outline_rounded, color: palette.onPrimary)
+          : Text(
+              initials,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: palette.onPrimary,
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+    );
+  }
+}
+
+/// Up to two initials from [fullName]; null when there is no usable name.
+@visibleForTesting
+String? pmInitials(String? fullName) {
+  final List<String> words = (fullName ?? '')
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((String word) => word.isNotEmpty)
+      .toList(growable: false);
+  if (words.isEmpty) return null;
+  final String first = words.first.characters.first;
+  final String last = words.length > 1 ? words.last.characters.first : '';
+  return '$first$last'.toUpperCase();
 }
 
 class _SectionHeading extends StatelessWidget {
@@ -448,29 +552,120 @@ class _SectionHeading extends StatelessWidget {
   final VoidCallback? onAction;
 
   @override
-  Widget build(BuildContext context) => Row(
-        children: <Widget>[
-          Expanded(
-            child: Text(
-              title,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: Text(
+            title,
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w900),
+          ),
+        ),
+        if (onAction != null)
+          TextButton.icon(
+            onPressed: onAction,
+            iconAlignment: IconAlignment.end,
+            style: TextButton.styleFrom(foregroundColor: palette.primary),
+            icon: Icon(
+              Directionality.of(context) == TextDirection.rtl
+                  ? Icons.chevron_left_rounded
+                  : Icons.chevron_right_rounded,
+            ),
+            label: Text(
+              action,
+              style: const TextStyle(fontWeight: FontWeight.w800),
             ),
           ),
-          if (onAction != null)
-            TextButton.icon(
-              onPressed: onAction,
-              iconAlignment: IconAlignment.end,
-              icon: Icon(
-                Directionality.of(context) == TextDirection.rtl
-                    ? Icons.chevron_left_rounded
-                    : Icons.chevron_right_rounded,
-              ),
-              label: Text(action),
+      ],
+    );
+  }
+}
+
+/// Two text toggles ("Due now" / "All plans") styled as a quiet filter rather
+/// than a segmented control. The selected one is bold and green.
+class _QuietFilter extends StatelessWidget {
+  const _QuietFilter({
+    required this.dueLabel,
+    required this.allLabel,
+    required this.dueOnly,
+    required this.onChanged,
+  });
+
+  final String dueLabel;
+  final String allLabel;
+  final bool dueOnly;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: TpSpace.xs),
+        child: Row(
+          children: <Widget>[
+            Icon(
+              Icons.filter_list_rounded,
+              size: TpSizing.iconSm,
+              color: TpPalette.of(context).textMuted,
             ),
-        ],
+            const SizedBox(width: TpSpace.xs),
+            _QuietFilterOption(
+              label: dueLabel,
+              selected: dueOnly,
+              onTap: () => onChanged(true),
+            ),
+            const SizedBox(width: TpSpace.sm),
+            _QuietFilterOption(
+              label: allLabel,
+              selected: !dueOnly,
+              onTap: () => onChanged(false),
+            ),
+          ],
+        ),
       );
+}
+
+class _QuietFilterOption extends StatelessWidget {
+  const _QuietFilterOption({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(TpRadius.sm),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 40),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: TpSpace.xs),
+            child: Center(
+              widthFactor: 1,
+              child: Text(
+                label,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: selected ? palette.primary : palette.textSecondary,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
+                    ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _QuickAccessTile extends StatelessWidget {
@@ -530,10 +725,10 @@ class _QuickAccessTile extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: palette.textMuted,
-                          height: 1.1,
-                        ),
+                    style: Theme.of(context)
+                        .textTheme
+                        .labelSmall
+                        ?.copyWith(color: palette.textMuted, height: 1.1),
                   ),
                 ],
               ),
@@ -545,8 +740,14 @@ class _QuickAccessTile extends StatelessWidget {
   }
 }
 
-class _PmPlanCard extends StatelessWidget {
-  const _PmPlanCard({
+/// One compact queue row: photo, asset number, type/plan, site, the due
+/// status chip and due date. Tapping the row records a service; the trailing
+/// check is the same action for users who look for an explicit button.
+///
+/// No technician is shown: `pm_programs` carries no assignee column, so the
+/// mock's technician avatar has no real data behind it.
+class _PmPlanRow extends StatelessWidget {
+  const _PmPlanRow({
     required this.plan,
     required this.now,
     required this.copy,
@@ -562,6 +763,7 @@ class _PmPlanCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
+    final TextTheme text = Theme.of(context).textTheme;
     final PmDueBand band = plan.dueBand(now);
     final int? days = plan.daysToDue(now);
     final TpStatus status = switch (band) {
@@ -570,11 +772,18 @@ class _PmPlanCard extends StatelessWidget {
       PmDueBand.ok => TpStatus.ok,
       PmDueBand.none => TpStatus.neutral,
     };
-    final List<String> meta = <String>[
-      if (plan.assetNo != null) plan.assetNo!,
-      if (plan.site != null) plan.site!,
+    final String title = plan.assetNo ?? plan.name ?? copy('plan');
+    final String detail = <String>[
       if (plan.assetCategory != null) plan.assetCategory!,
-    ];
+      if (plan.assetNo != null && plan.name != null) plan.name!,
+    ].join(' · ');
+    final DateTime? due = plan.nextDue;
+    final String dueText = <String>[
+      if (due != null)
+        MaterialLocalizations.of(context).formatShortDate(due.toLocal()),
+      if (plan.nextDueMeter != null && plan.meterUnit.isNotEmpty)
+        '${plan.nextDueMeter} ${plan.meterUnit}',
+    ].join(' · ');
     final VehicleAsset asset = VehicleAsset(
       id: plan.id,
       assetNo: plan.assetNo,
@@ -583,103 +792,138 @@ class _PmPlanCard extends StatelessWidget {
       status: plan.status,
     );
     final String? photo = vehiclePhotoAsset(asset);
-    return TpCard(
-      key: Key('pm.plan.${plan.id}'),
-      padding: const EdgeInsets.all(TpSpace.md),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: <Widget>[
-              Container(
-                width: 94,
-                height: 82,
-                decoration: BoxDecoration(
-                  color: palette.surfaceAlt,
-                  borderRadius: BorderRadius.circular(TpRadius.md),
-                  border: Border.all(color: palette.border),
-                ),
-                clipBehavior: Clip.antiAlias,
-                alignment: Alignment.center,
-                child: photo == null
-                    ? Icon(
-                        vehicleFallbackIcon(asset),
-                        size: 38,
-                        color: palette.primary,
-                      )
-                    : Image.asset(
-                        photo,
-                        width: double.infinity,
-                        height: double.infinity,
-                        fit: BoxFit.contain,
-                        filterQuality: FilterQuality.high,
-                      ),
-              ),
-              const SizedBox(width: TpSpace.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      plan.name ?? plan.assetNo ?? copy('plan'),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleSmall
-                          ?.copyWith(fontWeight: FontWeight.w900),
-                    ),
-                    if (meta.isNotEmpty) ...<Widget>[
-                      const SizedBox(height: TpSpace.xs),
-                      Text(
-                        meta.join(' · '),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: palette.textSecondary),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: TpSpace.sm),
-              TpStatusChip(
-                status: status,
-                label: switch (band) {
-                  PmDueBand.overdue => '${days!.abs()} ${copy('daysOverdue')}',
-                  PmDueBand.dueSoon => '$days ${copy('daysLeft')}',
-                  PmDueBand.ok => '$days ${copy('daysLeft')}',
-                  PmDueBand.none => copy('noDate'),
-                },
-              ),
-            ],
-          ),
-          if (plan.nextDueMeter != null &&
-              plan.meterUnit.isNotEmpty) ...<Widget>[
-            const SizedBox(height: TpSpace.md),
-            Row(
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        InkWell(
+          key: Key('pm.plan.${plan.id}'),
+          onTap: onRecord,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: TpSpace.sm),
+            child: Row(
               children: <Widget>[
-                Icon(
-                  Icons.speed_rounded,
-                  size: TpSizing.iconSm,
-                  color: palette.textMuted,
+                Container(
+                  width: 64,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: palette.surfaceAlt,
+                    borderRadius: BorderRadius.circular(TpRadius.sm),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  alignment: Alignment.center,
+                  child: photo == null
+                      ? Icon(
+                          vehicleFallbackIcon(asset),
+                          size: 28,
+                          color: palette.primary,
+                        )
+                      : Image.asset(
+                          photo,
+                          width: double.infinity,
+                          height: double.infinity,
+                          fit: BoxFit.contain,
+                          filterQuality: FilterQuality.high,
+                        ),
                 ),
-                const SizedBox(width: TpSpace.xs),
-                Text('${plan.nextDueMeter} ${plan.meterUnit}'),
+                const SizedBox(width: TpSpace.md),
+                Expanded(
+                  flex: 3,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: text.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      if (detail.isNotEmpty)
+                        Text(
+                          detail,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.bodySmall?.copyWith(
+                            color: palette.textSecondary,
+                          ),
+                        ),
+                      if (plan.site != null)
+                        Row(
+                          children: <Widget>[
+                            Icon(
+                              Icons.location_on_outlined,
+                              size: 14,
+                              color: palette.textMuted,
+                            ),
+                            const SizedBox(width: 2),
+                            Flexible(
+                              child: Text(
+                                plan.site!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: text.bodySmall?.copyWith(
+                                  color: palette.textSecondary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: TpSpace.sm),
+                Flexible(
+                  flex: 2,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: AlignmentDirectional.centerEnd,
+                        child: TpStatusChip(
+                          status: status,
+                          isCompact: true,
+                          label: switch (band) {
+                            PmDueBand.overdue =>
+                              '${days!.abs()} ${copy('daysOverdue')}',
+                            PmDueBand.dueSoon => '$days ${copy('daysLeft')}',
+                            PmDueBand.ok => '$days ${copy('daysLeft')}',
+                            PmDueBand.none => copy('noDate'),
+                          },
+                        ),
+                      ),
+                      if (dueText.isNotEmpty) ...<Widget>[
+                        const SizedBox(height: TpSpace.xs),
+                        Text(
+                          dueText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.bodySmall?.copyWith(
+                            color: palette.textMuted,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                IconButton(
+                  key: Key('pm.record.${plan.id}'),
+                  tooltip: copy('record'),
+                  onPressed: onRecord,
+                  visualDensity: VisualDensity.compact,
+                  color: palette.primary,
+                  icon: const Icon(Icons.check_circle_outline_rounded),
+                ),
               ],
             ),
-          ],
-          const SizedBox(height: TpSpace.md),
-          TpButton.primary(
-            label: copy('record'),
-            icon: Icons.check_circle_outline_rounded,
-            onPressed: onRecord,
-            isFullWidth: true,
-            isCompact: true,
           ),
-          if (showDivider) const SizedBox(height: TpSpace.xs),
-        ],
-      ),
+        ),
+        if (showDivider)
+          Divider(height: 1, thickness: 1, color: palette.border),
+      ],
     );
   }
 }

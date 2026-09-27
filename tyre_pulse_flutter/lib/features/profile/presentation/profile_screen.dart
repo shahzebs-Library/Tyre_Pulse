@@ -57,6 +57,23 @@
 /// session change reaches `app_router.dart`'s `resolveRedirect` through the
 /// same stream every other transition uses, and it is the one place that
 /// decides where the app goes next.
+///
+/// # Layout, aligned to the approved profile mock (19-profile)
+///
+/// Open identity header (no card), a status strip of REAL counts, then
+/// grouped settings sections with their headers outside the rows, and a
+/// full-width outlined sign-out. Every row of the mock that has no backend or
+/// no route in this app (edit profile, my activity, notification toggles,
+/// biometrics, change password, help, privacy, storage) is deliberately
+/// ABSENT, not rendered as a control that does nothing (AGENTS.md rule 7).
+/// Rows that only report a fact carry no chevron; a chevron means the row
+/// really opens something. The app keeps its own green theme.
+///
+/// Counts come from existing providers, read only:
+/// `homePendingSyncCountProvider` (the offline queue, via `QueueDao`) and
+/// `unreadNotificationsCountProvider` (the live inbox). A count that could not
+/// be read renders `-`, never `0` (AGENTS.md "States are not all the same
+/// thing").
 library;
 
 import 'dart:async';
@@ -67,12 +84,17 @@ import 'package:go_router/go_router.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
+import 'package:tyre_pulse/app/theme/tp_display_settings.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/auth/auth_controller.dart';
+import 'package:tyre_pulse/core/auth/auth_dependency_providers.dart';
 import 'package:tyre_pulse/core/auth/auth_state.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
+import 'package:tyre_pulse/features/auth/presentation/login_security_copy.dart';
 import 'package:tyre_pulse/features/driver_workspace/presentation/driver_workspace_panel.dart';
+import 'package:tyre_pulse/features/home/home_providers.dart';
+import 'package:tyre_pulse/features/notifications/notifications_providers.dart';
 import 'package:tyre_pulse/features/notifications/presentation/notifications_copy.dart';
 
 /// Stable finders for Profile's responsive visual regions.
@@ -82,7 +104,51 @@ abstract final class ProfileScreenKeys {
   static const Key status = Key('profile.status');
   static const Key access = Key('profile.access');
   static const Key account = Key('profile.account');
+  static const Key notificationsBadge = Key('profile.notifications.badge');
+  static const Key languageRow = Key('profile.language');
+  static const Key themeRow = Key('profile.theme');
+  static const Key pendingSyncRow = Key('profile.pendingSync');
+  static const Key appVersionRow = Key('profile.appVersion');
+  static const Key signOut = Key('profile.signOut');
+  static const Key unsyncedFooter = Key('profile.unsyncedFooter');
 }
+
+/// The three languages the app ships (en/ar/ur ARB catalogs). Names are the
+/// languages' own endonyms - identical in every locale, so not translated -
+/// matching the login screen's language control.
+const List<({Locale locale, String label})> _kLanguages =
+    <({Locale locale, String label})>[
+  (locale: Locale('en'), label: 'English'),
+  (locale: Locale('ar'), label: 'العربية'),
+  (locale: Locale('ur'), label: 'اردو'),
+];
+
+/// The three theme choices [themeModeProvider] accepts, in picker order.
+const List<ThemeMode> _kThemeModes = <ThemeMode>[
+  ThemeMode.light,
+  ThemeMode.dark,
+  ThemeMode.system,
+];
+
+String _themeLabel(ThemeMode mode, AppLocalizations l10n) {
+  return switch (mode) {
+    ThemeMode.light => l10n.profileThemeLight,
+    ThemeMode.dark => l10n.profileThemeDark,
+    ThemeMode.system => l10n.profileThemeSystem,
+  };
+}
+
+String _languageLabel(Locale locale) {
+  for (final ({Locale locale, String label}) option in _kLanguages) {
+    if (option.locale.languageCode == locale.languageCode) return option.label;
+  }
+  return locale.languageCode;
+}
+
+/// Mirrors `login_screen.dart`'s `visibleVersion`: the `999.0.0` fallback and
+/// a blank value are not a real build version and are not shown.
+String? _visibleVersion(String configured) =>
+    configured == '999.0.0' || configured.trim().isEmpty ? null : configured;
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({required this.route, super.key});
@@ -122,37 +188,106 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     if (confirmed != true || !mounted) return;
 
     setState(() => _isSigningOut = true);
-    // `AuthController.signOut()` never throws - see its own library comment
-    // ("Best-effort... Pressing the one control meant to escape a stuck
-    // screen must always reach the login screen") - so there is nothing to
-    // catch here. The router's redirect unmounts this screen once the
-    // resulting signedOut session reaches it; `_isSigningOut` only needs
-    // clearing for the frame or two before that happens, guarded by
-    // `mounted` for the case this widget is gone by the time the await
-    // returns.
+    // `AuthController.signOut()` never throws - see its own library comment.
+    // The router's redirect unmounts this screen once the signedOut session
+    // reaches it; `_isSigningOut` only needs clearing for the frame or two
+    // before that happens.
     await ref.read(authControllerProvider.notifier).signOut();
     if (mounted) {
       setState(() => _isSigningOut = false);
     }
   }
 
+  Future<void> _chooseLanguage(Locale active) async {
+    final Locale? chosen = await showModalBottomSheet<Locale>(
+      context: context,
+      useSafeArea: true,
+      builder: (BuildContext sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            for (final ({Locale locale, String label}) option in _kLanguages)
+              ListTile(
+                key: Key('profile.language.${option.locale.languageCode}'),
+                leading: const Icon(Icons.translate_rounded),
+                title: Text(option.label),
+                trailing: option.locale.languageCode == active.languageCode
+                    ? Icon(
+                        Icons.check_rounded,
+                        color: TpPalette.of(sheetContext).primary,
+                      )
+                    : null,
+                onTap: () => Navigator.of(sheetContext).pop(option.locale),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (chosen == null || !mounted) return;
+    ref.read(localeProvider.notifier).setLocale(chosen);
+  }
+
+  Future<void> _chooseTheme(ThemeMode active) async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final ThemeMode? chosen = await showModalBottomSheet<ThemeMode>(
+      context: context,
+      useSafeArea: true,
+      builder: (BuildContext sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            for (final ThemeMode mode in _kThemeModes)
+              ListTile(
+                key: Key('profile.theme.${mode.name}'),
+                leading: Icon(
+                  switch (mode) {
+                    ThemeMode.light => Icons.light_mode_outlined,
+                    ThemeMode.dark => Icons.dark_mode_outlined,
+                    ThemeMode.system => Icons.brightness_auto_outlined,
+                  },
+                ),
+                title: Text(_themeLabel(mode, l10n)),
+                trailing: mode == active
+                    ? Icon(
+                        Icons.check_rounded,
+                        color: TpPalette.of(sheetContext).primary,
+                      )
+                    : null,
+                onTap: () => Navigator.of(sheetContext).pop(mode),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (chosen == null || !mounted) return;
+    ref.read(themeModeProvider.notifier).setMode(chosen);
+  }
+
   @override
   Widget build(BuildContext context) {
     final AuthState authState = ref.watch(authControllerProvider);
     final WorkspaceProfile? profile = authState.profile;
+    final AsyncValue<int> unread = ref.watch(unreadNotificationsCountProvider);
+    final int unreadCount = unread.asData?.value ?? 0;
+    final TpPalette palette = TpPalette.of(context);
 
     return TpScaffold(
       // No back fallback: Profile is anchored - the root of its own branch,
-      // exactly like Home - see `home_screen.dart`'s identical choice and
-      // `tp_scaffold.dart`'s own library comment on what a null
-      // `backFallback` means.
+      // exactly like Home.
       appBar: AppBar(
         automaticallyImplyLeading: false,
         titleSpacing: TpSpace.lg,
         title: const TpBrandLockup(),
         actions: <Widget>[
           IconButton(
-            icon: const Icon(Icons.notifications_none_rounded),
+            icon: Badge(
+              key: ProfileScreenKeys.notificationsBadge,
+              isLabelVisible: unreadCount > 0,
+              backgroundColor: palette.warning.base,
+              textColor: palette.warning.onBase,
+              label: Text(unreadCount > 99 ? '99+' : '$unreadCount'),
+              child: const Icon(Icons.notifications_none_rounded),
+            ),
             tooltip: NotificationsCopy.of(context)('title'),
             onPressed: () => context.push(const NotificationsRoute().location),
           ),
@@ -160,65 +295,92 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ],
       ),
       body: profile == null
-          // Reachable only outside the normal shell flow (see the library
-          // comment: `TpAppShell` never renders this branch's content until
-          // `TpShellGate.none`, which itself requires a loaded profile) -
-          // most concretely, a widget test that mounts this screen directly
-          // with no session established yet. A real, temporary state, not a
-          // fabricated one - the same choice `TpAppShell` itself makes for
-          // "something is still being decided" via `TpBootScreen`.
+          // Reachable only outside the normal shell flow (the shell never
+          // renders this branch until a profile is loaded) - most concretely
+          // a widget test mounting this screen before a session resolves.
           ? const TpLoadingState()
-          : LayoutBuilder(
-              builder: (BuildContext context, BoxConstraints constraints) {
-                final double horizontalPadding =
-                    constraints.maxWidth >= 760 ? TpSpace.xxl : TpSpace.lg;
+          : _buildBody(context, authState, profile),
+    );
+  }
 
-                return ListView(
-                  padding: EdgeInsets.fromLTRB(
-                    horizontalPadding,
-                    TpSpace.lg,
-                    horizontalPadding,
-                    TpSpace.xxxl,
-                  ),
+  Widget _buildBody(
+    BuildContext context,
+    AuthState authState,
+    WorkspaceProfile profile,
+  ) {
+    final AsyncValue<int> pendingSync = ref.watch(homePendingSyncCountProvider);
+    final AsyncValue<int> unread = ref.watch(unreadNotificationsCountProvider);
+    final Locale activeLocale =
+        ref.watch(localeProvider) ?? Localizations.localeOf(context);
+    final ThemeMode activeTheme = ref.watch(themeModeProvider);
+    final String? version =
+        _visibleVersion(ref.watch(currentAppVersionProvider));
+    final int? pending = pendingSync.asData?.value;
+
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double horizontalPadding =
+            constraints.maxWidth >= 760 ? TpSpace.xxl : TpSpace.lg;
+
+        return ListView(
+          padding: EdgeInsets.fromLTRB(
+            horizontalPadding,
+            TpSpace.lg,
+            horizontalPadding,
+            TpSpace.xxxl,
+          ),
+          children: <Widget>[
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 960),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
-                    Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 960),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: <Widget>[
-                            _IdentityHero(profile: profile),
-                            const DriverWorkspaceEntry(),
-                            const SizedBox(height: TpSpace.md),
-                            _ProfileStatusStrip(
-                              profile: profile,
-                              profileStale: authState.profileStale,
-                            ),
-                            const SizedBox(height: TpSpace.md),
-                            _ProfileGroups(
-                              profile: profile,
-                              isSigningOut: _isSigningOut,
-                              onSignOut: () => unawaited(_confirmAndSignOut()),
-                            ),
-                          ],
-                        ),
+                    _IdentityHeader(profile: profile),
+                    const SizedBox(height: TpSpace.md),
+                    const DriverWorkspaceEntry(),
+                    const SizedBox(height: TpSpace.md),
+                    _ProfileStatusStrip(
+                      pendingSync: pendingSync,
+                      unread: unread,
+                      profileStale: authState.profileStale,
+                    ),
+                    const SizedBox(height: TpSpace.lg),
+                    _ProfileGroups(
+                      settings: _SettingsColumn(
+                        profile: profile,
+                        activeLocale: activeLocale,
+                        activeTheme: activeTheme,
+                        pendingSync: pendingSync,
+                        version: version,
+                        onChooseLanguage: () =>
+                            unawaited(_chooseLanguage(activeLocale)),
+                        onChooseTheme: () =>
+                            unawaited(_chooseTheme(activeTheme)),
+                      ),
+                      account: _AccountBlock(
+                        isSigningOut: _isSigningOut,
+                        pending: pending,
+                        onSignOut: () => unawaited(_confirmAndSignOut()),
                       ),
                     ),
                   ],
-                );
-              },
+                ),
+              ),
             ),
+          ],
+        );
+      },
     );
   }
 }
 
-/// The compact identity block from the approved profile mock.
-///
-/// Only verified profile fields are rendered. The mock contains employee ID
-/// and email examples, but the current `WorkspaceProfile` query does not own
-/// those columns, so this screen does not invent them to fill visual space.
-class _IdentityHero extends StatelessWidget {
-  const _IdentityHero({required this.profile});
+/// The open identity header: large initials avatar, name, labelled role,
+/// employee ID and site · country. No card, matching the mock. Only verified
+/// `profiles` columns are rendered - the mock's email line is absent because
+/// [WorkspaceProfile] does not carry an email.
+class _IdentityHeader extends StatelessWidget {
+  const _IdentityHeader({required this.profile});
 
   final WorkspaceProfile profile;
 
@@ -229,11 +391,18 @@ class _IdentityHero extends StatelessWidget {
     final TextTheme text = Theme.of(context).textTheme;
 
     final String? name = profile.fullName;
-    return TpCard(
+    final String site = (profile.legacySite?.trim().isNotEmpty ?? false)
+        ? profile.legacySite!.trim()
+        : l10n.homeSiteStatUnavailable;
+    final List<String> countries = profile.countryScope.seesAllCountries
+        ? const <String>[]
+        : profile.countryScope.namedCountries;
+    final String location =
+        countries.isEmpty ? site : '$site · ${countries.join(', ')}';
+
+    return Padding(
       key: ProfileScreenKeys.hero,
-      background: palette.surface,
-      borderColor: palette.border,
-      padding: const EdgeInsets.all(TpSpace.lg),
+      padding: const EdgeInsets.symmetric(vertical: TpSpace.sm),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -241,8 +410,8 @@ class _IdentityHero extends StatelessWidget {
             clipBehavior: Clip.none,
             children: <Widget>[
               Container(
-                width: 80,
-                height: 80,
+                width: 88,
+                height: 88,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: palette.primarySoft,
@@ -260,8 +429,8 @@ class _IdentityHero extends StatelessWidget {
                 ),
               ),
               PositionedDirectional(
-                end: 2,
-                bottom: 2,
+                end: 4,
+                bottom: 4,
                 child: Container(
                   width: 18,
                   height: 18,
@@ -270,7 +439,7 @@ class _IdentityHero extends StatelessWidget {
                     color: profile.isLocked
                         ? palette.critical.base
                         : palette.ok.base,
-                    border: Border.all(color: palette.surface, width: 3),
+                    border: Border.all(color: palette.background, width: 3),
                   ),
                 ),
               ),
@@ -293,28 +462,23 @@ class _IdentityHero extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: TpSpace.xs),
-                _IdentityLine(
-                  icon: Icons.badge_outlined,
-                  value: profile.role.displayName,
-                ),
                 if (profile.employeeId != null) ...<Widget>[
-                  const SizedBox(height: 3),
                   _IdentityLine(
-                    icon: Icons.contact_page_outlined,
+                    icon: Icons.person_outline_rounded,
+                    label: l10n.profileEmployeeIdLabel,
                     value: profile.employeeId!,
                   ),
+                  const SizedBox(height: 3),
                 ],
-                const SizedBox(height: 5),
                 _IdentityLine(
-                  icon: profile.isApproved && !profile.isLocked
-                      ? Icons.verified_user_outlined
-                      : Icons.gpp_bad_outlined,
-                  value: profile.isApproved && !profile.isLocked
-                      ? l10n.inspectionStatusSynced
-                      : l10n.accessBlockedMessage,
-                  color: profile.isApproved && !profile.isLocked
-                      ? palette.ok.base
-                      : palette.critical.base,
+                  icon: Icons.work_outline_rounded,
+                  label: l10n.profileRoleLabel,
+                  value: profile.role.displayName,
+                ),
+                const SizedBox(height: 3),
+                _IdentityLine(
+                  icon: Icons.location_on_outlined,
+                  value: location,
                 ),
                 if (profile.isSuperAdmin) ...<Widget>[
                   const SizedBox(height: TpSpace.sm),
@@ -334,150 +498,38 @@ class _IdentityHero extends StatelessWidget {
   }
 }
 
-class _ProfileStatusStrip extends StatelessWidget {
-  const _ProfileStatusStrip({
-    required this.profile,
-    required this.profileStale,
-  });
-
-  final WorkspaceProfile profile;
-  final bool profileStale;
-
-  @override
-  Widget build(BuildContext context) {
-    final AppLocalizations l10n = AppLocalizations.of(context);
-    final TpPalette palette = TpPalette.of(context);
-    return TpCard(
-      key: ProfileScreenKeys.status,
-      padding: const EdgeInsets.symmetric(
-        horizontal: TpSpace.sm,
-        vertical: TpSpace.md,
-      ),
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: _ProfileStatusItem(
-              icon: Icons.assignment_ind_outlined,
-              label: l10n.profileRoleLabel,
-              value: profile.role.displayName,
-              color: palette.primary,
-            ),
-          ),
-          _ProfileStatusDivider(color: palette.border),
-          Expanded(
-            child: _ProfileStatusItem(
-              icon: Icons.location_on_outlined,
-              label: l10n.vehiclesFieldSite,
-              value: (profile.legacySite?.trim().isNotEmpty ?? false)
-                  ? profile.legacySite!.trim()
-                  : l10n.homeSiteStatUnavailable,
-              color: palette.info.base,
-            ),
-          ),
-          _ProfileStatusDivider(color: palette.border),
-          Expanded(
-            child: _ProfileStatusItem(
-              icon: profileStale
-                  ? Icons.cloud_off_outlined
-                  : Icons.cloud_done_outlined,
-              label: l10n.homeSyncStatLabel,
-              value: profileStale
-                  ? l10n.syncStatusUnknown
-                  : l10n.inspectionStatusSynced,
-              color: profileStale ? palette.warning.base : palette.ok.base,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProfileStatusDivider extends StatelessWidget {
-  const _ProfileStatusDivider({required this.color});
-
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) => Container(
-        width: 1,
-        height: 48,
-        color: color,
-      );
-}
-
-class _ProfileStatusItem extends StatelessWidget {
-  const _ProfileStatusItem({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: TpSpace.xs),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Icon(icon, size: TpSizing.iconMd, color: color),
-            const SizedBox(height: 4),
-            Text(
-              value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-            ),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: TpPalette.of(context).textMuted,
-                  ),
-            ),
-          ],
-        ),
-      );
-}
-
 class _IdentityLine extends StatelessWidget {
   const _IdentityLine({
     required this.icon,
     required this.value,
-    this.color,
+    this.label,
   });
 
   final IconData icon;
   final String value;
-  final Color? color;
+  final String? label;
 
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
-    final Color foreground = color ?? palette.textSecondary;
+    final TextStyle? base = Theme.of(context).textTheme.bodyMedium;
     return Row(
       children: <Widget>[
-        Icon(icon, size: 16, color: foreground),
+        Icon(icon, size: 16, color: palette.textSecondary),
         const SizedBox(width: 6),
-        Expanded(
+        if (label != null) ...<Widget>[
+          Text(label!, style: base?.copyWith(color: palette.textSecondary)),
+          const SizedBox(width: TpSpace.sm),
+        ],
+        Flexible(
           child: Text(
             value,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: foreground,
-                  fontWeight: FontWeight.w600,
-                ),
+            style: base?.copyWith(
+              color: palette.text,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ],
@@ -491,7 +543,7 @@ String _profileInitials(String? raw) {
       .split(RegExp(r'\s+'))
       .where((String value) => value.isNotEmpty)
       .toList(growable: false);
-  if (words.isEmpty) return '—';
+  if (words.isEmpty) return '-';
   final String first = String.fromCharCode(words.first.runes.first);
   if (words.length == 1) return first.toUpperCase();
   final String last = String.fromCharCode(words.last.runes.first);
@@ -544,32 +596,149 @@ class _IdentityBadge extends StatelessWidget {
   }
 }
 
-class _ProfileGroups extends StatelessWidget {
-  const _ProfileGroups({
-    required this.profile,
-    required this.isSigningOut,
-    required this.onSignOut,
+/// A count as shown in the strip: the number when read, `-` otherwise.
+String _countText(AsyncValue<int> value) {
+  final int? count = value.asData?.value;
+  return count == null ? '-' : '$count';
+}
+
+/// Real items only: queued work still on this device, unread notifications,
+/// and - only when the profile itself is served from the offline cache - an
+/// offline marker. No invented task count or "last sync" clock.
+class _ProfileStatusStrip extends StatelessWidget {
+  const _ProfileStatusStrip({
+    required this.pendingSync,
+    required this.unread,
+    required this.profileStale,
   });
 
-  final WorkspaceProfile profile;
-  final bool isSigningOut;
-  final VoidCallback onSignOut;
+  final AsyncValue<int> pendingSync;
+  final AsyncValue<int> unread;
+  final bool profileStale;
 
   @override
   Widget build(BuildContext context) {
-    final Widget access = _AccessCard(profile: profile);
-    final Widget account = _AccountCard(
-      isSigningOut: isSigningOut,
-      onSignOut: onSignOut,
-    );
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    final int? pending = pendingSync.asData?.value;
+    final int? unreadCount = unread.asData?.value;
 
+    return TpCard(
+      key: ProfileScreenKeys.status,
+      padding: const EdgeInsets.symmetric(
+        horizontal: TpSpace.sm,
+        vertical: TpSpace.md,
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          children: <Widget>[
+            Expanded(
+              child: _ProfileStatusItem(
+                icon: Icons.cloud_upload_outlined,
+                value: _countText(pendingSync),
+                label: l10n.homeSyncStatLabel,
+                color:
+                    (pending ?? 0) > 0 ? palette.warning.base : palette.ok.base,
+              ),
+            ),
+            VerticalDivider(width: 1, thickness: 1, color: palette.border),
+            Expanded(
+              child: _ProfileStatusItem(
+                icon: Icons.notifications_none_rounded,
+                value: _countText(unread),
+                label: NotificationsCopy.of(context)('title'),
+                color: (unreadCount ?? 0) > 0
+                    ? palette.warning.base
+                    : palette.info.base,
+              ),
+            ),
+            if (profileStale) ...<Widget>[
+              VerticalDivider(width: 1, thickness: 1, color: palette.border),
+              Expanded(
+                child: _ProfileStatusItem(
+                  icon: Icons.cloud_off_outlined,
+                  value: l10n.offlineTitle,
+                  label: l10n.stateOfflineCachedTitle,
+                  color: palette.warning.base,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileStatusItem extends StatelessWidget {
+  const _ProfileStatusItem({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final TextTheme text = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: TpSpace.sm),
+      child: Row(
+        children: <Widget>[
+          Icon(icon, size: TpSizing.iconMd, color: color),
+          const SizedBox(width: TpSpace.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: text.titleMedium?.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                Text(
+                  label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: text.labelSmall?.copyWith(
+                    color: TpPalette.of(context).textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Settings beside the account block on a wide layout, stacked on a phone.
+class _ProfileGroups extends StatelessWidget {
+  const _ProfileGroups({required this.settings, required this.account});
+
+  final Widget settings;
+  final Widget account;
+
+  @override
+  Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         if (constraints.maxWidth >= 720) {
           return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Expanded(flex: 3, child: access),
+              Expanded(flex: 3, child: settings),
               const SizedBox(width: TpSpace.lg),
               Expanded(flex: 2, child: account),
             ],
@@ -578,7 +747,7 @@ class _ProfileGroups extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            access,
+            settings,
             const SizedBox(height: TpSpace.lg),
             account,
           ],
@@ -588,128 +757,161 @@ class _ProfileGroups extends StatelessWidget {
   }
 }
 
-class _AccessCard extends StatelessWidget {
-  const _AccessCard({required this.profile});
+class _SettingsColumn extends StatelessWidget {
+  const _SettingsColumn({
+    required this.profile,
+    required this.activeLocale,
+    required this.activeTheme,
+    required this.pendingSync,
+    required this.version,
+    required this.onChooseLanguage,
+    required this.onChooseTheme,
+  });
 
   final WorkspaceProfile profile;
+  final Locale activeLocale;
+  final ThemeMode activeTheme;
+  final AsyncValue<int> pendingSync;
+  final String? version;
+  final VoidCallback onChooseLanguage;
+  final VoidCallback onChooseTheme;
 
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final TpPalette palette = TpPalette.of(context);
+    final LoginSecurityCopy loginCopy = LoginSecurityCopy.of(context);
+    final String countries = _countryScopeLabel(profile, l10n);
+    final int? pending = pendingSync.asData?.value;
 
-    return TpCard(
-      key: ProfileScreenKeys.access,
-      padding: const EdgeInsets.all(TpSpace.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          _GroupHeading(
-            icon: Icons.admin_panel_settings_outlined,
-            title: l10n.loginOperationsTitle,
-            tone: palette.info,
-          ),
-          const SizedBox(height: TpSpace.lg),
-          _ProfileRow(
-            icon: Icons.badge_outlined,
-            label: l10n.profileRoleLabel,
-            value: profile.role.displayName,
-          ),
-          const Divider(height: TpSpace.xxl),
-          _ProfileRow(
-            icon: Icons.public_outlined,
-            label: l10n.vehiclesFieldCountry,
-            value: _countryScopeLabel(profile, l10n),
-          ),
-          const Divider(height: TpSpace.xxl),
-          _ProfileRow(
-            icon: Icons.location_on_outlined,
-            label: l10n.vehiclesFieldSite,
-            value: _siteScopeLabel(profile, l10n),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AccountCard extends StatelessWidget {
-  const _AccountCard({
-    required this.isSigningOut,
-    required this.onSignOut,
-  });
-
-  final bool isSigningOut;
-  final VoidCallback onSignOut;
-
-  @override
-  Widget build(BuildContext context) {
-    final AppLocalizations l10n = AppLocalizations.of(context);
-    final TpPalette palette = TpPalette.of(context);
-    final TextTheme text = Theme.of(context).textTheme;
-
-    return TpCard(
-      key: ProfileScreenKeys.account,
-      padding: const EdgeInsets.all(TpSpace.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          _GroupHeading(
-            icon: Icons.manage_accounts_outlined,
-            title: l10n.profileNavTitle,
-            tone: palette.neutral,
-          ),
-          const SizedBox(height: TpSpace.lg),
-          Text(
-            l10n.profileSignOutConfirmMessage,
-            style: text.bodyMedium?.copyWith(color: palette.textMuted),
-          ),
-          const SizedBox(height: TpSpace.lg),
-          TpButton.danger(
-            label: l10n.actionSignOut,
-            icon: Icons.logout,
-            isFullWidth: true,
-            isBusy: isSigningOut,
-            onPressed: isSigningOut ? null : onSignOut,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _GroupHeading extends StatelessWidget {
-  const _GroupHeading({
-    required this.icon,
-    required this.title,
-    required this.tone,
-  });
-
-  final IconData icon;
-  final String title;
-  final TpStatusColors tone;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
+        _SettingsSection(
+          key: ProfileScreenKeys.access,
+          title: l10n.profileSectionWorkspace,
+          rows: <Widget>[
+            _SettingsRow(
+              icon: Icons.work_outline_rounded,
+              label: l10n.profileRoleLabel,
+              value: profile.role.displayName,
+            ),
+            _SettingsRow(
+              icon: Icons.public_outlined,
+              label: l10n.vehiclesFieldCountry,
+              value: countries,
+            ),
+            _SettingsRow(
+              icon: Icons.location_city_outlined,
+              label: l10n.vehiclesFieldSite,
+              value: _siteScopeLabel(profile, l10n),
+            ),
+          ],
+        ),
+        const SizedBox(height: TpSpace.lg),
+        _SettingsSection(
+          title: l10n.profileSectionDisplay,
+          rows: <Widget>[
+            _SettingsRow(
+              key: ProfileScreenKeys.languageRow,
+              icon: Icons.translate_rounded,
+              label: l10n.profileLanguageLabel,
+              value: _languageLabel(activeLocale),
+              onTap: onChooseLanguage,
+            ),
+            _SettingsRow(
+              key: ProfileScreenKeys.themeRow,
+              icon: Icons.contrast_rounded,
+              label: l10n.profileThemeLabel,
+              value: _themeLabel(activeTheme, l10n),
+              onTap: onChooseTheme,
+            ),
+          ],
+        ),
+        const SizedBox(height: TpSpace.lg),
+        _SettingsSection(
+          title: l10n.profileSectionOffline,
+          rows: <Widget>[
+            _SettingsRow(
+              key: ProfileScreenKeys.pendingSyncRow,
+              icon: Icons.cloud_sync_outlined,
+              label: l10n.homeSyncStatLabel,
+              value: pending == null
+                  ? l10n.valueUnavailable
+                  : pending == 0
+                      ? l10n.syncAllSynced
+                      : l10n.syncPendingChanges(pending),
+              valueColor: pending == null
+                  ? palette.textMuted
+                  : pending == 0
+                      ? palette.ok.base
+                      : palette.warning.base,
+            ),
+          ],
+        ),
+        if (version != null) ...<Widget>[
+          const SizedBox(height: TpSpace.lg),
+          _SettingsSection(
+            rows: <Widget>[
+              _SettingsRow(
+                key: ProfileScreenKeys.appVersionRow,
+                icon: Icons.info_outline_rounded,
+                label: loginCopy.version(version!),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// A section: header text outside the rows, rows in one bordered group,
+/// separated by hairline dividers.
+class _SettingsSection extends StatelessWidget {
+  const _SettingsSection({required this.rows, this.title, super.key});
+
+  final String? title;
+  final List<Widget> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        if (title != null)
+          Padding(
+            padding: const EdgeInsetsDirectional.only(
+              start: TpSpace.xs,
+              bottom: TpSpace.sm,
+            ),
+            child: Text(
+              title!,
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: palette.text,
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+          ),
         DecoratedBox(
           decoration: BoxDecoration(
-            color: tone.soft,
+            color: palette.surface,
             borderRadius: BorderRadius.circular(TpRadius.md),
+            border: Border.all(color: palette.border),
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(TpSpace.sm),
-            child: Icon(icon, size: TpSizing.iconMd, color: tone.onSoft),
-          ),
-        ),
-        const SizedBox(width: TpSpace.md),
-        Expanded(
-          child: Text(
-            title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(TpRadius.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                for (int i = 0; i < rows.length; i++) ...<Widget>[
+                  if (i > 0)
+                    Divider(height: 1, thickness: 1, color: palette.border),
+                  rows[i],
+                ],
+              ],
+            ),
           ),
         ),
       ],
@@ -717,40 +919,153 @@ class _GroupHeading extends StatelessWidget {
   }
 }
 
-class _ProfileRow extends StatelessWidget {
-  const _ProfileRow({
+/// A dense settings row. A chevron is shown ONLY when [onTap] opens
+/// something real; a row that merely reports a fact is not a button.
+class _SettingsRow extends StatelessWidget {
+  const _SettingsRow({
     required this.icon,
     required this.label,
-    required this.value,
+    this.value,
+    this.valueColor,
+    this.onTap,
+    super.key,
   });
 
   final IconData icon;
   final String label;
-  final String value;
+  final String? value;
+  final Color? valueColor;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
     final TextTheme text = Theme.of(context).textTheme;
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Icon(icon, size: TpSizing.iconMd, color: palette.textMuted),
-        const SizedBox(width: TpSpace.sm),
-        Expanded(
-          flex: 2,
-          child: Text(label, style: text.bodyMedium),
+    final Widget content = ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 48),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: TpSpace.md,
+          vertical: TpSpace.sm,
         ),
-        const SizedBox(width: TpSpace.md),
-        Expanded(
-          flex: 3,
-          child: Text(
-            value,
-            textAlign: TextAlign.end,
-            style: text.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+        child: Row(
+          children: <Widget>[
+            Icon(icon, size: TpSizing.iconMd, color: palette.textSecondary),
+            const SizedBox(width: TpSpace.md),
+            Expanded(
+              flex: 2,
+              child: Text(label, style: text.bodyMedium),
+            ),
+            if (value != null) ...<Widget>[
+              const SizedBox(width: TpSpace.md),
+              Expanded(
+                flex: 3,
+                child: Text(
+                  value!,
+                  textAlign: TextAlign.end,
+                  style: text.bodyMedium?.copyWith(
+                    color: valueColor ?? palette.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+            if (onTap != null) ...<Widget>[
+              const SizedBox(width: TpSpace.xs),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: TpSizing.iconMd,
+                color: palette.textMuted,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+
+    if (onTap == null) return content;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(onTap: onTap, child: content),
+    );
+  }
+}
+
+/// Full-width outlined red sign-out, plus - only while work is still queued -
+/// an orange line saying so.
+class _AccountBlock extends StatelessWidget {
+  const _AccountBlock({
+    required this.isSigningOut,
+    required this.pending,
+    required this.onSignOut,
+  });
+
+  final bool isSigningOut;
+  final int? pending;
+  final VoidCallback onSignOut;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    final Color danger = palette.critical.base;
+    final int queued = pending ?? 0;
+
+    return Column(
+      key: ProfileScreenKeys.account,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        SizedBox(
+          height: 48,
+          child: OutlinedButton.icon(
+            key: ProfileScreenKeys.signOut,
+            onPressed: isSigningOut ? null : onSignOut,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: danger,
+              side: BorderSide(color: danger),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(TpRadius.md),
+              ),
+            ),
+            icon: isSigningOut
+                ? SizedBox(
+                    width: TpSizing.iconSm,
+                    height: TpSizing.iconSm,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: danger,
+                    ),
+                  )
+                : const Icon(Icons.logout_rounded),
+            label: Text(l10n.actionSignOut),
           ),
         ),
+        if (queued > 0) ...<Widget>[
+          const SizedBox(height: TpSpace.sm),
+          Row(
+            key: ProfileScreenKeys.unsyncedFooter,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              Icon(
+                Icons.info_outline_rounded,
+                size: TpSizing.iconSm,
+                color: palette.warning.base,
+              ),
+              const SizedBox(width: TpSpace.xs),
+              Flexible(
+                child: Text(
+                  l10n.profileUnsyncedFooter,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: palette.warning.base,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ],
     );
   }

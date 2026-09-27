@@ -190,7 +190,14 @@ Future<_Pumped> _pump(
 Finder _identifierField() => find.byType(TextField).at(0);
 Finder _passwordField() => find.byType(TextField).at(1);
 Finder _submitButton() => find.byKey(const Key('login.submit'));
-Finder _passwordToggle() => find.byType(IconButton);
+Finder _passwordToggle() => find.byKey(LoginActionKeys.passwordToggle);
+
+bool _languageSelected(WidgetTester tester, String code) =>
+    tester
+        .getSemantics(find.byKey(Key('login.language.$code')))
+        .flagsCollection
+        .isSelected ==
+    Tristate.isTrue;
 
 Future<void> _fillValidCredentials(WidgetTester tester) async {
   await tester.enterText(_identifierField(), 'tyreman@example.com');
@@ -209,6 +216,7 @@ Future<void> _precacheSaudiLoginArtwork(WidgetTester tester) async {
       'assets/login/figma_user.png',
       'assets/login/figma_lock.png',
       'assets/login/figma_password_visibility.png',
+      'assets/login/figma_location.png',
     ]) {
       await precacheImage(AssetImage(asset), context);
     }
@@ -376,14 +384,8 @@ void main() {
       await tester.pump();
 
       expect(p.container.read(localeProvider), const Locale('ar'));
-      final TpButton arChip = tester.widget<TpButton>(
-        find.byKey(const Key('login.language.ar')),
-      );
-      expect(arChip.variant, TpButtonVariant.primary);
-      final TpButton enChip = tester.widget<TpButton>(
-        find.byKey(const Key('login.language.en')),
-      );
-      expect(enChip.variant, TpButtonVariant.secondary);
+      expect(_languageSelected(tester, 'ar'), isTrue);
+      expect(_languageSelected(tester, 'en'), isFalse);
     },
   );
 
@@ -436,10 +438,7 @@ void main() {
         find.byKey(const Key('login.brand.panel')),
       );
       expect(Directionality.of(panelContext), TextDirection.rtl);
-      final TpButton arChip = tester.widget<TpButton>(
-        find.byKey(const Key('login.language.ar')),
-      );
-      expect(arChip.variant, TpButtonVariant.primary);
+      expect(_languageSelected(tester, 'ar'), isTrue);
       expect(find.byType(TextField), findsNWidgets(2));
       expect(tester.takeException(), isNull);
     },
@@ -510,16 +509,26 @@ void main() {
         p.countryRepository.value,
         LoginCountry.unitedArabEmirates,
       );
-      expect(find.text('Secure company workspace · UAE'), findsOneWidget);
+      // The country is named in full, never the 'UAE' abbreviation, and the
+      // artwork is the dark landmark variant used by the other two.
+      expect(find.text('United Arab Emirates'), findsOneWidget);
+      expect(find.text('UAE'), findsNothing);
+      expect(
+        find.byKey(
+          const ValueKey<String>(
+            'assets/login/united_arab_emirates_hero.png',
+          ),
+        ),
+        findsOneWidget,
+      );
       expect(
         find.byKey(
           const ValueKey<String>(
             'assets/login/united_arab_emirates_pmv_hero.webp',
           ),
         ),
-        findsOneWidget,
+        findsNothing,
       );
-      expect(find.text('Secure company workspace · UAE'), findsOneWidget);
     },
   );
 
@@ -556,13 +565,11 @@ void main() {
         find.byKey(const Key('login.form.card')),
       );
       expect(Directionality.of(formContext), TextDirection.rtl);
-      expect(find.text('English'), findsOneWidget);
+      expect(find.text('EN'), findsOneWidget);
       expect(find.text('العربية'), findsOneWidget);
       expect(find.text('اردو'), findsOneWidget);
-      final TpButton urChip = tester.widget<TpButton>(
-        find.byKey(const Key('login.language.ur')),
-      );
-      expect(urChip.variant, TpButtonVariant.primary);
+      expect(_languageSelected(tester, 'ur'), isTrue);
+      expect(_languageSelected(tester, 'en'), isFalse);
       expect(find.text('سائن اِن'), findsWidgets);
       expect(tester.takeException(), isNull);
     },
@@ -736,6 +743,113 @@ void main() {
       expect(find.textContaining('manages mobile access'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'the language selector is one segmented pill whose short visible labels '
+    'still announce the full language name',
+    (WidgetTester tester) async {
+      await _pump(tester);
+
+      // No language control is a stand-alone bordered button any more.
+      for (final String code in <String>['en', 'ar', 'ur']) {
+        expect(
+          find.descendant(
+            of: find.byKey(Key('login.language.$code')),
+            matching: find.byType(TpButton),
+          ),
+          findsNothing,
+        );
+      }
+      final Rect en =
+          tester.getRect(find.byKey(const Key('login.language.en')));
+      final Rect ar =
+          tester.getRect(find.byKey(const Key('login.language.ar')));
+      final Rect ur =
+          tester.getRect(find.byKey(const Key('login.language.ur')));
+      expect(en.top, ar.top);
+      expect(ar.top, ur.top);
+      // One pill: neighbouring segments sit within a divider's width.
+      expect((ar.left - en.right).abs(), lessThanOrEqualTo(2));
+      expect((ur.left - ar.right).abs(), lessThanOrEqualTo(2));
+      expect(find.text('EN'), findsOneWidget);
+      expect(
+        tester.getSemantics(find.byKey(const Key('login.language.en'))).label,
+        'English',
+      );
+    },
+  );
+
+  testWidgets(
+    'sign in carries no trailing arrow and the password eye sits behind a '
+    'divider',
+    (WidgetTester tester) async {
+      await _pump(tester);
+
+      expect(tester.widget<TpButton>(_submitButton()).icon, isNull);
+      expect(
+        find.descendant(
+          of: _submitButton(),
+          matching: find.byIcon(Icons.arrow_forward),
+        ),
+        findsNothing,
+      );
+      final Rect toggle = tester.getRect(_passwordToggle());
+      final Rect field = tester.getRect(_passwordField());
+      expect(toggle.right, lessThanOrEqualTo(field.right));
+      expect(toggle.left, greaterThan(field.center.dx));
+    },
+  );
+
+  testWidgets(
+    'compact footer names the full country and stays the 48dp country '
+    'control that opens the picker',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await _pump(tester);
+
+      final Finder footer = find.byKey(LoginCountryKeys.change);
+      expect(footer, findsOneWidget);
+      expect(
+        find.descendant(of: footer, matching: find.text('Saudi Arabia')),
+        findsOneWidget,
+      );
+      expect(
+        tester.getSize(footer).height,
+        greaterThanOrEqualTo(TpSizing.minTouchTarget),
+      );
+      expect(
+        tester.getTopLeft(footer).dy,
+        greaterThan(tester.getBottomLeft(_submitButton()).dy),
+      );
+      // Help and biometrics stay reachable, quietly, between the two.
+      expect(find.byKey(LoginActionKeys.forgotPassword), findsOneWidget);
+      expect(find.byKey(LoginActionKeys.accessHelp), findsOneWidget);
+      expect(find.byKey(LoginActionKeys.biometric), findsOneWidget);
+
+      await tester.tap(footer);
+      await tester.pumpAndSettle();
+      expect(find.byKey(LoginCountryKeys.picker), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+      'compact English login shows the mock hero title and sign-in '
+      'subtitle', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await _pump(tester);
+
+    expect(find.text('Complete PMV Operations'), findsOneWidget);
+    expect(find.text('Sign in to your assigned operations'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('approved compact English login matches its visual golden', (
     WidgetTester tester,

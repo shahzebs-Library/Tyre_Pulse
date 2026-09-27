@@ -2955,4 +2955,84 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get workshopCopyCatalog =>
       'title=My Jobs~onDuty=On duty~offDuty=Off duty~checkIn=Check In~checkOut=Check Out~checkInHint=Check in for your shift before recording work.~myJobs=My jobs~emptyTitle=No open jobs~emptyMessage=No open job is assigned to you right now.~loadError=Your jobs could not be loaded right now.~selectJobTitle=Select a job~selectJobMsg=Pick one of your jobs first.~checkInFirstTitle=Check in first~selectTaskTitle=Select a task~selectTaskMsg=Pick the task you are working on first.~tasks=Tasks~confirmTitle=Complete task?~confirmMsg=This records the task as complete and sends it for inspection.~cancel=Cancel~noteHint=Add a note (optional)~record=Record~queued=Saved on this device. It will sync automatically.~saveFailed=The activity could not be saved on this device. Try again.~todayTitle=My productivity today~productive=Productive~blocked=Blocked~unassigned=Unassigned~breakTime=Break~completed=Tasks completed~due=Due~ok=OK~a_start_job=Start Job~a_pause_job=Pause Job~a_resume_job=Resume Job~a_complete_task=Complete Task~a_request_parts=Request Parts~a_request_assistance=Request Assistance~a_waiting_approval=Waiting for Approval~a_waiting_vehicle=Waiting for Vehicle~a_waiting_tools=Waiting for Tools~a_start_break=Start Break~a_end_break=End Break~a_report_problem=Report Problem~s_working=Working~s_available=Available~s_waiting_parts=Waiting for Parts~s_waiting_approval=Waiting for Approval~s_waiting_tools=Waiting for Tools~s_waiting_vehicle=Waiting for Vehicle~s_on_break=On Break~s_training=Training~s_awaiting_inspection=Awaiting Inspection~s_off_duty=Off Duty~s_absent=Absent~photoLabel=Photo (optional)~takePhoto=Camera~pickPhoto=Gallery~removePhoto=Remove photo~photoLimit=Up to 3 photos~photoNotAttached=Recorded. The photo could not be attached without a connection.';
+
+  @override
+  String get homeTodaysWork => 'Today\'s work';
+
+  @override
+  String get homeAwaitingSignatureTag => 'Awaiting signature';
+
+  @override
+  String get homeResumeInspection => 'Resume inspection';
+
+  @override
+  String get homeTyreIssueNeedsAttention => 'Tyre issue needs attention';
+
+  @override
+  String get profileSectionWorkspace => 'Workspace';
+
+  @override
+  String get profileEmployeeIdLabel => 'Employee ID';
+
+  @override
+  String get profileLanguageLabel => 'App language';
+
+  @override
+  String get profileSectionDisplay => 'Language & display';
+
+  @override
+  String get profileThemeLabel => 'Theme';
+
+  @override
+  String get profileThemeLight => 'Light';
+
+  @override
+  String get profileThemeDark => 'Dark';
+
+  @override
+  String get profileThemeSystem => 'System default';
+
+  @override
+  String get profileSectionOffline => 'Offline & data';
+
+  @override
+  String get profileUnsyncedFooter =>
+      'Unsynced drafts remain safely on this device';
+
+  @override
+  String get loginHeroTitle => 'Complete PMV Operations';
+
+  @override
+  String get loginSignInSubtitle => 'Sign in to your assigned operations';
+
+  @override
+  String get vehiclesInspectNow => 'Inspect now';
+
+  @override
+  String get inspectionPreviousTyre => 'Previous';
+
+  @override
+  String get inspectionNextTyre => 'Next';
+
+  @override
+  String get inspectionProgressTitle => 'Inspection progress';
+
+  @override
+  String inspectionPercentComplete(int percent) {
+    return '$percent% complete';
+  }
+
+  @override
+  String inspectionAxleNumber(int number) {
+    return 'Axle $number';
+  }
+
+  @override
+  String get inspectionTyresLabel => 'Tyres';
+
+  @override
+  String get inspectionScanAssetButton => 'Scan asset';
+
+  @override
+  String get inspectionSelectedAssetTitle => 'Selected asset';
 }

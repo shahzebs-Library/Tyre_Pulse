@@ -478,10 +478,26 @@ void main() {
     // 872 + 1 = 873. workshopCopyCatalog: the technician "My Jobs" screen
     // (ported from mobile/app/(app)/workshop.tsx), one `~`-separated catalog
     // key in the same convention as tasksCopyCatalog.
-    test('en, ar and ur each carry exactly 873 translatable keys today', () {
-      expect(_translatableKeys(en).length, 873);
-      expect(_translatableKeys(ar).length, 873);
-      expect(_translatableKeys(ur).length, 873);
+    // 873 + 23 = 896. Mock-parity copy that screens had been faking with
+    // stand-in keys: Home (homeTodaysWork, homeAwaitingSignatureTag,
+    // homeResumeInspection, homeTyreIssueNeedsAttention = 4), Profile
+    // (profileSectionWorkspace, profileEmployeeIdLabel, profileLanguageLabel,
+    // profileSectionDisplay, profileThemeLabel, profileThemeLight,
+    // profileThemeDark, profileThemeSystem, profileSectionOffline,
+    // profileUnsyncedFooter = 10), login (loginHeroTitle,
+    // loginSignInSubtitle = 2), vehicle detail (vehiclesInspectNow = 1) and
+    // the inspection tyre stepper (inspectionPreviousTyre, inspectionNextTyre,
+    // inspectionProgressTitle, inspectionPercentComplete,
+    // inspectionAxleNumber, inspectionTyresLabel = 6). 4+10+2+1+6 = 23; no
+    // existing key carried any of these meanings (no theme strings existed).
+    // 896 + 2 = 898. New Inspection asset picker: inspectionScanAssetButton
+    // ("Scan asset", replacing the borrowed scannerTitle "Scan" on the
+    // full-width scan button) and inspectionSelectedAssetTitle ("Selected
+    // asset", the heading on the selected-asset card) = 2.
+    test('en, ar and ur each carry exactly 898 translatable keys today', () {
+      expect(_translatableKeys(en).length, 898);
+      expect(_translatableKeys(ar).length, 898);
+      expect(_translatableKeys(ur).length, 898);
     });
   });
 

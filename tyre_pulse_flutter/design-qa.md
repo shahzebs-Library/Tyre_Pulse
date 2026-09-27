@@ -802,3 +802,162 @@ workstream:
 - No device capture. Mock parity is asserted by widget tests only.
 
 final result: pending CI
+
+# 2026-09-27 - Home rebuilt to mock 07 ("Home - Today's work")
+
+- Reference: `07-home-todays-work.png` (primary), `10-home-new-inspection.png`
+  (secondary). Visual reference only; nothing from the mock is embedded.
+- Bottom bar: Home no longer draws its own Home / My Work / + / Alerts / More
+  bar. `app/router/app_shell.dart` now hides the shared shell bar ONLY on the
+  New Inspection flow, so Home shows the shared Home / Inspect / Approvals /
+  Accidents / Profile bar the mock shows. The Home-owned dark dashboard, its
+  nav bar, the app bar, the scanner hero, the search field and the unused
+  stat-card helpers were deleted; dark mode now renders the same layout from
+  palette tokens.
+- Matches the mock: initials avatar, greeting + first name, site and country
+  line, full-width green New inspection button with circled plus, a
+  "Today's work" timeline card (pastel circle icons, vertical connector,
+  coloured status tag, title, detail, secondary line, relative time,
+  chevron) and "View all".
+- Real data only: DRAFT (newest local inspection draft with progress, via new
+  read-only `homeLatestInspectionDraftProvider`), CRITICAL (first critical
+  tyre alert; tread depth only when recorded, no recommended pressure),
+  AWAITING SIGNATURE (pending inspection approvals count). A failed source
+  renders "Could not check"; no work renders an honest empty row.
+- Deliberately NOT built (no data source): the scheduled daily-checklist row,
+  Fleet pulse Good/Attention/Critical/Not-checked counts, Recent assets photo
+  strip, and an "Online" indicator (no connectivity provider). The header
+  shows only the offline-queue state: all synced / N waiting / could not check.
+- Kept: permission gating, accident command shortcut, scanner (now a quick
+  action), the full module catalogue (now the "More" quick action), site sheet,
+  notifications bell.
+- Strings reused: "Today's work" is shown as the existing "My work" heading
+  and the tag "Awaiting signature" as "Waiting for approval" until the owner
+  adds dedicated keys.
+
+## Verification
+
+- A throwaway copy of the project was analysed and tested with Flutter 3.47.2
+  (Linux): `flutter analyze --fatal-infos` clean; `dart format` clean;
+  `test/features/home` and `test/app/router/app_shell_home_bar_test.dart` pass
+  except the golden `test/features/home/presentation/goldens/home_screen_full_data.png`,
+  which is STALE by design and must be regenerated on Windows / Flutter 3.47.2
+  (`[update-goldens]`).
+- No device capture.
+
+final result: pending golden regeneration + CI
+
+# 2026-09-27 - Tyre inspection capture rebuilt to mocks 15, 16 and 17
+
+- References: `15-concrete-pump-inspection.png`, `16-wheel-loader-inspection.png`,
+  `17-pickup-tyre-inspection.png`. Visual reference only; nothing embedded.
+- Tyre cards (`vehicle_tyre_diagram.dart`, capture mode): ~60-70dp text-led
+  cards, position code above the card, status icon, then ONLY recorded values
+  (tread `mm`, pressure `psi` exactly as stored); an unrecorded wheel says
+  "Not recorded". Status-coloured border, soft red fill for critical.
+- Dual axles: every wheel is its own full-height row (outer above inner) under
+  its axle group key `tyre.diagram.axle.<side>.<n>`. The stage grows with the
+  side that has most rows instead of shrinking cards; contain-fitted photos and
+  SVG bodies are measured (`TyreDiagramPhotoSpec.aspectRatio`) so cards aim at
+  the vehicle, not the letterbox. Dashed leaders end in a status-coloured
+  chevron knob at the vehicle; faint grid behind the vehicle.
+- Wheel loader artwork switched to the clean SANY top plate
+  (`vehicle_multiview_views/sany_wheel_loader_five_view_v1_top.png`, cover,
+  rotated 180). The old `vehicle_photos/wheel_loader.png` has status dots baked
+  into its pixels. Axle centres measured from the source pixels (0.363 / 0.660
+  after rotation) so leaders point at the photographed wheels. Pickup keeps
+  `vehicle_photos/pickup.png`: neither pickup plate shows its wheels, so
+  alignment of the high-res Mitsubishi plate could not be verified.
+- Progress card: step caption kept (tests + screen readers), segmented bar,
+  large `N / M`, "N of M checked", chevron that selects the next unchecked
+  wheel (hidden when none). Legend: icon beside label, one row (scales down).
+- Selected tyre panel: code + condition chip, Position and Serial facts,
+  Condition / Tread depth / Pressure tiles (recorded value or `-`, no min or
+  recommended reference and no gauge bar - no reference data exists), Notes
+  and Photo tiles (open the editor), Previous / `i / N` / Next through layout
+  order (wraps), Edit details. Save & Next bar unchanged.
+- Differs from the mocks (data/asset, not built): bar units and recommended
+  pressure, minimum tread, remaining life, rotation due, machine meter, last
+  updated, a tyre photo thumbnail, the "Switch module" tabs, a dedicated spare
+  row (no layout has a spare slot), "Rear Axle 1" wording (no key), and the
+  "Previous"/"Next"/"Inspection progress"/"% complete" words (no keys yet).
+
+## Verification
+
+- Throwaway copy, Flutter 3.47.2 (Linux): `flutter analyze --fatal-infos` clean
+  on `lib/features/inspections`, `lib/features/tyre_diagram` and their tests;
+  `dart format` clean; `test/features/{tyre_diagram,inspections,approvals,tyre_exchange}`
+  pass except goldens. New tests: every one of the 13 layouts at 300/328/358/380dp
+  (one card per wheel, no overflow, nothing outside the stage, no overlapping
+  cards), recorded-only values on cards, tyreless state in capture mode,
+  previous/next wrapping and `-` for unrecorded panel values.
+- `test/features/inspections/presentation/goldens/inspection_tyres_selected.png`
+  is STALE by design; regenerate on Windows / Flutter 3.47.2 (`[update-goldens]`).
+  The two approval goldens fail identically with and without this change on
+  Linux (renderer), so they are not affected by it.
+
+final result: pending golden regeneration + CI
+
+## Approvals and Accidents tab landing lists (mock 07 / 18 / 19 language)
+
+No mock exists for these two tab landings, so they borrow the approved list
+language only - nothing new is invented.
+
+- **Shared kit** `lib/features/approvals/presentation/widgets/queue_list_kit.dart`:
+  `QueueSectionHeader` (open bold header, green text action only when a real
+  callback exists), `QueueListRow` (pastel circle icon, uppercase status tag +
+  trailing time, bold title, secondary lines, directional chevron, full-bleed
+  hairline), `QueueStatusTag`, `QueueFilterChip` (quiet outlined pill).
+  Palette tokens only, directional padding - dark mode and RTL follow.
+- **Inspection approvals** (`/inspection/approvals`): white canvas; search +
+  Pending N / Approved / Returned quiet chips in an open band (same three
+  real `approval_status` reads); date groups are open section headers; rows
+  show status tag, signed marker, time of day, `asset - type`, `site • inspector`.
+- **Checklist approvals**: same rows; tag wording/colour come from the same
+  `statusSummary` mapping as the review chip (`checklistApprovalStatusTone`);
+  "Your turn" is a second tag; blocked-decision panel unchanged.
+- **Accident register**: one full-width green "Report accident" primary
+  action replaces the app-bar icon + FAB duplicate; the hero card is now an
+  open intro (eyebrow, title, message); filters are quiet chips; rows show
+  status + severity tags, incident date, `reference • site`, `type • location`.
+  `AccidentHero` (no other caller) removed.
+- Goldens to regenerate on Windows/Flutter 3.47.2:
+  `test/features/accidents/goldens/accident_dashboard_light.png` (intended).
+  `inspection_approval_compact_en.png`, `inspection_approval_wide_ar.png` and
+  `accident_case_overview_light.png` also fail but fail identically on the
+  untouched tree (stale, not caused by this change).
+
+## New Inspection asset scan / search / selection (mock 11)
+
+Mock 11 is a visual reference only; its Vehicle / Equipment / Plant buckets,
+hour meter, PM due, "inspection due today" and "Recently accessed" list have
+no data source and are deliberately not built.
+
+- **Picker** (`_VehiclePicker`): one full-width green primary **Scan** action
+  (key `inspection.header.vehicle_scanner`, same scanner route) above the
+  search field, replacing the small tonal icon. Class chips below it come from
+  `classChips()` over the loaded fleet's asset-number prefixes (tyre classes
+  first, `All (n)` first), never invented buckets. A chip browses its class; a
+  typed search always covers the whole fleet (the production rule). More than
+  30 matches shows `vehiclesTruncatedNotice` instead of cutting silently.
+  Loading shows a progress bar; a failed fleet read says so with Try again.
+- **Result rows** (`_VehicleChip`): fleet photo (or fallback icon), bold asset
+  number, resolved class, site line, status chip (`ops_status` else `status`)
+  and a directional chevron. A row with no site/status (tyreless plant) omits
+  them rather than showing a placeholder.
+- **Selected card** (`_SelectedVehicle`): large 176 dp photo, class badge
+  (prefix code + class icon), large asset number, class name, make/model,
+  registration, site, status, a Change action, then the site/odometer/hour
+  meter fields and the full-width primary **Next** (the existing
+  `advanceToTyres`, still disabled without a site). The separate details card
+  and bottom Next are gone: fields appear once an asset is chosen. Side by
+  side at >= 520 dp, stacked below.
+- Unfinished drafts (real) now sit below the picker, in the mock's
+  "recent" slot. The tyre-capture step is untouched.
+- New strings wanted (closest existing used today): `inspectionScanAssetButton`
+  "Scan asset" (uses `scannerTitle` "Scan"); `inspectionSelectedAssetTitle`
+  "Selected asset" (uses `inspectionDetailTitle` above the fields only).
+- Tests: `test/features/inspections/presentation/new_inspection_asset_picker_test.dart`
+  (10); root responsive test now selects an asset before asserting the
+  meter fields. Golden `inspection_tyres_selected.png` fails on Linux as
+  before (Windows-authored); no picker golden exists.

@@ -7,6 +7,10 @@ import 'package:tyre_pulse/app/theme/tp_theme.dart';
 import 'package:tyre_pulse/core/permissions/access_resolver.dart';
 import 'package:tyre_pulse/core/permissions/permission_providers.dart';
 import 'package:tyre_pulse/core/permissions/roles.dart';
+import 'package:tyre_pulse/core/workspace/workspace_context.dart';
+import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
+import 'package:tyre_pulse/core/workspace/workspace_scope.dart';
+import 'package:tyre_pulse/features/notifications/notifications_providers.dart';
 import 'package:tyre_pulse/features/preventive_maintenance/data/pm_repository.dart';
 import 'package:tyre_pulse/features/preventive_maintenance/domain/pm_plan.dart';
 import 'package:tyre_pulse/features/preventive_maintenance/pm_providers.dart';
@@ -43,7 +47,9 @@ void main() {
     final _PmRepository repository = _PmRepository();
     await _pump(tester, repository);
 
-    await tester.tap(find.widgetWithText(FilledButton, 'Record service').first);
+    await tester.ensureVisible(find.byKey(const Key('pm.record.overdue')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('pm.record.overdue')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('pm.save')), findsOneWidget);
 
@@ -66,6 +72,88 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('tapping a queue row opens the record service sheet', (
+    WidgetTester tester,
+  ) async {
+    await _pump(tester, _PmRepository());
+
+    await tester.ensureVisible(find.byKey(const Key('pm.plan.soon')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('pm.plan.soon')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('pm.save')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('bell badge is hidden when there are no unread notifications', (
+    WidgetTester tester,
+  ) async {
+    await _pump(tester, _PmRepository());
+
+    final Badge badge =
+        tester.widget<Badge>(find.byKey(const Key('pm.notificationsBadge')));
+    expect(badge.isLabelVisible, isFalse);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('bell badge shows the real unread count', (
+    WidgetTester tester,
+  ) async {
+    await _pump(
+      tester,
+      _PmRepository(),
+      unread: const AsyncData<int>(3),
+    );
+
+    final Badge badge =
+        tester.widget<Badge>(find.byKey(const Key('pm.notificationsBadge')));
+    expect(badge.isLabelVisible, isTrue);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('pm.notificationsBadge')),
+        matching: find.text('3'),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('bell badge stays hidden while the inbox cannot be read', (
+    WidgetTester tester,
+  ) async {
+    await _pump(
+      tester,
+      _PmRepository(),
+      unread: AsyncError<int>(StateError('inbox'), StackTrace.empty),
+    );
+
+    final Badge badge =
+        tester.widget<Badge>(find.byKey(const Key('pm.notificationsBadge')));
+    expect(badge.isLabelVisible, isFalse);
+  });
+
+  testWidgets('avatar shows the signed-in user initials', (
+    WidgetTester tester,
+  ) async {
+    await _pump(tester, _PmRepository());
+
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('pm.avatar')),
+        matching: find.text('MS'),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  test('pmInitials takes first and last initials and never invents one', () {
+    expect(pmInitials('Mohammed Saleh'), 'MS');
+    expect(pmInitials('  anum  '), 'A');
+    expect(pmInitials('Ali bin Omar'), 'AO');
+    expect(pmInitials(''), isNull);
+    expect(pmInitials(null), isNull);
+  });
+
   testWidgets('create work order action opens the real creation workflow', (
     WidgetTester tester,
   ) async {
@@ -79,16 +167,31 @@ void main() {
   });
 }
 
-Future<void> _pump(WidgetTester tester, PmRepository repository) async {
+Future<void> _pump(
+  WidgetTester tester,
+  PmRepository repository, {
+  AsyncValue<int> unread = const AsyncData<int>(0),
+}) async {
+  const AccessState access = AccessState(role: UserRole.known(RoleId.admin));
+  final WorkspaceContext workspace = WorkspaceContext(
+    userId: 'user-1',
+    role: access.role,
+    effectivePermissions: access,
+    countryScope: CountryScope.none,
+    siteScope: SiteScope.none,
+    companyId: 'org-1',
+    tenantId: 'org-1',
+    fullName: 'Mohammed Saleh',
+  );
   await tester.binding.setSurfaceSize(const Size(390, 844));
   addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
         pmRepositoryProvider.overrideWithValue(repository),
-        accessStateProvider.overrideWithValue(
-          const AccessState(role: UserRole.known(RoleId.admin)),
-        ),
+        accessStateProvider.overrideWithValue(access),
+        workspaceContextProvider.overrideWithValue(workspace),
+        unreadNotificationsCountProvider.overrideWithValue(unread),
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,

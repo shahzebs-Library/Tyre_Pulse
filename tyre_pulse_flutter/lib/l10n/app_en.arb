@@ -2271,5 +2271,115 @@
   "washAllEntries": "All entries",
   "washSavedOnDevice": "Saved on this device. Upload status is available in Sync.",
   "washHistoryLimit": "History is too large to load completely. Use the web report.",
-  "workshopCopyCatalog": "title=My Jobs~onDuty=On duty~offDuty=Off duty~checkIn=Check In~checkOut=Check Out~checkInHint=Check in for your shift before recording work.~myJobs=My jobs~emptyTitle=No open jobs~emptyMessage=No open job is assigned to you right now.~loadError=Your jobs could not be loaded right now.~selectJobTitle=Select a job~selectJobMsg=Pick one of your jobs first.~checkInFirstTitle=Check in first~selectTaskTitle=Select a task~selectTaskMsg=Pick the task you are working on first.~tasks=Tasks~confirmTitle=Complete task?~confirmMsg=This records the task as complete and sends it for inspection.~cancel=Cancel~noteHint=Add a note (optional)~record=Record~queued=Saved on this device. It will sync automatically.~saveFailed=The activity could not be saved on this device. Try again.~todayTitle=My productivity today~productive=Productive~blocked=Blocked~unassigned=Unassigned~breakTime=Break~completed=Tasks completed~due=Due~ok=OK~a_start_job=Start Job~a_pause_job=Pause Job~a_resume_job=Resume Job~a_complete_task=Complete Task~a_request_parts=Request Parts~a_request_assistance=Request Assistance~a_waiting_approval=Waiting for Approval~a_waiting_vehicle=Waiting for Vehicle~a_waiting_tools=Waiting for Tools~a_start_break=Start Break~a_end_break=End Break~a_report_problem=Report Problem~s_working=Working~s_available=Available~s_waiting_parts=Waiting for Parts~s_waiting_approval=Waiting for Approval~s_waiting_tools=Waiting for Tools~s_waiting_vehicle=Waiting for Vehicle~s_on_break=On Break~s_training=Training~s_awaiting_inspection=Awaiting Inspection~s_off_duty=Off Duty~s_absent=Absent~photoLabel=Photo (optional)~takePhoto=Camera~pickPhoto=Gallery~removePhoto=Remove photo~photoLimit=Up to 3 photos~photoNotAttached=Recorded. The photo could not be attached without a connection."
+  "workshopCopyCatalog": "title=My Jobs~onDuty=On duty~offDuty=Off duty~checkIn=Check In~checkOut=Check Out~checkInHint=Check in for your shift before recording work.~myJobs=My jobs~emptyTitle=No open jobs~emptyMessage=No open job is assigned to you right now.~loadError=Your jobs could not be loaded right now.~selectJobTitle=Select a job~selectJobMsg=Pick one of your jobs first.~checkInFirstTitle=Check in first~selectTaskTitle=Select a task~selectTaskMsg=Pick the task you are working on first.~tasks=Tasks~confirmTitle=Complete task?~confirmMsg=This records the task as complete and sends it for inspection.~cancel=Cancel~noteHint=Add a note (optional)~record=Record~queued=Saved on this device. It will sync automatically.~saveFailed=The activity could not be saved on this device. Try again.~todayTitle=My productivity today~productive=Productive~blocked=Blocked~unassigned=Unassigned~breakTime=Break~completed=Tasks completed~due=Due~ok=OK~a_start_job=Start Job~a_pause_job=Pause Job~a_resume_job=Resume Job~a_complete_task=Complete Task~a_request_parts=Request Parts~a_request_assistance=Request Assistance~a_waiting_approval=Waiting for Approval~a_waiting_vehicle=Waiting for Vehicle~a_waiting_tools=Waiting for Tools~a_start_break=Start Break~a_end_break=End Break~a_report_problem=Report Problem~s_working=Working~s_available=Available~s_waiting_parts=Waiting for Parts~s_waiting_approval=Waiting for Approval~s_waiting_tools=Waiting for Tools~s_waiting_vehicle=Waiting for Vehicle~s_on_break=On Break~s_training=Training~s_awaiting_inspection=Awaiting Inspection~s_off_duty=Off Duty~s_absent=Absent~photoLabel=Photo (optional)~takePhoto=Camera~pickPhoto=Gallery~removePhoto=Remove photo~photoLimit=Up to 3 photos~photoNotAttached=Recorded. The photo could not be attached without a connection.",
+  "homeTodaysWork": "Today's work",
+  "@homeTodaysWork": {
+    "description": "Home section heading for the work the signed-in user has today."
+  },
+  "homeAwaitingSignatureTag": "Awaiting signature",
+  "@homeAwaitingSignatureTag": {
+    "description": "Tag on a Home work card for an item waiting for the user's signature."
+  },
+  "homeResumeInspection": "Resume inspection",
+  "@homeResumeInspection": {
+    "description": "Home work card title for an inspection draft that can be resumed."
+  },
+  "homeTyreIssueNeedsAttention": "Tyre issue needs attention",
+  "@homeTyreIssueNeedsAttention": {
+    "description": "Home work card title when a recorded tyre issue needs follow-up."
+  },
+  "profileSectionWorkspace": "Workspace",
+  "@profileSectionWorkspace": {
+    "description": "Profile section header for the user's role, country and site access."
+  },
+  "profileEmployeeIdLabel": "Employee ID",
+  "@profileEmployeeIdLabel": {
+    "description": "Label beside the employee ID on the profile identity header."
+  },
+  "profileLanguageLabel": "App language",
+  "@profileLanguageLabel": {
+    "description": "Profile settings row label that opens the language picker."
+  },
+  "profileSectionDisplay": "Language & display",
+  "@profileSectionDisplay": {
+    "description": "Profile section header for language and theme settings."
+  },
+  "profileThemeLabel": "Theme",
+  "@profileThemeLabel": {
+    "description": "Profile settings row label that opens the theme picker."
+  },
+  "profileThemeLight": "Light",
+  "@profileThemeLight": {
+    "description": "Theme picker option: light theme."
+  },
+  "profileThemeDark": "Dark",
+  "@profileThemeDark": {
+    "description": "Theme picker option: dark theme."
+  },
+  "profileThemeSystem": "System default",
+  "@profileThemeSystem": {
+    "description": "Theme picker option: follow the device theme."
+  },
+  "profileSectionOffline": "Offline & data",
+  "@profileSectionOffline": {
+    "description": "Profile section header for the offline queue status."
+  },
+  "profileUnsyncedFooter": "Unsynced drafts remain safely on this device",
+  "@profileUnsyncedFooter": {
+    "description": "Shown under Sign out while work is still queued: signing out does not delete it."
+  },
+  "loginHeroTitle": "Complete PMV Operations",
+  "@loginHeroTitle": {
+    "description": "Login hero headline over the country artwork."
+  },
+  "loginSignInSubtitle": "Sign in to your assigned operations",
+  "@loginSignInSubtitle": {
+    "description": "Subtitle under the login welcome title."
+  },
+  "vehiclesInspectNow": "Inspect now",
+  "@vehiclesInspectNow": {
+    "description": "Vehicle detail primary action that starts an inspection for this vehicle."
+  },
+  "inspectionPreviousTyre": "Previous",
+  "@inspectionPreviousTyre": {
+    "description": "Inspection tyre stepper: go to the previous tyre position."
+  },
+  "inspectionNextTyre": "Next",
+  "@inspectionNextTyre": {
+    "description": "Inspection tyre stepper: go to the next tyre position."
+  },
+  "inspectionProgressTitle": "Inspection progress",
+  "@inspectionProgressTitle": {
+    "description": "Heading of the inspection progress card."
+  },
+  "inspectionPercentComplete": "{percent}% complete",
+  "@inspectionPercentComplete": {
+    "description": "Inspection completion percentage.",
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "inspectionAxleNumber": "Axle {number}",
+  "@inspectionAxleNumber": {
+    "description": "Axle heading in the inspection tyre layout.",
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "inspectionTyresLabel": "Tyres",
+  "@inspectionTyresLabel": {
+    "description": "Label for the tyre count in the inspection progress card."
+  },
+  "inspectionScanAssetButton": "Scan asset",
+  "@inspectionScanAssetButton": {
+    "description": "New Inspection asset picker: full-width button that opens the scanner to pick an asset by its code."
+  },
+  "inspectionSelectedAssetTitle": "Selected asset",
+  "@inspectionSelectedAssetTitle": {
+    "description": "New Inspection asset picker: heading on the card showing the asset chosen for this inspection."
+  }
 }

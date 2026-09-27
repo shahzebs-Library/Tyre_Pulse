@@ -25,6 +25,8 @@ import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/approvals/data/inspection_approval_item.dart';
 import 'package:tyre_pulse/features/approvals/inspection_approvals_providers.dart';
+import 'package:tyre_pulse/features/inspections/domain/inspection_draft_summary.dart';
+import 'package:tyre_pulse/features/inspections/inspections_providers.dart';
 import 'package:tyre_pulse/features/tasks/data/task_item.dart';
 import 'package:tyre_pulse/features/tasks/tasks_providers.dart';
 
@@ -70,4 +72,27 @@ final FutureProvider<List<TaskItem>> homeTaskPreviewProvider =
         country: ref.watch(activeCountryProvider),
         limit: 100,
       );
+});
+
+/// The newest unfinished inspection draft for the signed-in user, or null.
+///
+/// Read-only over the inspections feature's own `InspectionDraftRepository`
+/// (`draftsForUser`, newest first) - Home never writes a draft. Only a draft
+/// with real progress counts: a sheet that was merely opened is not "work to
+/// resume", the same distinction `DraftsDao.draftHasContent` draws.
+///
+/// Resolves to null when nobody is signed into a workspace: with no user
+/// there is genuinely no draft to show, not an unknown value.
+final FutureProvider<InspectionDraftSummary?>
+    homeLatestInspectionDraftProvider =
+    FutureProvider<InspectionDraftSummary?>((ref) async {
+  final WorkspaceContext? workspace = ref.watch(workspaceContextProvider);
+  final String userId = workspace?.userId.trim() ?? '';
+  if (userId.isEmpty) return null;
+  final List<InspectionDraftSummary> drafts =
+      await ref.watch(inspectionDraftRepositoryProvider).draftsForUser(userId);
+  for (final InspectionDraftSummary draft in drafts) {
+    if (draft.hasProgress && draft.assetNo.trim().isNotEmpty) return draft;
+  }
+  return null;
 });

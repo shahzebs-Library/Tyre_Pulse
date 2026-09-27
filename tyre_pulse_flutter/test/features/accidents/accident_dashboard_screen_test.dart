@@ -129,6 +129,13 @@ void main() {
 
     expect(find.text('Accident command centre'), findsOneWidget);
     expect(find.text('Every case, one accountable trail'), findsOneWidget);
+    expect(
+      find.byKey(AccidentDashboardScreenKeys.reportAction),
+      findsOneWidget,
+    );
+    // Row content is the register's own columns, uppercase status tag first.
+    expect(find.text('UNDER REVIEW'), findsOneWidget);
+    expect(find.text('ACC-2026-0182 • Diriyah'), findsOneWidget);
     expect(find.byKey(AccidentDashboardScreenKeys.search), findsOneWidget);
     expect(find.byKey(AccidentDashboardScreenKeys.allCases), findsOneWidget);
     expect(
@@ -173,17 +180,21 @@ void main() {
     final (GoRouter router, _DashboardRepository repository) =
         await _pumpDashboard(tester);
 
-    tester
-        .widget<IconButton>(
-          find.byKey(AccidentDashboardScreenKeys.reportAction),
-        )
-        .onPressed!();
+    // The mock family carries ONE full-width primary action (no floating
+    // button). A compact app-bar icon also stays, so reporting an accident
+    // is still one tap away once the list has scrolled. Both reach the real
+    // report route.
+    expect(find.text('Report accident'), findsOneWidget);
+    expect(find.byType(FloatingActionButton), findsNothing);
+    await tester.tap(find.byKey(AccidentDashboardScreenKeys.reportAction));
     await tester.pumpAndSettle();
     expect(find.text('report destination'), findsOneWidget);
 
     router.go(TpRoutePaths.accidentDashboard);
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(AccidentDashboardScreenKeys.reportFab));
+    await tester.tap(
+      find.byKey(AccidentDashboardScreenKeys.reportAppBarAction),
+    );
     await tester.pumpAndSettle();
     expect(find.text('report destination'), findsOneWidget);
 

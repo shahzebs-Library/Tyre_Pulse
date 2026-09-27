@@ -5337,6 +5337,156 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'title=My Jobs~onDuty=On duty~offDuty=Off duty~checkIn=Check In~checkOut=Check Out~checkInHint=Check in for your shift before recording work.~myJobs=My jobs~emptyTitle=No open jobs~emptyMessage=No open job is assigned to you right now.~loadError=Your jobs could not be loaded right now.~selectJobTitle=Select a job~selectJobMsg=Pick one of your jobs first.~checkInFirstTitle=Check in first~selectTaskTitle=Select a task~selectTaskMsg=Pick the task you are working on first.~tasks=Tasks~confirmTitle=Complete task?~confirmMsg=This records the task as complete and sends it for inspection.~cancel=Cancel~noteHint=Add a note (optional)~record=Record~queued=Saved on this device. It will sync automatically.~saveFailed=The activity could not be saved on this device. Try again.~todayTitle=My productivity today~productive=Productive~blocked=Blocked~unassigned=Unassigned~breakTime=Break~completed=Tasks completed~due=Due~ok=OK~a_start_job=Start Job~a_pause_job=Pause Job~a_resume_job=Resume Job~a_complete_task=Complete Task~a_request_parts=Request Parts~a_request_assistance=Request Assistance~a_waiting_approval=Waiting for Approval~a_waiting_vehicle=Waiting for Vehicle~a_waiting_tools=Waiting for Tools~a_start_break=Start Break~a_end_break=End Break~a_report_problem=Report Problem~s_working=Working~s_available=Available~s_waiting_parts=Waiting for Parts~s_waiting_approval=Waiting for Approval~s_waiting_tools=Waiting for Tools~s_waiting_vehicle=Waiting for Vehicle~s_on_break=On Break~s_training=Training~s_awaiting_inspection=Awaiting Inspection~s_off_duty=Off Duty~s_absent=Absent~photoLabel=Photo (optional)~takePhoto=Camera~pickPhoto=Gallery~removePhoto=Remove photo~photoLimit=Up to 3 photos~photoNotAttached=Recorded. The photo could not be attached without a connection.'**
   String get workshopCopyCatalog;
+
+  /// Home section heading for the work the signed-in user has today.
+  ///
+  /// In en, this message translates to:
+  /// **'Today\'s work'**
+  String get homeTodaysWork;
+
+  /// Tag on a Home work card for an item waiting for the user's signature.
+  ///
+  /// In en, this message translates to:
+  /// **'Awaiting signature'**
+  String get homeAwaitingSignatureTag;
+
+  /// Home work card title for an inspection draft that can be resumed.
+  ///
+  /// In en, this message translates to:
+  /// **'Resume inspection'**
+  String get homeResumeInspection;
+
+  /// Home work card title when a recorded tyre issue needs follow-up.
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre issue needs attention'**
+  String get homeTyreIssueNeedsAttention;
+
+  /// Profile section header for the user's role, country and site access.
+  ///
+  /// In en, this message translates to:
+  /// **'Workspace'**
+  String get profileSectionWorkspace;
+
+  /// Label beside the employee ID on the profile identity header.
+  ///
+  /// In en, this message translates to:
+  /// **'Employee ID'**
+  String get profileEmployeeIdLabel;
+
+  /// Profile settings row label that opens the language picker.
+  ///
+  /// In en, this message translates to:
+  /// **'App language'**
+  String get profileLanguageLabel;
+
+  /// Profile section header for language and theme settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Language & display'**
+  String get profileSectionDisplay;
+
+  /// Profile settings row label that opens the theme picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Theme'**
+  String get profileThemeLabel;
+
+  /// Theme picker option: light theme.
+  ///
+  /// In en, this message translates to:
+  /// **'Light'**
+  String get profileThemeLight;
+
+  /// Theme picker option: dark theme.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark'**
+  String get profileThemeDark;
+
+  /// Theme picker option: follow the device theme.
+  ///
+  /// In en, this message translates to:
+  /// **'System default'**
+  String get profileThemeSystem;
+
+  /// Profile section header for the offline queue status.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline & data'**
+  String get profileSectionOffline;
+
+  /// Shown under Sign out while work is still queued: signing out does not delete it.
+  ///
+  /// In en, this message translates to:
+  /// **'Unsynced drafts remain safely on this device'**
+  String get profileUnsyncedFooter;
+
+  /// Login hero headline over the country artwork.
+  ///
+  /// In en, this message translates to:
+  /// **'Complete PMV Operations'**
+  String get loginHeroTitle;
+
+  /// Subtitle under the login welcome title.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to your assigned operations'**
+  String get loginSignInSubtitle;
+
+  /// Vehicle detail primary action that starts an inspection for this vehicle.
+  ///
+  /// In en, this message translates to:
+  /// **'Inspect now'**
+  String get vehiclesInspectNow;
+
+  /// Inspection tyre stepper: go to the previous tyre position.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous'**
+  String get inspectionPreviousTyre;
+
+  /// Inspection tyre stepper: go to the next tyre position.
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get inspectionNextTyre;
+
+  /// Heading of the inspection progress card.
+  ///
+  /// In en, this message translates to:
+  /// **'Inspection progress'**
+  String get inspectionProgressTitle;
+
+  /// Inspection completion percentage.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% complete'**
+  String inspectionPercentComplete(int percent);
+
+  /// Axle heading in the inspection tyre layout.
+  ///
+  /// In en, this message translates to:
+  /// **'Axle {number}'**
+  String inspectionAxleNumber(int number);
+
+  /// Label for the tyre count in the inspection progress card.
+  ///
+  /// In en, this message translates to:
+  /// **'Tyres'**
+  String get inspectionTyresLabel;
+
+  /// New Inspection asset picker: full-width button that opens the scanner to pick an asset by its code.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan asset'**
+  String get inspectionScanAssetButton;
+
+  /// New Inspection asset picker: heading on the card showing the asset chosen for this inspection.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected asset'**
+  String get inspectionSelectedAssetTitle;
 }
 
 class _AppLocalizationsDelegate

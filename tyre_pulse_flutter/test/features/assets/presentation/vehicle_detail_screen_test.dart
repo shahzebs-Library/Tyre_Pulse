@@ -29,8 +29,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 // naming it explicitly, which this file's helper signatures below do.
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/route_access.dart';
+import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
@@ -40,6 +42,7 @@ import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_detail_screen.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
+import 'package:tyre_pulse/features/inspections/domain/inspection_draft_summary.dart';
 
 const String _assetNo = 'TM514';
 
@@ -47,6 +50,7 @@ Future<void> _pump(
   WidgetTester tester,
   List<Override> overrides, {
   String assetNo = _assetNo,
+  InspectionDraftSummary? draft,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -55,6 +59,10 @@ Future<void> _pump(
             .overrideWith((Ref ref) => true),
         canAccessModuleProvider(ModuleKey.workorders)
             .overrideWith((Ref ref) => true),
+        // No on-device draft unless a test says otherwise: the real provider
+        // would reach the local database, which a widget test has not got.
+        vehicleInspectionDraftProvider(assetNo)
+            .overrideWith((Ref ref) async => draft),
         ...overrides,
       ],
       child: MaterialApp(
@@ -241,10 +249,14 @@ void main() {
         status: 'Active',
         currentKm: 88421,
       );
-      await _pump(tester, <Override>[
-        _resolved(const VehicleDetailLoaded(asset)),
-        _canStartInspection(true),
-      ]);
+      await _pump(
+        tester,
+        <Override>[
+          _resolved(const VehicleDetailLoaded(asset), assetNo: 'TM4271'),
+          _canStartInspection(true),
+        ],
+        assetNo: 'TM4271',
+      );
       await _pumpLoadedFrame(tester);
 
       expect(find.text('Vehicle 360°'), findsOneWidget);
@@ -264,7 +276,10 @@ void main() {
       );
       expect(
         tester.getTopLeft(find.byKey(VehicleDetailScreenKeys.overviewTab)).dy,
-        inInclusiveRange(170, 300),
+        // The single hero card (class pill, large code, site, large class
+        // artwork, Inspect now) now sits above the facts, so the tabs
+        // start lower - still well inside the first 852pt phone screen.
+        inInclusiveRange(300, 520),
       );
       await expectLater(
         find.byType(VehicleDetailScreen),
@@ -279,6 +294,240 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
       expect(find.byKey(VehicleDetailScreenKeys.tyreMap), findsOneWidget);
       expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'the hero does not offer Inspect now to someone who cannot inspect',
+    (WidgetTester tester) async {
+      const VehicleAsset asset = VehicleAsset(
+        id: 'v1',
+        assetNo: _assetNo,
+        vehicleType: 'TR-MIXER',
+      );
+      await _pump(tester, <Override>[
+        _resolved(const VehicleDetailLoaded(asset)),
+        _canStartInspection(false),
+      ]);
+      await _pumpLoadedFrame(tester);
+
+      expect(find.byKey(VehicleDetailScreenKeys.hero), findsOneWidget);
+      expect(find.byKey(VehicleDetailScreenKeys.inspectNow), findsNothing);
+      // Report issue / New work order stay reachable either way.
+      expect(find.byKey(VehicleDetailScreenKeys.reportIssue), findsOneWidget);
+      expect(
+        find.byKey(VehicleDetailScreenKeys.createWorkOrder),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'the hero offers Inspect now to someone who can inspect, and keeps '
+    'Report issue and New work order reachable',
+    (WidgetTester tester) async {
+      const VehicleAsset asset = VehicleAsset(
+        id: 'v1',
+        assetNo: _assetNo,
+        vehicleType: 'TR-MIXER',
+      );
+      await _pump(tester, <Override>[
+        _resolved(const VehicleDetailLoaded(asset)),
+        _canStartInspection(true),
+      ]);
+      await _pumpLoadedFrame(tester);
+
+      expect(find.byKey(VehicleDetailScreenKeys.inspectNow), findsOneWidget);
+      expect(find.text('Inspect now'), findsOneWidget);
+      expect(find.byKey(VehicleDetailScreenKeys.reportIssue), findsOneWidget);
+      expect(
+        find.byKey(VehicleDetailScreenKeys.createWorkOrder),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'the hero shows class, make and model, and site from the real row, and '
+    'no readiness ring when there is no draft',
+    (WidgetTester tester) async {
+      const VehicleAsset asset = VehicleAsset(
+        id: 'v1',
+        assetNo: 'CP045',
+        make: 'Putzmeister',
+        model: '42Z',
+        vehicleType: 'PUMPS',
+        site: 'Main Yard',
+      );
+      await _pump(
+        tester,
+        <Override>[
+          _resolved(
+            const VehicleDetailLoaded(asset),
+            assetNo: 'CP045',
+          ),
+          _canStartInspection(true),
+        ],
+        assetNo: 'CP045',
+      );
+      await _pumpLoadedFrame(tester);
+
+      final Finder hero = find.byKey(VehicleDetailScreenKeys.hero);
+      expect(
+        find.descendant(of: hero, matching: find.textContaining('CP045')),
+        findsWidgets,
+      );
+      expect(
+        find.descendant(
+          of: hero,
+          matching: find.text('Putzmeister \u00B7 42Z'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: hero, matching: find.text('PUMPS')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: hero, matching: find.text('Main Yard')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: hero,
+          matching: find.byKey(VehicleDetailScreenKeys.heroPhoto),
+        ),
+        findsOneWidget,
+      );
+      // No draft -> no ring and no invented percentage.
+      expect(find.byKey(VehicleDetailScreenKeys.draftReadiness), findsNothing);
+      // No source exists for connectivity or a tyre-condition rollup.
+      expect(
+        find.descendant(of: hero, matching: find.text('Online')),
+        findsNothing,
+      );
+      expect(
+        find.descendant(of: hero, matching: find.text('Good')),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
+    'a real on-device draft for this asset renders its own progress ring',
+    (WidgetTester tester) async {
+      const VehicleAsset asset = VehicleAsset(
+        id: 'v1',
+        assetNo: _assetNo,
+        vehicleType: 'TR-MIXER',
+      );
+      await _pump(
+        tester,
+        <Override>[
+          _resolved(const VehicleDetailLoaded(asset)),
+          _canStartInspection(true),
+        ],
+        draft: InspectionDraftSummary(
+          draftKey: 'u1:TM514',
+          assetNo: _assetNo,
+          filled: 8,
+          total: 10,
+          updatedAt: DateTime.utc(2026, 9, 27, 8),
+        ),
+      );
+      await _pumpLoadedFrame(tester);
+
+      expect(
+        find.byKey(VehicleDetailScreenKeys.draftReadiness),
+        findsOneWidget,
+      );
+      expect(find.text('80%'), findsOneWidget);
+      expect(find.text('8 of 10 checked'), findsOneWidget);
+      expect(find.text('Draft'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'tyreless plant still renders a complete hero with its fallback art',
+    (WidgetTester tester) async {
+      const VehicleAsset asset = VehicleAsset(
+        id: 'v1',
+        assetNo: 'GN103',
+        vehicleType: 'GENERATOR',
+        site: 'NHC',
+      );
+      await _pump(
+        tester,
+        <Override>[
+          _resolved(const VehicleDetailLoaded(asset), assetNo: 'GN103'),
+          _canStartInspection(true),
+        ],
+        assetNo: 'GN103',
+      );
+      await _pumpLoadedFrame(tester);
+
+      expect(find.byKey(VehicleDetailScreenKeys.hero), findsOneWidget);
+      expect(find.byKey(VehicleDetailScreenKeys.heroPhoto), findsOneWidget);
+      expect(find.byKey(VehicleDetailScreenKeys.inspectNow), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'Inspect now opens the inspection form for this asset and site',
+    (WidgetTester tester) async {
+      const VehicleAsset asset = VehicleAsset(
+        id: 'v1',
+        assetNo: _assetNo,
+        vehicleType: 'TR-MIXER',
+        site: 'NHC',
+      );
+      final GoRouter router = GoRouter(
+        routes: <RouteBase>[
+          GoRoute(
+            path: '/',
+            builder: (BuildContext context, GoRouterState state) =>
+                const VehicleDetailScreen(assetNo: _assetNo),
+          ),
+          GoRoute(
+            path: TpRoutePaths.newInspection,
+            builder: (BuildContext context, GoRouterState state) => Text(
+              'inspect:${state.uri.queryParameters[TpRoutePaths.qAssetNo]}'
+              '@${state.uri.queryParameters[TpRoutePaths.qSiteName]}',
+            ),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: <Override>[
+            canAccessModuleProvider(ModuleKey.reportIssue)
+                .overrideWith((Ref ref) => true),
+            canAccessModuleProvider(ModuleKey.workorders)
+                .overrideWith((Ref ref) => true),
+            vehicleInspectionDraftProvider(_assetNo)
+                .overrideWith((Ref ref) async => null),
+            _resolved(const VehicleDetailLoaded(asset)),
+            _canStartInspection(true),
+          ],
+          child: MaterialApp.router(
+            debugShowCheckedModeBanner: false,
+            theme: TpTheme.light,
+            locale: const Locale('en'),
+            supportedLocales: TpLocalizations.supportedLocales,
+            localizationsDelegates: TpLocalizations.delegates,
+            routerConfig: router,
+          ),
+        ),
+      );
+      await _pumpLoadedFrame(tester);
+
+      await tester.tap(find.byKey(VehicleDetailScreenKeys.inspectNow));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.text('inspect:$_assetNo@NHC'), findsOneWidget);
     },
   );
 

@@ -388,6 +388,8 @@ void main() {
   );
 
   for (final MapEntry<String, String> vehicle in <String, String>{
+    'Wheel loader':
+        'assets/vehicle_multiview_views/sany_wheel_loader_five_view_v1_top.png',
     'Skid loader': 'assets/vehicle_photos/skid_loader_top_down_v2.png',
     'Tri-mixer': 'assets/vehicle_photos/tri_mixer_top_down.webp',
     'Line pump': 'assets/vehicle_photos/line_pump_top_down_v2.png',
@@ -448,7 +450,8 @@ void main() {
   });
 
   testWidgets(
-    'capture keeps concrete-pump rear Inner and Outer controls joined by axle',
+    'capture gives each concrete-pump dual wheel its own full row, outer '
+    'above inner, grouped under its physical axle',
     (WidgetTester tester) async {
       final DiagramLayout layout = kTyreDiagramLayouts['Concrete pump']!;
       await _pump(
@@ -463,7 +466,7 @@ void main() {
         ),
       );
 
-      // Three single steer axle rows plus two joined rear-dual rows per side.
+      // Three single steer axles plus two rear dual axles per side.
       expect(
         find.byKey(const ValueKey<String>('tyre.diagram.axle.left.4')),
         findsOneWidget,
@@ -485,13 +488,157 @@ void main() {
       final Rect leftInner = tester.getRect(identifier('LHR1-I'));
       final Rect rightInner = tester.getRect(identifier('RHR1-I'));
       final Rect rightOuter = tester.getRect(identifier('RHR1-O'));
-      expect((leftOuter.center.dy - leftInner.center.dy).abs(), lessThan(1));
-      expect((rightInner.center.dy - rightOuter.center.dy).abs(), lessThan(1));
-      expect(leftOuter.center.dx, lessThan(leftInner.center.dx));
-      expect(rightInner.center.dx, lessThan(rightOuter.center.dx));
+      // One column per side, outer row first, never side by side.
+      expect((leftOuter.center.dx - leftInner.center.dx).abs(), lessThan(1));
+      expect((rightOuter.center.dx - rightInner.center.dx).abs(), lessThan(1));
+      expect(leftOuter.center.dy, lessThan(leftInner.center.dy));
+      expect(rightOuter.center.dy, lessThan(rightInner.center.dy));
+      // Both rows of one axle live inside that axle's group.
+      final Rect axleGroup = tester.getRect(
+        find.byKey(const ValueKey<String>('tyre.diagram.axle.left.3')),
+      );
+      expect(axleGroup.contains(leftOuter.center), isTrue);
+      expect(axleGroup.contains(leftInner.center), isTrue);
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets(
+    'capture cards show pressure and tread only when recorded, never a '
+    'placeholder value',
+    (WidgetTester tester) async {
+      await _pump(
+        tester,
+        const VehicleTyreDiagram(
+          vehicleType: 'PICKUP',
+          positions: <String>['FL', 'FR', 'RL', 'RR'],
+          tyreData: <String, Map<String, Object?>>{
+            // Pressure and tread both recorded.
+            'FL': <String, Object?>{
+              'pressure_psi': 34.0,
+              'tread_depth_mm': 7.1,
+              'condition': 'Good',
+              'checked': true,
+            },
+            // Pressure only - tread must stay hidden.
+            'FR': <String, Object?>{
+              'pressure_psi': 0,
+              'condition': 'Flat',
+              'checked': true,
+            },
+            // Checked with no reading - the condition label, no numbers.
+            'RL': <String, Object?>{'condition': 'Worn', 'checked': true},
+            // RR carries no entry at all: not recorded.
+          },
+          width: 366,
+          compact: true,
+          captureMode: true,
+        ),
+      );
+
+      expect(find.text('34 psi'), findsOneWidget);
+      expect(find.text('7.1 mm'), findsOneWidget);
+      // A 0 psi flat is a real reading, not "not recorded".
+      expect(find.text('0 psi'), findsOneWidget);
+      expect(find.textContaining(' mm'), findsOneWidget);
+      expect(find.text('Worn'), findsOneWidget);
+      expect(find.text('Not recorded'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('capture mode keeps the tyreless empty state', (
+    WidgetTester tester,
+  ) async {
+    await _pump(
+      tester,
+      const VehicleTyreDiagram(
+        vehicleType: 'STATIONARY PUMP',
+        positions: <String>['FL', 'FR'],
+        tyreData: <String, Map<String, Object?>>{},
+        width: 366,
+        compact: true,
+        captureMode: true,
+      ),
+    );
+    expect(
+      find.byKey(const Key('tyre.diagram.figma_capture_stage')),
+      findsNothing,
+    );
+    expect(
+      find.text('Stationary equipment, no tyres to inspect.'),
+      findsOneWidget,
+    );
+  });
+
+  // Every production layout, at every capture width the board can hand the
+  // stage (it clamps to 300-380; a 360-390dp phone lands at 328-358).
+  for (final DiagramLayout layout in kTyreDiagramLayouts.values) {
+    for (final double width in <double>[300, 328, 358, 380]) {
+      testWidgets(
+        '${layout.key} capture at ${width.toInt()}dp: one card per wheel, '
+        'no overflow, nothing outside the stage, no overlapping rows',
+        (WidgetTester tester) async {
+          tester.view.physicalSize = const Size(420, 1400);
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.reset);
+          String? tapped;
+          await _pump(
+            tester,
+            VehicleTyreDiagram(
+              vehicleType: layout.key,
+              positions: layout.tyres.map((TyreSlot tyre) => tyre.id).toList(),
+              tyreData: const <String, Map<String, Object?>>{},
+              width: width,
+              compact: true,
+              captureMode: true,
+              onPositionTap: (String id) => tapped = id,
+            ),
+          );
+          expect(tester.takeException(), isNull);
+
+          final Finder stage = find.byKey(
+            const Key('tyre.diagram.figma_capture_stage'),
+          );
+          expect(stage, findsOneWidget);
+          final Rect stageRect = tester.getRect(stage);
+          final Finder cards = find.descendant(
+            of: stage,
+            matching: find.byType(InkWell),
+          );
+          expect(cards, findsNWidgets(layout.tyres.length));
+
+          final List<Rect> rects = <Rect>[
+            for (int i = 0; i < layout.tyres.length; i++)
+              tester.getRect(cards.at(i)),
+          ];
+          for (final Rect rect in rects) {
+            expect(rect.left, greaterThanOrEqualTo(stageRect.left - 0.5));
+            expect(rect.right, lessThanOrEqualTo(stageRect.right + 0.5));
+            expect(rect.top, greaterThanOrEqualTo(stageRect.top - 0.5));
+            expect(rect.bottom, lessThanOrEqualTo(stageRect.bottom + 0.5));
+            expect(rect.height, greaterThanOrEqualTo(48));
+          }
+          for (int a = 0; a < rects.length; a++) {
+            for (int b = a + 1; b < rects.length; b++) {
+              expect(
+                rects[a].overlaps(rects[b]),
+                isFalse,
+                reason: 'cards $a and $b overlap',
+              );
+            }
+          }
+
+          await tester.tap(cards.last);
+          await tester.pump();
+          expect(
+            layout.tyres.map((TyreSlot tyre) => tyre.id),
+            contains(tapped),
+          );
+        },
+      );
+    }
+  }
 
   for (final String vehicleClass in <String>[
     'Tri-mixer',

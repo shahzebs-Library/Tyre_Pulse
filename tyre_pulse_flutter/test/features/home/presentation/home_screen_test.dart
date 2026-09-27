@@ -1,20 +1,25 @@
 /// [HomeScreen] rendered over a real [AccessState], the same override shape
-/// `main.dart` wires at the composition root
-/// (`accessStateProvider.overrideWith((ref) =>
-/// ref.watch(workspaceContextProvider)?.effectivePermissions ??
-/// AccessState.signedOut)`).
+/// `main.dart` wires at the composition root.
 ///
-/// # Why this file exists
+/// # What this file protects
 ///
-/// These tests pump the real responsive hierarchy at compact and default
-/// widths. They protect both the earlier unbounded-stat-row failure and the
-/// fixed-aspect quick-action grid that clipped longer translated labels.
+/// Home follows the owner-approved mock 07 ("Home - Today's work"): header,
+/// full-width New inspection button, a Today's-work timeline and quick
+/// actions. The shared shell bar - not a Home-owned bar - is the bottom
+/// navigation (see `test/app/router/app_shell_home_bar_test.dart`).
+///
+/// The timeline is asserted to contain ONLY rows backed by a real source
+/// (inspection draft, critical tyre alert, pending approvals), to say
+/// "Could not check" when a source fails rather than looking empty, and the
+/// header is asserted never to claim "Online" - there is no connectivity
+/// provider to back it.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
@@ -28,41 +33,47 @@ import 'package:tyre_pulse/core/workspace/workspace_scope.dart';
 import 'package:tyre_pulse/features/alerts/alerts_providers.dart';
 import 'package:tyre_pulse/features/alerts/domain/tyre_alert.dart';
 import 'package:tyre_pulse/features/approvals/data/inspection_approval_item.dart';
-import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
-import 'package:tyre_pulse/features/assets/presentation/'
-    'vehicle_fleet_providers.dart';
 import 'package:tyre_pulse/features/home/home_providers.dart';
 import 'package:tyre_pulse/features/home/presentation/home_screen.dart';
+import 'package:tyre_pulse/features/inspections/domain/inspection_draft_summary.dart';
 import 'package:tyre_pulse/features/notifications/notifications_providers.dart';
-import 'package:tyre_pulse/features/tasks/data/task_item.dart';
 
 import '../../../core/database/database_test_support.dart';
 
-/// A trivial fleet source: an empty page for every read, never a Supabase
-/// call. `vehicleFleetSourceProvider`'s real default reads
-/// `supabaseClientProvider`, which throws until `Supabase.initialize` has
-/// run - never true in a widget test - so any role this suite gives
-/// `ModuleKey.vehicles` access to needs this override or the pump never
-/// reaches a settled frame at all.
-class _EmptyVehicleFleetSource implements VehicleFleetSource {
-  @override
-  Future<List<Map<String, dynamic>>> fetchPage({
-    required int from,
-    required int to,
-    required String? country,
-  }) async =>
-      <Map<String, dynamic>>[];
-
-  @override
-  Future<Map<String, dynamic>?> fetchByAssetNo({
-    required String assetNo,
-    required String? country,
-  }) async =>
-      null;
-}
-
 const AccessState _admin = AccessState(role: UserRole.known(RoleId.admin));
 const AccessState _tyreMan = AccessState(role: UserRole.known(RoleId.tyreMan));
+
+/// The clock every timeline "N minutes ago" is measured against.
+final DateTime _now = DateTime(2026, 8, 28, 9, 30);
+
+InspectionDraftSummary _draft() => InspectionDraftSummary(
+      draftKey: 'user-1::CP045',
+      assetNo: 'CP045',
+      vehicleType: 'Concrete Pump',
+      site: 'NHC',
+      filled: 8,
+      total: 10,
+      updatedAt: _now.subtract(const Duration(minutes: 10)),
+    );
+
+const TyreAlert _criticalAlert = TyreAlert(
+  id: 'alert-1',
+  riskLevel: 'critical',
+  assetNo: 'CP045',
+  position: 'R1R',
+  site: 'NHC',
+  treadDepthMm: 4.8,
+  issueDate: '2026-08-27',
+);
+
+List<InspectionApprovalItem> _approvals(int count) => List.generate(
+      count,
+      (int index) => InspectionApprovalItem(
+        id: 'approval-$index',
+        createdAt:
+            _now.subtract(Duration(minutes: 25 + index)).toIso8601String(),
+      ),
+    );
 
 Future<void> _pumpHome(
   WidgetTester tester, {
@@ -71,8 +82,11 @@ Future<void> _pumpHome(
   Locale locale = const Locale('en'),
   ThemeData? theme,
   int notificationCount = 0,
-  bool settleForGolden = false,
-  List<Override> extraOverrides = const <Override>[],
+  AsyncValue<int> pendingSync = const AsyncData<int>(0),
+  Future<InspectionDraftSummary?> Function()? draft,
+  Future<List<TyreAlert>> Function()? alerts,
+  Future<List<InspectionApprovalItem>> Function()? approvals,
+  GoRouter? router,
 }) async {
   final WorkspaceContext workspace = WorkspaceContext(
     userId: 'user-1',
@@ -93,262 +107,312 @@ Future<void> _pumpHome(
     accessStateProvider.overrideWithValue(access),
     workspaceContextProvider.overrideWithValue(workspace),
     appDatabaseProvider.overrideWithValue(db),
-    vehicleFleetSourceProvider.overrideWith(
-      (Ref ref) => _EmptyVehicleFleetSource(),
-    ),
     unreadNotificationsCountProvider.overrideWithValue(
       AsyncData<int>(notificationCount),
     ),
-    ...extraOverrides,
+    homeHeaderClockProvider.overrideWithValue(() => _now),
+    homePendingSyncCountProvider.overrideWith(
+      (Ref ref) => switch (pendingSync) {
+        AsyncData<int>(:final value) => Future<int>.value(value),
+        _ => Future<int>.error(StateError('queue unreadable')),
+      },
+    ),
+    homeLatestInspectionDraftProvider.overrideWith(
+      (Ref ref) =>
+          draft == null ? Future<InspectionDraftSummary?>.value() : draft(),
+    ),
+    tyreAlertsProvider.overrideWith(
+      (Ref ref) => alerts == null
+          ? Future<List<TyreAlert>>.value(const <TyreAlert>[])
+          : alerts(),
+    ),
+    homePendingInspectionApprovalsProvider.overrideWith(
+      (Ref ref) => approvals == null
+          ? Future<List<InspectionApprovalItem>>.value(
+              const <InspectionApprovalItem>[],
+            )
+          : approvals(),
+    ),
   ];
 
-  await tester.pumpWidget(
-    ProviderScope(
-      overrides: overrides,
-      child: MaterialApp(
-        debugShowCheckedModeBanner: false,
-        theme: theme ?? TpTheme.light,
-        locale: locale,
-        supportedLocales: TpLocalizations.supportedLocales,
-        localizationsDelegates: TpLocalizations.delegates,
-        home: const HomeScreen(route: HomeRoute()),
-      ),
-    ),
-  );
-  // Loading-state tests use bounded pumps. The full-data golden opts into
-  // settling after image decoding so capture waits for scheduled frames.
+  final Widget app = router == null
+      ? MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: theme ?? TpTheme.light,
+          locale: locale,
+          supportedLocales: TpLocalizations.supportedLocales,
+          localizationsDelegates: TpLocalizations.delegates,
+          home: const HomeScreen(route: HomeRoute()),
+        )
+      : MaterialApp.router(
+          debugShowCheckedModeBanner: false,
+          theme: theme ?? TpTheme.light,
+          locale: locale,
+          supportedLocales: TpLocalizations.supportedLocales,
+          localizationsDelegates: TpLocalizations.delegates,
+          routerConfig: router,
+        );
+
+  await tester.pumpWidget(ProviderScope(overrides: overrides, child: app));
   await tester.pump();
-  await tester.runAsync(
-    () => precacheImage(
-      const AssetImage('assets/vehicle_photos/concrete_pump.png'),
-      tester.element(find.byType(HomeScreen)),
-    ),
-  );
-  if (settleForGolden) {
-    await tester.pumpAndSettle();
-  } else {
-    await tester.pump(const Duration(milliseconds: 50));
-  }
+  await tester.pump(const Duration(milliseconds: 50));
 }
+
+/// A two-route router: Home, and a stand-in for the New Inspection branch
+/// that records the query it was opened with.
+GoRouter _homeRouter() => GoRouter(
+      initialLocation: '/',
+      routes: <RouteBase>[
+        GoRoute(
+          path: '/',
+          builder: (BuildContext context, GoRouterState state) =>
+              const HomeScreen(route: HomeRoute()),
+        ),
+        GoRoute(
+          path: TpRoutePaths.newInspection,
+          builder: (BuildContext context, GoRouterState state) => Text(
+            'new-inspection:'
+            '${state.uri.queryParameters[TpRoutePaths.qAssetNo] ?? ''}',
+          ),
+        ),
+      ],
+    );
 
 void main() {
   testWidgets(
-    'approved Home dashboard has a deterministic full-data visual contract',
+    'Today\'s work shows the draft, critical and approval rows in the mock '
+    'order, from real sources only (golden)',
     (WidgetTester tester) async {
       tester.view.physicalSize = const Size(360, 780);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      final List<InspectionApprovalItem> approvals = List.generate(
-        8,
-        (int index) => InspectionApprovalItem(id: 'approval-$index'),
-      );
-      final List<TaskItem> tasks = List.generate(
-        12,
-        (int index) => TaskItem(
-          id: 'task-$index',
-          title: index == 0 ? 'PM • Mixer 3821' : 'Scheduled work ${index + 1}',
-          priority: index == 0 ? 'urgent' : 'normal',
-          status: 'open',
-          site: index == 0 ? 'Diriyah' : 'NHC',
-          assetNo: index == 0 ? 'Mixer 3821' : null,
-          description: index == 0 ? 'Preventive Maintenance' : null,
-          assignedTo: index == 0 ? 'user-1' : null,
-          dueDate: DateTime(2025, 1, index + 1),
-        ),
-      );
-      const List<TyreAlert> alerts = <TyreAlert>[
-        TyreAlert(
-          id: 'alert-1',
-          riskLevel: 'critical',
-          assetNo: 'Mixer 4271',
-          position: 'Rear outer tyre',
-          site: 'Qiddiya G2',
-          issueDate: '2026-08-28T12:00:00Z',
-        ),
-        TyreAlert(id: 'alert-2', riskLevel: 'critical'),
-        TyreAlert(id: 'alert-3', riskLevel: 'critical'),
-      ];
-
       await _pumpHome(
         tester,
         access: _admin,
-        legacySite: 'Qiddiya G2',
         notificationCount: 3,
-        settleForGolden: true,
-        extraOverrides: <Override>[
-          homeHeaderClockProvider.overrideWithValue(
-            () => DateTime(2026, 8, 28, 14),
-          ),
-          homePendingInspectionApprovalsProvider.overrideWith(
-            (Ref ref) async => approvals,
-          ),
-          homeTaskPreviewProvider.overrideWith((Ref ref) async => tasks),
-          tyreAlertsProvider.overrideWith((Ref ref) async => alerts),
-        ],
+        draft: () async => _draft(),
+        alerts: () async => const <TyreAlert>[_criticalAlert],
+        approvals: () async => _approvals(3),
       );
+      await tester.pumpAndSettle();
 
-      for (final String value in <String>['8', '12', '3']) {
-        expect(
-          find.descendant(
-            of: find.byKey(HomeScreenKeys.stats),
-            matching: find.text(value),
-          ),
-          findsOneWidget,
-        );
-      }
-      expect(find.text('Mixer 4271'), findsOneWidget);
-      expect(find.text('Rear outer tyre • Qiddiya G2'), findsOneWidget);
-      expect(find.text('PM • Mixer 3821'), findsOneWidget);
+      expect(find.byKey(HomeScreenKeys.hero), findsOneWidget);
+      expect(find.text('Mohammed'), findsOneWidget);
+      expect(find.text('MA'), findsOneWidget);
+      expect(find.byKey(HomeScreenKeys.newInspection), findsOneWidget);
+      expect(find.text('New inspection'), findsOneWidget);
+
+      final Finder draftRow = find.byKey(HomeScreenKeys.workRow('draft'));
+      final Finder criticalRow = find.byKey(HomeScreenKeys.workRow('critical'));
+      final Finder approvalsRow =
+          find.byKey(HomeScreenKeys.workRow('approvals'));
+      expect(draftRow, findsOneWidget);
+      expect(criticalRow, findsOneWidget);
+      expect(approvalsRow, findsOneWidget);
+      expect(find.byKey(HomeScreenKeys.workRow('empty')), findsNothing);
+
       expect(
-        find.text('Mixer 3821 • Preventive Maintenance'),
+        find.descendant(of: draftRow, matching: find.text('DRAFT')),
         findsOneWidget,
       );
-      expect(find.byIcon(Icons.fact_check_outlined), findsNothing);
-      expect(find.byIcon(Icons.schedule_rounded), findsNothing);
+      expect(find.text('Resume inspection'), findsOneWidget);
+      expect(find.text('CP045 • Concrete Pump • NHC'), findsOneWidget);
+      expect(find.text('8 of 10 checked'), findsOneWidget);
+      expect(
+        find.descendant(of: draftRow, matching: find.text('10m ago')),
+        findsOneWidget,
+      );
 
-      expect(find.byType(HomeScreen), findsOneWidget);
-      expect(find.byKey(HomeScreenKeys.pmvHero), findsOneWidget);
-      expect(find.byKey(HomeScreenKeys.pmvHeroImage), findsOneWidget);
-      expect(find.text('Scan'), findsWidgets);
+      expect(find.text('Tyre issue needs attention'), findsOneWidget);
+      expect(find.text('R1R • CP045 • NHC'), findsOneWidget);
+      expect(find.text('Tread depth: 4.8 mm'), findsOneWidget);
+
+      expect(find.text('Inspection Approvals'), findsOneWidget);
+      expect(find.text('3 awaiting sign-off'), findsOneWidget);
       expect(
         find.descendant(
-          of: find.byKey(HomeScreenKeys.pmvHero),
-          matching: find.byIcon(Icons.qr_code_scanner_rounded),
+          of: approvalsRow,
+          matching: find.text('AWAITING SIGNATURE'),
         ),
         findsOneWidget,
       );
+      expect(
+        find.descendant(of: approvalsRow, matching: find.text('25m ago')),
+        findsOneWidget,
+      );
+
+      final double draftY = tester.getTopLeft(draftRow).dy;
+      final double criticalY = tester.getTopLeft(criticalRow).dy;
+      final double approvalsY = tester.getTopLeft(approvalsRow).dy;
+      expect(draftY, lessThan(criticalY));
+      expect(criticalY, lessThan(approvalsY));
+
+      // The mock's rows with no data source are never fabricated.
+      expect(find.textContaining('Scheduled'), findsNothing);
+      expect(find.textContaining('Fleet pulse'), findsNothing);
+      expect(find.text('Online'), findsNothing);
+
       await expectLater(
         find.byType(HomeScreen),
-        matchesGoldenFile(
-          'goldens/home_screen_full_data.png',
-        ),
+        matchesGoldenFile('goldens/home_screen_full_data.png'),
       );
       expect(tester.takeException(), isNull);
     },
   );
 
   testWidgets(
-    'dark theme uses the approved Dashboard hierarchy without changing the '
-    'light Home route',
-    (WidgetTester tester) async {
-      tester.view.physicalSize = const Size(360, 780);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
-      final List<InspectionApprovalItem> approvals = List.generate(
-        12,
-        (int index) => InspectionApprovalItem(id: 'approval-$index'),
-      );
-      final List<TaskItem> tasks = List.generate(
-        8,
-        (int index) => TaskItem(
-          id: 'task-$index',
-          title: 'Fleet job ${index + 1}',
-          assetNo: 'Asset ${index + 1}',
-          status: 'open',
-          dueDate: DateTime.now().add(Duration(hours: index + 1)),
-        ),
-      );
-      const List<TyreAlert> alerts = <TyreAlert>[
-        TyreAlert(id: 'alert-1', riskLevel: 'critical'),
-        TyreAlert(id: 'alert-2', riskLevel: 'critical'),
-        TyreAlert(id: 'alert-3', riskLevel: 'critical'),
-        TyreAlert(id: 'alert-4', riskLevel: 'critical'),
-      ];
-
-      await _pumpHome(
-        tester,
-        access: _admin,
-        theme: TpTheme.dark,
-        notificationCount: 2,
-        extraOverrides: <Override>[
-          homePendingInspectionApprovalsProvider.overrideWith(
-            (Ref ref) async => approvals,
-          ),
-          homeTaskPreviewProvider.overrideWith((Ref ref) async => tasks),
-          tyreAlertsProvider.overrideWith((Ref ref) async => alerts),
-        ],
-      );
-
-      expect(find.byKey(HomeScreenKeys.darkDashboard), findsOneWidget);
-      expect(find.byKey(HomeScreenKeys.darkJobs), findsOneWidget);
-      expect(find.text('TYRE PULSE'), findsOneWidget);
-      expect(find.text('12'), findsOneWidget);
-      expect(find.text('4'), findsOneWidget);
-      expect(find.text('8'), findsOneWidget);
-      expect(find.text('Fleet job 1'), findsOneWidget);
-      expect(find.text('Fleet job 3'), findsOneWidget);
-      expect(find.text('Fleet job 4'), findsNothing);
-      expect(tester.takeException(), isNull);
-    },
-  );
-
-  testWidgets(
-    'an Admin renders the full Home hub with no layout exception: '
-    'greeting, both quick-action buttons, the stat-card row and every '
-    'section - never a blank body under a normal app bar',
+    'Home no longer draws its own bottom bar - the shell bar is the only one',
     (WidgetTester tester) async {
       await _pumpHome(tester, access: _admin);
 
-      expect(
-        tester.takeException(),
-        isNull,
-        reason: 'the stat-card Row must never throw a layout exception - '
-            'see this file\'s own library comment for the defect this guards',
-      );
+      expect(find.text("Today's work"), findsOneWidget); // section heading only
+      expect(find.text('Alerts'), findsNothing);
+      expect(find.byType(BottomNavigationBar), findsNothing);
+      expect(find.byType(NavigationBar), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
-      expect(find.text('Mohammed'), findsOneWidget);
-      expect(find.text('ATTENTION REQUIRED'), findsOneWidget);
-      expect(find.text('Approvals'), findsOneWidget);
-      expect(find.text('Overdue'), findsOneWidget);
-      expect(find.text('Critical'), findsOneWidget);
-      expect(find.text('MY WORK'), findsOneWidget);
-      expect(find.text('QUICK ACTIONS'), findsOneWidget);
-      expect(find.text('Inspect'), findsWidgets);
-      expect(find.text('Asset'), findsOneWidget);
-      expect(find.text('Report issue'), findsOneWidget);
-      expect(find.byKey(HomeScreenKeys.hero), findsOneWidget);
-      expect(find.byKey(HomeScreenKeys.stats), findsOneWidget);
-      expect(find.byKey(HomeScreenKeys.action('inspect')), findsNothing);
-      expect(find.byKey(HomeScreenKeys.action('washing')), findsOneWidget);
-      expect(find.byKey(HomeScreenKeys.action('asset')), findsOneWidget);
-      expect(find.byKey(HomeScreenKeys.action('reportIssue')), findsOneWidget);
-      expect(find.byKey(HomeScreenKeys.action('accident')), findsOneWidget);
-      expect(find.byKey(HomeScreenKeys.action('accidents')), findsOneWidget);
-      expect(find.byType(GridView), findsNothing);
-      // The Admin break-glass allows every module, so there is never a
-      // reason to fall back to the "nothing available" empty state.
-      expect(
-        find.text(
-          'Nothing is available to you here yet. Contact your '
-          'administrator if you need access to a feature.',
-        ),
-        findsNothing,
-      );
+  testWidgets('New inspection routes to the New Inspection branch', (
+    WidgetTester tester,
+  ) async {
+    await _pumpHome(tester, access: _admin, router: _homeRouter());
+
+    await tester.tap(find.byKey(HomeScreenKeys.newInspection));
+    await tester.pumpAndSettle();
+
+    expect(find.text('new-inspection:'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the draft row resumes that asset\'s inspection', (
+    WidgetTester tester,
+  ) async {
+    await _pumpHome(
+      tester,
+      access: _admin,
+      router: _homeRouter(),
+      draft: () async => _draft(),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(HomeScreenKeys.workRow('draft')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('new-inspection:CP045'), findsOneWidget);
+  });
+
+  testWidgets(
+    'no work anywhere renders the honest empty state, not fabricated rows',
+    (WidgetTester tester) async {
+      await _pumpHome(tester, access: _admin);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(HomeScreenKeys.workRow('empty')), findsOneWidget);
+      expect(find.text('Nothing needs you right now'), findsOneWidget);
+      for (final String id in <String>['draft', 'critical', 'approvals']) {
+        expect(find.byKey(HomeScreenKeys.workRow(id)), findsNothing);
+      }
+      expect(tester.takeException(), isNull);
     },
   );
 
   testWidgets(
-    'a role scoped to only some modules still renders the unconditional '
-    'header content with no layout exception',
+    'a failed source says "Could not check" instead of looking empty',
+    (WidgetTester tester) async {
+      await _pumpHome(
+        tester,
+        access: _admin,
+        approvals: () => Future<List<InspectionApprovalItem>>.error(
+          StateError('offline'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(HomeScreenKeys.workRow('unavailable')),
+        findsOneWidget,
+      );
+      expect(find.byKey(HomeScreenKeys.workRow('empty')), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'the header sync status reads the real queue and never claims Online',
+    (WidgetTester tester) async {
+      await _pumpHome(
+        tester,
+        access: _admin,
+        pendingSync: const AsyncData<int>(2),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.descendant(
+          of: find.byKey(HomeScreenKeys.syncStatus),
+          matching: find.text('2 changes waiting to sync'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Online'), findsNothing);
+    },
+  );
+
+  testWidgets('an empty queue reads as all synced', (
+    WidgetTester tester,
+  ) async {
+    await _pumpHome(tester, access: _admin);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: find.byKey(HomeScreenKeys.syncStatus),
+        matching: find.text('All changes synced'),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+    'an Admin gets every quick action, the accident shortcut and More',
+    (WidgetTester tester) async {
+      await _pumpHome(tester, access: _admin);
+
+      for (final String id in <String>[
+        'scanner',
+        'washing',
+        'asset',
+        'reportIssue',
+        'accident',
+        'accidents',
+        'more',
+      ]) {
+        expect(find.byKey(HomeScreenKeys.action(id)), findsOneWidget);
+      }
+      expect(find.byType(GridView), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'a role scoped to some modules keeps the header and its permitted '
+    'actions, and More is always reachable',
     (WidgetTester tester) async {
       await _pumpHome(tester, access: _tyreMan);
 
       expect(tester.takeException(), isNull);
       expect(find.text('Mohammed'), findsOneWidget);
       expect(find.byKey(HomeScreenKeys.hero), findsOneWidget);
-      expect(find.byKey(HomeScreenKeys.pmvHero), findsOneWidget);
-      expect(find.byKey(HomeScreenKeys.stats), findsOneWidget);
-      expect(find.text('Inspect'), findsWidgets);
+      expect(find.byKey(HomeScreenKeys.newInspection), findsOneWidget);
+      expect(find.byKey(HomeScreenKeys.action('more')), findsOneWidget);
     },
   );
 
   testWidgets(
-    'no site on the profile renders the honest "unavailable" stat card, '
-    'not a fabricated one, and still no layout exception',
+    'no site on the profile renders the honest "No site on file"',
     (WidgetTester tester) async {
       await _pumpHome(tester, access: _admin, legacySite: null);
 
@@ -358,49 +422,9 @@ void main() {
   );
 
   testWidgets(
-    'a compact phone keeps the PMV hierarchy readable without overflow',
+    'a compact phone keeps the mock hierarchy ordered without overflow',
     (WidgetTester tester) async {
       tester.view.physicalSize = const Size(320, 720);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
-      await _pumpHome(tester, access: _admin);
-
-      expect(tester.takeException(), isNull);
-      expect(find.byKey(HomeScreenKeys.hero), findsOneWidget);
-      expect(find.byKey(HomeScreenKeys.pmvHero), findsOneWidget);
-      expect(find.byKey(HomeScreenKeys.stats), findsOneWidget);
-      expect(find.byKey(HomeScreenKeys.action('inspect')), findsNothing);
-      expect(find.byKey(HomeScreenKeys.action('washing')), findsOneWidget);
-      expect(find.byType(GridView), findsNothing);
-    },
-  );
-
-  testWidgets(
-    'the approved compact hierarchy remains ordered on a narrow phone',
-    (WidgetTester tester) async {
-      tester.view.physicalSize = const Size(320, 720);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
-      await _pumpHome(tester, access: _admin);
-
-      final double attentionY =
-          tester.getTopLeft(find.text('ATTENTION REQUIRED')).dy;
-      final double workY = tester.getTopLeft(find.text('MY WORK')).dy;
-      final double actionsY = tester.getTopLeft(find.text('QUICK ACTIONS')).dy;
-      expect(attentionY, lessThan(workY));
-      expect(workY, lessThan(actionsY));
-      expect(tester.takeException(), isNull);
-    },
-  );
-
-  testWidgets(
-    'Arabic keeps the compact approved layout and all primary actions',
-    (WidgetTester tester) async {
-      tester.view.physicalSize = const Size(360, 720);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
@@ -408,62 +432,104 @@ void main() {
       await _pumpHome(
         tester,
         access: _admin,
-        locale: const Locale('ar'),
+        draft: () async => _draft(),
+        alerts: () async => const <TyreAlert>[_criticalAlert],
+        approvals: () async => _approvals(2),
       );
+      await tester.pumpAndSettle();
 
-      expect(find.byKey(HomeScreenKeys.action('asset')), findsOneWidget);
-      expect(find.byKey(HomeScreenKeys.action('reportIssue')), findsOneWidget);
-      expect(find.byKey(HomeScreenKeys.action('accident')), findsOneWidget);
       expect(tester.takeException(), isNull);
+      final double buttonY =
+          tester.getTopLeft(find.byKey(HomeScreenKeys.newInspection)).dy;
+      final double workY =
+          tester.getTopLeft(find.byKey(HomeScreenKeys.todaysWork)).dy;
+      expect(buttonY, lessThan(workY));
     },
   );
+
+  testWidgets('dark theme renders the same hierarchy', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 780);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await _pumpHome(
+      tester,
+      access: _admin,
+      theme: TpTheme.dark,
+      draft: () async => _draft(),
+      approvals: () async => _approvals(1),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(HomeScreenKeys.newInspection), findsOneWidget);
+    expect(find.byKey(HomeScreenKeys.workRow('draft')), findsOneWidget);
+    expect(find.byKey(HomeScreenKeys.workRow('approvals')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Arabic keeps the RTL layout and all primary actions', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await _pumpHome(
+      tester,
+      access: _admin,
+      locale: const Locale('ar'),
+      draft: () async => _draft(),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(HomeScreenKeys.newInspection), findsOneWidget);
+    expect(find.byKey(HomeScreenKeys.workRow('draft')), findsOneWidget);
+    expect(find.byKey(HomeScreenKeys.action('asset')), findsOneWidget);
+    expect(find.byKey(HomeScreenKeys.action('reportIssue')), findsOneWidget);
+    expect(find.byKey(HomeScreenKeys.action('accident')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
     'More exposes every implemented accident, workshop and management module',
     (WidgetTester tester) async {
       await _pumpHome(tester, access: _admin);
 
-      await tester.tap(find.text('More').last);
+      await tester.ensureVisible(find.byKey(HomeScreenKeys.action('more')));
+      await tester.tap(find.byKey(HomeScreenKeys.action('more')));
       await tester.pumpAndSettle();
 
-      expect(find.text('New inspection'), findsNothing);
+      final Finder sheet = find.byKey(HomeScreenKeys.action('servicesSheet'));
+      expect(sheet, findsOneWidget);
+      expect(
+        find.descendant(of: sheet, matching: find.text('New inspection')),
+        findsNothing,
+      );
       await tester.scrollUntilVisible(
         find.text('My Inspections'),
         220,
-        scrollable: find.byType(Scrollable).last,
+        scrollable: find.descendant(
+          of: sheet,
+          matching: find.byType(Scrollable),
+        ),
       );
       expect(find.text('My Inspections'), findsOneWidget);
       expect(find.text('Accident command centre'), findsWidgets);
       expect(find.text('Report an accident'), findsWidgets);
-      await tester.drag(find.byType(ListView).last, const Offset(0, -850));
+      await tester.drag(sheet, const Offset(0, -850));
       await tester.pumpAndSettle();
       expect(find.text('Maintenance Control Center'), findsOneWidget);
       expect(find.text('Maintenance & workshop'), findsWidgets);
-      await tester.drag(find.byType(ListView).last, const Offset(0, -850));
+      await tester.drag(sheet, const Offset(0, -850));
       await tester.pumpAndSettle();
       expect(find.text('Fleet Overview'), findsOneWidget);
       expect(find.text('Financial report'), findsOneWidget);
       expect(find.text('Fleet Analytics'), findsOneWidget);
       expect(find.text('Team'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    },
-  );
-
-  testWidgets(
-    'a healthy tyre state uses a verified health icon, not a repair icon',
-    (WidgetTester tester) async {
-      await _pumpHome(
-        tester,
-        access: _admin,
-        extraOverrides: <Override>[
-          tyreAlertsProvider.overrideWith(
-            (Ref ref) async => const <TyreAlert>[],
-          ),
-        ],
-      );
-
-      expect(find.byIcon(Icons.verified_rounded), findsOneWidget);
-      expect(find.byIcon(Icons.tire_repair_outlined), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );

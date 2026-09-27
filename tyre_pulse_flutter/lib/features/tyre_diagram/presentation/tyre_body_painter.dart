@@ -79,11 +79,31 @@ class TyreDiagramPhotoSpec {
     required this.asset,
     this.fit = BoxFit.contain,
     this.quarterTurns = 0,
+    this.frontAxleFraction,
+    this.rearAxleFraction,
+    this.aspectRatio,
   });
 
   final String asset;
   final BoxFit fit;
   final int quarterTurns;
+
+  /// Where the photographed FIRST (front) axle centre sits, as a fraction of
+  /// the displayed (already rotated) photo height. Measured from the source
+  /// pixels, never estimated. Only meaningful for a square [BoxFit.cover]
+  /// plate, whose rendered height is the stage height. When both fractions
+  /// are set the capture stage aims each tyre card's leader line at the
+  /// photographed wheel instead of the authored layout fraction.
+  final double? frontAxleFraction;
+
+  /// The LAST (rearmost) axle centre, same convention as [frontAxleFraction].
+  final double? rearAxleFraction;
+
+  /// Width / height of the displayed photo, read from the asset's own pixel
+  /// dimensions. Lets the capture stage know where a [BoxFit.contain] photo
+  /// actually lands inside a stage taller than the photo, so tyre cards are
+  /// laid against the vehicle rather than against empty letterbox space.
+  final double? aspectRatio;
 }
 
 /// Returns the approved orthographic vehicle photograph used by the focused
@@ -98,22 +118,45 @@ TyreDiagramPhotoSpec? tyreDiagramVehiclePhotoSpec(
   TyreDiagramBodyKey bodyKey,
 ) {
   return switch (bodyKey) {
-    TyreDiagramBodyKey.pickup =>
-      const TyreDiagramPhotoSpec(asset: 'assets/vehicle_photos/pickup.png'),
+    TyreDiagramBodyKey.pickup => const TyreDiagramPhotoSpec(
+        asset: 'assets/vehicle_photos/pickup.png',
+        // 158 x 318 px.
+        aspectRatio: 158 / 318,
+      ),
+    // The clean, high-resolution SANY top plate. The older
+    // `vehicle_photos/wheel_loader.png` carries status dots baked into its
+    // pixels, which would show a green/amber/red result on a wheel nobody has
+    // inspected. The plate is photographed bucket-down, so it is turned 180
+    // degrees to put FRONT at the top. Axle centres were measured on the
+    // source pixels (front tyre rows 427-551, rear 202-321 of 768, i.e.
+    // 0.637 and 0.340) and flipped by the rotation to 0.363 and 0.660.
     TyreDiagramBodyKey.wheelLoader => const TyreDiagramPhotoSpec(
-        asset: 'assets/vehicle_photos/wheel_loader.png',
+        asset:
+            'assets/vehicle_multiview_views/sany_wheel_loader_five_view_v1_top.png',
+        fit: BoxFit.cover,
+        quarterTurns: 2,
+        frontAxleFraction: 0.363,
+        rearAxleFraction: 0.660,
       ),
     TyreDiagramBodyKey.skidLoader => const TyreDiagramPhotoSpec(
         asset: 'assets/vehicle_photos/skid_loader_top_down_v2.png',
+        // 1254 x 1254 px.
+        aspectRatio: 1,
       ),
     TyreDiagramBodyKey.triMixer => const TyreDiagramPhotoSpec(
         asset: 'assets/vehicle_photos/tri_mixer_top_down.webp',
+        // 853 x 1844 px.
+        aspectRatio: 853 / 1844,
       ),
     TyreDiagramBodyKey.linePump => const TyreDiagramPhotoSpec(
         asset: 'assets/vehicle_photos/line_pump_top_down_v2.png',
+        // 856 x 1836 px.
+        aspectRatio: 856 / 1836,
       ),
     TyreDiagramBodyKey.concretePump => const TyreDiagramPhotoSpec(
         asset: 'assets/vehicle_photos/concrete_pump_top_down.webp',
+        // 853 x 1844 px.
+        aspectRatio: 853 / 1844,
       ),
     TyreDiagramBodyKey.bus => const TyreDiagramPhotoSpec(
         asset:

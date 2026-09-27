@@ -16,9 +16,11 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   PackagePlus, Boxes, Clock, CheckCircle2, AlertTriangle, Filter, X, Plus,
   Loader2, FileSpreadsheet, FileText, Search, ClipboardList, PieChart,
-  BarChart3, Check, ThumbsUp, Ban, ArrowRight, RefreshCw,
+  BarChart3, Check, ThumbsUp, Ban, ArrowRight, RefreshCw, Hourglass, Percent,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import Modal from '../components/ui/Modal'
 import EChart from '../components/charts/EChart'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -27,13 +29,16 @@ import {
   listOpenJobs, listPartCatalog, distinctSites,
 } from '../lib/api/partsRequests'
 import {
-  summarizeParts, isOpenParts, nextPartsStatus, PARTS_STATUS,
+  summarizeParts, nextPartsStatus, PARTS_STATUS,
   PARTS_STATUS_LABEL, PARTS_PRIORITIES, PARTS_PRIORITY_LABEL, normalizePartsStatus,
 } from '../lib/partsRequests'
 import { colorAt, categorical, withAlpha } from '../lib/reportColors'
 import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
+import {
+  decorateRequests, openAgeing, openByPriority, fillRate, fmtAge, requestExportRows,
+} from '../lib/partsRequestsAnalytics'
+import { compareValues } from '../lib/consoleTable'
 import { toUserMessage } from '../lib/safeError'
-import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import { isMissingRelation } from '../lib/api/_client'
 
 const WRITE_ROLES = new Set(['Admin', 'Manager', 'Director'])
@@ -51,7 +56,15 @@ const STATUS_TONE = {
   issued: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
   fulfilled: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
   rejected: 'bg-red-500/15 text-red-300 border-red-500/30',
-  cancelled: 'bg-slate-500/15 text-slate-300 border-slate-500/30',
+  cancelled: 'bg-[var(--input-bg)] text-[var(--text-secondary)] border-[var(--input-border)]',
+}
+const PRIORITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 }
+const valueSort = (a, b, id) => compareValues(a.getValue(id), b.getValue(id))
+// chartVarPlugin-style tokens: ECharts gets the live computed value per theme.
+const cssVar = (name, fallback) => {
+  if (typeof document === 'undefined') return fallback
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+  return v || fallback
 }
 const PRIORITY_TONE = {
   low: 'text-[var(--text-muted)]',
@@ -181,9 +194,14 @@ export default function PartsRequests() {
       : scoped.filter((r) => normalizePartsStatus(r.status) === filters.status)
   ), [scoped, filters.status])
 
-  // Paged, not capped - this register used to stop at 500 rows.
-  // The exports below still walk `filtered` in full.
-  const pager = usePagedRows(filtered)
+  // Decorated once (overdue, age) so the table, the ageing panel and the export
+  // agree on every row. The register pages and sorts inside EnterpriseTable.
+  const decoratedFiltered = useMemo(() => decorateRequests(filtered, new Date()), [filtered])
+  const decoratedScoped = useMemo(() => decorateRequests(scoped, new Date()), [scoped])
+  const ageing = useMemo(() => openAgeing(decoratedScoped), [decoratedScoped])
+  const priorities = useMemo(() => openByPriority(decoratedScoped), [decoratedScoped])
+  const fill = useMemo(() => fillRate(decoratedScoped), [decoratedScoped])
+  const failedFirstLoad = !!error && rows.length === 0 && !missing
 
   // Was `summarizeParts(rows)`: the tiles stated fleet-wide figures directly
   // above a table narrowed to one site, so the two contradicted each other.
@@ -207,12 +225,12 @@ export default function PartsRequests() {
     const colors = categorical(data.length)
     return {
       tooltip: { trigger: 'item' },
-      legend: { bottom: 0, textStyle: { color: 'rgba(148,163,184,0.95)', fontSize: 11 } },
+      legend: { bottom: 0, textStyle: { color: cssVar('--text-secondary', '#94a3b8'), fontSize: 11 } },
       series: [{
         type: 'pie', radius: ['45%', '70%'], center: ['50%', '45%'],
         avoidLabelOverlap: true,
-        itemStyle: { borderColor: 'var(--card-bg, transparent)', borderWidth: 1 },
-        label: { color: 'rgba(148,163,184,0.95)', fontSize: 11 },
+        itemStyle: { borderColor: cssVar('--card-bg', 'transparent'), borderWidth: 1 },
+        label: { color: cssVar('--text-secondary', '#94a3b8'), fontSize: 11 },
         data: data.map((d, i) => ({ ...d, itemStyle: { color: colors[i] } })),
       }],
     }
@@ -223,11 +241,11 @@ export default function PartsRequests() {
     return {
       grid: { left: 8, right: 16, top: 12, bottom: 8, containLabel: true },
       tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-      xAxis: { type: 'value', minInterval: 1, axisLabel: { color: 'rgba(148,163,184,0.9)', fontSize: 10 }, splitLine: { lineStyle: { color: 'var(--panel-2)' } } },
+      xAxis: { type: 'value', minInterval: 1, axisLabel: { color: cssVar('--text-muted', '#94a3b8'), fontSize: 10 }, splitLine: { lineStyle: { color: cssVar('--panel-2', 'rgba(148,163,184,0.2)') } } },
       yAxis: {
         type: 'category', inverse: true,
         data: top.map((p) => p.part),
-        axisLabel: { color: 'rgba(148,163,184,0.9)', fontSize: 10, width: 120, overflow: 'truncate' },
+        axisLabel: { color: cssVar('--text-muted', '#94a3b8'), fontSize: 10, width: 120, overflow: 'truncate' },
       },
       series: [{
         type: 'bar', barMaxWidth: 18,
@@ -299,20 +317,10 @@ export default function PartsRequests() {
     }
   }, [form, jobs, activeCountry])
 
-  // ── Exports ────────────────────────────────────────────────────────────────
-  const EXPORT_COLS = ['requested_at', 'part_name', 'qty', 'asset_no', 'site', 'priority', 'status', 'needed_by', 'fulfilled_at']
-  const EXPORT_HEADERS = ['Requested', 'Part', 'Qty', 'Asset', 'Site', 'Priority', 'Status', 'Needed by', 'Fulfilled']
-  const exportRows = () => filtered.map((r) => ({
-    requested_at: r.requested_at ? String(r.requested_at).slice(0, 16).replace('T', ' ') : '',
-    part_name: r.part_name || '',
-    qty: r.qty ?? '',
-    asset_no: r.asset_no || '',
-    site: r.site || '',
-    priority: PARTS_PRIORITY_LABEL[r.priority] || r.priority || '',
-    status: PARTS_STATUS_LABEL[normalizePartsStatus(r.status)] || r.status || '',
-    needed_by: r.needed_by ? String(r.needed_by).slice(0, 10) : '',
-    fulfilled_at: r.fulfilled_at ? String(r.fulfilled_at).slice(0, 16).replace('T', ' ') : '',
-  }))
+  // ── Exports (whole filtered set, never one page) ─────────────────────────
+  const EXPORT_COLS = ['requested_at', 'part_name', 'qty', 'asset_no', 'site', 'priority', 'status', 'needed_by', 'overdue', 'age', 'fulfilled_at']
+  const EXPORT_HEADERS = ['Requested', 'Part', 'Qty', 'Asset', 'Site', 'Priority', 'Status', 'Needed by', 'Overdue', 'Age', 'Fulfilled']
+  const exportRows = () => requestExportRows(decoratedFiltered)
   const exportExcel = () => {
     const name = reportFileName('Parts Requests', reportDateLabel())
     exportToExcel(exportRows(), EXPORT_COLS, EXPORT_HEADERS, name, 'Parts Requests', { title: 'Parts Requests', currency: activeCurrency })
@@ -322,14 +330,69 @@ export default function PartsRequests() {
     exportToPdf(exportRows(), EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Parts Requests Report', name, 'landscape', '', { currency: activeCurrency })
   }
 
+  const columns = useMemo(() => {
+    const base = [
+      { id: 'requested_at', header: 'Requested', accessorFn: (r) => r.requested_at || undefined, size: 160, sortingFn: valueSort, sortUndefined: 'last',
+        cell: ({ getValue }) => <span className="text-[var(--text-secondary)] whitespace-nowrap">{fmtDateTime(getValue())}</span> },
+      { id: 'part_name', header: 'Part', accessorFn: (r) => r.part_name || undefined, size: 200, sortingFn: valueSort, sortUndefined: 'last',
+        cell: ({ getValue }) => <span className="text-[var(--text-primary)]">{getValue() ?? 'N/A'}</span> },
+      { id: 'qty', header: 'Qty', accessorFn: (r) => (Number.isFinite(Number(r.qty)) ? Number(r.qty) : undefined), size: 70, sortingFn: valueSort, sortUndefined: 'last',
+        cell: ({ getValue }) => <span className="tabular-nums">{fmtNum(getValue())}</span>, meta: { align: 'right' } },
+      { id: 'asset_no', header: 'Asset', accessorFn: (r) => r.asset_no || undefined, size: 110, sortingFn: valueSort, sortUndefined: 'last', cell: ({ getValue }) => getValue() ?? 'N/A' },
+      { id: 'site', header: 'Site', accessorFn: (r) => r.site || undefined, size: 120, sortingFn: valueSort, sortUndefined: 'last', cell: ({ getValue }) => getValue() ?? 'N/A' },
+      { id: 'priority', header: 'Priority', accessorFn: (r) => PRIORITY_RANK[r.priority] ?? 9, size: 100, sortingFn: valueSort,
+        cell: ({ row }) => <span className={`text-xs font-medium ${PRIORITY_TONE[row.original.priority] || 'text-[var(--text-secondary)]'}`}>{PARTS_PRIORITY_LABEL[row.original.priority] || row.original.priority || 'N/A'}</span>,
+        meta: { exportValue: (r) => PARTS_PRIORITY_LABEL[r.priority] || r.priority || 'N/A' } },
+      { id: 'needed_by', header: 'Needed by', accessorFn: (r) => r.needed_by || undefined, size: 150, sortingFn: valueSort, sortUndefined: 'last',
+        cell: ({ row }) => {
+          const r = row.original
+          if (!r.needed_by) return <span className="text-[var(--text-muted)]">N/A</span>
+          return <span className={r._overdue ? 'text-red-300 font-medium' : 'text-[var(--text-secondary)]'}>{fmtDate(r.needed_by)}{r._overdue ? ' (overdue)' : ''}</span>
+        } },
+      { id: 'age', header: 'Age', accessorFn: (r) => r._ageHours ?? undefined, size: 80, sortingFn: valueSort, sortUndefined: 'last',
+        cell: ({ getValue }) => <span className="tabular-nums text-[var(--text-secondary)]">{fmtAge(getValue())}</span>, meta: { align: 'right', exportValue: (r) => fmtAge(r._ageHours) } },
+      { id: 'status', header: 'Status', accessorFn: (r) => PARTS_STATUS_LABEL[r._status] || r.status || 'N/A', size: 110, sortingFn: valueSort,
+        cell: ({ row, getValue }) => <span className={`inline-block text-[11px] px-2 py-0.5 rounded-full border ${STATUS_TONE[row.original._status] || STATUS_TONE.cancelled}`}>{getValue()}</span> },
+    ]
+    if (!canWrite) return base
+    return [...base, {
+      id: 'actions', header: 'Actions', enableSorting: false, size: 210, meta: { export: false, align: 'right' },
+      cell: ({ row }) => {
+        const r = row.original
+        const status = r._status
+        const fwd = FORWARD_ACTION[status]
+        const FwdIcon = fwd?.icon
+        const rowBusy = busyId === r.id
+        const name = r.part_name || 'request'
+        if (!r._open) return <span className="text-[11px] text-[var(--text-muted)]">Closed</span>
+        return (
+          <div className="inline-flex items-center gap-1.5">
+            {fwd && (
+              <button type="button" onClick={() => advance(r, nextPartsStatus(status))} disabled={rowBusy}
+                className="inline-flex items-center gap-1 px-2.5 min-h-[44px] text-[11px] rounded-lg bg-emerald-600/90 hover:bg-emerald-500 text-white disabled:opacity-60">
+                {rowBusy ? <Loader2 size={12} className="animate-spin" aria-hidden="true" /> : (FwdIcon && <FwdIcon size={12} aria-hidden="true" />)} {fwd.label}<span className="sr-only"> {name}</span>
+              </button>
+            )}
+            <button type="button" onClick={() => advance(r, 'rejected')} disabled={rowBusy}
+              className="inline-flex items-center gap-1 px-2.5 min-h-[44px] text-[11px] rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-red-300 hover:border-red-500/40 disabled:opacity-60">
+              <Ban size={12} aria-hidden="true" /> Reject<span className="sr-only"> {name}</span>
+            </button>
+          </div>
+        )
+      },
+    }]
+  }, [canWrite, busyId, advance])
+
   const kpis = [
     { label: 'Open Requests', value: fmtNum(summary.open), icon: Boxes },
     { label: 'Overdue', value: fmtNum(summary.overdue), icon: AlertTriangle, tone: summary.overdue > 0 ? 'text-red-300' : undefined },
     { label: 'Fulfilled Today', value: fmtNum(fulfilledToday), icon: CheckCircle2 },
     { label: 'Avg Fulfil Hours', value: fmtHours(summary.avgFulfilOreHours), icon: Clock },
+    { label: 'Fill Rate', value: fill == null ? 'N/A' : `${fill}%`, icon: Percent, hint: 'Fulfilled against every request that reached a final outcome' },
+    { label: 'Open Over 7 Days', value: fmtNum(ageing.buckets.find((b) => b.key === 'gt7d')?.count ?? 0), icon: Hourglass, tone: (ageing.buckets.find((b) => b.key === 'gt7d')?.count ?? 0) > 0 ? 'text-amber-300' : undefined },
   ]
 
-  const inputCls = 'w-full rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500'
+  const inputCls = 'w-full min-h-[44px] rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:border-blue-500'
 
   return (
     <div className="space-y-6">
@@ -341,8 +404,8 @@ export default function PartsRequests() {
         refreshing={refreshing}
         updatedAt={updatedAt}
         actions={canWrite && (
-          <button onClick={openModal} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={missing}>
-            <Plus size={14} /> New request
+          <button type="button" onClick={openModal} className="btn-primary text-sm min-h-[44px] inline-flex items-center gap-1.5" disabled={missing}>
+            <Plus size={14} aria-hidden="true" /> New request
           </button>
         )}
       />
@@ -360,29 +423,31 @@ export default function PartsRequests() {
       )}
 
       {error && (
-        <div className="card border border-red-800/50 flex items-start gap-3">
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
+        <div className="card border border-red-800/50 flex items-start gap-3" role="alert">
+          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
           <div className="flex-1">
-            <p className="text-red-300 font-medium">Something went wrong.</p>
+            <p className="text-red-300 font-medium">{failedFirstLoad ? 'Parts requests could not be loaded.' : 'Something went wrong.'}</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">{error}</p>
           </div>
-          <button onClick={load} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
+          <button type="button" onClick={load} className="inline-flex items-center gap-1.5 px-3 min-h-[44px] text-xs rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
             <RefreshCw size={13} /> Retry
           </button>
         </div>
       )}
 
       {/* KPI tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         {kpis.map((k) => {
           const Icon = k.icon
           return (
-            <div key={k.label} className="card">
-              <div className="flex items-center justify-between">
+            <div key={k.label} className="card" title={k.hint}>
+              <div className="flex items-center justify-between gap-2">
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
-                <Icon size={15} className="text-[var(--text-muted)]" />
+                <Icon size={15} className="text-[var(--text-muted)]" aria-hidden="true" />
               </div>
-              <p className={`text-xl font-bold mt-1 ${k.tone || 'text-[var(--text-primary)]'}`}>{loading ? '-' : k.value}</p>
+              {loading
+                ? <div className="h-7 w-12 mt-1 rounded bg-[var(--input-bg)] animate-pulse" />
+                : <p className={`text-xl font-bold mt-1 tabular-nums ${k.tone || 'text-[var(--text-primary)]'}`}>{failedFirstLoad ? 'N/A' : k.value}</p>}
             </div>
           )
         })}
@@ -424,6 +489,45 @@ export default function PartsRequests() {
         </div>
       </div>
 
+      {/* Open-request ageing + priority */}
+      {!loading && !failedFirstLoad && summary.open > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="card">
+            <div className="flex items-center gap-2 mb-3">
+              <Hourglass size={16} className="text-[var(--text-secondary)]" aria-hidden="true" />
+              <h3 className="font-semibold text-[var(--text-primary)]">How long open requests have waited</h3>
+            </div>
+            <ul className="space-y-2">
+              {ageing.buckets.map((b) => (
+                <li key={b.key} className="flex items-center gap-3 text-sm">
+                  <span className="w-28 text-[var(--text-secondary)]">{b.label}</span>
+                  <div className="flex-1 h-2 rounded-full bg-[var(--input-bg)] overflow-hidden" aria-hidden="true">
+                    <div className="h-full" style={{ width: `${summary.open ? (b.count / summary.open) * 100 : 0}%`, background: b.key === 'gt7d' ? '#f59e0b' : colorAt(0) }} />
+                  </div>
+                  <span className="w-10 text-right tabular-nums text-[var(--text-primary)]">{b.count}</span>
+                </li>
+              ))}
+            </ul>
+            {ageing.undated > 0 && <p className="text-[11px] text-[var(--text-muted)] mt-2">{ageing.undated} open request{ageing.undated === 1 ? '' : 's'} carry no request time and are not aged.</p>}
+          </div>
+          <div className="card">
+            <div className="flex items-center gap-2 mb-3">
+              <AlertTriangle size={16} className="text-[var(--text-secondary)]" aria-hidden="true" />
+              <h3 className="font-semibold text-[var(--text-primary)]">Open requests by priority</h3>
+            </div>
+            <ul className="grid grid-cols-2 gap-2">
+              {priorities.byPriority.map((p) => (
+                <li key={p.priority} className="rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)]/40 px-3 py-2">
+                  <p className={`text-xs font-medium ${PRIORITY_TONE[p.priority] || 'text-[var(--text-secondary)]'}`}>{p.label}</p>
+                  <p className="text-xl font-bold tabular-nums text-[var(--text-primary)]">{p.count}</p>
+                </li>
+              ))}
+            </ul>
+            {priorities.other > 0 && <p className="text-[11px] text-[var(--text-muted)] mt-2">{priorities.other} open request{priorities.other === 1 ? '' : 's'} carry no recognised priority.</p>}
+          </div>
+        </div>
+      )}
+
       {/* Filters */}
       <div className="card space-y-3">
         <div className="flex items-center gap-2 text-[var(--text-secondary)]">
@@ -453,139 +557,66 @@ export default function PartsRequests() {
           </label>
         </div>
         {(filters.status !== 'All' || filters.site !== 'All' || filters.q) && (
-          <button onClick={clearFilters} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
-            <X size={13} /> Clear filters
+          <button type="button" onClick={clearFilters} className="inline-flex items-center gap-1.5 px-3 min-h-[44px] text-xs rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
+            <X size={13} aria-hidden="true" /> Clear filters
           </button>
         )}
       </div>
 
-      {/* Table */}
-      <div className="card">
-        <div className="flex items-center gap-2 mb-3">
-          <ClipboardList size={16} className="text-[var(--text-secondary)]" />
+      {/* Register */}
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <ClipboardList size={16} className="text-[var(--text-secondary)]" aria-hidden="true" />
           <h3 className="font-semibold text-[var(--text-primary)]">Parts requests</h3>
-          <span className="text-[11px] text-[var(--text-muted)]">{filtered.length} shown</span>
+          <span className="text-[11px] text-[var(--text-muted)]" aria-live="polite">{failedFirstLoad ? 'Not loaded' : `${filtered.length} shown`}</span>
           <div className="ml-auto flex items-center gap-2">
-            <button onClick={exportExcel} disabled={filtered.length === 0} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-50">
-              <FileSpreadsheet size={14} /> Excel
+            <button type="button" onClick={exportExcel} disabled={filtered.length === 0} className="inline-flex items-center gap-1.5 px-3 min-h-[44px] text-xs rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-50">
+              <FileSpreadsheet size={14} aria-hidden="true" /> Excel
             </button>
-            <button onClick={exportPdf} disabled={filtered.length === 0} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-50">
-              <FileText size={14} /> PDF
+            <button type="button" onClick={exportPdf} disabled={filtered.length === 0} className="inline-flex items-center gap-1.5 px-3 min-h-[44px] text-xs rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-50">
+              <FileText size={14} aria-hidden="true" /> PDF
             </button>
           </div>
         </div>
-
-        {loading ? (
-          <div className="space-y-2">{[0, 1, 2, 3].map((i) => <div key={i} className="h-9 bg-[var(--input-bg)] rounded animate-pulse" />)}</div>
-        ) : filtered.length === 0 ? (
-          <div className="py-10 text-center text-[var(--text-muted)]">
-            <Boxes size={28} className="mx-auto mb-2 opacity-50" />
-            <p className="text-sm">{rows.length === 0 ? 'No parts requests yet.' : 'No requests match the filters.'}</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-[var(--text-muted)] border-b border-[var(--input-border)]">
-                  <th className="py-2 pr-3 font-medium">Requested</th>
-                  <th className="py-2 pr-3 font-medium">Part</th>
-                  <th className="py-2 pr-3 font-medium text-right">Qty</th>
-                  <th className="py-2 pr-3 font-medium">Asset</th>
-                  <th className="py-2 pr-3 font-medium">Site</th>
-                  <th className="py-2 pr-3 font-medium">Priority</th>
-                  <th className="py-2 pr-3 font-medium">Needed by</th>
-                  <th className="py-2 pr-3 font-medium">Status</th>
-                  {canWrite && <th className="py-2 font-medium text-right">Actions</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {pager.pageRows.map((r) => {
-                  const status = normalizePartsStatus(r.status)
-                  const fwd = FORWARD_ACTION[status]
-                  const FwdIcon = fwd?.icon
-                  const open = isOpenParts(status)
-                  const overdue = open && r.needed_by && new Date(r.needed_by).getTime() < Date.now()
-                  const rowBusy = busyId === r.id
-                  return (
-                    <tr key={r.id} className="border-b border-[var(--input-border)]/60 hover:bg-[var(--input-bg)]/50">
-                      <td className="py-2 pr-3 text-[var(--text-secondary)] whitespace-nowrap">{fmtDateTime(r.requested_at)}</td>
-                      <td className="py-2 pr-3 text-[var(--text-primary)]">{r.part_name || 'N/A'}</td>
-                      <td className="py-2 pr-3 text-right text-[var(--text-secondary)]">{fmtNum(r.qty)}</td>
-                      <td className="py-2 pr-3 text-[var(--text-secondary)]">{r.asset_no || 'N/A'}</td>
-                      <td className="py-2 pr-3 text-[var(--text-secondary)]">{r.site || 'N/A'}</td>
-                      <td className="py-2 pr-3">
-                        <span className={`text-xs font-medium ${PRIORITY_TONE[r.priority] || 'text-[var(--text-secondary)]'}`}>
-                          {PARTS_PRIORITY_LABEL[r.priority] || r.priority || 'N/A'}
-                        </span>
-                      </td>
-                      <td className="py-2 pr-3 whitespace-nowrap">
-                        {r.needed_by ? (
-                          <span className={overdue ? 'text-red-300 font-medium' : 'text-[var(--text-secondary)]'}>
-                            {fmtDate(r.needed_by)}{overdue ? ' (overdue)' : ''}
-                          </span>
-                        ) : <span className="text-[var(--text-muted)]">N/A</span>}
-                      </td>
-                      <td className="py-2 pr-3">
-                        <span className={`inline-block text-[11px] px-2 py-0.5 rounded-full border ${STATUS_TONE[status] || STATUS_TONE.cancelled}`}>
-                          {PARTS_STATUS_LABEL[status] || r.status || 'N/A'}
-                        </span>
-                      </td>
-                      {canWrite && (
-                        <td className="py-2 text-right whitespace-nowrap">
-                          {open ? (
-                            <div className="inline-flex items-center gap-1.5">
-                              {fwd && (
-                                <button
-                                  onClick={() => advance(r, nextPartsStatus(status))}
-                                  disabled={rowBusy}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] rounded-lg bg-emerald-600/90 hover:bg-emerald-500 text-white disabled:opacity-60"
-                                  title={fwd.label}
-                                >
-                                  {rowBusy ? <Loader2 size={12} className="animate-spin" /> : (FwdIcon && <FwdIcon size={12} />)} {fwd.label}
-                                </button>
-                              )}
-                              <button
-                                onClick={() => advance(r, 'rejected')}
-                                disabled={rowBusy}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-red-300 hover:border-red-500/40 disabled:opacity-60"
-                                title="Reject"
-                              >
-                                <Ban size={12} /> Reject
-                              </button>
-                            </div>
-                          ) : (
-                            <span className="text-[11px] text-[var(--text-muted)]">Closed</span>
-                          )}
-                        </td>
-                      )}
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-            <TablePagination {...pager} />
-          </div>
-        )}
+        <EnterpriseTable
+          columns={columns}
+          data={decoratedFiltered}
+          getRowId={(r) => String(r.id)}
+          loading={loading}
+          error={failedFirstLoad ? error : null}
+          onRetry={load}
+          enableGlobalFilter={false}
+          enableColumnFilters={false}
+          enableExport={false}
+          initialPageSize={25}
+          emptyIcon={<Boxes size={28} className="opacity-50" aria-hidden="true" />}
+          emptyMessage={rows.length === 0 ? 'No parts requests yet.' : 'No requests match the filters.'}
+        />
       </div>
 
       {/* New request modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !saving && setShowModal(false)}>
-          <div className="card max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center gap-2 mb-4">
-              <PackagePlus size={18} className="text-[var(--text-secondary)]" />
-              <h3 className="font-semibold text-[var(--text-primary)]">New parts request</h3>
-              <button onClick={() => setShowModal(false)} className="ml-auto p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={16} /></button>
-            </div>
-
+      <Modal
+        open={showModal}
+        onClose={() => !saving && setShowModal(false)}
+        title="New parts request"
+        size="lg"
+        footer={(
+          <div className="flex items-center justify-end gap-3">
+            <button type="button" onClick={() => setShowModal(false)} disabled={saving} className="btn-secondary text-sm min-h-[44px]">Cancel</button>
+            <button type="submit" form="parts-request-form" disabled={saving} className="btn-primary text-sm min-h-[44px] inline-flex items-center gap-1.5 disabled:opacity-60">
+              {saving ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <Plus size={14} aria-hidden="true" />} Raise request
+            </button>
+          </div>
+        )}
+      >
             {formError && (
-              <div className="mb-4 rounded-lg border border-red-800/50 bg-red-500/10 flex items-center gap-2 px-3 py-2">
+              <div role="alert" className="mb-4 rounded-lg border border-red-800/50 bg-red-500/10 flex items-center gap-2 px-3 py-2">
                 <AlertTriangle size={15} className="text-red-400" />
                 <span className="text-sm text-red-200">{formError}</span>
               </div>
             )}
 
-            <form onSubmit={submitForm} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <form id="parts-request-form" onSubmit={submitForm} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <label className="text-xs text-[var(--text-muted)] space-y-1 sm:col-span-2">
                 <span>Job (open work order) <span className="text-[var(--text-muted)]">(optional)</span></span>
                 <select value={form.job_id} onChange={(e) => onPickJob(e.target.value)} className={inputCls} disabled={pickerLoading}>
@@ -639,16 +670,8 @@ export default function PartsRequests() {
                 <input value={form.notes} onChange={(e) => setField('notes', e.target.value)} className={inputCls} placeholder="optional" />
               </label>
 
-              <div className="sm:col-span-2 flex items-center gap-3 pt-1">
-                <button type="submit" disabled={saving} className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60">
-                  {saving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Raise request
-                </button>
-                <button type="button" onClick={() => setShowModal(false)} className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)]">Cancel</button>
-              </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Modal>
     </div>
   )
 }

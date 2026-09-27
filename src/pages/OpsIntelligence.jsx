@@ -24,11 +24,12 @@ import {
 import { Doughnut, Bar } from 'react-chartjs-2'
 import {
   Siren, Activity, HeartPulse, Gauge, AlertTriangle, AlertOctagon, ShieldAlert,
-  Info, Search, X, Filter, FileSpreadsheet, FileText, ArrowUpRight, CheckCircle2,
+  Info, Search, X, FileSpreadsheet, FileText, ArrowUpRight, CheckCircle2,
   Building2, Layers, TrendingUp, DollarSign, Truck, Wrench, ClipboardCheck, Zap,
-  Package, Boxes, Wind, CalendarClock,
+  Package, Boxes, Wind, CalendarClock, RefreshCw, MapPin,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import EmailPdfButton from '../components/EmailPdfButton'
 import { useSettings } from '../contexts/SettingsContext'
 import { loadOpsData } from '../lib/api/opsIntelligence'
@@ -39,8 +40,12 @@ import {
   buildFinancials, buildExecutiveSummary,
   SEVERITY_META, CATEGORY_META, CATEGORIES,
 } from '../lib/opsIntelligence'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
-import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import {
+  pmAttentionItems, filterExceptions, exceptionSites, exceptionHotspots,
+  highSeveritySharePct, exceptionExportRows,
+} from '../lib/opsIntelligenceAnalytics'
+import { compareValues } from '../lib/consoleTable'
+import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
@@ -51,8 +56,10 @@ const REFRESH_MS = 30000
 const SEVERITY_STYLES = {
   high: 'bg-red-900/40 text-red-300 border border-red-700/50',
   medium: 'bg-amber-900/40 text-amber-300 border border-amber-700/50',
-  low: 'bg-slate-800/60 text-slate-300 border border-slate-600/50',
+  low: 'bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--input-border)]',
 }
+const SEVERITY_RANK = { high: 0, medium: 1, low: 2 }
+const valueSort = (a, b, id) => compareValues(a.getValue(id), b.getValue(id))
 const SEVERITY_COLOR = { high: '#ef4444', medium: '#f59e0b', low: '#64748b' }
 const CATEGORY_COLOR = {
   aged_tyre: '#ef4444',
@@ -117,8 +124,9 @@ export default function OpsIntelligence() {
       setNow(Date.now())
       setUpdatedAt(new Date())
     } catch (err) {
+      // Keep the last good scan (or stay unloaded): a failed read must never
+      // render as an all-clear fleet.
       setError(toUserMessage(err, 'Could not load fleet data.'))
-      setData({ tyres: [], workOrders: [], inspections: [], budgets: [], activeVehicles: null })
     } finally {
       setRefreshing(false)
     }
@@ -166,31 +174,7 @@ export default function OpsIntelligence() {
   // PM-derived attention items, shaped like the anomaly feed rows and linked to
   // the PM Programs module. Only emitted when plans are actually overdue / due
   // soon, so a fleet with no PM plans shows nothing extra (honest empty state).
-  const pmAnomalies = useMemo(() => {
-    if (!pmCompliance) return []
-    const items = []
-    if (pmCompliance.overdue > 0) {
-      items.push({
-        type: 'pm_overdue',
-        severity: 'critical',
-        title: `${pmCompliance.overdue} preventive maintenance ${pmCompliance.overdue === 1 ? 'plan' : 'plans'} overdue`,
-        detail: 'Overdue preventive maintenance raises breakdown and safety risk. Review and schedule service now.',
-        action: 'Open PM Programs',
-        link: '/pm-programs',
-      })
-    }
-    if (pmCompliance.dueSoon > 0) {
-      items.push({
-        type: 'pm_due_soon',
-        severity: 'warning',
-        title: `${pmCompliance.dueSoon} preventive maintenance ${pmCompliance.dueSoon === 1 ? 'plan' : 'plans'} due soon`,
-        detail: 'These plans reach their service window shortly. Plan workshop capacity ahead of time.',
-        action: 'Open PM Programs',
-        link: '/pm-programs',
-      })
-    }
-    return items
-  }, [pmCompliance])
+  const pmAnomalies = useMemo(() => pmAttentionItems(pmCompliance), [pmCompliance])
 
   // Rendered feed = PM attention items first, then the tyre / pressure / cost /
   // inspection anomalies. `anomalies` stays untouched for the executive strip.
@@ -198,29 +182,19 @@ export default function OpsIntelligence() {
   const feedTotal = feedItems.length
   const feedCritical = useMemo(() => feedItems.filter((a) => a.severity === 'critical').length, [feedItems])
 
-  const siteOptions = useMemo(
-    () => [...new Set(exceptions.map((e) => e.site).filter(Boolean))].sort(),
-    [exceptions],
-  )
+  const siteOptions = useMemo(() => exceptionSites(exceptions), [exceptions])
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return exceptions.filter((e) => {
-      if (severityFilter !== 'all' && e.severity !== severityFilter) return false
-      if (categoryFilter !== 'all' && e.category !== categoryFilter) return false
-      if (siteFilter && e.site !== siteFilter) return false
-      if (q) {
-        const hay = `${e.title} ${e.asset_no || ''} ${e.serial || ''} ${e.site || ''} ${e.detail}`.toLowerCase()
-        if (!hay.includes(q)) return false
-      }
-      return true
-    })
-  }, [exceptions, severityFilter, categoryFilter, siteFilter, search])
+  const filtered = useMemo(
+    () => filterExceptions(exceptions, { severity: severityFilter, category: categoryFilter, site: siteFilter, q: search }),
+    [exceptions, severityFilter, categoryFilter, siteFilter, search],
+  )
+  const siteHotspots = useMemo(() => exceptionHotspots(filtered, 'site', 8), [filtered])
+  const assetHotspots = useMemo(() => exceptionHotspots(filtered, 'asset_no', 8), [filtered])
+  const highShare = useMemo(() => highSeveritySharePct(summary), [summary])
 
   // ── Charts ────────────────────────────────────────────────────────────────
-  const chartText = typeof document !== 'undefined'
-    ? (getComputedStyle(document.documentElement).getPropertyValue('--text-muted') || '#9ca3af')
-    : '#9ca3af'
+  // chartVarPlugin resolves var(--token) per theme at draw time.
+  const chartText = 'var(--text-muted)'
 
   const severityData = {
     labels: ['High', 'Medium', 'Low'],
@@ -253,26 +227,55 @@ export default function OpsIntelligence() {
     },
   }
 
-  // Paged, not capped - the exception register used to stop at 500 silently.
-  // Both exports below still walk `filtered` in full.
-  const pager = usePagedRows(filtered)
-
-  // ── Export ──────────────────────────────────────────────────────────────────
+  // ── Export (whole filtered set) ─────────────────────────────────────────────
   const EXPORT_COLS = ['severity', 'category', 'title', 'asset_no', 'serial', 'site', 'detail']
   const EXPORT_HEADERS = ['Severity', 'Category', 'Title', 'Asset', 'Serial', 'Site', 'Detail']
-  const exportRows = filtered.map((e) => ({
-    severity: SEVERITY_META[e.severity]?.label || e.severity,
-    category: CATEGORY_META[e.category]?.label || e.category,
-    title: e.title,
-    asset_no: e.asset_no || '',
-    serial: e.serial || '',
-    site: e.site || '',
-    detail: e.detail,
-  }))
+  const exportRows = exceptionExportRows(filtered)
+  const exportName = reportFileName('Ops Intelligence Exceptions', reportDateLabel())
 
   const clearFilters = () => { setSeverityFilter('all'); setCategoryFilter('all'); setSiteFilter(''); setSearch('') }
   const hasFilters = severityFilter !== 'all' || categoryFilter !== 'all' || siteFilter || search
-  const loading = data === null
+  const loading = data === null && !error
+  const failed = data === null && !!error
+  // Money is only meaningful inside one currency; the All-countries view would
+  // add SAR, AED and EGP together.
+  const mixedCurrency = !activeCountry || activeCountry === 'All'
+
+  const exceptionColumns = useMemo(() => [
+    {
+      id: 'severity', header: 'Severity', accessorFn: (e) => SEVERITY_RANK[e.severity] ?? 9, size: 110, sortingFn: valueSort,
+      cell: ({ row }) => <span className={`badge text-[11px] px-2 py-0.5 rounded ${SEVERITY_STYLES[row.original.severity]}`}>{SEVERITY_META[row.original.severity]?.label}</span>,
+      meta: { exportValue: (e) => SEVERITY_META[e.severity]?.label || e.severity },
+    },
+    {
+      id: 'category', header: 'Category', accessorFn: (e) => CATEGORY_META[e.category]?.label || e.category, size: 150, sortingFn: valueSort,
+      cell: ({ row, getValue }) => (
+        <span className="inline-flex items-center gap-1.5 text-[var(--text-secondary)] whitespace-nowrap">
+          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CATEGORY_COLOR[row.original.category] }} aria-hidden="true" />
+          {getValue()}
+        </span>
+      ),
+    },
+    {
+      id: 'title', header: 'Exception', accessorFn: (e) => e.title, size: 260, sortingFn: valueSort,
+      cell: ({ getValue }) => <span className="text-[var(--text-primary)] font-medium block max-w-[260px] truncate" title={getValue()}>{getValue()}</span>,
+    },
+    { id: 'asset_no', header: 'Asset', accessorFn: (e) => e.asset_no || undefined, size: 110, sortingFn: valueSort, sortUndefined: 'last', cell: ({ getValue }) => getValue() ?? 'N/A' },
+    { id: 'site', header: 'Site', accessorFn: (e) => e.site || undefined, size: 120, sortingFn: valueSort, sortUndefined: 'last', cell: ({ getValue }) => getValue() ?? 'N/A' },
+    { id: 'detail', header: 'Detail', accessorFn: (e) => e.detail, size: 320, enableSorting: false, cell: ({ getValue }) => <span className="text-[var(--text-muted)] text-xs block max-w-[340px]">{getValue()}</span> },
+    {
+      id: 'open', header: 'Open', enableSorting: false, size: 100, meta: { export: false, align: 'right' },
+      cell: ({ row }) => {
+        const e = row.original
+        return (
+          <button type="button" onClick={() => navigate(e.link)} className="btn-secondary text-xs min-h-[44px] inline-flex items-center gap-1 px-2.5"
+            aria-label={`Open ${e.title} in ${CATEGORY_META[e.category]?.module || 'its module'}`}>
+            Open <ArrowUpRight size={13} aria-hidden="true" />
+          </button>
+        )
+      },
+    },
+  ], [navigate])
 
   const tone = HEALTH_TONE[pulse?.status] || HEALTH_TONE.good
   const c = pulse?.counts || {}
@@ -299,19 +302,19 @@ export default function OpsIntelligence() {
         refreshing={refreshing}
         updatedAt={updatedAt}
         actions={
-          <div className="flex items-center gap-2">
-            <span className="hidden md:inline-flex items-center gap-1.5 text-[11px] text-[var(--text-muted)] px-2.5 py-1 rounded-lg bg-gray-800/40 border border-white/5">
-              <Activity size={12} className="opacity-70" /> Auto-refresh 30s
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="hidden md:inline-flex items-center gap-1.5 text-[11px] text-[var(--text-muted)] px-2.5 py-1 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)]">
+              <Activity size={12} className="opacity-70" aria-hidden="true" /> Auto-refresh 30s
             </span>
-            <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'ops_intelligence_exceptions')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
-              <FileSpreadsheet size={14} /> Excel
+            <button type="button" onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, exportName, 'Exceptions')} className="btn-secondary text-sm min-h-[44px] inline-flex items-center gap-1.5" disabled={!filtered.length}>
+              <FileSpreadsheet size={14} aria-hidden="true" /> Excel
             </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Ops Intelligence: Exception Command Center', 'ops_intelligence_exceptions', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
-              <FileText size={14} /> PDF
+            <button type="button" onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Ops Intelligence: Exception Command Center', exportName, 'landscape')} className="btn-secondary text-sm min-h-[44px] inline-flex items-center gap-1.5" disabled={!filtered.length}>
+              <FileText size={14} aria-hidden="true" /> PDF
             </button>
             <EmailPdfButton
               disabled={!filtered.length}
-              className="btn-secondary text-sm inline-flex items-center gap-1.5 disabled:opacity-50"
+              className="btn-secondary text-sm min-h-[44px] inline-flex items-center gap-1.5 disabled:opacity-50"
               getPdf={async () => ({
                 base64: await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Ops Intelligence: Exception Command Center', 'ops_intelligence_exceptions', 'landscape', '', { returnBase64: true }),
                 filename: 'ops_intelligence_exceptions.pdf',
@@ -324,9 +327,13 @@ export default function OpsIntelligence() {
       />
 
       {error && (
-        <div className="card border border-red-800/50 flex items-start gap-3">
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-          <div><p className="text-red-300 font-medium">Couldn't load fleet data.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
+        <div className="card border border-red-800/50 flex items-start gap-3" role="alert">
+          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
+          <div className="flex-1">
+            <p className="text-red-300 font-medium">Couldn't load fleet data.</p>
+            <p className="text-[var(--text-muted)] text-sm mt-1">{error}{data ? ' Showing the last successful scan.' : ' Nothing below is a reading until a scan succeeds.'}</p>
+          </div>
+          <button type="button" onClick={load} className="btn-secondary text-sm min-h-[44px] inline-flex items-center gap-1.5"><RefreshCw size={14} aria-hidden="true" /> Retry</button>
         </div>
       )}
 
@@ -381,11 +388,12 @@ export default function OpsIntelligence() {
                   </p>
                 </div>
                 <button
+                  type="button"
                   onClick={() => navigate('/pm-programs')}
-                  className="btn-secondary text-xs inline-flex items-center gap-1 px-2.5 py-1 shrink-0"
-                  title="Open PM Programs"
+                  className="btn-secondary text-xs min-h-[44px] inline-flex items-center gap-1 px-2.5 shrink-0"
+                  aria-label="Open PM Programs"
                 >
-                  Open <ArrowUpRight size={13} />
+                  Open <ArrowUpRight size={13} aria-hidden="true" />
                 </button>
               </div>
             )}
@@ -427,7 +435,9 @@ export default function OpsIntelligence() {
             </div>
           </div>
           <div className="max-h-80 overflow-y-auto divide-y divide-[var(--input-border)]/60">
-            {loading ? (
+            {failed ? (
+              <div className="px-4 py-12 text-center text-[var(--text-muted)] text-sm" role="status">The anomaly feed could not be loaded. Use Retry above.</div>
+            ) : loading ? (
               [0, 1, 2].map((i) => <div key={i} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></div>)
             ) : feedItems.length === 0 ? (
               <div className="px-4 py-12 text-center text-[var(--text-muted)] text-sm">
@@ -435,25 +445,30 @@ export default function OpsIntelligence() {
                 No anomalies detected. Pressure, cost, inspection cadence and preventive maintenance all within range.
               </div>
             ) : (
-              feedItems.slice(0, 40).map((a, i) => (
-                <div
-                  key={`${a.type}:${a.asset_no || a.serial || i}`}
-                  className={`px-4 py-3 ${a.severity === 'critical' ? 'bg-red-900/15' : ''} ${a.link ? 'cursor-pointer hover:bg-[var(--input-bg)]/40' : ''}`}
-                  onClick={a.link ? () => navigate(a.link) : undefined}
-                >
-                  <div className="flex items-start gap-2.5">
-                    <AlertTriangle size={15} className={`mt-0.5 shrink-0 ${a.severity === 'critical' ? 'text-red-400' : 'text-amber-400'}`} />
+              feedItems.slice(0, 40).map((a, i) => {
+                const body = (
+                  <div className="flex items-start gap-2.5 text-left">
+                    <AlertTriangle size={15} className={`mt-0.5 shrink-0 ${a.severity === 'critical' ? 'text-red-400' : 'text-amber-400'}`} aria-hidden="true" />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-medium text-[var(--text-primary)] truncate">{a.title}</p>
-                        <span className="text-[10px] uppercase tracking-wide text-[var(--text-muted)] shrink-0">{ANOMALY_LABEL[a.type] || a.type}</span>
+                        <span className="text-[10px] uppercase tracking-wide text-[var(--text-muted)] shrink-0">{a.severity === 'critical' ? 'Critical | ' : ''}{ANOMALY_LABEL[a.type] || a.type}</span>
                       </div>
                       <p className="text-xs text-[var(--text-muted)] mt-0.5">{a.detail}</p>
-                      {a.action && <p className="text-xs text-blue-400 mt-0.5">→ {a.action}</p>}
+                      {a.action && <p className="text-xs text-blue-400 mt-0.5">{a.action}</p>}
                     </div>
                   </div>
-                </div>
-              ))
+                )
+                const cls = `w-full px-4 py-3 ${a.severity === 'critical' ? 'bg-red-900/15' : ''}`
+                return a.link ? (
+                  <button type="button" key={`${a.type}:${a.asset_no || a.serial || i}`} onClick={() => navigate(a.link)} className={`${cls} block hover:bg-[var(--input-bg)]/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]`}>{body}</button>
+                ) : (
+                  <div key={`${a.type}:${a.asset_no || a.serial || i}`} className={cls}>{body}</div>
+                )
+              })
+            )}
+            {feedItems.length > 40 && (
+              <p className="px-4 py-2 text-[11px] text-[var(--text-muted)]">Showing the first 40 of {feedItems.length} anomalies. Critical items are listed first.</p>
             )}
           </div>
           <p className="px-4 py-2 text-[11px] text-[var(--text-muted)] border-t border-[var(--input-border)] flex items-start gap-1.5">
@@ -468,7 +483,9 @@ export default function OpsIntelligence() {
             <DollarSign size={15} className="text-green-400" /> Financial intelligence
             {financials && <span className="ml-auto text-[11px] text-[var(--text-muted)] font-normal">FY {financials.year}</span>}
           </h3>
-          {loading || !financials ? (
+          {failed ? (
+            <p className="text-sm text-[var(--text-muted)]" role="status">Financials could not be loaded. Use Retry above.</p>
+          ) : loading || !financials ? (
             <div className="space-y-3">{[0, 1, 2, 3].map((i) => <div key={i} className="h-6 bg-[var(--input-bg)] rounded animate-pulse" />)}</div>
           ) : (
             <div className="space-y-3">
@@ -477,19 +494,25 @@ export default function OpsIntelligence() {
                 <div className="flex justify-between text-xs mb-1.5">
                   <span className="text-[var(--text-secondary)] font-medium">Budget consumption (tyre spend)</span>
                   <span className={`font-bold ${budgetTone.text}`}>
-                    {financials.budgetConsumptionPct == null ? 'No budget set' : `${financials.budgetConsumptionPct}%`}
+                    {mixedCurrency ? 'N/A' : financials.budgetConsumptionPct == null ? 'No budget set' : `${financials.budgetConsumptionPct}%`}
                   </span>
                 </div>
                 <div className="h-2.5 bg-[var(--input-bg)] rounded-full overflow-hidden">
-                  <div className={`h-full rounded-full transition-all ${budgetTone.bar}`} style={{ width: `${Math.min(financials.budgetConsumptionPct || 0, 100)}%` }} />
+                  <div className={`h-full rounded-full transition-all ${budgetTone.bar}`} style={{ width: `${mixedCurrency ? 0 : Math.min(financials.budgetConsumptionPct || 0, 100)}%` }} />
                 </div>
               </div>
+              {mixedCurrency && (
+                <p className="text-[11px] text-amber-400 flex items-start gap-1.5">
+                  <Info size={12} className="mt-0.5 shrink-0" aria-hidden="true" />
+                  All countries are in view, so money would add different currencies together. Pick one country to see spend, budget and CPK.
+                </p>
+              )}
               {[
-                ['YTD tyre spend', `${currency} ${fmtMoney(financials.ytdTyreSpend)}`],
-                ['Annual budget', financials.annualBudget > 0 ? `${currency} ${fmtMoney(financials.annualBudget)}` : 'Not set'],
-                ['Remaining', financials.remainingBudget == null ? 'N/A' : `${currency} ${fmtMoney(financials.remainingBudget)}`],
-                ['Avg CPK', financials.avgCpk != null ? `${currency} ${financials.avgCpk}/km` : 'N/A', financials.avgCpk != null ? (financials.cpkmStatus === 'good' ? 'text-green-400' : financials.cpkmStatus === 'average' ? 'text-amber-400' : 'text-red-400') : ''],
-                ['CPK data points', financials.cpkDataPoints],
+                ['YTD tyre spend', mixedCurrency ? 'N/A' : `${currency} ${fmtMoney(financials.ytdTyreSpend)}`],
+                ['Annual budget', mixedCurrency ? 'N/A' : financials.annualBudget > 0 ? `${currency} ${fmtMoney(financials.annualBudget)}` : 'Not set'],
+                ['Remaining', mixedCurrency || financials.remainingBudget == null ? 'N/A' : `${currency} ${fmtMoney(financials.remainingBudget)}`],
+                ['Avg CPK', !mixedCurrency && financials.avgCpk != null ? `${currency} ${financials.avgCpk}/km` : 'N/A', !mixedCurrency && financials.avgCpk != null ? (financials.cpkmStatus === 'good' ? 'text-green-400' : financials.cpkmStatus === 'average' ? 'text-amber-400' : 'text-red-400') : ''],
+                ['CPK data points', financials.cpkDataPoints ?? 'N/A'],
               ].map(([l, v, t]) => (
                 <div key={l} className="flex justify-between text-sm py-1.5 border-b border-[var(--input-border)]/60 last:border-0">
                   <span className="text-[var(--text-muted)]">{l}</span>
@@ -557,12 +580,13 @@ export default function OpsIntelligence() {
       </div>
 
       {/* KPI tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         {[
           { label: 'Open exceptions', value: summary.total, icon: Siren, tone: 'text-[var(--text-primary)]' },
           { label: 'High severity', value: summary.bySeverity.high, icon: AlertOctagon, tone: 'text-red-400' },
           { label: 'Medium severity', value: summary.bySeverity.medium, icon: AlertTriangle, tone: 'text-amber-400' },
           { label: 'Assets affected', value: summary.affectedAssets, icon: Building2, tone: 'text-blue-400' },
+          { label: 'High-severity share', value: highShare == null ? 'N/A' : `${highShare}%`, icon: ShieldAlert, tone: 'text-red-400' },
         ].map((k) => {
           const Icon = k.icon
           return (
@@ -571,7 +595,7 @@ export default function OpsIntelligence() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{loading ? 'N/A' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 tabular-nums ${k.tone}`}>{loading || failed ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -581,87 +605,87 @@ export default function OpsIntelligence() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="card">
           <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-1.5"><ShieldAlert size={15} className="text-red-400" /> By severity</h3>
-          <div className="h-64">{!loading && summary.total ? <Doughnut data={severityData} options={donutOpts} /> : <EmptyChart loading={loading} empty="No open exceptions." />}</div>
+          <div className="h-64">{!loading && summary.total ? <Doughnut data={severityData} options={donutOpts} /> : <EmptyChart loading={loading} empty={failed ? 'Not loaded.' : 'No open exceptions.'} />}</div>
         </div>
         <div className="card">
           <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-1.5"><Layers size={15} className="text-blue-400" /> By category</h3>
-          <div className="h-64">{!loading && activeCats.length ? <Bar data={categoryData} options={barOpts} /> : <EmptyChart loading={loading} empty="No open exceptions." />}</div>
+          <div className="h-64">{!loading && activeCats.length ? <Bar data={categoryData} options={barOpts} /> : <EmptyChart loading={loading} empty={failed ? 'Not loaded.' : 'No open exceptions.'} />}</div>
         </div>
       </div>
 
+      {/* Hotspots over the filtered exceptions */}
+      {!loading && !failed && summary.total > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <HotspotCard title="Sites with the most exceptions" icon={MapPin} rows={siteHotspots} onPick={(k) => setSiteFilter(k)} actionLabel="Filter to" />
+          <HotspotCard title="Assets with the most exceptions" icon={Truck} rows={assetHotspots} onPick={(k) => setSearch(k)} actionLabel="Search for" />
+        </div>
+      )}
+
       {/* Filters */}
-      <div className="card space-y-3">
+      <div className="card">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <input className="input pl-9 w-full" placeholder="Search title, asset, serial, site…" value={search} onChange={(e) => setSearch(e.target.value)} />
-          </div>
-          <select className="input" value={severityFilter} onChange={(e) => setSeverityFilter(e.target.value)} aria-label="Severity">
+          <label className="relative flex-1 min-w-[220px]">
+            <span className="sr-only">Search exceptions</span>
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+            <input className="input pl-9 w-full min-h-[44px]" placeholder="Search title, asset, serial, site" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </label>
+          <select className="input min-h-[44px]" value={severityFilter} onChange={(e) => setSeverityFilter(e.target.value)} aria-label="Severity">
             <option value="all">All severities</option>
             <option value="high">High</option>
             <option value="medium">Medium</option>
             <option value="low">Low</option>
           </select>
-          <select className="input" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} aria-label="Category">
+          <select className="input min-h-[44px]" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} aria-label="Category">
             <option value="all">All categories</option>
             {CATEGORIES.map((cat) => <option key={cat} value={cat}>{CATEGORY_META[cat].label}</option>)}
           </select>
-          <select className="input" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} aria-label="Site">
+          <select className="input min-h-[44px]" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} aria-label="Site">
             <option value="">All sites</option>
             {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
-          {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
-          <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {summary.total}</span>
+          {hasFilters && <button type="button" onClick={clearFilters} className="btn-secondary text-sm min-h-[44px] inline-flex items-center gap-1.5"><X size={14} aria-hidden="true" /> Clear</button>}
+          <span className="text-xs text-[var(--text-muted)] ml-auto" aria-live="polite">{failed ? 'Not loaded' : `${filtered.length} of ${summary.total}`}</span>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="card overflow-hidden !p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                {['Severity', 'Category', 'Exception', 'Asset', 'Site', 'Detail', ''].map((h, i) => <th key={i} className="px-4 py-3 font-semibold whitespace-nowrap">{h}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                [0, 1, 2, 3, 4].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={7} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
-              ) : filtered.length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-16 text-center text-[var(--text-muted)]">
-                  {summary.total === 0 ? (
-                    <><CheckCircle2 size={26} className="mx-auto mb-2 text-green-400 opacity-80" />All clear. No open exceptions across the fleet.</>
-                  ) : (
-                    <><Filter size={22} className="mx-auto mb-2 opacity-60" />No exceptions match these filters.</>
-                  )}
-                </td></tr>
-              ) : (
-                pager.pageRows.map((e) => (
-                  <tr key={e.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                    <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${SEVERITY_STYLES[e.severity]}`}>{SEVERITY_META[e.severity]?.label}</span></td>
-                    <td className="px-4 py-2.5 whitespace-nowrap">
-                      <span className="inline-flex items-center gap-1.5 text-[var(--text-secondary)]">
-                        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CATEGORY_COLOR[e.category] }} />
-                        {CATEGORY_META[e.category]?.label}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2.5 text-[var(--text-primary)] font-medium max-w-[260px] truncate" title={e.title}>{e.title}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{e.asset_no || 'N/A'}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{e.site || 'N/A'}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-muted)] text-xs max-w-[340px]">{e.detail}</td>
-                    <td className="px-4 py-2.5 whitespace-nowrap text-right">
-                      <button onClick={() => navigate(e.link)} className="btn-secondary text-xs inline-flex items-center gap-1 px-2.5 py-1" title={`Open in ${CATEGORY_META[e.category]?.module}`}>
-                        Open <ArrowUpRight size={13} />
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-        <TablePagination {...pager} />
-      </div>
+      {/* Exception register */}
+      <EnterpriseTable
+        columns={exceptionColumns}
+        data={filtered}
+        getRowId={(e) => String(e.id)}
+        loading={loading}
+        error={failed ? error : null}
+        onRetry={load}
+        enableGlobalFilter={false}
+        enableColumnFilters={false}
+        enableExport={false}
+        initialPageSize={25}
+        emptyMessage={summary.total === 0 ? 'All clear. No open exceptions across the fleet.' : 'No exceptions match these filters.'}
+      />
+    </div>
+  )
+}
+
+function HotspotCard({ title, icon: Icon, rows, onPick, actionLabel }) {
+  return (
+    <div className="card">
+      <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-1.5"><Icon size={15} className="text-[var(--text-secondary)]" aria-hidden="true" /> {title}</h3>
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--text-muted)]">No exception in view carries this field.</p>
+      ) : (
+        <ul className="space-y-1">
+          {rows.map((r) => (
+            <li key={r.key}>
+              <button type="button" onClick={() => onPick(r.key)} className="w-full min-h-[44px] flex items-center gap-3 px-2 rounded-lg hover:bg-[var(--input-bg)] text-left" aria-label={`${actionLabel} ${r.key}`}>
+                <span className="flex-1 min-w-0 truncate text-sm text-[var(--text-primary)]">{r.key}</span>
+                <span className="text-[11px] text-red-400 tabular-nums">{r.high} high</span>
+                <span className="text-[11px] text-amber-400 tabular-nums">{r.medium} med</span>
+                <span className="text-xs font-semibold tabular-nums text-[var(--text-secondary)] w-10 text-right">{r.total}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }
@@ -675,7 +699,7 @@ function ScoreRing({ score, color, loading }) {
   return (
     <div className="relative w-[84px] h-[84px] shrink-0">
       <svg width="84" height="84" viewBox="0 0 84 84" className="-rotate-90">
-        <circle cx="42" cy="42" r={r} fill="none" stroke="rgba(148,163,184,0.18)" strokeWidth="7" />
+        <circle cx="42" cy="42" r={r} fill="none" stroke="rgba(148,163,184,0.25)" strokeWidth="7" />
         <circle
           cx="42" cy="42" r={r} fill="none" stroke={color} strokeWidth="7" strokeLinecap="round"
           strokeDasharray={`${dash} ${circ}`}

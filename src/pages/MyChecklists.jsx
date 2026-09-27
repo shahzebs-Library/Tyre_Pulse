@@ -1,11 +1,18 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   ClipboardCheck, Play, SkipForward, Eye, RefreshCw, AlertTriangle,
   CheckCircle2, Clock, CalendarClock, ListChecks, Zap, MapPin, Boxes, Users,
+  Search, X, FileSpreadsheet, FileText, Percent, CalendarDays,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import {
+  decorateAssignments, checklistKpis, filterByTab, filterAssignments, distinctValues,
+  dueHint, prettyStatus, tabCount, assignmentExportRows, TABS,
+} from '../lib/myChecklistsAnalytics'
+import { compareValues } from '../lib/consoleTable'
+import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { listAssignments, skipAssignment, generateNow } from '../lib/api/checklistSchedules'
@@ -30,27 +37,6 @@ function TemplateIcon({ template }) {
   return <Icon size={18} className="text-brand-bright" aria-hidden="true" />
 }
 
-// "Tables not deployed yet" heuristic — mirrors Billing.jsx / Checklists.jsx.
-
-// ── Date helpers (null-safe) ────────────────────────────────────────────────
-const MS_DAY = 86400000
-
-function startOfDay(d) {
-  const x = new Date(d)
-  if (Number.isNaN(x.getTime())) return null
-  x.setHours(0, 0, 0, 0)
-  return x
-}
-
-/** Whole-day delta between a due date and today. Negative ⇒ overdue. Null-safe. */
-function dueDeltaDays(due) {
-  if (!due) return null
-  const d = startOfDay(due)
-  const today = startOfDay(new Date())
-  if (!d || !today) return null
-  return Math.round((d.getTime() - today.getTime()) / MS_DAY)
-}
-
 function fmtDate(v) {
   if (!v) return 'N/A'
   const d = new Date(v)
@@ -59,31 +45,7 @@ function fmtDate(v) {
     : d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
-/** Human relative hint for a due date. Returns { text, tone }. */
-function dueHint(due, status) {
-  if (status === 'completed') return { text: 'Completed', tone: 'green' }
-  if (status === 'skipped') return { text: 'Skipped', tone: 'muted' }
-  const delta = dueDeltaDays(due)
-  if (delta == null) return { text: 'No due date', tone: 'muted' }
-  if (delta < 0) {
-    const n = Math.abs(delta)
-    return { text: `${n} day${n === 1 ? '' : 's'} overdue`, tone: 'red' }
-  }
-  if (delta === 0) return { text: 'Due today', tone: 'amber' }
-  if (delta === 1) return { text: 'Due tomorrow', tone: 'amber' }
-  return { text: `Due in ${delta} days`, tone: 'muted' }
-}
-
-// A pending assignment whose due date has already passed is effectively overdue,
-// even if the nightly generator hasn't restamped its status yet.
-function effectiveStatus(a) {
-  const s = String(a?.status || 'pending').toLowerCase()
-  if (s === 'pending') {
-    const delta = dueDeltaDays(a?.due_date)
-    if (delta != null && delta < 0) return 'overdue'
-  }
-  return s
-}
+const valueSort = (a, b, id) => compareValues(a.getValue(id), b.getValue(id))
 
 const TONE_TEXT = {
   red: 'text-red-400',
@@ -101,18 +63,6 @@ const STATUS_BADGE = {
 function statusBadge(s) {
   return STATUS_BADGE[s] || STATUS_BADGE.skipped
 }
-function prettyStatus(s) {
-  return String(s || '').replace(/\b\w/g, (c) => c.toUpperCase())
-}
-
-const TABS = [
-  { key: 'todo', label: 'To do' },
-  { key: 'overdue', label: 'Overdue' },
-  { key: 'pending', label: 'Pending' },
-  { key: 'completed', label: 'Completed' },
-  { key: 'all', label: 'All' },
-]
-
 export default function MyChecklists() {
   const navigate = useNavigate()
   const { activeCountry } = useSettings()
@@ -129,6 +79,9 @@ export default function MyChecklists() {
   const [updatedAt, setUpdatedAt] = useState(null)
 
   const [tab, setTab] = useState('todo')
+  const [search, setSearch] = useState('')
+  const [siteFilter, setSiteFilter] = useState('')
+  const [templateFilter, setTemplateFilter] = useState('')
   const [generating, setGenerating] = useState(false)
   const [busyId, setBusyId] = useState(null)
   const [toast, setToast] = useState(null) // { kind:'success'|'error', msg }
@@ -164,23 +117,14 @@ export default function MyChecklists() {
   useEffect(() => { load() }, [load])
 
   // Decorate with derived status + sort once, reuse everywhere.
-  const decorated = useMemo(() => {
-    const rank = { overdue: 0, pending: 1, completed: 2, skipped: 3 }
-    // An assignment aimed at another trade is not this person's work. A row with
-    // no assignee_role stays visible to everyone (that is what NULL means), and
-    // oversight roles keep seeing all of them. Filtering here rather than in the
-    // render keeps the KPI counts and the table describing the same set.
-    return filterAssignmentsForRole(assignments, role, roleOpts)
-      .map((a) => ({ ...a, _status: effectiveStatus(a) }))
-      .sort((x, y) => {
-        const r = (rank[x._status] ?? 9) - (rank[y._status] ?? 9)
-        if (r !== 0) return r
-        // Within a status: oldest due date first (most urgent on top).
-        const dx = x.due_date ? new Date(x.due_date).getTime() : Infinity
-        const dy = y.due_date ? new Date(y.due_date).getTime() : Infinity
-        return dx - dy
-      })
-  }, [assignments, role, roleOpts])
+  // An assignment aimed at another trade is not this person's work. A row with
+  // no assignee_role stays visible to everyone (that is what NULL means), and
+  // oversight roles keep seeing all of them. Filtering here rather than in the
+  // render keeps the KPI counts and the table describing the same set.
+  const decorated = useMemo(
+    () => decorateAssignments(filterAssignmentsForRole(assignments, role, roleOpts), new Date()),
+    [assignments, role, roleOpts],
+  )
 
   // The published checklists written for this person's trade. Untargeted
   // templates are everyone's; oversight roles see the lot.
@@ -195,28 +139,26 @@ export default function MyChecklists() {
     for (const t of templates) if (t?.id != null) m.set(String(t.id), t)
     return m
   }, [templates])
+  // The search / site / checklist filters narrow what the KPIs and the table
+  // describe together; the status tab is held out of the KPIs because the tiles
+  // ARE the status readings (a tile restating the tab just picked is no reading).
+  const scoped = useMemo(
+    () => filterAssignments(decorated, { q: search, site: siteFilter, template: templateFilter }),
+    [decorated, search, siteFilter, templateFilter],
+  )
+  const kpis = useMemo(() => checklistKpis(scoped), [scoped])
+  const visible = useMemo(() => filterByTab(scoped, tab), [scoped, tab])
+  const siteOptions = useMemo(() => distinctValues(decorated, 'site'), [decorated])
+  const templateOptions = useMemo(() => distinctValues(decorated, 'template_name'), [decorated])
+  const filtersActive = !!(search || siteFilter || templateFilter)
+  const clearFilters = () => { setSearch(''); setSiteFilter(''); setTemplateFilter('') }
 
-  const kpis = useMemo(() => {
-    let overdue = 0, pending = 0, completed = 0
-    for (const a of decorated) {
-      if (a._status === 'overdue') overdue++
-      else if (a._status === 'pending') pending++
-      else if (a._status === 'completed') completed++
-    }
-    return { overdue, pending, completed, total: decorated.length }
-  }, [decorated])
-
-  const visible = useMemo(() => {
-    switch (tab) {
-      case 'overdue': return decorated.filter((a) => a._status === 'overdue')
-      case 'pending': return decorated.filter((a) => a._status === 'pending')
-      case 'completed': return decorated.filter((a) => a._status === 'completed')
-      case 'all': return decorated
-      case 'todo':
-      default: return decorated.filter((a) => a._status === 'overdue' || a._status === 'pending')
-    }
-  }, [decorated, tab])
-  const assignmentsPager = usePagedRows(visible)
+  const exportRows = () => assignmentExportRows(visible, new Date())
+  const EXPORT_COLS = ['checklist', 'role', 'site', 'asset', 'due_date', 'due', 'status']
+  const EXPORT_HEADERS = ['Checklist', 'Role', 'Site', 'Asset', 'Due date', 'Due', 'Status']
+  const exportName = () => reportFileName('My Checklists', reportDateLabel())
+  const doExcel = () => exportToExcel(exportRows(), EXPORT_COLS, EXPORT_HEADERS, exportName(), 'My Checklists')
+  const doPdf = () => exportToPdf(exportRows(), EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'My Checklists', exportName(), 'landscape')
 
   const handleGenerate = useCallback(async () => {
     setGenerating(true); setError('')
@@ -257,24 +199,141 @@ export default function MyChecklists() {
   }, [navigate])
 
   const kpiCards = [
-    { key: 'overdue', label: 'Overdue', value: kpis.overdue, icon: AlertTriangle, tone: 'red',
+    { key: 'overdue', label: 'Overdue', value: kpis.overdue, icon: AlertTriangle,
       cls: 'text-red-400', ring: 'border-red-700/40 bg-red-900/10' },
-    { key: 'pending', label: 'Due (pending)', value: kpis.pending, icon: Clock, tone: 'amber',
+    { key: 'pending', label: 'Due (pending)', value: kpis.pending, icon: Clock,
       cls: 'text-amber-400', ring: 'border-amber-700/40 bg-amber-900/10' },
-    { key: 'completed', label: 'Completed', value: kpis.completed, icon: CheckCircle2, tone: 'green',
+    { key: 'week', label: 'Due in 7 days', value: kpis.dueThisWeek, icon: CalendarDays,
+      cls: 'text-sky-400', ring: 'border-sky-700/40 bg-sky-900/10' },
+    { key: 'completed', label: 'Completed', value: kpis.completed, icon: CheckCircle2,
       cls: 'text-green-400', ring: 'border-green-700/40 bg-green-900/10' },
+    { key: 'rate', label: 'Completion rate', value: kpis.completionRate == null ? 'N/A' : `${kpis.completionRate}%`, icon: Percent,
+      cls: 'text-[var(--text-primary)]', ring: 'border-[var(--border-dim)]',
+      hint: 'Completed against every assignment that is overdue or was decided' },
   ]
 
+  const columns = useMemo(() => [
+    {
+      id: 'checklist', header: 'Checklist', accessorFn: (a) => a.template_name || 'Checklist', size: 280, sortingFn: valueSort,
+      cell: ({ row }) => {
+        const a = row.original
+        const tpl = templateById.get(String(a.template_id))
+        return (
+          <div className="flex items-start gap-2">
+            <span className="mt-0.5 shrink-0"><TemplateIcon template={tpl || { name: a.template_name }} /></span>
+            <div className="min-w-0">
+              <div className="font-medium text-[var(--text-primary)]">{a.template_name || 'Checklist'}</div>
+              {a.assignee_role && <div className="text-xs text-[var(--text-muted)] mt-0.5">Role: {a.assignee_role}</div>}
+              {roleTargetLabel(tpl) && (
+                <div className="text-xs text-amber-400 mt-0.5 inline-flex items-center gap-1">
+                  <Users size={11} aria-hidden="true" /> For: {roleTargetLabel(tpl)}
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      },
+    },
+    {
+      id: 'target', header: 'Target', accessorFn: (a) => [a.site, a.asset_no].filter(Boolean).join(' ') || undefined, size: 180,
+      sortingFn: valueSort, sortUndefined: 'last',
+      cell: ({ row }) => {
+        const a = row.original
+        return (
+          <div className="flex flex-col gap-0.5 text-xs">
+            {a.site && <span className="inline-flex items-center gap-1 text-[var(--text-primary)]"><MapPin size={12} className="text-[var(--text-muted)]" aria-hidden="true" /> {a.site}</span>}
+            {a.asset_no && <span className="inline-flex items-center gap-1 text-[var(--text-muted)]"><Boxes size={12} aria-hidden="true" /> {a.asset_no}</span>}
+            {!a.site && !a.asset_no && <span className="text-[var(--text-muted)]">N/A</span>}
+          </div>
+        )
+      },
+      meta: { exportValue: (a) => [a.site, a.asset_no].filter(Boolean).join(' / ') || 'N/A' },
+    },
+    {
+      id: 'due', header: 'Due', accessorFn: (a) => a.due_date || undefined, size: 170, sortingFn: valueSort, sortUndefined: 'last',
+      cell: ({ row }) => {
+        const a = row.original
+        const hint = dueHint(a.due_date, a._status)
+        return (
+          <div className="whitespace-nowrap">
+            <div className="inline-flex items-center gap-1.5 text-[var(--text-primary)]">
+              <CalendarClock size={13} className="text-[var(--text-muted)]" aria-hidden="true" /> {fmtDate(a.due_date)}
+            </div>
+            <div className={`text-xs mt-0.5 ${TONE_TEXT[hint.tone] || TONE_TEXT.muted}`}>{hint.text}</div>
+          </div>
+        )
+      },
+      meta: { exportValue: (a) => (a.due_date ? String(a.due_date).slice(0, 10) : 'N/A') },
+    },
+    {
+      id: 'status', header: 'Status', accessorFn: (a) => prettyStatus(a._status), size: 120, sortingFn: valueSort,
+      cell: ({ row }) => <span className={`badge text-xs ${statusBadge(row.original._status)}`}>{prettyStatus(row.original._status)}</span>,
+    },
+    {
+      id: 'actions', header: 'Actions', enableSorting: false, size: 230, meta: { export: false, align: 'right' },
+      cell: ({ row }) => {
+        const a = row.original
+        const status = a._status
+        const actionable = status === 'overdue' || status === 'pending'
+        const rowBusy = busyId === a.id
+        const name = a.template_name || 'checklist'
+        return (
+          <div className="flex items-center justify-end gap-2">
+            {actionable && (
+              <>
+                <button type="button" onClick={() => start(a)} disabled={rowBusy}
+                  className="btn-primary text-xs min-h-[44px] inline-flex items-center gap-1.5 disabled:opacity-50">
+                  <Play size={13} aria-hidden="true" /> Start<span className="sr-only"> {name}</span>
+                </button>
+                <button type="button" onClick={() => handleSkip(a)} disabled={rowBusy}
+                  className="btn-secondary text-xs min-h-[44px] inline-flex items-center gap-1.5 disabled:opacity-50">
+                  {rowBusy ? <RefreshCw size={13} className="animate-spin" aria-hidden="true" /> : <SkipForward size={13} aria-hidden="true" />} Skip<span className="sr-only"> {name}</span>
+                </button>
+              </>
+            )}
+            {status === 'completed' && (
+              a.submission_id ? (
+                <Link to={`/checklists/submission/${a.submission_id}`} className="btn-secondary text-xs min-h-[44px] inline-flex items-center gap-1.5">
+                  <Eye size={13} aria-hidden="true" /> View<span className="sr-only"> {name} submission</span>
+                </Link>
+              ) : (
+                <span className="text-xs text-[var(--text-muted)] inline-flex items-center gap-1.5">
+                  <CheckCircle2 size={13} className="text-green-400" aria-hidden="true" /> Done
+                </span>
+              )
+            )}
+            {status === 'skipped' && (
+              <button type="button" onClick={() => start(a)} className="btn-secondary text-xs min-h-[44px] inline-flex items-center gap-1.5">
+                <Play size={13} aria-hidden="true" /> Run anyway<span className="sr-only"> {name}</span>
+              </button>
+            )}
+          </div>
+        )
+      },
+    },
+  ], [templateById, busyId, start, handleSkip])
+
   const headerActions = (
-    <button
-      onClick={handleGenerate}
-      disabled={generating || missing}
-      className="btn-primary text-sm inline-flex items-center gap-2 disabled:opacity-50"
-      title="Materialise any checklist assignments that are due right now"
-    >
-      <Zap size={15} className={generating ? 'animate-pulse' : ''} />
-      {generating ? 'Generating…' : 'Generate due now'}
-    </button>
+    <div className="flex flex-wrap items-center gap-2">
+      <button type="button" onClick={doExcel} disabled={loading || !visible.length}
+        className="btn-secondary text-sm min-h-[44px] inline-flex items-center gap-1.5 disabled:opacity-50">
+        <FileSpreadsheet size={14} aria-hidden="true" /> Excel
+      </button>
+      <button type="button" onClick={doPdf} disabled={loading || !visible.length}
+        className="btn-secondary text-sm min-h-[44px] inline-flex items-center gap-1.5 disabled:opacity-50">
+        <FileText size={14} aria-hidden="true" /> PDF
+      </button>
+      <button
+        type="button"
+        onClick={handleGenerate}
+        disabled={generating || missing}
+        className="btn-primary text-sm min-h-[44px] inline-flex items-center gap-2 disabled:opacity-50"
+        title="Materialise any checklist assignments that are due right now"
+      >
+        <Zap size={15} className={generating ? 'animate-pulse' : ''} aria-hidden="true" />
+        {generating ? 'Generating...' : 'Generate due now'}
+      </button>
+    </div>
   )
 
   return (
@@ -283,7 +342,7 @@ export default function MyChecklists() {
         title="My Checklists"
         subtitle="Checklist assignments due to you: start, complete, or skip scheduled inspections."
         icon={ClipboardCheck}
-        badge={!loading && !missing ? `${kpis.overdue + kpis.pending} to do` : undefined}
+        badge={!loading && !missing && !error ? `${kpis.todo} to do` : undefined}
         actions={headerActions}
         onRefresh={load}
         refreshing={loading}
@@ -294,6 +353,7 @@ export default function MyChecklists() {
       {toast && (
         <div
           role="status"
+          aria-live="polite"
           className={`fixed bottom-6 right-6 z-50 max-w-sm rounded-xl px-4 py-3 text-sm shadow-lg border flex items-start gap-2 ${
             toast.kind === 'success'
               ? 'bg-green-900/80 border-green-700/60 text-green-100'
@@ -307,52 +367,84 @@ export default function MyChecklists() {
         </div>
       )}
 
-      {/* KPI strip */}
-      {!missing && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {kpiCards.map(({ key, label, value, icon: Icon, cls, ring }) => (
-            <div key={key} className={`card flex items-center gap-4 border ${ring}`}>
-              <div className="w-11 h-11 rounded-xl bg-[var(--surface-2)] flex items-center justify-center shrink-0">
-                <Icon size={20} className={cls} />
+      {/* KPI strip - covers the search / site / checklist filters, not the tab */}
+      {!missing && !error && (
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+          {kpiCards.map(({ key, label, value, icon: Icon, cls, ring, hint }) => (
+            <div key={key} className={`card flex items-center gap-3 border ${ring}`} title={hint}>
+              <div className="w-10 h-10 rounded-xl bg-[var(--surface-2)] flex items-center justify-center shrink-0">
+                <Icon size={18} className={cls} aria-hidden="true" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs text-[var(--text-muted)] uppercase tracking-wide">{label}</p>
                 {loading
                   ? <div className="h-7 w-10 mt-1 bg-[var(--input-bg)] rounded animate-pulse" />
-                  : <p className={`text-3xl font-bold ${cls}`}>{value}</p>}
+                  : <p className={`text-2xl font-bold tabular-nums ${cls}`}>{value}</p>}
               </div>
             </div>
           ))}
         </div>
       )}
+      {!missing && !error && !loading && filtersActive && (
+        <p className="text-xs text-[var(--text-muted)] -mt-3">
+          These figures cover the {scoped.length} assignment{scoped.length === 1 ? '' : 's'} matching your search and filters, of {decorated.length} in total.
+        </p>
+      )}
+
+      {/* Filters */}
+      {!missing && !error && (
+        <div className="card">
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="relative flex-1 min-w-[220px]">
+              <span className="sr-only">Search checklists</span>
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+              <input className="input w-full pl-9 min-h-[44px]" placeholder="Search checklist, role, site or asset" value={search} onChange={(e) => setSearch(e.target.value)} />
+            </label>
+            <label className="text-xs text-[var(--text-muted)]">
+              <span className="sr-only">Site</span>
+              <select className="input min-h-[44px]" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} aria-label="Site">
+                <option value="">All sites</option>
+                {siteOptions.map((v) => <option key={v} value={v}>{v}</option>)}
+              </select>
+            </label>
+            <label className="text-xs text-[var(--text-muted)]">
+              <span className="sr-only">Checklist</span>
+              <select className="input min-h-[44px]" value={templateFilter} onChange={(e) => setTemplateFilter(e.target.value)} aria-label="Checklist">
+                <option value="">All checklists</option>
+                {templateOptions.map((v) => <option key={v} value={v}>{v}</option>)}
+              </select>
+            </label>
+            {filtersActive && (
+              <button type="button" onClick={clearFilters} className="btn-secondary text-sm min-h-[44px] inline-flex items-center gap-1.5">
+                <X size={14} aria-hidden="true" /> Clear filters
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Status tabs */}
-      {!missing && (
-        <div className="flex items-center gap-1 border-b border-[var(--border-dim)] overflow-x-auto">
-          {TABS.map(({ key, label }) => {
-            const count =
-              key === 'overdue' ? kpis.overdue
-              : key === 'pending' ? kpis.pending
-              : key === 'completed' ? kpis.completed
-              : key === 'todo' ? kpis.overdue + kpis.pending
-              : kpis.total
-            return (
-              <button
-                key={key}
-                onClick={() => setTab(key)}
-                className={`px-4 py-2.5 text-sm font-medium flex items-center gap-2 border-b-2 -mb-px whitespace-nowrap transition-colors ${
-                  tab === key
-                    ? 'border-green-500 text-green-400'
-                    : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                }`}
-              >
-                {label}
-                {!loading && (
-                  <span className="text-xs px-1.5 py-0.5 rounded-full bg-[var(--surface-2)] text-[var(--text-muted)]">{count}</span>
-                )}
-              </button>
-            )
-          })}
+      {!missing && !error && (
+        <div className="flex items-center gap-1 border-b border-[var(--border-dim)] overflow-x-auto" role="tablist" aria-label="Assignment status">
+          {TABS.map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={tab === key}
+              onClick={() => setTab(key)}
+              className={`px-4 min-h-[44px] text-sm font-medium flex items-center gap-2 border-b-2 -mb-px whitespace-nowrap transition-colors ${
+                tab === key
+                  ? 'border-green-500 text-green-400'
+                  : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              {label}
+              {!loading && (
+                <span className="text-xs px-1.5 py-0.5 rounded-full bg-[var(--surface-2)] text-[var(--text-muted)]">{tabCount(key, kpis)}</span>
+              )}
+            </button>
+          ))}
         </div>
       )}
 
@@ -367,7 +459,7 @@ export default function MyChecklists() {
                 Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V124_CHECKLIST_SCHEDULES.sql</span> to create the
                 {' '}<span className="font-mono">checklist_schedules</span> and <span className="font-mono">checklist_assignments</span> tables, then reload.
               </p>
-              <button onClick={load} className="btn-secondary text-sm mt-3 inline-flex items-center gap-2">
+              <button type="button" onClick={load} className="btn-secondary text-sm min-h-[44px] mt-3 inline-flex items-center gap-2">
                 <RefreshCw size={14} /> Retry
               </button>
             </div>
@@ -377,13 +469,13 @@ export default function MyChecklists() {
 
       {/* Error */}
       {error && !missing && (
-        <div className="card border border-red-800/50">
+        <div className="card border border-red-800/50" role="alert">
           <div className="flex items-start gap-3">
             <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
             <div>
               <p className="text-red-300 font-medium">Couldn't load your checklists.</p>
               <p className="text-[var(--text-muted)] text-sm mt-1">{error}</p>
-              <button onClick={load} className="btn-secondary text-sm mt-3 inline-flex items-center gap-2">
+              <button type="button" onClick={load} className="btn-secondary text-sm min-h-[44px] mt-3 inline-flex items-center gap-2">
                 <RefreshCw size={14} /> Retry
               </button>
             </div>
@@ -391,161 +483,35 @@ export default function MyChecklists() {
         </div>
       )}
 
-      {/* Loading skeleton */}
-      {loading && !missing && !error && (
-        <div className="card p-0 overflow-hidden">
-          {[0, 1, 2, 3, 4].map((i) => (
-            <div key={i} className="flex items-center gap-4 p-4 border-t border-[var(--border-dim)] first:border-t-0 animate-pulse">
-              <div className="h-4 w-48 bg-[var(--input-bg)] rounded" />
-              <div className="h-4 w-28 bg-[var(--input-bg)] rounded ml-auto" />
-              <div className="h-8 w-20 bg-[var(--input-bg)] rounded" />
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Empty state */}
-      {!loading && !missing && !error && visible.length === 0 && (
+      {/* Empty state: nothing assigned at all (a real answer, distinct from a filter miss) */}
+      {!loading && !missing && !error && decorated.length === 0 && (
         <div className="card text-center py-16 space-y-3">
-          {kpis.overdue + kpis.pending === 0 ? (
-            <>
-              <CheckCircle2 size={36} className="mx-auto text-green-400" />
-              <p className="text-[var(--text-primary)] font-semibold">You're all caught up, no checklists due</p>
-              <p className="text-sm text-[var(--text-muted)] max-w-md mx-auto">
-                Scheduled assignments will appear here as they come due. Browse published checklists to run one on demand.
-              </p>
-            </>
-          ) : (
-            <>
-              <ListChecks size={34} className="mx-auto text-[var(--text-muted)]" />
-              <p className="text-[var(--text-primary)] font-semibold">Nothing in this view</p>
-              <p className="text-sm text-[var(--text-muted)] max-w-md mx-auto">
-                Try the <button onClick={() => setTab('todo')} className="text-green-400 hover:underline">To do</button> tab to see what's due.
-              </p>
-            </>
-          )}
-          <Link to="/checklists" className="btn-secondary text-sm inline-flex items-center gap-2 mx-auto">
-            <ListChecks size={15} /> Browse checklists
+          <CheckCircle2 size={36} className="mx-auto text-green-400" aria-hidden="true" />
+          <p className="text-[var(--text-primary)] font-semibold">You're all caught up, no checklists due</p>
+          <p className="text-sm text-[var(--text-muted)] max-w-md mx-auto">
+            Scheduled assignments will appear here as they come due. Browse published checklists to run one on demand.
+          </p>
+          <Link to="/checklists" className="btn-secondary text-sm min-h-[44px] inline-flex items-center gap-2 mx-auto">
+            <ListChecks size={15} aria-hidden="true" /> Browse checklists
           </Link>
         </div>
       )}
 
-      {/* Assignment table */}
-      {!loading && !missing && !error && visible.length > 0 && (
-        <div className="card p-0 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr>
-                <th className="table-header text-left">Checklist</th>
-                <th className="table-header text-left">Target</th>
-                <th className="table-header text-left">Due</th>
-                <th className="table-header text-left">Status</th>
-                <th className="table-header text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {assignmentsPager.pageRows.map((a) => {
-                const status = a._status
-                const hint = dueHint(a.due_date, status)
-                const actionable = status === 'overdue' || status === 'pending'
-                const rowBusy = busyId === a.id
-                return (
-                  <tr key={a.id} className="border-t border-[var(--border-dim)] align-top">
-                    <td className="table-cell">
-                      <div className="flex items-start gap-2">
-                        <span className="mt-0.5 shrink-0">
-                          <TemplateIcon template={templateById.get(String(a.template_id)) || { name: a.template_name }} />
-                        </span>
-                        <div className="min-w-0">
-                          <div className="font-medium text-[var(--text-primary)]">{a.template_name || 'Checklist'}</div>
-                          {a.assignee_role && (
-                            <div className="text-xs text-[var(--text-muted)] mt-0.5">Role: {a.assignee_role}</div>
-                          )}
-                          {roleTargetLabel(templateById.get(String(a.template_id))) && (
-                            <div className="text-xs text-amber-400 mt-0.5 inline-flex items-center gap-1">
-                              <Users size={11} /> For: {roleTargetLabel(templateById.get(String(a.template_id)))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="table-cell">
-                      <div className="flex flex-col gap-0.5 text-xs">
-                        {a.site && (
-                          <span className="inline-flex items-center gap-1 text-[var(--text-primary)]">
-                            <MapPin size={12} className="text-[var(--text-muted)]" /> {a.site}
-                          </span>
-                        )}
-                        {a.asset_no && (
-                          <span className="inline-flex items-center gap-1 text-[var(--text-muted)]">
-                            <Boxes size={12} /> {a.asset_no}
-                          </span>
-                        )}
-                        {!a.site && !a.asset_no && <span className="text-[var(--text-muted)]">N/A</span>}
-                      </div>
-                    </td>
-                    <td className="table-cell whitespace-nowrap">
-                      <div className="inline-flex items-center gap-1.5 text-[var(--text-primary)]">
-                        <CalendarClock size={13} className="text-[var(--text-muted)]" /> {fmtDate(a.due_date)}
-                      </div>
-                      <div className={`text-xs mt-0.5 ${TONE_TEXT[hint.tone] || TONE_TEXT.muted}`}>{hint.text}</div>
-                    </td>
-                    <td className="table-cell">
-                      <span className={`badge text-xs ${statusBadge(status)}`}>{prettyStatus(status)}</span>
-                    </td>
-                    <td className="table-cell">
-                      <div className="flex items-center justify-end gap-2">
-                        {actionable && (
-                          <>
-                            <button
-                              onClick={() => start(a)}
-                              disabled={rowBusy}
-                              className="btn-primary text-xs inline-flex items-center gap-1.5 disabled:opacity-50"
-                            >
-                              <Play size={13} /> Start
-                            </button>
-                            <button
-                              onClick={() => handleSkip(a)}
-                              disabled={rowBusy}
-                              className="btn-secondary text-xs inline-flex items-center gap-1.5 disabled:opacity-50"
-                              title="Skip this assignment"
-                            >
-                              {rowBusy ? <RefreshCw size={13} className="animate-spin" /> : <SkipForward size={13} />} Skip
-                            </button>
-                          </>
-                        )}
-                        {status === 'completed' && (
-                          a.submission_id ? (
-                            <Link
-                              to={`/checklists/submission/${a.submission_id}`}
-                              className="btn-secondary text-xs inline-flex items-center gap-1.5"
-                            >
-                              <Eye size={13} /> View
-                            </Link>
-                          ) : (
-                            <span className="text-xs text-[var(--text-muted)] inline-flex items-center gap-1.5">
-                              <CheckCircle2 size={13} className="text-green-400" /> Done
-                            </span>
-                          )
-                        )}
-                        {status === 'skipped' && (
-                          <button
-                            onClick={() => start(a)}
-                            className="btn-secondary text-xs inline-flex items-center gap-1.5"
-                            title="Run this checklist anyway"
-                          >
-                            <Play size={13} /> Run anyway
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-          <TablePagination {...assignmentsPager} />
-        </div>
+      {/* Assignment register */}
+      {!missing && !error && (loading || decorated.length > 0) && (
+        <EnterpriseTable
+          columns={columns}
+          data={visible}
+          getRowId={(a) => String(a.id)}
+          loading={loading}
+          enableGlobalFilter={false}
+          enableColumnFilters={false}
+          enableExport={false}
+          initialPageSize={25}
+          emptyMessage={filtersActive
+            ? 'No assignments match these filters. Clear the search or filters to see more.'
+            : tab === 'todo' ? 'Nothing is due. You are all caught up.' : 'No assignments in this view. Try the To do tab.'}
+        />
       )}
 
       {/* ── Checklists written for this trade ──
@@ -588,10 +554,11 @@ export default function MyChecklists() {
                   </span>
                 )}
                 <button
+                  type="button"
                   onClick={() => navigate(`/checklists/${tpl.id}/run`)}
-                  className="btn-primary text-sm inline-flex items-center gap-2 justify-center mt-4"
+                  className="btn-primary text-sm min-h-[44px] inline-flex items-center gap-2 justify-center mt-4"
                 >
-                  <Play size={15} /> Fill
+                  <Play size={15} aria-hidden="true" /> Fill<span className="sr-only"> {tpl.name || 'checklist'}</span>
                 </button>
               </div>
             ))}

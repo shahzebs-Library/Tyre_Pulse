@@ -18,12 +18,12 @@ import {
 import { Bar, Line } from 'react-chartjs-2'
 import {
   Wrench, Wallet, ListChecks, TrendingUp, PieChart, Building2, Truck,
-  Download, RefreshCw, Eye, EyeOff, FileSpreadsheet,
+  Download, RefreshCw, Eye, EyeOff, FileSpreadsheet, AlertTriangle,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import DateField from '../components/ui/DateField'
 import FilterBar from '../components/ui/FilterBar'
-import { TablePagination, usePagedRows } from '../components/ui/TablePagination'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useFilterState } from '../hooks/useFilterState'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatCurrency } from '../lib/formatters'
@@ -33,6 +33,10 @@ import {
   mtkpis, taskChart, actionChart, workTypeSpendChart, siteSpendChart,
   assetSpendChart, monthlySpendChart, buildMaintenanceRecommendations,
 } from '../lib/maintenanceBoard'
+import {
+  buildDetailRows, detailSiteOptions, filterDetails, boardInsights, DETAIL_TYPES, DETAIL_TYPE_LABEL,
+} from '../lib/maintenanceCostBoardAnalytics'
+import { compareValues } from '../lib/consoleTable'
 import { stylize, ACCENTS } from '../lib/reportColors'
 import { reportFileName, reportDateLabel, exportToExcel } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
@@ -61,13 +65,17 @@ const chartBase = (legend = false, horizontal = false) => ({
   layout: { padding: { top: 8 } },
   plugins: {
     legend: { display: legend, labels: { color: 'var(--text-secondary)', boxWidth: 12, font: { size: 11 } } },
-    tooltip: { backgroundColor: 'var(--panel-2)', titleColor: 'var(--panel-ink)', bodyColor: '#9ca3af', borderColor: 'var(--hairline)', borderWidth: 1 },
+    tooltip: { backgroundColor: 'var(--panel-2)', titleColor: 'var(--panel-ink)', bodyColor: 'var(--text-secondary)', borderColor: 'var(--hairline)', borderWidth: 1 },
   },
   scales: {
-    x: { ticks: { color: '#6b7280', font: { size: 10 } }, grid: { color: 'rgba(148,163,184,0.12)' }, beginAtZero: true },
-    y: { ticks: { color: '#6b7280', font: { size: 10 } }, grid: { color: 'rgba(148,163,184,0.12)' }, beginAtZero: true },
+    x: { ticks: { color: 'var(--text-muted)', font: { size: 10 } }, grid: { color: 'rgba(148,163,184,0.12)' }, beginAtZero: true },
+    y: { ticks: { color: 'var(--text-muted)', font: { size: 10 } }, grid: { color: 'rgba(148,163,184,0.12)' }, beginAtZero: true },
   },
 })
+
+// Sort by the value, blanks last whatever the direction (consoleTable rules).
+const valueSort = (a, b, id) => compareValues(a.getValue(id), b.getValue(id))
+const blankToUndef = (v) => (v === null || v === undefined || v === '' ? undefined : v)
 
 /** Colourful KPI tile. */
 function Kpi({ label, value, accent = ACCENTS.primary, sub }) {
@@ -80,14 +88,22 @@ function Kpi({ label, value, accent = ACCENTS.primary, sub }) {
   )
 }
 
-function ChartCard({ title, children, refCb, height = 240 }) {
+function ChartCard({ title, children, refCb, height = 240, empty = false }) {
   return (
     <div className="card">
       <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">{title}</h3>
-      <div style={{ height }} ref={refCb}>{children}</div>
+      {empty ? (
+        <div style={{ height }} className="flex items-center justify-center text-sm text-[var(--text-muted)]" role="status">
+          No data for this breakdown in the selected scope.
+        </div>
+      ) : (
+        <div style={{ height }} ref={refCb} role="img" aria-label={title}>{children}</div>
+      )}
     </div>
   )
 }
+
+const pct = (v) => (v == null ? 'N/A' : `${v.toFixed(1)}%`)
 
 export default function MaintenanceCostBoard() {
   const [filters, setFilter, resetFilters, hasActiveFilters] = useFilterState(FILTER_DEFAULTS)
@@ -158,18 +174,55 @@ export default function MaintenanceCostBoard() {
   const recs = useMemo(() => buildMaintenanceRecommendations(snapshot), [snapshot])
 
   const hasAny = hasData && (k.jobCards || k.lineItems || k.totalSpend)
-  const detailRows = useMemo(() => [
-    ...(snapshot?.top_tasks || []).map((r, index) => ({ id: `task-${index}-${r?.label}`, type: 'task', name: String(r?.label ?? '') || 'N/A', site: '', jobs: null, occurrences: Number(r?.n) || 0, spend: null })),
-    ...(snapshot?.spend_by_site || []).map((r, index) => ({ id: `site-${index}-${r?.label}`, type: 'site', name: String(r?.label ?? '') || 'N/A', site: String(r?.label ?? '') || 'N/A', jobs: Number(r?.jobs) || 0, occurrences: null, spend: Number(r?.spend) || 0 })),
-  ], [snapshot])
-  const siteOptions = useMemo(() => [...new Set(detailRows.map((r) => r.site).filter(Boolean))].sort(), [detailRows])
-  const filteredDetails = useMemo(() => {
-    const q = filters.q.trim().toLowerCase()
-    return detailRows.filter((row) => (!q || `${row.name} ${row.site}`.toLowerCase().includes(q))
-      && (!filters.rowType || row.type === filters.rowType)
-      && (!filters.site || row.site === filters.site))
-  }, [detailRows, filters.q, filters.rowType, filters.site])
-  const detailPager = usePagedRows(filteredDetails)
+  const insights = useMemo(() => boardInsights(snapshot), [snapshot])
+  const detailRows = useMemo(() => buildDetailRows(snapshot), [snapshot])
+  const siteOptions = useMemo(() => detailSiteOptions(detailRows), [detailRows])
+  const filteredDetails = useMemo(
+    () => filterDetails(detailRows, { q: filters.q, rowType: filters.rowType, site: filters.site }),
+    [detailRows, filters.q, filters.rowType, filters.site],
+  )
+
+  const detailColumns = useMemo(() => [
+    {
+      id: 'type', header: 'Type', accessorFn: (r) => DETAIL_TYPE_LABEL[r.type] || r.type, size: 140, sortingFn: valueSort,
+      cell: ({ getValue }) => <span className="text-[var(--text-secondary)]">{getValue()}</span>,
+    },
+    {
+      id: 'name', header: 'Name', accessorFn: (r) => blankToUndef(r.name), size: 260, sortingFn: valueSort, sortUndefined: 'last',
+      cell: ({ getValue }) => <span className="text-[var(--text-primary)] font-medium">{getValue() ?? 'N/A'}</span>,
+    },
+    {
+      id: 'jobs', header: 'Jobs', accessorFn: (r) => blankToUndef(r.jobs), size: 100, sortingFn: valueSort, sortUndefined: 'last',
+      cell: ({ getValue }) => <span className="tabular-nums">{num(getValue())}</span>,
+      meta: { align: 'right', exportValue: (r) => (r.jobs == null ? 'N/A' : r.jobs) },
+    },
+    {
+      id: 'occurrences', header: 'Occurrences', accessorFn: (r) => blankToUndef(r.occurrences), size: 120, sortingFn: valueSort, sortUndefined: 'last',
+      cell: ({ getValue }) => <span className="tabular-nums">{num(getValue())}</span>,
+      meta: { align: 'right', exportValue: (r) => (r.occurrences == null ? 'N/A' : r.occurrences) },
+    },
+    {
+      id: 'spend', header: 'Spend', accessorFn: (r) => blankToUndef(r.spend), size: 140, sortingFn: valueSort, sortUndefined: 'last',
+      cell: ({ getValue }) => <span className="tabular-nums">{money0(getValue())}</span>,
+      meta: { align: 'right', exportValue: (r) => (r.spend == null ? 'N/A' : r.spend) },
+    },
+    {
+      id: 'share', header: 'Share of spend', accessorFn: (r) => blankToUndef(r.sharePct), size: 150, sortingFn: valueSort, sortUndefined: 'last',
+      cell: ({ getValue }) => {
+        const v = getValue()
+        if (v == null) return <span className="text-[var(--text-muted)]">N/A</span>
+        return (
+          <div className="flex items-center gap-2 justify-end">
+            <div className="w-16 h-1.5 rounded-full bg-[var(--input-bg)] overflow-hidden" aria-hidden="true">
+              <div className="h-full bg-[var(--accent)]" style={{ width: `${Math.min(100, v)}%` }} />
+            </div>
+            <span className="tabular-nums">{pct(v)}</span>
+          </div>
+        )
+      },
+      meta: { align: 'right', exportValue: (r) => (r.sharePct == null ? 'N/A' : r.sharePct) },
+    },
+  ], [money0])
 
   // Build the PDF doc. Mirrors BoardOverview.buildBoardDoc (chart capture on paper).
   async function buildBoardDoc() {
@@ -242,9 +295,15 @@ export default function MaintenanceCostBoard() {
       const company = appSettings?.company_name || 'TyrePulse'
       const taskRows = (snapshot.top_tasks || []).map((r) => ({ task: String(r?.label ?? ''), occurrences: Number(r?.n) || 0 }))
       const siteRows = (snapshot.spend_by_site || []).map((r) => ({ site: String(r?.label ?? ''), jobs: Number(r?.jobs) || 0, spend: Number(r?.spend) || 0 }))
+      const actionRows = (snapshot.top_actions || []).map((r) => ({ section: 'Corrective action', name: String(r?.label ?? ''), jobs: '', occurrences: Number(r?.n) || 0, spend: '' }))
+      const typeRows = (snapshot.by_work_type || []).map((r) => ({ section: 'Work type spend', name: String(r?.label ?? ''), jobs: r?.jobs ?? '', occurrences: '', spend: Number(r?.spend) || 0 }))
+      const assetRows = (snapshot.spend_by_asset || []).map((r) => ({ section: 'Asset spend', name: String(r?.label ?? ''), jobs: r?.jobs ?? '', occurrences: '', spend: Number(r?.spend) || 0 }))
       const rows = [
         ...taskRows.map((r) => ({ section: 'Top task', name: r.task, jobs: '', occurrences: r.occurrences, spend: '' })),
+        ...actionRows,
+        ...typeRows,
         ...siteRows.map((r) => ({ section: 'Site spend', name: r.site, jobs: r.jobs, occurrences: '', spend: r.spend })),
+        ...assetRows,
       ]
       await exportToExcel(
         rows,
@@ -269,7 +328,7 @@ export default function MaintenanceCostBoard() {
         searchLabel="Search maintenance task and site details"
         placeholder="Search task or site"
         selects={[
-          { key: 'rowType', value: filters.rowType, onChange: (value) => setFilter('rowType', value), placeholder: 'All detail types', ariaLabel: 'Filter maintenance details by type', options: [{ value: 'task', label: 'Tasks' }, { value: 'site', label: 'Sites' }] },
+          { key: 'rowType', value: filters.rowType, onChange: (value) => setFilter('rowType', value), placeholder: 'All detail types', ariaLabel: 'Filter maintenance details by type', options: DETAIL_TYPES },
           { key: 'site', value: filters.site, onChange: (value) => setFilter('site', value), placeholder: 'All sites', ariaLabel: 'Filter maintenance details by site', options: siteOptions.map((value) => ({ value, label: value })) },
         ]}
         resultCount={filteredDetails.length}
@@ -285,31 +344,45 @@ export default function MaintenanceCostBoard() {
           {SECTIONS.map(([key, label, Icon]) => (
             <button
               key={key}
+              type="button"
               onClick={() => toggle(key)}
-              className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${sections[key] ? 'bg-[var(--accent)]/15 text-[var(--accent)] border-[var(--accent)]/30' : 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)]'}`}
+              aria-pressed={!!sections[key]}
+              className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 min-h-[44px] rounded-lg border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] ${sections[key] ? 'bg-[var(--accent)]/15 text-[var(--accent)] border-[var(--accent)]/30' : 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)]'}`}
             >
-              <Icon size={13} /> {label} {sections[key] ? <Eye size={12} /> : <EyeOff size={12} />}
+              <Icon size={13} aria-hidden="true" /> {label} {sections[key] ? <Eye size={12} aria-hidden="true" /> : <EyeOff size={12} aria-hidden="true" />}
+              <span className="sr-only">{sections[key] ? '(shown)' : '(hidden)'}</span>
             </button>
           ))}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {updatedAt && <span className="text-[11px] text-[var(--text-muted)]">Updated {updatedAt.toLocaleTimeString()}</span>}
-          <button onClick={load} disabled={refreshing} className="btn-secondary text-sm px-3 py-1.5 inline-flex items-center gap-1.5 disabled:opacity-50">
+          <button type="button" onClick={load} disabled={refreshing} className="btn-secondary text-sm px-3 min-h-[44px] inline-flex items-center gap-1.5 disabled:opacity-50">
             <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} /> Refresh
           </button>
-          <button onClick={exportExcel} disabled={!hasAny} className="btn-secondary text-sm px-3 py-1.5 inline-flex items-center gap-1.5 disabled:opacity-50">
+          <button type="button" onClick={exportExcel} disabled={!hasAny} className="btn-secondary text-sm px-3 min-h-[44px] inline-flex items-center gap-1.5 disabled:opacity-50">
             <FileSpreadsheet size={14} /> Export Excel
           </button>
-          <button onClick={exportPdf} disabled={exporting || !hasAny} className="btn-primary text-sm px-3 py-1.5 inline-flex items-center gap-1.5 disabled:opacity-50">
+          <button type="button" onClick={exportPdf} disabled={exporting || !hasAny} className="btn-primary text-sm px-3 min-h-[44px] inline-flex items-center gap-1.5 disabled:opacity-50">
             <Download size={14} /> {exporting ? 'Preparing...' : 'Export PDF'}
           </button>
         </div>
       </div>
 
-      {error && <div className="card border border-red-700/50 text-red-300 text-sm">{error}</div>}
+      {error && (
+        <div role="alert" className="card border border-red-700/50 flex items-start gap-3">
+          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-[var(--text-primary)]">The maintenance board could not be loaded.</p>
+            <p className="text-sm text-[var(--text-muted)] mt-1">{error}</p>
+          </div>
+          <button type="button" onClick={load} className="btn-secondary text-sm px-3 min-h-[44px] inline-flex items-center gap-1.5">
+            <RefreshCw size={14} aria-hidden="true" /> Retry
+          </button>
+        </div>
+      )}
       {loading ? (
-        <div className="card text-center text-[var(--text-muted)] py-10">Loading the maintenance board...</div>
-      ) : !hasAny ? (
+        <div className="card text-center text-[var(--text-muted)] py-10" role="status">Loading the maintenance board...</div>
+      ) : error && !hasData ? null : !hasAny ? (
         <div className="card text-center text-[var(--text-muted)] py-10">No maintenance data yet for the selected scope. Work orders will appear here as they are captured.</div>
       ) : (
         <>
@@ -322,7 +395,12 @@ export default function MaintenanceCostBoard() {
                 <Kpi label="Total spend" value={money0(k.totalSpend)} accent={ACCENTS.watch} />
                 <Kpi label="Avg job cost" value={money0(k.avgJobCost)} accent={ACCENTS.good} />
                 <Kpi label="Tyre-related lines" value={num(k.tyreLines)} accent={ACCENTS.info} />
-                <Kpi label="Open jobs" value={num(k.openJobs)} accent={ACCENTS.risk} />
+                <Kpi label="Open jobs" value={num(k.openJobs)} accent={ACCENTS.risk} sub={insights.openJobSharePct == null ? undefined : `${pct(insights.openJobSharePct)} of job cards`} />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <Kpi label="Repair share of spend" value={pct(insights.repairSharePct)} accent={ACCENTS.watch} sub="Repair work types against all work type spend" />
+                <Kpi label="Tyre share of line items" value={pct(insights.tyreLineSharePct)} accent={ACCENTS.info} sub="Tyre-related lines against all line items" />
+                <Kpi label="Highest-spend site" value={insights.topSite || 'N/A'} accent={ACCENTS.primary} sub={insights.topSiteSharePct == null ? 'No site spend recorded' : `${pct(insights.topSiteSharePct)} of site spend`} />
               </div>
             </section>
           )}
@@ -332,7 +410,7 @@ export default function MaintenanceCostBoard() {
             <section className="space-y-3">
               <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2"><PieChart size={15} /> Spend by work type</h2>
               <div className="grid grid-cols-1 gap-4">
-                <ChartCard title="Spend by work type" refCb={setRef('workType')}>
+                <ChartCard title="Spend by work type" refCb={setRef('workType')} empty={!charts.workType.labels.length}>
                   <Bar data={stylize(charts.workType, 'bar')} options={chartBase(false)} />
                 </ChartCard>
               </div>
@@ -344,46 +422,32 @@ export default function MaintenanceCostBoard() {
             <section className="space-y-3">
               <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2"><ListChecks size={15} /> Top tasks and actions</h2>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <ChartCard title="Top maintenance tasks" refCb={setRef('tasks')} height={360}>
+                <ChartCard title="Top maintenance tasks" refCb={setRef('tasks')} height={360} empty={!charts.tasks.labels.length}>
                   <Bar data={stylize(charts.tasks, 'bar')} options={chartBase(false, true)} />
                 </ChartCard>
-                <ChartCard title="Top corrective actions" refCb={setRef('actions')} height={360}>
+                <ChartCard title="Top corrective actions" refCb={setRef('actions')} height={360} empty={!charts.actions.labels.length}>
                   <Bar data={stylize(charts.actions, 'bar')} options={chartBase(false, true)} />
                 </ChartCard>
               </div>
-              <div className="card p-0 overflow-hidden">
-                <h3 className="text-sm font-semibold text-[var(--text-primary)] p-4 border-b border-[var(--hairline)]">Task and site details</h3>
-                {detailRows.length === 0 ? (
-                  <p className="text-sm text-[var(--text-muted)] p-4">No task or site data exists for the selected scope.</p>
-                ) : filteredDetails.length === 0 ? (
-                  <p className="text-sm text-[var(--text-muted)] p-4" role="status">No maintenance details match these filters. Clear or change the search, type, or site.</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-left text-[var(--text-muted)] border-b border-[var(--hairline)]">
-                        <th className="py-2 px-4 font-semibold">Type</th>
-                        <th className="py-2 pr-3 font-semibold">Name</th>
-                        <th className="py-2 pr-3 font-semibold text-right">Jobs</th>
-                        <th className="py-2 pr-3 font-semibold text-right">Occurrences</th>
-                        <th className="py-2 pr-4 font-semibold text-right">Spend</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {detailPager.pageRows.map((r) => (
-                        <tr key={r.id} className="border-b border-[var(--hairline)]/50">
-                          <td className="py-1.5 px-4 text-[var(--text-dim)] capitalize">{r.type}</td>
-                          <td className="py-1.5 pr-3 text-[var(--text-secondary)]">{r.name}</td>
-                          <td className="py-1.5 pr-3 text-right text-[var(--text-primary)]">{r.jobs == null ? 'N/A' : num(r.jobs)}</td>
-                          <td className="py-1.5 pr-3 text-right text-[var(--text-primary)]">{r.occurrences == null ? 'N/A' : num(r.occurrences)}</td>
-                          <td className="py-1.5 pr-4 text-right text-[var(--text-primary)]">{r.spend == null ? 'N/A' : money0(r.spend)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  </div>
-                )}
-                <TablePagination {...detailPager} />
+              <div className="space-y-2">
+                <h3 className="text-sm font-semibold text-[var(--text-primary)]">Maintenance breakdown register</h3>
+                <p className="text-xs text-[var(--text-muted)]">
+                  Every task, corrective action, work type, site and asset from the snapshot in one sortable register.
+                  Share of spend compares a row with the others of the same type.
+                </p>
+                <EnterpriseTable
+                  columns={detailColumns}
+                  data={filteredDetails}
+                  getRowId={(r) => r.id}
+                  enableGlobalFilter={false}
+                  enableColumnFilters={false}
+                  initialPageSize={25}
+                  exportFileName={reportFileName(appSettings?.company_name || 'TyrePulse', 'Maintenance Breakdown', reportDateLabel())}
+                  reportMeta={{ title: 'Maintenance breakdown register', company: appSettings?.company_name, currency: activeCurrency }}
+                  emptyMessage={detailRows.length === 0
+                    ? 'No task, action, work type, site or asset data exists for the selected scope.'
+                    : 'No maintenance details match these filters. Clear or change the search, type, or site.'}
+                />
               </div>
             </section>
           )}
@@ -393,7 +457,7 @@ export default function MaintenanceCostBoard() {
             <section className="space-y-3">
               <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2"><Building2 size={15} /> Spend by site</h2>
               <div className="grid grid-cols-1 gap-4">
-                <ChartCard title="Spend by site" refCb={setRef('sites')} height={300}>
+                <ChartCard title="Spend by site" refCb={setRef('sites')} height={300} empty={!charts.sites.labels.length}>
                   <Bar data={stylize(charts.sites, 'bar')} options={chartBase(false)} />
                 </ChartCard>
               </div>
@@ -405,7 +469,7 @@ export default function MaintenanceCostBoard() {
             <section className="space-y-3">
               <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2"><Truck size={15} /> Spend by asset</h2>
               <div className="grid grid-cols-1 gap-4">
-                <ChartCard title="Highest-spend assets" refCb={setRef('assets')} height={360}>
+                <ChartCard title="Highest-spend assets" refCb={setRef('assets')} height={360} empty={!charts.assets.labels.length}>
                   <Bar data={stylize(charts.assets, 'bar')} options={chartBase(false, true)} />
                 </ChartCard>
               </div>
@@ -417,7 +481,7 @@ export default function MaintenanceCostBoard() {
             <section className="space-y-3">
               <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2"><TrendingUp size={15} /> Maintenance spend, last 12 months</h2>
               <div className="grid grid-cols-1 gap-4">
-                <ChartCard title="Monthly spend" refCb={setRef('monthly')} height={280}>
+                <ChartCard title="Monthly spend" refCb={setRef('monthly')} height={280} empty={!charts.monthly.labels.length}>
                   <Line data={stylize(charts.monthly, 'area')} options={chartBase(false)} />
                 </ChartCard>
               </div>

@@ -1,6 +1,6 @@
-import { X, Download } from 'lucide-react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { Download } from 'lucide-react'
 import { downloadChartPng } from '../lib/chartCapture'
+import Modal from './ui/Modal'
 
 const GRANULARITY_OPTIONS = ['Daily', 'Weekly', 'Monthly', 'Yearly']
 const MONTHS = [
@@ -14,10 +14,12 @@ function generateYears(count = 5) {
 }
 
 /**
- * ChartModal - fullscreen chart enlargement with optional filter controls.
+ * ChartModal - enlarged chart view with optional filter controls, on the shared
+ * Modal shell (focus trap, Escape, backdrop close, viewport sizing, theme tokens).
  *
  * Props:
- *   open            boolean
+ *   open            boolean. Defaults to true, so a caller that mounts the modal
+ *                   conditionally ({expanded && <ChartModal ...>}) still shows it.
  *   onClose         () => void
  *   title           string
  *   children        JSX  (the chart element)
@@ -31,7 +33,7 @@ function generateYears(count = 5) {
  *   showBrand       boolean (default true when brands provided)
  */
 export function ChartModal({
-  open,
+  open = true,
   onClose,
   title,
   children,
@@ -61,7 +63,7 @@ export function ChartModal({
     try {
       downloadChartPng(chartRef.current, title || 'chart')
     } catch {
-      // silently ignore if chart ref not ready
+      // chart ref not ready yet; nothing to download
     }
   }
 
@@ -69,127 +71,83 @@ export function ChartModal({
     if (onFilterChange) onFilterChange(key, value)
   }
 
+  const hasFilters = showGranularity || filters.year !== undefined
+    || (showSite && sites.length > 0) || (showBrand && brands.length > 0)
+  const selectCls = 'input py-1 px-2 text-sm min-h-[44px]'
+
   return (
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          key="chart-modal-overlay"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.18 }}
-          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-6"
-          onClick={onClose}
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={title}
+      size="xl"
+      headerExtra={chartRef ? (
+        <button
+          type="button"
+          onClick={handleDownloadPng}
+          aria-label="Download chart as PNG"
+          title="Download PNG"
+          className="shrink-0 inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg transition-colors hover:bg-[var(--surface-2)]"
+          style={{ color: 'var(--text-secondary)' }}
         >
-          <motion.div
-            key="chart-modal-card"
-            initial={{ opacity: 0, scale: 0.95, y: 16 }}
-            animate={{ opacity: 1, scale: 1,   y: 0  }}
-            exit={{ opacity: 0, scale: 0.95,   y: 16 }}
-            transition={{ duration: 0.2, ease: 'easeOut' }}
-            className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-5xl flex flex-col max-h-[90vh]"
-            onClick={e => e.stopPropagation()}
-          >
-            {/* Header row */}
-            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-800 flex-shrink-0">
-              <h2 className="text-lg font-semibold text-white">{title}</h2>
-              <div className="flex items-center gap-2">
+          <Download size={16} aria-hidden="true" />
+        </button>
+      ) : null}
+    >
+      {hasFilters && (
+        <div className="flex flex-wrap items-center gap-3 pb-3 mb-3 border-b border-[var(--border)]" role="group" aria-label="Chart filters">
+          {showGranularity && (
+            <div className="flex flex-wrap gap-1" role="group" aria-label="Granularity">
+              {GRANULARITY_OPTIONS.map(g => (
                 <button
-                  onClick={handleDownloadPng}
-                  title="Download PNG"
-                  className="text-gray-400 hover:text-white transition-colors p-1 rounded hover:bg-gray-800"
+                  key={g}
+                  type="button"
+                  aria-pressed={granularity === g}
+                  onClick={() => change('granularity', g)}
+                  className={`px-3 min-h-[44px] rounded-lg text-xs font-medium transition-colors ${
+                    granularity === g ? 'btn-primary' : 'btn-secondary'
+                  }`}
                 >
-                  <Download size={16} />
+                  {g}
                 </button>
-                <button
-                  onClick={onClose}
-                  title="Close"
-                  className="text-gray-400 hover:text-white transition-colors p-1 rounded hover:bg-gray-800"
-                >
-                  <X size={20} />
-                </button>
-              </div>
+              ))}
             </div>
+          )}
 
-            {/* Filter bar */}
-            {(showGranularity || filters.year !== undefined || (showSite && sites.length > 0) || (showBrand && brands.length > 0)) && (
-              <div className="flex flex-wrap items-center gap-3 px-6 py-3 border-b border-gray-800 flex-shrink-0 bg-gray-900/60">
+          {filters.year !== undefined && (
+            <select aria-label="Year" value={filters.year} onChange={e => change('year', Number(e.target.value))} className={`${selectCls} w-28`}>
+              {years.map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+          )}
 
-                {/* Granularity pills */}
-                {showGranularity && (
-                  <div className="flex gap-1">
-                    {GRANULARITY_OPTIONS.map(g => (
-                      <button
-                        key={g}
-                        onClick={() => change('granularity', g)}
-                        className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
-                          granularity === g
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
-                        }`}
-                      >
-                        {g}
-                      </button>
-                    ))}
-                  </div>
-                )}
+          {displayMonth && filters.month !== undefined && (
+            <select aria-label="Month" value={filters.month} onChange={e => change('month', Number(e.target.value))} className={`${selectCls} w-36`}>
+              <option value={0}>All Months</option>
+              {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+            </select>
+          )}
 
-                {/* Year */}
-                {filters.year !== undefined && (
-                  <select
-                    value={filters.year}
-                    onChange={e => change('year', Number(e.target.value))}
-                    className="input py-1 px-2 text-xs h-7 w-24"
-                  >
-                    {years.map(y => <option key={y} value={y}>{y}</option>)}
-                  </select>
-                )}
+          {showSite && sites.length > 0 && (
+            <select aria-label="Site" value={filters.site || ''} onChange={e => change('site', e.target.value)} className={`${selectCls} w-40`}>
+              <option value="">All Sites</option>
+              {sites.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          )}
 
-                {/* Month (conditional) */}
-                {displayMonth && filters.month !== undefined && (
-                  <select
-                    value={filters.month}
-                    onChange={e => change('month', Number(e.target.value))}
-                    className="input py-1 px-2 text-xs h-7 w-28"
-                  >
-                    <option value={0}>All Months</option>
-                    {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
-                  </select>
-                )}
-
-                {/* Site */}
-                {showSite && sites.length > 0 && (
-                  <select
-                    value={filters.site || ''}
-                    onChange={e => change('site', e.target.value)}
-                    className="input py-1 px-2 text-xs h-7 w-36"
-                  >
-                    <option value="">All Sites</option>
-                    {sites.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                )}
-
-                {/* Brand */}
-                {showBrand && brands.length > 0 && (
-                  <select
-                    value={filters.brand || ''}
-                    onChange={e => change('brand', e.target.value)}
-                    className="input py-1 px-2 text-xs h-7 w-36"
-                  >
-                    <option value="">All Brands</option>
-                    {brands.map(b => <option key={b} value={b}>{b}</option>)}
-                  </select>
-                )}
-              </div>
-            )}
-
-            {/* Chart area */}
-            <div className="flex-1 min-h-0 p-6">
-              {children}
-            </div>
-          </motion.div>
-        </motion.div>
+          {showBrand && brands.length > 0 && (
+            <select aria-label="Brand" value={filters.brand || ''} onChange={e => change('brand', e.target.value)} className={`${selectCls} w-40`}>
+              <option value="">All Brands</option>
+              {brands.map(b => <option key={b} value={b}>{b}</option>)}
+            </select>
+          )}
+        </div>
       )}
-    </AnimatePresence>
+
+      {/* A bare chart (maintainAspectRatio false) sizes to this area; callers that
+          wrap their chart in their own fixed-height box simply grow past it. */}
+      <div className="relative w-full" style={{ minHeight: 'max(260px, min(50vh, 420px))' }}>
+        {children}
+      </div>
+    </Modal>
   )
 }

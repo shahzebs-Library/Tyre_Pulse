@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   Bookmark, ChevronDown, ChevronRight, Trash2, Pencil, Eye, EyeOff,
   Loader2, RefreshCw, ArrowRight, AlertCircle,
@@ -6,6 +6,10 @@ import {
 import * as imports from '../../lib/api/imports'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { toUserMessage } from '../../lib/safeError'
+import EnterpriseTable from '../ui/EnterpriseTable'
+import { compareValues, isBlank } from '../../lib/consoleTable'
+
+const valueSort = (a, b, id) => compareValues(a.getValue(id), b.getValue(id))
 
 /**
  * Saved Mappings manager — browse, inspect and manage the reusable column-mapping
@@ -35,12 +39,18 @@ export default function MappingProfilesManager({ moduleLabels = {}, onApply }) {
   }, [t])
   useEffect(() => { load() }, [load])
 
+  async function retryRules(id) {
+    setRules((p) => { const n = { ...p }; delete n[id]; return n })
+    try { const r = await imports.getProfileRules(id); setRules((p) => ({ ...p, [id]: r || [] })) }
+    catch (e) { setRules((p) => ({ ...p, [id]: { error: toUserMessage(e, 'The column rules could not be loaded.') } })) }
+  }
+
   async function toggleExpand(id) {
     if (expanded === id) { setExpanded(null); return }
     setExpanded(id)
     if (!rules[id]) {
       try { const r = await imports.getProfileRules(id); setRules((p) => ({ ...p, [id]: r || [] })) }
-      catch { setRules((p) => ({ ...p, [id]: [] })) }
+      catch (e) { setRules((p) => ({ ...p, [id]: { error: toUserMessage(e, 'The column rules could not be loaded.') } })) }
     }
   }
   async function rename(p) {
@@ -60,6 +70,25 @@ export default function MappingProfilesManager({ moduleLabels = {}, onApply }) {
     catch (e) { setError(toUserMessage(e)) } finally { setBusyId(null) }
   }
 
+  const keptAsExtra = t('intake.panels.profiles.keptAsExtra')
+  const ruleColumns = useMemo(() => [
+    {
+      id: 'source_header', header: t('intake.panels.profiles.sourceColumn'),
+      accessorFn: (r) => (isBlank(r.source_header) ? undefined : r.source_header),
+      sortingFn: valueSort, sortUndefined: 'last',
+      cell: ({ getValue }) => <span className="text-[var(--text-secondary)]">{getValue() ?? 'N/A'}</span>,
+    },
+    {
+      id: 'target_field', header: t('intake.panels.profiles.mappedTo'),
+      accessorFn: (r) => (isBlank(r.target_field) ? undefined : r.target_field),
+      sortingFn: valueSort, sortUndefined: 'last',
+      meta: { exportValue: (r) => r.target_field || keptAsExtra },
+      cell: ({ getValue }) => (getValue()
+        ? <span className="text-[var(--text-primary)]">{getValue()}</span>
+        : <span className="text-amber-500">{keptAsExtra}</span>),
+    },
+  ], [t, keptAsExtra])
+
   const count = profiles?.length ?? 0
   const groups = {}
   for (const p of profiles || []) (groups[p.module] ||= []).push(p)
@@ -68,33 +97,40 @@ export default function MappingProfilesManager({ moduleLabels = {}, onApply }) {
 
   return (
     <div className="card p-0 overflow-hidden">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-gray-800/40 transition-colors"
-      >
-        {open ? <ChevronDown size={16} className="text-gray-400" /> : <ChevronRight size={16} className="text-gray-400" />}
-        <Bookmark size={16} className="text-[var(--accent)]" />
-        <span className="text-sm font-semibold text-[var(--text-primary)]">{t('intake.panels.profiles.header')}</span>
-        <span className="text-xs text-[var(--text-muted)] bg-gray-800 rounded-full px-2 py-0.5">{profiles == null ? '…' : count}</span>
-        <span className="ml-auto" />
-        <RefreshCw
-          size={14}
-          className="text-gray-500 hover:text-gray-300"
-          onClick={(e) => { e.stopPropagation(); load() }}
+      <div className="flex items-center gap-1 pr-2 hover:bg-[var(--surface-2)] transition-colors">
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          className="flex-1 min-w-0 min-h-[44px] flex items-center gap-2 px-4 py-3 text-left"
+        >
+          {open ? <ChevronDown size={16} className="text-[var(--text-muted)]" aria-hidden="true" /> : <ChevronRight size={16} className="text-[var(--text-muted)]" aria-hidden="true" />}
+          <Bookmark size={16} className="text-[var(--accent)]" aria-hidden="true" />
+          <span className="text-sm font-semibold text-[var(--text-primary)]">{t('intake.panels.profiles.header')}</span>
+          <span className="text-xs text-[var(--text-muted)] bg-[var(--surface-2)] rounded-full px-2 py-0.5">{profiles == null ? '…' : count}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => load()}
           title={t('intake.panels.profiles.refresh')}
-        />
-      </button>
+          aria-label={t('intake.panels.profiles.refresh')}
+          className="shrink-0 inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+        >
+          <RefreshCw size={14} aria-hidden="true" />
+        </button>
+      </div>
 
       {open && (
         <div className="border-t border-[var(--card-border)] p-4 space-y-4">
           {error && (
-            <div className="flex items-center gap-2 text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg px-3 py-2">
-              <AlertCircle size={15} /> {error}
+            <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-[var(--text-primary)] bg-red-500/10 border border-red-500/40 rounded-lg px-3 py-2">
+              <AlertCircle size={15} className="text-red-500" aria-hidden="true" /> <span className="flex-1">{error}</span>
+              <button type="button" onClick={() => load()} className="btn-secondary text-xs px-3 min-h-[44px]">Retry</button>
             </div>
           )}
 
           {profiles == null && (
-            <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]"><Loader2 size={15} className="animate-spin" /> {t('intake.panels.profiles.loading')}</div>
+            <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]"><Loader2 size={15} className="animate-spin" aria-hidden="true" /> {t('intake.panels.profiles.loading')}</div>
           )}
 
           {profiles != null && count === 0 && !error && (
@@ -110,23 +146,23 @@ export default function MappingProfilesManager({ moduleLabels = {}, onApply }) {
               </div>
               <div className="space-y-1.5">
                 {list.map((p) => (
-                  <div key={p.id} className={`rounded-lg border ${p.active ? 'border-[var(--card-border)]' : 'border-dashed border-gray-700 opacity-70'} bg-gray-900/40`}>
+                  <div key={p.id} className={`rounded-lg border ${p.active ? 'border-[var(--card-border)]' : 'border-dashed border-[var(--border)] opacity-70'} bg-[var(--surface-2)]`}>
                     <div className="flex items-center gap-2 px-3 py-2">
-                      <button onClick={() => toggleExpand(p.id)} className="flex items-center gap-2 min-w-0 flex-1 text-left">
-                        {expanded === p.id ? <ChevronDown size={14} className="text-gray-500 shrink-0" /> : <ChevronRight size={14} className="text-gray-500 shrink-0" />}
+                      <button type="button" onClick={() => toggleExpand(p.id)} aria-expanded={expanded === p.id} className="flex items-center gap-2 min-w-0 flex-1 min-h-[44px] text-left">
+                        {expanded === p.id ? <ChevronDown size={14} className="text-[var(--text-muted)] shrink-0" aria-hidden="true" /> : <ChevronRight size={14} className="text-[var(--text-muted)] shrink-0" aria-hidden="true" />}
                         <span className="text-sm text-[var(--text-primary)] truncate">{p.name}</span>
-                        {!p.active && <span className="text-[10px] text-gray-500 border border-gray-700 rounded px-1">{t('intake.panels.profiles.inactive')}</span>}
+                        {!p.active && <span className="text-[10px] text-[var(--text-muted)] border border-[var(--border)] rounded px-1">{t('intake.panels.profiles.inactive')}</span>}
                       </button>
                       <span className="hidden sm:block text-xs text-[var(--text-muted)] shrink-0">{p.source_system || 'N/A'}</span>
                       <span className="text-xs text-[var(--text-muted)] shrink-0" title={t('intake.panels.profiles.colsSuffix')}>{p.rule_count} {t('intake.panels.profiles.colsSuffix')}</span>
                       <span className="hidden md:block text-xs text-[var(--text-muted)] shrink-0" title={fmtDate(p.last_used_at)}>{fmtDate(p.last_used_at)}</span>
                       <div className="flex items-center gap-1 shrink-0">
                         {onApply && (
-                          <button onClick={() => onApply(p.id)} title={t('intake.panels.profiles.applyTitle')} className="p-1.5 rounded hover:bg-gray-700 text-[var(--accent)]"><ArrowRight size={14} /></button>
+                          <button type="button" onClick={() => onApply(p.id)} title={t('intake.panels.profiles.applyTitle')} aria-label={`${t('intake.panels.profiles.applyTitle')}: ${p.name}`} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded hover:bg-[var(--surface-3,var(--surface-2))] text-[var(--accent)]"><ArrowRight size={14} aria-hidden="true" /></button>
                         )}
-                        <button onClick={() => rename(p)} disabled={busyId === p.id} title={t('intake.panels.profiles.renameTitle')} className="p-1.5 rounded hover:bg-gray-700 text-gray-400 disabled:opacity-40"><Pencil size={13} /></button>
-                        <button onClick={() => toggleActive(p)} disabled={busyId === p.id} title={p.active ? t('intake.panels.profiles.deactivateTitle') : t('intake.panels.profiles.activateTitle')} className="p-1.5 rounded hover:bg-gray-700 text-gray-400 disabled:opacity-40">{p.active ? <EyeOff size={13} /> : <Eye size={13} />}</button>
-                        <button onClick={() => remove(p)} disabled={busyId === p.id} title={t('intake.panels.profiles.deleteTitle')} className="p-1.5 rounded hover:bg-gray-700 text-red-400 disabled:opacity-40">{busyId === p.id ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}</button>
+                        <button type="button" onClick={() => rename(p)} disabled={busyId === p.id} title={t('intake.panels.profiles.renameTitle')} aria-label={`${t('intake.panels.profiles.renameTitle')}: ${p.name}`} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded hover:bg-[var(--surface-3,var(--surface-2))] text-[var(--text-muted)] disabled:opacity-40"><Pencil size={13} aria-hidden="true" /></button>
+                        <button type="button" onClick={() => toggleActive(p)} disabled={busyId === p.id} title={p.active ? t('intake.panels.profiles.deactivateTitle') : t('intake.panels.profiles.activateTitle')} aria-label={`${p.active ? t('intake.panels.profiles.deactivateTitle') : t('intake.panels.profiles.activateTitle')}: ${p.name}`} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded hover:bg-[var(--surface-3,var(--surface-2))] text-[var(--text-muted)] disabled:opacity-40">{p.active ? <EyeOff size={13} aria-hidden="true" /> : <Eye size={13} aria-hidden="true" />}</button>
+                        <button type="button" onClick={() => remove(p)} disabled={busyId === p.id} title={t('intake.panels.profiles.deleteTitle')} aria-label={`${t('intake.panels.profiles.deleteTitle')}: ${p.name}`} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded hover:bg-[var(--surface-3,var(--surface-2))] text-red-500 disabled:opacity-40">{busyId === p.id ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : <Trash2 size={13} aria-hidden="true" />}</button>
                       </div>
                     </div>
 
@@ -134,31 +170,24 @@ export default function MappingProfilesManager({ moduleLabels = {}, onApply }) {
                       <div className="border-t border-[var(--card-border)] px-3 py-2">
                         {!rules[p.id] ? (
                           <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]"><Loader2 size={12} className="animate-spin" /> {t('intake.panels.profiles.loadingColumns')}</div>
+                        ) : rules[p.id].error ? (
+                          <div role="alert" className="flex flex-wrap items-center gap-2 text-xs">
+                            <span className="text-red-500">{rules[p.id].error}</span>
+                            <button type="button" onClick={() => retryRules(p.id)} className="btn-secondary text-xs px-3 min-h-[44px]">Retry</button>
+                          </div>
                         ) : rules[p.id].length === 0 ? (
                           <div className="text-xs text-[var(--text-muted)]">{t('intake.panels.profiles.noRules')}</div>
                         ) : (
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-xs">
-                              <thead>
-                                <tr className="text-[var(--text-muted)] text-left">
-                                  <th className="py-1 pr-4 font-medium">{t('intake.panels.profiles.sourceColumn')}</th>
-                                  <th className="py-1 pr-4 font-medium">{t('intake.panels.profiles.mappedTo')}</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {rules[p.id].map((r, i) => (
-                                  <tr key={i} className="border-t border-gray-800/60">
-                                    <td className="py-1 pr-4 text-[var(--text-secondary)]">{r.source_header}</td>
-                                    <td className="py-1 pr-4">
-                                      {r.target_field
-                                        ? <span className="text-[var(--text-primary)]">{r.target_field}</span>
-                                        : <span className="text-amber-400/80">{t('intake.panels.profiles.keptAsExtra')}</span>}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
+                          <EnterpriseTable
+                            columns={ruleColumns}
+                            data={rules[p.id]}
+                            getRowId={(r, i) => `${r.source_header ?? ''}:${i}`}
+                            initialPageSize={25}
+                            enableColumnVisibility={false}
+                            searchPlaceholder={t('intake.panels.profiles.sourceColumn')}
+                            exportFileName={`Mapping ${p.name}`}
+                            reportMeta={{ title: `Saved mapping: ${p.name}` }}
+                          />
                         )}
                       </div>
                     )}

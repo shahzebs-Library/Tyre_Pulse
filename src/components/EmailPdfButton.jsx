@@ -13,7 +13,8 @@
  * @param {string}  [className]
  */
 import { useState } from 'react'
-import { Mail, X } from 'lucide-react'
+import { Mail } from 'lucide-react'
+import Modal from './ui/Modal'
 import { sendReportEmail } from '../lib/emailService'
 import { toUserMessage } from '../lib/safeError'
 
@@ -59,32 +60,36 @@ export default function EmailPdfButton({
   return (
     <>
       <button type="button" onClick={() => { setOpen(true); setMsg(null) }} disabled={disabled} className={className} title={title}>
-        <Mail size={14} /> {label}
+        <Mail size={14} aria-hidden="true" /> {label}
       </button>
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4" onClick={() => !busy && setOpen(false)}>
-          <div className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-bold flex items-center gap-2"><Mail size={15} /> Email report</h3>
-              <button onClick={() => !busy && setOpen(false)} className="text-[var(--text-muted)] hover:text-[var(--text)]"><X size={16} /></button>
-            </div>
-            <p className="text-xs text-[var(--text-muted)] mb-2">The exact report you see here is attached as a PDF and sent right away.</p>
-            <input autoFocus type="text" value={to}
-              onChange={(e) => { setTo(e.target.value); setMsg(null) }}
-              placeholder="name@company.com, another@company.com"
-              className="w-full h-9 rounded-lg px-3 text-sm bg-[var(--surface-2)] border border-[var(--border)] focus:outline-none focus:border-[var(--accent)]" />
-            {msg && <p className={`text-xs mt-2 ${msg.ok ? 'text-green-400' : 'text-red-400'}`}>{msg.text}</p>}
-            <div className="flex items-center gap-2 mt-4">
-              <button onClick={() => setOpen(false)} disabled={busy} className="btn-secondary flex-1 text-sm px-3 py-2">Cancel</button>
-              <button onClick={send} disabled={busy || !to.trim()} className="btn-primary flex-1 flex items-center justify-center gap-1.5 text-sm px-3 py-2 disabled:opacity-50">
-                {busy
-                  ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" /> Sending...</>
-                  : <><Mail size={14} /> Send now</>}
-              </button>
-            </div>
+      <Modal
+        open={open}
+        onClose={() => { if (!busy) setOpen(false) }}
+        closeOnBackdrop={!busy}
+        size="sm"
+        title={<span className="inline-flex items-center gap-2"><Mail size={15} aria-hidden="true" /> Email report</span>}
+        subtitle="The exact report you see here is attached as a PDF and sent right away."
+        footer={
+          <div className="flex items-center gap-2 w-full">
+            <button type="button" onClick={() => setOpen(false)} disabled={busy} className="btn-secondary flex-1 text-sm px-3 min-h-[44px]">Cancel</button>
+            <button type="button" onClick={send} disabled={busy || !to.trim()} className="btn-primary flex-1 flex items-center justify-center gap-1.5 text-sm px-3 min-h-[44px] disabled:opacity-50">
+              {busy
+                ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" aria-hidden="true" /> Sending...</>
+                : <><Mail size={14} aria-hidden="true" /> Send now</>}
+            </button>
           </div>
-        </div>
-      )}
+        }
+      >
+        <label htmlFor="email-pdf-recipients" className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Recipients</label>
+        <input id="email-pdf-recipients" autoFocus type="text" value={to}
+          onChange={(e) => { setTo(e.target.value); setMsg(null) }}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !busy && to.trim()) { e.preventDefault(); send() } }}
+          placeholder="name@company.com, another@company.com"
+          aria-describedby="email-pdf-hint"
+          className="w-full min-h-[44px] rounded-lg px-3 text-sm bg-[var(--surface-2)] border border-[var(--border)] focus:outline-none focus:border-[var(--accent)]" />
+        <p id="email-pdf-hint" className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Separate addresses with a comma, semicolon or space.</p>
+        {msg && <p role={msg.ok ? 'status' : 'alert'} className={`text-xs mt-2 ${msg.ok ? 'text-green-500' : 'text-red-500'}`}>{msg.text}</p>}
+      </Modal>
     </>
   )
 }

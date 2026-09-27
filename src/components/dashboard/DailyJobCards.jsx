@@ -18,6 +18,57 @@ import {
 } from 'lucide-react'
 import { getDailyJobCards } from '../../lib/api/jobCards'
 import { toUserMessage } from '../../lib/safeError'
+import EnterpriseTable from '../ui/EnterpriseTable'
+import { compareValues, isBlank } from '../../lib/consoleTable'
+
+const valueSort = (a, b, id) => compareValues(a.getValue(id), b.getValue(id))
+const blank = (v) => (isBlank(v) ? undefined : v)
+const sortable = { sortingFn: valueSort, sortUndefined: 'last' }
+const stateLabel = (r) => (r.not_started ? 'Not started' : 'In workshop')
+
+const stillOutColumns = [
+  {
+    id: 'asset_no', header: 'Asset', accessorFn: (r) => blank(r.asset_no), ...sortable,
+    meta: { exportValue: (r) => r.asset_no || 'N/A' },
+    cell: ({ row: { original: r } }) => (
+      <span>
+        <Link to={`/asset-management/${encodeURIComponent(r.asset_no || '')}`}
+          className="text-[var(--text-primary)] font-medium hover:text-[var(--accent)] hover:underline">
+          {r.asset_no || 'N/A'}
+        </Link>
+        {r.plate_no ? <span className="text-[11px] text-[var(--text-dim)] ml-1.5">{r.plate_no}</span> : null}
+      </span>
+    ),
+  },
+  { id: 'work_order_no', header: 'Job card', accessorFn: (r) => blank(r.work_order_no), ...sortable },
+  {
+    id: 'site', header: 'Site', accessorFn: (r) => blank(r.site), ...sortable,
+    meta: { filterVariant: 'select', exportValue: (r) => r.site || 'N/A' },
+    cell: ({ getValue }) => getValue() || 'N/A',
+  },
+  {
+    id: 'complaint', header: 'Complaint', accessorFn: (r) => blank(r.complaint), ...sortable,
+    meta: { exportValue: (r) => r.complaint || 'N/A' },
+    cell: ({ getValue }) => (
+      <span className="block max-w-[280px] truncate text-[var(--text-tertiary)]" title={getValue() || ''}>{getValue() || 'N/A'}</span>
+    ),
+  },
+  {
+    id: 'hours_out', header: 'Down for', accessorFn: (r) => (Number.isFinite(Number(r.hours_out)) && r.hours_out != null ? Number(r.hours_out) : undefined),
+    ...sortable, meta: { align: 'right', exportHeader: 'Down for', exportValue: (r) => dur(r.hours_out) },
+    cell: ({ getValue }) => (
+      <span className={`font-medium ${Number(getValue()) > 48 ? 'text-red-500' : 'text-[var(--text-primary)]'}`}>{dur(getValue())}</span>
+    ),
+  },
+  {
+    id: 'state', header: 'State', accessorFn: stateLabel, ...sortable,
+    meta: { filterVariant: 'select' },
+    // Not started is the actionable state: it is queueing, not being fixed
+    cell: ({ row: { original: r } }) => (r.not_started
+      ? <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-500">Not started</span>
+      : <span className="text-[11px] px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-500">In workshop</span>),
+  },
+]
 
 const num = (v) => (v == null || !Number.isFinite(Number(v)) ? 'N/A' : Number(v).toLocaleString('en-US'))
 /** Hours are meaningless past a couple of days; show what a person would say. */
@@ -54,6 +105,7 @@ export default function DailyJobCards({ country }) {
 
   const load = useCallback(async () => {
     setError('')
+    setLoading(true)
     try {
       const res = await getDailyJobCards({ country })
       setSnap(res && res.ok ? res : null)
@@ -68,7 +120,8 @@ export default function DailyJobCards({ country }) {
   const stillOut = useMemo(() => (Array.isArray(snap?.still_out_list) ? snap.still_out_list : []), [snap])
 
   // Nothing imported yet, or nothing to say. Better silent than an empty shell.
-  if (!loading && !snap) return null
+  // A failed read must say so (with Retry), never vanish as if nothing existed.
+  if (!loading && !snap && !error) return null
 
   return (
     <section className="space-y-3">
@@ -80,15 +133,20 @@ export default function DailyJobCards({ country }) {
           <Link to="/workshop-live" className="text-xs text-[var(--accent)] hover:underline inline-flex items-center gap-1">
             Workshop board <ArrowRight size={12} />
           </Link>
-          <button onClick={load} disabled={loading}
-            className="btn-secondary text-xs px-2 py-1 inline-flex items-center gap-1 disabled:opacity-50">
+          <button type="button" onClick={load} disabled={loading}
+            className="btn-secondary text-xs px-3 min-h-[44px] inline-flex items-center gap-1 disabled:opacity-50">
             <RefreshCw size={11} className={loading ? 'animate-spin' : ''} /> Refresh
           </button>
         </div>
       </div>
 
       {error ? (
-        <div className="card text-sm text-red-400">{error}</div>
+        <div className="card text-sm flex flex-wrap items-center gap-3" role="alert">
+          <span className="text-red-500">{error}</span>
+          <button type="button" onClick={load} className="btn-secondary text-xs px-3 min-h-[44px] inline-flex items-center gap-1">
+            <RefreshCw size={12} aria-hidden="true" /> Retry
+          </button>
+        </div>
       ) : loading ? (
         <div className="card text-sm text-[var(--text-muted)]">Loading today&apos;s job cards.</div>
       ) : (
@@ -111,50 +169,20 @@ export default function DailyJobCards({ country }) {
           </div>
 
           {stillOut.length > 0 ? (
-            <div className="card overflow-x-auto">
+            <div className="card">
               <p className="text-xs font-semibold text-[var(--text-secondary)] mb-2">
                 Out of production now, longest first
               </p>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-[var(--text-muted)] border-b border-[var(--hairline)]">
-                    <th className="py-2 pr-3 font-semibold">Asset</th>
-                    <th className="py-2 px-3 font-semibold">Job card</th>
-                    <th className="py-2 px-3 font-semibold">Site</th>
-                    <th className="py-2 px-3 font-semibold">Complaint</th>
-                    <th className="py-2 px-3 font-semibold text-right">Down for</th>
-                    <th className="py-2 pl-3 font-semibold">State</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {stillOut.map((r) => (
-                    <tr key={r.work_order_no} className="border-b border-[var(--hairline)]/60">
-                      <td className="py-2 pr-3">
-                        <Link to={`/asset-management/${encodeURIComponent(r.asset_no || '')}`}
-                          className="text-[var(--text-primary)] font-medium hover:text-[var(--accent)]">
-                          {r.asset_no || 'N/A'}
-                        </Link>
-                        {r.plate_no ? <span className="text-[11px] text-[var(--text-dim)] ml-1.5">{r.plate_no}</span> : null}
-                      </td>
-                      <td className="py-2 px-3 text-[var(--text-secondary)]">{r.work_order_no}</td>
-                      <td className="py-2 px-3 text-[var(--text-secondary)]">{r.site || 'N/A'}</td>
-                      <td className="py-2 px-3 text-[var(--text-tertiary)] max-w-[280px] truncate" title={r.complaint || ''}>
-                        {r.complaint || 'N/A'}
-                      </td>
-                      <td className={`py-2 px-3 text-right font-medium ${
-                        Number(r.hours_out) > 48 ? 'text-red-400' : 'text-[var(--text-primary)]'}`}>
-                        {dur(r.hours_out)}
-                      </td>
-                      <td className="py-2 pl-3">
-                        {/* Not started is the actionable state: it is queueing, not being fixed */}
-                        {r.not_started
-                          ? <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400">Not started</span>
-                          : <span className="text-[11px] px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-400">In workshop</span>}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <EnterpriseTable
+                columns={stillOutColumns}
+                data={stillOut}
+                getRowId={(r) => String(r.work_order_no)}
+                initialPageSize={25}
+                searchPlaceholder="Search asset, job card, site, complaint"
+                exportFileName="Job Cards Out Of Production"
+                reportMeta={{ title: 'Job cards out of production' }}
+                emptyMessage="No job cards match this search."
+              />
             </div>
           ) : (
             <div className="card text-sm text-[var(--text-muted)]">

@@ -13,12 +13,52 @@ import { loadErpHistory, HISTORY_MAX } from '../../lib/api/erpSyncHistory'
 import { OUTCOME_META, importRowSummary, importRowOutcome } from '../../lib/api/importHistory'
 import { batchFeedSummary, historyKpis, feedFreshness, rejectSummary, filterBatches, batchExportRows, moduleLabel } from '../../lib/erpSyncAnalytics'
 import { toUserMessage } from '../../lib/safeError'
+import EnterpriseTable from '../ui/EnterpriseTable'
+import { compareValues, isBlank } from '../../lib/consoleTable'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend)
 
 const BAND = { fresh: ['Fresh', 'text-green-500'], stale: ['Late', 'text-amber-500'], silent: ['Silent', 'text-red-500'], never: ['No data', 'text-[var(--text-muted)]'] }
 const EXPORT_COLS = ['created_at', 'module', 'country', 'sheet', 'total_rows', 'imported_rows', 'error_rows', 'duplicate_rows', 'outcome']
 const EXPORT_HEADERS = ['Uploaded', 'Feed', 'Country', 'Sheet', 'Rows read', 'Imported', 'Errors', 'Duplicates', 'Outcome']
+const valueSort = (a, b, id) => compareValues(a.getValue(id), b.getValue(id))
+const blank = v => (isBlank(v) ? undefined : v)
+const sortable = { sortingFn: valueSort, sortUndefined: 'last' }
+const naCell = ({ getValue }) => getValue() ?? 'N/A'
+const uploadedAt = v => (v ? String(v).replace('T', ' ').slice(0, 16) : undefined)
+
+const FRESH_COLUMNS = [
+  { id: 'country', header: 'Country', accessorFn: f => blank(f.country), ...sortable, meta: { filterVariant: 'select' }, cell: naCell },
+  { id: 'feed', header: 'Feed', accessorFn: f => blank(f.label), ...sortable, cell: naCell },
+  {
+    id: 'lastDate', header: 'Last data', accessorFn: f => blank(f.lastDate), ...sortable,
+    meta: { exportValue: f => f.lastDate || 'N/A' },
+    cell: ({ row: { original: f } }) => <>{f.lastDate || 'N/A'}{f.daysSince != null && <span className="text-[var(--text-muted)]"> ({f.daysSince}d)</span>}</>,
+  },
+  { id: 'missingDays', header: 'Missed days', accessorFn: f => (f.missingDays == null ? undefined : f.missingDays), ...sortable, meta: { align: 'right', exportValue: f => (f.missingDays == null ? 'N/A' : f.missingDays) }, cell: naCell },
+  {
+    id: 'band', header: 'State', accessorFn: f => BAND[f.band]?.[0] || f.band, ...sortable, meta: { filterVariant: 'select' },
+    cell: ({ row: { original: f } }) => <span className={BAND[f.band]?.[1]}>{BAND[f.band]?.[0] || f.band}</span>,
+  },
+]
+
+const BATCH_COLUMNS = [
+  { id: 'created_at', header: 'Uploaded', accessorFn: b => uploadedAt(b.created_at), ...sortable, cell: ({ getValue }) => <span className="whitespace-nowrap">{getValue() ?? 'N/A'}</span> },
+  { id: 'module', header: 'Feed', accessorFn: b => moduleLabel(b.module), ...sortable },
+  { id: 'country', header: 'Country', accessorFn: b => blank(b.country), ...sortable, cell: naCell },
+  { id: 'result', header: 'Result', accessorFn: b => importRowSummary(b), ...sortable },
+  { id: 'error_rows', header: 'Errors', accessorFn: b => Number(b.error_rows) || 0, ...sortable, meta: { align: 'right' } },
+  { id: 'outcome', header: 'Outcome', accessorFn: b => OUTCOME_META[importRowOutcome(b)]?.label, ...sortable, cell: naCell },
+]
+
+const REJECT_COLUMNS = [
+  { id: 'created_at', header: 'Date', accessorFn: r => blank(String(r.created_at || '').slice(0, 10)), ...sortable, cell: ({ getValue }) => <span className="whitespace-nowrap">{getValue() ?? 'N/A'}</span> },
+  { id: 'work_order_no', header: 'Job card', accessorFn: r => blank(r.work_order_no), ...sortable, cell: naCell },
+  { id: 'item', header: 'Item', accessorFn: r => blank(r.item_description || r.item_code), ...sortable, cell: naCell },
+  { id: 'uploaded_country', header: 'Uploaded as', accessorFn: r => blank(r.uploaded_country), ...sortable, meta: { filterVariant: 'select' }, cell: naCell },
+  { id: 'detected_country', header: 'Belongs to', accessorFn: r => blank(r.detected_country), ...sortable, meta: { filterVariant: 'select' }, cell: naCell },
+]
+
 const FAILED_LABEL = { batches: 'upload batches', rejects: 'rejected lines', coverage: 'feed freshness' }
 
 function Tile({ label, value, tone = '' }) {
@@ -75,15 +115,15 @@ export default function ErpLoadHistoryPanel() {
     <div className="flex flex-wrap items-center justify-between gap-2">
       <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2"><Activity size={14} className="text-green-400" /> Load history and feed freshness</h2>
       <div className="flex gap-2">
-        <button className="btn-secondary text-xs inline-flex items-center gap-1" onClick={retry} disabled={state.loading}><RefreshCw size={13} /> Refresh</button>
-        <button className="btn-secondary text-xs inline-flex items-center gap-1" onClick={() => doExport('excel')} disabled={!shown.length}><FileSpreadsheet size={13} /> Excel</button>
-        <button className="btn-secondary text-xs inline-flex items-center gap-1" onClick={() => doExport('pdf')} disabled={!shown.length}><FileText size={13} /> PDF</button>
+        <button type="button" className="btn-secondary text-xs inline-flex items-center gap-1 min-h-[44px]" onClick={retry} disabled={state.loading}><RefreshCw size={13} aria-hidden="true" className={state.loading ? 'animate-spin' : ''} /> Refresh</button>
+        <button type="button" className="btn-secondary text-xs inline-flex items-center gap-1 min-h-[44px]" onClick={() => doExport('excel')} disabled={!shown.length}><FileSpreadsheet size={13} aria-hidden="true" /> Excel</button>
+        <button type="button" className="btn-secondary text-xs inline-flex items-center gap-1 min-h-[44px]" onClick={() => doExport('pdf')} disabled={!shown.length}><FileText size={13} aria-hidden="true" /> PDF</button>
       </div>
     </div>
-    {state.loading && <div className="card text-sm text-[var(--text-muted)]">Loading load history...</div>}
-    {state.error && <div className="card text-sm"><p className="text-red-500">{state.error}</p><button className="btn-secondary mt-2" onClick={retry}>Retry</button></div>}
+    {state.loading && <div className="card text-sm text-[var(--text-muted)]" role="status">Loading load history...</div>}
+    {state.error && <div className="card text-sm" role="alert"><p className="text-red-500">{state.error}</p><button type="button" className="btn-secondary mt-2 min-h-[44px]" onClick={retry}>Retry</button></div>}
     {state.data && <>
-      {failed.length > 0 && <p className="text-xs text-amber-500">Could not read {failed.map(f => FAILED_LABEL[f]).join(', ')}. <button className="underline" onClick={retry}>Retry</button></p>}
+      {failed.length > 0 && <p className="text-xs text-amber-500">Could not read {failed.map(f => FAILED_LABEL[f]).join(', ')}. <button type="button" className="underline min-h-[44px] px-1" onClick={retry}>Retry</button></p>}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <Tile label="Upload batches" value={failed.includes('batches') ? null : kpis.batches} />
         <Tile label="Rows imported" value={failed.includes('batches') ? null : kpis.imported} tone="text-green-500" />
@@ -104,9 +144,17 @@ export default function ErpLoadHistoryPanel() {
         <div className="card">
           <h3 className="text-xs font-semibold text-[var(--text-secondary)] mb-2 flex items-center gap-1.5"><Clock size={13} /> Feed freshness (last 30 days)</h3>
           {!freshness.length ? <p className="text-sm text-[var(--text-muted)] py-10 text-center">No watched feeds reported. Configure them in the console Import History.</p>
-            : <div className="max-h-64 overflow-y-auto"><table className="w-full text-xs"><thead><tr className="text-left text-[var(--text-muted)]"><th className="p-1.5">Country</th><th className="p-1.5">Feed</th><th className="p-1.5">Last data</th><th className="p-1.5">Missed days</th><th className="p-1.5">State</th></tr></thead><tbody>
-              {freshness.map(f => <tr key={`${f.country}:${f.src}`} className="border-t border-[var(--hairline)]"><td className="p-1.5">{f.country}</td><td className="p-1.5">{f.label}</td><td className="p-1.5">{f.lastDate || 'N/A'}{f.daysSince != null && <span className="text-[var(--text-muted)]"> ({f.daysSince}d)</span>}</td><td className="p-1.5">{f.missingDays == null ? 'N/A' : f.missingDays}</td><td className={`p-1.5 ${BAND[f.band][1]}`}>{BAND[f.band][0]}</td></tr>)}
-            </tbody></table></div>}
+            : <EnterpriseTable
+                columns={FRESH_COLUMNS}
+                data={freshness}
+                getRowId={f => `${f.country}:${f.src}`}
+                initialPageSize={25}
+                enableColumnVisibility={false}
+                searchPlaceholder="Search country or feed"
+                exportFileName="ERP Feed Freshness"
+                reportMeta={{ title: 'Feed freshness (last 30 days)' }}
+                emptyMessage="No feeds match this search."
+              />}
         </div>
       </div>
 
@@ -118,10 +166,16 @@ export default function ErpLoadHistoryPanel() {
         </div>
         {!batches.length ? <p className="text-sm text-[var(--text-muted)] text-center py-4">No uploads recorded yet. <Link className="underline" to="/data-intake">Open Data Intake</Link></p>
           : !shown.length ? <p className="text-sm text-[var(--text-muted)] text-center py-4">No batches match these filters.</p>
-          : <div className="overflow-x-auto max-h-96"><table className="w-full text-xs"><thead><tr className="text-left text-[var(--text-muted)]"><th className="p-1.5">Uploaded</th><th className="p-1.5">Feed</th><th className="p-1.5">Country</th><th className="p-1.5">Result</th><th className="p-1.5">Errors</th><th className="p-1.5">Outcome</th></tr></thead><tbody>
-            {shown.slice(0, 300).map(b => <tr key={b.id} className="border-t border-[var(--hairline)]"><td className="p-1.5 whitespace-nowrap">{b.created_at ? String(b.created_at).replace('T', ' ').slice(0, 16) : 'N/A'}</td><td className="p-1.5">{moduleLabel(b.module)}</td><td className="p-1.5">{b.country || 'N/A'}</td><td className="p-1.5">{importRowSummary(b)}</td><td className="p-1.5">{Number(b.error_rows) || 0}</td><td className="p-1.5">{OUTCOME_META[importRowOutcome(b)]?.label}</td></tr>)}
-          </tbody></table>{shown.length > 300 && <p className="text-[11px] text-[var(--text-muted)] p-2">Showing 300 of {shown.length}. Export for the full list.</p>}</div>}
-        {exportError && <p className="text-xs text-red-500">{exportError}</p>}
+          : <EnterpriseTable
+              columns={BATCH_COLUMNS}
+              data={shown}
+              getRowId={b => String(b.id)}
+              initialPageSize={25}
+              enableGlobalFilter={false}
+              enableExport={false}
+              emptyMessage="No batches match these filters."
+            />}
+        {exportError && <p className="text-xs text-red-500" role="alert">{exportError}</p>}
       </div>
 
       <div className="card space-y-2">
@@ -129,9 +183,16 @@ export default function ErpLoadHistoryPanel() {
         {!rej.total ? <p className="text-sm text-[var(--text-muted)]">{failed.includes('rejects') ? 'Rejected lines could not be read.' : 'No expense lines have been refused.'}</p> : <>
           <div className="flex flex-wrap gap-2 text-xs">{rej.byPair.map(p => <span key={p.label} className="px-2 py-1 rounded-lg border border-[var(--hairline)]">{p.label}: {p.count}</span>)}</div>
           <div className="flex flex-wrap gap-2 text-xs">{rej.byReason.map(p => <span key={p.label} className="px-2 py-1 rounded-lg border border-[var(--hairline)] text-[var(--text-muted)]">{p.label}: {p.count}</span>)}</div>
-          <div className="overflow-x-auto max-h-64"><table className="w-full text-xs"><thead><tr className="text-left text-[var(--text-muted)]"><th className="p-1.5">Date</th><th className="p-1.5">Job card</th><th className="p-1.5">Item</th><th className="p-1.5">Uploaded as</th><th className="p-1.5">Belongs to</th></tr></thead><tbody>
-            {rejects.slice(0, 100).map(r => <tr key={r.id} className="border-t border-[var(--hairline)]"><td className="p-1.5 whitespace-nowrap">{String(r.created_at || '').slice(0, 10) || 'N/A'}</td><td className="p-1.5">{r.work_order_no || 'N/A'}</td><td className="p-1.5">{r.item_description || r.item_code || 'N/A'}</td><td className="p-1.5">{r.uploaded_country || 'N/A'}</td><td className="p-1.5">{r.detected_country || 'N/A'}</td></tr>)}
-          </tbody></table></div>
+          <EnterpriseTable
+            columns={REJECT_COLUMNS}
+            data={rejects}
+            getRowId={r => String(r.id)}
+            initialPageSize={25}
+            searchPlaceholder="Search job card, item, country"
+            exportFileName="ERP Rejected Lines"
+            reportMeta={{ title: 'Lines refused by the upload guard' }}
+            emptyMessage="No rejected lines match this search."
+          />
         </>}
       </div>
     </>}

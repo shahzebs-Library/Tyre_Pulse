@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Columns, ArrowRight, AlertTriangle, PlusCircle, MinusCircle, Info, X } from 'lucide-react'
+import { Columns, ArrowRight, AlertTriangle, PlusCircle, MinusCircle, Info } from 'lucide-react'
+import Modal from '../ui/Modal'
 import { diffHeaders, defaultDecisions, summariseDiff, DECISION } from '../../lib/import'
 
 /**
@@ -46,26 +47,30 @@ export default function HeaderChangeDialog({ open, profile, previousHeaders, com
   const set = (key, value) => setDecisions((d) => ({ ...d, [key]: value }))
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
-      <div className="w-full max-w-3xl max-h-[88vh] overflow-y-auto rounded-xl bg-[var(--surface-raised,var(--card))] border border-[var(--border)] shadow-2xl">
-        <div className="sticky top-0 flex items-start gap-3 px-5 py-4 bg-amber-950/30 border-b border-amber-800/40 backdrop-blur">
-          <Columns size={18} className="text-amber-400 mt-0.5 shrink-0" />
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-[var(--text-primary)]">This file's columns are not the ones we remembered</p>
-            <p className="text-xs text-[var(--text-muted)] mt-0.5">{summariseDiff(diff)}</p>
-            {profile?.name && (
-              <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                Compared against your saved mapping "{profile.name}".
-                {complete === false && ' That mapping only recorded the columns it used, so a column it never used will look new here.'}
-              </p>
-            )}
-          </div>
-          <button onClick={onDismiss} className="p-1 rounded hover:bg-white/10 text-[var(--text-muted)] shrink-0" title="Close without changing anything">
-            <X size={16} />
+    <Modal
+      open
+      onClose={onDismiss}
+      size="lg"
+      title={<span className="inline-flex items-start gap-2"><Columns size={18} className="text-amber-500 mt-0.5 shrink-0" aria-hidden="true" />This file's columns are not the ones we remembered</span>}
+      subtitle={summariseDiff(diff)}
+      footer={
+        <div className="flex flex-wrap items-center justify-end gap-2 w-full">
+          <button type="button" onClick={onDismiss} className="btn-secondary px-3 min-h-[44px] text-sm">
+            Ignore my saved mapping
+          </button>
+          <button type="button" onClick={() => onApply?.(decisions, diff)} className="btn-primary px-4 min-h-[44px] text-sm">
+            Apply my choices
           </button>
         </div>
-
-        <div className="p-5 space-y-5">
+      }
+    >
+        {profile?.name && (
+          <p className="text-xs text-[var(--text-muted)] mb-4">
+            Compared against your saved mapping "{profile.name}".
+            {complete === false && ' That mapping only recorded the columns it used, so a column it never used will look new here.'}
+          </p>
+        )}
+        <div className="space-y-5">
           {diff.renames.length > 0 && (
             <section>
               <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)] mb-2 flex items-center gap-1.5">
@@ -82,9 +87,9 @@ export default function HeaderChangeDialog({ open, profile, previousHeaders, com
                   return (
                     <div key={key} className="rounded-lg border border-[var(--border)] p-3">
                       <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--text-primary)]">
-                        <span className="px-2 py-0.5 rounded bg-white/5 font-mono text-xs">{r.from}</span>
+                        <span className="px-2 py-0.5 rounded bg-[var(--surface-2)] font-mono text-xs">{r.from}</span>
                         <ArrowRight size={14} className="text-[var(--text-muted)]" />
-                        <span className="px-2 py-0.5 rounded bg-white/5 font-mono text-xs">{r.to}</span>
+                        <span className="px-2 py-0.5 rounded bg-[var(--surface-2)] font-mono text-xs">{r.to}</span>
                       </div>
                       <p className="text-xs text-[var(--text-muted)] mt-1.5">
                         {target
@@ -94,13 +99,15 @@ export default function HeaderChangeDialog({ open, profile, previousHeaders, com
                       <div className="flex gap-2 mt-2.5">
                         <button
                           onClick={() => set(key, DECISION.KEEP)}
-                          className={`px-3 py-1.5 rounded-lg text-xs border ${keep ? 'bg-green-600 border-green-500 text-white' : 'border-[var(--border)] text-[var(--text-muted)] hover:bg-white/5'}`}
+                          aria-pressed={keep}
+                          type="button" className={`px-3 min-h-[44px] rounded-lg text-xs border ${keep ? 'bg-green-600 border-green-500 text-white' : 'border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--surface-2)]'}`}
                         >
                           Keep my mapping
                         </button>
                         <button
                           onClick={() => set(key, DECISION.CHANGE)}
-                          className={`px-3 py-1.5 rounded-lg text-xs border ${!keep ? 'bg-sky-600 border-sky-500 text-white' : 'border-[var(--border)] text-[var(--text-muted)] hover:bg-white/5'}`}
+                          aria-pressed={!keep}
+                          type="button" className={`px-3 min-h-[44px] rounded-lg text-xs border ${!keep ? 'bg-sky-600 border-sky-500 text-white' : 'border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--surface-2)]'}`}
                         >
                           Leave it as a new column
                         </button>
@@ -125,7 +132,7 @@ export default function HeaderChangeDialog({ open, profile, previousHeaders, com
                   const target = targetFor(h)
                   return (
                     <li key={h} className="flex flex-wrap items-baseline gap-2">
-                      <span className="px-2 py-0.5 rounded bg-white/5 font-mono text-xs">{h}</span>
+                      <span className="px-2 py-0.5 rounded bg-[var(--surface-2)] font-mono text-xs">{h}</span>
                       <span className="text-xs text-[var(--text-muted)]">
                         {target ? <>filled <span className="text-[var(--text-primary)]">{target}</span></> : 'was not mapped'}
                       </span>
@@ -146,7 +153,7 @@ export default function HeaderChangeDialog({ open, profile, previousHeaders, com
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {diff.added.map((h) => (
-                  <span key={h} className="px-2 py-0.5 rounded bg-white/5 font-mono text-xs">{h}</span>
+                  <span key={h} className="px-2 py-0.5 rounded bg-[var(--surface-2)] font-mono text-xs">{h}</span>
                 ))}
               </div>
             </section>
@@ -158,15 +165,6 @@ export default function HeaderChangeDialog({ open, profile, previousHeaders, com
           </p>
         </div>
 
-        <div className="sticky bottom-0 flex flex-wrap items-center justify-end gap-2 px-5 py-3 bg-[var(--card)] border-t border-[var(--border)]">
-          <button onClick={onDismiss} className="px-3 py-2 rounded-lg text-sm border border-[var(--border)] text-[var(--text-muted)] hover:bg-white/5">
-            Ignore my saved mapping
-          </button>
-          <button onClick={() => onApply?.(decisions, diff)} className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm">
-            Apply my choices
-          </button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

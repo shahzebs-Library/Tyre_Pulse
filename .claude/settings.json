@@ -11,9 +11,38 @@
         "source": "github",
         "repo": "Laith0003/ux-skill"
       }
+    },
+    "claude-plugins-official": {
+      "source": {
+        "source": "github",
+        "repo": "anthropics/claude-plugins-official"
+      }
+    },
+    "dart-flutter": {
+      "source": {
+        "source": "github",
+        "repo": "flutter/agent-plugins"
+      }
+    },
+    "knowledge-work-plugins": {
+      "source": {
+        "source": "github",
+        "repo": "anthropics/knowledge-work-plugins"
+      }
+    },
+    "very-good-claude-code-marketplace": {
+      "source": {
+        "source": "github",
+        "repo": "VeryGoodOpenSource/very_good_claude_code_marketplace"
+      }
     }
   },
   "enabledPlugins": {
-    "ux@ux-skill": true
+    "ux@ux-skill": true,
+    "dart-flutter@dart-flutter": true,
+    "vgv-ai-flutter-plugin@very-good-claude-code-marketplace": true,
+    "frontend-design@claude-plugins-official": true,
+    "design@knowledge-work-plugins": true,
+    "superdesign@claude-plugins-official": true
   }
 }

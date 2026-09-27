@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import {
   Upload, FileSpreadsheet, Database, Loader2, AlertTriangle, CheckCircle2,
   Trash2, Download, Search, ArrowRight, RefreshCw, Info, Rocket, Undo2, ShieldCheck,
+  Layers, History, Percent,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -20,10 +21,15 @@ import { exportToExcel } from '../lib/exportUtils'
 import { configNum } from '../lib/api/systemConfig'
 import { downloadErpTemplates } from '../lib/erpTemplates'
 import { toUserMessage } from '../lib/safeError'
-import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import StatTile from '../components/ui/StatTile'
+import {
+  humanizeKey, flagsOf, summarizeRows, filterReviewRows, reviewExportRows,
+  summarizeBatches, capOverflow, matchRate,
+} from '../lib/erpImportAnalytics'
 
 const ELEVATED = ['admin', 'manager', 'director']
-const PREVIEW_LIMIT = 50
+const PREVIEW_LIMIT = 500
 const ROW_CAP = 100000
 
 function newBatchId() {
@@ -119,14 +125,7 @@ export default function ErpImport() {
     return mapped
   }, [mapped, datasetKey, parsed, sheet])
 
-  const activeCount = useMemo(
-    () => (datasetKey === 'change' ? derived.filter((r) => r.is_active).length : null),
-    [derived, datasetKey],
-  )
-  const warnCount = useMemo(
-    () => derived.filter((r) => Array.isArray(r.warnings) && r.warnings.length > 0).length,
-    [derived],
-  )
+  const summary = useMemo(() => summarizeRows(derived, datasetKey), [derived, datasetKey])
 
   function resetImport() {
     setParsed(null); setSheetIdx(0); setFileName(''); setError(''); setSaveResult(null)
@@ -207,7 +206,7 @@ export default function ErpImport() {
   }
 
   return (
-    <div className="p-6 max-w-[1800px] mx-auto text-[var(--text-primary)]">
+    <div className="p-4 sm:p-6 max-w-[1800px] mx-auto text-[var(--text-primary)]">
       <PageHeader
         title="ERP Data Import"
         subtitle="Parse a filled ERP template and save rows into a review table you can check, export and delete."
@@ -216,34 +215,37 @@ export default function ErpImport() {
       />
 
       {/* Tabs */}
-      <div className="flex items-center gap-2 my-5">
-        {[['import', 'Import', Upload], ['review', 'Review saved', Search]].map(([k, label, Icon]) => (
+      <div role="tablist" aria-label="ERP import sections" className="flex flex-wrap items-center gap-2 my-5">
+        {[['import', 'Import', Upload], ['review', 'Review & promote', Search]].map(([k, label, Icon]) => (
           <button
             key={k}
+            role="tab"
+            aria-selected={tab === k}
             onClick={() => setTab(k)}
-            className={`px-4 py-2 rounded-lg text-sm flex items-center gap-2 border ${tab === k ? 'bg-green-600 border-green-600 text-white' : 'bg-[var(--surface-1)] border-[var(--border-bright)] hover:border-green-600/50'}`}
+            className={`min-h-[44px] px-4 py-2 rounded-lg text-sm flex items-center gap-2 border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 ${tab === k ? 'bg-green-600 border-green-600 text-white' : 'bg-[var(--surface-1)] border-[var(--border-bright)] hover:border-green-500/40'}`}
           >
-            <Icon size={15} /> {label}
+            <Icon size={15} aria-hidden="true" /> {label}
           </button>
         ))}
       </div>
 
       {/* Dataset picker (shared) */}
-      <div className="mb-5">
-        <label className="block text-sm text-[var(--text-secondary)] mb-2">Dataset</label>
+      <div className="mb-5" role="group" aria-labelledby="erp-dataset-label">
+        <p id="erp-dataset-label" className="block text-sm text-[var(--text-secondary)] mb-2">Dataset</p>
         <div className="flex flex-wrap gap-2">
           {DATASET_LIST.map((d) => (
             <button
               key={d.key}
+              aria-pressed={datasetKey === d.key}
               onClick={() => { setDatasetKey(d.key); setError('') }}
-              className={`px-4 py-2 rounded-lg text-sm border ${datasetKey === d.key ? 'bg-green-600 border-green-600 text-white' : 'bg-[var(--surface-1)] border-[var(--border-bright)] hover:border-green-600/50'}`}
+              className={`min-h-[44px] px-4 py-2 rounded-lg text-sm border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 ${datasetKey === d.key ? 'bg-green-600 border-green-600 text-white' : 'bg-[var(--surface-1)] border-[var(--border-bright)] hover:border-green-500/40'}`}
             >
               {d.label}
             </button>
           ))}
         </div>
         <p className="text-xs text-[var(--text-muted)] mt-2 flex items-center gap-1.5">
-          <Info size={13} />
+          <Info size={13} aria-hidden="true" className="shrink-0" />
           {datasetKey === 'production'
             ? 'Production m3 loads directly into the live Cost Center production log.'
             : 'Rows are saved to a review table first. When you are happy with the batch, open the Review tab and Promote it into the master tables (assets, tyres or costs). Promotion is reversible.'}
@@ -251,8 +253,8 @@ export default function ErpImport() {
       </div>
 
       {error && (
-        <div className="mb-4 bg-red-900/20 border border-red-700/50 rounded-lg p-3 text-red-300 text-sm flex gap-2">
-          <AlertTriangle size={16} /> {error}
+        <div role="alert" className="mb-4 bg-red-500/10 border border-red-500/40 rounded-lg p-3 text-red-500 text-sm flex gap-2">
+          <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden="true" /> <span>{error}</span>
         </div>
       )}
 
@@ -274,8 +276,7 @@ export default function ErpImport() {
             mapped={mapped}
             match={match}
             derived={derived}
-            activeCount={activeCount}
-            warnCount={warnCount}
+            summary={summary}
             saveResult={saveResult}
             onFile={onFile}
             onSave={save}
@@ -293,11 +294,13 @@ export default function ErpImport() {
 
 function ImportPanel({
   dataset, datasetKey, canWrite, countryTag, fileRef, fileName, parsed, sheet, sheetIdx,
-  setSheetIdx, busy, progress, mapped, match, derived, activeCount, warnCount, onFile, onSave, onReset,
+  setSheetIdx, busy, progress, mapped, match, derived, summary, onFile, onSave, onReset,
   saveResult,
 }) {
-  const displayCols = dataset.columns.map((c) => c.key)
-  const previewRows = derived.slice(0, PREVIEW_LIMIT)
+  const previewRows = useMemo(() => derived.slice(0, PREVIEW_LIMIT), [derived])
+  const previewColumns = useDatasetColumns(dataset, datasetKey, { withFlags: datasetKey === 'change' || datasetKey === 'expense' })
+  const overflow = capOverflow(mapped.length, ROW_CAP)
+  const rate = matchRate(match)
 
   const [tplBusy, setTplBusy] = useState(false)
   const [tplErr, setTplErr] = useState('')
@@ -316,57 +319,64 @@ function ImportPanel({
   return (
     <div className="space-y-5">
       {!canWrite && (
-        <div className="bg-amber-900/20 border border-amber-700/50 rounded-lg p-3 text-amber-300 text-sm flex gap-2">
-          <AlertTriangle size={16} /> Only Admin, Manager, or Director can save imports. You can still preview a file.
+        <div role="status" className="bg-amber-500/10 border border-amber-500/40 rounded-lg p-3 text-amber-500 text-sm flex gap-2">
+          <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden="true" /> Only Admin, Manager, or Director can save imports. You can still preview a file.
         </div>
       )}
 
-      {/* Downloadable ERP templates */}
-      <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-4 space-y-3">
-        <div className="flex items-start gap-3">
-          <FileSpreadsheet size={18} className="shrink-0 text-green-400 mt-0.5" />
-          <div>
-            <p className="text-sm font-medium text-[var(--text-primary)]">Download import templates</p>
-            <p className="text-xs text-[var(--text-muted)] mt-0.5">
-              Send these templates to your ERP vendor, then upload the filled file here. Every sheet header is exactly what the importer expects, so a filled file maps automatically on upload.
-            </p>
+      {/* Downloadable ERP templates - collapsed by default so the upload is the
+          first thing on screen; the vendor hand-off is a one-off task. */}
+      <details className="group bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl">
+        <summary className="flex items-center gap-3 p-4 cursor-pointer list-none min-h-[44px] rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500">
+          <FileSpreadsheet size={18} className="shrink-0 text-green-500" aria-hidden="true" />
+          <span className="flex-1 min-w-0">
+            <span className="block text-sm font-medium text-[var(--text-primary)]">Download import templates</span>
+            <span className="block text-xs text-[var(--text-muted)] mt-0.5">Send these to your ERP vendor, then upload the filled file below.</span>
+          </span>
+          <span className="text-xs text-[var(--text-muted)] group-open:hidden">Show</span>
+          <span className="text-xs text-[var(--text-muted)] hidden group-open:inline">Hide</span>
+        </summary>
+        <div className="px-4 pb-4 space-y-3">
+          <p className="text-xs text-[var(--text-muted)]">
+            Every sheet header is exactly what the importer expects, so a filled file maps automatically on upload.
+          </p>
+          {tplErr && (
+            <div role="alert" className="bg-red-500/10 border border-red-500/40 rounded-lg p-2.5 text-red-500 text-xs flex gap-2">
+              <AlertTriangle size={14} className="shrink-0" aria-hidden="true" /> {tplErr}
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => handleTemplate(null)}
+              disabled={tplBusy}
+              className="min-h-[44px] px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm flex items-center gap-2 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400"
+            >
+              {tplBusy ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Download size={15} aria-hidden="true" />}
+              Download all templates
+            </button>
+            <button
+              onClick={() => handleTemplate([datasetKey])}
+              disabled={tplBusy}
+              className="min-h-[44px] px-4 py-2 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--border-bright)] text-sm flex items-center gap-2 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400"
+            >
+              <Download size={15} aria-hidden="true" /> {dataset.label} template
+            </button>
           </div>
+          <p className="text-xs text-[var(--text-muted)]">
+            One workbook with four sheets: Asset Master, Tyre Change Log, Tyre Expense (Purchase) and Production m3. Each sheet has the header row plus an example row and a format hint row.
+          </p>
         </div>
-        {tplErr && (
-          <div className="bg-red-900/20 border border-red-700/50 rounded-lg p-2.5 text-red-300 text-xs flex gap-2">
-            <AlertTriangle size={14} /> {tplErr}
-          </div>
-        )}
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => handleTemplate(null)}
-            disabled={tplBusy}
-            className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm flex items-center gap-2 disabled:opacity-50"
-          >
-            {tplBusy ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
-            Download all templates
-          </button>
-          <button
-            onClick={() => handleTemplate([datasetKey])}
-            disabled={tplBusy}
-            className="px-4 py-2 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-sm flex items-center gap-2 disabled:opacity-50"
-          >
-            <Download size={15} /> {dataset.label} template
-          </button>
-        </div>
-        <p className="text-xs text-[var(--text-muted)]">
-          One workbook with four sheets: Asset Master, Tyre Change Log, Tyre Expense (Purchase) and Production m3. Each sheet has the header row plus an example row and a format hint row.
-        </p>
-      </div>
+      </details>
 
-      {/* File chooser */}
-      <label className="block border-2 border-dashed border-[var(--border-bright)] rounded-xl p-8 text-center cursor-pointer hover:border-green-600/60">
-        <input ref={fileRef} type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.ods,.csv,.tsv,.txt" className="hidden" onChange={onFile} />
+      {/* File chooser. The input stays in the tab order (sr-only, not hidden)
+          so a keyboard user can open the picker. */}
+      <label className="block border-2 border-dashed border-[var(--border-bright)] rounded-xl p-6 sm:p-8 text-center cursor-pointer hover:border-green-600/60 focus-within:ring-2 focus-within:ring-green-500">
+        <input ref={fileRef} type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.ods,.csv,.tsv,.txt" className="sr-only" onChange={onFile} aria-label={`Choose the filled ERP template for ${dataset.label}`} />
         {busy && !parsed
-          ? <Loader2 className="animate-spin mx-auto text-green-400" />
-          : <Upload className="mx-auto text-[var(--text-muted)]" size={32} />}
-        <p className="mt-2 text-sm text-[var(--text-secondary)]">
-          {fileName || `Choose the filled ERP template (.xlsx) for ${dataset.label}`}
+          ? <Loader2 className="animate-spin mx-auto text-green-500" aria-hidden="true" />
+          : <Upload className="mx-auto text-[var(--text-muted)]" size={32} aria-hidden="true" />}
+        <p className="mt-2 text-sm text-[var(--text-secondary)] break-all">
+          {busy && !parsed ? 'Reading file...' : fileName || `Choose the filled ERP template (.xlsx) for ${dataset.label}`}
         </p>
         <p className="mt-1 text-xs text-[var(--text-muted)]">The matching tab is detected automatically. If not found, pick the sheet below.</p>
       </label>
@@ -374,14 +384,15 @@ function ImportPanel({
       {parsed?.sheets?.length > 0 && (
         <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-4 space-y-3">
           <p className="text-sm text-[var(--text-secondary)] flex items-center gap-2">
-            <FileSpreadsheet size={15} /> {parsed.sheets.length} sheet(s). Selected tab feeds the {dataset.label} mapping.
+            <FileSpreadsheet size={15} aria-hidden="true" /> {parsed.sheets.length} sheet(s). Selected tab feeds the {dataset.label} mapping.
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Workbook sheets">
             {parsed.sheets.map((s, i) => (
               <button
                 key={s.name + i}
+                aria-pressed={i === sheetIdx}
                 onClick={() => setSheetIdx(i)}
-                className={`px-3 py-1.5 rounded-lg text-xs ${i === sheetIdx ? 'bg-green-600 text-white' : 'bg-[var(--surface-2)] hover:bg-[var(--surface-3)]'}`}
+                className={`min-h-[40px] px-3 py-1.5 rounded-lg text-xs border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 ${i === sheetIdx ? 'bg-green-600 border-green-600 text-white' : 'bg-[var(--surface-2)] border-[var(--border-bright)] hover:bg-[var(--surface-3)]'}`}
               >
                 {s.name} <span className="opacity-70">({(s.rows || []).length})</span>
               </button>
@@ -390,22 +401,23 @@ function ImportPanel({
         </div>
       )}
 
-      {/* Summary counts */}
+      {/* KPI strip */}
       {sheet && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Stat label="Rows mapped" value={mapped.length} color="text-[var(--text-primary)]" />
-          {datasetKey === 'change' && <Stat label="Current (active)" value={activeCount ?? 0} color="text-green-400" />}
-          {datasetKey === 'change' && <Stat label="Old / history" value={Math.max(0, mapped.length - (activeCount ?? 0))} color="text-sky-400" />}
-          <Stat label="Rows with warnings" value={warnCount} color={warnCount ? 'text-amber-400' : 'text-[var(--text-primary)]'} />
-          <Stat label="Country tag" value={countryTag || 'None'} color="text-[var(--text-secondary)]" small />
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+          <StatTile label="Rows mapped" value={summary.rows.toLocaleString()} icon={Layers} />
+          <StatTile label="Key match rate" value={rate == null ? 'N/A' : `${rate}%`} sub={match ? `${match.keyed.toLocaleString()} of ${match.read.toLocaleString()} read rows carry ${match.keyField || 'a key'}` : undefined} tone={rate != null && rate < 90 ? 'warn' : 'accent'} icon={Percent} />
+          {datasetKey === 'change' && <StatTile label="Current (active)" value={(summary.active ?? 0).toLocaleString()} tone="accent" icon={CheckCircle2} />}
+          {datasetKey === 'change' && <StatTile label="Old / history" value={(summary.old ?? 0).toLocaleString()} tone="info" icon={History} />}
+          <StatTile label="Rows flagged" value={summary.flagged.toLocaleString()} sub={summary.flaggedPct == null ? undefined : `${summary.flaggedPct}% of mapped rows`} tone={summary.flagged ? 'warn' : 'neutral'} icon={AlertTriangle} />
+          <StatTile label="Country tag" value={countryTag || 'None'} sub={countryTag ? undefined : 'Pick a country in the top bar to stamp rows'} icon={Database} />
         </div>
       )}
 
       {/* Large-file honesty note */}
-      {mapped.length > ROW_CAP && (
-        <div className="bg-amber-900/20 border border-amber-600/50 rounded-xl p-3 text-amber-300 text-sm flex gap-2">
-          <AlertTriangle size={16} />
-          This sheet has {mapped.length.toLocaleString()} rows. The browser import saves the first {ROW_CAP.toLocaleString()}. For very large files (100k+ rows) use the server load. Contact an administrator.
+      {overflow > 0 && (
+        <div role="status" className="bg-amber-500/10 border border-amber-500/40 rounded-xl p-3 text-amber-500 text-sm flex gap-2">
+          <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden="true" />
+          This sheet has {mapped.length.toLocaleString()} rows. The browser import saves the first {ROW_CAP.toLocaleString()}; {overflow.toLocaleString()} would be left behind. For very large files (100k+ rows) use the server load. Contact an administrator.
         </div>
       )}
 
@@ -413,34 +425,19 @@ function ImportPanel({
       {sheet && mapped.length > 0 && (
         <div className="space-y-2">
           <p className="text-sm text-[var(--text-secondary)]">
-            Preview of the first {Math.min(PREVIEW_LIMIT, mapped.length)} of {mapped.length.toLocaleString()} mapped rows.
+            Preview of the first {Math.min(PREVIEW_LIMIT, mapped.length).toLocaleString()} of {mapped.length.toLocaleString()} mapped rows. Every mapped row is saved, not only the preview.
           </p>
-          <div className="overflow-x-auto border border-[var(--border-dim)] rounded-xl max-h-[520px]">
-            <table className="w-full text-xs whitespace-nowrap">
-              <thead className="bg-[var(--surface-2)] text-[var(--text-secondary)] sticky top-0">
-                <tr>
-                  <th className="text-left px-2 py-2">#</th>
-                  {(datasetKey === 'change' || datasetKey === 'expense') && <th className="text-left px-2 py-2">Flags</th>}
-                  {displayCols.map((c) => <th key={c} className="text-left px-2 py-2">{c}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {previewRows.map((r, i) => (
-                  <tr key={i} className="border-t border-[var(--border-dim)]">
-                    <td className="px-2 py-1.5 text-[var(--text-muted)]">{r.source_row}</td>
-                    {(datasetKey === 'change' || datasetKey === 'expense') && (
-                      <td className="px-2 py-1.5"><FlagCell row={r} datasetKey={datasetKey} /></td>
-                    )}
-                    {displayCols.map((c) => (
-                      <td key={c} className="px-2 py-1.5 text-[var(--text-secondary)]">
-                        {r[c] == null || r[c] === '' ? <span className="text-[var(--text-dim)]">-</span> : String(r[c])}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <EnterpriseTable
+            columns={previewColumns}
+            data={previewRows}
+            getRowId={(r, i) => `${r.source_row ?? 'r'}-${i}`}
+            enableColumnFilters={false}
+            searchPlaceholder="Search the preview..."
+            initialPageSize={25}
+            exportFileName={`ERP ${dataset.label} preview`}
+            reportMeta={{ title: `ERP ${dataset.label} import preview` }}
+            emptyMessage="No rows to preview."
+          />
         </div>
       )}
 
@@ -448,14 +445,14 @@ function ImportPanel({
           Saying so is the whole point: this exact case previously saved 18 rows
           in which every business column was null and reported it as a success. */}
       {sheet && match?.unusable && (
-        <div className="bg-amber-900/15 border border-amber-700/40 rounded-xl p-4 text-sm space-y-1">
-          <p className="text-amber-300 flex items-center gap-2">
-            <AlertTriangle size={16} />
+        <div role="alert" className="bg-amber-500/10 border border-amber-500/40 rounded-xl p-4 text-sm space-y-1">
+          <p className="text-amber-500 flex items-center gap-2">
+            <AlertTriangle size={16} aria-hidden="true" />
             This does not look like a {dataset.label} sheet.
           </p>
           <p className="text-[var(--text-secondary)]">
             {match.read.toLocaleString()} row(s) were read and none of them has a
-            {' '}<span className="text-[var(--text)]">{match.keyField}</span>, which is the value
+            {' '}<span className="text-[var(--text-primary)] font-medium">{match.keyField}</span>, which is the value
             {' '}{dataset.label} rows are identified by. Nothing will be saved from it.
             Pick the tab that holds your {dataset.label} data, or switch the type above.
           </p>
@@ -468,29 +465,42 @@ function ImportPanel({
         </div>
       )}
 
-      {sheet && sheetIdx < 0 && (
-        <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-4 text-sm text-[var(--text-muted)]">
+      {parsed && sheetIdx < 0 && (
+        <div role="status" className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-4 text-sm text-[var(--text-muted)]">
           No tab in this workbook is named like a {dataset.label} sheet. Choose the right one above.
         </div>
       )}
 
       {/* Save result */}
       {saveResult && (
-        <div className="bg-green-900/15 border border-green-700/40 rounded-xl p-4 text-sm space-y-1">
-          <p className="text-green-300 flex items-center gap-2">
-            <CheckCircle2 size={16} />
+        <div role="status" className="bg-green-500/10 border border-green-500/40 rounded-xl p-4 text-sm space-y-1">
+          <p className="text-green-500 flex items-center gap-2">
+            <CheckCircle2 size={16} aria-hidden="true" />
             Saved {saveResult.saved.toLocaleString()} of {saveResult.requested.toLocaleString()} row(s)
             {saveResult.dataset === 'production' ? ' into the live production log.' : ' to the review table.'}
           </p>
           {saveResult.capped > 0 && (
-            <p className="text-amber-300">{saveResult.capped.toLocaleString()} row(s) beyond the {ROW_CAP.toLocaleString()} browser cap were not saved. Use the server load for the rest.</p>
+            <p className="text-amber-500">{saveResult.capped.toLocaleString()} row(s) beyond the {ROW_CAP.toLocaleString()} browser cap were not saved. Use the server load for the rest.</p>
           )}
           {saveResult.failures?.length > 0 && (
-            <p className="text-amber-300">{saveResult.failures.length} row(s) failed: {saveResult.failures.slice(0, 3).join('; ')}{saveResult.failures.length > 3 ? ' ...' : ''}</p>
+            <p className="text-amber-500">{saveResult.failures.length} row(s) failed: {saveResult.failures.slice(0, 3).join('; ')}{saveResult.failures.length > 3 ? ' ...' : ''}</p>
           )}
           {saveResult.dataset !== 'production' && (
             <p className="text-[var(--text-secondary)]">Open the Review tab to check the batch, then Promote it into the master tables when it looks right.</p>
           )}
+        </div>
+      )}
+
+      {/* Progress */}
+      {progress && progress.total > 0 && (
+        <div className="space-y-1" aria-live="polite">
+          <div className="flex justify-between text-xs text-[var(--text-muted)]">
+            <span>Saving {progress.done.toLocaleString()} of {progress.total.toLocaleString()}</span>
+            <span>{Math.round((progress.done / progress.total) * 100)}%</span>
+          </div>
+          <div className="h-2 rounded-full bg-[var(--surface-2)] overflow-hidden" role="progressbar" aria-valuemin={0} aria-valuemax={progress.total} aria-valuenow={progress.done}>
+            <div className="h-full bg-green-600 transition-[width] duration-300" style={{ width: `${Math.round((progress.done / progress.total) * 100)}%` }} />
+          </div>
         </div>
       )}
 
@@ -499,9 +509,9 @@ function ImportPanel({
         <button
           onClick={onSave}
           disabled={busy || !canWrite || mapped.length === 0 || !!saveResult}
-          className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm flex items-center gap-2 disabled:opacity-50"
+          className="min-h-[44px] px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm flex items-center gap-2 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400"
         >
-          {busy ? <Loader2 size={15} className="animate-spin" /> : <ArrowRight size={15} />}
+          {busy ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <ArrowRight size={15} aria-hidden="true" />}
           {/* Show real counts while saving. A spinner alone on a multi-minute
               upload is indistinguishable from a hung tab. */}
           {progress
@@ -509,13 +519,48 @@ function ImportPanel({
             : datasetKey === 'production' ? 'Save to production log' : 'Save to review table'}
         </button>
         {(parsed || saveResult) && (
-          <button onClick={onReset} className="px-4 py-2 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-sm flex items-center gap-2">
-            <RefreshCw size={15} /> New file
+          <button onClick={onReset} className="min-h-[44px] px-4 py-2 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--border-bright)] text-sm flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400">
+            <RefreshCw size={15} aria-hidden="true" /> New file
           </button>
         )}
       </div>
     </div>
   )
+}
+
+/**
+ * EnterpriseTable column defs for a dataset: source row, optional flags, then
+ * one column per staging column. Blank cells read N/A (never a fabricated 0).
+ */
+function useDatasetColumns(dataset, datasetKey, { withFlags } = {}) {
+  return useMemo(() => {
+    const cols = [
+      { id: 'source_row', header: '#', accessorFn: (r) => Number(r.source_row) || 0, size: 70, meta: { align: 'right' },
+        cell: ({ row }) => <span className="text-[var(--text-muted)]">{row.original.source_row ?? 'N/A'}</span> },
+    ]
+    if (withFlags) {
+      cols.push({
+        id: 'flags', header: 'Flags', accessorFn: (r) => flagsOf(r, datasetKey).join(', '), size: 170,
+        cell: ({ row }) => <FlagCell row={row.original} datasetKey={datasetKey} />,
+      })
+    }
+    for (const c of dataset.columns) {
+      cols.push({
+        id: c.key,
+        header: humanizeKey(c.key),
+        accessorFn: (r) => (r[c.key] == null || r[c.key] === '' ? '' : r[c.key]),
+        size: 150,
+        meta: { exportHeader: c.key, exportValue: (r) => (r[c.key] == null || r[c.key] === '' ? '' : r[c.key]), align: c.type === 'num' || c.type === 'int' ? 'right' : undefined },
+        cell: ({ row }) => {
+          const v = row.original[c.key]
+          return v == null || v === ''
+            ? <span className="text-[var(--text-dim)]">N/A</span>
+            : <span className="text-[var(--text-secondary)] whitespace-nowrap">{String(v)}</span>
+        },
+      })
+    }
+    return cols
+  }, [dataset, datasetKey, withFlags])
 }
 
 /* ── Promotion panel (staging -> master tables) ──────────────────────────────
@@ -548,7 +593,7 @@ function PromoteSummary({ datasetKey, res, applied }) {
         {updated > 0 && <p className="text-[var(--text-muted)]">{updated.toLocaleString()} same-key asset(s) refreshed with changed supplied values.</p>}
         {exact > 0 && <p className="text-[var(--text-muted)]">{exact.toLocaleString()} exact duplicate(s) dropped.</p>}
         {fmtPromoMoney(res.to_insert_by_country) && <p className="text-[var(--text-muted)]">By country: {fmtPromoMoney(res.to_insert_by_country)}</p>}
-        {res.skipped_no_asset_no > 0 && <p className="text-amber-400">{res.skipped_no_asset_no.toLocaleString()} row(s) skipped - no asset number.</p>}
+        {res.skipped_no_asset_no > 0 && <p className="text-amber-500">{res.skipped_no_asset_no.toLocaleString()} row(s) skipped - no asset number.</p>}
       </div>
     )
   }
@@ -561,8 +606,8 @@ function PromoteSummary({ datasetKey, res, applied }) {
         {fmtPromoMoney(res.to_insert_by_country) && <p className="text-[var(--text-muted)]">By country: {fmtPromoMoney(res.to_insert_by_country)}</p>}
         {updated > 0 && <p className="text-[var(--text-muted)]">{updated.toLocaleString()} same-fitment row(s) refreshed.</p>}
         {exact > 0 && <p className="text-[var(--text-muted)]">{exact.toLocaleString()} exact duplicate(s) dropped.</p>}
-        {res.skipped_no_key > 0 && <p className="text-amber-400">{res.skipped_no_key.toLocaleString()} row(s) skipped - missing serial or asset.</p>}
-        {res.active_position_conflicts > 0 && <p className="text-amber-400">{res.active_position_conflicts.toLocaleString()} landed as history - that asset/position already had an active tyre.</p>}
+        {res.skipped_no_key > 0 && <p className="text-amber-500">{res.skipped_no_key.toLocaleString()} row(s) skipped - missing serial or asset.</p>}
+        {res.active_position_conflicts > 0 && <p className="text-amber-500">{res.active_position_conflicts.toLocaleString()} landed as history - that asset/position already had an active tyre.</p>}
       </div>
     )
   }
@@ -571,7 +616,7 @@ function PromoteSummary({ datasetKey, res, applied }) {
       <p>{verb} <b>{Number(res.to_insert_total || 0).toLocaleString()}</b> tyre cost line(s) into the expense grid.</p>
       {fmtPromoMoney(res.by_country) && <p className="text-[var(--text-muted)]">{fmtPromoMoney(res.by_country)}</p>}
       {res.already_present > 0 && <p className="text-[var(--text-muted)]">{res.already_present.toLocaleString()} exact duplicate cost line(s) dropped.</p>}
-      {res.skipped_no_cost > 0 && <p className="text-amber-400">{res.skipped_no_cost.toLocaleString()} row(s) skipped - no cost.</p>}
+      {res.skipped_no_cost > 0 && <p className="text-amber-500">{res.skipped_no_cost.toLocaleString()} row(s) skipped - no cost.</p>}
     </div>
   )
 }
@@ -636,14 +681,14 @@ function PromotePanel({ datasetKey, batchId, canWrite, onChanged }) {
   return (
     <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-4 space-y-3">
       <div className="flex items-start gap-3">
-        <ShieldCheck size={18} className="shrink-0 text-green-400 mt-0.5" />
+        <ShieldCheck size={18} className="shrink-0 text-green-500 mt-0.5" />
         <div className="flex-1">
           <p className="text-sm font-medium text-[var(--text-primary)]">Promote to the {MASTER_LABEL[datasetKey]}</p>
           <p className="text-xs text-[var(--text-muted)] mt-0.5">
             Move every valid reviewed row into the master tables. Changed same-key rows refresh; only exact copies are dropped. Preview the counts first.
           </p>
           {isPromoted && (
-            <p className="text-xs text-green-300 mt-1.5 flex items-center gap-1.5">
+            <p className="text-xs text-green-500 mt-1.5 flex items-center gap-1.5">
               <CheckCircle2 size={13} />
               Promotion complete: {Number(status.inserted || 0).toLocaleString()} added, {Number(status.updated || 0).toLocaleString()} refreshed, {Number(status.exact_duplicates ?? status.existing ?? 0).toLocaleString()} exact duplicate(s) dropped.
             </p>
@@ -652,20 +697,20 @@ function PromotePanel({ datasetKey, batchId, canWrite, onChanged }) {
       </div>
 
       {error && (
-        <div className="bg-red-900/20 border border-red-700/50 rounded-lg p-2.5 text-red-300 text-xs flex gap-2">
+        <div className="bg-red-500/10 border border-red-500/40 rounded-lg p-2.5 text-red-500 text-xs flex gap-2">
           <AlertTriangle size={14} /> {error}
         </div>
       )}
 
       {preview && !applied && (
-        <div className="bg-sky-900/15 border border-sky-700/40 rounded-lg p-3 text-[var(--text-secondary)]">
-          <p className="text-sky-300 text-xs font-medium mb-1">Preview (nothing written yet)</p>
+        <div className="bg-sky-500/10 border border-sky-500/40 rounded-lg p-3 text-[var(--text-secondary)]">
+          <p className="text-sky-500 text-xs font-medium mb-1">Preview (nothing written yet)</p>
           <PromoteSummary datasetKey={datasetKey} res={preview} applied={false} />
         </div>
       )}
       {applied && (
-        <div className="bg-green-900/15 border border-green-700/40 rounded-lg p-3 text-[var(--text-secondary)]">
-          <p className="text-green-300 text-xs font-medium mb-1 flex items-center gap-1.5"><CheckCircle2 size={13} /> Promoted</p>
+        <div className="bg-green-500/10 border border-green-500/40 rounded-lg p-3 text-[var(--text-secondary)]">
+          <p className="text-green-500 text-xs font-medium mb-1 flex items-center gap-1.5"><CheckCircle2 size={13} /> Promoted</p>
           <PromoteSummary datasetKey={datasetKey} res={applied} applied />
         </div>
       )}
@@ -691,7 +736,7 @@ function PromotePanel({ datasetKey, batchId, canWrite, onChanged }) {
             onClick={onUndo}
             disabled={anyBusy || !canWrite}
             title={canWrite ? 'Remove the rows this batch added' : 'Requires Admin / Manager / Director'}
-            className="px-3 py-2 rounded-lg bg-red-900/40 hover:bg-red-900/60 text-red-200 text-sm flex items-center gap-2 disabled:opacity-50"
+            className="px-3 py-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-500 text-sm flex items-center gap-2 disabled:opacity-50"
           >
             {busy === 'undo' ? <Loader2 size={14} className="animate-spin" /> : <Undo2 size={14} />} Undo promotion
           </button>
@@ -707,17 +752,17 @@ function FlagCell({ row, datasetKey }) {
     <div className="flex flex-wrap items-center gap-1">
       {datasetKey === 'change' && (
         row.is_active
-          ? <span className="px-1.5 py-0.5 rounded bg-green-900/40 text-green-300">Active</span>
-          : <span className="px-1.5 py-0.5 rounded bg-sky-900/40 text-sky-300">Old</span>
+          ? <span className="px-1.5 py-0.5 rounded bg-green-500/10 text-green-500">Active</span>
+          : <span className="px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-500">Old</span>
       )}
       {datasetKey === 'change' && row.chain_ok === false && (
-        <span className="px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300" title="Chain break">Chain</span>
+        <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500" title="Chain break">Chain</span>
       )}
       {datasetKey === 'expense' && row._hasChangeTab && !row.serial_in_change && (
-        <span className="px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300" title="No matching fitment">No fitment</span>
+        <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500" title="No matching fitment">No fitment</span>
       )}
       {warns.length > 0 && (
-        <span className="px-1.5 py-0.5 rounded bg-red-900/40 text-red-300" title={warns.join('; ')}>
+        <span className="px-1.5 py-0.5 rounded bg-red-500/10 text-red-500" title={warns.join('; ')}>
           <AlertTriangle size={11} className="inline" /> {warns.length}
         </span>
       )}
@@ -730,109 +775,126 @@ function FlagCell({ row, datasetKey }) {
 function ReviewPanel({ datasetKey, dataset, canWrite, countryTag }) {
   const isProduction = datasetKey === 'production'
   const [batches, setBatches] = useState([])
+  const [batchesLoading, setBatchesLoading] = useState(false)
+  const [batchesError, setBatchesError] = useState('')
   const [batchId, setBatchId] = useState('')
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [rowsError, setRowsError] = useState('')
+  const [actionError, setActionError] = useState('')
   const [search, setSearch] = useState('')
   const [flagFilter, setFlagFilter] = useState('all')
   const [deleting, setDeleting] = useState(false)
+  const [now] = useState(() => new Date())
 
   const loadBatches = useCallback(async () => {
     if (isProduction) return
-    setError('')
+    setBatchesError(''); setBatchesLoading(true)
     try {
       const list = await listImportBatches(datasetKey, { country: countryTag })
       setBatches(list)
       setBatchId((cur) => (list.some((b) => b.batch_id === cur) ? cur : (list[0]?.batch_id || '')))
     } catch (err) {
-      setError(toUserMessage(err, 'Could not load saved batches.'))
-    }
+      setBatchesError(toUserMessage(err, 'Could not load saved batches.'))
+    } finally { setBatchesLoading(false) }
   }, [datasetKey, countryTag, isProduction])
 
   useEffect(() => { loadBatches() }, [loadBatches])
 
   const loadRows = useCallback(async () => {
     if (isProduction || !batchId) { setRows([]); return }
-    setLoading(true); setError('')
+    setLoading(true); setRowsError('')
     try {
       const data = await listImportRows(datasetKey, { batch_id: batchId, country: countryTag })
       setRows(datasetKey === 'change' ? deriveTyreActivity(data) : data)
     } catch (err) {
-      setError(toUserMessage(err, 'Could not load the batch rows.'))
+      setRowsError(toUserMessage(err, 'Could not load the batch rows.'))
     } finally { setLoading(false) }
   }, [datasetKey, batchId, countryTag, isProduction])
 
   useEffect(() => { loadRows() }, [loadRows])
 
-  const filtered = useMemo(() => {
-    let out = rows
-    if (datasetKey === 'change' && flagFilter !== 'all') {
-      out = out.filter((r) => (flagFilter === 'active' ? r.is_active : flagFilter === 'old' ? !r.is_active : (r.warnings?.length > 0 || r.chain_ok === false)))
-    }
-    const q = search.trim().toLowerCase()
-    if (q) {
-      out = out.filter((r) => Object.values(r).some((v) => v != null && String(v).toLowerCase().includes(q)))
-    }
-    return out
-  }, [rows, search, flagFilter, datasetKey])
+  // Reset a dataset-specific flag filter when the dataset changes.
+  useEffect(() => { setFlagFilter('all') }, [datasetKey])
 
-  // Paged, not capped: this table used to render filtered.slice(0, 2000), so a
-  // batch larger than that hid its tail. onExport below still covers `filtered`.
-  const pager = usePagedRows(filtered)
-
+  const filtered = useMemo(
+    () => filterReviewRows(rows, { search, flag: flagFilter, datasetKey }),
+    [rows, search, flagFilter, datasetKey],
+  )
+  const batchSummary = useMemo(() => summarizeBatches(batches, now), [batches, now])
+  const rowSummary = useMemo(() => summarizeRows(rows, datasetKey), [rows, datasetKey])
+  const columns = useDatasetColumns(dataset, datasetKey, { withFlags: datasetKey === 'change' })
   const displayCols = dataset.columns.map((c) => c.key)
+  const filtersActive = !!search.trim() || flagFilter !== 'all'
 
   async function onDelete() {
     if (!batchId || !window.confirm('Delete this saved batch? Every row in it is removed from the review table.')) return
-    setDeleting(true); setError('')
+    setDeleting(true); setActionError('')
     try {
       await deleteImportBatch(datasetKey, batchId)
       setBatchId(''); setRows([])
       await loadBatches()
     } catch (err) {
-      setError(toUserMessage(err, 'Could not delete the batch.'))
+      setActionError(toUserMessage(err, 'Could not delete the batch.'))
     } finally { setDeleting(false) }
   }
 
   function onExport() {
     if (!filtered.length) return
-    const cols = datasetKey === 'change' ? ['source_row', 'is_active', 'chain_ok', ...displayCols] : ['source_row', ...displayCols]
-    const headers = cols.map((c) => (c === 'is_active' ? 'Active' : c === 'chain_ok' ? 'Chain OK' : c))
-    const flat = filtered.map((r) => {
-      const o = {}
-      for (const c of cols) o[c] = c === 'is_active' ? (r.is_active ? 'Active' : 'Old') : r[c] ?? ''
-      return o
-    })
+    const { cols, headers, flat } = reviewExportRows(filtered, displayCols, datasetKey)
     exportToExcel(flat, cols, headers, `ERP ${dataset.label} ${batchId.slice(0, 8)}`)
   }
 
   if (isProduction) {
     return (
       <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-6 text-sm text-[var(--text-secondary)] flex gap-3">
-        <Info size={18} className="shrink-0 text-sky-400" />
+        <Info size={18} className="shrink-0 text-sky-500" aria-hidden="true" />
         <p>Production m3 loads directly into the live production log (it is not staged for review). Review and edit m3 entries on the Cost Center page under "Cost per unit".</p>
       </div>
     )
   }
 
+  const selectCls = 'min-h-[44px] bg-[var(--surface-1)] border border-[var(--border-bright)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500'
+  const btnCls = 'min-h-[44px] px-3 py-2 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--border-bright)] text-sm flex items-center gap-2 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400'
+
   return (
     <div className="space-y-4">
-      {error && (
-        <div className="bg-red-900/20 border border-red-700/50 rounded-lg p-3 text-red-300 text-sm flex gap-2">
-          <AlertTriangle size={16} /> {error}
+      {batchesError && (
+        <div role="alert" className="bg-red-500/10 border border-red-500/40 rounded-lg p-3 text-red-500 text-sm flex flex-wrap items-center gap-2">
+          <AlertTriangle size={16} className="shrink-0" aria-hidden="true" /> <span className="flex-1 min-w-0">{batchesError}</span>
+          <button onClick={loadBatches} className={btnCls}><RefreshCw size={14} aria-hidden="true" /> Retry</button>
+        </div>
+      )}
+      {actionError && (
+        <div role="alert" className="bg-red-500/10 border border-red-500/40 rounded-lg p-3 text-red-500 text-sm flex gap-2">
+          <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden="true" /> {actionError}
+        </div>
+      )}
+
+      {/* KPI strip - batches are whole-dataset figures; the row figures cover the selected batch. */}
+      {!batchesError && (
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+          <StatTile label="Saved batches" value={batchesLoading ? '...' : batchSummary.batches.toLocaleString()} icon={Layers} />
+          <StatTile label="Rows staged (all batches)" value={batchesLoading ? '...' : batchSummary.rows.toLocaleString()} icon={Database} />
+          <StatTile label="Latest batch" value={batchesLoading ? '...' : batchSummary.latestAgeDays == null ? 'N/A' : batchSummary.latestAgeDays === 0 ? 'Today' : `${batchSummary.latestAgeDays}d ago`} icon={History} />
+          <StatTile label="Rows in this batch" value={loading ? '...' : batchId ? rowSummary.rows.toLocaleString() : 'N/A'} icon={FileSpreadsheet} />
+          {datasetKey === 'change'
+            ? <StatTile label="Current / history" value={loading ? '...' : batchId ? `${(rowSummary.active ?? 0).toLocaleString()} / ${(rowSummary.old ?? 0).toLocaleString()}` : 'N/A'} tone="info" icon={CheckCircle2} />
+            : <StatTile label="Countries" value={batchesLoading ? '...' : batchSummary.countries.length ? batchSummary.countries.join(', ') : 'N/A'} icon={Info} />}
+          <StatTile label="Flagged rows" value={loading ? '...' : batchId ? rowSummary.flagged.toLocaleString() : 'N/A'} sub={batchId && rowSummary.flaggedPct != null ? `${rowSummary.flaggedPct}% of this batch` : undefined} tone={rowSummary.flagged ? 'warn' : 'neutral'} icon={AlertTriangle} />
         </div>
       )}
 
       <div className="flex flex-wrap items-end gap-3">
-        <div>
-          <label className="block text-xs text-[var(--text-muted)] mb-1">Saved batch</label>
+        <div className="min-w-0 w-full sm:w-auto">
+          <label htmlFor="erp-batch" className="block text-xs text-[var(--text-muted)] mb-1">Saved batch</label>
           <select
+            id="erp-batch"
             value={batchId}
             onChange={(e) => setBatchId(e.target.value)}
-            className="bg-[var(--surface-1)] border border-[var(--border-bright)] rounded-lg px-3 py-2 text-sm min-w-[280px]"
+            className={`${selectCls} w-full sm:min-w-[280px]`}
           >
-            {batches.length === 0 && <option value="">No saved batches</option>}
+            {batches.length === 0 && <option value="">{batchesLoading ? 'Loading batches...' : 'No saved batches'}</option>}
             {batches.map((b) => (
               <option key={b.batch_id} value={b.batch_id}>
                 {fmtDate(b.created_at)} | {b.count.toLocaleString()} rows{b.country ? ` (${b.country})` : ''}
@@ -840,37 +902,37 @@ function ReviewPanel({ datasetKey, dataset, canWrite, countryTag }) {
             ))}
           </select>
         </div>
-        <button onClick={loadBatches} className="px-3 py-2 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-sm flex items-center gap-2">
-          <RefreshCw size={14} /> Refresh
+        <button onClick={loadBatches} disabled={batchesLoading} className={btnCls}>
+          <RefreshCw size={14} className={batchesLoading ? 'animate-spin' : ''} aria-hidden="true" /> Refresh
         </button>
-        {datasetKey === 'change' && (
-          <div>
-            <label className="block text-xs text-[var(--text-muted)] mb-1">Show</label>
-            <select value={flagFilter} onChange={(e) => setFlagFilter(e.target.value)} className="bg-[var(--surface-1)] border border-[var(--border-bright)] rounded-lg px-3 py-2 text-sm">
-              <option value="all">All fitments</option>
-              <option value="active">Current (active)</option>
-              <option value="old">Old / history</option>
-              <option value="flagged">Flagged only</option>
-            </select>
-          </div>
-        )}
+        <div>
+          <label htmlFor="erp-flag" className="block text-xs text-[var(--text-muted)] mb-1">Show</label>
+          <select id="erp-flag" value={flagFilter} onChange={(e) => setFlagFilter(e.target.value)} className={selectCls}>
+            <option value="all">{datasetKey === 'change' ? 'All fitments' : 'All rows'}</option>
+            {datasetKey === 'change' && <option value="active">Current (active)</option>}
+            {datasetKey === 'change' && <option value="old">Old / history</option>}
+            <option value="flagged">Flagged only</option>
+          </select>
+        </div>
         <div className="flex-1 min-w-[200px]">
-          <label className="block text-xs text-[var(--text-muted)] mb-1">Search</label>
+          <label htmlFor="erp-search" className="block text-xs text-[var(--text-muted)] mb-1">Search</label>
           <div className="relative">
-            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
             <input
+              id="erp-search"
+              type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search any field"
-              className="w-full bg-[var(--surface-1)] border border-[var(--border-bright)] rounded-lg pl-8 pr-3 py-2 text-sm"
+              className={`${selectCls} w-full pl-8`}
             />
           </div>
         </div>
-        <button onClick={onExport} disabled={!filtered.length} className="px-3 py-2 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-sm flex items-center gap-2 disabled:opacity-50">
-          <Download size={14} /> Excel
+        <button onClick={onExport} disabled={!filtered.length} className={btnCls}>
+          <Download size={14} aria-hidden="true" /> Excel (all filtered)
         </button>
-        <button onClick={onDelete} disabled={!batchId || deleting || !canWrite} className="px-3 py-2 rounded-lg bg-red-900/40 hover:bg-red-900/60 text-red-200 text-sm flex items-center gap-2 disabled:opacity-50" title={canWrite ? 'Delete this batch' : 'Requires Admin / Manager / Director'}>
-          {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />} Delete batch
+        <button onClick={onDelete} disabled={!batchId || deleting || !canWrite} className="min-h-[44px] px-3 py-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/40 text-red-500 text-sm flex items-center gap-2 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400" title={canWrite ? 'Delete this batch' : 'Requires Admin / Manager / Director'}>
+          {deleting ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <Trash2 size={14} aria-hidden="true" />} Delete batch
         </button>
       </div>
 
@@ -883,63 +945,36 @@ function ReviewPanel({ datasetKey, dataset, canWrite, countryTag }) {
         />
       )}
 
-      {loading
+      {!batchId && !batchesLoading && !batchesError
         ? (
-          <div className="flex items-center gap-2 text-sm text-[var(--text-muted)] py-10 justify-center">
-            <Loader2 size={16} className="animate-spin" /> Loading rows...
+          <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-8 text-center text-sm text-[var(--text-muted)]">
+            No saved {dataset.label} batches yet. Import a file to create one.
           </div>
         )
-        : !batchId
-          ? (
-            <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-8 text-center text-sm text-[var(--text-muted)]">
-              No saved {dataset.label} batches yet. Import a file to create one.
-            </div>
-          )
-          : filtered.length === 0
-            ? (
-              <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-8 text-center text-sm text-[var(--text-muted)]">
-                No rows match the current filters.
-              </div>
-            )
-            : (
-              <>
-                <p className="text-xs text-[var(--text-muted)]">{filtered.length.toLocaleString()} row(s)</p>
-                <div className="overflow-x-auto border border-[var(--border-dim)] rounded-xl max-h-[600px]">
-                  <table className="w-full text-xs whitespace-nowrap">
-                    <thead className="bg-[var(--surface-2)] text-[var(--text-secondary)] sticky top-0">
-                      <tr>
-                        <th className="text-left px-2 py-2">#</th>
-                        {datasetKey === 'change' && <th className="text-left px-2 py-2">Flags</th>}
-                        {displayCols.map((c) => <th key={c} className="text-left px-2 py-2">{c}</th>)}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {pager.pageRows.map((r, i) => (
-                        <tr key={r.id || i} className="border-t border-[var(--border-dim)]">
-                          <td className="px-2 py-1.5 text-[var(--text-muted)]">{r.source_row}</td>
-                          {datasetKey === 'change' && <td className="px-2 py-1.5"><FlagCell row={r} datasetKey="change" /></td>}
-                          {displayCols.map((c) => (
-                            <td key={c} className="px-2 py-1.5 text-[var(--text-secondary)]">
-                              {r[c] == null || r[c] === '' ? <span className="text-[var(--text-dim)]">-</span> : String(r[c])}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <TablePagination {...pager} className="border border-t-0 border-[var(--border-dim)] rounded-b-xl" />
-              </>
+        : batchId && (
+          <div className="space-y-2">
+            {!loading && !rowsError && (
+              <p className="text-xs text-[var(--text-muted)]">
+                {filtersActive ? `${filtered.length.toLocaleString()} of ${rows.length.toLocaleString()} row(s) match` : `${rows.length.toLocaleString()} row(s)`}
+              </p>
             )}
-    </div>
-  )
-}
-
-function Stat({ label, value, color, small }) {
-  return (
-    <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-3">
-      <p className="text-xs text-[var(--text-muted)]">{label}</p>
-      <p className={`font-bold ${small ? 'text-base' : 'text-2xl'} ${color}`}>{typeof value === 'number' ? value.toLocaleString() : value}</p>
+            <EnterpriseTable
+              columns={columns}
+              data={filtered}
+              getRowId={(r, i) => String(r.id ?? `${r.source_row}-${i}`)}
+              loading={loading}
+              error={rowsError || null}
+              onRetry={loadRows}
+              enableGlobalFilter={false}
+              enableColumnFilters={false}
+              initialPageSize={50}
+              pageSizeOptions={[25, 50, 100, 250]}
+              exportFileName={`ERP ${dataset.label} batch`}
+              reportMeta={{ title: `ERP ${dataset.label} review batch` }}
+              emptyMessage={filtersActive ? 'No rows match the current filters.' : 'This batch has no rows.'}
+            />
+          </div>
+        )}
     </div>
   )
 }

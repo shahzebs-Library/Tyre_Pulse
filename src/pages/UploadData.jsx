@@ -21,6 +21,12 @@ import Card from '../components/ui/Card'
 import Modal from '../components/ui/Modal'
 import { toUserMessage } from '../lib/safeError'
 import { duplicateComparable, isExactSuppliedRow } from '../lib/import/exactDuplicate'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import StatTile from '../components/ui/StatTile'
+import {
+  resultNumber, rowsHandled, fileSummary, qualityVerdict, QUALITY_LABEL, summarizeQuality,
+  filterQuality, rawPreviewRows, columnLetter, dupReviewRows, DUP_KIND_LABEL, skipLogRows,
+} from '../lib/uploadDataAnalytics'
 
 // ── Step bar ──────────────────────────────────────────────────────────────────
 
@@ -37,22 +43,23 @@ function StepBar({ current }) {
   const { t } = useLanguage()
   const activeIdx = STEPS.findIndex(s => s.key === current)
   return (
-    <div className="flex items-center gap-0 mb-8 overflow-x-auto pb-1">
+    <div className="flex items-center gap-0 mb-8 overflow-x-auto pb-1" role="list" aria-label="Upload progress">
       {STEPS.map((s, i) => {
         const Icon = s.icon
         const done   = i < activeIdx
         const active = i === activeIdx
         return (
-          <div key={s.key} className="flex items-center">
+          <div key={s.key} role="listitem" className="flex items-center" aria-current={active ? 'step' : undefined}>
             <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-              active  ? 'bg-green-900/40 text-green-300 border border-green-500/50' :
-              done    ? 'text-green-500 opacity-70' : 'text-gray-600'
+              active  ? 'bg-green-500/15 text-green-500 border border-green-500/50' :
+              done    ? 'text-green-500 opacity-70' : 'text-[var(--text-dim)]'
             }`}>
-              <Icon size={13} />
+              <Icon size={13} aria-hidden="true" />
               <span className="hidden sm:inline">{t(`uploaddata.steps.${s.key}`)}</span>
+              <span className="sr-only sm:hidden">{t(`uploaddata.steps.${s.key}`)}{done ? ' (done)' : active ? ' (current)' : ''}</span>
             </div>
             {i < STEPS.length - 1 && (
-              <ChevronRight size={12} className={`mx-1 flex-shrink-0 ${i < activeIdx ? 'text-green-600' : 'text-gray-700'}`} />
+              <ChevronRight size={12} className={`mx-1 flex-shrink-0 ${i < activeIdx ? 'text-green-600' : 'text-[var(--text-dim)]'}`} />
             )}
           </div>
         )
@@ -313,6 +320,8 @@ export const TYRE_FIELDS = [
 
 
 // Fields parsed as dates / numbers during row building.
+const PREVIEW_ROWS = 50
+
 const DATE_FIELDS    = new Set(['issue_date', 'removal_date'])
 const NUMERIC_FIELDS = new Set(['km_at_fitment', 'hrs_at_fitment', 'km_at_removal', 'hrs_at_removal', 'total_km', 'total_hrs'])
 
@@ -324,15 +333,6 @@ function parseNumeric(val) {
   return m ? parseFloat(m[0]) : null
 }
 
-function resultNumber(v) {
-  return Number(v || 0)
-}
-
-function rowsHandled(result) {
-  if (!result) return 0
-  if (result.pending) return resultNumber(result.submitted)
-  return resultNumber(result.added) + resultNumber(result.skipped) + resultNumber(result.dupesSkipped)
-}
 
 const STOCK_FIELDS = [
   { key: 'item_code',   label: 'Item Code',    required: true,  guesses: ['item code', 'item_code', 'code', 'part no', 'part number', 'sku', 'item no', 'رمز الصنف', 'كود الصنف'] },
@@ -640,6 +640,7 @@ export default function UploadData() {
   useEffect(() => {
     uploads.listFieldSynonyms()
       .then(({ data }) => { if (data) setSynonyms(data) })
+      .catch(() => { /* synonyms are an accuracy boost; auto-mapping still runs without them */ })
   }, [])
 
   // Unmapped source columns - shown in a warning strip so user sees what's being dropped
@@ -652,6 +653,100 @@ export default function UploadData() {
   const requiredFields  = activeFields.filter(f => f.required)
   const mappedRequired  = requiredFields.filter(f => mapping[f.key])
   const mappingComplete = mappedRequired.length === requiredFields.length
+
+  // ── Derived views (pure engine: src/lib/uploadDataAnalytics.js) ────────────
+  const [qualitySearch, setQualitySearch] = useState('')
+  const [qualityIssuesOnly, setQualityIssuesOnly] = useState(false)
+  const [dupFilter, setDupFilter] = useState('all')
+  const summary = useMemo(
+    () => fileSummary({ headers, rows, mapping, fields: activeFields, skipCount: skipIds.size }),
+    [headers, rows, mapping, activeFields, skipIds],
+  )
+  const qualitySummary = useMemo(() => summarizeQuality(quality), [quality])
+  const qualityRows = useMemo(
+    () => filterQuality(quality, { search: qualitySearch, onlyIssues: qualityIssuesOnly }),
+    [quality, qualitySearch, qualityIssuesOnly],
+  )
+  const raw = useMemo(() => rawPreviewRows(rawAoa, headerRowIdx), [rawAoa, headerRowIdx])
+  const dupRows = useMemo(() => {
+    const all = dupReviewRows(dupCheck, skipIds)
+    return dupFilter === 'all' ? all : all.filter(r => r.action === dupFilter)
+  }, [dupCheck, skipIds, dupFilter])
+  const skipRows = useMemo(
+    () => skipLogRows(result?.skipLog).map(r => ({ ...r, reason: r.reason === 'Not recorded' ? r.reason : toUserMessage({ message: r.reason }, 'Row could not be saved') })),
+    [result],
+  )
+  const mappedPreviewFields = useMemo(() => activeFields.filter(f => mapping[f.key]), [activeFields, mapping])
+
+  const rawColumns = useMemo(() => {
+    const cols = [{
+      id: '_row', header: 'Row', accessorFn: r => r._row, size: 110,
+      cell: ({ row }) => (
+        <span className="whitespace-nowrap text-[var(--text-muted)]">
+          {row.original._row}
+          {row.original._role === 'header' && <span className="ml-1.5 px-1.5 py-0.5 rounded bg-green-500/15 text-green-500 text-[10px] font-semibold">Header</span>}
+          {row.original._role === 'above' && <span className="ml-1.5 text-[10px]">(skipped)</span>}
+        </span>
+      ),
+    }]
+    for (let i = 0; i < raw.width; i++) {
+      cols.push({
+        id: `c${i}`, header: columnLetter(i), accessorFn: r => r[`c${i}`], size: 140,
+        cell: ({ row }) => {
+          const v = row.original[`c${i}`]
+          const role = row.original._role
+          return v === ''
+            ? <span className="text-[var(--text-dim)]">empty</span>
+            : <span className={`whitespace-nowrap ${role === 'header' ? 'text-green-500 font-semibold' : role === 'above' ? 'text-[var(--text-dim)]' : 'text-[var(--text-secondary)]'}`}>{v}</span>
+        },
+      })
+    }
+    return cols
+  }, [raw.width])
+
+  const qualityColumns = useMemo(() => [
+    { id: 'field', header: 'Field', accessorFn: q => q.label, size: 200,
+      cell: ({ row }) => <span className="text-[var(--text-primary)]">{row.original.label}{row.original.required && <span className="text-red-500 ml-0.5" title="Required">* <span className="sr-only">required</span></span>}</span> },
+    { id: 'fill', header: 'Filled', accessorFn: q => q.fillPct, size: 90, meta: { align: 'right', exportValue: q => `${q.fillPct}%` },
+      cell: ({ row }) => { const q = row.original; return <span className={q.fillPct >= 90 ? 'text-green-500' : q.fillPct >= 50 ? 'text-yellow-500' : q.required ? 'text-red-500' : 'text-[var(--text-muted)]'}>{q.fillPct}%</span> } },
+    { id: 'invalid', header: 'Invalid', accessorFn: q => q.invalid, size: 90, meta: { align: 'right' },
+      cell: ({ row }) => <span className={row.original.invalid ? 'text-orange-500 font-semibold' : 'text-[var(--text-dim)]'}>{row.original.invalid}</span> },
+    { id: 'dupes', header: 'In-file dupes', accessorFn: q => q.dupes, size: 110, meta: { align: 'right' },
+      cell: ({ row }) => <span className={row.original.dupes ? 'text-yellow-500 font-semibold' : 'text-[var(--text-dim)]'}>{row.original.dupes}</span> },
+    { id: 'verdict', header: 'Verdict', accessorFn: q => QUALITY_LABEL[qualityVerdict(q)], size: 100,
+      cell: ({ row }) => {
+        const v = qualityVerdict(row.original)
+        const cls = v === 'good' ? 'bg-green-500/15 text-green-500 border-green-500/30' : v === 'partial' ? 'bg-yellow-500/15 text-yellow-500 border-yellow-500/30' : 'bg-red-500/15 text-red-500 border-red-500/30'
+        const Icon = v === 'good' ? CheckCircle : AlertTriangle
+        return <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-semibold ${cls}`}><Icon size={11} aria-hidden="true" /> {QUALITY_LABEL[v]}</span>
+      } },
+  ], [])
+
+  const previewColumns = useMemo(() => mappedPreviewFields.map(f => ({
+    id: f.key, header: f.label, accessorFn: r => (r[f.key] == null || r[f.key] === '' ? '' : String(r[f.key])), size: 150,
+    cell: ({ row }) => {
+      const v = row.original[f.key]
+      return v == null || v === '' ? <span className="text-[var(--text-dim)]">N/A</span> : <span className="whitespace-nowrap text-[var(--text-secondary)]">{String(v)}</span>
+    },
+  })), [mappedPreviewFields])
+
+  const dupColumns = useMemo(() => [
+    { id: 'fileRow', header: 'File row', accessorFn: r => r.fileRow, size: 90, meta: { align: 'right' } },
+    { id: 'serial', header: 'Serial', accessorFn: r => r.serial, size: 150, cell: ({ row }) => <span className="font-mono text-[var(--text-primary)]">{row.original.serial || 'N/A'}</span> },
+    { id: 'kind', header: 'Match', accessorFn: r => DUP_KIND_LABEL[r.kind], size: 170 },
+    { id: 'file', header: 'In file', accessorFn: r => `${r.fileAsset} ${r.fileDate}`.trim(), size: 170, cell: ({ row }) => <span className="whitespace-nowrap text-[var(--text-secondary)]">{row.original.fileAsset || 'N/A'} | {row.original.fileDate || 'N/A'}</span> },
+    { id: 'db', header: 'In system', accessorFn: r => `${r.dbAsset} ${r.dbDate}`.trim(), size: 170, cell: ({ row }) => <span className="whitespace-nowrap text-[var(--text-secondary)]">{row.original.dbAsset || 'N/A'} | {row.original.dbDate || 'N/A'}</span> },
+    { id: 'action', header: 'Outcome', accessorFn: r => (r.action === 'drop' ? 'Exact copy: drop' : 'Changed row: import'), size: 170,
+      cell: ({ row }) => row.original.action === 'drop'
+        ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-semibold bg-sky-500/15 text-sky-500 border-sky-500/30"><X size={11} aria-hidden="true" /> Exact copy: drop</span>
+        : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-semibold bg-green-500/15 text-green-500 border-green-500/30"><CheckCircle size={11} aria-hidden="true" /> Changed row: import</span> },
+  ], [])
+
+  const skipColumns = useMemo(() => [
+    { id: 'row', header: 'Row', accessorFn: r => r.row ?? 0, size: 80, meta: { align: 'right', exportValue: r => r.row ?? 'N/A' }, cell: ({ row }) => row.original.row ?? 'N/A' },
+    { id: 'serial', header: 'Serial', accessorFn: r => r.serial, size: 160, cell: ({ row }) => <span className="font-mono">{row.original.serial || 'N/A'}</span> },
+    { id: 'reason', header: 'Reason', accessorFn: r => r.reason, size: 380 },
+  ], [])
 
   // ── File parsing ────────────────────────────────────────────────────────────
 
@@ -822,7 +917,7 @@ export default function UploadData() {
     setError('')
     try {
     const built = buildRows(headers, rows, mapping)
-    setPreview(built.slice(0, 5))
+    setPreview(built.slice(0, PREVIEW_ROWS))
     setSkipIds(new Set())
     setDupCheck(null)
 
@@ -1213,13 +1308,24 @@ export default function UploadData() {
         <button
           type="button"
           onClick={() => navigate('/data-intake?module=tyre')}
-          className="text-green-400 hover:text-green-300 underline underline-offset-2"
+          className="text-green-500 hover:text-green-500 underline underline-offset-2"
         >
           {t('uploaddata.banner.link')}
         </button>{' '}
         {t('uploaddata.banner.suffix')}
       </p>
       <StepBar current={step} />
+
+      {(step === 'mapping' || step === 'preview') && (
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3" aria-label="File summary">
+          <StatTile label="Rows in file" value={summary.rows.toLocaleString()} icon={Table2} />
+          <StatTile label="Columns detected" value={summary.columns.toLocaleString()} sub={summary.unmapped ? `${summary.unmapped} kept as custom data` : 'All mapped'} icon={Layers} />
+          <StatTile label="Required mapped" value={`${summary.requiredMapped} / ${summary.requiredTotal}`} tone={summary.complete ? 'accent' : 'warn'} icon={summary.complete ? CheckCircle : AlertTriangle} />
+          <StatTile label="Fields mapped" value={`${summary.mappedFields} / ${summary.totalFields}`} icon={Table2} />
+          <StatTile label="Quality issues" value={step === 'preview' && quality.length ? qualitySummary.issues : 'N/A'} sub={step === 'preview' && quality.length ? `${qualitySummary.invalid} invalid, ${qualitySummary.dupes} in-file dupes` : 'Shown after preview'} tone={qualitySummary.issues ? 'warn' : 'neutral'} icon={Database} />
+          <StatTile label="Rows to upload" value={step === 'preview' ? summary.toUpload.toLocaleString() : 'N/A'} sub={step === 'preview' && skipIds.size ? `${skipIds.size} exact copies dropped` : undefined} tone="accent" icon={Rocket} />
+        </div>
+      )}
 
       <AnimatePresence mode="wait">
 
@@ -1236,10 +1342,10 @@ export default function UploadData() {
                 const Icon = opt.icon
                 const active = uploadType === opt.val
                 const colorMap = {
-                  green:  { border: 'rgba(22,163,74,0.5)',  bg: 'rgba(22,163,74,0.1)',  text: 'text-green-300',  icon: 'text-green-400' },
-                  blue:   { border: 'rgba(59,130,246,0.5)', bg: 'rgba(59,130,246,0.1)', text: 'text-blue-300',   icon: 'text-blue-400' },
-                  purple: { border: 'rgba(168,85,247,0.5)', bg: 'rgba(168,85,247,0.1)', text: 'text-purple-300', icon: 'text-purple-400' },
-                  yellow: { border: 'rgba(234,179,8,0.5)',  bg: 'rgba(234,179,8,0.08)', text: 'text-yellow-300', icon: 'text-yellow-400' },
+                  green:  { border: 'rgba(22,163,74,0.5)',  bg: 'rgba(22,163,74,0.1)',  text: 'text-green-500',  icon: 'text-green-500' },
+                  blue:   { border: 'rgba(59,130,246,0.5)', bg: 'rgba(59,130,246,0.1)', text: 'text-blue-500',   icon: 'text-blue-500' },
+                  purple: { border: 'rgba(168,85,247,0.5)', bg: 'rgba(168,85,247,0.1)', text: 'text-purple-500', icon: 'text-purple-500' },
+                  yellow: { border: 'rgba(234,179,8,0.5)',  bg: 'rgba(234,179,8,0.08)', text: 'text-yellow-500', icon: 'text-yellow-500' },
                 }
                 const c = colorMap[opt.color]
                 return (
@@ -1257,7 +1363,7 @@ export default function UploadData() {
                     className="text-left transition-all duration-150"
                     style={active ? { borderColor: c.border, background: c.bg, boxShadow: `0 0 20px ${c.border}` } : {}}
                   >
-                    <Icon size={22} className={`mb-2 ${active ? c.icon : 'text-gray-600'}`} />
+                    <Icon size={22} className={`mb-2 ${active ? c.icon : 'text-[var(--text-dim)]'}`} />
                     <p className={`text-sm font-semibold ${active ? c.text : 'text-[var(--panel-ink-2)]'}`}>{opt.label}</p>
                     <p className="text-xs text-[var(--panel-ink-4)] mt-0.5 leading-snug">{opt.desc}</p>
                   </Card>
@@ -1266,27 +1372,27 @@ export default function UploadData() {
             </div>
 
             {uploadType === 'fleet' ? (
-              // `border-yellow-700/40 bg-yellow-900/10` would be DEAD here -
+              // `border-yellow-500/40 bg-yellow-500/10` would be DEAD here -
               // Card sets border and background inline. `tone="warn"` is the
               // sanctioned route to the amber edge this banner needs.
               <Card as={motion.div} tone="warn" initial={{ opacity:0, scale:0.98 }} animate={{ opacity:1, scale:1 }} className="mb-6">
                 <div className="flex items-start gap-3">
-                  <AlertTriangle size={20} className="text-yellow-400 flex-shrink-0 mt-0.5" />
+                  <AlertTriangle size={20} className="text-yellow-500 flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-sm font-semibold text-yellow-300">{t('uploaddata.idle.fleetBanner.title')}</p>
+                    <p className="text-sm font-semibold text-yellow-500">{t('uploaddata.idle.fleetBanner.title')}</p>
                     <p className="text-sm text-[var(--panel-ink-3)] mt-1">{t('uploaddata.idle.fleetBanner.desc')}</p>
-                    <a href="/fleet-master" className="inline-block mt-2 text-sm text-green-400 underline hover:text-green-300">{t('uploaddata.idle.fleetBanner.link')}</a>
+                    <a href="/fleet-master" className="inline-block mt-2 text-sm text-green-500 underline hover:text-green-500">{t('uploaddata.idle.fleetBanner.link')}</a>
                   </div>
                 </div>
               </Card>
             ) : (
               <>
-                {/* Accepted columns reference. `border-green-900/40 bg-green-900/5`
+                {/* Accepted columns reference. `border-green-900/40 bg-green-500/10`
                     would be dead on a Card; `tone="good"` carries the green edge. */}
                 <Card tone="good" className="mb-4">
                   <div className="flex items-center gap-2 mb-3">
-                    <Info size={15} className="text-green-400" />
-                    <span className="text-sm font-semibold text-green-300">Your columns don't need to match exactly</span>
+                    <Info size={15} className="text-green-500" />
+                    <span className="text-sm font-semibold text-green-500">Your columns don't need to match exactly</span>
                   </div>
                   <p className="text-xs text-[var(--panel-ink-3)] mb-3">
                     The smart mapping engine recognises hundreds of column name variations, abbreviations, and Arabic headers.
@@ -1295,10 +1401,10 @@ export default function UploadData() {
                   <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
                     {(uploadType === 'stock' ? STOCK_FIELDS : TYRE_FIELDS).filter(f => f.required).map(f => (
                       <div key={f.key} className="flex items-start gap-1.5">
-                        <span className="text-green-500 text-xs mt-0.5 flex-shrink-0">✓</span>
+                        <CheckCircle size={12} className="text-green-500 mt-0.5 flex-shrink-0" aria-hidden="true" />
                         <div>
                           <span className="text-xs font-semibold text-[var(--panel-ink-2)]">{f.label}</span>
-                          <p className="text-xs text-gray-600 leading-tight">{f.guesses.slice(0,3).join(', ')}...</p>
+                          <p className="text-xs text-[var(--text-dim)] leading-tight">{f.guesses.slice(0,3).join(', ')}...</p>
                         </div>
                       </div>
                     ))}
@@ -1306,32 +1412,36 @@ export default function UploadData() {
                 </Card>
 
                 <motion.div
-                  className="relative overflow-hidden rounded-2xl cursor-pointer transition-all duration-200"
-                  style={{ border: `2px dashed ${dragging ? 'rgba(22,163,74,0.7)' : 'rgba(255,255,255,0.1)'}`, background: dragging ? 'rgba(22,163,74,0.07)' : 'rgba(255,255,255,0.02)', boxShadow: dragging ? '0 0 40px rgba(22,163,74,0.2)' : 'none' }}
+                  className="relative overflow-hidden rounded-2xl cursor-pointer transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
+                  style={{ border: `2px dashed ${dragging ? 'rgba(22,163,74,0.7)' : 'var(--border-bright)'}`, background: dragging ? 'rgba(22,163,74,0.07)' : 'var(--surface-1)', boxShadow: dragging ? '0 0 40px rgba(22,163,74,0.2)' : 'none' }}
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Choose an Excel or CSV file to upload"
                   onClick={() => fileRef.current?.click()}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileRef.current?.click() } }}
                   onDragOver={e => { e.preventDefault(); setDragging(true) }}
                   onDragLeave={() => setDragging(false)}
                   onDrop={handleDrop}
                   whileHover={{ borderColor: 'rgba(22,163,74,0.4)', background: 'rgba(22,163,74,0.04)' }}
                 >
-                  <div className="py-20 flex flex-col items-center justify-center gap-4">
+                  <div className="py-12 sm:py-20 px-4 flex flex-col items-center justify-center gap-4">
                     <motion.div animate={dragging ? { scale: 1.15, rotate: [-5, 5, -5, 0] } : { scale: 1, rotate: 0 }} transition={{ duration: 0.3 }}
                       className="w-20 h-20 rounded-2xl flex items-center justify-center"
                       style={{ background: 'rgba(22,163,74,0.12)', border: '1px solid rgba(22,163,74,0.3)', boxShadow: '0 0 30px rgba(22,163,74,0.15)' }}>
-                      <Upload size={36} className="text-green-400" />
+                      <Upload size={36} className="text-green-500" />
                     </motion.div>
                     <div className="text-center">
-                      <p className="text-xl font-semibold text-white mb-1">{dragging ? 'Drop to upload' : 'Drop your Excel or CSV file here'}</p>
+                      <p className="text-xl font-semibold text-[var(--text-primary)] mb-1">{dragging ? 'Drop to upload' : 'Drop your Excel or CSV file here'}</p>
                       <p className="text-[var(--panel-ink-4)] text-sm">or click to browse · Excel, OpenDocument, CSV/TSV supported</p>
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-gray-600 flex-wrap justify-center">
+                    <div className="flex items-center gap-2 text-xs text-[var(--text-dim)] flex-wrap justify-center">
                       {['.xlsx', '.xls', '.xlsm', '.xlsb', '.ods', '.csv', '.tsv', '.txt'].map(x => (
-                        <span key={x} className="px-2 py-1 bg-gray-800/60 rounded">{x}</span>
+                        <span key={x} className="px-2 py-1 bg-[var(--surface-2)] rounded">{x}</span>
                       ))}
                     </div>
                   </div>
-                  <input ref={fileRef} type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.ods,.csv,.tsv,.txt" className="hidden" onChange={handleFile} />
-                  {error && <p className="text-red-400 text-sm text-center pb-4">{error}</p>}
+                  <input ref={fileRef} type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.ods,.csv,.tsv,.txt" className="hidden" tabIndex={-1} aria-hidden="true" onChange={handleFile} />
+                  {error && <p role="alert" className="text-red-500 text-sm text-center pb-4 px-4">{error}</p>}
                 </motion.div>
               </>
             )}
@@ -1341,16 +1451,16 @@ export default function UploadData() {
         {/* ── Sheets picker ── */}
         {step === 'sheets' && (
           <Card className="space-y-4">
-            <h2 className="text-base font-semibold text-white">Select Sheets to Import</h2>
+            <h2 className="text-base font-semibold text-[var(--text-primary)]">Select Sheets to Import</h2>
             <p className="text-sm text-[var(--panel-ink-3)]">This workbook has {sheetOptions.length} sheets. Choose which to include. Pivot and summary sheets are suggested to skip.</p>
             <div className="space-y-2">
               {sheetOptions.map((s, i) => (
-                <label key={s.name} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${s.selected ? 'border-green-700/50 bg-green-900/10' : 'border-gray-700 bg-gray-800/30'}`}>
+                <label key={s.name} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${s.selected ? 'border-green-500/40 bg-green-500/10' : 'border-[var(--border-bright)] bg-[var(--surface-2)]'}`}>
                   <input type="checkbox" checked={s.selected}
                     onChange={() => setSheetOptions(prev => prev.map((x, j) => j === i ? {...x, selected: !x.selected} : x))}
                     className="accent-green-500" />
-                  <span className="text-white text-sm font-medium flex-1">{s.name}</span>
-                  {s.likelyPivot && <span className="text-xs text-yellow-400">looks like a pivot</span>}
+                  <span className="text-[var(--text-primary)] text-sm font-medium flex-1">{s.name}</span>
+                  {s.likelyPivot && <span className="text-xs text-yellow-500">looks like a pivot</span>}
                   <span className="text-xs text-[var(--panel-ink-4)]">{s.rows} rows</span>
                 </label>
               ))}
@@ -1373,7 +1483,7 @@ export default function UploadData() {
                   await applyHeaders(hdrs, dataRows)
                 }}
                 className="btn-primary disabled:opacity-40">
-                Import {sheetOptions.filter(s => s.selected).reduce((a, s) => a + s.rows, 0)} rows →
+                Import {sheetOptions.filter(s => s.selected).reduce((a, s) => a + s.rows, 0)} rows <ChevronRight size={14} className="inline" aria-hidden="true" />
               </button>
               <button onClick={reset} className="btn-secondary">Cancel</button>
             </div>
@@ -1385,16 +1495,16 @@ export default function UploadData() {
           <div className="space-y-4">
             {/* Header row */}
             <div className="flex flex-wrap items-center gap-3 text-sm text-[var(--panel-ink-3)]">
-              <FileSpreadsheet size={16} className="text-blue-400" />
+              <FileSpreadsheet size={16} className="text-blue-500" />
               <span className="font-medium text-[var(--panel-ink-2)]">{fileName}</span>
               <span>· {rows.length.toLocaleString()} rows · {headers.length} columns detected</span>
               {mappingSource === 'memory' && (
-                <span className="badge bg-green-900/50 text-green-300 border border-green-700/50 flex items-center gap-1 text-xs px-2 py-0.5 rounded-full">
+                <span className="badge bg-green-500/15 text-green-500 border border-green-500/40 flex items-center gap-1 text-xs px-2 py-0.5 rounded-full">
                   <BookOpen size={11} /> Recalled from memory
                 </span>
               )}
               {mappingSource === 'auto' && (
-                <span className="badge bg-blue-900/50 text-blue-300 border border-blue-700/50 flex items-center gap-1 text-xs px-2 py-0.5 rounded-full">
+                <span className="badge bg-blue-500/15 text-blue-500 border border-blue-500/40 flex items-center gap-1 text-xs px-2 py-0.5 rounded-full">
                   <Zap size={11} /> Smart auto-mapped
                 </span>
               )}
@@ -1409,13 +1519,13 @@ export default function UploadData() {
               <Card>
                 <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
                   <div>
-                    <h2 className="text-base font-semibold text-white">File Preview</h2>
+                    <h2 className="text-base font-semibold text-[var(--text-primary)]">File Preview</h2>
                     <p className="text-xs text-[var(--panel-ink-4)] mt-0.5">If the wrong row was detected as the header, pick the correct one. The table re-maps instantly.</p>
                   </div>
                   <label className="flex items-center gap-2 text-xs text-[var(--panel-ink-3)]">
                     Header row:
                     <select
-                      className="input text-xs py-1"
+                      className="input text-xs py-1 min-h-[40px] max-w-[70vw]"
                       value={headerRowIdx}
                       onChange={e => changeHeaderRow(Number(e.target.value))}
                     >
@@ -1426,24 +1536,23 @@ export default function UploadData() {
                     </select>
                   </label>
                 </div>
-                <div className="overflow-x-auto border border-gray-800 rounded-lg">
-                  <table className="text-xs">
-                    <tbody>
-                      {rawAoa.slice(0, 8).map((r, ri) => (
-                        <tr key={ri} className={ri === headerRowIdx ? 'bg-green-900/30' : ri < headerRowIdx ? 'opacity-40' : ''}>
-                          <td className="px-2 py-1 text-gray-600 border-r border-gray-800 sticky left-0 bg-inherit">{ri + 1}</td>
-                          {(r || []).slice(0, 12).map((c, ci) => (
-                            <td key={ci} className={`px-2 py-1 whitespace-nowrap ${ri === headerRowIdx ? 'text-green-300 font-semibold' : 'text-[var(--panel-ink-3)]'}`}>
-                              {c == null || c === '' ? '·' : String(c).slice(0, 24)}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <EnterpriseTable
+                  columns={rawColumns}
+                  data={raw.rows}
+                  getRowId={r => String(r._row)}
+                  enableGlobalFilter={false}
+                  enableColumnFilters={false}
+                  enableSorting={false}
+                  enableExport={false}
+                  enableColumnVisibility={false}
+                  stickyFirstColumn
+                  initialPageSize={25}
+                  pageSizeOptions={[25]}
+                  emptyMessage="This sheet has no rows to preview."
+                />
+                <p className="text-xs text-[var(--panel-ink-4)] mt-2">First {raw.rows.length} sheet rows and up to 12 columns, as read. The highlighted row is used as the header; rows above it are skipped.</p>
                 {rows.length === 0 && (
-                  <p className="text-xs text-yellow-400 mt-2">No data rows detected below the current header row. Try selecting a different header row above.</p>
+                  <p className="text-xs text-yellow-500 mt-2">No data rows detected below the current header row. Try selecting a different header row above.</p>
                 )}
               </Card>
             )}
@@ -1451,14 +1560,14 @@ export default function UploadData() {
             {/* Completeness indicator */}
             <div className={`rounded-xl px-4 py-3 flex items-center gap-3 border ${
               mappingComplete
-                ? 'bg-green-900/20 border-green-700/40'
-                : 'bg-yellow-900/20 border-yellow-700/40'
+                ? 'bg-green-500/10 border-green-500/40'
+                : 'bg-yellow-500/10 border-yellow-500/40'
             }`}>
               {mappingComplete
-                ? <CheckCircle size={16} className="text-green-400 flex-shrink-0" />
-                : <AlertTriangle size={16} className="text-yellow-400 flex-shrink-0" />
+                ? <CheckCircle size={16} className="text-green-500 flex-shrink-0" />
+                : <AlertTriangle size={16} className="text-yellow-500 flex-shrink-0" />
               }
-              <p className={`text-sm ${mappingComplete ? 'text-green-300' : 'text-yellow-300'}`}>
+              <p className={`text-sm ${mappingComplete ? 'text-green-500' : 'text-yellow-500'}`}>
                 {mappingComplete
                   ? `All ${requiredFields.length} required fields are mapped. You can proceed to preview.`
                   : `${mappedRequired.length}/${requiredFields.length} required fields mapped. Map the remaining fields before uploading.`
@@ -1468,13 +1577,13 @@ export default function UploadData() {
 
             {/* Unmapped source columns warning */}
             {unmappedSource.length > 0 && (
-              <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl px-4 py-3">
+              <div className="bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-xl px-4 py-3">
                 <p className="text-xs font-semibold text-[var(--panel-ink-3)] mb-1.5">
                   {unmappedSource.length} column{unmappedSource.length !== 1 ? 's' : ''} from your file are not mapped to any field - they will be saved in <code className="text-[var(--panel-ink-2)]">extra_fields</code> and not lost:
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {unmappedSource.map(h => (
-                    <span key={h} className="text-xs bg-gray-700/60 text-[var(--panel-ink-2)] px-2 py-0.5 rounded-full">{h}</span>
+                    <span key={h} className="text-xs bg-[var(--surface-3)] text-[var(--panel-ink-2)] px-2 py-0.5 rounded-full">{h}</span>
                   ))}
                 </div>
               </div>
@@ -1483,16 +1592,18 @@ export default function UploadData() {
             {/* Header stays hand-rolled for the same reason as the File
                 Preview card: the filter box must be free to wrap. */}
             <Card>
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <div>
-                  <h2 className="text-base font-semibold text-white">Column Mapping</h2>
+                  <h2 className="text-base font-semibold text-[var(--text-primary)]">Column Mapping</h2>
                   <p className="text-xs text-[var(--panel-ink-4)] mt-0.5">Match your file's columns to the system fields. Confidence shown by colour.</p>
                 </div>
                 {/* Search */}
                 <div className="relative">
                   <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--panel-ink-4)]" />
                   <input
-                    className="input text-xs pl-7 py-1.5 w-36"
+                    className="input text-xs pl-7 py-1.5 w-36 min-h-[40px]"
+                    type="search"
+                    aria-label="Filter mapping fields"
                     placeholder="Filter fields..."
                     value={searchMapping}
                     onChange={e => setSearchMapping(e.target.value)}
@@ -1505,7 +1616,7 @@ export default function UploadData() {
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" /> Exact / High match</span>
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-500 inline-block" /> Medium match</span>
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" /> No match: please select</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-600 inline-block" /> Optional / Skipped</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--text-dim)] inline-block" /> Optional / Skipped</span>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1515,37 +1626,38 @@ export default function UploadData() {
                   const sc = mappingScores[field.key] ?? { score: 0, band: 'none' }
                   const hasMapping = !!mapping[field.key]
                   const borderColor = hasMapping
-                    ? sc.band === 'exact' || sc.band === 'high'   ? 'border-green-700/60'
-                    : sc.band === 'medium'                         ? 'border-yellow-700/60'
-                    :                                               'border-orange-700/60'
-                    : field.required                               ? 'border-red-800/60'
-                    :                                               'border-gray-700/40'
+                    ? sc.band === 'exact' || sc.band === 'high'   ? 'border-green-500/40'
+                    : sc.band === 'medium'                         ? 'border-yellow-500/40'
+                    :                                               'border-orange-500/40'
+                    : field.required                               ? 'border-red-500/40'
+                    :                                               'border-[var(--border-bright)]'
                   const dotColor = hasMapping
                     ? sc.band === 'exact' || sc.band === 'high'   ? 'bg-green-500'
                     : sc.band === 'medium'                         ? 'bg-yellow-500'
                     :                                               'bg-orange-500'
                     : field.required                               ? 'bg-red-600'
-                    :                                               'bg-gray-600'
+                    :                                               'bg-[var(--text-dim)]'
 
                   return (
                     <div key={field.key} className={`rounded-lg border p-3 transition-all ${borderColor}`}>
                       <div className="flex items-center gap-2 mb-1.5">
                         <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`} />
-                        <label className="text-xs font-semibold text-[var(--panel-ink-2)]">
+                        <label htmlFor={`map-${field.key}`} className="text-xs font-semibold text-[var(--panel-ink-2)]">
                           {field.label}
-                          {field.required && <span className="text-red-400 ml-0.5">*</span>}
+                          {field.required && <span className="text-red-500 ml-0.5">*</span>}
                         </label>
                         {sc.band !== 'none' && hasMapping && (
                           <span className={`ml-auto text-xs px-1.5 py-0.5 rounded-full ${
-                            sc.band === 'exact' || sc.band === 'high' ? 'bg-green-900/60 text-green-300' :
-                            sc.band === 'medium' ? 'bg-yellow-900/60 text-yellow-300' : 'bg-orange-900/60 text-orange-300'
+                            sc.band === 'exact' || sc.band === 'high' ? 'bg-green-500/15 text-green-500' :
+                            sc.band === 'medium' ? 'bg-yellow-500/15 text-yellow-500' : 'bg-orange-500/15 text-orange-500'
                           }`}>
                             {sc.score}% match
                           </span>
                         )}
                       </div>
                       <select
-                        className="input text-xs w-full"
+                        id={`map-${field.key}`}
+                        className="input text-xs w-full min-h-[40px]"
                         value={mapping[field.key] ?? ''}
                         onChange={e => {
                           const val = e.target.value || undefined
@@ -1590,19 +1702,19 @@ export default function UploadData() {
               // `tone="warn"` keeps it.
               <Card tone="warn">
                 <div className="flex items-center gap-2 mb-3">
-                  <AlertTriangle size={18} className="text-yellow-400" />
-                  <span className="font-semibold text-yellow-300">Exact Copy Check</span>
+                  <AlertTriangle size={18} className="text-yellow-500" />
+                  <span className="font-semibold text-yellow-500">Exact Copy Check</span>
                 </div>
-                {dupCheck.reupload && <p className="text-yellow-300 text-sm mb-2">This file closely matches a previous upload. It will still proceed through exact-row verification.</p>}
+                {dupCheck.reupload && <p className="text-yellow-500 text-sm mb-2">This file closely matches a previous upload. It will still proceed through exact-row verification.</p>}
                 <div className="flex gap-4 text-sm mb-3">
-                  {dupCheck.exact.length > 0 && <span className="text-sky-300">{dupCheck.exact.length} exact duplicate{dupCheck.exact.length !== 1 ? 's' : ''} to drop</span>}
-                  {(dupCheck.changed?.length || 0) > 0 && <span className="text-green-300">{dupCheck.changed.length} changed same-fitment row{dupCheck.changed.length !== 1 ? 's' : ''} to import</span>}
-                  {dupCheck.conflicts.length > 0 && <span className="text-orange-300">{dupCheck.conflicts.length} serial history row{dupCheck.conflicts.length !== 1 ? 's' : ''} to import</span>}
+                  {dupCheck.exact.length > 0 && <span className="text-sky-500">{dupCheck.exact.length} exact duplicate{dupCheck.exact.length !== 1 ? 's' : ''} to drop</span>}
+                  {(dupCheck.changed?.length || 0) > 0 && <span className="text-green-500">{dupCheck.changed.length} changed same-fitment row{dupCheck.changed.length !== 1 ? 's' : ''} to import</span>}
+                  {dupCheck.conflicts.length > 0 && <span className="text-orange-500">{dupCheck.conflicts.length} serial history row{dupCheck.conflicts.length !== 1 ? 's' : ''} to import</span>}
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <button className="px-3 py-1.5 text-sm rounded-lg border border-gray-600 text-[var(--panel-ink-2)] hover:text-white" onClick={() => setDupReview(true)}>Review matches</button>
+                  <button className="px-3 py-1.5 text-sm rounded-lg border border-[var(--border-bright)] text-[var(--panel-ink-2)] hover:text-[var(--text-primary)]" onClick={() => setDupReview(true)}>Review matches</button>
                 </div>
-                {skipIds.size > 0 && <p className="text-xs text-green-400 mt-2">{skipIds.size} verified exact row{skipIds.size !== 1 ? 's' : ''} will be dropped automatically. All changed rows continue.</p>}
+                {skipIds.size > 0 && <p className="text-xs text-green-500 mt-2">{skipIds.size} verified exact row{skipIds.size !== 1 ? 's' : ''} will be dropped automatically. All changed rows continue.</p>}
               </Card>
             )}
 
@@ -1617,37 +1729,48 @@ export default function UploadData() {
               footer={<button onClick={() => setDupReview(false)} className="btn-primary w-full">Done</button>}
             >
               <div className="space-y-3">
-                {[...(dupCheck?.exact ?? []), ...(dupCheck?.changed ?? []), ...(dupCheck?.conflicts ?? [])].map(({ idx, row, existing }) => (
-                  <div key={idx} className={`rounded-lg p-3 border ${skipIds.has(idx) ? 'border-red-800/50 bg-red-900/10 opacity-60' : 'border-gray-700 bg-gray-800/50'}`}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="text-xs space-y-0.5">
-                        <p className="text-white font-mono font-semibold">Row {idx + 1}: {row.serial_no}</p>
-                        <p className="text-[var(--panel-ink-3)]">File: {row.asset_no} · {row.issue_date} | DB: {existing.asset_no} · {existing.issue_date}</p>
-                      </div>
-                      <span className={`text-xs px-2 py-1 rounded border flex-shrink-0 ${skipIds.has(idx) ? 'bg-sky-900/30 text-sky-300 border-sky-800/50' : 'bg-green-900/30 text-green-300 border-green-800/50'}`}>
-                        {skipIds.has(idx) ? 'Exact copy: drop' : 'Changed row: import'}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                <div className="flex flex-wrap gap-2" role="group" aria-label="Filter matches by outcome">
+                  {[['all', 'All'], ['drop', 'Dropped as exact copies'], ['import', 'Importing']].map(([k, label]) => (
+                    <button
+                      key={k}
+                      type="button"
+                      aria-pressed={dupFilter === k}
+                      onClick={() => setDupFilter(k)}
+                      className={`min-h-[40px] px-3 py-1.5 rounded-lg text-xs border ${dupFilter === k ? 'bg-green-600 border-green-600 text-white' : 'bg-[var(--surface-2)] border-[var(--border-bright)] text-[var(--text-secondary)]'}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <EnterpriseTable
+                  columns={dupColumns}
+                  data={dupRows}
+                  getRowId={r => String(r.idx)}
+                  enableColumnFilters={false}
+                  searchPlaceholder="Search serial or asset..."
+                  initialPageSize={25}
+                  exportFileName={`Upload row matches ${fileName || ''}`.trim()}
+                  reportMeta={{ title: 'Upload row matches' }}
+                  emptyMessage="No matches for this filter."
+                />
               </div>
             </Modal>
 
             {dupes.length > 0 && (
-              <div className="bg-yellow-900/20 border border-yellow-700/50 rounded-xl p-4">
+              <div className="bg-yellow-500/10 border border-yellow-500/40 rounded-xl p-4">
                 <div className="flex items-start gap-3">
-                  <AlertTriangle size={18} className="text-yellow-400 flex-shrink-0 mt-0.5" />
+                  <AlertTriangle size={18} className="text-yellow-500 flex-shrink-0 mt-0.5" />
                   <div className="flex-1">
-                    <p className="text-yellow-300 font-medium">{dupes.length} serial number{dupes.length !== 1 ? 's' : ''} also appear in history</p>
+                    <p className="text-yellow-500 font-medium">{dupes.length} serial number{dupes.length !== 1 ? 's' : ''} also appear in history</p>
                     <p className="text-sm text-yellow-200 mt-1">Serial reuse alone does not block import. Changed lifecycle rows continue; only exact full-row copies are dropped.</p>
                   </div>
                 </div>
               </div>
             )}
 
-            <div className="bg-blue-900/20 border border-blue-800/50 rounded-xl px-4 py-3 flex gap-3">
-              <Wand2 size={16} className="text-blue-400 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-blue-300">Records will be auto-classified on upload. High/Medium confidence results are marked cleaned instantly. Low confidence records are flagged for review in Data Cleaning.</p>
+            <div className="bg-blue-500/10 border border-blue-500/40 rounded-xl px-4 py-3 flex gap-3">
+              <Wand2 size={16} className="text-blue-500 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-blue-500">Records will be auto-classified on upload. High/Medium confidence results are marked cleaned instantly. Low confidence records are flagged for review in Data Cleaning.</p>
             </div>
 
             {/* Data-quality report */}
@@ -1657,36 +1780,44 @@ export default function UploadData() {
               // row count off, so this header stays hand-rolled.
               <Card>
                 <div className="flex items-center gap-2 mb-3">
-                  <Database size={15} className="text-green-400" />
-                  <h2 className="text-base font-semibold text-white">Data Quality</h2>
+                  <Database size={15} className="text-green-500" />
+                  <h2 className="text-base font-semibold text-[var(--text-primary)]">Data Quality</h2>
                   <span className="text-xs text-[var(--panel-ink-4)]">· {rows.length.toLocaleString()} rows analysed</span>
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead><tr>
-                      <th className="table-header">Field</th>
-                      <th className="table-header">Filled</th>
-                      <th className="table-header">Invalid</th>
-                      <th className="table-header">In-file dupes</th>
-                    </tr></thead>
-                    <tbody>
-                      {quality.map(qf => (
-                        <tr key={qf.key}>
-                          <td className="table-cell">{qf.label}{qf.required && <span className="text-red-400 ml-0.5">*</span>}</td>
-                          <td className="table-cell">
-                            <span className={qf.fillPct >= 90 ? 'text-green-400' : qf.fillPct >= 50 ? 'text-yellow-400' : qf.required ? 'text-red-400' : 'text-[var(--panel-ink-3)]'}>
-                              {qf.fillPct}%
-                            </span>
-                          </td>
-                          <td className="table-cell">{qf.invalid > 0 ? <span className="text-orange-400">{qf.invalid}</span> : <span className="text-gray-600">0</span>}</td>
-                          <td className="table-cell">{qf.dupes > 0 ? <span className="text-yellow-400">{qf.dupes}</span> : <span className="text-gray-600">0</span>}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="flex flex-wrap items-end gap-3 mb-3">
+                  <div className="relative flex-1 min-w-[180px]">
+                    <label htmlFor="quality-search" className="sr-only">Search quality fields</label>
+                    <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--panel-ink-4)]" aria-hidden="true" />
+                    <input
+                      id="quality-search"
+                      type="search"
+                      className="input text-xs pl-7 min-h-[40px] w-full"
+                      placeholder="Search fields..."
+                      value={qualitySearch}
+                      onChange={e => setQualitySearch(e.target.value)}
+                    />
+                  </div>
+                  <label className="flex items-center gap-2 text-xs text-[var(--panel-ink-3)] min-h-[40px] cursor-pointer">
+                    <input type="checkbox" className="accent-green-500 w-4 h-4" checked={qualityIssuesOnly} onChange={e => setQualityIssuesOnly(e.target.checked)} />
+                    Only fields that need a check ({qualitySummary.issues})
+                  </label>
+                  <span className="text-xs text-[var(--panel-ink-4)] pb-2.5">Average fill: {qualitySummary.avgFill == null ? 'N/A' : `${qualitySummary.avgFill}%`}</span>
                 </div>
-                {quality.some(qf => qf.required && qf.fillPct < 50) && (
-                  <p className="text-xs text-red-400 mt-2">⚠ A required field is under 50% filled. Check the column mapping or header row before uploading.</p>
+                <EnterpriseTable
+                  columns={qualityColumns}
+                  data={qualityRows}
+                  getRowId={q => q.key}
+                  enableGlobalFilter={false}
+                  enableColumnFilters={false}
+                  initialPageSize={25}
+                  exportFileName={`Upload data quality ${fileName || ''}`.trim()}
+                  reportMeta={{ title: 'Upload data quality' }}
+                  emptyMessage={qualitySearch || qualityIssuesOnly ? 'No fields match. Clear the search or the issues filter.' : 'No fields to report.'}
+                />
+                {qualitySummary.lowRequired > 0 && (
+                  <p role="alert" className="text-xs text-red-500 mt-2 flex items-center gap-1.5">
+                    <AlertTriangle size={12} aria-hidden="true" /> {qualitySummary.lowRequired} required field{qualitySummary.lowRequired === 1 ? ' is' : 's are'} under 50% filled. Check the column mapping or header row before uploading.
+                  </p>
                 )}
               </Card>
             )}
@@ -1699,12 +1830,12 @@ export default function UploadData() {
               // that pairing.
               <Card>
                 <div className="flex items-center gap-2 mb-3">
-                  <Wand2 size={15} className="text-purple-400" />
-                  <h2 className="text-base font-semibold text-white">Cleaning Preview</h2>
+                  <Wand2 size={15} className="text-purple-500" />
+                  <h2 className="text-base font-semibold text-[var(--text-primary)]">Cleaning Preview</h2>
                 </div>
                 <div className="flex flex-wrap gap-4 text-sm mb-3">
-                  <span className="text-green-400">{cleanPreview.auto.toLocaleString()} auto-classified</span>
-                  <span className="text-yellow-400">{cleanPreview.review.toLocaleString()} need review</span>
+                  <span className="text-green-500">{cleanPreview.auto.toLocaleString()} auto-classified</span>
+                  <span className="text-yellow-500">{cleanPreview.review.toLocaleString()} need review</span>
                   <span className="text-[var(--panel-ink-4)]">of {cleanPreview.total.toLocaleString()} sampled</span>
                 </div>
                 {cleanPreview.examples.length > 0 && (
@@ -1712,15 +1843,15 @@ export default function UploadData() {
                     {cleanPreview.examples.map((ex, i) => (
                       <div key={i} className="flex items-center gap-2 text-xs">
                         <span className="text-[var(--panel-ink-3)] truncate max-w-xs">{ex.text}</span>
-                        <ChevronRight size={11} className="text-gray-600 flex-shrink-0" />
+                        <ChevronRight size={11} className="text-[var(--text-dim)] flex-shrink-0" />
                         <span className="text-[var(--panel-ink-2)]">{ex.category || '-'}</span>
-                        {ex.risk && <span className="px-1.5 py-0.5 rounded bg-gray-800 text-[var(--panel-ink-3)]">{ex.risk}</span>}
-                        <span className={`px-1.5 py-0.5 rounded ${ex.conf === 'Low' ? 'bg-yellow-900/40 text-yellow-400' : 'bg-green-900/40 text-green-400'}`}>{ex.conf}</span>
+                        {ex.risk && <span className="px-1.5 py-0.5 rounded bg-[var(--surface-2)] text-[var(--panel-ink-3)]">{ex.risk}</span>}
+                        <span className={`px-1.5 py-0.5 rounded ${ex.conf === 'Low' ? 'bg-yellow-500/15 text-yellow-500' : 'bg-green-500/15 text-green-500'}`}>{ex.conf}</span>
                       </div>
                     ))}
                   </div>
                 )}
-                <label className="flex items-start gap-2 cursor-pointer border-t border-gray-800 pt-3">
+                <label className="flex items-start gap-2 cursor-pointer border-t border-[var(--border-bright)] pt-3">
                   <input type="checkbox" className="accent-purple-500 mt-0.5" checked={useAI} onChange={e => setUseAI(e.target.checked)} />
                   <span className="text-sm text-[var(--panel-ink-2)]">
                     Clean low-confidence rows with AI
@@ -1731,34 +1862,34 @@ export default function UploadData() {
             )}
 
             <Card>
-              <h2 className="text-base font-semibold text-white mb-4">Preview (first 5 rows)</h2>
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr>{activeFields.filter(f => mapping[f.key]).map(f => <th key={f.key} className="table-header">{f.label}</th>)}</tr>
-                  </thead>
-                  <tbody>
-                    {preview.map((row, i) => (
-                      <tr key={i}>{activeFields.filter(f => mapping[f.key]).map(f => <td key={f.key} className="table-cell">{String(row[f.key] ?? '-')}</td>)}</tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <h2 className="text-base font-semibold text-[var(--text-primary)] mb-1">Preview</h2>
+              <p className="text-xs text-[var(--panel-ink-4)] mb-3">First {preview.length.toLocaleString()} of {rows.length.toLocaleString()} rows as they will be saved. Every row is uploaded, not only the preview.</p>
+              <EnterpriseTable
+                columns={previewColumns}
+                data={preview}
+                getRowId={(r, i) => String(i)}
+                enableColumnFilters={false}
+                searchPlaceholder="Search the preview..."
+                initialPageSize={25}
+                exportFileName={`Upload preview ${fileName || ''}`.trim()}
+                reportMeta={{ title: 'Upload preview' }}
+                emptyMessage="No rows could be built from this mapping."
+              />
               {activeCountry === 'All' ? (
                 <div className="mt-4 mb-1 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3">
-                  <p className="text-amber-300 text-sm font-semibold">Select a country before uploading</p>
+                  <p className="text-amber-500 text-sm font-semibold">Select a country before uploading</p>
                   <p className="text-amber-200/80 text-xs mt-1">
                     Pick a specific country in the top bar (KSA / UAE / Egypt). Every row will be stamped with it so your data never mixes.
                   </p>
                 </div>
               ) : (
                 <div className="mt-4 mb-1 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-2">
-                  <p className="text-emerald-300 text-sm">
+                  <p className="text-emerald-500 text-sm">
                     Uploading to <span className="font-bold">{activeCountry}</span>. Every row will be stamped with this country.
                   </p>
                 </div>
               )}
-              {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
+              {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
               <div className="flex gap-3 mt-4">
                 <button
                   onClick={upload}
@@ -1789,11 +1920,11 @@ export default function UploadData() {
             style={{ paddingBlock: 'var(--space-12)' }}
           >
             <div className="relative w-16 h-16 mx-auto mb-6">
-              <div className="absolute inset-0 rounded-full border-2 border-gray-700" />
+              <div className="absolute inset-0 rounded-full border-2 border-[var(--border-bright)]" />
               <div className="absolute inset-0 rounded-full border-2 border-green-500 border-t-transparent animate-spin" />
-              <div className="absolute inset-0 flex items-center justify-center"><Rocket size={20} className="text-green-400" /></div>
+              <div className="absolute inset-0 flex items-center justify-center"><Rocket size={20} className="text-green-500" /></div>
             </div>
-            <p className="text-white text-lg font-semibold mb-1">Uploading & classifying</p>
+            <p className="text-[var(--text-primary)] text-lg font-semibold mb-1">Uploading & classifying</p>
             <p className="text-[var(--panel-ink-4)] text-sm mb-6">Auto-classifying records with the Smart Engine</p>
             {progress.total > 0 && (
               <div className="max-w-sm mx-auto">
@@ -1801,11 +1932,11 @@ export default function UploadData() {
                   <span>{progress.done.toLocaleString()} rows processed</span>
                   <span>{Math.round((progress.done / progress.total) * 100)}%</span>
                 </div>
-                <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
+                <div className="h-2 bg-[var(--surface-2)] rounded-full overflow-hidden">
                   <motion.div className="h-full rounded-full" style={{ background: 'linear-gradient(90deg, #16a34a, #4ade80)' }}
                     animate={{ width: `${(progress.done / progress.total) * 100}%` }} transition={{ duration: 0.3 }} />
                 </div>
-                <p className="text-gray-600 text-xs mt-2">{progress.total.toLocaleString()} total records</p>
+                <p className="text-[var(--text-dim)] text-xs mt-2">{progress.total.toLocaleString()} total records</p>
               </div>
             )}
           </Card>
@@ -1817,11 +1948,11 @@ export default function UploadData() {
             <div className="flex items-center gap-3 mb-6">
               <motion.div initial={{ scale:0 }} animate={{ scale:1 }} transition={{ type:'spring', stiffness:300, delay:0.1 }}>
                 {result.pending
-                  ? <Clock size={32} className="text-amber-400" style={{ filter: 'drop-shadow(0 0 12px rgba(251,191,36,0.6))' }} />
-                  : <CheckCircle size={32} className="text-green-400" style={{ filter: 'drop-shadow(0 0 12px rgba(74,222,128,0.6))' }} />}
+                  ? <Clock size={32} className="text-amber-500" style={{ filter: 'drop-shadow(0 0 12px rgba(251,191,36,0.6))' }} />
+                  : <CheckCircle size={32} className="text-green-500" style={{ filter: 'drop-shadow(0 0 12px rgba(74,222,128,0.6))' }} />}
               </motion.div>
               <div>
-                <h2 className="text-xl font-bold text-white">{result.pending ? 'Submitted for Approval' : 'Upload Complete'}</h2>
+                <h2 className="text-xl font-bold text-[var(--text-primary)]">{result.pending ? 'Submitted for Approval' : 'Upload Complete'}</h2>
                 <p className="text-[var(--panel-ink-4)] text-sm">
                   {result.pending
                     ? `${(result.submitted ?? 0).toLocaleString()} ${result.pending ? 'records' : ''} sent to an administrator. They will appear once approved.`
@@ -1830,35 +1961,35 @@ export default function UploadData() {
               </div>
             </div>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-              <Tile label={result.pending ? 'Rows Submitted' : 'Rows Handled'} value={rowsHandled(result)} color={result.pending ? 'yellow' : 'green'} />
-              <Tile label={result.pending ? 'Rows in File' : 'Records Added'} value={result.pending ? result.sourceRows : result.added} color={result.pending ? 'gray' : 'blue'} />
-              <Tile label="Need Review" value={result.needsReviewCount} color="yellow" />
-              <Tile label="Skipped" value={resultNumber(result.skipped) + resultNumber(result.dupesSkipped)} color="gray" />
+              <StatTile label={result.pending ? 'Rows Submitted' : 'Rows Handled'} value={rowsHandled(result).toLocaleString()} tone={result.pending ? 'warn' : 'accent'} icon={result.pending ? Clock : CheckCircle} />
+              <StatTile label={result.pending ? 'Rows in File' : 'Records Added'} value={resultNumber(result.pending ? result.sourceRows : result.added).toLocaleString()} tone="info" icon={Database} />
+              <StatTile label="Need Review" value={resultNumber(result.needsReviewCount).toLocaleString()} tone={result.needsReviewCount ? 'warn' : 'neutral'} icon={Wand2} />
+              <StatTile label="Skipped" value={(resultNumber(result.skipped) + resultNumber(result.dupesSkipped)).toLocaleString()} sub={result.dupesSkipped ? `${resultNumber(result.dupesSkipped)} exact copies dropped` : undefined} icon={X} />
             </div>
 
             {/* Extra fields confirmation */}
             {result.extraColCount > 0 && (
-              <div className="bg-purple-900/20 border border-purple-800/40 rounded-xl p-4 mb-4 flex items-start gap-3">
-                <Info size={18} className="text-purple-400 flex-shrink-0 mt-0.5" />
+              <div className="bg-purple-500/10 border border-purple-500/40 rounded-xl p-4 mb-4 flex items-start gap-3">
+                <Info size={18} className="text-purple-500 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-white font-medium">
+                  <p className="text-[var(--text-primary)] font-medium">
                     {result.extraColCount} extra column{result.extraColCount !== 1 ? 's' : ''} saved as custom data, nothing was lost
                   </p>
                   <p className="text-sm text-[var(--panel-ink-3)] mt-0.5">
                     All columns that don't match a standard field are preserved in Custom Data. You can browse, search, export, or teach the system to recognise them permanently.
                   </p>
-                  <Link to="/custom-data" className="inline-flex items-center gap-1.5 mt-2 text-sm text-purple-300 hover:text-purple-200 underline">
-                    View Custom Data →
+                  <Link to="/custom-data" className="inline-flex items-center gap-1.5 mt-2 text-sm text-purple-500 hover:text-purple-200 underline">
+                    View Custom Data <ChevronRight size={14} aria-hidden="true" />
                   </Link>
                 </div>
               </div>
             )}
             {result.needsReviewCount > 0 && (
-              <div className="bg-yellow-900/20 border border-yellow-800 rounded-xl p-4 mb-4">
+              <div className="bg-yellow-500/10 border border-yellow-500/40 rounded-xl p-4 mb-4">
                 <div className="flex items-start gap-3">
-                  <Wand2 size={18} className="text-yellow-400 flex-shrink-0 mt-0.5" />
+                  <Wand2 size={18} className="text-yellow-500 flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-white font-medium">{result.needsReviewCount.toLocaleString()} records need manual classification</p>
+                    <p className="text-[var(--text-primary)] font-medium">{result.needsReviewCount.toLocaleString()} records need manual classification</p>
                     <p className="text-sm text-[var(--panel-ink-3)] mt-0.5">Open Data Cleaning to approve or adjust them.</p>
                     <button onClick={() => navigate('/cleaning')} className="btn-primary mt-3 text-sm flex items-center gap-2"><Wand2 size={14} /> Go to Data Cleaning</button>
                   </div>
@@ -1867,8 +1998,20 @@ export default function UploadData() {
             )}
             {result.skipLog?.length > 0 && (
               <details className="text-sm text-[var(--panel-ink-3)] mb-4">
-                <summary className="cursor-pointer text-yellow-400">View error log ({result.skipLog.length} row(s) skipped, see reason per row)</summary>
-                <pre className="mt-2 bg-gray-800 rounded p-3 text-xs overflow-auto">{JSON.stringify(result.skipLog, null, 2)}</pre>
+                <summary className="cursor-pointer text-yellow-500 min-h-[40px] flex items-center">View error log ({result.skipLog.length} row(s) skipped, see reason per row)</summary>
+                <div className="mt-2">
+                  <EnterpriseTable
+                    columns={skipColumns}
+                    data={skipRows}
+                    getRowId={r => String(r.id)}
+                    enableColumnFilters={false}
+                    searchPlaceholder="Search skipped rows..."
+                    initialPageSize={25}
+                    exportFileName={`Upload skipped rows ${fileName || ''}`.trim()}
+                    reportMeta={{ title: 'Upload skipped rows' }}
+                    emptyMessage="No skipped rows."
+                  />
+                </div>
               </details>
             )}
             {/* `self-start`: Card is flex-col, so a lone button as a direct
@@ -1878,21 +2021,6 @@ export default function UploadData() {
         )}
 
       </AnimatePresence>
-    </div>
-  )
-}
-
-function Tile({ label, value, color }) {
-  const colors = {
-    green:  'text-green-400 border-green-800 bg-green-900/20',
-    blue:   'text-blue-400 border-blue-800 bg-blue-900/20',
-    yellow: 'text-yellow-400 border-yellow-800 bg-yellow-900/20',
-    gray:   'text-[var(--panel-ink-3)] border-gray-700 bg-gray-800/50',
-  }
-  return (
-    <div className={`border rounded-lg p-3 ${colors[color]}`}>
-      <p className={`text-2xl font-bold ${colors[color].split(' ')[0]}`}>{String(value ?? 0)}</p>
-      <p className="text-xs mt-0.5 opacity-80">{label}</p>
     </div>
   )
 }

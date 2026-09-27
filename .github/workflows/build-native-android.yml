@@ -1,10 +1,9 @@
 name: Build and Submit Native Android
 
+# RETIRED 2026-09-27: mobile releases use flutter-release-play.yml (Flutter app).
+# This workflow fails on purpose if run, and no tag triggers it.
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - 'native-v*'
 
 # Least privilege: this workflow no longer pushes anything back to the repo.
 permissions:
@@ -16,6 +15,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Retired - mobile releases are Flutter only
+        run: |
+          echo "::error::This native Kotlin release path is RETIRED. Mobile builds and releases use the Flutter app (tyre_pulse_flutter/) via flutter-release-play.yml."
+          exit 1
+
       - name: Checkout repository
         uses: actions/checkout@v6
         with:

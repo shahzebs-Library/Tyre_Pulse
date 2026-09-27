@@ -8,6 +8,8 @@ name: Submit Android to Google Play (Internal)
 #   EXPO_TOKEN                  - Expo access token
 #   GOOGLE_SERVICE_ACCOUNT_KEY  - Full JSON of the Play Console service account
 
+# RETIRED 2026-09-27: mobile releases use flutter-release-play.yml (Flutter app).
+# This workflow fails on purpose if run, and no tag triggers it.
 on:
   workflow_dispatch:
 
@@ -16,6 +18,11 @@ jobs:
     name: Submit latest AAB to Play internal track
     runs-on: ubuntu-latest
     steps:
+      - name: Retired - mobile releases are Flutter only
+        run: |
+          echo "::error::This Expo release path is RETIRED. Mobile builds and releases use the Flutter app (tyre_pulse_flutter/) via flutter-release-play.yml."
+          exit 1
+
       - name: Checkout repository
         uses: actions/checkout@v6
 

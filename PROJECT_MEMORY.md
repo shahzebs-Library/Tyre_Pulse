@@ -23,6 +23,17 @@ it as merged and awaiting a build the owner has not asked for.
 
 ---
 
+# ⚑ MOBILE BUILDS = FLUTTER ONLY. OWNER INSTRUCTION 2026-09-27, STANDING.
+
+**When a mobile build or release is triggered, it must be the Flutter app (`tyre_pulse_flutter/`), via
+`flutter-release-play.yml` (workflow_dispatch only).** The Expo workflows (`release-play.yml`,
+`build-android.yml`, `submit-android.yml`, `eas-update.yml`) and the native Kotlin `build-native-android.yml` are
+RETIRED. Their `mobile-v*` and `native-v*` tag triggers were removed, and their first step exits 1 with a pointer
+to the Flutter workflow. A manual run therefore fails before it builds anything. Do not re-enable them. The
+no-build-unless-the-owner-asks rule above still applies to the Flutter workflow too.
+
+---
+
 # ⚑ ONE MERGE PER SESSION. THE OWNER HAS NOW SAID THIS TWICE.
 
 **Every push to `main` starts a production build.** Seven pushes in one session

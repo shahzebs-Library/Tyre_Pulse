@@ -6,6 +6,8 @@ name: OTA Update (EAS Update)
 # Trigger: manually (Actions -> Run workflow).
 # Required secret: EXPO_TOKEN (expo.dev -> Account -> Access tokens)
 
+# RETIRED 2026-09-27: mobile releases use flutter-release-play.yml (Flutter app).
+# This workflow fails on purpose if run, and no tag triggers it.
 on:
   workflow_dispatch:
     inputs:
@@ -19,6 +21,11 @@ jobs:
     name: Push OTA update to production channel
     runs-on: ubuntu-latest
     steps:
+      - name: Retired - mobile releases are Flutter only
+        run: |
+          echo "::error::This Expo release path is RETIRED. Mobile builds and releases use the Flutter app (tyre_pulse_flutter/) via flutter-release-play.yml."
+          exit 1
+
       - name: Checkout repository
         uses: actions/checkout@v6
 

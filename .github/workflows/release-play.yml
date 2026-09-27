@@ -15,17 +15,21 @@ name: Release to Google Play (Closed testing)
 # If GOOGLE_SERVICE_ACCOUNT_KEY is not set, the workflow only builds the AAB
 # (download it from the EAS build page for the first manual upload).
 
+# RETIRED 2026-09-27: mobile releases use flutter-release-play.yml (Flutter app).
+# This workflow fails on purpose if run, and no tag triggers it.
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - 'mobile-v*'
 
 jobs:
   release:
     name: Build AAB + submit to Play closed testing
     runs-on: ubuntu-latest
     steps:
+      - name: Retired - mobile releases are Flutter only
+        run: |
+          echo "::error::This Expo release path is RETIRED. Mobile builds and releases use the Flutter app (tyre_pulse_flutter/) via flutter-release-play.yml."
+          exit 1
+
       - name: Checkout repository
         uses: actions/checkout@v6
 

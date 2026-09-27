@@ -294,3 +294,88 @@ export function analyzeInsuranceClaims(rows = [], opts = {}) {
     insurers: byInsurer(list, nowMs),
   }
 }
+
+// ─── Register helpers (moved out of the page so they are tested once) ────────
+
+const hasAmount = (v) => v !== null && v !== undefined && String(v).trim() !== '' && Number.isFinite(parseFloat(v))
+
+/** Local-midnight epoch of a YYYY-MM-DD bound, null when blank/invalid. */
+function boundMs(v, endOfDay) {
+  if (!v || String(v).trim() === '') return null
+  const t = Date.parse(`${String(v).slice(0, 10)}T00:00:00`)
+  if (!Number.isFinite(t)) return null
+  return endOfDay ? t + 86400000 - 1 : t
+}
+
+/**
+ * Filter the ledger. All predicates are ANDed; blank / 'all' are no-ops. The
+ * date bound applies to incident_date, then claim_date, then created_at; a
+ * claim with none of them is EXCLUDED only while a date bound is set (it cannot
+ * be placed in the window, so it is not claimed to be in it).
+ * @param {Array} rows
+ * @param {{status?:string, insurer?:string, search?:string, from?:string, to?:string}} [f]
+ */
+export function filterInsuranceClaims(rows = [], f = {}) {
+  const list = Array.isArray(rows) ? rows : []
+  const q = String(f.search || '').trim().toLowerCase()
+  const from = boundMs(f.from, false)
+  const to = boundMs(f.to, true)
+  return list.filter((r) => {
+    if (!r) return false
+    if (f.status && f.status !== 'all' && r.status !== f.status) return false
+    if (f.insurer && r.insurer !== f.insurer) return false
+    if (from != null || to != null) {
+      const anchor = r.incident_date || r.claim_date || r.created_at
+      const t = anchor ? new Date(anchor).getTime() : NaN
+      if (!Number.isFinite(t)) return false
+      if (from != null && t < from) return false
+      if (to != null && t > to) return false
+    }
+    if (q) {
+      const hay = `${r.claim_no || ''} ${r.asset_no || ''} ${r.insurer || ''} ${r.policy_no || ''} ${r.description || ''}`.toLowerCase()
+      if (!hay.includes(q)) return false
+    }
+    return true
+  })
+}
+
+/**
+ * One register row: the stored claim plus its derived figures. Money that was
+ * never entered stays null (N/A), never 0. `outstanding` is null when nothing
+ * was claimed, because an unclaimed amount cannot be outstanding.
+ */
+export function insuranceClaimRow(r, now) {
+  const claimed = hasAmount(r?.amount_claimed) ? num(r.amount_claimed) : null
+  const settled = hasAmount(r?.amount_settled) ? num(r.amount_settled) : null
+  return {
+    ...r,
+    claimed,
+    settled,
+    outstanding: claimed == null ? null : outstandingValue(r),
+    ageDays: claimAgeDays(r, toMs(now)),
+    statusLabel: CLAIM_STATUS_META[r?.status]?.label || r?.status || 'N/A',
+    isDelayed: isDelayedClaim(r, toMs(now)),
+  }
+}
+
+/**
+ * Honest headline rates. The raw analysis reports 0% when there is nothing to
+ * measure (no value claimed, no claim decided); a reader takes 0% as "insurers
+ * paid nothing". These return null in that case so the page prints N/A.
+ */
+export function headlineRates(analysis) {
+  const a = analysis || {}
+  return {
+    recoveryRate: num(a.totalClaimed) > 0 ? a.recoveryRate : null,
+    approvalRate: num(a.decidedCount) > 0 ? a.approvalRate : null,
+  }
+}
+
+/** Insurer rows with honest recovery: null when the insurer has no claimed value. */
+export function insurerRows(analysis) {
+  const list = Array.isArray(analysis?.insurers) ? analysis.insurers : []
+  return list.map((g) => ({
+    ...g,
+    recoveryPct: num(g.claimed) > 0 ? Math.round((num(g.settled) / num(g.claimed)) * 100) : null,
+  }))
+}

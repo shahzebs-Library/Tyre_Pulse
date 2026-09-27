@@ -17,34 +17,38 @@
  * in the pure, unit-tested src/lib/insuranceClaimsAnalytics.js (built on the
  * shared primitives in src/lib/insuranceClaims.js).
  */
-import { useState, useEffect, useMemo, useCallback } from 'react'
-import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement,
   LineElement, PointElement, ArcElement,
   Title, Tooltip, Legend, Filler,
 } from 'chart.js'
-import { Bar, Line, Doughnut } from 'react-chartjs-2'
+import { Bar, Doughnut } from 'react-chartjs-2'
 import {
   ShieldAlert, Plus, Search, X, Filter, Pencil, Trash2, Loader2, Save,
   FileSpreadsheet, FileText, AlertTriangle, DollarSign, Inbox, TrendingUp,
-  Clock, Percent, Wallet, RefreshCw, ArrowUpDown, ChevronUp, ChevronDown,
+  Clock, Percent, Wallet, RefreshCw, LayoutGrid, ListChecks, Building2,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Card, { CardHeader } from '../components/ui/Card'
+import Modal from '../components/ui/Modal'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatCurrencyCompact } from '../lib/formatters'
 import {
   listClaims, createClaim, updateClaim, deleteClaim,
 } from '../lib/api/insuranceClaims'
+import { CLAIM_STATUSES, CLAIM_STATUS_META } from '../lib/insuranceClaims'
 import {
-  claimAgeDays, CLAIM_STATUSES, CLAIM_STATUS_META,
-} from '../lib/insuranceClaims'
-import {
-  analyzeInsuranceClaims, outstandingValue,
+  analyzeInsuranceClaims, outstandingValue, filterInsuranceClaims,
+  insuranceClaimRow, headlineRates, insurerRows,
 } from '../lib/insuranceClaimsAnalytics'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { compareValues, sortRows } from '../lib/consoleTable'
+import { colorAt, withAlpha } from '../lib/reportColors'
 import { isMissingRelation } from '../lib/api/_client'
 
 ChartJS.register(
@@ -53,38 +57,35 @@ ChartJS.register(
   Title, Tooltip, Legend, Filler,
 )
 
-// ── Chart theme (matches the app's other chart.js pages) ──────────────────────
-const AXIS = { ticks: { color: '#9ca3af', font: { size: 11 } }, grid: { color: 'rgba(148,163,184,0.12)' } }
+// ── Chart theme: token colours so both light and dark modes stay legible ──────
+const INK = 'var(--text-muted)'
+const AXIS = { ticks: { color: INK, font: { size: 11 } }, grid: { color: 'var(--panel-2)' } }
 const BASE = {
   responsive: true,
   maintainAspectRatio: false,
-  plugins: {
-    legend: { labels: { color: '#9ca3af', boxWidth: 12, font: { size: 11 } } },
-    tooltip: { backgroundColor: '#0f172a', borderColor: '#334155', borderWidth: 1, titleColor: '#f8fafc', bodyColor: '#e2e8f0' },
-  },
+  plugins: { legend: { labels: { color: INK, boxWidth: 12, font: { size: 11 } } } },
   scales: { x: AXIS, y: AXIS },
 }
-const NO_LEGEND = { ...BASE, plugins: { ...BASE.plugins, legend: { display: false } } }
-const HORIZONTAL = { ...NO_LEGEND, indexAxis: 'y' }
+const HORIZONTAL = { ...BASE, indexAxis: 'y' }
 const DOUGHNUT = {
   responsive: true, maintainAspectRatio: false, cutout: '62%',
-  plugins: { legend: { position: 'bottom', labels: { color: '#9ca3af', boxWidth: 12, padding: 10, font: { size: 11 } } }, tooltip: BASE.plugins.tooltip },
+  plugins: { legend: { position: 'bottom', labels: { color: INK, boxWidth: 12, padding: 10, font: { size: 11 } } } },
 }
 const DUAL_AXIS = {
   ...BASE,
   interaction: { mode: 'index', intersect: false },
-  plugins: { ...BASE.plugins },
   scales: {
     x: AXIS,
-    y: { ...AXIS, position: 'left', title: { display: true, text: 'Value', color: '#64748b', font: { size: 10 } } },
-    y1: { ...AXIS, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Claims', color: '#64748b', font: { size: 10 } } },
+    y: { ...AXIS, position: 'left', beginAtZero: true, title: { display: true, text: 'Value', color: INK, font: { size: 10 } } },
+    y1: { ...AXIS, position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: 'Claims', color: INK, font: { size: 10 } } },
   },
 }
 
-// Status -> chart colour (aligned with the badge palette below).
+// Status -> chart colour. Semantic (the colour carries meaning), aligned with
+// the badge palette below; the label is always printed beside it.
 const STATUS_COLOR = {
   open: '#38bdf8', submitted: '#3b82f6', under_review: '#f59e0b',
-  approved: '#22c55e', rejected: '#ef4444', settled: '#10b981', slate: '#64748b', closed: '#64748b',
+  approved: '#22c55e', rejected: '#ef4444', settled: '#10b981', closed: '#64748b',
 }
 
 const STATUS_STYLES = {
@@ -103,15 +104,11 @@ const EMPTY_FORM = {
   status: 'open', description: '',
 }
 
-const SORTS = {
-  claim_no:       (a, b) => String(a.claim_no || '').localeCompare(String(b.claim_no || '')),
-  asset_no:       (a, b) => String(a.asset_no || '').localeCompare(String(b.asset_no || '')),
-  insurer:        (a, b) => String(a.insurer || '').localeCompare(String(b.insurer || '')),
-  incident_date:  (a, b) => new Date(a.incident_date || 0) - new Date(b.incident_date || 0),
-  amount_claimed: (a, b) => (Number(a.amount_claimed) || 0) - (Number(b.amount_claimed) || 0),
-  amount_settled: (a, b) => (Number(a.amount_settled) || 0) - (Number(b.amount_settled) || 0),
-  status:         (a, b) => String(a.status || '').localeCompare(String(b.status || '')),
-}
+const EXPORT_COLS = ['claim_no', 'asset_no', 'insurer', 'policy_no', 'incident_date', 'claim_date', 'amount_claimed', 'amount_settled', 'outstanding', 'status', 'ageDays']
+const EXPORT_HEADERS = ['Claim No', 'Asset', 'Insurer', 'Policy', 'Incident', 'Claim Date', 'Claimed', 'Settled', 'Outstanding', 'Status', 'Age (days)']
+
+const valueSort = (a, b, id) => compareValues(a.getValue(id), b.getValue(id))
+const blankToUndef = (v) => (v === null || v === undefined || v === '' ? undefined : v)
 
 function fmtDate(v) {
   if (!v) return 'N/A'
@@ -119,34 +116,88 @@ function fmtDate(v) {
   return Number.isNaN(d.getTime()) ? 'N/A' : d.toISOString().slice(0, 10)
 }
 
-function Kpi({ label, value, sub, icon: Icon, tone = 'text-[var(--text-primary)]', accent = 'text-[var(--text-muted)]' }) {
+const TABS = [
+  { id: 'overview', label: 'Overview', icon: LayoutGrid },
+  { id: 'register', label: 'Claims register', icon: ListChecks },
+  { id: 'insurers', label: 'Insurers', icon: Building2 },
+]
+const TAB_IDS = TABS.map((t) => t.id)
+
+/** Accessible tab strip synced to ?tab= (arrow keys move between tabs). */
+function PageTabs({ tab, onChange }) {
+  const refs = useRef([])
+  const onKey = (e, i) => {
+    let next = null
+    if (e.key === 'ArrowRight') next = (i + 1) % TABS.length
+    else if (e.key === 'ArrowLeft') next = (i - 1 + TABS.length) % TABS.length
+    else if (e.key === 'Home') next = 0
+    else if (e.key === 'End') next = TABS.length - 1
+    if (next == null) return
+    e.preventDefault()
+    onChange(TABS[next].id)
+    refs.current[next]?.focus()
+  }
   return (
-    <div className="card">
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-[var(--text-muted)]">{label}</p>
-        <Icon size={16} className={accent} />
-      </div>
-      <p className={`text-2xl font-bold mt-1 ${tone}`}>{value}</p>
-      {sub != null && <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{sub}</p>}
+    <div role="tablist" aria-label="Insurance claims views" className="flex flex-wrap gap-1 border-b border-[var(--border-bright)]">
+      {TABS.map((t, i) => {
+        const Icon = t.icon
+        const active = tab === t.id
+        return (
+          <button
+            key={t.id}
+            ref={(el) => { refs.current[i] = el }}
+            type="button"
+            role="tab"
+            id={`ic-tab-${t.id}`}
+            aria-selected={active}
+            aria-controls={`ic-panel-${t.id}`}
+            tabIndex={active ? 0 : -1}
+            onClick={() => onChange(t.id)}
+            onKeyDown={(e) => onKey(e, i)}
+            className={`inline-flex items-center gap-1.5 px-4 min-h-[44px] text-sm font-medium border-b-2 -mb-px rounded-t-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent,#16a34a)] ${active ? 'border-[var(--accent,#16a34a)] text-[var(--text-primary)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
+          >
+            <Icon size={15} aria-hidden="true" /> {t.label}
+          </button>
+        )
+      })}
     </div>
   )
 }
-function ChartCard({ title, subtitle, children, height = 260, empty }) {
+
+function Kpi({ label, value, sub, icon: Icon, tone = 'text-[var(--text-primary)]', accent = 'text-[var(--text-muted)]' }) {
   return (
-    <div className="card">
-      <div className="mb-3">
-        <h3 className="text-sm font-semibold text-[var(--text-primary)]">{title}</h3>
-        {subtitle && <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{subtitle}</p>}
+    <Card>
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-[var(--text-muted)]">{label}</p>
+        <Icon size={16} className={accent} aria-hidden="true" />
       </div>
+      <p className={`text-2xl font-bold mt-1 tabular-nums ${tone}`}>{value}</p>
+      {sub != null && <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{sub}</p>}
+    </Card>
+  )
+}
+
+function ChartCard({ title, subtitle, children, height = 260, empty, summary }) {
+  return (
+    <Card>
+      <CardHeader title={title} description={subtitle} />
       {empty ? (
         <div style={{ height }} className="flex flex-col items-center justify-center text-[var(--text-muted)]">
-          <Inbox size={22} className="mb-2 opacity-60" />
+          <Inbox size={22} className="mb-2 opacity-60" aria-hidden="true" />
           <p className="text-sm">{empty}</p>
         </div>
       ) : (
-        <div style={{ height }}>{children}</div>
+        <div style={{ height }} role="img" aria-label={summary || title}>{children}</div>
       )}
-    </div>
+    </Card>
+  )
+}
+
+function StatusBadge({ status }) {
+  return (
+    <span className={`badge text-[11px] px-2 py-0.5 rounded whitespace-nowrap ${STATUS_STYLES[status] || STATUS_STYLES.open}`}>
+      {CLAIM_STATUS_META[status]?.label || status || 'N/A'}
+    </span>
   )
 }
 
@@ -154,6 +205,7 @@ export default function InsuranceClaims() {
   const { activeCountry, activeCurrency } = useSettings() || {}
   const [rows, setRows] = useState(null)
   const [error, setError] = useState('')
+  const [actionError, setActionError] = useState('')
   const [missing, setMissing] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [updatedAt, setUpdatedAt] = useState(null)
@@ -163,8 +215,15 @@ export default function InsuranceClaims() {
   const [search, setSearch] = useState('')
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
-  const [sortKey, setSortKey] = useState('incident_date')
-  const [sortDir, setSortDir] = useState('desc')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tab = TAB_IDS.includes(searchParams.get('tab')) ? searchParams.get('tab') : 'overview'
+  const setTab = useCallback((id) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      if (id === 'overview') next.delete('tab'); else next.set('tab', id)
+      return next
+    }, { replace: true })
+  }, [setSearchParams])
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -172,6 +231,7 @@ export default function InsuranceClaims() {
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
   const [deleting, setDeleting] = useState(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
 
   const ccy = activeCurrency || 'SAR'
   const money = useCallback((v) => (v == null || v === '' ? 'N/A' : formatCurrencyCompact(v, ccy)), [ccy])
@@ -192,61 +252,34 @@ export default function InsuranceClaims() {
 
   useEffect(() => { load() }, [load])
 
-  const now = Date.now()
-
-  // Full analysis over the loaded (country-scoped) set - drives KPIs + charts.
-  const analysis = useMemo(() => analyzeInsuranceClaims(rows || [], { now }), [rows, now])
+  // Ages are measured against the moment the data loaded, so they are stable
+  // between renders instead of ticking every keystroke.
+  const now = useMemo(() => (updatedAt ? updatedAt.getTime() : Date.now()), [updatedAt])
+  const loading = rows === null
+  // A failed read must never render as "no claims" or a row of zeros.
+  const loadFailed = Boolean(error) && !loading
 
   const insurerOptions = useMemo(
-    () => [...new Set((rows || []).map((r) => r.insurer).filter(Boolean))].sort(),
+    () => [...new Set((rows || []).map((r) => r.insurer).filter(Boolean))].sort((x, y) => x.localeCompare(y)),
     [rows],
   )
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    const from = fromDate ? new Date(fromDate).getTime() : null
-    const to = toDate ? new Date(toDate).getTime() + 86400000 - 1 : null
-    const list = (rows || []).filter((r) => {
-      if (statusFilter !== 'all' && r.status !== statusFilter) return false
-      if (insurerFilter && r.insurer !== insurerFilter) return false
-      if (from != null || to != null) {
-        const anchor = r.incident_date || r.claim_date || r.created_at
-        const t = anchor ? new Date(anchor).getTime() : null
-        if (t == null || Number.isNaN(t)) return false
-        if (from != null && t < from) return false
-        if (to != null && t > to) return false
-      }
-      if (q) {
-        const hay = `${r.claim_no || ''} ${r.asset_no || ''} ${r.insurer || ''} ${r.policy_no || ''} ${r.description || ''}`.toLowerCase()
-        if (!hay.includes(q)) return false
-      }
-      return true
-    })
-    const cmp = SORTS[sortKey] || SORTS.incident_date
-    const sorted = [...list].sort(cmp)
-    if (sortDir === 'desc') sorted.reverse()
-    return sorted
-  }, [rows, statusFilter, insurerFilter, search, fromDate, toDate, sortKey, sortDir])
+    const list = filterInsuranceClaims(rows || [], {
+      status: statusFilter, insurer: insurerFilter, search, from: fromDate, to: toDate,
+    }).map((r) => insuranceClaimRow(r, now))
+    return sortRows(list, { key: 'incident_date', dir: 'desc' })
+  }, [rows, statusFilter, insurerFilter, search, fromDate, toDate, now])
 
-  // Analysis of the *filtered* view so the dashboard reflects active filters.
-  const viewAnalysis = useMemo(() => analyzeInsuranceClaims(filtered, { now }), [filtered, now])
-
-  const toggleSort = (key) => {
-    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
-    else { setSortKey(key); setSortDir('asc') }
-  }
-  const SortHead = ({ label, k, align = 'left' }) => (
-    <th className={`px-4 py-3 font-semibold whitespace-nowrap ${align === 'right' ? 'text-right' : 'text-left'}`}>
-      <button onClick={() => toggleSort(k)} className={`inline-flex items-center gap-1 hover:text-[var(--text-primary)] ${align === 'right' ? 'flex-row-reverse' : ''}`}>
-        {label}
-        {sortKey === k ? (sortDir === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />) : <ArrowUpDown size={11} className="opacity-40" />}
-      </button>
-    </th>
-  )
+  // The dashboard reflects the active filters.
+  const a = useMemo(() => analyzeInsuranceClaims(filtered, { now }), [filtered, now])
+  const rates = useMemo(() => headlineRates(a), [a])
+  const insurers = useMemo(() => insurerRows(a), [a])
+  const totalLoaded = rows ? rows.length : 0
 
   // ── Modal handlers ──────────────────────────────────────────────────────────
   const openCreate = () => { setEditing(null); setForm(EMPTY_FORM); setFormError(''); setModalOpen(true) }
-  const openEdit = (r) => {
+  const openEdit = useCallback((r) => {
     setEditing(r)
     setForm({
       claim_no: r.claim_no || '', asset_no: r.asset_no || '', insurer: r.insurer || '',
@@ -255,8 +288,11 @@ export default function InsuranceClaims() {
       status: r.status || 'open', description: r.description || '',
     })
     setFormError(''); setModalOpen(true)
-  }
+  }, [])
   const setField = (k, v) => setForm((f) => ({ ...f, [k]: v }))
+  // One guarded close for Escape, the backdrop, the X and Cancel.
+  const closeForm = () => { if (!saving) setModalOpen(false) }
+  const closeDelete = () => { if (!deleteBusy) setDeleting(null) }
 
   const submit = useCallback(async (e) => {
     e?.preventDefault?.()
@@ -266,6 +302,8 @@ export default function InsuranceClaims() {
     }
     setSaving(true)
     try {
+      // Only the stored columns go to the service - never the derived register
+      // fields (outstanding, age, labels).
       const payload = {
         ...form,
         country: activeCountry && activeCountry !== 'All' ? activeCountry : null,
@@ -283,48 +321,57 @@ export default function InsuranceClaims() {
 
   const confirmDelete = useCallback(async () => {
     if (!deleting) return
+    setDeleteBusy(true)
     try {
       await deleteClaim(deleting.id)
       setDeleting(null)
       await load()
     } catch (err) {
-      setError(toUserMessage(err, 'Could not delete the claim.'))
+      setActionError(toUserMessage(err, 'Could not delete the claim.'))
       setDeleting(null)
+    } finally {
+      setDeleteBusy(false)
     }
   }, [deleting, load])
 
-  // ── Export ──────────────────────────────────────────────────────────────────
-  const EXPORT_COLS = ['claim_no', 'asset_no', 'insurer', 'policy_no', 'incident_date', 'claim_date', 'amount_claimed', 'amount_settled', 'outstanding', 'status', 'ageDays']
-  const EXPORT_HEADERS = ['Claim No', 'Asset', 'Insurer', 'Policy', 'Incident', 'Claim Date', 'Claimed', 'Settled', 'Outstanding', 'Status', 'Age (days)']
-  const claimsPager = usePagedRows(filtered)
-  const exportRows = filtered.map((r) => ({
-    claim_no: r.claim_no || '', asset_no: r.asset_no || '', insurer: r.insurer || '',
-    policy_no: r.policy_no || '', incident_date: fmtDate(r.incident_date), claim_date: fmtDate(r.claim_date),
-    amount_claimed: r.amount_claimed ?? '', amount_settled: r.amount_settled ?? '',
-    outstanding: outstandingValue(r) || '',
-    status: CLAIM_STATUS_META[r.status]?.label || r.status, ageDays: claimAgeDays(r, now) ?? '',
-  }))
+  // ── Export: the WHOLE filtered set, not the page on screen ─────────────────
+  const exportRows = useMemo(() => filtered.map((r) => ({
+    claim_no: r.claim_no || 'N/A', asset_no: r.asset_no || 'N/A', insurer: r.insurer || 'N/A',
+    policy_no: r.policy_no || 'N/A', incident_date: fmtDate(r.incident_date), claim_date: fmtDate(r.claim_date),
+    amount_claimed: r.claimed ?? 'N/A', amount_settled: r.settled ?? 'N/A',
+    outstanding: r.outstanding ?? 'N/A',
+    status: r.statusLabel, ageDays: r.ageDays ?? 'N/A',
+  })), [filtered])
+  const fileName = reportFileName('TyrePulse Insurance Claims', activeCountry && activeCountry !== 'All' ? activeCountry : null, reportDateLabel())
+  const doExport = async (kind) => {
+    try {
+      if (kind === 'excel') await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, fileName, 'Claims', { currency: ccy })
+      else await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Insurance Claims', fileName, 'landscape', '', { currency: ccy })
+    } catch (err) {
+      setActionError(toUserMessage(err, 'Could not export. Try again.'))
+    }
+  }
 
-  // ── KPIs (driven by the pure engine over the filtered view) ───────────────────
-  const loading = rows === null
-  const a = viewAnalysis
+  // ── KPIs (pure engine over the filtered view; N/A when not measurable) ─────
+  const na = loading || loadFailed
   const kpis = [
-    { label: 'Total claims', value: loading ? 'N/A' : a.total, sub: `${a.openCount} open`, icon: ShieldAlert, accent: 'text-indigo-400' },
-    { label: 'Open claims', value: loading ? 'N/A' : a.openCount, sub: a.avgOpenAgeDays == null ? 'no dated open claims' : `avg age ${a.avgOpenAgeDays}d`, icon: Inbox, accent: 'text-sky-400', tone: 'text-sky-400' },
-    { label: 'Total claimed', value: loading ? 'N/A' : money(a.totalClaimed), sub: a.total ? `avg ${money(a.avgClaim)}` : null, icon: DollarSign },
-    { label: 'Total settled', value: loading ? 'N/A' : money(a.totalSettled), sub: 'recovered from insurers', icon: TrendingUp, accent: 'text-emerald-400', tone: 'text-emerald-400' },
-    { label: 'Recovery rate', value: loading ? 'N/A' : `${a.recoveryRate}%`, sub: 'settled / claimed', icon: Percent, tone: a.recoveryRate >= 70 ? 'text-green-400' : 'text-amber-400', accent: a.recoveryRate >= 70 ? 'text-green-400' : 'text-amber-400' },
-    { label: 'Approval rate', value: loading ? 'N/A' : (a.decidedCount ? `${a.approvalRate}%` : 'N/A'), sub: `${a.decidedCount} decided`, icon: ShieldAlert, accent: 'text-blue-400' },
-    { label: 'Outstanding', value: loading ? 'N/A' : money(a.outstanding), sub: 'claimed not yet settled', icon: Wallet, tone: a.outstanding > 0 ? 'text-amber-400' : 'text-[var(--text-primary)]', accent: 'text-amber-400' },
-    { label: 'Delayed claims', value: loading ? 'N/A' : a.delayedCount, sub: `open > ${a.delayedThresholdDays}d${a.avgSettleDays == null ? '' : ` | settle avg ${a.avgSettleDays}d`}`, icon: Clock, tone: a.delayedCount > 0 ? 'text-red-400' : 'text-[var(--text-primary)]', accent: 'text-red-400' },
+    { label: 'Total claims', value: na ? 'N/A' : a.total, sub: na ? null : `${a.openCount} open`, icon: ShieldAlert, accent: 'text-indigo-400' },
+    { label: 'Open claims', value: na ? 'N/A' : a.openCount, sub: na ? null : a.avgOpenAgeDays == null ? 'no dated open claims' : `avg age ${a.avgOpenAgeDays}d`, icon: Inbox, accent: 'text-sky-400', tone: 'text-sky-400' },
+    { label: 'Total claimed', value: na ? 'N/A' : money(a.totalClaimed), sub: na || !a.total ? null : `avg ${money(a.avgClaim)}`, icon: DollarSign },
+    { label: 'Total settled', value: na ? 'N/A' : money(a.totalSettled), sub: 'recovered from insurers', icon: TrendingUp, accent: 'text-emerald-400', tone: 'text-emerald-400' },
+    { label: 'Recovery rate', value: na || rates.recoveryRate == null ? 'N/A' : `${rates.recoveryRate}%`, sub: rates.recoveryRate == null ? 'nothing claimed yet' : 'settled / claimed', icon: Percent,
+      tone: rates.recoveryRate == null ? 'text-[var(--text-primary)]' : rates.recoveryRate >= 70 ? 'text-green-400' : 'text-amber-400', accent: 'text-amber-400' },
+    { label: 'Approval rate', value: na || rates.approvalRate == null ? 'N/A' : `${rates.approvalRate}%`, sub: na ? null : `${a.decidedCount} decided`, icon: ShieldAlert, accent: 'text-blue-400' },
+    { label: 'Outstanding', value: na ? 'N/A' : money(a.outstanding), sub: 'claimed not yet settled', icon: Wallet, tone: !na && a.outstanding > 0 ? 'text-amber-400' : 'text-[var(--text-primary)]', accent: 'text-amber-400' },
+    { label: 'Delayed claims', value: na ? 'N/A' : a.delayedCount, sub: na ? null : `open over ${a.delayedThresholdDays}d${a.avgSettleDays == null ? '' : ` | settle avg ${a.avgSettleDays}d`}`, icon: Clock, tone: !na && a.delayedCount > 0 ? 'text-red-400' : 'text-[var(--text-primary)]', accent: 'text-red-400' },
   ]
 
   // ── Chart data ────────────────────────────────────────────────────────────────
   const statusDoughnut = useMemo(() => {
-    const entries = CLAIM_STATUSES.map((s) => ({ s, n: a.byStatus[s] || 0 })).filter((e) => e.n > 0)
+    const entries = CLAIM_STATUSES.map((st) => ({ st, n: a.byStatus[st] || 0 })).filter((e) => e.n > 0)
     return {
-      labels: entries.map((e) => CLAIM_STATUS_META[e.s]?.label || e.s),
-      datasets: [{ data: entries.map((e) => e.n), backgroundColor: entries.map((e) => STATUS_COLOR[e.s] || '#64748b'), borderWidth: 0 }],
+      labels: entries.map((e) => CLAIM_STATUS_META[e.st]?.label || e.st),
+      datasets: [{ data: entries.map((e) => e.n), backgroundColor: entries.map((e) => STATUS_COLOR[e.st] || '#64748b'), borderWidth: 0 }],
     }
   }, [a.byStatus])
   const statusHasData = statusDoughnut.labels.length > 0
@@ -332,27 +379,102 @@ export default function InsuranceClaims() {
   const trendData = useMemo(() => ({
     labels: a.monthly.map((m) => m.label),
     datasets: [
-      { type: 'bar', label: 'Claimed', data: a.monthly.map((m) => m.claimed), backgroundColor: 'rgba(99,102,241,0.55)', yAxisID: 'y', order: 2 },
-      { type: 'bar', label: 'Settled', data: a.monthly.map((m) => m.settled), backgroundColor: 'rgba(16,185,129,0.6)', yAxisID: 'y', order: 2 },
-      { type: 'line', label: 'Claims', data: a.monthly.map((m) => m.count), borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.15)', yAxisID: 'y1', tension: 0.35, fill: false, pointRadius: 2, order: 1 },
+      { type: 'bar', label: 'Claimed', data: a.monthly.map((m) => m.claimed), backgroundColor: withAlpha(colorAt(0), 0.6), yAxisID: 'y', order: 2 },
+      { type: 'bar', label: 'Settled', data: a.monthly.map((m) => m.settled), backgroundColor: withAlpha(colorAt(1), 0.65), yAxisID: 'y', order: 2 },
+      { type: 'line', label: 'Claims', data: a.monthly.map((m) => m.count), borderColor: colorAt(2), backgroundColor: withAlpha(colorAt(2), 0.15), yAxisID: 'y1', tension: 0.35, fill: false, pointRadius: 2, order: 1 },
     ],
   }), [a.monthly])
   const trendHasData = a.monthly.some((m) => m.count > 0)
 
   const insurerData = useMemo(() => {
-    const top = a.insurers.slice(0, 8)
+    const top = insurers.slice(0, 8)
     return {
       labels: top.map((g) => g.insurer),
       datasets: [
-        { label: 'Claimed', data: top.map((g) => g.claimed), backgroundColor: 'rgba(99,102,241,0.6)' },
-        { label: 'Settled', data: top.map((g) => g.settled), backgroundColor: 'rgba(16,185,129,0.65)' },
+        { label: 'Claimed', data: top.map((g) => g.claimed), backgroundColor: withAlpha(colorAt(0), 0.65) },
+        { label: 'Settled', data: top.map((g) => g.settled), backgroundColor: withAlpha(colorAt(1), 0.7) },
       ],
     }
-  }, [a.insurers])
-  const insurerHasData = a.insurers.length > 0
+  }, [insurers])
+  const insurerHasData = insurers.length > 0
+
+  // ── Table columns ───────────────────────────────────────────────────────────
+  const registerColumns = useMemo(() => [
+    { id: 'claim_no', header: 'Claim No', accessorFn: (r) => blankToUndef(r.claim_no), sortingFn: valueSort, sortUndefined: 'last',
+      cell: ({ getValue }) => <span className="font-mono text-xs text-[var(--text-primary)]">{getValue() || 'N/A'}</span> },
+    { id: 'asset_no', header: 'Asset', accessorFn: (r) => blankToUndef(r.asset_no), sortingFn: valueSort, sortUndefined: 'last',
+      cell: ({ getValue }) => getValue() || 'N/A' },
+    { id: 'insurer', header: 'Insurer / Policy', accessorFn: (r) => blankToUndef(r.insurer), sortingFn: valueSort, sortUndefined: 'last',
+      cell: ({ row }) => <span>{row.original.insurer || 'N/A'}{row.original.policy_no ? <span className="text-[var(--text-muted)]"> | {row.original.policy_no}</span> : ''}</span> },
+    { id: 'incident_date', header: 'Incident', accessorFn: (r) => blankToUndef(r.incident_date), sortingFn: valueSort, sortUndefined: 'last',
+      cell: ({ getValue }) => <span className="whitespace-nowrap tabular-nums">{fmtDate(getValue())}</span> },
+    { id: 'claimed', header: 'Claimed', accessorFn: (r) => r.claimed ?? undefined, sortingFn: valueSort, sortUndefined: 'last', meta: { align: 'right' },
+      cell: ({ getValue }) => <span className="font-medium tabular-nums text-[var(--text-primary)]">{money(getValue())}</span> },
+    { id: 'settled', header: 'Settled', accessorFn: (r) => r.settled ?? undefined, sortingFn: valueSort, sortUndefined: 'last', meta: { align: 'right' },
+      cell: ({ getValue }) => <span className="tabular-nums text-emerald-400">{money(getValue())}</span> },
+    { id: 'outstanding', header: 'Outstanding', accessorFn: (r) => r.outstanding ?? undefined, sortingFn: valueSort, sortUndefined: 'last', meta: { align: 'right' },
+      cell: ({ getValue }) => <span className="tabular-nums">{money(getValue())}</span> },
+    { id: 'ageDays', header: 'Age', accessorFn: (r) => r.ageDays ?? undefined, sortingFn: valueSort, sortUndefined: 'last', meta: { align: 'right' },
+      cell: ({ row }) => (
+        <span className={`tabular-nums whitespace-nowrap ${row.original.isDelayed ? 'text-red-400 font-medium' : ''}`}>
+          {row.original.ageDays == null ? 'N/A' : `${row.original.ageDays}d`}{row.original.isDelayed ? ' (delayed)' : ''}
+        </span>
+      ) },
+    { id: 'status', header: 'Status', accessorFn: (r) => r.statusLabel, sortingFn: valueSort,
+      meta: { filterVariant: 'select' },
+      cell: ({ row }) => <StatusBadge status={row.original.status} /> },
+    { id: 'actions', header: () => <span className="sr-only">Actions</span>, enableSorting: false, meta: { export: false },
+      cell: ({ row }) => {
+        const r = row.original
+        const label = r.claim_no || r.asset_no || 'claim'
+        return (
+          <div className="flex items-center gap-1 justify-end">
+            <button type="button" onClick={(e) => { e.stopPropagation(); openEdit(r) }} aria-label={`Edit claim ${label}`} title="Edit" className="w-9 h-9 inline-flex items-center justify-center rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent,#16a34a)]"><Pencil size={14} aria-hidden="true" /></button>
+            <button type="button" onClick={(e) => { e.stopPropagation(); setDeleting(r) }} aria-label={`Delete claim ${label}`} title="Delete" className="w-9 h-9 inline-flex items-center justify-center rounded-lg hover:bg-red-900/40 text-[var(--text-muted)] hover:text-red-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"><Trash2 size={14} aria-hidden="true" /></button>
+          </div>
+        )
+      } },
+  ], [money, openEdit])
+
+  const delayedRows = useMemo(() => a.delayed.map((r) => ({ ...r, outstandingValue: outstandingValue(r) })), [a.delayed])
+  const delayedColumns = useMemo(() => [
+    { id: 'ref', header: 'Claim', accessorFn: (r) => blankToUndef(r.claim_no || r.asset_no), sortingFn: valueSort, sortUndefined: 'last',
+      cell: ({ row }) => (
+        <div>
+          <div className="font-mono text-xs text-[var(--text-primary)]">{row.original.claim_no || row.original.asset_no || 'N/A'}</div>
+          <div className="text-[11px] text-[var(--text-muted)]">{row.original.insurer || 'Unassigned'}</div>
+        </div>
+      ) },
+    { id: 'status', header: 'Status', accessorFn: (r) => CLAIM_STATUS_META[r.status]?.label || r.status, sortingFn: valueSort,
+      cell: ({ row }) => <StatusBadge status={row.original.status} /> },
+    { id: 'outstandingValue', header: 'Outstanding', accessorFn: (r) => r.outstandingValue, sortingFn: valueSort, meta: { align: 'right' },
+      cell: ({ getValue }) => <span className="tabular-nums">{money(getValue())}</span> },
+    { id: 'ageDays', header: 'Age', accessorFn: (r) => r.ageDays, sortingFn: valueSort, meta: { align: 'right' },
+      cell: ({ getValue }) => <span className="tabular-nums text-red-400 font-medium">{getValue()}d</span> },
+  ], [money])
+
+  const insurerColumns = useMemo(() => [
+    { id: 'insurer', header: 'Insurer', accessorKey: 'insurer', sortingFn: valueSort,
+      cell: ({ getValue }) => <span className="text-[var(--text-primary)]">{getValue()}</span> },
+    { id: 'count', header: 'Claims', accessorKey: 'count', sortingFn: valueSort, meta: { align: 'right' },
+      cell: ({ getValue }) => <span className="tabular-nums">{getValue()}</span> },
+    { id: 'openCount', header: 'Open', accessorKey: 'openCount', sortingFn: valueSort, meta: { align: 'right' },
+      cell: ({ getValue }) => <span className="tabular-nums">{getValue()}</span> },
+    { id: 'claimed', header: 'Claimed', accessorKey: 'claimed', sortingFn: valueSort, meta: { align: 'right' },
+      cell: ({ getValue }) => <span className="tabular-nums">{money(getValue())}</span> },
+    { id: 'settled', header: 'Settled', accessorKey: 'settled', sortingFn: valueSort, meta: { align: 'right' },
+      cell: ({ getValue }) => <span className="tabular-nums text-emerald-400">{money(getValue())}</span> },
+    { id: 'outstanding', header: 'Outstanding', accessorKey: 'outstanding', sortingFn: valueSort, meta: { align: 'right' },
+      cell: ({ getValue }) => <span className="tabular-nums">{money(getValue())}</span> },
+    { id: 'recoveryPct', header: 'Recovery', accessorFn: (g) => g.recoveryPct ?? undefined, sortingFn: valueSort, sortUndefined: 'last', meta: { align: 'right' },
+      cell: ({ getValue }) => <span className="tabular-nums">{getValue() == null ? 'N/A' : `${getValue()}%`}</span> },
+    { id: 'avgClaim', header: 'Avg claim', accessorKey: 'avgClaim', sortingFn: valueSort, meta: { align: 'right' },
+      cell: ({ row }) => <span className="tabular-nums">{row.original.count ? money(row.original.avgClaim) : 'N/A'}</span> },
+  ], [money])
 
   const clearFilters = () => { setStatusFilter('all'); setInsurerFilter(''); setSearch(''); setFromDate(''); setToDate('') }
   const hasFilters = statusFilter !== 'all' || insurerFilter || search || fromDate || toDate
+  const chartEmpty = (hasAny, emptyText) => (loading ? 'Loading...' : loadFailed ? 'Not loaded. Use Retry above.' : !hasAny ? emptyText : null)
 
   return (
     <div className="space-y-6">
@@ -364,256 +486,232 @@ export default function InsuranceClaims() {
         refreshing={refreshing}
         updatedAt={updatedAt}
         actions={
-          <div className="flex items-center gap-2">
-            <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'insurance_claims') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
-              <FileSpreadsheet size={14} /> Excel
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => doExport('excel')} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!filtered.length} title="Exports the claims matching the filters">
+              <FileSpreadsheet size={14} aria-hidden="true" /> Excel
             </button>
-            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Insurance Claims', 'insurance_claims', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
-              <FileText size={14} /> PDF
+            <button type="button" onClick={() => doExport('pdf')} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!filtered.length} title="Exports the claims matching the filters">
+              <FileText size={14} aria-hidden="true" /> PDF
             </button>
-            <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5">
-              <Plus size={14} /> New claim
+            <button type="button" onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={missing}>
+              <Plus size={14} aria-hidden="true" /> New claim
             </button>
           </div>
         }
       />
 
       {missing && (
-        <div className="card border border-amber-800/50 flex items-start gap-3">
-          <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
+        <Card tone="warn" className="items-start gap-3" style={{ flexDirection: 'row' }}>
+          <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" aria-hidden="true" />
           <div>
             <p className="text-amber-300 font-medium">Insurance claims are not enabled on this database yet.</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">
               Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V134_INSURANCE_CLAIMS.sql</span>, then reload.
             </p>
           </div>
-        </div>
+        </Card>
       )}
 
       {error && (
-        <div className="card border border-red-800/50 flex items-start gap-3">
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
+        <Card tone="crit" role="alert" className="items-start gap-3" style={{ flexDirection: 'row' }}>
+          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
           <div className="flex-1">
             <p className="text-red-300 font-medium">Could not load insurance claims.</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">{error}</p>
           </div>
-          <button onClick={load} className="btn-secondary text-sm inline-flex items-center gap-1.5 shrink-0"><RefreshCw size={14} /> Retry</button>
-        </div>
+          <button type="button" onClick={load} className="btn-secondary text-sm inline-flex items-center gap-1.5 shrink-0 min-h-[44px]"><RefreshCw size={14} aria-hidden="true" /> Retry</button>
+        </Card>
       )}
 
-      {/* KPI tiles */}
+      {actionError && (
+        <Card tone="crit" role="alert" className="items-center gap-3" style={{ flexDirection: 'row' }}>
+          <AlertTriangle size={16} className="text-red-400 shrink-0" aria-hidden="true" />
+          <p className="flex-1 text-sm text-red-300">{actionError}</p>
+          <button type="button" onClick={() => setActionError('')} aria-label="Dismiss message" className="w-9 h-9 inline-flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent,#16a34a)]"><X size={15} aria-hidden="true" /></button>
+        </Card>
+      )}
+
+      {/* KPI tiles - follow the filters below */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {kpis.map((k) => (
-          <Kpi key={k.label} {...k} />
-        ))}
+        {kpis.map((k) => <Kpi key={k.label} {...k} />)}
       </div>
 
-      {/* Analytics dashboard */}
-      {!missing && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <ChartCard title="Status distribution" subtitle="Claims by lifecycle stage" empty={loading ? 'Loading...' : !statusHasData ? 'No claims to chart.' : null}>
-            <Doughnut data={statusDoughnut} options={DOUGHNUT} />
-          </ChartCard>
-          <div className="lg:col-span-2">
-            <ChartCard title="Monthly trend" subtitle="Claimed and settled value with claim volume, trailing 12 months" empty={loading ? 'Loading...' : !trendHasData ? 'No dated claims to chart.' : null}>
-              <Bar data={trendData} options={DUAL_AXIS} />
-            </ChartCard>
-          </div>
-        </div>
-      )}
-
-      {!missing && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <ChartCard title="Insurer performance" subtitle="Claimed vs settled by insurer (top 8)" empty={loading ? 'Loading...' : !insurerHasData ? 'No insurer data yet.' : null}>
-            <Bar data={insurerData} options={HORIZONTAL} />
-          </ChartCard>
-
-          {/* Delayed / outstanding intelligence */}
-          <div className="card">
-            <div className="mb-3 flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-semibold text-[var(--text-primary)]">Delayed and outstanding</h3>
-                <p className="text-[11px] text-[var(--text-muted)] mt-0.5">Open claims aged over {a.delayedThresholdDays} days, highest first</p>
-              </div>
-              {!loading && a.delayedCount > 0 && (
-                <span className="text-[11px] text-amber-300">{money(a.outstandingOpen)} at risk</span>
-              )}
-            </div>
-            {loading ? (
-              <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-8 bg-[var(--input-bg)] rounded animate-pulse" />)}</div>
-            ) : a.delayed.length === 0 ? (
-              <div className="h-[220px] flex flex-col items-center justify-center text-[var(--text-muted)]">
-                <ShieldAlert size={22} className="mb-2 opacity-60" />
-                <p className="text-sm">No delayed open claims. Nothing overdue.</p>
-              </div>
-            ) : (
-              <div className="max-h-[240px] overflow-y-auto -mx-2">
-                <table className="w-full text-sm">
-                  <tbody>
-                    {a.delayed.slice(0, 12).map((r) => (
-                      <tr key={r.id} className="border-b border-[var(--input-border)]/40">
-                        <td className="px-2 py-2">
-                          <div className="font-mono text-xs text-[var(--text-primary)]">{r.claim_no || r.asset_no || 'N/A'}</div>
-                          <div className="text-[11px] text-[var(--text-muted)]">{r.insurer || 'Unassigned'}</div>
-                        </td>
-                        <td className="px-2 py-2 text-right text-[var(--text-secondary)]">{money(outstandingValue(r))}</td>
-                        <td className="px-2 py-2 text-right"><span className="text-red-300 font-medium">{r.ageDays}d</span></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Filters */}
-      <div className="card space-y-3">
+      {/* Filters: shared by every tab so the dashboard, register and insurer
+          breakdown always describe the same set of claims. */}
+      <Card className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <input className="input pl-9 w-full" placeholder="Search claim no, asset, insurer, policy..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Search size={15} aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+            <input type="search" aria-label="Search claims" className="input pl-9 w-full" placeholder="Search claim no, asset, insurer, policy..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
             <option value="all">All statuses</option>
-            {CLAIM_STATUSES.map((s) => <option key={s} value={s}>{CLAIM_STATUS_META[s]?.label || s}</option>)}
+            {CLAIM_STATUSES.map((st) => <option key={st} value={st}>{CLAIM_STATUS_META[st]?.label || st}</option>)}
           </select>
-          <select className="input" value={insurerFilter} onChange={(e) => setInsurerFilter(e.target.value)} aria-label="Insurer">
+          <select className="input" value={insurerFilter} onChange={(e) => setInsurerFilter(e.target.value)} aria-label="Insurer" disabled={!insurerOptions.length}>
             <option value="">All insurers</option>
             {insurerOptions.map((i) => <option key={i} value={i}>{i}</option>)}
           </select>
-          <div className="flex items-center gap-1.5">
-            <input type="date" className="input" value={fromDate} onChange={(e) => setFromDate(e.target.value)} aria-label="From date" title="Incident date from" />
-            <span className="text-xs text-[var(--text-muted)]">to</span>
-            <input type="date" className="input" value={toDate} onChange={(e) => setToDate(e.target.value)} aria-label="To date" title="Incident date to" />
+          <div className="flex flex-wrap items-center gap-1.5">
+            <label htmlFor="ic-from" className="text-xs text-[var(--text-muted)]">Incident from</label>
+            <input id="ic-from" type="date" className="input" value={fromDate} max={toDate || undefined} onChange={(e) => setFromDate(e.target.value)} />
+            <label htmlFor="ic-to" className="text-xs text-[var(--text-muted)]">to</label>
+            <input id="ic-to" type="date" className="input" value={toDate} min={fromDate || undefined} onChange={(e) => setToDate(e.target.value)} />
           </div>
-          {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
-          <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {analysis.total}</span>
+          {hasFilters && <button type="button" onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><X size={14} aria-hidden="true" /> Clear filters</button>}
+          <span className="text-xs text-[var(--text-muted)] ml-auto" aria-live="polite">{filtered.length} of {totalLoaded} claims</span>
         </div>
-      </div>
+      </Card>
 
-      {/* Table */}
-      <div className="card overflow-hidden !p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--input-border)] text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                <SortHead label="Claim No" k="claim_no" />
-                <SortHead label="Asset" k="asset_no" />
-                <SortHead label="Insurer / Policy" k="insurer" />
-                <SortHead label="Incident" k="incident_date" />
-                <SortHead label="Claimed" k="amount_claimed" align="right" />
-                <SortHead label="Settled" k="amount_settled" align="right" />
-                <th className="px-4 py-3 font-semibold whitespace-nowrap text-right">Outstanding</th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap text-left">Age</th>
-                <SortHead label="Status" k="status" />
-                <th className="px-4 py-3 font-semibold whitespace-nowrap" />
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                [0, 1, 2, 3, 4].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={10} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
-              ) : filtered.length === 0 ? (
-                <tr><td colSpan={10} className="px-4 py-12 text-center text-[var(--text-muted)]">
-                  <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {analysis.total === 0 ? 'No insurance claims yet. Record your first claim.' : 'No claims match these filters.'}
-                </td></tr>
-              ) : (
-                claimsPager.pageRows.map((r) => {
-                  const age = claimAgeDays(r, now)
-                  const out = outstandingValue(r)
-                  return (
-                    <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.claim_no || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.asset_no || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.insurer || 'N/A'}{r.policy_no ? <span className="text-[var(--text-muted)]"> | {r.policy_no}</span> : ''}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtDate(r.incident_date)}</td>
-                      <td className="px-4 py-2.5 font-medium text-[var(--text-primary)] text-right">{money(r.amount_claimed)}</td>
-                      <td className="px-4 py-2.5 text-emerald-400 text-right">{r.amount_settled ? money(r.amount_settled) : 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-right text-[var(--text-secondary)]">{out > 0 ? money(out) : 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{age == null ? 'N/A' : `${age}d`}</td>
-                      <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${STATUS_STYLES[r.status] || STATUS_STYLES.open}`}>{CLAIM_STATUS_META[r.status]?.label || r.status}</span></td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center gap-1.5 justify-end">
-                          <button onClick={() => openEdit(r)} className="p-1.5 rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit claim"><Pencil size={14} /></button>
-                          <button onClick={() => setDeleting(r)} className="p-1.5 rounded-lg hover:bg-red-900/40 text-[var(--text-muted)] hover:text-red-300" aria-label="Delete claim"><Trash2 size={14} /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-          <TablePagination {...claimsPager} />
-        </div>
-      </div>
+      <PageTabs tab={tab} onChange={setTab} />
 
-      {/* Create / edit modal */}
-      {modalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => !saving && setModalOpen(false)}>
-          <div className="bg-[var(--card-bg)] border border-[var(--input-border)] rounded-2xl w-full max-w-2xl shadow-2xl max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="px-6 py-4 border-b border-[var(--input-border)] flex items-center justify-between">
-              <h2 className="font-bold text-[var(--text-primary)]">{editing ? 'Edit claim' : 'New insurance claim'}</h2>
-              <button onClick={() => setModalOpen(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
+      {tab === 'overview' && (
+        <div role="tabpanel" id="ic-panel-overview" aria-labelledby="ic-tab-overview" className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <ChartCard title="Status distribution" subtitle="Claims by lifecycle stage" empty={chartEmpty(statusHasData, 'No claims to chart.')}
+              summary={`Status distribution: ${statusDoughnut.labels.map((l, i) => `${l} ${statusDoughnut.datasets[0].data[i]}`).join(', ')}`}>
+              <Doughnut data={statusDoughnut} options={DOUGHNUT} />
+            </ChartCard>
+            <div className="lg:col-span-2">
+              <ChartCard title="Monthly trend" subtitle="Claimed and settled value with claim volume, trailing 12 months" empty={chartEmpty(trendHasData, 'No dated claims to chart.')}>
+                <Bar data={trendData} options={DUAL_AXIS} />
+              </ChartCard>
             </div>
-            <form onSubmit={submit} className="p-6 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div><label className="label">Claim No</label><input className="input w-full" value={form.claim_no} onChange={(e) => setField('claim_no', e.target.value)} placeholder="CLM-0001" /></div>
-                <div><label className="label">Asset No</label><input className="input w-full" value={form.asset_no} onChange={(e) => setField('asset_no', e.target.value)} placeholder="Vehicle / asset" /></div>
-                <div><label className="label">Insurer</label><input className="input w-full" value={form.insurer} onChange={(e) => setField('insurer', e.target.value)} placeholder="e.g. Tawuniya" /></div>
-                <div><label className="label">Policy No</label><input className="input w-full" value={form.policy_no} onChange={(e) => setField('policy_no', e.target.value)} /></div>
-                <div><label className="label">Incident date</label><input type="date" className="input w-full" value={form.incident_date || ''} onChange={(e) => setField('incident_date', e.target.value)} /></div>
-                <div><label className="label">Claim date</label><input type="date" className="input w-full" value={form.claim_date || ''} onChange={(e) => setField('claim_date', e.target.value)} /></div>
-                <div><label className="label">Amount claimed ({ccy})</label><input type="number" min="0" step="0.01" className="input w-full" value={form.amount_claimed} onChange={(e) => setField('amount_claimed', e.target.value)} /></div>
-                <div><label className="label">Amount settled ({ccy})</label><input type="number" min="0" step="0.01" className="input w-full" value={form.amount_settled} onChange={(e) => setField('amount_settled', e.target.value)} /></div>
-                <div><label className="label">Status</label>
-                  <select className="input w-full" value={form.status} onChange={(e) => setField('status', e.target.value)}>
-                    {CLAIM_STATUSES.map((s) => <option key={s} value={s}>{CLAIM_STATUS_META[s]?.label || s}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div><label className="label">Description</label>
-                <textarea className="input w-full min-h-[90px] resize-y" value={form.description} maxLength={8000} onChange={(e) => setField('description', e.target.value)} placeholder="What happened, damage summary, notes..." />
-              </div>
-              {formError && (
-                <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
-                  <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {formError}
-                </div>
-              )}
-              <div className="flex items-center justify-end gap-2 pt-1">
-                <button type="button" onClick={() => setModalOpen(false)} className="btn-secondary text-sm">Cancel</button>
-                <button type="submit" disabled={saving} className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60">
-                  {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-                  {saving ? 'Saving...' : editing ? 'Save changes' : 'Create claim'}
-                </button>
-              </div>
-            </form>
           </div>
+
+          <Card pad="none" clip>
+            <div className="px-4 pt-4">
+              <CardHeader
+                icon={Clock}
+                title="Delayed and outstanding"
+                description={`Open claims aged ${a.delayedThresholdDays} days or more, oldest first${!na && a.delayedCount > 0 ? `. ${money(a.outstandingOpen)} at risk.` : '.'}`}
+              />
+            </div>
+            <EnterpriseTable
+              columns={delayedColumns}
+              data={delayedRows}
+              getRowId={(r) => String(r.id)}
+              loading={loading}
+              error={loadFailed ? error : null}
+              onRetry={load}
+              enableColumnFilters={false}
+              searchPlaceholder="Search delayed claims"
+              initialPageSize={25}
+              exportFileName={reportFileName('TyrePulse Delayed Insurance Claims', reportDateLabel())}
+              reportMeta={{ title: 'Delayed Insurance Claims', currency: ccy }}
+              emptyMessage="No delayed open claims. Nothing is overdue."
+              emptyIcon={<ShieldAlert size={22} className="opacity-60" aria-hidden="true" />}
+            />
+          </Card>
         </div>
       )}
 
-      {/* Delete confirm */}
-      {deleting && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => setDeleting(null)}>
-          <div className="bg-[var(--card-bg)] border border-[var(--input-border)] rounded-2xl w-full max-w-md shadow-2xl p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-xl bg-red-900/30 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" /></div>
-              <div>
-                <h3 className="font-bold text-[var(--text-primary)]">Delete claim?</h3>
-                <p className="text-sm text-[var(--text-muted)] mt-1">
-                  {deleting.claim_no ? <span className="font-mono text-[var(--text-secondary)]">{deleting.claim_no}</span> : 'This claim'} will be permanently removed. This cannot be undone.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center justify-end gap-2">
-              <button onClick={() => setDeleting(null)} className="btn-secondary text-sm">Cancel</button>
-              <button onClick={confirmDelete} className="btn-primary text-sm bg-red-600 hover:bg-red-500 inline-flex items-center gap-1.5"><Trash2 size={14} /> Delete</button>
-            </div>
-          </div>
+      {tab === 'register' && (
+        <div role="tabpanel" id="ic-panel-register" aria-labelledby="ic-tab-register">
+          <Card pad="none" clip>
+            <EnterpriseTable
+              columns={registerColumns}
+              data={filtered}
+              getRowId={(r) => String(r.id)}
+              loading={loading}
+              error={loadFailed ? error : null}
+              onRetry={load}
+              enableGlobalFilter={false}
+              enableColumnFilters={false}
+              enableExport={false}
+              viewKey="insurance-claims"
+              initialPageSize={50}
+              pageSizeOptions={[25, 50, 100, 250]}
+              emptyMessage={missing ? 'Insurance claims are not enabled on this database yet.' : totalLoaded === 0 ? 'No insurance claims yet. Record your first claim.' : 'No claims match these filters.'}
+              emptyIcon={<Filter size={22} className="opacity-60" aria-hidden="true" />}
+            />
+          </Card>
         </div>
       )}
+
+      {tab === 'insurers' && (
+        <div role="tabpanel" id="ic-panel-insurers" aria-labelledby="ic-tab-insurers" className="space-y-4">
+          <ChartCard title="Insurer performance" subtitle="Claimed vs settled by insurer (top 8)" height={300} empty={chartEmpty(insurerHasData, 'No insurer data yet.')}>
+            <Bar data={insurerData} options={HORIZONTAL} />
+          </ChartCard>
+          <Card pad="none" clip>
+            <EnterpriseTable
+              columns={insurerColumns}
+              data={insurers}
+              getRowId={(g) => g.insurer}
+              loading={loading}
+              error={loadFailed ? error : null}
+              onRetry={load}
+              enableColumnFilters={false}
+              searchPlaceholder="Search insurers"
+              exportFileName={reportFileName('TyrePulse Insurer Performance', reportDateLabel())}
+              reportMeta={{ title: 'Insurer Performance', currency: ccy }}
+              emptyMessage={totalLoaded === 0 ? 'No insurance claims yet.' : 'No insurers in the filtered claims.'}
+              emptyIcon={<Building2 size={22} className="opacity-60" aria-hidden="true" />}
+            />
+          </Card>
+        </div>
+      )}
+
+      {/* Create / edit - Modal owns Escape, focus trap, scroll lock and the X;
+          every dismissal path is guarded while a save is in flight. */}
+      <Modal open={modalOpen} onClose={closeForm} title={editing ? 'Edit claim' : 'New insurance claim'} size="lg">
+        <form onSubmit={submit} className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div><label htmlFor="ic-f-claim" className="label">Claim No</label><input id="ic-f-claim" className="input w-full" value={form.claim_no} onChange={(e) => setField('claim_no', e.target.value)} placeholder="CLM-0001" /></div>
+            <div><label htmlFor="ic-f-asset" className="label">Asset No</label><input id="ic-f-asset" className="input w-full" value={form.asset_no} onChange={(e) => setField('asset_no', e.target.value)} placeholder="Vehicle / asset" /></div>
+            <div><label htmlFor="ic-f-insurer" className="label">Insurer</label><input id="ic-f-insurer" className="input w-full" value={form.insurer} onChange={(e) => setField('insurer', e.target.value)} placeholder="e.g. Tawuniya" /></div>
+            <div><label htmlFor="ic-f-policy" className="label">Policy No</label><input id="ic-f-policy" className="input w-full" value={form.policy_no} onChange={(e) => setField('policy_no', e.target.value)} /></div>
+            <div><label htmlFor="ic-f-incident" className="label">Incident date</label><input id="ic-f-incident" type="date" className="input w-full" value={form.incident_date || ''} onChange={(e) => setField('incident_date', e.target.value)} /></div>
+            <div><label htmlFor="ic-f-claimdate" className="label">Claim date</label><input id="ic-f-claimdate" type="date" className="input w-full" value={form.claim_date || ''} onChange={(e) => setField('claim_date', e.target.value)} /></div>
+            <div><label htmlFor="ic-f-claimed" className="label">Amount claimed ({ccy})</label><input id="ic-f-claimed" type="number" inputMode="decimal" min="0" step="0.01" className="input w-full" value={form.amount_claimed} onChange={(e) => setField('amount_claimed', e.target.value)} /></div>
+            <div><label htmlFor="ic-f-settled" className="label">Amount settled ({ccy})</label><input id="ic-f-settled" type="number" inputMode="decimal" min="0" step="0.01" className="input w-full" value={form.amount_settled} onChange={(e) => setField('amount_settled', e.target.value)} /></div>
+            <div><label htmlFor="ic-f-status" className="label">Status</label>
+              <select id="ic-f-status" className="input w-full" value={form.status} onChange={(e) => setField('status', e.target.value)}>
+                {CLAIM_STATUSES.map((st) => <option key={st} value={st}>{CLAIM_STATUS_META[st]?.label || st}</option>)}
+              </select>
+            </div>
+          </div>
+          <div><label htmlFor="ic-f-desc" className="label">Description</label>
+            <textarea id="ic-f-desc" className="input w-full min-h-[90px] resize-y" value={form.description} maxLength={8000} onChange={(e) => setField('description', e.target.value)} placeholder="What happened, damage summary, notes..." />
+          </div>
+          <p className="text-xs text-[var(--text-muted)]">Provide at least an insurer or an asset number.</p>
+          {formError && (
+            <div role="alert" className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
+              <AlertTriangle size={15} className="mt-0.5 shrink-0" aria-hidden="true" /> {formError}
+            </div>
+          )}
+          <div className="flex items-center justify-end gap-2 pt-1">
+            <button type="button" onClick={closeForm} disabled={saving} className="btn-secondary text-sm min-h-[44px]">Cancel</button>
+            <button type="submit" disabled={saving} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px] disabled:opacity-60">
+              {saving ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Save size={15} aria-hidden="true" />}
+              {saving ? 'Saving...' : editing ? 'Save changes' : 'Create claim'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        open={Boolean(deleting)}
+        onClose={closeDelete}
+        title="Delete claim?"
+        size="sm"
+        footer={(
+          <>
+            <button type="button" onClick={closeDelete} disabled={deleteBusy} className="btn-secondary text-sm min-h-[44px]">Cancel</button>
+            <button type="button" onClick={confirmDelete} disabled={deleteBusy} className="btn-danger text-sm inline-flex items-center gap-1.5 min-h-[44px] disabled:opacity-60">
+              {deleteBusy ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <Trash2 size={14} aria-hidden="true" />} Delete
+            </button>
+          </>
+        )}
+      >
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl bg-red-900/30 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" aria-hidden="true" /></div>
+          <p className="text-sm text-[var(--text-muted)]">
+            {deleting?.claim_no ? <span className="font-mono text-[var(--text-secondary)]">{deleting.claim_no}</span> : 'This claim'} will be permanently removed. This cannot be undone.
+          </p>
+        </div>
+      </Modal>
     </div>
   )
 }

@@ -267,3 +267,70 @@ export function analyzeRetreadClaims(rows = [], { months = 12, vendorLimit = 8, 
     trend: monthlyTrend(rows, { months, now }),
   }
 }
+
+// ─── Register helpers (moved out of the page so they are tested once) ────────
+
+/** YYYY-MM-DD of a date-ish value, '' when blank or invalid. */
+export function claimDayKey(v) {
+  if (!v) return ''
+  const d = new Date(v)
+  return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10)
+}
+
+const hasAmount = (v) => v !== null && v !== undefined && String(v).trim() !== '' && Number.isFinite(parseFloat(v))
+
+/**
+ * Filter the register. All predicates ANDed; blank / 'all' are no-ops. A claim
+ * with no usable claim_date is excluded only while a date bound is set.
+ * @param {object[]} rows
+ * @param {{status?:string, vendor?:string, search?:string, from?:string, to?:string}} [f]
+ */
+export function filterRetreadClaims(rows = [], f = {}) {
+  const q = cleanStr(f.search).toLowerCase()
+  const from = cleanStr(f.from).slice(0, 10)
+  const to = cleanStr(f.to).slice(0, 10)
+  return asList(rows).filter((r) => {
+    if (!r) return false
+    if (f.status && f.status !== 'all' && r.status !== f.status) return false
+    if (f.vendor && r.vendor !== f.vendor) return false
+    const dk = claimDayKey(r.claim_date)
+    if (from && (!dk || dk < from)) return false
+    if (to && (!dk || dk > to)) return false
+    if (q) {
+      const hay = `${r.claim_no || ''} ${r.tyre_serial || ''} ${r.asset_no || ''} ${r.vendor || ''} ${r.reason || ''}`.toLowerCase()
+      if (!hay.includes(q)) return false
+    }
+    return true
+  })
+}
+
+/**
+ * One register row: stored claim plus derived figures. Money never entered is
+ * null (N/A), not 0; `outstanding` is null when no cost was recorded.
+ */
+export function retreadClaimRow(r) {
+  const cost = hasAmount(r?.cost) ? num(r.cost) : null
+  const recovered = hasAmount(r?.amount_recovered) ? num(r.amount_recovered) : null
+  return {
+    ...r,
+    costValue: cost,
+    recoveredValue: recovered,
+    outstanding: cost == null ? null : Math.max(0, Math.round((cost - (recovered || 0)) * 100) / 100),
+    claimDay: claimDayKey(r?.claim_date) || null,
+    statusLabel: RETREAD_CLAIM_STATUS_META[r?.status]?.label || r?.status || 'N/A',
+    resolutionDays: resolutionDays(r),
+  }
+}
+
+/**
+ * Honest recovery rate: pct() reports 0 when no cost was recorded, which reads
+ * as "vendors paid nothing". Returns null so the page prints N/A.
+ */
+export function honestRecoveryRate(recovered, cost) {
+  return num(cost) > 0 ? pct(recovered, cost) : null
+}
+
+/** Vendor ranking rows with honest recovery (null when a vendor has no cost). */
+export function vendorRows(vendors = []) {
+  return asList(vendors).map((v) => ({ ...v, recoveryPct: honestRecoveryRate(v.recovered, v.cost) }))
+}

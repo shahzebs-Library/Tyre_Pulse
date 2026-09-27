@@ -338,3 +338,49 @@ export function analyzeServiceEvents(rows = [], opts = {}) {
     positions: distinctValues(list, 'position'),
   }
 }
+
+// ─── Register / export helpers ──────────────────────────────────────────────
+
+/** Excel/PDF column keys and headers for the service-event register. */
+export const SERVICE_EVENT_EXPORT_COLS = ['event_date', 'event_type', 'tyre_serial', 'asset_no', 'position', 'tread_depth', 'pressure', 'cost', 'technician', 'site', 'notes']
+export const SERVICE_EVENT_EXPORT_HEADERS = ['Date', 'Type', 'Serial', 'Asset', 'Position', 'Tread (mm)', 'Pressure (PSI)', 'Cost', 'Technician', 'Site', 'Notes']
+
+const measured = (v) => {
+  if (v === null || v === undefined || String(v).trim() === '') return null
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
+/**
+ * One register row: the stored event plus typed measurements. A tread,
+ * pressure or cost that was never recorded is null (the page prints N/A),
+ * never 0 - a 0 mm tread would read as a bald tyre.
+ */
+export function serviceEventRow(r) {
+  return {
+    ...r,
+    day: r?.event_date ? String(r.event_date).slice(0, 10) : null,
+    typeLabel: eventTypeLabel(r?.event_type),
+    treadValue: measured(r?.tread_depth),
+    pressureValue: measured(r?.pressure),
+    costValue: measured(r?.cost),
+  }
+}
+
+/** Export projection; blank measurements export as 'N/A', not 0. */
+export function serviceEventExportRow(r) {
+  const x = serviceEventRow(r)
+  return {
+    event_date: x.day || 'N/A',
+    event_type: x.typeLabel,
+    tyre_serial: str(r?.tyre_serial) || 'N/A',
+    asset_no: str(r?.asset_no) || 'N/A',
+    position: str(r?.position) || 'N/A',
+    tread_depth: x.treadValue ?? 'N/A',
+    pressure: x.pressureValue ?? 'N/A',
+    cost: x.costValue ?? 'N/A',
+    technician: str(r?.technician) || 'N/A',
+    site: str(r?.site) || 'N/A',
+    notes: str(r?.notes),
+  }
+}

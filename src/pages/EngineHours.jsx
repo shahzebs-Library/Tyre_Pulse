@@ -10,7 +10,8 @@
  * over real data only - honest N/A where a metric is not computable, never a
  * fabricated figure.
  */
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement,
   PointElement, LineElement, Filler, Tooltip, Legend,
@@ -19,7 +20,7 @@ import { Bar, Doughnut, Line } from 'react-chartjs-2'
 import {
   Gauge, Activity, Clock, Truck, Plus, Pencil, Trash2, Search, X, Filter,
   Save, Loader2, AlertTriangle, FileSpreadsheet, FileText, TrendingUp, BarChart3,
-  MapPin, Moon, ShieldAlert, ArrowUp, ArrowDown, ArrowUpDown, Timer,
+  MapPin, Moon, ShieldAlert, Timer, LayoutGrid, ListChecks, RefreshCw,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import Card, { CardHeader } from '../components/ui/Card'
@@ -32,12 +33,15 @@ import {
 import {
   summarizeEngineHours, filterEngineHours, anomalyRowIds, detectAnomalies,
   monthlyHoursTrend, utilizationByAsset, utilizationBySite,
+  distinctFieldValues, engineHoursRow, engineHoursExportRow,
+  ENGINE_HOURS_EXPORT_COLS, ENGINE_HOURS_EXPORT_HEADERS,
   LOW_UTILISATION_HOURS_PER_DAY, STALE_READING_DAYS,
 } from '../lib/engineHoursAnalytics'
 import { colorAt, categorical, withAlpha } from '../lib/reportColors'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
-import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { compareValues, sortRows } from '../lib/consoleTable'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { isMissingRelation } from '../lib/api/_client'
 
 ChartJS.register(
@@ -47,8 +51,61 @@ ChartJS.register(
 
 // Shared light-legible chart options (grid var resolved by chartVarPlugin).
 const AXIS = {
-  x: { grid: { display: false }, ticks: { color: 'rgba(148,163,184,0.9)', font: { size: 10 } } },
-  y: { beginAtZero: true, grid: { color: 'var(--panel-2)' }, ticks: { color: 'rgba(148,163,184,0.9)', font: { size: 10 } } },
+  x: { grid: { display: false }, ticks: { color: 'var(--text-muted)', font: { size: 10 } } },
+  y: { beginAtZero: true, grid: { color: 'var(--panel-2)' }, ticks: { color: 'var(--text-muted)', font: { size: 10 } } },
+}
+
+const valueSort = (a, b, id) => compareValues(a.getValue(id), b.getValue(id))
+const blankToUndef = (v) => (v === null || v === undefined || v === '' ? undefined : v)
+
+const TABS = [
+  { id: 'overview', label: 'Utilisation', icon: LayoutGrid },
+  { id: 'anomalies', label: 'Data quality', icon: ShieldAlert },
+  { id: 'register', label: 'Reading log', icon: ListChecks },
+]
+const TAB_IDS = TABS.map((t) => t.id)
+
+/** Accessible tab strip synced to ?tab= (arrow keys move between tabs). */
+function PageTabs({ tab, onChange, badges = {} }) {
+  const refs = useRef([])
+  const onKey = (e, i) => {
+    let next = null
+    if (e.key === 'ArrowRight') next = (i + 1) % TABS.length
+    else if (e.key === 'ArrowLeft') next = (i - 1 + TABS.length) % TABS.length
+    else if (e.key === 'Home') next = 0
+    else if (e.key === 'End') next = TABS.length - 1
+    if (next == null) return
+    e.preventDefault()
+    onChange(TABS[next].id)
+    refs.current[next]?.focus()
+  }
+  return (
+    <div role="tablist" aria-label="Engine hours views" className="flex flex-wrap gap-1 border-b border-[var(--border-bright)]">
+      {TABS.map((t, i) => {
+        const Icon = t.icon
+        const active = tab === t.id
+        const badge = badges[t.id]
+        return (
+          <button
+            key={t.id}
+            ref={(el) => { refs.current[i] = el }}
+            type="button"
+            role="tab"
+            id={`eh-tab-${t.id}`}
+            aria-selected={active}
+            aria-controls={`eh-panel-${t.id}`}
+            tabIndex={active ? 0 : -1}
+            onClick={() => onChange(t.id)}
+            onKeyDown={(e) => onKey(e, i)}
+            className={`inline-flex items-center gap-1.5 px-4 min-h-[44px] text-sm font-medium border-b-2 -mb-px rounded-t-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent,#16a34a)] ${active ? 'border-[var(--accent,#16a34a)] text-[var(--text-primary)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
+          >
+            <Icon size={15} aria-hidden="true" /> {t.label}
+            {badge ? <span className="ml-1 text-[11px] px-1.5 rounded-full bg-red-900/40 text-red-300 border border-red-700/50 tabular-nums">{badge}</span> : null}
+          </button>
+        )
+      })}
+    </div>
+  )
 }
 
 const today = () => new Date().toISOString().slice(0, 10)
@@ -60,15 +117,6 @@ const fmtDate = (d) => {
   if (!d) return 'N/A'
   const dt = new Date(d)
   return Number.isNaN(dt.getTime()) ? 'N/A' : dt.toLocaleDateString()
-}
-
-// Sortable log-table columns.
-const SORT_COLS = {
-  asset_no: (r) => String(r.asset_no || '').toLowerCase(),
-  engine_hours: (r) => (r.engine_hours == null || r.engine_hours === '' ? -Infinity : Number(r.engine_hours)),
-  reading_date: (r) => (r.reading_date || r.created_at || ''),
-  source: (r) => String(r.source || '').toLowerCase(),
-  site: (r) => String(r.site || '').toLowerCase(),
 }
 
 export default function EngineHours() {
@@ -84,7 +132,15 @@ export default function EngineHours() {
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [search, setSearch] = useState('')
-  const [sort, setSort] = useState({ key: 'reading_date', dir: 'desc' })
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tab = TAB_IDS.includes(searchParams.get('tab')) ? searchParams.get('tab') : 'overview'
+  const setTab = useCallback((id) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      if (id === 'overview') next.delete('tab'); else next.set('tab', id)
+      return next
+    }, { replace: true })
+  }, [setSearchParams])
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null) // row being edited, or null for create
@@ -125,31 +181,18 @@ export default function EngineHours() {
   const byAsset = useMemo(() => utilizationByAsset(filtered, new Date(), 12), [filtered])
   const bySite = useMemo(() => utilizationBySite(filtered), [filtered])
 
-  const assetOptions = useMemo(
-    () => [...new Set((rows || []).map((r) => r.asset_no).filter(Boolean))].sort(),
-    [rows],
-  )
-  const siteOptions = useMemo(
-    () => [...new Set((rows || []).map((r) => r.site).filter(Boolean))].sort(),
-    [rows],
-  )
+  const assetOptions = useMemo(() => distinctFieldValues(rows || [], 'asset_no'), [rows])
+  const siteOptions = useMemo(() => distinctFieldValues(rows || [], 'site'), [rows])
 
-  const sortedRows = useMemo(() => {
-    const get = SORT_COLS[sort.key] || SORT_COLS.reading_date
-    const dir = sort.dir === 'asc' ? 1 : -1
-    return [...filtered].sort((a, b) => {
-      const av = get(a); const bv = get(b)
-      if (av < bv) return -1 * dir
-      if (av > bv) return 1 * dir
-      return 0
-    })
-  }, [filtered, sort])
-
-  const toggleSort = (key) => setSort((s) =>
-    s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' })
+  // Newest first by default; the table re-sorts on any header click and pages
+  // the WHOLE filtered set (it used to stop at 500 of 4,379 readings).
+  const sortedRows = useMemo(
+    () => sortRows(filtered.map((r) => engineHoursRow(r, anomalyIds)), { key: 'day', dir: 'desc' }),
+    [filtered, anomalyIds],
+  )
 
   const openCreate = () => { setEditing(null); setForm(emptyForm()); setFormError(''); setModalOpen(true) }
-  const openEdit = (r) => {
+  const openEdit = useCallback((r) => {
     setEditing(r)
     setForm({
       asset_no: r.asset_no || '',
@@ -160,7 +203,7 @@ export default function EngineHours() {
       notes: r.notes || '',
     })
     setFormError(''); setModalOpen(true)
-  }
+  }, [])
   const setField = (k, v) => setForm((f) => ({ ...f, [k]: v }))
   // One guarded close for Escape, the backdrop and the X - the legacy overlay
   // guarded only the backdrop, so the X could dismiss a dialog mid-save.
@@ -211,22 +254,61 @@ export default function EngineHours() {
   }, [confirmDelete, load])
 
   // Export -------------------------------------------------------------------
-  const EXPORT_COLS = ['asset_no', 'engine_hours', 'reading_date', 'source', 'site', 'notes']
-  const EXPORT_HEADERS = ['Asset', 'Engine hours', 'Reading date', 'Source', 'Site', 'Notes']
-  // Paged, not capped. This table used to render sortedRows.slice(0, 500)
-  // against 4,379 stored readings, so 3,879 were unreachable.
-  // The EXPORT deliberately still covers sortedRows in full - a page of 50
-  // is a reading convenience, not a narrowing of what you asked for.
-  const pager = usePagedRows(sortedRows)
+  // The export covers the WHOLE filtered set, not the page on screen.
+  const exportRows = useMemo(() => sortedRows.map((r) => engineHoursExportRow(r, anomalyIds)), [sortedRows, anomalyIds])
+  const fileName = reportFileName('TyrePulse Engine Hours', activeCountry && activeCountry !== 'All' ? activeCountry : null, reportDateLabel())
+  const doExport = async (kind) => {
+    try {
+      if (kind === 'excel') await exportToExcel(exportRows, ENGINE_HOURS_EXPORT_COLS, ENGINE_HOURS_EXPORT_HEADERS, fileName, 'Engine hours')
+      else await exportToPdf(exportRows, ENGINE_HOURS_EXPORT_COLS.map((c, i) => ({ key: c, header: ENGINE_HOURS_EXPORT_HEADERS[i] })), 'Engine Hours', fileName, 'landscape')
+    } catch (e) {
+      setError(toUserMessage(e, 'Could not export. Try again.'))
+    }
+  }
 
-  const exportRows = sortedRows.map((r) => ({
-    asset_no: r.asset_no || '',
-    engine_hours: r.engine_hours ?? '',
-    reading_date: r.reading_date || '',
-    source: r.source || '',
-    site: r.site || '',
-    notes: r.notes || '',
-  }))
+  const logColumns = useMemo(() => [
+    { id: 'asset_no', header: 'Asset', accessorFn: (r) => blankToUndef(r.asset_no), sortingFn: valueSort, sortUndefined: 'last',
+      cell: ({ getValue }) => <span className="font-medium text-[var(--text-primary)]">{getValue() || 'N/A'}</span> },
+    { id: 'hours', header: 'Engine hours', accessorFn: (r) => r.hours ?? undefined, sortingFn: valueSort, sortUndefined: 'last', meta: { align: 'right' },
+      cell: ({ row }) => (
+        <span className="font-semibold tabular-nums text-[var(--text-secondary)] whitespace-nowrap">
+          {row.original.hours == null ? 'N/A' : `${fmtHours(row.original.hours)} h`}
+          {row.original.isAnomaly && <span className="ml-2 badge text-[10px] px-1.5 py-0.5 rounded bg-red-900/40 text-red-300 border border-red-700/50 inline-flex items-center gap-1"><ShieldAlert size={10} aria-hidden="true" /> anomaly</span>}
+        </span>
+      ) },
+    { id: 'day', header: 'Reading date', accessorFn: (r) => blankToUndef(r.day), sortingFn: valueSort, sortUndefined: 'last',
+      cell: ({ row }) => <span className="whitespace-nowrap">{fmtDate(row.original.reading_date || row.original.created_at)}</span> },
+    { id: 'source', header: 'Source', accessorFn: (r) => blankToUndef(r.source), sortingFn: valueSort, sortUndefined: 'last',
+      cell: ({ getValue }) => getValue() || 'N/A' },
+    { id: 'site', header: 'Site', accessorFn: (r) => blankToUndef(r.site), sortingFn: valueSort, sortUndefined: 'last',
+      cell: ({ getValue }) => getValue() || 'N/A' },
+    { id: 'notes', header: 'Notes', accessorFn: (r) => blankToUndef(r.notes), enableSorting: false,
+      cell: ({ getValue }) => <span className="block max-w-[240px] truncate text-[var(--text-muted)]" title={getValue() || ''}>{getValue() || 'N/A'}</span> },
+    { id: 'actions', header: () => <span className="sr-only">Actions</span>, enableSorting: false, meta: { export: false },
+      cell: ({ row }) => {
+        const r = row.original
+        const label = `${r.asset_no || 'asset'} ${fmtDate(r.reading_date)}`
+        return (
+          <div className="flex items-center gap-1 justify-end">
+            <button type="button" onClick={(e) => { e.stopPropagation(); openEdit(r) }} aria-label={`Edit reading ${label}`} title="Edit" className="w-9 h-9 inline-flex items-center justify-center rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent,#16a34a)]"><Pencil size={14} aria-hidden="true" /></button>
+            <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmDelete(r) }} aria-label={`Delete reading ${label}`} title="Delete" className="w-9 h-9 inline-flex items-center justify-center rounded-lg hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"><Trash2 size={14} aria-hidden="true" /></button>
+          </div>
+        )
+      } },
+  ], [openEdit])
+
+  const anomalyColumns = useMemo(() => [
+    { id: 'asset_no', header: 'Asset', accessorKey: 'asset_no', sortingFn: valueSort,
+      cell: ({ getValue }) => <span className="font-medium text-[var(--text-primary)]">{getValue() || 'N/A'}</span> },
+    { id: 'reading_date', header: 'Reading date', accessorFn: (a) => blankToUndef(a.reading_date), sortingFn: valueSort, sortUndefined: 'last',
+      cell: ({ getValue }) => fmtDate(getValue()) },
+    { id: 'engine_hours', header: 'Reading', accessorFn: (a) => a.engine_hours ?? undefined, sortingFn: valueSort, sortUndefined: 'last', meta: { align: 'right' },
+      cell: ({ getValue }) => <span className="tabular-nums">{fmtHours(getValue())} h</span> },
+    { id: 'prevHours', header: 'Previous', accessorFn: (a) => a.prevHours ?? undefined, sortingFn: valueSort, sortUndefined: 'last', meta: { align: 'right' },
+      cell: ({ row }) => <span className="tabular-nums text-[var(--text-muted)]">{fmtHours(row.original.prevHours)} h {row.original.prevDate ? `(${fmtDate(row.original.prevDate)})` : ''}</span> },
+    { id: 'drop', header: 'Drop', accessorFn: (a) => a.drop ?? undefined, sortingFn: valueSort, sortUndefined: 'last', meta: { align: 'right' },
+      cell: ({ getValue }) => <span className="tabular-nums text-red-400 font-semibold">-{fmtHours(getValue())} h</span> },
+  ], [])
 
   const kpis = [
     { label: 'Readings logged', value: summary.totalReadings, icon: Activity, tone: 'text-[var(--text-primary)]' },
@@ -239,7 +321,8 @@ export default function EngineHours() {
 
   const clearFilters = () => { setAssetFilter(''); setSiteFilter(''); setFrom(''); setTo(''); setSearch('') }
   const hasFilters = assetFilter || siteFilter || from || to || search
-  const hasData = filtered.length > 0
+  // A failed read must never render as "no readings" or a row of zeros.
+  const loadFailed = Boolean(error) && rows !== null && rows.length === 0 && !missing
 
   // Chart datasets (only rendered when data exists).
   const trendHasData = trend.some((b) => b.hoursAdded > 0 || b.readings > 0)
@@ -273,27 +356,11 @@ export default function EngineHours() {
   const lineOpts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: AXIS }
   const barOpts = {
     responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
-    scales: { x: AXIS.x, y: { ...AXIS.y, title: { display: true, text: 'Hours', color: 'rgba(148,163,184,0.9)', font: { size: 10 } } } },
+    scales: { x: AXIS.x, y: { ...AXIS.y, title: { display: true, text: 'Hours', color: 'var(--text-muted)', font: { size: 10 } } } },
   }
   const doughnutOpts = {
     responsive: true, maintainAspectRatio: false, cutout: '58%',
-    plugins: { legend: { position: 'right', labels: { color: 'rgba(148,163,184,0.95)', font: { size: 11 }, boxWidth: 12 } } },
-  }
-
-  const SortHead = ({ label, colKey, align = 'left' }) => {
-    const active = sort.key === colKey
-    const Icon = active ? (sort.dir === 'asc' ? ArrowUp : ArrowDown) : ArrowUpDown
-    return (
-      <th className={`px-4 py-3 font-semibold whitespace-nowrap ${align === 'right' ? 'text-right' : ''}`}>
-        <button
-          type="button"
-          onClick={() => toggleSort(colKey)}
-          className={`inline-flex items-center gap-1 hover:text-[var(--text-primary)] ${active ? 'text-[var(--text-primary)]' : ''}`}
-        >
-          {label} <Icon size={12} className={active ? '' : 'opacity-50'} />
-        </button>
-      </th>
-    )
+    plugins: { legend: { position: 'right', labels: { color: 'var(--text-muted)', font: { size: 11 }, boxWidth: 12 } } },
   }
 
   return (
@@ -306,15 +373,15 @@ export default function EngineHours() {
         refreshing={refreshing}
         updatedAt={updatedAt}
         actions={
-          <div className="flex items-center gap-2">
-            <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'engine_hours') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!exportRows.length}>
-              <FileSpreadsheet size={14} /> Excel
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => doExport('excel')} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!exportRows.length} title="Exports the readings matching the filters">
+              <FileSpreadsheet size={14} aria-hidden="true" /> Excel
             </button>
-            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Engine Hours', 'engine_hours', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!exportRows.length}>
-              <FileText size={14} /> PDF
+            <button type="button" onClick={() => doExport('pdf')} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!exportRows.length} title="Exports the readings matching the filters">
+              <FileText size={14} aria-hidden="true" /> PDF
             </button>
-            <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={missing}>
-              <Plus size={14} /> Log reading
+            <button type="button" onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={missing}>
+              <Plus size={14} aria-hidden="true" /> Log reading
             </button>
           </div>
         }
@@ -337,12 +404,12 @@ export default function EngineHours() {
       )}
 
       {error && (
-        <Card tone="crit" className="items-start justify-between gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
+        <Card tone="crit" role="alert" className="items-start justify-between gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
           <div className="flex items-start gap-3">
             <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
             <div><p className="text-red-300 font-medium">Could not load engine-hour readings.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
           </div>
-          <button onClick={load} className="btn-secondary text-sm shrink-0">Retry</button>
+          <button type="button" onClick={load} className="btn-secondary text-sm shrink-0 inline-flex items-center gap-1.5 min-h-[44px]"><RefreshCw size={14} aria-hidden="true" /> Retry</button>
         </Card>
       )}
 
@@ -357,7 +424,7 @@ export default function EngineHours() {
                 <Icon size={16} className={k.tone} />
               </div>
               <p className={`text-2xl font-bold mt-1 ${k.tone}`}>
-                {rows === null ? 'N/A' : k.value}{rows !== null && k.suffix ? <span className="text-sm font-medium text-[var(--text-muted)]">{k.suffix}</span> : ''}
+                {rows === null || loadFailed ? 'N/A' : k.value}{rows !== null && !loadFailed && k.suffix ? <span className="text-sm font-medium text-[var(--text-muted)]">{k.suffix}</span> : ''}
               </p>
               {k.hint && <p className="text-[10px] text-[var(--text-muted)] mt-0.5">{k.hint}</p>}
             </Card>
@@ -365,54 +432,14 @@ export default function EngineHours() {
         })}
       </div>
 
-      {/* Most / least utilised strip */}
-      {rows !== null && (summary.mostUtilized || summary.staleAssets > 0) && (
-        // Each tile is an icon BESIDE its text, so the row direction goes in
-        // `style` (Card is flex-col and a .flex-row class cannot beat it), and
-        // `items-center` keeps the 9x9 icon chip from stretching - Card brings
-        // align-items:stretch, which the legacy block `.card` did not.
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-[var(--gap-grid)]">
-          {summary.mostUtilized && (
-            <Card className="items-center gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
-              <div className="w-9 h-9 rounded-xl bg-green-900/30 flex items-center justify-center shrink-0"><TrendingUp size={17} className="text-green-400" /></div>
-              <div className="min-w-0">
-                <p className="text-xs text-[var(--text-muted)]">Most utilised</p>
-                <p className="text-sm font-semibold text-[var(--text-primary)] truncate">{summary.mostUtilized.asset_no}</p>
-                <p className="text-xs text-green-400">{fmtHours(summary.mostUtilized.avgDailyHours)} h/day</p>
-              </div>
-            </Card>
-          )}
-          {summary.leastUtilized && summary.leastUtilized.asset_no !== summary.mostUtilized?.asset_no && (
-            <Card className="items-center gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
-              <div className="w-9 h-9 rounded-xl bg-indigo-900/30 flex items-center justify-center shrink-0"><Moon size={17} className="text-indigo-300" /></div>
-              <div className="min-w-0">
-                <p className="text-xs text-[var(--text-muted)]">Least utilised</p>
-                <p className="text-sm font-semibold text-[var(--text-primary)] truncate">{summary.leastUtilized.asset_no}</p>
-                <p className="text-xs text-indigo-300">{fmtHours(summary.leastUtilized.avgDailyHours)} h/day</p>
-              </div>
-            </Card>
-          )}
-          {summary.staleAssets > 0 && (
-            <Card className="items-center gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
-              <div className="w-9 h-9 rounded-xl bg-amber-900/30 flex items-center justify-center shrink-0"><Timer size={17} className="text-amber-400" /></div>
-              <div className="min-w-0">
-                <p className="text-xs text-[var(--text-muted)]">Stale meters</p>
-                <p className="text-sm font-semibold text-[var(--text-primary)]">{summary.staleAssets} asset{summary.staleAssets === 1 ? '' : 's'}</p>
-                <p className="text-xs text-amber-400">No reading in {STALE_READING_DAYS}+ days</p>
-              </div>
-            </Card>
-          )}
-        </div>
-      )}
-
       {/* Filters. NOT clipped: the asset/site/date controls are native inputs
           whose popups the browser paints outside this element, but leaving the
           card unclipped is what keeps any future anchored popover usable here. */}
       <Card className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <input className="input pl-9 w-full" placeholder="Search asset, site, source, notes" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Search size={15} aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+            <input type="search" aria-label="Search readings" className="input pl-9 w-full" placeholder="Search asset, site, source, notes" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <select className="input" value={assetFilter} onChange={(e) => setAssetFilter(e.target.value)} aria-label="Asset">
             <option value="">All assets</option>
@@ -423,140 +450,153 @@ export default function EngineHours() {
             {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
           <div className="flex items-center gap-1.5">
-            <label className="text-xs text-[var(--text-muted)]">From</label>
-            <input type="date" className="input" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} aria-label="From date" />
+            <label htmlFor="eh-from" className="text-xs text-[var(--text-muted)]">From</label>
+            <input id="eh-from" type="date" className="input" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} />
           </div>
           <div className="flex items-center gap-1.5">
-            <label className="text-xs text-[var(--text-muted)]">To</label>
-            <input type="date" className="input" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} aria-label="To date" />
+            <label htmlFor="eh-to" className="text-xs text-[var(--text-muted)]">To</label>
+            <input id="eh-to" type="date" className="input" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} />
           </div>
-          {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
-          <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {rows?.length || 0}</span>
+          {hasFilters && <button type="button" onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><X size={14} aria-hidden="true" /> Clear filters</button>}
+          <span className="text-xs text-[var(--text-muted)] ml-auto" aria-live="polite">{filtered.length} of {rows?.length || 0} readings. Every tab follows these filters.</span>
         </div>
       </Card>
 
-      {/* Charts */}
-      {rows !== null && !missing && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-[var(--gap-grid)]">
-          <Card className="lg:col-span-2">
-            <CardHeader icon={TrendingUp} title="Run-hours accumulated (12 months)" />
-            <div className="h-64">
-              {trendHasData
-                ? <Line data={trendData} options={lineOpts} />
-                : <div className="h-full flex flex-col items-center justify-center text-[var(--text-muted)] text-sm"><TrendingUp size={22} className="mb-2 opacity-60" />No dated readings to trend yet.</div>}
-            </div>
-          </Card>
-          <Card>
-            <CardHeader icon={MapPin} title="Utilisation by site" />
-            <div className="h-64">
-              {bySite.length
-                ? <Doughnut data={siteData} options={doughnutOpts} />
-                : <div className="h-full flex flex-col items-center justify-center text-[var(--text-muted)] text-sm"><MapPin size={22} className="mb-2 opacity-60" />Need 2+ readings per asset to attribute hours.</div>}
-            </div>
-          </Card>
-          <Card className="lg:col-span-3">
-            <CardHeader icon={BarChart3} title={`Utilisation by asset (top ${byAsset.length})`} />
-            <div className="h-64">
-              {byAsset.some((a) => a.hoursAdded > 0)
-                ? <Bar data={assetData} options={barOpts} />
-                : <div className="h-full flex flex-col items-center justify-center text-[var(--text-muted)] text-sm"><BarChart3 size={22} className="mb-2 opacity-60" />Log at least two readings per asset to measure accumulated hours.</div>}
-            </div>
-          </Card>
-        </div>
-      )}
+      <PageTabs tab={tab} onChange={setTab} badges={{ anomalies: loadFailed ? 0 : anomalies.length }} />
 
-      {/* Anomaly panel. A meter that READS LOWER than its previous reading is
-          surfaced, never smoothed away - the drop is what tells an engineer a
-          meter was reset or swapped. `tone="crit"` carries the red edge the old
-          `border-red-800/40` class gave; as a class it would now be dead, since
-          Card sets `border` inline. The explanation of what counts as an anomaly
-          moves to CardHeader's `description`, verbatim. */}
-      {anomalies.length > 0 && (
-        <Card tone="crit">
-          <CardHeader
-            icon={ShieldAlert}
-            title={`Data-quality anomalies (${anomalies.length})`}
-            description="Reading lower than the previous one (meter reset, replacement, or a keying error)"
-          />
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs uppercase tracking-wider text-[var(--text-muted)] border-b border-[var(--input-border)]">
-                  {['Asset', 'Reading date', 'Reading', 'Previous', 'Drop'].map((h) => <th key={h} className="px-3 py-2 font-semibold whitespace-nowrap">{h}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {anomalies.slice(0, 50).map((a) => (
-                  <tr key={String(a.id)} className="border-b border-[var(--input-border)]/50">
-                    <td className="px-3 py-2 font-medium text-[var(--text-primary)]">{a.asset_no}</td>
-                    <td className="px-3 py-2 text-[var(--text-secondary)]">{fmtDate(a.reading_date)}</td>
-                    <td className="px-3 py-2 text-[var(--text-secondary)]">{fmtHours(a.engine_hours)} h</td>
-                    <td className="px-3 py-2 text-[var(--text-muted)]">{fmtHours(a.prevHours)} h {a.prevDate ? `(${fmtDate(a.prevDate)})` : ''}</td>
-                    <td className="px-3 py-2 text-red-400 font-semibold">-{fmtHours(a.drop)} h</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      )}
-
-      {/* Log table. `pad="none" clip` reproduces the edge-to-edge crop the legacy
-          `.card overflow-hidden !p-0` gave. Clipping is safe here: the only
-          popup inside is TablePagination's rows-per-page native <select>, whose
-          option list the browser paints outside this overflow context. */}
-      <Card pad="none" clip>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                <SortHead label="Asset" colKey="asset_no" />
-                <SortHead label="Engine hours" colKey="engine_hours" />
-                <SortHead label="Reading date" colKey="reading_date" />
-                <SortHead label="Source" colKey="source" />
-                <SortHead label="Site" colKey="site" />
-                <th className="px-4 py-3 font-semibold whitespace-nowrap">Notes</th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap text-right"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows === null ? (
-                [0, 1, 2, 3, 4].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={7} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
-              ) : sortedRows.length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-12 text-center text-[var(--text-muted)]">
-                  {(rows.length === 0 && !missing)
-                    ? <><Gauge size={22} className="mx-auto mb-2 opacity-60" />No engine-hour readings yet. Log the first reading to get started.</>
-                    : <><Filter size={22} className="mx-auto mb-2 opacity-60" />No readings match these filters.</>}
-                </td></tr>
-              ) : (
-                pager.pageRows.map((r) => {
-                  const isAnomaly = anomalyIds.has(r.id)
-                  return (
-                    <tr key={r.id} className={`border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40 ${isAnomaly ? 'bg-red-900/10' : ''}`}>
-                      <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.asset_no || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] font-semibold">
-                        {fmtHours(r.engine_hours)} h
-                        {isAnomaly && <span className="ml-2 badge text-[10px] px-1.5 py-0.5 rounded bg-red-900/40 text-red-300 border border-red-700/50 inline-flex items-center gap-1"><ShieldAlert size={10} /> anomaly</span>}
-                      </td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtDate(r.reading_date)}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.source || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-muted)] max-w-[240px] truncate" title={r.notes || ''}>{r.notes || 'N/A'}</td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center gap-1.5 justify-end">
-                          <button onClick={() => openEdit(r)} className="p-1.5 rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" title="Edit"><Pencil size={14} /></button>
-                          <button onClick={() => setConfirmDelete(r)} className="p-1.5 rounded-lg hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" title="Delete"><Trash2 size={14} /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })
+      {tab === 'overview' && (
+        <div role="tabpanel" id="eh-panel-overview" aria-labelledby="eh-tab-overview" className="space-y-6">
+          {rows === null ? (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-[var(--gap-grid)]">
+              {[0, 1, 2].map((i) => <div key={i} className="h-72 rounded-xl bg-[var(--input-bg)] animate-pulse" />)}
+            </div>
+          ) : loadFailed ? (
+            <Card><div className="py-12 text-center text-sm text-[var(--text-muted)]">Utilisation is unavailable because the readings could not be loaded. Use Retry above.</div></Card>
+          ) : (<>
+          {/* Most / least utilised strip */}
+          {(summary.mostUtilized || summary.staleAssets > 0) && (
+            // Each tile is an icon BESIDE its text, so the row direction goes in
+            // `style` (Card is flex-col and a .flex-row class cannot beat it), and
+            // `items-center` keeps the 9x9 icon chip from stretching - Card brings
+            // align-items:stretch, which the legacy block `.card` did not.
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-[var(--gap-grid)]">
+              {summary.mostUtilized && (
+                <Card className="items-center gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
+                  <div className="w-9 h-9 rounded-xl bg-green-900/30 flex items-center justify-center shrink-0"><TrendingUp size={17} className="text-green-400" /></div>
+                  <div className="min-w-0">
+                    <p className="text-xs text-[var(--text-muted)]">Most utilised</p>
+                    <p className="text-sm font-semibold text-[var(--text-primary)] truncate">{summary.mostUtilized.asset_no}</p>
+                    <p className="text-xs text-green-400">{fmtHours(summary.mostUtilized.avgDailyHours)} h/day</p>
+                  </div>
+                </Card>
               )}
-            </tbody>
-          </table>
+              {summary.leastUtilized && summary.leastUtilized.asset_no !== summary.mostUtilized?.asset_no && (
+                <Card className="items-center gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
+                  <div className="w-9 h-9 rounded-xl bg-indigo-900/30 flex items-center justify-center shrink-0"><Moon size={17} className="text-indigo-300" /></div>
+                  <div className="min-w-0">
+                    <p className="text-xs text-[var(--text-muted)]">Least utilised</p>
+                    <p className="text-sm font-semibold text-[var(--text-primary)] truncate">{summary.leastUtilized.asset_no}</p>
+                    <p className="text-xs text-indigo-300">{fmtHours(summary.leastUtilized.avgDailyHours)} h/day</p>
+                  </div>
+                </Card>
+              )}
+              {summary.staleAssets > 0 && (
+                <Card className="items-center gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
+                  <div className="w-9 h-9 rounded-xl bg-amber-900/30 flex items-center justify-center shrink-0"><Timer size={17} className="text-amber-400" /></div>
+                  <div className="min-w-0">
+                    <p className="text-xs text-[var(--text-muted)]">Stale meters</p>
+                    <p className="text-sm font-semibold text-[var(--text-primary)]">{summary.staleAssets} asset{summary.staleAssets === 1 ? '' : 's'}</p>
+                    <p className="text-xs text-amber-400">No reading in {STALE_READING_DAYS}+ days</p>
+                  </div>
+                </Card>
+              )}
+            </div>
+          )}
+
+          {/* Charts */}
+          {!missing && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-[var(--gap-grid)]">
+              <Card className="lg:col-span-2">
+                <CardHeader icon={TrendingUp} title="Run-hours accumulated (12 months)" />
+                <div className="h-64">
+                  {trendHasData
+                    ? <Line data={trendData} options={lineOpts} />
+                    : <div className="h-full flex flex-col items-center justify-center text-[var(--text-muted)] text-sm"><TrendingUp size={22} className="mb-2 opacity-60" />No dated readings to trend yet.</div>}
+                </div>
+              </Card>
+              <Card>
+                <CardHeader icon={MapPin} title="Utilisation by site" />
+                <div className="h-64">
+                  {bySite.length
+                    ? <Doughnut data={siteData} options={doughnutOpts} />
+                    : <div className="h-full flex flex-col items-center justify-center text-[var(--text-muted)] text-sm"><MapPin size={22} className="mb-2 opacity-60" />Need 2+ readings per asset to attribute hours.</div>}
+                </div>
+              </Card>
+              <Card className="lg:col-span-3">
+                <CardHeader icon={BarChart3} title={`Utilisation by asset (top ${byAsset.length})`} />
+                <div className="h-64">
+                  {byAsset.some((a) => a.hoursAdded > 0)
+                    ? <Bar data={assetData} options={barOpts} />
+                    : <div className="h-full flex flex-col items-center justify-center text-[var(--text-muted)] text-sm"><BarChart3 size={22} className="mb-2 opacity-60" />Log at least two readings per asset to measure accumulated hours.</div>}
+                </div>
+              </Card>
+            </div>
+          )}
+
+          </>)}
         </div>
-        <TablePagination {...pager} />
-      </Card>
+      )}
+
+      {tab === 'anomalies' && (
+        <div role="tabpanel" id="eh-panel-anomalies" aria-labelledby="eh-tab-anomalies" className="space-y-3">
+          <Card>
+            <CardHeader
+              icon={ShieldAlert}
+              title={`Data-quality anomalies${loadFailed || rows === null ? '' : ` (${anomalies.length})`}`}
+              description="A reading lower than the previous one for the same asset: a meter reset, replacement, or a keying error. Surfaced, never smoothed away."
+            />
+          </Card>
+          <Card pad="none" clip>
+            <EnterpriseTable
+              columns={anomalyColumns}
+              data={anomalies}
+              getRowId={(a) => String(a.id)}
+              loading={rows === null}
+              error={loadFailed ? error : null}
+              onRetry={load}
+              enableColumnFilters={false}
+              searchPlaceholder="Search anomalies"
+              exportFileName={reportFileName('TyrePulse Engine Hours Anomalies', reportDateLabel())}
+              reportMeta={{ title: 'Engine Hours Data-Quality Anomalies' }}
+              emptyMessage={rows && rows.length === 0 ? 'No readings logged yet.' : 'No meter drops in the filtered readings. Every asset reads at or above its previous reading.'}
+              emptyIcon={<ShieldAlert size={22} className="opacity-60" aria-hidden="true" />}
+            />
+          </Card>
+        </div>
+      )}
+
+      {tab === 'register' && (
+        <div role="tabpanel" id="eh-panel-register" aria-labelledby="eh-tab-register">
+          <Card pad="none" clip>
+            <EnterpriseTable
+              columns={logColumns}
+              data={sortedRows}
+              getRowId={(r) => String(r.id)}
+              loading={rows === null}
+              error={loadFailed ? error : null}
+              onRetry={load}
+              enableGlobalFilter={false}
+              enableColumnFilters={false}
+              enableExport={false}
+              viewKey="engine-hours-log"
+              initialPageSize={50}
+              pageSizeOptions={[25, 50, 100, 250]}
+              emptyMessage={missing ? 'Engine hours tracking is not enabled on this database yet.' : rows && rows.length === 0 ? 'No engine-hour readings yet. Log the first reading to get started.' : 'No readings match these filters.'}
+              emptyIcon={<Filter size={22} className="opacity-60" aria-hidden="true" />}
+            />
+          </Card>
+        </div>
+      )}
 
       {/* Create / Edit modal. The submit button stays INSIDE the <form> rather
           than moving to Modal's `footer`: a footer button would need a

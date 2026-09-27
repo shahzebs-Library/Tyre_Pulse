@@ -391,3 +391,50 @@ export function summarizeEngineHours(rows, filters = {}, now = new Date()) {
     assets,
   }
 }
+
+// ─── Register / export helpers ──────────────────────────────────────────────
+
+/** Distinct, sorted, non-blank values of `field` (filter dropdown options). */
+export function distinctFieldValues(rows, field) {
+  if (!Array.isArray(rows)) return []
+  const set = new Set()
+  for (const r of rows) {
+    const v = r?.[field] == null ? '' : String(r[field]).trim()
+    if (v) set.add(v)
+  }
+  return [...set].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }))
+}
+
+export const ENGINE_HOURS_EXPORT_COLS = ['asset_no', 'engine_hours', 'reading_date', 'source', 'site', 'anomaly', 'notes']
+export const ENGINE_HOURS_EXPORT_HEADERS = ['Asset', 'Engine hours', 'Reading date', 'Source', 'Site', 'Anomaly', 'Notes']
+
+/**
+ * One register row with typed hours and its anomaly flag. A blank meter reading
+ * stays null (N/A) - it is not a reading of zero.
+ * @param {object} r
+ * @param {Set} [anomalyIds] ids from anomalyRowIds()
+ */
+export function engineHoursRow(r, anomalyIds) {
+  const h = toNum(r?.engine_hours)
+  return {
+    ...r,
+    hours: h,
+    day: dayOf(r) || null,
+    isAnomaly: Boolean(anomalyIds && anomalyIds.has && anomalyIds.has(r?.id)),
+  }
+}
+
+/** Export projection; blanks export as 'N/A', anomaly as Yes/No. */
+export function engineHoursExportRow(r, anomalyIds) {
+  const x = engineHoursRow(r, anomalyIds)
+  const t = (v) => (v == null ? '' : String(v).trim())
+  return {
+    asset_no: t(x.asset_no) || 'N/A',
+    engine_hours: x.hours ?? 'N/A',
+    reading_date: x.day || 'N/A',
+    source: t(x.source) || 'N/A',
+    site: t(x.site) || 'N/A',
+    anomaly: x.isAnomaly ? 'Yes' : 'No',
+    notes: t(x.notes),
+  }
+}

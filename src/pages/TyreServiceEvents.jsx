@@ -10,7 +10,8 @@
  * sortable table with date-range + site + position + type filters and Excel/PDF
  * export. Loading / error+Retry / empty states throughout.
  */
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Chart as ChartJS, ArcElement, CategoryScale, LinearScale, BarElement,
   Tooltip, Legend,
@@ -19,8 +20,8 @@ import { Doughnut, Bar } from 'react-chartjs-2'
 import {
   Wrench, Activity, RotateCcw, Gauge, Plus, Pencil, Trash2, Search, X, Filter,
   Save, Loader2, AlertTriangle, FileSpreadsheet, FileText, CircleDot,
-  Building2, MapPin, TrendingUp, ClipboardCheck, Timer, ArrowUp, ArrowDown,
-  RefreshCw,
+  Building2, MapPin, TrendingUp, ClipboardCheck, Timer, RefreshCw,
+  LayoutGrid, ListChecks,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import Card, { CardHeader } from '../components/ui/Card'
@@ -32,11 +33,15 @@ import {
 } from '../lib/api/tyreServiceEvents'
 import { EVENT_TYPES, EVENT_TYPE_META } from '../lib/tyreServiceEvents'
 import {
-  analyzeServiceEvents, filterEvents, distinctValues, eventTypeLabel,
+  analyzeServiceEvents, filterEvents, distinctValues,
+  serviceEventRow, serviceEventExportRow,
+  SERVICE_EVENT_EXPORT_COLS, SERVICE_EVENT_EXPORT_HEADERS,
 } from '../lib/tyreServiceEventsAnalytics'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
-import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { compareValues, sortRows } from '../lib/consoleTable'
+import { colorAt, withAlpha } from '../lib/reportColors'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { isMissingRelation } from '../lib/api/_client'
 
 ChartJS.register(ArcElement, CategoryScale, LinearScale, BarElement, Tooltip, Legend)
@@ -58,7 +63,59 @@ const BADGE_STYLES = {
   other:       'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]',
 }
 
-const num = (v) => (v == null || v === '' ? 'N/A' : v)
+const valueSort = (a, b, id) => compareValues(a.getValue(id), b.getValue(id))
+const blankToUndef = (v) => (v === null || v === undefined || v === '' ? undefined : v)
+
+const TABS = [
+  { id: 'overview', label: 'Overview', icon: LayoutGrid },
+  { id: 'register', label: 'Event register', icon: ListChecks },
+]
+const TAB_IDS = TABS.map((t) => t.id)
+
+/**
+ * Accessible tab strip synced to ?tab= so a view can be bookmarked and the
+ * back button restores it. Arrow keys move between tabs (WAI-ARIA tabs).
+ */
+function PageTabs({ tab, onChange }) {
+  const refs = useRef([])
+  const onKey = (e, i) => {
+    let next = null
+    if (e.key === 'ArrowRight') next = (i + 1) % TABS.length
+    else if (e.key === 'ArrowLeft') next = (i - 1 + TABS.length) % TABS.length
+    else if (e.key === 'Home') next = 0
+    else if (e.key === 'End') next = TABS.length - 1
+    if (next == null) return
+    e.preventDefault()
+    onChange(TABS[next].id)
+    refs.current[next]?.focus()
+  }
+  return (
+    <div role="tablist" aria-label="Service event views" className="flex flex-wrap gap-1 border-b border-[var(--border-bright)]">
+      {TABS.map((t, i) => {
+        const Icon = t.icon
+        const active = tab === t.id
+        return (
+          <button
+            key={t.id}
+            ref={(el) => { refs.current[i] = el }}
+            type="button"
+            role="tab"
+            id={`tse-tab-${t.id}`}
+            aria-selected={active}
+            aria-controls={`tse-panel-${t.id}`}
+            tabIndex={active ? 0 : -1}
+            onClick={() => onChange(t.id)}
+            onKeyDown={(e) => onKey(e, i)}
+            className={`inline-flex items-center gap-1.5 px-4 min-h-[44px] text-sm font-medium border-b-2 -mb-px rounded-t-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent,#16a34a)] ${active ? 'border-[var(--accent,#16a34a)] text-[var(--text-primary)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
+          >
+            <Icon size={15} aria-hidden="true" /> {t.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 const fmtDate = (v) => (v ? String(v).slice(0, 10) : 'N/A')
 const cssVar = (name, fallback) => {
   try { return (getComputedStyle(document.documentElement).getPropertyValue(name) || '').trim() || fallback }
@@ -241,7 +298,7 @@ function RankCard({ title, icon: Icon, rows, labelKey, currency, empty }) {
       ) : (
         <ul className="space-y-2">
           {rows.map((r) => (
-            <li key={r[labelKey] || 'x'} className="text-sm">
+            <li key={r[labelKey] || 'x'} className="text-sm" aria-label={`${r[labelKey]}: ${r.count} ${r.count === 1 ? 'event' : 'events'}`}>
               <div className="flex items-center justify-between gap-2">
                 <span className="font-mono text-xs text-[var(--text-primary)] truncate" title={r[labelKey]}>{r[labelKey]}</span>
                 <span className="text-[var(--text-muted)] text-xs shrink-0">
@@ -250,7 +307,7 @@ function RankCard({ title, icon: Icon, rows, labelKey, currency, empty }) {
                 </span>
               </div>
               <div className="mt-1 h-1.5 rounded bg-[var(--input-bg)] overflow-hidden">
-                <div className="h-full bg-sky-500/70 rounded" style={{ width: `${(r.count / max) * 100}%` }} />
+                <div className="h-full rounded" style={{ width: `${(r.count / max) * 100}%`, background: withAlpha(colorAt(0), 0.75) }} />
               </div>
             </li>
           ))}
@@ -261,13 +318,6 @@ function RankCard({ title, icon: Icon, rows, labelKey, currency, empty }) {
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
-const SORTS = {
-  event_date: (a, b) => String(a.event_date || '').localeCompare(String(b.event_date || '')),
-  event_type: (a, b) => eventTypeLabel(a.event_type).localeCompare(eventTypeLabel(b.event_type)),
-  asset_no: (a, b) => String(a.asset_no || '').localeCompare(String(b.asset_no || '')),
-  cost: (a, b) => (Number(a.cost) || 0) - (Number(b.cost) || 0),
-}
-
 export default function TyreServiceEvents() {
   const { activeCountry, activeCurrency } = useSettings()
   const [rows, setRows] = useState(null)
@@ -281,8 +331,15 @@ export default function TyreServiceEvents() {
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [search, setSearch] = useState('')
-  const [sortKey, setSortKey] = useState('event_date')
-  const [sortDir, setSortDir] = useState('desc')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tab = TAB_IDS.includes(searchParams.get('tab')) ? searchParams.get('tab') : 'overview'
+  const setTab = useCallback((id) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      if (id === 'overview') next.delete('tab'); else next.set('tab', id)
+      return next
+    }, { replace: true })
+  }, [setSearchParams])
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editRow, setEditRow] = useState(null)
@@ -310,16 +367,12 @@ export default function TyreServiceEvents() {
   const siteOptions = useMemo(() => distinctValues(rows || [], 'site'), [rows])
   const positionOptions = useMemo(() => distinctValues(rows || [], 'position'), [rows])
 
+  // Newest first by default; EnterpriseTable re-sorts on any header click and
+  // pages the WHOLE filtered set (no 500-row cap, no slice).
   const filtered = useMemo(() => {
     const list = filterEvents(rows || [], { type: typeFilter, site: siteFilter, position: positionFilter, from, to, search })
-    const cmp = SORTS[sortKey] || SORTS.event_date
-    const sorted = [...list].sort(cmp)
-    return sortDir === 'desc' ? sorted.reverse() : sorted
-  }, [rows, typeFilter, siteFilter, positionFilter, from, to, search, sortKey, sortDir])
-
-  // Paged, not capped. This register used to render filtered.slice(0, 500),
-  // so event 501 was unreachable. The exports still cover the full filtered set.
-  const pager = usePagedRows(filtered)
+    return sortRows(list.map(serviceEventRow), { key: 'day', dir: 'desc' })
+  }, [rows, typeFilter, siteFilter, positionFilter, from, to, search])
 
   const chartText = cssVar('--text-muted', '#9ca3af')
   const gridColor = cssVar('--panel-2', 'rgba(148,163,184,0.15)')
@@ -342,7 +395,7 @@ export default function TyreServiceEvents() {
     datasets: [{
       label: 'Events',
       data: analysis.trend.map((b) => b.total),
-      backgroundColor: '#38bdf8',
+      backgroundColor: withAlpha(colorAt(0), 0.8),
       borderRadius: 4,
       maxBarThickness: 28,
     }],
@@ -361,7 +414,7 @@ export default function TyreServiceEvents() {
     datasets: [{
       label: 'Events',
       data: analysis.bySite.map((s) => s.count),
-      backgroundColor: '#818cf8',
+      backgroundColor: withAlpha(colorAt(1), 0.8),
       borderRadius: 4,
       maxBarThickness: 22,
     }],
@@ -375,21 +428,16 @@ export default function TyreServiceEvents() {
     },
   }
 
-  const EXPORT_COLS = ['event_date', 'event_type', 'tyre_serial', 'asset_no', 'position', 'tread_depth', 'pressure', 'cost', 'technician', 'site', 'notes']
-  const EXPORT_HEADERS = ['Date', 'Type', 'Serial', 'Asset', 'Position', 'Tread (mm)', 'Pressure', 'Cost', 'Technician', 'Site', 'Notes']
-  const exportRows = filtered.map((r) => ({
-    event_date: fmtDate(r.event_date),
-    event_type: EVENT_TYPE_META[r.event_type]?.label || r.event_type,
-    tyre_serial: r.tyre_serial || '',
-    asset_no: r.asset_no || '',
-    position: r.position || '',
-    tread_depth: r.tread_depth ?? '',
-    pressure: r.pressure ?? '',
-    cost: r.cost ?? '',
-    technician: r.technician || '',
-    site: r.site || '',
-    notes: r.notes || '',
-  }))
+  const exportRows = useMemo(() => filtered.map(serviceEventExportRow), [filtered])
+  const fileName = reportFileName('TyrePulse Tyre Service Events', activeCountry && activeCountry !== 'All' ? activeCountry : null, reportDateLabel())
+  const doExport = async (kind) => {
+    try {
+      if (kind === 'excel') await exportToExcel(exportRows, SERVICE_EVENT_EXPORT_COLS, SERVICE_EVENT_EXPORT_HEADERS, fileName, 'Service events', { currency: activeCurrency })
+      else await exportToPdf(exportRows, SERVICE_EVENT_EXPORT_COLS.map((c, i) => ({ key: c, header: SERVICE_EVENT_EXPORT_HEADERS[i] })), 'Tyre Service Events', fileName, 'landscape', '', { currency: activeCurrency })
+    } catch (err) {
+      setError(toUserMessage(err, 'Could not export. Try again.'))
+    }
+  }
 
   const k = analysis.kpis
   const kpis = [
@@ -410,12 +458,49 @@ export default function TyreServiceEvents() {
   const clearFilters = () => { setTypeFilter('all'); setSiteFilter('all'); setPositionFilter('all'); setFrom(''); setTo(''); setSearch('') }
   const hasFilters = typeFilter !== 'all' || siteFilter !== 'all' || positionFilter !== 'all' || from || to || search
   const openCreate = () => { setEditRow(null); setModalOpen(true) }
-  const openEdit = (r) => { setEditRow(r); setModalOpen(true) }
-  const toggleSort = (key) => {
-    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
-    else { setSortKey(key); setSortDir('desc') }
-  }
-  const SortIcon = ({ col }) => sortKey !== col ? null : (sortDir === 'asc' ? <ArrowUp size={11} className="inline ml-1" /> : <ArrowDown size={11} className="inline ml-1" />)
+  const openEdit = useCallback((r) => { setEditRow(r); setModalOpen(true) }, [])
+
+  const columns = useMemo(() => [
+    { id: 'day', header: 'Date', accessorFn: (r) => blankToUndef(r.day), sortingFn: valueSort, sortUndefined: 'last',
+      cell: ({ getValue }) => <span className="whitespace-nowrap tabular-nums text-[var(--text-secondary)]">{getValue() || 'N/A'}</span> },
+    { id: 'type', header: 'Type', accessorFn: (r) => r.typeLabel, sortingFn: valueSort,
+      cell: ({ row }) => {
+        const r = row.original
+        const Icon = EVENT_ICON[r.event_type] || CircleDot
+        return (
+          <span className={`badge text-[11px] px-2 py-0.5 rounded inline-flex items-center gap-1 ${BADGE_STYLES[r.event_type] || BADGE_STYLES.other}`}>
+            <Icon size={11} aria-hidden="true" /> {r.typeLabel}
+          </span>
+        )
+      } },
+    { id: 'tyre_serial', header: 'Serial', accessorFn: (r) => blankToUndef(r.tyre_serial), sortingFn: valueSort, sortUndefined: 'last',
+      cell: ({ getValue }) => <span className="font-mono text-xs text-[var(--text-primary)]">{getValue() || 'N/A'}</span> },
+    { id: 'asset_no', header: 'Asset', accessorFn: (r) => blankToUndef(r.asset_no), sortingFn: valueSort, sortUndefined: 'last',
+      cell: ({ getValue }) => <span className="font-mono text-xs text-[var(--text-secondary)]">{getValue() || 'N/A'}</span> },
+    { id: 'position', header: 'Position', accessorFn: (r) => blankToUndef(r.position), sortingFn: valueSort, sortUndefined: 'last',
+      cell: ({ getValue }) => getValue() || 'N/A' },
+    { id: 'tread', header: 'Tread (mm)', accessorFn: (r) => r.treadValue ?? undefined, sortingFn: valueSort, sortUndefined: 'last', meta: { align: 'right' },
+      cell: ({ getValue }) => <span className="tabular-nums">{getValue() ?? 'N/A'}</span> },
+    { id: 'pressure', header: 'PSI', accessorFn: (r) => r.pressureValue ?? undefined, sortingFn: valueSort, sortUndefined: 'last', meta: { align: 'right' },
+      cell: ({ getValue }) => <span className="tabular-nums">{getValue() ?? 'N/A'}</span> },
+    { id: 'cost', header: 'Cost', accessorFn: (r) => r.costValue ?? undefined, sortingFn: valueSort, sortUndefined: 'last', meta: { align: 'right' },
+      cell: ({ getValue }) => <span className="tabular-nums">{getValue() == null ? 'N/A' : formatCurrencyCompact(getValue(), activeCurrency)}</span> },
+    { id: 'technician', header: 'Technician', accessorFn: (r) => blankToUndef(r.technician), sortingFn: valueSort, sortUndefined: 'last',
+      cell: ({ getValue }) => getValue() || 'N/A' },
+    { id: 'site', header: 'Site', accessorFn: (r) => blankToUndef(r.site), sortingFn: valueSort, sortUndefined: 'last',
+      cell: ({ getValue }) => getValue() || 'N/A' },
+    { id: 'actions', header: () => <span className="sr-only">Actions</span>, enableSorting: false, meta: { export: false },
+      cell: ({ row }) => {
+        const r = row.original
+        const label = r.tyre_serial || r.asset_no || 'event'
+        return (
+          <div className="flex items-center gap-1 justify-end">
+            <button type="button" onClick={(e) => { e.stopPropagation(); openEdit(r) }} aria-label={`Edit service event ${label}`} title="Edit" className="w-9 h-9 inline-flex items-center justify-center rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent,#16a34a)]"><Pencil size={14} aria-hidden="true" /></button>
+            <button type="button" onClick={(e) => { e.stopPropagation(); setDeleteRow(r) }} aria-label={`Delete service event ${label}`} title="Delete" className="w-9 h-9 inline-flex items-center justify-center rounded-lg hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"><Trash2 size={14} aria-hidden="true" /></button>
+          </div>
+        )
+      } },
+  ], [activeCurrency, openEdit])
 
   const confirmDelete = useCallback(async () => {
     if (!deleteRow) return
@@ -432,6 +517,8 @@ export default function TyreServiceEvents() {
   }, [deleteRow, load])
 
   const hasData = rows && rows.length > 0
+  // A failed read must never render as "no events" or a row of zeros.
+  const loadFailed = Boolean(error && error !== 'missing')
 
   return (
     <div className="space-y-6">
@@ -443,15 +530,15 @@ export default function TyreServiceEvents() {
         refreshing={refreshing}
         updatedAt={updatedAt}
         actions={
-          <div className="flex items-center gap-2">
-            <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'tyre_service_events')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
-              <FileSpreadsheet size={14} /> Excel
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => doExport('excel')} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!filtered.length} title="Exports the events matching the register filters">
+              <FileSpreadsheet size={14} aria-hidden="true" /> Excel
             </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k2, i) => ({ key: k2, header: EXPORT_HEADERS[i] })), 'Tyre Service Events', 'tyre_service_events', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
-              <FileText size={14} /> PDF
+            <button type="button" onClick={() => doExport('pdf')} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!filtered.length} title="Exports the events matching the register filters">
+              <FileText size={14} aria-hidden="true" /> PDF
             </button>
-            <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5">
-              <Plus size={14} /> Log event
+            <button type="button" onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={error === 'missing'}>
+              <Plus size={14} aria-hidden="true" /> Log event
             </button>
           </div>
         }
@@ -473,12 +560,12 @@ export default function TyreServiceEvents() {
         </Card>
       )}
       {error && error !== 'missing' && (
-        <Card tone="crit" className="items-start justify-between gap-3" style={{ flexDirection: 'row' }}>
+        <Card tone="crit" role="alert" className="items-start justify-between gap-3" style={{ flexDirection: 'row' }}>
           <div className="flex items-start gap-3">
             <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
             <div><p className="text-red-300 font-medium">Could not load service events.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
           </div>
-          <button onClick={load} className="btn-secondary text-sm inline-flex items-center gap-1.5 shrink-0"><RefreshCw size={14} /> Retry</button>
+          <button type="button" onClick={load} className="btn-secondary text-sm inline-flex items-center gap-1.5 shrink-0 min-h-[44px]"><RefreshCw size={14} aria-hidden="true" /> Retry</button>
         </Card>
       )}
 
@@ -494,166 +581,136 @@ export default function TyreServiceEvents() {
                 <p className="text-xs text-[var(--text-muted)]">{kp.label}</p>
                 <Icon size={16} className={kp.tone} />
               </div>
-              <p className={`text-2xl font-bold mt-1 ${kp.tone}`}>{rows === null ? 'N/A' : kp.value}</p>
-              <p className="text-[11px] text-[var(--text-dim)] mt-0.5">{rows === null ? '' : kp.sub}</p>
+              <p className={`text-2xl font-bold mt-1 tabular-nums ${kp.tone}`}>{rows === null || loadFailed ? 'N/A' : kp.value}</p>
+              <p className="text-[11px] text-[var(--text-dim)] mt-0.5">{rows === null ? '' : loadFailed ? 'not loaded' : kp.sub}</p>
             </Card>
           )
         })}
       </div>
 
-      {/* Charts row: type doughnut + monthly trend */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* The chart wells keep their own h-64 / h-52: that is the definite
-            height chart.js needs under maintainAspectRatio:false, and it was
-            never on the card, so moving to Card cannot collapse it. */}
-        <Card className="lg:col-span-1">
-          <CardHeader title="Events by type" />
-          <div className="h-64">
-            {rows === null
-              ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" />
-              : hasData && analysis.breakdown.items.length
-                ? <Doughnut data={donutData} options={donutOpts} />
-                : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No service events yet.</div>}
-          </div>
-        </Card>
+      <PageTabs tab={tab} onChange={setTab} />
 
-        <Card className="lg:col-span-2">
-          <CardHeader title="Events over the last 12 months" />
-          <div className="h-64">
-            {rows === null
-              ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" />
-              : hasData
-                ? <Bar data={trendData} options={barOpts} />
-                : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No dated events to trend.</div>}
-          </div>
-        </Card>
-      </div>
+      {tab === 'overview' && (
+        <div role="tabpanel" id="tse-panel-overview" aria-labelledby="tse-tab-overview" className="space-y-6">
+          {loadFailed ? (
+            <Card><div className="py-12 text-center text-sm text-[var(--text-muted)]">
+              Analytics are unavailable because the service events could not be loaded. Use Retry above.
+            </div></Card>
+          ) : (<>
+          {/* Charts row: type doughnut + monthly trend */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* The chart wells keep their own h-64 / h-52: that is the definite
+                height chart.js needs under maintainAspectRatio:false, and it was
+                never on the card, so moving to Card cannot collapse it. */}
+            <Card className="lg:col-span-1">
+              <CardHeader title="Events by type" />
+              <div className="h-64">
+                {rows === null
+                  ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" />
+                  : hasData && analysis.breakdown.items.length
+                    ? <Doughnut data={donutData} options={donutOpts} />
+                    : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No service events yet.</div>}
+              </div>
+            </Card>
 
-      {/* Rankings + site breakdown */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <RankCard title="Most-serviced assets" icon={Building2} rows={analysis.topAssets} labelKey="asset_no" currency={activeCurrency} empty={rows === null ? 'Loading...' : 'No asset-linked events.'} />
-        <RankCard title="Most-serviced positions" icon={MapPin} rows={analysis.topPositions} labelKey="position" currency={activeCurrency} empty={rows === null ? 'Loading...' : 'No position data recorded.'} />
-        <Card>
-          <CardHeader title="Events by site" icon={Building2} />
-          <div className="h-52">
-            {analysis.bySite.length
-              ? <Bar data={siteChart} options={siteBarOpts} />
-              : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">{rows === null ? 'Loading...' : 'No site data recorded.'}</div>}
+            <Card className="lg:col-span-2">
+              <CardHeader title="Events over the last 12 months" />
+              <div className="h-64">
+                {rows === null
+                  ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" />
+                  : hasData
+                    ? <Bar data={trendData} options={barOpts} />
+                    : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No dated events to trend.</div>}
+              </div>
+            </Card>
           </div>
-        </Card>
-      </div>
 
-      {/* Filters. No `clip`: everything out of flow in here is a native <select>
-          or a native date input, which the browser paints outside the page's
-          overflow context, so there is nothing for a clipped card to cut. */}
-      <Card className="space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <input className="input pl-9 w-full" placeholder="Search serial, asset, position, technician, notes..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          {/* Rankings + site breakdown */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <RankCard title="Most-serviced assets" icon={Building2} rows={analysis.topAssets} labelKey="asset_no" currency={activeCurrency} empty={rows === null ? 'Loading...' : 'No asset-linked events.'} />
+            <RankCard title="Most-serviced positions" icon={MapPin} rows={analysis.topPositions} labelKey="position" currency={activeCurrency} empty={rows === null ? 'Loading...' : 'No position data recorded.'} />
+            <Card>
+              <CardHeader title="Events by site" icon={Building2} />
+              <div className="h-52">
+                {analysis.bySite.length
+                  ? <Bar data={siteChart} options={siteBarOpts} />
+                  : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">{rows === null ? 'Loading...' : 'No site data recorded.'}</div>}
+              </div>
+            </Card>
           </div>
-          <select className="input" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Event type">
-            <option value="all">All types</option>
-            {EVENT_TYPES.map((t) => <option key={t} value={t}>{EVENT_TYPE_META[t].label}</option>)}
-          </select>
-          <select className="input" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} aria-label="Site" disabled={!siteOptions.length}>
-            <option value="all">All sites</option>
-            {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-          <select className="input" value={positionFilter} onChange={(e) => setPositionFilter(e.target.value)} aria-label="Position" disabled={!positionOptions.length}>
-            <option value="all">All positions</option>
-            {positionOptions.map((p) => <option key={p} value={p}>{p}</option>)}
-          </select>
+          </>)}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <label className="text-xs text-[var(--text-muted)]">From</label>
-          <input type="date" className="input" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="From date" />
-          <label className="text-xs text-[var(--text-muted)]">To</label>
-          <input type="date" className="input" value={to} onChange={(e) => setTo(e.target.value)} aria-label="To date" />
-          {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
-          <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {k.total}</span>
-        </div>
-        <div className="flex flex-wrap gap-2 pt-1">
-          {analysis.breakdown.items.length === 0 ? (
-            <span className="text-xs text-[var(--text-dim)]">No events logged yet.</span>
-          ) : EVENT_TYPES.filter((t) => analysis.breakdown.byType[t] > 0).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTypeFilter((cur) => (cur === t ? 'all' : t))}
-              className={`badge text-[11px] px-2 py-0.5 rounded inline-flex items-center gap-1 ${BADGE_STYLES[t]} ${typeFilter === t ? 'ring-1 ring-[var(--text-secondary)]' : ''}`}
-            >
-              {EVENT_TYPE_META[t].label}: <span className="font-semibold">{analysis.breakdown.byType[t]}</span>
-            </button>
-          ))}
-        </div>
-      </Card>
+      )}
 
-      {/* Table. `pad="none" clip` replaces the old `overflow-hidden !p-0`: the
-          `!important` existed only to beat .card's padding, and the kit has a
-          prop for it. It stays a raw <table> - it already owns its sortable
-          headers, usePagedRows + TablePagination and the Excel/PDF export above,
-          and it carries composite cells (a typed badge, a row action pair) that
-          EnterpriseTable would have to give a second search box to reproduce. */}
-      <Card pad="none" clip>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                <th className="px-4 py-3 font-semibold whitespace-nowrap cursor-pointer select-none" onClick={() => toggleSort('event_date')}>Date<SortIcon col="event_date" /></th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap cursor-pointer select-none" onClick={() => toggleSort('event_type')}>Type<SortIcon col="event_type" /></th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap">Serial</th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap cursor-pointer select-none" onClick={() => toggleSort('asset_no')}>Asset<SortIcon col="asset_no" /></th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap">Position</th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap">Tread</th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap">PSI</th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap cursor-pointer select-none" onClick={() => toggleSort('cost')}>Cost<SortIcon col="cost" /></th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap">Technician</th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap">Site</th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows === null ? (
-                [0, 1, 2, 3, 4].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={11} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
-              ) : filtered.length === 0 ? (
-                <tr><td colSpan={11} className="px-4 py-12 text-center text-[var(--text-muted)]">
-                  <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 ? 'No service events logged yet - use "Log event" to add the first.' : 'No events match these filters.'}
-                </td></tr>
-              ) : (
-                pager.pageRows.map((r) => {
-                  const Icon = EVENT_ICON[r.event_type] || CircleDot
-                  return (
-                    <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(r.event_date)}</td>
-                      <td className="px-4 py-2.5">
-                        <span className={`badge text-[11px] px-2 py-0.5 rounded inline-flex items-center gap-1 ${BADGE_STYLES[r.event_type] || BADGE_STYLES.other}`}>
-                          <Icon size={11} /> {EVENT_TYPE_META[r.event_type]?.label || r.event_type}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.tyre_serial || 'N/A'}</td>
-                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{r.asset_no || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.position || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{num(r.tread_depth)}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{num(r.pressure)}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.cost == null ? 'N/A' : formatCurrencyCompact(r.cost, activeCurrency)}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.technician || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || 'N/A'}</td>
-                      <td className="px-4 py-2.5 whitespace-nowrap">
-                        <div className="flex items-center gap-1.5">
-                          <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" title="Edit"><Pencil size={14} /></button>
-                          <button onClick={() => setDeleteRow(r)} className="p-1.5 rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" title="Delete"><Trash2 size={14} /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
+      {tab === 'register' && (
+        <div role="tabpanel" id="tse-panel-register" aria-labelledby="tse-tab-register" className="space-y-4">
+          {/* Filters. No `clip`: everything out of flow in here is a native <select>
+              or a native date input, which the browser paints outside the page's
+              overflow context, so there is nothing for a clipped card to cut. */}
+          <Card className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search size={15} aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+                <input type="search" aria-label="Search service events" className="input pl-9 w-full" placeholder="Search serial, asset, position, technician, notes..." value={search} onChange={(e) => setSearch(e.target.value)} />
+              </div>
+              <select className="input" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Event type">
+                <option value="all">All types</option>
+                {EVENT_TYPES.map((t) => <option key={t} value={t}>{EVENT_TYPE_META[t].label}</option>)}
+              </select>
+              <select className="input" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} aria-label="Site" disabled={!siteOptions.length}>
+                <option value="all">All sites</option>
+                {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <select className="input" value={positionFilter} onChange={(e) => setPositionFilter(e.target.value)} aria-label="Position" disabled={!positionOptions.length}>
+                <option value="all">All positions</option>
+                {positionOptions.map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <label htmlFor="tse-from" className="text-xs text-[var(--text-muted)]">From</label>
+              <input id="tse-from" type="date" className="input" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} />
+              <label htmlFor="tse-to" className="text-xs text-[var(--text-muted)]">To</label>
+              <input id="tse-to" type="date" className="input" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} />
+              {hasFilters && <button type="button" onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><X size={14} aria-hidden="true" /> Clear filters</button>}
+              <span className="text-xs text-[var(--text-muted)] ml-auto" aria-live="polite">{filtered.length} of {k.total} events</span>
+            </div>
+            <div className="flex flex-wrap gap-2 pt-1">
+              {analysis.breakdown.items.length === 0 ? (
+                <span className="text-xs text-[var(--text-dim)]">No events logged yet.</span>
+              ) : EVENT_TYPES.filter((t) => analysis.breakdown.byType[t] > 0).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  aria-pressed={typeFilter === t}
+                  onClick={() => setTypeFilter((cur) => (cur === t ? 'all' : t))}
+                  className={`badge text-xs px-3 min-h-[36px] rounded-lg inline-flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent,#16a34a)] ${BADGE_STYLES[t]} ${typeFilter === t ? 'ring-2 ring-[var(--text-secondary)]' : ''}`}
+                >
+                  {EVENT_TYPE_META[t].label}: <span className="font-semibold">{analysis.breakdown.byType[t]}</span>
+                </button>
+              ))}
+            </div>
+          </Card>
+
+          <Card pad="none" clip>
+            <EnterpriseTable
+              columns={columns}
+              data={filtered}
+              getRowId={(r) => String(r.id)}
+              loading={rows === null}
+              error={error && error !== 'missing' ? error : null}
+              onRetry={load}
+              enableGlobalFilter={false}
+              enableColumnFilters={false}
+              enableExport={false}
+              viewKey="tyre-service-events"
+              initialPageSize={50}
+              pageSizeOptions={[25, 50, 100, 250]}
+              emptyMessage={rows && rows.length === 0 ? 'No service events logged yet. Use "Log event" to add the first.' : 'No events match these filters.'}
+              emptyIcon={<Filter size={22} className="opacity-60" aria-hidden="true" />}
+            />
+          </Card>
         </div>
-        <TablePagination {...pager} />
-      </Card>
+      )}
 
       <EventModal open={modalOpen} initial={editRow} onClose={() => setModalOpen(false)} onSaved={load} />
       <ConfirmDelete open={Boolean(deleteRow)} busy={deleting} onCancel={() => setDeleteRow(null)} onConfirm={confirmDelete} />

@@ -21,7 +21,9 @@
     "inspectionOverdue": "فحص متأخر",
     "inspectionOverdueSub": "تجاوز الموعد المحدد",
     "activeAlerts": "التنبيهات النشطة",
-    "activeAlertsSub": "اعتبارًا من {date}"
+    "activeAlertsSub": "اعتبارًا من {date}",
+    "noData": "لا توجد بيانات إطارات",
+    "noDataSub": "مركبات بلا إطارات مسجلة"
   },
   "filters": {
     "searchPlaceholder": "ابحث برقم الأصل أو رقم الأسطول أو المشغّل...",
@@ -30,7 +32,8 @@
       "operational": "تشغيلي",
       "atRisk": "معرض للخطر",
       "critical": "حرج",
-      "overdue": "متأخر"
+      "overdue": "متأخر",
+      "noData": "لا توجد بيانات"
     },
     "clear": "مسح",
     "clearFilters": "مسح المرشحات",
@@ -60,7 +63,8 @@
     "operational": "تشغيلي",
     "monitor": "مراقبة",
     "atRisk": "معرض للخطر",
-    "critical": "حرج"
+    "critical": "حرج",
+    "noData": "لا توجد بيانات"
   },
   "list": {
     "columns": {

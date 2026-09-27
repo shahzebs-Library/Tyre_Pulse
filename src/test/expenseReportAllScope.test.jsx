@@ -205,9 +205,10 @@ describe('ExpenseReport - All countries scope', () => {
     render(<ExpenseReport />)
     await screen.findByText('Spend by site')
     // KSA site total 6 -> SAR, UAE site total 13 -> AED, Egypt total 7 -> EGP.
-    await waitFor(() => expect(screen.getByText('SAR 6')).toBeTruthy())
-    expect(screen.getByText('AED 13')).toBeTruthy()
-    expect(screen.getByText('EGP 7')).toBeTruthy()
+    // The amount appears in the register row AND the group's Total spend tile.
+    await waitFor(() => expect(screen.getAllByText('SAR 6').length).toBeGreaterThan(0))
+    expect(screen.getAllByText('AED 13').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('EGP 7').length).toBeGreaterThan(0)
   })
 
   it('saves a store mapping against the country of the row it was edited on', async () => {
@@ -251,7 +252,7 @@ describe('ExpenseReport - single country scope is unchanged', () => {
     render(<ExpenseReport />)
     await waitFor(() => expect(h.calls.bySite.length).toBe(1))
     expect(h.calls.bySite[0].country).toBe('KSA')
-    expect(await screen.findByText('SAR 6')).toBeTruthy()
+    expect((await screen.findAllByText('SAR 6')).length).toBeGreaterThan(0)
   })
 
   it('keeps the legacy export columns', async () => {
@@ -303,7 +304,7 @@ describe('ExpenseReport follows the reporting scope', () => {
     await screen.findByText('Top stores by spend')
     // In UAE's OWN currency, taken from the scope - not from the working context.
     await waitFor(() => expect(h.calls.bySite[0].country).toBe('UAE'))
-    expect(await screen.findByText('AED 13')).toBeTruthy()
+    expect((await screen.findAllByText('AED 13')).length).toBeGreaterThan(0)
   })
 
   it('asks for nothing, and says so, when the scope resolves to no country', async () => {

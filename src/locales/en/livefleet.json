@@ -21,7 +21,9 @@
     "inspectionOverdue": "Inspection Overdue",
     "inspectionOverdueSub": "past scheduled date",
     "activeAlerts": "Active Alerts",
-    "activeAlertsSub": "as of {date}"
+    "activeAlertsSub": "as of {date}",
+    "noData": "No tyre data",
+    "noDataSub": "vehicles with no fitted tyre recorded"
   },
   "filters": {
     "searchPlaceholder": "Search asset, fleet no, operator...",
@@ -30,7 +32,8 @@
       "operational": "Operational",
       "atRisk": "At Risk",
       "critical": "Critical",
-      "overdue": "Overdue"
+      "overdue": "Overdue",
+      "noData": "No data"
     },
     "clear": "Clear",
     "clearFilters": "Clear filters",
@@ -60,7 +63,8 @@
     "operational": "Operational",
     "monitor": "Monitor",
     "atRisk": "At Risk",
-    "critical": "Critical"
+    "critical": "Critical",
+    "noData": "No data"
   },
   "list": {
     "columns": {

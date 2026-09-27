@@ -62,6 +62,12 @@ import { defaultWindow } from '../lib/defaultPeriod'
 import SiteOperatingCostPanel from '../components/expense/SiteOperatingCostPanel'
 import { defaultPeriodFor } from '../lib/api/latestActivity'
 import PeriodNotice from '../components/ui/PeriodNotice'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import { compareValues } from '../lib/consoleTable'
+import {
+  aggregateTyres, buildExpenseExport as buildExpenseExportCore, monthLabel,
+  siteTableRows, siteTableSummary, filterSiteRows, cpkTypeRows, cpkTypeSummary,
+} from '../lib/expenseReportAnalytics'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
@@ -91,101 +97,10 @@ const SECTION_DEFAULTS = {
   bysite: true, assets: true, items: true, trend: true, forecast: true, builder: true, fleetcpk: true, evidence: true,
 }
 
-/** 'YYYY-MM' -> 'Mon YY' month label (passthrough for non date keys). */
-const monthLabel = (key) => {
-  const s = String(key || '')
-  if (!/^\d{4}-\d{2}/.test(s)) return s
-  const [y, m] = s.split('-')
-  const d = new Date(Number(y), Number(m) - 1, 1)
-  return d.toLocaleDateString('en', { month: 'short', year: '2-digit' })
-}
-
 const num = (v) => (v == null || !Number.isFinite(Number(v)) ? 'N/A' : Number(v).toLocaleString('en-US'))
 
-/**
- * Aggregate tyre records for the Chart Builder: quantity by site / size / brand /
- * month and cost-per-km by site (sum cost / sum km, per site). Scoped client-side
- * to [from,to] on issue_date when given. Pure; honest zeros/N-A downstream.
- */
-export function aggregateTyres(rows = [], fromISO = '', toISO = '') {
-  const inRange = (d) => {
-    if (!d) return !fromISO && !toISO
-    const s = String(d).slice(0, 10)
-    if (fromISO && s < fromISO) return false
-    if (toISO && s > toISO) return false
-    return true
-  }
-  const site = new Map(); const size = new Map(); const brand = new Map(); const month = new Map()
-  const siteCost = new Map(); const siteKm = new Map()
-  const remSite = new Map(); const remMonth = new Map()
-  // Per-brand: total qty, cost (+ qty priced) for an average cost, km (+ count) for an average life.
-  const brandCost = new Map(); const brandCostQty = new Map()
-  const brandKm = new Map(); const brandKmN = new Map()
-  let total = 0; let removed = 0
-  for (const r of rows) {
-    const s = String(r.site || 'Unspecified')
-    // Removals: counted on removal_date (a tyre taken off in the window).
-    if (r.removal_date && inRange(r.removal_date)) {
-      const q = Number(r.qty) > 0 ? Number(r.qty) : 1
-      removed += q
-      remSite.set(s, (remSite.get(s) || 0) + q)
-      const rmk = String(r.removal_date).slice(0, 7)
-      if (/^\d{4}-\d{2}$/.test(rmk)) remMonth.set(rmk, (remMonth.get(rmk) || 0) + q)
-    }
-    if (!inRange(r.issue_date)) continue
-    const qty = Number(r.qty) > 0 ? Number(r.qty) : 1
-    total += qty
-    const z = String(r.size || 'Unknown')
-    const b = String(r.brand || 'Unknown')
-    site.set(s, (site.get(s) || 0) + qty)
-    size.set(z, (size.get(z) || 0) + qty)
-    brand.set(b, (brand.get(b) || 0) + qty)
-    const mk = String(r.issue_date || '').slice(0, 7)
-    if (/^\d{4}-\d{2}$/.test(mk)) month.set(mk, (month.get(mk) || 0) + qty)
-    const unitCost = Number(r.cost_per_tyre) || 0
-    const cost = unitCost * qty
-    const km = Number(r.total_km) || 0
-    if (km > 0 && cost > 0) {
-      siteCost.set(s, (siteCost.get(s) || 0) + cost)
-      siteKm.set(s, (siteKm.get(s) || 0) + km)
-    }
-    if (unitCost > 0) {
-      brandCost.set(b, (brandCost.get(b) || 0) + cost)
-      brandCostQty.set(b, (brandCostQty.get(b) || 0) + qty)
-    }
-    if (km > 0) {
-      brandKm.set(b, (brandKm.get(b) || 0) + km)
-      brandKmN.set(b, (brandKmN.get(b) || 0) + 1)
-    }
-  }
-  const rowsOf = (m) => [...m.entries()].map(([label, value]) => ({ label, value }))
-  const cpkSite = [...siteKm.entries()]
-    .map(([s, km]) => ({ label: s, value: km > 0 ? (siteCost.get(s) || 0) / km : 0 }))
-    .filter((r) => r.value > 0)
-  const months = [...month.keys()].sort()
-  const remMonths = [...remMonth.keys()].sort()
-  const avgCostByBrand = [...brandCostQty.entries()]
-    .map(([b, q]) => ({ label: b, value: q > 0 ? (brandCost.get(b) || 0) / q : 0 }))
-    .filter((r) => r.value > 0)
-  const avgKmByBrand = [...brandKmN.entries()]
-    .map(([b, n2]) => ({ label: b, value: n2 > 0 ? (brandKm.get(b) || 0) / n2 : 0 }))
-    .filter((r) => r.value > 0)
-  return {
-    total,
-    removed,
-    bySite: rowsOf(site),
-    bySize: rowsOf(size),
-    byBrand: rowsOf(brand),
-    avgCostByBrand,
-    avgKmByBrand,
-    cpkSite,
-    removalBySite: rowsOf(remSite),
-    monthLabels: months.map((mk) => monthLabel(mk)),
-    monthQty: months.map((mk) => month.get(mk) || 0),
-    remMonthLabels: remMonths.map((mk) => monthLabel(mk)),
-    remMonthQty: remMonths.map((mk) => remMonth.get(mk) || 0),
-  }
-}
+// Pure engine: tyre aggregation, export shape and register-row shapers.
+export { aggregateTyres }
 
 /**
  * Currency for one country (KSA=SAR, UAE=AED, Egypt=EGP), falling back to the
@@ -195,63 +110,18 @@ export function currencyForCountry(country, fallback = 'SAR') {
   return COUNTRY_CURRENCY[country] || fallback
 }
 
+/**
+ * Excel export rows + columns. The shape lives in the pure engine
+ * (expenseReportAnalytics); the page supplies the app's country->currency map.
+ */
+export function buildExpenseExport(args = {}) {
+  return buildExpenseExportCore({ currencyOf: currencyForCountry, ...args })
+}
+
 /** Currency-aware money formatter; a missing or non-numeric value renders "N/A". */
 export const moneyIn = (currency) => (v) => (
   v == null || !Number.isFinite(Number(v)) ? 'N/A' : formatCurrency(Number(v), currency, 0)
 )
-
-/**
- * Rows + columns for the Excel export.
- *
- * Single country: the legacy Store / Top Item / Month rows with one Spend column,
- * in that country's currency (unchanged).
- * All countries: per-country rows only (country total, category split and the
- * per-site spend), with ONE COLUMN PER CURRENCY, so SAR, AED and EGP never land
- * in the same column and can never be added into one meaningless total.
- *
- * @param {{isAll:boolean, currency?:string, snap?:Object|null,
- *          byCountry?:Array<Object>, siteGroups?:Array<Object>}} args
- * @returns {{rows:Array<Object>, columns:string[], headers:string[]}}
- */
-export function buildExpenseExport({ isAll, currency = 'SAR', snap = null, byCountry = [], siteGroups = [] } = {}) {
-  if (!isAll) {
-    const s = snap && snap.ok ? snap : null
-    const rows = []
-    ;(s?.by_store || []).forEach((r) => rows.push({ section: 'Store', name: r.label, spend: Number(r.spend) || 0, count: '' }))
-    ;(s?.top_items || []).forEach((r) => rows.push({ section: 'Top Item', name: r.label, spend: Number(r.spend) || 0, count: Number(r.n) || '' }))
-    ;(s?.monthly || []).forEach((r) => rows.push({ section: 'Month', name: monthLabel(r.m), spend: Number(r.total) || 0, count: '' }))
-    return { rows, columns: ['section', 'name', 'spend', 'count'], headers: ['Section', 'Name', 'Spend', 'Count'] }
-  }
-
-  const currencies = []
-  const trackCurrency = (cur) => { if (cur && !currencies.includes(cur)) currencies.push(cur); return cur }
-  const rows = []
-  const push = (country, cur, section, name, amount, lines) => rows.push({
-    country: country || 'N/A',
-    section,
-    name: name == null || name === '' ? 'N/A' : name,
-    [cur]: Number(amount) || 0,
-    count: lines == null || lines === '' ? '' : Number(lines) || 0,
-  })
-
-  ;(byCountry || []).forEach((c) => {
-    const cur = trackCurrency(currencyForCountry(c.country, currency))
-    push(c.country, cur, 'Country total', c.country, c.total, c.lines)
-    push(c.country, cur, 'Category', 'Tyres', c.tyre, '')
-    push(c.country, cur, 'Category', 'Spare parts', c.spare, '')
-    push(c.country, cur, 'Category', 'Oil', c.oil, '')
-  })
-  ;(siteGroups || []).forEach((g) => {
-    const cur = trackCurrency(g.currency || currencyForCountry(g.country, currency))
-    ;(g.rows || []).forEach((r) => push(g.country, cur, 'Site', r.site, r.total, r.lines))
-  })
-
-  return {
-    rows,
-    columns: ['country', 'section', 'name', ...currencies, 'count'],
-    headers: ['Country', 'Section', 'Name', ...currencies, 'Count'],
-  }
-}
 
 const chartBase = (legend = false) => ({
   responsive: true,
@@ -259,11 +129,11 @@ const chartBase = (legend = false) => ({
   layout: { padding: { top: 8 } },
   plugins: {
     legend: { display: legend, labels: { color: 'var(--text-secondary)', boxWidth: 12, font: { size: 11 } } },
-    tooltip: { backgroundColor: 'var(--panel-2)', titleColor: 'var(--panel-ink)', bodyColor: '#9ca3af', borderColor: 'var(--hairline)', borderWidth: 1 },
+    tooltip: { backgroundColor: 'var(--panel-2)', titleColor: 'var(--panel-ink)', bodyColor: 'var(--text-secondary)', borderColor: 'var(--hairline)', borderWidth: 1 },
   },
   scales: {
-    x: { ticks: { color: '#6b7280', font: { size: 10 } }, grid: { color: 'rgba(148,163,184,0.12)' } },
-    y: { ticks: { color: '#6b7280', font: { size: 10 } }, grid: { color: 'rgba(148,163,184,0.12)' }, beginAtZero: true },
+    x: { ticks: { color: 'var(--text-muted)', font: { size: 10 } }, grid: { color: 'rgba(148,163,184,0.12)' } },
+    y: { ticks: { color: 'var(--text-muted)', font: { size: 10 } }, grid: { color: 'rgba(148,163,184,0.12)' }, beginAtZero: true },
   },
 })
 const H_BAR_OPTS = { ...chartBase(false), indexAxis: 'y' }
@@ -300,52 +170,118 @@ function ChartCard({ title, children, refCb }) {
 
 
 
-/** One country's (or the single active scope's) per-site expense table. */
-function SiteTable({ group, canMap, onSave }) {
-  const money = moneyIn(group.currency)
+/** Null-last numeric/text sort shared with the console registers. */
+const nullLastSort = (rowA, rowB, id) => {
+  const a = rowA.getValue(id)
+  const b = rowB.getValue(id)
+  const blankA = a == null || a === ''
+  const blankB = b == null || b === ''
+  if (blankA && blankB) return 0
+  if (blankA) return 1
+  if (blankB) return -1
+  return compareValues(a, b)
+}
+
+const MAPPING_FILTERS = [
+  ['all', 'All sites'],
+  ['mapped', 'Mapped'],
+  ['unmapped', 'Unmapped'],
+]
+
+/** Small summary tile used above the site register. */
+function MiniStat({ label, value, sub }) {
   return (
-    <Card className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="text-left text-[var(--text-muted)] border-b border-[var(--hairline)]">
-            <th className="py-2 pr-3 font-semibold">Site</th>
-            <th className="py-2 px-3 font-semibold text-right">Tyre</th>
-            <th className="py-2 px-3 font-semibold text-right">Spare</th>
-            <th className="py-2 px-3 font-semibold text-right">Oil</th>
-            <th className="py-2 px-3 font-semibold text-right">Total</th>
-            <th className="py-2 pl-3 font-semibold text-right">Lines</th>
-          </tr>
-        </thead>
-        <tbody>
-          {(group.rows || []).map((r, i) => {
-            const site = String(r.site || '')
-            const unmapped = site.startsWith('Unmapped: ')
-            const storeCode = unmapped ? site.slice('Unmapped: '.length) : null
-            return (
-              <tr key={`${site}-${i}`} className="border-b border-[var(--hairline)]/60">
-                <td className="py-2 pr-3">
-                  {unmapped ? (
-                    <UnmappedCell
-                      storeCode={storeCode}
-                      country={group.country}
-                      canMap={canMap}
-                      siteOptions={group.siteOptions}
-                      onSave={onSave}
-                    />
-                  ) : (
-                    <span className="text-[var(--text-primary)] font-medium">{site}</span>
-                  )}
-                </td>
-                <td className="py-2 px-3 text-right text-[var(--text-secondary)]">{money(r.tyre)}</td>
-                <td className="py-2 px-3 text-right text-[var(--text-secondary)]">{money(r.spare)}</td>
-                <td className="py-2 px-3 text-right text-[var(--text-secondary)]">{money(r.oil)}</td>
-                <td className="py-2 px-3 text-right font-semibold text-[var(--text-primary)]">{money(r.total)}</td>
-                <td className="py-2 pl-3 text-right text-[var(--text-muted)]">{num(r.lines)}</td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
+    <div className="rounded-lg border border-[var(--hairline)] bg-[var(--panel-2)] px-3 py-2 min-w-0">
+      <p className="text-[11px] uppercase tracking-wide text-[var(--text-muted)]">{label}</p>
+      <p className="text-sm font-semibold text-[var(--text-primary)] tabular-nums truncate">{value}</p>
+      {sub ? <p className="text-[11px] text-[var(--text-dim)] truncate">{sub}</p> : null}
+    </div>
+  )
+}
+
+/** One country's (or the single active scope's) per-site expense register. */
+function SiteTable({ group, canMap, onSave }) {
+  const money = useMemo(() => moneyIn(group.currency), [group.currency])
+  const [mapping, setMapping] = useState('all')
+  const rows = useMemo(() => siteTableRows(group.rows), [group.rows])
+  const summary = useMemo(() => siteTableSummary(group.rows), [group.rows])
+  const visible = useMemo(() => filterSiteRows(rows, { mapping }), [rows, mapping])
+
+  const columns = useMemo(() => [
+    {
+      id: 'site', header: 'Site', accessorFn: (r) => r.label, size: 260, sortingFn: nullLastSort,
+      cell: ({ row }) => {
+        const r = row.original
+        return r.unmapped ? (
+          <UnmappedCell
+            storeCode={r.storeCode}
+            country={group.country}
+            canMap={canMap}
+            siteOptions={group.siteOptions}
+            onSave={onSave}
+          />
+        ) : (
+          <span className="text-[var(--text-primary)] font-medium">{r.site}</span>
+        )
+      },
+      meta: { exportValue: (r) => (r.unmapped ? `Unmapped: ${r.storeCode}` : r.site) },
+    },
+    ...[['tyre', 'Tyre'], ['spare', 'Spare'], ['oil', 'Oil']].map(([id, header]) => ({
+      id, header, accessorFn: (r) => r[id], size: 120, sortingFn: nullLastSort,
+      meta: { align: 'right', exportValue: (r) => r[id] ?? '' },
+      cell: ({ row }) => <span className="tabular-nums text-[var(--text-secondary)]">{money(row.original[id])}</span>,
+    })),
+    {
+      id: 'total', header: 'Total', accessorFn: (r) => r.total, size: 130, sortingFn: nullLastSort,
+      meta: { align: 'right', exportValue: (r) => r.total ?? '' },
+      cell: ({ row }) => <span className="tabular-nums font-semibold text-[var(--text-primary)]">{money(row.original.total)}</span>,
+    },
+    {
+      id: 'lines', header: 'Lines', accessorFn: (r) => r.lines, size: 90, sortingFn: nullLastSort,
+      meta: { align: 'right', exportValue: (r) => r.lines ?? '' },
+      cell: ({ row }) => <span className="tabular-nums text-[var(--text-muted)]">{num(row.original.lines)}</span>,
+    },
+  ], [money, group.country, group.siteOptions, canMap, onSave])
+
+  return (
+    <Card className="space-y-3 min-w-0">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+        <MiniStat label="Sites" value={num(summary.sites)} sub={`${num(summary.lines)} lines`} />
+        <MiniStat label="Total spend" value={money(summary.total)} sub={group.currency} />
+        <MiniStat label="Top site" value={summary.topSite || 'N/A'} sub={summary.topSpend != null ? money(summary.topSpend) : undefined} />
+        <MiniStat
+          label="Unmapped stores"
+          value={num(summary.unmapped)}
+          sub={summary.unmappedShare == null ? 'N/A' : `${(summary.unmappedShare * 100).toFixed(1)}% of spend`}
+        />
+      </div>
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Filter sites by mapping">
+        {MAPPING_FILTERS.map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setMapping(key)}
+            aria-pressed={mapping === key}
+            className={`min-h-[44px] px-3 rounded-lg text-xs font-medium border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] ${
+              mapping === key
+                ? 'border-[var(--accent)] text-[var(--text-primary)] bg-[var(--panel-2)]'
+                : 'border-[var(--hairline)] text-[var(--text-secondary)]'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <EnterpriseTable
+        columns={columns}
+        data={visible}
+        getRowId={(r) => r.key}
+        enableColumnFilters={false}
+        enableExport={false}
+        searchPlaceholder="Search sites or store codes"
+        initialPageSize={25}
+        emptyMessage={mapping === 'all' ? 'No per-site expense for the selected filters.' : 'No sites match this mapping filter.'}
+      />
     </Card>
   )
 }
@@ -358,7 +294,7 @@ function SiteTable({ group, canMap, onSave }) {
  * (elevated users) so an admin can map the store_code to a governed site; the
  * total then rolls up under that site on refresh.
  */
-function BySitePanel({ groups, canMap, onSave, error }) {
+function BySitePanel({ groups, canMap, onSave, error, onRetry }) {
   const list = (Array.isArray(groups) ? groups : []).filter((g) => (g?.rows || []).length > 0)
   const multi = list.length > 1
   return (
@@ -371,8 +307,17 @@ function BySitePanel({ groups, canMap, onSave, error }) {
         {canMap ? '; pick a site and Save to map them.' : '.'}
         {multi ? ' Each country is listed separately in its own currency and is never summed with another country.' : ''}
       </p>
-      {error && <Card tone="crit" className="text-red-300 text-sm">{error}</Card>}
-      {list.length === 0 ? (
+      {error && (
+        <Card tone="crit" className="text-sm flex flex-wrap items-center justify-between gap-3" role="alert">
+          <span className="text-red-400">{error}</span>
+          {onRetry && (
+            <button type="button" onClick={onRetry} className="btn-secondary min-h-[44px] px-3 text-xs inline-flex items-center gap-1">
+              <RefreshCw size={12} aria-hidden="true" /> Retry
+            </button>
+          )}
+        </Card>
+      )}
+      {list.length === 0 && error ? null : list.length === 0 ? (
         <Card
           className="text-center text-[var(--text-muted)]"
           style={{ paddingTop: 'var(--space-8)', paddingBottom: 'var(--space-8)' }}
@@ -385,7 +330,7 @@ function BySitePanel({ groups, canMap, onSave, error }) {
             {multi && (
               <h3 className="text-xs font-semibold text-[var(--text-secondary)] flex items-center gap-2">
                 {g.country || 'N/A'}
-                <span className="text-[11px] px-2 py-0.5 rounded bg-[var(--surface-2,#1e293b)] text-[var(--text-tertiary)]">{g.currency}</span>
+                <span className="text-[11px] px-2 py-0.5 rounded bg-[var(--panel-2)] text-[var(--text-tertiary)]">{g.currency}</span>
               </h3>
             )}
             <SiteTable group={g} canMap={canMap} onSave={onSave} />
@@ -503,7 +448,7 @@ function CountryReport({
           <h2 className="text-base font-bold text-[var(--text-primary)]">{country}</h2>
           {/* The currency is stated on every block because the page now shows
               several, and a figure without its currency is not a figure. */}
-          <span className="text-[11px] px-2 py-0.5 rounded bg-[var(--surface-2,#1e293b)] text-[var(--text-secondary)]">{currency}</span>
+          <span className="text-[11px] px-2 py-0.5 rounded bg-[var(--panel-2)] text-[var(--text-secondary)]">{currency}</span>
         </div>
       )}
 
@@ -1012,6 +957,39 @@ export default function ExpenseReport() {
   const cpkFleetTiles = useMemo(() => fleetTiles(fleetCpk.fleet), [fleetCpk])
   const cpkByType = useMemo(() => sortByTypeWorstFirst(fleetCpk.byType), [fleetCpk])
   const cpkHasData = cpkFleetTiles.length > 0 || cpkByType.length > 0
+  const cpkTypeData = useMemo(() => cpkTypeRows(cpkByType), [cpkByType])
+  const cpkTypeStats = useMemo(() => cpkTypeSummary(cpkByType), [cpkByType])
+  const cpkTypeColumns = useMemo(() => [
+    {
+      id: 'vehicle_type', header: 'Asset Type', accessorFn: (r) => r.vehicle_type, size: 200, sortingFn: nullLastSort,
+      cell: ({ row }) => (
+        <span className="font-medium text-[var(--text-secondary)]">
+          {row.original.vehicle_type}
+          {row.original.country ? <span className="text-[var(--text-muted)]"> ({row.original.country})</span> : null}
+        </span>
+      ),
+    },
+    { id: 'unit', header: 'Unit', accessorFn: (r) => unitSuffix(r.unit).replace('/', ''), size: 80 },
+    {
+      id: 'distance', header: 'Distance / Hours', accessorFn: (r) => r.distance_or_hours, size: 140, sortingFn: nullLastSort,
+      meta: { align: 'right', exportValue: (r) => r.distance_or_hours ?? '' },
+      cell: ({ row }) => <span className="tabular-nums">{fmtDistance(row.original.distance_or_hours, row.original.unit)}</span>,
+    },
+    ...[['tyre_cost', 'Tyre Cost'], ['total_cost', 'Total Cost']].map(([id, header]) => ({
+      id, header, accessorFn: (r) => r[id], size: 130, sortingFn: nullLastSort,
+      meta: { align: 'right', exportValue: (r) => r[id] ?? '' },
+      cell: ({ row }) => <span className="tabular-nums">{fmtCpkMoney(row.original[id], row.original.currency)}</span>,
+    })),
+    ...[['cpk_tyre', 'CPK Tyre'], ['cpk_total', 'CPK Total']].map(([id, header]) => ({
+      id, header, accessorFn: (r) => r[id], size: 150, sortingFn: nullLastSort,
+      meta: { align: 'right', exportValue: (r) => r[id] ?? '' },
+      cell: ({ row }) => (
+        <span className={row.original[id] == null ? 'text-[var(--text-muted)]' : 'tabular-nums font-medium text-[var(--text-primary)]'}>
+          {fmtCpkValue(row.original[id], row.original.currency, row.original.unit)}
+        </span>
+      ),
+    })),
+  ], [])
 
   // If this month has no expense rows yet, fall back to the most recent month
   // that does - and say so. An empty current month reads as lost data otherwise.
@@ -1497,7 +1475,7 @@ export default function ExpenseReport() {
                     <Card key={c.country}>
                       <div className="flex items-center justify-between">
                         <p className="text-sm font-semibold text-[var(--text-primary)]">{c.country}</p>
-                        <span className="text-xs px-2 py-0.5 rounded bg-[var(--surface-2,#1e293b)] text-[var(--text-secondary)]">{cur}</span>
+                        <span className="text-xs px-2 py-0.5 rounded bg-[var(--panel-2)] text-[var(--text-secondary)]">{cur}</span>
                       </div>
                       <p className="mt-1 text-xl font-bold text-[var(--text-primary)]">{fmt(c.total)}</p>
                       <div className="mt-2 grid grid-cols-3 gap-2 text-xs text-[var(--text-secondary)]">
@@ -1544,6 +1522,7 @@ export default function ExpenseReport() {
               canMap={canMap}
               onSave={saveMapping}
               error={bySiteErr}
+              onRetry={load}
             />
           )}
 
@@ -1758,46 +1737,21 @@ export default function ExpenseReport() {
                         <span className="text-xs text-[var(--text-muted)]">{cpkByType.length} types | worst CPK first</span>
                       )}
                     />
-                    {cpkByType.length === 0 ? (
-                      <p className="text-[var(--text-muted)] text-sm py-6 text-center">No asset-type data</p>
-                    ) : (
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="text-left border-b border-[var(--input-border)]">
-                            <th className="table-header pb-2 pr-3">Asset Type</th>
-                            <th className="table-header pb-2 pr-3">Unit</th>
-                            <th className="table-header pb-2 pr-3 text-right">Distance / Hours</th>
-                            <th className="table-header pb-2 pr-3 text-right">Tyre Cost</th>
-                            <th className="table-header pb-2 pr-3 text-right">Total Cost</th>
-                            <th className="table-header pb-2 pr-3 text-right">CPK Tyre</th>
-                            <th className="table-header pb-2 text-right">CPK Total</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {cpkByType.map((r, i) => {
-                            const cur = r.currency || r.country || ''
-                            return (
-                              <tr key={`${r.country}-${r.vehicle_type}-${r.unit}-${i}`} className="border-b border-[var(--input-border)]/50">
-                                <td className="table-cell py-2 pr-3 text-[var(--text-secondary)] font-medium">
-                                  {r.vehicle_type}
-                                  {r.country ? <span className="text-[var(--text-muted)]"> - {r.country}</span> : null}
-                                </td>
-                                <td className="table-cell py-2 pr-3 text-[var(--text-muted)]">{unitSuffix(r.unit).replace('/', '')}</td>
-                                <td className="table-cell py-2 pr-3 text-right text-[var(--text-secondary)]">{fmtDistance(r.distance_or_hours, r.unit)}</td>
-                                <td className="table-cell py-2 pr-3 text-right text-[var(--text-secondary)]">{fmtCpkMoney(r.tyre_cost, cur)}</td>
-                                <td className="table-cell py-2 pr-3 text-right text-[var(--text-secondary)]">{fmtCpkMoney(r.total_cost, cur)}</td>
-                                <td className="table-cell py-2 pr-3 text-right text-[var(--text-secondary)]">{fmtCpkValue(r.cpk_tyre, cur, r.unit)}</td>
-                                <td className="table-cell py-2 text-right">
-                                  <span className={r.cpk_total == null ? 'text-[var(--text-muted)]' : 'font-medium text-[var(--text-primary)]'}>
-                                    {fmtCpkValue(r.cpk_total, cur, r.unit)}
-                                  </span>
-                                </td>
-                              </tr>
-                            )
-                          })}
-                        </tbody>
-                      </table>
-                    )}
+                    <p className="text-xs text-[var(--text-muted)] mb-2">
+                      {cpkTypeStats.measured} of {cpkTypeStats.types} types measurable
+                      {cpkTypeStats.unmeasured > 0 ? `; ${cpkTypeStats.unmeasured} have no distance or hours, so CPK reads N/A` : ''}
+                      {cpkTypeStats.worstType ? `. Highest total CPK: ${cpkTypeStats.worstType}${cpkTypeStats.worstCountry ? ` (${cpkTypeStats.worstCountry})` : ''}.` : ''}
+                    </p>
+                    <EnterpriseTable
+                      columns={cpkTypeColumns}
+                      data={cpkTypeData}
+                      getRowId={(r) => r.key}
+                      enableColumnFilters={false}
+                      enableExport={false}
+                      searchPlaceholder="Search asset types"
+                      initialPageSize={25}
+                      emptyMessage="No asset-type data"
+                    />
                   </Card>
                 </>
               )}

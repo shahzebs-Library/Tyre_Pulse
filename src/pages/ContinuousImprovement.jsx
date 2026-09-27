@@ -1,22 +1,30 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Zap, Download, FileText, TrendingUp, TrendingDown, Minus,
+  Zap, Download, FileText, TrendingUp, TrendingDown,
   ChevronDown, ChevronRight, CheckCircle, Clock, AlertTriangle,
   XCircle, DollarSign, BarChart2, Target, RefreshCw, Plus,
-  Package, Wrench, Search, ShieldCheck, Truck, Star,
+  Package, Wrench, Search, ShieldCheck, Star,
   ArrowUpRight, ArrowDownRight, Award, Activity, Info,
 } from 'lucide-react'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement,
   LineElement, PointElement, ArcElement, Title, Tooltip, Legend, Filler,
 } from 'chart.js'
-import { Bar, Line, Doughnut } from 'react-chartjs-2'
+import { Bar, Line } from 'react-chartjs-2'
 import * as ciApi from '../lib/api/continuousImprovement'
 import { useSettings } from '../contexts/SettingsContext'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import { compareValues } from '../lib/consoleTable'
+import { colorAt, withAlpha } from '../lib/reportColors'
+import {
+  fmt, fmtCur, monthLabel, filterByPeriod, computeMetrics, improvementScore as buildImprovementScore,
+  buildOpportunities, cpkTrend, failureTrend, closeRateTrend, findTarget, kpiScorecard as buildKpiScorecard,
+  actionStats as buildActionStats, filterActions, roiSummary as buildRoiSummary,
+  actionExportRows, ACTION_EXPORT_COLS, ACTION_EXPORT_HEADERS, OVERDUE_ACTION_DAYS,
+} from '../lib/continuousImprovementAnalytics'
 import PageHeader from '../components/ui/PageHeader'
-import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import SegmentedControl from '../components/ui/SegmentedControl'
 import { toUserMessage } from '../lib/safeError'
 
@@ -26,8 +34,6 @@ ChartJS.register(
 )
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-
-const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
 const PRIORITY_BADGE = {
   High:   'bg-red-900/50 text-red-300 border border-red-700/50',
@@ -55,66 +61,44 @@ const CHART_BASE = {
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
-    legend: { labels: { color: '#9ca3af', font: { size: 11 } } },
+    legend: { labels: { color: 'var(--text-secondary)', font: { size: 11 } } },
     tooltip: {
       backgroundColor: 'var(--panel)',
-      titleColor: '#f9fafb',
-      bodyColor: '#d1d5db',
+      titleColor: 'var(--panel-ink)',
+      bodyColor: 'var(--text-secondary)',
       borderColor: 'var(--hairline)',
       borderWidth: 1,
     },
   },
   scales: {
-    x: { grid: { color:'var(--text-muted)' }, ticks: { color: '#6b7280', font: { size: 10 } } },
-    y: { grid: { color:'var(--text-muted)' }, ticks: { color: '#6b7280', font: { size: 10 } } },
+    x: { grid: { color: 'var(--panel-2)' }, ticks: { color: 'var(--text-muted)', font: { size: 10 } } },
+    y: { grid: { color: 'var(--panel-2)' }, ticks: { color: 'var(--text-muted)', font: { size: 10 } } },
   },
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function fmt(n, decimals = 0) {
-  if (n == null || isNaN(n)) return '-'
-  return Number(n).toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
-}
-
-function fmtCur(n, currency, decimals = 0) {
-  if (n == null || isNaN(n)) return '-'
-  return `${currency} ${fmt(n, decimals)}`
-}
-
-function daysOpen(created_at) {
-  if (!created_at) return 0
-  return Math.max(0, Math.floor((Date.now() - new Date(created_at).getTime()) / 86400000))
-}
-
-function monthKey(dateStr) {
-  if (!dateStr) return null
-  const d = new Date(dateStr)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-}
-
-function last12MonthKeys() {
-  const keys = []
-  const now = new Date()
-  for (let i = 11; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    keys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
-  }
-  return keys
-}
-
-function monthLabel(key) {
-  const [yr, mo] = key.split('-')
-  return `${MONTH_LABELS[parseInt(mo) - 1]} ${yr.slice(2)}`
+/** Null-last sort for EnterpriseTable columns. */
+function nullLastSort(rowA, rowB, id) {
+  const a = rowA.getValue(id)
+  const b = rowB.getValue(id)
+  const ba = a == null || a === ''
+  const bb = b == null || b === ''
+  if (ba && bb) return 0
+  if (ba) return 1
+  if (bb) return -1
+  return compareValues(a, b)
 }
 
 function scoreColor(score) {
+  if (score == null) return 'text-[var(--text-muted)]'
   if (score >= 75) return 'text-green-400'
   if (score >= 50) return 'text-yellow-400'
   return 'text-red-400'
 }
 
 function scoreBg(score) {
+  if (score == null) return 'border-[var(--input-border)]'
   if (score >= 75) return 'border-green-700/50 bg-green-950/20'
   if (score >= 50) return 'border-yellow-700/50 bg-yellow-950/10'
   return 'border-red-700/50 bg-red-950/20'
@@ -135,13 +119,18 @@ function OpportunityRow({ opp, onCreateAction, alreadyCreated, creating }) {
       animate={{ opacity: 1, y: 0 }}
     >
       <button
+        type="button"
+        aria-expanded={expanded}
         onClick={() => setExpanded(v => !v)}
-        className="w-full flex items-center gap-3 px-4 py-3 bg-[var(--surface-1)] hover:bg-[var(--input-bg)]/60 transition-colors text-left"
+        className="w-full flex flex-wrap items-center gap-3 px-4 py-3 min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] bg-[var(--surface-1)] hover:bg-[var(--input-bg)]/60 transition-colors text-left"
       >
         <span className={`px-2 py-0.5 rounded text-xs font-semibold ${PRIORITY_BADGE[opp.priority] ?? PRIORITY_BADGE.Medium}`}>
           {opp.priority}
         </span>
         <span className="flex-1 text-sm text-[var(--text-secondary)]">{opp.title}</span>
+        {opp.saving === null && (
+          <span className="text-xs text-[var(--text-dim)]">Saving not measurable</span>
+        )}
         {opp.saving > 0 && (
           <span className="flex items-center gap-1 text-xs text-green-400 font-medium">
             <ImpactIcon size={12} />
@@ -169,7 +158,7 @@ function OpportunityRow({ opp, onCreateAction, alreadyCreated, creating }) {
                 <ul className="space-y-1">
                   {opp.details.map((d, i) => (
                     <li key={i} className="flex items-start gap-2 text-xs text-[var(--text-muted)]">
-                      <span className="text-[var(--text-dim)] mt-0.5">•</span>
+                      <span className="text-[var(--text-dim)] mt-0.5" aria-hidden="true">-</span>
                       {d}
                     </li>
                   ))}
@@ -182,9 +171,10 @@ function OpportunityRow({ opp, onCreateAction, alreadyCreated, creating }) {
                   </span>
                 ) : (
                   <button
+                    type="button"
                     onClick={() => onCreateAction(opp)}
                     disabled={creating}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-medium transition-colors"
+                    className="flex items-center gap-1.5 px-3 min-h-[44px] rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-medium transition-colors"
                   >
                     {creating ? <RefreshCw size={12} className="animate-spin" /> : <Plus size={12} />}
                     Create Corrective Action
@@ -212,8 +202,10 @@ function CategoryAccordion({ categoryKey, opportunities, onCreateAction, created
   return (
     <div className={`bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden`}>
       <button
+        type="button"
+        aria-expanded={open}
         onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[var(--input-bg)]/40 transition-colors"
+        className="w-full flex items-center gap-3 px-4 py-3 min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] hover:bg-[var(--input-bg)]/40 transition-colors"
       >
         <span className="flex items-center justify-center w-7 h-7 rounded-lg" style={{ background: `${meta.color}20` }}>
           <Icon size={14} style={{ color: meta.color }} />
@@ -319,488 +311,19 @@ export default function ContinuousImprovement() {
 
   useEffect(() => { load() }, [load])
 
-  // ── Period cutoff ─────────────────────────────────────────────────────────────
-
-  const periodCutoff = useMemo(() => {
-    const now = new Date()
-    if (period === '3mo') return new Date(now.getFullYear(), now.getMonth() - 3, 1)
-    if (period === '6mo') return new Date(now.getFullYear(), now.getMonth() - 6, 1)
-    if (period === '1yr') return new Date(now.getFullYear(), now.getMonth() - 12, 1)
-    return new Date(now.getFullYear(), now.getMonth() - 6, 1)
-  }, [period])
-
-  const filteredRecords = useMemo(
-    () => records.filter(r => r.issue_date && new Date(r.issue_date) >= periodCutoff),
-    [records, periodCutoff]
+  // ── Derived (pure engine: continuousImprovementAnalytics) ─────────────────
+  // The period picker scopes the KPIs and the opportunity finder; the score and
+  // the progress charts always read the rolling 12 months so a trend is visible.
+  const [computedAt, setComputedAt] = useState(() => new Date())
+  useEffect(() => { if (!loading) setComputedAt(new Date()) }, [loading])
+  const periodRecords = useMemo(() => filterByPeriod(records, period, computedAt), [records, period, computedAt])
+  const metrics = useMemo(() => computeMetrics(periodRecords, inspections, actions), [periodRecords, inspections, actions])
+  const scoreMetrics = useMemo(() => computeMetrics(records, inspections, actions), [records, inspections, actions])
+  const improvementScore = useMemo(() => buildImprovementScore(records, scoreMetrics, computedAt), [records, scoreMetrics, computedAt])
+  const opportunities = useMemo(
+    () => buildOpportunities({ records: periodRecords, actions, inspections, metrics, currency: activeCurrency, now: computedAt }),
+    [periodRecords, actions, inspections, metrics, activeCurrency, computedAt],
   )
-
-  // ── Core derived metrics ──────────────────────────────────────────────────────
-
-  const metrics = useMemo(() => {
-    const withKm = records.filter(r => r.km_at_fitment != null && r.km_at_removal != null && r.cost_per_tyre > 0)
-    const cpkList = withKm.map(r => {
-      const km = r.km_at_removal - r.km_at_fitment
-      return km > 0 ? r.cost_per_tyre / km : null
-    }).filter(Boolean)
-    const avgCpk = cpkList.length ? cpkList.reduce((a, b) => a + b, 0) / cpkList.length : 0
-
-    const totalCost = records.reduce((s, r) => s + (r.cost_per_tyre ?? 0) * (r.qty || 1), 0)
-    const avgCostPerTyre = records.length ? totalCost / records.length : 0
-
-    const failures = records.filter(r => r.risk_level === 'High' || r.category === 'Scrap')
-    const failureRate = records.length ? (failures.length / records.length) * 100 : 0
-
-    const completed = inspections.filter(i => i.status === 'Completed' || i.completed_date)
-    const inspectionCompliance = inspections.length ? (completed.length / inspections.length) * 100 : 0
-
-    const closedActions = actions.filter(a => a.status === 'Closed')
-    const closeRate = actions.length ? (closedActions.length / actions.length) * 100 : 0
-
-    return { avgCpk, avgCostPerTyre, totalCost, failureRate, inspectionCompliance, closeRate }
-  }, [records, inspections, actions])
-
-  // ── Improvement Score ─────────────────────────────────────────────────────────
-
-  const improvementScore = useMemo(() => {
-    const monthKeys = last12MonthKeys()
-    const midPoint = monthKeys[5]
-
-    const recentRec = records.filter(r => monthKey(r.issue_date) > midPoint)
-    const olderRec  = records.filter(r => monthKey(r.issue_date) <= midPoint && monthKey(r.issue_date) >= monthKeys[0])
-
-    function avgCpkFor(recs) {
-      const wk = recs.filter(r => r.km_at_fitment != null && r.km_at_removal != null && r.cost_per_tyre > 0)
-      const cpks = wk.map(r => {
-        const km = r.km_at_removal - r.km_at_fitment
-        return km > 0 ? r.cost_per_tyre / km : null
-      }).filter(Boolean)
-      return cpks.length ? cpks.reduce((a, b) => a + b, 0) / cpks.length : null
-    }
-
-    const recentCpk = avgCpkFor(recentRec)
-    const olderCpk  = avgCpkFor(olderRec)
-
-    let costPts = 12
-    if (recentCpk != null && olderCpk != null && olderCpk > 0) {
-      const pctImprove = (olderCpk - recentCpk) / olderCpk
-      costPts = Math.min(25, Math.max(0, 12.5 + pctImprove * 100))
-    }
-
-    function failureRateFor(recs) {
-      if (!recs.length) return null
-      const f = recs.filter(r => r.risk_level === 'High' || r.category === 'Scrap')
-      return (f.length / recs.length) * 100
-    }
-
-    const recentFR = failureRateFor(recentRec)
-    const olderFR  = failureRateFor(olderRec)
-
-    let relPts = 12
-    if (recentFR != null && olderFR != null && olderFR > 0) {
-      const pctImprove = (olderFR - recentFR) / olderFR
-      relPts = Math.min(25, Math.max(0, 12.5 + pctImprove * 100))
-    }
-
-    const inspPts  = (metrics.inspectionCompliance / 100) * 25
-    const closePts = (metrics.closeRate / 100) * 25
-
-    const total = Math.round(costPts + relPts + inspPts + closePts)
-
-    // last month score estimate
-    const prevMonth = monthKeys[10]
-    const prevRec = records.filter(r => monthKey(r.issue_date) === prevMonth)
-    const currRec = records.filter(r => monthKey(r.issue_date) === monthKeys[11])
-    const prevFR = failureRateFor(prevRec)
-    const currFR = failureRateFor(currRec)
-    let delta = null
-    if (prevFR != null && currFR != null) {
-      delta = prevFR > currFR ? 2 : currFR > prevFR ? -2 : 0
-    }
-
-    return { total, costPts: Math.round(costPts), relPts: Math.round(relPts), inspPts: Math.round(inspPts), closePts: Math.round(closePts), delta }
-  }, [records, metrics])
-
-  // ── Opportunities ─────────────────────────────────────────────────────────────
-
-  const opportunities = useMemo(() => {
-    const cur = activeCurrency
-    const result = { cost: [], reliability: [], process: [], inspection: [], maintenance: [], procurement: [] }
-
-    // ── A. Cost Reduction ──────────────────────────────────────────────────────
-    const brandMap = {}
-    records.forEach(r => {
-      if (!r.brand || !r.km_at_fitment || !r.km_at_removal || !r.cost_per_tyre) return
-      const km = r.km_at_removal - r.km_at_fitment
-      if (km <= 0) return
-      const cpk = r.cost_per_tyre / km
-      if (!brandMap[r.brand]) brandMap[r.brand] = { cpks: [], costs: [] }
-      brandMap[r.brand].cpks.push(cpk)
-      brandMap[r.brand].costs.push(r.cost_per_tyre)
-    })
-
-    const brandCpks = Object.entries(brandMap)
-      .map(([brand, v]) => ({ brand, avgCpk: v.cpks.reduce((a, b) => a + b, 0) / v.cpks.length, count: v.cpks.length }))
-      .filter(b => b.count >= 3)
-      .sort((a, b) => a.avgCpk - b.avgCpk)
-
-    if (brandCpks.length >= 2) {
-      const best  = brandCpks[0]
-      const worst = brandCpks[brandCpks.length - 1]
-      const avgKm = 50000
-      const fleetReplacements = records.length / Math.max(1, (new Date() - new Date(records[records.length - 1]?.issue_date ?? Date.now())) / (365 * 86400000))
-      const annualSaving = Math.round(fleetReplacements * (worst.avgCpk - best.avgCpk) * avgKm)
-
-      result.cost.push({
-        key: 'brand-switch',
-        title: `Switch procurement from ${worst.brand} to ${best.brand}`,
-        description: `${worst.brand} has CPK ${fmt(worst.avgCpk, 4)} vs ${best.brand} at ${fmt(best.avgCpk, 4)} - a ${fmt((worst.avgCpk - best.avgCpk) / best.avgCpk * 100, 1)}% difference. Migrating procurement could generate significant annual savings.`,
-        priority: 'High',
-        saving: annualSaving > 0 ? annualSaving : 0,
-        currency: cur,
-        details: [
-          `${worst.brand}: avg CPK ${fmt(worst.avgCpk, 4)} (${worst.count} tyres)`,
-          `${best.brand}: avg CPK ${fmt(best.avgCpk, 4)} (${best.count} tyres)`,
-          `Estimated fleet replacements/year: ${fmt(Math.round(fleetReplacements))}`,
-        ],
-      })
-    }
-
-    // Site with highest avg cost
-    const siteMap = {}
-    records.forEach(r => {
-      if (!r.site || !r.cost_per_tyre) return
-      if (!siteMap[r.site]) siteMap[r.site] = []
-      siteMap[r.site].push(r.cost_per_tyre)
-    })
-    const siteCosts = Object.entries(siteMap)
-      .map(([site, costs]) => ({ site, avg: costs.reduce((a, b) => a + b, 0) / costs.length, count: costs.length }))
-      .filter(s => s.count >= 5)
-      .sort((a, b) => b.avg - a.avg)
-
-    const fleetAvgCost = metrics.avgCostPerTyre
-    if (siteCosts.length > 1 && siteCosts[0].avg > fleetAvgCost * 1.2) {
-      result.cost.push({
-        key: 'site-cost-audit',
-        title: `Audit ${siteCosts[0].site} cost controls - ${fmt(((siteCosts[0].avg / fleetAvgCost) - 1) * 100, 0)}% above fleet average`,
-        description: `Site ${siteCosts[0].site} averages ${fmtCur(siteCosts[0].avg, cur)} per tyre replacement vs fleet average ${fmtCur(fleetAvgCost, cur)}. A procurement and workshop audit may identify overspend drivers.`,
-        priority: 'Medium',
-        saving: Math.round((siteCosts[0].avg - fleetAvgCost) * siteCosts[0].count),
-        currency: cur,
-        site: siteCosts[0].site,
-        details: siteCosts.slice(0, 5).map(s => `${s.site}: avg ${fmtCur(s.avg, cur)} (${s.count} tyres)`),
-      })
-    }
-
-    // High CPK vehicles
-    const vehicleMap = {}
-    records.forEach(r => {
-      if (!r.asset_no || !r.km_at_fitment || !r.km_at_removal || !r.cost_per_tyre) return
-      const km = r.km_at_removal - r.km_at_fitment
-      if (km <= 0) return
-      if (!vehicleMap[r.asset_no]) vehicleMap[r.asset_no] = []
-      vehicleMap[r.asset_no].push(r.cost_per_tyre / km)
-    })
-    const fleetAvgCpk = metrics.avgCpk
-    const highCpkVehicles = Object.entries(vehicleMap)
-      .map(([asset, cpks]) => ({ asset, avg: cpks.reduce((a, b) => a + b, 0) / cpks.length, count: cpks.length }))
-      .filter(v => v.count >= 2 && v.avg > fleetAvgCpk * 2)
-      .sort((a, b) => b.avg - a.avg)
-      .slice(0, 8)
-
-    if (highCpkVehicles.length > 0) {
-      result.cost.push({
-        key: 'high-cpk-vehicles',
-        title: `${highCpkVehicles.length} vehicles operating at 2× fleet average CPK`,
-        description: `These vehicles show abnormally high cost-per-kilometre. Root causes may include alignment issues, driver behaviour, route conditions, or wrong tyre specification.`,
-        priority: 'High',
-        saving: Math.round(highCpkVehicles.reduce((s, v) => s + (v.avg - fleetAvgCpk) * 50000 * v.count, 0)),
-        currency: cur,
-        details: highCpkVehicles.map(v => `${v.asset}: CPK ${fmt(v.avg, 4)} - ${fmt(((v.avg / fleetAvgCpk) - 1) * 100, 0)}% above average`),
-      })
-    }
-
-    // ── B. Reliability ────────────────────────────────────────────────────────
-
-    const posMap = {}
-    records.forEach(r => {
-      if (!r.position) return
-      if (!posMap[r.position]) posMap[r.position] = { total: 0, failures: 0 }
-      posMap[r.position].total++
-      if (r.risk_level === 'High' || r.category === 'Scrap') posMap[r.position].failures++
-    })
-
-    Object.entries(posMap).forEach(([pos, v]) => {
-      const rate = v.total > 4 ? (v.failures / v.total) * 100 : 0
-      if (rate > 20) {
-        result.reliability.push({
-          key: `pos-failure-${pos}`,
-          title: `High failure rate on ${pos} position (${fmt(rate, 1)}%)`,
-          description: `${pos} tyres are failing at ${fmt(rate, 1)}% - above the 20% threshold. Inspect all ${pos} tyres immediately. Likely causes: inflation non-compliance, alignment, or load distribution issues.`,
-          priority: rate > 35 ? 'High' : 'Medium',
-          impactPct: rate - 20,
-          details: [`${v.failures} failures out of ${v.total} tyres on ${pos} position`],
-        })
-      }
-    })
-
-    const fleetFailureRate = metrics.failureRate
-    const siteFailMap = {}
-    records.forEach(r => {
-      if (!r.site) return
-      if (!siteFailMap[r.site]) siteFailMap[r.site] = { total: 0, failures: 0 }
-      siteFailMap[r.site].total++
-      if (r.risk_level === 'High' || r.category === 'Scrap') siteFailMap[r.site].failures++
-    })
-    Object.entries(siteFailMap).forEach(([site, v]) => {
-      const rate = v.total > 4 ? (v.failures / v.total) * 100 : 0
-      if (rate > fleetFailureRate * 1.3 && rate > 10) {
-        result.reliability.push({
-          key: `site-failure-${site}`,
-          title: `${site} failure rate ${fmt(rate, 1)}% - ${fmt(rate - fleetFailureRate, 1)}pp above fleet average`,
-          description: `Site ${site} has a significantly elevated failure rate. A reliability review covering workshop practices, tyre selection, and maintenance compliance is recommended.`,
-          priority: 'Medium',
-          site,
-          details: [`Fleet avg: ${fmt(fleetFailureRate, 1)}%`, `${site}: ${fmt(rate, 1)}% (${v.failures}/${v.total} tyres)`],
-        })
-      }
-    })
-
-    const brandFailMap = {}
-    records.forEach(r => {
-      if (!r.brand) return
-      if (!brandFailMap[r.brand]) brandFailMap[r.brand] = { total: 0, failures: 0 }
-      brandFailMap[r.brand].total++
-      if (r.risk_level === 'High' || r.category === 'Scrap') brandFailMap[r.brand].failures++
-    })
-    Object.entries(brandFailMap).forEach(([brand, v]) => {
-      const rate = v.total > 5 ? (v.failures / v.total) * 100 : 0
-      if (rate > fleetFailureRate * 1.4 && rate > 12) {
-        result.reliability.push({
-          key: `brand-failure-${brand}`,
-          title: `${brand} failure rate ${fmt(rate, 1)}% - review procurement`,
-          description: `${brand} tyres show above-average failure rate. Consider replacing with higher-reliability brands if CPK analysis supports this decision.`,
-          priority: 'Medium',
-          details: [`Fleet avg failure rate: ${fmt(fleetFailureRate, 1)}%`, `${brand}: ${fmt(rate, 1)}% (${v.failures}/${v.total} tyres)`],
-        })
-      }
-    })
-
-    // ── C. Process Improvements ───────────────────────────────────────────────
-
-    const overdueActions = actions.filter(a =>
-      a.status !== 'Closed' && daysOpen(a.created_at) > 14
-    )
-    if (overdueActions.length > 0) {
-      result.process.push({
-        key: 'overdue-actions',
-        title: `${overdueActions.length} corrective actions overdue (>14 days open)`,
-        description: `These open actions represent unresolved operational risks. Escalation and assignment review required to restore action close rate.`,
-        priority: overdueActions.length > 10 ? 'High' : 'Medium',
-        details: overdueActions.slice(0, 6).map(a => `${a.title} - ${daysOpen(a.created_at)}d open${a.site ? ` (${a.site})` : ''}`),
-      })
-    }
-
-    const siteInspComp = {}
-    inspections.forEach(i => {
-      if (!i.site) return
-      if (!siteInspComp[i.site]) siteInspComp[i.site] = { total: 0, done: 0 }
-      siteInspComp[i.site].total++
-      if (i.status === 'Completed' || i.completed_date) siteInspComp[i.site].done++
-    })
-    const lowComplianceSites = Object.entries(siteInspComp)
-      .map(([site, v]) => ({ site, pct: v.total > 2 ? (v.done / v.total) * 100 : 100 }))
-      .filter(s => s.pct < 85)
-      .sort((a, b) => a.pct - b.pct)
-
-    if (lowComplianceSites.length > 0) {
-      result.process.push({
-        key: 'inspection-compliance-sites',
-        title: `${lowComplianceSites.length} sites below 85% inspection compliance`,
-        description: `Low inspection compliance leads to undetected tyre degradation, increased failure rates, and higher replacement costs. Immediate compliance intervention required.`,
-        priority: 'High',
-        details: lowComplianceSites.map(s => `${s.site}: ${fmt(s.pct, 1)}% compliance`),
-      })
-    }
-
-    const openActionsByPriority = actions.filter(a => a.status === 'Open')
-    if (openActionsByPriority.filter(a => a.priority === 'High').length > 5) {
-      result.process.push({
-        key: 'high-priority-backlog',
-        title: `${openActionsByPriority.filter(a => a.priority === 'High').length} high-priority actions still open`,
-        description: `High-priority corrective actions are accumulating. Review assignment, escalate unresolved items, and implement daily action tracking.`,
-        priority: 'High',
-        details: openActionsByPriority.filter(a => a.priority === 'High').slice(0, 5).map(a => `${a.title}${a.site ? ` - ${a.site}` : ''}`),
-      })
-    }
-
-    // ── D. Inspection Improvements ────────────────────────────────────────────
-
-    const sitesWithNoInspections = [...new Set(records.map(r => r.site).filter(Boolean))]
-      .filter(site => !siteInspComp[site])
-
-    if (sitesWithNoInspections.length > 0) {
-      result.inspection.push({
-        key: 'sites-no-inspections',
-        title: `${sitesWithNoInspections.length} active site(s) with no inspection records`,
-        description: `Sites with tyre records but no inspection history represent unmonitored operational risk. Establish regular inspection schedules immediately.`,
-        priority: 'High',
-        details: sitesWithNoInspections.map(s => `${s}: no inspections found`),
-      })
-    }
-
-    const overdueInspections = inspections.filter(i => {
-      if (i.status === 'Completed' || i.completed_date) return false
-      if (!i.scheduled_date) return false
-      return new Date(i.scheduled_date) < new Date()
-    })
-    if (overdueInspections.length > 0) {
-      result.inspection.push({
-        key: 'overdue-inspections',
-        title: `${overdueInspections.length} scheduled inspections are overdue`,
-        description: `Overdue inspections create compliance gaps and undetected tyre risk. Implement automated reminder and escalation workflow.`,
-        priority: overdueInspections.length > 20 ? 'High' : 'Medium',
-        details: [`${overdueInspections.length} inspections past scheduled date`],
-      })
-    }
-
-    if (metrics.inspectionCompliance < 75) {
-      result.inspection.push({
-        key: 'fleet-inspection-compliance',
-        title: `Fleet inspection compliance at ${fmt(metrics.inspectionCompliance, 1)}% - critical`,
-        description: `Overall inspection compliance is critically low. Without systematic inspections, pressure non-compliance and wear issues go undetected. A structured inspection programme rollout is required.`,
-        priority: 'High',
-        impactPct: 75 - metrics.inspectionCompliance,
-      })
-    }
-
-    // ── E. Maintenance Improvements ───────────────────────────────────────────
-
-    const vehicleHighRiskCount = {}
-    const now12 = new Date()
-    now12.setMonth(now12.getMonth() - 12)
-    records.filter(r => r.issue_date && new Date(r.issue_date) >= now12 && r.risk_level === 'High').forEach(r => {
-      if (!r.asset_no) return
-      vehicleHighRiskCount[r.asset_no] = (vehicleHighRiskCount[r.asset_no] ?? 0) + 1
-    })
-    const repeatHighRisk = Object.entries(vehicleHighRiskCount)
-      .filter(([, count]) => count >= 3)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-
-    if (repeatHighRisk.length > 0) {
-      result.maintenance.push({
-        key: 'repeat-high-risk-vehicles',
-        title: `${repeatHighRisk.length} vehicles with 3+ high-risk tyres in 12 months`,
-        description: `Repeated high-risk tyre events on the same vehicle suggest a systemic mechanical issue: alignment, suspension, brake drag, or driver behaviour. Full vehicle inspection required.`,
-        priority: 'High',
-        details: repeatHighRisk.map(([asset, count]) => `${asset}: ${count} high-risk tyre events`),
-      })
-    }
-
-    const siteScrapMap = {}
-    records.forEach(r => {
-      if (!r.site) return
-      if (!siteScrapMap[r.site]) siteScrapMap[r.site] = { total: 0, scrap: 0 }
-      siteScrapMap[r.site].total++
-      if (r.category === 'Scrap') siteScrapMap[r.site].scrap++
-    })
-    const fleetScrapRate = records.length ? (records.filter(r => r.category === 'Scrap').length / records.length) * 100 : 0
-    const highScrapSites = Object.entries(siteScrapMap)
-      .map(([site, v]) => ({ site, rate: v.total > 5 ? (v.scrap / v.total) * 100 : 0 }))
-      .filter(s => s.rate > fleetScrapRate * 1.5 && s.rate > 10)
-      .sort((a, b) => b.rate - a.rate)
-
-    if (highScrapSites.length > 0) {
-      result.maintenance.push({
-        key: 'high-scrap-sites',
-        title: `${highScrapSites.length} site(s) with elevated scrap rate - workshop audit required`,
-        description: `These sites are generating scrap tyres at above-average rates. Root causes likely include poor installation practice, under-inflation, or overloading. Workshop audit recommended.`,
-        priority: 'Medium',
-        details: highScrapSites.map(s => `${s.site}: ${fmt(s.rate, 1)}% scrap rate`),
-      })
-    }
-
-    const steerFast = posMap['Steer']
-    if (steerFast && posMap['Drive']) {
-      const steerFR = steerFast.total > 5 ? (steerFast.failures / steerFast.total) * 100 : 0
-      const driveFR = posMap['Drive'].total > 5 ? (posMap['Drive'].failures / posMap['Drive'].total) * 100 : 0
-      if (steerFR > driveFR * 1.5) {
-        result.maintenance.push({
-          key: 'steer-wear',
-          title: `Steer tyres failing ${fmt(steerFR / Math.max(driveFR, 1), 1)}× faster than drive - rotation non-compliance signal`,
-          description: `Steer tyre failure rate significantly exceeds drive axle, suggesting tyre rotation is not being performed. Implement mandatory rotation schedule.`,
-          priority: 'Medium',
-          details: [`Steer failure rate: ${fmt(steerFR, 1)}%`, `Drive failure rate: ${fmt(driveFR, 1)}%`],
-        })
-      }
-    }
-
-    // ── F. Procurement Improvements ───────────────────────────────────────────
-
-    if (brandCpks.length >= 2) {
-      result.procurement.push({
-        key: 'brand-cpk-ranking',
-        title: `Brand CPK ranking - procurement consolidation opportunity`,
-        description: `Fleet is using ${brandCpks.length} brands with CPK variance of ${fmt(brandCpks[brandCpks.length-1].avgCpk - brandCpks[0].avgCpk, 4)}. Consolidating to top 2-3 performers could reduce CPK significantly.`,
-        priority: brandCpks.length > 8 ? 'High' : 'Medium',
-        details: brandCpks.slice(0, 6).map(b => `${b.brand}: CPK ${fmt(b.avgCpk, 4)} (${b.count} tyres)`),
-      })
-    }
-
-    if (brandCpks.length > 8) {
-      result.procurement.push({
-        key: 'vendor-consolidation',
-        title: `${brandCpks.length} active brands - vendor consolidation recommended`,
-        description: `Operating with ${brandCpks.length} different tyre brands increases inventory complexity, reduces negotiating power, and complicates quality control. Consolidate to 3-5 preferred brands.`,
-        priority: 'Medium',
-        saving: Math.round(metrics.avgCostPerTyre * records.length * 0.05),
-        currency: cur,
-        details: [`Current active brands: ${brandCpks.length}`, 'Target: 3-5 preferred approved brands', 'Estimated procurement saving: 5-10% through volume discounts'],
-      })
-    }
-
-    const retreads = records.filter(r => r.category === 'Retread')
-    const newTyres = records.filter(r => r.category !== 'Retread')
-
-    function avgCpkFromSet(set) {
-      const wk = set.filter(r => r.km_at_fitment != null && r.km_at_removal != null && r.cost_per_tyre > 0)
-      const cpks = wk.map(r => {
-        const km = r.km_at_removal - r.km_at_fitment
-        return km > 0 ? r.cost_per_tyre / km : null
-      }).filter(Boolean)
-      return cpks.length ? cpks.reduce((a, b) => a + b, 0) / cpks.length : null
-    }
-
-    const retreadCpk = avgCpkFromSet(retreads)
-    const newTyreCpk = avgCpkFromSet(newTyres)
-
-    if (retreadCpk != null && newTyreCpk != null && retreadCpk < newTyreCpk * 0.8 && retreads.length > 10) {
-      const adoptionSaving = Math.round((newTyreCpk - retreadCpk) * 50000 * records.length * 0.15)
-      result.procurement.push({
-        key: 'retread-adoption',
-        title: `Increase retread adoption - ${fmt(((newTyreCpk - retreadCpk) / newTyreCpk) * 100, 0)}% lower CPK than new tyres`,
-        description: `Retreads are outperforming new tyres on CPK. Increasing retread adoption from ${fmt(retreads.length / records.length * 100, 0)}% to 25-30% of replacements could generate significant annual savings.`,
-        priority: 'Medium',
-        saving: adoptionSaving > 0 ? adoptionSaving : 0,
-        currency: cur,
-        details: [
-          `Retread avg CPK: ${fmt(retreadCpk, 4)}`,
-          `New tyre avg CPK: ${fmt(newTyreCpk, 4)}`,
-          `Current retread share: ${fmt(retreads.length / records.length * 100, 1)}%`,
-        ],
-      })
-    } else if (retreads.length < 5 && records.length > 50) {
-      result.procurement.push({
-        key: 'retread-opportunity',
-        title: `Low retread usage (${fmt(retreads.length / Math.max(records.length, 1) * 100, 1)}%) - evaluate retread programme`,
-        description: `Fleet retread adoption is very low. A structured retread evaluation programme could reduce tyre costs by 30-50% on eligible axle positions (drive and trailer).`,
-        priority: 'Low',
-        details: [`Current retreads: ${retreads.length} of ${records.length} total`, 'Typical retread saving: 30-50% cost reduction per tyre'],
-      })
-    }
-
-    return result
-  }, [records, actions, inspections, metrics, activeCurrency])
 
   // ── Action tracking ───────────────────────────────────────────────────────────
 
@@ -838,263 +361,163 @@ export default function ContinuousImprovement() {
       setActions(prev => prev.map(a => a.id === id ? { ...a, status: 'Closed', resolved_at: new Date().toISOString() } : a))
       setToast({ message: 'Action closed successfully', type: 'success' })
     } catch (e) {
-      setToast({ message: 'Failed to close action', type: 'error' })
+      setToast({ message: toUserMessage(e, 'Failed to close action'), type: 'error' })
     }
     setClosingId(null)
   }, [])
 
   // ── Monthly trend charts ──────────────────────────────────────────────────────
 
-  const monthKeys12 = useMemo(() => last12MonthKeys(), [])
-
   const cpkTrendData = useMemo(() => {
-    const monthData = {}
-    monthKeys12.forEach(k => { monthData[k] = { cpks: [] } })
-    records.forEach(r => {
-      const k = monthKey(r.issue_date)
-      if (!monthData[k] || !r.km_at_fitment || !r.km_at_removal || !r.cost_per_tyre) return
-      const km = r.km_at_removal - r.km_at_fitment
-      if (km > 0) monthData[k].cpks.push(r.cost_per_tyre / km)
-    })
-
-    const cpkValues = monthKeys12.map(k => {
-      const cpks = monthData[k].cpks
-      return cpks.length ? cpks.reduce((a, b) => a + b, 0) / cpks.length : null
-    })
-
-    const cpkTarget = targets.find(t => t.metric === 'target_cpk' || t.metric === 'max_cpk')
-    const targetLine = cpkTarget ? monthKeys12.map(() => cpkTarget.target_value) : null
-
-    const datasets = [
-      {
-        label: 'Avg CPK',
-        data: cpkValues,
-        borderColor: '#3b82f6',
-        backgroundColor: 'rgba(59,130,246,0.12)',
-        fill: true,
-        tension: 0.4,
-        spanGaps: true,
-        pointRadius: 3,
-      },
-    ]
-    if (targetLine) {
-      datasets.push({
-        label: 'CPK Target',
-        data: targetLine,
-        borderColor: '#10b981',
-        borderDash: [5, 4],
-        fill: false,
-        pointRadius: 0,
-        tension: 0,
-      })
-    }
-
-    return {
-      labels: monthKeys12.map(monthLabel),
-      datasets,
-    }
-  }, [records, targets, monthKeys12])
+    const tr = cpkTrend(records, computedAt)
+    const target = findTarget(targets, 'target_cpk', 'max_cpk')
+    const datasets = [{
+      label: 'Avg CPK', data: tr.values, borderColor: colorAt(0), backgroundColor: withAlpha(colorAt(0), 0.12),
+      fill: true, tension: 0.4, spanGaps: true, pointRadius: 3,
+    }]
+    if (target != null) datasets.push({ label: 'CPK Target', data: tr.keys.map(() => target), borderColor: '#10b981', borderDash: [5, 4], fill: false, pointRadius: 0, tension: 0 })
+    return { labels: tr.keys.map(monthLabel), datasets }
+  }, [records, targets, computedAt])
 
   const failureRateTrendData = useMemo(() => {
-    const monthData = {}
-    monthKeys12.forEach(k => { monthData[k] = { total: 0, failures: 0 } })
-    records.forEach(r => {
-      const k = monthKey(r.issue_date)
-      if (!monthData[k]) return
-      monthData[k].total++
-      if (r.risk_level === 'High' || r.category === 'Scrap') monthData[k].failures++
-    })
-
-    const rateValues = monthKeys12.map(k => {
-      const d = monthData[k]
-      return d.total > 0 ? (d.failures / d.total) * 100 : null
-    })
-
-    const frTarget = targets.find(t => t.metric === 'max_failure_rate' || t.metric === 'failure_rate_target')
-    const targetLine = frTarget ? monthKeys12.map(() => frTarget.target_value) : null
-
-    const datasets = [
-      {
-        label: 'Failure Rate %',
-        data: rateValues,
-        borderColor: '#ef4444',
-        backgroundColor: 'rgba(239,68,68,0.12)',
-        fill: true,
-        tension: 0.4,
-        spanGaps: true,
-        pointRadius: 3,
-      },
-    ]
-    if (targetLine) {
-      datasets.push({
-        label: 'Target',
-        data: targetLine,
-        borderColor: '#10b981',
-        borderDash: [5, 4],
-        fill: false,
-        pointRadius: 0,
-        tension: 0,
-      })
-    }
-
-    return {
-      labels: monthKeys12.map(monthLabel),
-      datasets,
-    }
-  }, [records, targets, monthKeys12])
-
-  // ── Action close rate trend ───────────────────────────────────────────────────
+    const tr = failureTrend(records, computedAt)
+    const target = findTarget(targets, 'max_failure_rate', 'failure_rate_target')
+    const datasets = [{
+      label: 'Failure Rate %', data: tr.values, borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.12)',
+      fill: true, tension: 0.4, spanGaps: true, pointRadius: 3,
+    }]
+    if (target != null) datasets.push({ label: 'Target', data: tr.keys.map(() => target), borderColor: '#10b981', borderDash: [5, 4], fill: false, pointRadius: 0, tension: 0 })
+    return { labels: tr.keys.map(monthLabel), datasets }
+  }, [records, targets, computedAt])
 
   const actionCloseTrend = useMemo(() => {
-    const monthData = {}
-    monthKeys12.forEach(k => { monthData[k] = { total: 0, closed: 0 } })
-    actions.forEach(a => {
-      const k = monthKey(a.created_at)
-      if (!monthData[k]) return
-      monthData[k].total++
-      if (a.status === 'Closed') monthData[k].closed++
-    })
-
+    const tr = closeRateTrend(actions, computedAt)
     return {
-      labels: monthKeys12.map(monthLabel),
+      labels: tr.keys.map(monthLabel),
       datasets: [{
-        label: 'Close Rate %',
-        data: monthKeys12.map(k => {
-          const d = monthData[k]
-          return d.total > 0 ? (d.closed / d.total) * 100 : null
-        }),
-        borderColor: '#10b981',
-        backgroundColor: 'rgba(16,185,129,0.15)',
-        fill: true,
-        tension: 0.4,
-        spanGaps: true,
-        pointRadius: 3,
+        label: 'Close Rate %', data: tr.values, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.15)',
+        fill: true, tension: 0.4, spanGaps: true, pointRadius: 3,
       }],
     }
-  }, [actions, monthKeys12])
-
-  // ── KPI vs Target scorecard ───────────────────────────────────────────────────
+  }, [actions, computedAt])
 
   const kpiScorecard = useMemo(() => {
-    const metricDefs = [
-      { metric: 'target_cpk',           label: 'Cost Per KM (CPK)',        unit: '',   current: metrics.avgCpk,               higherBetter: false, fmt: v => fmt(v, 4) },
-      { metric: 'max_failure_rate',     label: 'Failure Rate %',           unit: '%',  current: metrics.failureRate,          higherBetter: false, fmt: v => `${fmt(v, 1)}%` },
-      { metric: 'min_inspection_comp',  label: 'Inspection Compliance %',  unit: '%',  current: metrics.inspectionCompliance, higherBetter: true,  fmt: v => `${fmt(v, 1)}%` },
-      { metric: 'min_action_close_rate',label: 'Action Close Rate %',      unit: '%',  current: metrics.closeRate,            higherBetter: true,  fmt: v => `${fmt(v, 1)}%` },
-      { metric: 'max_avg_cost_tyre',    label: 'Avg Cost Per Tyre',        unit: activeCurrency, current: metrics.avgCostPerTyre, higherBetter: false, fmt: v => fmtCur(v, activeCurrency) },
-    ]
-
-    return metricDefs.map(def => {
-      const tgtRow = targets.find(t => t.metric === def.metric)
-      const target = tgtRow?.target_value ?? null
-      const current = def.current
-      if (target == null) return { ...def, target: null, status: 'no-target', gap: null }
-
-      const gap = current - target
-      let status
-      if (def.higherBetter) {
-        status = current >= target ? 'Met' : current >= target * 0.9 ? 'Close' : 'Off Track'
-      } else {
-        status = current <= target ? 'Met' : current <= target * 1.1 ? 'Close' : 'Off Track'
-      }
-      return { ...def, target, gap, status }
-    }).filter(d => d.target != null)
+    const format = (kind, v) => (kind === 'cpk' ? fmt(v, 4) : kind === 'pct' ? (v == null ? 'N/A' : `${fmt(v, 1)}%`) : fmtCur(v, activeCurrency))
+    return buildKpiScorecard(metrics, targets).map((k) => ({ ...k, fmt: (v) => format(k.kind, v) }))
   }, [metrics, targets, activeCurrency])
 
   const kpiBarData = useMemo(() => {
-    if (!kpiScorecard.length) return null
-    const labels = kpiScorecard.map(k => k.label)
+    const rows = kpiScorecard.filter((k) => k.current != null)
+    if (!rows.length) return null
     return {
-      labels,
+      labels: rows.map((k) => k.label),
       datasets: [
         {
           label: 'Current',
-          data: kpiScorecard.map(k => k.current),
-          backgroundColor: kpiScorecard.map(k =>
-            k.status === 'Met' ? 'rgba(16,185,129,0.7)' :
-            k.status === 'Close' ? 'rgba(245,158,11,0.7)' :
-            'rgba(239,68,68,0.7)'
-          ),
+          data: rows.map((k) => k.current),
+          backgroundColor: rows.map((k) => (k.status === 'Met' ? 'rgba(16,185,129,0.7)' : k.status === 'Close' ? 'rgba(245,158,11,0.7)' : 'rgba(239,68,68,0.7)')),
           borderRadius: 4,
         },
         {
-          label: 'Target',
-          data: kpiScorecard.map(k => k.target),
-          backgroundColor:'var(--text-muted)',
-          borderColor:'var(--text-muted)',
-          borderWidth: 1,
-          borderRadius: 4,
+          label: 'Target', data: rows.map((k) => k.target),
+          backgroundColor: 'var(--text-muted)', borderColor: 'var(--text-muted)', borderWidth: 1, borderRadius: 4,
         },
       ],
     }
   }, [kpiScorecard])
 
-  // ── Corrective action stats ───────────────────────────────────────────────────
+  const actionStats = useMemo(() => buildActionStats(actions, computedAt), [actions, computedAt])
+  const [actionStatus, setActionStatus] = useState('all')
+  const [actionPriority, setActionPriority] = useState('all')
+  const [overdueOnly, setOverdueOnly] = useState(false)
+  const actionRows = useMemo(
+    () => filterActions(actionStats.openTable, { status: actionStatus, priority: actionPriority, overdueOnly }),
+    [actionStats, actionStatus, actionPriority, overdueOnly],
+  )
+  const roiSummary = useMemo(() => buildRoiSummary(actions, actionStats, metrics, opportunities), [actions, actionStats, metrics, opportunities])
 
-  const actionStats = useMemo(() => {
-    const open        = actions.filter(a => a.status === 'Open')
-    const inProgress  = actions.filter(a => a.status === 'In Progress')
-    const closed      = actions.filter(a => a.status === 'Closed')
-    const overdue     = actions.filter(a => a.status !== 'Closed' && daysOpen(a.created_at) > 14)
-    const openTable   = actions.filter(a => a.status !== 'Closed').sort((a, b) => {
-      const po = { High: 0, Medium: 1, Low: 2 }
-      return (po[a.priority] ?? 1) - (po[b.priority] ?? 1)
-    })
-    return { open, inProgress, closed, overdue, openTable }
-  }, [actions])
-  const openActionsPager = usePagedRows(actionStats.openTable)
+  const actionColumns = useMemo(() => [
+    { id: 'title', header: 'Title', accessorFn: (a) => a.title, size: 260, sortingFn: nullLastSort,
+      cell: ({ getValue }) => <span className="text-[var(--text-secondary)] line-clamp-2">{getValue() || 'N/A'}</span> },
+    { id: 'site', header: 'Site', accessorFn: (a) => a.site ?? null, size: 110, sortingFn: nullLastSort, cell: ({ getValue }) => getValue() ?? 'N/A' },
+    { id: 'priority', header: 'Priority', accessorFn: (a) => ({ High: 0, Medium: 1, Low: 2 }[a.priority] ?? 1), size: 100,
+      meta: { exportValue: (a) => a.priority },
+      cell: ({ row }) => (
+        <span className={`px-1.5 py-0.5 rounded text-[11px] font-semibold ${PRIORITY_BADGE[row.original.priority] ?? PRIORITY_BADGE.Medium}`}>{row.original.priority || 'N/A'}</span>
+      ) },
+    { id: 'days_open', header: 'Days Open', accessorFn: (a) => a.days_open, size: 110, sortingFn: nullLastSort, meta: { align: 'right' },
+      cell: ({ row }) => (
+        <span className={`tabular-nums font-medium ${row.original.overdue ? 'text-orange-400' : 'text-[var(--text-muted)]'}`}>
+          {row.original.days_open == null ? 'N/A' : `${row.original.days_open}d`}
+          {row.original.overdue && <span className="ml-1 text-[10px] text-orange-500">OVERDUE</span>}
+        </span>
+      ) },
+    { id: 'status', header: 'Status', accessorFn: (a) => a.status, size: 110,
+      cell: ({ getValue }) => <span className={`px-1.5 py-0.5 rounded text-[11px] ${STATUS_COLORS[getValue()] ?? STATUS_COLORS.Open}`}>{getValue() || 'N/A'}</span> },
+    { id: 'action', header: 'Action', enableSorting: false, size: 100, meta: { export: false },
+      cell: ({ row }) => (
+        <button
+          type="button"
+          onClick={() => handleCloseAction(row.original.id)}
+          disabled={closingId === row.original.id}
+          aria-label={`Close action: ${row.original.title}`}
+          className="px-3 min-h-[36px] rounded bg-green-800/50 hover:bg-green-700/50 text-green-300 text-xs transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]"
+        >
+          {closingId === row.original.id ? 'Closing' : 'Close'}
+        </button>
+      ) },
+  ], [closingId, handleCloseAction])
 
-  // ── ROI summary ───────────────────────────────────────────────────────────────
-
-  const roiSummary = useMemo(() => {
-    // Actual fleet average cost only; when there is no cost data the ROI estimate
-    // stays at 0 rather than being fabricated from a settings default.
-    const avgTyreCost = Number(metrics.avgCostPerTyre) || 0
-    const closedCritical = actionStats.closed.filter(a => a.priority === 'High').length
-    const openCritical   = actionStats.open.filter(a => a.priority === 'High').length
-    const costAvoidance  = closedCritical * avgTyreCost * 3
-    const backlogRisk    = openCritical   * avgTyreCost * 2
-
-    const allOpps = Object.values(opportunities).flat()
-    const totalSaving = allOpps.reduce((s, o) => s + (o.saving ?? 0), 0)
-
-    return {
-      totalRaised: actions.length,
-      totalClosed: actionStats.closed.length,
-      costAvoidance,
-      backlogRisk,
-      totalSaving,
-    }
-  }, [actions, actionStats, metrics, opportunities])
+  const scorecardColumns = useMemo(() => [
+    { id: 'label', header: 'Metric', accessorFn: (k) => k.label },
+    { id: 'current', header: 'Current', accessorFn: (k) => k.current, sortingFn: nullLastSort, meta: { align: 'right' },
+      cell: ({ row }) => <span className="font-mono">{row.original.fmt(row.original.current)}</span> },
+    { id: 'target', header: 'Target', accessorFn: (k) => k.target, meta: { align: 'right' },
+      cell: ({ row }) => <span className="font-mono text-[var(--text-muted)]">{row.original.fmt(row.original.target)}</span> },
+    { id: 'gap', header: 'Gap', accessorFn: (k) => k.gap, sortingFn: nullLastSort, meta: { align: 'right' },
+      cell: ({ row }) => {
+        const k = row.original
+        return (
+          <span className={`font-mono text-xs ${k.status === 'Met' ? 'text-green-400' : k.status === 'Close' ? 'text-yellow-400' : k.status === 'No data' ? 'text-[var(--text-muted)]' : 'text-red-400'}`}>
+            {k.gap != null ? (k.gap >= 0 ? '+' : '') + k.fmt(k.gap) : 'N/A'}
+          </span>
+        )
+      } },
+    { id: 'status', header: 'Status', accessorFn: (k) => k.status, meta: { align: 'right' },
+      cell: ({ getValue }) => (
+        <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
+          getValue() === 'Met' ? 'bg-green-900/50 text-green-300 border border-green-700/50'
+            : getValue() === 'Close' ? 'bg-yellow-900/50 text-yellow-300 border border-yellow-700/50'
+              : getValue() === 'No data' ? 'bg-[var(--surface-2)] text-[var(--text-muted)] border border-[var(--input-border)]'
+                : 'bg-red-900/50 text-red-300 border border-red-700/50'
+        }`}>{getValue()}</span>
+      ) },
+  ], [])
 
   // ── Exports ───────────────────────────────────────────────────────────────────
 
   const handleExcelExport = useCallback(() => {
+    if (!actionStats.all.length) return
     exportToExcel(
-      actions.map(a => ({
-        ...a,
-        days_open: daysOpen(a.created_at),
-        overdue: daysOpen(a.created_at) > 14 && a.status !== 'Closed' ? 'Yes' : 'No',
-      })),
-      ['title','site','priority','status','days_open','overdue','created_at','resolved_at','description'],
-      ['Title','Site','Priority','Status','Days Open','Overdue','Created','Resolved','Description'],
-      'continuous_improvement',
+      actionExportRows(actionStats.all),
+      ACTION_EXPORT_COLS,
+      ACTION_EXPORT_HEADERS,
+      reportFileName('TyrePulse Continuous Improvement Actions', reportDateLabel()),
       'Actions',
     )
-  }, [actions])
+  }, [actionStats])
 
   const handlePdfExport = useCallback(() => {
+    if (!actionStats.all.length) return
+    const cols = ['title', 'site', 'priority', 'status', 'days_open', 'overdue']
     exportToPdf(
-      actions.map(a => ({
-        ...a,
-        days_open: daysOpen(a.created_at),
-      })),
-      ['title','site','priority','status','days_open'],
-      ['Title','Site','Priority','Status','Days Open'],
-      'Continuous Improvement Report',
-      'continuous_improvement',
+      actionExportRows(actionStats.all),
+      cols.map((k) => ({ key: k, header: ACTION_EXPORT_HEADERS[ACTION_EXPORT_COLS.indexOf(k)] })),
+      'Continuous Improvement Report: Corrective Actions',
+      reportFileName('TyrePulse Continuous Improvement', reportDateLabel()),
+      'landscape',
     )
-  }, [actions])
+  }, [actionStats])
 
   // ── Render ────────────────────────────────────────────────────────────────────
 
@@ -1109,7 +532,21 @@ export default function ContinuousImprovement() {
     )
   }
 
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-64 gap-4 text-center" role="alert">
+        <XCircle size={36} className="text-red-400" aria-hidden="true" />
+        <p className="text-red-400 font-medium">{error}</p>
+        <p className="text-xs text-[var(--text-muted)] max-w-sm">The improvement data could not be loaded, so no score or opportunity is shown rather than a misleading zero.</p>
+        <button type="button" onClick={load} className="btn-primary min-h-[44px] px-4 inline-flex items-center gap-2">
+          <RefreshCw size={14} aria-hidden="true" /> Retry
+        </button>
+      </div>
+    )
+  }
+
   const totalOpps = Object.values(opportunities).reduce((s, arr) => s + arr.length, 0)
+  const noData = !records.length && !actions.length && !inspections.length
 
   return (
     <div className="text-[var(--text-secondary)] space-y-6">
@@ -1132,23 +569,29 @@ export default function ContinuousImprovement() {
             ]}
           />
           <button
+            type="button"
             onClick={handleExcelExport}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-700 hover:bg-green-600 text-white text-xs font-medium transition-colors"
+            disabled={!actionStats.all.length}
+            className="disabled:opacity-50 min-h-[44px] flex items-center gap-1.5 px-3 rounded-lg bg-green-700 hover:bg-green-600 text-white text-xs font-medium transition-colors"
           >
             <Download size={13} /> Excel
           </button>
           <button
+            type="button"
             onClick={handlePdfExport}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-700 hover:bg-red-600 text-white text-xs font-medium transition-colors"
+            disabled={!actionStats.all.length}
+            className="disabled:opacity-50 min-h-[44px] flex items-center gap-1.5 px-3 rounded-lg bg-red-700 hover:bg-red-600 text-white text-xs font-medium transition-colors"
           >
             <FileText size={13} /> PDF
           </button>
         </>}
       />
 
-      {error && (
-        <div className="bg-red-950/50 border border-red-700/50 rounded-xl p-4 flex items-center gap-3 text-red-300 text-sm">
-          <XCircle size={16} /> {error}
+      {noData && (
+        <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-6 text-center">
+          <Info size={22} className="text-[var(--text-dim)] mx-auto mb-2" aria-hidden="true" />
+          <p className="text-sm text-[var(--text-secondary)] font-medium">No tyre, inspection or corrective action records yet</p>
+          <p className="text-xs text-[var(--text-muted)] mt-1">Scores and opportunities appear once data is recorded for this country.</p>
         </div>
       )}
 
@@ -1164,10 +607,13 @@ export default function ContinuousImprovement() {
             <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider">Improvement Programme Score</p>
             <div className="flex items-end gap-2">
               <span className={`text-6xl font-black tabular-nums ${scoreColor(improvementScore.total)}`}>
-                {improvementScore.total}
+                {improvementScore.total ?? 'N/A'}
               </span>
               <span className="text-[var(--text-dim)] text-xl mb-2">/100</span>
             </div>
+            {improvementScore.total != null && improvementScore.measured < 4 && (
+              <span className="text-[11px] text-[var(--text-dim)]">Scaled over {improvementScore.measured} of 4 measurable components</span>
+            )}
             {improvementScore.delta != null && (
               <span className={`flex items-center gap-1 text-xs font-medium ${improvementScore.delta >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                 {improvementScore.delta >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
@@ -1187,13 +633,13 @@ export default function ContinuousImprovement() {
               <div key={item.label} className="bg-[var(--input-bg)]/60 rounded-lg p-3">
                 <p className="text-xs text-[var(--text-muted)] mb-1">{item.label}</p>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-lg font-bold" style={{ color: item.color }}>{item.pts}</span>
+                  <span className="text-lg font-bold" style={{ color: item.pts == null ? 'var(--text-muted)' : item.color }}>{item.pts ?? 'N/A'}</span>
                   <span className="text-xs text-[var(--text-dim)]">/{item.max}</span>
                 </div>
                 <div className="h-1.5 bg-[var(--input-bg)] rounded-full overflow-hidden">
                   <div
                     className="h-full rounded-full transition-all"
-                    style={{ width: `${(item.pts / item.max) * 100}%`, background: item.color }}
+                    style={{ width: `${((item.pts ?? 0) / item.max) * 100}%`, background: item.color }}
                   />
                 </div>
               </div>
@@ -1206,7 +652,7 @@ export default function ContinuousImprovement() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { label: 'Total Actions Raised',    value: fmt(roiSummary.totalRaised),              icon: Activity,      color: 'text-blue-400',   desc: 'All time' },
-          { label: 'Actions Closed',          value: fmt(roiSummary.totalClosed),              icon: CheckCircle,   color: 'text-green-400',  desc: `${fmt(metrics.closeRate, 0)}% close rate` },
+          { label: 'Actions Closed',          value: fmt(roiSummary.totalClosed),              icon: CheckCircle,   color: 'text-green-400',  desc: metrics.closeRate == null ? 'No actions raised' : `${fmt(metrics.closeRate, 0)}% close rate` },
           { label: 'Est. Cost Avoidance',     value: fmtCur(roiSummary.costAvoidance, activeCurrency), icon: DollarSign, color: 'text-emerald-400', desc: 'From closed critical actions' },
           { label: 'Open Action Backlog Risk',value: fmtCur(roiSummary.backlogRisk, activeCurrency),  icon: AlertTriangle,color: 'text-orange-400', desc: 'Open critical actions' },
         ].map(card => {
@@ -1229,7 +675,8 @@ export default function ContinuousImprovement() {
           <Award size={18} className="text-emerald-400 shrink-0" />
           <p className="text-sm text-emerald-300">
             <span className="font-semibold">{totalOpps} improvement opportunities identified</span> with a combined estimated annual saving potential of{' '}
-            <span className="font-bold">{fmtCur(roiSummary.totalSaving, activeCurrency)}</span>.
+            <span className="font-bold">{fmtCur(roiSummary.totalSaving, activeCurrency)}</span>
+            {roiSummary.unpricedOpportunities > 0 ? ` (${roiSummary.unpricedOpportunities} further opportunities could not be priced from measured data)` : ''}.
           </p>
         </div>
       )}
@@ -1273,7 +720,7 @@ export default function ContinuousImprovement() {
                     ...CHART_BASE,
                     scales: {
                       ...CHART_BASE.scales,
-                      y: { ...CHART_BASE.scales.y, title: { display: true, text: 'CPK', color: '#6b7280', font: { size: 10 } } },
+                      y: { ...CHART_BASE.scales.y, title: { display: true, text: 'CPK', color: 'var(--text-muted)', font: { size: 10 } } },
                     },
                   }}
                 />
@@ -1293,7 +740,7 @@ export default function ContinuousImprovement() {
                     ...CHART_BASE,
                     scales: {
                       ...CHART_BASE.scales,
-                      y: { ...CHART_BASE.scales.y, title: { display: true, text: 'Failure %', color: '#6b7280', font: { size: 10 } } },
+                      y: { ...CHART_BASE.scales.y, title: { display: true, text: 'Failure %', color: 'var(--text-muted)', font: { size: 10 } } },
                     },
                   }}
                 />
@@ -1366,62 +813,42 @@ export default function ContinuousImprovement() {
             </p>
             {actionStats.openTable.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-36 gap-2 text-[var(--text-dim)]">
-                <CheckCircle size={24} className="text-green-600" />
-                <p className="text-sm">All corrective actions are closed</p>
+                <CheckCircle size={24} className="text-green-600" aria-hidden="true" />
+                <p className="text-sm">{actions.length ? 'All corrective actions are closed' : 'No corrective actions raised yet'}</p>
               </div>
             ) : (
-              <div className="overflow-auto max-h-52">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="text-[var(--text-muted)] border-b border-[var(--input-border)]">
-                      <th className="text-left pb-2 pr-2 font-medium">Title</th>
-                      <th className="text-left pb-2 pr-2 font-medium">Site</th>
-                      <th className="text-left pb-2 pr-2 font-medium">Priority</th>
-                      <th className="text-left pb-2 pr-2 font-medium">Days Open</th>
-                      <th className="text-left pb-2 pr-2 font-medium">Status</th>
-                      <th className="text-left pb-2 font-medium">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {openActionsPager.pageRows.map(a => {
-                      const days = daysOpen(a.created_at)
-                      const isOverdue = days > 14
-                      return (
-                        <tr key={a.id} className="border-b border-[var(--input-border)]/60 hover:bg-[var(--input-bg)]/30">
-                          <td className="py-1.5 pr-2 max-w-[180px] truncate text-[var(--text-secondary)]">{a.title}</td>
-                          <td className="py-1.5 pr-2 text-[var(--text-muted)]">{a.site ?? '-'}</td>
-                          <td className="py-1.5 pr-2">
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${PRIORITY_BADGE[a.priority] ?? PRIORITY_BADGE.Medium}`}>
-                              {a.priority}
-                            </span>
-                          </td>
-                          <td className={`py-1.5 pr-2 font-medium tabular-nums ${isOverdue ? 'text-orange-400' : 'text-[var(--text-muted)]'}`}>
-                            {days}d {isOverdue && <span className="text-orange-500 text-[10px]">OVERDUE</span>}
-                          </td>
-                          <td className="py-1.5 pr-2">
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] ${STATUS_COLORS[a.status] ?? STATUS_COLORS.Open}`}>
-                              {a.status}
-                            </span>
-                          </td>
-                          <td className="py-1.5">
-                            <button
-                              onClick={() => handleCloseAction(a.id)}
-                              disabled={closingId === a.id}
-                              className="px-2 py-0.5 rounded bg-green-800/50 hover:bg-green-700/50 text-green-300 text-[10px] transition-colors disabled:opacity-50"
-                            >
-                              {closingId === a.id ? '...' : 'Close'}
-                            </button>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-                <TablePagination {...openActionsPager} />
-                {actionStats.openTable.length > 30 && (
-                  <p className="text-xs text-[var(--text-dim)] text-center pt-2">{actionStats.openTable.length - 30} more actions not shown</p>
-                )}
-              </div>
+              <>
+                <div className="flex flex-wrap gap-2 mb-3">
+                  <select aria-label="Filter by status" value={actionStatus} onChange={(e) => setActionStatus(e.target.value)}
+                    className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-2 min-h-[44px] text-xs text-[var(--text-secondary)]">
+                    <option value="all">All statuses</option>
+                    <option value="Open">Open</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Overdue">Overdue status</option>
+                  </select>
+                  <select aria-label="Filter by priority" value={actionPriority} onChange={(e) => setActionPriority(e.target.value)}
+                    className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-2 min-h-[44px] text-xs text-[var(--text-secondary)]">
+                    <option value="all">All priorities</option>
+                    <option value="High">High</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Low">Low</option>
+                  </select>
+                  <label className="inline-flex items-center gap-2 text-xs text-[var(--text-secondary)] min-h-[44px] cursor-pointer">
+                    <input type="checkbox" checked={overdueOnly} onChange={(e) => setOverdueOnly(e.target.checked)} />
+                    Over {OVERDUE_ACTION_DAYS} days only
+                  </label>
+                </div>
+                <EnterpriseTable
+                  columns={actionColumns}
+                  data={actionRows}
+                  getRowId={(a) => String(a.id)}
+                  enableColumnFilters={false}
+                  enableExport={false}
+                  searchPlaceholder="Search actions"
+                  initialPageSize={25}
+                  emptyMessage="No open actions match these filters"
+                />
+              </>
             )}
           </div>
         </div>
@@ -1446,43 +873,18 @@ export default function ContinuousImprovement() {
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
             {/* Table */}
-            <div className="lg:col-span-3 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-xs text-[var(--text-muted)] border-b border-[var(--input-border)] bg-[var(--input-bg)]/40">
-                    <th className="text-left px-4 py-2.5 font-medium">Metric</th>
-                    <th className="text-right px-4 py-2.5 font-medium">Current</th>
-                    <th className="text-right px-4 py-2.5 font-medium">Target</th>
-                    <th className="text-right px-4 py-2.5 font-medium">Gap</th>
-                    <th className="text-right px-4 py-2.5 font-medium">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {kpiScorecard.map(k => (
-                    <tr key={k.metric} className="border-b border-[var(--input-border)]/60 hover:bg-[var(--input-bg)]/20">
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{k.label}</td>
-                      <td className="px-4 py-2.5 text-right font-mono text-[var(--text-secondary)]">{k.fmt(k.current)}</td>
-                      <td className="px-4 py-2.5 text-right font-mono text-[var(--text-muted)]">{k.fmt(k.target)}</td>
-                      <td className={`px-4 py-2.5 text-right font-mono text-xs ${
-                        k.status === 'Met' ? 'text-green-400' :
-                        k.status === 'Close' ? 'text-yellow-400' :
-                        'text-red-400'
-                      }`}>
-                        {k.gap != null ? (k.gap >= 0 ? '+' : '') + k.fmt(k.gap) : '-'}
-                      </td>
-                      <td className="px-4 py-2.5 text-right">
-                        <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                          k.status === 'Met'       ? 'bg-green-900/50 text-green-300 border border-green-700/50' :
-                          k.status === 'Close'     ? 'bg-yellow-900/50 text-yellow-300 border border-yellow-700/50' :
-                          'bg-red-900/50 text-red-300 border border-red-700/50'
-                        }`}>
-                          {k.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="lg:col-span-3 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-3 min-w-0">
+              <EnterpriseTable
+                columns={scorecardColumns}
+                data={kpiScorecard}
+                getRowId={(k) => k.metric}
+                enableGlobalFilter={false}
+                enableColumnFilters={false}
+                enableColumnVisibility={false}
+                enableExport={false}
+                initialPageSize={25}
+                emptyMessage="No KPI targets configured"
+              />
             </div>
 
             {/* Bar chart */}
@@ -1500,7 +902,7 @@ export default function ContinuousImprovement() {
                       },
                       plugins: {
                         ...CHART_BASE.plugins,
-                        legend: { labels: { color: '#9ca3af', font: { size: 10 }, boxWidth: 10 } },
+                        legend: { labels: { color: 'var(--text-secondary)', font: { size: 10 }, boxWidth: 10 } },
                       },
                     }}
                   />
@@ -1519,7 +921,7 @@ export default function ContinuousImprovement() {
           <Info size={13} /> Score Methodology
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs text-[var(--text-muted)]">
-          <div className="flex gap-2"><span className="text-green-400 font-semibold">≥75</span> - Excellent: sustain & extend programme</div>
+          <div className="flex gap-2"><span className="text-green-400 font-semibold">75+</span> - Excellent: sustain & extend programme</div>
           <div className="flex gap-2"><span className="text-yellow-400 font-semibold">50-74</span> - Progressing: intensify action tracking</div>
           <div className="flex gap-2"><span className="text-red-400 font-semibold">&lt;50</span> - Critical: immediate escalation required</div>
           <div className="flex gap-2"><span className="text-[var(--text-muted)] font-semibold">Score</span> = Cost (25) + Reliability (25) + Compliance (25) + Close Rate (25)</div>

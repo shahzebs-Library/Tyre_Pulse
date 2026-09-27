@@ -8,21 +8,22 @@
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
-  FileCheck, AlertTriangle, Clock, CheckCircle2, User, Search, X, Filter,
-  Plus, Pencil, Trash2, FileSpreadsheet, FileText, Loader2, Save,
+  FileCheck, AlertTriangle, Clock, CheckCircle2, User, Search, X,
+  Plus, Pencil, Trash2, FileSpreadsheet, FileText, Loader2, Save, RotateCcw, Users, ShieldCheck,
 } from 'lucide-react'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listDriverDocuments, createDriverDocument, updateDriverDocument, deleteDriverDocument,
 } from '../lib/api/driverDocuments'
 import {
-  docStatus, daysToExpiry, summarizeDriverDocuments, DOC_STATUS_META,
-  DOC_TYPES, DOC_TYPE_LABELS, EXPIRING_SOON_DAYS,
-} from '../lib/driverDocuments'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+  enrichDocuments, filterDocuments, typeOptions as buildTypeOptions, driverOptions as buildDriverOptions,
+  documentKpis, typeBreakdown, documentExport, docTypeLabel, expiryPhrase,
+  DOC_STATUS_META, DOC_TYPES, DOC_TYPE_LABELS, EXPIRING_SOON_DAYS, URGENT_DAYS,
+} from '../lib/driverDocumentsAnalytics'
+import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
-import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import { isMissingRelation } from '../lib/api/_client'
 
 const STATUS_STYLES = {
@@ -30,13 +31,13 @@ const STATUS_STYLES = {
   expiring: 'bg-amber-900/40 text-amber-300 border border-amber-700/50',
   expired: 'bg-red-900/40 text-red-300 border border-red-700/50',
 }
+const STATUS_ICON = { valid: CheckCircle2, expiring: Clock, expired: AlertTriangle }
 
 function fmtDate(v) {
   if (!v) return 'N/A'
   const d = new Date(v)
   return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
 }
-const docTypeLabel = (t) => DOC_TYPE_LABELS[t] || (t ? String(t).replace(/_/g, ' ') : 'N/A')
 
 const EMPTY_FORM = {
   driver_name: '', doc_type: 'license', doc_number: '', issuer: '',
@@ -53,6 +54,7 @@ export default function DriverDocuments() {
 
   const [statusFilter, setStatusFilter] = useState('all')
   const [typeFilter, setTypeFilter] = useState('all')
+  const [driverFilter, setDriverFilter] = useState('all')
   const [search, setSearch] = useState('')
 
   const [modalOpen, setModalOpen] = useState(false)
@@ -63,17 +65,22 @@ export default function DriverDocuments() {
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
 
-  const NOW = Date.now()
+  const [loadError, setLoadError] = useState('')
+  // Reference clock captured per load so every derived band is stable
+  // between renders (a per-render Date.now() recomputed every memo).
+  const [now, setNow] = useState(() => Date.now())
 
   const load = useCallback(async () => {
-    setRefreshing(true); setError(''); setMissing(false)
+    setRefreshing(true); setError(''); setLoadError(''); setMissing(false)
     try {
       const data = await listDriverDocuments({ country: activeCountry })
       setRows(Array.isArray(data) ? data : [])
+      setNow(Date.now())
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) { setMissing(true); setRows([]) }
-      else { setError(toUserMessage(err, 'Could not load driver documents.')); setRows([]) }
+      // A failed read is NOT "no documents": keep rows null so KPIs read N/A.
+      else { setLoadError(toUserMessage(err, 'Could not load driver documents.')); setRows(null) }
     } finally {
       setRefreshing(false)
     }
@@ -81,38 +88,18 @@ export default function DriverDocuments() {
 
   useEffect(() => { load() }, [load])
 
-  // Derive live status for every row against the reference clock (pure lib).
-  const enriched = useMemo(
-    () => (rows || []).map((r) => {
-      const status = docStatus(r, NOW)
-      return { ...r, _status: status, _days: daysToExpiry(r, NOW) }
-    }),
-    [rows, NOW],
+  const enriched = useMemo(() => enrichDocuments(rows || [], now), [rows, now])
+  const kpi = useMemo(() => documentKpis(rows || [], now), [rows, now])
+  const breakdown = useMemo(() => typeBreakdown(enriched), [enriched])
+  const typeOptions = useMemo(() => buildTypeOptions(enriched), [enriched])
+  const driverOptions = useMemo(() => buildDriverOptions(enriched), [enriched])
+  const filtered = useMemo(
+    () => filterDocuments(enriched, { status: statusFilter, type: typeFilter, driver: driverFilter, search }),
+    [enriched, statusFilter, typeFilter, driverFilter, search],
   )
-  const summary = useMemo(() => summarizeDriverDocuments(rows || [], NOW), [rows, NOW])
 
-  const typeOptions = useMemo(() => {
-    const present = new Set((enriched || []).map((r) => r.doc_type).filter(Boolean))
-    const ordered = DOC_TYPES.filter((t) => present.has(t))
-    const extra = [...present].filter((t) => !DOC_TYPES.includes(t)).sort()
-    return [...ordered, ...extra]
-  }, [enriched])
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return enriched.filter((r) => {
-      if (statusFilter !== 'all' && r._status !== statusFilter) return false
-      if (typeFilter !== 'all' && r.doc_type !== typeFilter) return false
-      if (q) {
-        const hay = `${r.driver_name || ''} ${r.doc_type || ''} ${r.doc_number || ''} ${r.issuer || ''}`.toLowerCase()
-        if (!hay.includes(q)) return false
-      }
-      return true
-    })
-  }, [enriched, statusFilter, typeFilter, search])
-
-  const clearFilters = () => { setStatusFilter('all'); setTypeFilter('all'); setSearch('') }
-  const hasFilters = statusFilter !== 'all' || typeFilter !== 'all' || search
+  const clearFilters = () => { setStatusFilter('all'); setTypeFilter('all'); setDriverFilter('all'); setSearch('') }
+  const hasFilters = statusFilter !== 'all' || typeFilter !== 'all' || driverFilter !== 'all' || !!search
 
   // ── CRUD handlers ────────────────────────────────────────────────────────────
   const openCreate = () => { setEditing(null); setForm(EMPTY_FORM); setFormError(''); setModalOpen(true) }
@@ -173,26 +160,80 @@ export default function DriverDocuments() {
     }
   }, [confirmDelete])
 
-  // ── Export ───────────────────────────────────────────────────────────────────
-  const EXPORT_COLS = ['driver_name', 'doc_type', 'doc_number', 'issuer', 'issue_date', 'expiry_date', 'status']
-  const EXPORT_HEADERS = ['Driver', 'Document type', 'Doc number', 'Issuer', 'Issue date', 'Expiry date', 'Status']
-  // Paged, not capped: this table used to render filtered.slice(0, 500) with no
-  // way to reach row 501. The exports below still cover `filtered` in full.
-  const pager = usePagedRows(filtered)
+  // ── Export (the full filtered set, never just the visible page) ──────────
+  const doExport = async (format) => {
+    const shaped = documentExport(filtered)
+    const file = reportFileName('Driver Documents', activeCountry !== 'All' ? activeCountry : '')
+    try {
+      if (format === 'pdf') {
+        await exportToPdf(shaped.rows, shaped.keys.map((k, i) => ({ key: k, header: shaped.headers[i] })), 'Driver Documents', file, 'landscape')
+      } else {
+        await exportToExcel(shaped.rows, shaped.keys, shaped.headers, file)
+      }
+    } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) }
+  }
 
-  const exportRows = filtered.map((r) => ({
-    driver_name: r.driver_name || '',
-    doc_type: docTypeLabel(r.doc_type),
-    doc_number: r.doc_number || '', issuer: r.issuer || '',
-    issue_date: r.issue_date || '', expiry_date: r.expiry_date || '',
-    status: DOC_STATUS_META[r._status]?.label || r._status || '',
-  }))
-
+  const na = (v) => (rows === null || v == null ? 'N/A' : v)
   const kpis = [
-    { label: 'Total documents', value: summary.total, icon: FileCheck, tone: 'text-[var(--text-primary)]' },
-    { label: 'Valid', value: summary.byStatus.valid, icon: CheckCircle2, tone: 'text-green-400' },
-    { label: `Expiring (≤${EXPIRING_SOON_DAYS}d)`, value: summary.byStatus.expiring, icon: Clock, tone: 'text-amber-400' },
-    { label: 'Expired', value: summary.byStatus.expired, icon: AlertTriangle, tone: 'text-red-400' },
+    { label: 'Total documents', value: na(kpi.total), icon: FileCheck, tone: 'text-[var(--text-primary)]', filter: 'all' },
+    { label: 'Valid', value: na(kpi.valid), icon: CheckCircle2, tone: 'text-green-400', filter: 'valid' },
+    { label: `Expiring in ${EXPIRING_SOON_DAYS} days`, value: na(kpi.expiring), icon: Clock, tone: 'text-amber-400', filter: 'expiring', sub: rows === null ? null : `${kpi.urgent} within ${URGENT_DAYS} days` },
+    { label: 'Expired', value: na(kpi.expired), icon: AlertTriangle, tone: 'text-red-400', filter: 'expired' },
+    { label: 'Drivers covered', value: na(kpi.drivers), icon: Users, tone: 'text-[var(--text-primary)]', sub: rows === null ? null : `${kpi.driversWithExpired} with an expired document` },
+    { label: 'Driver compliance', value: rows === null || kpi.compliancePct == null ? 'N/A' : `${kpi.compliancePct}%`, icon: ShieldCheck, tone: 'text-sky-400', sub: 'Drivers with no expired document' },
+  ]
+
+  const columns = [
+    {
+      id: 'driver', header: 'Driver', accessorFn: (r) => r.driver_name || '', size: 200,
+      cell: ({ row }) => (
+        <span className="inline-flex items-center gap-2 font-medium text-[var(--text-primary)]">
+          <User size={14} className="text-[var(--text-muted)] shrink-0" aria-hidden="true" />
+          {row.original.driver_name || 'N/A'}
+        </span>
+      ),
+    },
+    { id: 'type', header: 'Type', accessorFn: (r) => docTypeLabel(r.doc_type), size: 120 },
+    {
+      id: 'number', header: 'Number', accessorFn: (r) => r.doc_number || '', size: 140,
+      cell: ({ row }) => <span className="font-mono text-xs text-[var(--text-secondary)]">{row.original.doc_number || 'N/A'}</span>,
+    },
+    { id: 'issuer', header: 'Issuer', accessorFn: (r) => r.issuer || 'N/A', size: 150 },
+    { id: 'issue', header: 'Issue', accessorFn: (r) => r.issue_date || '', size: 110, cell: ({ row }) => fmtDate(row.original.issue_date) },
+    {
+      id: 'expiry', header: 'Expiry', accessorFn: (r) => (r._days == null ? Number.POSITIVE_INFINITY : r._days), size: 170,
+      cell: ({ row }) => {
+        const r = row.original
+        const cls = r._status === 'expired' ? 'text-red-400 font-medium' : r._status === 'expiring' ? 'text-amber-400 font-medium' : 'text-[var(--text-secondary)]'
+        return (
+          <span className={cls}>
+            {fmtDate(r.expiry_date)}
+            <span className="block text-[11px] opacity-80">{expiryPhrase(r._days)}</span>
+          </span>
+        )
+      },
+    },
+    {
+      id: 'status', header: 'Status', accessorFn: (r) => DOC_STATUS_META[r._status]?.label || '', size: 130,
+      cell: ({ row }) => {
+        const st = row.original._status
+        const Icon = STATUS_ICON[st] || CheckCircle2
+        return (
+          <span className={`badge text-[11px] px-2 py-0.5 rounded inline-flex items-center gap-1 ${STATUS_STYLES[st]}`}>
+            <Icon size={11} aria-hidden="true" />{DOC_STATUS_META[st]?.label}
+          </span>
+        )
+      },
+    },
+    {
+      id: 'actions', header: '', enableSorting: false, size: 110, meta: { export: false },
+      cell: ({ row }) => (
+        <div className="flex items-center gap-1">
+          <button onClick={() => openEdit(row.original)} className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label={`Edit document for ${row.original.driver_name || 'driver'}`}><Pencil size={15} /></button>
+          <button onClick={() => setConfirmDelete(row.original)} className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" aria-label={`Delete document for ${row.original.driver_name || 'driver'}`}><Trash2 size={15} /></button>
+        </div>
+      ),
+    },
   ]
 
   return (
@@ -205,14 +246,14 @@ export default function DriverDocuments() {
         refreshing={refreshing}
         updatedAt={updatedAt}
         actions={
-          <div className="flex items-center gap-2">
-            <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'driver_documents') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+          <div className="flex flex-wrap items-center gap-2">
+            <button onClick={() => doExport('excel')} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!filtered.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Driver Documents', 'driver_documents', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={() => doExport('pdf')} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!filtered.length}>
               <FileText size={14} /> PDF
             </button>
-            <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5">
+            <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px]">
               <Plus size={14} /> New document
             </button>
           </div>
@@ -223,7 +264,7 @@ export default function DriverDocuments() {
         <div className="card border border-amber-800/50 flex items-start gap-3">
           <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
           <div>
-            <p className="text-amber-300 font-medium">Driver documents aren’t enabled on this database yet.</p>
+            <p className="text-amber-300 font-medium">Driver documents are not enabled on this database yet.</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">
               Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V154_DRIVER_DOCUMENTS.sql</span>, then reload.
             </p>
@@ -231,112 +272,124 @@ export default function DriverDocuments() {
         </div>
       )}
 
+      {loadError && (
+        <div role="alert" className="card border border-red-800/50 flex flex-wrap items-start gap-3">
+          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
+          <div className="flex-1 min-w-[200px]">
+            <p className="text-red-300 font-medium">Driver documents could not be loaded.</p>
+            <p className="text-[var(--text-muted)] text-sm mt-1">{loadError} The figures below are not available until the register loads.</p>
+          </div>
+          <button onClick={load} disabled={refreshing} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><RotateCcw size={14} /> Retry</button>
+        </div>
+      )}
+
       {error && (
-        <div className="card border border-red-800/50 flex items-start gap-3">
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-          <div><p className="text-red-300 font-medium">Something went wrong.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
+        <div role="alert" className="card border border-red-800/50 flex items-start gap-3">
+          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
+          <div className="flex-1"><p className="text-red-300 font-medium">That action did not complete.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
+          <button onClick={() => setError('')} className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)]" aria-label="Dismiss message"><X size={16} /></button>
         </div>
       )}
 
       {/* Expiry banner */}
-      {summary.expiringSoon.length > 0 && (
-        <div className="card border border-amber-800/50 flex items-center gap-3 !py-3">
-          <Clock size={16} className="text-amber-400 shrink-0" />
-          <span className="text-sm text-amber-200">
-            {summary.expiringSoon.length} document{summary.expiringSoon.length === 1 ? '' : 's'} expiring within {EXPIRING_SOON_DAYS} days or already expired. Renewal required.
+      {rows !== null && kpi.renewalQueue > 0 && (
+        <div className="card border border-amber-800/50 flex flex-wrap items-center gap-3 !py-3">
+          <Clock size={16} className="text-amber-400 shrink-0" aria-hidden="true" />
+          <span className="text-sm text-[var(--text-secondary)] flex-1 min-w-[200px]">
+            {kpi.renewalQueue} document{kpi.renewalQueue === 1 ? '' : 's'} expiring within {EXPIRING_SOON_DAYS} days or already expired. Renewal required.
+            {kpi.nextExpiry && <> Next: {kpi.nextExpiry.driver}, {kpi.nextExpiry.type}, {expiryPhrase(kpi.nextExpiry.days)}.</>}
           </span>
+          <button onClick={() => setStatusFilter('expiring')} className="btn-secondary text-xs min-h-[44px]">Show renewals</button>
         </div>
       )}
 
-      {/* KPI tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* KPI tiles (status tiles double as filters) */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         {kpis.map((k) => {
           const Icon = k.icon
-          return (
-            <div key={k.label} className="card">
-              <div className="flex items-center justify-between">
+          const active = k.filter && statusFilter === k.filter && k.filter !== 'all'
+          const body = (
+            <>
+              <div className="flex items-center justify-between gap-2">
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
-                <Icon size={16} className={k.tone} />
+                <Icon size={16} className={k.tone} aria-hidden="true" />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
-            </div>
+              <p className={`text-2xl sm:text-3xl font-bold mt-1 tabular-nums ${k.tone}`}>{k.value}</p>
+              {k.sub && <p className="text-[11px] text-[var(--text-muted)] mt-1">{k.sub}</p>}
+            </>
           )
+          return k.filter ? (
+            <button key={k.label} type="button" onClick={() => setStatusFilter(k.filter)} aria-pressed={active}
+              className={`card text-left min-h-[44px] transition-colors hover:border-[var(--accent)] ${active ? 'ring-2 ring-[var(--accent)]' : ''}`}>
+              {body}
+            </button>
+          ) : <div key={k.label} className="card">{body}</div>
         })}
       </div>
+
+      {/* Type breakdown */}
+      {rows !== null && breakdown.length > 0 && (
+        <div className="card">
+          <p className="text-sm font-semibold text-[var(--text-primary)] mb-3">Documents by type</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {breakdown.map((b) => {
+              const pct = kpi.total ? Math.round((b.total / kpi.total) * 100) : 0
+              return (
+                <div key={b.type}>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-[var(--text-secondary)] capitalize">{b.type}</span>
+                    <span className="text-[var(--text-muted)] tabular-nums">{b.total} ({b.expired} expired, {b.expiring} expiring)</span>
+                  </div>
+                  <div className="h-2 mt-1 rounded bg-[var(--input-bg)] overflow-hidden" role="presentation">
+                    <div className="h-full rounded bg-sky-500/70" style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="card space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <input className="input pl-9 w-full" placeholder="Search driver, doc type, number, issuer…" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+            <input className="input pl-9 w-full min-h-[44px]" aria-label="Search documents" placeholder="Search driver, doc type, number, issuer" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
+          <select className="input min-h-[44px]" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
             <option value="all">All statuses</option>
             <option value="valid">Valid</option>
             <option value="expiring">Expiring soon</option>
             <option value="expired">Expired</option>
           </select>
-          <select className="input" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Document type">
+          <select className="input min-h-[44px]" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Document type">
             <option value="all">All types</option>
             {typeOptions.map((t) => <option key={t} value={t}>{docTypeLabel(t)}</option>)}
           </select>
-          {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
-          <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {summary.total}</span>
+          <select className="input min-h-[44px] max-w-[220px]" value={driverFilter} onChange={(e) => setDriverFilter(e.target.value)} aria-label="Driver">
+            <option value="all">All drivers</option>
+            {driverOptions.map((d) => <option key={d} value={d}>{d}</option>)}
+          </select>
+          {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><X size={14} /> Clear</button>}
+          <span className="text-xs text-[var(--text-muted)] ml-auto" aria-live="polite">{rows === null ? 'N/A' : `${filtered.length} of ${kpi.total}`}</span>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="card overflow-hidden !p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                {['Driver', 'Type', 'Number', 'Issuer', 'Issue', 'Expiry', 'Status', ''].map((h, i) => <th key={i} className="px-4 py-3 font-semibold whitespace-nowrap">{h}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {rows === null ? (
-                [0, 1, 2, 3, 4].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={8} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
-              ) : filtered.length === 0 ? (
-                <tr><td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]"><Filter size={22} className="mx-auto mb-2 opacity-60" />No documents match these filters.</td></tr>
-              ) : (
-                pager.pageRows.map((r) => {
-                  const expClass = r._status === 'expired' ? 'text-red-400 font-medium' : r._status === 'expiring' ? 'text-amber-400 font-medium' : 'text-[var(--text-secondary)]'
-                  return (
-                    <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                      <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">
-                        <span className="inline-flex items-center gap-2">
-                          <User size={14} className="text-[var(--text-muted)] shrink-0" />
-                          {r.driver_name || 'N/A'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] capitalize">{docTypeLabel(r.doc_type)}</td>
-                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{r.doc_number || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.issuer || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtDate(r.issue_date)}</td>
-                      <td className={`px-4 py-2.5 ${expClass}`}>
-                        {fmtDate(r.expiry_date)}
-                        {r._days != null && r.expiry_date && (
-                          <span className="ml-1 text-[11px] opacity-80">({r._days < 0 ? `${Math.abs(r._days)}d ago` : `${r._days}d`})</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${STATUS_STYLES[r._status]}`}>{DOC_STATUS_META[r._status]?.label}</span></td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center gap-1.5">
-                          <button onClick={() => openEdit(r)} className="p-1.5 rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit"><Pencil size={14} /></button>
-                          <button onClick={() => setConfirmDelete(r)} className="p-1.5 rounded-lg hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" aria-label="Delete"><Trash2 size={14} /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-        <TablePagination {...pager} />
-      </div>
+      {/* Register */}
+      {!loadError && (
+        <EnterpriseTable
+          columns={columns}
+          data={filtered}
+          getRowId={(r) => String(r.id)}
+          loading={rows === null}
+          enableGlobalFilter={false}
+          enableColumnFilters={false}
+          enableExport={false}
+          initialPageSize={25}
+          emptyMessage={hasFilters ? 'No documents match these filters.' : missing ? 'Driver documents are not enabled on this database yet.' : 'No driver documents recorded yet. Add the first one with New document.'}
+        />
+      )}
 
       {/* Create / edit modal */}
       {modalOpen && (
@@ -344,48 +397,48 @@ export default function DriverDocuments() {
           <div className="card w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-[var(--text-primary)]">{editing ? 'Edit document' : 'New document'}</h2>
-              <button onClick={() => !saving && setModalOpen(false)} className="p-1.5 rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)]"><X size={18} /></button>
+              <button onClick={() => !saving && setModalOpen(false)} className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)]" aria-label="Close"><X size={18} /></button>
             </div>
             <form onSubmit={submit} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="label">Driver name<span className="text-red-400"> *</span></label>
-                  <input className="input w-full" placeholder="e.g. J. Smith" value={form.driver_name} maxLength={200} onChange={(e) => setField('driver_name', e.target.value)} />
+                  <label htmlFor="dd-f1" className="label">Driver name<span className="text-red-400"> *</span></label>
+                  <input id="dd-f1" className="input w-full" placeholder="e.g. J. Smith" value={form.driver_name} maxLength={200} onChange={(e) => setField('driver_name', e.target.value)} />
                 </div>
                 <div>
-                  <label className="label">Document type</label>
-                  <select className="input w-full" value={form.doc_type} onChange={(e) => setField('doc_type', e.target.value)}>
+                  <label htmlFor="dd-f2" className="label">Document type</label>
+                  <select id="dd-f2" className="input w-full" value={form.doc_type} onChange={(e) => setField('doc_type', e.target.value)}>
                     {DOC_TYPES.map((t) => <option key={t} value={t}>{DOC_TYPE_LABELS[t]}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="label">Document number</label>
-                  <input className="input w-full" value={form.doc_number} maxLength={120} onChange={(e) => setField('doc_number', e.target.value)} />
+                  <label htmlFor="dd-f3" className="label">Document number</label>
+                  <input id="dd-f3" className="input w-full" value={form.doc_number} maxLength={120} onChange={(e) => setField('doc_number', e.target.value)} />
                 </div>
                 <div>
-                  <label className="label">Issuer</label>
-                  <input className="input w-full" placeholder="Issuing authority" value={form.issuer} maxLength={200} onChange={(e) => setField('issuer', e.target.value)} />
+                  <label htmlFor="dd-f4" className="label">Issuer</label>
+                  <input id="dd-f4" className="input w-full" placeholder="Issuing authority" value={form.issuer} maxLength={200} onChange={(e) => setField('issuer', e.target.value)} />
                 </div>
                 <div>
-                  <label className="label">Status</label>
-                  <select className="input w-full" value={form.status} onChange={(e) => setField('status', e.target.value)}>
+                  <label htmlFor="dd-f5" className="label">Status</label>
+                  <select id="dd-f5" className="input w-full" value={form.status} onChange={(e) => setField('status', e.target.value)}>
                     <option value="valid">Valid</option>
                     <option value="expiring">Expiring soon</option>
                     <option value="expired">Expired</option>
                   </select>
                 </div>
                 <div>
-                  <label className="label">Issue date</label>
-                  <input type="date" className="input w-full" value={form.issue_date || ''} onChange={(e) => setField('issue_date', e.target.value)} />
+                  <label htmlFor="dd-f6" className="label">Issue date</label>
+                  <input id="dd-f6" type="date" className="input w-full" value={form.issue_date || ''} onChange={(e) => setField('issue_date', e.target.value)} />
                 </div>
                 <div>
-                  <label className="label">Expiry date</label>
-                  <input type="date" className="input w-full" value={form.expiry_date || ''} onChange={(e) => setField('expiry_date', e.target.value)} />
+                  <label htmlFor="dd-f7" className="label">Expiry date</label>
+                  <input id="dd-f7" type="date" className="input w-full" value={form.expiry_date || ''} onChange={(e) => setField('expiry_date', e.target.value)} />
                 </div>
               </div>
               <div>
-                <label className="label">Notes</label>
-                <textarea className="input w-full min-h-[90px] resize-y" value={form.notes} maxLength={4000} onChange={(e) => setField('notes', e.target.value)} />
+                <label htmlFor="dd-f8" className="label">Notes</label>
+                <textarea id="dd-f8" className="input w-full min-h-[90px] resize-y" value={form.notes} maxLength={4000} onChange={(e) => setField('notes', e.target.value)} />
               </div>
               {formError && (
                 <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
@@ -395,7 +448,7 @@ export default function DriverDocuments() {
               <div className="flex items-center gap-3">
                 <button type="submit" disabled={saving} className="btn-primary inline-flex items-center gap-2 disabled:opacity-60">
                   {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-                  {saving ? 'Saving…' : editing ? 'Save changes' : 'Create document'}
+                  {saving ? 'Saving' : editing ? 'Save changes' : 'Create document'}
                 </button>
                 <button type="button" onClick={() => setModalOpen(false)} disabled={saving} className="btn-secondary">Cancel</button>
               </div>
@@ -423,7 +476,7 @@ export default function DriverDocuments() {
               <button onClick={() => setConfirmDelete(null)} disabled={deleting} className="btn-secondary">Cancel</button>
               <button onClick={doDelete} disabled={deleting} className="btn-primary bg-red-600 hover:bg-red-500 border-red-600 inline-flex items-center gap-2 disabled:opacity-60">
                 {deleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
-                {deleting ? 'Deleting…' : 'Delete'}
+                {deleting ? 'Deleting' : 'Delete'}
               </button>
             </div>
           </div>

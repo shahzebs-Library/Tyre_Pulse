@@ -3,26 +3,30 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   ArrowLeft, FileText, FileSpreadsheet, Lock, User, AlertTriangle,
-  RefreshCw, Award, ShieldAlert, ClipboardList, StickyNote, Gauge,
+  RefreshCw, Award, ShieldAlert, ClipboardList, StickyNote, Gauge, Search, X, Info,
 } from 'lucide-react'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import {
+  buildDriverView, performanceBadge, enrichRecords, filterRecords, optionList, breakdown, recordExport,
+} from '../lib/driverDetailAnalytics'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import EmptyState from '../components/EmptyState'
 import LoadingState from '../components/LoadingState'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 
-// ── Formatting helpers (shared logic with DriverManagement, kept pure) ──────────
+// ── Formatting helpers (display only; all maths lives in driverDetailAnalytics) ─
 function fmtCpk(v, currency) {
   if (v == null || !isFinite(v) || v <= 0) return 'N/A'
   return `${currency} ${v.toFixed(4)}`
 }
 
 function fmtCurrency(v, currency) {
-  if (v == null || !isFinite(v)) return `${currency} 0`
+  if (v == null || !isFinite(v)) return 'N/A'
   return `${currency} ${Math.round(v).toLocaleString()}`
 }
 
@@ -33,16 +37,17 @@ function fmtKm(v) {
 }
 
 function fmtPct(v) {
-  if (v == null || !isFinite(v)) return '0.0%'
+  if (v == null || !isFinite(v)) return 'N/A'
   return `${v.toFixed(1)}%`
 }
 
-function performanceBadge(score) {
-  if (score <= 20) return { label: 'Excellent', cls: 'bg-green-500/20 text-green-400 border-green-500/30' }
-  if (score <= 40) return { label: 'Good',      cls: 'bg-blue-500/20 text-blue-400 border-blue-500/30' }
-  if (score <= 60) return { label: 'Average',   cls: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' }
-  if (score <= 80) return { label: 'Poor',      cls: 'bg-orange-500/20 text-orange-400 border-orange-500/30' }
-  return                  { label: 'Critical',  cls: 'bg-red-500/20 text-red-400 border-red-500/30' }
+const BADGE_CLS = {
+  green: 'bg-green-500/20 text-green-400 border-green-500/30',
+  blue: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  yellow: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+  orange: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+  red: 'bg-red-500/20 text-red-400 border-red-500/30',
+  muted: 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)]',
 }
 
 function cpkColor(cpk) {
@@ -52,92 +57,11 @@ function cpkColor(cpk) {
   return 'text-red-400'
 }
 
-function calcCpk(cost, kmFit, kmRem) {
-  if (cost == null || kmFit == null || kmRem == null) return null
-  const dist = kmRem - kmFit
-  if (dist <= 0) return null
-  return cost / dist
+const RISK_CLS = {
+  Critical: 'text-red-400', High: 'text-orange-400', Medium: 'text-yellow-400', Low: 'text-green-400',
 }
 
-function isHighRisk(r) {
-  const rl = (r.risk_level ?? '').toLowerCase()
-  return rl === 'high' || rl === 'critical'
-}
-
-// ── Single-driver aggregation ───────────────────────────────────────────────────
-// Mirrors DriverManagement.aggregateDrivers for one driver's record set. The
-// fleet-relative rank / risk-score require the full fleet, so those are derived
-// from the fleet aggregate the detail page also fetches (see aggregateDriver).
-function aggregateDriver(name, records) {
-  const cpkValues = []
-  const kmValues = []
-  let totalCost = 0
-  let highRiskCount = 0
-
-  for (const r of records) {
-    totalCost += (r.cost_per_tyre ?? 0) * (r.qty || 1)
-    if (isHighRisk(r)) highRiskCount++
-    const cpk = calcCpk(r.cost_per_tyre, r.km_at_fitment, r.km_at_removal)
-    if (cpk !== null && cpk > 0) cpkValues.push(cpk)
-    const life = (r.km_at_removal != null && r.km_at_fitment != null)
-      ? r.km_at_removal - r.km_at_fitment
-      : null
-    if (life !== null && life > 0) kmValues.push(life)
-  }
-
-  return {
-    name,
-    totalTyres: records.length,
-    totalCost,
-    avgCpk: cpkValues.length > 0
-      ? cpkValues.reduce((s, v) => s + v, 0) / cpkValues.length
-      : null,
-    avgTyreLife: kmValues.length > 0
-      ? kmValues.reduce((s, v) => s + v, 0) / kmValues.length
-      : null,
-    failureRate: records.length > 0
-      ? (highRiskCount / records.length) * 100
-      : 0,
-    highRiskCount,
-    records,
-  }
-}
-
-// ── Fleet-relative risk score + rank (matches DriverManagement.aggregateDrivers) ─
-// Recomputes the composite risk score & rank across the fleet so the detail page
-// shows the same numbers as the ranking table. Only the target driver's derived
-// { riskScore, rank } are returned.
-function computeFleetRank(targetName, fleetRecords) {
-  const map = new Map()
-  for (const r of fleetRecords) {
-    const nm = (r.driver_name ?? '').trim() || 'Unassigned'
-    if (!map.has(nm)) map.set(nm, [])
-    map.get(nm).push(r)
-  }
-
-  const drivers = Array.from(map.entries()).map(([nm, recs]) => aggregateDriver(nm, recs))
-
-  const withCpk = drivers.filter(d => d.avgCpk !== null)
-  const noCpk   = drivers.filter(d => d.avgCpk === null)
-  withCpk.sort((a, b) => a.avgCpk - b.avgCpk)
-  const cpkRanked = withCpk.map((d, i) => ({ ...d, cpkRank: (i / Math.max(withCpk.length - 1, 1)) * 100 }))
-
-  const allForFailure = [...cpkRanked, ...noCpk.map(d => ({ ...d, cpkRank: 100 }))]
-  const sortedByFailure = [...allForFailure].sort((a, b) => a.failureRate - b.failureRate)
-  const failureRankMap = new Map(
-    sortedByFailure.map((d, i) => [d.name, (i / Math.max(sortedByFailure.length - 1, 1)) * 100])
-  )
-
-  const withScores = allForFailure.map(d => {
-    const failureRank = failureRankMap.get(d.name) ?? 100
-    const riskScore = Math.min(100, Math.round(d.cpkRank * 0.4 + failureRank * 0.6))
-    return { ...d, riskScore }
-  })
-
-  withScores.sort((a, b) => a.riskScore - b.riskScore)
-  const ranked = withScores.map((d, i) => ({ ...d, rank: i + 1 }))
-  return ranked.find(d => d.name === targetName) ?? null
-}
+const PANEL = 'rounded-xl bg-[var(--surface-1)] border border-[var(--input-border)]'
 
 // ── Tab definitions ─────────────────────────────────────────────────────────────
 const TABS = [
@@ -149,11 +73,12 @@ const TABS = [
 ]
 
 // ── Stat tile ────────────────────────────────────────────────────────────────────
-function StatTile({ label, value, accent }) {
+function StatTile({ label, value, accent, sub }) {
   return (
-    <div className="rounded-lg p-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-      <p className="text-[10px] text-[var(--text-dim)] mb-0.5">{label}</p>
-      <p className={`text-sm font-bold truncate ${accent || 'text-[var(--text-primary)]'}`}>{value}</p>
+    <div className="rounded-lg p-3 bg-[var(--surface-1)] border border-[var(--input-border)]">
+      <p className="text-[11px] text-[var(--text-muted)] mb-0.5">{label}</p>
+      <p className={`text-base font-bold tabular-nums break-words ${accent || 'text-[var(--text-primary)]'}`}>{value}</p>
+      {sub && <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{sub}</p>}
     </div>
   )
 }
@@ -174,7 +99,13 @@ export default function DriverDetail() {
   const [error, setError] = useState(null)
   const [truncated, setTruncated] = useState(false)
   const [activeTab, setActiveTab] = useState('profile')
-  const [recordSort, setRecordSort] = useState({ col: 'issue_date', dir: 'desc' })
+  const [search, setSearch] = useState('')
+  const [riskFilter, setRiskFilter] = useState('')
+  const [brandFilter, setBrandFilter] = useState('')
+  const [siteFilter, setSiteFilter] = useState('')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
+  const [exportError, setExportError] = useState('')
 
   // Approval & Workflow Engine gate — mirrors the original drawer: while the
   // driver-violation approval is active (pending/in_review/returned) or locked
@@ -212,15 +143,7 @@ export default function DriverDetail() {
       if (err) throw err
       setTruncated(!!tr)
 
-      const fleet = data || []
-      const mine = fleet.filter(r => ((r.driver_name ?? '').trim() || 'Unassigned') === driverName)
-      if (mine.length === 0) {
-        setDriver(null)
-      } else {
-        const ranked = computeFleetRank(driverName, fleet)
-        const base = aggregateDriver(driverName, mine)
-        setDriver({ ...base, riskScore: ranked?.riskScore ?? 0, rank: ranked?.rank ?? null })
-      }
+      setDriver(buildDriverView(driverName, data || []))
     } catch (e) {
       if (myReq === reqIdRef.current) setError(toUserMessage(e, 'Failed to load driver record'))
     } finally {
@@ -230,73 +153,50 @@ export default function DriverDetail() {
 
   useEffect(() => { load() }, [load])
 
-  const sortedRecords = useMemo(() => {
-    if (!driver) return []
-    const recs = [...driver.records]
-    recs.sort((a, b) => {
-      let va = a[recordSort.col] ?? ''
-      let vb = b[recordSort.col] ?? ''
-      if (typeof va === 'string') va = va.toLowerCase()
-      if (typeof vb === 'string') vb = vb.toLowerCase()
-      if (va < vb) return recordSort.dir === 'asc' ? -1 : 1
-      if (va > vb) return recordSort.dir === 'asc' ? 1 : -1
-      return 0
-    })
-    return recs
-  }, [driver, recordSort])
-
-  // Derived incident (high-risk) records for the Incidents tab.
-  const incidents = useMemo(
-    () => sortedRecords.filter(isHighRisk),
-    [sortedRecords]
+  const enriched = useMemo(() => (driver ? enrichRecords(driver.records) : []), [driver])
+  const brandOptions = useMemo(() => optionList(enriched, 'brand'), [enriched])
+  const siteOptions = useMemo(() => optionList(enriched, 'site'), [enriched])
+  const filtered = useMemo(
+    () => filterRecords(enriched, { risk: riskFilter, brand: brandFilter, site: siteFilter, from: fromDate, to: toDate, search }),
+    [enriched, riskFilter, brandFilter, siteFilter, fromDate, toDate, search],
   )
+  const incidents = useMemo(() => filterRecords(enriched, { risk: 'high' }), [enriched])
+  const notes = useMemo(() => enriched.filter((r) => r.removal_reason), [enriched])
+  const brandMix = useMemo(() => breakdown(enriched, 'brand'), [enriched])
+  const reasonMix = useMemo(() => breakdown(enriched.filter((r) => r.removal_reason), 'removal_reason'), [enriched])
+  const hasFilters = !!(search || riskFilter || brandFilter || siteFilter || fromDate || toDate)
+  const clearFilters = () => { setSearch(''); setRiskFilter(''); setBrandFilter(''); setSiteFilter(''); setFromDate(''); setToDate('') }
 
-  function handleRecordSort(col) {
-    setRecordSort(prev => ({
-      col,
-      dir: prev.col === col && prev.dir === 'asc' ? 'desc' : 'asc',
-    }))
-  }
-
-  function handleExcelExport() {
+  // Exports cover the FILTERED record set (what the reader is looking at).
+  async function runExport(format) {
     if (!driver) return
-    exportToExcel(
-      sortedRecords,
-      ['asset_no', 'serial_no', 'brand', 'issue_date', 'cost_per_tyre', 'km_at_fitment', 'km_at_removal', 'risk_level', 'removal_reason'],
-      ['Asset No', 'Serial No', 'Brand', 'Issue Date', 'Cost', 'KM Fitment', 'KM Removal', 'Risk Level', 'Removal Reason'],
-      `driver_${driver.name.replace(/\s+/g, '_')}_history`,
-      'Driver History',
-    )
+    if (format === 'pdf' && wfLocked) return
+    setExportError('')
+    const shaped = recordExport(filtered)
+    const file = reportFileName('Driver History', driver.name)
+    try {
+      if (format === 'pdf') {
+        await exportToPdf(shaped.rows, shaped.keys.map((k, i) => ({ key: k, header: shaped.headers[i] })), `Driver History: ${driver.name}`, file, 'landscape')
+      } else {
+        await exportToExcel(shaped.rows, shaped.keys, shaped.headers, file, 'Driver History')
+      }
+    } catch (e) {
+      setExportError(toUserMessage(e, 'Could not export. Try again.'))
+    }
   }
 
-  function handlePdfExport() {
-    if (!driver) return
-    // Locked — this driver's disciplinary record is mid-approval; the formal
-    // export is blocked until the workflow completes.
-    if (wfLocked) return
-    exportToPdf(
-      sortedRecords.map(r => ({
-        ...r,
-        cpk_display: fmtCpk(calcCpk(r.cost_per_tyre, r.km_at_fitment, r.km_at_removal), activeCurrency),
-        life_km: r.km_at_removal != null && r.km_at_fitment != null
-          ? Math.max(0, r.km_at_removal - r.km_at_fitment)
-          : '',
-      })),
-      [
-        { key: 'asset_no',        header: 'Asset No' },
-        { key: 'brand',           header: 'Brand' },
-        { key: 'issue_date',      header: 'Date' },
-        { key: 'cost_per_tyre',   header: 'Cost' },
-        { key: 'cpk_display',     header: 'CPK' },
-        { key: 'life_km',         header: 'Life (km)' },
-        { key: 'risk_level',      header: 'Risk Level' },
-        { key: 'removal_reason',  header: 'Removal Reason' },
-      ],
-      `Driver History - ${driver.name}`,
-      `driver_${driver.name.replace(/\s+/g, '_')}_history`,
-      'landscape',
-    )
-  }
+  const recordColumns = useMemo(() => [
+    { id: 'asset', header: t('driver.detail.cols.asset'), accessorFn: (r) => r._asset || '', size: 110, cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original._asset || 'N/A'}</span> },
+    { id: 'serial', header: 'Serial', accessorFn: (r) => r.serial_no || '', size: 130, cell: ({ row }) => <span className="font-mono text-xs">{row.original.serial_no || 'N/A'}</span> },
+    { id: 'brand', header: t('driver.detail.cols.brand'), accessorFn: (r) => r.brand || 'N/A', size: 110 },
+    { id: 'site', header: 'Site', accessorFn: (r) => r.site || 'N/A', size: 110 },
+    { id: 'date', header: t('driver.detail.cols.date'), accessorFn: (r) => r._date || '', size: 110, cell: ({ row }) => row.original._date || 'N/A' },
+    { id: 'cost', header: t('driver.detail.cols.cost'), accessorFn: (r) => (r.cost_per_tyre == null ? -1 : Number(r.cost_per_tyre)), size: 110, meta: { align: 'right' }, cell: ({ row }) => (row.original.cost_per_tyre != null ? `${activeCurrency} ${Number(row.original.cost_per_tyre).toLocaleString()}` : 'N/A') },
+    { id: 'cpk', header: t('driver.detail.cols.cpk'), accessorFn: (r) => (r._cpk == null ? Number.POSITIVE_INFINITY : r._cpk), size: 120, meta: { align: 'right' }, cell: ({ row }) => <span className={`font-mono ${cpkColor(row.original._cpk)}`}>{fmtCpk(row.original._cpk, activeCurrency)}</span> },
+    { id: 'life', header: t('driver.detail.cols.life'), accessorFn: (r) => r._life ?? -1, size: 100, meta: { align: 'right' }, cell: ({ row }) => fmtKm(row.original._life) },
+    { id: 'risk', header: t('driver.detail.cols.risk'), accessorFn: (r) => r._risk || '', size: 100, cell: ({ row }) => (row.original._risk ? <span className={`font-semibold ${RISK_CLS[row.original._risk]}`}>{row.original._risk}</span> : <span className="text-[var(--text-muted)]">Not rated</span>) },
+    { id: 'reason', header: t('driver.detail.cols.reason'), accessorFn: (r) => r.removal_reason || '', size: 180, cell: ({ row }) => <span className="block max-w-[220px] truncate" title={row.original.removal_reason || ''}>{row.original.removal_reason || 'N/A'}</span> },
+  ], [t, activeCurrency])
 
   // ── States ─────────────────────────────────────────────────────────────────────
   if (loading) return <LoadingState message={t('driver.detail.loading')} />
@@ -306,18 +206,17 @@ export default function DriverDetail() {
       <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-4">
         <button
           onClick={() => navigate('/driver-management')}
-          className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center gap-1.5"
+          className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center gap-1.5 min-h-[44px]"
         >
           <ArrowLeft size={15} /> {t('driver.detail.back')}
         </button>
-        <div className="flex flex-col items-center justify-center gap-3 py-16">
+        <div role="alert" className="flex flex-col items-center justify-center gap-3 py-16 text-center">
           <AlertTriangle size={32} className="text-red-500" />
           <p className="text-red-400 font-medium">{t('driver.detail.errorTitle')}</p>
           <p className="text-[var(--text-dim)] text-sm">{error}</p>
           <button
             onClick={load}
-            className="mt-2 flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-green-400 transition-colors hover:bg-green-400/10"
-            style={{ border: '1px solid rgba(22,163,74,0.3)' }}
+            className="mt-2 btn-secondary inline-flex items-center gap-2 text-sm min-h-[44px]"
           >
             <RefreshCw size={14} /> {t('driver.detail.retry')}
           </button>
@@ -331,7 +230,7 @@ export default function DriverDetail() {
       <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-4">
         <button
           onClick={() => navigate('/driver-management')}
-          className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center gap-1.5"
+          className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center gap-1.5 min-h-[44px]"
         >
           <ArrowLeft size={15} /> {t('driver.detail.back')}
         </button>
@@ -347,57 +246,93 @@ export default function DriverDetail() {
   }
 
   const badge = performanceBadge(driver.riskScore)
+  const ev = driver.evidence
+  const basisNote = `Risk score rests on ${ev.cpkTyres} tyre${ev.cpkTyres === 1 ? '' : 's'} with cost and distance and ${ev.ratedTyres} risk-rated tyre${ev.ratedTyres === 1 ? '' : 's'} of ${driver.totalTyres}.`
+
+  const recordFilters = (
+    <div className="flex flex-wrap items-end gap-2 p-4 border-b border-[var(--input-border)]">
+      <div className="relative flex-1 min-w-[180px]">
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+        <input className="input pl-9 w-full min-h-[44px]" aria-label="Search tyre records" placeholder="Search asset, serial, brand, reason" value={search} onChange={(e) => setSearch(e.target.value)} />
+      </div>
+      <select className="input min-h-[44px]" aria-label="Risk level" value={riskFilter} onChange={(e) => setRiskFilter(e.target.value)}>
+        <option value="">All risk levels</option>
+        <option value="high">High or critical</option>
+        <option value="Critical">Critical</option>
+        <option value="High">High</option>
+        <option value="Medium">Medium</option>
+        <option value="Low">Low</option>
+        <option value="unrated">Not rated</option>
+      </select>
+      <select className="input min-h-[44px]" aria-label="Brand" value={brandFilter} onChange={(e) => setBrandFilter(e.target.value)}>
+        <option value="">All brands</option>
+        {brandOptions.map((b) => <option key={b} value={b}>{b}</option>)}
+      </select>
+      <select className="input min-h-[44px]" aria-label="Site" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)}>
+        <option value="">All sites</option>
+        {siteOptions.map((b) => <option key={b} value={b}>{b}</option>)}
+      </select>
+      <label className="text-[11px] text-[var(--text-muted)] flex flex-col gap-0.5">From
+        <input type="date" className="input min-h-[44px]" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+      </label>
+      <label className="text-[11px] text-[var(--text-muted)] flex flex-col gap-0.5">To
+        <input type="date" className="input min-h-[44px]" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+      </label>
+      {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><X size={14} /> Clear</button>}
+      <span className="text-xs text-[var(--text-muted)] ml-auto" aria-live="polite">{filtered.length} of {enriched.length}</span>
+    </div>
+  )
 
   return (
     <div className="p-4 md:p-6 max-w-[1400px] mx-auto space-y-5">
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           <button
             onClick={() => navigate('/driver-management')}
-            className="p-2 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-            title={t('driver.detail.back')}
+            className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+            aria-label={t('driver.detail.back')}
           >
             <ArrowLeft size={16} />
           </button>
-          <div className="w-11 h-11 rounded-xl flex items-center justify-center text-white font-bold text-lg"
-            style={{ background: 'linear-gradient(135deg,#16a34a,#15803d)', boxShadow: '0 0 14px rgba(22,163,74,0.4)' }}>
+          <div className="w-11 h-11 rounded-xl flex items-center justify-center text-white font-bold text-lg shrink-0 bg-[var(--brand)]" aria-hidden="true">
             {driver.name[0]?.toUpperCase() ?? 'D'}
           </div>
-          <div>
-            <h1 className="text-xl font-semibold text-[var(--text-primary)] tracking-tight">{driver.name}</h1>
-            <div className="flex items-center gap-2 mt-0.5">
-              <span className={`text-[11px] px-2 py-0.5 rounded-full border font-semibold ${badge.cls}`}>
+          <div className="min-w-0">
+            <h1 className="text-xl font-semibold text-[var(--text-primary)] tracking-tight break-words">{driver.name}</h1>
+            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+              <span className={`text-[11px] px-2 py-0.5 rounded-full border font-semibold ${BADGE_CLS[badge.tone]}`}>
                 {badge.label}
               </span>
               {driver.rank != null && (
                 <span className="text-xs text-[var(--text-muted)]">
-                  {t('driver.detail.rank', { rank: driver.rank })}
+                  {t('driver.detail.rank', { rank: driver.rank })}{driver.driverCount ? ` of ${driver.driverCount}` : ''}
                 </span>
               )}
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={handlePdfExport}
-            disabled={wfLocked}
+            onClick={() => runExport('pdf')}
+            disabled={wfLocked || !filtered.length}
             title={wfLocked ? t('driver.detail.lockedTitle') : t('driver.detail.exportPdfTitle')}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}
+            className="btn-secondary inline-flex items-center gap-1.5 text-sm min-h-[44px] disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {wfLocked ? <Lock size={13} /> : <FileText size={13} />} PDF
+            {wfLocked ? <Lock size={13} aria-hidden="true" /> : <FileText size={13} aria-hidden="true" />} PDF
           </button>
           <button
-            onClick={handleExcelExport}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-            style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)' }}
+            onClick={() => runExport('excel')}
+            disabled={!filtered.length}
+            className="btn-secondary inline-flex items-center gap-1.5 text-sm min-h-[44px] disabled:opacity-40"
           >
-            <FileSpreadsheet size={13} /> Excel
+            <FileSpreadsheet size={13} aria-hidden="true" /> Excel
           </button>
         </div>
       </div>
+
+      {exportError && <p role="alert" className="text-sm text-red-400">{exportError}</p>}
 
       {truncated && (
         <p className="text-xs text-amber-400">
@@ -408,31 +343,32 @@ export default function DriverDetail() {
       {/* ── Stat summary strip ─────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
         <StatTile label={t('driver.detail.stats.totalTyres')} value={driver.totalTyres} />
-        <StatTile label={t('driver.detail.stats.avgCpk')} value={fmtCpk(driver.avgCpk, activeCurrency)} accent={cpkColor(driver.avgCpk)} />
-        <StatTile label={t('driver.detail.stats.totalCost')} value={fmtCurrency(driver.totalCost, activeCurrency)} />
-        <StatTile label={t('driver.detail.stats.failureRate')} value={fmtPct(driver.failureRate)} />
-        <StatTile label={t('driver.detail.stats.avgTyreLife')} value={fmtKm(driver.avgTyreLife)} />
+        <StatTile label={t('driver.detail.stats.avgCpk')} value={fmtCpk(driver.avgCpk, activeCurrency)} accent={cpkColor(driver.avgCpk)} sub={`From ${ev.cpkTyres} tyre${ev.cpkTyres === 1 ? '' : 's'}`} />
+        <StatTile label={t('driver.detail.stats.totalCost')} value={fmtCurrency(driver.totalCost, activeCurrency)} sub={`${ev.pricedTyres} of ${driver.totalTyres} priced`} />
+        <StatTile label={t('driver.detail.stats.failureRate')} value={fmtPct(driver.failureRate)} sub={`${ev.ratedTyres} risk-rated`} />
+        <StatTile label={t('driver.detail.stats.avgTyreLife')} value={fmtKm(driver.avgTyreLife)} sub={`From ${ev.lifeTyres} removed tyre${ev.lifeTyres === 1 ? '' : 's'}`} />
         <StatTile label={t('driver.detail.stats.highRisk')} value={driver.highRiskCount} accent={driver.highRiskCount > 0 ? 'text-red-400' : undefined} />
-        <StatTile label={t('driver.detail.stats.riskScore')} value={driver.riskScore} />
+        <StatTile label={t('driver.detail.stats.riskScore')} value={driver.riskScore ?? 'N/A'} />
         <StatTile label={t('driver.detail.stats.performance')} value={badge.label} />
       </div>
+      <p className="text-xs text-[var(--text-muted)] flex items-start gap-1.5"><Info size={13} className="mt-0.5 shrink-0" aria-hidden="true" /> {basisNote} Cost is the recorded tyre price only; totals for whole-fleet spend come from the expense grid.</p>
 
       {/* ── Tabs ───────────────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap gap-1 rounded-xl p-1"
-        style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+      <div role="tablist" aria-label="Driver sections" className={`flex flex-wrap gap-1 p-1 ${PANEL}`}>
         {TABS.map(tab => {
           const Icon = tab.icon
           const active = activeTab === tab.key
           return (
             <button
               key={tab.key}
+              role="tab"
+              aria-selected={active}
               onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
-                active ? 'text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+              className={`flex items-center gap-1.5 px-3 min-h-[44px] rounded-lg text-sm font-medium transition-colors ${
+                active ? 'text-white bg-[var(--brand)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
               }`}
-              style={active ? { background: '#15803d' } : {}}
             >
-              <Icon size={13} /> {t(tab.labelKey) === tab.labelKey ? tab.fallback : t(tab.labelKey)}
+              <Icon size={13} aria-hidden="true" /> {t(tab.labelKey) === tab.labelKey ? tab.fallback : t(tab.labelKey)}
             </button>
           )
         })}
@@ -447,11 +383,10 @@ export default function DriverDetail() {
       >
         {activeTab === 'profile' && (
           <div className="space-y-5">
-            <div className="rounded-xl p-5"
-              style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <div className={`p-5 ${PANEL}`}>
               <div className="flex items-center gap-2 mb-4">
-                <User size={14} className="text-green-400" />
-                <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('driver.detail.profile.title')}</h3>
+                <User size={14} className="text-green-400" aria-hidden="true" />
+                <h2 className="text-sm font-semibold text-[var(--text-primary)]">{t('driver.detail.profile.title')}</h2>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
                 <Field label={t('driver.detail.profile.name')} value={driver.name} />
@@ -463,28 +398,27 @@ export default function DriverDetail() {
               </div>
             </div>
 
-            {/* Approval & Workflow Engine — driver-violation gate (preserved from drawer). */}
-            <div className="rounded-xl p-5 space-y-3"
-              style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+            {/* Approval & Workflow Engine: driver-violation gate (preserved from drawer). */}
+            <div className={`p-5 space-y-3 ${PANEL}`}>
               <EntityApprovalPanel
                 entityType="driver_violation"
                 entityId={driver.name}
                 entityLabel={driver.name}
                 context={{
-                  severity: performanceBadge(driver.riskScore).label,
+                  severity: badge.label,
                   violation_type: 'tyre_cost_risk',
-                  points: driver.riskScore,
-                  failure_rate: Number(driver.failureRate?.toFixed?.(1)) || 0,
+                  points: driver.riskScore ?? 0,
+                  failure_rate: driver.failureRate == null ? null : Number(driver.failureRate.toFixed(1)),
                   high_risk_count: driver.highRiskCount,
                   total_tyres: driver.totalTyres,
-                  total_cost: Math.round(driver.totalCost || 0),
+                  total_cost: driver.totalCost == null ? null : Math.round(driver.totalCost),
                 }}
                 onStateChange={(s) => setWfLocked(!!(s?.isActive || s?.isLocked))}
                 title={t('driver.detail.approval.title')}
               />
               {wfLocked && (
                 <div className="flex items-center gap-1.5 text-xs text-[var(--accent)] bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-3 py-2">
-                  <Lock size={12} />
+                  <Lock size={12} aria-hidden="true" />
                   {t('driver.detail.approval.lockedNote')}
                 </div>
               )}
@@ -493,36 +427,47 @@ export default function DriverDetail() {
         )}
 
         {activeTab === 'performance' && (
-          <div className="rounded-xl p-5"
-            style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
-            <div className="flex items-center gap-2 mb-4">
-              <Award size={14} className="text-yellow-400" />
-              <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('driver.detail.performance.title')}</h3>
+          <div className="space-y-5">
+            <div className={`p-5 ${PANEL}`}>
+              <div className="flex items-center gap-2 mb-4">
+                <Award size={14} className="text-yellow-400" aria-hidden="true" />
+                <h2 className="text-sm font-semibold text-[var(--text-primary)]">{t('driver.detail.performance.title')}</h2>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                <StatTile label={t('driver.detail.stats.avgCpk')} value={fmtCpk(driver.avgCpk, activeCurrency)} accent={cpkColor(driver.avgCpk)} />
+                <StatTile label={t('driver.detail.stats.totalCost')} value={fmtCurrency(driver.totalCost, activeCurrency)} />
+                <StatTile label={t('driver.detail.stats.avgTyreLife')} value={fmtKm(driver.avgTyreLife)} />
+                <StatTile label={t('driver.detail.stats.failureRate')} value={fmtPct(driver.failureRate)} accent={
+                  driver.failureRate == null ? undefined : driver.failureRate >= 30 ? 'text-red-400' : driver.failureRate >= 15 ? 'text-yellow-400' : 'text-green-400'
+                } />
+                <StatTile label={t('driver.detail.stats.totalTyres')} value={driver.totalTyres} />
+                <StatTile label={t('driver.detail.stats.highRisk')} value={driver.highRiskCount} accent={driver.highRiskCount > 0 ? 'text-red-400' : undefined} />
+                <StatTile label={t('driver.detail.stats.riskScore')} value={driver.riskScore ?? 'N/A'} />
+                <StatTile label={t('driver.detail.stats.rank')} value={driver.rank != null ? `#${driver.rank}` : 'N/A'} />
+              </div>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-              <StatTile label={t('driver.detail.stats.avgCpk')} value={fmtCpk(driver.avgCpk, activeCurrency)} accent={cpkColor(driver.avgCpk)} />
-              <StatTile label={t('driver.detail.stats.totalCost')} value={fmtCurrency(driver.totalCost, activeCurrency)} />
-              <StatTile label={t('driver.detail.stats.avgTyreLife')} value={fmtKm(driver.avgTyreLife)} />
-              <StatTile label={t('driver.detail.stats.failureRate')} value={fmtPct(driver.failureRate)} accent={
-                driver.failureRate >= 30 ? 'text-red-400' : driver.failureRate >= 15 ? 'text-yellow-400' : 'text-green-400'
-              } />
-              <StatTile label={t('driver.detail.stats.totalTyres')} value={driver.totalTyres} />
-              <StatTile label={t('driver.detail.stats.highRisk')} value={driver.highRiskCount} accent={driver.highRiskCount > 0 ? 'text-red-400' : undefined} />
-              <StatTile label={t('driver.detail.stats.riskScore')} value={driver.riskScore} />
-              <StatTile label={t('driver.detail.stats.rank')} value={driver.rank != null ? `#${driver.rank}` : 'N/A'} />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              <MixPanel title="Tyres by brand" rows={brandMix} total={enriched.length} empty="No brand recorded on this driver's tyres." />
+              <MixPanel title="Top removal reasons" rows={reasonMix} total={notes.length} empty="No removal reasons recorded." />
             </div>
           </div>
         )}
 
         {activeTab === 'incidents' && (
-          <div className="rounded-xl overflow-hidden"
-            style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+          <div className={`overflow-hidden ${PANEL}`}>
             <div className="px-5 py-4 border-b border-[var(--input-border)] flex items-center gap-2">
-              <ShieldAlert size={14} className="text-red-400" />
-              <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('driver.detail.incidents.title')}</h3>
-              <span className="text-xs text-[var(--text-dim)] ml-1">({incidents.length})</span>
+              <ShieldAlert size={14} className="text-red-400" aria-hidden="true" />
+              <h2 className="text-sm font-semibold text-[var(--text-primary)]">{t('driver.detail.incidents.title')}</h2>
+              <span className="text-xs text-[var(--text-muted)] ml-1">({incidents.length})</span>
             </div>
-            {incidents.length === 0 ? (
+            {ev.ratedTyres === 0 ? (
+              <EmptyState
+                icon={ShieldAlert}
+                title="No tyres are risk-rated"
+                description="None of this driver's tyre records carries a risk level, so high-risk incidents cannot be identified yet."
+                compact
+              />
+            ) : incidents.length === 0 ? (
               <EmptyState
                 icon={ShieldAlert}
                 title={t('driver.detail.incidents.emptyTitle')}
@@ -530,53 +475,49 @@ export default function DriverDetail() {
                 compact
               />
             ) : (
-              <RecordsTable
-                records={incidents}
-                currency={activeCurrency}
-                sort={recordSort}
-                onSort={handleRecordSort}
-                t={t}
+              <EnterpriseTable
+                columns={recordColumns}
+                data={incidents}
+                getRowId={(r) => String(r.id)}
+                enableGlobalFilter={false}
+                enableColumnFilters={false}
+                enableExport={false}
+                initialPageSize={25}
+                emptyMessage="No high-risk records."
               />
             )}
           </div>
         )}
 
         {activeTab === 'records' && (
-          <div className="rounded-xl overflow-hidden"
-            style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+          <div className={`overflow-hidden ${PANEL}`}>
             <div className="px-5 py-4 border-b border-[var(--input-border)] flex items-center gap-2">
-              <ClipboardList size={14} className="text-green-400" />
-              <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('driver.detail.records.title')}</h3>
-              <span className="text-xs text-[var(--text-dim)] ml-1">({driver.records.length})</span>
+              <ClipboardList size={14} className="text-green-400" aria-hidden="true" />
+              <h2 className="text-sm font-semibold text-[var(--text-primary)]">{t('driver.detail.records.title')}</h2>
+              <span className="text-xs text-[var(--text-muted)] ml-1">({driver.records.length})</span>
             </div>
-            {sortedRecords.length === 0 ? (
-              <EmptyState
-                icon={ClipboardList}
-                title={t('driver.detail.records.emptyTitle')}
-                description={t('driver.detail.records.emptyDesc')}
-                compact
-              />
-            ) : (
-              <RecordsTable
-                records={sortedRecords}
-                currency={activeCurrency}
-                sort={recordSort}
-                onSort={handleRecordSort}
-                t={t}
-              />
-            )}
+            {recordFilters}
+            <EnterpriseTable
+              columns={recordColumns}
+              data={filtered}
+              getRowId={(r) => String(r.id)}
+              enableGlobalFilter={false}
+              enableColumnFilters={false}
+              enableExport={false}
+              initialPageSize={25}
+              emptyMessage={hasFilters ? 'No tyre records match these filters.' : t('driver.detail.records.emptyDesc')}
+            />
           </div>
         )}
 
         {activeTab === 'notes' && (
-          <div className="rounded-xl p-5"
-            style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+          <div className={`p-5 ${PANEL}`}>
             <div className="flex items-center gap-2 mb-4">
-              <StickyNote size={14} className="text-blue-400" />
-              <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('driver.detail.notes.title')}</h3>
+              <StickyNote size={14} className="text-blue-400" aria-hidden="true" />
+              <h2 className="text-sm font-semibold text-[var(--text-primary)]">{t('driver.detail.notes.title')}</h2>
             </div>
             {/* Removal-reason notes surfaced from the driver's tyre records. */}
-            {sortedRecords.filter(r => r.removal_reason).length === 0 ? (
+            {notes.length === 0 ? (
               <EmptyState
                 icon={StickyNote}
                 title={t('driver.detail.notes.emptyTitle')}
@@ -585,17 +526,14 @@ export default function DriverDetail() {
               />
             ) : (
               <ul className="space-y-2">
-                {sortedRecords.filter(r => r.removal_reason).map((r, i) => (
+                {sortedNotes(notes).map((r, i) => (
                   <li key={r.id ?? i}
-                    className="rounded-lg px-3 py-2.5 text-sm text-[var(--text-muted)]"
-                    style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    className="rounded-lg px-3 py-2.5 text-sm text-[var(--text-secondary)] bg-[var(--input-bg)] border border-[var(--input-border)]">
                     <div className="flex items-center justify-between gap-2 mb-1">
-                      <span className="text-xs text-[var(--text-dim)]">
-                        {r.asset_no ?? r.asset_number ?? '-'}{r.issue_date ? ` · ${r.issue_date.slice(0, 10)}` : ''}
+                      <span className="text-xs text-[var(--text-muted)]">
+                        {r._asset ?? 'N/A'}{r._date ? `, ${r._date}` : ''}
                       </span>
-                      {r.risk_level && (
-                        <span className="text-[11px] capitalize text-[var(--text-dim)]">{r.risk_level}</span>
-                      )}
+                      <span className={`text-[11px] ${r._risk ? RISK_CLS[r._risk] : 'text-[var(--text-muted)]'}`}>{r._risk || 'Not rated'}</span>
                     </div>
                     {r.removal_reason}
                   </li>
@@ -629,60 +567,32 @@ function firstValue(records, key) {
   return hit ? hit[key] : ''
 }
 
-function RecordsTable({ records, currency, sort, onSort, t }) {
-  const cols = [
-    ['asset_no', t('driver.detail.cols.asset')],
-    ['brand', t('driver.detail.cols.brand')],
-    ['issue_date', t('driver.detail.cols.date')],
-    ['cost_per_tyre', t('driver.detail.cols.cost')],
-    ['cpk', t('driver.detail.cols.cpk')],
-    ['life', t('driver.detail.cols.life')],
-    ['risk_level', t('driver.detail.cols.risk')],
-    ['removal_reason', t('driver.detail.cols.reason')],
-  ]
+function sortedNotes(rows) {
+  return [...rows].sort((a, b) => String(b._date || '').localeCompare(String(a._date || '')))
+}
+
+function MixPanel({ title, rows, total, empty }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-xs">
-        <thead style={{ background: 'rgba(255,255,255,0.03)' }}>
-          <tr>
-            {cols.map(([col, lbl]) => (
-              <th
-                key={col}
-                className="px-3 py-2.5 text-left text-[10px] font-semibold text-[var(--text-dim)] uppercase tracking-wider cursor-pointer hover:text-[var(--text-muted)] transition-colors"
-                onClick={() => onSort(col)}
-              >
-                {lbl}{sort.col === col ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {records.map((r, i) => {
-            const cpk = calcCpk(r.cost_per_tyre, r.km_at_fitment, r.km_at_removal)
-            const life = r.km_at_removal != null && r.km_at_fitment != null
-              ? Math.max(0, r.km_at_removal - r.km_at_fitment)
-              : null
-            const riskLow = (r.risk_level ?? '').toLowerCase()
-            const riskCls = riskLow === 'critical' ? 'text-red-400'
-              : riskLow === 'high'     ? 'text-orange-400'
-              : riskLow === 'medium'   ? 'text-yellow-400'
-              : riskLow === 'low'      ? 'text-green-400'
-              : 'text-[var(--text-muted)]'
+    <div className={`p-5 ${PANEL}`}>
+      <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">{title}</h3>
+      {rows.length === 0 ? <p className="text-sm text-[var(--text-muted)]">{empty}</p> : (
+        <ul className="space-y-2">
+          {rows.map((r) => {
+            const pct = total ? Math.round((r.count / total) * 100) : 0
             return (
-              <tr key={r.id ?? i} className="border-t border-[var(--input-border)] hover:bg-white/[0.02] transition-colors">
-                <td className="px-3 py-2 text-[var(--text-dim)] font-medium">{r.asset_no ?? r.asset_number ?? '-'}</td>
-                <td className="px-3 py-2 text-[var(--text-muted)]">{r.brand ?? '-'}</td>
-                <td className="px-3 py-2 text-[var(--text-muted)]">{r.issue_date ? r.issue_date.slice(0, 10) : '-'}</td>
-                <td className="px-3 py-2 text-[var(--text-dim)]">{r.cost_per_tyre != null ? `${currency} ${r.cost_per_tyre}` : '-'}</td>
-                <td className={`px-3 py-2 font-mono ${cpkColor(cpk)}`}>{fmtCpk(cpk, currency)}</td>
-                <td className="px-3 py-2 text-[var(--text-muted)]">{life != null ? fmtKm(life) : '-'}</td>
-                <td className={`px-3 py-2 font-semibold capitalize ${riskCls}`}>{r.risk_level ?? '-'}</td>
-                <td className="px-3 py-2 text-[var(--text-muted)] max-w-[160px] truncate">{r.removal_reason ?? '-'}</td>
-              </tr>
+              <li key={r.label}>
+                <div className="flex items-center justify-between gap-2 text-xs">
+                  <span className="text-[var(--text-secondary)] break-words min-w-0">{r.label}</span>
+                  <span className="text-[var(--text-muted)] tabular-nums whitespace-nowrap">{r.count} ({pct}%)</span>
+                </div>
+                <div className="h-2 mt-1 rounded bg-[var(--input-bg)] overflow-hidden" role="presentation">
+                  <div className="h-full rounded bg-sky-500/70" style={{ width: `${pct}%` }} />
+                </div>
+              </li>
             )
           })}
-        </tbody>
-      </table>
+        </ul>
+      )}
     </div>
   )
 }

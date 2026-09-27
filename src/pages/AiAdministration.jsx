@@ -18,21 +18,27 @@
  * The Budgets tab reads real spend from the existing ai_token_logs table — no
  * fabricated numbers; when that table is absent it shows cap config only.
  */
-import { Children, useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
-  Sparkles, Cpu, BookOpen, Wallet, Star, Search, X, Filter, AlertTriangle,
+  Sparkles, Cpu, BookOpen, Wallet, Star, Search, AlertTriangle,
   FileSpreadsheet, FileText, Plus, Pencil, Trash2, ShieldAlert, CheckCircle2,
-  Coins, ThumbsUp, Activity, Send,
+  Coins, ThumbsUp, Activity, Send, RefreshCw, Languages, Gauge,
 } from 'lucide-react'
 import { AiOperationsTab, AiDeliveryJobsTab } from '../components/ai/AiOpsTabs'
 import PageHeader from '../components/ui/PageHeader'
-import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import UiModal from '../components/ui/Modal'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
-import { supabase } from '../lib/supabase'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
-import { costPerCall, summariseModels, budgetStatus } from '../lib/aiAdmin'
+import { costPerCall } from '../lib/aiAdmin'
+import { readTokenLogs } from '../lib/api/aiOps'
+import { compareValues } from '../lib/consoleTable'
+import {
+  searchRecords, spendWindows, budgetUtilisation, modelKpis, promptKpis,
+  budgetKpis, feedbackKpis, ratingDistribution,
+} from '../lib/aiAdministrationAnalytics'
 import {
   listAiModels, createAiModel, updateAiModel, deleteAiModel,
 } from '../lib/api/aiModels'
@@ -69,85 +75,97 @@ const fmtDate = (v) => {
 }
 
 // ── generic UI atoms ─────────────────────────────────────────────────────────
-function KpiTile({ label, value, Icon, tone = 'text-[var(--text-primary)]' }) {
+const FOCUS = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
+const CTRL = `min-h-[44px] sm:min-h-[36px] ${FOCUS}`
+
+// One sort rule for every column: number/date aware, blanks last.
+const SORT = { sortingFn: (a, b, id) => compareValues(a.getValue(id), b.getValue(id)), sortUndefined: 'last' }
+const undef = (v) => (v == null || v === '' ? undefined : v)
+const NA = <span className="text-[var(--text-muted)] text-xs">N/A</span>
+
+function KpiTile({ label, value, Icon, tone = 'text-[var(--text-primary)]', sub }) {
   return (
-    <div className="card">
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-[var(--text-muted)]">{label}</p>
-        <Icon size={16} className={tone} />
+    <div className="card min-w-0">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-[var(--text-muted)] truncate">{label}</p>
+        <Icon size={16} className={tone} aria-hidden="true" />
       </div>
-      <p className={`text-3xl font-bold mt-1 ${tone}`}>{value}</p>
+      <p className={`text-2xl sm:text-3xl font-bold mt-1 tabular-nums truncate ${tone}`}>{value}</p>
+      {sub && <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{sub}</p>}
     </div>
   )
 }
 
-function StatePanel({ tone = 'amber', title, children }) {
-  const border = tone === 'red' ? 'border-red-800/50' : 'border-amber-800/50'
-  const text = tone === 'red' ? 'text-red-300' : 'text-amber-300'
+function StatePanel({ tone = 'amber', title, children, onRetry }) {
+  const border = tone === 'red' ? 'border-red-500/40' : 'border-amber-500/40'
+  const text = tone === 'red' ? 'text-red-400' : 'text-amber-400'
   return (
-    <div className={`card border ${border} flex items-start gap-3`}>
-      <AlertTriangle size={18} className={`${tone === 'red' ? 'text-red-400' : 'text-amber-400'} mt-0.5 shrink-0`} />
-      <div>
+    <div className={`card border ${border} flex flex-wrap items-start gap-3`} role={tone === 'red' ? 'alert' : 'status'}>
+      <AlertTriangle size={18} className={`${text} mt-0.5 shrink-0`} aria-hidden="true" />
+      <div className="flex-1 min-w-0">
         <p className={`${text} font-medium`}>{title}</p>
         <p className="text-[var(--text-muted)] text-sm mt-1">{children}</p>
       </div>
+      {onRetry && (
+        <button onClick={onRetry} className={`btn-secondary text-sm inline-flex items-center gap-1.5 px-3 ${CTRL}`}>
+          <RefreshCw size={14} aria-hidden="true" /> Retry
+        </button>
+      )}
     </div>
   )
 }
 
 function Badge({ ok, yes = 'Active', no = 'Inactive' }) {
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
-      ok ? 'bg-green-500/10 text-green-400' : 'bg-white/5 text-[var(--text-muted)]'
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium border ${
+      ok ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-[var(--panel-2)] text-[var(--text-muted)] border-[var(--border)]'
     }`}>
-      {ok && <CheckCircle2 size={11} />}{ok ? yes : no}
+      {ok && <CheckCircle2 size={11} aria-hidden="true" />}{ok ? yes : no}
     </span>
   )
 }
 
 function Modal({ title, onClose, saving, children }) {
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={() => !saving && onClose()}>
-      <div className="card w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-bold text-[var(--text-primary)]">{title}</h3>
-          <button onClick={() => !saving && onClose()} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
-        </div>
-        {children}
-      </div>
-    </div>
+    <UiModal open onClose={() => { if (!saving) onClose() }} title={title} size="lg" closeOnBackdrop={!saving}>
+      {children}
+    </UiModal>
   )
 }
 
 function Field({ label, hint, children }) {
+  // The control is nested inside the label, so it is named by it.
   return (
-    <div>
-      <label className="label">{label}</label>
+    <label className="block">
+      <span className="label">{label}</span>
       {children}
-      {hint && <p className="text-[11px] text-[var(--text-muted)] mt-1">{hint}</p>}
-    </div>
+      {hint && <span className="block text-[11px] text-[var(--text-muted)] mt-1">{hint}</span>}
+    </label>
   )
 }
 
 function DeleteConfirm({ label, onCancel, onConfirm, deleting }) {
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={() => !deleting && onCancel()}>
-      <div className="card w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-full bg-red-900/30 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" /></div>
-          <div>
-            <h3 className="text-[var(--text-primary)] font-semibold">Delete this record?</h3>
-            <p className="text-sm text-[var(--text-muted)] mt-1">{label}. This can’t be undone.</p>
-          </div>
-        </div>
-        <div className="flex items-center justify-end gap-2 mt-5">
-          <button onClick={onCancel} className="btn-secondary text-sm" disabled={deleting}>Cancel</button>
-          <button onClick={onConfirm} className="btn-danger text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={deleting}>
-            <Trash2 size={14} /> {deleting ? 'Deleting…' : 'Delete'}
+    <UiModal
+      open
+      onClose={() => { if (!deleting) onCancel() }}
+      title="Delete this record?"
+      size="sm"
+      closeOnBackdrop={!deleting}
+      footer={(
+        <div className="flex items-center justify-end gap-2">
+          <button onClick={onCancel} className={`btn-secondary text-sm px-3 ${CTRL}`} disabled={deleting}>Cancel</button>
+          <button onClick={onConfirm} className={`btn-danger text-sm inline-flex items-center gap-1.5 px-3 disabled:opacity-60 ${CTRL}`} disabled={deleting}>
+            <Trash2 size={14} aria-hidden="true" /> {deleting ? 'Deleting...' : 'Delete'}
           </button>
         </div>
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" aria-hidden="true" /></div>
+        <p className="text-sm text-[var(--text-secondary)]">{label}. This cannot be undone.</p>
       </div>
-    </div>
+    </UiModal>
   )
 }
 
@@ -155,59 +173,62 @@ function Toolbar({ search, setSearch, placeholder, extra, onExcel, onPdf, onCrea
   return (
     <div className="card space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-          <input className="input pl-9 w-full" placeholder={placeholder} value={search} onChange={(e) => setSearch(e.target.value)} />
-        </div>
+        <label className="relative flex-1 min-w-[200px]">
+          <span className="sr-only">{placeholder}</span>
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+          <input type="search" className={`input pl-9 w-full ${CTRL}`} placeholder={placeholder} value={search} onChange={(e) => setSearch(e.target.value)} />
+        </label>
         {extra}
-        <button onClick={onExcel} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!count}>
-          <FileSpreadsheet size={14} /> Excel
+        <button onClick={onExcel} className={`btn-secondary text-sm inline-flex items-center gap-1.5 px-3 disabled:opacity-40 ${CTRL}`} disabled={!count}>
+          <FileSpreadsheet size={14} aria-hidden="true" /> Excel
         </button>
-        <button onClick={onPdf} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!count}>
-          <FileText size={14} /> PDF
+        <button onClick={onPdf} className={`btn-secondary text-sm inline-flex items-center gap-1.5 px-3 disabled:opacity-40 ${CTRL}`} disabled={!count}>
+          <FileText size={14} aria-hidden="true" /> PDF
         </button>
-        <button onClick={onCreate} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={!canCreate}>
-          <Plus size={14} /> {createLabel}
+        <button onClick={onCreate} className={`btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-40 ${CTRL}`} disabled={!canCreate}>
+          <Plus size={14} aria-hidden="true" /> {createLabel}
         </button>
-        <span className="text-xs text-[var(--text-muted)] ml-auto w-full sm:w-auto text-right">{count} of {total}</span>
+        <span className="text-xs text-[var(--text-muted)] ml-auto w-full sm:w-auto text-right" aria-live="polite">{count} of {total}</span>
       </div>
     </div>
   )
 }
 
-function DataTable({ headers, loading, empty, notProvisioned, children }) {
-  const tableRows = useMemo(() => Children.toArray(children), [children])
-  const paging = usePagedRows(tableRows, { pageSize: 25 })
-
+/** Row actions (edit + delete) as a column cell. Icon-only, so each is labelled. */
+function RowActions({ what, onEdit, onDelete }) {
   return (
-    <div className="card overflow-hidden !p-0">
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-              {headers.map((h, i) => <th key={i} className="px-4 py-3 font-semibold whitespace-nowrap">{h}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              [0, 1, 2, 3, 4].map((i) => (
-                <tr key={i} className="border-b border-[var(--input-border)]/50">
-                  <td colSpan={headers.length} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td>
-                </tr>
-              ))
-            ) : empty ? (
-              <tr><td colSpan={headers.length} className="px-4 py-12 text-center text-[var(--text-muted)]">
-                <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                {notProvisioned ? 'Not provisioned yet.' : 'No records match these filters.'}
-              </td></tr>
-            ) : paging.pageRows}
-          </tbody>
-        </table>
-      </div>
-      {!loading && !empty && <TablePagination {...paging} />}
+    <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+      <button onClick={onEdit} className={`w-11 h-11 sm:w-9 sm:h-9 inline-flex items-center justify-center rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] ${FOCUS}`} aria-label={`Edit ${what}`}><Pencil size={14} aria-hidden="true" /></button>
+      <button onClick={onDelete} className={`w-11 h-11 sm:w-9 sm:h-9 inline-flex items-center justify-center rounded hover:bg-red-500/10 text-[var(--text-muted)] hover:text-red-400 ${FOCUS}`} aria-label={`Delete ${what}`}><Trash2 size={14} aria-hidden="true" /></button>
     </div>
   )
 }
+
+/**
+ * The shared register for every catalogue tab: EnterpriseTable over the FULL
+ * filtered set (it pages and sorts across it), with the tab's own states.
+ */
+function ResourceTable({ viewKey, columns, rows, loading, error, onRetry, notProvisioned, onRowClick }) {
+  return (
+    <EnterpriseTable
+      viewKey={viewKey}
+      columns={columns}
+      data={rows}
+      getRowId={(r) => String(r.id)}
+      loading={loading}
+      error={error || null}
+      onRetry={onRetry}
+      enableGlobalFilter={false}
+      enableColumnFilters={false}
+      enableExport={false}
+      initialPageSize={25}
+      pageSizeOptions={[25, 50, 100]}
+      onRowClick={onRowClick}
+      emptyMessage={notProvisioned ? 'Not provisioned yet.' : 'No records match these filters.'}
+    />
+  )
+}
+
 
 // ── shared tab controller hook ───────────────────────────────────────────────
 function useResource(loader, country) {
@@ -253,15 +274,15 @@ function ModelsTab({ country }) {
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
 
-  const summary = useMemo(() => summariseModels(rows || []), [rows])
+  const [statusFilter, setStatusFilter] = useState('')
+  const summary = useMemo(() => modelKpis(rows || []), [rows])
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return (rows || []).filter((r) => {
-      if (!q) return true
-      return `${r.key || ''} ${r.provider || ''} ${r.model_id || ''} ${r.notes || ''}`.toLowerCase().includes(q)
-    })
-  }, [rows, search])
+    const base = searchRecords(rows || [], search, ['key', 'provider', 'model_id', 'notes'])
+    if (statusFilter === 'active') return base.filter((r) => r.active !== false)
+    if (statusFilter === 'inactive') return base.filter((r) => r.active === false)
+    return base
+  }, [rows, search, statusFilter])
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
   const openCreate = () => { setForm(MODEL_FORM); setFormError(''); setModal({ editing: null }) }
@@ -302,49 +323,61 @@ function ModelsTab({ country }) {
     input_price: r.input_price ?? '', output_price: r.output_price ?? '',
     max_tokens: r.max_tokens ?? '', is_default: fmtBool(r.is_default), active: fmtBool(r.active),
   }))
-  // A reference $6/MTok call cost preview for the default model (illustrative).
+  // A reference call-cost preview for the default model (1M in + 1M out tokens).
   const sampleCost = summary.defaultModel ? costPerCall(summary.defaultModel, 1_000_000, 1_000_000) : null
+
+  const modelColumns = [
+    { id: 'key', header: 'Key', accessorFn: (r) => undef(r.key), size: 160, ...SORT, cell: ({ getValue }) => <span className="font-medium text-[var(--text-primary)]">{getValue() ?? 'N/A'}</span> },
+    { id: 'provider', header: 'Provider', accessorFn: (r) => undef(r.provider), size: 110, ...SORT, cell: ({ getValue }) => getValue() ?? NA },
+    { id: 'model_id', header: 'Model ID', accessorFn: (r) => undef(r.model_id), size: 200, ...SORT, cell: ({ getValue }) => (getValue() ? <span className="font-mono text-xs">{getValue()}</span> : NA) },
+    { id: 'input_price', header: 'Input $/1M', accessorFn: (r) => undef(r.input_price == null ? null : Number(r.input_price)), size: 100, meta: { align: 'right' }, ...SORT, cell: ({ getValue }) => fmtUSD(getValue()) },
+    { id: 'output_price', header: 'Output $/1M', accessorFn: (r) => undef(r.output_price == null ? null : Number(r.output_price)), size: 100, meta: { align: 'right' }, ...SORT, cell: ({ getValue }) => fmtUSD(getValue()) },
+    { id: 'max_tokens', header: 'Max tokens', accessorFn: (r) => undef(r.max_tokens == null ? null : Number(r.max_tokens)), size: 100, meta: { align: 'right' }, ...SORT, cell: ({ getValue }) => fmtNum(getValue()) },
+    { id: 'is_default', header: 'Default', accessorFn: (r) => (r.is_default ? 1 : 0), size: 90, ...SORT, cell: ({ row }) => (row.original.is_default ? <Badge ok yes="Default" /> : <span className="text-[var(--text-muted)] text-xs">No</span>) },
+    { id: 'active', header: 'Active', accessorFn: (r) => (r.active !== false ? 1 : 0), size: 90, ...SORT, cell: ({ row }) => <Badge ok={row.original.active !== false} /> },
+    { id: 'actions', header: '', enableSorting: false, size: 90, meta: { export: false }, cell: ({ row }) => <RowActions what={`model ${row.original.key || ''}`} onEdit={() => openEdit(row.original)} onDelete={() => setConfirmDelete(row.original)} /> },
+  ]
 
   return (
     <div className="space-y-6">
-      {notProvisioned && <StatePanel title="AI model catalogue isn’t enabled yet.">Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V205_AI_ADMINISTRATION.sql</span>, then reload.</StatePanel>}
-      {error && <StatePanel tone="red" title="Couldn’t load models.">{error}</StatePanel>}
+      {notProvisioned && <StatePanel title="AI model catalogue is not enabled yet.">Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V205_AI_ADMINISTRATION.sql</span>, then reload.</StatePanel>}
+      {error && <StatePanel tone="red" title="Could not load models." onRetry={load}>{error}</StatePanel>}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiTile label="Models configured" value={rows === null ? 'N/A' : summary.total} Icon={Cpu} />
-        <KpiTile label="Active" value={rows === null ? 'N/A' : summary.activeCount} Icon={CheckCircle2} tone="text-green-400" />
-        <KpiTile label="Default model" value={rows === null ? 'N/A' : (summary.defaultModel?.key || 'None')} Icon={Sparkles} tone="text-amber-400" />
-        <KpiTile label="1M+1M call (default)" value={sampleCost == null ? 'N/A' : fmtUSD(sampleCost)} Icon={Coins} tone="text-sky-400" />
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <KpiTile label="Models configured" value={rows === null || error ? 'N/A' : summary.total} Icon={Cpu} />
+        <KpiTile label="Active" value={rows === null || error ? 'N/A' : summary.activeCount} Icon={CheckCircle2} tone="text-green-400" />
+        <KpiTile label="Priced" value={rows === null || error ? 'N/A' : summary.priced} Icon={Coins} sub="Input and output price set" />
+        <KpiTile label="Default model" value={rows === null || error ? 'N/A' : (summary.defaultModel?.key || 'None')} Icon={Sparkles} tone="text-amber-400" />
+        <KpiTile label="1M in + 1M out (default)" value={sampleCost == null ? 'N/A' : fmtUSD(sampleCost)} Icon={Gauge} />
       </div>
 
       <Toolbar
-        search={search} setSearch={setSearch} placeholder="Search key, provider, model id, notes…"
-        onExcel={async () => { try { await exportToExcel(exportRows, COLS, HEADERS, 'ai_models') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
-        onPdf={async () => { try { await exportToPdf(exportRows, COLS.map((k, i) => ({ key: k, header: HEADERS[i] })), 'AI Models', 'ai_models', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
+        search={search} setSearch={setSearch} placeholder="Search key, provider, model id, notes"
+        extra={(
+          <label><span className="sr-only">Status</span>
+            <select className={`input ${CTRL}`} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="">All statuses</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </label>
+        )}
+        onExcel={async () => { try { await exportToExcel(exportRows, COLS, HEADERS, reportFileName('TyrePulse AI Models')) } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
+        onPdf={async () => { try { await exportToPdf(exportRows, COLS.map((k, i) => ({ key: k, header: HEADERS[i] })), 'AI Models', reportFileName('TyrePulse AI Models'), 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
         onCreate={openCreate} createLabel="Add model" canCreate={!notProvisioned}
         count={filtered.length} total={summary.total}
       />
 
-      <DataTable headers={[...HEADERS, '']} loading={rows === null} empty={filtered.length === 0} notProvisioned={notProvisioned}>
-        {filtered.map((r) => (
-          <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-            <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.key || 'N/A'}</td>
-            <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.provider || 'N/A'}</td>
-            <td className="px-4 py-2.5 text-[var(--text-secondary)] font-mono text-xs">{r.model_id || 'N/A'}</td>
-            <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtUSD(r.input_price)}</td>
-            <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtUSD(r.output_price)}</td>
-            <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtNum(r.max_tokens)}</td>
-            <td className="px-4 py-2.5">{r.is_default ? <Badge ok yes="Default" /> : <span className="text-[var(--text-muted)] text-xs">N/A</span>}</td>
-            <td className="px-4 py-2.5"><Badge ok={r.active !== false} /></td>
-            <td className="px-4 py-2.5">
-              <div className="flex items-center justify-end gap-1">
-                <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit"><Pencil size={14} /></button>
-                <button onClick={() => setConfirmDelete(r)} className="p-1.5 rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" aria-label="Delete"><Trash2 size={14} /></button>
-              </div>
-            </td>
-          </tr>
-        ))}
-      </DataTable>
+      <ResourceTable
+        viewKey="ai-admin-models"
+        columns={modelColumns}
+        rows={filtered}
+        loading={rows === null}
+        error={error}
+        onRetry={load}
+        notProvisioned={notProvisioned}
+        onRowClick={openEdit}
+      />
 
       {modal && (
         <Modal title={modal.editing ? 'Edit model' : 'Add model'} onClose={() => setModal(null)} saving={saving}>
@@ -388,18 +421,13 @@ function PromptsTab({ country }) {
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
 
-  const total = (rows || []).length
-  const activeCount = (rows || []).filter((r) => r.active !== false).length
-  const agentCount = new Set((rows || []).map((r) => r.agent).filter(Boolean)).size
+  const k = useMemo(() => promptKpis(rows || []), [rows])
+  const total = k.total
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return (rows || []).filter((r) => {
-      if (localeFilter && r.locale !== localeFilter) return false
-      if (!q) return true
-      return `${r.agent || ''} ${r.name || ''} ${r.system_prompt || ''} ${r.notes || ''}`.toLowerCase().includes(q)
-    })
-  }, [rows, search, localeFilter])
+  const filtered = useMemo(() => (
+    searchRecords(rows || [], search, ['agent', 'name', 'system_prompt', 'notes'])
+      .filter((r) => !localeFilter || r.locale === localeFilter)
+  ), [rows, search, localeFilter])
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
   const openCreate = () => { setForm(PROMPT_FORM); setFormError(''); setModal({ editing: null }) }
@@ -432,6 +460,16 @@ function PromptsTab({ country }) {
     finally { setDeleting(false) }
   }
 
+  const promptColumns = [
+    { id: 'agent', header: 'Agent', accessorFn: (r) => undef(r.agent), size: 140, ...SORT, cell: ({ getValue }) => <span className="font-medium text-[var(--text-primary)]">{getValue() ?? 'N/A'}</span> },
+    { id: 'name', header: 'Name', accessorFn: (r) => undef(r.name), size: 200, ...SORT, cell: ({ getValue }) => getValue() ?? NA },
+    { id: 'locale', header: 'Locale', accessorFn: (r) => undef(r.locale), size: 80, ...SORT, cell: ({ getValue }) => (getValue() ? <span className="uppercase">{getValue()}</span> : NA) },
+    { id: 'version', header: 'Version', accessorFn: (r) => undef(r.version == null ? null : Number(r.version)), size: 80, meta: { align: 'right' }, ...SORT, cell: ({ getValue }) => (getValue() == null ? NA : `v${getValue()}`) },
+    { id: 'length', header: 'Prompt length', accessorFn: (r) => (r.system_prompt ? r.system_prompt.length : undefined), size: 110, meta: { align: 'right' }, ...SORT, cell: ({ getValue }) => (getValue() == null ? NA : `${getValue().toLocaleString()} chars`) },
+    { id: 'active', header: 'Active', accessorFn: (r) => (r.active !== false ? 1 : 0), size: 90, ...SORT, cell: ({ row }) => <Badge ok={row.original.active !== false} /> },
+    { id: 'actions', header: '', enableSorting: false, size: 90, meta: { export: false }, cell: ({ row }) => <RowActions what={`prompt ${row.original.agent || ''}`} onEdit={() => openEdit(row.original)} onDelete={() => setConfirmDelete(row.original)} /> },
+  ]
+
   const COLS = ['agent', 'name', 'locale', 'version', 'active']
   const HEADERS = ['Agent', 'Name', 'Locale', 'Version', 'Active']
   const exportRows = filtered.map((r) => ({
@@ -440,47 +478,43 @@ function PromptsTab({ country }) {
 
   return (
     <div className="space-y-6">
-      {notProvisioned && <StatePanel title="AI prompt catalogue isn’t enabled yet.">Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V205_AI_ADMINISTRATION.sql</span>, then reload.</StatePanel>}
-      {error && <StatePanel tone="red" title="Couldn’t load prompts.">{error}</StatePanel>}
+      {notProvisioned && <StatePanel title="AI prompt catalogue is not enabled yet.">Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V205_AI_ADMINISTRATION.sql</span>, then reload.</StatePanel>}
+      {error && <StatePanel tone="red" title="Could not load prompts." onRetry={load}>{error}</StatePanel>}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiTile label="Prompts" value={rows === null ? 'N/A' : total} Icon={BookOpen} />
-        <KpiTile label="Active" value={rows === null ? 'N/A' : activeCount} Icon={CheckCircle2} tone="text-green-400" />
-        <KpiTile label="Distinct agents" value={rows === null ? 'N/A' : agentCount} Icon={Sparkles} tone="text-amber-400" />
-        <KpiTile label="Locales" value={rows === null ? 'N/A' : LOCALES.length} Icon={FileText} tone="text-sky-400" />
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <KpiTile label="Prompts" value={rows === null || error ? 'N/A' : k.total} Icon={BookOpen} />
+        <KpiTile label="Active" value={rows === null || error ? 'N/A' : k.active} Icon={CheckCircle2} tone="text-green-400" />
+        <KpiTile label="Distinct agents" value={rows === null || error ? 'N/A' : k.agents} Icon={Sparkles} tone="text-amber-400" />
+        <KpiTile label="Locales in use" value={rows === null || error ? 'N/A' : `${k.locales} of ${LOCALES.length}`} Icon={Languages} />
+        <KpiTile label="Conflicting actives" value={rows === null || error ? 'N/A' : k.conflicts} Icon={AlertTriangle} tone={k.conflicts ? 'text-red-400' : 'text-[var(--text-primary)]'} sub="Same agent and locale, more than one active" />
       </div>
 
       <Toolbar
-        search={search} setSearch={setSearch} placeholder="Search agent, name, prompt text…"
+        search={search} setSearch={setSearch} placeholder="Search agent, name, prompt text"
         extra={(
-          <select className="input" value={localeFilter} onChange={(e) => setLocaleFilter(e.target.value)} aria-label="Locale">
-            <option value="">All locales</option>
-            {LOCALES.map((l) => <option key={l} value={l}>{l}</option>)}
-          </select>
+          <label><span className="sr-only">Locale</span>
+            <select className={`input ${CTRL}`} value={localeFilter} onChange={(e) => setLocaleFilter(e.target.value)}>
+              <option value="">All locales</option>
+              {LOCALES.map((l) => <option key={l} value={l}>{l}</option>)}
+            </select>
+          </label>
         )}
-        onExcel={async () => { try { await exportToExcel(exportRows, COLS, HEADERS, 'ai_prompts') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
-        onPdf={async () => { try { await exportToPdf(exportRows, COLS.map((k, i) => ({ key: k, header: HEADERS[i] })), 'AI Prompts', 'ai_prompts', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
+        onExcel={async () => { try { await exportToExcel(exportRows, COLS, HEADERS, reportFileName('TyrePulse AI Prompts')) } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
+        onPdf={async () => { try { await exportToPdf(exportRows, COLS.map((c, i) => ({ key: c, header: HEADERS[i] })), 'AI Prompts', reportFileName('TyrePulse AI Prompts'), 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
         onCreate={openCreate} createLabel="Add prompt" canCreate={!notProvisioned}
         count={filtered.length} total={total}
       />
 
-      <DataTable headers={[...HEADERS, '']} loading={rows === null} empty={filtered.length === 0} notProvisioned={notProvisioned}>
-        {filtered.map((r) => (
-          <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-            <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.agent || 'N/A'}</td>
-            <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.name || 'N/A'}</td>
-            <td className="px-4 py-2.5 text-[var(--text-secondary)] uppercase">{r.locale || 'N/A'}</td>
-            <td className="px-4 py-2.5 text-[var(--text-secondary)]">v{r.version ?? 1}</td>
-            <td className="px-4 py-2.5"><Badge ok={r.active !== false} /></td>
-            <td className="px-4 py-2.5">
-              <div className="flex items-center justify-end gap-1">
-                <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit"><Pencil size={14} /></button>
-                <button onClick={() => setConfirmDelete(r)} className="p-1.5 rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" aria-label="Delete"><Trash2 size={14} /></button>
-              </div>
-            </td>
-          </tr>
-        ))}
-      </DataTable>
+      <ResourceTable
+        viewKey="ai-admin-prompts"
+        columns={promptColumns}
+        rows={filtered}
+        loading={rows === null}
+        error={error}
+        onRetry={load}
+        notProvisioned={notProvisioned}
+        onRowClick={openEdit}
+      />
 
       {modal && (
         <Modal title={modal.editing ? 'Edit prompt' : 'Add prompt'} onClose={() => setModal(null)} saving={saving}>
@@ -497,7 +531,7 @@ function PromptsTab({ country }) {
               </Field>
               <Field label="Version"><input className="input w-full" type="number" step="1" min="1" value={form.version} onChange={(e) => set('version', e.target.value)} /></Field>
             </div>
-            <Field label="System prompt"><textarea className="input w-full min-h-[160px] resize-y font-mono text-xs" placeholder="You are TyrePulse Analyst Agent…" value={form.system_prompt} maxLength={20000} onChange={(e) => set('system_prompt', e.target.value)} /></Field>
+            <Field label="System prompt"><textarea className="input w-full min-h-[160px] resize-y font-mono text-xs" placeholder="You are TyrePulse Analyst Agent..." value={form.system_prompt} maxLength={20000} onChange={(e) => set('system_prompt', e.target.value)} /></Field>
             <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]"><input type="checkbox" checked={form.active} onChange={(e) => set('active', e.target.checked)} /> Active</label>
             <Field label="Notes (optional)"><textarea className="input w-full min-h-[60px] resize-y" value={form.notes} maxLength={8000} onChange={(e) => set('notes', e.target.value)} /></Field>
             <FormFooter {...{ formError, saving, editing: modal.editing, onCancel: () => setModal(null) }} />
@@ -512,7 +546,6 @@ function PromptsTab({ country }) {
 
 // ── Budgets tab ──────────────────────────────────────────────────────────────
 const BUDGET_FORM = { period: 'monthly', token_cap: '', cost_cap_usd: '', hard_stop: false, scope: '', active: true, notes: '' }
-const PERIOD_DAYS = { daily: 1, weekly: 7, monthly: 30 }
 
 function BudgetsTab({ country }) {
   const { rows, error, notProvisioned, load, setError } = useResource(listAiBudgets, country)
@@ -523,56 +556,31 @@ function BudgetsTab({ country }) {
   const [formError, setFormError] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
-  // Real spend windows from the existing ai_token_logs table (no fabrication).
-  const [spend, setSpend] = useState({ available: false, byPeriod: {} })
+  // Real spend windows from ai_token_logs through the ONE reader (aiOps, paged
+  // past the 1,000-row cap). Unknown spend stays unknown, never 0.
+  const [spend, setSpend] = useState({ available: false, windows: null, truncated: false, error: '' })
+  const [statusFilter, setStatusFilter] = useState('')
 
-  useEffect(() => {
-    let alive = true
-    ;(async () => {
-      try {
-        const since = new Date(Date.now() - 30 * 86_400_000).toISOString()
-        const { data, error: err } = await supabase
-          .from('ai_token_logs')
-          .select('cost_usd, prompt_tokens, completion_tokens, created_at')
-          .gte('created_at', since)
-          .limit(20000)
-        if (err) throw err
-        const now = Date.now()
-        const acc = { daily: { cost: 0, tokens: 0 }, weekly: { cost: 0, tokens: 0 }, monthly: { cost: 0, tokens: 0 } }
-        for (const r of data || []) {
-          const age = now - new Date(r.created_at).getTime()
-          const cost = Number(r.cost_usd) || 0
-          const toks = (Number(r.prompt_tokens) || 0) + (Number(r.completion_tokens) || 0)
-          for (const p of PERIODS) {
-            if (age <= PERIOD_DAYS[p] * 86_400_000) { acc[p].cost += cost; acc[p].tokens += toks }
-          }
-        }
-        if (alive) setSpend({ available: true, byPeriod: acc })
-      } catch {
-        if (alive) setSpend({ available: false, byPeriod: {} })
-      }
-    })()
-    return () => { alive = false }
+  const loadSpend = useCallback(async () => {
+    try {
+      const { rows: logs, truncated } = await readTokenLogs({ days: 30, country })
+      setSpend({ available: true, windows: spendWindows(logs, Date.now()), truncated, error: '' })
+    } catch (err) {
+      setSpend({ available: false, windows: null, truncated: false, error: toUserMessage(err, 'Live spend is unavailable.') })
+    }
   }, [country])
+  useEffect(() => { loadSpend() }, [loadSpend])
 
-  const total = (rows || []).length
-  const activeCount = (rows || []).filter((r) => r.active !== false).length
-  const hardStops = (rows || []).filter((r) => r.hard_stop === true).length
+  const k = useMemo(() => budgetKpis(rows || [], spend.windows), [rows, spend.windows])
+  const total = k.total
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return (rows || []).filter((r) => {
-      if (!q) return true
-      return `${r.period || ''} ${r.scope || ''} ${r.notes || ''}`.toLowerCase().includes(q)
-    })
-  }, [rows, search])
-
-  const spendFor = (b) => {
-    if (!spend.available) return null
-    const p = spend.byPeriod[b.period] || { cost: 0, tokens: 0 }
-    // If a cost cap is set, compare against cost; else against tokens.
-    return b.cost_cap_usd != null ? p.cost : p.tokens
-  }
+    const base = searchRecords(rows || [], search, ['period', 'scope', 'notes'])
+    if (statusFilter === 'over') return base.filter((r) => budgetUtilisation(r, spend.windows)?.over)
+    if (statusFilter === 'active') return base.filter((r) => r.active !== false)
+    if (statusFilter === 'inactive') return base.filter((r) => r.active === false)
+    return base
+  }, [rows, search, statusFilter, spend.windows])
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
   const openCreate = () => { setForm(BUDGET_FORM); setFormError(''); setModal({ editing: null }) }
@@ -604,69 +612,99 @@ function BudgetsTab({ country }) {
     finally { setDeleting(false) }
   }
 
-  const COLS = ['period', 'token_cap', 'cost_cap_usd', 'hard_stop', 'scope', 'active']
-  const HEADERS = ['Period', 'Token cap', 'Cost cap $', 'Hard stop', 'Scope', 'Active']
-  const exportRows = filtered.map((r) => ({
-    period: r.period || '', token_cap: r.token_cap ?? '', cost_cap_usd: r.cost_cap_usd ?? '',
-    hard_stop: fmtBool(r.hard_stop), scope: r.scope || '', active: fmtBool(r.active),
-  }))
+  const budgetColumns = [
+    { id: 'period', header: 'Period', accessorFn: (r) => undef(r.period), size: 100, ...SORT, cell: ({ getValue }) => <span className="font-medium capitalize text-[var(--text-primary)]">{getValue() ?? 'N/A'}</span> },
+    {
+      id: 'cap', header: 'Cap', accessorFn: (r) => undef(r.cost_cap_usd != null ? Number(r.cost_cap_usd) : (r.token_cap != null ? Number(r.token_cap) : null)), size: 120, meta: { align: 'right' }, ...SORT,
+      cell: ({ row }) => {
+        const r = row.original
+        return r.cost_cap_usd != null ? fmtUSD(r.cost_cap_usd) : (r.token_cap != null ? `${fmtNum(r.token_cap)} tok` : NA)
+      },
+    },
+    {
+      id: 'util', header: 'Utilisation', accessorFn: (r) => budgetUtilisation(r, spend.windows)?.pct, size: 170, ...SORT,
+      cell: ({ row }) => {
+        const u = budgetUtilisation(row.original, spend.windows)
+        if (!u) return NA
+        return (
+          <div className="min-w-[120px]">
+            <div className="flex items-center justify-between text-[11px] mb-1">
+              <span className={u.over ? 'text-red-400 font-medium' : 'text-[var(--text-secondary)]'}>{u.pct.toFixed(0)}%{u.over ? ' over cap' : ''}</span>
+              <span className="text-[var(--text-muted)]">{u.basis === 'cost' ? fmtUSD(u.spend) : `${fmtNum(u.spend)} tok`}</span>
+            </div>
+            <div className="w-full bg-[var(--panel-2)] rounded-full h-1.5" role="progressbar" aria-valuenow={Math.round(u.pct)} aria-valuemin={0} aria-valuemax={100} aria-label="Budget used">
+              <div className={`h-1.5 rounded-full ${u.over ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${Math.min(u.pct, 100).toFixed(1)}%` }} />
+            </div>
+          </div>
+        )
+      },
+    },
+    { id: 'hard_stop', header: 'Hard stop', accessorFn: (r) => (r.hard_stop ? 1 : 0), size: 90, ...SORT, cell: ({ row }) => (row.original.hard_stop ? <Badge ok yes="Hard" /> : <span className="text-[var(--text-muted)] text-xs">Soft</span>) },
+    { id: 'scope', header: 'Scope', accessorFn: (r) => undef(r.scope), size: 140, ...SORT, cell: ({ getValue }) => getValue() ?? <span className="text-[var(--text-muted)]">Org-wide</span> },
+    { id: 'active', header: 'Active', accessorFn: (r) => (r.active !== false ? 1 : 0), size: 90, ...SORT, cell: ({ row }) => <Badge ok={row.original.active !== false} /> },
+    { id: 'actions', header: '', enableSorting: false, size: 90, meta: { export: false }, cell: ({ row }) => <RowActions what={`${row.original.period || ''} budget`} onEdit={() => openEdit(row.original)} onDelete={() => setConfirmDelete(row.original)} /> },
+  ]
+
+  const COLS = ['period', 'token_cap', 'cost_cap_usd', 'hard_stop', 'scope', 'active', 'utilisation']
+  const HEADERS = ['Period', 'Token cap', 'Cost cap $', 'Hard stop', 'Scope', 'Active', 'Utilisation %']
+  const exportRows = filtered.map((r) => {
+    const u = budgetUtilisation(r, spend.windows)
+    return {
+      period: r.period || 'N/A', token_cap: r.token_cap ?? 'N/A', cost_cap_usd: r.cost_cap_usd ?? 'N/A',
+      hard_stop: fmtBool(r.hard_stop), scope: r.scope || 'Org-wide', active: fmtBool(r.active),
+      utilisation: u ? Number(u.pct.toFixed(1)) : 'N/A',
+    }
+  })
 
   return (
     <div className="space-y-6">
-      {notProvisioned && <StatePanel title="AI budgets aren’t enabled yet.">Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V205_AI_ADMINISTRATION.sql</span>, then reload.</StatePanel>}
-      {error && <StatePanel tone="red" title="Couldn’t load budgets.">{error}</StatePanel>}
+      {notProvisioned && <StatePanel title="AI budgets are not enabled yet.">Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V205_AI_ADMINISTRATION.sql</span>, then reload.</StatePanel>}
+      {error && <StatePanel tone="red" title="Could not load budgets." onRetry={load}>{error}</StatePanel>}
       {!spend.available && !notProvisioned && (
-        <p className="text-xs text-[var(--text-muted)]">Live spend unavailable (no ai_token_logs access). Showing cap configuration only.</p>
+        <StatePanel title="Live spend is unavailable." onRetry={loadSpend}>
+          {spend.error || 'Spend could not be read.'} Showing cap configuration only; utilisation reads N/A.
+        </StatePanel>
+      )}
+      {spend.truncated && (
+        <p className="text-xs text-amber-400" role="status">Spend read hit its row ceiling, so utilisation is a lower bound.</p>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiTile label="Budgets" value={rows === null ? 'N/A' : total} Icon={Wallet} />
-        <KpiTile label="Active" value={rows === null ? 'N/A' : activeCount} Icon={CheckCircle2} tone="text-green-400" />
-        <KpiTile label="Hard stops" value={rows === null ? 'N/A' : hardStops} Icon={ShieldAlert} tone="text-red-400" />
-        <KpiTile label="30d spend" value={spend.available ? fmtUSD(spend.byPeriod.monthly?.cost) : 'N/A'} Icon={Coins} tone="text-sky-400" />
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <KpiTile label="Budgets" value={rows === null || error ? 'N/A' : k.total} Icon={Wallet} />
+        <KpiTile label="Active" value={rows === null || error ? 'N/A' : k.active} Icon={CheckCircle2} tone="text-green-400" />
+        <KpiTile label="Hard stops" value={rows === null || error ? 'N/A' : k.hardStops} Icon={ShieldAlert} />
+        <KpiTile label="Over cap now" value={rows === null || error || k.overCap == null ? 'N/A' : k.overCap} Icon={AlertTriangle} tone={k.overCap ? 'text-red-400' : 'text-[var(--text-primary)]'} />
+        <KpiTile label="30 day spend" value={k.spend30d == null ? 'N/A' : fmtUSD(k.spend30d)} Icon={Coins} sub={spend.windows ? `${spend.windows.monthly.calls.toLocaleString()} calls` : undefined} />
       </div>
 
       <Toolbar
-        search={search} setSearch={setSearch} placeholder="Search period, scope, notes…"
-        onExcel={async () => { try { await exportToExcel(exportRows, COLS, HEADERS, 'ai_budgets') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
-        onPdf={async () => { try { await exportToPdf(exportRows, COLS.map((k, i) => ({ key: k, header: HEADERS[i] })), 'AI Budgets', 'ai_budgets', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
+        search={search} setSearch={setSearch} placeholder="Search period, scope, notes"
+        extra={(
+          <label><span className="sr-only">Status</span>
+            <select className={`input ${CTRL}`} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="">All budgets</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+              <option value="over">Over cap</option>
+            </select>
+          </label>
+        )}
+        onExcel={async () => { try { await exportToExcel(exportRows, COLS, HEADERS, reportFileName('TyrePulse AI Budgets')) } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
+        onPdf={async () => { try { await exportToPdf(exportRows, COLS.map((c, i) => ({ key: c, header: HEADERS[i] })), 'AI Budgets', reportFileName('TyrePulse AI Budgets'), 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
         onCreate={openCreate} createLabel="Add budget" canCreate={!notProvisioned}
         count={filtered.length} total={total}
       />
 
-      <DataTable headers={['Period', 'Cap', 'Utilisation', 'Hard stop', 'Scope', 'Active', '']} loading={rows === null} empty={filtered.length === 0} notProvisioned={notProvisioned}>
-        {filtered.map((r) => {
-          const status = spend.available ? budgetStatus(r, spendFor(r)) : null
-          const capLabel = r.cost_cap_usd != null ? fmtUSD(r.cost_cap_usd) : (r.token_cap != null ? `${fmtNum(r.token_cap)} tok` : 'N/A')
-          return (
-            <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-              <td className="px-4 py-2.5 font-medium text-[var(--text-primary)] capitalize">{r.period || 'N/A'}</td>
-              <td className="px-4 py-2.5 text-[var(--text-secondary)]">{capLabel}</td>
-              <td className="px-4 py-2.5 min-w-[140px]">
-                {status && status.cap > 0 ? (
-                  <div>
-                    <div className="flex items-center justify-between text-[11px] mb-1">
-                      <span className={status.over ? 'text-red-400 font-medium' : 'text-[var(--text-muted)]'}>{status.pct.toFixed(0)}%</span>
-                    </div>
-                    <div className="w-full bg-[var(--input-bg)] rounded-full h-1.5">
-                      <div className={`h-1.5 rounded-full ${status.over ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${Math.min(status.pct, 100).toFixed(1)}%` }} />
-                    </div>
-                  </div>
-                ) : <span className="text-[var(--text-muted)] text-xs">N/A</span>}
-              </td>
-              <td className="px-4 py-2.5">{r.hard_stop ? <Badge ok yes="Hard" /> : <span className="text-[var(--text-muted)] text-xs">Soft</span>}</td>
-              <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.scope || 'org-wide'}</td>
-              <td className="px-4 py-2.5"><Badge ok={r.active !== false} /></td>
-              <td className="px-4 py-2.5">
-                <div className="flex items-center justify-end gap-1">
-                  <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit"><Pencil size={14} /></button>
-                  <button onClick={() => setConfirmDelete(r)} className="p-1.5 rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" aria-label="Delete"><Trash2 size={14} /></button>
-                </div>
-              </td>
-            </tr>
-          )
-        })}
-      </DataTable>
+      <ResourceTable
+        viewKey="ai-admin-budgets"
+        columns={budgetColumns}
+        rows={filtered}
+        loading={rows === null}
+        error={error}
+        onRetry={load}
+        notProvisioned={notProvisioned}
+        onRowClick={openEdit}
+      />
 
       {modal && (
         <Modal title={modal.editing ? 'Edit budget' : 'Add budget'} onClose={() => setModal(null)} saving={saving}>
@@ -711,19 +749,19 @@ function FeedbackTab({ country }) {
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
 
-  const total = (rows || []).length
-  const rated = (rows || []).filter((r) => r.rating != null)
-  const avgRating = rated.length ? (rated.reduce((s, r) => s + Number(r.rating), 0) / rated.length) : null
-  const correctCount = (rows || []).filter((r) => r.correct === true).length
-  const correctPct = total ? (correctCount / total) * 100 : null
+  const [verdictFilter, setVerdictFilter] = useState('')
+  const k = useMemo(() => feedbackKpis(rows || []), [rows])
+  const dist = useMemo(() => ratingDistribution(rows || []), [rows])
+  const total = k.total
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return (rows || []).filter((r) => {
-      if (!q) return true
-      return `${r.note || ''} ${r.conversation_id || ''} ${r.message_id || ''}`.toLowerCase().includes(q)
-    })
-  }, [rows, search])
+    const base = searchRecords(rows || [], search, ['note', 'conversation_id', 'message_id'])
+    if (verdictFilter === 'correct') return base.filter((r) => r.correct === true)
+    if (verdictFilter === 'wrong') return base.filter((r) => r.correct === false)
+    if (verdictFilter === 'unjudged') return base.filter((r) => r.correct == null)
+    if (verdictFilter === 'low') return base.filter((r) => r.rating != null && Number(r.rating) <= 2)
+    return base
+  }, [rows, search, verdictFilter])
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
   const openCreate = () => { setForm(FEEDBACK_FORM); setFormError(''); setModal({ editing: null }) }
@@ -759,6 +797,15 @@ function FeedbackTab({ country }) {
     finally { setDeleting(false) }
   }
 
+  const feedbackColumns = [
+    { id: 'created_at', header: 'Date', accessorFn: (r) => undef(r.created_at), size: 110, ...SORT, cell: ({ getValue }) => fmtDate(getValue()) },
+    { id: 'rating', header: 'Rating', accessorFn: (r) => undef(r.rating == null ? null : Number(r.rating)), size: 80, meta: { align: 'right' }, ...SORT, cell: ({ getValue }) => (getValue() == null ? NA : <span className="font-semibold">{getValue()}/5</span>) },
+    { id: 'correct', header: 'Correct', accessorFn: (r) => (r.correct == null ? undefined : (r.correct ? 1 : 0)), size: 90, ...SORT, cell: ({ row }) => (row.original.correct == null ? NA : <Badge ok={row.original.correct === true} yes="Correct" no="Wrong" />) },
+    { id: 'note', header: 'Note', accessorFn: (r) => undef(r.note), size: 320, ...SORT, cell: ({ getValue }) => (getValue() ? <span className="block max-w-[320px] truncate" title={getValue()}>{getValue()}</span> : NA) },
+    { id: 'conversation_id', header: 'Conversation', accessorFn: (r) => undef(r.conversation_id), size: 160, ...SORT, cell: ({ getValue }) => (getValue() ? <span className="font-mono text-xs block max-w-[160px] truncate" title={getValue()}>{getValue()}</span> : NA) },
+    { id: 'actions', header: '', enableSorting: false, size: 90, meta: { export: false }, cell: ({ row }) => <RowActions what="feedback entry" onEdit={() => openEdit(row.original)} onDelete={() => setConfirmDelete(row.original)} /> },
+  ]
+
   const COLS = ['created_at', 'rating', 'correct', 'note', 'conversation_id']
   const HEADERS = ['Date', 'Rating', 'Correct', 'Note', 'Conversation']
   const exportRows = filtered.map((r) => ({
@@ -768,41 +815,62 @@ function FeedbackTab({ country }) {
 
   return (
     <div className="space-y-6">
-      {notProvisioned && <StatePanel title="AI feedback isn’t enabled yet.">Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V205_AI_ADMINISTRATION.sql</span>, then reload.</StatePanel>}
-      {error && <StatePanel tone="red" title="Couldn’t load feedback.">{error}</StatePanel>}
+      {notProvisioned && <StatePanel title="AI feedback is not enabled yet.">Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V205_AI_ADMINISTRATION.sql</span>, then reload.</StatePanel>}
+      {error && <StatePanel tone="red" title="Could not load feedback." onRetry={load}>{error}</StatePanel>}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiTile label="Feedback entries" value={rows === null ? 'N/A' : total} Icon={Star} />
-        <KpiTile label="Avg rating" value={rows === null ? 'N/A' : (avgRating == null ? 'N/A' : avgRating.toFixed(2))} Icon={Star} tone="text-amber-400" />
-        <KpiTile label="Marked correct" value={rows === null ? 'N/A' : correctCount} Icon={ThumbsUp} tone="text-green-400" />
-        <KpiTile label="Correct %" value={rows === null ? 'N/A' : (correctPct == null ? 'N/A' : `${correctPct.toFixed(0)}%`)} Icon={CheckCircle2} tone="text-sky-400" />
+        <KpiTile label="Feedback entries" value={rows === null || error ? 'N/A' : k.total} Icon={Star} />
+        <KpiTile label="Avg rating" value={rows === null || error || k.avgRating == null ? 'N/A' : `${k.avgRating.toFixed(2)} / 5`} Icon={Star} tone="text-amber-400" sub={k.rated ? `${k.rated} rated` : 'No ratings yet'} />
+        <KpiTile label="Marked correct" value={rows === null || error ? 'N/A' : k.correct} Icon={ThumbsUp} tone="text-green-400" sub={`of ${k.judged} judged`} />
+        <KpiTile label="Correct share" value={rows === null || error || k.correctPct == null ? 'N/A' : `${k.correctPct.toFixed(0)}%`} Icon={CheckCircle2} sub="Among judged answers" />
       </div>
 
+      {k.rated > 0 && (
+        <div className="card" aria-label="Rating distribution">
+          <p className="text-xs text-[var(--text-muted)] mb-2">Rating distribution</p>
+          <ul className="grid grid-cols-5 gap-2">
+            {dist.map((d) => (
+              <li key={d.rating} className="text-center">
+                <div className="h-16 flex items-end justify-center">
+                  <div className="w-full max-w-[40px] rounded-t bg-amber-500/70" style={{ height: `${k.rated ? Math.max(4, (d.count / k.rated) * 100) : 0}%` }} />
+                </div>
+                <p className="text-xs text-[var(--text-secondary)] mt-1">{d.rating} star{d.rating === 1 ? '' : 's'}</p>
+                <p className="text-xs font-semibold text-[var(--text-primary)] tabular-nums">{d.count}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <Toolbar
-        search={search} setSearch={setSearch} placeholder="Search note, conversation, message id…"
-        onExcel={async () => { try { await exportToExcel(exportRows, COLS, HEADERS, 'ai_feedback') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
-        onPdf={async () => { try { await exportToPdf(exportRows, COLS.map((k, i) => ({ key: k, header: HEADERS[i] })), 'AI Feedback', 'ai_feedback', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
+        search={search} setSearch={setSearch} placeholder="Search note, conversation, message id"
+        extra={(
+          <label><span className="sr-only">Verdict</span>
+            <select className={`input ${CTRL}`} value={verdictFilter} onChange={(e) => setVerdictFilter(e.target.value)}>
+              <option value="">All feedback</option>
+              <option value="correct">Correct</option>
+              <option value="wrong">Wrong</option>
+              <option value="unjudged">Not judged</option>
+              <option value="low">Rated 2 or lower</option>
+            </select>
+          </label>
+        )}
+        onExcel={async () => { try { await exportToExcel(exportRows, COLS, HEADERS, reportFileName('TyrePulse AI Feedback')) } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
+        onPdf={async () => { try { await exportToPdf(exportRows, COLS.map((c, i) => ({ key: c, header: HEADERS[i] })), 'AI Feedback', reportFileName('TyrePulse AI Feedback'), 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
         onCreate={openCreate} createLabel="Log feedback" canCreate={!notProvisioned}
         count={filtered.length} total={total}
       />
 
-      <DataTable headers={[...HEADERS, '']} loading={rows === null} empty={filtered.length === 0} notProvisioned={notProvisioned}>
-        {filtered.map((r) => (
-          <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-            <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(r.created_at)}</td>
-            <td className="px-4 py-2.5 text-[var(--text-primary)] font-semibold">{r.rating == null ? 'N/A' : `${r.rating}/5`}</td>
-            <td className="px-4 py-2.5">{r.correct == null ? <span className="text-[var(--text-muted)] text-xs">N/A</span> : <Badge ok={r.correct === true} yes="Correct" no="Wrong" />}</td>
-            <td className="px-4 py-2.5 text-[var(--text-secondary)] max-w-[320px] truncate" title={r.note || ''}>{r.note || 'N/A'}</td>
-            <td className="px-4 py-2.5 text-[var(--text-muted)] font-mono text-xs truncate max-w-[160px]">{r.conversation_id || 'N/A'}</td>
-            <td className="px-4 py-2.5">
-              <div className="flex items-center justify-end gap-1">
-                <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit"><Pencil size={14} /></button>
-                <button onClick={() => setConfirmDelete(r)} className="p-1.5 rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" aria-label="Delete"><Trash2 size={14} /></button>
-              </div>
-            </td>
-          </tr>
-        ))}
-      </DataTable>
+      <ResourceTable
+        viewKey="ai-admin-feedback"
+        columns={feedbackColumns}
+        rows={filtered}
+        loading={rows === null}
+        error={error}
+        onRetry={load}
+        notProvisioned={notProvisioned}
+        onRowClick={openEdit}
+      />
 
       {modal && (
         <Modal title={modal.editing ? 'Edit feedback' : 'Log feedback'} onClose={() => setModal(null)} saving={saving}>
@@ -837,14 +905,14 @@ function FormFooter({ formError, saving, editing, onCancel, createWord = 'Create
   return (
     <>
       {formError && (
-        <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
-          <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {formError}
+        <div role="alert" className="flex items-start gap-2 text-sm text-red-400 bg-red-500/10 border border-red-500/40 rounded-lg px-3 py-2">
+          <AlertTriangle size={15} className="mt-0.5 shrink-0" aria-hidden="true" /> {formError}
         </div>
       )}
       <div className="flex items-center justify-end gap-2 pt-1">
-        <button type="button" onClick={onCancel} className="btn-secondary text-sm" disabled={saving}>Cancel</button>
-        <button type="submit" className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={saving}>
-          {saving ? 'Saving…' : editing ? 'Save changes' : createWord}
+        <button type="button" onClick={onCancel} className={`btn-secondary text-sm px-3 ${CTRL}`} disabled={saving}>Cancel</button>
+        <button type="submit" className={`btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60 ${CTRL}`} disabled={saving}>
+          {saving ? 'Saving...' : editing ? 'Save changes' : createWord}
         </button>
       </div>
     </>
@@ -856,7 +924,7 @@ function AccessDenied() {
   return (
     <div className="card max-w-md mx-auto mt-16 p-8 text-center flex flex-col items-center gap-3">
       <div className="w-12 h-12 rounded-2xl bg-red-500/10 flex items-center justify-center">
-        <ShieldAlert size={22} className="text-red-400" />
+        <ShieldAlert size={22} className="text-red-400" aria-hidden="true" />
       </div>
       <h1 className="text-lg font-bold text-[var(--text-primary)]">Admin access required</h1>
       <p className="text-sm text-muted">
@@ -877,9 +945,9 @@ export default function AiAdministration() {
   if (authLoading) {
     return (
       <div className="space-y-6" aria-busy="true">
-        <div className="h-12 w-64 rounded-xl bg-white/5 animate-pulse" />
+        <div className="h-12 w-64 rounded-xl bg-[var(--panel-2)] animate-pulse" />
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-24 rounded-2xl bg-white/5 animate-pulse" />)}
+          {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-24 rounded-2xl bg-[var(--panel-2)] animate-pulse" />)}
         </div>
       </div>
     )
@@ -897,18 +965,20 @@ export default function AiAdministration() {
       />
 
       {/* Tabs */}
-      <div className="flex flex-wrap gap-2 border-b border-[var(--input-border)] pb-px">
+      <div className="flex flex-wrap gap-2 border-b border-[var(--input-border)] pb-px" role="tablist" aria-label="AI administration sections">
         {TABS.map(({ key, label, Icon }) => (
           <button
             key={key}
+            role="tab"
+            aria-selected={tab === key}
             onClick={() => setTab(key)}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium rounded-t-lg border-b-2 -mb-px transition-colors ${
+            className={`inline-flex items-center gap-1.5 px-3.5 min-h-[44px] text-sm font-medium rounded-t-lg border-b-2 -mb-px transition-colors ${FOCUS} ${
               tab === key
                 ? 'border-brand-bright text-[var(--text-primary)]'
                 : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
             }`}
           >
-            <Icon size={15} /> {label}
+            <Icon size={15} aria-hidden="true" /> {label}
           </button>
         ))}
       </div>

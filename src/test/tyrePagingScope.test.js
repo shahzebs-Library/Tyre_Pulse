@@ -223,10 +223,13 @@ describe('the long tyre registers are actually paged', () => {
     {
       file: 'pages/SerialTracker.jsx',
       what: 'the bulk serial lookup',
+      // CONTRACT MOVED, deliberately: both registers are now EnterpriseTables,
+      // which page (and sort) the FULL filtered set themselves. They must be
+      // handed the filtered list, never a page, and must page, not render all.
       requires: [
-        'const bulkPager  = usePagedRows(filteredBulkResults)',
-        '{bulkPager.pageRows.map(r => (',
-        '<TablePagination {...bulkPager} />',
+        '<EnterpriseTable',
+        'data={filteredBulkResults}',
+        'initialPageSize={50}',
       ],
       forbids: '{filteredBulkResults.map(r => (',
     },
@@ -234,9 +237,9 @@ describe('the long tyre registers are actually paged', () => {
       file: 'pages/SerialTracker.jsx',
       what: 'the scrapped register',
       requires: [
-        'const scrapPager = usePagedRows(filteredScrapList)',
-        '{scrapPager.pageRows.map(r => (',
-        '<TablePagination {...scrapPager} />',
+        '<EnterpriseTable',
+        'data={filteredScrapList}',
+        'initialPageSize={50}',
       ],
       forbids: '{filteredScrapList.map(r => (',
     },
@@ -278,8 +281,8 @@ describe('the long tyre registers are actually paged', () => {
     },
     {
       file: 'pages/TyreLifecycle.jsx',
-      what: 'the lifecycle table (its own pager, predates this pass)',
-      requires: ['filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)'],
+      what: 'the lifecycle register (EnterpriseTable pages it)',
+      requires: ['<EnterpriseTable', 'initialPageSize={25}'],
       forbids: '{filtered.map(r => {',
     },
     {

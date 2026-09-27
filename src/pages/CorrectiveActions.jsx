@@ -4,26 +4,37 @@ import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   Plus, Save, X, CheckCircle, Clock, AlertCircle, Download, FileText,
-  Camera, ClipboardCheck, Search, LayoutList, LayoutGrid, ChevronDown,
+  Camera, ClipboardCheck, Search, LayoutList, LayoutGrid,
   TrendingUp, AlertTriangle, Timer, Filter, BarChart2, RefreshCw,
+  MapPin, User, Truck, CircleDot, Calendar, Wrench,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Modal from '../components/ui/Modal'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { SkeletonTable } from '../components/ui/Skeleton'
 import { formatDate } from '../lib/formatters'
 import { RISK_BADGE_DARK } from '../lib/formatters'
 import { useLanguage } from '../contexts/LanguageContext'
 import { toUserMessage } from '../lib/safeError'
+import { compareValues } from '../lib/consoleTable'
+import { colorAt } from '../lib/reportColors'
+import {
+  overdueDays, daysOpen, avgDaysToClose as avgDaysToCloseAt, matchesSearch, overdueRate,
+  rootCauseDistribution, siteBreakdown, sortActions, actionRows, actionExportRows,
+  EXPORT_COLS, EXPORT_HEADERS, STATUSES, PRIORITIES,
+} from '../lib/correctiveActionsAnalytics'
 
 // exportUtils pulls the PDF/Excel report engines that most sessions never
 // trigger, so it loads on first click instead of riding with the route chunk.
 const loadExportUtils = () => import('../lib/exportUtils')
 
 // ── Constants ──────────────────────────────────────────────────────────────────
+// Semantic status colours. The status name is always printed beside the colour.
 const STATUS_META = {
-  Open:          { icon: AlertCircle,  color: 'text-red-400',    bg: 'bg-red-900/30 border-red-700/50',    pill: 'bg-red-900/40 text-red-300 border-red-700/50' },
-  'In Progress': { icon: Clock,        color: 'text-yellow-400', bg: 'bg-yellow-900/30 border-yellow-700/50', pill: 'bg-yellow-900/40 text-yellow-300 border-yellow-700/50' },
-  Closed:        { icon: CheckCircle,  color: 'text-green-400',  bg: 'bg-green-900/30 border-green-700/50',  pill: 'bg-green-900/40 text-green-300 border-green-700/50' },
+  Open:          { icon: AlertCircle, color: 'text-red-400',    bg: 'bg-red-500/10 border-red-500/40' },
+  'In Progress': { icon: Clock,       color: 'text-amber-400',  bg: 'bg-amber-500/10 border-amber-500/40' },
+  Closed:        { icon: CheckCircle, color: 'text-green-400',  bg: 'bg-green-500/10 border-green-500/40' },
 }
 
 const PRIORITY_BADGE = {
@@ -31,8 +42,6 @@ const PRIORITY_BADGE = {
   Medium: RISK_BADGE_DARK.Medium,
   Low:    RISK_BADGE_DARK.Low,
 }
-
-const PRIORITY_RANK = { High: 0, Medium: 1, Low: 2 }
 
 const EMPTY_FORM = {
   title: '', priority: 'Medium', site: '', description: '', assigned_to: '',
@@ -46,222 +55,159 @@ const ROOT_CAUSES = [
   'Wear Limit Reached', 'Other',
 ]
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
-function overdueDays(due_date, status) {
-  if (!due_date || status === 'Closed') return null
-  const days = Math.floor((Date.now() - new Date(due_date)) / 86_400_000)
-  return days > 0 ? days : null
-}
+const SORT = { sortingFn: (a, b, id) => compareValues(a.getValue(id), b.getValue(id)), sortUndefined: 'last' }
+const undef = (v) => (v == null || v === '' ? undefined : v)
 
-function daysOpen(created_at, closed_at) {
-  const end = closed_at ? new Date(closed_at) : new Date()
-  return Math.max(0, Math.floor((end - new Date(created_at)) / 86_400_000))
-}
-
-function avgDaysToClose(actions) {
-  const closed = actions.filter(a => a.status === 'Closed' && a.closed_at && a.created_at)
-  if (!closed.length) return null
-  const total = closed.reduce((s, a) => s + daysOpen(a.created_at, a.closed_at), 0)
-  return Math.round(total / closed.length)
-}
+const FOCUS = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
+const ctrlCls = `min-h-[44px] sm:min-h-[36px] ${FOCUS}`
+const iconBtn = (active) =>
+  `w-11 h-11 sm:w-9 sm:h-9 inline-flex items-center justify-center rounded-lg border transition-colors ${FOCUS} `
+  + (active
+    ? 'bg-[var(--accent)]/15 border-[var(--accent)] text-[var(--accent)]'
+    : 'bg-[var(--surface-2)] border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]')
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
-function KpiCard({ label, value, sub, icon: Icon, color = 'text-blue-400', onClick, active }) {
+function KpiCard({ label, value, sub, icon: Icon, color = 'text-[var(--text-primary)]', onClick, active }) {
+  const Tag = onClick ? 'button' : 'div'
   return (
-    <button
+    <Tag
       onClick={onClick}
-      className={`flex-1 min-w-[130px] p-4 rounded-xl border transition-all text-left ${
-        active ? 'bg-blue-900/30 border-blue-600/60 ring-1 ring-blue-500/30' : 'card hover:border-gray-600'
+      {...(onClick ? { type: 'button', 'aria-pressed': !!active } : {})}
+      className={`min-w-0 p-4 rounded-xl border transition-all text-left ${onClick ? FOCUS : ''} ${
+        active ? 'border-[var(--accent)] ring-1 ring-[var(--accent)] bg-[var(--surface-2)]' : 'card hover:border-[var(--border-bright)]'
       }`}
     >
       <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">{label}</p>
+        <div className="min-w-0">
+          <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wide truncate">{label}</p>
           <p className={`text-2xl font-bold tabular-nums mt-0.5 ${color}`}>{value}</p>
-          {sub !== undefined && <p className="text-xs text-gray-500 mt-0.5">{sub}</p>}
+          {sub !== undefined && <p className="text-xs text-[var(--text-muted)] mt-0.5">{sub}</p>}
         </div>
-        {Icon && <Icon size={20} className={`${color} opacity-60 flex-shrink-0 mt-0.5`} />}
+        {Icon && <Icon size={20} className={`${color} opacity-60 flex-shrink-0 mt-0.5`} aria-hidden="true" />}
       </div>
-    </button>
+    </Tag>
   )
 }
 
 function RootCauseBar({ actions }) {
   const { t } = useLanguage()
-  const map = useMemo(() => {
-    const m = {}
-    actions.filter(a => a.root_cause).forEach(a => { m[a.root_cause] = (m[a.root_cause] || 0) + 1 })
-    return Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 6)
-  }, [actions])
-
-  if (!map.length) return null
-  const max = map[0][1]
-
+  const rows = useMemo(() => rootCauseDistribution(actions), [actions])
+  const withCause = actions.filter(a => a.root_cause).length
+  const max = rows[0]?.count || 0
   return (
     <div className="card p-4">
       <div className="flex items-center gap-2 mb-3">
-        <BarChart2 size={14} className="text-blue-400" />
+        <BarChart2 size={14} className="text-[var(--accent)]" aria-hidden="true" />
         <span className="text-sm font-semibold text-[var(--text-primary)]">{t('correctiveactions.analytics.rootCauseDistribution')}</span>
-        <span className="text-xs text-gray-500 ml-auto">{t('correctiveactions.analytics.withCause', { count: actions.filter(a => a.root_cause).length })}</span>
+        <span className="text-xs text-[var(--text-muted)] ml-auto">{t('correctiveactions.analytics.withCause', { count: withCause })}</span>
       </div>
-      <div className="space-y-2">
-        {map.map(([cause, count]) => (
-          <div key={cause} className="flex items-center gap-2">
-            <span className="text-xs text-gray-400 w-32 truncate flex-shrink-0">{cause}</span>
-            <div className="flex-1 h-2 bg-gray-800 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-indigo-600 to-blue-500 rounded-full transition-all"
-                style={{ width: `${(count / max) * 100}%` }}
-              />
-            </div>
-            <span className="text-xs text-gray-400 w-6 text-right">{count}</span>
-          </div>
-        ))}
-      </div>
+      {rows.length === 0 ? (
+        <p className="text-xs text-[var(--text-muted)]">No action in this scope records a root cause.</p>
+      ) : (
+        <ul className="space-y-2">
+          {rows.map((r, i) => (
+            <li key={r.cause} className="flex items-center gap-2">
+              <span className="text-xs text-[var(--text-secondary)] w-32 truncate flex-shrink-0" title={r.cause}>{r.cause}</span>
+              <div className="flex-1 h-2 bg-[var(--panel-2)] rounded-full overflow-hidden">
+                <div className="h-full rounded-full" style={{ width: `${(r.count / max) * 100}%`, background: colorAt(i) }} />
+              </div>
+              <span className="text-xs text-[var(--text-secondary)] w-6 text-right tabular-nums">{r.count}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }
 
-function ActionCard({ a, onEdit, onStatusChange, country }) {
+function StatusSelect({ a, onStatusChange, compact }) {
+  const meta = STATUS_META[a.status] ?? STATUS_META.Open
+  return (
+    <select
+      value={a.status}
+      aria-label={`Status of ${a.title}`}
+      onClick={e => e.stopPropagation()}
+      onChange={e => onStatusChange(a.id, e.target.value)}
+      className={`text-xs border rounded-md px-2 ${compact ? 'min-h-[36px]' : ctrlCls} cursor-pointer text-[var(--text-primary)] ${FOCUS} ${meta.bg}`}
+    >
+      {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+    </select>
+  )
+}
+
+function Meta({ icon: Icon, children, className = '' }) {
+  return <span className={`inline-flex items-center gap-1 ${className}`}><Icon size={12} aria-hidden="true" />{children}</span>
+}
+
+function ActionCard({ a, onEdit, onStatusChange, onRaiseJob, raisingJob, country, now }) {
   const { t } = useLanguage()
-  const od = overdueDays(a.due_date, a.status)
+  const od = overdueDays(a.due_date, a.status, now)
+  const age = daysOpen(a.created_at, a.closed_at, now)
   const meta = STATUS_META[a.status] ?? STATUS_META.Open
   const Icon = meta.icon
 
   return (
-    <div className={`card transition-all hover:border-gray-600 ${od ? 'border-red-800/60' : ''}`}>
-      <div className="flex items-start justify-between gap-4">
-        {/* Left */}
+    <article className={`card transition-all hover:border-[var(--border-bright)] ${od ? 'border-red-500/50' : ''}`}>
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <Icon size={14} className={meta.color} />
+            <Icon size={14} className={meta.color} aria-hidden="true" />
+            <span className="sr-only">{a.status}</span>
             <h3 className="font-semibold text-[var(--text-primary)] text-sm">
               {a.title}
-              {a.photo_data && <Camera className="inline w-3 h-3 ml-1.5 text-gray-500" title={t('correctiveactions.card.hasPhoto')} />}
+              {a.photo_data && <Camera className="inline w-3 h-3 ml-1.5 text-[var(--text-muted)]" aria-label={t('correctiveactions.card.hasPhoto')} />}
             </h3>
-            <span className={`badge text-xs px-2 py-0.5 rounded-full border font-medium ${PRIORITY_BADGE[a.priority]}`}>
-              {a.priority}
-            </span>
+            <span className={`badge text-xs px-2 py-0.5 rounded-full border font-medium ${PRIORITY_BADGE[a.priority] || ''}`}>{a.priority || 'N/A'}</span>
             {od && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-red-900/40 text-red-400 border border-red-700/50 font-medium">
+              <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/40 font-medium">
                 {t('correctiveactions.card.overdueDays', { count: od })}
               </span>
             )}
           </div>
 
-          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-gray-400">
-            {a.site        && <span>📍 {a.site}</span>}
-            {a.assigned_to && <span>👤 {a.assigned_to}</span>}
-            {a.asset_no    && <span>🚛 {a.asset_no}</span>}
-            {a.tyre_serial && <span>🔵 {a.tyre_serial}</span>}
-            {a.due_date    && (
-              <span className={od ? 'text-red-400' : ''}>
-                📅 {t('correctiveactions.card.due')} {formatDate(a.due_date, country)}
-              </span>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-[var(--text-secondary)]">
+            {a.site && <Meta icon={MapPin}>{a.site}</Meta>}
+            {a.assigned_to && <Meta icon={User}>{a.assigned_to}</Meta>}
+            {a.asset_no && <Meta icon={Truck}>{a.asset_no}</Meta>}
+            {a.tyre_serial && <Meta icon={CircleDot}>{a.tyre_serial}</Meta>}
+            {a.due_date && (
+              <Meta icon={Calendar} className={od ? 'text-red-400' : ''}>
+                {t('correctiveactions.card.due')} {formatDate(a.due_date, country)}
+              </Meta>
             )}
-            <span className="text-gray-600">
-              {daysOpen(a.created_at, a.closed_at)}d {a.status === 'Closed' ? t('correctiveactions.card.daysToClose') : t('correctiveactions.card.daysOpen')}
+            <span className="text-[var(--text-muted)]">
+              {age == null ? 'Age N/A' : `${age}d ${a.status === 'Closed' ? t('correctiveactions.card.daysToClose') : t('correctiveactions.card.daysOpen')}`}
             </span>
           </div>
 
-          {a.description && (
-            <p className="text-xs text-gray-500 mt-2 line-clamp-1">{a.description}</p>
-          )}
-          {a.root_cause && (
-            <span className="inline-block mt-1.5 text-xs px-2 py-0.5 rounded bg-indigo-900/30 text-indigo-300 border border-indigo-700/30">
-              ⚙ {a.root_cause}
-            </span>
-          )}
+          {a.description && <p className="text-xs text-[var(--text-muted)] mt-2 line-clamp-2">{a.description}</p>}
+          <div className="flex flex-wrap gap-2 mt-1.5">
+            {a.root_cause && (
+              <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-[var(--panel-2)] text-[var(--text-secondary)] border border-[var(--border)]">
+                <Wrench size={11} aria-hidden="true" /> {a.root_cause}
+              </span>
+            )}
+            {a.source_type && a.source_type !== 'manual' && (
+              <span className="text-xs text-[var(--text-muted)]">Raised from {a.source_type}{a.source_detail ? ` (${a.source_detail})` : ''}</span>
+            )}
+          </div>
         </div>
 
-        {/* Right controls */}
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <select
-            value={a.status}
-            onChange={e => onStatusChange(a.id, e.target.value)}
-            className={`text-xs border rounded-md px-2 py-1 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500/50 transition-colors ${meta.bg}`}
-          >
-            <option value="Open">Open</option>
-            <option value="In Progress">In Progress</option>
-            <option value="Closed">Closed</option>
-          </select>
-          <button onClick={() => onEdit(a)} className="text-xs text-gray-400 hover:text-blue-400 transition-colors px-2 py-1 rounded border border-gray-700 hover:border-blue-600/50">
+        <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
+          <StatusSelect a={a} onStatusChange={onStatusChange} />
+          <button onClick={() => onEdit(a)} className={`btn-secondary text-xs px-3 ${ctrlCls}`}>
             {t('correctiveactions.card.edit')}
           </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function TableRow({ a, onEdit, onStatusChange, onRaiseJob, raisingJob, country }) {
-  const { t } = useLanguage()
-  const od = overdueDays(a.due_date, a.status)
-  const meta = STATUS_META[a.status] ?? STATUS_META.Open
-  const Icon = meta.icon
-
-  return (
-    <tr className="border-b border-gray-800 hover:bg-gray-800/40 transition-colors">
-      <td className="px-4 py-2.5">
-        <div className="flex items-center gap-1.5">
-          <Icon size={12} className={meta.color} />
-          <span className="text-sm text-[var(--text-primary)] font-medium">{a.title}</span>
-          {a.photo_data && <Camera size={10} className="text-gray-600" />}
-        </div>
-        {a.root_cause && (
-          <span className="text-xs text-indigo-400 opacity-70">{a.root_cause}</span>
-        )}
-        {/* Where this action came from, and whether it became scheduled work.
-            An action raised by an inspection used to be indistinguishable from
-            one typed by hand, and nothing recorded whether a job followed. */}
-        {a.source_type && a.source_type !== 'manual' && (
-          <span className="block text-xs text-gray-500">
-            Raised from {a.source_type}
-            {a.source_detail ? ` (${a.source_detail})` : ''}
-          </span>
-        )}
-      </td>
-      <td className="px-3 py-2.5">
-        <span className={`badge text-xs px-2 py-0.5 rounded-full border ${PRIORITY_BADGE[a.priority]}`}>{a.priority}</span>
-      </td>
-      <td className="px-3 py-2.5 text-xs text-gray-400">{a.site || '-'}</td>
-      <td className="px-3 py-2.5 text-xs text-gray-400">{a.assigned_to || '-'}</td>
-      <td className="px-3 py-2.5 text-xs text-gray-400">{a.asset_no || '-'}</td>
-      <td className="px-3 py-2.5 text-xs">
-        {od
-          ? <span className="text-red-400">{t('correctiveactions.card.overdueDays', { count: od })}</span>
-          : a.due_date ? <span className="text-gray-400">{formatDate(a.due_date, country)}</span>
-          : <span className="text-gray-600">-</span>
-        }
-      </td>
-      <td className="px-3 py-2.5 text-xs text-gray-500">{daysOpen(a.created_at, a.closed_at)}d</td>
-      <td className="px-3 py-2.5">
-        <select
-          value={a.status}
-          onChange={e => onStatusChange(a.id, e.target.value)}
-          className={`text-xs border rounded px-1.5 py-0.5 cursor-pointer focus:outline-none ${meta.bg}`}
-        >
-          <option value="Open">Open</option>
-          <option value="In Progress">In Progress</option>
-          <option value="Closed">Closed</option>
-        </select>
-      </td>
-      <td className="px-3 py-2.5">
-        <div className="flex items-center gap-2">
-          <button onClick={() => onEdit(a)} className="text-xs text-gray-400 hover:text-blue-400 transition-colors">{t('correctiveactions.card.edit')}</button>
           {a.work_order_id ? (
-            <span className="text-xs text-emerald-400" title="A job has been raised for this action">Job raised</span>
+            <span className="text-xs text-green-400 inline-flex items-center gap-1"><CheckCircle size={12} aria-hidden="true" /> Job raised</span>
           ) : a.asset_no ? (
-            <button
-              onClick={() => onRaiseJob(a)} disabled={raisingJob === a.id}
-              className="text-xs text-gray-400 hover:text-emerald-400 transition-colors disabled:opacity-50"
-            >
+            <button onClick={() => onRaiseJob(a)} disabled={raisingJob === a.id} className={`btn-secondary text-xs px-3 disabled:opacity-50 ${ctrlCls}`}>
               {raisingJob === a.id ? 'Raising...' : 'Raise job'}
             </button>
           ) : null}
         </div>
-      </td>
-    </tr>
+      </div>
+    </article>
   )
 }
 
@@ -274,6 +220,9 @@ export default function CorrectiveActions() {
   const [actions, setActions]   = useState([])
   const [loading, setLoading]   = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [loadError, setLoadError] = useState(null)
+  const [actionError, setActionError] = useState(null)
+  const [now, setNow] = useState(() => Date.now())
 
   // Filters
   const [search, setSearch]               = useState('')
@@ -297,12 +246,20 @@ export default function CorrectiveActions() {
   const photoRef = useRef(null)
 
   // ── Data ──────────────────────────────────────────────────────────────────────
+  // A failed read is reported as a failure, never rendered as "no actions".
   const load = useCallback(async (quiet = false) => {
     quiet ? setRefreshing(true) : setLoading(true)
-    let data = []
-    try { data = await correctiveActions.listCorrectiveActions({ country: activeCountry }) } catch { data = [] }
-    setActions(data ?? [])
-    quiet ? setRefreshing(false) : setLoading(false)
+    try {
+      const data = await correctiveActions.listCorrectiveActions({ country: activeCountry })
+      setActions(data ?? [])
+      setLoadError(null)
+    } catch (err) {
+      setLoadError(toUserMessage(err, 'Could not load corrective actions.'))
+      if (!quiet) setActions([])
+    } finally {
+      setNow(Date.now())
+      quiet ? setRefreshing(false) : setLoading(false)
+    }
   }, [activeCountry])
 
   useEffect(() => { load() }, [load])
@@ -321,29 +278,17 @@ export default function CorrectiveActions() {
    * already narrowed by their own filter makes each one restate the table's row
    * count the moment it is pressed, and stops it being a target you can aim at.
    *
-   * Everything else (site, priority, search) DOES apply - these figures used to
-   * be computed over the raw `actions`, so filtering to one site left the tiles
-   * stating fleet-wide numbers above a table showing that site alone.
+   * Everything else (site, priority, search) DOES apply.
    */
   const narrow = useCallback((arr, skip) => {
     let out = arr
     if (skip !== 'status' && statusFilter) out = out.filter(a => a.status === statusFilter)
     if (priorityFilter) out = out.filter(a => a.priority === priorityFilter)
-    if (siteFilter)     out = out.filter(a => a.site === siteFilter)
-    if (skip !== 'overdue' && overdueOnly) out = out.filter(a => overdueDays(a.due_date, a.status) !== null)
-    if (search) {
-      const q = search.toLowerCase()
-      out = out.filter(a =>
-        a.title?.toLowerCase().includes(q) ||
-        a.assigned_to?.toLowerCase().includes(q) ||
-        a.asset_no?.toLowerCase().includes(q) ||
-        a.tyre_serial?.toLowerCase().includes(q) ||
-        a.site?.toLowerCase().includes(q) ||
-        a.root_cause?.toLowerCase().includes(q)
-      )
-    }
+    if (siteFilter) out = out.filter(a => a.site === siteFilter)
+    if (skip !== 'overdue' && overdueOnly) out = out.filter(a => overdueDays(a.due_date, a.status, now) !== null)
+    if (search) out = out.filter(a => matchesSearch(a, search))
     return out
-  }, [statusFilter, priorityFilter, siteFilter, overdueOnly, search])
+  }, [statusFilter, priorityFilter, siteFilter, overdueOnly, search, now])
 
   // The status tiles hold out the status filter; their denominator is the same
   // base, so the breakdown bar's percentages add up to what the tiles show.
@@ -355,31 +300,28 @@ export default function CorrectiveActions() {
   }, [statusBase])
 
   const overdueCount = useMemo(() =>
-    narrow(actions, 'overdue').filter(a => overdueDays(a.due_date, a.status) !== null).length,
-    [actions, narrow]
+    narrow(actions, 'overdue').filter(a => overdueDays(a.due_date, a.status, now) !== null).length,
+    [actions, narrow, now]
   )
 
   // Not a toggle, so it covers the fully filtered set.
-  const avgClose = useMemo(() => avgDaysToClose(narrow(actions, null)), [actions, narrow])
+  const avgDaysToClose = useCallback(arr => avgDaysToCloseAt(arr, now), [now])
+  const avgClose = useMemo(() => avgDaysToClose(narrow(actions, null)), [actions, narrow, avgDaysToClose])
+  const odRate = useMemo(() => overdueRate(statusBase, now), [statusBase, now])
+  const bySite = useMemo(() => siteBreakdown(narrow(actions, null), now), [actions, narrow, now])
 
   // True only while the tiles cover less than the whole register.
   const scopeNarrowed = statusBase.length !== actions.length
 
   const filtered = useMemo(() => {
     const arr = narrow(actions, null)
-    // Sort
-    return [...arr].sort((a, b) => {
-      if (sortBy === 'priority') return PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]
-      if (sortBy === 'due_date') return (a.due_date ?? 'z').localeCompare(b.due_date ?? 'z')
-      if (sortBy === 'overdue') {
-        const oa = overdueDays(a.due_date, a.status) ?? 0
-        const ob = overdueDays(b.due_date, b.status) ?? 0
-        return ob - oa
-      }
-      return new Date(b.created_at) - new Date(a.created_at)
-    })
-  }, [actions, narrow, sortBy])
+    return sortActions(arr, sortBy, now)
+  }, [actions, narrow, sortBy, now])
+  const tableRows = useMemo(() => actionRows(filtered, now), [filtered, now])
   const actionsPager = usePagedRows(filtered)
+
+  const hasFilters = !!(search || statusFilter || priorityFilter || siteFilter || overdueOnly)
+  function clearAll() { setSearch(''); setStatusFilter(''); setPriorityFilter(''); setSiteFilter(''); setOverdueOnly(false) }
 
   // ── Mutations ─────────────────────────────────────────────────────────────────
   function startAdd() {
@@ -431,6 +373,7 @@ export default function CorrectiveActions() {
   }
 
   async function handleStatusChange(id, newStatus) {
+    setActionError(null)
     try {
       await correctiveActions.updateCorrectiveAction(id, {
         status: newStatus,
@@ -438,16 +381,16 @@ export default function CorrectiveActions() {
           ? { closed_by: profile?.id, closed_at: new Date().toISOString() }
           : { closed_by: null, closed_at: null }),
       })
-    } catch { /* original ignored update errors here */ }
+    } catch (err) {
+      setActionError(toUserMessage(err, 'The status could not be changed.'))
+    }
     load(true)
   }
 
   /**
    * Turn an action into scheduled work. Delegates to the service, which reuses
-   * the ONE work-order creator (workshopLive.createJob) and writes the link back,
-   * so the job number, status vocabulary and payload cannot drift from the
-   * workshop's own. Errors surface instead of failing silently - a job that was
-   * created but not linked must be visible, not lost.
+   * the ONE work-order creator (workshopLive.createJob) and writes the link back.
+   * Errors surface instead of failing silently.
    */
   async function handleRaiseJob(a) {
     setRaisingJob(a.id)
@@ -471,36 +414,89 @@ export default function CorrectiveActions() {
     reader.readAsDataURL(file)
   }
 
-  // ── Export ────────────────────────────────────────────────────────────────────
+  // ── Export (the whole filtered set) ───────────────────────────────────────────
   async function doExcelExport() {
-    const { exportToExcel } = await loadExportUtils()
-    exportToExcel(
-      filtered,
-      ['title', 'priority', 'status', 'site', 'assigned_to', 'asset_no', 'tyre_serial', 'root_cause', 'due_date', 'created_at'],
-      ['Title', 'Priority', 'Status', 'Site', 'Assigned To', 'Asset No', 'Tyre Serial', 'Root Cause', 'Due Date', 'Created'],
-      'TyrePulse_CorrectiveActions'
-    )
+    const { exportToExcel, reportFileName } = await loadExportUtils()
+    exportToExcel(actionExportRows(filtered, now), EXPORT_COLS, EXPORT_HEADERS, reportFileName('TyrePulse Corrective Actions'), 'Actions')
   }
 
   async function doPdfExport() {
-    const { exportToPdf } = await loadExportUtils()
+    const { exportToPdf, reportFileName } = await loadExportUtils()
+    const cols = ['title', 'priority', 'status', 'site', 'assigned_to', 'asset_no', 'root_cause', 'due_date', 'overdue_days', 'age_days']
     exportToPdf(
-      filtered,
-      [
-        { key: 'title',       header: 'Title' },
-        { key: 'priority',    header: 'Priority' },
-        { key: 'status',      header: 'Status' },
-        { key: 'site',        header: 'Site' },
-        { key: 'assigned_to', header: 'Assigned To' },
-        { key: 'asset_no',    header: 'Asset' },
-        { key: 'root_cause',  header: 'Root Cause' },
-        { key: 'due_date',    header: 'Due Date' },
-      ],
+      actionExportRows(filtered, now),
+      cols.map(k => ({ key: k, header: EXPORT_HEADERS[EXPORT_COLS.indexOf(k)] })),
       'Corrective Actions Register',
-      'TyrePulse_CorrectiveActions',
+      reportFileName('TyrePulse Corrective Actions'),
       'landscape'
     )
   }
+
+  const na = <span className="text-[var(--text-muted)]">N/A</span>
+  const columns = useMemo(() => [
+    {
+      id: 'title', header: t('correctiveactions.table.columns.titleRootCause'), accessorFn: r => r.title, size: 240, ...SORT,
+      cell: ({ row }) => {
+        const a = row.original
+        const meta = STATUS_META[a.status] ?? STATUS_META.Open
+        const Icon = meta.icon
+        return (
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <Icon size={12} className={meta.color} aria-hidden="true" />
+              <span className="text-sm text-[var(--text-primary)] font-medium">{a.title}</span>
+              {a.photo_data && <Camera size={10} className="text-[var(--text-muted)]" aria-label="Has photo" />}
+            </div>
+            {a.root_cause && <span className="text-xs text-[var(--text-secondary)]">{a.root_cause}</span>}
+            {a.source_type && a.source_type !== 'manual' && (
+              <span className="block text-xs text-[var(--text-muted)]">Raised from {a.source_type}{a.source_detail ? ` (${a.source_detail})` : ''}</span>
+            )}
+          </div>
+        )
+      },
+    },
+    {
+      id: 'priority', header: t('correctiveactions.table.columns.priority'), accessorFn: r => r._priorityRank ?? undefined, size: 90, ...SORT,
+      meta: { exportValue: r => r.priority },
+      cell: ({ row }) => <span className={`badge text-xs px-2 py-0.5 rounded-full border ${PRIORITY_BADGE[row.original.priority] || ''}`}>{row.original.priority || 'N/A'}</span>,
+    },
+    { id: 'site', header: t('correctiveactions.table.columns.site'), accessorFn: r => undef(r.site), size: 110, ...SORT, cell: ({ getValue }) => getValue() ?? na },
+    { id: 'assigned', header: t('correctiveactions.table.columns.assignedTo'), accessorFn: r => undef(r.assigned_to), size: 120, ...SORT, cell: ({ getValue }) => getValue() ?? na },
+    { id: 'asset', header: t('correctiveactions.table.columns.asset'), accessorFn: r => undef(r.asset_no), size: 100, ...SORT, cell: ({ getValue }) => getValue() ?? na },
+    {
+      id: 'due', header: t('correctiveactions.table.columns.dueDate'), accessorFn: r => undef(r.due_date), size: 120, ...SORT,
+      cell: ({ row }) => {
+        const a = row.original
+        if (a._overdue) return <span className="text-red-400 text-xs">{t('correctiveactions.card.overdueDays', { count: a._overdue })}</span>
+        return a.due_date ? <span className="text-xs">{formatDate(a.due_date, activeCountry)}</span> : na
+      },
+    },
+    { id: 'age', header: t('correctiveactions.table.columns.age'), accessorFn: r => undef(r._age), size: 70, meta: { align: 'right' }, ...SORT, cell: ({ getValue }) => (getValue() == null ? na : `${getValue()}d`) },
+    {
+      id: 'status', header: t('correctiveactions.table.columns.status'), accessorFn: r => r.status, size: 130, meta: { filterVariant: 'select', filterOptions: STATUSES }, ...SORT,
+      cell: ({ row }) => <StatusSelect a={row.original} onStatusChange={handleStatusChange} compact />,
+    },
+    {
+      id: 'actions', header: 'Actions', enableSorting: false, size: 150, meta: { export: false },
+      cell: ({ row }) => {
+        const a = row.original
+        return (
+          <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+            <button onClick={() => startEdit(a)} className={`text-xs text-[var(--text-secondary)] hover:text-[var(--accent)] min-h-[36px] px-1 ${FOCUS}`}>
+              {t('correctiveactions.card.edit')}
+            </button>
+            {a.work_order_id ? (
+              <span className="text-xs text-green-400" title="A job has been raised for this action">Job raised</span>
+            ) : a.asset_no ? (
+              <button onClick={() => handleRaiseJob(a)} disabled={raisingJob === a.id} className={`text-xs text-[var(--text-secondary)] hover:text-green-400 disabled:opacity-50 min-h-[36px] px-1 ${FOCUS}`}>
+                {raisingJob === a.id ? 'Raising...' : 'Raise job'}
+              </button>
+            ) : null}
+          </div>
+        )
+      },
+    },
+  ], [t, activeCountry, raisingJob]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
@@ -517,8 +513,18 @@ export default function CorrectiveActions() {
         icon={ClipboardCheck}
       />
 
+      {loadError && (
+        <div role="alert" className="card border border-red-500/40 flex flex-wrap items-center gap-3">
+          <AlertTriangle size={18} className="text-red-400 shrink-0" aria-hidden="true" />
+          <p className="text-sm text-red-400 flex-1">{loadError}</p>
+          <button onClick={() => load()} className={`btn-secondary inline-flex items-center gap-1.5 text-sm px-3 ${ctrlCls}`}>
+            <RefreshCw size={14} aria-hidden="true" /> Retry
+          </button>
+        </div>
+      )}
+
       {/* KPI strip */}
-      <div className="flex gap-3 flex-wrap">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <KpiCard
           label="Open" value={counts.Open}
           icon={AlertCircle} color="text-red-400"
@@ -527,7 +533,7 @@ export default function CorrectiveActions() {
         />
         <KpiCard
           label="In Progress" value={counts['In Progress']}
-          icon={Clock} color="text-yellow-400"
+          icon={Clock} color="text-amber-400"
           active={statusFilter === 'In Progress'}
           onClick={() => setStatusFilter(statusFilter === 'In Progress' ? '' : 'In Progress')}
         />
@@ -540,23 +546,26 @@ export default function CorrectiveActions() {
         <KpiCard
           label={t('correctiveactions.kpi.overdue')} value={overdueCount}
           sub={overdueCount > 0 ? t('correctiveactions.kpi.overdueSubNeedsAttention') : t('correctiveactions.kpi.overdueSubOnTrack')}
-          icon={AlertTriangle} color={overdueCount > 0 ? 'text-red-400' : 'text-gray-500'}
+          icon={AlertTriangle} color={overdueCount > 0 ? 'text-red-400' : 'text-[var(--text-muted)]'}
           active={overdueOnly}
           onClick={() => setOverdueOnly(!overdueOnly)}
         />
-        {avgClose !== null && (
-          <KpiCard
-            label={t('correctiveactions.kpi.avgResolution')} value={`${avgClose}d`}
-            sub={t('correctiveactions.kpi.avgResolutionSub')}
-            icon={Timer} color="text-blue-400"
-          />
-        )}
+        <KpiCard
+          label={t('correctiveactions.kpi.avgResolution')} value={avgClose === null ? 'N/A' : `${avgClose}d`}
+          sub={avgClose === null ? 'No closed action with dates' : t('correctiveactions.kpi.avgResolutionSub')}
+          icon={Timer} color="text-[var(--text-primary)]"
+        />
+        <KpiCard
+          label="Overdue rate" value={odRate == null ? 'N/A' : `${Math.round(odRate)}%`}
+          sub={odRate == null ? 'Nothing open' : 'of open actions'}
+          icon={TrendingUp} color={odRate ? 'text-red-400' : 'text-[var(--text-primary)]'}
+        />
       </div>
 
       {/* When the tiles cover a narrowed set, say so. A silently narrowed KPI is
           the same defect one level down. */}
       {scopeNarrowed && (
-        <p className="text-xs text-gray-500 -mt-1">
+        <p className="text-xs text-[var(--text-muted)] -mt-1">
           These figures cover the {statusBase.length} action{statusBase.length === 1 ? '' : 's'} matching
           your site, priority and search filters, of {actions.length} in total. Each tile ignores its own
           filter so it stays something you can aim at.
@@ -565,169 +574,178 @@ export default function CorrectiveActions() {
 
       {/* Toolbar */}
       <div className="flex items-center gap-3 flex-wrap">
-        {/* Search */}
-        <div className="relative flex-1 min-w-[220px] max-w-xs">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+        <label className="relative flex-1 min-w-[200px] max-w-xs">
+          <span className="sr-only">{t('correctiveactions.toolbar.searchPlaceholder')}</span>
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
           <input
-            className="input pl-9 text-sm"
+            type="search"
+            className={`input pl-9 text-sm ${ctrlCls}`}
             placeholder={t('correctiveactions.toolbar.searchPlaceholder')}
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
-        </div>
+        </label>
 
-        {/* Priority filter */}
-        <div className="flex items-center gap-1">
-          {['High', 'Medium', 'Low'].map(p => (
+        <div className="flex items-center gap-1" role="group" aria-label="Filter by priority">
+          {PRIORITIES.map(p => (
             <button key={p}
               onClick={() => setPriorityFilter(priorityFilter === p ? '' : p)}
-              className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
-                priorityFilter === p ? PRIORITY_BADGE[p] + ' ring-1 ring-white/20' : 'bg-gray-800 text-gray-400 border-gray-700 hover:text-white'
+              aria-pressed={priorityFilter === p}
+              className={`px-3 rounded text-xs font-medium border transition-colors ${ctrlCls} ${
+                priorityFilter === p ? `${PRIORITY_BADGE[p]} ring-1 ring-[var(--accent)]` : 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border)] hover:text-[var(--text-primary)]'
               }`}
             >{p}</button>
           ))}
         </div>
 
-        {/* Site filter */}
         {sites.length > 0 && (
-          <select
-            value={siteFilter}
-            onChange={e => setSiteFilter(e.target.value)}
-            className="input text-sm py-1.5 pr-7 max-w-[160px]"
-          >
-            <option value="">{t('correctiveactions.toolbar.allSites')}</option>
-            {sites.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
+          <label>
+            <span className="sr-only">Site</span>
+            <select value={siteFilter} onChange={e => setSiteFilter(e.target.value)} className={`input text-sm pr-7 max-w-[180px] ${ctrlCls}`}>
+              <option value="">{t('correctiveactions.toolbar.allSites')}</option>
+              {sites.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </label>
         )}
 
-        {/* Sort */}
-        <select
-          value={sortBy}
-          onChange={e => setSortBy(e.target.value)}
-          className="input text-sm py-1.5 max-w-[150px]"
-        >
-          <option value="created_at">{t('correctiveactions.toolbar.sortNewest')}</option>
-          <option value="priority">{t('correctiveactions.toolbar.sortByPriority')}</option>
-          <option value="due_date">{t('correctiveactions.toolbar.sortByDueDate')}</option>
-          <option value="overdue">{t('correctiveactions.toolbar.sortMostOverdue')}</option>
-        </select>
+        {viewMode === 'cards' && (
+          <label>
+            <span className="sr-only">Sort cards</span>
+            <select value={sortBy} onChange={e => setSortBy(e.target.value)} className={`input text-sm max-w-[160px] ${ctrlCls}`}>
+              <option value="created_at">{t('correctiveactions.toolbar.sortNewest')}</option>
+              <option value="priority">{t('correctiveactions.toolbar.sortByPriority')}</option>
+              <option value="due_date">{t('correctiveactions.toolbar.sortByDueDate')}</option>
+              <option value="overdue">{t('correctiveactions.toolbar.sortMostOverdue')}</option>
+            </select>
+          </label>
+        )}
 
-        <div className="ml-auto flex items-center gap-2">
-          {/* Analytics toggle */}
+        <div className="ml-auto flex items-center gap-2 flex-wrap">
           <button
             onClick={() => setShowAnalytics(!showAnalytics)}
-            className={`btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5 ${showAnalytics ? 'text-blue-400 border-blue-600/50' : ''}`}
+            aria-pressed={showAnalytics}
+            className={`btn-secondary inline-flex items-center gap-1.5 text-sm px-3 ${ctrlCls} ${showAnalytics ? 'border-[var(--accent)] text-[var(--accent)]' : ''}`}
           >
-            <BarChart2 size={14} /> {t('correctiveactions.toolbar.analytics')}
+            <BarChart2 size={14} aria-hidden="true" /> {t('correctiveactions.toolbar.analytics')}
           </button>
 
-          {/* View mode */}
-          <button
-            onClick={() => setViewMode('cards')}
-            className={`p-1.5 rounded border transition-colors ${viewMode === 'cards' ? 'bg-blue-600/20 border-blue-600/50 text-blue-400' : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white'}`}
-          >
-            <LayoutGrid size={15} />
-          </button>
-          <button
-            onClick={() => setViewMode('table')}
-            className={`p-1.5 rounded border transition-colors ${viewMode === 'table' ? 'bg-blue-600/20 border-blue-600/50 text-blue-400' : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white'}`}
-          >
-            <LayoutList size={15} />
+          <div role="group" aria-label="View mode" className="flex gap-1">
+            <button onClick={() => setViewMode('cards')} aria-label="Card view" aria-pressed={viewMode === 'cards'} className={iconBtn(viewMode === 'cards')}>
+              <LayoutGrid size={15} aria-hidden="true" />
+            </button>
+            <button onClick={() => setViewMode('table')} aria-label="Table view" aria-pressed={viewMode === 'table'} className={iconBtn(viewMode === 'table')}>
+              <LayoutList size={15} aria-hidden="true" />
+            </button>
+          </div>
+
+          <button onClick={() => load(true)} disabled={refreshing} aria-label="Refresh corrective actions" className={iconBtn(false)}>
+            <RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} aria-hidden="true" />
           </button>
 
-          {/* Refresh */}
-          <button
-            onClick={() => load(true)}
-            className="p-1.5 rounded border border-gray-700 bg-gray-800 text-gray-400 hover:text-white transition-colors"
-            disabled={refreshing}
-          >
-            <RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />
+          <button onClick={doExcelExport} disabled={!filtered.length} className={`btn-secondary inline-flex items-center gap-1.5 text-sm px-3 disabled:opacity-40 ${ctrlCls}`}>
+            <Download size={14} aria-hidden="true" /> {t('correctiveactions.toolbar.excel')}
+          </button>
+          <button onClick={doPdfExport} disabled={!filtered.length} className={`btn-secondary inline-flex items-center gap-1.5 text-sm px-3 disabled:opacity-40 ${ctrlCls}`}>
+            <FileText size={14} aria-hidden="true" /> {t('correctiveactions.toolbar.pdf')}
           </button>
 
-          {/* Exports */}
-          <button onClick={doExcelExport} className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5">
-            <Download size={14} /> {t('correctiveactions.toolbar.excel')}
-          </button>
-          <button onClick={doPdfExport} className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5">
-            <FileText size={14} /> {t('correctiveactions.toolbar.pdf')}
-          </button>
-
-          {/* New */}
-          <button onClick={startAdd} className="btn-primary flex items-center gap-2 text-sm">
-            <Plus size={16} /> {t('correctiveactions.toolbar.newAction')}
+          <button onClick={startAdd} className={`btn-primary inline-flex items-center gap-2 text-sm ${ctrlCls}`}>
+            <Plus size={16} aria-hidden="true" /> {t('correctiveactions.toolbar.newAction')}
           </button>
         </div>
       </div>
 
-      {/* Active filter indicators */}
-      {(search || statusFilter || priorityFilter || siteFilter || overdueOnly) && (
+      {hasFilters && (
         <div className="flex items-center gap-2 flex-wrap text-xs">
-          <Filter size={12} className="text-gray-500" />
-          <span className="text-gray-500">{t('correctiveactions.filtersBar.label')}</span>
+          <Filter size={12} className="text-[var(--text-muted)]" aria-hidden="true" />
+          <span className="text-[var(--text-muted)]">{t('correctiveactions.filtersBar.label')}</span>
           {statusFilter   && <Chip label={statusFilter}   onRemove={() => setStatusFilter('')} />}
           {priorityFilter && <Chip label={priorityFilter} onRemove={() => setPriorityFilter('')} />}
           {siteFilter     && <Chip label={siteFilter}     onRemove={() => setSiteFilter('')} />}
           {overdueOnly    && <Chip label={t('correctiveactions.filtersBar.overdueOnly')} onRemove={() => setOverdueOnly(false)} />}
           {search         && <Chip label={`"${search}"`}  onRemove={() => setSearch('')} />}
-          <button
-            onClick={() => { setSearch(''); setStatusFilter(''); setPriorityFilter(''); setSiteFilter(''); setOverdueOnly(false) }}
-            className="text-gray-500 hover:text-red-400 transition-colors ml-1"
-          >{t('correctiveactions.filtersBar.clearAll')}</button>
-          <span className="ml-auto text-gray-500">{t('correctiveactions.filtersBar.results', { count: filtered.length })}</span>
+          <button onClick={clearAll} className={`text-[var(--text-muted)] hover:text-red-400 transition-colors ml-1 min-h-[32px] px-1 ${FOCUS}`}>
+            {t('correctiveactions.filtersBar.clearAll')}
+          </button>
+          <span className="ml-auto text-[var(--text-muted)]" aria-live="polite">{t('correctiveactions.filtersBar.results', { count: filtered.length })}</span>
         </div>
       )}
 
-      {/* Analytics panel */}
       {showAnalytics && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <RootCauseBar actions={actions} />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <RootCauseBar actions={narrow(actions, null)} />
           <div className="card p-4">
             <div className="flex items-center gap-2 mb-3">
-              <TrendingUp size={14} className="text-blue-400" />
+              <TrendingUp size={14} className="text-[var(--accent)]" aria-hidden="true" />
               <span className="text-sm font-semibold text-[var(--text-primary)]">{t('correctiveactions.analytics.resolutionPerformance')}</span>
             </div>
             <div className="space-y-2">
               {[
                 { label: 'Open', count: counts.Open, pct: statusBase.length ? Math.round(counts.Open / statusBase.length * 100) : 0, color: 'bg-red-500' },
-                { label: 'In Progress', count: counts['In Progress'], pct: statusBase.length ? Math.round(counts['In Progress'] / statusBase.length * 100) : 0, color: 'bg-yellow-500' },
+                { label: 'In Progress', count: counts['In Progress'], pct: statusBase.length ? Math.round(counts['In Progress'] / statusBase.length * 100) : 0, color: 'bg-amber-500' },
                 { label: 'Closed', count: counts.Closed, pct: statusBase.length ? Math.round(counts.Closed / statusBase.length * 100) : 0, color: 'bg-green-500' },
               ].map(row => (
                 <div key={row.label} className="flex items-center gap-2">
-                  <span className="text-xs text-gray-400 w-20">{row.label}</span>
-                  <div className="flex-1 h-2 bg-gray-800 rounded-full overflow-hidden">
+                  <span className="text-xs text-[var(--text-secondary)] w-20">{row.label}</span>
+                  <div className="flex-1 h-2 bg-[var(--panel-2)] rounded-full overflow-hidden">
                     <div className={`h-full ${row.color} rounded-full`} style={{ width: `${row.pct}%` }} />
                   </div>
-                  <span className="text-xs text-gray-400 w-16 text-right">{row.count} ({row.pct}%)</span>
+                  <span className="text-xs text-[var(--text-secondary)] w-16 text-right tabular-nums">{row.count} ({row.pct}%)</span>
                 </div>
               ))}
               {avgClose !== null && (
-                <p className="text-xs text-gray-500 pt-2 border-t border-gray-800 mt-2">
-                  {t('correctiveactions.analytics.avgTimeToClose')} <span className="text-blue-400 font-medium">{t('correctiveactions.analytics.daysValue', { count: avgClose })}</span>
+                <p className="text-xs text-[var(--text-muted)] pt-2 border-t border-[var(--border)] mt-2">
+                  {t('correctiveactions.analytics.avgTimeToClose')} <span className="text-[var(--text-primary)] font-medium">{t('correctiveactions.analytics.daysValue', { count: avgClose })}</span>
                 </p>
               )}
-              <p className="text-xs text-gray-500">
-                {t('correctiveactions.analytics.overdueRate')} <span className={`font-medium ${overdueCount > 0 ? 'text-red-400' : 'text-green-400'}`}>
-                  {counts.Open + counts['In Progress'] > 0
-                    ? Math.round(overdueCount / (counts.Open + counts['In Progress']) * 100)
-                    : 0}%
+              <p className="text-xs text-[var(--text-muted)]">
+                {t('correctiveactions.analytics.overdueRate')}{' '}
+                <span className={`font-medium ${odRate ? 'text-red-400' : 'text-[var(--text-primary)]'}`}>
+                  {odRate == null ? 'N/A' : `${Math.round(odRate)}%`}
                 </span>
               </p>
             </div>
           </div>
+          <div className="card p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <MapPin size={14} className="text-[var(--accent)]" aria-hidden="true" />
+              <span className="text-sm font-semibold text-[var(--text-primary)]">Open actions by site</span>
+            </div>
+            {bySite.length === 0 ? (
+              <p className="text-xs text-[var(--text-muted)]">No actions in this scope.</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {bySite.slice(0, 6).map(s => (
+                  <li key={s.site} className="flex items-center justify-between text-xs gap-2">
+                    <span className="text-[var(--text-secondary)] truncate">{s.site}</span>
+                    <span className="tabular-nums text-[var(--text-primary)]">
+                      {s.open} open{s.overdue ? <span className="text-red-400">, {s.overdue} overdue</span> : ''}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       )}
 
-      {/* Outcome of raising a job. Shown rather than toasted so a failure to
-          LINK a created job (which leaves a real job needing manual attachment)
-          stays on screen until the operator has read it. */}
+      {/* Outcome of raising a job, or of a status change that failed. Shown
+          rather than toasted so it stays on screen until read. */}
       {jobNotice && (
-        <div className="mb-4 rounded-lg border px-4 py-2.5 text-sm flex items-start justify-between gap-4"
-          style={jobNotice.ok
-            ? { borderColor: 'rgba(16,185,129,0.35)', background: 'rgba(16,185,129,0.08)', color: '#34d399' }
-            : { borderColor: 'rgba(220,38,38,0.35)', background: 'rgba(220,38,38,0.08)', color: '#f87171' }}>
+        <div role={jobNotice.ok ? 'status' : 'alert'}
+          className={`rounded-lg border px-4 py-2.5 text-sm flex items-start justify-between gap-4 ${
+            jobNotice.ok ? 'border-green-500/40 bg-green-500/10 text-green-400' : 'border-red-500/40 bg-red-500/10 text-red-400'}`}>
           <span>{jobNotice.text}</span>
-          <button onClick={() => setJobNotice(null)} className="opacity-70 hover:opacity-100" aria-label="Dismiss">
-            <X size={14} />
+          <button onClick={() => setJobNotice(null)} className={`opacity-70 hover:opacity-100 ${FOCUS}`} aria-label="Dismiss">
+            <X size={14} aria-hidden="true" />
+          </button>
+        </div>
+      )}
+      {actionError && (
+        <div role="alert" className="rounded-lg border border-red-500/40 bg-red-500/10 text-red-400 px-4 py-2.5 text-sm flex items-start justify-between gap-4">
+          <span>{actionError}</span>
+          <button onClick={() => setActionError(null)} className={`opacity-70 hover:opacity-100 ${FOCUS}`} aria-label="Dismiss">
+            <X size={14} aria-hidden="true" />
           </button>
         </div>
       )}
@@ -735,186 +753,145 @@ export default function CorrectiveActions() {
       {/* Content */}
       {loading ? (
         <LoadingState />
-      ) : filtered.length === 0 ? (
-        <EmptyState hasFilters={!!(search || statusFilter || priorityFilter || siteFilter || overdueOnly)} onAdd={startAdd} />
+      ) : loadError && actions.length === 0 ? null : filtered.length === 0 && viewMode === 'cards' ? (
+        <EmptyState hasFilters={hasFilters} onAdd={startAdd} onClear={clearAll} />
       ) : viewMode === 'cards' ? (
         <div className="space-y-2.5">
           {actionsPager.pageRows.map(a => (
-            <ActionCard key={a.id} a={a} country={activeCountry} onEdit={startEdit} onStatusChange={handleStatusChange} />
+            <ActionCard key={a.id} a={a} country={activeCountry} now={now} onEdit={startEdit} onStatusChange={handleStatusChange}
+              onRaiseJob={handleRaiseJob} raisingJob={raisingJob} />
           ))}
+          <TablePagination {...actionsPager} />
         </div>
       ) : (
-        <div className="card overflow-hidden p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead className="bg-gray-800/60 border-b border-gray-700">
-                <tr>
-                  {[
-                    t('correctiveactions.table.columns.titleRootCause'),
-                    t('correctiveactions.table.columns.priority'),
-                    t('correctiveactions.table.columns.site'),
-                    t('correctiveactions.table.columns.assignedTo'),
-                    t('correctiveactions.table.columns.asset'),
-                    t('correctiveactions.table.columns.dueDate'),
-                    t('correctiveactions.table.columns.age'),
-                    t('correctiveactions.table.columns.status'),
-                    '',
-                  ].map(h => (
-                    <th key={h} className="px-3 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {actionsPager.pageRows.map(a => (
-                  <TableRow key={a.id} a={a} country={activeCountry} onEdit={startEdit} onStatusChange={handleStatusChange}
-                    onRaiseJob={handleRaiseJob} raisingJob={raisingJob} />
-                ))}
-              </tbody>
-            </table>
-            <TablePagination {...actionsPager} />
-          </div>
-          <div className="px-4 py-2 border-t border-gray-800 text-xs text-gray-500">
-            {t('correctiveactions.table.actionsCount', { count: filtered.length })}
-          </div>
-        </div>
+        <EnterpriseTable
+          viewKey="corrective-actions"
+          columns={columns}
+          data={tableRows}
+          getRowId={r => String(r.id)}
+          enableGlobalFilter={false}
+          enableColumnFilters={false}
+          enableExport={false}
+          initialPageSize={25}
+          pageSizeOptions={[25, 50, 100]}
+          onRowClick={startEdit}
+          emptyMessage={hasFilters ? t('correctiveactions.empty.noMatch') : t('correctiveactions.empty.noneYet')}
+        />
       )}
 
-      {/* Form modal */}
-      {showForm && (
-        <div
-          className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-start justify-center z-50 p-4 overflow-y-auto"
-          onClick={() => setShowForm(false)}
-        >
-          <div
-            className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-lg p-6 my-8 shadow-2xl"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-base font-semibold text-white flex items-center gap-2">
-                <ClipboardCheck size={16} className="text-blue-400" />
-                {editId ? t('correctiveactions.form.editTitle') : t('correctiveactions.form.newTitle')}
-              </h2>
-              <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-white transition-colors">
-                <X size={18} />
-              </button>
+      <Modal
+        open={showForm}
+        onClose={() => setShowForm(false)}
+        size="lg"
+        title={(
+          <span className="flex items-center gap-2">
+            <ClipboardCheck size={16} className="text-[var(--accent)]" aria-hidden="true" />
+            {editId ? t('correctiveactions.form.editTitle') : t('correctiveactions.form.newTitle')}
+          </span>
+        )}
+        footer={(
+          <div className="flex gap-3 justify-end">
+            <button type="button" onClick={() => setShowForm(false)} className={`btn-secondary ${ctrlCls}`}>{t('correctiveactions.form.cancel')}</button>
+            <button type="submit" form="ca-form" disabled={saving} className={`btn-primary inline-flex items-center gap-2 disabled:opacity-50 ${ctrlCls}`}>
+              <Save size={15} aria-hidden="true" /> {saving ? t('correctiveactions.form.saving') : t('correctiveactions.form.save')}
+            </button>
+          </div>
+        )}
+      >
+        {formError && (
+          <div role="alert" className="bg-red-500/10 border border-red-500/40 text-red-400 rounded-lg px-4 py-2.5 mb-4 text-sm">{formError}</div>
+        )}
+        <form id="ca-form" onSubmit={save} className="space-y-3">
+          <div>
+            <label className="label" htmlFor="ca-title">{t('correctiveactions.form.titleLabel')} <span aria-hidden="true">*</span></label>
+            <input id="ca-title" className="input" placeholder={t('correctiveactions.form.titlePlaceholder')} value={form.title}
+              onChange={e => setForm(f => ({ ...f, title: e.target.value }))} required />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="label" htmlFor="ca-priority">{t('correctiveactions.form.priority')}</label>
+              <select id="ca-priority" className="input" value={form.priority} onChange={e => setForm(f => ({ ...f, priority: e.target.value }))}>
+                {PRIORITIES.map(p => <option key={p}>{p}</option>)}
+              </select>
             </div>
-
-            {formError && (
-              <div className="bg-red-900/30 border border-red-700 text-red-300 rounded-lg px-4 py-2.5 mb-4 text-sm">
-                {formError}
-              </div>
-            )}
-
-            <form onSubmit={save} className="space-y-3">
-              <div>
-                <label className="label">{t('correctiveactions.form.titleLabel')}</label>
-                <input
-                  className="input"
-                  placeholder={t('correctiveactions.form.titlePlaceholder')}
-                  value={form.title}
-                  onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label">{t('correctiveactions.form.priority')}</label>
-                  <select className="input" value={form.priority} onChange={e => setForm(f => ({ ...f, priority: e.target.value }))}>
-                    {['High', 'Medium', 'Low'].map(p => <option key={p}>{p}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="label">{t('correctiveactions.form.status')}</label>
-                  <select className="input" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
-                    {['Open', 'In Progress', 'Closed'].map(s => <option key={s}>{s}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label">{t('correctiveactions.form.site')}</label>
-                  <input className="input" value={form.site} onChange={e => setForm(f => ({ ...f, site: e.target.value }))}
-                    list="ca-sites" placeholder={t('correctiveactions.form.sitePlaceholder')} />
-                  <datalist id="ca-sites">{sites.map(s => <option key={s} value={s} />)}</datalist>
-                </div>
-                <div>
-                  <label className="label">{t('correctiveactions.form.dueDate')}</label>
-                  <input type="date" className="input" value={form.due_date}
-                    onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))} />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label">{t('correctiveactions.form.assignedTo')}</label>
-                  <input className="input" value={form.assigned_to}
-                    onChange={e => setForm(f => ({ ...f, assigned_to: e.target.value }))} />
-                </div>
-                <div>
-                  <label className="label">{t('correctiveactions.form.assetNo')}</label>
-                  <input className="input" value={form.asset_no}
-                    onChange={e => setForm(f => ({ ...f, asset_no: e.target.value }))} />
-                </div>
-              </div>
-
-              <div>
-                <label className="label">{t('correctiveactions.form.tyreSerial')}</label>
-                <input className="input" value={form.tyre_serial}
-                  onChange={e => setForm(f => ({ ...f, tyre_serial: e.target.value }))}
-                  placeholder={t('correctiveactions.form.tyreSerialPlaceholder')} />
-              </div>
-
-              <div>
-                <label className="label">{t('correctiveactions.form.rootCause')}</label>
-                <select className="input" value={form.root_cause}
-                  onChange={e => setForm(f => ({ ...f, root_cause: e.target.value }))}>
-                  <option value="">{t('correctiveactions.form.selectRootCause')}</option>
-                  {ROOT_CAUSES.map(r => <option key={r}>{r}</option>)}
-                </select>
-              </div>
-
-              <div>
-                <label className="label">{t('correctiveactions.form.description')}</label>
-                <textarea className="input" rows={3} value={form.description}
-                  onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                  placeholder={t('correctiveactions.form.descriptionPlaceholder')} />
-              </div>
-
-              {/* Photo */}
-              <div>
-                <label className="label">{t('correctiveactions.form.photo')}</label>
-                <div className="flex items-center gap-3">
-                  <button type="button"
-                    onClick={() => photoRef.current?.click()}
-                    className="btn-secondary text-sm flex items-center gap-2 px-3 py-2">
-                    <Camera size={14} /> {form.photo_data ? t('correctiveactions.form.changePhoto') : t('correctiveactions.form.attachPhoto')}
-                  </button>
-                  {form.photo_data && (
-                    <button type="button"
-                      onClick={() => setForm(f => ({ ...f, photo_data: null }))}
-                      className="text-xs text-red-400 hover:text-red-300 transition-colors">
-                      {t('correctiveactions.form.removePhoto')}
-                    </button>
-                  )}
-                  <input ref={photoRef} type="file" accept="image/*" className="hidden" onChange={handlePhoto} />
-                </div>
-                {form.photo_data && (
-                  <img src={form.photo_data} alt={t('correctiveactions.form.evidenceAlt')} className="mt-2 rounded-lg max-h-40 border border-gray-700 object-cover w-full" />
-                )}
-              </div>
-
-              <div className="flex gap-3 pt-2 border-t border-gray-800">
-                <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
-                  <Save size={15} /> {saving ? t('correctiveactions.form.saving') : t('correctiveactions.form.save')}
-                </button>
-                <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">{t('correctiveactions.form.cancel')}</button>
-              </div>
-            </form>
+            <div>
+              <label className="label" htmlFor="ca-status">{t('correctiveactions.form.status')}</label>
+              <select id="ca-status" className="input" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
+                {STATUSES.map(s => <option key={s}>{s}</option>)}
+              </select>
+            </div>
           </div>
-        </div>
-      )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="label" htmlFor="ca-site">{t('correctiveactions.form.site')}</label>
+              <input id="ca-site" className="input" value={form.site} onChange={e => setForm(f => ({ ...f, site: e.target.value }))}
+                list="ca-sites" placeholder={t('correctiveactions.form.sitePlaceholder')} />
+              <datalist id="ca-sites">{sites.map(s => <option key={s} value={s} />)}</datalist>
+            </div>
+            <div>
+              <label className="label" htmlFor="ca-due">{t('correctiveactions.form.dueDate')}</label>
+              <input id="ca-due" type="date" className="input" value={form.due_date}
+                onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="label" htmlFor="ca-assigned">{t('correctiveactions.form.assignedTo')}</label>
+              <input id="ca-assigned" className="input" value={form.assigned_to}
+                onChange={e => setForm(f => ({ ...f, assigned_to: e.target.value }))} />
+            </div>
+            <div>
+              <label className="label" htmlFor="ca-asset">{t('correctiveactions.form.assetNo')}</label>
+              <input id="ca-asset" className="input" value={form.asset_no}
+                onChange={e => setForm(f => ({ ...f, asset_no: e.target.value }))} />
+            </div>
+          </div>
+
+          <div>
+            <label className="label" htmlFor="ca-serial">{t('correctiveactions.form.tyreSerial')}</label>
+            <input id="ca-serial" className="input" value={form.tyre_serial}
+              onChange={e => setForm(f => ({ ...f, tyre_serial: e.target.value }))}
+              placeholder={t('correctiveactions.form.tyreSerialPlaceholder')} />
+          </div>
+
+          <div>
+            <label className="label" htmlFor="ca-cause">{t('correctiveactions.form.rootCause')}</label>
+            <select id="ca-cause" className="input" value={form.root_cause}
+              onChange={e => setForm(f => ({ ...f, root_cause: e.target.value }))}>
+              <option value="">{t('correctiveactions.form.selectRootCause')}</option>
+              {ROOT_CAUSES.map(r => <option key={r}>{r}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label className="label" htmlFor="ca-desc">{t('correctiveactions.form.description')}</label>
+            <textarea id="ca-desc" className="input" rows={3} value={form.description}
+              onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+              placeholder={t('correctiveactions.form.descriptionPlaceholder')} />
+          </div>
+
+          <div>
+            <span className="label">{t('correctiveactions.form.photo')}</span>
+            <div className="flex items-center gap-3 flex-wrap">
+              <button type="button" onClick={() => photoRef.current?.click()} className={`btn-secondary text-sm inline-flex items-center gap-2 px-3 ${ctrlCls}`}>
+                <Camera size={14} aria-hidden="true" /> {form.photo_data ? t('correctiveactions.form.changePhoto') : t('correctiveactions.form.attachPhoto')}
+              </button>
+              {form.photo_data && (
+                <button type="button" onClick={() => setForm(f => ({ ...f, photo_data: null }))} className={`text-xs text-red-400 hover:text-red-300 min-h-[36px] px-1 ${FOCUS}`}>
+                  {t('correctiveactions.form.removePhoto')}
+                </button>
+              )}
+              <input ref={photoRef} type="file" accept="image/*" className="hidden" onChange={handlePhoto} aria-label={t('correctiveactions.form.photo')} />
+            </div>
+            {form.photo_data && (
+              <img src={form.photo_data} alt={t('correctiveactions.form.evidenceAlt')} className="mt-2 rounded-lg max-h-40 border border-[var(--border)] object-cover w-full" />
+            )}
+          </div>
+        </form>
+      </Modal>
     </div>
   )
 }
@@ -922,9 +899,11 @@ export default function CorrectiveActions() {
 // ── Util sub-components ────────────────────────────────────────────────────────
 function Chip({ label, onRemove }) {
   return (
-    <span className="flex items-center gap-1 px-2 py-0.5 bg-blue-900/30 text-blue-300 border border-blue-700/40 rounded-full">
+    <span className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 bg-[var(--surface-2)] text-[var(--text-primary)] border border-[var(--border)] rounded-full">
       {label}
-      <button onClick={onRemove} className="hover:text-red-400 transition-colors"><X size={10} /></button>
+      <button onClick={onRemove} aria-label={`Remove filter ${label}`} className={`w-6 h-6 inline-flex items-center justify-center rounded-full hover:text-red-400 ${FOCUS}`}>
+        <X size={10} aria-hidden="true" />
+      </button>
     </span>
   )
 }
@@ -933,20 +912,24 @@ function LoadingState() {
   return <SkeletonTable rows={8} cols={8} />
 }
 
-function EmptyState({ hasFilters, onAdd }) {
+function EmptyState({ hasFilters, onAdd, onClear }) {
   const { t } = useLanguage()
   return (
     <div className="card text-center py-16">
-      <ClipboardCheck size={40} className="mx-auto text-gray-700 mb-3" />
-      <p className="text-gray-400 font-medium">
+      <ClipboardCheck size={40} className="mx-auto text-[var(--text-dim)] mb-3" aria-hidden="true" />
+      <p className="text-[var(--text-secondary)] font-medium">
         {hasFilters ? t('correctiveactions.empty.noMatch') : t('correctiveactions.empty.noneYet')}
       </p>
-      <p className="text-gray-600 text-sm mt-1">
+      <p className="text-[var(--text-muted)] text-sm mt-1">
         {hasFilters ? t('correctiveactions.empty.noMatchHint') : t('correctiveactions.empty.noneYetHint')}
       </p>
-      {!hasFilters && (
-        <button onClick={onAdd} className="btn-primary mt-4 inline-flex items-center gap-2 text-sm">
-          <Plus size={14} /> {t('correctiveactions.toolbar.newAction')}
+      {hasFilters ? (
+        <button onClick={onClear} className="btn-secondary mt-4 inline-flex items-center gap-2 text-sm min-h-[44px] px-4">
+          <X size={14} aria-hidden="true" /> {t('correctiveactions.filtersBar.clearAll')}
+        </button>
+      ) : (
+        <button onClick={onAdd} className="btn-primary mt-4 inline-flex items-center gap-2 text-sm min-h-[44px]">
+          <Plus size={14} aria-hidden="true" /> {t('correctiveactions.toolbar.newAction')}
         </button>
       )}
     </div>

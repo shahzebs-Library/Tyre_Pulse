@@ -70,6 +70,7 @@ export async function listProduction({ country, site, from, to, limit = 20000 } 
     return q
       .order('period_date', { ascending: false })
       .order('created_at', { ascending: false })
+      .order('id', { ascending: true })   // unique tiebreak for concurrent paging
       .range(pFrom, pTo)
   }
   try {

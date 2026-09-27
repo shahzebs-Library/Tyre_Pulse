@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 const h = vi.hoisted(() => ({ from: vi.fn(), country: vi.fn(), select: vi.fn(), abort: vi.fn() }))
-vi.mock('../lib/api/_client', () => ({ supabase: { from: h.from }, applyCountry: h.country }))
+vi.mock('../lib/api/_client', () => ({ supabase: { from: h.from }, applyCountry: h.country, ServiceError:class ServiceError extends Error{constructor(m,c,cause){super(m);this.name='ServiceError';this.code=c;this.cause=cause}} }))
 import { loadWorkspaceCount } from '../lib/api/workspace'
 beforeEach(() => {
   h.from.mockReset().mockReturnValue({ select: h.select })
@@ -20,5 +20,5 @@ it('does not treat unavailable counts as zero or query unsupported modules', asy
   await expect(loadWorkspaceCount('budgets', { profile: { id: 'u1' } })).rejects.toThrow('unavailable')
   expect(h.from).not.toHaveBeenCalled()
   h.abort.mockResolvedValue({ count: null, error: { message: 'Access denied' } })
-  await expect(loadWorkspaceCount('fleet_master', { profile: { id: 'u1' } })).rejects.toEqual({ message: 'Access denied' })
+  await expect(loadWorkspaceCount('fleet_master', { profile: { id: 'u1' } })).rejects.toMatchObject({ name: 'ServiceError', message: 'Access denied' })
 })

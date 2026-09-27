@@ -9,7 +9,8 @@
  * Every read degrades to an empty-but-shaped value on a missing relation / RPC
  * error so a not-yet-migrated org shows an honest empty state, never a throw.
  */
-import { supabase, fetchAllPages, isMissingRelation } from './_client'
+import { supabase, fetchAllPages, isMissingRelation, isNotProvisioned, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 /**
  * Insert many rows fast and reliably: batches of CHUNK, a small concurrency pool,
@@ -55,6 +56,17 @@ const SCO_COLS = 'id, country, region, site, period_date, cost_center, descripti
 const SANY_COLS = 'id, country, region, site, asset_code, asset_no, invoice_no, invoice_date, period_date, description, amount, currency, status, doc_type, gross_amount, net_amount, fx_rate, deductions, fleet_remarks, maintenance_remarks, source, notes, created_at'
 
 /** Empty, correctly-shaped Cost/M3 result. */
+/**
+ * Honest read outcome. A ledger that is not provisioned yet degrades to [];
+ * anything else (permission, network, timeout) THROWS a sanitised ServiceError,
+ * because an empty ledger reads as "no cost" / "no production" - the exact claim
+ * a failed read must never make. Every caller of these reads already catches.
+ */
+function readFailed(error, fallback) {
+  if (isNotProvisioned(error)) return []
+  throw new ServiceError(toUserMessage(error, fallback), error?.code, error)
+}
+
 function emptyCostPerM3() {
   return { ok: false, country: null, currency: null, from: null, to: null, regions: [], total: null }
 }
@@ -121,9 +133,12 @@ export async function listScoCosts({ country, from, to, limit = 500 } = {}) {
     if (from) q = q.gte('period_date', from)
     if (to) q = q.lte('period_date', to)
     const { data, error } = await q.limit(limit)
-    if (error) return []
+    if (error) return readFailed(error, 'Could not load the SCO costs.')
     return Array.isArray(data) ? data : []
-  } catch { return [] }
+  } catch (err) {
+    if (err instanceof ServiceError) throw err
+    return readFailed(err, 'Could not load the SCO costs.')
+  }
 }
 
 /** Insert one SCO cost row (organisation/currency/created_by defaulted server-side). */
@@ -186,9 +201,12 @@ export async function listSanyInvoices({ country, from, to, limit = 500 } = {}) 
     if (from) q = q.gte('period_date', from)
     if (to) q = q.lte('period_date', to)
     const { data, error } = await q.limit(limit)
-    if (error) return []
+    if (error) return readFailed(error, 'Could not load the SANY invoices.')
     return Array.isArray(data) ? data : []
-  } catch { return [] }
+  } catch (err) {
+    if (err instanceof ServiceError) throw err
+    return readFailed(err, 'Could not load the SANY invoices.')
+  }
 }
 
 export async function createSanyInvoice(row) {
@@ -272,9 +290,14 @@ export async function listProduction({ country, from, to, limit = 20000 } = {}) 
       if (to) q = q.lte('period_date', to)
       return q.range(pFrom, pTo)
     }, { max: limit })
+    // The error used to be ignored, so a failed read rendered as "no production".
+    if (res?.error) return readFailed(res.error, 'Could not load the production log.')
     const rows = res?.data ?? res
     return Array.isArray(rows) ? rows : []
-  } catch { return [] }
+  } catch (err) {
+    if (err instanceof ServiceError) throw err
+    return readFailed(err, 'Could not load the production log.')
+  }
 }
 
 /**
@@ -301,9 +324,12 @@ export async function listRejectedProduction({ country, from, to, reason, limit 
       else if (reason) q = q.eq('reason', reason)
       return q.range(pgFrom, pgTo)
     }, { max: limit })
-    if (error) return []
+    if (error) return readFailed(error, 'Could not load the rejected loads.')
     return Array.isArray(data) ? data : []
-  } catch { return [] }
+  } catch (err) {
+    if (err instanceof ServiceError) throw err
+    return readFailed(err, 'Could not load the rejected loads.')
+  }
 }
 
 /**
@@ -319,9 +345,12 @@ export async function getProductionStations({ country } = {}) {
     const { data, error } = await supabase.rpc('get_production_stations', {
       p_country: country && country !== 'All' ? country : null,
     })
-    if (error) return []
+    if (error) return readFailed(error, 'Could not load the batching stations.')
     return Array.isArray(data) ? data : []
-  } catch { return [] }
+  } catch (err) {
+    if (err instanceof ServiceError) throw err
+    return readFailed(err, 'Could not load the batching stations.')
+  }
 }
 
 /** Map a station code to a real site. Elevated only, enforced by RLS. */
@@ -347,9 +376,12 @@ export async function listProductionStationMap({ country } = {}) {
     let q = supabase.from('production_station_map').select('*').order('station')
     if (country && country !== 'All') q = q.eq('country', country)
     const { data, error } = await q
-    if (error) return []
+    if (error) return readFailed(error, 'Could not load the station map.')
     return Array.isArray(data) ? data : []
-  } catch { return [] }
+  } catch (err) {
+    if (err instanceof ServiceError) throw err
+    return readFailed(err, 'Could not load the station map.')
+  }
 }
 
 /**
@@ -503,9 +535,12 @@ export async function getProductionReasons({ country, from, to } = {}) {
       p_country: country && country !== 'All' ? country : null,
       p_from: from || null, p_to: to || null,
     })
-    if (error) return []
+    if (error) return readFailed(error, 'Could not load the rejection reasons.')
     return Array.isArray(data) ? data : []
-  } catch { return [] }
+  } catch (err) {
+    if (err instanceof ServiceError) throw err
+    return readFailed(err, 'Could not load the rejection reasons.')
+  }
 }
 
 /**
@@ -550,9 +585,12 @@ export async function getLedgerMonthly(kind, { country, from, to } = {}) {
       p_country: country && country !== 'All' ? country : null,
       p_from: from || null, p_to: to || null,
     })
-    if (error) return []
+    if (error) return readFailed(error, 'Could not load the monthly summary.')
     return Array.isArray(data) ? data : []
-  } catch { return [] }
+  } catch (err) {
+    if (err instanceof ServiceError) throw err
+    return readFailed(err, 'Could not load the monthly summary.')
+  }
 }
 
 export async function getProductionMonthly({ country, from, to, reason } = {}) {
@@ -562,9 +600,12 @@ export async function getProductionMonthly({ country, from, to, reason } = {}) {
       p_from: from || null, p_to: to || null,
       p_reason: reason || null,
     })
-    if (error) return []
+    if (error) return readFailed(error, 'Could not load the monthly production summary.')
     return Array.isArray(data) ? data : []
-  } catch { return [] }
+  } catch (err) {
+    if (err instanceof ServiceError) throw err
+    return readFailed(err, 'Could not load the monthly production summary.')
+  }
 }
 
 /**
@@ -630,9 +671,12 @@ export async function listSites({ country, limit = 2000 } = {}) {
     let q = supabase.from('sites').select(SITE_COLS).order('country').order('name')
     if (country && country !== 'All') q = q.eq('country', country)
     const { data, error } = await q.limit(limit)
-    if (error) return []
+    if (error) return readFailed(error, 'Could not load the sites.')
     return Array.isArray(data) ? data : []
-  } catch { return [] }
+  } catch (err) {
+    if (err instanceof ServiceError) throw err
+    return readFailed(err, 'Could not load the sites.')
+  }
 }
 
 export async function createSite(row) {

@@ -5,7 +5,8 @@
  * through the Universal Approval Engine (entity_type 'checklist_submission').
  * Explicit column lists, null-safe country scoping — mirrors stock.js / tyres.js.
  */
-import { supabase, unwrap, applyCountry, fetchAllPages } from './_client'
+import { supabase, unwrap, applyCountry, fetchAllPages, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 import { submissionDay } from '../checklistMonthly'
 
 // name_i18n / description_i18n / option_sets carry the template's translations:
@@ -383,7 +384,7 @@ export async function uploadChecklistPhoto(file, { prefix = 'misc' } = {}) {
   const { error } = await supabase.storage.from(PHOTO_BUCKET).upload(path, file, {
     cacheControl: '3600', upsert: false, contentType: file.type || undefined,
   })
-  if (error) throw new Error(error.message || 'Photo upload failed.')
+  if (error) throw new ServiceError(toUserMessage(error, 'Photo upload failed.'), error.code, error)
   const { data } = supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path)
   return data?.publicUrl || null
 }

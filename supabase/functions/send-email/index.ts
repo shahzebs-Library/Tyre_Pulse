@@ -21,6 +21,8 @@ async function emailNotificationsDisabled(): Promise<boolean> {
   }
 }
 
+class ProviderError extends Error {}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders(req) })
@@ -88,7 +90,10 @@ serve(async (req) => {
     const data = await res.json()
 
     if (!res.ok) {
-      throw new Error(data.message || `Resend API error: ${res.status}`)
+      // The provider's own sentence (e.g. an unverified sending domain) is
+      // actionable for an admin and carries no database internals, so it is the
+      // one message passed through; anything else below is generic.
+      throw new ProviderError(String(data?.message || `Email provider error (${res.status})`).slice(0, 300))
     }
 
     // Audit log via Supabase service role
@@ -115,7 +120,8 @@ serve(async (req) => {
 
     return jsonResponse(req, { success: true, id: data.id })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error'
+    console.error('[send-email] failed:', err instanceof Error ? err.message : err)
+    const message = err instanceof ProviderError ? err.message : 'The email could not be sent.'
     return jsonResponse(req, { error: message }, 500)
   }
 })

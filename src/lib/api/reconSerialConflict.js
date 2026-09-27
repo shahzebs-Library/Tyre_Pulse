@@ -19,26 +19,26 @@
  * The read path NEVER throws: it returns [] on a null payload or any RPC error
  * so the section can degrade to an honest empty state.
  */
-import { supabase } from './_client'
+import { supabase, ServiceError, isNotProvisioned } from './_client'
+import { toUserMessage } from '../safeError'
 
 /**
  * List tyre serials that appear against more than one asset, via the
- * `recon_serial_multi_asset` RPC. Never throws - returns [] on a null payload
- * or any RPC error.
+ * `recon_serial_multi_asset` RPC. Returns [] on a null payload or when not
+ * provisioned; throws a sanitised ServiceError on any other failure.
  *
  * @returns {Promise<Array<{
  *   serial_no: string,
  *   country: string,
  *   asset_count: number,
  *   assets: string
- * }>>} serial-on-multiple-assets rows (empty array when none or on error)
+ * }>>} serial-on-multiple-assets rows (empty array when none or not provisioned)
  */
 export async function listSerialMultiAsset() {
-  try {
-    const { data, error } = await supabase.rpc('recon_serial_multi_asset')
-    if (error) return []
-    return Array.isArray(data) ? data : []
-  } catch {
-    return []
+  const { data, error } = await supabase.rpc('recon_serial_multi_asset')
+  if (error) {
+    if (isNotProvisioned(error)) return []
+    throw new ServiceError(toUserMessage(error, 'Could not load serial conflicts.'), error.code, error)
   }
+  return Array.isArray(data) ? data : []
 }

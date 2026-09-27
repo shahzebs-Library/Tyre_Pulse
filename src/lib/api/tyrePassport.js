@@ -10,7 +10,8 @@
  *   - retread_claims (retread vendor claims)
  * The passport assembly lives in `src/lib/tyrePassport.js`.
  */
-import { supabase, applyCountry, fetchAllPages, unwrap } from './_client'
+import { supabase, applyCountry, fetchAllPages, unwrap, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 import { sanitizeSearchTerm } from '../searchFilter'
 
 const COLS =
@@ -110,7 +111,7 @@ export async function searchSerials(query, { country, limit = 25 } = {}) {
     .limit(200)
   q = applyCountry(q, country)
   const { data, error } = await q
-  if (error) throw error
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   const seen = new Set()
   const out = []
   for (const r of data || []) {

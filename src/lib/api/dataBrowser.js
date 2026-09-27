@@ -26,7 +26,7 @@
  * `admin_row_changes` and can be reverted, and the server refuses to touch identity,
  * tenancy or generated columns.
  */
-import { supabase, unwrap } from './_client'
+import { supabase, unwrap, ServiceError, isNotProvisioned } from './_client'
 import { toUserMessage } from '../safeError'
 
 /**
@@ -105,7 +105,7 @@ export async function updateRow(table, id, patch) {
     p_id: id,
     p_patch: patch,
   })
-  if (error) throw new Error(toUserMessage(error, 'Could not save that change.'))
+  if (error) throw new ServiceError(toUserMessage(error, 'Could not save that change.'), error?.code, error)
   return data || { ok: false }
 }
 
@@ -115,7 +115,7 @@ export async function deleteRow(table, id) {
     p_table: table,
     p_id: id,
   })
-  if (error) throw new Error(toUserMessage(error, 'Could not delete that row.'))
+  if (error) throw new ServiceError(toUserMessage(error, 'Could not delete that row.'), error?.code, error)
   return data || { ok: false }
 }
 
@@ -124,21 +124,22 @@ export async function revertChange(changeId) {
   const { data, error } = await supabase.rpc('admin_db_revert_change', {
     p_change_id: changeId,
   })
-  if (error) throw new Error(toUserMessage(error, 'Could not undo that change.'))
+  if (error) throw new ServiceError(toUserMessage(error, 'Could not undo that change.'), error?.code, error)
   return data || { ok: false }
 }
 
 /** Recent edits and deletes, newest first, for the undo list. */
 export async function listRowChanges(limit = 50) {
-  try {
-    const { data, error } = await supabase
-      .from('admin_row_changes')
-      .select('id, tbl, row_id, action, changed_by, created_at, reverted_at')
-      .order('created_at', { ascending: false })
-      .limit(Math.max(1, Math.min(Number(limit) || 50, 500)))
-    if (error) return []
-    return Array.isArray(data) ? data : []
-  } catch {
-    return []
+  const { data, error } = await supabase
+    .from('admin_row_changes')
+    .select('id, tbl, row_id, action, changed_by, created_at, reverted_at')
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(Math.max(1, Math.min(Number(limit) || 50, 500)))
+  if (error) {
+    // A failed read must not look like "nothing to undo".
+    if (isNotProvisioned(error)) return []
+    throw new ServiceError(toUserMessage(error, 'Could not read the recent changes.'), error.code, error)
   }
+  return Array.isArray(data) ? data : []
 }

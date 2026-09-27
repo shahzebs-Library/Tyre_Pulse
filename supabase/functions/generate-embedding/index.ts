@@ -91,7 +91,9 @@ serve(async (req) => {
 
     return jsonResponse(req, { embedding })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error'
-    return jsonResponse(req, { error: message }, 500)
+    // The provider's raw error body can carry account/org identifiers and
+    // request internals: log it server-side, return a generic message.
+    console.error('[generate-embedding] failed:', err instanceof Error ? err.message : err)
+    return jsonResponse(req, { error: 'Embedding could not be generated.' }, 500)
   }
 })

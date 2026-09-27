@@ -14,12 +14,13 @@
  * error so the section can degrade to an honest empty state. This surface is
  * READ ONLY - the rows are flags for manual correction and are never mutated.
  */
-import { supabase } from './_client'
+import { supabase, ServiceError, isNotProvisioned } from './_client'
+import { toUserMessage } from '../safeError'
 
 /**
  * List work orders whose encoded MM/YY (from the Ramco work order number)
  * disagrees with the actual opened date, via the `recon_jobcard_mismatches`
- * RPC. Never throws - returns [] on a null payload or any RPC error.
+ * RPC. Returns [] when not provisioned; throws a sanitised ServiceError otherwise.
  *
  * @param {{ limit?: number }} [opts]  max rows to return (server-clamped)
  * @returns {Promise<Array<{
@@ -32,32 +33,30 @@ import { supabase } from './_client'
  *   jobcard_year: number,
  *   opened_month: number,
  *   opened_year: number
- * }>>} mismatch rows (empty array when none or on error)
+ * }>>} mismatch rows (empty array when none or not provisioned; throws otherwise)
  */
 export async function listJobcardMismatches({ limit = 1000 } = {}) {
-  try {
-    const { data, error } = await supabase.rpc('recon_jobcard_mismatches', { p_limit: limit })
-    if (error) return []
-    return Array.isArray(data) ? data : []
-  } catch {
-    return []
+  const { data, error } = await supabase.rpc('recon_jobcard_mismatches', { p_limit: limit })
+  if (error) {
+    if (isNotProvisioned(error)) return []
+    throw new ServiceError(toUserMessage(error, 'Could not load job card date mismatches.'), error.code, error)
   }
+  return Array.isArray(data) ? data : []
 }
 
 /**
  * Per-country count of job card date mismatches via the
- * `recon_jobcard_mismatch_summary` RPC. Never throws - returns [] on a null
- * payload or any RPC error.
+ * `recon_jobcard_mismatch_summary` RPC. Returns [] on a null payload or when the
+ * RPC is not provisioned; THROWS a sanitised ServiceError on any other failure.
  *
  * @returns {Promise<Array<{ country: string, mismatches: number }>>}
- *   per-country summary rows (empty array when none or on error)
+ *   per-country summary rows (empty array when none or not provisioned; throws otherwise)
  */
 export async function getJobcardMismatchSummary() {
-  try {
-    const { data, error } = await supabase.rpc('recon_jobcard_mismatch_summary')
-    if (error) return []
-    return Array.isArray(data) ? data : []
-  } catch {
-    return []
+  const { data, error } = await supabase.rpc('recon_jobcard_mismatch_summary')
+  if (error) {
+    if (isNotProvisioned(error)) return []
+    throw new ServiceError(toUserMessage(error, 'Could not load the job card mismatch summary.'), error.code, error)
   }
+  return Array.isArray(data) ? data : []
 }

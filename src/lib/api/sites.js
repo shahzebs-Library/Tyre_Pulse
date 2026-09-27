@@ -10,6 +10,7 @@
  * logic.
  */
 import { supabase, unwrap, ServiceError, fetchAllPages } from './_client'
+import { toUserMessage } from '../safeError'
 
 export const SITE_TYPES = ['depot', 'workshop', 'warehouse', 'camp', 'branch', 'project', 'yard', 'other']
 
@@ -120,7 +121,7 @@ export async function listDataSiteOptions(country) {
   const { data, error } = await supabase.rpc('reference_site_options', {
     p_country: country && country !== 'All' ? country : null,
   })
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return (Array.isArray(data) ? data : []).map((r) => r?.name).filter(Boolean)
 }
 
@@ -136,7 +137,7 @@ export async function listSiteAssets({ country } = {}) {
   const rows = await fetchAllPages((from, to) => {
     let q = supabase.from('vehicle_fleet')
       .select('id,asset_no,fleet_number,vehicle_type,site,country,region,status,current_km,active:is_active')
-      .order('site', { nullsFirst: false }).order('asset_no').range(from, to)
+      .order('site', { nullsFirst: false }).order('asset_no').order('id', { ascending: true }).range(from, to)
     if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
     return q
   })
@@ -252,23 +253,23 @@ export async function upsertSite(site) {
   if (existing?.id) {
     const { error } = await supabase.from('sites')
       .update({ ...payload, updated_by: uid }).eq('id', existing.id)
-    if (error) throw new ServiceError(error.message, error.code, error)
+    if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     return existing.id
   }
   const { data: ins, error } = await supabase.from('sites')
     .insert({ ...payload, created_by: uid }).select('id').single()
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return ins.id
 }
 
 /** Activate / deactivate a site without editing the rest. */
 export async function setSiteActive(id, active) {
   const { error } = await supabase.from('sites').update({ active: !!active }).eq('id', id)
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
 }
 
 /** Permanently delete a site from the master. */
 export async function deleteSite(id) {
   const { error } = await supabase.from('sites').delete().eq('id', id)
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
 }

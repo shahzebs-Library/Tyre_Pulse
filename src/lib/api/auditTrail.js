@@ -271,7 +271,8 @@ export function listAudit(sourceKey, opts) {
   return listDataAudit(opts)
 }
 
-import { supabase } from './_client'
+import { supabase, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 export const AUDIT_EXPORT_CAP = 5000
 
@@ -319,7 +320,7 @@ export async function readAuditExport({ upload = false, filters = {}, search = '
     const { data, error, count } = await query
       .lte(upload ? 'uploaded_at' : 'created_at', snapshot)
       .range(from, Math.min(from + 999, AUDIT_EXPORT_CAP))
-    if (error) throw error
+    if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     if (!Number.isSafeInteger(count) || count < 0) throw new Error('The server did not confirm the export total. Please retry.')
     if (expected === null) expected = count
     if (count !== expected) throw new Error('The records changed during export. Retry to obtain a complete file.')

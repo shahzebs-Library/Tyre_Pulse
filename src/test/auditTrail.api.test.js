@@ -5,7 +5,7 @@ vi.mock('../lib/api/_client',()=>({supabase:{from:(table)=>{
  const query={then:(resolve,reject)=>Promise.resolve(state.responses.shift()).then(resolve,reject)}
  for(const method of ['select','order','gte','lt','lte','eq','range']) query[method]=(...args)=>{state.calls.push([method,...args]);return query}
  return query
-}}}))
+}},ServiceError:class ServiceError extends Error{constructor(m,c,cause){super(m);this.name='ServiceError';this.code=c;this.cause=cause}}}))
 import { readAuditExport } from '../lib/api/auditTrail'
 beforeEach(()=>{state.responses=[];state.calls=[]})
 describe('complete filtered audit exports',()=>{

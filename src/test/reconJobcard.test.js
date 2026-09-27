@@ -21,9 +21,10 @@ beforeEach(() => {
 })
 
 describe('service layer - job card date mismatches', () => {
-  it('listJobcardMismatches maps p_limit and returns [] on error', async () => {
-    h.state.rpc = { data: null, error: { message: 'boom', code: '42501' } }
-    expect(await recon.listJobcardMismatches({ limit: 250 })).toEqual([])
+  it('listJobcardMismatches maps p_limit and THROWS a sanitised error on failure', async () => {
+    h.state.rpc = { data: null, error: { message: 'permission denied for function recon_jobcard_mismatches', code: '42501' } }
+    await expect(recon.listJobcardMismatches({ limit: 250 })).rejects.toMatchObject({ name: 'ServiceError', code: '42501' })
+    await expect(recon.listJobcardMismatches({ limit: 250 })).rejects.not.toThrow(/recon_jobcard/)
     expect(h.state.lastRpc.name).toBe('recon_jobcard_mismatches')
     expect(h.state.lastRpc.args).toEqual({ p_limit: 250 })
   })
@@ -61,8 +62,10 @@ describe('service layer - job card date mismatches', () => {
     expect(h.state.lastRpc.args).toBeUndefined()
   })
 
-  it('getJobcardMismatchSummary returns [] on error and on a null payload', async () => {
+  it('getJobcardMismatchSummary throws on error, [] when not provisioned or null', async () => {
     h.state.rpc = { data: null, error: { message: 'boom' } }
+    await expect(recon.getJobcardMismatchSummary()).rejects.toMatchObject({ name: 'ServiceError' })
+    h.state.rpc = { data: null, error: { message: 'x', code: 'PGRST202' } }
     expect(await recon.getJobcardMismatchSummary()).toEqual([])
     h.state.rpc = { data: null, error: null }
     expect(await recon.getJobcardMismatchSummary()).toEqual([])

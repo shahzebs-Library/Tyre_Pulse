@@ -15,7 +15,7 @@
  * undo), and every learned decision lands as a per-item row a human can override
  * individually rather than as an invisible global regex.
  */
-import { supabase } from './_client'
+import { supabase, ServiceError } from './_client'
 import { toUserMessage } from '../safeError'
 
 /** An older backend has no learning loop yet. That is an absence, not a failure. */
@@ -41,7 +41,7 @@ export async function listRuleProposals(opts = {}) {
   })
   if (error) {
     if (isMissing(error)) return { ok: false, proposals: [] }
-    throw new Error(toUserMessage(error, 'Could not work out what the classifier is missing.'))
+    throw new ServiceError(toUserMessage(error, 'Could not work out what the classifier is missing.'), error?.code, error)
   }
   return { ok: true, proposals: Array.isArray(data) ? data : [] }
 }
@@ -60,7 +60,7 @@ export async function previewLearnedRule(token, category, limit = 50) {
   })
   if (error) {
     if (isMissing(error)) return { ok: false, rows: [] }
-    throw new Error(toUserMessage(error, 'Could not show what this rule would change.'))
+    throw new ServiceError(toUserMessage(error, 'Could not show what this rule would change.'), error?.code, error)
   }
   return { ok: true, rows: Array.isArray(data) ? data : [] }
 }
@@ -80,7 +80,7 @@ export async function decideRule(token, category, action, note) {
     p_action: action,
     p_note: note || null,
   })
-  if (error) throw new Error(toUserMessage(error, 'Could not record that decision.'))
+  if (error) throw new ServiceError(toUserMessage(error, 'Could not record that decision.'), error?.code, error)
   return data || {}
 }
 
@@ -100,7 +100,7 @@ export async function applyLearnedRule(token, category, dryRun = true) {
     p_category: category,
     p_dry_run: dryRun !== false,
   })
-  if (error) throw new Error(toUserMessage(error, 'Could not apply that rule.'))
+  if (error) throw new ServiceError(toUserMessage(error, 'Could not apply that rule.'), error?.code, error)
   return data || {}
 }
 
@@ -125,7 +125,7 @@ export async function listLearnedRules() {
     if (isMissing(error) || /relation .* does not exist/i.test(error.message || '')) {
       return { ok: false, rules: [] }
     }
-    throw new Error(toUserMessage(error, 'Could not load what the classifier has learned.'))
+    throw new ServiceError(toUserMessage(error, 'Could not load what the classifier has learned.'), error?.code, error)
   }
   return { ok: true, rules: Array.isArray(data) ? data : [] }
 }
@@ -135,7 +135,7 @@ export async function getAccuracy() {
   const { data, error } = await supabase.rpc('classification_accuracy')
   if (error) {
     if (isMissing(error)) return { ok: false, periods: [] }
-    throw new Error(toUserMessage(error, 'Could not load the accuracy history.'))
+    throw new ServiceError(toUserMessage(error, 'Could not load the accuracy history.'), error?.code, error)
   }
   return { ok: true, periods: Array.isArray(data) ? data : [] }
 }
@@ -149,7 +149,7 @@ export async function getWeakSpots(limit = 20) {
   const { data, error } = await supabase.rpc('classification_weak_spots', { p_limit: limit })
   if (error) {
     if (isMissing(error)) return { ok: false, spots: [] }
-    throw new Error(toUserMessage(error, 'Could not load the weak spots.'))
+    throw new ServiceError(toUserMessage(error, 'Could not load the weak spots.'), error?.code, error)
   }
   return { ok: true, spots: Array.isArray(data) ? data : [] }
 }

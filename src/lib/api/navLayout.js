@@ -13,6 +13,7 @@
  * the normalized layout and throws a ServiceError on a failed write.
  */
 import { supabase, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 import { normalizeNavLayout } from '../navLayout'
 import { configEntry, whenSystemConfigLoaded } from './systemConfig'
 
@@ -90,7 +91,7 @@ export async function saveNavLayout(layout) {
       [{ key: NAV_LAYOUT_CONFIG_KEY, value, value_text: value, updated_at: new Date().toISOString() }],
       { onConflict: 'key', ignoreDuplicates: false },
     )
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   _cache = Promise.resolve(clean) // keep the cache in sync with the write
   return { ok: true, layout: clean }
 }

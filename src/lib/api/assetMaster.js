@@ -7,14 +7,16 @@
  *
  * @module api/assetMaster
  */
-import { supabase, fetchAllRpcPages } from './_client'
+import { supabase, fetchAllRpcPages, ServiceError, isNotProvisioned } from './_client'
+import { toUserMessage } from '../safeError'
 
 /** Per-country currency for the by_country expense breakdown. */
 export const COUNTRY_CURRENCY = { KSA: 'SAR', UAE: 'AED', Egypt: 'EGP' }
 
 /**
- * One master row per asset_no with cross-country rollup. Never throws - returns
- * [] on a null payload or any RPC error so the panel degrades to an empty state.
+ * One master row per asset_no with cross-country rollup. Returns [] on a null
+ * payload or when the RPC is not provisioned; THROWS a sanitised ServiceError on
+ * any other failure so the panel shows an error with Retry, never "no assets".
  *
  * PAGED. `get_asset_master` is SET-RETURNING, and PostgREST caps an RPC response
  * at 1000 rows exactly as it caps a table read - so the browse list showed 1000
@@ -31,17 +33,16 @@ export const COUNTRY_CURRENCY = { KSA: 'SAR', UAE: 'AED', Egypt: 'EGP' }
  */
 export async function getAssetMaster({ search, limit = 20000 } = {}) {
   const p_search = search && search.trim() ? search.trim() : null
-  try {
-    const { data, error } = await fetchAllRpcPages(
-      (from, to) => supabase
-        .rpc('get_asset_master', { p_search, p_limit: limit })
-        .range(from, to),
-      (row) => (row && row.asset_no != null ? String(row.asset_no) : null),
-      { max: limit },
-    )
-    if (error) return []
-    return Array.isArray(data) ? data : []
-  } catch {
-    return []
+  const { data, error } = await fetchAllRpcPages(
+    (from, to) => supabase
+      .rpc('get_asset_master', { p_search, p_limit: limit })
+      .range(from, to),
+    (row) => (row && row.asset_no != null ? String(row.asset_no) : null),
+    { max: limit },
+  )
+  if (error) {
+    if (isNotProvisioned(error)) return []
+    throw new ServiceError(toUserMessage(error, 'Could not load the asset master.'), error.code, error)
   }
+  return Array.isArray(data) ? data : []
 }

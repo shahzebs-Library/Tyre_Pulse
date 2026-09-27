@@ -8,6 +8,7 @@
  * degrades to local-only layouts before the migration is applied.
  */
 import { supabase, unwrap, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 const COLS = 'id,name,description,config,created_by,created_at,updated_at'
 
@@ -26,7 +27,7 @@ export async function listTemplates() {
     .order('updated_at', { ascending: false })
   if (error) {
     if (isMissingRelation(error)) return []
-    throw new ServiceError(error.message, error.code)
+    throw new ServiceError(toUserMessage(error), error.code, error)
   }
   return data ?? []
 }
@@ -68,5 +69,5 @@ export async function updateTemplate(id, patch) {
 /** Delete a layout by id. */
 export async function deleteTemplate(id) {
   const { error } = await supabase.from('accident_report_templates').delete().eq('id', id)
-  if (error) throw new ServiceError(error.message, error.code)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
 }

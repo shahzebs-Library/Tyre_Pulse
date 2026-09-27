@@ -9,7 +9,8 @@
  * reusable by the panel - it derives a 0-100 score and a letter grade from a
  * single country row's linkage and brand-completeness ratios.
  */
-import { supabase } from './_client'
+import { supabase, ServiceError, isNotProvisioned } from './_client'
+import { toUserMessage } from '../safeError'
 
 /**
  * Fetch the per-country data-quality summary via the `recon_data_quality_summary`
@@ -26,16 +27,18 @@ import { supabase } from './_client'
  *   wo_linked: number,
  *   tyres_linked: number,
  *   fleet: number
- * }>>} one row per country (empty array when none or on error)
+ * }>>} one row per country (empty array when none or not provisioned; throws otherwise)
  */
 export async function getDataQualitySummary() {
-  try {
-    const { data, error } = await supabase.rpc('recon_data_quality_summary')
-    if (error) return []
-    return Array.isArray(data) ? data : []
-  } catch {
-    return []
+  const { data, error } = await supabase.rpc('recon_data_quality_summary')
+  if (error) {
+    // Only a genuinely undeployed RPC degrades to "no rows"; a permission or
+    // network failure must reach the scorecard as an error with Retry, never as
+    // "no data quality problems".
+    if (isNotProvisioned(error)) return []
+    throw new ServiceError(toUserMessage(error, 'Could not load the data quality summary.'), error.code, error)
   }
+  return Array.isArray(data) ? data : []
 }
 
 /**

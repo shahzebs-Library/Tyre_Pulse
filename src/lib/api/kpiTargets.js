@@ -75,7 +75,7 @@ export async function listKpiTyreRecords({ country, from: fromDate, to: toDate }
     if (active) q = q.eq('country', active)
     if (fromDate) q = q.gte('issue_date', fromDate)
     if (toDate) q = q.lte('issue_date', toDate)
-    return q.range(from, to)
+    return q.order('id', { ascending: true }).range(from, to)
   }, { max: 200000 })
 }
 
@@ -93,7 +93,7 @@ export async function listKpiTyreRecordsInRange({ start, end, country } = {}) {
       .gte('issue_date', start)
       .lte('issue_date', end)
     if (active) q = q.eq('country', active)
-    return q.range(from, to)
+    return q.order('id', { ascending: true }).range(from, to)
   }, { max: 200000 })
 }
 

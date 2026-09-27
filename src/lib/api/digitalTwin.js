@@ -4,7 +4,8 @@
  * (null-safe) and fully paginated so heavily-fitted assets are never truncated.
  * All health/score assembly lives in `src/lib/digitalTwin.js`.
  */
-import { supabase, applyCountry, fetchAllPages } from './_client'
+import { supabase, applyCountry, fetchAllPages, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 import { sanitizeSearchTerm } from '../searchFilter'
 
 const COLS =
@@ -49,7 +50,7 @@ export async function searchAssets(query, { country, limit = 25 } = {}) {
     .limit(300)
   q = applyCountry(q, country)
   const { data, error } = await q
-  if (error) throw error
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   const seen = new Map()
   for (const r of data || []) {
     const asset = (r.asset_no || r.asset_number || '').trim()

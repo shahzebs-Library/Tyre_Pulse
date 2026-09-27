@@ -15,13 +15,13 @@
  *     `flagSuspiciousClusters` below marks the tell-tale pattern: two clusters of
  *     the SAME row count close together in time, which is a resent chunk.
  */
-import { supabase } from './_client'
+import { supabase, ServiceError } from './_client'
 import { toUserMessage } from '../safeError'
 
 /** Logged uploads, newest first, each flagged if the same file content came before. */
 export async function listImportHistory(limit = 100) {
   const { data, error } = await supabase.rpc('admin_import_history', { p_limit: limit })
-  if (error) throw new Error(toUserMessage(error, 'Could not load import history.'))
+  if (error) throw new ServiceError(toUserMessage(error, 'Could not load import history.'), error?.code, error)
   return Array.isArray(data) ? data : []
 }
 
@@ -31,7 +31,7 @@ export async function listUnloggedImports(key = 'parts_expense', limit = 60) {
     p_key: key,
     p_limit: limit,
   })
-  if (error) throw new Error(toUserMessage(error, 'Could not load import activity.'))
+  if (error) throw new ServiceError(toUserMessage(error, 'Could not load import activity.'), error?.code, error)
   return Array.isArray(data) ? data : []
 }
 

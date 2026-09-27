@@ -3,7 +3,7 @@
  * (per active tyre: km/hours run vs current meters + projected remaining km).
  * Degrades to { ok: false } so the section renders an honest error state.
  */
-import { supabase, applyCountry } from './_client'
+import { supabase, applyCountry, ServiceError } from './_client'
 import { toUserMessage } from '../safeError'
 
 /**
@@ -176,16 +176,16 @@ export async function saveTyreLifeTarget({ id, country, size, vehicle_type, targ
   if (id) {
     const { data, error } = await supabase.from('tyre_life_targets')
       .update({ ...row, updated_at: new Date().toISOString() }).eq('id', id).select(TARGET_COLS).single()
-    if (error) throw error
+    if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     return data
   }
   const { data, error } = await supabase.from('tyre_life_targets')
     .insert([row]).select(TARGET_COLS).single()
-  if (error) throw error
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data
 }
 
 export async function deleteTyreLifeTarget(id) {
   const { error } = await supabase.from('tyre_life_targets').delete().eq('id', id)
-  if (error) throw error
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
 }

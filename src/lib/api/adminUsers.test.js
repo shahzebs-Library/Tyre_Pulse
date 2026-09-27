@@ -110,7 +110,8 @@ describe('service layer - admin users (console admin roles)', () => {
 
   it('listAdminUsers throws a ServiceError on a non-missing-relation error', async () => {
     h.state.from = { data: null, error: { code: '42501', message: 'denied' } }
-    await expect(svc.listAdminUsers()).rejects.toThrow('denied')
+    // Sanitised for display; the code and original error are kept.
+    await expect(svc.listAdminUsers()).rejects.toMatchObject({ name: 'ServiceError', code: '42501', message: 'You do not have permission to do that.' })
   })
 
   it('searchProfiles queries profiles with an ilike or-filter and []-degrades', async () => {

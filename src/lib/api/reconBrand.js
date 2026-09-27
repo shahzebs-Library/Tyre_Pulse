@@ -158,6 +158,6 @@ export async function setTyreBrand(id, brand) {
     .update({ brand: value })
     .eq('id', id)
 
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return { ok: true }
 }

@@ -67,6 +67,7 @@ export default function CustomData() {
   const [loading, setLoading]     = useState(true)
   const [synLoading, setSynLoading] = useState(true)
   const [recLoading, setRecLoading] = useState(false)
+  const [recError, setRecError] = useState('')
 
   const [statsError, setStatsError] = useState('')
   const [synError, setSynError]     = useState('')
@@ -146,6 +147,7 @@ export default function CustomData() {
 
   const loadRecords = useCallback(async () => {
     setRecLoading(true)
+    setRecError('')
     try {
       const { data, count } = await customData.listRecordsWithExtraFields({
         country: activeCountry,
@@ -156,9 +158,11 @@ export default function CustomData() {
       })
       setRecords(data ?? [])
       setTotalRecords(count ?? 0)
-    } catch {
+    } catch (error) {
+      // A failed read is not "no records": say so instead of an empty table.
       setRecords([])
       setTotalRecords(0)
+      setRecError(toUserMessage(error, 'Could not load the records with custom data.'))
     }
     setRecLoading(false)
   }, [activeCountry, filterKey, filterVal, recPage])
@@ -744,6 +748,7 @@ export default function CustomData() {
                 <span className="text-[var(--text-primary)] font-semibold">{totalRecords.toLocaleString()}</span> {t('customdata.records.countSuffix')}
                 <span className="ml-2 text-xs">Select a row to see all of its custom values.</span>
               </p>
+              {recError && <p role="alert" className="text-sm text-red-400">{recError}</p>}
               <EnterpriseTable
                 columns={recordColumns}
                 data={records}

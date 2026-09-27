@@ -1,4 +1,5 @@
 import { supabase, applyCountry, fetchAllPages, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 function periodBounds(period) {
   const v = period || { mode: 'all' }
@@ -33,13 +34,13 @@ export async function loadExecutiveData({ country, period } = {}) {
   const [rRes, iRes, aRes, fRes] = await Promise.all([
     fetchAllPages((from, to) => scoped(supabase.from('tyre_records').select(
       'id,asset_no,site,brand,position,risk_level,category,findings,km_at_fitment,km_at_removal,cost_per_tyre,qty,issue_date,tread_depth,pressure_reading,country'
-    ), 'issue_date').order('issue_date', { ascending: false }).range(from, to), { max: 50000 }),
+    ), 'issue_date').order('issue_date', { ascending: false }).order('id', { ascending: true }).range(from, to), { max: 50000 }),
     fetchAllPages((from, to) => scoped(supabase.from('inspections').select(
       'id,asset_no,site,status,scheduled_date,completed_date,findings,country'
-    ), 'scheduled_date').order('scheduled_date', { ascending: false }).range(from, to), { max: 50000 }),
+    ), 'scheduled_date').order('scheduled_date', { ascending: false }).order('id', { ascending: true }).range(from, to), { max: 50000 }),
     fetchAllPages((from, to) => scoped(supabase.from('corrective_actions').select(
       'id,site,status,priority,title,created_at,resolved_at,country'
-    ), 'created_at').order('created_at', { ascending: false }).range(from, to), { max: 50000 }),
+    ), 'created_at').order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to), { max: 50000 }),
     fetchAllPages((from, to) => applyCountry(
       supabase.from('vehicle_fleet').select('asset_no,site,vehicle_type,monthly_tyre_budget,country'),
       country).order('id').range(from, to), { max: 20000 }).then(
@@ -47,9 +48,9 @@ export async function loadExecutiveData({ country, period } = {}) {
     ).catch(() => ({ data: [], error: null, truncated: false })),
   ])
 
-  if (rRes.error) throw new ServiceError(rRes.error.message, rRes.error.code, rRes.error)
-  if (iRes.error) throw new ServiceError(iRes.error.message, iRes.error.code, iRes.error)
-  if (aRes.error) throw new ServiceError(aRes.error.message, aRes.error.code, aRes.error)
+  if (rRes.error) throw new ServiceError(toUserMessage(rRes.error), rRes.error.code, rRes.error)
+  if (iRes.error) throw new ServiceError(toUserMessage(iRes.error), iRes.error.code, iRes.error)
+  if (aRes.error) throw new ServiceError(toUserMessage(aRes.error), aRes.error.code, aRes.error)
 
   return {
     records: rRes.data || [],
@@ -84,20 +85,20 @@ export async function loadExecutiveAnalyticsData({ country, dateFrom, dateTo } =
       .select('asset_no,site,brand,size,supplier,cost_per_tyre,qty,issue_date'))
       .gte('issue_date', from)
       .lte('issue_date', to)
-      .range(f, t), { max: 50000 }).then(
+      .order('id', { ascending: true }).range(f, t), { max: 50000 }).then(
         r => ({ data: r.data || [], error: r.error, truncated: !!r.truncated })
       ).catch(e => ({ data: [], error: e, truncated: false })),
     fetchAllPages((f, t) => supabase
       .from('inspections')
       .select('asset_no,site,status,findings,scheduled_date,completed_date')
       .gte('scheduled_date', inspSince)
-      .range(f, t), { max: 10000 }).then(
+      .order('id', { ascending: true }).range(f, t), { max: 10000 }).then(
         r => ({ data: r.data || [], error: r.error, truncated: !!r.truncated })
       ).catch(e => ({ data: [], error: e, truncated: false })),
     fetchAllPages((f, t) => supabase
       .from('vehicle_fleet')
       .select('asset_no,site,status')
-      .range(f, t), { max: 20000 }).then(
+      .order('id', { ascending: true }).range(f, t), { max: 20000 }).then(
         r => ({ data: r.data || [], error: r.error, truncated: !!r.truncated })
       ).catch(e => ({ data: [], error: e, truncated: false })),
     fetchAllPages((f, t) => byCountry(supabase
@@ -105,7 +106,7 @@ export async function loadExecutiveAnalyticsData({ country, dateFrom, dateTo } =
       .select('asset_no,site,risk_level'))
       .is('removal_date', null)
       .in('risk_level', ['High', 'Critical'])
-      .range(f, t), { max: 50000 }).then(
+      .order('id', { ascending: true }).range(f, t), { max: 50000 }).then(
         r => ({ data: r.data || [], error: r.error, truncated: !!r.truncated })
       ).catch(e => ({ data: [], error: e, truncated: false })),
   ])

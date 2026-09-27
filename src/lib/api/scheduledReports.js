@@ -18,6 +18,8 @@ import { supabase } from '../supabase'
 import { applyCountry } from '../countryFilter'
 import { listTemplates as listAccidentReportTemplates } from './accidentReportTemplates'
 import { reportDateLabel } from '../exportUtils'
+import { ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 // Select every column so the page keeps listing schedules even before V218 is
 // applied (the new fields simply read back undefined until the migration lands).
@@ -220,25 +222,25 @@ export async function listSchedules() {
     .from('report_schedules')
     .select(SELECT)
     .order('created_at', { ascending: false })
-  if (error) throw error
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data ?? []
 }
 
 export async function createSchedule(row) {
   const { data, error } = await supabase.from('report_schedules').insert(row).select(SELECT).single()
-  if (error) throw error
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data
 }
 
 export async function updateSchedule(id, patch) {
   const { data, error } = await supabase.from('report_schedules').update(patch).eq('id', id).select(SELECT).single()
-  if (error) throw error
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data
 }
 
 export async function deleteSchedule(id) {
   const { error } = await supabase.from('report_schedules').delete().eq('id', id)
-  if (error) throw error
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
 }
 
 /* ── Scheduling maths ─────────────────────────────────────────────────────── */
@@ -329,6 +331,6 @@ export async function fetchReportRows(reportType, { from, to, country } = {}) {
   if (ds.orFilter) q = q.or(ds.orFilter)
   q = q.order(ds.dateCol, { ascending: ds.orderAscending === true, nullsFirst: false }).limit(5000)
   const { data, error } = await q
-  if (error) throw error
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return { rows: data ?? [], dataset: ds }
 }

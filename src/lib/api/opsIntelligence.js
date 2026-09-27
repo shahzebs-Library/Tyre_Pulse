@@ -10,6 +10,7 @@
  * rather than failing the whole page.
  */
 import { supabase, applyCountry, fetchAllPages, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 const TYRE_COLS =
   'id,serial_no,serial_number,tyre_serial,brand,size,asset_no,site,position,country,' +
@@ -58,7 +59,7 @@ export async function listTyresForOps({ country } = {}) {
       .range(from, to)
     return applyCountry(q, country)
   })
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data || []
 }
 
@@ -92,7 +93,7 @@ export async function listWorkOrdersForOpsScoped({
   }, { max })
   if (error) {
     if (isMissingTable(error)) return { rows: [], truncated: false, sinceDate, max }
-    throw new ServiceError(error.message, error.code, error)
+    throw new ServiceError(toUserMessage(error), error.code, error)
   }
   return { rows: data || [], truncated: !!truncated, sinceDate, max }
 }
@@ -118,7 +119,7 @@ export async function listInspectionsForOps({ country } = {}) {
   })
   if (error) {
     if (isMissingTable(error)) return []
-    throw new ServiceError(error.message, error.code, error)
+    throw new ServiceError(toUserMessage(error), error.code, error)
   }
   return data || []
 }
@@ -139,7 +140,7 @@ export async function listBudgetsForOps({ country, year = new Date().getFullYear
   })
   if (error) {
     if (isMissingTable(error)) return []
-    throw new ServiceError(error.message, error.code, error)
+    throw new ServiceError(toUserMessage(error), error.code, error)
   }
   return data || []
 }

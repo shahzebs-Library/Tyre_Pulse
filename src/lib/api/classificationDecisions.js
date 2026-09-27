@@ -13,7 +13,7 @@
  * since V368 and had never been callable from anywhere in the app, so reviewing
  * an item fixed future rows only and left the money already loaded where it was.
  */
-import { supabase } from './_client'
+import { supabase, ServiceError } from './_client'
 import { toUserMessage } from '../safeError'
 
 /**
@@ -44,7 +44,7 @@ export async function getClassificationDecisions(opts = {}) {
     if (/could not find the function|does not exist/i.test(error.message || '')) {
       return { ok: false, view, countries: [], items: [] }
     }
-    throw new Error(toUserMessage(error, 'Could not load the classification decisions.'))
+    throw new ServiceError(toUserMessage(error, 'Could not load the classification decisions.'), error?.code, error)
   }
   return {
     ok: data?.ok !== false,
@@ -68,7 +68,7 @@ export async function getClassificationDecisions(opts = {}) {
  */
 export async function applyReviewedDecisions(dryRun = true) {
   const { data, error } = await supabase.rpc('reclassify_from_master', { p_dry_run: dryRun !== false })
-  if (error) throw new Error(toUserMessage(error, 'Could not apply the reviewed decisions.'))
+  if (error) throw new ServiceError(toUserMessage(error, 'Could not apply the reviewed decisions.'), error?.code, error)
   return data || {}
 }
 
@@ -80,6 +80,6 @@ export async function applyReviewedDecisions(dryRun = true) {
 export async function revertDecisionBatch(batchId) {
   if (!batchId) throw new Error('Nothing to undo.')
   const { data, error } = await supabase.rpc('reclassify_revert', { p_batch_id: batchId })
-  if (error) throw new Error(toUserMessage(error, 'Could not undo that change.'))
+  if (error) throw new ServiceError(toUserMessage(error, 'Could not undo that change.'), error?.code, error)
   return data || {}
 }

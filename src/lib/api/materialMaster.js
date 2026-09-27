@@ -15,7 +15,7 @@
  *
  * Pure logic lives in src/lib/materialMaster.js; this file only talks to the database.
  */
-import { supabase } from './_client'
+import { supabase, ServiceError, isNotProvisioned } from './_client'
 import { toUserMessage } from '../safeError'
 
 const COLS = 'id, country, item_code, item_name, category, subcategory, brand, uom, '
@@ -97,7 +97,7 @@ function sanitizeSearch(term) {
  */
 export async function deriveMaterials() {
   const { data, error } = await supabase.rpc('material_master_derive')
-  if (error) throw new Error(toUserMessage(error, 'Could not refresh the material master.'))
+  if (error) throw new ServiceError(toUserMessage(error, 'Could not refresh the material master.'), error?.code, error)
   return data || { ok: false, inserted: 0, updated: 0, conflicting: 0 }
 }
 
@@ -126,7 +126,7 @@ export async function setMaterial(entry = {}) {
     p_notes: entry.notes ?? null,
     p_reviewed: entry.reviewed !== false,
   })
-  if (error) throw new Error(toUserMessage(error, 'Could not save that item.'))
+  if (error) throw new ServiceError(toUserMessage(error, 'Could not save that item.'), error?.code, error)
   return data || null
 }
 
@@ -155,7 +155,7 @@ export async function setMaterialsBulk(items = []) {
     }))
   if (list.length === 0) return { ok: true, confirmed: 0, skipped: 0, errors: [] }
   const { data, error } = await supabase.rpc('material_master_set_bulk', { p_items: list })
-  if (error) throw new Error(toUserMessage(error, 'Could not confirm those items.'))
+  if (error) throw new ServiceError(toUserMessage(error, 'Could not confirm those items.'), error?.code, error)
   return data || { ok: false, confirmed: 0, skipped: 0, errors: [] }
 }
 
@@ -163,11 +163,16 @@ export async function setMaterialsBulk(items = []) {
  * How much of the MONEY is classified by a human decision rather than a text pattern.
  * That is the honest progress figure: reviewing 100 high-value codes moves it far more
  * than reviewing 1,000 trivial ones.
- * @returns {Promise<object>} {} when unavailable
+ * @returns {Promise<object>} {} when not provisioned; throws a ServiceError otherwise
  */
 export async function materialCoverage() {
   const { data, error } = await supabase.rpc('material_master_coverage')
-  if (error) return {}
+  if (error) {
+    // Not provisioned is honestly "no figure yet"; any other failure (permission,
+    // network) must reach the caller rather than read as "0% reviewed".
+    if (isNotProvisioned(error)) return {}
+    throw new ServiceError(toUserMessage(error, 'Could not load classification coverage.'), error.code, error)
+  }
   return data || {}
 }
 
@@ -179,17 +184,16 @@ export async function materialCoverage() {
  * @param {number} [limit=50]
  */
 export async function listMaterialTransactions(country, itemCode, limit = 50) {
-  try {
-    const { data, error } = await supabase
-      .from('parts_consumption')
-      .select('item_description, cost_category, qty, line_cost, currency, site, event_date, work_order_no')
-      .eq('country', country)
-      .eq('item_code', itemCode)
-      .order('line_cost', { ascending: false })
-      .limit(Math.max(1, Math.min(Number(limit) || 50, 500)))
-    if (error) return []
-    return Array.isArray(data) ? data : []
-  } catch {
-    return []
-  }
+  const { data, error } = await supabase
+    .from('parts_consumption')
+    .select('id, item_description, cost_category, qty, line_cost, currency, site, event_date, work_order_no')
+    .eq('country', country)
+    .eq('item_code', itemCode)
+    .order('line_cost', { ascending: false })
+    .order('id', { ascending: true })   // line_cost is not unique; keep the top-N stable
+    .limit(Math.max(1, Math.min(Number(limit) || 50, 500)))
+  // parts_consumption always exists: a failure here is real (RLS, network) and
+  // must not read as "no lines behind this item".
+  if (error) throw new ServiceError(toUserMessage(error, 'Could not read the lines behind this item.'), error.code, error)
+  return Array.isArray(data) ? data : []
 }

@@ -11,7 +11,8 @@
  * Country scoping stays a STRICT `.eq('country', X)` (NOT null-safe) to preserve
  * the page's prior behaviour exactly. Additive only.
  */
-import { supabase, fetchAllPages } from './_client'
+import { supabase, fetchAllPages, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 /** Strict (non null-safe) country scope, matching the page's prior inline helper. */
 function scopeCountry(query, country) {
@@ -55,5 +56,5 @@ export function listInspectionIntelFleet({ country } = {}) {
  */
 export async function insertCorrectiveAction(payload) {
   const { error } = await supabase.from('corrective_actions').insert(payload)
-  if (error) throw error
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
 }

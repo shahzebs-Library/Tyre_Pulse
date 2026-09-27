@@ -80,6 +80,6 @@ export async function listBudgetTyreRecords({ country, start, end } = {}) {
       .gte('issue_date', start)
       .lt('issue_date', end)
     if (active) q = q.eq('country', active)
-    return q.range(from, to)
+    return q.order('id', { ascending: true }).range(from, to)
   })
 }

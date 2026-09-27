@@ -12,6 +12,7 @@
  * the enforcement lives in Postgres.
  */
 import { supabase, unwrap, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 import { sanitizeSearchTerm } from '../searchFilter'
 
 /** The three console admin roles (matches the admin_users.admin_role CHECK). */
@@ -36,7 +37,7 @@ export async function listAdminUsers() {
   if (error) {
     // Missing relation (e.g. migration not applied) => honest empty list.
     if (error.code === '42P01') return []
-    throw new ServiceError(error.message, error.code, error)
+    throw new ServiceError(toUserMessage(error), error.code, error)
   }
   return data ?? []
 }

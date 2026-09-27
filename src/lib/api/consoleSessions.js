@@ -16,7 +16,8 @@
  * Read helpers []-degrade: any error (missing relation, RLS, network) resolves
  * to [] so the page renders an honest empty state instead of crashing.
  */
-import { supabase, unwrap } from './_client'
+import { supabase, unwrap, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 import { adminUpdateProfile } from './users'
 import { fetchAllPages } from '../fetchAll'
 
@@ -42,7 +43,7 @@ export async function listConsoleSessions({ limit = 200 } = {}) {
     .select(SESSION_COLS)
     .order('created_at', { ascending: false })
     .limit(limit)
-  if (error) throw error
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return Array.isArray(data) ? data : []
 }
 
@@ -63,7 +64,7 @@ export async function listUserDevices() {
     .order('last_login_at', { ascending: false, nullsFirst: false })
     .order('id')
     .range(from, to), { max: 50000 })
-  if (error) throw error
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return (Array.isArray(data) ? data : []).map((r) => ({
       id: r.id,
       full_name: r.full_name,

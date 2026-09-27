@@ -5,6 +5,7 @@
  * when open blockers exist. Explicit column lists; null-safe country scoping.
  */
 import { supabase, unwrap, applyCountry, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 const COLS =
   'id,asset_no,site,country,pass_date,status,inspection_id,cleared_by,cleared_at,denial_reason,notes,created_at,organisation_id'
@@ -32,7 +33,7 @@ export async function listGatePassBlockers({ assetNo, country } = {}) {
     p_asset_no: String(assetNo).trim(),
     p_country: country && country !== 'All' ? country : null,
   })
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data || { asset_no: String(assetNo).trim(), country: null, total: 0, blocked: false, corrective_actions: [], tyres: [], inspections: [] }
 }
 

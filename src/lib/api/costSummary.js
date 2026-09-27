@@ -202,7 +202,7 @@ export async function loadCostSplit({ country, now, from, to, site } = {}) {
   try {
     const { data, error } = await fetchAllPages((f, t) => {
       let q = supabase.from('pm_service_records').select('total_cost,service_date,site')
-        .order('service_date', { ascending: true }).range(f, t)
+        .order('service_date', { ascending: true }).order('id', { ascending: true }).range(f, t)
       q = applyCountry(q, country)
       if (siteEq) q = q.eq('site', siteEq)
       return q
@@ -221,7 +221,7 @@ export async function loadCostSplit({ country, now, from, to, site } = {}) {
     const { data, error } = await fetchAllPages((f, t) => {
       let q = supabase.from('work_orders')
         .select('labour_cost,parts_cost,lubricant_cost,outside_repair_cost,tyre_cost,completed_at,created_at,site')
-        .order('created_at', { ascending: true }).range(f, t)
+        .order('created_at', { ascending: true }).order('id', { ascending: true }).range(f, t)
       q = applyCountry(q, country)
       if (siteEq) q = q.eq('site', siteEq)
       return q

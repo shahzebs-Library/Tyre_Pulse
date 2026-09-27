@@ -4,6 +4,7 @@
  * assets.js / tyres.js.
  */
 import { supabase, unwrap, applyCountry, applyCountries, countryList, fetchAllPages, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 /**
  * The job-card columns the ERP export fills (V381/V385/V386, promoted to typed
@@ -152,7 +153,7 @@ export async function listWorkOrdersForPage({ country, countries, max = 200000, 
     (from, to) => listWorkOrdersPage({ country, countries, from, to, openedFrom, openedTo, lean }),
     { max },
   )
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data
 }
 
@@ -264,7 +265,7 @@ export async function generateWorkOrderNo() {
  */
 export async function deleteWorkOrder(id) {
   const { data, error } = await supabase.from('work_orders').delete().eq('id', id).select('id')
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   if ((data?.length ?? 0) === 0) {
     throw new ServiceError('The work order was not deleted - only an Admin can delete work orders.', '42501')
   }
@@ -283,7 +284,7 @@ export async function deleteWorkOrders(ids) {
   for (let i = 0; i < list.length; i += CHUNK) {
     const slice = list.slice(i, i + CHUNK)
     const { data, error } = await supabase.from('work_orders').delete().in('id', slice).select('id')
-    if (error) throw new ServiceError(error.message, error.code, error)
+    if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     deleted += data?.length ?? 0
   }
   if (deleted === 0) {

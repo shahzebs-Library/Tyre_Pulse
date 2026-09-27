@@ -13,7 +13,8 @@
  * page can surface an honest "not provisioned yet" empty state instead of
  * throwing. All pure analytics live in `src/lib/fleetUtilization.js`.
  */
-import { supabase, unwrap, applyCountry, fetchAllPages, isMissingRelation } from './_client'
+import { supabase, unwrap, applyCountry, fetchAllPages, isMissingRelation, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 export const COLS =
   'id,organisation_id,country,asset_no,make,model,captured_at,' +
@@ -34,7 +35,7 @@ export async function listAssetUtilization({ country } = {}) {
         .order('asset_no', { ascending: true })
         .range(from, to),
     )
-    if (error) throw error
+    if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     rows = data || []
   } catch (err) {
     if (isMissingRelation(err)) return []
@@ -51,7 +52,7 @@ export async function listAssetUtilization({ country } = {}) {
         .order('id', { ascending: true })
         .range(from, to),
     )
-    if (error) throw error
+    if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     fleet = data || []
   } catch (err) {
     if (!isMissingRelation(err)) throw err

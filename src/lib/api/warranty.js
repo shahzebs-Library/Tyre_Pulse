@@ -70,6 +70,7 @@ export async function listTyreContext() {
       .from('tyre_records')
       .select(TYRE_CONTEXT_COLS)
       .order('created_at', { ascending: false })
+      .order('id', { ascending: true })
       .range(from, to),
   )
   return data ?? []

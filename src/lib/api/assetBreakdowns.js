@@ -11,7 +11,8 @@
  * provisioned, so an org that has not run the migration sees an empty state
  * rather than a thrown page.
  */
-import { supabase, isMissingRelation, applyCountry, fetchAllPages } from './_client'
+import { supabase, isMissingRelation, applyCountry, fetchAllPages, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 const COLS = 'id,country,asset_no,site,reported_on,details,breakdown_days,expected_return,'
   + 'returned_to_service,returned_on,repair_location,remark,source_file,created_at,updated_at'
@@ -84,7 +85,7 @@ export async function saveAssetBreakdown(row = {}) {
     ? supabase.from('asset_breakdowns').update(patch).eq('id', row.id).select(COLS).single()
     : supabase.from('asset_breakdowns').insert(patch).select(COLS).single()
   const { data, error } = await q
-  if (error) throw error
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data
 }
 
@@ -101,7 +102,7 @@ export async function markReturnedToService(id, returnedOn, remark) {
   if (remark !== undefined) patch.remark = text(remark)
   const { data, error } = await supabase
     .from('asset_breakdowns').update(patch).eq('id', id).select(COLS).single()
-  if (error) throw error
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data
 }
 
@@ -111,12 +112,12 @@ export async function reopenAssetBreakdown(id) {
     .from('asset_breakdowns')
     .update({ returned_to_service: false, returned_on: null })
     .eq('id', id).select(COLS).single()
-  if (error) throw error
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data
 }
 
 export async function deleteAssetBreakdown(id) {
   const { error } = await supabase.from('asset_breakdowns').delete().eq('id', id)
-  if (error) throw error
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return true
 }

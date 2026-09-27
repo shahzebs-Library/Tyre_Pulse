@@ -84,15 +84,18 @@ export default function Vehicle360() {
   const load = useCallback(async () => {
     setLoading(true); setError(null)
     try {
-      const [v, t] = await Promise.all([v360.getVehicle(assetNo), v360.getVehicleTyres(assetNo)])
+      // The same asset code in two countries is a different machine: read the
+      // vehicle in the active country, then its tyres in THAT vehicle's country.
+      const v = await v360.getVehicle(assetNo, { country: activeCountry })
       if (!v) throw new Error(`Vehicle "${assetNo}" not found.`)
+      const t = await v360.getVehicleTyres(assetNo, { country: v.country })
       setVehicle(v); setTyres(t || [])
       setGps({ lat: v.latitude ?? '', lng: v.longitude ?? '' })
       setPhotoUrl(v.image_path ? await v360.vehiclePhotoUrl(v.image_path) : null)
       loadHistory(v)
     } catch (e) { setError(toUserMessage(e, 'Could not load the vehicle.')) }
     finally { setLoading(false) }
-  }, [assetNo, loadHistory])
+  }, [assetNo, activeCountry, loadHistory])
   useEffect(() => { load() }, [load])
 
   async function onPhoto(e) {
@@ -101,7 +104,7 @@ export default function Vehicle360() {
     if (file.size > 8 * 1024 * 1024) { setMsg({ type: 'err', text: 'Image must be under 8 MB.' }); return }
     setUploading(true); setMsg(null)
     try {
-      const { url } = await v360.uploadVehiclePhoto(assetNo, file)
+      const { url } = await v360.uploadVehiclePhoto(assetNo, file, { country: vehicle?.country })
       setPhotoUrl(url); setMsg({ type: 'ok', text: 'Photo updated.' })
     } catch (err) { setMsg({ type: 'err', text: toUserMessage(err, 'Upload failed.') }) }
     finally { setUploading(false); if (fileRef.current) fileRef.current.value = '' }
@@ -110,7 +113,7 @@ export default function Vehicle360() {
   async function saveGps(e) {
     e.preventDefault(); setSavingGps(true); setMsg(null)
     try {
-      const { latitude, longitude } = await v360.saveVehicleGps(assetNo, gps.lat, gps.lng)
+      const { latitude, longitude } = await v360.saveVehicleGps(assetNo, gps.lat, gps.lng, 'manual', { country: vehicle?.country })
       setVehicle((v) => ({ ...v, latitude, longitude }))
       setMsg({ type: 'ok', text: 'Location saved.' })
     } catch (err) { setMsg({ type: 'err', text: toUserMessage(err, 'Could not save location.') }) }

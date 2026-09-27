@@ -11,6 +11,7 @@
  */
 import { supabase } from '../supabase'
 import { toUserMessage } from '../safeError'
+import { ServiceError } from './_client'
 
 const KEY_MIN = 'mobile_min_version'
 const KEY_LATEST = 'mobile_latest_version'
@@ -44,7 +45,7 @@ async function upsertConfig(key, value) {
   const { error } = await supabase
     .from('system_config')
     .upsert({ key, value: String(value ?? '').trim(), updated_at: new Date().toISOString() }, { onConflict: 'key' })
-  if (error) throw new Error(toUserMessage(error, 'Could not save the setting.'))
+  if (error) throw new ServiceError(toUserMessage(error, 'Could not save the setting.'), error?.code, error)
 }
 
 /** Save the forced-update minimum. The PAGE runs gateRisk first; this is the writer only. */

@@ -51,13 +51,6 @@ describe('service layer - assetManagement', () => {
     expect(h.state.lastRpc.args).toEqual({ p_country: 'KSA' })
   })
 
-  it('listAssetWorkOrders reads the cost/health columns from work_orders', async () => {
-    await assetApi.listAssetWorkOrders()
-    expect(h.state.last._table).toBe('work_orders')
-    expect(h.state.last._calls.select).toContain('total_cost')
-    expect(h.state.last._calls.select).toContain('work_type')
-  })
-
   it('listAssetTyres scopes tyre_records by asset_no', async () => {
     await assetApi.listAssetTyres('A1')
     expect(h.state.last._table).toBe('tyre_records')

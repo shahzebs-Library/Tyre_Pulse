@@ -11,7 +11,8 @@
  * rename an RPC or reshape its `p_*` argument object here - the enforcement
  * lives in Postgres.
  */
-import { supabase, unwrap } from './_client'
+import { supabase, unwrap, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 import { isApprovalRequiredError, APPROVAL_REQUIRED_MESSAGE } from '../dualControl'
 
 /**
@@ -238,6 +239,6 @@ export async function adminSetUserPassword(userId, password, reason) {
     p_password: password,
     p_reason: reason || null,
   })
-  if (error) throw error
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data || { ok: false, reason: 'unknown' }
 }

@@ -11,7 +11,8 @@
  * `../lib/countryFilter` behaviour. The page keeps ownership of pagination math
  * and the 200-row batch loops; these functions relocate only the queries.
  */
-import { supabase, applyCountry, fetchAllPages } from './_client'
+import { supabase, applyCountry, fetchAllPages, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 import { sanitizeSearchTerm } from '../searchFilter'
 import { createServiceEvent } from './tyreServiceEvents'
 
@@ -43,7 +44,7 @@ export async function listFilterOptions(country) {
   const { data, error } = await supabase.rpc('get_tyre_filter_options', {
     p_country: country && country !== 'All' ? country : null,
   })
-  if (error) throw error
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return { sites: data?.sites ?? [], brands: data?.brands ?? [] }
 }
 

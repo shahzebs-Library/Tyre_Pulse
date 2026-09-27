@@ -28,7 +28,8 @@
  * recon_resolve_duplicate_key RPC keeps the newest row and deletes exact copies
  * only; a group whose rows differ is left untouched and reported as such).
  */
-import { supabase, unwrap, isNotProvisioned } from './_client'
+import { supabase, unwrap, isNotProvisioned, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 /**
  * List groups of tyre_records that share the same (serial_no, asset_no,
@@ -75,6 +76,6 @@ export async function resolveDuplicateKey(serial, asset, issueDate) {
     p_asset: asset,
     p_issue_date: issueDate ?? null,
   })
-  if (error) throw error
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data || { resolved: false, reason: 'not_found' }
 }

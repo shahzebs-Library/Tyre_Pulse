@@ -11,7 +11,8 @@
  * invoked once STRIPE keys exist. Until then `changePlan` applies the plan
  * change directly (correct for manual/enterprise billing).
  */
-import { supabase, unwrap } from './_client'
+import { supabase, unwrap, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 const PLAN_COLS =
   'id,code,name,description,price_monthly,price_annual,currency,' +
@@ -176,6 +177,6 @@ export async function startCheckout({ planCode, interval = 'monthly' } = {}) {
   const { data, error } = await supabase.functions.invoke('billing-checkout', {
     body: { planCode, interval },
   })
-  if (error) throw new Error(error.message || 'Checkout could not be started.')
+  if (error) throw new ServiceError(toUserMessage(error, 'Checkout could not be started.'), error.code, error)
   return data || { configured: false }
 }

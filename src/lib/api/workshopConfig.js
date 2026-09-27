@@ -18,7 +18,8 @@
  * loadWorkshopConfig never throws: on any error (missing table, RLS, network)
  * it degrades to WORKSHOP_CONFIG_DEFAULTS so the dashboard always renders.
  */
-import { supabase } from './_client'
+import { supabase, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 /**
  * Fail-safe defaults. `thresholds` mirrors the engine's DEFAULT_THRESHOLDS
@@ -196,6 +197,6 @@ export async function saveWorkshopConfig(patch) {
   const { error } = await supabase
     .from('workshop_config')
     .upsert(rows, { onConflict: 'organisation_id,key' })
-  if (error) throw error
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return rows.map((r) => r.key)
 }

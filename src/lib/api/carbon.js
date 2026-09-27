@@ -13,6 +13,7 @@
  * empty list rather than throwing — the page shows an honest empty state.
  */
 import { supabase, applyCountry, fetchAllPages, unwrap, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 // Least-privilege select: only the columns carbon aggregation needs. Mirrors
 // the fuel-relevant subset of FuelEfficiency's tyre_records query.
@@ -84,7 +85,7 @@ export async function listFuelUsage({ country } = {}) {
     })
     if (error) {
       if (isMissingRelation(error)) return []
-      throw new ServiceError(error.message, error.code, error)
+      throw new ServiceError(toUserMessage(error), error.code, error)
     }
     return (data ?? []).map(normalize)
   } catch (err) {
@@ -109,7 +110,7 @@ async function listLifecycleTyres({ country } = {}) {
   })
   if (error) {
     if (isMissingRelation(error)) return []
-    throw new ServiceError(error.message, error.code, error)
+    throw new ServiceError(toUserMessage(error), error.code, error)
   }
   return data ?? []
 }
@@ -127,7 +128,7 @@ async function listLifecycleVehicles({ country } = {}) {
   })
   if (error) {
     if (isMissingRelation(error)) return []
-    throw new ServiceError(error.message, error.code, error)
+    throw new ServiceError(toUserMessage(error), error.code, error)
   }
   return data ?? []
 }

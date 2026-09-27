@@ -7,6 +7,7 @@
  * this module is purely I/O with a least-privilege column list.
  */
 import { supabase, unwrap, applyCountry, fetchAllPages, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 // Explicit columns only (no SELECT *). `assigned_to` aliases technician_name to
 // mirror WorkshopManagement; the pure lib accepts either key.
@@ -30,7 +31,7 @@ export async function listWorkOrdersForScorecard({ country } = {}) {
       .range(from, to)
     return applyCountry(q, country)
   })
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data || []
 }
 

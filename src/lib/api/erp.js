@@ -4,7 +4,8 @@
  * The API key/token is never kept here or in the browser; it is set as an
  * edge-function secret (see docs/ERP_INTEGRATION.md) so it can't leak client-side.
  */
-import { supabase, unwrap } from './_client'
+import { supabase, unwrap, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 import { getConfiguration, saveConfiguration } from '../configurationStore'
 import { validateErpConfig } from '../erpReliability'
 
@@ -54,7 +55,7 @@ export async function getErpConnection() {
 export async function saveErpConnection(config) {
   const clean = { ...validateErpConfig(config), updated_at: new Date().toISOString() }
   const { error } = await saveConfiguration(supabase, 'app_settings', { key: KEY, value: JSON.stringify(clean) })
-  if (error) throw new Error(error.message || 'Could not save the ERP connection.')
+  if (error) throw new ServiceError(toUserMessage(error, 'Could not save the ERP connection.'), error.code, error)
   return clean
 }
 

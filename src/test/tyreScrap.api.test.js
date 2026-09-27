@@ -10,6 +10,7 @@ const h = vi.hoisted(() => {
       _table: table,
       _calls: calls,
       select(cols) { calls.select = cols; return b },
+      order(col, opts) { (calls.order = calls.order || []).push([col, opts]); return b },
       range(f, t) { calls.range = [f, t]; return b },
       upsert(v, o) { calls.upsert = v; calls.upsertOpts = o; return b },
       then(onF, onR) { return Promise.resolve(state.result).then(onF, onR) },
@@ -42,6 +43,9 @@ describe('service layer - tyreScrap', () => {
     expect(h.state.last._calls.select).toContain('removal_reason')
     expect(h.state.last._calls.select).toContain('removal_date')
     expect(h.state.last._calls.range).toEqual([0, 999])
+    // canonical serial served under the legacy name; unique paging order
+    expect(h.state.last._calls.select).toContain('serial_number:serial_no')
+    expect(h.state.last._calls.order).toEqual([['id', { ascending: true }]])
   })
 
   it('upsertTyreDisposal upserts with the tyre_record_id conflict target', async () => {

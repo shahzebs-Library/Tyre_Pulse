@@ -7,21 +7,21 @@
  * any delete, so a purge is recoverable from Console -> Backups. This layer is a
  * thin, error-safe pass-through.
  */
-import { supabase } from './_client'
+import { supabase, ServiceError } from './_client'
 import { toUserMessage } from '../safeError'
 import { isApprovalRequiredError, APPROVAL_REQUIRED_MESSAGE } from '../dualControl'
 
 /** All cleanup targets with total rows + oldest/newest date. */
 export async function listCleanupTargets() {
   const { data, error } = await supabase.rpc('admin_data_cleanup_targets')
-  if (error) throw new Error(toUserMessage(error, 'Could not load cleanup targets.'))
+  if (error) throw new ServiceError(toUserMessage(error, 'Could not load cleanup targets.'), error?.code, error)
   return Array.isArray(data) ? data : []
 }
 
 /** Count how many rows of `key` are older than the `before` (YYYY-MM-DD) cutoff. */
 export async function previewCleanup(key, before) {
   const { data, error } = await supabase.rpc('admin_data_cleanup_preview', { p_key: key, p_before: before })
-  if (error) throw new Error(toUserMessage(error, 'Could not preview the cleanup.'))
+  if (error) throw new ServiceError(toUserMessage(error, 'Could not preview the cleanup.'), error?.code, error)
   return data || { count: 0 }
 }
 
@@ -31,7 +31,7 @@ export async function runCleanup(key, before) {
   if (error) {
     // Dual control: say plainly that a second super admin must approve first.
     if (isApprovalRequiredError(error)) throw new Error(APPROVAL_REQUIRED_MESSAGE)
-    throw new Error(toUserMessage(error, 'Could not run the cleanup.'))
+    throw new ServiceError(toUserMessage(error, 'Could not run the cleanup.'), error?.code, error)
   }
   return data || { deleted: 0 }
 }

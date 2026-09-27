@@ -18,7 +18,7 @@
  * denial, which is surfaced here as an empty list plus an error message - it is
  * NOT silently reported as "no claims", which would read as a clean loss record.
  */
-import { supabase, applyCountry, fetchAllPages, isMissingRelation } from './_client'
+import { supabase, applyCountry, fetchAllPages, isMissingRelation, ServiceError } from './_client'
 import { toUserMessage } from '../safeError'
 import { buildFleetIndex, matchToAsset, linkClaimToAccident, MIN_CONFIDENT_MATCH } from '../insuranceMatch'
 import { buildInsurancePortfolio } from '../insurancePortfolio'
@@ -71,7 +71,7 @@ async function pagedList(table, cols, { country, orderBy = 'id' } = {}) {
     },
     { max: MAX_ROWS },
   )
-  if (error) throw error
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return Array.isArray(data) ? data : []
 }
 
@@ -274,7 +274,7 @@ export async function persistClaimMatches(proposals = []) {
           match_confidence: p.match_confidence,
         })
         .eq('id', p.id)
-      if (error) throw error
+      if (error) throw new ServiceError(toUserMessage(error), error.code, error)
       updated += 1
     } catch (e) {
       failed.push({ id: p.id, error: toUserMessage(e, 'Could not save this match.') })
@@ -300,7 +300,7 @@ export async function clearClaimMatches(ids) {
       .like('match_method', `${AUTO_MATCH_PREFIX}%`)
     if (Array.isArray(ids) && ids.length > 0) q = q.in('id', ids)
     const { error } = await q
-    if (error) throw error
+    if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     return ok({ cleared: true })
   } catch (e) {
     if (isMissingRelation(e)) return ok({ cleared: false })

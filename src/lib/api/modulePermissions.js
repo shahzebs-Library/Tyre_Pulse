@@ -4,6 +4,7 @@
  * the Admin-gated `set_module_permissions` RPC (V64). Every method throws on error.
  */
 import { supabase, unwrap, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 import { serializeOverrides } from '../permissionMatrix'
 
 /**
@@ -35,7 +36,7 @@ export async function saveModulePermissions(changes) {
   )
   if (!clean.length) return 0
   const { data, error } = await supabase.rpc('set_module_permissions', { p_changes: clean })
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data ?? clean.length
 }
 
@@ -49,6 +50,6 @@ export async function saveAccessControlMatrix({ viewChanges = [], overrides, rea
     p_capability_envelope: overrides === undefined ? null : serializeOverrides(overrides),
     p_reason: reason || null,
   })
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data || { view_changes: clean.length, capabilities_saved: overrides !== undefined }
 }

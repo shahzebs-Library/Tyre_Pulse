@@ -70,13 +70,13 @@ export function listTyreRecordsSince({ country, since, max = 200000 } = {}) {
   return fetchAllPages((from, to) => {
     let q = supabase.from('tyre_records').select(TYRE_COLS_NO_EXTRA).gte('created_at', since)
     if (c) q = q.eq('country', c)
-    return q.range(from, to)
+    return q.order('id', { ascending: true }).range(from, to)
   }, { max })
 }
 
 /** All inspections since an ISO date (paged). */
 export function listInspectionsSince({ since, max = 200000 } = {}) {
-  return fetchAllPages((from, to) => supabase.from('inspections').select('*').gte('inspection_date', since).range(from, to), { max })
+  return fetchAllPages((from, to) => supabase.from('inspections').select('*').gte('inspection_date', since).order('id', { ascending: true }).range(from, to), { max })
 }
 
 /** All accidents since an ISO date. */

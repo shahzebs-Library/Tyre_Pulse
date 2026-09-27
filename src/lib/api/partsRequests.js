@@ -11,7 +11,8 @@
  * Before the migration is applied the lister degrades to [] so the page can
  * surface an "apply v296_parts_requests" hint instead of throwing.
  */
-import { supabase, unwrap, applyCountry, fetchAllPages, isMissingRelation } from './_client'
+import { supabase, unwrap, applyCountry, fetchAllPages, isMissingRelation, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 export const COLS =
   'id,organisation_id,country,site,job_id,asset_no,part_id,part_name,qty,status,' +
@@ -56,11 +57,11 @@ export async function listPartsRequests({ status, site, job_id, country, limit =
     if (status && status !== 'All') q = q.eq('status', status)
     if (site && site !== 'All') q = q.eq('site', site)
     if (job_id) q = q.eq('job_id', job_id)
-    return q.order('requested_at', { ascending: false }).range(pFrom, pTo)
+    return q.order('requested_at', { ascending: false }).order('id', { ascending: true }).range(pFrom, pTo)
   }
   try {
     const { data, error } = await fetchAllPages(pageFn, { pageSize: 1000, max: limit })
-    if (error) throw error
+    if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     return data || []
   } catch (err) {
     if (isMissingRelation(err)) return []

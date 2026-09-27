@@ -1,6 +1,7 @@
 import { supabase } from '../supabase'
 import { fetchAllPages } from '../fetchAll'
 import { toUserMessage } from '../safeError'
+import { ServiceError } from './_client'
 import { addDays, MAX_PLANNER_BATCH } from '../inspectionPlanner'
 
 const scheduleColumns = 'id, asset_no, site, scheduled_date, inspection_time, inspector_name, inspection_type, priority, status, notes, country, created_at'
@@ -22,13 +23,13 @@ export async function loadPlannerData({ country, signal } = {}) {
       if (signal) query = query.abortSignal(signal)
       return query
     }, { max: 50000 })
-    if (result.error) throw result.error
+    if (result.error) throw new ServiceError(toUserMessage(result.error), result.error.code, result.error)
     return result
   }
   // Retain independent results so unavailable schedules cannot become a false zero.
   const results = await Promise.allSettled([
     read('inspections', 'id, asset_no, tyre_serial, inspection_date, inspector, site, country, pressure_reading', 'inspection_date'),
-    read('tyre_records', 'id, asset_no, serial_number, site, country, risk_level, tread_depth, issue_date', 'issue_date'),
+    read('tyre_records', 'id, asset_no, serial_number:serial_no, site, country, risk_level, tread_depth, issue_date', 'issue_date'),
     read('inspection_schedules', scheduleColumns, 'scheduled_date', true),
   ])
   if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
@@ -74,7 +75,7 @@ function validateSchedule(item) {
 }
 
 function verifyWrite(result, count, fallback) {
-  if (result.error) throw new Error(toUserMessage(result.error, fallback))
+  if (result.error) throw new ServiceError(toUserMessage(result.error, fallback), result.error?.code, result.error)
   if (!Array.isArray(result.data) || result.data.length !== count) {
     throw new Error('The change could not be confirmed. Refresh and check your access before trying again.')
   }

@@ -14,7 +14,10 @@ const h = vi.hoisted(() => {
   }
 })
 
-vi.mock('./_client', () => ({ supabase: h.supabase }))
+vi.mock('./_client', () => ({
+  supabase: h.supabase,
+  ServiceError: class ServiceError extends Error { constructor(m, c, cause) { super(m); this.name = 'ServiceError'; this.code = c; this.cause = cause } },
+}))
 vi.mock('../safeError', () => ({ toUserMessage: (_e, fb) => fb }))
 
 const api = await import('./dataCleanup')

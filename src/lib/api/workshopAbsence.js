@@ -15,7 +15,8 @@
  * here - RLS is the authoritative country boundary for staff. We scope shifts /
  * attendance by their scalar country column only.
  */
-import { supabase, unwrap, applyCountry, fetchAllPages, isMissingRelation } from './_client'
+import { supabase, unwrap, applyCountry, fetchAllPages, isMissingRelation, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 export const SHIFT_COLS =
   'id,person_name,role,shift_date,start_time,end_time,site,status,country'
@@ -61,11 +62,11 @@ async function loadAttendance({ from, to, site, country }) {
       }
     }
     if (site && site !== 'All') q = q.eq('site', site)
-    return q.order('check_in', { ascending: false }).range(pFrom, pTo)
+    return q.order('check_in', { ascending: false }).order('id', { ascending: true }).range(pFrom, pTo)
   }
   try {
     const { data, error } = await fetchAllPages(pageFn, { pageSize: 1000, max: 20000 })
-    if (error) throw error
+    if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     return data || []
   } catch (err) {
     if (isMissingRelation(err)) return []

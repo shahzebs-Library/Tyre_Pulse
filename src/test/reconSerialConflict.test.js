@@ -37,8 +37,13 @@ describe('service layer - serial on multiple assets', () => {
     expect(await recon.listSerialMultiAsset()).toEqual(rows)
   })
 
-  it('listSerialMultiAsset returns [] on an RPC error', async () => {
+  it('listSerialMultiAsset throws a ServiceError on an RPC error', async () => {
     h.state.rpc = { data: null, error: { message: 'boom', code: '42501' } }
+    await expect(recon.listSerialMultiAsset()).rejects.toMatchObject({ name: 'ServiceError', code: '42501' })
+  })
+
+  it('listSerialMultiAsset returns [] only when not provisioned', async () => {
+    h.state.rpc = { data: null, error: { message: 'x', code: 'PGRST202' } }
     expect(await recon.listSerialMultiAsset()).toEqual([])
   })
 

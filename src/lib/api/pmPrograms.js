@@ -7,7 +7,8 @@
  *
  * Read failures propagate so unavailable data is not presented as an empty list.
  */
-import { supabase, unwrap, applyCountry, isMissingRelation, fetchAllPages } from './_client'
+import { supabase, unwrap, applyCountry, isMissingRelation, fetchAllPages, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 export const COLS =
   'id,organisation_id,country,name,asset_no,asset_type,interval_type,interval_value,' +
@@ -254,7 +255,7 @@ export async function loadPmDashboard({ country } = {}) {
     for (const c of chunks) {
       const { data, error } = await applyCountry(supabase
         .from('vehicle_fleet').select('asset_no,current_km').in('asset_no', c), country)
-      if (error) throw error
+      if (error) throw new ServiceError(toUserMessage(error), error.code, error)
       for (const r of data || []) {
         if (seenFleetAssets.has(r.asset_no)) ambiguousAssets.add(r.asset_no)
         seenFleetAssets.add(r.asset_no)
@@ -269,7 +270,7 @@ export async function loadPmDashboard({ country } = {}) {
       const { data, error } = await fetchAllPages((from, to) => applyCountry(supabase
         .from('engine_hours_logs').select('asset_no,engine_hours,reading_date')
         .in('asset_no', c), country).order('reading_date', { ascending: false }).order('id').range(from, to))
-      if (error) throw error
+      if (error) throw new ServiceError(toUserMessage(error), error.code, error)
       for (const r of data || []) {
         if (r && r.asset_no != null && r.engine_hours != null && Number.isFinite(Number(r.engine_hours)) && !(r.asset_no in hoursByAsset)) {
           hoursByAsset[r.asset_no] = Number(r.engine_hours)

@@ -3,6 +3,7 @@
  * (no SELECT *) so new/sensitive columns are never exposed by accident.
  */
 import { supabase, unwrap, applyCountry, ServiceError, fetchAllPages, fetchAllRpcPages } from './_client'
+import { toUserMessage } from '../safeError'
 
 // ops_status is the OPERATIONAL state from the owner's monthly asset sheet
 // (running / breakdown / idle / planned scrap / being reallocated). It is a
@@ -61,7 +62,7 @@ export async function listAssets({ country, site, status, limit } = {}) {
     if (status) q = q.eq('status', status)
     return q
   }, { max: ceiling })
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data
 }
 
@@ -90,7 +91,7 @@ export async function listDataAssetOptions(country) {
     (r) => (typeof r?.asset_no === 'string' && r.asset_no ? r.asset_no : null),
     { max: MAX_ASSET_ROWS },
   )
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return (Array.isArray(data) ? data : []).map((r) => r?.asset_no).filter(Boolean)
 }
 
@@ -177,7 +178,7 @@ export async function listFleetRecords({ page, pageSize, search, site, status, c
   q = applyCountry(q, country)
 
   const { data, count, error } = await q
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return { data: data ?? [], count: count ?? 0 }
 }
 
@@ -192,7 +193,7 @@ export async function listSites({ country } = {}) {
     q = applyCountry(q, country)
     return q
   }, { max: MAX_ASSET_ROWS })
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return [...new Set((data ?? []).map(r => r.site))].sort()
 }
 
@@ -210,7 +211,7 @@ export async function getFleetSummary({ country, search, site } = {}) {
     return q
   }, { max: MAX_ASSET_ROWS })
 
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   const rows = data ?? []
   return {
     total:        rows.length,
@@ -226,7 +227,7 @@ export async function saveFleetRecord(payload, id) {
     ? supabase.from('vehicle_fleet').update(payload).eq('id', id)
     : supabase.from('vehicle_fleet').insert(payload)
   const { error } = await q
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
 }
 
 export async function deleteFleetRecord(id) {
@@ -235,7 +236,7 @@ export async function deleteFleetRecord(id) {
     .delete()
     .eq('id', id)
     .select('id')
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   if (!data || data.length === 0) {
     throw new Error('No permission or record not found.')
   }
@@ -251,7 +252,7 @@ export async function deleteFleetRecords(ids) {
       .delete()
       .in('id', chunk)
       .select('id')
-    if (error) throw new ServiceError(error.message, error.code, error)
+    if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     deleted += data?.length ?? 0
   }
   if (deleted === 0) {
@@ -274,6 +275,6 @@ export async function fetchAllFleetRecords({ search, site, status, country } = {
     q = applyCountry(q, country)
     return q
   }, { max: MAX_ASSET_ROWS })
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data ?? []
 }

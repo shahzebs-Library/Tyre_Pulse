@@ -41,11 +41,15 @@ export function listComplianceTyreRecords({ country, from: fromDate, to: toDate 
   return fetchAllPages((from, to) => {
     let q = supabase
       .from('tyre_records')
-      .select('id, asset_no, serial_number, position, brand, size, site, country, issue_date, risk_level')
+      // serial_number is a dead legacy column (0 rows populated); serve the canonical
+      // serial_no under the name the page reads.
+      .select('id, asset_no, serial_number:serial_no, position, brand, size, site, country, issue_date, risk_level')
     if (country && country !== 'All') q = q.eq('country', country)
     if (fromDate) q = q.gte('issue_date', fromDate)
     if (toDate) q = q.lte('issue_date', toDate)
-    return q.order('issue_date', { ascending: false }).range(from, to)
+    // issue_date is not unique; `id` is the paging tiebreak so a page boundary
+    // inside a same-day group can neither drop nor repeat a tyre.
+    return q.order('issue_date', { ascending: false }).order('id', { ascending: true }).range(from, to)
   }, { max: 200000 })
 }
 

@@ -64,6 +64,7 @@ export async function listAllEquipment({ country, max = 20000 } = {}) {
     const { data, error } = await fetchAllPages(
       (from, to) => applyCountry(supabase.from('equipment').select(COLS), country)
         .order('created_at', { ascending: false })
+        .order('id', { ascending: true })
         .range(from, to),
       { max },
     )

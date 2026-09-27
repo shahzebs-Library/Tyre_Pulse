@@ -9,7 +9,8 @@
  * page touches) and do NOT overlap tyres.js - they exist solely for the
  * extra_fields backfill/export and a generic dynamic-column patch.
  */
-import { supabase, unwrap, fetchAllPages, fetchAllRpcPages } from './_client'
+import { supabase, unwrap, fetchAllPages, fetchAllRpcPages, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 export { fetchAllPages }
 
@@ -42,6 +43,7 @@ export async function listFieldSynonyms() {
       .from('field_synonyms')
       .select(SYNONYM_COLS)
       .order('use_count', { ascending: false })
+      .order('id', { ascending: true })
       .range(from, to))
   if (error) return unwrap({ data: null, error })
   return data
@@ -82,6 +84,7 @@ export async function listRecordsWithExtraFields({ country, filterKey, filterVal
     .not('extra_fields', 'eq', '{}')
     .not('extra_fields', 'is', null)
     .order('issue_date', { ascending: false })
+    .order('id', { ascending: true })   // stable page boundaries
     .range(from, to)
 
   if (country && country !== 'All') q = q.eq('country', country)
@@ -92,7 +95,10 @@ export async function listRecordsWithExtraFields({ country, filterKey, filterVal
     q = q.not('extra_fields->>' + filterKey, 'is', null)
   }
 
-  const { data, count } = await q
+  // The error used to be discarded, so a denied or failed read rendered as
+  // "0 records carry custom data". It now surfaces as a sanitised ServiceError.
+  const { data, count, error } = await q
+  if (error) throw new ServiceError(toUserMessage(error, 'Could not load the records with custom data.'), error.code, error)
   return { data: data ?? [], count: count ?? 0 }
 }
 
@@ -109,6 +115,7 @@ export async function listTyreRecordsForBackfill({ fieldKey, target } = {}) {
     .select('id, extra_fields')
     .not('extra_fields->>' + fieldKey, 'is', null)
     .is(target, null)
+    .order('id', { ascending: true })
     .range(from, to))
 }
 
@@ -123,6 +130,7 @@ export async function listTyreRecordsForExport() {
     .not('extra_fields', 'eq', '{}')
     .not('extra_fields', 'is', null)
     .order('issue_date', { ascending: false })
+    .order('id', { ascending: true })
     .range(from, to))
 }
 

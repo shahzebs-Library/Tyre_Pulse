@@ -22,7 +22,7 @@
  * Production m3 is NOT handled here - it loads into the live production_logs
  * table via src/lib/api/production.js (createProduction), reused by the page.
  */
-import { supabase, unwrap, applyCountry, fetchAllPages } from './_client'
+import { supabase, unwrap, applyCountry, fetchAllPages, ServiceError } from './_client'
 import { DATASETS } from '../erpImport'
 import { toUserMessage } from '../safeError'
 
@@ -119,7 +119,7 @@ export async function listImportBatches(dataset, { country } = {}) {
   const pageFn = (pFrom, pTo) => {
     let q = supabase.from(table).select('batch_id,created_at,country')
     q = applyCountry(q, country)
-    return q.order('created_at', { ascending: false }).range(pFrom, pTo)
+    return q.order('created_at', { ascending: false }).order('id', { ascending: true }).range(pFrom, pTo)
   }
   try {
     const { data, error } = await fetchAllPages(pageFn, { pageSize: 1000, max: 100000 })
@@ -151,7 +151,7 @@ export async function listImportRows(dataset, { batch_id, country, limit = 20000
     let q = supabase.from(table).select(SELECT_COLS[dataset])
     q = applyCountry(q, country)
     if (batch_id) q = q.eq('batch_id', batch_id)
-    return q.order('source_row', { ascending: true }).range(pFrom, pTo)
+    return q.order('source_row', { ascending: true }).order('id', { ascending: true }).range(pFrom, pTo)
   }
   try {
     const { data, error } = await fetchAllPages(pageFn, { pageSize: 1000, max: limit })
@@ -295,7 +295,7 @@ function promoteRpcFor(dataset) {
 export async function previewPromotion(dataset, batch_id) {
   if (!batch_id) throw new Error('A batch id is required.')
   const { data, error } = await supabase.rpc(promoteRpcFor(dataset), { p_batch: batch_id, p_dry_run: true })
-  if (error) throw new Error(toUserMessage(error, 'Could not preview the promotion.'))
+  if (error) throw new ServiceError(toUserMessage(error, 'Could not preview the promotion.'), error?.code, error)
   return data || {}
 }
 
@@ -309,7 +309,7 @@ export async function previewPromotion(dataset, batch_id) {
 export async function applyPromotion(dataset, batch_id) {
   if (!batch_id) throw new Error('A batch id is required.')
   const { data, error } = await supabase.rpc(promoteRpcFor(dataset), { p_batch: batch_id, p_dry_run: false })
-  if (error) throw new Error(toUserMessage(error, 'Could not promote the batch.'))
+  if (error) throw new ServiceError(toUserMessage(error, 'Could not promote the batch.'), error?.code, error)
   return data || {}
 }
 
@@ -323,7 +323,7 @@ export async function applyPromotion(dataset, batch_id) {
 export async function undoPromotion(dataset, batch_id) {
   if (!batch_id) throw new Error('A batch id is required.')
   const { data, error } = await supabase.rpc('promote_erp_undo', { p_dataset: dataset, p_batch: batch_id })
-  if (error) throw new Error(toUserMessage(error, 'Could not undo the promotion.'))
+  if (error) throw new ServiceError(toUserMessage(error, 'Could not undo the promotion.'), error?.code, error)
   return data || {}
 }
 

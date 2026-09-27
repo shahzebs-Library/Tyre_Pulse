@@ -6,7 +6,8 @@
  * reported so the page never implies it read everything when it did not.
  * Each source settles independently: one failure never blanks the others.
  */
-import { supabase, fetchAllPages, applyCountry } from './_client'
+import { supabase, fetchAllPages, applyCountry, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 import { getUploadCoverageDetail } from './uploadCoverage'
 
 export const HISTORY_MAX = 5000
@@ -20,7 +21,7 @@ async function readBatches(country) {
       .order('created_at', { ascending: false }).order('id'),
     country,
   ).range(from, to), { max: HISTORY_MAX })
-  if (error) throw error
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return { rows: data || [], truncated: !!truncated }
 }
 
@@ -31,7 +32,7 @@ async function readRejects(country) {
     if (country && country !== 'All') q = q.or(`uploaded_country.eq.${country},detected_country.eq.${country}`)
     return q.range(from, to)
   }, { max: HISTORY_MAX })
-  if (error) throw error
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return { rows: data || [], truncated: !!truncated }
 }
 

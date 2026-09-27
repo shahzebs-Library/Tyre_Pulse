@@ -1,5 +1,6 @@
 /** Approval configuration API. Failures remain errors; empty means a successful read with no rows. */
 import { supabase, unwrap, fetchAllPages, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 import { ASSIGNABLE_BUILTIN_ROLES } from './customRoles'
 
 const COLS = `id,entity_type,match_country,match_site,match_role,match_user_id,
@@ -15,7 +16,7 @@ export async function listApprovalRules() {
       .order('entity_type')
       .order('level')
       .order('created_at')
-    if (error) throw error
+    if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     return data || []
   } catch (e) {
     throw e
@@ -65,7 +66,7 @@ export async function previewApprovers({ entityType, country, site, role, userId
       p_role: role || null,
       p_user_id: userId || null,
     })
-    if (error) throw error
+    if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     return data || []
   } catch (e) {
     throw e

@@ -25,7 +25,7 @@ export function listImprovementTyreRecords({ country } = {}) {
       .select('id,asset_no,site,brand,position,risk_level,category,km_at_fitment,km_at_removal,cost_per_tyre,issue_date,country')
       .order('issue_date', { ascending: false })
     if (country !== 'All') q = q.eq('country', country)
-    return q.range(from, to)
+    return q.order('id', { ascending: true }).range(from, to)
   })
 }
 
@@ -56,7 +56,7 @@ export function listImprovementInspections({ country } = {}) {
       .select('id,asset_no,site,status,scheduled_date,completed_date,country')
       .order('scheduled_date', { ascending: false })
     if (country !== 'All') q = q.eq('country', country)
-    return q.range(from, to)
+    return q.order('id', { ascending: true }).range(from, to)
   })
 }
 

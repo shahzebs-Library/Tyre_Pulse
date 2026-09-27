@@ -45,13 +45,6 @@ export function reportAssetOverview({ country } = {}) {
   return supabase.rpc('report_asset_overview', { p_country: country })
 }
 
-/** Work orders feeding the asset registry cost/health columns. Paged past the 1000-row cap. */
-export function listAssetWorkOrders() {
-  return fetchAllPages((from, to) =>
-    supabase.from('work_orders').select('id,asset_no,status,total_cost,created_at,work_type,work_order_no,priority,labour_cost,parts_cost,completed_at')
-      .order('id').range(from, to))
-}
-
 /**
  * Tyres for a single asset (detail drawer), keyed by asset number.
  * `country` scopes the read: the same asset code in two countries is a

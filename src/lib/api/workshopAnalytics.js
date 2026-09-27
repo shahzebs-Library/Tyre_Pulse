@@ -16,7 +16,8 @@
  * - RLS is the authoritative country boundary for staff. We reuse listTechnicians
  * from the live service (single source for the roster).
  */
-import { supabase, unwrap, applyCountry, fetchAllPages, isMissingRelation } from './_client'
+import { supabase, unwrap, applyCountry, fetchAllPages, isMissingRelation, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 import { listTechnicians } from './workshopLive'
 
 export const EVENT_COLS =
@@ -48,11 +49,11 @@ async function loadEvents({ from, to, site, country }) {
     if (from) q = q.gte('at', String(from).slice(0, 10))
     if (upper) q = q.lt('at', upper)
     if (site && site !== 'All') q = q.eq('site', site)
-    return q.order('at', { ascending: true }).range(pFrom, pTo)
+    return q.order('at', { ascending: true }).order('id', { ascending: true }).range(pFrom, pTo)
   }
   try {
     const { data, error } = await fetchAllPages(pageFn, { pageSize: 1000, max: 100000 })
-    if (error) throw error
+    if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     return data || []
   } catch (err) {
     if (isMissingRelation(err)) return []
@@ -74,10 +75,10 @@ async function loadJobs({ from, to, site, country }) {
       if (from) q = q.gte(col, String(from).slice(0, 10))
       if (upper) q = q.lt(col, upper)
       if (site && site !== 'All') q = q.eq('site', site)
-      return q.order(col, { ascending: false }).range(pFrom, pTo)
+      return q.order(col, { ascending: false }).order('id', { ascending: true }).range(pFrom, pTo)
     }
     const { data, error } = await fetchAllPages(pageFn, { pageSize: 1000, max: 100000 })
-    if (error) throw error
+    if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     return data || []
   }
   try {

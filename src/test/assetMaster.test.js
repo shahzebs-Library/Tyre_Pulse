@@ -98,8 +98,13 @@ describe('service layer - getAssetMaster', () => {
     expect(h.state.ranges).toHaveLength(2)
   })
 
-  it('returns [] on an RPC error', async () => {
+  it('throws a ServiceError on an RPC error (never reads as "no assets")', async () => {
     h.state.error = { message: 'boom', code: '42501' }
+    await expect(getAssetMaster({ search: 'x' })).rejects.toMatchObject({ name: 'ServiceError', code: '42501' })
+  })
+
+  it('returns [] only when the RPC is not provisioned', async () => {
+    h.state.error = { message: 'missing', code: 'PGRST202' }
     expect(await getAssetMaster({ search: 'x' })).toEqual([])
   })
 

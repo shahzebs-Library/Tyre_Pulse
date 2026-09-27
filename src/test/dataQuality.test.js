@@ -30,10 +30,14 @@ describe('service layer - getDataQualitySummary', () => {
     expect(h.state.calls[0][0]).toBe('recon_data_quality_summary')
   })
 
-  it('returns [] on an RPC error', async () => {
-    h.state.result = { data: null, error: { message: 'nope' } }
-    const rows = await getDataQualitySummary()
-    expect(rows).toEqual([])
+  it('throws a ServiceError on an RPC error (never reads as "no problems")', async () => {
+    h.state.result = { data: null, error: { message: 'nope', code: '42501' } }
+    await expect(getDataQualitySummary()).rejects.toMatchObject({ name: 'ServiceError', code: '42501' })
+  })
+
+  it('returns [] only when the RPC is not provisioned', async () => {
+    h.state.result = { data: null, error: { message: 'missing', code: 'PGRST202' } }
+    expect(await getDataQualitySummary()).toEqual([])
   })
 
   it('returns [] when the payload is not an array', async () => {

@@ -12,6 +12,7 @@
  * shared applyCountry helper. Paginated so exports/analytics see every row.
  */
 import { supabase, unwrap, applyCountry, fetchAllPages, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 const READING_COLS =
   'id,organisation_id,country,asset_no,tyre_position,tyre_serial,pressure,temperature,' +
@@ -44,7 +45,7 @@ export async function listTpmsReadings({ country, limit = 5000 } = {}) {
   }, { pageSize: 1000, max: limit })
   if (error) {
     if (isMissingRelation(error)) return []
-    throw new ServiceError(error.message, error.code, error)
+    throw new ServiceError(toUserMessage(error), error.code, error)
   }
   return data || []
 }
@@ -64,7 +65,7 @@ export async function listTyrePressureBaseline({ country, limit = 10000 } = {}) 
       .order('id', { ascending: true })
     return applyCountry(q, country).range(from, to)
   }, { pageSize: 1000, max: limit })
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data || []
 }
 

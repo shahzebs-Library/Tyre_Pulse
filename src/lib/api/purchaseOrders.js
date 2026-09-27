@@ -71,7 +71,7 @@ export async function listReplenishmentTyreRecords({ country, sinceDate, untilDa
     let q = supabase.from('tyre_records').select(TYRE_COLS).gte('issue_date', sinceDate)
     if (untilDate) q = q.lte('issue_date', untilDate)
     if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
-    return q.range(from, to)
+    return q.order('id', { ascending: true }).range(from, to)
   }, { max: 200000 })
   return unwrap(res)
 }

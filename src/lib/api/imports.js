@@ -5,6 +5,7 @@
  */
 import { supabase } from '../supabase'
 import { ServiceError, unwrap, fetchAllPages, fetchAllRpcPages, isNotProvisioned } from './_client'
+import { toUserMessage } from '../safeError'
 import { MODULE_FIELDS, MODULE_TABLES, normaliseToken } from '../import/synonyms'
 import { naturalKey } from '../import/validate'
 import { queryClient } from '../queryClient'
@@ -52,7 +53,7 @@ async function currentUser() {
 async function currentOrgId(userId) {
   if (!userId) throw new ServiceError('An authenticated user is required.', 'AUTH_REQUIRED')
   const { data, error } = await supabase.from('profiles').select('organisation_id,org_id,approved,locked').eq('id', userId).maybeSingle()
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   if (!data || data.approved === false || data.locked === true) throw new ServiceError('This account is not active for imports.', 'IMPORT_ACCOUNT_INACTIVE')
   const org = data.organisation_id ?? data.org_id
   if (!org) throw new ServiceError('Your account is not assigned to an organisation.', 'IMPORT_ORG_REQUIRED')
@@ -95,7 +96,7 @@ export async function uploadOriginalFile(file, { module, country, sha256 }) {
     contentType: file.type || 'application/octet-stream',
     upsert: false,
   })
-  if (upErr) throw new ServiceError(upErr.message, upErr.statusCode, upErr)
+  if (upErr) throw new ServiceError(toUserMessage(upErr, 'Could not upload the file.'), upErr.statusCode, upErr)
 
   const row = {
     country: country || null,
@@ -126,7 +127,7 @@ export async function uploadOriginalFile(file, { module, country, sha256 }) {
       return { fileId: prior?.id ?? null, bucket: BUCKET, path: prior?.storagePath ?? path, sha256, reused: true }
     }
     await supabase.storage.from(BUCKET).remove([path]).catch(() => {})
-    throw new ServiceError(error.message, error.code, error)
+    throw new ServiceError(toUserMessage(error), error.code, error)
   }
   return { fileId: data.id, bucket: BUCKET, path, sha256 }
 }
@@ -160,7 +161,7 @@ export async function uploadAttachment(file, { batchId, country, filename, sha25
     contentType: file?.type || 'application/octet-stream',
     upsert: false,
   })
-  if (upErr) throw new ServiceError(upErr.message, upErr.statusCode, upErr)
+  if (upErr) throw new ServiceError(toUserMessage(upErr, 'Could not upload the file.'), upErr.statusCode, upErr)
 
   // Metadata and bytes are one logical unit. If metadata fails, remove the bytes
   // so an untraceable object can never remain in storage.
@@ -182,7 +183,7 @@ export async function uploadAttachment(file, { batchId, country, filename, sha25
       const prior = await findFileBySha(sha256)
       return { fileId: prior?.id ?? null, bucket: BUCKET, path: prior?.storagePath ?? null, reused: true }
     }
-    if (error) throw new ServiceError(error.message, error.code, error)
+    if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     fileId = data?.id ?? null
   } catch (err) {
     await supabase.storage.from(BUCKET).remove([path]).catch(() => {})
@@ -215,7 +216,7 @@ export async function recordAttachmentMatches(rows) {
     status: r.status ?? 'unmatched',
   }))
   const { error } = await supabase.from('import_attachment_matches').insert(payload)
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return payload.length
 }
 
@@ -241,7 +242,7 @@ export async function createBatch(b) {
     import_status: 'staged',
   }
   const { data, error } = await supabase.from('import_batches').insert(row).select('id').single()
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data.id
 }
 
@@ -258,7 +259,7 @@ export async function saveSheets(batchId, sheets) {
     summary: s.summary ?? {},
   }))
   const { error } = await supabase.from('import_batch_sheets').insert(rows)
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
 }
 
 /** Bulk-insert staged rows (chunked to stay within request limits). */
@@ -277,19 +278,23 @@ export async function saveSheets(batchId, sheets) {
 const TRANSIENT_RE = /failed to fetch|network|load failed|timeout|statement timeout|too large|request entity|payload|413|econnreset|connection|fetch failed/i
 
 function isTransient(e) {
-  return e?.name === 'TypeError' || TRANSIENT_RE.test(e?.message || '')
+  // Read the ORIGINAL error too: a ServiceError carries a sanitised message for
+  // display and keeps the driver's own text on `.cause`, which is what names a
+  // dropped connection or a timeout.
+  return e?.name === 'TypeError' || e?.cause?.name === 'TypeError'
+    || TRANSIENT_RE.test(e?.message || '') || TRANSIENT_RE.test(e?.cause?.message || '')
 }
 
 async function insertRowChunk(chunk, { attempts = 5, depth = 0 } = {}) {
   for (let a = 1; a <= attempts; a++) {
     try {
       const { error } = await supabase.from('import_rows').insert(chunk)
-      if (error) throw new ServiceError(error.message, error.code, error)
+      if (error) throw new ServiceError(toUserMessage(error), error.code, error)
       return
     } catch (e) {
       // Deterministic server-side rejection — retrying/bisecting can't help.
       if (!isTransient(e)) {
-        throw new ServiceError(e?.message || 'Could not stage the rows.', e?.code, e)
+        throw new ServiceError(toUserMessage(e, 'Could not stage the rows.'), e?.code, e)
       }
       if (a < attempts) {
         // Jittered exponential backoff: ~0.3s, 0.9s, 1.8s, 3.0s (+ up to 250ms)
@@ -310,7 +315,7 @@ async function insertRowChunk(chunk, { attempts = 5, depth = 0 } = {}) {
       // A single row still cannot be saved after every retry — surface the real
       // cause so it is actionable, not a generic "too large" message.
       throw new ServiceError(
-        `Could not save a row after repeated attempts: ${e?.message || 'the connection dropped'}. `
+        `Could not save a row after repeated attempts: ${toUserMessage(e, 'the connection dropped')}. `
         + 'The connection looks unstable; check your network and retry from Intake History.',
         e?.code, e,
       )
@@ -323,7 +328,7 @@ async function verifyStagedRows(batchId, expectedRows) {
   const { count, error } = await supabase.from('import_rows')
     .select('id', { count: 'exact', head: true })
     .eq('batch_id', batchId)
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   if (Number(count || 0) !== expectedRows) {
     throw new ServiceError(
       `${Number(count || 0).toLocaleString('en-US')} of ${expectedRows.toLocaleString('en-US')} expected row(s) are staged. The batch was stopped before commit to prevent missing or duplicated records.`,
@@ -381,7 +386,7 @@ export async function stageRows(batchId, rows, { onProgress } = {}) {
 export async function saveRowIssues(issues) {
   if (!issues?.length) return
   const { error } = await supabase.from('import_row_issues').insert(issues)
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
 }
 
 export async function setBatchCounts(batchId, c) {
@@ -393,13 +398,13 @@ export async function setBatchCounts(batchId, c) {
     duplicate_rows: c.duplicate ?? 0,
     conflict_rows: c.conflict ?? 0,
   }).eq('id', batchId)
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
 }
 
 export async function submitForApproval(batchId) {
   const { error } = await supabase.from('import_batches')
     .update({ approval_status: 'pending_approval' }).eq('id', batchId)
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
 }
 
 export async function approveBatch(batchId) {
@@ -407,7 +412,7 @@ export async function approveBatch(batchId) {
   const { error } = await supabase.from('import_batches')
     .update({ approval_status: 'approved', approver: user?.id ?? null, approved_at: new Date().toISOString() })
     .eq('id', batchId)
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
 }
 
 // Tunable company limits for post-import automation. Overridable via opts.limits
@@ -535,7 +540,7 @@ export async function commitBatch(batchId, { chunkSize = COMMIT_CHUNK_ROWS, onPr
       p_batch_id: batchId,
       p_max_rows: chunkSize,
     })
-    if (error) throw new ServiceError(error.message, error.code, error)
+    if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     const d = data || {}
     totals.inserted += d.inserted || 0
     totals.skipped  += d.skipped  || 0
@@ -581,7 +586,7 @@ export async function commitBatch(batchId, { chunkSize = COMMIT_CHUNK_ROWS, onPr
 
 export async function verifyBatchLanding(batchId) {
   const { data, error } = await supabase.rpc('import_verify_landing', { p_batch_id: batchId })
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   const counters = ['expected_distinct', 'landed_distinct', 'dangling']
   if (!data || typeof data !== 'object' || Array.isArray(data) || data.batch_id !== batchId ||
       data.scope_verified !== true ||
@@ -617,7 +622,7 @@ export async function enrichBatch(batchId, { chunkSize = ENRICH_CHUNK_ROWS, onPr
       p_max_rows: chunkSize,
       p_after_id: after,
     })
-    if (error) throw new ServiceError(error.message, error.code, error)
+    if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     const d = data || {}
     totals.enriched += d.enriched || 0
     totals.skipped  += d.skipped  || 0
@@ -681,7 +686,7 @@ export async function existingKeys({ module, country }) {
     keyOfRow,
     { max: MAX_IMPORT_KEYS },
   )
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   // RPC returns SETOF text → array of strings (rows) or array of { import_existing_keys }.
   const keys = (data || []).map((r) => (typeof r === 'string' ? r : r?.import_existing_keys)).filter(Boolean)
   const set = new Set(keys)
@@ -734,7 +739,7 @@ export async function existingRecords({ module, country, rows = [] }) {
     let q = supabase.from(table).select(cols).in(probe, values.slice(i, i + 200))
     if (country && country !== 'All' && module !== 'workorder') q = q.eq('country', country)
     const { data, error } = await q
-    if (error) throw new ServiceError(error.message, error.code, error)
+    if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     for (const rec of data || []) {
       const key = naturalKey(rec, module)
       if (key && !out.has(key)) out.set(key, rec)
@@ -746,13 +751,13 @@ export async function existingRecords({ module, country, rows = [] }) {
 
 export async function reverseBatch(batchId) {
   const { data, error } = await supabase.rpc('import_reverse_batch', { p_batch_id: batchId })
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data
 }
 
 export async function reprocessRow(rowId) {
   const { error } = await supabase.rpc('import_reprocess_row', { p_row_id: rowId })
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
 }
 
 // ── Reads ────────────────────────────────────────────────────────────────────
@@ -771,7 +776,7 @@ export async function listBatches({ country, module, status, limit = 50 } = {}) 
       if (status) q = q.eq('import_status', status)
       return q.range(from, to)
     })
-    if (error) throw new ServiceError(error.message, error.code, error)
+    if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     return data
   }
   let q = supabase.from('import_batches').select(BATCH_COLS)
@@ -790,8 +795,8 @@ export async function getBatchRows(batchId, limit = 500) {
   if (limit == null) {
     const { data, error } = await fetchAllPages((from, to) => supabase.from('import_rows')
       .select('id,source_row_no,validation_status,dup_status,action,transformed_data,target_record_id,processed_at')
-      .eq('batch_id', batchId).order('source_row_no').range(from, to))
-    if (error) throw new ServiceError(error.message, error.code, error)
+      .eq('batch_id', batchId).order('source_row_no').order('id').range(from, to))
+    if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     return data
   }
   return unwrap(
@@ -823,7 +828,7 @@ export async function listImportFileFingerprints(fileIds = []) {
       .in('id', chunk)
     if (error) {
       if (isNotProvisioned(error)) return []
-      throw new ServiceError(error.message, error.code, error)
+      throw new ServiceError(toUserMessage(error), error.code, error)
     }
     out.push(...(data || []))
   }
@@ -838,7 +843,7 @@ export async function listImportFileFingerprints(fileIds = []) {
  */
 export async function deleteBatch(batchId) {
   const { error } = await supabase.from('import_batches').delete().eq('id', batchId)
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
 }
 
 /**
@@ -873,7 +878,7 @@ export async function deleteFile(fileId) {
     await supabase.storage.from(f.storage_bucket || BUCKET).remove([f.storage_path]).catch(() => {})
   }
   const { error } = await supabase.from('import_files').delete().eq('id', fileId)
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
 }
 
 /** Data Intake batches awaiting an approver's decision (canonical pipeline). */
@@ -884,9 +889,9 @@ export async function listForApproval({ country, limit = 100 } = {}) {
         .eq('approval_status', 'pending_approval')
         .order('created_at', { ascending: false })
       if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
-      return q.range(from, to)
+      return q.order('id', { ascending: true }).range(from, to)
     })
-    if (error) throw new ServiceError(error.message, error.code, error)
+    if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     return data
   }
   let q = supabase.from('import_batches').select(BATCH_COLS)
@@ -902,7 +907,7 @@ export async function rejectBatch(batchId) {
   const { error } = await supabase.from('import_batches')
     .update({ approval_status: 'rejected', approver: user?.id ?? null, approved_at: new Date().toISOString() })
     .eq('id', batchId)
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
 }
 
 export async function getRowIssues(rowId) {
@@ -922,7 +927,7 @@ export async function listProfiles({ module, country } = {}) {
     if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
     return q.range(from, to)
   })
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data
 }
 
@@ -943,14 +948,14 @@ export async function saveProfile(profile, rules = []) {
     unit_settings: profile.unitSettings ?? {},
     created_by: user?.id ?? null,
   }).select('id').single()
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   if (rules.length) {
     const ruleRows = rules.map((r) => ({
       profile_id: data.id, source_header: r.sourceHeader, target_field: r.target ?? null,
       transform: r.transform ?? {}, alias_rule: r.aliasRule ?? {}, confidence: r.confidence ?? null,
     }))
     const { error: rErr } = await supabase.from('import_mapping_rules').insert(ruleRows)
-    if (rErr) throw new ServiceError(rErr.message, rErr.code, rErr)
+    if (rErr) throw new ServiceError(toUserMessage(rErr), rErr.code, rErr)
   }
   return data.id
 }
@@ -1018,7 +1023,7 @@ export async function touchProfile(profileId) {
  */
 export async function linkAudit() {
   const { data, error } = await supabase.rpc('data_link_audit')
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data
 }
 
@@ -1029,7 +1034,7 @@ export async function linkAudit() {
  */
 export async function linkCreateMissingAssets() {
   const { data, error } = await supabase.rpc('data_link_create_missing_assets')
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data
 }
 
@@ -1037,7 +1042,7 @@ export async function linkCreateMissingAssets() {
 /** Fleet budget overview: vehicles, budgets set, total vs actual avg monthly spend. */
 export async function costBudgetOverview() {
   const { data, error } = await supabase.rpc('cost_budget_overview')
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data
 }
 
@@ -1049,14 +1054,14 @@ export async function costBudgetOverview() {
  */
 export async function costSetMonthlyBudget(scope, value, amount) {
   const { data, error } = await supabase.rpc('cost_set_monthly_budget', { p_scope: scope, p_value: value, p_amount: amount })
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data
 }
 
 /** Admin: set each vehicle's budget to its own actual average monthly spend. */
 export async function costApplyActualBudgets() {
   const { data, error } = await supabase.rpc('cost_apply_actual_budgets')
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data
 }
 
@@ -1067,7 +1072,7 @@ export async function costApplyActualBudgets() {
  */
 export async function costClearValue(value) {
   const { data, error } = await supabase.rpc('cost_clear_value', { p_value: value })
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data
 }
 
@@ -1080,13 +1085,13 @@ export async function costClearValue(value) {
 /** Per-field data-completeness stats (V92) for the intake scorecard. */
 export async function dataCompleteness() {
   const { data, error } = await supabase.rpc('data_completeness')
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data
 }
 
 export async function costConvertLineTotals() {
   const { data, error } = await supabase.rpc('cost_convert_line_totals')
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data
 }
 
@@ -1113,14 +1118,14 @@ export async function listAllProfiles() {
 export async function renameProfile(profileId, name) {
   const { error } = await supabase.from('import_mapping_profiles')
     .update({ name: String(name).trim() }).eq('id', profileId)
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
 }
 
 /** Activate / deactivate a saved mapping profile (inactive ones are not auto-suggested). */
 export async function setProfileActive(profileId, active) {
   const { error } = await supabase.from('import_mapping_profiles')
     .update({ active: !!active }).eq('id', profileId)
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
 }
 
 /** Delete a saved mapping profile and its column rules. */
@@ -1128,7 +1133,7 @@ export async function deleteProfile(profileId) {
   // Remove rules first in case the FK is not ON DELETE CASCADE.
   await supabase.from('import_mapping_rules').delete().eq('profile_id', profileId)
   const { error } = await supabase.from('import_mapping_profiles').delete().eq('id', profileId)
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
 }
 
 // ── Master-data aliases (directive §9) ───────────────────────────────────────
@@ -1142,7 +1147,7 @@ export async function listAliases({ entityType, country } = {}) {
     if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
     return q.range(from, to)
   })
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data
 }
 
@@ -1172,11 +1177,11 @@ export async function saveAlias({ entityType, country, rawValue, canonicalValue,
     const { error } = await supabase.from('import_master_aliases')
       .update({ canonical_value: row.canonical_value, canonical_id: row.canonical_id, active: true })
       .eq('id', existing.id)
-    if (error) throw new ServiceError(error.message, error.code, error)
+    if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     return existing.id
   }
   const { data, error } = await supabase.from('import_master_aliases').insert(row).select('id').single()
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data.id
 }
 
@@ -1192,7 +1197,7 @@ export async function listCurrencyRates({ baseCurrency, quoteCurrency, approvedO
     if (quoteCurrency) q = q.eq('quote_currency', quoteCurrency)
     return q.range(from, to)
   })
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data
 }
 
@@ -1224,7 +1229,7 @@ export async function saveCurrencyRate({ baseCurrency, quoteCurrency, rate, rate
     base_currency: baseCurrency, quote_currency: quoteCurrency, rate: Number(rate),
     rate_date: rateDate, source: source || 'manual', created_by: user?.id ?? null,
   }).select('id').single()
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data.id
 }
 
@@ -1234,7 +1239,7 @@ export async function approveCurrencyRate(id) {
   const { error } = await supabase.from('currency_rates')
     .update({ approved: true, approved_by: user?.id ?? null, approved_at: new Date().toISOString() })
     .eq('id', id)
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
 }
 
 export async function listCustomFields({ module, country } = {}) {
@@ -1246,7 +1251,7 @@ export async function listCustomFields({ module, country } = {}) {
     if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
     return q.range(from, to)
   })
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data
 }
 

@@ -162,7 +162,6 @@ const ALLOWED = [
   //     bounded with { max }, these service readers are the raw path behind
   //     them. If any gains a { max } later, drop its entry (test 2 will fail
   //     otherwise). ---
-  { file: 'src/lib/api/assetManagement.js', why: 'listAssetWorkOrders - full work_orders read feeding asset registry cost/health columns' },
   { file: 'src/lib/api/costSummary.js', why: 'work_orders maintenance-cost read; server RPC get_maint_tyre_split is the primary path, this is the country+site-scoped fallback' },
   { file: 'src/lib/api/technicianScorecard.js', why: 'listWorkOrdersForScorecard - country-scoped complete work_orders read' },
 

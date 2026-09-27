@@ -9,6 +9,7 @@
  *   - tyre_records    → STRICT country eq (matches the page's .eq('country', ...))
  */
 import { supabase, unwrap, applyCountry, fetchAllPages, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 // Least-privilege column set for the schedule table. Omits organisation_id
 // (RLS-managed) and updated_at (write-only bookkeeping the page does not read).
@@ -18,8 +19,13 @@ const COLS =
 // Columns the analytics engine consumes from tyre_records. Kept local to this
 // service (the page's read is a specialised ascending, fully-paged scan that
 // does not match tyres.js listTyreRecords).
+/** Ceiling on the rotation history read (tyre_records holds ~11k rows today). */
+export const ROTATION_RECORD_MAX = 100000
+
 const RECORD_COLS =
-  'id,asset_no,serial_number,serial_no,position,brand,size,tread_depth,cost_per_tyre,issue_date,km_at_fitment,km_at_removal,risk_level,site,country'
+  // serial_number is a dead legacy column (0 of 7,504 populated): alias the
+  // canonical serial_no under that name so every reader gets the real serial.
+  'id,asset_no,serial_number:serial_no,serial_no,position,brand,size,tread_depth,cost_per_tyre,issue_date,km_at_fitment,km_at_removal,risk_level,site,country'
 
 /**
  * List scheduled rotations, earliest first. Null-safe country scoping so
@@ -71,8 +77,8 @@ export async function listRotationRecords({ country } = {}) {
     if (country && country !== 'All') {
       query = query.eq('country', country)
     }
-    return query.range(from, to)
-  })
-  if (error) throw new ServiceError(error.message, error.code, error)
+    return query.order('id', { ascending: true }).range(from, to)
+  }, { max: ROTATION_RECORD_MAX })
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data || []
 }

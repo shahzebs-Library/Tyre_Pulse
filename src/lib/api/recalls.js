@@ -61,6 +61,6 @@ export async function deleteRecall(id) {
  */
 export function listRecallTyres() {
   return fetchAllPages((from, to) =>
-    supabase.from('tyre_records').select(TYRE_COLS).range(from, to),
+    supabase.from('tyre_records').select(TYRE_COLS).order('id', { ascending: true }).range(from, to),
   )
 }

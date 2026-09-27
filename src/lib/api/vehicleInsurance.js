@@ -11,7 +11,8 @@
  * asset id that joins the fleet register, so an empty result means "no line
  * names this asset", not "this asset is uninsured". The page says so.
  */
-import { supabase, fetchAllPages, isMissingRelation } from './_client'
+import { supabase, fetchAllPages, isMissingRelation, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 const COLS =
   'id,country,policy_no,cover_type,asset_no,plate_no,chassis_no,description,sum_insured,premium,currency,cover_from,cover_to,status,certificate_no'
@@ -25,7 +26,7 @@ export async function listVehicleInsuranceLines(assetNo, { country } = {}) {
       if (country && country !== 'All') q = q.eq('country', country)
       return q.order('cover_to', { ascending: false, nullsFirst: false }).order('id').range(from, to)
     }, { max: 500 })
-    if (error) throw error
+    if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     return Array.isArray(data) ? data : []
   } catch (err) {
     if (isMissingRelation(err)) return []

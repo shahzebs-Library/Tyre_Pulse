@@ -8,7 +8,8 @@
  * (a personal queue, not a register) and each carries an exact server count so
  * the page can say "showing N of M" instead of implying completeness.
  */
-import { supabase, applyCountry } from './_client'
+import { supabase, applyCountry, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 import { listInspectionApprovals, listChecklistApprovals } from './approvalsQueue'
 import { isClosedWorkOrder } from '../myQueueAnalytics'
 
@@ -64,7 +65,7 @@ async function myChecklistAssignments(role, country, signal) {
       .limit(QUEUE_LIST_LIMIT),
     country,
   ).abortSignal(signal)
-  if (res.error) throw res.error
+  if (res.error) throw new ServiceError(toUserMessage(res.error), res.error.code, res.error)
   return { rows: res.data || [], total: res.count ?? (res.data || []).length }
 }
 
@@ -78,7 +79,7 @@ async function myInspections(profileId, country, signal) {
       .limit(RECENT_LIMIT),
     country,
   ).abortSignal(signal)
-  if (res.error) throw res.error
+  if (res.error) throw new ServiceError(toUserMessage(res.error), res.error.code, res.error)
   return { rows: res.data || [], total: res.count ?? (res.data || []).length }
 }
 
@@ -92,7 +93,7 @@ async function myChecklists(profileId, country, signal) {
       .limit(RECENT_LIMIT),
     country,
   ).abortSignal(signal)
-  if (res.error) throw res.error
+  if (res.error) throw new ServiceError(toUserMessage(res.error), res.error.code, res.error)
   return { rows: res.data || [], total: res.count ?? (res.data || []).length }
 }
 

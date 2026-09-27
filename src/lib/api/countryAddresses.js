@@ -9,6 +9,7 @@
  * can rely on them without a DB round-trip.
  */
 import { supabase, unwrap, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 /** Editable columns (order = form order). organisation_id/audit cols are server-set. */
 export const COUNTRY_ADDRESS_FIELDS = [
@@ -150,12 +151,12 @@ export async function upsertCountryAddress(country, data) {
   if (existing?.id) {
     const { error } = await supabase.from('country_addresses')
       .update({ ...payload, updated_by: uid }).eq('id', existing.id)
-    if (error) throw new ServiceError(error.message, error.code, error)
+    if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     return existing.id
   }
   const { data: ins, error } = await supabase.from('country_addresses')
     .insert({ ...payload, created_by: uid, updated_by: uid }).select('id').single()
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return ins.id
 }
 
@@ -164,5 +165,5 @@ export async function deleteCountryAddress(country) {
   const c = String(country ?? '').trim()
   if (!c) return
   const { error } = await supabase.from('country_addresses').delete().ilike('country', c)
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
 }

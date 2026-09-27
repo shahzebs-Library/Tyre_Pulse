@@ -15,6 +15,7 @@
  * fallback. Call `invalidateCustomLayouts()` after a designer save/delete.
  */
 import { supabase, unwrap, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 import { normalizeDiagramConfig, positionsFromConfig } from '../vehicleDiagram'
 
 const TABLE = 'vehicle_diagram_configs'
@@ -50,7 +51,7 @@ export async function listVehicleDiagramConfigs() {
     .order('vehicle_type', { ascending: true })
   if (error) {
     if (isMissingRelation(error)) return []
-    throw new ServiceError(error.message, error.code, error)
+    throw new ServiceError(toUserMessage(error), error.code, error)
   }
   return data ?? []
 }
@@ -91,7 +92,7 @@ export async function upsertVehicleDiagramConfig({ vehicle_type, label = '', con
 export async function deleteVehicleDiagramConfig(id) {
   if (!id) throw new ServiceError('Config id is required.', 'invalid_id')
   const { error } = await supabase.from(TABLE).delete().eq('id', id)
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return { ok: true }
 }
 

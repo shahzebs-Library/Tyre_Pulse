@@ -15,6 +15,7 @@
  * or a failed write so the page can report it.
  */
 import { supabase, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 import { configEntry, whenSystemConfigLoaded } from './systemConfig'
 
 /** system_config key that both this service and get_report_snapshot read. */
@@ -63,7 +64,7 @@ export async function setDiagramBg(hex) {
       [{ key: DIAGRAM_BG_CONFIG_KEY, value_text: value, value, updated_at: new Date().toISOString() }],
       { onConflict: 'key', ignoreDuplicates: false },
     )
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return { ok: true }
 }
 
@@ -144,6 +145,6 @@ export async function setCompanyLogo(url) {
       [{ key: LOGO_CONFIG_KEY, value_text: value, value, updated_at: new Date().toISOString() }],
       { onConflict: 'key', ignoreDuplicates: false },
     )
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return { ok: true }
 }

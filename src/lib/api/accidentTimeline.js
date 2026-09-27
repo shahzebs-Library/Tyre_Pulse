@@ -10,6 +10,7 @@
  * Missing relation → [] so the UI degrades to the honest single-step timeline.
  */
 import { supabase, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 const COLS =
   'id,accident_id,changed_at,action,old_status:old_values->>status,new_status:new_values->>status'
@@ -35,7 +36,7 @@ export async function listStatusTransitions(accidentId) {
     .order('changed_at', { ascending: true })
   if (error) {
     if (isMissingRelation(error)) return []
-    throw new ServiceError(error.message, error.code)
+    throw new ServiceError(toUserMessage(error), error.code, error)
   }
   return data ?? []
 }

@@ -1124,7 +1124,9 @@ async function handleSendNow(req: Request, svc: any): Promise<Response> {
       schedule_id: s.id, schedule_name: `${s.name} (send now)`, report_type: s.report_type,
       recipients, status: 'failed', error: msg,
     })
-    return jsonResponse(req, { error: msg }, 502)
+    // The full reason (which can name tables and query failures) stays in the
+    // admin-only delivery log; the caller gets a clean sentence.
+    return jsonResponse(req, { error: 'The report could not be sent. The reason is recorded in the delivery history.' }, 502)
   }
 }
 

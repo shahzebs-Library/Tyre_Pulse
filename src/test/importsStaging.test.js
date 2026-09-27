@@ -76,7 +76,11 @@ describe('stageRows — resilient chunk insert', () => {
     h.state.failFn = () => 'new row violates row-level security policy for table "import_rows"'
     h.state.failCode = '42501'
 
-    await expect(stageRows('b1', makeRows(8))).rejects.toThrow(/row-level security/i)
+    // Sanitised for display (no policy/table names), original kept on .cause.
+    const err = await stageRows('b1', makeRows(8)).catch((e) => e)
+    expect(err.message).not.toMatch(/row-level security|import_rows/i)
+    expect(err.code).toBe('42501')
+    expect(String(err.cause?.cause?.message || err.cause?.message)).toMatch(/row-level security/i)
     expect(h.state.attempts.length).toBe(1)    // no retry, no bisection
   })
 

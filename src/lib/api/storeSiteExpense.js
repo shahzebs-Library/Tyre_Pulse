@@ -9,7 +9,8 @@
  *
  * @module api/storeSiteExpense
  */
-import { supabase } from './_client'
+import { supabase, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 /**
  * Per-site expense (tyre / spare / oil / total / lines) for a country + date
@@ -41,7 +42,7 @@ export async function setStoreSiteMap({ country, store_code, site } = {}) {
     p_store_code: store_code,
     p_site: site,
   })
-  if (error) throw error
+  if (error) throw new ServiceError(toUserMessage(error, 'Could not save the store mapping.'), error.code, error)
   return true
 }
 

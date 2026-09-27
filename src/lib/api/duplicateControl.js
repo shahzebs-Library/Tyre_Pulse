@@ -13,13 +13,13 @@
  * protected count rather than hide it, so nobody assumes "0 deletable" means
  * "nothing found".
  */
-import { supabase, fetchAllPages } from './_client'
+import { supabase, fetchAllPages, ServiceError } from './_client'
 import { toUserMessage } from '../safeError'
 
 /** Every scannable target: {key, tbl, label, kind, has_source_row}. */
 export async function listDuplicateTargets() {
   const { data, error } = await supabase.rpc('admin_dup_targets')
-  if (error) throw new Error(toUserMessage(error, 'Could not load duplicate targets.'))
+  if (error) throw new ServiceError(toUserMessage(error, 'Could not load duplicate targets.'), error?.code, error)
   return Array.isArray(data) ? data : []
 }
 
@@ -34,7 +34,7 @@ export async function previewDuplicates(key, country = null) {
     p_key: key,
     p_country: country || null,
   })
-  if (error) throw new Error(toUserMessage(error, 'Could not preview duplicates.'))
+  if (error) throw new ServiceError(toUserMessage(error, 'Could not preview duplicates.'), error?.code, error)
   return data || {}
 }
 
@@ -45,7 +45,7 @@ export async function scanDuplicates(key, country = null, limit = 200) {
     p_country: country || null,
     p_limit: limit,
   })
-  if (error) throw new Error(toUserMessage(error, 'Could not scan for duplicates.'))
+  if (error) throw new ServiceError(toUserMessage(error, 'Could not scan for duplicates.'), error?.code, error)
   return Array.isArray(data) ? data : []
 }
 
@@ -60,14 +60,14 @@ export async function resolveDuplicates(key, country = null, reason = null) {
     p_country: country || null,
     p_reason: reason || null,
   })
-  if (error) throw new Error(toUserMessage(error, 'Could not remove the duplicates.'))
+  if (error) throw new ServiceError(toUserMessage(error, 'Could not remove the duplicates.'), error?.code, error)
   return data || { ok: false, deleted: 0 }
 }
 
 /** Put a previously deleted batch back, exactly as it was. */
 export async function restoreDuplicateBatch(batchId) {
   const { data, error } = await supabase.rpc('admin_dup_restore', { p_batch_id: batchId })
-  if (error) throw new Error(toUserMessage(error, 'Could not restore that batch.'))
+  if (error) throw new ServiceError(toUserMessage(error, 'Could not restore that batch.'), error?.code, error)
   return data || { ok: false, restored: 0 }
 }
 
@@ -97,7 +97,7 @@ export async function listDuplicateBatches(limit = 50) {
   if (error) {
     const code = String(error.code || error.cause?.code || '')
     if (code === '42P01' || code === 'PGRST205') return []
-    throw new Error(toUserMessage(error, 'Could not load past delete batches.'))
+    throw new ServiceError(toUserMessage(error, 'Could not load past delete batches.'), error?.code, error)
   }
   return groupBatches(Array.isArray(data) ? data : [])
     .slice(0, Math.max(1, Math.min(Number(limit) || 50, 500)))

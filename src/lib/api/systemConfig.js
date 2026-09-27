@@ -21,7 +21,8 @@
  * (e.g. "SAR"). parseConfigValue() normalises both shapes. The typed getters read
  * the primed cache synchronously so hot paths (an export click) never await I/O.
  */
-import { supabase } from './_client'
+import { supabase, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 /** Keys the anon-safe get_public_config() RPC is allowed to return (mirror V286). */
 export const PUBLIC_CONFIG_KEYS = Object.freeze([
@@ -215,7 +216,7 @@ export async function loadSystemConfig({ force = false } = {}) {
       if (error) {
         ({ data, error } = await supabase.from('system_config').select('key, value'))
       }
-      if (error) throw error
+      if (error) throw new ServiceError(toUserMessage(error), error.code, error)
       const map = {}
       const textMap = {}
       for (const row of data || []) {
@@ -247,7 +248,7 @@ export async function loadSystemConfig({ force = false } = {}) {
 export async function getPublicConfig() {
   try {
     const { data, error } = await supabase.rpc('get_public_config')
-    if (error) throw error
+    if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     const map = (data && typeof data === 'object') ? data : {}
     // Merge onto any existing cache without clobbering non-public keys.
     _cache = { ..._cache, ...map }

@@ -13,7 +13,7 @@
  * without dividing by quantity and so overstated the per-tyre price 2.5x to 5.1x
  * on the 29% of lines covering more than one tyre. Do not call that function.
  */
-import { supabase } from './_client'
+import { supabase, ServiceError } from './_client'
 import { toUserMessage } from '../safeError'
 
 const isMissing = (error) =>
@@ -32,7 +32,7 @@ export async function runTyrePriceBackfill({ country, dryRun = true } = {}) {
   })
   if (error) {
     if (isMissing(error)) return { ok: false, rows: 0, by_source: {}, by_country: {}, sample: [] }
-    throw new Error(toUserMessage(error, 'Could not work out the missing tyre prices.'))
+    throw new ServiceError(toUserMessage(error, 'Could not work out the missing tyre prices.'), error?.code, error)
   }
   return data || {}
 }
@@ -45,7 +45,7 @@ export async function runTyrePriceBackfill({ country, dryRun = true } = {}) {
 export async function undoTyrePriceBackfill(batchId) {
   if (!batchId) throw new Error('Nothing to undo.')
   const { data, error } = await supabase.rpc('tyre_price_backfill_undo', { p_batch_id: batchId })
-  if (error) throw new Error(toUserMessage(error, 'Could not undo that price change.'))
+  if (error) throw new ServiceError(toUserMessage(error, 'Could not undo that price change.'), error?.code, error)
   return data || {}
 }
 
@@ -54,7 +54,7 @@ export async function getTyrePriceCoverage() {
   const { data, error } = await supabase.rpc('tyre_price_coverage')
   if (error) {
     if (isMissing(error)) return { ok: false, rows: [] }
-    throw new Error(toUserMessage(error, 'Could not load the tyre price coverage.'))
+    throw new ServiceError(toUserMessage(error, 'Could not load the tyre price coverage.'), error?.code, error)
   }
   return { ok: true, rows: Array.isArray(data) ? data : [] }
 }

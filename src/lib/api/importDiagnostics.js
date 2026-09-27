@@ -11,6 +11,8 @@
  * the throw-on-error / return-data convention of imports.js.
  */
 import { supabase } from '../supabase'
+import { ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 // Row ids we scan to resolve issues (import_row_issues has no batch_id, so we
 // bridge batch → row ids → issues). Bounded so a huge batch can't run away.
@@ -33,7 +35,7 @@ export async function getBatch(batchId) {
     .select(BATCH_COLS)
     .eq('id', batchId)
     .single()
-  if (error) throw error
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data
 }
 
@@ -50,7 +52,7 @@ export async function listBatchRows(batchId, { limit = 500, onlyErrors = false }
     .eq('batch_id', batchId)
   if (onlyErrors) q = q.eq('validation_status', 'error')
   const { data, error } = await q.order('source_row_no').limit(limit)
-  if (error) throw error
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data ?? []
 }
 

@@ -10,6 +10,7 @@
  * relocates the call and normalises error surfacing.
  */
 import { supabase, unwrap, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 // Least-privilege column set for the admin user list + edit modal. Covers every
 // profile field the page reads or writes. Omits push_token/avatar_url and
@@ -65,7 +66,7 @@ export async function listAuditLog({ limit = 100 } = {}) {
  */
 export async function adminUpdateProfile(args) {
   const { data, error } = await supabase.rpc('admin_update_profile', args)
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data
 }
 

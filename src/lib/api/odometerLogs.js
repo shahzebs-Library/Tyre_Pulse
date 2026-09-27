@@ -73,6 +73,7 @@ export async function listAllOdometerLogs({ country, max = 100000 } = {}) {
         return q
           .order('reading_date', { ascending: true, nullsFirst: true })
           .order('created_at', { ascending: true })
+          .order('id', { ascending: true })
           .range(from, to)
       },
       { max },

@@ -8,7 +8,8 @@
  * Before the migration is applied the lister degrades to [] so the page can
  * surface an "apply MIGRATIONS_V270_WASH_MODULE.sql" hint instead of throwing.
  */
-import { supabase, unwrap, applyCountry, fetchAllPages, isMissingRelation } from './_client'
+import { supabase, unwrap, applyCountry, fetchAllPages, isMissingRelation, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 import { validateWashDetails, canonicalWashValue, comparableWashDetails } from '../washDetails'
 
 export const COLS =
@@ -76,7 +77,7 @@ export async function uploadWashPhoto(file, index = 0) {
   const { error } = await supabase.storage.from(PHOTO_BUCKET).upload(path, file, {
     upsert: false, contentType: file.type || 'image/jpeg', cacheControl: '3600',
   })
-  if (error) throw new Error(error.message || 'Photo upload failed.')
+  if (error) throw new ServiceError(toUserMessage(error, 'Photo upload failed.'), error.code, error)
   return `tp-storage://${PHOTO_BUCKET}/${path}`
 }
 
@@ -123,7 +124,7 @@ export async function listWashRecords({
   }
   try {
     const { data, error, truncated } = await fetchAllPages(pageFn, { pageSize: 1000, max: limit })
-    if (error) throw error
+    if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     if (truncated) throw new Error('Wash history exceeds the reporting limit. Narrow the date range before reporting.')
     return data || []
   } catch (err) {
@@ -275,7 +276,7 @@ export async function listWashCorrections(washId) {
       .eq('wash_id', washId)
       .order('corrected_at', { ascending: false })
       .limit(200)
-    if (error) throw error
+    if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     return data || []
   } catch (err) {
     if (isMissingRelation(err)) return []

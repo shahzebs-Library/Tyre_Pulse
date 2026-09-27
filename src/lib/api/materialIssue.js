@@ -26,7 +26,7 @@
  *
  * @module api/materialIssue
  */
-import { supabase, fetchAllPages, isMissingRelation } from './_client'
+import { supabase, fetchAllPages, isMissingRelation, ServiceError } from './_client'
 import { toUserMessage } from '../safeError'
 import { groupLinesIntoSlips } from '../materialIssue'
 
@@ -125,7 +125,7 @@ export async function listSlipsFromConsumption(opts = {}) {
     if (isMissingRelation(error)) {
       return { slips: [], lines: [], truncated: false, unslipped: null, missing: true }
     }
-    throw new Error(toUserMessage(error, 'Could not load the material issue register.'))
+    throw new ServiceError(toUserMessage(error, 'Could not load the material issue register.'), error?.code, error)
   }
   const rows = Array.isArray(data) ? data : []
   return {
@@ -340,7 +340,7 @@ export async function createMaterialIssue(header = {}, lines = []) {
       .single()
     if (error) {
       if (isMissingRelation(error)) return { ok: false, reason: 'not_provisioned' }
-      throw new Error(toUserMessage(error, 'Could not save that slip.'))
+      throw new ServiceError(toUserMessage(error, 'Could not save that slip.'), error?.code, error)
     }
     created = data
   } catch (err) {
@@ -368,7 +368,7 @@ export async function createMaterialIssue(header = {}, lines = []) {
     if (error) {
       // Roll the header back so no slip exists with zero items.
       await supabase.from('material_issues').delete().eq('id', created.id)
-      throw new Error(toUserMessage(error, 'Could not save the items on that slip.'))
+      throw new ServiceError(toUserMessage(error, 'Could not save the items on that slip.'), error?.code, error)
     }
   }
 
@@ -389,7 +389,7 @@ export async function setIssueStatus(id, status) {
       .eq('id', id)
     if (error) {
       if (isMissingRelation(error)) return { ok: false, reason: 'not_provisioned' }
-      throw new Error(toUserMessage(error, 'Could not update that slip.'))
+      throw new ServiceError(toUserMessage(error, 'Could not update that slip.'), error?.code, error)
     }
     return { ok: true }
   } catch (err) {

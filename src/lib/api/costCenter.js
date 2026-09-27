@@ -1,4 +1,5 @@
 import { supabase, applyCountry, fetchAllPages, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 const TYRE_ROW_CEILING = 50000
 
@@ -23,10 +24,10 @@ export async function fetchCostCenterRecords({ country, dateFrom, dateTo } = {})
       q = q.lt('created_at', exclusiveEnd.toISOString())
     }
 
-    return q.order('created_at', { ascending: false }).range(from, to)
+    return q.order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to)
   }, { max: TYRE_ROW_CEILING })
 
-  if (error) throw new ServiceError(error.message, error.code, error)
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return { data: data ?? [], truncated: Boolean(truncated) }
 }
 

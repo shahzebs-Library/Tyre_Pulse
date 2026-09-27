@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 const rpc=vi.hoisted(()=>vi.fn())
-vi.mock('../lib/api/_client',()=>({supabase:{rpc},isMissingRelation:()=>false}))
+vi.mock('../lib/api/_client',()=>({supabase:{rpc},isMissingRelation:()=>false,ServiceError:class ServiceError extends Error{constructor(m,c,cause){super(m);this.name='ServiceError';this.code=c;this.cause=cause}}}))
 import { importExpenseBatch } from '../lib/api/partsConsumption'
 import { decidePendingUpload } from '../lib/api/pendingUploadDecisions'
 const rows=Array.from({length:201},(_,i)=>({item_description:`Item ${i}`,value_amount:10,country:'KSA',organisation_id:'untrusted'}))

@@ -7,7 +7,8 @@
  * Degrades to [] when the RPC is not deployed yet so the page shows an honest
  * empty state. All analytics live in the pure `src/lib/expenseTrends.js` engine.
  */
-import { supabase, isMissingRelation } from './_client'
+import { supabase, isMissingRelation, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 import { callScopedMulti } from './partsConsumption'
 
 /**
@@ -29,7 +30,7 @@ export async function getExpensePeriodTrend({ country, grain = 'year' } = {}) {
       p_country: country && country !== 'All' ? country : 'All',
       p_grain: g,
     })
-    if (error) throw error
+    if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     return Array.isArray(data) ? data : []
   } catch (err) {
     if (isMissingRelation(err)) return []

@@ -19,7 +19,8 @@
  * checklists.js/washRecords.js ('tyre-photos', a general attachment store
  * despite the name), under an accidents/ prefix - no new bucket invented.
  */
-import { supabase, unwrap, isMissingRelation } from './_client'
+import { supabase, unwrap, isMissingRelation, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 const PHOTO_BUCKET = 'tyre-photos'
 
@@ -69,7 +70,7 @@ export async function uploadEvidenceFile(accidentId, file) {
   const { error } = await supabase.storage.from(PHOTO_BUCKET).upload(path, file, {
     cacheControl: '3600', upsert: false, contentType: file.type || undefined,
   })
-  if (error) throw new Error(error.message || 'File upload failed.')
+  if (error) throw new ServiceError(toUserMessage(error, 'File upload failed.'), error.code, error)
   const { data } = supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path)
   return data?.publicUrl || null
 }

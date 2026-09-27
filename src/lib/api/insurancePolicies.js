@@ -7,7 +7,7 @@
  *
  * Additive only - mirrors accidents.js / assets.js conventions.
  */
-import { supabase, applyCountry, isMissingRelation } from './_client'
+import { supabase, applyCountry, isMissingRelation, ServiceError } from './_client'
 import { toUserMessage } from '../safeError'
 
 const POLICY_COLS =
@@ -29,7 +29,7 @@ export async function listPolicies({ country } = {}) {
     let q = supabase.from('insurance_policies').select(POLICY_COLS).order('period_from', { ascending: false })
     q = applyCountry(q, country)
     const { data, error } = await q
-    if (error) throw error
+    if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     return ok(Array.isArray(data) ? data : [])
   } catch (e) { return fail(e, 'Could not load insurance policies.') }
 }
@@ -55,7 +55,7 @@ export async function listConditions(policyId) {
     const { data, error } = await supabase
       .from('insurance_policy_conditions').select(CONDITION_COLS)
       .eq('policy_id', policyId).order('seq', { ascending: true })
-    if (error) throw error
+    if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     return ok(Array.isArray(data) ? data : [])
   } catch (e) { return fail(e, 'Could not load policy conditions.') }
 }
@@ -65,7 +65,7 @@ export async function createPolicy(row) {
   try {
     const { data, error } = await supabase
       .from('insurance_policies').insert(row).select(POLICY_COLS).single()
-    if (error) throw error
+    if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     return { data, error: null }
   } catch (e) { return { data: null, error: toUserMessage(e, 'Could not create the policy.') } }
 }
@@ -75,7 +75,7 @@ export async function updatePolicy(id, patch) {
   try {
     const { data, error } = await supabase
       .from('insurance_policies').update(patch).eq('id', id).select(POLICY_COLS).single()
-    if (error) throw error
+    if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     return { data, error: null }
   } catch (e) { return { data: null, error: toUserMessage(e, 'Could not update the policy.') } }
 }
@@ -84,7 +84,7 @@ export async function updatePolicy(id, patch) {
 export async function deletePolicy(id) {
   try {
     const { error } = await supabase.from('insurance_policies').delete().eq('id', id)
-    if (error) throw error
+    if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     return { data: true, error: null }
   } catch (e) { return { data: null, error: toUserMessage(e, 'Could not delete the policy.') } }
 }
@@ -94,7 +94,7 @@ export async function addCondition(row) {
   try {
     const { data, error } = await supabase
       .from('insurance_policy_conditions').insert(row).select(CONDITION_COLS).single()
-    if (error) throw error
+    if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     return { data, error: null }
   } catch (e) { return { data: null, error: toUserMessage(e, 'Could not add the condition.') } }
 }
@@ -104,7 +104,7 @@ export async function updateCondition(id, patch) {
   try {
     const { data, error } = await supabase
       .from('insurance_policy_conditions').update(patch).eq('id', id).select(CONDITION_COLS).single()
-    if (error) throw error
+    if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     return { data, error: null }
   } catch (e) { return { data: null, error: toUserMessage(e, 'Could not update the condition.') } }
 }
@@ -113,7 +113,7 @@ export async function updateCondition(id, patch) {
 export async function deleteCondition(id) {
   try {
     const { error } = await supabase.from('insurance_policy_conditions').delete().eq('id', id)
-    if (error) throw error
+    if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     return { data: true, error: null }
   } catch (e) { return { data: null, error: toUserMessage(e, 'Could not delete the condition.') } }
 }

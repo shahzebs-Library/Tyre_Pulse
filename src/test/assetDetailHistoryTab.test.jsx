@@ -59,7 +59,6 @@ vi.mock('../lib/supabase', () => {
 const envelope = (data) => Promise.resolve({ data, error: null })
 vi.mock('../lib/api/assetManagement', () => ({
   listAssetTyres: () => envelope([]),
-  listAssetWorkOrders: () => envelope([]),
   reportAssetOverview: () => envelope([]),
   listAssetInspections: () => envelope([]),
   listAssetAccidents: () => envelope([]),

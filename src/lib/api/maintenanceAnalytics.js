@@ -7,7 +7,8 @@
  * On a missing-function/relation error we degrade to `{ ok:false }` so the page
  * shows an honest empty state rather than crashing.
  */
-import { supabase } from './_client'
+import { supabase, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 /** True when the error means the RPC / relation does not exist yet. */
 function isMissingRelation(error) {
@@ -37,7 +38,7 @@ export async function getMaintenanceSnapshot({ site, country, from, to } = {}) {
   })
   if (error) {
     if (isMissingRelation(error)) return { ok: false }
-    throw new Error(error.message || 'Could not load the maintenance snapshot.')
+    throw new ServiceError(toUserMessage(error, 'Could not load the maintenance snapshot.'), error.code, error)
   }
   return data ?? { ok: false }
 }

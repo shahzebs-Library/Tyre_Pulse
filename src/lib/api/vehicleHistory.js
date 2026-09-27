@@ -31,7 +31,7 @@ export function listFleetTyreRecords({ country, from: fromDate, to: toDate } = {
     if (country !== 'All') q = q.eq('country', country)
     if (fromDate) q = q.gte('issue_date', fromDate)
     if (toDate) q = q.lte('issue_date', toDate)
-    return q.range(from, to)
+    return q.order('id', { ascending: true }).range(from, to)
   }, { max: 200000 })
 }
 

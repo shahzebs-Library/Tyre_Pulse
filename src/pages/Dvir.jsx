@@ -24,6 +24,7 @@ import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { colorAt, withAlpha } from '../lib/reportColors'
 import { analyzeDvir, filterDvir, distinctValues } from '../lib/dvirAnalytics'
 import PageHeader from '../components/ui/PageHeader'
+import Modal from '../components/ui/Modal'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listDvirReports, createDvirReport, updateDvirReport, deleteDvirReport,
@@ -109,17 +110,19 @@ function DvirModal({ initial, activeCountry, onClose, onSaved }) {
   }, [form, editing, initial, activeCountry, onSaved])
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" role="dialog" aria-modal="true">
-      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl border border-[var(--input-border)] bg-[var(--card-bg)] shadow-2xl">
-        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 px-5 py-4 border-b border-[var(--input-border)] bg-[var(--card-bg)]">
-          <h3 className="text-base font-semibold text-[var(--text-primary)] inline-flex items-center gap-2">
-            <ClipboardCheck size={18} className="text-[var(--brand-bright)]" />
-            {editing ? 'Edit inspection report' : 'New inspection report'}
-          </h3>
-          <button type="button" onClick={onClose} aria-label="Close" className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
-        </div>
-
-        <form onSubmit={submit} className="p-5 space-y-4">
+    <Modal
+      open
+      onClose={onClose}
+      closeOnBackdrop={false}
+      size="lg"
+      title={(
+        <span className="inline-flex items-center gap-2">
+          <ClipboardCheck size={18} className="text-[var(--brand-bright)]" aria-hidden="true" />
+          {editing ? 'Edit inspection report' : 'New inspection report'}
+        </span>
+      )}
+    >
+        <form onSubmit={submit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="label" htmlFor="dvir-asset_no">Asset number *</label>
@@ -190,8 +193,7 @@ function DvirModal({ initial, activeCountry, onClose, onSaved }) {
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -205,21 +207,26 @@ function DeleteConfirm({ row, onCancel, onConfirm }) {
     catch (err) { setError(toUserMessage(err, 'Could not delete the report.')); setBusy(false) }
   }
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" role="dialog" aria-modal="true">
-      <div className="w-full max-w-md rounded-xl border border-[var(--input-border)] bg-[var(--card-bg)] shadow-2xl p-5 space-y-4">
+    <Modal
+      open
+      onClose={busy ? undefined : onCancel}
+      closeOnBackdrop={false}
+      title="Delete inspection report?"
+      size="sm"
+    >
+      <div className="space-y-4">
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 rounded-lg bg-red-900/30 flex items-center justify-center shrink-0">
             <Trash2 size={18} className="text-red-400" />
           </div>
           <div>
-            <h3 className="text-base font-semibold text-[var(--text-primary)]">Delete inspection report?</h3>
-            <p className="text-sm text-[var(--text-muted)] mt-1">
+            <p className="text-sm text-[var(--text-muted)]">
               Report for asset <span className="font-medium text-[var(--text-secondary)]">{row.asset_no}</span>
               {row.inspection_date ? ` on ${fmtDate(row.inspection_date)}` : ''} will be permanently removed.
             </p>
           </div>
         </div>
-        {error && <p className="text-sm text-red-300">{error}</p>}
+        {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
         <div className="flex items-center justify-end gap-2">
           <button type="button" onClick={onCancel} className="btn-secondary text-sm" disabled={busy}>Cancel</button>
           <button type="button" onClick={go} disabled={busy} className="btn-danger text-sm inline-flex items-center gap-2 disabled:opacity-60">
@@ -227,7 +234,7 @@ function DeleteConfirm({ row, onCancel, onConfirm }) {
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   )
 }
 

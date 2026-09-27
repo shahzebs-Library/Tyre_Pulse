@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import PageHeader from '../components/ui/PageHeader'
+import Modal from '../components/ui/Modal'
 import { useSettings } from '../contexts/SettingsContext'
 import { listLoads, createLoad, updateLoad, deleteLoad, LOAD_STATUSES } from '../lib/api/dispatch'
 import { loadStatusMeta } from '../lib/dispatch'
@@ -102,13 +103,22 @@ function LoadModal({ initial, onClose, onSaved }) {
   }, [form, editing, initial, activeCountry, onSaved, onClose])
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true">
-      <div className="card w-full max-w-2xl max-h-[90vh] overflow-y-auto !p-0">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--input-border)]">
-          <h2 className="text-base font-bold text-[var(--text-primary)]">{editing ? 'Edit load' : 'New load'}</h2>
-          <button type="button" onClick={onClose} className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Close"><X size={18} /></button>
-        </div>
-        <form onSubmit={submit} className="p-5 space-y-4">
+    <Modal
+      open
+      onClose={onClose}
+      title={editing ? 'Edit load' : 'New load'}
+      size="lg"
+      footer={(
+        <>
+          <button type="button" onClick={onClose} className="btn-secondary text-sm min-h-[44px]">Cancel</button>
+          <button type="submit" form="dispatch-load-form" disabled={busy} className="btn-primary inline-flex items-center gap-2 text-sm min-h-[44px] disabled:opacity-60">
+            {busy ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+            {busy ? 'Saving' : editing ? 'Save changes' : 'Create load'}
+          </button>
+        </>
+      )}
+    >
+        <form id="dispatch-load-form" onSubmit={submit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label htmlFor="dl-f1" className="label">Load no.</label>
@@ -168,16 +178,8 @@ function LoadModal({ initial, onClose, onSaved }) {
               <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {error}
             </div>
           )}
-          <div className="flex items-center justify-end gap-2 pt-1">
-            <button type="button" onClick={onClose} className="btn-secondary text-sm">Cancel</button>
-            <button type="submit" disabled={busy} className="btn-primary inline-flex items-center gap-2 text-sm disabled:opacity-60">
-              {busy ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
-              {busy ? 'Saving' : editing ? 'Save changes' : 'Create load'}
-            </button>
-          </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -190,28 +192,35 @@ function DeleteConfirm({ load, onCancel, onConfirm }) {
     try { await onConfirm() } catch (e) { setErr(toUserMessage(e, 'Could not delete.')); setBusy(false) }
   }
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true">
-      <div className="card w-full max-w-md space-y-4">
+    <Modal
+      open
+      onClose={busy ? undefined : onCancel}
+      closeOnBackdrop={!busy}
+      title="Delete this load?"
+      size="sm"
+      footer={(
+        <>
+          <button type="button" onClick={onCancel} className="btn-secondary text-sm min-h-[44px]" disabled={busy}>Cancel</button>
+          <button type="button" onClick={go} disabled={busy} className="btn-primary bg-red-600 hover:bg-red-500 inline-flex items-center gap-2 text-sm min-h-[44px] disabled:opacity-60">
+            {busy ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />} Delete
+          </button>
+        </>
+      )}
+    >
+      <div className="space-y-4">
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 rounded-xl bg-red-900/30 border border-red-800/50 flex items-center justify-center shrink-0">
             <Trash2 size={18} className="text-red-400" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-[var(--text-primary)]">Delete this load?</h3>
-            <p className="text-sm text-[var(--text-muted)] mt-1">
+            <p className="text-sm text-[var(--text-muted)]">
               {load.load_no || load.asset_no || 'This load'} will be permanently removed. This cannot be undone.
             </p>
           </div>
         </div>
-        {err && <p className="text-xs text-red-300">{err}</p>}
-        <div className="flex items-center justify-end gap-2">
-          <button type="button" onClick={onCancel} className="btn-secondary text-sm" disabled={busy}>Cancel</button>
-          <button type="button" onClick={go} disabled={busy} className="btn-primary bg-red-600 hover:bg-red-500 inline-flex items-center gap-2 text-sm disabled:opacity-60">
-            {busy ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />} Delete
-          </button>
-        </div>
+        {err && <p role="alert" className="text-xs text-red-300">{err}</p>}
       </div>
-    </div>
+    </Modal>
   )
 }
 

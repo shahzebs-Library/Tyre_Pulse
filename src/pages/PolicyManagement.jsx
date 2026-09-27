@@ -25,6 +25,7 @@ import {
   CalendarX, Archive, Save, ShieldCheck, Wallet, Layers,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Modal from '../components/ui/Modal'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listPolicies, createPolicy, updatePolicy, deletePolicy,
@@ -151,59 +152,49 @@ function PolicyModal({ open, existing, onClose, onSaved }) {
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 py-10">
-      <div className="w-full max-w-2xl card space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-bold text-[var(--text-primary)]">
-            {existing ? 'Edit policy' : 'New policy'}
-          </h2>
-          <button type="button" onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Close">
-            <X size={18} />
-          </button>
-        </div>
-
+    <Modal open={open} onClose={onClose} closeOnBackdrop={false} size="lg" title={existing ? 'Edit policy' : 'New policy'}>
         <form onSubmit={submit} className="space-y-4">
           <div>
-            <label className="label">Title *</label>
-            <input className="input w-full" placeholder="e.g. Fleet Third-Party Liability Cover" value={form.title} maxLength={300} onChange={(e) => set('title', e.target.value)} />
+            <label className="label" htmlFor="pm-title">Title *</label>
+            <input id="pm-title" className="input w-full" placeholder="e.g. Fleet Third-Party Liability Cover" value={form.title} maxLength={300} onChange={(e) => set('title', e.target.value)} />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="label">Coverage type / category</label>
-              <input className="input w-full" placeholder="e.g. Motor, Liability, Cargo" value={form.category} maxLength={120} onChange={(e) => set('category', e.target.value)} />
+              <label className="label" htmlFor="pm-category">Coverage type / category</label>
+              <input id="pm-category" className="input w-full" placeholder="e.g. Motor, Liability, Cargo" value={form.category} maxLength={120} onChange={(e) => set('category', e.target.value)} />
             </div>
             <div>
-              <label className="label">Version</label>
-              <input className="input w-full" placeholder="e.g. 1.0" value={form.version} maxLength={60} onChange={(e) => set('version', e.target.value)} />
+              <label className="label" htmlFor="pm-version">Version</label>
+              <input id="pm-version" className="input w-full" placeholder="e.g. 1.0" value={form.version} maxLength={60} onChange={(e) => set('version', e.target.value)} />
             </div>
             <div>
-              <label className="label">Owner / responsible party</label>
-              <input className="input w-full" placeholder="e.g. Fleet Ops, Insurer" value={form.owner} maxLength={160} onChange={(e) => set('owner', e.target.value)} />
+              <label className="label" htmlFor="pm-owner">Owner / responsible party</label>
+              <input id="pm-owner" className="input w-full" placeholder="e.g. Fleet Ops, Insurer" value={form.owner} maxLength={160} onChange={(e) => set('owner', e.target.value)} />
             </div>
             <div>
-              <label className="label">Status</label>
-              <select className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
+              <label className="label" htmlFor="pm-status">Status</label>
+              <select id="pm-status" className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
                 {POLICY_STATUSES.map((s) => <option key={s} value={s}>{POLICY_STATUS_META[s]?.label || s}</option>)}
               </select>
             </div>
             <div>
-              <label className="label">Effective date</label>
-              <input type="date" className="input w-full" value={form.effective_date || ''} onChange={(e) => set('effective_date', e.target.value)} />
+              <label className="label" htmlFor="pm-effective">Effective date</label>
+              <input id="pm-effective" type="date" className="input w-full" value={form.effective_date || ''} onChange={(e) => set('effective_date', e.target.value)} />
             </div>
             <div>
-              <label className="label">Renewal / review date</label>
-              <input type="date" className="input w-full" value={form.review_date || ''} onChange={(e) => set('review_date', e.target.value)} />
+              <label className="label" htmlFor="pm-review">Renewal / review date</label>
+              <input id="pm-review" type="date" className="input w-full" value={form.review_date || ''} onChange={(e) => set('review_date', e.target.value)} />
             </div>
           </div>
 
           <div>
-            <label className="label">Body</label>
-            <textarea className="input w-full min-h-[120px] resize-y" placeholder="Coverage scope, terms and requirements..." value={form.body} maxLength={20000} onChange={(e) => set('body', e.target.value)} />
+            <label className="label" htmlFor="pm-body">Body</label>
+            <textarea id="pm-body" className="input w-full min-h-[120px] resize-y" placeholder="Coverage scope, terms and requirements..." value={form.body} maxLength={20000} onChange={(e) => set('body', e.target.value)} />
           </div>
           <div>
-            <label className="label">Notes</label>
-            <textarea className="input w-full min-h-[70px] resize-y" placeholder="Internal notes, references..." value={form.notes} maxLength={8000} onChange={(e) => set('notes', e.target.value)} />
+            <label className="label" htmlFor="pm-notes">Notes</label>
+            <textarea id="pm-notes" className="input w-full min-h-[70px] resize-y" placeholder="Internal notes, references..." value={form.notes} maxLength={8000} onChange={(e) => set('notes', e.target.value)} />
           </div>
 
           {error && (
@@ -220,8 +211,7 @@ function PolicyModal({ open, existing, onClose, onSaved }) {
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -229,27 +219,32 @@ function PolicyModal({ open, existing, onClose, onSaved }) {
 function DeleteConfirm({ policy, onCancel, onConfirm, busy }) {
   if (!policy) return null
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-md card space-y-4">
+    <Modal
+      open
+      onClose={busy ? undefined : onCancel}
+      closeOnBackdrop={false}
+      title="Delete policy?"
+      size="sm"
+    >
+      <div className="space-y-4">
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 rounded-xl bg-red-900/30 border border-red-800/50 flex items-center justify-center shrink-0">
             <Trash2 size={18} className="text-red-400" />
           </div>
           <div>
-            <h3 className="font-semibold text-[var(--text-primary)]">Delete policy?</h3>
-            <p className="text-sm text-[var(--text-muted)] mt-1">
+            <p className="text-sm text-[var(--text-muted)]">
               "{policy.title}" will be permanently removed. This cannot be undone.
             </p>
           </div>
         </div>
         <div className="flex items-center justify-end gap-2">
-          <button type="button" onClick={onCancel} className="btn-secondary text-sm">Cancel</button>
+          <button type="button" onClick={onCancel} disabled={busy} className="btn-secondary text-sm">Cancel</button>
           <button type="button" onClick={onConfirm} disabled={busy} className="btn-primary text-sm inline-flex items-center gap-2 !bg-red-600 hover:!bg-red-500 disabled:opacity-60">
             {busy ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />} Delete
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   )
 }
 

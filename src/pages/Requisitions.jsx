@@ -16,6 +16,7 @@ import {
   FileText, CalendarX, CalendarClock, Users,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Modal from '../components/ui/Modal'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatCurrencyCompact } from '../lib/formatters'
 import {
@@ -107,21 +108,18 @@ function RequisitionModal({ open, initial, onClose, onSaved }) {
   const estTotal = (Number(form.quantity) || 0) * (Number(form.est_cost) || 0)
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={onClose}>
-      <form
-        onClick={(e) => e.stopPropagation()}
-        onSubmit={submit}
-        className="card w-full max-w-lg max-h-[90vh] overflow-y-auto space-y-4"
-      >
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
-            <ClipboardList size={18} className="text-[var(--brand-bright)]" />
-            {initial?.id ? 'Edit requisition' : 'New requisition'}
-          </h2>
-          <button type="button" onClick={onClose} aria-label="Close" className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--brand-bright)]">
-            <X size={18} />
-          </button>
-        </div>
+    <Modal
+      open={open}
+      onClose={onClose}
+      size="md"
+      title={(
+        <span className="inline-flex items-center gap-2">
+          <ClipboardList size={18} className="text-[var(--brand-bright)]" aria-hidden="true" />
+          {initial?.id ? 'Edit requisition' : 'New requisition'}
+        </span>
+      )}
+    >
+      <form onSubmit={submit} className="space-y-4">
 
         <div>
           <label className="label" htmlFor="req-item">Item *</label>
@@ -226,7 +224,7 @@ function RequisitionModal({ open, initial, onClose, onSaved }) {
           </button>
         </div>
       </form>
-    </div>
+    </Modal>
   )
 }
 
@@ -240,26 +238,33 @@ function DeleteDialog({ row, onCancel, onConfirm }) {
     try { await onConfirm() } catch (e) { setError(toUserMessage(e, 'Could not delete.')); setBusy(false) }
   }
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={onCancel}>
-      <div onClick={(e) => e.stopPropagation()} className="card w-full max-w-sm space-y-4">
-        <div className="flex items-center gap-2 text-[var(--text-primary)]">
-          <Trash2 size={18} className="text-red-400" />
-          <h3 className="text-base font-semibold">Delete requisition?</h3>
-        </div>
+    <Modal
+      open
+      onClose={busy ? undefined : onCancel}
+      closeOnBackdrop={!busy}
+      size="sm"
+      title={(
+        <span className="inline-flex items-center gap-2">
+          <Trash2 size={18} className="text-red-400" aria-hidden="true" />
+          Delete requisition?
+        </span>
+      )}
+    >
+      <div className="space-y-4">
         <p className="text-sm text-[var(--text-muted)]">
           This will permanently remove the request for
           <span className="text-[var(--text-secondary)] font-medium"> {row.item}</span>
           {row.requisition_no ? ` (${row.requisition_no})` : ''}. This cannot be undone.
         </p>
-        {error && <p className="text-xs text-red-300">{error}</p>}
+        {error && <p role="alert" className="text-xs text-red-300">{error}</p>}
         <div className="flex items-center justify-end gap-2">
-          <button onClick={onCancel} className="btn-secondary text-sm">Cancel</button>
+          <button onClick={onCancel} disabled={busy} className="btn-secondary text-sm">Cancel</button>
           <button onClick={run} disabled={busy} className="btn-primary text-sm inline-flex items-center gap-2 !bg-red-600 hover:!bg-red-500 disabled:opacity-60">
             {busy ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />} Delete
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   )
 }
 

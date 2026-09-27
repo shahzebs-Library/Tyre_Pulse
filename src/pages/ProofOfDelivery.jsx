@@ -18,6 +18,7 @@ import {
   Plus, Pencil, Trash2, MapPin, PenLine, Image as ImageIcon, ShieldCheck, CalendarClock,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Modal from '../components/ui/Modal'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listPodRecords, createPodRecord, updatePodRecord, deletePodRecord,
@@ -454,12 +455,7 @@ export default function ProofOfDelivery() {
 
       {/* Create / Edit modal */}
       {showModal && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={closeModal}>
-          <div className="card w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-[var(--text-primary)]">{editing ? 'Edit POD record' : 'Record proof of delivery'}</h3>
-              <button type="button" onClick={closeModal} aria-label="Close" className={`${ICON_BTN} text-[var(--text-muted)] hover:text-[var(--text-primary)]`}><X size={18} /></button>
-            </div>
+        <Modal open onClose={closeModal} closeOnBackdrop={!saving} title={editing ? 'Edit POD record' : 'Record proof of delivery'} size="lg">
             <form onSubmit={submit} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -546,19 +542,22 @@ export default function ProofOfDelivery() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* Delete confirm */}
       {confirmDelete && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={() => !deleting && setConfirmDelete(null)}>
-          <div className="card w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+        <Modal
+          open
+          onClose={deleting ? undefined : () => setConfirmDelete(null)}
+          closeOnBackdrop={!deleting}
+          title="Delete this POD record?"
+          size="sm"
+        >
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-full bg-red-900/30 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" /></div>
               <div>
-                <h3 className="text-[var(--text-primary)] font-semibold">Delete this POD record?</h3>
-                <p className="text-sm text-[var(--text-muted)] mt-1">
+                <p className="text-sm text-[var(--text-muted)]">
                   {confirmDelete.pod_no || confirmDelete.customer_name || 'Record'}, {fmtDateTime(confirmDelete.delivered_at)}. This cannot be undone.
                 </p>
               </div>
@@ -569,8 +568,7 @@ export default function ProofOfDelivery() {
                 <Trash2 size={14} /> {deleting ? 'Deleting' : 'Delete'}
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

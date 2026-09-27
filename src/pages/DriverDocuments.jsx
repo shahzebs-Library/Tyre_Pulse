@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import PageHeader from '../components/ui/PageHeader'
+import Modal from '../components/ui/Modal'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listDriverDocuments, createDriverDocument, updateDriverDocument, deleteDriverDocument,
@@ -393,12 +394,13 @@ export default function DriverDocuments() {
 
       {/* Create / edit modal */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => !saving && setModalOpen(false)}>
-          <div className="card w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-[var(--text-primary)]">{editing ? 'Edit document' : 'New document'}</h2>
-              <button onClick={() => !saving && setModalOpen(false)} className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)]" aria-label="Close"><X size={18} /></button>
-            </div>
+        <Modal
+          open
+          onClose={() => { if (!saving) setModalOpen(false) }}
+          closeOnBackdrop={!saving}
+          title={editing ? 'Edit document' : 'New document'}
+          size="lg"
+        >
             <form onSubmit={submit} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -453,21 +455,24 @@ export default function DriverDocuments() {
                 <button type="button" onClick={() => setModalOpen(false)} disabled={saving} className="btn-secondary">Cancel</button>
               </div>
             </form>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* Delete confirmation */}
       {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => !deleting && setConfirmDelete(null)}>
-          <div className="card w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+        <Modal
+          open
+          onClose={deleting ? undefined : () => setConfirmDelete(null)}
+          closeOnBackdrop={!deleting}
+          title="Delete document?"
+          size="sm"
+        >
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-xl bg-red-900/30 flex items-center justify-center shrink-0">
                 <AlertTriangle size={20} className="text-red-400" />
               </div>
               <div className="flex-1">
-                <h3 className="text-base font-bold text-[var(--text-primary)]">Delete document?</h3>
-                <p className="text-sm text-[var(--text-muted)] mt-1">
+                <p className="text-sm text-[var(--text-muted)]">
                   This permanently removes the {docTypeLabel(confirmDelete.doc_type).toLowerCase()} document for <span className="font-medium text-[var(--text-secondary)]">{confirmDelete.driver_name}</span>. This cannot be undone.
                 </p>
               </div>
@@ -479,8 +484,7 @@ export default function DriverDocuments() {
                 {deleting ? 'Deleting' : 'Delete'}
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

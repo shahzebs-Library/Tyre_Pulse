@@ -23,6 +23,7 @@ import {
 } from 'chart.js'
 import { Bar, Doughnut } from 'react-chartjs-2'
 import PageHeader from '../components/ui/PageHeader'
+import Modal from '../components/ui/Modal'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import {
@@ -119,20 +120,21 @@ function EquipmentModal({ initial, onClose, onSaved }) {
   }, [form, editing, initial, activeCountry, onSaved])
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={onClose}>
-      <div className="card w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
-            <Wrench size={18} className="text-[var(--brand-bright)]" />
-            {editing ? 'Edit equipment' : 'Register equipment'}
-          </h2>
-          <button type="button" onClick={onClose} aria-label="Close" className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
-        </div>
-
+    <Modal
+      open
+      onClose={onClose}
+      size="lg"
+      title={(
+        <span className="inline-flex items-center gap-2">
+          <Wrench size={18} className="text-[var(--brand-bright)]" aria-hidden="true" />
+          {editing ? 'Edit equipment' : 'Register equipment'}
+        </span>
+      )}
+    >
         <form onSubmit={submit} className="space-y-4">
           <div>
-            <label className="label">Name <span className="text-red-400">*</span></label>
-            <input className="input w-full" placeholder="e.g. Hydraulic bottle jack 20T" value={form.name} maxLength={200} onChange={(e) => set('name', e.target.value)} autoFocus />
+            <label className="label" htmlFor="eq-name">Name <span className="text-red-400">*</span></label>
+            <input id="eq-name" className="input w-full" placeholder="e.g. Hydraulic bottle jack 20T" value={form.name} maxLength={200} onChange={(e) => set('name', e.target.value)} autoFocus />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -183,8 +185,7 @@ function EquipmentModal({ initial, onClose, onSaved }) {
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -197,23 +198,28 @@ function DeleteConfirm({ item, onCancel, onConfirm }) {
     try { await onConfirm() } catch (err) { setError(toUserMessage(err, 'Delete failed.')); setBusy(false) }
   }
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={onCancel}>
-      <div className="card w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
-          <Trash2 size={18} className="text-red-400" /> Delete equipment
-        </h2>
-        <p className="text-sm text-[var(--text-secondary)] mt-3">
+    <Modal
+      open
+      onClose={busy ? undefined : onCancel}
+      closeOnBackdrop={!busy}
+      size="sm"
+      title={(
+        <span className="inline-flex items-center gap-2">
+          <Trash2 size={18} className="text-red-400" aria-hidden="true" /> Delete equipment
+        </span>
+      )}
+    >
+        <p className="text-sm text-[var(--text-secondary)]">
           Delete <span className="font-semibold text-[var(--text-primary)]">{item.name}</span>? This cannot be undone.
         </p>
-        {error && <p className="text-xs text-red-300 mt-2">{error}</p>}
+        {error && <p role="alert" className="text-xs text-red-300 mt-2">{error}</p>}
         <div className="flex items-center justify-end gap-2 mt-5">
-          <button type="button" onClick={onCancel} className="btn-secondary text-sm">Cancel</button>
+          <button type="button" onClick={onCancel} disabled={busy} className="btn-secondary text-sm">Cancel</button>
           <button type="button" onClick={go} disabled={busy} className="btn-primary text-sm inline-flex items-center gap-2 !bg-red-600 hover:!bg-red-500 disabled:opacity-60">
             {busy ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />} Delete
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }
 

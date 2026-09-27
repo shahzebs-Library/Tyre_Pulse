@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { Plus, Save, X, Search, Download, FileText, Camera, GitBranch } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Modal from '../components/ui/Modal'
 import SectionTabs, { RCA_TABS } from '../components/ui/SectionTabs'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
@@ -389,12 +390,7 @@ export default function RcaRecords() {
 
       {/* Detail modal */}
       {selectedRecord && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setSelectedRecord(null)}>
-          <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-lg p-6 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-white">RCA Detail</h2>
-              <button onClick={() => setSelectedRecord(null)} className="text-gray-400 hover:text-white"><X size={18} /></button>
-            </div>
+        <Modal open onClose={() => setSelectedRecord(null)} title="RCA Detail" size="md">
             <dl className="space-y-3 text-sm">
               {[
                 ['Asset No',          selectedRecord.asset_no],
@@ -408,13 +404,13 @@ export default function RcaRecords() {
                 ['Analysis Notes',    selectedRecord.ai_analysis],
               ].filter(([, v]) => v).map(([k, v]) => (
                 <div key={k}>
-                  <dt className="text-gray-500 mb-0.5">{k}</dt>
-                  <dd className="text-gray-200">{v}</dd>
+                  <dt className="mb-0.5" style={{ color: 'var(--text-muted)' }}>{k}</dt>
+                  <dd style={{ color: 'var(--text-primary)' }}>{v}</dd>
                 </div>
               ))}
               {Array.isArray(selectedRecord.contributing_factors) && selectedRecord.contributing_factors.length > 0 && (
                 <div>
-                  <dt className="text-gray-500 mb-1">Contributing Factors</dt>
+                  <dt className="mb-1" style={{ color: 'var(--text-muted)' }}>Contributing Factors</dt>
                   <dd className="flex gap-1 flex-wrap">
                     {selectedRecord.contributing_factors.map((f, i) => (
                       <span
@@ -429,16 +425,16 @@ export default function RcaRecords() {
               )}
               {selectedRecord.corrective_action && (
                 <div>
-                  <dt className="text-gray-500 mb-1">Linked Corrective Action</dt>
+                  <dt className="mb-1" style={{ color: 'var(--text-muted)' }}>Linked Corrective Action</dt>
                   <dd>
                     <span className="text-green-400">{selectedRecord.corrective_action.title}</span>
-                    <span className="ml-2 text-xs text-gray-500">({selectedRecord.corrective_action.status})</span>
+                    <span className="ml-2 text-xs" style={{ color: 'var(--text-muted)' }}>({selectedRecord.corrective_action.status})</span>
                   </dd>
                 </div>
               )}
             </dl>
             {!selectedRecord.corrective_action && (
-              <div className="mt-4 pt-4 border-t border-gray-800">
+              <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--border)' }}>
                 <button
                   onClick={() => { setSelectedRecord(null); createLinkedAction(selectedRecord) }}
                   disabled={creatingAction}
@@ -448,30 +444,24 @@ export default function RcaRecords() {
                 </button>
               </div>
             )}
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* Form modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto" onClick={() => setShowForm(false)}>
-          <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-lg p-6 my-4" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-white">{editId ? 'Edit' : 'New'} RCA Record</h2>
-              <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-white"><X size={18} /></button>
-            </div>
-            {error && <div className="bg-red-900/30 border border-red-700 text-red-300 rounded-lg px-4 py-2 mb-4 text-sm">{error}</div>}
+        <Modal open onClose={() => setShowForm(false)} closeOnBackdrop={!saving} title={`${editId ? 'Edit' : 'New'} RCA Record`} size="lg">
+            {error && <div role="alert" className="bg-red-900/30 border border-red-700 text-red-300 rounded-lg px-4 py-2 mb-4 text-sm">{error}</div>}
             <form onSubmit={save} className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="label">Asset No</label><input className="input" value={form.asset_no} onChange={e => setForm(f => ({ ...f, asset_no: e.target.value }))} /></div>
-                <div><label className="label">Tyre Serial</label><input className="input" value={form.tyre_serial} onChange={e => setForm(f => ({ ...f, tyre_serial: e.target.value }))} /></div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div><label className="label" htmlFor="rca-asset">Asset No</label><input id="rca-asset" className="input" value={form.asset_no} onChange={e => setForm(f => ({ ...f, asset_no: e.target.value }))} /></div>
+                <div><label className="label" htmlFor="rca-serial">Tyre Serial</label><input id="rca-serial" className="input" value={form.tyre_serial} onChange={e => setForm(f => ({ ...f, tyre_serial: e.target.value }))} /></div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div><label className="label">Brand</label><input className="input" value={form.brand} onChange={e => setForm(f => ({ ...f, brand: e.target.value }))} /></div>
-                <div><label className="label">Site</label><input className="input" value={form.site} onChange={e => setForm(f => ({ ...f, site: e.target.value }))} /></div>
+                <div><label className="label" htmlFor="rca-brand">Brand</label><input id="rca-brand" className="input" value={form.brand} onChange={e => setForm(f => ({ ...f, brand: e.target.value }))} /></div>
+                <div><label className="label" htmlFor="rca-site">Site</label><input id="rca-site" className="input" value={form.site} onChange={e => setForm(f => ({ ...f, site: e.target.value }))} /></div>
                 <div>
-                  <label className="label">Country</label>
-                  <select className="input" value={form.country} onChange={e => setForm(f => ({ ...f, country: e.target.value }))}>
+                  <label className="label" htmlFor="rca-country">Country</label>
+                  <select id="rca-country" className="input" value={form.country} onChange={e => setForm(f => ({ ...f, country: e.target.value }))}>
                     <option value="">{COUNTRY_PLACEHOLDER}</option>
                     {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
@@ -481,16 +471,16 @@ export default function RcaRecords() {
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div><label className="label">Failure Date</label><input type="date" className="input" value={form.failure_date} onChange={e => setForm(f => ({ ...f, failure_date: e.target.value }))} /></div>
-                <div><label className="label">KM at Failure</label><input type="number" className="input" value={form.km_at_failure} onChange={e => setForm(f => ({ ...f, km_at_failure: e.target.value }))} /></div>
-                <div><label className="label">Hours</label><input type="number" className="input" value={form.hours_at_failure} onChange={e => setForm(f => ({ ...f, hours_at_failure: e.target.value }))} /></div>
+                <div><label className="label" htmlFor="rca-date">Failure Date</label><input id="rca-date" type="date" className="input" value={form.failure_date} onChange={e => setForm(f => ({ ...f, failure_date: e.target.value }))} /></div>
+                <div><label className="label" htmlFor="rca-km">KM at Failure</label><input id="rca-km" type="number" className="input" value={form.km_at_failure} onChange={e => setForm(f => ({ ...f, km_at_failure: e.target.value }))} /></div>
+                <div><label className="label" htmlFor="rca-hours">Hours</label><input id="rca-hours" type="number" className="input" value={form.hours_at_failure} onChange={e => setForm(f => ({ ...f, hours_at_failure: e.target.value }))} /></div>
               </div>
-              <div><label className="label">Root Cause</label><textarea className="input" rows={3} value={form.root_cause} onChange={e => setForm(f => ({ ...f, root_cause: e.target.value }))} /></div>
+              <div><label className="label" htmlFor="rca-cause">Root Cause</label><textarea id="rca-cause" className="input" rows={3} value={form.root_cause} onChange={e => setForm(f => ({ ...f, root_cause: e.target.value }))} /></div>
 
               {/* Contributing factors as checkbox chips */}
               <div>
-                <label className="label">Contributing Factors</label>
-                <div className="grid grid-cols-2 gap-2 mt-1">
+                <p className="label">Contributing Factors</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1" role="group" aria-label="Contributing factors">
                   {CONTRIBUTING_FACTOR_OPTIONS.map(factor => {
                     const selected = Array.isArray(form.contributing_factors) && form.contributing_factors.includes(factor)
                     return (
@@ -498,24 +488,25 @@ export default function RcaRecords() {
                         key={factor}
                         type="button"
                         onClick={() => toggleFactor(factor)}
+                        aria-pressed={selected}
                         className={`text-left text-xs px-2.5 py-1.5 rounded-lg border transition-colors ${
                           selected
                             ? `${FACTOR_COLOR_MAP[factor]} ring-1 ring-white/20`
-                            : 'bg-gray-800/50 text-gray-400 border-gray-700 hover:border-gray-500 hover:text-white'
+                            : 'bg-[var(--input-bg)] text-[var(--text-secondary)] border-[var(--border)] hover:text-[var(--text-primary)]'
                         }`}
                       >
-                        {selected && <span className="mr-1">✓</span>}{factor}
+                        {selected && <span className="mr-1" aria-hidden="true">✓</span>}{factor}
                       </button>
                     )
                   })}
                 </div>
               </div>
 
-              <div><label className="label">Analysis Notes</label><textarea className="input" rows={3} value={form.ai_analysis} onChange={e => setForm(f => ({ ...f, ai_analysis: e.target.value }))} /></div>
+              <div><label className="label" htmlFor="rca-notes">Analysis Notes</label><textarea id="rca-notes" className="input" rows={3} value={form.ai_analysis} onChange={e => setForm(f => ({ ...f, ai_analysis: e.target.value }))} /></div>
 
               {/* Photo */}
               <div>
-                <label className="label">Photo / Evidence</label>
+                <p className="label">Photo / Evidence</p>
                 <div className="flex items-center gap-3">
                   <button type="button"
                     onClick={() => photoRef.current?.click()}
@@ -529,11 +520,11 @@ export default function RcaRecords() {
                       Remove
                     </button>
                   )}
-                  <input ref={photoRef} type="file" accept="image/*" className="hidden"
+                  <input ref={photoRef} type="file" aria-label="Photo or evidence file" accept="image/*" className="hidden"
                     onChange={e => handlePhoto(e, setForm)} />
                 </div>
                 {form?.photo_data && (
-                  <img src={form.photo_data} alt="Evidence" className="mt-2 rounded-lg max-h-40 border border-gray-700 object-cover" />
+                  <img src={form.photo_data} alt="Evidence" className="mt-2 rounded-lg max-h-40 border border-[var(--border)] object-cover" />
                 )}
               </div>
               <div className="flex gap-3 pt-2">
@@ -543,8 +534,7 @@ export default function RcaRecords() {
                 <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">Cancel</button>
               </div>
             </form>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

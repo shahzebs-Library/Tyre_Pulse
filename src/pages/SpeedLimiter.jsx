@@ -26,13 +26,14 @@ import {
 } from 'chart.js'
 import { Doughnut, Bar } from 'react-chartjs-2'
 import {
-  Gauge, Zap, AlertTriangle, Settings, Plus, Pencil, Trash2, Search, X, Filter,
+  Gauge, AlertTriangle, Settings, Plus, Pencil, Trash2, Search, X,
   FileSpreadsheet, FileText, ShieldCheck, ShieldAlert, CalendarClock, CalendarX,
-  CheckCircle2, MapPin, ArrowUpDown, Percent,
+  CheckCircle2, MapPin, RotateCw,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import Card, { CardHeader } from '../components/ui/Card'
 import Modal from '../components/ui/Modal'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listSpeedLimiters, createSpeedLimiter, updateSpeedLimiter, deleteSpeedLimiter,
@@ -44,10 +45,11 @@ import {
   DEFAULT_REVERIFY_DAYS, DEFAULT_EXPIRING_SOON_DAYS,
   summarizeSpeedLimiters, setSpeedDistribution, bySiteCoverage,
   nonCompliantList, filterSpeedLimiters, sortByExpiry,
-  verificationBand, nextDueDate, daysToNextDue,
+  verificationBand, daysToNextDue, dueLabel,
+  SPEED_LIMITER_EXPORT_COLUMNS, speedLimiterExportRows,
 } from '../lib/speedLimiterAnalytics'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
-import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
+import { colorAt } from '../lib/reportColors'
 import toUserMessage from '../lib/safeError'
 import { isMissingRelation } from '../lib/api/_client'
 
@@ -85,17 +87,14 @@ function fmtDate(v) {
   const d = v instanceof Date ? v : new Date(v)
   return Number.isNaN(d.getTime()) ? 'N/A' : d.toISOString().slice(0, 10)
 }
-function fmtDueLabel(days) {
-  if (days == null) return 'Not verified'
-  if (days < 0) return `${Math.abs(days)}d overdue`
-  if (days === 0) return 'Due today'
-  return `In ${days}d`
-}
+const fmtDueLabel = dueLabel
+const ICON_BTN = 'inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
 
 export default function SpeedLimiter() {
   const { activeCountry } = useSettings()
   const [rows, setRows] = useState(null)
   const [fleet, setFleet] = useState([])
+  const [fleetFailed, setFleetFailed] = useState(false)
   const [error, setError] = useState('')
   const [missing, setMissing] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -113,7 +112,6 @@ export default function SpeedLimiter() {
   const [search, setSearch] = useState('')
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
-  const [sortDir, setSortDir] = useState('asc')
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -131,12 +129,16 @@ export default function SpeedLimiter() {
   const load = useCallback(async () => {
     setRefreshing(true); setError(''); setMissing(false)
     try {
-      const [data, fleetRows] = await Promise.all([
+      // The fleet read only feeds the coverage ratio. A failed fleet read must
+      // not be rendered as "no fleet" (that would read as zero coverage), so it
+      // is tracked separately and the coverage tiles say they could not look.
+      const [data, fleetRes] = await Promise.all([
         listSpeedLimiters({ country: activeCountry }),
-        listFleetForCoverage({ country: activeCountry }).catch(() => []),
+        listFleetForCoverage({ country: activeCountry }).then((r) => ({ ok: true, rows: r }), () => ({ ok: false, rows: [] })),
       ])
       setRows(Array.isArray(data) ? data : [])
-      setFleet(Array.isArray(fleetRows) ? fleetRows : [])
+      setFleet(Array.isArray(fleetRes.rows) ? fleetRes.rows : [])
+      setFleetFailed(!fleetRes.ok)
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) { setMissing(true); setRows([]) }
@@ -167,13 +169,10 @@ export default function SpeedLimiter() {
       status: statusFilter, band: bandFilter, site: siteFilter, search,
       from: fromDate, to: toDate, ...engineOpts,
     }).filter((r) => !assetFilter || r.asset_no === assetFilter)
-    return sortByExpiry(base, { direction: sortDir, ...engineOpts })
-  }, [rows, statusFilter, bandFilter, siteFilter, assetFilter, search, fromDate, toDate, sortDir, engineOpts])
-
-  // Paged, not capped. The register used to render filtered.slice(0, 500) with
-  // no way to reach row 501. The exports below still cover the whole filtered
-  // set - a page of 50 is a reading convenience, not a narrowing.
-  const pager = usePagedRows(filtered)
+    // Default order is soonest-due first; EnterpriseTable re-sorts on demand
+    // across the WHOLE filtered set (it pages internally, nothing is clipped).
+    return sortByExpiry(base, { direction: 'asc', ...engineOpts })
+  }, [rows, statusFilter, bandFilter, siteFilter, assetFilter, search, fromDate, toDate, engineOpts])
 
   // ---- Charts -------------------------------------------------------------
   const chartText = getComputedStyle(document.documentElement).getPropertyValue('--text-muted') || '#9ca3af'
@@ -205,7 +204,7 @@ export default function SpeedLimiter() {
     labels: speedDist.map((d) => (d.limit == null ? 'Not set' : `${d.limit} km/h`)),
     datasets: [{
       label: 'Assets', data: speedDist.map((d) => d.count),
-      backgroundColor: '#38bdf8', borderRadius: 4,
+      backgroundColor: colorAt(0), borderRadius: 4,
     }],
   }
   const coverageBar = {
@@ -237,31 +236,20 @@ export default function SpeedLimiter() {
     { label: 'Verification overdue', value: summary.expired, icon: CalendarX, tone: summary.expired ? 'text-red-400' : 'text-green-400' },
     { label: 'Expiring soon', value: summary.expiringSoon, icon: CalendarClock, tone: summary.expiringSoon ? 'text-amber-400' : 'text-[var(--text-primary)]' },
     { label: 'Not verified', value: summary.unverified, icon: ShieldAlert, tone: summary.unverified ? 'text-amber-400' : 'text-green-400' },
-    { label: 'Fleet coverage', value: coverage.overall.coverage == null ? 'N/A' : `${coverage.overall.coverage}%`, icon: MapPin, tone: coverage.overall.coverage != null && coverage.overall.coverage >= 90 ? 'text-green-400' : 'text-sky-400' },
+    { label: 'Fleet coverage', value: fleetFailed || coverage.overall.coverage == null ? 'N/A' : `${coverage.overall.coverage}%`, icon: MapPin, tone: coverage.overall.coverage != null && coverage.overall.coverage >= 90 ? 'text-green-400' : 'text-sky-400' },
     { label: 'Avg limit (km/h)', value: summary.avgLimit == null ? 'N/A' : summary.avgLimit, icon: Settings, tone: 'text-sky-400' },
   ]
 
-  // ---- Export -------------------------------------------------------------
-  const EXPORT_COLS = ['asset_no', 'limit_kph', 'device_id', 'status', 'site', 'last_verified_at', 'next_due', 'verification', 'compliant']
-  const EXPORT_HEADERS = ['Asset', 'Limit (km/h)', 'Device', 'Status', 'Site', 'Last verified', 'Next due', 'Verification', 'Compliant']
-  const exportRows = filtered.map((r) => {
-    const band = verificationBand(r, engineOpts)
-    const due = nextDueDate(r, reverifyDays)
-    const days = daysToNextDue(r, engineOpts)
-    return {
-      asset_no: r.asset_no || '', limit_kph: r.limit_kph ?? '', device_id: r.device_id || '',
-      status: SPEED_LIMITER_STATUS_META[r.status]?.label || r.status || '',
-      site: r.site || '', last_verified_at: r.last_verified_at || '',
-      next_due: due ? due.toISOString().slice(0, 10) : 'N/A',
-      verification: `${VERIFICATION_BAND_META[band].label} (${fmtDueLabel(days)})`,
-      compliant: (r.status === 'active' && (band === 'valid' || band === 'expiring')) ? 'Yes' : 'No',
-    }
-  })
+  // ---- Export (whole filtered set; same rules as the screen) ------------
+  const exportRows = useMemo(() => speedLimiterExportRows(filtered, engineOpts), [filtered, engineOpts])
+  const fileName = reportFileName('TyrePulse Speed Limiter Compliance', activeCountry !== 'All' ? activeCountry : null, reportDateLabel())
+  const doExcel = () => exportToExcel(exportRows, SPEED_LIMITER_EXPORT_COLUMNS.map((c) => c[0]), SPEED_LIMITER_EXPORT_COLUMNS.map((c) => c[1]), fileName)
+  const doPdf = () => exportToPdf(exportRows, SPEED_LIMITER_EXPORT_COLUMNS.map(([key, header]) => ({ key, header })), 'Speed Limiter Compliance', fileName, 'landscape')
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
 
   const openCreate = () => { setEditing(null); setForm(EMPTY_FORM); setFormError(''); setModalOpen(true) }
-  const openEdit = (r) => {
+  const openEdit = useCallback((r) => {
     setEditing(r)
     setForm({
       asset_no: r.asset_no || '', limit_kph: r.limit_kph ?? '', device_id: r.device_id || '',
@@ -269,8 +257,34 @@ export default function SpeedLimiter() {
       site: r.site || '', notes: r.notes || '',
     })
     setFormError(''); setModalOpen(true)
-  }
+  }, [])
   const closeModal = () => { if (!saving) { setModalOpen(false); setEditing(null) } }
+
+  // ---- Table columns -----------------------------------------------------
+  const columns = useMemo(() => [
+    { id: 'asset', header: 'Asset', accessorFn: (r) => r.asset_no || '', size: 130, cell: ({ row }) => <span className="font-mono text-xs text-[var(--text-primary)]">{row.original.asset_no || 'N/A'}</span> },
+    { id: 'limit', header: 'Limit (km/h)', accessorFn: (r) => (r.limit_kph == null || r.limit_kph === '' ? -1 : Number(r.limit_kph)), size: 110, meta: { align: 'right', exportValue: (r) => (r.limit_kph == null || r.limit_kph === '' ? 'N/A' : r.limit_kph) }, cell: ({ row }) => <span className="tabular-nums">{row.original.limit_kph == null || row.original.limit_kph === '' ? 'N/A' : row.original.limit_kph}</span> },
+    { id: 'device', header: 'Device', accessorFn: (r) => r.device_id || '', size: 140, cell: ({ row }) => <span className="text-[var(--text-secondary)]">{row.original.device_id || 'N/A'}</span> },
+    { id: 'site', header: 'Site', accessorFn: (r) => r.site || '', size: 130, cell: ({ row }) => <span className="text-[var(--text-secondary)]">{row.original.site || 'N/A'}</span> },
+    { id: 'verified', header: 'Last verified', accessorFn: (r) => r.last_verified_at || '', size: 120, meta: { exportValue: (r) => fmtDate(r.last_verified_at) }, cell: ({ row }) => <span className="text-[var(--text-secondary)]">{fmtDate(row.original.last_verified_at)}</span> },
+    { id: 'status', header: 'Status', accessorFn: (r) => SPEED_LIMITER_STATUS_META[r.status]?.label || r.status || '', size: 110, cell: ({ row }) => <span className={`badge text-[11px] px-2 py-0.5 rounded ${STATUS_BADGE[row.original.status] || STATUS_BADGE.disabled}`}>{SPEED_LIMITER_STATUS_META[row.original.status]?.label || row.original.status || 'N/A'}</span> },
+    { id: 'band', header: 'Verification', accessorFn: (r) => VERIFICATION_BAND_META[verificationBand(r, engineOpts)].label, size: 150, cell: ({ row }) => { const b = verificationBand(row.original, engineOpts); return <span className={`badge text-[11px] px-2 py-0.5 rounded ${BAND_BADGE[b]}`}>{VERIFICATION_BAND_META[b].label}</span> } },
+    {
+      id: 'due', header: 'Next due', accessorFn: (r) => { const d = daysToNextDue(r, engineOpts); return d == null ? Number.MAX_SAFE_INTEGER : d }, size: 120,
+      meta: { exportValue: (r) => fmtDueLabel(daysToNextDue(r, engineOpts)) },
+      cell: ({ row }) => { const d = daysToNextDue(row.original, engineOpts); return <span className={`whitespace-nowrap ${d != null && d < 0 ? 'text-red-400' : d != null && d <= soonDays ? 'text-amber-400' : 'text-[var(--text-secondary)]'}`}>{fmtDueLabel(d)}</span> },
+    },
+    {
+      id: 'actions', header: '', enableSorting: false, size: 110, meta: { export: false },
+      cell: ({ row }) => (
+        <div className="flex items-center gap-1 justify-end">
+          <button type="button" onClick={() => openEdit(row.original)} className={ICON_BTN} aria-label={`Edit limiter for ${row.original.asset_no || 'asset'}`}><Pencil size={15} /></button>
+          <button type="button" onClick={() => setConfirmDel(row.original)} className={`${ICON_BTN} hover:text-red-400`} aria-label={`Delete limiter for ${row.original.asset_no || 'asset'}`}><Trash2 size={15} /></button>
+        </div>
+      ),
+    },
+  ], [engineOpts, soonDays, openEdit])
+
 
   const submit = useCallback(async (e) => {
     e?.preventDefault?.()
@@ -324,13 +338,13 @@ export default function SpeedLimiter() {
         updatedAt={updatedAt}
         actions={
           <div className="flex items-center gap-2">
-            <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'speed_limiters')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button type="button" onClick={doExcel} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!filtered.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Speed Limiter Compliance', 'speed_limiters', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button type="button" onClick={doPdf} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!filtered.length}>
               <FileText size={14} /> PDF
             </button>
-            <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5">
+            <button type="button" onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={missing}>
               <Plus size={14} /> Register limiter
             </button>
           </div>
@@ -365,7 +379,7 @@ export default function SpeedLimiter() {
             <p className="text-red-300 font-medium">Could not load speed limiters.</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">{error}</p>
           </div>
-          <button onClick={load} className="btn-secondary text-sm shrink-0">Retry</button>
+          <button type="button" onClick={load} className="btn-secondary text-sm shrink-0 inline-flex items-center gap-1.5 min-h-[44px]"><RotateCw size={14} aria-hidden="true" /> Retry</button>
         </Card>
       )}
 
@@ -389,7 +403,13 @@ export default function SpeedLimiter() {
             {SOON_OPTIONS.map((d) => <option key={d} value={d}>Within {d}d</option>)}
           </select>
         </label>
-        {!coverage.hasFleet && rows && rows.length > 0 && (
+        {fleetFailed && rows && (
+          <span className="text-xs text-[var(--text-muted)] ml-auto inline-flex items-center gap-1" role="status">
+            <AlertTriangle size={12} className="text-amber-400" aria-hidden="true" /> Could not read the fleet register: coverage is not measured.
+            <button type="button" onClick={load} className="underline min-h-[44px] px-1">Retry</button>
+          </span>
+        )}
+        {!fleetFailed && !coverage.hasFleet && rows && rows.length > 0 && (
           <span className="text-xs text-[var(--text-muted)] ml-auto inline-flex items-center gap-1">
             <AlertTriangle size={12} className="text-amber-400" /> No fleet master data: coverage ratios unavailable.
           </span>
@@ -451,12 +471,12 @@ export default function SpeedLimiter() {
           <div className="h-64">
             {rows === null ? (
               <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" />
-            ) : coverage.hasFleet && coverage.bySite.length ? (
+            ) : !fleetFailed && coverage.hasFleet && coverage.bySite.length ? (
               <Bar data={coverageBar} options={barOpts(100)} />
             ) : (
               <div className="h-full flex flex-col items-center justify-center text-sm text-[var(--text-muted)] gap-2 text-center px-4">
                 <MapPin size={22} className="opacity-60" />
-                {coverage.hasFleet ? 'No sites to compare yet.' : 'Fleet master data unavailable, so coverage vs fleet cannot be computed.'}
+                {fleetFailed ? 'The fleet register could not be read, so coverage is not measured.' : coverage.hasFleet ? 'No sites to compare yet.' : 'Fleet master data unavailable, so coverage vs fleet cannot be computed.'}
               </div>
             )}
           </div>
@@ -496,6 +516,7 @@ export default function SpeedLimiter() {
             ))}
           </div>
         )}
+        {nonCompliant.length > 40 && <p className="text-xs text-[var(--text-muted)] mt-2">{nonCompliant.length - 40} more are in the register below. Filter by status or verification to see them.</p>}
       </Card>
 
       {/* Filters. No `clip` here: these are native <select>s, whose option list
@@ -505,7 +526,7 @@ export default function SpeedLimiter() {
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <input className="input pl-9 w-full" placeholder="Search asset, device, site, notes" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input className="input pl-9 w-full min-h-[44px]" aria-label="Search limiters" placeholder="Search asset, device, site, notes" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
             <option value="all">All statuses</option>
@@ -533,75 +554,37 @@ export default function SpeedLimiter() {
             to
             <input type="date" className="input py-1.5" value={toDate} onChange={(e) => setToDate(e.target.value)} aria-label="Verified to" />
           </label>
-          {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
+          {hasFilters && <button type="button" onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><X size={14} /> Clear</button>}
           <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {summary.total}</span>
         </div>
       </Card>
 
-      {/* Table. `pad="none"` + `clip` replace the old `!p-0 overflow-hidden`:
-          Card writes padding inline, so `pad` is the route rather than a
-          `!important` fight. TablePagination's rows-per-page control is a
-          native <select>, which an ancestor's overflow cannot clip. */}
-      <Card pad="none" clip>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                {['Asset', 'Limit (km/h)', 'Device', 'Site', 'Last verified', 'Status', 'Verification'].map((h) => (
-                  <th key={h} className="px-4 py-3 font-semibold whitespace-nowrap">{h}</th>
-                ))}
-                <th className="px-4 py-3 font-semibold whitespace-nowrap">
-                  <button onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))} className="inline-flex items-center gap-1 hover:text-[var(--text-primary)]" title="Sort by next due">
-                    Next due <ArrowUpDown size={12} />
-                  </button>
-                </th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows === null ? (
-                [0, 1, 2, 3, 4].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={9} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
-              ) : filtered.length === 0 ? (
-                <tr><td colSpan={9} className="px-4 py-12 text-center text-[var(--text-muted)]">
-                  {summary.total === 0 && !missing ? (
-                    <div className="flex flex-col items-center gap-3">
-                      <Gauge size={26} className="opacity-60" />
-                      <p>No speed limiters registered yet.</p>
-                      <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5"><Plus size={14} /> Register your first limiter</button>
-                    </div>
-                  ) : (
-                    <><Filter size={22} className="mx-auto mb-2 opacity-60" />No speed limiters match these filters.</>
-                  )}
-                </td></tr>
-              ) : (
-                pager.pageRows.map((r) => {
-                  const band = verificationBand(r, engineOpts)
-                  const days = daysToNextDue(r, engineOpts)
-                  return (
-                    <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.asset_no || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.limit_kph == null || r.limit_kph === '' ? 'N/A' : `${r.limit_kph}`}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.device_id || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtDate(r.last_verified_at)}</td>
-                      <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${STATUS_BADGE[r.status]}`}>{SPEED_LIMITER_STATUS_META[r.status]?.label || r.status}</span></td>
-                      <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${BAND_BADGE[band]}`}>{VERIFICATION_BAND_META[band].label}</span></td>
-                      <td className={`px-4 py-2.5 whitespace-nowrap ${days != null && days < 0 ? 'text-red-400' : days != null && days <= soonDays ? 'text-amber-400' : 'text-[var(--text-secondary)]'}`}>{fmtDueLabel(days)}</td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center gap-1 justify-end">
-                          <button onClick={() => openEdit(r)} className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)]" aria-label="Edit"><Pencil size={14} /></button>
-                          <button onClick={() => setConfirmDel(r)} className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-red-400 hover:bg-red-900/20" aria-label="Delete"><Trash2 size={14} /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-        <TablePagination {...pager} />
-      </Card>
+      {/* Register. EnterpriseTable pages and sorts across the WHOLE filtered set
+          (default order: soonest verification due first). */}
+      {missing || error ? (
+        <Card><p className="text-center py-6 text-sm text-[var(--text-muted)]">Speed limiters are unavailable.</p></Card>
+      ) : summary.total === 0 && rows !== null ? (
+        <Card>
+          <div className="flex flex-col items-center gap-3 py-8 text-sm text-[var(--text-muted)]">
+            <Gauge size={26} className="opacity-60" aria-hidden="true" />
+            <p>No speed limiters registered yet.</p>
+            <button type="button" onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><Plus size={14} aria-hidden="true" /> Register your first limiter</button>
+          </div>
+        </Card>
+      ) : (
+        <EnterpriseTable
+          columns={columns}
+          data={filtered}
+          getRowId={(r) => String(r.id)}
+          loading={rows === null}
+          enableGlobalFilter={false}
+          enableColumnFilters={false}
+          exportFileName={fileName}
+          viewKey="speed-limiter"
+          initialPageSize={25}
+          emptyMessage="No speed limiters match these filters."
+        />
+      )}
 
       {/* Create / edit dialog. The submit button stays INSIDE the <form> rather
           than moving to Modal's footer slot: that would need a form="id"

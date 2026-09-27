@@ -9,7 +9,7 @@ vi.mock('../lib/api/vehicleReservations', () => ({
   createVehicleReservation: vi.fn(), updateVehicleReservation: vi.fn(), deleteVehicleReservation: vi.fn(),
 }))
 vi.mock('../lib/api/_client', () => ({ isMissingRelation: (err) => err.code === '42P01' }))
-vi.mock('../lib/exportUtils', () => ({ exportToExcel: vi.fn(), exportToPdf: vi.fn() }))
+vi.mock('../lib/exportUtils', () => ({ exportToExcel: vi.fn(), exportToPdf: vi.fn(), reportFileName: (...p) => p.filter(Boolean).join(' '), reportDateLabel: () => 'today' }))
 vi.mock('../components/ui/PageHeader', () => ({ default: ({ title, actions }) => <header><h1>{title}</h1>{actions}</header> }))
 
 beforeEach(() => { state.country = 'KSA'; state.list.mockReset() })
@@ -21,7 +21,7 @@ describe('reservation load states', () => {
     render(<VehicleReservations />)
     await screen.findByText('Vehicle reservations are unavailable.')
     expect(screen.queryByText('No reservations yet. Create your first booking.')).not.toBeInTheDocument()
-    expect(screen.getAllByText('N/A')).toHaveLength(4)
+    expect(screen.getAllByText('N/A')).toHaveLength(8)
     expect(screen.getByRole('button', { name: 'Excel' })).toBeDisabled()
   })
 

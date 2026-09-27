@@ -380,3 +380,45 @@ export function filterSpeedLimiters(rows = [], filters = {}) {
     return true
   })
 }
+
+/** Plain-language due label for a days-to-next-due value (null = never verified). */
+export function dueLabel(days) {
+  if (days == null) return 'Not verified'
+  if (days < 0) return `${Math.abs(days)}d overdue`
+  if (days === 0) return 'Due today'
+  return `In ${days}d`
+}
+
+/** Export column order and headers for the register. */
+export const SPEED_LIMITER_EXPORT_COLUMNS = [
+  ['asset_no', 'Asset'], ['limit_kph', 'Limit (km/h)'], ['device_id', 'Device'], ['status', 'Status'],
+  ['site', 'Site'], ['last_verified_at', 'Last verified'], ['next_due', 'Next due'],
+  ['verification', 'Verification'], ['compliant', 'Compliant'], ['reason', 'Reason'],
+]
+
+/**
+ * Flat export rows for the register. Uses the SAME band / due / compliance
+ * rules as the page (verificationBand, nextDueDate, daysToNextDue,
+ * isCompliant), so the file can never disagree with the screen. A limiter with
+ * no set limit exports blank, never 0.
+ */
+export function speedLimiterExportRows(rows = [], opts = {}) {
+  const { reverifyDays = DEFAULT_REVERIFY_DAYS } = opts
+  return (Array.isArray(rows) ? rows : []).map((r) => {
+    const band = verificationBand(r, opts)
+    const due = nextDueDate(r, reverifyDays)
+    const limit = toNumber(r?.limit_kph)
+    return {
+      asset_no: r?.asset_no || '',
+      limit_kph: limit == null ? '' : limit,
+      device_id: r?.device_id || '',
+      status: SPEED_LIMITER_STATUS_META[r?.status]?.label || r?.status || '',
+      site: r?.site || '',
+      last_verified_at: r?.last_verified_at || '',
+      next_due: due ? due.toISOString().slice(0, 10) : 'N/A',
+      verification: `${VERIFICATION_BAND_META[band].label} (${dueLabel(daysToNextDue(r, opts))})`,
+      compliant: isCompliant(r, opts) ? 'Yes' : 'No',
+      reason: nonComplianceReason(r, opts) || '',
+    }
+  })
+}

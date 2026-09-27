@@ -23,11 +23,16 @@ import { useParams } from 'react-router-dom'
 import {
   Maximize2, Minimize2, RotateCw, AlertTriangle, Lock, Clock, KeyRound, Loader2,
   Wrench, Timer, Car, CheckCircle2, PauseCircle, Coffee, UserX, ShieldAlert,
-  ClipboardList, Gauge, Activity,
+  ClipboardList, Gauge, Activity, Pause, Play,
 } from 'lucide-react'
 import { getWorkshopSnapshot } from '../lib/api/reportShares'
 import { categorical, colorAt, withAlpha } from '../lib/reportColors'
 import EChart from '../components/charts/EChart'
+import { shapeWorkshopSnapshot, nextPageIndex } from '../lib/workshopTvAnalytics'
+
+/** Seconds each page of open job cards stays on screen before auto-advancing. */
+const CARD_PAGE_SECONDS = 15
+const CARD_PAGE_SIZE = 25
 
 // ── Light chart palette (pinned literals so canvases read on white paper) ──────
 const P = {
@@ -40,8 +45,8 @@ const TOOLTIP = {
 }
 
 const GROUP = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 })
-const fmtInt = (v) => GROUP.format(Math.round(Number(v) || 0))
-const arr = (v) => (Array.isArray(v) ? v : [])
+// null (the snapshot did not say) reads N/A, never a fabricated 0.
+const fmtInt = (v) => (v == null || !Number.isFinite(Number(v)) ? 'N/A' : GROUP.format(Math.round(Number(v))))
 const safeStr = (v) => (v == null || v === '' ? 'N/A' : String(v))
 const clampSec = (v, fallback) => {
   const n = Number(v)
@@ -57,29 +62,10 @@ function fmtUpdated(iso) {
   if (Number.isNaN(d.getTime())) return 'N/A'
   return d.toLocaleString('en-US', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
-function fmtSince(iso) {
-  if (!iso) return 'N/A'
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return String(iso)
-  const hrs = Math.max(0, Math.round((Date.now() - d.getTime()) / 3_600_000))
-  if (hrs < 24) return `${hrs}h`
-  return `${Math.round(hrs / 24)}d`
-}
 
-function priorityTone(p) {
-  const k = String(p || '').toLowerCase()
-  if (k.includes('crit')) return 'wt-pill-red'
-  if (k.includes('high')) return 'wt-pill-orange'
-  if (k.includes('med')) return 'wt-pill-amber'
-  return 'wt-pill-slate'
-}
-function statusTone(s) {
-  const k = String(s || '').toLowerCase()
-  if (k.includes('progress') || k.includes('open') || k.includes('assigned') || k.includes('new')) return 'wt-pill-blue'
-  if (k.includes('hold') || k.includes('pending') || k.includes('wait')) return 'wt-pill-amber'
-  if (k.includes('complete') || k.includes('closed') || k.includes('done') || k.includes('inspection')) return 'wt-pill-green'
-  return 'wt-pill-slate'
-}
+const PRIORITY_TONE = { critical: 'wt-pill-red', high: 'wt-pill-orange', medium: 'wt-pill-amber', low: 'wt-pill-slate', unknown: 'wt-pill-slate' }
+const STATUS_TONE = { active: 'wt-pill-blue', waiting: 'wt-pill-amber', done: 'wt-pill-green', other: 'wt-pill-slate' }
+const ALERT_LABEL = { critical: 'Critical', warning: 'Warning', info: 'Info' }
 function alertTone(level) {
   const k = String(level || '').toLowerCase()
   if (k === 'critical') return 'wt-alert-red'
@@ -281,13 +267,24 @@ export default function WorkshopTv() {
     return () => clearInterval(id)
   }, [])
 
-  const kpis = snapshot?.kpis || {}
-  const jobsByStatus = useMemo(() => arr(snapshot?.jobs_by_status).filter((x) => Number(x?.value) > 0), [snapshot])
-  const openCards = useMemo(() => arr(snapshot?.open_job_cards), [snapshot])
-  const cardsPager = usePagedRows(openCards)
-  const vorList = useMemo(() => arr(snapshot?.vor_list), [snapshot])
-  const alerts = useMemo(() => arr(snapshot?.safety_alerts), [snapshot])
-  const utilization = Number.isFinite(Number(kpis.utilization)) ? Number(kpis.utilization) : null
+  // All shaping (honest nulls, priority order, longest off road first,
+  // critical alerts first) lives in the pure engine.
+  const shaped = useMemo(() => shapeWorkshopSnapshot(snapshot, { now: lastRefresh || undefined }), [snapshot, lastRefresh])
+  const { kpis, jobsByStatus, openCards, vorList, alerts, utilization, counts } = shaped
+  const cardsPager = usePagedRows(openCards, { pageSize: CARD_PAGE_SIZE })
+  const [autoAdvance, setAutoAdvance] = useState(true)
+  const { setPage: setCardsPage, page: cardsPage, totalPages: cardsPages } = cardsPager
+
+  // A wall board has nobody to press Next, so a long job list rotates its
+  // pages. Viewers who need to read a page can pause it.
+  useEffect(() => {
+    if (!autoAdvance || cardsPages <= 1) return undefined
+    const id = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return
+      setCardsPage((p) => nextPageIndex(p, cardsPages))
+    }, CARD_PAGE_SECONDS * 1000)
+    return () => clearInterval(id)
+  }, [autoAdvance, cardsPages, setCardsPage])
 
   // ── loading ─────────────────────────────────────────────────────────────────
   if (status === 'loading') {
@@ -395,25 +392,36 @@ export default function WorkshopTv() {
             className="wt-card-tall"
           >
             <div className="wt-table-wrap">
-              <table className="wt-table">
-                <thead>
-                  <tr>
-                    <th>Job No</th><th>Asset</th><th>Status</th><th>Priority</th><th>Site</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {cardsPager.pageRows.map((c, i) => (
-                    <tr key={`${c.wo_no || 'wo'}-${i}`}>
-                      <td className="wt-mono">{safeStr(c.wo_no)}</td>
-                      <td className="wt-mono">{safeStr(c.asset_no)}</td>
-                      <td><span className={`wt-pill ${statusTone(c.status)}`}>{safeStr(c.status)}</span></td>
-                      <td><span className={`wt-pill ${priorityTone(c.priority)}`}>{safeStr(c.priority)}</span></td>
-                      <td>{safeStr(c.site)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <TablePagination {...cardsPager} />
+              <div className="wt-jobs-meta">
+                <span>{counts.openCards} open, {counts.critical} critical. Highest priority first.</span>
+                {cardsPages > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setAutoAdvance((x) => !x)}
+                    className="wt-icbtn wt-icbtn-sm"
+                    aria-pressed={!autoAdvance}
+                    aria-label={autoAdvance ? `Pause page rotation, page ${cardsPage + 1} of ${cardsPages}` : `Resume page rotation, page ${cardsPage + 1} of ${cardsPages}`}
+                    title={autoAdvance ? 'Pause page rotation' : 'Resume page rotation'}
+                  >
+                    {autoAdvance ? <Pause size={16} /> : <Play size={16} />}
+                  </button>
+                )}
+              </div>
+              <div className="wt-jobs-head" aria-hidden="true">
+                <span>Job No</span><span>Asset</span><span>Status</span><span>Priority</span><span>Site</span>
+              </div>
+              <ul className="wt-jobs" aria-label="Open job cards">
+                {cardsPager.pageRows.map((c) => (
+                  <li key={`${c.wo_no || 'wo'}-${c._i}`} className={`wt-job wt-job-${c._priority}`}>
+                    <span className="wt-mono"><span className="wt-sr">Job </span>{safeStr(c.wo_no)}</span>
+                    <span className="wt-mono"><span className="wt-sr">Asset </span>{safeStr(c.asset_no)}</span>
+                    <span><span className={`wt-pill ${STATUS_TONE[c._family]}`}>{safeStr(c.status)}</span></span>
+                    <span><span className={`wt-pill ${PRIORITY_TONE[c._priority]}`}>{safeStr(c.priority)}</span></span>
+                    <span className="wt-job-site"><span className="wt-sr">Site </span>{safeStr(c.site)}</span>
+                  </li>
+                ))}
+              </ul>
+              <TablePagination {...cardsPager} showSizeSelector={false} />
             </div>
           </Card>
 
@@ -428,7 +436,7 @@ export default function WorkshopTv() {
                   <li key={`${v.asset_no || 'a'}-${i}`} className="wt-vor-item">
                     <span className="wt-vor-asset wt-mono">{safeStr(v.asset_no)}</span>
                     <span className="wt-vor-site">{safeStr(v.site)}</span>
-                    <span className="wt-vor-since"><Timer size={14} aria-hidden="true" /> {fmtSince(v.since)}</span>
+                    <span className="wt-vor-since"><Timer size={14} aria-hidden="true" /> <span className="wt-sr">Off road for </span>{v.sinceText}</span>
                   </li>
                 ))}
               </ul>
@@ -440,9 +448,10 @@ export default function WorkshopTv() {
               className="wt-card-alerts"
             >
               <ul className="wt-alert-list">
-                {alerts.map((a, i) => (
-                  <li key={i} className={`wt-alert ${alertTone(a.level)}`}>
+                {alerts.map((a) => (
+                  <li key={a._i} className={`wt-alert ${alertTone(a.level)}`}>
                     <ShieldAlert size={16} aria-hidden="true" />
+                    <span className="wt-alert-level">{ALERT_LABEL[a.level] || 'Info'}</span>
                     <span>{safeStr(a.message)}</span>
                   </li>
                 ))}
@@ -493,8 +502,21 @@ function ScopedStyle() {
       .wt-clock { display: inline-flex; align-items: center; gap: 6px; color: var(--wt-sub); font-weight: 700; font-variant-numeric: tabular-nums; }
       .wt-clock-time { font-size: 1.1rem; }
       .wt-updated { color: var(--wt-muted); font-size: 0.85rem; }
-      .wt-icbtn { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--wt-border); background: #fff; color: var(--wt-sub); cursor: pointer; }
+      .wt-icbtn { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 10px; border: 1px solid var(--wt-border); background: #fff; color: var(--wt-sub); cursor: pointer; }
       .wt-icbtn:disabled { opacity: 0.6; cursor: not-allowed; }
+      .wt-icbtn:focus-visible, .wt-pwbtn:focus-visible, .wt-pwinput:focus-visible { outline: 3px solid #4f46e5; outline-offset: 2px; }
+      .wt-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+      .wt-jobs-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--wt-muted); font-size: 0.85rem; margin-bottom: 6px; }
+      .wt-jobs-head, .wt-job { display: grid; grid-template-columns: 1.1fr 1fr 1.1fr 0.9fr 1fr; gap: 8px; align-items: center; padding: 9px 12px; }
+      .wt-jobs-head { position: sticky; top: 0; background: #f8fafc; color: var(--wt-muted); font-weight: 700; font-size: 0.85rem; border-bottom: 1px solid var(--wt-border); }
+      .wt-jobs { list-style: none; margin: 0; padding: 0; }
+      .wt-job { border-bottom: 1px solid rgba(16,24,40,0.06); color: var(--wt-sub); font-size: 0.92rem; border-left: 4px solid transparent; }
+      .wt-job:nth-child(even) { background: #fafbfd; }
+      .wt-job-critical { border-left-color: #ef4444; }
+      .wt-job-high { border-left-color: #f97316; }
+      .wt-job-site { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .wt-alert-level { font-weight: 800; text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.04em; }
+      @media (prefers-reduced-motion: reduce) { .wt-spin { animation: none; } }
 
       .wt-body { flex: 1; padding: 18px 24px 26px; display: flex; flex-direction: column; gap: 16px; min-height: 0; }
 
@@ -525,10 +547,6 @@ function ScopedStyle() {
       .wt-note { margin-top: 6px; color: var(--wt-muted); font-size: 0.82rem; text-align: center; }
 
       .wt-table-wrap { overflow: auto; border-radius: 10px; }
-      .wt-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
-      .wt-table thead th { position: sticky; top: 0; background: #f8fafc; text-align: left; padding: 10px 12px; color: var(--wt-muted); font-weight: 700; border-bottom: 1px solid var(--wt-border); white-space: nowrap; }
-      .wt-table tbody td { padding: 10px 12px; border-bottom: 1px solid rgba(16,24,40,0.06); color: var(--wt-sub); }
-      .wt-table tbody tr:nth-child(even) { background: #fafbfd; }
       .wt-mono { font-variant-numeric: tabular-nums; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--wt-text); }
 
       .wt-pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 0.78rem; font-weight: 700; }
@@ -553,6 +571,16 @@ function ScopedStyle() {
       @media (max-width: 1100px) {
         .wt-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         .wt-row-2 { grid-template-columns: 1fr; }
+      }
+      @media (max-width: 640px) {
+        .wt-header { flex-wrap: wrap; padding: 12px 16px; }
+        .wt-head-right { flex-wrap: wrap; gap: 8px; }
+        .wt-body { padding: 12px 16px 20px; }
+        .wt-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .wt-jobs-head { display: none; }
+        .wt-job { grid-template-columns: 1fr 1fr; }
+        .wt-vor-item { grid-template-columns: 1fr auto; }
+        .wt-vor-site { grid-column: 1 / -1; }
       }
       @media (min-width: 1920px) {
         .wt-name { font-size: 1.9rem; }

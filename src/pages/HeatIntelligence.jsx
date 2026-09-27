@@ -41,16 +41,22 @@ import {
   updateTemperatureReading, deleteTemperatureReading, listTyresForHeatRisk,
 } from '../lib/api/heatIntelligence'
 import {
-  summariseHeat, latestPerPosition, hotspots, classifyTemp, tempOverAmbient,
-  GCC_CITIES, currentConditions, assessFleetRisk, pressureByTimeOfDay,
+  summariseHeat, latestPerPosition, hotspots, classifyTemp,
+  GCC_CITIES, currentConditions, pressureByTimeOfDay,
   enrichRoutes, correlationFromReadings,
   cityCoords, mergeLiveConditions, hottestHours,
 } from '../lib/heatIntelligence'
 import { getCurrentWeather, getAirQuality, aqiBand } from '../lib/api/weather'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
-import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import { compareValues } from '../lib/consoleTable'
 import { isMissingRelation } from '../lib/api/_client'
+import {
+  RISK_LEVELS, scoreInstalledFleet, riskSites, filterRiskRows, riskExportRows,
+  RISK_EXPORT_COLS, RISK_EXPORT_HEADERS, filterReadings, readingRows, readingExportRows,
+  READING_EXPORT_COLS, READING_EXPORT_HEADERS,
+} from '../lib/heatIntelligenceAnalytics'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend, Title)
 
@@ -77,11 +83,11 @@ const STATUS_META = {
  * in RISK_CARD_TONE / SEVERITY_CARD_TONE below.
  */
 const RISK_META = {
-  extreme: { label: 'Extreme', badge: 'bg-red-900/50 text-red-200 border-red-700/60', pill: 'bg-red-600 text-white', tone: 'text-red-400' },
-  high: { label: 'High', badge: 'bg-orange-900/40 text-orange-200 border-orange-700/50', pill: 'bg-orange-500 text-white', tone: 'text-orange-400' },
-  elevated: { label: 'Elevated', badge: 'bg-amber-900/30 text-amber-200 border-amber-700/50', pill: 'bg-amber-500 text-slate-900', tone: 'text-amber-400' },
-  medium: { label: 'Medium', badge: 'bg-sky-900/30 text-sky-200 border-sky-700/50', pill: 'bg-sky-500 text-white', tone: 'text-sky-400' },
-  low: { label: 'Low', badge: 'bg-emerald-900/30 text-emerald-200 border-emerald-700/50', pill: 'bg-emerald-500 text-white', tone: 'text-emerald-400' },
+  extreme: { label: 'Extreme', badge: 'bg-red-900/50 text-red-300 border-red-700/60', pill: 'bg-red-600 text-white', tone: 'text-red-400' },
+  high: { label: 'High', badge: 'bg-orange-900/40 text-orange-300 border-orange-700/50', pill: 'bg-orange-500 text-white', tone: 'text-orange-400' },
+  elevated: { label: 'Elevated', badge: 'bg-amber-900/30 text-amber-300 border-amber-700/50', pill: 'bg-amber-500 text-slate-900', tone: 'text-amber-300' },
+  medium: { label: 'Medium', badge: 'bg-sky-900/30 text-sky-300 border-sky-700/50', pill: 'bg-sky-500 text-white', tone: 'text-sky-300' },
+  low: { label: 'Low', badge: 'bg-emerald-900/30 text-emerald-300 border-emerald-700/50', pill: 'bg-emerald-500 text-white', tone: 'text-emerald-300' },
 }
 
 /** Ambient severity → pill styling. */
@@ -104,6 +110,17 @@ const SEVERITY_META = {
  */
 const RISK_CARD_TONE = { extreme: 'crit', high: 'crit', elevated: 'warn', medium: 'info', low: 'good' }
 const SEVERITY_CARD_TONE = { extreme: 'crit', very_high: 'crit', high: 'warn', moderate: 'info', low: 'good' }
+
+// The manual log reads the newest N readings (listTemperatureReadings default).
+const READINGS_LIMIT = 500
+
+// One sort rule for every table column: consoleTable's number/date aware
+// comparison, with blank cells pushed to the end whatever the direction.
+const SORT = {
+  sortingFn: (a, b, id) => compareValues(a.getValue(id), b.getValue(id)),
+  sortUndefined: 'last',
+}
+const blankToUndef = (v) => (v == null || v === '' ? undefined : v)
 
 const TABS = [
   ['conditions', 'Conditions', Sun],
@@ -165,7 +182,7 @@ function TempCell({ reading }) {
   const band = classifyTemp(reading)
   const color = band === 'critical' ? 'text-red-400'
     : band === 'high' ? 'text-orange-400'
-    : band === 'elevated' ? 'text-amber-400'
+    : band === 'elevated' ? 'text-amber-300'
     : 'text-[var(--text-primary)]'
   return <span className={`font-semibold ${color}`}>{fmtC(reading.temperature_c)}</span>
 }
@@ -216,7 +233,7 @@ export default function HeatIntelligence() {
   const load = useCallback(async () => {
     setRefreshing(true); setError(''); setNotProvisioned(false)
     try {
-      const data = await listTemperatureReadings({ country: activeCountry })
+      const data = await listTemperatureReadings({ country: activeCountry, limit: READINGS_LIMIT })
       setRows(Array.isArray(data) ? data : [])
       setUpdatedAt(new Date())
     } catch (err) {
@@ -234,7 +251,7 @@ export default function HeatIntelligence() {
       const data = await listTyresForHeatRisk({ country: activeCountry })
       setTyres(Array.isArray(data) ? data : [])
     } catch (err) {
-      setTyresError(err?.message || 'Could not load fleet tyres for risk assessment.')
+      setTyresError(toUserMessage(err, 'Could not load fleet tyres for risk assessment.'))
       setTyres([])
     } finally {
       setTyresLoading(false)
@@ -301,10 +318,21 @@ export default function HeatIntelligence() {
     return liveWeather?.ambient_c != null ? mergeLiveConditions(base, liveWeather.ambient_c, liveWeather.source) : base
   }, [city, liveWeather])
   const hotHours = useMemo(() => hottestHours(liveWeather?.hourly, 3), [liveWeather])
-  const fleetRisk = useMemo(
-    () => assessFleetRisk(tyres || [], { ambient_c: conditions.ambient_c, road_c: conditions.road_surface_c }),
+  // Every installed tyre scored (the engine's assessFleetRisk keeps only the
+  // top 30 for cards; the table and exports need the whole ranked set).
+  const fleetScored = useMemo(
+    () => scoreInstalledFleet(tyres || [], { ambient_c: conditions.ambient_c, road_c: conditions.road_surface_c }),
     [tyres, conditions],
   )
+  const [riskLevel, setRiskLevel] = useState('at_risk')
+  const [riskSite, setRiskSite] = useState('')
+  const [riskSearch, setRiskSearch] = useState('')
+  const riskSiteOptions = useMemo(() => riskSites(fleetScored.rows), [fleetScored])
+  const riskFiltered = useMemo(
+    () => filterRiskRows(fleetScored.rows, { level: riskLevel, site: riskSite, search: riskSearch }),
+    [fleetScored, riskLevel, riskSite, riskSearch],
+  )
+  const riskRowsForExport = useMemo(() => riskExportRows(riskFiltered), [riskFiltered])
   const calcPoints = useMemo(
     () => pressureByTimeOfDay(Number(coldPsi) || 0, 25, conditions.ambient_c),
     [coldPsi, conditions],
@@ -343,13 +371,12 @@ export default function HeatIntelligence() {
   // ── Manual-logger roll-ups ─────────────────────────────────────────────────
   const summary = useMemo(() => summariseHeat(rows || []), [rows])
   const latest = useMemo(() => latestPerPosition(rows || []), [rows])
-  // Sorted here rather than inline in the tbody so the pager sees the reader's
-  // order. Paged, not capped - it used to stop at the 40 hottest positions.
-  const latestSorted = useMemo(
-    () => [...latest].sort((a, b) => (Number(b.temperature_c) || -Infinity) - (Number(a.temperature_c) || -Infinity)),
+  // Hottest first; the table pages and re-sorts across the whole set.
+  const latestRows = useMemo(
+    () => readingRows(latest).sort((a, b) => (b.temp_num ?? -Infinity) - (a.temp_num ?? -Infinity)),
     [latest],
   )
-  const latestPager = usePagedRows(latestSorted)
+  const readingsCapped = (rows || []).length >= READINGS_LIMIT
   const hot = useMemo(() => hotspots(rows || []), [rows])
 
   const assetOptions = useMemo(
@@ -365,70 +392,114 @@ export default function HeatIntelligence() {
     [rows],
   )
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return (rows || []).filter((r) => {
-      if (assetFilter && r.asset_no !== assetFilter) return false
-      if (positionFilter && r.tyre_position !== positionFilter) return false
-      if (countryFilter && r.country !== countryFilter) return false
-      if (statusFilter && classifyTemp(r) !== statusFilter) return false
-      if (q) {
-        const hay = `${r.asset_no || ''} ${r.tyre_position || ''} ${r.tyre_serial || ''} ${r.location || ''} ${r.notes || ''}`.toLowerCase()
-        if (!hay.includes(q)) return false
-      }
-      return true
-    })
-  }, [rows, assetFilter, positionFilter, countryFilter, statusFilter, search])
-
-  // Paged, not capped - this register used to stop at 500 rows.
-  // The exports below still walk `filtered` in full.
-  const pager = usePagedRows(filtered)
+  const filtered = useMemo(
+    () => filterReadings(rows || [], { asset: assetFilter, position: positionFilter, country: countryFilter, status: statusFilter, search }),
+    [rows, assetFilter, positionFilter, countryFilter, statusFilter, search],
+  )
+  // Paged by the table, not capped. The exports below walk `filtered` in full.
+  const logRows = useMemo(() => readingRows(filtered), [filtered])
 
   const kpis = [
     { label: 'Readings logged', value: summary.totalReadings, icon: Activity, tone: 'text-[var(--text-primary)]' },
     { label: 'Critical', value: summary.criticalCount, icon: Flame, tone: 'text-red-400' },
     { label: 'High', value: summary.highCount, icon: ThermometerSun, tone: 'text-orange-400' },
-    { label: 'Assets tracked', value: summary.distinctAssets, icon: Truck, tone: 'text-sky-400' },
-    { label: 'Max temperature', value: summary.maxTempC == null ? 'N/A' : fmtC(summary.maxTempC), icon: Thermometer, tone: 'text-amber-400' },
+    { label: 'Assets tracked', value: summary.distinctAssets, icon: Truck, tone: 'text-sky-300' },
+    { label: 'Max temperature', value: summary.maxTempC == null ? 'N/A' : fmtC(summary.maxTempC), icon: Thermometer, tone: 'text-amber-300' },
     { label: 'Avg temperature', value: summary.avgTempC == null ? 'N/A' : fmtC(Math.round(summary.avgTempC * 10) / 10), icon: TrendingUp, tone: 'text-green-400' },
   ]
 
   // ── Log export ─────────────────────────────────────────────────────────────
-  const EXPORT_COLS = ['asset_no', 'tyre_position', 'tyre_serial', 'temperature_c', 'ambient_c', 'rise_c', 'pressure_bar', 'speed_kmh', 'threshold_c', 'status', 'location', 'recorded_at', 'notes']
-  const EXPORT_HEADERS = ['Asset', 'Position', 'Serial', 'Temp (°C)', 'Ambient (°C)', 'Rise (°C)', 'Pressure (bar)', 'Speed (km/h)', 'Threshold (°C)', 'Status', 'Location', 'Recorded', 'Notes']
-  const exportRows = filtered.map((r) => ({
-    asset_no: r.asset_no || '',
-    tyre_position: r.tyre_position || '',
-    tyre_serial: r.tyre_serial || '',
-    temperature_c: r.temperature_c ?? '',
-    ambient_c: r.ambient_c ?? '',
-    rise_c: tempOverAmbient(r) ?? '',
-    pressure_bar: r.pressure_bar ?? '',
-    speed_kmh: r.speed_kmh ?? '',
-    threshold_c: r.threshold_c ?? '',
-    status: STATUS_META[classifyTemp(r)]?.label || '',
-    location: r.location || '',
-    recorded_at: r.recorded_at || '',
-    notes: r.notes || '',
-  }))
+  const exportRows = useMemo(() => readingExportRows(filtered), [filtered])
+  const runExport = useCallback(async (fn) => {
+    try { await fn() } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) }
+  }, [])
 
-  // ── Fleet-risk export ───────────────────────────────────────────────────────
-  const RISK_COLS = ['serial', 'asset_no', 'site', 'position', 'brand', 'size', 'risk_score', 'risk_level', 'road_surface_temp_c', 'target_psi', 'factors', 'action']
-  const RISK_HEADERS = ['Serial', 'Asset', 'Site', 'Position', 'Brand', 'Size', 'Risk score', 'Risk level', 'Road °C', 'Target PSI (ref)', 'Contributing factors', 'Top action']
-  const riskExportRows = (fleetRisk.high_risk_tyres || []).map((t) => ({
-    serial: t.serial || '',
-    asset_no: t.asset_no || '',
-    site: t.site || '',
-    position: t.position || '',
-    brand: t.brand || '',
-    size: t.size || '',
-    risk_score: t.risk_score,
-    risk_level: RISK_META[t.risk_level]?.label || t.risk_level,
-    road_surface_temp_c: t.road_surface_temp_c,
-    target_psi: t.target_psi,
-    factors: (t.contributing_factors || []).map((f) => `${f.factor} (${f.value})`).join('; '),
-    action: t.recommended_actions?.[0] || '',
-  }))
+  // ── Table columns ──────────────────────────────────────────────────────────
+  const riskColumns = useMemo(() => [
+    {
+      id: 'risk_score', header: 'Score', accessorKey: 'risk_score', size: 80, ...SORT,
+      cell: ({ row }) => {
+        const meta = RISK_META[row.original.risk_level] || RISK_META.medium
+        return <span className={`text-sm font-bold px-2 py-0.5 rounded tabular-nums ${meta.pill}`}>{Math.round(row.original.risk_score)}</span>
+      },
+    },
+    {
+      id: 'risk_level', header: 'Level', accessorFn: (r) => RISK_LEVELS.length - RISK_LEVELS.indexOf(r.risk_level), size: 100, ...SORT,
+      cell: ({ row }) => {
+        const meta = RISK_META[row.original.risk_level] || RISK_META.medium
+        return <span className={`text-xs font-bold uppercase px-2 py-0.5 rounded-full border ${meta.badge}`}>{meta.label}</span>
+      },
+      meta: { exportValue: (r) => r.risk_label },
+    },
+    { id: 'serial', header: 'Serial', accessorFn: (r) => blankToUndef(r.serial), size: 140, ...SORT,
+      cell: ({ row }) => <span className="font-mono text-sm text-[var(--text-primary)]">{row.original.serial || 'N/A'}</span> },
+    { id: 'asset_no', header: 'Asset', accessorFn: (r) => blankToUndef(r.asset_no), size: 100, ...SORT,
+      cell: ({ row }) => row.original.asset_no || 'N/A' },
+    { id: 'site', header: 'Site', accessorFn: (r) => blankToUndef(r.site), size: 110, ...SORT,
+      cell: ({ row }) => row.original.site || 'Not recorded' },
+    { id: 'position', header: 'Position', accessorFn: (r) => blankToUndef(r.position), size: 90, ...SORT,
+      cell: ({ row }) => row.original.position || 'N/A' },
+    { id: 'tread_mm', header: 'Tread (mm)', accessorFn: (r) => blankToUndef(r.tread_mm), size: 90, ...SORT, meta: { align: 'right' },
+      cell: ({ row }) => row.original.tread_mm ?? 'N/A' },
+    { id: 'pressure_psi', header: 'PSI / target', accessorFn: (r) => blankToUndef(r.pressure_psi), size: 110, ...SORT, meta: { align: 'right' },
+      cell: ({ row }) => `${row.original.pressure_psi ?? 'N/A'} / ${row.original.target_psi}` },
+    {
+      id: 'factors', header: 'Contributing factors', accessorFn: (r) => blankToUndef(r.factors_text), size: 280, ...SORT,
+      cell: ({ row }) => (row.original.factors.length ? (
+        <ul className="space-y-0.5">
+          {row.original.factors.map((f, j) => (
+            <li key={j} className="text-xs text-[var(--text-secondary)] flex items-start gap-1">
+              <AlertTriangle size={11} className="text-orange-400 shrink-0 mt-0.5" aria-hidden="true" /> {f.factor} <span className="text-[var(--text-muted)]">({f.value})</span>
+            </li>
+          ))}
+        </ul>
+      ) : <span className="text-xs text-[var(--text-muted)]">None</span>),
+    },
+    { id: 'top_action', header: 'Top action', accessorFn: (r) => blankToUndef(r.top_action), size: 260, ...SORT,
+      cell: ({ row }) => <span className="text-xs font-semibold text-[var(--text-primary)]">{row.original.top_action || 'No action needed'}</span> },
+  ], [])
+
+  const latestColumns = useMemo(() => [
+    { id: 'asset_no', header: 'Asset', accessorFn: (r) => blankToUndef(r.asset_no), size: 110, ...SORT,
+      cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original.asset_no || 'N/A'}</span> },
+    { id: 'tyre_position', header: 'Position', accessorFn: (r) => blankToUndef(r.tyre_position), size: 100, ...SORT,
+      cell: ({ row }) => row.original.tyre_position || 'N/A' },
+    { id: 'temp', header: 'Temp', accessorFn: (r) => blankToUndef(r.temp_num), size: 100, ...SORT, meta: { align: 'right' },
+      cell: ({ row }) => <TempCell reading={row.original} /> },
+    { id: 'rise', header: 'Rise vs ambient', accessorFn: (r) => blankToUndef(r.rise_c), size: 120, ...SORT, meta: { align: 'right' },
+      cell: ({ row }) => (row.original.rise_c == null ? 'N/A' : `+${fmtC(row.original.rise_c)}`) },
+    { id: 'pressure', header: 'Pressure', accessorFn: (r) => blankToUndef(r.pressure_num), size: 100, ...SORT, meta: { align: 'right' },
+      cell: ({ row }) => fmtBar(row.original.pressure_bar) },
+    { id: 'band', header: 'Status', accessorKey: 'band_rank', size: 110, ...SORT,
+      cell: ({ row }) => <StatusBadge band={row.original.band} />, meta: { exportValue: (r) => r.band_label } },
+    { id: 'recorded_at', header: 'Recorded', accessorFn: (r) => blankToUndef(r.recorded_at), size: 170, ...SORT,
+      cell: ({ row }) => <span className="whitespace-nowrap">{fmtDateTime(row.original.recorded_at)}</span> },
+  ], [])
+
+  const logColumns = useMemo(() => [
+    ...latestColumns.filter((c) => c.id !== 'rise' && c.id !== 'band' && c.id !== 'recorded_at' && c.id !== 'pressure'),
+    { id: 'ambient', header: 'Ambient', accessorFn: (r) => blankToUndef(r.ambient_num), size: 100, ...SORT, meta: { align: 'right' },
+      cell: ({ row }) => fmtC(row.original.ambient_c) },
+    { id: 'rise', header: 'Rise', accessorFn: (r) => blankToUndef(r.rise_c), size: 90, ...SORT, meta: { align: 'right' },
+      cell: ({ row }) => (row.original.rise_c == null ? 'N/A' : `+${fmtC(row.original.rise_c)}`) },
+    { id: 'pressure', header: 'Pressure', accessorFn: (r) => blankToUndef(r.pressure_num), size: 100, ...SORT, meta: { align: 'right' },
+      cell: ({ row }) => fmtBar(row.original.pressure_bar) },
+    { id: 'speed', header: 'Speed', accessorFn: (r) => blankToUndef(r.speed_num), size: 90, ...SORT, meta: { align: 'right' },
+      cell: ({ row }) => fmtNum(row.original.speed_kmh, 'km/h') },
+    { id: 'band', header: 'Status', accessorKey: 'band_rank', size: 110, ...SORT,
+      cell: ({ row }) => <StatusBadge band={row.original.band} /> },
+    { id: 'recorded_at', header: 'Recorded', accessorFn: (r) => blankToUndef(r.recorded_at), size: 170, ...SORT,
+      cell: ({ row }) => <span className="whitespace-nowrap">{fmtDateTime(row.original.recorded_at)}</span> },
+    {
+      id: 'actions', header: '', enableSorting: false, size: 100, meta: { export: false },
+      cell: ({ row }) => (
+        <div className="flex items-center justify-end gap-1">
+          <button type="button" onClick={(e) => { e.stopPropagation(); openEdit(row.original) }} className="inline-flex items-center justify-center min-w-[36px] min-h-[36px] rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]" aria-label={`Edit reading for ${row.original.asset_no || 'asset'}`}><Pencil size={14} /></button>
+          <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmDelete(row.original) }} className="inline-flex items-center justify-center min-w-[36px] min-h-[36px] rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]" aria-label={`Delete reading for ${row.original.asset_no || 'asset'}`}><Trash2 size={14} /></button>
+        </div>
+      ),
+    },
+  ], [latestColumns])
 
   // ── Modal ────────────────────────────────────────────────────────────────
   const openCreate = () => { setEditing(null); setForm(EMPTY_FORM); setFormError(''); setShowModal(true) }
@@ -511,7 +582,7 @@ export default function HeatIntelligence() {
         title="Desert Heat Intelligence"
         subtitle="GCC-exclusive heat analytics: climatology, Gay-Lussac pressure physics, and fleet-wide blowout-risk scoring. Overheating is the leading indicator of blowouts, bearing failure, and chronic under-inflation."
         icon={ThermometerSun}
-        badge={fleetRisk.risk_summary?.extreme ? `${fleetRisk.risk_summary.extreme} extreme risk` : (summary.criticalCount > 0 ? `${summary.criticalCount} critical` : undefined)}
+        badge={fleetScored.summary.bands.extreme ? `${fleetScored.summary.bands.extreme} extreme risk` : (summary.criticalCount > 0 ? `${summary.criticalCount} critical` : undefined)}
         onRefresh={refreshAll}
         refreshing={refreshing || tyresLoading}
         updatedAt={updatedAt}
@@ -526,12 +597,15 @@ export default function HeatIntelligence() {
       />
 
       {/* Tab bar */}
-      <div className="flex border-b border-[var(--input-border)] gap-1 overflow-x-auto">
+      <div role="tablist" aria-label="Heat intelligence views" className="flex border-b border-[var(--input-border)] gap-1 overflow-x-auto">
         {TABS.map(([id, label, Icon]) => (
           <button
             key={id}
+            type="button"
+            role="tab"
+            aria-selected={tab === id}
             onClick={() => setTab(id)}
-            className={`px-4 py-2.5 text-sm font-semibold inline-flex items-center gap-1.5 border-b-2 -mb-px whitespace-nowrap ${tab === id ? 'border-sky-500 text-sky-400' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+            className={`min-h-[44px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] px-4 py-2.5 text-sm font-semibold inline-flex items-center gap-1.5 border-b-2 -mb-px whitespace-nowrap ${tab === id ? 'border-[var(--accent)] text-[var(--text-primary)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
           >
             <Icon size={14} /> {label}
           </button>
@@ -560,7 +634,7 @@ export default function HeatIntelligence() {
                 </div>
                 <p className="text-sm text-[var(--text-secondary)]">{conditions.advisory}</p>
                 <p className="text-xs text-[var(--text-muted)] mt-1.5 inline-flex items-center gap-1">
-                  <Sun size={12} className="text-amber-400" /> Peak heat window: <strong className="text-[var(--text-secondary)]">{conditions.peak_hours}</strong>
+                  <Sun size={12} className="text-amber-300" /> Peak heat window: <strong className="text-[var(--text-secondary)]">{conditions.peak_hours}</strong>
                 </p>
               </div>
             </div>
@@ -588,7 +662,7 @@ export default function HeatIntelligence() {
             <CardBody>
             {weatherLoading && liveWeather == null ? (
               <p className="text-sm text-[var(--text-muted)] inline-flex items-center gap-2">
-                <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" /> Fetching live conditions for {city}...
+                <span className="w-3.5 h-3.5 border-2 border-[var(--input-border)] border-t-[var(--text-primary)] rounded-full animate-spin inline-block" aria-hidden="true" /> Fetching live conditions for {city}...
               </p>
             ) : liveWeather?.ambient_c != null ? (
               <>
@@ -656,7 +730,7 @@ export default function HeatIntelligence() {
             <CardBody>
             {aqLoading && liveAir == null ? (
               <p className="text-sm text-[var(--text-muted)] inline-flex items-center gap-2">
-                <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" /> Fetching air quality for {city}...
+                <span className="w-3.5 h-3.5 border-2 border-[var(--input-border)] border-t-[var(--text-primary)] rounded-full animate-spin inline-block" aria-hidden="true" /> Fetching air quality for {city}...
               </p>
             ) : liveAir ? (
               <>
@@ -703,7 +777,7 @@ export default function HeatIntelligence() {
                 </p>
                 <div className="mt-[var(--space-3)] rounded-lg border border-red-800/50 bg-red-950/20 px-3 py-2">
                   <p className="text-xs font-bold uppercase text-red-300 mb-0.5 inline-flex items-center gap-1"><AlertTriangle size={12} /> Critical</p>
-                  <p className="text-sm text-red-200">Always inflate when COLD. Never release pressure from hot tyres. The reading is normal heat expansion.</p>
+                  <p className="text-sm text-red-300">Always inflate when COLD. Never release pressure from hot tyres. The reading is normal heat expansion.</p>
                 </div>
               </Card>
 
@@ -732,11 +806,11 @@ export default function HeatIntelligence() {
                   ['Post-trip', Thermometer, ['Check for embedded debris', 'Allow full cool-down before storing the vehicle', 'Flag any unusual wear patterns for inspection']],
                 ].map(([heading, Icon, items]) => (
                   <div key={heading}>
-                    <p className="text-xs font-bold uppercase text-[var(--text-muted)] mb-1.5 inline-flex items-center gap-1.5"><Icon size={13} className="text-sky-400" /> {heading}</p>
+                    <p className="text-xs font-bold uppercase text-[var(--text-muted)] mb-1.5 inline-flex items-center gap-1.5"><Icon size={13} className="text-sky-300" /> {heading}</p>
                     <ul className="space-y-1">
                       {items.map((item) => (
                         <li key={item} className="text-sm text-[var(--text-secondary)] flex gap-2">
-                          <span className="text-sky-400 shrink-0">•</span>{item}
+                          <span className="text-sky-300 shrink-0">•</span>{item}
                         </li>
                       ))}
                     </ul>
@@ -752,26 +826,27 @@ export default function HeatIntelligence() {
       {tab === 'risk' && (
         <div className="space-y-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
+            <div className="min-w-0">
               <p className="text-sm text-[var(--text-secondary)]">
                 Scored under <strong className="text-[var(--text-primary)]">{conditions.city}</strong> conditions:{' '}
-                {conditions.ambient_c}°C ambient · {conditions.road_surface_c}°C road · {conditions.month}.{' '}
-                {fleetRisk.fleet_size} installed tyre{fleetRisk.fleet_size === 1 ? '' : 's'} assessed.
+                {conditions.ambient_c}°C ambient, {conditions.road_surface_c}°C road, {conditions.month}.{' '}
+                {fleetScored.summary.fleet_size} installed tyre{fleetScored.summary.fleet_size === 1 ? '' : 's'} assessed.
               </p>
               <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
                 Target PSI uses published size references (this dataset carries no measured per-tyre target); load assumed nominal where not captured.
+                {fleetScored.summary.fleet_size > 0 && ` ${fleetScored.summary.with_tread.toLocaleString()} carry a tread reading, ${fleetScored.summary.with_pressure.toLocaleString()} a pressure reading; ${fleetScored.summary.unmeasured.toLocaleString()} are scored on heat and age alone.`}
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <div className="text-right mr-2">
-                <p className="text-2xl font-bold text-orange-400 leading-none">{fleetRisk.fleet_risk_score}%</p>
+                <p className="text-2xl font-bold text-orange-400 leading-none tabular-nums">{fleetScored.summary.fleet_risk_score == null ? 'N/A' : `${fleetScored.summary.fleet_risk_score}%`}</p>
                 <p className="text-[11px] uppercase tracking-wider text-[var(--text-muted)]">Fleet risk score</p>
               </div>
-              <button onClick={async () => { try { await exportToExcel(riskExportRows, RISK_COLS, RISK_HEADERS, 'heat_blowout_risk') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!riskExportRows.length}>
-                <FileSpreadsheet size={14} /> Excel
+              <button type="button" onClick={() => runExport(() => exportToExcel(riskRowsForExport, RISK_EXPORT_COLS, RISK_EXPORT_HEADERS, reportFileName('TyrePulse Heat Blowout Risk', conditions.city)))} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[40px]" disabled={!riskRowsForExport.length}>
+                <FileSpreadsheet size={14} aria-hidden="true" /> Excel
               </button>
-              <button onClick={async () => { try { await exportToPdf(riskExportRows, RISK_COLS.map((k, i) => ({ key: k, header: RISK_HEADERS[i] })), 'Fleet Blowout Risk', 'heat_blowout_risk', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!riskExportRows.length}>
-                <FileText size={14} /> PDF
+              <button type="button" onClick={() => runExport(() => exportToPdf(riskRowsForExport, RISK_EXPORT_COLS.map((k, i) => ({ key: k, header: RISK_EXPORT_HEADERS[i] })), `Fleet Blowout Risk, ${conditions.city}`, reportFileName('TyrePulse Heat Blowout Risk', conditions.city), 'landscape'))} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[40px]" disabled={!riskRowsForExport.length}>
+                <FileText size={14} aria-hidden="true" /> PDF
               </button>
             </div>
           </div>
@@ -781,84 +856,79 @@ export default function HeatIntelligence() {
                .flex-row, so a row-direction card sets its direction through
                `style`, where Card spreads it last and it deterministically wins. */
             <Card tone="crit" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
-              <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-              <div><p className="text-red-300 font-medium">Couldn’t load fleet tyres.</p><p className="text-[var(--text-muted)] text-sm mt-1">{tyresError}</p></div>
+              <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
+              <div className="flex-1" role="alert">
+                <p className="text-red-300 font-medium">Couldn’t load fleet tyres.</p>
+                <p className="text-[var(--text-muted)] text-sm mt-1">{tyresError}</p>
+              </div>
+              <button type="button" onClick={loadTyres} className="btn-secondary text-sm min-h-[40px]">Retry</button>
             </Card>
           )}
 
-          {/* Band tiles */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-[var(--gap-grid)]">
-            {['extreme', 'high', 'elevated', 'medium', 'low'].map((level) => {
+          {/* Band tiles: each is a filter toggle for the table below */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-[var(--gap-grid)]">
+            {RISK_LEVELS.map((level) => {
               const meta = RISK_META[level]
+              const on = riskLevel === level
               return (
-                <Card key={level} pad="tight" tone={RISK_CARD_TONE[level]}>
-                  <div className="flex items-center justify-between">
-                    <p className={`text-xs font-semibold uppercase tracking-wider ${meta.tone}`}>{meta.label}</p>
-                    <Flame size={14} className={meta.tone} />
-                  </div>
-                  <p className="text-2xl font-bold mt-1 text-[var(--text-primary)]">{tyres === null ? 'N/A' : (fleetRisk.risk_summary?.[level] || 0)}</p>
-                </Card>
+                <button
+                  key={level}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => setRiskLevel(on ? '' : level)}
+                  className="text-left rounded-[var(--radius-card)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                >
+                  <Card pad="tight" tone={RISK_CARD_TONE[level]} style={on ? { borderColor: 'var(--accent)' } : undefined}>
+                    <div className="flex items-center justify-between">
+                      <p className={`text-xs font-semibold uppercase tracking-wider ${meta.tone}`}>{meta.label}</p>
+                      <Flame size={14} className={meta.tone} aria-hidden="true" />
+                    </div>
+                    <p className="text-2xl font-bold mt-1 text-[var(--text-primary)] tabular-nums">{tyres === null || tyresError ? 'N/A' : (fleetScored.summary.bands[level] || 0)}</p>
+                  </Card>
+                </button>
               )
             })}
           </div>
 
-          {/* Ranked cards */}
-          {tyres === null || tyresLoading ? (
-            <div className="space-y-2">{[0, 1, 2, 3].map((i) => <Card key={i} className="h-20 animate-pulse" />)}</div>
-          ) : (tyres || []).length === 0 ? (
-            /* `py-12` would be DEAD on a Card - Card sets padding inline and
-               inline beats a class - so the empty state's breathing room is a
-               spacing token on the content instead. */
-            <Card className="text-center" style={{ paddingBlock: 'var(--space-12)' }}>
-              <Truck size={26} className="mx-auto mb-2 text-[var(--text-muted)] opacity-60" />
-              <p className="text-[var(--text-secondary)] font-medium">No installed tyres to assess.</p>
-              <p className="text-sm text-[var(--text-muted)] mt-1">Blowout risk scores every fitted tyre in <span className="font-mono">tyre_records</span>. Import or fit tyres to populate this view.</p>
-            </Card>
-          ) : (fleetRisk.high_risk_tyres || []).length === 0 ? (
-            <Card tone="good" className="text-center" style={{ paddingBlock: 'var(--space-12)' }}>
-              <ShieldCheck size={26} className="mx-auto mb-2 text-emerald-400" />
-              <p className="text-emerald-300 font-medium">No elevated-or-higher blowout risk under {conditions.city} heat.</p>
-              <p className="text-sm text-[var(--text-muted)] mt-1">All {fleetRisk.fleet_size} installed tyres score below 30.</p>
-            </Card>
-          ) : (
-            <div className="space-y-2">
-              {(fleetRisk.high_risk_tyres || []).map((t) => {
-                const meta = RISK_META[t.risk_level] || RISK_META.medium
-                return (
-                  <Card key={t.id ?? `${t.asset_no}-${t.position}-${t.serial}`} pad="tight" tone={RISK_CARD_TONE[t.risk_level] || 'info'}>
-                    <div className="flex items-start gap-3">
-                      <span className={`shrink-0 mt-0.5 text-sm font-bold px-2.5 py-1 rounded ${meta.pill}`}>{Math.round(t.risk_score)}</span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`text-xs font-bold uppercase px-2 py-0.5 rounded-full border ${meta.badge}`}>{meta.label}</span>
-                          <span className="font-mono font-semibold text-sm text-[var(--text-primary)]">{t.serial || 'N/A'}</span>
-                          {t.asset_no && <span className="text-xs text-[var(--text-muted)]">· {t.asset_no}</span>}
-                          {t.position && <span className="text-xs text-[var(--text-muted)]">· {t.position}</span>}
-                          {t.brand && <span className="text-xs text-[var(--text-muted)]">· {t.brand}</span>}
-                          {t.size && <span className="text-xs text-[var(--text-muted)]">· {t.size}</span>}
-                        </div>
-                        {(t.contributing_factors || []).length > 0 && (
-                          <div className="flex gap-x-3 gap-y-1 mt-1.5 flex-wrap">
-                            {t.contributing_factors.map((f, j) => (
-                              <span key={j} className="text-xs text-[var(--text-secondary)] inline-flex items-center gap-1">
-                                <AlertTriangle size={11} className="text-orange-400 shrink-0" /> {f.factor} <span className="text-[var(--text-muted)]">({f.value})</span>
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                        {(t.recommended_actions || []).map((a, j) => (
-                          <p key={j} className="text-xs font-semibold text-[var(--text-primary)] mt-1">→ {a}</p>
-                        ))}
-                      </div>
-                    </div>
-                  </Card>
-                )
-              })}
-              {fleetRisk.high_risk_tyres.length >= 30 && (
-                <p className="text-xs text-[var(--text-muted)] px-1">Showing the 30 highest-risk tyres. Export for the full ranked set.</p>
-              )}
+          {/* Filters */}
+          <Card className="space-y-[var(--space-3)]">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-2 items-center">
+              <div className="relative">
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+                <input className="input pl-9 w-full min-h-[44px]" placeholder="Search serial, asset, brand, size, position" aria-label="Search scored tyres" value={riskSearch} onChange={(e) => setRiskSearch(e.target.value)} />
+              </div>
+              <select className="input min-h-[44px]" value={riskLevel} onChange={(e) => setRiskLevel(e.target.value)} aria-label="Filter by risk level">
+                <option value="">All risk levels</option>
+                <option value="at_risk">Elevated or higher (score 30+)</option>
+                {RISK_LEVELS.map((l) => <option key={l} value={l}>{RISK_META[l].label}</option>)}
+              </select>
+              <select className="input min-h-[44px]" value={riskSite} onChange={(e) => setRiskSite(e.target.value)} aria-label="Filter by site">
+                <option value="">All sites</option>
+                {riskSiteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <div className="flex items-center gap-2 justify-end">
+                <span className="text-xs text-[var(--text-muted)] whitespace-nowrap">{riskFiltered.length.toLocaleString()} of {fleetScored.rows.length.toLocaleString()}</span>
+                {(riskLevel || riskSite || riskSearch) && (
+                  <button type="button" onClick={() => { setRiskLevel(''); setRiskSite(''); setRiskSearch('') }} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[40px]"><X size={14} aria-hidden="true" /> Clear</button>
+                )}
+              </div>
             </div>
-          )}
+          </Card>
+
+          <EnterpriseTable
+            columns={riskColumns}
+            data={riskFiltered}
+            getRowId={(r, i) => String(r.id ?? `${r.asset_no}-${r.position}-${r.serial}-${i}`)}
+            loading={tyres === null || tyresLoading}
+            enableGlobalFilter={false}
+            enableColumnFilters={false}
+            enableExport={false}
+            initialPageSize={25}
+            emptyMessage={fleetScored.rows.length === 0
+              ? 'No installed tyres to assess. Import or fit tyres to populate this view.'
+              : 'No tyre matches these filters.'}
+            emptyIcon={<ShieldCheck size={26} className="text-emerald-300" aria-hidden="true" />}
+          />
         </div>
       )}
 
@@ -887,7 +957,7 @@ export default function HeatIntelligence() {
                   {calcPoints.map((c) => {
                     const cold = Number(coldPsi)
                     const tone = c.expected_hot_pressure_psi > cold * 1.2 ? 'text-red-400'
-                      : c.expected_hot_pressure_psi > cold * 1.1 ? 'text-orange-400' : 'text-emerald-400'
+                      : c.expected_hot_pressure_psi > cold * 1.1 ? 'text-orange-400' : 'text-emerald-300'
                     return (
                       <div key={c.time_label} className="flex items-center justify-between rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)]/40 px-3 py-2.5">
                         <div>
@@ -904,7 +974,7 @@ export default function HeatIntelligence() {
                 </div>
                 {calcPoints.length > 0 && (
                   <div className="mt-4 rounded-lg border border-red-800/50 bg-red-950/20 px-3 py-2.5">
-                    <p className="text-sm text-red-200">
+                    <p className="text-sm text-red-300">
                       <strong>At {conditions.road_surface_c}°C road surface, pressure rises to {calcPoints[calcPoints.length - 1].expected_hot_pressure_psi} PSI.</strong>{' '}
                       NEVER release pressure from hot tyres.
                     </p>
@@ -922,7 +992,7 @@ export default function HeatIntelligence() {
           <p className="text-sm text-[var(--text-secondary)]">GCC desert corridors enriched with today’s {conditions.month} ambient/road temperatures and risk-appropriate pre-trip checks.</p>
           {routes.map((route) => {
             const meta = RISK_META[route.risk] || SEVERITY_META[route.risk] || RISK_META.medium
-            const badge = RISK_META[route.risk]?.badge || 'bg-sky-900/30 text-sky-200 border-sky-700/50'
+            const badge = RISK_META[route.risk]?.badge || 'bg-sky-900/30 text-sky-300 border-sky-700/50'
             return (
               <Card key={route.name} pad="tight" tone={RISK_CARD_TONE[route.risk] || 'default'}>
                 <div className="flex items-start justify-between flex-wrap gap-3">
@@ -935,7 +1005,7 @@ export default function HeatIntelligence() {
                     </div>
                     <div className="mt-2 space-y-0.5">
                       {route.recommended_checks.slice(0, 4).map((check) => (
-                        <p key={check} className="text-xs text-[var(--text-secondary)] flex gap-1.5"><span className="text-sky-400 shrink-0">•</span>{check}</p>
+                        <p key={check} className="text-xs text-[var(--text-secondary)] flex gap-1.5"><span className="text-sky-300 shrink-0">•</span>{check}</p>
                       ))}
                     </div>
                   </div>
@@ -954,10 +1024,10 @@ export default function HeatIntelligence() {
       {tab === 'log' && (
         <div className="space-y-6">
           <div className="flex items-center justify-end gap-2">
-            <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'heat_intelligence') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button type="button" onClick={() => runExport(() => exportToExcel(exportRows, READING_EXPORT_COLS, READING_EXPORT_HEADERS, reportFileName('TyrePulse Heat Intelligence Log')))} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Heat Intelligence', 'heat_intelligence', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button type="button" onClick={() => runExport(() => exportToPdf(exportRows, READING_EXPORT_COLS.map((k, i) => ({ key: k, header: READING_EXPORT_HEADERS[i] })), 'Heat Intelligence temperature log', reportFileName('TyrePulse Heat Intelligence Log'), 'landscape'))} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileText size={14} /> PDF
             </button>
             <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={notProvisioned}>
@@ -967,7 +1037,7 @@ export default function HeatIntelligence() {
 
           {notProvisioned && (
             <Card tone="warn" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
-              <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
+              <AlertTriangle size={18} className="text-amber-300 mt-0.5 shrink-0" />
               <div>
                 <p className="text-amber-300 font-medium">The manual temperature logger isn’t enabled on this database yet.</p>
                 <p className="text-[var(--text-muted)] text-sm mt-1">
@@ -1007,7 +1077,7 @@ export default function HeatIntelligence() {
               <div className="h-16 bg-[var(--input-bg)] rounded animate-pulse" />
             ) : hot.length === 0 ? (
               <p className="text-sm text-[var(--text-muted)] flex items-center gap-2">
-                <Thermometer size={15} className="text-emerald-400" /> No tyres reading high or critical. Fleet is within safe thermal limits.
+                <Thermometer size={15} className="text-emerald-300" /> No tyres reading high or critical. Fleet is within safe thermal limits.
               </p>
             ) : (
               <div className="flex flex-wrap gap-2">
@@ -1031,126 +1101,76 @@ export default function HeatIntelligence() {
           </Card>
 
           {/* Latest-per-position snapshot */}
-          <Card pad="none" clip>
-            <div className="px-4 pt-4 pb-3">
-              <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
-                <Thermometer size={15} /> Latest reading per tyre position
-              </h3>
-            </div>
-            {rows === null ? (
-              <div className="px-4 pb-4"><div className="h-16 bg-[var(--input-bg)] rounded animate-pulse" /></div>
-            ) : latest.length === 0 ? (
-              <p className="px-4 pb-4 text-sm text-[var(--text-muted)]">No readings logged yet.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-y border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                      {['Asset', 'Position', 'Temp', 'Rise vs ambient', 'Pressure', 'Status', 'Recorded'].map((h, i) => <th key={i} className="px-4 py-2.5 font-semibold whitespace-nowrap">{h}</th>)}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {latestPager.pageRows.map((r) => {
-                        const rise = tempOverAmbient(r)
-                        return (
-                          <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                            <td className="px-4 py-2 font-medium text-[var(--text-primary)]">{r.asset_no || 'N/A'}</td>
-                            <td className="px-4 py-2 text-[var(--text-secondary)]">{r.tyre_position || 'N/A'}</td>
-                            <td className="px-4 py-2"><TempCell reading={r} /></td>
-                            <td className="px-4 py-2 text-[var(--text-secondary)]">{rise == null ? 'N/A' : `+${fmtC(rise)}`}</td>
-                            <td className="px-4 py-2 text-[var(--text-secondary)]">{fmtBar(r.pressure_bar)}</td>
-                            <td className="px-4 py-2"><StatusBadge band={classifyTemp(r)} /></td>
-                            <td className="px-4 py-2 text-[var(--text-secondary)] whitespace-nowrap">{fmtDateTime(r.recorded_at)}</td>
-                          </tr>
-                        )
-                      })}
-                  </tbody>
-                </table>
-                <TablePagination {...latestPager} />
-              </div>
-            )}
-          </Card>
+          <section className="space-y-2" aria-labelledby="heat-latest">
+            <h3 id="heat-latest" className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2 px-1">
+              <Thermometer size={15} aria-hidden="true" /> Latest reading per tyre position
+            </h3>
+            <EnterpriseTable
+              columns={latestColumns}
+              data={latestRows}
+              getRowId={(r, i) => String(r.id ?? i)}
+              loading={rows === null}
+              enableColumnFilters={false}
+              searchPlaceholder="Search asset or position"
+              exportFileName={reportFileName('TyrePulse Latest Tyre Temperatures')}
+              reportMeta={{ title: 'Latest reading per tyre position' }}
+              initialPageSize={25}
+              emptyMessage="No readings logged yet."
+            />
+          </section>
 
           {/* Filters. Deliberately NOT clipped: this card hosts native selects,
               and a clipped card is what cuts a dropdown off. */}
           <Card className="space-y-[var(--space-3)]">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative flex-1 min-w-[200px]">
-                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-                <input className="input pl-9 w-full" placeholder="Search asset, position, serial, location, notes…" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_repeat(3,minmax(0,1fr))_auto] gap-2 items-center">
+              <div className="relative">
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+                <input className="input pl-9 w-full min-h-[44px]" placeholder="Search asset, position, serial, location, notes" aria-label="Search readings" value={search} onChange={(e) => setSearch(e.target.value)} />
               </div>
-              <select className="input" value={assetFilter} onChange={(e) => setAssetFilter(e.target.value)} aria-label="Asset">
+              <select className="input min-h-[44px]" value={assetFilter} onChange={(e) => setAssetFilter(e.target.value)} aria-label="Filter by asset">
                 <option value="">All assets</option>
                 {assetOptions.map((a) => <option key={a} value={a}>{a}</option>)}
               </select>
-              <select className="input" value={positionFilter} onChange={(e) => setPositionFilter(e.target.value)} aria-label="Position">
+              <select className="input min-h-[44px]" value={positionFilter} onChange={(e) => setPositionFilter(e.target.value)} aria-label="Filter by position">
                 <option value="">All positions</option>
                 {positionOptions.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
-              <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
+              <select className="input min-h-[44px]" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter by status">
                 <option value="">All statuses</option>
                 <option value="critical">Critical</option>
                 <option value="high">High</option>
                 <option value="elevated">Elevated</option>
                 <option value="normal">Normal</option>
               </select>
-              {countryOptions.length > 1 && (
-                <select className="input" value={countryFilter} onChange={(e) => setCountryFilter(e.target.value)} aria-label="Country">
-                  <option value="">All countries</option>
-                  {countryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-              )}
-              {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
-              <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {summary.totalReadings}</span>
+              <div className="flex items-center gap-2 justify-end">
+                {countryOptions.length > 1 && (
+                  <select className="input min-h-[44px]" value={countryFilter} onChange={(e) => setCountryFilter(e.target.value)} aria-label="Filter by country">
+                    <option value="">All countries</option>
+                    {countryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                )}
+                {hasFilters && <button type="button" onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[40px]"><X size={14} aria-hidden="true" /> Clear</button>}
+                <span className="text-xs text-[var(--text-muted)] whitespace-nowrap">{filtered.length} of {summary.totalReadings}</span>
+              </div>
             </div>
+            {readingsCapped && (
+              <p className="text-xs text-[var(--text-muted)]">Showing the newest {READINGS_LIMIT} readings. Older readings are not loaded into this view or its exports.</p>
+            )}
           </Card>
 
-          {/* Table */}
-          <Card pad="none" clip>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                    {['Asset', 'Position', 'Temp', 'Ambient', 'Rise', 'Pressure', 'Speed', 'Status', 'Recorded', ''].map((h, i) => <th key={i} className="px-4 py-3 font-semibold whitespace-nowrap">{h}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows === null ? (
-                    [0, 1, 2, 3, 4].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={10} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
-                  ) : filtered.length === 0 ? (
-                    <tr><td colSpan={10} className="px-4 py-12 text-center text-[var(--text-muted)]">
-                      <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                      {rows.length === 0 && !notProvisioned ? 'No readings logged yet. Log your first thermal reading.' : 'No readings match these filters.'}
-                    </td></tr>
-                  ) : (
-                    pager.pageRows.map((r) => {
-                      const rise = tempOverAmbient(r)
-                      return (
-                        <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                          <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.asset_no || 'N/A'}</td>
-                          <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.tyre_position || 'N/A'}</td>
-                          <td className="px-4 py-2.5"><TempCell reading={r} /></td>
-                          <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtC(r.ambient_c)}</td>
-                          <td className="px-4 py-2.5 text-[var(--text-secondary)]">{rise == null ? 'N/A' : `+${fmtC(rise)}`}</td>
-                          <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtBar(r.pressure_bar)}</td>
-                          <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtNum(r.speed_kmh, 'km/h')}</td>
-                          <td className="px-4 py-2.5"><StatusBadge band={classifyTemp(r)} /></td>
-                          <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDateTime(r.recorded_at)}</td>
-                          <td className="px-4 py-2.5">
-                            <div className="flex items-center justify-end gap-1">
-                              <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit"><Pencil size={14} /></button>
-                              <button onClick={() => setConfirmDelete(r)} className="p-1.5 rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" aria-label="Delete"><Trash2 size={14} /></button>
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <TablePagination {...pager} />
-          </Card>
+          {/* Full log */}
+          <EnterpriseTable
+            columns={logColumns}
+            data={logRows}
+            getRowId={(r, i) => String(r.id ?? i)}
+            loading={rows === null}
+            enableGlobalFilter={false}
+            enableColumnFilters={false}
+            enableExport={false}
+            initialPageSize={25}
+            emptyMessage={(rows || []).length === 0 && !notProvisioned ? 'No readings logged yet. Log your first thermal reading.' : 'No readings match these filters.'}
+            emptyIcon={<Filter size={22} className="opacity-60" aria-hidden="true" />}
+          />
         </div>
       )}
 
@@ -1168,53 +1188,53 @@ export default function HeatIntelligence() {
             <form onSubmit={submit} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="label">Asset number</label>
-                  <input className="input w-full" placeholder="e.g. TRK-1042" value={form.asset_no} maxLength={120} onChange={(e) => set('asset_no', e.target.value)} />
+                  <label className="label" htmlFor="heat-f1">Asset number</label>
+                  <input id="heat-f1" className="input w-full" placeholder="e.g. TRK-1042" value={form.asset_no} maxLength={120} onChange={(e) => set('asset_no', e.target.value)} />
                 </div>
                 <div>
-                  <label className="label">Tyre position (optional)</label>
-                  <input className="input w-full" placeholder="e.g. FL, RRo, Drive-2" value={form.tyre_position} maxLength={60} onChange={(e) => set('tyre_position', e.target.value)} />
+                  <label className="label" htmlFor="heat-f2">Tyre position (optional)</label>
+                  <input id="heat-f2" className="input w-full" placeholder="e.g. FL, RRo, Drive-2" value={form.tyre_position} maxLength={60} onChange={(e) => set('tyre_position', e.target.value)} />
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="label">Temperature (°C)</label>
-                  <input className="input w-full" type="number" step="0.1" min="0" placeholder="95" value={form.temperature_c} onChange={(e) => set('temperature_c', e.target.value)} />
+                  <label className="label" htmlFor="heat-f3">Temperature (°C)</label>
+                  <input id="heat-f3" className="input w-full" type="number" step="0.1" min="0" placeholder="95" value={form.temperature_c} onChange={(e) => set('temperature_c', e.target.value)} />
                 </div>
                 <div>
-                  <label className="label">Ambient (°C, optional)</label>
-                  <input className="input w-full" type="number" step="0.1" min="0" placeholder="42" value={form.ambient_c} onChange={(e) => set('ambient_c', e.target.value)} />
+                  <label className="label" htmlFor="heat-f4">Ambient (°C, optional)</label>
+                  <input id="heat-f4" className="input w-full" type="number" step="0.1" min="0" placeholder="42" value={form.ambient_c} onChange={(e) => set('ambient_c', e.target.value)} />
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="label">Pressure (bar, optional)</label>
-                  <input className="input w-full" type="number" step="0.1" min="0" placeholder="8.5" value={form.pressure_bar} onChange={(e) => set('pressure_bar', e.target.value)} />
+                  <label className="label" htmlFor="heat-f5">Pressure (bar, optional)</label>
+                  <input id="heat-f5" className="input w-full" type="number" step="0.1" min="0" placeholder="8.5" value={form.pressure_bar} onChange={(e) => set('pressure_bar', e.target.value)} />
                 </div>
                 <div>
-                  <label className="label">Speed (km/h, optional)</label>
-                  <input className="input w-full" type="number" step="1" min="0" placeholder="80" value={form.speed_kmh} onChange={(e) => set('speed_kmh', e.target.value)} />
+                  <label className="label" htmlFor="heat-f6">Speed (km/h, optional)</label>
+                  <input id="heat-f6" className="input w-full" type="number" step="1" min="0" placeholder="80" value={form.speed_kmh} onChange={(e) => set('speed_kmh', e.target.value)} />
                 </div>
                 <div>
-                  <label className="label">Alarm threshold (°C, optional)</label>
-                  <input className="input w-full" type="number" step="0.1" min="0" placeholder="90" value={form.threshold_c} onChange={(e) => set('threshold_c', e.target.value)} />
+                  <label className="label" htmlFor="heat-f7">Alarm threshold (°C, optional)</label>
+                  <input id="heat-f7" className="input w-full" type="number" step="0.1" min="0" placeholder="90" value={form.threshold_c} onChange={(e) => set('threshold_c', e.target.value)} />
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="label">Tyre serial (optional)</label>
-                  <input className="input w-full" placeholder="e.g. DOT-3521-XT" value={form.tyre_serial} maxLength={120} onChange={(e) => set('tyre_serial', e.target.value)} />
+                  <label className="label" htmlFor="heat-f8">Tyre serial (optional)</label>
+                  <input id="heat-f8" className="input w-full" placeholder="e.g. DOT-3521-XT" value={form.tyre_serial} maxLength={120} onChange={(e) => set('tyre_serial', e.target.value)} />
                 </div>
                 <div>
-                  <label className="label">Recorded at (optional)</label>
-                  <input className="input w-full" type="datetime-local" value={form.recorded_at} onChange={(e) => set('recorded_at', e.target.value)} />
+                  <label className="label" htmlFor="heat-f9">Recorded at (optional)</label>
+                  <input id="heat-f9" className="input w-full" type="datetime-local" value={form.recorded_at} onChange={(e) => set('recorded_at', e.target.value)} />
                   <p className="text-[11px] text-[var(--text-muted)] mt-1">Leave blank to use now.</p>
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="label">Status (optional)</label>
-                  <select className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
+                  <label className="label" htmlFor="heat-f10">Status (optional)</label>
+                  <select id="heat-f10" className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
                     <option value="">Auto-classify from temperature</option>
                     <option value="normal">Normal</option>
                     <option value="elevated">Elevated</option>
@@ -1226,13 +1246,13 @@ export default function HeatIntelligence() {
                   </p>
                 </div>
                 <div>
-                  <label className="label">Location (optional)</label>
-                  <input className="input w-full" placeholder="e.g. Riyadh depot, Route 40" value={form.location} maxLength={200} onChange={(e) => set('location', e.target.value)} />
+                  <label className="label" htmlFor="heat-f11">Location (optional)</label>
+                  <input id="heat-f11" className="input w-full" placeholder="e.g. Riyadh depot, Route 40" value={form.location} maxLength={200} onChange={(e) => set('location', e.target.value)} />
                 </div>
               </div>
               <div>
-                <label className="label">Notes (optional)</label>
-                <textarea className="input w-full min-h-[70px] resize-y" placeholder="e.g. infrared gun reading after 4h haul; hub warm to touch" value={form.notes} maxLength={8000} onChange={(e) => set('notes', e.target.value)} />
+                <label className="label" htmlFor="heat-f12">Notes (optional)</label>
+                <textarea id="heat-f12" className="input w-full min-h-[70px] resize-y" placeholder="e.g. infrared gun reading after 4h haul; hub warm to touch" value={form.notes} maxLength={8000} onChange={(e) => set('notes', e.target.value)} />
               </div>
 
               {formError && (

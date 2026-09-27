@@ -42,7 +42,7 @@ import PageHeader from '../components/ui/PageHeader'
 import Card, { CardHeader } from '../components/ui/Card'
 import Modal from '../components/ui/Modal'
 import EmptyState from '../components/EmptyState'
-import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import {
@@ -62,6 +62,7 @@ import { colorAt, categorical, withAlpha } from '../lib/reportColors'
 import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { safeImageSrc } from '../lib/safeUrl'
+import { compareValues } from '../lib/consoleTable'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement,
@@ -70,12 +71,23 @@ ChartJS.register(
 
 const WRITE_ROLES = new Set(['Admin', 'Manager', 'Director'])
 
+// One sort rule for every table column: consoleTable's number/date aware
+// comparison, with blank cells pushed to the end whatever the direction.
+const SORT = {
+  sortingFn: (a, b, id) => compareValues(a.getValue(id), b.getValue(id)),
+  sortUndefined: 'last',
+}
+const blankToUndef = (v) => (v == null || v === '' ? undefined : v)
+
 const TONE = {
-  danger: { bg: 'rgba(239,68,68,0.10)', border: 'rgba(239,68,68,0.30)', text: '#fca5a5' },
-  warning: { bg: 'rgba(245,158,11,0.10)', border: 'rgba(245,158,11,0.30)', text: '#fcd34d' },
-  info: { bg: 'rgba(59,130,246,0.10)', border: 'rgba(59,130,246,0.30)', text: '#93c5fd' },
-  good: { bg: 'rgba(22,163,74,0.10)', border: 'rgba(22,163,74,0.30)', text: '#86efac' },
-  quiet: { bg: 'rgba(148,163,184,0.10)', border: 'rgba(148,163,184,0.25)', text: '#cbd5e1' },
+  // `cls` carries the ink as a Tailwind class, because index.css remaps the
+  // -300 text tier to a saturated ink under html.light. An inline hex cannot be
+  // remapped and read as near-invisible pale text on the light theme.
+  danger: { bg: 'rgba(239,68,68,0.10)', border: 'rgba(239,68,68,0.30)', cls: 'text-red-300' },
+  warning: { bg: 'rgba(245,158,11,0.10)', border: 'rgba(245,158,11,0.30)', cls: 'text-amber-300' },
+  info: { bg: 'rgba(59,130,246,0.10)', border: 'rgba(59,130,246,0.30)', cls: 'text-blue-300' },
+  good: { bg: 'rgba(22,163,74,0.10)', border: 'rgba(22,163,74,0.30)', cls: 'text-emerald-300' },
+  quiet: { bg: 'rgba(148,163,184,0.10)', border: 'rgba(148,163,184,0.25)', cls: 'text-[var(--text-secondary)]' },
 }
 
 const inputCls =
@@ -107,6 +119,7 @@ function Tile({ label, value, sub, icon: Icon, tone, active, onClick }) {
       // tile is genuinely a button.
       interactive={!!onClick}
       onClick={onClick}
+      aria-pressed={onClick ? !!active : undefined}
       className="text-left w-full"
       // Card spreads `style` last, so the active accent still wins over the
       // borderColor Card sets from its tone.
@@ -114,9 +127,9 @@ function Tile({ label, value, sub, icon: Icon, tone, active, onClick }) {
     >
       <div className="flex items-center justify-between mb-1">
         <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{label}</span>
-        {Icon && <Icon className="w-4 h-4" style={{ color: tone || 'var(--text-dim)' }} />}
+        {Icon && <Icon aria-hidden="true" className={`w-4 h-4 ${tone || ''}`} style={tone ? undefined : { color: 'var(--text-dim)' }} />}
       </div>
-      <div className="text-2xl font-semibold" style={{ color: tone || 'var(--text-primary)' }}>
+      <div className={`text-2xl font-semibold tabular-nums ${tone || ''}`} style={tone ? undefined : { color: 'var(--text-primary)' }}>
         {value === null || value === undefined ? 'N/A' : value}
       </div>
       {sub && <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-dim)' }}>{sub}</div>}
@@ -129,8 +142,8 @@ function StatusPill({ status }) {
   const t = meta ? TONE[meta.tone] : TONE.quiet
   return (
     <span
-      className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] whitespace-nowrap"
-      style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.text }}
+      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] whitespace-nowrap ${t.cls}`}
+      style={{ background: t.bg, border: `1px solid ${t.border}` }}
     >
       {rfrStatusLabel(status)}
     </span>
@@ -144,8 +157,8 @@ function PriorityPill({ priority }) {
     : p === 'Medium' ? TONE.info : TONE.good
   return (
     <span
-      className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px]"
-      style={{ background: tone.bg, border: `1px solid ${tone.border}`, color: tone.text }}
+      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] whitespace-nowrap ${tone.cls}`}
+      style={{ background: tone.bg, border: `1px solid ${tone.border}` }}
     >
       {p}
     </span>
@@ -191,6 +204,7 @@ export default function RepairRequests() {
   const [rejecting, setRejecting] = useState(null)
   const [converting, setConverting] = useState(null)
   const [notice, setNotice] = useState('')
+  const [exportError, setExportError] = useState('')
 
   // ONE clock for the whole render, so every age on screen is measured from the
   // same instant rather than drifting row by row as the render walks the list.
@@ -263,8 +277,78 @@ export default function RepairRequests() {
     () => filterJobCardRfrs(cardViews, filters),
     [cardViews, filters],
   )
-  const queuePager = usePagedRows(sortedQueue)
-  const cardsPager = usePagedRows(filteredCards)
+  // ── table columns: one sort rule (consoleTable.compareValues, blanks last) ─
+  const queueColumns = useMemo(() => [
+    {
+      id: 'rfr_no', header: 'RFR', accessorFn: (r) => blankToUndef(r.rfr_no), size: 160, ...SORT,
+      cell: ({ row }) => <span className="whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>{row.original.rfr_no || 'N/A'}</span>,
+    },
+    { id: 'asset_no', header: 'Asset', accessorFn: (r) => blankToUndef(r.asset_no), size: 110, ...SORT,
+      cell: ({ row }) => row.original.asset_no || 'N/A' },
+    {
+      id: 'fault_category', header: 'Fault', accessorFn: (r) => blankToUndef(r.fault_category), size: 200, ...SORT,
+      cell: ({ row }) => (
+        <span className="block max-w-[22rem] truncate" title={row.original.description || ''}>
+          {row.original.fault_category || 'Not recorded'}
+        </span>
+      ),
+    },
+    { id: 'site', header: 'Site', accessorFn: (r) => blankToUndef(r.site), size: 120, ...SORT,
+      cell: ({ row }) => row.original.site || 'Not recorded' },
+    {
+      id: 'priority', header: 'Priority', size: 110, ...SORT,
+      accessorFn: (r) => {
+        const i = RFR_PRIORITIES.indexOf(canonRfrPriority(r.priority))
+        return i < 0 ? undefined : RFR_PRIORITIES.length - i
+      },
+      cell: ({ row }) => <PriorityPill priority={row.original.priority} />,
+      meta: { exportValue: (r) => canonRfrPriority(r.priority) || 'Not set' },
+    },
+    {
+      id: 'status', header: 'Status', accessorFn: (r) => rfrStatusLabel(r.status), size: 150, ...SORT,
+      cell: ({ row }) => <StatusPill status={row.original.status} />,
+    },
+    {
+      id: 'waiting', header: 'Waiting', size: 110, ...SORT, meta: { align: 'right' },
+      accessorFn: (r) => blankToUndef(rfrAgeHours(r, now)),
+      cell: ({ row }) => {
+        const overdue = isRfrOverdue(row.original, now)
+        return (
+          <span className={`whitespace-nowrap tabular-nums ${overdue ? 'text-red-300 font-semibold' : ''}`}>
+            {overdue && <AlertTriangle aria-label="Past response target" className="w-3 h-3 inline mr-1" />}
+            {hours(rfrAgeHours(row.original, now))}
+          </span>
+        )
+      },
+    },
+    { id: 'work_order_no', header: 'Job card', accessorFn: (r) => blankToUndef(r.work_order_no), size: 150, ...SORT,
+      cell: ({ row }) => row.original.work_order_no || '' },
+    {
+      id: 'open', header: '', enableSorting: false, size: 40, meta: { export: false },
+      cell: () => <ChevronRight aria-hidden="true" className="w-4 h-4 inline" style={{ color: 'var(--text-dim)' }} />,
+    },
+  ], [now])
+
+  const cardColumns = useMemo(() => [
+    { id: 'rfr_no', header: 'RFR', accessorFn: (r) => blankToUndef(r.rfr_no), size: 160, ...SORT,
+      cell: ({ row }) => <span style={{ color: 'var(--text-primary)' }}>{row.original.rfr_no || 'N/A'}</span> },
+    { id: 'rfr_period', header: 'Period', accessorFn: (r) => blankToUndef(r.rfr_period), size: 90, ...SORT,
+      cell: ({ row }) => row.original.rfr_period || 'N/A' },
+    { id: 'raised_by', header: 'Raised by', accessorFn: (r) => blankToUndef(r.raised_by), size: 130, ...SORT,
+      cell: ({ row }) => row.original.raised_by || 'Not recorded' },
+    { id: 'raised_at', header: 'Raised on', accessorFn: (r) => blankToUndef(r.raised_at), size: 140, ...SORT,
+      cell: ({ row }) => row.original.raised_at || 'Not recorded' },
+    { id: 'work_order_no', header: 'Job card', accessorFn: (r) => blankToUndef(r.work_order_no), size: 160, ...SORT,
+      cell: ({ row }) => row.original.work_order_no || 'N/A' },
+    { id: 'asset_no', header: 'Asset', accessorFn: (r) => blankToUndef(r.asset_no), size: 110, ...SORT,
+      cell: ({ row }) => row.original.asset_no || 'N/A' },
+    { id: 'site', header: 'Site', accessorFn: (r) => blankToUndef(r.site), size: 120, ...SORT,
+      cell: ({ row }) => row.original.site || 'Not recorded' },
+    { id: 'work_type', header: 'Type', accessorFn: (r) => blankToUndef(r.work_type), size: 110, ...SORT,
+      cell: ({ row }) => row.original.work_type || 'N/A' },
+    { id: 'status', header: 'Card status', accessorFn: (r) => blankToUndef(r.status), size: 120, ...SORT,
+      cell: ({ row }) => row.original.status || 'N/A' },
+  ], [])
   const cardSummary = useMemo(() => summarizeJobCardRfrs(filteredCards), [filteredCards])
 
   // ── derived: analytics (over whichever tab's set is in view) ──────────────
@@ -357,10 +441,15 @@ export default function RepairRequests() {
     }
   }
 
-  const exportForTab = (kind) => {
-    if (tab === 'jobcards') return exportCards(kind)
-    if (tab === 'analytics') return exportAnalytics(kind)
-    return exportQueue(kind)
+  const exportForTab = async (kind) => {
+    setExportError('')
+    try {
+      if (tab === 'jobcards') await exportCards(kind)
+      else if (tab === 'analytics') await exportAnalytics(kind)
+      else await exportQueue(kind)
+    } catch (e) {
+      setExportError(toUserMessage(e, 'Could not export. Please retry.'))
+    }
   }
 
   const exportDisabled = tab === 'jobcards'
@@ -626,7 +715,7 @@ export default function RepairRequests() {
               <RefreshCw className="w-4 h-4" /> Refresh
             </button>
             {tab !== 'analytics' && (
-              <button onClick={() => setShowFilters((s) => !s)} className="btn-secondary text-sm inline-flex items-center gap-1.5">
+              <button onClick={() => setShowFilters((s) => !s)} aria-expanded={showFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5">
                 <Filter className="w-4 h-4" />
                 Filters{activeFilterCount ? ` (${activeFilterCount})` : ''}
               </button>
@@ -647,15 +736,25 @@ export default function RepairRequests() {
       />
 
       {/* Tabs */}
-      <div className="flex flex-wrap gap-2">
+      {exportError && (
+        <p role="alert" className={`text-sm rounded-lg px-3 py-2 ${TONE.danger.cls}`}
+          style={{ background: TONE.danger.bg, border: `1px solid ${TONE.danger.border}` }}>
+          {exportError}
+        </p>
+      )}
+
+      <div className="flex flex-wrap gap-2" role="tablist" aria-label="Repair request views">
         {TABS.map((t) => {
           const Icon = t.icon
           const on = tab === t.key
           return (
             <button
               key={t.key}
+              type="button"
+              role="tab"
+              aria-selected={on}
               onClick={() => setTab(t.key)}
-              className="px-3 py-2 rounded-lg text-sm inline-flex items-center gap-1.5 border transition-colors"
+              className="min-h-[40px] px-3 py-2 rounded-lg text-sm inline-flex items-center gap-1.5 border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
               style={{
                 background: on ? 'var(--brand-subtle, rgba(22,163,74,0.12))' : 'transparent',
                 borderColor: on ? 'var(--accent)' : 'var(--border-subtle, rgba(255,255,255,0.08))',
@@ -675,7 +774,7 @@ export default function RepairRequests() {
       {notice && (
         <Card pad="tight" className="items-start justify-between gap-[var(--space-3)]"
           style={{ flexDirection: 'row', background: TONE.good.bg, borderColor: TONE.good.border }}>
-          <p className="text-sm" style={{ color: TONE.good.text }}>{notice}</p>
+          <p className={`text-sm ${TONE.good.cls}`}>{notice}</p>
           <button onClick={() => setNotice('')} className="btn-secondary text-xs">Dismiss</button>
         </Card>
       )}
@@ -688,7 +787,7 @@ export default function RepairRequests() {
           {queueError && (
             <Card pad="tight" className="items-start justify-between gap-[var(--space-3)]"
               style={{ flexDirection: 'row', background: TONE.danger.bg, borderColor: TONE.danger.border }}>
-              <p className="text-sm" style={{ color: TONE.danger.text }}>{queueError}</p>
+              <p className={`text-sm ${TONE.danger.cls}`}>{queueError}</p>
               <button onClick={loadQueue} className="btn-secondary text-xs">Retry</button>
             </Card>
           )}
@@ -718,12 +817,12 @@ export default function RepairRequests() {
               <div className="grid gap-3 grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
                 <Tile label="Open requests" value={summary.open} icon={Inbox}
                   sub={summary.assets ? `${summary.assets} distinct assets` : null}
-                  tone={summary.open ? '#f59e0b' : undefined} />
+                  tone={summary.open ? 'text-orange-400' : undefined} />
                 <Tile label="Awaiting acknowledgement" value={summary.awaitingAcknowledgement} icon={Clock}
                   active={filters.status === 'submitted'}
                   onClick={() => setFilter('status', filters.status === 'submitted' ? '' : 'submitted')} />
                 <Tile label="Past response target" value={summary.overdue} icon={AlertTriangle}
-                  tone={summary.overdue ? '#ef4444' : undefined}
+                  tone={summary.overdue ? 'text-red-400' : undefined}
                   sub={`Critical ${RFR_TARGET_HOURS.Critical} h, High ${RFR_TARGET_HOURS.High} h, Medium ${RFR_TARGET_HOURS.Medium} h, Low ${RFR_TARGET_HOURS.Low} h`} />
                 <Tile label="Converted to job cards" value={summary.converted} icon={CheckCircle2}
                   sub={summary.conversionRate === null ? 'Rate not measurable' : `${summary.conversionRate}% of requests`}
@@ -743,7 +842,7 @@ export default function RepairRequests() {
 
               {queue.truncated && (
                 <Card pad="tight" style={{ background: TONE.warning.bg, borderColor: TONE.warning.border }}>
-                  <p className="text-sm" style={{ color: TONE.warning.text }}>
+                  <p className={`text-sm ${TONE.warning.cls}`}>
                     This view was capped. Narrow the date range to see the whole register.
                   </p>
                 </Card>
@@ -754,8 +853,8 @@ export default function RepairRequests() {
                   <CardHeader title="What needs attention" level={2} />
                   <div className="space-y-2">
                     {findings.map((f, i) => (
-                      <div key={i} className="rounded-lg px-3 py-2 text-sm"
-                        style={{ background: TONE[f.tone]?.bg, border: `1px solid ${TONE[f.tone]?.border}`, color: TONE[f.tone]?.text }}>
+                      <div key={i} className={`rounded-lg px-3 py-2 text-sm ${TONE[f.tone]?.cls || ''}`}
+                        style={{ background: TONE[f.tone]?.bg, border: `1px solid ${TONE[f.tone]?.border}` }}>
                         {f.text}
                       </div>
                     ))}
@@ -777,56 +876,17 @@ export default function RepairRequests() {
                     action={queueRows.length ? { label: 'Clear filters', onClick: () => setFilters(EMPTY_RFR_FILTERS) } : null}
                   />
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr style={{ borderBottom: '1px solid var(--border-subtle, rgba(255,255,255,0.08))' }}>
-                          {['RFR', 'Asset', 'Fault', 'Site', 'Priority', 'Status', 'Waiting', 'Job card', ''].map((h) => (
-                            <th key={h} className="text-left px-3 py-2 text-xs font-medium whitespace-nowrap"
-                              style={{ color: 'var(--text-secondary)' }}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {queuePager.pageRows.map((r) => {
-                          const overdue = isRfrOverdue(r, now)
-                          return (
-                            <tr key={r.id}
-                              className="cursor-pointer hover:bg-white/5"
-                              onClick={() => setOpen(r)}
-                              style={{ borderBottom: '1px solid var(--border-subtle, rgba(255,255,255,0.05))' }}>
-                              <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>
-                                {r.rfr_no || 'N/A'}
-                              </td>
-                              <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
-                                {r.asset_no || 'N/A'}
-                              </td>
-                              <td className="px-3 py-2 max-w-[22rem] truncate" style={{ color: 'var(--text-secondary)' }}
-                                title={r.description || ''}>
-                                {r.fault_category || 'Not recorded'}
-                              </td>
-                              <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
-                                {r.site || 'Not recorded'}
-                              </td>
-                              <td className="px-3 py-2"><PriorityPill priority={r.priority} /></td>
-                              <td className="px-3 py-2"><StatusPill status={r.status} /></td>
-                              <td className="px-3 py-2 whitespace-nowrap"
-                                style={{ color: overdue ? '#fca5a5' : 'var(--text-secondary)' }}>
-                                {hours(rfrAgeHours(r, now))}
-                              </td>
-                              <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
-                                {r.work_order_no || ''}
-                              </td>
-                              <td className="px-3 py-2 text-right">
-                                <ChevronRight className="w-4 h-4 inline" style={{ color: 'var(--text-dim)' }} />
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                    <TablePagination {...queuePager} />
-                  </div>
+                  <EnterpriseTable
+                    columns={queueColumns}
+                    data={sortedQueue}
+                    getRowId={(r) => String(r.id)}
+                    enableColumnFilters={false}
+                    enableGlobalFilter={false}
+                    enableExport={false}
+                    initialPageSize={25}
+                    onRowClick={(r) => setOpen(r)}
+                    emptyMessage="No requests match these filters."
+                  />
                 )}
               </Card>
             </>
@@ -840,7 +900,7 @@ export default function RepairRequests() {
           {cardsError && (
             <Card pad="tight" className="items-start justify-between gap-[var(--space-3)]"
               style={{ flexDirection: 'row', background: TONE.danger.bg, borderColor: TONE.danger.border }}>
-              <p className="text-sm" style={{ color: TONE.danger.text }}>{cardsError}</p>
+              <p className={`text-sm ${TONE.danger.cls}`}>{cardsError}</p>
               <button onClick={loadCards} className="btn-secondary text-xs">Retry</button>
             </Card>
           )}
@@ -870,7 +930,7 @@ export default function RepairRequests() {
                   sub={cardSummary.duplicateRfrNumbers
                     ? `${cardSummary.duplicateRfrNumbers} reference reused on more than one card`
                     : 'Every reference is unique'}
-                  tone={cardSummary.duplicateRfrNumbers ? '#f59e0b' : undefined} />
+                  tone={cardSummary.duplicateRfrNumbers ? 'text-orange-400' : undefined} />
                 <Tile label="People raising requests" value={cardSummary.distinctRaisers} icon={User}
                   sub={cardSummary.raisedByCoveragePct === null
                     ? 'Coverage not measurable'
@@ -884,7 +944,7 @@ export default function RepairRequests() {
 
               {cards?.truncated && (
                 <Card pad="tight" style={{ background: TONE.warning.bg, borderColor: TONE.warning.border }}>
-                  <p className="text-sm" style={{ color: TONE.warning.text }}>
+                  <p className={`text-sm ${TONE.warning.cls}`}>
                     This view was capped before the whole history was read. Narrow the date range for a complete set.
                   </p>
                 </Card>
@@ -918,34 +978,16 @@ export default function RepairRequests() {
                     action={cardViews.length ? { label: 'Clear filters', onClick: () => setFilters(EMPTY_RFR_FILTERS) } : null}
                   />
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr style={{ borderBottom: '1px solid var(--border-subtle, rgba(255,255,255,0.08))' }}>
-                          {['RFR', 'Period', 'Raised by', 'Raised on', 'Job card', 'Asset', 'Site', 'Type', 'Card status'].map((h) => (
-                            <th key={h} className="text-left px-3 py-2 text-xs font-medium whitespace-nowrap"
-                              style={{ color: 'var(--text-secondary)' }}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {cardsPager.pageRows.map((r) => (
-                          <tr key={r.id} style={{ borderBottom: '1px solid var(--border-subtle, rgba(255,255,255,0.05))' }}>
-                            <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>{r.rfr_no || 'N/A'}</td>
-                            <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--text-dim)' }}>{r.rfr_period || 'N/A'}</td>
-                            <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>{r.raised_by || 'Not recorded'}</td>
-                            <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>{r.raised_at || 'Not recorded'}</td>
-                            <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>{r.work_order_no || 'N/A'}</td>
-                            <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>{r.asset_no || 'N/A'}</td>
-                            <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>{r.site || 'Not recorded'}</td>
-                            <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>{r.work_type || 'N/A'}</td>
-                            <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>{r.status || 'N/A'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    <TablePagination {...cardsPager} />
-                  </div>
+                  <EnterpriseTable
+                    columns={cardColumns}
+                    data={filteredCards}
+                    getRowId={(r) => String(r.id)}
+                    enableColumnFilters={false}
+                    enableGlobalFilter={false}
+                    enableExport={false}
+                    initialPageSize={25}
+                    emptyMessage="No job cards match these filters."
+                  />
                 )}
               </Card>
 
@@ -1121,15 +1163,15 @@ export default function RepairRequests() {
             </div>
 
             {open.rejected_reason && (
-              <div className="rounded-lg px-3 py-2 text-sm"
-                style={{ background: TONE.danger.bg, border: `1px solid ${TONE.danger.border}`, color: TONE.danger.text }}>
+              <div className={`rounded-lg px-3 py-2 text-sm ${TONE.danger.cls}`}
+                style={{ background: TONE.danger.bg, border: `1px solid ${TONE.danger.border}` }}>
                 Rejected: {open.rejected_reason}
               </div>
             )}
 
             {open.work_order_no && (
-              <div className="rounded-lg px-3 py-2 text-sm flex items-center gap-2"
-                style={{ background: TONE.good.bg, border: `1px solid ${TONE.good.border}`, color: TONE.good.text }}>
+              <div className={`rounded-lg px-3 py-2 text-sm flex items-center gap-2 ${TONE.good.cls}`}
+                style={{ background: TONE.good.bg, border: `1px solid ${TONE.good.border}` }}>
                 <Link2 className="w-4 h-4" />
                 Converted to job card {open.work_order_no}
               </div>
@@ -1237,7 +1279,7 @@ export default function RepairRequests() {
             placeholder="Leave blank to generate"
             onChange={(e) => setConverting((c) => ({ ...c, workOrderNo: e.target.value }))} />
         </label>
-        {formError && <p className="text-sm mt-3" style={{ color: TONE.danger.text }}>{formError}</p>}
+        {formError && <p role="alert" className={`text-sm mt-3 ${TONE.danger.cls}`}>{formError}</p>}
       </Modal>
 
       {/* ── Raise a request ───────────────────────────────────────────────────
@@ -1312,7 +1354,7 @@ export default function RepairRequests() {
                   onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
               </label>
             </div>
-            {formError && <p className="text-sm" style={{ color: TONE.danger.text }}>{formError}</p>}
+            {formError && <p className={`text-sm ${TONE.danger.cls}`}>{formError}</p>}
             <div className="flex justify-end gap-2">
               <button type="button" className="btn-secondary text-sm" onClick={closeForm}>Cancel</button>
               <button type="submit" className="btn-primary text-sm" disabled={busy}>Raise request</button>

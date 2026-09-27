@@ -1090,7 +1090,10 @@ async function handleSendNow(req: Request, svc: any): Promise<Response> {
   // RLS-scoped read: invisible schedules 404 rather than leak.
   const { data: s, error: schedErr } = await userClient
     .from('report_schedules').select(SCHEDULE_COLS).eq('id', scheduleId).maybeSingle()
-  if (schedErr) return jsonResponse(req, { error: schedErr.message }, 500)
+  if (schedErr) {
+    console.error('send-now: schedule read failed', schedErr)
+    return jsonResponse(req, { error: 'Could not load this schedule.' }, 500)
+  }
   if (!s) return jsonResponse(req, { error: 'Schedule not found' }, 404)
 
   const recipients = ((s.recipients ?? []) as string[]).filter((r) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r))
@@ -1120,6 +1123,7 @@ async function handleSendNow(req: Request, svc: any): Promise<Response> {
     return jsonResponse(req, { sent: true, recipients: recipients.length })
   } catch (e) {
     const msg = String((e as Error)?.message ?? e).slice(0, 300)
+    console.error('send-now: report send failed', e)
     await svc.from('report_send_log').insert({
       schedule_id: s.id, schedule_name: `${s.name} (send now)`, report_type: s.report_type,
       recipients, status: 'failed', error: msg,
@@ -1155,7 +1159,8 @@ serve(async (req) => {
     .or(`next_run_at.is.null,next_run_at.lte.${now.toISOString()}`)
     .limit(25)
   if (dueErr) {
-    return new Response(JSON.stringify({ error: dueErr.message }), { status: 500, headers: { 'Content-Type': 'application/json' } })
+    console.error('cron: due schedules read failed', dueErr)
+    return new Response(JSON.stringify({ error: 'Could not load due schedules.' }), { status: 500, headers: { 'Content-Type': 'application/json' } })
   }
 
   const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')

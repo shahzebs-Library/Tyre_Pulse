@@ -112,7 +112,14 @@ vi.mock('../lib/api/siteOperatingCost', () => ({
   storeVsOperating: () => [],
 }))
 vi.mock('../lib/api/storeSiteExpense', () => ({
-  getExpenseBySite: (args) => { h.calls.bySite.push(args); return Promise.resolve(h.SITE_ROWS[args?.country] || []) },
+  getExpenseBySite: (args) => {
+    h.calls.bySite.push(args)
+    if (h.failSite && h.failSite === args?.country) {
+      const e = new Error('Could not load spend by site.'); e.name = 'ServiceError'
+      return Promise.reject(e)
+    }
+    return Promise.resolve(h.SITE_ROWS[args?.country] || [])
+  },
   listSites: () => Promise.resolve(['NHC', 'RED SEA']),
   setStoreSiteMap: (args) => { h.calls.setMap.push(args); return Promise.resolve(true) },
 }))
@@ -140,6 +147,7 @@ import ExpenseReport from '../pages/ExpenseReport'
 
 beforeEach(() => {
   h.calls.bySite = []; h.calls.excel = []; h.calls.setMap = []
+  h.failSite = null
   h.calls.snapshot = []; h.calls.byCountry = []; h.calls.overview = []
   h.scope = { reportingScope: { countries: ['All'] }, allowed: ['KSA', 'UAE', 'Egypt'] }
 })
@@ -209,6 +217,23 @@ describe('ExpenseReport - All countries scope', () => {
     await waitFor(() => expect(screen.getAllByText('SAR 6').length).toBeGreaterThan(0))
     expect(screen.getAllByText('AED 13').length).toBeGreaterThan(0)
     expect(screen.getAllByText('EGP 7').length).toBeGreaterThan(0)
+  })
+
+  it('a failed by-site read shows an error with Retry in that panel and never fails the page', async () => {
+    h.failSite = 'UAE'
+    render(<ExpenseReport />)
+    const alert = await screen.findByText('Could not load spend by site.')
+    expect(alert).toBeTruthy()
+    // The rest of the page still loaded, including the other countries' site tables.
+    expect(screen.getByText('By country (own currency)')).toBeTruthy()
+    await waitFor(() => expect(screen.getAllByText('SAR 6').length).toBeGreaterThan(0))
+    expect(screen.getAllByText('EGP 7').length).toBeGreaterThan(0)
+    // Retry re-runs the read; with the failure cleared the error goes away.
+    h.failSite = null
+    const before = h.calls.bySite.length
+    fireEvent.click(screen.getAllByRole('button', { name: /Retry/i })[0])
+    await waitFor(() => expect(h.calls.bySite.length).toBeGreaterThan(before))
+    await waitFor(() => expect(screen.queryByText('Could not load spend by site.')).toBeNull())
   })
 
   it('saves a store mapping against the country of the row it was edited on', async () => {

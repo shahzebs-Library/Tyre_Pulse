@@ -23,7 +23,10 @@ const h = vi.hoisted(() => {
   return { state, supabase }
 })
 
-vi.mock('../lib/api/_client', () => ({ supabase: h.supabase }))
+vi.mock('../lib/api/_client', async () => {
+  const actual = await vi.importActual('../lib/api/_client')
+  return { ...actual, supabase: h.supabase }
+})
 
 const { getExpenseBySite, setStoreSiteMap, listSites } = await import('../lib/api/storeSiteExpense')
 
@@ -48,8 +51,22 @@ describe('getExpenseBySite', () => {
     expect(h.state.rpcCalls[0][1]).toEqual({ p_country: null, p_from: null, p_to: null })
   })
 
-  it('returns [] on an RPC error', async () => {
-    h.state.rpcResult = { data: null, error: { message: 'nope' } }
+  it('throws a sanitised ServiceError on a real RPC error (never renders a failure as "none")', async () => {
+    h.state.rpcResult = { data: null, error: { code: '42501', message: 'permission denied for relation parts_consumption' } }
+    const err = await getExpenseBySite({ country: 'KSA' }).catch((e) => e)
+    expect(err).toBeInstanceOf(Error)
+    expect(err.name).toBe('ServiceError')
+    expect(err.code).toBe('42501')
+    expect(err.message).not.toMatch(/parts_consumption/)
+  })
+
+  it('throws on a network failure with no code', async () => {
+    h.state.rpcResult = { data: null, error: { message: 'Failed to fetch' } }
+    await expect(getExpenseBySite({ country: 'KSA' })).rejects.toThrow()
+  })
+
+  it('degrades to [] only when the RPC is not provisioned', async () => {
+    h.state.rpcResult = { data: null, error: { code: 'PGRST202', message: 'Could not find the function' } }
     expect(await getExpenseBySite({ country: 'KSA' })).toEqual([])
   })
 

@@ -9,13 +9,17 @@
  *
  * @module api/storeSiteExpense
  */
-import { supabase, ServiceError } from './_client'
+import { supabase, ServiceError, toServiceError, isNotProvisioned } from './_client'
 import { toUserMessage } from '../safeError'
 
 /**
  * Per-site expense (tyre / spare / oil / total / lines) for a country + date
- * window, mapped via store_site_map. Never throws - returns [] on any error so
- * the page degrades to an honest empty state.
+ * window, mapped via store_site_map.
+ *
+ * HONEST READ: a failed read THROWS a sanitised ServiceError so the page can say
+ * "could not load" with a Retry, instead of rendering a failure as "no per-site
+ * expense". Only a genuinely unprovisioned RPC (code-only `isNotProvisioned`)
+ * degrades to [] - a permission denial or network failure is never "none".
  *
  * @param {{ country?:string, from?:string, to?:string }} [opts]
  * @returns {Promise<Array<{site:string, tyre:number, spare:number, oil:number, total:number, lines:number}>>}
@@ -26,7 +30,10 @@ export async function getExpenseBySite({ country, from, to } = {}) {
     p_from: from || null,
     p_to: to || null,
   })
-  if (error) return []
+  if (error) {
+    if (isNotProvisioned(error)) return []
+    throw toServiceError(error, 'Could not load spend by site.')
+  }
   return Array.isArray(data) ? data : []
 }
 

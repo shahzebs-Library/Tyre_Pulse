@@ -858,23 +858,28 @@ export default function ExpenseReport() {
       } else {
         setByCountry([])
       }
-      // Per-site expense (store_code -> site map). Never throws -> [].
+      // Per-site expense (store_code -> site map). The read THROWS on a real
+      // failure; each country's read is caught on its own so a by-site failure
+      // shows an error + Retry inside that panel and never fails the page load.
       // On the All view this is loaded ONCE PER COUNTRY so each table carries its
       // own currency; a single un-scoped call would sum SAR + AED + EGP per site.
       setBySiteErr('')
+      let siteFailure = null
       const scopes = isAll
         ? countries.map((c) => ({ country: c, currency: currencyForCountry(c, activeCurrency) }))
         : [{ country: activeCountry, currency: activeCurrency }]
       const groups = await Promise.all(scopes.map(async (s) => {
         const scoped = s.country && s.country !== 'All' ? s.country : undefined
         const [rows, opts] = await Promise.all([
-          getExpenseBySite({ country: scoped, from: from || undefined, to: to || undefined }),
+          getExpenseBySite({ country: scoped, from: from || undefined, to: to || undefined })
+            .catch((e) => { if (!siteFailure) siteFailure = e; return [] }),
           listSites({ country: scoped }).catch(() => []),
         ])
         return { ...s, rows, siteOptions: opts }
       }))
       if (stale()) return
       setSiteGroups(groups)
+      if (siteFailure) setBySiteErr(toUserMessage(siteFailure, 'Could not load spend by site.'))
 
       // Tyre quantity, tyre CPK by site and the demand forecast - ONE READ PER
       // COUNTRY IN SCOPE, run in parallel. Each country is aggregated on its own

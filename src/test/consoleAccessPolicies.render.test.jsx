@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 
 vi.mock('../lib/api/accessPolicies', () => ({
   getAccessPolicies: vi.fn(async () => ({
@@ -28,6 +28,8 @@ describe('ConsoleAccessPolicies', () => {
   })
   it('refuses to require SSO without an active, registered connection', async () => {
     render(<ConsoleAccessPolicies />)
+    // SSO now lives on its own tab (?tab=sso) so the page is not one long wall.
+    fireEvent.click(await screen.findByRole('tab', { name: /Single sign-on/ }))
     expect(await screen.findByText('Company A')).toBeTruthy()
     expect(screen.getByRole('button', { name: /Require SSO/ }).disabled).toBe(true)
     expect(screen.getByText(/No active SSO connection/)).toBeTruthy()

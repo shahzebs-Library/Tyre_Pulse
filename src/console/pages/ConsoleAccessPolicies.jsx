@@ -16,6 +16,11 @@
  *    Supabase Auth, otherwise nobody could sign in at all.
  *
  * Every change is written to console_sessions (server-stamped, with your IP).
+ *
+ * Layout: header, KPI tiles (each opens the tab it describes), the attention
+ * list, then three tabs mirrored into ?tab= so a deep link lands on the right
+ * one: IP allowlist, Single sign-on, and How it works. Both tables sort,
+ * search and export exactly the rows on screen.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
@@ -23,7 +28,7 @@ import {
   CheckCircle2, Lock, Unlock, Info, Network, BookOpen, Building2,
 } from 'lucide-react'
 import {
-  Panel, PanelHeader, Note, StatTile, Badge, Btn, Code,
+  Panel, PanelHeader, Note, StatTile, Badge, Btn, Code, SearchInput, Toolbar,
   Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Modal,
 } from '../components/ui'
 import {
@@ -34,7 +39,35 @@ import {
   validateAllowlistEntry, enableLockoutRisk, isCovered, rangeSize, ssoOrgStatus, ssoEnableBlocker,
 } from '../../lib/accessPolicies'
 import { toUserMessage } from '../../lib/safeError'
-import { PageHeader, useRefreshStamp, Collapsible, AttentionList } from './shared/pageKit'
+import { sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
+import ExportButtons from './shared/ExportButtons'
+import { PageHeader, useRefreshStamp, AttentionList, useUrlTab, TabBar, TabPanel, usePaged, Pager } from './shared/pageKit'
+
+const TABS = ['allowlist', 'sso', 'guide']
+
+const IP_EXPORT = [
+  { key: 'label', header: 'Label' },
+  { key: 'cidr', header: 'Range' },
+  { key: 'size', header: 'Size', value: (r) => rangeSize(r.cidr) },
+  { key: 'active', header: 'Status', value: (r) => (r.active ? 'Active' : 'Paused') },
+  { key: 'covers_caller', header: 'Covers your address', value: (r) => (r.covers_caller ? 'Yes' : 'No') },
+  { key: 'created_at', header: 'Added', value: (r) => fmtWhen(r.created_at) },
+  { key: 'created_by_name', header: 'Added by', value: (r) => r.created_by_name || 'Not recorded' },
+]
+
+const SSO_EXPORT = [
+  { key: 'name', header: 'Organisation' },
+  { key: 'active_connections', header: 'Active connections' },
+  { key: 'connections', header: 'Connections' },
+  { key: 'domains', header: 'Domains', value: (r) => (r.active_domains || []).join(', ') || 'None' },
+  { key: 'status', header: 'Status', value: (r) => ssoOrgStatus(r).label },
+  { key: 'affected_users', header: 'Users affected', value: (r) => (r.required ? r.affected_users : '') },
+]
+
+const SSO_SORT = {
+  status: (o) => ssoOrgStatus(o).label,
+  domains: (o) => (o.active_domains || []).length,
+}
 
 const inputCls = 'w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 placeholder-gray-500 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500'
 
@@ -92,6 +125,13 @@ function IpAllowlistPanel({ ip, onChanged }) {
   const [toggle, setToggle] = useState(null) // 'on' | 'off'
   const [adding, setAdding] = useState(false)
   const [confirmDel, setConfirmDel] = useState(null) // entry pending delete
+  const [query, setQuery] = useState('')
+  const { sort, onSort } = useTableSort({ key: 'created_at', dir: 'desc' })
+  const shown = useMemo(
+    () => sortRows(searchRows(ip.entries, query, ['label', 'cidr', 'created_by_name']), sort),
+    [ip.entries, query, sort],
+  )
+  const paged = usePaged(shown, 25, query)
 
   const check = useMemo(() => (cidr.trim() ? validateAllowlistEntry({ label: label || 'x', cidr }) : null), [label, cidr])
   const lockoutRisk = enableLockoutRisk(ip.callerIp, ip.entries)
@@ -156,12 +196,26 @@ function IpAllowlistPanel({ ip, onChanged }) {
           <EmptyState icon={Network} title="No ranges listed yet"
             reason="Add the office or VPN ranges you administer from. The allowlist cannot be turned on until your own address is covered." />
         ) : (
+          <>
+          <Toolbar className="mb-2">
+            <SearchInput value={query} onChange={setQuery} placeholder="Search label, range or who added it" className="flex-1 min-w-[12rem]" />
+            <ExportButtons rows={shown} columns={IP_EXPORT} title="TyrePulse Console IP Allowlist" />
+          </Toolbar>
+          {shown.length === 0 ? (
+            <EmptyState icon={Network} title="No range matches" reason="Nothing in the allowlist matches this search. Clear it to see every range." />
+          ) : (
+          <>
           <Table>
             <THead>
-              <Th>Label</Th><Th>Range</Th><Th>Size</Th><Th>Status</Th><Th>Added</Th><Th align="right">Actions</Th>
+              <Th sortKey="label" sort={sort} onSort={onSort}>Label</Th>
+              <Th sortKey="cidr" sort={sort} onSort={onSort}>Range</Th>
+              <Th>Size</Th>
+              <Th sortKey="active" sort={sort} onSort={onSort}>Status</Th>
+              <Th sortKey="created_at" sort={sort} onSort={onSort}>Added</Th>
+              <Th align="right">Actions</Th>
             </THead>
             <tbody>
-              {ip.entries.map((e) => {
+              {paged.pageRows.map((e) => {
                 const strandOff = wouldStrand(e, false)
                 const strandDel = wouldStrand(e, null)
                 return (
@@ -192,6 +246,10 @@ function IpAllowlistPanel({ ip, onChanged }) {
               })}
             </tbody>
           </Table>
+          <Pager {...paged} label="ranges" />
+          </>
+          )}
+          </>
         )}
       </div>
 
@@ -222,6 +280,13 @@ function IpAllowlistPanel({ ip, onChanged }) {
 /* ── SSO panel ────────────────────────────────────────────────────────────── */
 function SsoPanel({ sso, onChanged }) {
   const [target, setTarget] = useState(null) // { org, required }
+  const [query, setQuery] = useState('')
+  const { sort, onSort } = useTableSort({ key: 'name', dir: 'asc' })
+  const shown = useMemo(
+    () => sortRows(searchRows(sso.orgs, query, ['name', (o) => (o.active_domains || []).join(' ')]), sort, SSO_SORT),
+    [sso.orgs, query, sort],
+  )
+  const paged = usePaged(shown, 25, query)
   return (
     <Panel>
       <PanelHeader icon={KeyRound} title="Require single sign-on"
@@ -230,12 +295,25 @@ function SsoPanel({ sso, onChanged }) {
       {sso.orgs.length === 0 ? (
         <EmptyState icon={Building2} title="No organisations" reason="There are no organisations to configure." />
       ) : (
+        <>
+        <Toolbar className="mb-2">
+          <SearchInput value={query} onChange={setQuery} placeholder="Search organisation or domain" className="flex-1 min-w-[12rem]" />
+          <ExportButtons rows={shown} columns={SSO_EXPORT} title="TyrePulse Console SSO Enforcement" />
+        </Toolbar>
+        {shown.length === 0 ? (
+          <EmptyState icon={Building2} title="No organisation matches" reason="Nothing matches this search. Clear it to see every organisation." />
+        ) : (
+        <>
         <Table>
           <THead>
-            <Th>Organisation</Th><Th>Connections</Th><Th>Domains</Th><Th>Status</Th><Th align="right">Action</Th>
+            <Th sortKey="name" sort={sort} onSort={onSort}>Organisation</Th>
+            <Th sortKey="active_connections" sort={sort} onSort={onSort}>Connections</Th>
+            <Th sortKey="domains" sort={sort} onSort={onSort}>Domains</Th>
+            <Th sortKey="status" sort={sort} onSort={onSort}>Status</Th>
+            <Th align="right">Action</Th>
           </THead>
           <tbody>
-            {sso.orgs.map((o) => {
+            {paged.pageRows.map((o) => {
               const st = ssoOrgStatus(o)
               const blocker = o.required ? null : ssoEnableBlocker(o, sso.registeredDomains)
               return (
@@ -264,6 +342,10 @@ function SsoPanel({ sso, onChanged }) {
             })}
           </tbody>
         </Table>
+        <Pager {...paged} label="organisations" />
+        </>
+        )}
+        </>
       )}
 
       <ReasonModal open={!!target} onClose={() => setTarget(null)}
@@ -283,6 +365,7 @@ export default function ConsoleAccessPolicies() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const { refreshedAt, stamp } = useRefreshStamp()
+  const [tab, setTab] = useUrlTab(TABS, 'allowlist')
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
@@ -321,27 +404,41 @@ export default function ConsoleAccessPolicies() {
         <>
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
             <StatTile label="IP allowlist" value={ip.enabled ? 'On' : 'Off'} tone={ip.enabled ? 'warning' : 'default'}
-              icon={ip.enabled ? Lock : Unlock} sub={ip.enabled ? 'Enforced on console sign-in' : 'Console open from anywhere'} />
+              icon={ip.enabled ? Lock : Unlock} sub={ip.enabled ? 'Enforced on console sign-in' : 'Console open from anywhere'}
+              onClick={() => setTab('allowlist')} active={tab === 'allowlist'} />
             <StatTile label="Your address" value={ip.callerIp || 'Unknown'} icon={Globe}
               sub={ip.callerIp ? (ip.callerCovered ? 'Covered by an active range' : 'Not covered') : 'Could not be read from this request'} />
-            <StatTile label="Active ranges" value={activeRanges} icon={CheckCircle2} sub={`${ip.entries.length} listed in total`} />
+            <StatTile label="Active ranges" value={activeRanges} icon={CheckCircle2} sub={`${ip.entries.length} listed in total`}
+              onClick={() => setTab('allowlist')} />
             <StatTile label="Lockout check" value={lockoutRisk ? 'Not safe' : 'Safe'} tone={lockoutRisk ? 'warning' : 'good'}
               icon={lockoutRisk ? AlertTriangle : ShieldCheck} sub={lockoutRisk ? 'Add your own range first' : 'You would stay in'} />
-            <StatTile label="SSO required" value={requiredOrgs} icon={KeyRound} sub={`of ${sso.orgs.length} organisation${sso.orgs.length === 1 ? '' : 's'}`} />
+            <StatTile label="SSO required" value={requiredOrgs} icon={KeyRound} sub={`of ${sso.orgs.length} organisation${sso.orgs.length === 1 ? '' : 's'}`}
+              onClick={() => setTab('sso')} active={tab === 'sso'} />
             <StatTile label="IdPs registered" value={sso.registeredProviders} icon={ShieldCheck}
+              onClick={() => setTab('sso')}
               tone={sso.registeredProviders ? 'default' : 'warning'}
               sub={sso.registeredProviders ? `${sso.registeredDomains.length} domain(s)` : 'SSO cannot be required yet'} />
           </div>
 
           <AttentionList items={attention} clearText="The allowlist is on and at least one identity provider is registered." />
 
-          <div className="grid gap-4 xl:grid-cols-2 items-start">
-            <IpAllowlistPanel ip={ip} onChanged={load} />
-            <SsoPanel sso={sso} onChanged={load} />
-          </div>
+          <TabBar ariaLabel="Access policy sections" value={tab} onChange={setTab} tabs={[
+            { key: 'allowlist', label: 'IP allowlist', icon: Network, count: ip.entries.length },
+            { key: 'sso', label: 'Single sign-on', icon: KeyRound, count: sso.orgs.length },
+            { key: 'guide', label: 'How it works', icon: BookOpen },
+          ]} />
 
-          <Collapsible icon={BookOpen} title="How enforcement works, known gaps and lock-out recovery"
-            subtitle="Read before turning a policy on">
+          {tab === 'allowlist' && (
+            <TabPanel label="IP allowlist"><IpAllowlistPanel ip={ip} onChanged={load} /></TabPanel>
+          )}
+          {tab === 'sso' && (
+            <TabPanel label="Single sign-on"><SsoPanel sso={sso} onChanged={load} /></TabPanel>
+          )}
+          {tab === 'guide' && (
+          <TabPanel label="How it works">
+          <Panel>
+            <PanelHeader icon={BookOpen} title="How enforcement works, known gaps and lock-out recovery"
+              subtitle="Read before turning a policy on" />
             <div className="space-y-2">
               <Note icon={Info}>
                 The IP allowlist guards the console screens. It does not change database permissions: a super admin&apos;s
@@ -362,7 +459,9 @@ export default function ConsoleAccessPolicies() {
                 {' '}<Code>{"select set_config('app.access_policy_rpc','on',true); update public.system_config set value='false' where key='console_ip_allowlist_enabled';"}</Code>
               </Note>
             </div>
-          </Collapsible>
+          </Panel>
+          </TabPanel>
+          )}
         </>
       )}
     </div>

@@ -16,6 +16,9 @@
  *
  * Pausing beats deleting: a feed that was genuinely retired keeps its label and
  * the alert's "already told you about this gap" history.
+ *
+ * The watched list sorts by any column, filters by status, searches label /
+ * table / column, and exports exactly the rows on screen.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Plus, RefreshCw, Radar, Pause, Play, Pencil, AlertTriangle } from 'lucide-react'
@@ -24,9 +27,28 @@ import {
 } from '../../../lib/api/uploadCoverage'
 import { toUserMessage } from '../../../lib/safeError'
 import {
-  Panel, PanelHeader, Note, Badge, Btn, Select, Toolbar, Modal,
+  Panel, PanelHeader, Note, Badge, Btn, Select, Toolbar, Modal, SearchInput, Segmented,
   Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState,
 } from '../../components/ui'
+import { sortRows, searchRows, useTableSort } from '../../../lib/consoleTable'
+import ExportButtons from '../shared/ExportButtons'
+
+const FEED_EXPORT = [
+  { key: 'label', header: 'Feed' },
+  { key: 'src', header: 'Key' },
+  { key: 'table_name', header: 'Table' },
+  { key: 'date_column', header: 'Day counted by' },
+  { key: 'date_basis', header: 'Date basis', value: (f) => (f.date_basis === 'arrival' ? 'Arrival (when rows landed)' : 'Business date') },
+  { key: 'site_column', header: 'Area column', value: (f) => f.site_column || 'None' },
+  { key: 'site_day_policed', header: 'Daily per site', value: (f) => (f.site_day_policed ? 'Yes' : 'No') },
+  { key: 'active', header: 'Status', value: (f) => (f.active ? 'Watched' : 'Paused') },
+]
+
+const STATUS_FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'active', label: 'Watched' },
+  { key: 'paused', label: 'Paused' },
+]
 
 /** A table name to a plain-English default, so the owner is not typing schema. */
 function suggestLabel(table) {
@@ -160,6 +182,9 @@ export default function UploadFeedManager() {
   const [candidatesFailed, setCandidatesFailed] = useState(false)
   const [togglingId, setTogglingId] = useState(null)
   const [toggleErr, setToggleErr] = useState('')
+  const [query, setQuery] = useState('')
+  const [status, setStatus] = useState('all')
+  const { sort, onSort } = useTableSort({ key: 'sort_order', dir: 'asc' })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [editing, setEditing] = useState(null)
@@ -208,6 +233,12 @@ export default function UploadFeedManager() {
     } finally { setTogglingId(null) }
   }
 
+  const shown = useMemo(() => {
+    const byStatus = feeds.filter((f) => (status === 'all' ? true : status === 'active' ? f.active : !f.active))
+    return sortRows(searchRows(byStatus, query, ['label', 'src', 'table_name', 'date_column', 'site_column']), sort)
+  }, [feeds, status, query, sort])
+  const pausedCount = feeds.filter((f) => !f.active).length
+
   const valid = editing?.table_name && editing?.date_column
     && String(editing?.src || '').trim() && String(editing?.label || '').trim()
 
@@ -237,16 +268,31 @@ export default function UploadFeedManager() {
         ) : (
           <>
             {toggleErr && <div className="px-3 pt-3"><ErrorState message={toggleErr} /></div>}
+            <div className="px-3 pt-3">
+              <Toolbar>
+                <Segmented ariaLabel="Feed status" role="group" value={status} onChange={setStatus}
+                  options={STATUS_FILTERS.map((o) => ({
+                    ...o,
+                    count: o.key === 'all' ? feeds.length : o.key === 'paused' ? pausedCount : feeds.length - pausedCount,
+                  }))} />
+                <SearchInput value={query} onChange={setQuery} placeholder="Search feed, table or column" className="flex-1 min-w-[12rem]" />
+                <ExportButtons rows={shown} columns={FEED_EXPORT} title="TyrePulse Watched Upload Feeds" />
+              </Toolbar>
+            </div>
+            {shown.length === 0 ? (
+              <EmptyState icon={Radar} title="No feed matches"
+                reason="Nothing matches this status and search. Clear them to see every watched table." />
+            ) : (
             <Table>
               <THead>
-                <Th>Feed</Th>
-                <Th>Table</Th>
-                <Th>Day counted by</Th>
-                <Th>Area</Th>
+                <Th sortKey="label" sort={sort} onSort={onSort}>Feed</Th>
+                <Th sortKey="table_name" sort={sort} onSort={onSort}>Table</Th>
+                <Th sortKey="date_column" sort={sort} onSort={onSort}>Day counted by</Th>
+                <Th sortKey="site_column" sort={sort} onSort={onSort}>Area</Th>
                 <Th align="right">Actions</Th>
               </THead>
               <tbody>
-                {feeds.map((f) => (
+                {shown.map((f) => (
                   <Tr key={f.id}>
                     <Td>
                       <span className="text-gray-200 break-words">{f.label}</span>
@@ -259,7 +305,7 @@ export default function UploadFeedManager() {
                     </Td>
                     <Td nowrap>
                       {f.site_column
-                        ? <span className="text-gray-500">{f.site_column}{f.site_day_policed ? ' · daily per site' : ''}</span>
+                        ? <span className="text-gray-500">{f.site_column}{f.site_day_policed ? ' | daily per site' : ''}</span>
                         : <span className="text-gray-400">none</span>}
                     </Td>
                     <Td align="right">
@@ -274,6 +320,7 @@ export default function UploadFeedManager() {
                 ))}
               </tbody>
             </Table>
+            )}
 
             {candidatesFailed && (
               <div className="px-3 pb-3">

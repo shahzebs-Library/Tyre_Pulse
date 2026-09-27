@@ -13,8 +13,10 @@
  * Layout: header, kind tiles, a paged asset picker and the lineage of the
  * selected asset split into views (diagram / upstream / downstream / edges).
  * The selected asset lives in ?asset=<asset_id> so another console page (the
- * Metric Catalogue) can deep-link straight to a trace. Clicking a source or an
- * affected asset re-centres the trace on it.
+ * Metric Catalogue) can deep-link straight to a trace, and the active view in
+ * ?view= so a link can open straight on the downstream impact list. Clicking a
+ * source or an affected asset re-centres the trace on it (and returns to the
+ * diagram). Every list sorts, searches and exports the rows on screen.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
@@ -35,7 +37,15 @@ import EChart from '../../components/charts/EChart'
 import { toUserMessage } from '../../lib/safeError'
 import { sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
 import ExportButtons from './shared/ExportButtons'
-import { PageHeader, usePaged, Pager } from './shared/pageKit'
+import { PageHeader, usePaged, Pager, useUrlTab } from './shared/pageKit'
+
+const VIEWS = ['diagram', 'upstream', 'downstream', 'edges']
+
+const EDGE_EXPORT = [
+  { key: 'fromName', header: 'From' },
+  { key: 'type', header: 'Relationship' },
+  { key: 'toName', header: 'To' },
+]
 
 const nf = new Intl.NumberFormat('en-US')
 
@@ -152,7 +162,7 @@ export default function ConsoleLineageExplorer() {
   const [params, setParams] = useSearchParams()
   const selectedId = params.get('asset') || null
   const [detail, setDetail] = useState(null)        // { graph, impact, loading, error }
-  const [view, setView] = useState('diagram')
+  const [view, setView] = useUrlTab(VIEWS, 'diagram', 'view')
 
   const loadAssets = useCallback(async () => {
     setAssets((s) => ({ ...s, loading: true, error: null }))
@@ -210,8 +220,9 @@ export default function ConsoleLineageExplorer() {
   const selectAsset = useCallback((assetOrId) => {
     const id = typeof assetOrId === 'string' ? assetOrId : assetOrId?.asset_id
     if (!id) return
-    setView('diagram')
-    setParams((prev) => { const p = new URLSearchParams(prev); p.set('asset', id); return p }, { replace: false })
+    // One URL write: the new asset, and the view back to the diagram (the
+    // default, so the parameter is simply dropped).
+    setParams((prev) => { const p = new URLSearchParams(prev); p.set('asset', id); p.delete('view'); return p }, { replace: false })
   }, [setParams])
 
   return (
@@ -322,11 +333,23 @@ export default function ConsoleLineageExplorer() {
 
 function NodeTable({ rows, label, onSelect, emptyNote, withModule = true }) {
   const { sort, onSort } = useTableSort({ key: 'name', dir: 'asc' })
-  const sorted = useMemo(() => sortRows(rows, sort), [rows, sort])
-  const paged = usePaged(sorted, 15)
+  const [query, setQuery] = useState('')
+  const sorted = useMemo(
+    () => sortRows(searchRows(rows, query, ['name', 'module', 'assetId', (r) => assetKindLabel(r.kind)]), sort),
+    [rows, query, sort],
+  )
+  const paged = usePaged(sorted, 15, query)
   if (!rows.length) return <Note>{emptyNote}</Note>
   return (
     <>
+      {rows.length > 8 && (
+        <Toolbar className="mb-2">
+          <SearchInput value={query} onChange={setQuery} placeholder={`Search ${label.toLowerCase()} name or module`} className="flex-1 min-w-[12rem]" />
+        </Toolbar>
+      )}
+      {sorted.length === 0 ? (
+        <EmptyState icon={Database} title="No asset matches" reason="Nothing in this list matches the search. Clear it to see every asset." />
+      ) : (
       <Table>
         <THead>
           <Th sortKey="name" sort={sort} onSort={onSort}>{label}</Th>
@@ -343,6 +366,7 @@ function NodeTable({ rows, label, onSelect, emptyNote, withModule = true }) {
           ))}
         </tbody>
       </Table>
+      )}
       <Pager {...paged} label="assets" />
       <p className="text-[11px] text-gray-500 mt-1">Click an asset to re-centre the trace on it.</p>
     </>
@@ -468,45 +492,77 @@ function LineageDetail({ asset, graph, impact, view, onView, onSelect }) {
             </div>
           )}
 
-          {view === 'edges' && edges.length > 0 && (
-            <EdgeTable edges={edges} nameById={nameById} />
-          )}
+          {view === 'edges' && (edges.length > 0
+            ? <EdgeTable edges={edges} nameById={nameById} onSelect={onSelect} />
+            : <Note>The graph carries no raw edge rows for this asset. The Upstream and Downstream views still list what it touches.</Note>)}
         </>
       )}
     </div>
   )
 }
 
-function EdgeTable({ edges, nameById }) {
-  const paged = usePaged(edges, 20)
+function EdgeTable({ edges, nameById, onSelect }) {
+  const rows = useMemo(() => edges.map((e, i) => ({
+    ...e,
+    rowKey: `${e.from}:${e.to}:${i}`,
+    fromName: nameById.get(e.from) || assetShortName(e.from),
+    toName: nameById.get(e.to) || assetShortName(e.to),
+    type: e.type || 'feeds',
+  })), [edges, nameById])
+  const { sort, onSort } = useTableSort({ key: 'fromName', dir: 'asc' })
+  const [query, setQuery] = useState('')
+  const shown = useMemo(
+    () => sortRows(searchRows(rows, query, ['fromName', 'toName', 'type', 'from', 'to']), sort),
+    [rows, query, sort],
+  )
+  const paged = usePaged(shown, 20, query)
   return (
     <div>
       <div className="flex items-center gap-2 mb-2">
         <Network size={14} className="text-orange-400" aria-hidden="true" />
         <h4 className="text-sm font-semibold text-gray-200">Raw graph edges</h4>
       </div>
+      <Toolbar className="mb-2">
+        <SearchInput value={query} onChange={setQuery} placeholder="Search either end or the relationship" className="flex-1 min-w-[12rem]" />
+        <ExportButtons rows={shown} columns={EDGE_EXPORT} title="TyrePulse Lineage Edges" />
+      </Toolbar>
+      {shown.length === 0 ? (
+        <EmptyState icon={Network} title="No edge matches" reason="Nothing in the graph matches this search. Clear it to see every edge." />
+      ) : (
       <Table>
         <THead>
-          <Th>From</Th>
-          <Th>Relationship</Th>
-          <Th>To</Th>
+          <Th sortKey="fromName" sort={sort} onSort={onSort}>From</Th>
+          <Th sortKey="type" sort={sort} onSort={onSort}>Relationship</Th>
+          <Th sortKey="toName" sort={sort} onSort={onSort}>To</Th>
         </THead>
         <tbody>
-          {paged.pageRows.map((e, i) => (
-            <Tr key={`${e.from}:${e.to}:${i}`}>
-              <Td nowrap>{nameById.get(e.from) || assetShortName(e.from)}</Td>
+          {paged.pageRows.map((e) => (
+            <Tr key={e.rowKey}>
+              <Td nowrap>
+                <button type="button" onClick={() => onSelect(e.from)}
+                  className="text-gray-200 hover:text-orange-300 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
+                  {e.fromName}
+                </button>
+              </Td>
               <Td>
                 <span className="inline-flex items-center gap-1 text-gray-400">
                   <ArrowRight size={12} aria-hidden="true" />
-                  {e.type || 'feeds'}
+                  {e.type}
                 </span>
               </Td>
-              <Td nowrap>{nameById.get(e.to) || assetShortName(e.to)}</Td>
+              <Td nowrap>
+                <button type="button" onClick={() => onSelect(e.to)}
+                  className="text-gray-200 hover:text-orange-300 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
+                  {e.toName}
+                </button>
+              </Td>
             </Tr>
           ))}
         </tbody>
       </Table>
+      )}
       <Pager {...paged} label="edges" />
+      <p className="text-[11px] text-gray-500 mt-1">Click either end of an edge to re-centre the trace on it.</p>
     </div>
   )
 }

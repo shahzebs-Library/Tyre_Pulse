@@ -15,7 +15,8 @@ import {
   LoadingState, EmptyState, ErrorState, Modal, Table, THead, Th, Tr, Td,
 } from '../components/ui'
 import ExportButtons from './shared/ExportButtons'
-import { PageHeader, useUrlTab, TabPanel } from './shared/pageKit'
+import { PageHeader, useUrlTab, TabPanel, usePaged, Pager } from './shared/pageKit'
+import { sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
 import { navChanges } from './navigation/navDiff'
 
 /**
@@ -302,18 +303,7 @@ export default function ConsoleNavigation() {
                 {changes.length === 0 ? (
                   <EmptyState icon={CheckCircle2} title="The sidebar is the built-in default" reason="No group or item has been reordered, renamed, moved or hidden." />
                 ) : (
-                  <Table>
-                    <THead><Th>Change</Th><Th>Menu entry</Th><Th>Detail</Th></THead>
-                    <tbody>
-                      {changes.map((c, i) => (
-                        <Tr key={`${c.kind}:${c.target}:${i}`}>
-                          <Td nowrap><Badge tone={c.tone}>{c.kind}</Badge></Td>
-                          <Td className="text-gray-200">{c.target}</Td>
-                          <Td className="text-gray-400">{c.detail}</Td>
-                        </Tr>
-                      ))}
-                    </tbody>
-                  </Table>
+                  <ChangesTable changes={changes} />
                 )}
               </Panel>
             </TabPanel>
@@ -468,5 +458,54 @@ export default function ConsoleNavigation() {
         </p>
       </Modal>
     </div>
+  )
+}
+
+/**
+ * The change list, filterable by kind of change, searchable, sortable and
+ * paged. The export button in the panel header still exports every change
+ * (the full diff is what gets reviewed), independent of this view's filter.
+ */
+function ChangesTable({ changes }) {
+  const [query, setQuery] = useState('')
+  const [kind, setKind] = useState('')
+  const { sort, onSort } = useTableSort(null)
+  const kinds = useMemo(() => [...new Set(changes.map((c) => c.kind))].sort(), [changes])
+  const shown = useMemo(() => {
+    const byKind = kind ? changes.filter((c) => c.kind === kind) : changes
+    return sortRows(searchRows(byKind, query, ['kind', 'target', 'detail']), sort)
+  }, [changes, kind, query, sort])
+  const paged = usePaged(shown, 25, `${kind}|${query}`)
+  return (
+    <>
+      <Toolbar className="mb-2">
+        <Select ariaLabel="Kind of change" value={kind} onChange={setKind} placeholder="Every kind of change" className="w-52"
+          options={kinds.map((k) => ({ value: k, label: k }))} />
+        <SearchInput value={query} onChange={setQuery} placeholder="Search menu entry or detail" className="flex-1 min-w-[12rem]" />
+      </Toolbar>
+      {shown.length === 0 ? (
+        <EmptyState icon={GitCompare} title="No change matches" reason="Nothing matches this kind and search. Clear them to see every change." />
+      ) : (
+        <>
+          <Table>
+            <THead>
+              <Th sortKey="kind" sort={sort} onSort={onSort}>Change</Th>
+              <Th sortKey="target" sort={sort} onSort={onSort}>Menu entry</Th>
+              <Th sortKey="detail" sort={sort} onSort={onSort}>Detail</Th>
+            </THead>
+            <tbody>
+              {paged.pageRows.map((c, i) => (
+                <Tr key={`${c.kind}:${c.target}:${i}`}>
+                  <Td nowrap><Badge tone={c.tone}>{c.kind}</Badge></Td>
+                  <Td className="text-gray-200">{c.target}</Td>
+                  <Td className="text-gray-400">{c.detail}</Td>
+                </Tr>
+              ))}
+            </tbody>
+          </Table>
+          <Pager {...paged} label="changes" />
+        </>
+      )}
+    </>
   )
 }

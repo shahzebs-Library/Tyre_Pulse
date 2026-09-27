@@ -43,14 +43,14 @@ import { listGlobalPermissions, saveModulePermissions, saveAccessControlMatrix }
 import { listProfiles } from '../../../lib/api/users'
 import { listCustomRoles } from '../../../lib/api/customRoles'
 import MobileAccessPanel from './MobileAccessPanel'
-import { Collapsible } from '../shared/pageKit'
+import { Collapsible, useUrlTab, useUrlParam } from '../shared/pageKit'
 import {
   listUserGrants, revokeUserAccessGrant,
   setUserAccessGrantScoped, mobileGrantKey, parseGrantScope,
   grantKeysForScope, computeRoleViewChanges,
 } from '../../../lib/api/accessGrants'
 import { toUserMessage } from '../../../lib/safeError'
-import { EmptyState, ErrorState, LoadingState, Note, Panel } from '../../components/ui'
+import { Btn, EmptyState, ErrorState, LoadingState, Modal, Note, Panel } from '../../components/ui'
 
 // Capabilities beyond `view` (the Advanced row). view is the big ON/OFF toggle.
 const EXTRA_CAPS = CAPABILITIES.filter((c) => c.key !== 'view')
@@ -275,9 +275,20 @@ export default function AccessManager() {
   const canWriteRole = isAdmin // set_module_permissions: Admin or super
   const canWriteUser = isSuperAdmin === true // set_user_access_grant: super only
 
-  const [mode, setMode] = useState('role') // 'role' | 'user'
-  const [selectedRole, setSelectedRole] = useState('Manager')
-  const [selectedUserId, setSelectedUserId] = useState(null)
+  // Mode, role and user are mirrored into the URL (?amode= / ?arole= /
+  // ?auser=) so a link opens straight on the role or person being discussed,
+  // and a reload does not drop the admin back on Manager. The names avoid the
+  // Access Control hub's own ?tab=. Defaults are written as no parameter.
+  const [mode, setMode] = useUrlTab(['role', 'user'], 'role', 'amode') // 'role' | 'user'
+  const [roleParam, setRoleParam] = useUrlParam('arole')
+  const selectedRole = roleParam || 'Manager'
+  const setSelectedRole = useCallback((r) => setRoleParam(!r || r === 'Manager' ? null : r), [setRoleParam])
+  const [selectedUserId, setSelectedUserId] = useUrlParam('auser')
+
+  // Switching role, user or mode rebuilds the draft from the new subject, so
+  // unsaved edits would silently vanish. The switch is held here until the
+  // admin confirms discarding them.
+  const [pendingSwitch, setPendingSwitch] = useState(null) // { run, label }
 
   // Custom roles (custom_roles table) get first-class chips beside the built-ins.
   // Their access already lives in the SAME module_permissions rows keyed by the
@@ -387,7 +398,7 @@ export default function AccessManager() {
     if (mode !== 'role' || !customRolesLoaded) return
     if (ACCESS_ROLES.includes(selectedRole)) return
     if (!customRoles.some((r) => r.name === selectedRole)) setSelectedRole('Manager')
-  }, [mode, selectedRole, customRoles, customRolesLoaded])
+  }, [mode, selectedRole, customRoles, customRolesLoaded, setSelectedRole])
 
   const selectedUser = useMemo(
     () => (users || []).find((u) => u.id === selectedUserId) || null,
@@ -495,6 +506,10 @@ export default function AccessManager() {
     return s
   }, [baseline, draft, mode, scopeDraft, scopeBaseline, rowHasOverride, viewMap, selectedRole])
   const dirtyCount = dirtyKeys.size
+  const guardSwitch = useCallback((run, label) => {
+    if (dirtyCount > 0) setPendingSwitch({ run, label })
+    else run()
+  }, [dirtyCount])
 
   // ── Mutators ─────────────────────────────────────────────────────────────────
   const capEditable = useCallback((key) => {
@@ -847,14 +862,16 @@ export default function AccessManager() {
           <div className="inline-flex rounded-lg border border-[var(--input-border)] overflow-hidden">
             <button
               type="button"
-              onClick={() => setMode('role')}
+              aria-pressed={mode === 'role'}
+              onClick={() => { if (mode !== 'role') guardSwitch(() => setMode('role'), 'edit a role instead') }}
               className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition-colors ${
                 mode === 'role' ? 'bg-[var(--surface-3)] text-[var(--brand-bright)]' : 'text-[var(--text-secondary)] hover:bg-[var(--input-bg)]'
               }`}
             ><UserCog size={15} /> Edit a role</button>
             <button
               type="button"
-              onClick={() => setMode('user')}
+              aria-pressed={mode === 'user'}
+              onClick={() => { if (mode !== 'user') guardSwitch(() => setMode('user'), 'edit a user instead') }}
               className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition-colors border-l border-[var(--input-border)] ${
                 mode === 'user' ? 'bg-[var(--surface-3)] text-[var(--brand-bright)]' : 'text-[var(--text-secondary)] hover:bg-[var(--input-bg)]'
               }`}
@@ -870,7 +887,8 @@ export default function AccessManager() {
                   <button
                     key={r}
                     type="button"
-                    onClick={() => setSelectedRole(r)}
+                    aria-pressed={on}
+                    onClick={() => { if (!on) guardSwitch(() => setSelectedRole(r), `switch to ${r}`) }}
                     className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
                       on
                         ? 'bg-[var(--surface-3)] border-[var(--border-bright)] text-[var(--brand-bright)]'
@@ -894,7 +912,8 @@ export default function AccessManager() {
                       <button
                         key={cr.id}
                         type="button"
-                        onClick={() => setSelectedRole(cr.name)}
+                        aria-pressed={on}
+                        onClick={() => { if (!on) guardSwitch(() => setSelectedRole(cr.name), `switch to ${cr.name}`) }}
                         className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border border-dashed transition-colors ${
                           on
                             ? 'bg-[var(--surface-3)] border-[var(--border-bright)] text-[var(--brand-bright)]'
@@ -981,7 +1000,9 @@ export default function AccessManager() {
                       return (
                         <li key={u.id}>
                           <button
-                            onClick={() => setSelectedUserId(u.id)}
+                            type="button"
+                            aria-pressed={on}
+                            onClick={() => { if (!on) guardSwitch(() => setSelectedUserId(u.id), `switch to ${displayName(u)}`) }}
                             className={`w-full text-left px-3 py-2.5 flex items-center gap-2.5 border-b border-[var(--input-border)]/50 transition-colors ${on ? 'bg-[var(--brand-subtle,rgba(34,197,94,0.12))]' : 'hover:bg-[var(--input-bg)]/50'}`}
                           >
                             <div className="w-8 h-8 rounded-full bg-[var(--input-bg)] flex items-center justify-center shrink-0 text-xs font-semibold text-[var(--text-secondary)]">
@@ -1268,6 +1289,17 @@ export default function AccessManager() {
       )}
 
       {/* Save bar */}
+      <Modal open={!!pendingSwitch} width="max-w-md"
+        title="Discard unsaved changes?"
+        subtitle={pendingSwitch ? `You have ${dirtyCount} unsaved change${dirtyCount === 1 ? '' : 's'}. To ${pendingSwitch.label}, they are thrown away.` : undefined}
+        onClose={() => setPendingSwitch(null)}
+        footer={<>
+          <Btn onClick={() => setPendingSwitch(null)}>Keep editing</Btn>
+          <Btn variant="danger" onClick={() => { const p = pendingSwitch; setPendingSwitch(null); p?.run() }}>Discard and switch</Btn>
+        </>}>
+        <p className="text-sm text-gray-300">Save first if you want to keep them. Nothing has been written yet.</p>
+      </Modal>
+
       {dirtyCount > 0 && !readOnly && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 rounded-2xl px-5 py-3 shadow-lg bg-[var(--surface-3)]" style={{ border: '1px solid var(--border-bright)' }}>
           <span className="text-sm text-[var(--text-secondary)]"><span className="font-semibold text-[var(--text-primary)]">{dirtyCount}</span> unsaved change{dirtyCount !== 1 ? 's' : ''}</span>

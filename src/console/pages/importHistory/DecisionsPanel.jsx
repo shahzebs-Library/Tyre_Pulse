@@ -25,7 +25,10 @@
  * collect in a tray you can review, undo individually, and save together.
  *
  * The item list is paged, and the evidence behind an item opens in a modal
- * rather than expanding the table row.
+ * rather than expanding the table row. The active view lives in ?decisions=
+ * so a link can open straight on "Moved" or "Not stated", and every column
+ * header sorts (clicking one overrides the preset in the Sort by list; picking
+ * a preset clears the column sort again).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
@@ -42,7 +45,8 @@ import {
   sortDecisions, SORTS,
 } from '../../../lib/classificationDecisions'
 import ExportButtons from '../shared/ExportButtons'
-import { usePaged, Pager } from '../shared/pageKit'
+import { usePaged, Pager, useUrlTab } from '../shared/pageKit'
+import { sortRows, useTableSort } from '../../../lib/consoleTable'
 import { toUserMessage } from '../../../lib/safeError'
 import {
   Panel, PanelHeader, Note, ProportionBar, Badge, Code, Btn, Segmented,
@@ -56,6 +60,17 @@ const VIEWS = [
   { key: 'unlabelled', label: 'Not stated', hint: 'Your file left the category blank' },
   { key: 'all', label: 'Everything', hint: 'Every item, however it was decided' },
 ]
+
+const VIEW_KEYS = VIEWS.map((v) => v.key)
+
+/** Column sort accessors: sort by the label a reader sees, not the raw token. */
+const COLUMN_SORT = {
+  erp_said: (r) => bucketLabel(r.erp_said),
+  we_said: (r) => bucketLabel(r.we_said),
+  decided_by: (r) => reasonLabel(r.decided_by),
+  rows: (r) => (Number.isFinite(Number(r.rows)) ? Number(r.rows) : null),
+  value: (r) => (Number.isFinite(Number(r.value)) ? Number(r.value) : null),
+}
 
 const money = (v, ccy) => (Number.isFinite(Number(v))
   ? `${ccy || ''} ${Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })}`.trim()
@@ -116,12 +131,13 @@ function LineEvidence({ country, itemCode }) {
 }
 
 export default function DecisionsPanel() {
-  const [view, setView] = useState('moved')
+  const [view, setView] = useUrlTab(VIEW_KEYS, 'moved', 'decisions')
   const [search, setSearch] = useState('')
   const [term, setTerm] = useState('')
   const [country, setCountry] = useState('')
   const [onlyFlagged, setOnlyFlagged] = useState(false)
   const [sort, setSort] = useState('value')
+  const { sort: colSort, setSort: setColSort, onSort: onColSort } = useTableSort(null)
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -158,9 +174,10 @@ export default function DecisionsPanel() {
   const flaggedCount = useMemo(() => allItems.filter(needsAttention).length, [allItems])
   const items = useMemo(() => {
     const base = onlyFlagged ? allItems.filter(needsAttention) : allItems
-    return sortDecisions(base, sort)
-  }, [allItems, onlyFlagged, sort])
-  const paged = usePaged(items, 25)
+    const preset = sortDecisions(base, sort)
+    return colSort ? sortRows(preset, colSort, COLUMN_SORT) : preset
+  }, [allItems, onlyFlagged, sort, colSort])
+  const paged = usePaged(items, 25, `${view}|${term}|${country}|${onlyFlagged}|${sort}|${colSort?.key}|${colSort?.dir}`)
 
   const stagedList = Object.values(staged)
   const stagedThatMove = stagedList.filter((s) => overrideMovesMoney(s.row, s.category)).length
@@ -271,20 +288,20 @@ export default function DecisionsPanel() {
                   <span className="w-2 h-2 rounded-sm bg-amber-500" /> Moved
                 </dt>
                 <dd className="text-gray-300 tabular-nums">
-                  {num(c.moved_rows)} <span className="text-gray-400">({pct(c.moved_share)})</span> · {money(c.moved_value, c.currency)}
+                  {num(c.moved_rows)} <span className="text-gray-400">({pct(c.moved_share)})</span> | {money(c.moved_value, c.currency)}
                 </dd>
               </div>
               <div className="flex justify-between gap-2">
                 <dt className="text-emerald-300 inline-flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-sm bg-emerald-500" /> Kept
                 </dt>
-                <dd className="text-gray-300 tabular-nums">{num(c.kept_rows)} · {money(c.kept_value, c.currency)}</dd>
+                <dd className="text-gray-300 tabular-nums">{num(c.kept_rows)} | {money(c.kept_value, c.currency)}</dd>
               </div>
               <div className="flex justify-between gap-2">
                 <dt className="text-gray-400 inline-flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-sm bg-gray-600" /> Not stated
                 </dt>
-                <dd className="text-gray-300 tabular-nums">{num(c.unlabelled_rows)} · {money(c.unlabelled_value, c.currency)}</dd>
+                <dd className="text-gray-300 tabular-nums">{num(c.unlabelled_rows)} | {money(c.unlabelled_value, c.currency)}</dd>
               </div>
             </dl>
           </Panel>
@@ -303,7 +320,7 @@ export default function DecisionsPanel() {
           options={countries.map((c) => ({ value: c.country, label: c.country }))}
         />
         <Select ariaLabel="Sort by"
-          value={sort} onChange={setSort} className="w-40"
+          value={sort} onChange={(v) => { setSort(v); setColSort(null) }} className="w-40"
           options={SORTS.map((s) => ({ value: s.key, label: s.label }))}
         />
         <SearchInput value={search} onChange={setSearch} placeholder="Item code or description" className="w-56" />
@@ -452,12 +469,12 @@ export default function DecisionsPanel() {
         <>
         <Table>
           <THead>
-            <Th>Item</Th>
-            <Th>Your file said</Th>
-            <Th>We filed it as</Th>
-            <Th>Why</Th>
-            <Th align="right">Lines</Th>
-            <Th align="right">Value</Th>
+            <Th sortKey="item_code" sort={colSort} onSort={onColSort}>Item</Th>
+            <Th sortKey="erp_said" sort={colSort} onSort={onColSort}>Your file said</Th>
+            <Th sortKey="we_said" sort={colSort} onSort={onColSort}>We filed it as</Th>
+            <Th sortKey="decided_by" sort={colSort} onSort={onColSort}>Why</Th>
+            <Th align="right" sortKey="rows" sort={colSort} onSort={onColSort}>Lines</Th>
+            <Th align="right" sortKey="value" sort={colSort} onSort={onColSort}>Value</Th>
             <Th>Change it to</Th>
           </THead>
           <tbody>

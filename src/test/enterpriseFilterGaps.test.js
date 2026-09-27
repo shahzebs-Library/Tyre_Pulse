@@ -13,8 +13,20 @@ describe('enterprise filter-gap rollout', () => {
       const source = read(page)
       expect(source).toContain('<FilterBar')
       expect(source).toContain('useFilterState(')
-      expect(source).toContain('usePagedRows(')
-      expect(source).toContain('<TablePagination')
+      // MaintenanceCostBoard moved its register onto EnterpriseTable, which pages
+      // (and sorts) across the whole filtered set itself.
+      if (page === 'MaintenanceCostBoard') {
+        expect(source).toContain('<EnterpriseTable')
+        expect(source).toContain('data={filteredDetails}')
+      } else if (page === 'ExpenseImport') {
+        // ExpenseImport's preview moved onto EnterpriseTable too; it pages the
+        // whole filtered preview and the import still submits every row.
+        expect(source).toContain('<EnterpriseTable')
+        expect(source).toContain('data={previewRows}')
+      } else {
+        expect(source).toContain('usePagedRows(')
+        expect(source).toContain('<TablePagination')
+      }
       expect(source).toMatch(/No .+ match (?:these|this) filter|No .+ match this search/)
     })
   }

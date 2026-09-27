@@ -69,7 +69,9 @@ describe('production-risk registers remediated in this paging wave', () => {
     'StockReplenishment', 'SupplierManagement', 'UserManagement',
   ]
 
-  const ENTERPRISE_PAGES = new Set(['AssetDisposals', 'TcoCalculator', 'ContinuousImprovement', 'ScheduledReports', 'RecallTracker', 'RepairRequests', 'InsuranceClaims', 'RetreadClaims', 'WorkshopAnalytics', 'EngineeringKpi'])
+  const ENTERPRISE_PAGES = new Set(['Geofencing', 'IncidentReports', 'FuelCards', 'GatePass', 'ChecklistSchedules', 'Checklists', 'Contracts', 'AssetDisposals', 'PolicyManagement', 'TcoCalculator', 'ContinuousImprovement', 'ScheduledReports', 'RecallTracker', 'RepairRequests', 'InsuranceClaims', 'RetreadClaims', 'WorkshopAnalytics', 'EngineeringKpi', 'AdvancedSearch', 'AssetBreakdowns'])
+  // MyChecklists + PerformanceBenchmark moved their registers onto EnterpriseTable.
+  for (const p of ['MyChecklists', 'PerformanceBenchmark']) ENTERPRISE_PAGES.add(p)
 
   for (const page of pages) {
     it(`${page} renders through the shared pager`, () => {

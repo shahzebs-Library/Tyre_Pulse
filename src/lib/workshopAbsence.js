@@ -338,3 +338,88 @@ export function summarizeAttendance({ shifts, attendance, from, to, now = new Da
     detail: classified,
   }
 }
+
+// ── view-model helpers (page presentation, still pure) ──────────────────────
+
+/** Display label for each classification token. */
+export const ATTENDANCE_STATUS_LABEL = {
+  present: 'Present', late: 'Late', absent: 'Absent',
+  scheduled: 'Scheduled', leave: 'On leave', cancelled: 'Cancelled',
+}
+
+/** Worst-first ordering for the attendance register. */
+export const ATTENDANCE_STATUS_ORDER = { absent: 0, late: 1, scheduled: 2, present: 3, leave: 4, cancelled: 5 }
+
+/**
+ * Flatten `summary.detail` into register rows, worst status first, then newest
+ * date, then person. A missing check-in stays null (never an invented time).
+ */
+export function attendanceDetailRows(detail) {
+  const list = Array.isArray(detail) ? detail : []
+  return list
+    .map(({ shift = {}, cls, att }, i) => ({
+      id: shift.id != null ? String(shift.id) : `row-${i}`,
+      person: shift.person_name && String(shift.person_name).trim() ? String(shift.person_name).trim() : 'Unknown',
+      date: dateOf(shift.shift_date) || null,
+      site: shift.site && String(shift.site).trim() ? String(shift.site).trim() : null,
+      rostered: [shift.start_time, shift.end_time].filter(Boolean).join(' to ') || null,
+      checkIn: att && att.check_in ? String(att.check_in).slice(11, 16) || null : null,
+      status: cls,
+      statusLabel: ATTENDANCE_STATUS_LABEL[cls] || cls || null,
+    }))
+    .sort((a, b) =>
+      (ATTENDANCE_STATUS_ORDER[a.status] ?? 9) - (ATTENDANCE_STATUS_ORDER[b.status] ?? 9)
+      || String(b.date || '').localeCompare(String(a.date || ''))
+      || a.person.localeCompare(b.person))
+}
+
+/**
+ * Filter register rows by status token ('' = all) and a free-text query over
+ * person / site / status label.
+ */
+export function filterDetailRows(rows, { status = '', query = '' } = {}) {
+  const list = Array.isArray(rows) ? rows : []
+  const q = String(query || '').trim().toLowerCase()
+  return list.filter((r) => {
+    if (status && r.status !== status) return false
+    if (!q) return true
+    return [r.person, r.site, r.statusLabel, r.date].some((v) => v && String(v).toLowerCase().includes(q))
+  })
+}
+
+/**
+ * Per-person rows with an attendance rate that is null (not 0) when nothing is
+ * measurable (no attended or absent shift yet).
+ */
+export function personRows(byPerson) {
+  const list = Array.isArray(byPerson) ? byPerson : []
+  return list.map((p) => {
+    const denom = (p.present || 0) + (p.absent || 0)
+    return { ...p, rate: denom > 0 ? p.present / denom : null }
+  })
+}
+
+/**
+ * Headline insights beyond the four core tiles. Every ratio is null when its
+ * denominator is zero.
+ *   lateRate            late / present
+ *   repeatAbsentees     people absent on 2+ rostered shifts
+ *   worstSite           site with the most absences (null when none)
+ *   daysCovered         distinct roster days with any signal
+ */
+export function absenceInsights(summary) {
+  const s = summary || {}
+  const present = Number(s.present) || 0
+  const late = Number(s.late) || 0
+  const byPerson = Array.isArray(s.byPerson) ? s.byPerson : []
+  const bySite = Array.isArray(s.bySite) ? s.bySite : []
+  const byDay = Array.isArray(s.byDay) ? s.byDay : []
+  const repeatAbsentees = byPerson.filter((p) => (p.absent || 0) >= 2).map((p) => p.person)
+  const worst = bySite.find((x) => (x.absent || 0) > 0) || null
+  return {
+    lateRate: present > 0 ? late / present : null,
+    repeatAbsentees,
+    worstSite: worst ? { site: worst.site, absent: worst.absent } : null,
+    daysCovered: byDay.length,
+  }
+}

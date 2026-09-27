@@ -104,8 +104,11 @@ const CASES = [
   {
     file: 'pages/AssetManagement.jsx',
     what: 'the table body renders the page',
-    required: '{pageAssets.map((a, i) => {',
-    forbidden: '{filteredAssets.map((a, i) => {',
+    // CONTRACT MOVED, deliberately: the register is an EnterpriseTable handed
+    // the URL-borne PAGE (the shared TablePagination bar still owns paging,
+    // and the URL sort orders the whole filtered set first).
+    required: 'data={pageAssets}',
+    forbidden: 'data={filteredAssets}',
   },
 
   // ── Accidents: EnterpriseTable owns the paging; it is handed everything ───

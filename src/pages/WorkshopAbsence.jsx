@@ -6,9 +6,10 @@
  * Evidence-based (no fabrication): absence is only asserted for a ROSTERED shift
  * (shifts table) whose start has passed with no matching check-in
  * (workshop_attendance). All maths live in the pure, unit-tested workshopAbsence
- * engine; this page is presentation + orchestration only. Honest loading / empty
- * / error states. Read-only, self-gated to Admin / Manager / Director + super
- * admin. Light + dark via var(--*) tokens.
+ * engine (classification, summary, register rows, filters, insights); this page
+ * is presentation + orchestration only. Honest loading / empty / error states:
+ * a failed read renders N/A and a Retry, never zeros. Read-only, self-gated to
+ * Admin / Manager / Director + super admin. Light + dark via var(--*) tokens.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
@@ -19,15 +20,20 @@ import { Bar } from 'react-chartjs-2'
 import {
   CalendarCheck2, Filter, X, UserCheck, UserX, Clock, Percent,
   BarChart3, Users, AlertTriangle, ShieldAlert, FileSpreadsheet, FileText,
+  Search, Palmtree, Repeat, MapPin, RefreshCw,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { loadAbsenceData, enrichAttendanceWithNames, distinctSites } from '../lib/api/workshopAbsence'
-import { summarizeAttendance } from '../lib/workshopAbsence'
+import {
+  summarizeAttendance, attendanceDetailRows, filterDetailRows, personRows,
+  absenceInsights, ATTENDANCE_STATUS_LABEL,
+} from '../lib/workshopAbsence'
 import { colorAt, withAlpha } from '../lib/reportColors'
+import { compareValues } from '../lib/consoleTable'
 import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
-import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import { toUserMessage } from '../lib/safeError'
 import useLatestRequest from '../lib/useLatestRequest'
 import { isMissingRelation } from '../lib/api/_client'
@@ -36,38 +42,43 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend)
 
 const VIEW_ROLES = new Set(['Admin', 'Manager', 'Director'])
 
-// Status pill tones (semantic, deliberately not palettized).
+// Status pill tones (semantic, deliberately not palettized). The label is
+// always printed, so colour is never the only signal.
 const STATUS_TONE = {
-  present: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
-  late: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
-  absent: 'bg-red-500/15 text-red-300 border-red-500/30',
-  scheduled: 'bg-sky-500/15 text-sky-300 border-sky-500/30',
-  leave: 'bg-violet-500/15 text-violet-300 border-violet-500/30',
-  cancelled: 'bg-slate-500/15 text-slate-300 border-slate-500/30',
-}
-const STATUS_LABEL = {
-  present: 'Present', late: 'Late', absent: 'Absent',
-  scheduled: 'Scheduled', leave: 'On leave', cancelled: 'Cancelled',
+  present: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+  late: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+  absent: 'bg-red-500/15 text-red-400 border-red-500/30',
+  scheduled: 'bg-sky-500/15 text-sky-400 border-sky-500/30',
+  leave: 'bg-violet-500/15 text-violet-400 border-violet-500/30',
+  cancelled: 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)]',
 }
 
+// chartVarPlugin resolves var(--token) colours per theme at draw time.
+const TICK = { color: 'var(--text-muted)', font: { size: 10 } }
 const AXIS_STACKED = {
-  x: { stacked: true, grid: { display: false }, ticks: { color: 'rgba(148,163,184,0.9)', font: { size: 10 } } },
-  y: { stacked: true, beginAtZero: true, grid: { color: 'var(--panel-2)' }, ticks: { color: 'rgba(148,163,184,0.9)', font: { size: 10 }, precision: 0 } },
+  x: { stacked: true, grid: { display: false }, ticks: TICK },
+  y: { stacked: true, beginAtZero: true, grid: { color: 'var(--panel-2)' }, ticks: { ...TICK, precision: 0 } },
 }
 const AXIS_PLAIN = {
-  x: { grid: { display: false }, ticks: { color: 'rgba(148,163,184,0.9)', font: { size: 10 } } },
-  y: { beginAtZero: true, grid: { color: 'var(--panel-2)' }, ticks: { color: 'rgba(148,163,184,0.9)', font: { size: 10 }, precision: 0 } },
+  x: { grid: { display: false }, ticks: TICK },
+  y: { beginAtZero: true, grid: { color: 'var(--panel-2)' }, ticks: { ...TICK, precision: 0 } },
 }
+const LEGEND = { position: 'bottom', labels: { color: 'var(--text-secondary)', font: { size: 11 }, boxWidth: 12 } }
 
-const todayISO = () => new Date().toISOString().slice(0, 10)
+// Local calendar dates. toISOString() is UTC and rolls the day back or forward
+// for anyone not on UTC, so a "Today" filter would read yesterday.
+function isoLocal(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+const todayISO = () => isoLocal(new Date())
 function daysAgo(n) {
   const d = new Date()
   d.setDate(d.getDate() - n)
-  return d.toISOString().slice(0, 10)
+  return isoLocal(d)
 }
 function firstOfMonth() {
   const d = new Date()
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10)
+  return isoLocal(new Date(d.getFullYear(), d.getMonth(), 1))
 }
 function fmtDate(v) {
   if (!v) return 'N/A'
@@ -76,10 +87,19 @@ function fmtDate(v) {
 }
 function fmtNum(v) {
   const n = Number(v)
-  return Number.isFinite(n) ? n.toLocaleString() : 'N/A'
+  return v != null && Number.isFinite(n) ? n.toLocaleString() : 'N/A'
 }
 function fmtRate(r) {
   return r == null ? 'N/A' : `${Math.round(r * 100)}%`
+}
+const sortCompare = (a, b, id) => compareValues(a.getValue(id), b.getValue(id))
+
+function StatusPill({ status }) {
+  return (
+    <span className={`inline-block text-[11px] px-2 py-0.5 rounded-full border ${STATUS_TONE[status] || STATUS_TONE.cancelled}`}>
+      {ATTENDANCE_STATUS_LABEL[status] || status || 'N/A'}
+    </span>
+  )
 }
 
 export default function WorkshopAbsence() {
@@ -96,7 +116,13 @@ export default function WorkshopAbsence() {
 
   const [filters, setFilters] = useState({ from: daysAgo(7), to: todayISO(), site: 'All' })
   const setFilter = (k, v) => setFilters((f) => ({ ...f, [k]: v }))
-  const resetFilters = () => setFilters({ from: daysAgo(7), to: todayISO(), site: 'All' })
+  const [statusFilter, setStatusFilter] = useState('')
+  const [query, setQuery] = useState('')
+  const resetFilters = () => {
+    setFilters({ from: daysAgo(7), to: todayISO(), site: 'All' })
+    setStatusFilter('')
+    setQuery('')
+  }
 
   // Changing the date range or site refetches without waiting for the load
   // already in flight. If the earlier one finishes last it marks the PREVIOUS
@@ -116,6 +142,7 @@ export default function WorkshopAbsence() {
         country: activeCountry,
       })
       if (stale()) return
+      setMissing(false)
       setData(res)
       setUpdatedAt(new Date())
     } catch (err) {
@@ -148,16 +175,20 @@ export default function WorkshopAbsence() {
     }),
     [data.shifts, enriched, filters.from, filters.to],
   )
+  const insights = useMemo(() => absenceInsights(summary), [summary])
+  const people = useMemo(() => personRows(summary.byPerson), [summary.byPerson])
 
   const siteOptions = useMemo(() => distinctSites(data.shifts, data.attendance), [data.shifts, data.attendance])
   const hasRoster = summary.rostered > 0
+  // A failed or unprovisioned read is not a measurement: every figure reads N/A.
+  const unknown = !!error || missing
 
   // ── Charts ──────────────────────────────────────────────────────────────────
   const dayData = useMemo(() => {
     const rows = summary.byDay
-    const present = colorAt(1) // green-ish accent
-    const absent = colorAt(3)
+    const present = colorAt(1)
     const late = colorAt(2)
+    const absent = colorAt(3)
     return {
       labels: rows.map((r) => r.date.slice(5)),
       datasets: [
@@ -181,73 +212,97 @@ export default function WorkshopAbsence() {
     }
   }, [summary.bySite])
 
-  const stackedOpts = {
-    responsive: true, maintainAspectRatio: false,
-    plugins: { legend: { position: 'bottom', labels: { color: 'rgba(148,163,184,0.95)', font: { size: 11 }, boxWidth: 12 } } },
-    scales: AXIS_STACKED,
-  }
-  const groupedOpts = {
-    responsive: true, maintainAspectRatio: false,
-    plugins: { legend: { position: 'bottom', labels: { color: 'rgba(148,163,184,0.95)', font: { size: 11 }, boxWidth: 12 } } },
-    scales: AXIS_PLAIN,
-  }
+  const stackedOpts = { responsive: true, maintainAspectRatio: false, plugins: { legend: LEGEND }, scales: AXIS_STACKED }
+  const groupedOpts = { responsive: true, maintainAspectRatio: false, plugins: { legend: LEGEND }, scales: AXIS_PLAIN }
 
   const kpis = [
-    { label: 'Present', value: fmtNum(summary.present), sub: 'checked in (incl. late)', icon: UserCheck },
-    { label: 'Absent', value: fmtNum(summary.absent), sub: 'rostered, no check-in', icon: UserX },
-    { label: 'Late', value: fmtNum(summary.late), sub: 'after shift start', icon: Clock },
-    { label: 'Attendance Rate', value: fmtRate(summary.attendanceRate), sub: 'present / (present + absent)', icon: Percent },
+    { label: 'Present', value: fmtNum(summary.present), sub: 'checked in (incl. late)', icon: UserCheck, status: 'present' },
+    { label: 'Absent', value: fmtNum(summary.absent), sub: 'rostered, no check-in', icon: UserX, status: 'absent' },
+    { label: 'Late', value: fmtNum(summary.late), sub: `${fmtRate(insights.lateRate)} of those present`, icon: Clock, status: 'late' },
+    { label: 'Attendance rate', value: fmtRate(summary.attendanceRate), sub: 'present / (present + absent)', icon: Percent, status: '' },
+    { label: 'On leave', value: fmtNum(summary.onLeave), sub: 'approved, not counted absent', icon: Palmtree, status: 'leave' },
+    { label: 'Repeat absentees', value: fmtNum(insights.repeatAbsentees.length), sub: 'absent on 2+ rostered shifts', icon: Repeat, status: 'absent' },
   ]
 
-  // ── Absentee / attendance detail rows (rostered shifts, worst first) ─────────
-  const detailRows = useMemo(() => {
-    const order = { absent: 0, late: 1, scheduled: 2, present: 3, leave: 4, cancelled: 5 }
-    return summary.detail
-      .map(({ shift, cls, att }) => ({
-        person: shift.person_name || 'Unknown',
-        date: shift.shift_date ? String(shift.shift_date).slice(0, 10) : '',
-        site: shift.site || '',
-        rostered: [shift.start_time, shift.end_time].filter(Boolean).join(' to ') || 'N/A',
-        checkIn: att && att.check_in ? String(att.check_in).slice(11, 16) : '',
-        status: cls,
-      }))
-      .sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9) || b.date.localeCompare(a.date) || a.person.localeCompare(b.person))
-  }, [summary.detail])
+  // ── Register rows (engine) + page filters ─────────────────────────────────
+  const detailRows = useMemo(() => attendanceDetailRows(summary.detail), [summary.detail])
+  const filteredDetail = useMemo(
+    () => filterDetailRows(detailRows, { status: statusFilter, query }),
+    [detailRows, statusFilter, query],
+  )
 
-  // Paged, not capped. This table used to render detailRows.slice(0, 500), so
-  // shift 501 was unreachable. The exports below still cover every rostered
-  // shift in the filtered window.
-  const pager = usePagedRows(detailRows)
-
-  // ── Exports ─────────────────────────────────────────────────────────────────
+  // ── Exports: the whole filtered register, never a page ────────────────────
   const EXPORT_COLS = ['date', 'person', 'site', 'rostered', 'checkIn', 'statusLabel']
   const EXPORT_HEADERS = ['Date', 'Person', 'Site', 'Rostered Shift', 'Check In', 'Status']
-  const exportRows = () => detailRows.map((r) => ({
-    date: r.date,
+  const exportRows = () => filteredDetail.map((r) => ({
+    date: r.date || 'N/A',
     person: r.person,
-    site: r.site,
-    rostered: r.rostered,
+    site: r.site || 'N/A',
+    rostered: r.rostered || 'N/A',
     checkIn: r.checkIn || 'N/A',
-    statusLabel: STATUS_LABEL[r.status] || r.status,
+    statusLabel: r.statusLabel || 'N/A',
   }))
-  const exportExcel = () => {
-    const name = reportFileName('Workshop Attendance', reportDateLabel())
-    exportToExcel(exportRows(), EXPORT_COLS, EXPORT_HEADERS, name, 'Attendance', { title: 'Workshop Attendance', currency: activeCurrency })
+  const exportExcel = async () => {
+    try {
+      const name = reportFileName('Workshop Attendance', reportDateLabel())
+      await exportToExcel(exportRows(), EXPORT_COLS, EXPORT_HEADERS, name, 'Attendance', { title: 'Workshop Attendance', currency: activeCurrency })
+    } catch (err) {
+      setError(toUserMessage(err, 'Could not export. Try again.'))
+    }
   }
-  const exportPdf = () => {
-    const name = reportFileName('Workshop Attendance', reportDateLabel())
-    exportToPdf(
-      exportRows(),
-      EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })),
-      'Workshop Attendance Report',
-      name,
-      'landscape',
-      '',
-      { currency: activeCurrency },
-    )
+  const exportPdf = async () => {
+    try {
+      const name = reportFileName('Workshop Attendance', reportDateLabel())
+      await exportToPdf(
+        exportRows(),
+        EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })),
+        'Workshop Attendance Report',
+        name,
+        'landscape',
+        '',
+        { currency: activeCurrency },
+      )
+    } catch (err) {
+      setError(toUserMessage(err, 'Could not export. Try again.'))
+    }
   }
 
-  const inputCls = 'w-full rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500'
+  // ── Table columns ─────────────────────────────────────────────────────────
+  const personColumns = useMemo(() => [
+    { accessorKey: 'person', header: 'Person', sortingFn: sortCompare, cell: ({ getValue }) => <span className="text-[var(--text-primary)] font-medium">{getValue()}</span> },
+    { accessorKey: 'scheduled', header: 'Scheduled', sortingFn: sortCompare, meta: { align: 'right' }, cell: ({ getValue }) => fmtNum(getValue()) },
+    { accessorKey: 'present', header: 'Present', sortingFn: sortCompare, meta: { align: 'right' }, cell: ({ getValue }) => fmtNum(getValue()) },
+    {
+      accessorKey: 'absent', header: 'Absent', sortingFn: sortCompare, meta: { align: 'right' },
+      cell: ({ getValue }) => <span className={getValue() > 0 ? 'text-red-400 font-semibold' : ''}>{fmtNum(getValue())}</span>,
+    },
+    { accessorKey: 'late', header: 'Late', sortingFn: sortCompare, meta: { align: 'right' }, cell: ({ getValue }) => fmtNum(getValue()) },
+    {
+      id: 'rate', accessorFn: (r) => (r.rate == null ? undefined : r.rate), header: 'Rate', sortingFn: sortCompare, sortUndefined: 'last', meta: { align: 'right', exportValue: (r) => fmtRate(r.rate) },
+      cell: ({ getValue }) => fmtRate(getValue()),
+    },
+    {
+      id: 'lastSeen', header: 'Last seen', sortingFn: sortCompare, sortUndefined: 'last',
+      accessorFn: (r) => r.lastSeen || undefined,
+      cell: ({ getValue }) => fmtDate(getValue()),
+    },
+  ], [])
+
+  const registerColumns = useMemo(() => [
+    { id: 'date', accessorFn: (r) => r.date || undefined, header: 'Date', sortingFn: sortCompare, sortUndefined: 'last', cell: ({ getValue }) => fmtDate(getValue()) },
+    { accessorKey: 'person', header: 'Person', sortingFn: sortCompare, cell: ({ getValue }) => <span className="text-[var(--text-primary)]">{getValue()}</span> },
+    { id: 'site', accessorFn: (r) => r.site || undefined, header: 'Site', sortingFn: sortCompare, sortUndefined: 'last', cell: ({ getValue }) => getValue() || 'N/A' },
+    { id: 'rostered', accessorFn: (r) => r.rostered || undefined, header: 'Rostered shift', enableSorting: false, cell: ({ getValue }) => getValue() || 'N/A' },
+    { id: 'checkIn', accessorFn: (r) => r.checkIn || undefined, header: 'Check in', sortingFn: sortCompare, sortUndefined: 'last', cell: ({ getValue }) => getValue() || 'N/A' },
+    {
+      accessorKey: 'status', header: 'Status', sortingFn: sortCompare,
+      meta: { exportValue: (r) => r.statusLabel },
+      cell: ({ getValue }) => <StatusPill status={getValue()} />,
+    },
+  ], [])
+
+  const controlCls = 'w-full min-h-[44px] rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500'
+  const chipCls = 'min-h-[44px] text-xs px-3 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] hover:border-blue-600/50 text-[var(--text-secondary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500'
 
   const quickRanges = [
     { id: '7', label: 'Last 7 days', from: daysAgo(7), to: todayISO() },
@@ -255,15 +310,16 @@ export default function WorkshopAbsence() {
     { id: 'month', label: 'This month', from: firstOfMonth(), to: todayISO() },
     { id: 'today', label: 'Today', from: todayISO(), to: todayISO() },
   ]
+  const filtersActive = filters.site !== 'All' || statusFilter || query
 
   if (!canView) {
     return (
       <div className="space-y-6">
         <PageHeader title="Absence & Attendance" subtitle="Workshop attendance reporting." icon={CalendarCheck2} />
-        <div className="card border border-amber-800/50 flex items-start gap-3">
-          <ShieldAlert size={18} className="text-amber-400 mt-0.5 shrink-0" />
+        <div className="card border border-amber-800/50 flex items-start gap-3" role="alert">
+          <ShieldAlert size={18} className="text-amber-400 mt-0.5 shrink-0" aria-hidden="true" />
           <div>
-            <p className="text-amber-300 font-medium">You do not have access to attendance reporting.</p>
+            <p className="text-amber-400 font-medium">You do not have access to attendance reporting.</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">This view is limited to Admin, Manager and Director roles.</p>
           </div>
         </div>
@@ -280,13 +336,23 @@ export default function WorkshopAbsence() {
         onRefresh={load}
         refreshing={refreshing}
         updatedAt={updatedAt}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <button onClick={exportExcel} disabled={unknown || filteredDetail.length === 0} className="btn-secondary min-h-[44px] text-sm inline-flex items-center gap-1.5 disabled:opacity-50">
+              <FileSpreadsheet size={14} aria-hidden="true" /> Excel
+            </button>
+            <button onClick={exportPdf} disabled={unknown || filteredDetail.length === 0} className="btn-secondary min-h-[44px] text-sm inline-flex items-center gap-1.5 disabled:opacity-50">
+              <FileText size={14} aria-hidden="true" /> PDF
+            </button>
+          </div>
+        }
       />
 
       {missing && (
-        <div className="card border border-amber-800/50 flex items-start gap-3">
-          <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
+        <div className="card border border-amber-800/50 flex items-start gap-3" role="status">
+          <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" aria-hidden="true" />
           <div>
-            <p className="text-amber-300 font-medium">Attendance tracking is not enabled on this database yet.</p>
+            <p className="text-amber-400 font-medium">Attendance tracking is not enabled on this database yet.</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">
               The <span className="font-mono text-[var(--text-primary)]">workshop_attendance</span> and <span className="font-mono text-[var(--text-primary)]">shifts</span> tables must exist, then reload.
             </p>
@@ -295,78 +361,130 @@ export default function WorkshopAbsence() {
       )}
 
       {error && (
-        <div className="card border border-red-800/50 flex items-start gap-3">
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-          <div>
-            <p className="text-red-300 font-medium">Something went wrong.</p>
+        <div className="card border border-red-800/50 flex items-start gap-3" role="alert">
+          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
+          <div className="flex-1">
+            <p className="text-red-400 font-medium">Attendance could not be loaded, so no figure below is a measurement.</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">{error}</p>
-            <button onClick={load} className="mt-2 text-sm text-blue-400 hover:text-blue-300">Retry</button>
           </div>
+          <button onClick={load} className="btn-secondary min-h-[44px] text-sm inline-flex items-center gap-1.5">
+            <RefreshCw size={14} aria-hidden="true" /> Retry
+          </button>
         </div>
       )}
 
       {/* Filters */}
-      <div className="card space-y-3">
-        <div className="flex items-center gap-2 text-[var(--text-secondary)]">
-          <Filter size={15} /> <span className="text-sm font-medium">Filters</span>
-          <div className="ml-auto flex flex-wrap gap-1.5">
-            {quickRanges.map((q) => (
-              <button
-                key={q.id}
-                onClick={() => setFilters((f) => ({ ...f, from: q.from, to: q.to }))}
-                className="text-[11px] px-2.5 py-1 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] hover:border-blue-600/50 text-[var(--text-secondary)]"
-              >
-                {q.label}
-              </button>
-            ))}
+      <section className="card space-y-3" aria-label="Filters">
+        <div className="flex flex-wrap items-center gap-2 text-[var(--text-secondary)]">
+          <Filter size={15} aria-hidden="true" /> <h2 className="text-sm font-medium">Filters</h2>
+          <div className="ms-auto flex flex-wrap gap-1.5">
+            {quickRanges.map((q) => {
+              const on = filters.from === q.from && filters.to === q.to
+              return (
+                <button
+                  key={q.id}
+                  onClick={() => setFilters((f) => ({ ...f, from: q.from, to: q.to }))}
+                  aria-pressed={on}
+                  className={`${chipCls} ${on ? 'border-blue-500 text-[var(--text-primary)]' : ''}`}
+                >
+                  {q.label}
+                </button>
+              )
+            })}
           </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+          <label className="text-xs text-[var(--text-muted)] space-y-1 lg:col-span-2">
+            <span>Search person, site or status</span>
+            <span className="relative block">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+              <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="e.g. Ahmed or NHC" className={`${controlCls} pl-9`} />
+            </span>
+          </label>
           <label className="text-xs text-[var(--text-muted)] space-y-1">
             <span>From</span>
-            <input type="date" value={filters.from} onChange={(e) => setFilter('from', e.target.value)} className={inputCls} />
+            <input type="date" value={filters.from} onChange={(e) => setFilter('from', e.target.value)} className={controlCls} />
           </label>
           <label className="text-xs text-[var(--text-muted)] space-y-1">
             <span>To</span>
-            <input type="date" value={filters.to} onChange={(e) => setFilter('to', e.target.value)} className={inputCls} />
+            <input type="date" value={filters.to} onChange={(e) => setFilter('to', e.target.value)} className={controlCls} />
           </label>
           <label className="text-xs text-[var(--text-muted)] space-y-1">
             <span>Site</span>
-            <select value={filters.site} onChange={(e) => setFilter('site', e.target.value)} className={inputCls}>
+            <select value={filters.site} onChange={(e) => setFilter('site', e.target.value)} className={controlCls}>
               <option value="All">All sites</option>
               {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </label>
-          <div className="flex items-end">
-            <button onClick={resetFilters} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
-              <X size={14} /> Reset
+          <label className="text-xs text-[var(--text-muted)] space-y-1">
+            <span>Status</span>
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className={controlCls}>
+              <option value="">All statuses</option>
+              {Object.entries(ATTENDANCE_STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+          </label>
+        </div>
+        {filtersActive && (
+          <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-muted)]">
+            <span>Register shows {filteredDetail.length} of {detailRows.length} rostered shifts.</span>
+            <button onClick={resetFilters} className={`${chipCls} inline-flex items-center gap-1.5`}>
+              <X size={14} aria-hidden="true" /> Reset filters
             </button>
           </div>
-        </div>
-      </div>
+        )}
+      </section>
 
-      {/* KPI tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* KPI tiles. Each status tile also filters the register. */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         {kpis.map((k) => {
           const Icon = k.icon
-          return (
-            <div key={k.label} className="card">
+          const active = k.status && statusFilter === k.status
+          const body = (
+            <>
               <div className="flex items-center justify-between">
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
-                <Icon size={15} className="text-[var(--text-muted)]" />
+                <Icon size={15} className="text-[var(--text-muted)]" aria-hidden="true" />
               </div>
-              <p className="text-2xl font-bold text-[var(--text-primary)] mt-1">{loading ? '-' : k.value}</p>
-              <p className="text-[10px] text-[var(--text-muted)] mt-0.5">{k.sub}</p>
-            </div>
+              <p className="text-2xl font-bold text-[var(--text-primary)] mt-1 tabular-nums">{loading ? '...' : unknown ? 'N/A' : k.value}</p>
+              <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{k.sub}</p>
+            </>
           )
+          return k.status ? (
+            <button
+              key={k.label}
+              type="button"
+              onClick={() => setStatusFilter(active ? '' : k.status)}
+              aria-pressed={!!active}
+              className={`card text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${active ? 'ring-2 ring-blue-500' : ''}`}
+            >
+              {body}
+            </button>
+          ) : <div key={k.label} className="card">{body}</div>
         })}
       </div>
 
+      {!loading && !unknown && hasRoster && (insights.worstSite || insights.repeatAbsentees.length > 0) && (
+        <div className="card flex flex-wrap items-start gap-4 text-sm" role="note">
+          {insights.worstSite && (
+            <p className="flex items-center gap-2 text-[var(--text-secondary)]">
+              <MapPin size={15} className="text-red-400 shrink-0" aria-hidden="true" />
+              Most absences: <span className="font-semibold text-[var(--text-primary)]">{insights.worstSite.site}</span> ({fmtNum(insights.worstSite.absent)})
+            </p>
+          )}
+          {insights.repeatAbsentees.length > 0 && (
+            <p className="flex items-center gap-2 text-[var(--text-secondary)]">
+              <Repeat size={15} className="text-amber-400 shrink-0" aria-hidden="true" />
+              Repeat absentees: <span className="text-[var(--text-primary)]">{insights.repeatAbsentees.slice(0, 5).join(', ')}{insights.repeatAbsentees.length > 5 ? ` and ${insights.repeatAbsentees.length - 5} more` : ''}</span>
+            </p>
+          )}
+        </div>
+      )}
+
       {loading ? (
-        <div className="card"><div className="space-y-2">{[0, 1, 2, 3, 4].map((i) => <div key={i} className="h-9 bg-[var(--input-bg)] rounded animate-pulse" />)}</div></div>
-      ) : !hasRoster ? (
+        <div className="card" aria-busy="true"><div className="space-y-2">{[0, 1, 2, 3, 4].map((i) => <div key={i} className="h-9 bg-[var(--input-bg)] rounded animate-pulse" />)}</div></div>
+      ) : unknown ? null : !hasRoster ? (
         <div className="card py-12 text-center text-[var(--text-muted)]">
-          <CalendarCheck2 size={30} className="mx-auto mb-2 opacity-50" />
+          <CalendarCheck2 size={30} className="mx-auto mb-2 opacity-50" aria-hidden="true" />
           <p className="text-sm">No roster or attendance in this range.</p>
           <p className="text-xs mt-1">Schedule shifts (Shift Scheduling) and capture check-ins to populate this report.</p>
         </div>
@@ -374,114 +492,64 @@ export default function WorkshopAbsence() {
         <>
           {/* Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="card">
+            <section className="card" aria-labelledby="wa-day">
               <div className="flex items-center gap-2 mb-3">
-                <BarChart3 size={16} className="text-[var(--text-secondary)]" />
-                <h3 className="font-semibold text-[var(--text-primary)]">Daily present vs absent</h3>
+                <BarChart3 size={16} className="text-[var(--text-secondary)]" aria-hidden="true" />
+                <h3 id="wa-day" className="font-semibold text-[var(--text-primary)]">Daily present vs absent</h3>
               </div>
-              <div className="h-[260px]">
+              <div className="h-[260px]" role="img" aria-label={`Daily attendance over ${summary.byDay.length} days: ${summary.present} present, ${summary.absent} absent, ${summary.late} late.`}>
                 {summary.byDay.length === 0 ? <EmptyChart /> : <Bar data={dayData} options={stackedOpts} />}
               </div>
-            </div>
-            <div className="card">
+            </section>
+            <section className="card" aria-labelledby="wa-site">
               <div className="flex items-center gap-2 mb-3">
-                <BarChart3 size={16} className="text-[var(--text-secondary)]" />
-                <h3 className="font-semibold text-[var(--text-primary)]">By site</h3>
+                <BarChart3 size={16} className="text-[var(--text-secondary)]" aria-hidden="true" />
+                <h3 id="wa-site" className="font-semibold text-[var(--text-primary)]">By site</h3>
               </div>
-              <div className="h-[260px]">
+              <div className="h-[260px]" role="img" aria-label={`Attendance across ${summary.bySite.length} sites.${insights.worstSite ? ` Most absences at ${insights.worstSite.site}.` : ''}`}>
                 {summary.bySite.length === 0 ? <EmptyChart /> : <Bar data={siteData} options={groupedOpts} />}
               </div>
-            </div>
+            </section>
           </div>
 
           {/* By person */}
-          <div className="card">
+          <section className="card" aria-labelledby="wa-person">
             <div className="flex items-center gap-2 mb-3">
-              <Users size={16} className="text-[var(--text-secondary)]" />
-              <h3 className="font-semibold text-[var(--text-primary)]">By person</h3>
-              <span className="text-[11px] text-[var(--text-muted)]">{summary.byPerson.length} rostered</span>
+              <Users size={16} className="text-[var(--text-secondary)]" aria-hidden="true" />
+              <h3 id="wa-person" className="font-semibold text-[var(--text-primary)]">By person</h3>
+              <span className="text-[11px] text-[var(--text-muted)]">{people.length} rostered</span>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-[var(--text-muted)] border-b border-[var(--input-border)]">
-                    <th className="py-2 pr-3 font-medium">Person</th>
-                    <th className="py-2 pr-3 font-medium text-right">Scheduled</th>
-                    <th className="py-2 pr-3 font-medium text-right">Present</th>
-                    <th className="py-2 pr-3 font-medium text-right">Absent</th>
-                    <th className="py-2 pr-3 font-medium text-right">Late</th>
-                    <th className="py-2 pr-3 font-medium text-right">Rate</th>
-                    <th className="py-2 font-medium">Last seen</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {summary.byPerson.map((p) => {
-                    const denom = p.present + p.absent
-                    const rate = denom > 0 ? p.present / denom : null
-                    return (
-                      <tr key={p.person} className="border-b border-[var(--input-border)]/60 hover:bg-[var(--input-bg)]/50">
-                        <td className="py-2 pr-3 text-[var(--text-primary)]">{p.person}</td>
-                        <td className="py-2 pr-3 text-right text-[var(--text-secondary)]">{fmtNum(p.scheduled)}</td>
-                        <td className="py-2 pr-3 text-right text-emerald-300">{fmtNum(p.present)}</td>
-                        <td className="py-2 pr-3 text-right text-red-300">{fmtNum(p.absent)}</td>
-                        <td className="py-2 pr-3 text-right text-amber-300">{fmtNum(p.late)}</td>
-                        <td className="py-2 pr-3 text-right text-[var(--text-secondary)]">{fmtRate(rate)}</td>
-                        <td className="py-2 text-[var(--text-secondary)]">{p.lastSeen ? fmtDate(p.lastSeen) : 'N/A'}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+            <EnterpriseTable
+              columns={personColumns}
+              data={people}
+              getRowId={(r) => r.person}
+              enableColumnFilters={false}
+              enableExport={false}
+              enableKeyboard={false}
+              initialPageSize={25}
+              searchPlaceholder="Search people"
+              emptyMessage="No rostered people in this range."
+            />
+          </section>
 
           {/* Detailed attendance / absentee register */}
-          <div className="card">
-            <div className="flex items-center gap-2 mb-3">
-              <CalendarCheck2 size={16} className="text-[var(--text-secondary)]" />
-              <h3 className="font-semibold text-[var(--text-primary)]">Attendance register</h3>
-              <span className="text-[11px] text-[var(--text-muted)]">{detailRows.length} shifts</span>
-              <div className="ml-auto flex items-center gap-2">
-                <button onClick={exportExcel} disabled={detailRows.length === 0} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-50">
-                  <FileSpreadsheet size={14} /> Excel
-                </button>
-                <button onClick={exportPdf} disabled={detailRows.length === 0} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-50">
-                  <FileText size={14} /> PDF
-                </button>
-              </div>
+          <section className="card" aria-labelledby="wa-register">
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <CalendarCheck2 size={16} className="text-[var(--text-secondary)]" aria-hidden="true" />
+              <h3 id="wa-register" className="font-semibold text-[var(--text-primary)]">Attendance register</h3>
+              <span className="text-[11px] text-[var(--text-muted)]">{filteredDetail.length} of {detailRows.length} shifts</span>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-[var(--text-muted)] border-b border-[var(--input-border)]">
-                    <th className="py-2 pr-3 font-medium">Date</th>
-                    <th className="py-2 pr-3 font-medium">Person</th>
-                    <th className="py-2 pr-3 font-medium">Site</th>
-                    <th className="py-2 pr-3 font-medium">Rostered shift</th>
-                    <th className="py-2 pr-3 font-medium">Check in</th>
-                    <th className="py-2 font-medium">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pager.pageRows.map((r, i) => (
-                    <tr key={`${r.person}-${r.date}-${i}`} className="border-b border-[var(--input-border)]/60 hover:bg-[var(--input-bg)]/50">
-                      <td className="py-2 pr-3 text-[var(--text-secondary)]">{fmtDate(r.date)}</td>
-                      <td className="py-2 pr-3 text-[var(--text-primary)]">{r.person}</td>
-                      <td className="py-2 pr-3 text-[var(--text-secondary)]">{r.site || 'N/A'}</td>
-                      <td className="py-2 pr-3 text-[var(--text-secondary)]">{r.rostered}</td>
-                      <td className="py-2 pr-3 text-[var(--text-secondary)]">{r.checkIn || 'N/A'}</td>
-                      <td className="py-2">
-                        <span className={`inline-block text-[11px] px-2 py-0.5 rounded-full border ${STATUS_TONE[r.status] || STATUS_TONE.cancelled}`}>
-                          {STATUS_LABEL[r.status] || r.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <TablePagination {...pager} />
-            </div>
-          </div>
+            <EnterpriseTable
+              columns={registerColumns}
+              data={filteredDetail}
+              getRowId={(r) => r.id}
+              enableGlobalFilter={false}
+              enableColumnFilters={false}
+              enableExport={false}
+              initialPageSize={50}
+              emptyMessage={filtersActive ? 'No shifts match these filters.' : 'No rostered shifts in this range.'}
+            />
+          </section>
         </>
       )}
     </div>
@@ -491,7 +559,7 @@ export default function WorkshopAbsence() {
 function EmptyChart({ hint = 'No data for the selected filters.' }) {
   return (
     <div className="h-full flex flex-col items-center justify-center text-[var(--text-muted)]">
-      <CalendarCheck2 size={26} className="opacity-40 mb-2" />
+      <CalendarCheck2 size={26} className="opacity-40 mb-2" aria-hidden="true" />
       <p className="text-xs">{hint}</p>
     </div>
   )

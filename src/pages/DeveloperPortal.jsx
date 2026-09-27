@@ -21,19 +21,23 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   KeyRound, Webhook, ShieldCheck, Activity, Ban, Clock, Server,
   Radio, AlertTriangle, AlertOctagon, Search, X, Filter, FileSpreadsheet,
-  FileText, Plus, Pencil, Trash2, Copy,
+  FileText, Plus, Pencil, Trash2, Copy, CalendarClock, KeySquare, ShieldAlert, RefreshCw,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
-import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listApiKeys, createApiKey, revokeApiKey,
   listWebhookEndpoints, createWebhookEndpoint, updateWebhookEndpoint, deleteWebhookEndpoint,
 } from '../lib/api/developerPortal'
 import {
-  summariseKeys, summariseWebhooks, healthyWebhookRate, isKeyExpired, maskKey,
+  summariseKeys, summariseWebhooks, maskKey,
 } from '../lib/developerPortal'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import {
+  keyRows, hookRows, filterKeyRows, filterHookRows, keyInsights, hookInsights,
+} from '../lib/developerPortalAnalytics'
+import { compareValues } from '../lib/consoleTable'
+import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { isMissingRelation } from '../lib/api/_client'
 
@@ -77,6 +81,10 @@ function fmtDateTime(v) {
   const d = new Date(v)
   return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString()
 }
+const pct = (r) => (r == null ? 'N/A' : `${Math.round(r * 100)}%`)
+const sortCompare = (a, b, id) => compareValues(a.getValue(id), b.getValue(id))
+const undef = (v) => (v === null || v === undefined || v === '' ? undefined : v)
+const iconBtn = 'p-2.5 rounded-lg text-[var(--text-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500'
 
 
 export default function DeveloperPortal() {
@@ -133,56 +141,55 @@ export default function DeveloperPortal() {
 
   const keySummary = useMemo(() => summariseKeys(keys || [], nowMs), [keys, nowMs])
   const hookSummary = useMemo(() => summariseWebhooks(hooks || []), [hooks])
-  const hookHealth = useMemo(() => healthyWebhookRate(hooks || []), [hooks])
+  // Insight + filter logic lives in developerPortalAnalytics (pure, tested).
+  const keyInfo = useMemo(() => keyInsights(keys || [], nowMs), [keys, nowMs])
+  const hookInfo = useMemo(() => hookInsights(hooks || []), [hooks])
 
   // ── Filtering ──────────────────────────────────────────────────────────────
-  const filteredKeys = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return (keys || []).filter((r) => {
-      const effStatus = isKeyExpired(r, nowMs) ? 'expired' : String(r.status || '').toLowerCase()
-      if (statusFilter && effStatus !== statusFilter) return false
-      if (q) {
-        const hay = `${r.key_name || ''} ${r.key_prefix || ''} ${r.scopes || ''} ${r.environment || ''} ${r.created_label || ''} ${r.notes || ''}`.toLowerCase()
-        if (!hay.includes(q)) return false
-      }
-      return true
-    })
-  }, [keys, statusFilter, search, nowMs])
-
-  const filteredHooks = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return (hooks || []).filter((r) => {
-      if (statusFilter && String(r.status || '').toLowerCase() !== statusFilter) return false
-      if (q) {
-        const hay = `${r.endpoint_name || ''} ${r.url || ''} ${r.event_types || ''} ${r.notes || ''}`.toLowerCase()
-        if (!hay.includes(q)) return false
-      }
-      return true
-    })
-  }, [hooks, statusFilter, search])
+  const filteredKeys = useMemo(
+    () => filterKeyRows(keyRows(keys || [], nowMs), { status: statusFilter, query: search }),
+    [keys, statusFilter, search, nowMs],
+  )
+  const filteredHooks = useMemo(
+    () => filterHookRows(hookRows(hooks || []), { status: statusFilter, query: search }),
+    [hooks, statusFilter, search],
+  )
 
   const statusOptions = tab === 'keys'
     ? ['active', 'revoked', 'expired']
     : ['active', 'paused', 'failing', 'disabled']
 
   // ── KPI tiles ────────────────────────────────────────────────────────────
+  // Status tiles double as filters (aria-pressed); the label, not the colour,
+  // carries the meaning.
   const keyKpis = [
     { label: 'Total keys', value: keySummary.totalKeys, icon: KeyRound, tone: 'text-[var(--text-primary)]' },
-    { label: 'Active', value: keySummary.activeCount, icon: ShieldCheck, tone: 'text-green-400' },
-    { label: 'Production', value: keySummary.productionCount, icon: Server, tone: 'text-indigo-400' },
-    { label: 'Expired', value: keySummary.expiredCount, icon: Clock, tone: 'text-amber-400' },
+    { label: 'Active', value: keySummary.activeCount, icon: ShieldCheck, tone: 'text-green-400', status: 'active' },
+    { label: 'Expired', value: keySummary.expiredCount, icon: Clock, tone: 'text-amber-400', status: 'expired' },
+    { label: 'Revoked', value: keySummary.revokedCount, icon: Ban, tone: 'text-red-400', status: 'revoked' },
+    { label: 'Expiring in 30 days', value: keyInfo.expiringSoon, icon: CalendarClock, tone: 'text-amber-400', sub: 'live keys' },
+    { label: 'Never used', value: keyInfo.neverUsed, icon: KeySquare, tone: 'text-[var(--text-secondary)]', sub: `${keyInfo.stale} unused for 90+ days` },
   ]
   const hookKpis = [
     { label: 'Endpoints', value: hookSummary.totalEndpoints, icon: Webhook, tone: 'text-[var(--text-primary)]' },
-    { label: 'Active', value: hookSummary.activeCount, icon: Radio, tone: 'text-green-400' },
-    { label: 'Failing', value: hookSummary.failingCount, icon: AlertOctagon, tone: 'text-red-400' },
+    { label: 'Active', value: hookSummary.activeCount, icon: Radio, tone: 'text-green-400', status: 'active' },
+    { label: 'Failing', value: hookSummary.failingCount, icon: AlertOctagon, tone: 'text-red-400', status: 'failing' },
     { label: 'Total failures', value: hookSummary.totalFailures, icon: AlertTriangle, tone: 'text-amber-400' },
+    { label: 'No signing secret', value: hookInfo.withoutSecret, icon: ShieldAlert, tone: 'text-amber-400' },
+    { label: 'Production keys', value: keySummary.productionCount, icon: Server, tone: 'text-indigo-400', sub: 'live API credentials' },
   ]
   const kpis = tab === 'keys' ? keyKpis : hookKpis
   const loaded = tab === 'keys' ? keys : hooks
+  // A failed read is not a count of zero.
+  const readFailed = !!error || notProvisioned
 
   // ── Export (active tab) ────────────────────────────────────────────────────
-  const doExport = (kind) => {
+  const [exportError, setExportError] = useState('')
+  const doExport = async (kind) => {
+    setExportError('')
+    try { await runExport(kind) } catch (err) { setExportError(toUserMessage(err, 'Could not export. Try again.')) }
+  }
+  const runExport = async (kind) => {
     if (tab === 'keys') {
       const cols = ['key_name', 'key_prefix', 'environment', 'status', 'scopes', 'rate_limit', 'expires_at', 'last_used_at', 'created_at']
       const headers = ['Key name', 'Prefix', 'Environment', 'Status', 'Scopes', 'Rate limit', 'Expires', 'Last used', 'Created']
@@ -190,15 +197,15 @@ export default function DeveloperPortal() {
         key_name: r.key_name || '',
         key_prefix: r.key_prefix || '',
         environment: r.environment || '',
-        status: isKeyExpired(r, nowMs) ? 'expired' : (r.status || ''),
+        status: r._status || 'N/A',
         scopes: r.scopes || '',
         rate_limit: r.rate_limit ?? '',
         expires_at: r.expires_at ? fmtDate(r.expires_at) : '',
         last_used_at: r.last_used_at ? fmtDate(r.last_used_at) : '',
         created_at: r.created_at ? fmtDate(r.created_at) : '',
       }))
-      if (kind === 'excel') exportToExcel(rows, cols, headers, 'api_keys')
-      else exportToPdf(rows, cols.map((k, i) => ({ key: k, header: headers[i] })), 'API Keys', 'api_keys', 'landscape')
+      if (kind === 'excel') await exportToExcel(rows, cols, headers, reportFileName('API Keys'))
+      else await exportToPdf(rows, cols.map((k, i) => ({ key: k, header: headers[i] })), 'API Keys', reportFileName('API Keys'), 'landscape')
     } else {
       const cols = ['endpoint_name', 'url', 'status', 'event_types', 'failure_count', 'secret_set', 'last_delivery_at', 'created_at']
       const headers = ['Endpoint', 'URL', 'Status', 'Event types', 'Failures', 'Secret set', 'Last delivery', 'Created']
@@ -207,21 +214,54 @@ export default function DeveloperPortal() {
         url: r.url || '',
         status: r.status || '',
         event_types: r.event_types || '',
-        failure_count: r.failure_count ?? '',
+        failure_count: r._failures ?? 'N/A',
         secret_set: r.secret_set ? 'Yes' : 'No',
         last_delivery_at: r.last_delivery_at ? fmtDate(r.last_delivery_at) : '',
         created_at: r.created_at ? fmtDate(r.created_at) : '',
       }))
-      if (kind === 'excel') exportToExcel(rows, cols, headers, 'webhook_endpoints')
-      else exportToPdf(rows, cols.map((k, i) => ({ key: k, header: headers[i] })), 'Webhook Endpoints', 'webhook_endpoints', 'landscape')
+      if (kind === 'excel') await exportToExcel(rows, cols, headers, reportFileName('Webhook Endpoints'))
+      else await exportToPdf(rows, cols.map((k, i) => ({ key: k, header: headers[i] })), 'Webhook Endpoints', reportFileName('Webhook Endpoints'), 'landscape')
     }
   }
 
-  // Paged, not capped: both tables used to render <list>.slice(0, 500) with no
-  // way to reach row 501. The exports still cover the whole filtered list.
-  const keysPager = usePagedRows(filteredKeys)
-  const hooksPager = usePagedRows(filteredHooks)
-  const activePager = tab === 'keys' ? keysPager : hooksPager
+  // EnterpriseTable pages (and sorts) the WHOLE filtered list itself; the
+  // exports above still cover every filtered row, never one page.
+  const keyColumns = [
+    { id: 'key_name', accessorFn: (r) => undef(r.key_name), header: 'Key name', sortingFn: sortCompare, sortUndefined: 'last', cell: ({ getValue }) => <span className="font-medium text-[var(--text-primary)]">{getValue() || 'N/A'}</span> },
+    { id: 'key_prefix', accessorFn: (r) => undef(r.key_prefix), header: 'Prefix', enableSorting: false, cell: ({ row }) => <span className="font-mono text-xs whitespace-nowrap">{maskKey(row.original.key_prefix)}</span> },
+    { id: 'environment', accessorFn: (r) => undef(r.environment), header: 'Environment', sortingFn: sortCompare, sortUndefined: 'last', cell: ({ getValue }) => <Badge className={ENV_STYLE[getValue()] || ''}>{getValue() || 'N/A'}</Badge> },
+    { id: 'status', accessorFn: (r) => undef(r._status), header: 'Status', sortingFn: sortCompare, sortUndefined: 'last', cell: ({ getValue }) => <Badge className={KEY_STATUS_STYLE[getValue()] || ''}>{getValue() || 'N/A'}</Badge> },
+    { id: 'rate_limit', accessorFn: (r) => undef(r.rate_limit), header: 'Rate limit', sortingFn: sortCompare, sortUndefined: 'last', meta: { align: 'right' }, cell: ({ getValue }) => (getValue() != null ? `${Number(getValue()).toLocaleString()}/min` : 'N/A') },
+    { id: 'expires_at', accessorFn: (r) => undef(r.expires_at), header: 'Expires', sortingFn: sortCompare, sortUndefined: 'last', cell: ({ getValue }) => <span className="whitespace-nowrap">{getValue() ? fmtDate(getValue()) : 'Never'}</span> },
+    { id: 'last_used_at', accessorFn: (r) => undef(r.last_used_at), header: 'Last used', sortingFn: sortCompare, sortUndefined: 'last', cell: ({ getValue }) => <span className="whitespace-nowrap">{getValue() ? fmtDate(getValue()) : 'Never used'}</span> },
+    {
+      id: 'actions', header: 'Actions', enableSorting: false, meta: { align: 'right', export: false },
+      cell: ({ row }) => row.original._status !== 'revoked' ? (
+        <button onClick={() => setConfirmDelete({ ...row.original, _kind: 'key' })} className={`${iconBtn} hover:bg-red-900/30 hover:text-red-400`} aria-label={`Revoke key ${row.original.key_name || ''}`.trim()}><Ban size={14} aria-hidden="true" /></button>
+      ) : <span className="text-xs text-[var(--text-muted)]">Revoked</span>,
+    },
+  ]
+  const hookColumns = [
+    { id: 'endpoint_name', accessorFn: (r) => undef(r.endpoint_name), header: 'Endpoint', sortingFn: sortCompare, sortUndefined: 'last', cell: ({ getValue }) => <span className="font-medium text-[var(--text-primary)]">{getValue() || 'N/A'}</span> },
+    { id: 'url', accessorFn: (r) => undef(r.url), header: 'URL', sortingFn: sortCompare, sortUndefined: 'last', cell: ({ getValue }) => <span className="block font-mono text-xs max-w-[280px] truncate" title={getValue() || ''}>{getValue() || 'N/A'}</span> },
+    { id: 'status', accessorFn: (r) => undef(r._status), header: 'Status', sortingFn: sortCompare, sortUndefined: 'last', cell: ({ getValue }) => <Badge className={HOOK_STATUS_STYLE[getValue()] || ''}>{getValue() || 'N/A'}</Badge> },
+    { id: 'event_types', accessorFn: (r) => undef(r.event_types), header: 'Events', sortingFn: sortCompare, sortUndefined: 'last', cell: ({ getValue }) => <span className="block max-w-[200px] truncate" title={getValue() || ''}>{getValue() || 'N/A'}</span> },
+    {
+      id: 'failures', accessorFn: (r) => undef(r._failures), header: 'Failures', sortingFn: sortCompare, sortUndefined: 'last', meta: { align: 'right' },
+      cell: ({ getValue }) => getValue() == null ? 'N/A' : <span className={getValue() > 0 ? 'text-red-400 font-semibold' : ''}>{Number(getValue()).toLocaleString()}</span>,
+    },
+    { id: 'secret_set', accessorFn: (r) => (r.secret_set ? 'Set' : 'None'), header: 'Secret', sortingFn: sortCompare, cell: ({ getValue }) => getValue() === 'Set' ? <Badge className="bg-green-900/30 text-green-400 border-green-800/50">Set</Badge> : <Badge className="bg-amber-900/30 text-amber-400 border-amber-800/50">None</Badge> },
+    { id: 'last_delivery_at', accessorFn: (r) => undef(r.last_delivery_at), header: 'Last delivery', sortingFn: sortCompare, sortUndefined: 'last', cell: ({ getValue }) => <span className="whitespace-nowrap">{fmtDateTime(getValue())}</span> },
+    {
+      id: 'actions', header: 'Actions', enableSorting: false, meta: { align: 'right', export: false },
+      cell: ({ row }) => (
+        <div className="flex items-center justify-end gap-1">
+          <button onClick={() => openEditHook(row.original)} className={`${iconBtn} hover:bg-[var(--input-bg)] hover:text-[var(--text-primary)]`} aria-label={`Edit webhook ${row.original.endpoint_name || ''}`.trim()}><Pencil size={14} aria-hidden="true" /></button>
+          <button onClick={() => setConfirmDelete({ ...row.original, _kind: 'hook' })} className={`${iconBtn} hover:bg-red-900/30 hover:text-red-400`} aria-label={`Delete webhook ${row.original.endpoint_name || ''}`.trim()}><Trash2 size={14} aria-hidden="true" /></button>
+        </div>
+      ),
+    },
+  ]
 
   const activeFilteredCount = tab === 'keys' ? filteredKeys.length : filteredHooks.length
   const activeTotalCount = tab === 'keys' ? keySummary.totalKeys : hookSummary.totalEndpoints
@@ -305,15 +345,15 @@ export default function DeveloperPortal() {
         refreshing={refreshing}
         updatedAt={updatedAt}
         actions={
-          <div className="flex items-center gap-2">
-            <button onClick={() => doExport('excel')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!activeFilteredCount}>
-              <FileSpreadsheet size={14} /> Excel
+          <div className="flex flex-wrap items-center gap-2">
+            <button onClick={() => doExport('excel')} className="btn-secondary min-h-[44px] text-sm inline-flex items-center gap-1.5" disabled={!activeFilteredCount || readFailed}>
+              <FileSpreadsheet size={14} aria-hidden="true" /> Excel
             </button>
-            <button onClick={() => doExport('pdf')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!activeFilteredCount}>
-              <FileText size={14} /> PDF
+            <button onClick={() => doExport('pdf')} className="btn-secondary min-h-[44px] text-sm inline-flex items-center gap-1.5" disabled={!activeFilteredCount || readFailed}>
+              <FileText size={14} aria-hidden="true" /> PDF
             </button>
-            <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={notProvisioned}>
-              <Plus size={14} /> {tab === 'keys' ? 'Issue API key' : 'Register webhook'}
+            <button onClick={openCreate} className="btn-primary min-h-[44px] text-sm inline-flex items-center gap-1.5" disabled={notProvisioned}>
+              <Plus size={14} aria-hidden="true" /> {tab === 'keys' ? 'Issue API key' : 'Register webhook'}
             </button>
           </div>
         }
@@ -323,7 +363,7 @@ export default function DeveloperPortal() {
         <div className="card border border-amber-800/50 flex items-start gap-3">
           <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
           <div>
-            <p className="text-amber-300 font-medium">The Developer Portal isn’t enabled on this database yet.</p>
+            <p className="text-amber-400 font-medium">The Developer Portal is not enabled on this database yet.</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">
               Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V194_DEVELOPER_PORTAL.sql</span>, then reload.
             </p>
@@ -332,14 +372,24 @@ export default function DeveloperPortal() {
       )}
 
       {error && (
-        <div className="card border border-red-800/50 flex items-start gap-3">
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-          <div><p className="text-red-300 font-medium">Couldn’t load the developer portal.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
+        <div className="card border border-red-800/50 flex flex-wrap items-start gap-3" role="alert">
+          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
+          <div className="flex-1 min-w-[200px]"><p className="text-red-400 font-medium">Could not load the developer portal, so the figures below are not counts.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
+          <button onClick={load} disabled={refreshing} className="btn-secondary min-h-[44px] text-sm inline-flex items-center gap-1.5">
+            <RefreshCw size={14} aria-hidden="true" /> Retry
+          </button>
+        </div>
+      )}
+      {exportError && (
+        <div className="card border border-red-800/50 flex items-center gap-3" role="alert">
+          <AlertTriangle size={16} className="text-red-400 shrink-0" aria-hidden="true" />
+          <p className="text-sm text-red-400 flex-1">{exportError}</p>
+          <button onClick={() => setExportError('')} className={iconBtn} aria-label="Dismiss export error"><X size={14} aria-hidden="true" /></button>
         </div>
       )}
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 border-b border-[var(--input-border)]">
+      <div className="flex flex-wrap items-center gap-1 border-b border-[var(--input-border)]" role="tablist" aria-label="Developer portal sections">
         {tabs.map((t) => {
           const Icon = t.icon
           const active = tab === t.id
@@ -347,11 +397,13 @@ export default function DeveloperPortal() {
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${active ? 'border-indigo-500 text-[var(--text-primary)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
+              role="tab"
+              aria-selected={active}
+              className={`inline-flex items-center gap-2 px-4 min-h-[44px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 text-sm font-medium border-b-2 -mb-px transition-colors ${active ? 'border-indigo-500 text-[var(--text-primary)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
             >
-              <Icon size={15} /> {t.label}
-              <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[11px] ${active ? 'bg-indigo-900/40 text-indigo-300' : 'bg-[var(--input-bg)] text-[var(--text-muted)]'}`}>
-                {loaded === null ? 'N/A' : t.count}
+              <Icon size={15} aria-hidden="true" /> {t.label}
+              <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[11px] ${active ? 'bg-indigo-900/40 text-indigo-400' : 'bg-[var(--input-bg)] text-[var(--text-muted)]'}`}>
+                {(tab === t.id ? loaded : true) === null || readFailed ? 'N/A' : t.count}
               </span>
             </button>
           )
@@ -359,18 +411,27 @@ export default function DeveloperPortal() {
       </div>
 
       {/* KPI tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         {kpis.map((k) => {
           const Icon = k.icon
-          return (
-            <div key={k.label} className="card">
-              <div className="flex items-center justify-between">
+          const pressed = !!k.status && statusFilter === k.status
+          const body = (
+            <>
+              <div className="flex items-center justify-between gap-2">
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
-                <Icon size={16} className={k.tone} />
+                <Icon size={16} className={k.tone} aria-hidden="true" />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{loaded === null ? 'N/A' : k.value}</p>
-            </div>
+              <p className="text-3xl font-bold mt-1 text-[var(--text-primary)] tabular-nums">{loaded === null ? '...' : readFailed ? 'N/A' : k.value}</p>
+              {k.sub && <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{k.sub}</p>}
+            </>
           )
+          return k.status ? (
+            <button key={k.label} type="button" aria-pressed={pressed}
+              onClick={() => setStatusFilter(pressed ? '' : k.status)}
+              className={`card text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${pressed ? 'ring-2 ring-indigo-500' : ''}`}>
+              {body}
+            </button>
+          ) : <div key={k.label} className="card">{body}</div>
         })}
       </div>
 
@@ -381,16 +442,21 @@ export default function DeveloperPortal() {
             <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
               <Activity size={15} /> Delivery health
             </h3>
-            <span className="text-sm font-semibold text-[var(--text-primary)]">{hooks === null ? 'N/A' : `${hookHealth}%`}</span>
+            <span className="text-sm font-semibold text-[var(--text-primary)]">{hooks === null || readFailed ? 'N/A' : pct(hookInfo.healthRate)}</span>
           </div>
-          <div className="h-2.5 w-full rounded-full bg-[var(--input-bg)] overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all ${hookHealth >= 80 ? 'bg-green-500' : hookHealth >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
-              style={{ width: `${hooks === null ? 0 : hookHealth}%` }}
-            />
-          </div>
+          {(() => {
+            const rate = hooks === null || readFailed ? null : hookInfo.healthRate
+            const w = rate == null ? 0 : Math.round(rate * 100)
+            return (
+              <div className="h-2.5 w-full rounded-full bg-[var(--input-bg)] overflow-hidden" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={rate == null ? undefined : w} aria-valuetext={rate == null ? 'Not measurable' : `${w}% of endpoints active`} aria-label="Webhook delivery health">
+                <div className={`h-full rounded-full transition-all ${w >= 80 ? 'bg-green-500' : w >= 50 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${w}%` }} />
+              </div>
+            )
+          })()}
           <p className="text-[11px] text-[var(--text-muted)] mt-2">
-            Share of endpoints currently active. {hookSummary.failingCount} failing · {hookSummary.totalFailures} total failed deliveries.
+            {hookInfo.total === 0
+              ? 'No endpoints registered, so health is not measurable.'
+              : `Share of endpoints currently active. ${hookSummary.failingCount} failing, ${hookSummary.totalFailures} total failed deliveries${hookInfo.worst ? `, most on ${hookInfo.worst.name || 'an unnamed endpoint'} (${hookInfo.worst.failures})` : ''}.`}
           </p>
         </div>
       )}
@@ -399,117 +465,54 @@ export default function DeveloperPortal() {
       <div className="card space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
             <input
-              className="input pl-9 w-full"
-              placeholder={tab === 'keys' ? 'Search key name, prefix, scopes…' : 'Search endpoint, URL, events…'}
+              type="search"
+              aria-label={tab === 'keys' ? 'Search API keys' : 'Search webhooks'}
+              className="input pl-9 w-full min-h-[44px]"
+              placeholder={tab === 'keys' ? 'Search key name, prefix, scopes' : 'Search endpoint, URL, events'}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
+          <select className="input min-h-[44px]" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
             <option value="">All statuses</option>
             {statusOptions.map((s) => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
           </select>
-          {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
+          {hasFilters && <button onClick={clearFilters} className="btn-secondary min-h-[44px] text-sm inline-flex items-center gap-1.5"><X size={14} aria-hidden="true" /> Clear</button>}
           <span className="text-xs text-[var(--text-muted)] ml-auto">{activeFilteredCount} of {activeTotalCount}</span>
         </div>
       </div>
 
       {/* Table */}
-      <div className="card overflow-hidden !p-0">
-        <div className="overflow-x-auto">
-          {tab === 'keys' ? (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                  {['Key name', 'Prefix', 'Environment', 'Status', 'Rate limit', 'Expires', 'Last used', ''].map((h, i) => <th key={i} className="px-4 py-3 font-semibold whitespace-nowrap">{h}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {keys === null ? (
-                  [0, 1, 2, 3, 4].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={8} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
-                ) : filteredKeys.length === 0 ? (
-                  <tr><td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]">
-                    <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                    {keys.length === 0 && !notProvisioned ? 'No API keys issued yet. Create your first key.' : 'No keys match these filters.'}
-                  </td></tr>
-                ) : (
-                  keysPager.pageRows.map((r) => {
-                    const expired = isKeyExpired(r, nowMs)
-                    const effStatus = expired ? 'expired' : String(r.status || '').toLowerCase()
-                    return (
-                      <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                        <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.key_name || 'N/A'}</td>
-                        <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)] whitespace-nowrap">{maskKey(r.key_prefix)}</td>
-                        <td className="px-4 py-2.5"><Badge className={ENV_STYLE[r.environment] || ''}>{r.environment || 'N/A'}</Badge></td>
-                        <td className="px-4 py-2.5"><Badge className={KEY_STATUS_STYLE[effStatus] || ''}>{effStatus || 'N/A'}</Badge></td>
-                        <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.rate_limit != null ? `${Number(r.rate_limit).toLocaleString()}/min` : 'N/A'}</td>
-                        <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(r.expires_at)}</td>
-                        <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(r.last_used_at)}</td>
-                        <td className="px-4 py-2.5">
-                          <div className="flex items-center justify-end gap-1">
-                            {effStatus !== 'revoked' && (
-                              <button onClick={() => setConfirmDelete({ ...r, _kind: 'key' })} className="p-1.5 rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" aria-label="Revoke key"><Ban size={14} /></button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })
-                )}
-              </tbody>
-            </table>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                  {['Endpoint', 'URL', 'Status', 'Events', 'Failures', 'Secret', 'Last delivery', ''].map((h, i) => <th key={i} className="px-4 py-3 font-semibold whitespace-nowrap">{h}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {hooks === null ? (
-                  [0, 1, 2, 3, 4].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={8} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
-                ) : filteredHooks.length === 0 ? (
-                  <tr><td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]">
-                    <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                    {hooks.length === 0 && !notProvisioned ? 'No webhook endpoints yet. Register your first endpoint.' : 'No endpoints match these filters.'}
-                  </td></tr>
-                ) : (
-                  hooksPager.pageRows.map((r) => {
-                    const status = String(r.status || '').toLowerCase()
-                    return (
-                      <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                        <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.endpoint_name || 'N/A'}</td>
-                        <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)] max-w-[280px] truncate" title={r.url || ''}>{r.url || 'N/A'}</td>
-                        <td className="px-4 py-2.5"><Badge className={HOOK_STATUS_STYLE[status] || ''}>{status || 'N/A'}</Badge></td>
-                        <td className="px-4 py-2.5 text-[var(--text-secondary)] max-w-[200px] truncate" title={r.event_types || ''}>{r.event_types || 'N/A'}</td>
-                        <td className="px-4 py-2.5">
-                          <span className={(Number(r.failure_count) || 0) > 0 ? 'text-red-400 font-semibold' : 'text-[var(--text-secondary)]'}>
-                            {r.failure_count != null ? Number(r.failure_count).toLocaleString() : '0'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2.5">
-                          {r.secret_set
-                            ? <Badge className="bg-green-900/30 text-green-300 border-green-800/50">Set</Badge>
-                            : <Badge className="bg-amber-900/30 text-amber-300 border-amber-800/50">None</Badge>}
-                        </td>
-                        <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDateTime(r.last_delivery_at)}</td>
-                        <td className="px-4 py-2.5">
-                          <div className="flex items-center justify-end gap-1">
-                            <button onClick={() => openEditHook(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit"><Pencil size={14} /></button>
-                            <button onClick={() => setConfirmDelete({ ...r, _kind: 'hook' })} className="p-1.5 rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" aria-label="Delete"><Trash2 size={14} /></button>
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })
-                )}
-              </tbody>
-            </table>
-          )}
-        </div>
-        <TablePagination {...activePager} />
+      <div className="card">
+        {tab === 'keys' ? (
+          <EnterpriseTable
+            key="keys"
+            columns={keyColumns}
+            data={filteredKeys}
+            getRowId={(r) => String(r.id)}
+            loading={keys === null}
+            enableGlobalFilter={false}
+            enableColumnFilters={false}
+            enableExport={false}
+            initialPageSize={50}
+            emptyMessage={readFailed ? 'API keys could not be read.' : keys && keys.length === 0 ? 'No API keys issued yet. Issue your first key.' : 'No keys match these filters.'}
+          />
+        ) : (
+          <EnterpriseTable
+            key="hooks"
+            columns={hookColumns}
+            data={filteredHooks}
+            getRowId={(r) => String(r.id)}
+            loading={hooks === null}
+            enableGlobalFilter={false}
+            enableColumnFilters={false}
+            enableExport={false}
+            initialPageSize={50}
+            emptyMessage={readFailed ? 'Webhook endpoints could not be read.' : hooks && hooks.length === 0 ? 'No webhook endpoints yet. Register your first endpoint.' : 'No endpoints match these filters.'}
+          />
+        )}
       </div>
 
       {/* Create / Edit modal */}
@@ -521,19 +524,19 @@ export default function DeveloperPortal() {
                 {tab === 'keys' ? <KeyRound size={18} /> : <Webhook size={18} />}
                 {editing ? 'Edit webhook record' : (tab === 'keys' ? 'Issue API key' : 'New webhook record')}
               </h3>
-              <button onClick={closeModal} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
+              <button onClick={closeModal} className={`${iconBtn} hover:text-[var(--text-primary)]`} aria-label="Close"><X size={18} aria-hidden="true" /></button>
             </div>
 
             <form onSubmit={submit} className="space-y-4">
               {tab === 'keys' ? (
                 <>
                   <div>
-                    <label className="label">Key name</label>
-                    <input className="input w-full" placeholder="e.g. ERP sync (read-only)" value={keyForm.key_name} maxLength={200} onChange={(e) => setKey('key_name', e.target.value)} />
+                    <label className="label" htmlFor="dp-key-name">Key name</label>
+                    <input id="dp-key-name" className="input w-full" placeholder="e.g. ERP sync (read-only)" value={keyForm.key_name} maxLength={200} onChange={(e) => setKey('key_name', e.target.value)} />
                   </div>
                   <div>
-                    <label className="label">Expires on (optional)</label>
-                    <input className="input w-full" type="date" value={keyForm.expires_at} onChange={(e) => setKey('expires_at', e.target.value)} />
+                    <label className="label" htmlFor="dp-key-exp">Expires on (optional)</label>
+                    <input id="dp-key-exp" className="input w-full" type="date" value={keyForm.expires_at} onChange={(e) => setKey('expires_at', e.target.value)} />
                   </div>
                   <p className="text-xs text-[var(--text-muted)]">
                     The key grants read-only access to this organisation&apos;s data through the public API. It is shown once after it is issued and cannot be recovered later, so copy it straight away.
@@ -542,21 +545,21 @@ export default function DeveloperPortal() {
               ) : (
                 <>
                   <div>
-                    <label className="label">Endpoint name</label>
-                    <input className="input w-full" placeholder="e.g. Ops alerting hook" value={hookForm.endpoint_name} maxLength={200} onChange={(e) => setHook('endpoint_name', e.target.value)} />
+                    <label className="label" htmlFor="dp-hook-name">Endpoint name</label>
+                    <input id="dp-hook-name" className="input w-full" placeholder="e.g. Ops alerting hook" value={hookForm.endpoint_name} maxLength={200} onChange={(e) => setHook('endpoint_name', e.target.value)} />
                   </div>
                   <div>
-                    <label className="label">Delivery URL</label>
-                    <input className="input w-full font-mono" placeholder="https://example.com/webhooks/tyre-pulse" value={hookForm.url} maxLength={2000} onChange={(e) => setHook('url', e.target.value)} />
+                    <label className="label" htmlFor="dp-hook-url">Delivery URL</label>
+                    <input id="dp-hook-url" className="input w-full font-mono" placeholder="https://example.com/webhooks/tyre-pulse" value={hookForm.url} maxLength={2000} onChange={(e) => setHook('url', e.target.value)} />
                   </div>
                   <div>
-                    <label className="label">Event types</label>
-                    <input className="input w-full" placeholder="alert.created, inspection.completed, tyre.changed" value={hookForm.event_types} maxLength={2000} onChange={(e) => setHook('event_types', e.target.value)} />
+                    <label className="label" htmlFor="dp-hook-events">Event types</label>
+                    <input id="dp-hook-events" className="input w-full" placeholder="alert.created, inspection.completed, tyre.changed" value={hookForm.event_types} maxLength={2000} onChange={(e) => setHook('event_types', e.target.value)} />
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="label">Status</label>
-                      <select className="input w-full" value={hookForm.status} onChange={(e) => setHook('status', e.target.value)}>
+                      <label className="label" htmlFor="dp-hook-status">Status</label>
+                      <select id="dp-hook-status" className="input w-full" value={hookForm.status} onChange={(e) => setHook('status', e.target.value)}>
                         <option value="active">Active</option>
                         <option value="paused">Paused</option>
                         <option value="failing">Failing</option>
@@ -564,8 +567,8 @@ export default function DeveloperPortal() {
                       </select>
                     </div>
                     <div>
-                      <label className="label">Failure count</label>
-                      <input className="input w-full" type="number" min="0" step="1" placeholder="0" value={hookForm.failure_count} onChange={(e) => setHook('failure_count', e.target.value)} />
+                      <label className="label" htmlFor="dp-hook-fail">Failure count</label>
+                      <input id="dp-hook-fail" className="input w-full" type="number" min="0" step="1" placeholder="0" value={hookForm.failure_count} onChange={(e) => setHook('failure_count', e.target.value)} />
                     </div>
                   </div>
                   <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
@@ -574,8 +577,8 @@ export default function DeveloperPortal() {
                     <span className="text-[11px] text-[var(--text-muted)]">(the secret value itself is never stored here)</span>
                   </label>
                   <div>
-                    <label className="label">Notes (optional)</label>
-                    <textarea className="input w-full min-h-[70px] resize-y" placeholder="Consumer system, retry policy, on-call owner…" value={hookForm.notes} maxLength={8000} onChange={(e) => setHook('notes', e.target.value)} />
+                    <label className="label" htmlFor="dp-hook-notes">Notes (optional)</label>
+                    <textarea id="dp-hook-notes" className="input w-full min-h-[70px] resize-y" placeholder="Consumer system, retry policy, on-call owner" value={hookForm.notes} maxLength={8000} onChange={(e) => setHook('notes', e.target.value)} />
                   </div>
                 </>
               )}
@@ -589,7 +592,7 @@ export default function DeveloperPortal() {
               <div className="flex items-center justify-end gap-2 pt-1">
                 <button type="button" onClick={closeModal} className="btn-secondary text-sm" disabled={saving}>Cancel</button>
                 <button type="submit" className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={saving}>
-                  {saving ? 'Saving…' : editing ? 'Save changes' : (tab === 'keys' ? 'Save key reference' : 'Save webhook record')}
+                  {saving ? 'Saving...' : editing ? 'Save changes' : (tab === 'keys' ? 'Save key reference' : 'Save webhook record')}
                 </button>
               </div>
             </form>
@@ -632,7 +635,7 @@ export default function DeveloperPortal() {
                 <p className="text-sm text-[var(--text-muted)] mt-1">
                   {confirmDelete._kind === 'key'
                     ? <>{confirmDelete.key_name || 'Key'} · {maskKey(confirmDelete.key_prefix)}. Any system using this key stops working immediately. The key stays listed as revoked.</>
-                    : <>{confirmDelete.endpoint_name || 'Endpoint'} · {confirmDelete.url || 'N/A'}. This can’t be undone.</>}
+                    : <>{confirmDelete.endpoint_name || 'Endpoint'} · {confirmDelete.url || 'N/A'}. This cannot be undone.</>}
                 </p>
               </div>
             </div>
@@ -640,7 +643,7 @@ export default function DeveloperPortal() {
               <button onClick={() => setConfirmDelete(null)} className="btn-secondary text-sm" disabled={deleting}>Cancel</button>
               <button onClick={doDelete} className="btn-danger text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={deleting}>
                 {confirmDelete._kind === 'key' ? <Ban size={14} /> : <Trash2 size={14} />}
-                {deleting ? 'Working…' : (confirmDelete._kind === 'key' ? 'Revoke key' : 'Delete record')}
+                {deleting ? 'Working...' : (confirmDelete._kind === 'key' ? 'Revoke key' : 'Delete record')}
               </button>
             </div>
           </div>

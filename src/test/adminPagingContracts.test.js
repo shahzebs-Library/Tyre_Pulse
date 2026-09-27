@@ -18,7 +18,7 @@ const SURFACES = [
 
 // Pages whose registers moved onto EnterpriseTable, which pages ALL rows
 // itself. They must not fall back to a fixed slice either.
-const ENTERPRISE_SURFACES = new Set(['SafetyCompliance.jsx', 'ApprovalMatrix.jsx', 'AccidentWorkflowSettings.jsx', 'Settings.jsx', 'ReportShare.jsx'])
+const ENTERPRISE_SURFACES = new Set(['SafetyCompliance.jsx', 'ApprovalMatrix.jsx', 'AccidentWorkflowSettings.jsx', 'Settings.jsx', 'ReportShare.jsx', 'SecurityCenter.jsx'])
 
 describe('admin and configuration registers expose all rows through shared paging', () => {
   for (const file of SURFACES) {

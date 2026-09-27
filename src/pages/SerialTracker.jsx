@@ -3,16 +3,34 @@ import { findSerialRecords } from '../lib/api/serialTracker'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToPdf, exportToExcel, reportFileName } from '../lib/exportUtils'
 import { formatCurrencyCompact, formatDate } from '../lib/formatters'
-import { ScanLine, Search, Download, FileText, Upload, AlertTriangle, Trash2, RotateCcw } from 'lucide-react'
+import { ScanLine, Search, FileText, Upload, AlertTriangle, Trash2, RotateCcw, FileSpreadsheet, ClipboardList, UserX, CalendarClock } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import Card, { CardBody, CardHeader } from '../components/ui/Card'
 import Modal from '../components/ui/Modal'
-import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import EmptyState from '../components/EmptyState'
 import { toUserMessage } from '../lib/safeError'
 import { useAuth } from '../contexts/AuthContext'
 import { scrapTyreBySerial, unscrapTyreBySerial, getScrapMark, listScrapMarks, listScrappedTyres, updateScrapReason, getScrapPermissions } from '../lib/api/tyreExchange'
 import { COUNTRY_CURRENCY } from '../lib/api/assetMaster'
+import {
+  serialStats, serialTimeline, summarizeBulkSerial, bulkSummary as summarizeBulk,
+  filterBulkResults, filterScrapList, scrapRegisterSummary, recordPrice,
+} from '../lib/serialTrackerAnalytics'
+import { compareValues } from '../lib/consoleTable'
+
+// EnterpriseTable sorts through the shared console comparator, so blanks sort
+// last and numeric strings compare as numbers on every column.
+const sortCompare = (a, b, id) => compareValues(a.getValue(id), b.getValue(id))
+const blankToUndef = (v) => (v === null || v === undefined || v === '' ? undefined : v)
+const moneyFor = (n, country) => (n == null ? 'N/A' : formatCurrencyCompact(n, COUNTRY_CURRENCY[country] || 'SAR'))
+
+const BULK_TONE = {
+  'Not Found': 'bg-[var(--surface-2)] text-[var(--text-muted)] border-[var(--border-bright)]',
+  Active: 'bg-green-900/30 text-green-400 border-green-700/50',
+  Scrapped: 'bg-red-900/30 text-red-400 border-red-700/50',
+  Retired: 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)]',
+}
 
 function SearchSkeleton() {
   return (
@@ -192,15 +210,8 @@ export default function SerialTracker() {
     }
   }
 
-  const filteredScrapList = useMemo(() => {
-    const q = scrapListSearch.trim().toLowerCase()
-    if (!q) return scrapList
-    return scrapList.filter(r =>
-      String(r.serial || '').toLowerCase().includes(q)
-      || (r.reason || '').toLowerCase().includes(q)
-      || (r.asset_no || '').toLowerCase().includes(q)
-      || (r.scrapped_by_name || '').toLowerCase().includes(q))
-  }, [scrapList, scrapListSearch])
+  const filteredScrapList = useMemo(() => filterScrapList(scrapList, scrapListSearch), [scrapList, scrapListSearch])
+  const scrapSummary = useMemo(() => scrapRegisterSummary(scrapList), [scrapList])
 
   // ── Single search ─────────────────────────────────────────────────────────
   async function search() {
@@ -264,49 +275,43 @@ export default function SerialTracker() {
     }
   }
 
-  const stats = useMemo(() => {
-    if (records.length === 0) return null
-    const first = records[0]
-    const last  = records[records.length - 1]
-    const assets = new Set(records.map(r => r.asset_no).filter(Boolean))
-    const totalCost = records.reduce((s, r) => s + (parseFloat(r.cost) || 0), 0)
-    let days = 0
-    if (first.issue_date && last.issue_date) {
-      const d1 = new Date(first.issue_date), d2 = new Date(last.issue_date)
-      days = Math.round((d2 - d1) / (1000 * 60 * 60 * 24))
-    }
-    const cutoff = new Date(); cutoff.setMonth(cutoff.getMonth() - 12)
-    const active = last.issue_date && new Date(last.issue_date) >= cutoff
-    return { first, last, assets: assets.size, totalCost, days, active, brand: first.brand, description: first.description }
-  }, [records])
+  // All lifecycle maths live in serialTrackerAnalytics. `cost` was never a
+  // tyre_records column, so the old sum always read zero; the price is now the
+  // tyre's recorded per-tyre price, and null (N/A) when none was recorded.
+  const stats = useMemo(() => serialStats(records), [records])
+  const timeline = useMemo(() => serialTimeline(records), [records])
 
-  const timeline = useMemo(() => {
-    if (records.length === 0) return []
-    const groups = []
-    let currentGroup = null
-    records.forEach(r => {
-      if (!currentGroup || currentGroup.asset !== r.asset_no) {
-        currentGroup = { asset: r.asset_no, records: [] }
-        groups.push(currentGroup)
-      }
-      currentGroup.records.push(r)
-    })
-    return groups
-  }, [records])
+  // Lifecycle rows as exported: every record, with the price and dates
+  // rendered, never a blank that reads as zero.
+  const lifecycleRows = useMemo(() => records.map(r => ({
+    issue_date: r.issue_date ? formatDate(r.issue_date) : 'N/A',
+    removal_date: r.removal_date ? formatDate(r.removal_date) : 'N/A',
+    asset_no: r.asset_no || 'N/A',
+    site: r.site || 'N/A',
+    position: r.position || r.tyre_position || 'N/A',
+    brand: r.brand || 'N/A',
+    description: r.description || 'N/A',
+    risk_level: r.risk_level || 'N/A',
+    status: r.status || 'N/A',
+    price: recordPrice(r) == null ? 'N/A' : recordPrice(r),
+    remarks: r.remarks || '',
+  })), [records])
 
   function exportLifecyclePdf() {
     try {
       exportToPdf(
-        records,
+        lifecycleRows,
         [
-          { key: 'issue_date',  header: 'Date' },
-          { key: 'asset_no',    header: 'Asset No' },
-          { key: 'site',        header: 'Site' },
-          { key: 'position',    header: 'Position' },
-          { key: 'brand',       header: 'Brand' },
-          { key: 'description', header: 'Description' },
-          { key: 'risk_level',  header: 'Risk' },
-          { key: 'cost',        header: 'Cost' },
+          { key: 'issue_date',   header: 'Fitted' },
+          { key: 'removal_date', header: 'Removed' },
+          { key: 'asset_no',     header: 'Asset No' },
+          { key: 'site',         header: 'Site' },
+          { key: 'position',     header: 'Position' },
+          { key: 'brand',        header: 'Brand' },
+          { key: 'description',  header: 'Description' },
+          { key: 'risk_level',   header: 'Risk' },
+          { key: 'status',       header: 'Status' },
+          { key: 'price',        header: 'Price per tyre' },
         ],
         `Serial Lifecycle: ${lastQuery}`,
         reportFileName('TyrePulse Serial', lastQuery),
@@ -320,9 +325,9 @@ export default function SerialTracker() {
   function exportLifecycleExcel() {
     try {
       exportToExcel(
-        records,
-        ['issue_date','asset_no','site','position','brand','description','risk_level','cost','remarks'],
-        ['Date','Asset No','Site','Position','Brand','Description','Risk','Cost','Remarks'],
+        lifecycleRows,
+        ['issue_date','removal_date','asset_no','site','position','brand','description','risk_level','status','price','remarks'],
+        ['Fitted','Removed','Asset No','Site','Position','Brand','Description','Risk','Status','Price per tyre','Remarks'],
         reportFileName('TyrePulse Serial', lastQuery)
       )
     } catch (err) {
@@ -377,10 +382,6 @@ export default function SerialTracker() {
         return
       }
 
-      const cutoff = new Date()
-      cutoff.setMonth(cutoff.getMonth() - 12)
-      const cutoffStr = cutoff.toISOString().split('T')[0]
-
       const results = []
       const BATCH_SIZE = 10
 
@@ -389,24 +390,8 @@ export default function SerialTracker() {
         const batch = serials.slice(i, i + BATCH_SIZE)
         const batchResults = await Promise.all(
           batch.map(async serial => {
-            const data = await findSerialRecords(serial, { country: activeCountry, columns: 'serial_no, issue_date, asset_no, status, country, cost:cost_per_tyre' })
-            if (!data || data.length === 0) {
-              return { serial, first_seen: null, last_asset: null, total_records: 0, cost: 0, country: null, status: 'Not Found' }
-            }
-            const first = data[0]
-            const last  = data[data.length - 1]
-            const scrapped = data.some(r => /scrap/i.test(r.status || ''))
-            const isActive = last.issue_date && last.issue_date >= cutoffStr
-            const cost = data.reduce((s, r) => s + (parseFloat(r.cost) || 0), 0)
-            return {
-              serial,
-              first_seen: first.issue_date || null,
-              last_asset: last.asset_no || null,
-              total_records: data.length,
-              cost,
-              country: last.country || first.country || null,
-              status: scrapped ? 'Scrapped' : isActive ? 'Active' : 'Retired',
-            }
+            const data = await findSerialRecords(serial, { country: activeCountry, columns: 'serial_no, issue_date, removal_date, asset_no, site, status, country, cost:cost_per_tyre' })
+            return summarizeBulkSerial(serial, data)
           })
         )
         results.push(...batchResults)
@@ -443,52 +428,181 @@ export default function SerialTracker() {
         filteredBulkResults,
         ['serial', 'first_seen', 'last_asset', 'total_records', 'cost', 'status'],
         ['Serial No', 'First Seen', 'Last Asset', 'Records', 'Cost', 'Status'],
-        'TyrePulse_BulkLookup'
+        reportFileName('TyrePulse Bulk Serial Lookup')
       )
     } catch (err) {
       setError(toUserMessage(err, 'Could not export. Try again.'))
     }
   }
 
-  const bulkSummary = useMemo(() => {
-    if (bulkResults.length === 0) return null
-    const found   = bulkResults.filter(r => r.status !== 'Not Found').length
-    const active  = bulkResults.filter(r => r.status === 'Active').length
-    const retired = bulkResults.filter(r => r.status === 'Retired').length
-    const scrapped = bulkResults.filter(r => r.status === 'Scrapped').length
-    const notFound = bulkResults.filter(r => r.status === 'Not Found').length
-    return { total: found, active, retired, scrapped, notFound }
-  }, [bulkResults])
-
-  const filteredBulkResults = useMemo(() => {
-    let rows = bulkResults
-    if (statusFilter) rows = rows.filter(r => r.status === statusFilter)
-    if (bulkSearch.trim()) {
-      const q = bulkSearch.trim().toLowerCase()
-      rows = rows.filter(r =>
-        r.serial.toLowerCase().includes(q) ||
-        (r.last_asset || '').toLowerCase().includes(q) ||
-        r.status.toLowerCase().includes(q)
+  function exportBulkPdf() {
+    try {
+      exportToPdf(
+        filteredBulkResults.map(r => ({
+          serial: r.serial,
+          first_seen: r.first_seen ? formatDate(r.first_seen) : 'N/A',
+          last_asset: r.last_asset || 'N/A',
+          total_records: r.total_records,
+          cost: moneyFor(r.cost, r.country),
+          status: r.status,
+        })),
+        [
+          { key: 'serial', header: 'Serial No' },
+          { key: 'first_seen', header: 'First Seen' },
+          { key: 'last_asset', header: 'Last Asset' },
+          { key: 'total_records', header: 'Records' },
+          { key: 'cost', header: 'Price per tyre' },
+          { key: 'status', header: 'Status' },
+        ],
+        'Bulk Serial Lookup',
+        reportFileName('TyrePulse Bulk Serial Lookup'),
+        'landscape'
       )
+    } catch (err) {
+      setError(toUserMessage(err, 'Could not export. Try again.'))
     }
-    return rows
-  }, [bulkResults, bulkSearch, statusFilter])
+  }
+
+  // The scrapped register exports the FILTERED list, never a page.
+  const scrapExportRows = () => filteredScrapList.map(r => ({
+    serial: r.serial,
+    asset_no: r.asset_no || 'N/A',
+    position: r.tyre_position || 'N/A',
+    reason: r.reason || 'No reason given',
+    scrapped_by: r.marked === false ? 'Not recorded' : (r.scrapped_by_name || 'Unknown user'),
+    created_at: r.created_at ? formatDate(r.created_at) : 'N/A',
+  }))
+  const SCRAP_COLS = ['serial', 'asset_no', 'position', 'reason', 'scrapped_by', 'created_at']
+  const SCRAP_HEADERS = ['Serial No', 'Asset', 'Position', 'Reason', 'Scrapped By', 'Scrapped On']
+  function exportScrapExcel() {
+    try {
+      exportToExcel(scrapExportRows(), SCRAP_COLS, SCRAP_HEADERS, reportFileName('TyrePulse Scrapped Tyres'))
+    } catch (err) {
+      setScrapListErr(toUserMessage(err, 'Could not export. Try again.'))
+    }
+  }
+  function exportScrapPdf() {
+    try {
+      exportToPdf(scrapExportRows(), SCRAP_COLS.map((k, i) => ({ key: k, header: SCRAP_HEADERS[i] })),
+        'Scrapped Tyres', reportFileName('TyrePulse Scrapped Tyres'), 'landscape')
+    } catch (err) {
+      setScrapListErr(toUserMessage(err, 'Could not export. Try again.'))
+    }
+  }
+
+  const bulkSummary = useMemo(() => summarizeBulk(bulkResults), [bulkResults])
+
+  const filteredBulkResults = useMemo(
+    () => filterBulkResults(bulkResults, { status: statusFilter, query: bulkSearch }),
+    [bulkResults, bulkSearch, statusFilter],
+  )
 
   /**
-   * BOTH LONG LISTS ARE READ A PAGE AT A TIME, through the app's one pager.
+   * ALL THREE LISTS ARE READ A PAGE AT A TIME by EnterpriseTable.
    *
    * A bulk lookup is a pasted file - it is routinely hundreds of serials - and
-   * the scrapped register is the whole scrap history (about 300 rows today,
-   * server-capped at 500). Rendering either in full made the page a single
-   * unbroken scroll.
-   *
-   * Each pager is given the FULL FILTERED list. Nothing else reads `pageRows`:
-   * the status chips still count `bulkResults`, the "N of M" captions still
-   * quote the filtered totals, and the Excel export still writes every result
-   * rather than the fifty on screen.
+   * the scrapped register is the whole scrap history. Each table is handed the
+   * FULL FILTERED list and pages + sorts it itself, so the status chips still
+   * count `bulkResults`, the "N of M" captions still quote the filtered totals,
+   * and every export writes every filtered row rather than one page.
    */
-  const bulkPager  = usePagedRows(filteredBulkResults)
-  const scrapPager = usePagedRows(filteredScrapList)
+  const recordColumns = useMemo(() => [
+    { id: 'issue_date', accessorFn: r => blankToUndef(r.issue_date), header: 'Fitted', sortingFn: sortCompare, sortUndefined: 'last', cell: ({ getValue }) => getValue() ? formatDate(getValue()) : 'N/A' },
+    { id: 'removal_date', accessorFn: r => blankToUndef(r.removal_date), header: 'Removed', sortingFn: sortCompare, sortUndefined: 'last', cell: ({ getValue }) => getValue() ? formatDate(getValue()) : 'N/A' },
+    { id: 'asset_no', accessorFn: r => blankToUndef(r.asset_no), header: 'Asset', sortingFn: sortCompare, sortUndefined: 'last', cell: ({ getValue }) => <span className="font-mono text-[var(--text-primary)]">{getValue() || 'N/A'}</span> },
+    { id: 'site', accessorFn: r => blankToUndef(r.site), header: 'Site', sortingFn: sortCompare, sortUndefined: 'last', cell: ({ getValue }) => getValue() || 'N/A' },
+    { id: 'position', accessorFn: r => blankToUndef(r.position || r.tyre_position), header: 'Position', sortingFn: sortCompare, sortUndefined: 'last', cell: ({ getValue }) => <span className="font-mono">{getValue() || 'N/A'}</span> },
+    { id: 'risk_level', accessorFn: r => blankToUndef(r.risk_level), header: 'Risk', sortingFn: sortCompare, sortUndefined: 'last', cell: ({ getValue }) => <span className={riskColor(getValue())}>{getValue() || 'N/A'}</span> },
+    { id: 'status', accessorFn: r => blankToUndef(r.status), header: 'Status', sortingFn: sortCompare, sortUndefined: 'last', cell: ({ getValue }) => getValue() || 'N/A' },
+    { id: 'price', accessorFn: r => recordPrice(r) ?? undefined, header: 'Price per tyre', sortingFn: sortCompare, sortUndefined: 'last', meta: { align: 'right' }, cell: ({ row, getValue }) => moneyFor(getValue() ?? null, row.original.country) },
+  ], [])
+
+  const bulkColumns = useMemo(() => [
+    { accessorKey: 'serial', header: 'Serial No', sortingFn: sortCompare, cell: ({ getValue }) => <span className="font-mono text-[var(--text-primary)]">{getValue()}</span> },
+    { id: 'first_seen', accessorFn: r => blankToUndef(r.first_seen), header: 'First Seen', sortingFn: sortCompare, sortUndefined: 'last', cell: ({ getValue }) => getValue() ? formatDate(getValue()) : 'N/A' },
+    { id: 'last_asset', accessorFn: r => blankToUndef(r.last_asset), header: 'Last Asset', sortingFn: sortCompare, sortUndefined: 'last', cell: ({ getValue }) => <span className="font-mono">{getValue() || 'N/A'}</span> },
+    { accessorKey: 'total_records', header: 'Records', sortingFn: sortCompare, meta: { align: 'right' } },
+    { id: 'cost', accessorFn: r => r.cost ?? undefined, header: 'Price per tyre', sortingFn: sortCompare, sortUndefined: 'last', meta: { align: 'right' }, cell: ({ row, getValue }) => moneyFor(getValue() ?? null, row.original.country) },
+    {
+      accessorKey: 'status', header: 'Status', sortingFn: sortCompare,
+      cell: ({ getValue }) => <span className={`text-xs px-2 py-0.5 rounded-full border ${BULK_TONE[getValue()] || BULK_TONE.Retired}`}>{getValue()}</span>,
+    },
+  ], [])
+
+  const scrapColumns = useMemo(() => [
+    { accessorKey: 'serial', header: 'Serial No', sortingFn: sortCompare, cell: ({ getValue }) => <span className="font-mono text-[var(--text-primary)]">{getValue()}</span> },
+    {
+      id: 'asset_no', accessorFn: r => blankToUndef(r.asset_no), header: 'Asset', sortingFn: sortCompare, sortUndefined: 'last',
+      cell: ({ row, getValue }) => (
+        <span className="whitespace-nowrap">
+          {getValue() || <span className="text-[var(--text-muted)]">N/A</span>}
+          {row.original.tyre_position ? <span className="text-xs text-[var(--text-muted)] ml-1.5">{row.original.tyre_position}</span> : null}
+        </span>
+      ),
+    },
+    {
+      id: 'reason', accessorFn: r => blankToUndef(r.reason), header: 'Reason', sortingFn: sortCompare, sortUndefined: 'last', size: 260,
+      cell: ({ row }) => {
+        const r = row.original
+        return editSerial === r.serial ? (
+          <div className="flex flex-col gap-2 min-w-[220px]">
+            <label className="sr-only" htmlFor={`reason-${r.serial}`}>Reason for {r.serial}</label>
+            <textarea
+              id={`reason-${r.serial}`}
+              className="input w-full text-sm min-h-[52px]"
+              value={editReason}
+              onChange={e => setEditReason(e.target.value)}
+              placeholder="Reason (optional)"
+            />
+            <div className="flex gap-2">
+              <button onClick={() => saveEditReason(r.serial)} disabled={rowBusy === r.serial}
+                className="btn-primary text-xs px-3 min-h-[36px] disabled:opacity-50">
+                {rowBusy === r.serial ? 'Saving...' : 'Save'}
+              </button>
+              <button onClick={() => { setEditSerial(null); setEditReason('') }} disabled={rowBusy === r.serial}
+                className="btn-secondary text-xs px-3 min-h-[36px] disabled:opacity-50">Cancel</button>
+            </div>
+          </div>
+        ) : (
+          <span className={r.reason ? '' : 'text-[var(--text-muted)] italic'}>{r.reason || 'No reason given'}</span>
+        )
+      },
+    },
+    {
+      id: 'scrapped_by', header: 'Scrapped By', sortingFn: sortCompare, sortUndefined: 'last',
+      accessorFn: r => (r.marked === false ? 'Not recorded' : blankToUndef(r.scrapped_by_name)),
+      // A row with marked === false was bulk-scrapped from the tyre grid, which
+      // saves no name. Say so rather than leave a blank that reads like missing data.
+      cell: ({ row }) => row.original.marked === false
+        ? <span className="text-amber-400 text-xs">Not recorded</span>
+        : <span className="text-xs">{row.original.scrapped_by_name || 'Unknown user'}</span>,
+    },
+    { id: 'created_at', accessorFn: r => blankToUndef(r.created_at), header: 'Scrapped On', sortingFn: sortCompare, sortUndefined: 'last', cell: ({ getValue }) => <span className="text-xs whitespace-nowrap">{getValue() ? formatDate(getValue()) : 'N/A'}</span> },
+    {
+      id: 'actions', header: 'Actions', enableSorting: false, meta: { align: 'right', export: false },
+      cell: ({ row }) => {
+        const r = row.original
+        if (editSerial === r.serial) return <span className="text-xs text-[var(--text-muted)]">Editing...</span>
+        if (!canScrap && !canUndo) return <span className="text-xs text-[var(--text-muted)]">View only</span>
+        return (
+          <div className="inline-flex gap-2 whitespace-nowrap">
+            {canScrap && (
+              <button onClick={() => { setEditSerial(r.serial); setEditReason(r.reason || '') }}
+                disabled={rowBusy === r.serial}
+                className="btn-secondary text-xs px-2.5 min-h-[36px] disabled:opacity-50">Edit reason</button>
+            )}
+            {canUndo && (
+              <button onClick={() => undoScrapRow(r.serial)} disabled={rowBusy === r.serial}
+                className="flex items-center gap-1 text-xs px-2.5 min-h-[36px] rounded-md font-medium border border-green-700/50 bg-green-900/20 text-green-400 hover:bg-green-900/40 transition-colors disabled:opacity-50">
+                <RotateCcw size={12} aria-hidden="true" /> {rowBusy === r.serial ? 'Working...' : 'Undo scrap'}
+              </button>
+            )}
+          </div>
+        )
+      },
+    },
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- row handlers are recreated each render; the edit/busy state they read is listed.
+  ], [editSerial, editReason, rowBusy, canScrap, canUndo, lastQuery, scrapMark])
 
   return (
     <div className="space-y-6">
@@ -498,12 +612,14 @@ export default function SerialTracker() {
         icon={ScanLine}
       />
 
-      <div className="flex gap-1 p-1 bg-[var(--surface-2)] rounded-lg w-fit">
+      <div className="flex flex-wrap gap-1 p-1 bg-[var(--surface-2)] rounded-lg w-fit max-w-full" role="tablist" aria-label="Serial tracker views">
         {[['single', 'Single Search'], ['bulk', 'Bulk Lookup'], ['scrapped', 'Scrapped']].map(([key, label]) => (
           <button
             key={key}
+            role="tab"
+            aria-selected={activeTab === key}
             onClick={() => { setActiveTab(key); if (key === 'scrapped') loadScrapList() }}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+            className={`min-h-[44px] px-4 rounded-md text-sm font-medium transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
               activeTab === key ? 'bg-[var(--surface-3)] text-[var(--text-primary)] shadow' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
           >
@@ -517,16 +633,19 @@ export default function SerialTracker() {
         <>
           {/* Deliberately NOT clipped: this is the page's search control. */}
           <Card>
-            <div className="flex gap-3">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <label htmlFor="serial-search" className="sr-only">Serial number</label>
               <input
-                className="input flex-1 text-base"
-                placeholder="Enter serial number (case-sensitive)..."
+                id="serial-search"
+                type="search"
+                className="input flex-1 text-base min-h-[44px]"
+                placeholder="Enter a serial number"
                 value={serialInput}
                 onChange={e => setSerialInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && search()}
               />
               <button onClick={search} disabled={loading || !serialInput.trim()}
-                className="btn-primary flex items-center gap-2 px-5 disabled:opacity-50">
+                className="btn-primary flex items-center justify-center gap-2 px-5 min-h-[44px] disabled:opacity-50">
                 <Search size={16} />
                 {loading ? 'Searching...' : 'Search'}
               </button>
@@ -541,8 +660,8 @@ export default function SerialTracker() {
                `style`, where Card spreads it last and it deterministically wins. */
             <Card tone="crit" className="items-center gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
               <AlertTriangle size={18} className="text-red-400 shrink-0" />
-              <p className="text-sm text-red-300 flex-1">{error}</p>
-              <button onClick={search} className="btn-secondary text-xs px-3 py-1.5">Retry</button>
+              <p className="text-sm text-red-400 flex-1">{error}</p>
+              <button onClick={search} className="btn-secondary text-xs px-3 min-h-[44px]">Retry</button>
             </Card>
           )}
 
@@ -552,7 +671,7 @@ export default function SerialTracker() {
                 illustration="state/search-empty"
                 icon={ScanLine}
                 title="No records found"
-                description={`No tyre records match serial "${lastQuery}". Check spelling and capitalisation.`}
+                description={`No tyre records match serial "${lastQuery}" in the selected country. Check the spelling, or switch the country scope.`}
               />
             </Card>
           )}
@@ -582,7 +701,7 @@ export default function SerialTracker() {
                       <p className="text-[var(--text-secondary)] text-sm">{[stats.brand, stats.description].filter(Boolean).join(' · ')}</p>
                     )}
                     {scrapMark && (
-                      <p className="text-xs text-red-300/80 mt-1">
+                      <p className="text-xs text-red-400/80 mt-1">
                         Scrapped {formatDate(scrapMark.created_at)}{scrapMark.reason ? ` · ${scrapMark.reason}` : ''}
                       </p>
                     )}
@@ -592,47 +711,64 @@ export default function SerialTracker() {
                         separately rather than by one flag. */}
                     {scrapMark ? (canUndo && (
                       <button onClick={undoScrap} disabled={scrapBusy}
-                        className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5 disabled:opacity-50">
+                        className="btn-secondary flex items-center gap-1.5 text-sm px-3 min-h-[44px] disabled:opacity-50">
                         <RotateCcw size={14} /> {scrapBusy ? 'Working...' : 'Undo scrap'}
                       </button>
                     )) : (canScrap && (
                       <button onClick={() => { setScrapErr(null); setScrapReason(''); setScrapOpen(true) }}
-                        className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md font-medium border border-red-700/50 bg-red-900/20 text-red-300 hover:bg-red-900/40 transition-colors">
+                        className="flex items-center gap-1.5 text-sm px-3 min-h-[44px] rounded-md font-medium border border-red-700/50 bg-red-900/20 text-red-400 hover:bg-red-900/40 transition-colors">
                         <Trash2 size={14} /> Mark as Scrap
                       </button>
                     ))}
-                    <button onClick={exportLifecycleExcel} className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5">
-                      <Download size={14} /> Excel
+                    <button onClick={exportLifecycleExcel} className="btn-secondary flex items-center gap-1.5 text-sm px-3 min-h-[44px]">
+                      <FileSpreadsheet size={14} aria-hidden="true" /> Excel
                     </button>
-                    <button onClick={exportLifecyclePdf} className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5">
+                    <button onClick={exportLifecyclePdf} className="btn-secondary flex items-center gap-1.5 text-sm px-3 min-h-[44px]">
                       <FileText size={14} /> PDF
                     </button>
                   </div>
                 </div>
                 {scrapErr && (
-                  <div className="mb-3 -mt-1 flex items-center gap-2 text-sm text-red-300">
+                  <div className="mb-3 -mt-1 flex items-center gap-2 text-sm text-red-400">
                     <AlertTriangle size={14} className="shrink-0" /> {scrapErr}
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                   {[
-                    { label: 'First Used',      value: formatDate(stats.first.issue_date) },
-                    { label: 'Total Records',   value: records.length },
+                    { label: 'First Used',      value: stats.first.issue_date ? formatDate(stats.first.issue_date) : 'N/A' },
+                    { label: 'Total Records',   value: stats.records },
                     { label: 'Vehicles Used',   value: stats.assets },
-                    { label: 'Days in Service', value: stats.days || '-' },
+                    { label: 'Sites',           value: stats.sites },
+                    { label: 'Days in Service', value: stats.days == null ? 'N/A' : stats.days.toLocaleString() },
+                    { label: 'Price per tyre',  value: moneyFor(stats.price, stats.country) },
                   ].map(s => (
                     <div key={s.label} className="bg-[var(--surface-2)] rounded-lg p-3 text-center">
-                      <p className="text-lg font-bold text-[var(--text-primary)]">{s.value}</p>
+                      <p className="text-lg font-bold text-[var(--text-primary)] tabular-nums">{s.value}</p>
                       <p className="text-xs text-[var(--text-muted)] mt-0.5">{s.label}</p>
                     </div>
                   ))}
                 </div>
-                {stats.totalCost > 0 && (
-                  <p className="text-[var(--text-secondary)] text-sm mt-3">
-                    Total cost: <span className="text-[var(--text-primary)] font-semibold">{formatCurrencyCompact(stats.totalCost, COUNTRY_CURRENCY[records[0]?.country] || 'SAR')}</span>
-                  </p>
-                )}
+                <p className="text-xs text-[var(--text-muted)] mt-3">
+                  {stats.price == null
+                    ? 'No purchase price is recorded on any record of this tyre.'
+                    : `Price taken from the latest priced record (${stats.pricedRecords} of ${stats.records} records carry a price). Moves are not summed: one tyre is bought once.`}
+                </p>
+              </Card>
+
+              <Card>
+                <CardHeader level={2} title="Record history" description={`All ${stats.records} tyre record${stats.records !== 1 ? 's' : ''} for this serial. Sort any column.`} />
+                <EnterpriseTable
+                  columns={recordColumns}
+                  data={records}
+                  getRowId={r => String(r.id)}
+                  enableColumnFilters={false}
+                  enableExport={false}
+                  enableKeyboard={false}
+                  initialPageSize={25}
+                  searchPlaceholder="Search this tyre's records"
+                  emptyMessage="No records."
+                />
               </Card>
 
               <Card>
@@ -655,10 +791,10 @@ export default function SerialTracker() {
                             <div className="text-xs font-mono text-[var(--text-muted)] w-24 flex-shrink-0 pt-0.5">{formatDate(r.issue_date)}</div>
                             <div className="flex-1 min-w-0">
                               <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
-                                <span className="text-[var(--text-secondary)]">{r.site || '-'}</span>
+                                <span className="text-[var(--text-secondary)]">{r.site || 'N/A'}</span>
                                 {r.position && <span className="text-[var(--text-muted)]">Pos: <span className="text-[var(--text-primary)] font-mono">{r.position}</span></span>}
                                 {r.risk_level && <span className={riskColor(r.risk_level)}>{r.risk_level}</span>}
-                                {r.cost > 0 && <span className="text-[var(--text-muted)]">{formatCurrencyCompact(r.cost, COUNTRY_CURRENCY[r.country] || 'SAR')}</span>}
+                                {recordPrice(r) != null && <span className="text-[var(--text-muted)]">{moneyFor(recordPrice(r), r.country)}</span>}
                               </div>
                               {r.description && <p className="text-xs text-[var(--text-dim)] mt-0.5 truncate">{r.description}</p>}
                             </div>
@@ -709,7 +845,7 @@ export default function SerialTracker() {
                 File must have a column: <span className="font-mono text-[var(--text-secondary)]">serial_no</span>, <span className="font-mono text-[var(--text-secondary)]">Serial No</span>, <span className="font-mono text-[var(--text-secondary)]">Serial Number</span>, or <span className="font-mono text-[var(--text-secondary)]">serial</span>
               </p>
               <button
-                className="btn-secondary text-sm px-4 py-1.5 pointer-events-auto"
+                className="btn-secondary text-sm px-4 min-h-[44px] pointer-events-auto"
                 onClick={e => { e.stopPropagation(); bulkFileRef.current?.click() }}
               >
                 Browse File
@@ -728,9 +864,10 @@ export default function SerialTracker() {
           )}
 
           {error && !bulkLoading && (
-            <Card tone="crit" className="items-center gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
-              <AlertTriangle size={18} className="text-red-400 shrink-0" />
-              <p className="text-sm text-red-300 flex-1">{error}</p>
+            <Card tone="crit" className="items-center gap-[var(--space-3)]" style={{ flexDirection: 'row' }} role="alert">
+              <AlertTriangle size={18} className="text-red-400 shrink-0" aria-hidden="true" />
+              <p className="text-sm text-red-400 flex-1">{error}</p>
+              <button onClick={() => bulkFileRef.current?.click()} className="btn-secondary text-xs px-3 min-h-[44px]">Choose file again</button>
             </Card>
           )}
 
@@ -750,8 +887,9 @@ export default function SerialTracker() {
                       ].map(chip => (
                         <button
                           key={chip.label}
+                          aria-pressed={chip.active}
                           onClick={() => setStatusFilter(chip.active && chip.key !== null ? null : chip.key)}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
+                          className={`flex items-center gap-1.5 px-3 min-h-[44px] rounded-lg text-sm font-medium border transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                             chip.active && chip.key === null
                               ? 'bg-green-900/40 text-green-300 border-green-600/50'
                               : chip.active
@@ -768,18 +906,23 @@ export default function SerialTracker() {
                         </button>
                       ))}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <div className="relative">
-                        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+                        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
                         <input
-                          className="input text-sm pl-7 pr-3 py-1.5 w-44"
+                          type="search"
+                          aria-label="Filter bulk results"
+                          className="input text-sm pl-7 pr-3 min-h-[44px] w-44"
                           placeholder="Filter results..."
                           value={bulkSearch}
                           onChange={e => setBulkSearch(e.target.value)}
                         />
                       </div>
-                      <button onClick={exportBulkExcel} className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5">
-                        <Download size={14} /> Export
+                      <button onClick={exportBulkExcel} disabled={filteredBulkResults.length === 0} className="btn-secondary flex items-center gap-1.5 text-sm px-3 min-h-[44px] disabled:opacity-50">
+                        <FileSpreadsheet size={14} aria-hidden="true" /> Excel
+                      </button>
+                      <button onClick={exportBulkPdf} disabled={filteredBulkResults.length === 0} className="btn-secondary flex items-center gap-1.5 text-sm px-3 min-h-[44px] disabled:opacity-50">
+                        <FileText size={14} aria-hidden="true" /> PDF
                       </button>
                     </div>
                   </div>
@@ -809,46 +952,17 @@ export default function SerialTracker() {
                   <button onClick={() => { setStatusFilter(null); setBulkSearch('') }} className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)] underline mt-1">Clear filters</button>
                 </Card>
               ) : (
-                /* Kept unclipped and padded: the horizontal scroller is the
-                   card's own class, and `clip` would fight it. */
-                <Card className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-left text-[var(--text-secondary)] border-b border-[var(--border-dim)]">
-                        <th className="pb-2 pr-4">Serial No</th>
-                        <th className="pb-2 pr-4">First Seen</th>
-                        <th className="pb-2 pr-4">Last Asset</th>
-                        <th className="pb-2 pr-4 text-right">Records</th>
-                        <th className="pb-2 pr-4 text-right">Cost</th>
-                        <th className="pb-2">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {bulkPager.pageRows.map(r => (
-                        <tr key={r.serial} className="border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)]">
-                          <td className="py-2 pr-4 font-mono text-[var(--text-primary)]">{r.serial}</td>
-                          <td className="py-2 pr-4 text-[var(--text-secondary)] text-xs">{formatDate(r.first_seen)}</td>
-                          <td className="py-2 pr-4 font-mono text-[var(--text-secondary)] text-xs">{r.last_asset || '-'}</td>
-                          <td className="py-2 pr-4 text-[var(--text-secondary)] text-right">{r.total_records}</td>
-                          <td className="py-2 pr-4 text-[var(--text-secondary)] text-right text-xs">
-                            {r.cost > 0 ? formatCurrencyCompact(r.cost, COUNTRY_CURRENCY[r.country] || 'SAR') : '-'}
-                          </td>
-                          <td className="py-2">
-                            {r.status === 'Not Found' ? (
-                              <span className="text-xs px-2 py-0.5 rounded-full border bg-[var(--surface-2)] text-[var(--text-muted)] border-[var(--border-bright)]">Not Found</span>
-                            ) : r.status === 'Active' ? (
-                              <span className="text-xs px-2 py-0.5 rounded-full border bg-green-900/30 text-green-400 border-green-700/50">Active</span>
-                            ) : r.status === 'Scrapped' ? (
-                              <span className="text-xs px-2 py-0.5 rounded-full border bg-red-900/30 text-red-400 border-red-700/50">Scrapped</span>
-                            ) : (
-                              <span className="text-xs px-2 py-0.5 rounded-full border bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)]">Retired</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  <TablePagination {...bulkPager} />
+                <Card>
+                  <EnterpriseTable
+                    columns={bulkColumns}
+                    data={filteredBulkResults}
+                    getRowId={r => r.serial}
+                    enableGlobalFilter={false}
+                    enableColumnFilters={false}
+                    enableExport={false}
+                    initialPageSize={50}
+                    emptyMessage="No results match the current filter."
+                  />
                 </Card>
               )}
             </>
@@ -872,17 +986,27 @@ export default function SerialTracker() {
               actions={
                 <>
                   <div className="relative">
-                    <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+                    <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
                     <input
-                      className="input text-sm pl-7 pr-3 py-1.5 w-48"
+                      type="search"
+                      aria-label="Filter scrapped tyres"
+                      className="input text-sm pl-7 pr-3 min-h-[44px] w-48"
                       placeholder="Filter serial / reason..."
                       value={scrapListSearch}
                       onChange={e => setScrapListSearch(e.target.value)}
                     />
                   </div>
+                  <button onClick={exportScrapExcel} disabled={scrapListLoad || !!scrapListErr || filteredScrapList.length === 0}
+                    className="btn-secondary flex items-center gap-1.5 text-sm px-3 min-h-[44px] disabled:opacity-50">
+                    <FileSpreadsheet size={14} aria-hidden="true" /> Excel
+                  </button>
+                  <button onClick={exportScrapPdf} disabled={scrapListLoad || !!scrapListErr || filteredScrapList.length === 0}
+                    className="btn-secondary flex items-center gap-1.5 text-sm px-3 min-h-[44px] disabled:opacity-50">
+                    <FileText size={14} aria-hidden="true" /> PDF
+                  </button>
                   <button onClick={loadScrapList} disabled={scrapListLoad}
-                    className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5 disabled:opacity-50">
-                    <RotateCcw size={14} /> Refresh
+                    className="btn-secondary flex items-center gap-1.5 text-sm px-3 min-h-[44px] disabled:opacity-50">
+                    <RotateCcw size={14} aria-hidden="true" /> Refresh
                   </button>
                 </>
               }
@@ -900,11 +1024,30 @@ export default function SerialTracker() {
             </CardBody>
           </Card>
 
+          {/* KPI strip. A failed read shows N/A, never zeros. */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {[
+              { label: 'Scrapped tyres', value: scrapSummary.total, icon: Trash2, sub: 'marked as scrap' },
+              { label: 'Last 30 days', value: scrapSummary.last30, icon: CalendarClock, sub: 'newly scrapped' },
+              { label: 'With a reason', value: scrapSummary.reasonRate == null ? 'N/A' : `${Math.round(scrapSummary.reasonRate * 100)}%`, icon: ClipboardList, sub: `${scrapSummary.withReason} of ${scrapSummary.total}` },
+              { label: 'No actor recorded', value: scrapSummary.unattributed, icon: UserX, sub: 'bulk-scrapped from the tyre grid' },
+            ].map(k => (
+              <Card key={k.label}>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
+                  <k.icon size={15} className="text-[var(--text-muted)]" aria-hidden="true" />
+                </div>
+                <p className="text-2xl font-bold text-[var(--text-primary)] mt-1 tabular-nums">{scrapListLoad ? '...' : scrapListErr ? 'N/A' : k.value}</p>
+                <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{k.sub}</p>
+              </Card>
+            ))}
+          </div>
+
           {scrapListErr && (
-            <Card tone="crit" className="items-center gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
+            <Card tone="crit" className="items-center gap-[var(--space-3)]" style={{ flexDirection: 'row' }} role="alert">
               <AlertTriangle size={18} className="text-red-400 shrink-0" />
-              <p className="text-sm text-red-300 flex-1">{scrapListErr}</p>
-              <button onClick={loadScrapList} className="btn-secondary text-xs px-3 py-1.5">Retry</button>
+              <p className="text-sm text-red-400 flex-1">{scrapListErr}</p>
+              <button onClick={loadScrapList} className="btn-secondary text-xs px-3 min-h-[44px]">Retry</button>
             </Card>
           )}
 
@@ -913,7 +1056,7 @@ export default function SerialTracker() {
               <div className="inline-block w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin mb-3" />
               <p className="text-[var(--text-secondary)]">Loading scrapped tyres...</p>
             </Card>
-          ) : scrapList.length === 0 ? (
+          ) : scrapListErr ? null : scrapList.length === 0 ? (
             <Card>
               <EmptyState
                 illustration="state/search-empty"
@@ -928,85 +1071,18 @@ export default function SerialTracker() {
               <button onClick={() => setScrapListSearch('')} className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)] underline mt-1">Clear filter</button>
             </Card>
           ) : (
-            <Card className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-[var(--text-secondary)] border-b border-[var(--border-dim)]">
-                    <th className="pb-2 pr-4">Serial No</th>
-                    <th className="pb-2 pr-4">Asset</th>
-                    <th className="pb-2 pr-4">Reason</th>
-                    <th className="pb-2 pr-4">Scrapped By</th>
-                    <th className="pb-2 pr-4">Scrapped On</th>
-                    <th className="pb-2 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {scrapPager.pageRows.map(r => (
-                    <tr key={r.serial} className="border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)] align-top">
-                      <td className="py-2 pr-4 font-mono text-[var(--text-primary)]">{r.serial}</td>
-                      <td className="py-2 pr-4 text-[var(--text-secondary)] whitespace-nowrap">
-                        {r.asset_no || <span className="text-[var(--text-muted)]">N/A</span>}
-                        {r.tyre_position ? <span className="text-xs text-[var(--text-muted)] ml-1.5">{r.tyre_position}</span> : null}
-                      </td>
-                      <td className="py-2 pr-4 text-[var(--text-secondary)] min-w-[220px]">
-                        {editSerial === r.serial ? (
-                          <div className="flex flex-col gap-2">
-                            <textarea
-                              className="input w-full text-sm min-h-[52px]"
-                              value={editReason}
-                              onChange={e => setEditReason(e.target.value)}
-                              placeholder="Reason (optional)"
-                            />
-                            <div className="flex gap-2">
-                              <button onClick={() => saveEditReason(r.serial)} disabled={rowBusy === r.serial}
-                                className="btn-primary text-xs px-3 py-1 disabled:opacity-50">
-                                {rowBusy === r.serial ? 'Saving...' : 'Save'}
-                              </button>
-                              <button onClick={() => { setEditSerial(null); setEditReason('') }} disabled={rowBusy === r.serial}
-                                className="btn-secondary text-xs px-3 py-1 disabled:opacity-50">Cancel</button>
-                            </div>
-                          </div>
-                        ) : (
-                          <span className={r.reason ? '' : 'text-[var(--text-muted)] italic'}>{r.reason || 'No reason given'}</span>
-                        )}
-                      </td>
-                      <td className="py-2 pr-4 text-xs whitespace-nowrap">
-                        {/* A row with marked === false was bulk-scrapped from the
-                            tyre grid, which saves no name. Say so rather than
-                            leave a blank that reads like missing data. */}
-                        {r.marked === false ? (
-                          <span className="text-amber-400">Not recorded</span>
-                        ) : (
-                          <span className="text-[var(--text-secondary)]">{r.scrapped_by_name || 'Unknown user'}</span>
-                        )}
-                      </td>
-                      <td className="py-2 pr-4 text-[var(--text-secondary)] text-xs whitespace-nowrap">{formatDate(r.created_at)}</td>
-                      <td className="py-2 text-right whitespace-nowrap">
-                        {editSerial === r.serial ? (
-                          <span className="text-xs text-[var(--text-muted)]">Editing...</span>
-                        ) : (canScrap || canUndo) ? (
-                          <div className="inline-flex gap-2">
-                            {canScrap && (
-                              <button onClick={() => { setEditSerial(r.serial); setEditReason(r.reason || '') }}
-                                disabled={rowBusy === r.serial}
-                                className="btn-secondary text-xs px-2.5 py-1 disabled:opacity-50">Edit reason</button>
-                            )}
-                            {canUndo && (
-                              <button onClick={() => undoScrapRow(r.serial)} disabled={rowBusy === r.serial}
-                                className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-md font-medium border border-green-700/50 bg-green-900/20 text-green-300 hover:bg-green-900/40 transition-colors disabled:opacity-50">
-                                <RotateCcw size={12} /> {rowBusy === r.serial ? 'Working...' : 'Undo scrap'}
-                              </button>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-[var(--text-muted)]">View only</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <TablePagination {...scrapPager} />
+            <Card>
+              <EnterpriseTable
+                columns={scrapColumns}
+                data={filteredScrapList}
+                getRowId={r => r.serial}
+                enableGlobalFilter={false}
+                enableColumnFilters={false}
+                enableExport={false}
+                enableKeyboard={false}
+                initialPageSize={50}
+                emptyMessage="No scrapped tyres match this filter."
+              />
             </Card>
           )}
         </div>
@@ -1024,9 +1100,9 @@ export default function SerialTracker() {
           size="sm"
           footer={
             <>
-              <button onClick={closeScrap} disabled={scrapBusy} className="btn-secondary text-sm px-4 py-1.5 disabled:opacity-50">Cancel</button>
+              <button onClick={closeScrap} disabled={scrapBusy} className="btn-secondary text-sm px-4 min-h-[44px] disabled:opacity-50">Cancel</button>
               <button onClick={confirmScrap} disabled={scrapBusy}
-                className="flex items-center gap-1.5 text-sm px-4 py-1.5 rounded-md font-medium border border-red-700/50 bg-red-600/80 text-white hover:bg-red-600 transition-colors disabled:opacity-50">
+                className="flex items-center gap-1.5 text-sm px-4 min-h-[44px] rounded-md font-medium border border-red-700/50 bg-red-600/80 text-white hover:bg-red-600 transition-colors disabled:opacity-50">
                 <Trash2 size={14} /> {scrapBusy ? 'Marking...' : 'Confirm scrap'}
               </button>
             </>
@@ -1047,7 +1123,7 @@ export default function SerialTracker() {
             onChange={e => setScrapReason(e.target.value)}
           />
           {scrapErr && (
-            <div className="mt-2 flex items-center gap-2 text-sm text-red-300">
+            <div className="mt-2 flex items-center gap-2 text-sm text-red-400">
               <AlertTriangle size={14} className="shrink-0" /> {scrapErr}
             </div>
           )}

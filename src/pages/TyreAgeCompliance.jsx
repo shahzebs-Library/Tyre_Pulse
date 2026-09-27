@@ -1,67 +1,92 @@
 /**
  * TyreAgeCompliance (route /tyre-age-compliance) - flags tyres that are too OLD
  * by CALENDAR age, regardless of remaining tread. Rubber degrades with age and
- * in GCC heat an under-worn but aged tyre is a real blow-out / insurance risk.
+ * in GCC heat an under-worn but aged tyre is a real blow-out and insurance risk.
  *
- * Age is measured from the best available birth date (DOT / manufacture date if
- * present, else issue date, else fitment date) to now, and classified into a
- * tunable policy ladder: OK, Watch, Replace, Overdue, plus an honest
- * "Date unknown" bucket for tyres with no birth date on record.
+ * Age is measured from the best available birth date (DOT or manufacture date
+ * when present, else issue date, else fitment date) and classified into a
+ * policy ladder: OK, Watch, Replace, Overdue, plus an honest "Date unknown"
+ * bucket for tyres with no birth date on record.
  *
- * Runs on the existing `tyre_records` table (no new data). All banding + KPI
- * maths live in the pure engine `src/lib/tyreAgeCompliance.js`.
+ * Runs on `tyre_records` (paged read). Banding and KPI maths live in
+ * `src/lib/tyreAgeCompliance.js`; the page-level filters, histogram, action
+ * list and exports live in `src/lib/tyreAgeComplianceAnalytics.js`.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
-  Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement,
-  Tooltip, Legend,
+  Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend,
 } from 'chart.js'
 import { Bar, Doughnut } from 'react-chartjs-2'
 import {
-  ShieldCheck, ShieldAlert, AlertTriangle, CalendarClock, CheckCircle2, Search,
-  X, Filter, FileSpreadsheet, FileText, Info, Database, Gauge, ArrowUp, ArrowDown,
-  CalendarX,
+  ShieldCheck, ShieldAlert, AlertTriangle, CalendarClock, CheckCircle2, Search, X,
+  FileSpreadsheet, FileText, Info, Gauge, CalendarX, RotateCcw, Database,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import StatTile from '../components/ui/StatTile'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import EmailPdfButton from '../components/EmailPdfButton'
 import { useSettings } from '../contexts/SettingsContext'
 import { listTyresForAgeScan } from '../lib/api/tyreAgeCompliance'
+import { assessFleet } from '../lib/tyreAgeCompliance'
 import {
-  assessFleet, AGE_BAND_META, AGE_BANDS, DEFAULT_AGE_POLICY, DATE_SOURCE_META,
-  serialOf, positionOf,
-} from '../lib/tyreAgeCompliance'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
-import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+  buildAgeView, ageHistogram, dateSourceMix, actionList, ageExportRows,
+  AGE_BANDS, AGE_BAND_META, DATE_SOURCE_META, DATE_SOURCES, DEFAULT_AGE_POLICY,
+  serialOf, positionOf, EXPORT_COLS, EXPORT_HEADERS,
+} from '../lib/tyreAgeComplianceAnalytics'
+import { colorAt, withAlpha } from '../lib/reportColors'
 import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
 
+const loadExportUtils = () => import('../lib/exportUtils')
+const FIELD = 'input w-full min-h-[44px]'
+
+// Semantic band colours: the ladder carries meaning, so it stays fixed.
+const BAND_HEX = { ok: '#22c55e', watch: '#f59e0b', replace: '#fb923c', overdue: '#ef4444', unknown: '#64748b' }
 const BAND_STYLES = {
-  ok: 'bg-green-900/40 text-green-300 border border-green-700/50',
-  watch: 'bg-amber-900/40 text-amber-300 border border-amber-700/50',
-  replace: 'bg-orange-900/40 text-orange-300 border border-orange-700/50',
-  overdue: 'bg-red-900/40 text-red-300 border border-red-700/50',
+  ok: 'bg-green-900/30 text-green-400 border border-green-700/50',
+  watch: 'bg-amber-900/30 text-amber-400 border border-amber-700/50',
+  replace: 'bg-orange-900/30 text-orange-400 border border-orange-700/50',
+  overdue: 'bg-red-900/30 text-red-400 border border-red-700/50',
   unknown: 'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]',
 }
-const BAND_HEX = { ok: '#22c55e', watch: '#f59e0b', replace: '#fb923c', overdue: '#ef4444', unknown: '#64748b' }
 
 const fmtAge = (y) => (y == null ? 'N/A' : `${y} yr`)
 const dash = (v) => (v == null || v === '' ? 'N/A' : v)
+const fmtNum = (v) => (v == null ? 'N/A' : Number(v).toLocaleString())
+
+const BAR_OPTS = {
+  responsive: true, maintainAspectRatio: false,
+  plugins: { legend: { display: false } },
+  scales: {
+    x: { ticks: { color: 'var(--text-muted)', font: { size: 10 } }, grid: { display: false } },
+    y: { ticks: { color: 'var(--text-muted)', font: { size: 10 } }, grid: { color: 'var(--panel-2)' }, beginAtZero: true },
+  },
+}
+const DONUT_OPTS = {
+  responsive: true, maintainAspectRatio: false, cutout: '58%',
+  plugins: { legend: { position: 'bottom', labels: { color: 'var(--text-secondary)', boxWidth: 12, padding: 12 } } },
+}
+
+function BandBadge({ band }) {
+  return <span className={`inline-flex items-center text-[11px] px-2 py-0.5 rounded ${BAND_STYLES[band] || BAND_STYLES.unknown}`}>{AGE_BAND_META[band]?.label || 'N/A'}</span>
+}
 
 export default function TyreAgeCompliance() {
   const { activeCountry } = useSettings()
   const [rows, setRows] = useState(null)
   const [error, setError] = useState('')
+  const [actionError, setActionError] = useState('')
   const [refreshing, setRefreshing] = useState(false)
   const [updatedAt, setUpdatedAt] = useState(null)
 
   const [bandFilter, setBandFilter] = useState('all')
   const [siteFilter, setSiteFilter] = useState('')
   const [brandFilter, setBrandFilter] = useState('')
+  const [sourceFilter, setSourceFilter] = useState('')
   const [search, setSearch] = useState('')
   const [fittedOnly, setFittedOnly] = useState(true)
-  const [breakdownDim, setBreakdownDim] = useState('site') // site | brand
-  const [sortDir, setSortDir] = useState('desc') // by age
+  const [breakdownDim, setBreakdownDim] = useState('site')
 
   const load = useCallback(async () => {
     setRefreshing(true); setError('')
@@ -71,7 +96,7 @@ export default function TyreAgeCompliance() {
       setUpdatedAt(new Date())
     } catch (err) {
       setError(toUserMessage(err, 'Could not load tyre records.'))
-      setRows([])
+      setRows(null)
     } finally {
       setRefreshing(false)
     }
@@ -79,116 +104,96 @@ export default function TyreAgeCompliance() {
 
   useEffect(() => { load() }, [load])
 
-  // Enrich + summarize against the reference clock (engine is pure).
-  const { rows: enriched, counts, kpis, distribution, bySite, byBrand } = useMemo(
-    () => assessFleet(rows || [], Date.now(), DEFAULT_AGE_POLICY),
-    [rows],
-  )
+  const loaded = Array.isArray(rows)
+  // Enrich once against one reference clock (the engine is pure).
+  const assessed = useMemo(() => assessFleet(rows || [], Date.now(), DEFAULT_AGE_POLICY).rows, [rows])
+  const filters = useMemo(() => ({ band: bandFilter, site: siteFilter, brand: brandFilter, source: sourceFilter, search }),
+    [bandFilter, siteFilter, brandFilter, sourceFilter, search])
+  const { scope, summary, table } = useMemo(() => buildAgeView(assessed, filters, { now: Date.now() }), [assessed, filters])
+  const { counts, kpis, distribution, bySite, byBrand } = summary
+  const histogram = useMemo(() => ageHistogram(scope), [scope])
+  const sources = useMemo(() => dateSourceMix(scope), [scope])
+  const worklist = useMemo(() => actionList(scope, 10), [scope])
 
-  const siteOptions = useMemo(
-    () => [...new Set((enriched || []).map((r) => r.site).filter(Boolean))].sort(),
-    [enriched],
-  )
-  const brandOptions = useMemo(
-    () => [...new Set((enriched || []).map((r) => r.brand).filter(Boolean))].sort(),
-    [enriched],
-  )
+  const siteOptions = useMemo(() => [...new Set(assessed.map((r) => r.site).filter(Boolean))].sort(), [assessed])
+  const brandOptions = useMemo(() => [...new Set(assessed.map((r) => r.brand).filter(Boolean))].sort(), [assessed])
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    const out = (enriched || []).filter((r) => {
-      if (bandFilter !== 'all' && r.ageBand !== bandFilter) return false
-      if (siteFilter && r.site !== siteFilter) return false
-      if (brandFilter && r.brand !== brandFilter) return false
-      if (q) {
-        const hay = `${serialOf(r) || ''} ${r.asset_no || ''} ${r.brand || ''} ${r.size || ''}`.toLowerCase()
-        if (!hay.includes(q)) return false
-      }
-      return true
-    })
-    const dir = sortDir === 'asc' ? 1 : -1
-    return out.sort((a, b) => {
-      const av = a.ageYears == null ? -Infinity : a.ageYears
-      const bv = b.ageYears == null ? -Infinity : b.ageYears
-      if (av === bv) return 0
-      return av < bv ? -dir : dir
-    })
-  }, [enriched, bandFilter, siteFilter, brandFilter, search, sortDir])
+  // ── Exports (the whole filtered table, never one page) ───────────────────
+  const exportRows = useMemo(() => ageExportRows(table), [table])
+  const fileBase = async () => {
+    const { reportFileName, reportDateLabel } = await loadExportUtils()
+    return reportFileName('TyrePulse Tyre Age Compliance', activeCountry !== 'All' ? activeCountry : null, reportDateLabel())
+  }
+  const pdfCols = EXPORT_COLS.map((c, i) => ({ key: c, header: EXPORT_HEADERS[i] }))
+  const doExcel = async () => {
+    try {
+      const { exportToExcel } = await loadExportUtils()
+      await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, await fileBase())
+    } catch (e) { setActionError(toUserMessage(e, 'Export failed. Please try again.')) }
+  }
+  const doPdf = async () => {
+    try {
+      const { exportToPdf } = await loadExportUtils()
+      await exportToPdf(exportRows, pdfCols, 'Tyre Age Compliance', await fileBase(), 'landscape')
+    } catch (e) { setActionError(toUserMessage(e, 'Export failed. Please try again.')) }
+  }
 
-  // Paged, not capped. The table used to render filtered.slice(0, 500), so a
-  // fleet with more than 500 matching tyres looked complete while it was not.
-  // The exports below still cover the whole filtered set on purpose.
-  const pager = usePagedRows(filtered)
+  const clearFilters = () => { setBandFilter('all'); setSiteFilter(''); setBrandFilter(''); setSourceFilter(''); setSearch('') }
+  const hasFilters = bandFilter !== 'all' || !!(siteFilter || brandFilter || sourceFilter || search)
+  const oldest = kpis.oldest
 
-  const chartText = (typeof document !== 'undefined'
-    && getComputedStyle(document.documentElement).getPropertyValue('--text-muted')) || '#9ca3af'
+  const columns = useMemo(() => [
+    { id: 'serial', header: 'Serial', accessorFn: (r) => serialOf(r) || 'N/A', size: 150,
+      cell: ({ row }) => <span className="font-mono text-xs text-[var(--text-primary)]">{dash(serialOf(row.original))}</span> },
+    { id: 'asset', header: 'Asset', accessorFn: (r) => r.asset_no || 'N/A', size: 110 },
+    { id: 'brand', header: 'Brand', accessorFn: (r) => r.brand || 'N/A', size: 120 },
+    { id: 'size', header: 'Size', accessorFn: (r) => r.size || 'N/A', size: 120 },
+    { id: 'position', header: 'Position', accessorFn: (r) => positionOf(r) || 'N/A', size: 100 },
+    { id: 'site', header: 'Site', accessorFn: (r) => r.site || 'N/A', size: 120 },
+    { id: 'age', header: 'Age', accessorFn: (r) => r.ageYears, size: 90, meta: { align: 'right' },
+      sortUndefined: 'last', cell: ({ row }) => <span className="tabular-nums font-semibold">{fmtAge(row.original.ageYears)}</span> },
+    { id: 'birth', header: 'Birth date', accessorFn: (r) => r.birthDate || 'N/A', size: 110 },
+    { id: 'source', header: 'Date source', accessorFn: (r) => DATE_SOURCE_META[r.dateSource]?.label || 'N/A', size: 170,
+      cell: ({ row }) => <span className="text-xs text-[var(--text-dim)] whitespace-nowrap">{DATE_SOURCE_META[row.original.dateSource]?.label || 'N/A'}</span> },
+    { id: 'band', header: 'Status', accessorFn: (r) => AGE_BAND_META[r.ageBand]?.label || 'N/A', size: 120,
+      cell: ({ row }) => <BandBadge band={row.original.ageBand} /> },
+  ], [])
 
   const donutData = {
     labels: distribution.map((d) => d.label),
-    datasets: [{
-      data: distribution.map((d) => d.count),
-      backgroundColor: AGE_BANDS.map((b) => BAND_HEX[b]),
-      borderWidth: 0,
-    }],
+    datasets: [{ data: distribution.map((d) => d.count), backgroundColor: AGE_BANDS.map((b) => BAND_HEX[b]), borderWidth: 0 }],
   }
-
   const breakdown = breakdownDim === 'site' ? bySite : byBrand
   const barData = {
     labels: breakdown.map((g) => g.name),
     datasets: [{
       label: 'Average age (yrs)',
       data: breakdown.map((g) => g.avgAge),
-      backgroundColor: breakdown.map((g) => (g.nonCompliant > 0 ? '#fb923c' : '#3b82f6')),
+      backgroundColor: breakdown.map((g) => (g.nonCompliant > 0 ? BAND_HEX.replace : withAlpha(colorAt(0), 0.75))),
       borderRadius: 4,
     }],
   }
-  const chartOpts = {
-    responsive: true, maintainAspectRatio: false,
-    plugins: { legend: { labels: { color: chartText, boxWidth: 12 } } },
-    scales: {
-      x: { ticks: { color: chartText }, grid: { color: 'rgba(148,163,184,0.12)' } },
-      y: { ticks: { color: chartText }, grid: { color: 'rgba(148,163,184,0.12)' }, beginAtZero: true },
-    },
-  }
-  const donutOpts = {
-    responsive: true, maintainAspectRatio: false,
-    plugins: { legend: { position: 'bottom', labels: { color: chartText, boxWidth: 12, padding: 12 } } },
+  const histData = {
+    labels: histogram.map((h) => (h.label === 'Unknown' ? 'Unknown' : `${h.label} yr`)),
+    datasets: [{
+      label: 'Tyres',
+      data: histogram.map((h) => h.count),
+      backgroundColor: histogram.map((h, i) => (h.label === 'Unknown' ? BAND_HEX.unknown
+        : i >= DEFAULT_AGE_POLICY.overdueYears ? BAND_HEX.overdue
+          : i >= DEFAULT_AGE_POLICY.replaceYears ? BAND_HEX.replace
+            : i >= DEFAULT_AGE_POLICY.watchYears ? BAND_HEX.watch : BAND_HEX.ok)),
+      borderRadius: 4,
+    }],
   }
 
-  const EXPORT_COLS = ['serial', 'asset_no', 'brand', 'size', 'position', 'site', 'ageYears', 'band', 'birthDate', 'dateSource']
-  const EXPORT_HEADERS = ['Serial', 'Asset', 'Brand', 'Size', 'Position', 'Site', 'Age (yrs)', 'Status', 'Birth date', 'Date source']
-  const exportRows = filtered.map((r) => ({
-    serial: serialOf(r) || 'N/A',
-    asset_no: r.asset_no || 'N/A',
-    brand: r.brand || 'N/A',
-    size: r.size || 'N/A',
-    position: positionOf(r) || 'N/A',
-    site: r.site || 'N/A',
-    ageYears: r.ageYears ?? 'N/A',
-    band: AGE_BAND_META[r.ageBand]?.label || r.ageBand,
-    birthDate: r.birthDate || 'N/A',
-    dateSource: DATE_SOURCE_META[r.dateSource]?.label || 'N/A',
-  }))
-
-  const kpiTiles = [
-    { label: 'Tyres assessed', value: kpis.totalAssessed, icon: ShieldCheck, tone: 'text-[var(--text-primary)]',
-      sub: kpis.withDate != null ? `${kpis.withDate} with a birth date` : null },
-    { label: 'Compliance rate', value: kpis.compliancePct == null ? 'N/A' : `${kpis.compliancePct}%`,
-      icon: CheckCircle2, tone: 'text-green-400', sub: 'Under 5 years old' },
-    { label: 'Non-compliant', value: kpis.nonCompliantCount, icon: ShieldAlert, tone: 'text-orange-400',
-      sub: '5 years or older' },
-    { label: 'Overdue', value: kpis.overdueCount, icon: AlertTriangle, tone: 'text-red-400',
-      sub: 'Over 7 years, remove now' },
-    { label: 'Average fleet age', value: kpis.avgAgeYears == null ? 'N/A' : `${kpis.avgAgeYears} yr`,
-      icon: Gauge, tone: 'text-[var(--text-primary)]', sub: 'Across dated tyres' },
-    { label: 'Unknown birth date', value: kpis.unknownDate, icon: CalendarX, tone: 'text-slate-400',
-      sub: kpis.unknownDatePct == null ? 'Data quality' : `${kpis.unknownDatePct}% of fleet` },
+  const tiles = [
+    { label: 'Tyres assessed', value: loaded ? fmtNum(kpis.totalAssessed) : 'N/A', icon: ShieldCheck, sub: `${fmtNum(kpis.withDate)} with a birth date` },
+    { label: 'Compliance rate', value: loaded && kpis.compliancePct != null ? `${kpis.compliancePct}%` : 'N/A', icon: CheckCircle2, tone: 'accent', sub: `Under ${DEFAULT_AGE_POLICY.replaceYears} years, dated tyres` },
+    { label: 'Non-compliant', value: loaded ? fmtNum(kpis.nonCompliantCount) : 'N/A', icon: ShieldAlert, tone: 'warn', sub: `${DEFAULT_AGE_POLICY.replaceYears} years or older` },
+    { label: 'Overdue', value: loaded ? fmtNum(kpis.overdueCount) : 'N/A', icon: AlertTriangle, tone: 'crit', sub: `Over ${DEFAULT_AGE_POLICY.overdueYears} years, remove now` },
+    { label: 'Average age', value: loaded ? fmtAge(kpis.avgAgeYears) : 'N/A', icon: Gauge, sub: 'Across dated tyres' },
+    { label: 'Unknown birth date', value: loaded ? fmtNum(kpis.unknownDate) : 'N/A', icon: CalendarX, sub: kpis.unknownDatePct == null ? 'Data quality' : `${kpis.unknownDatePct}% of scope` },
   ]
-
-  const clearFilters = () => { setBandFilter('all'); setSiteFilter(''); setBrandFilter(''); setSearch('') }
-  const hasFilters = bandFilter !== 'all' || siteFilter || brandFilter || search
-  const noData = rows !== null && rows.length === 0 && !error
-  const oldest = kpis.oldest
 
   return (
     <div className="space-y-6">
@@ -200,193 +205,220 @@ export default function TyreAgeCompliance() {
         refreshing={refreshing}
         updatedAt={updatedAt}
         actions={
-          <div className="flex items-center gap-2">
-            <label className="flex items-center gap-1.5 text-xs text-[var(--text-muted)] cursor-pointer">
-              <input type="checkbox" checked={fittedOnly} onChange={(e) => setFittedOnly(e.target.checked)} />
-              Fitted only
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="inline-flex items-center gap-2 min-h-[44px] px-2 text-sm text-[var(--text-secondary)] cursor-pointer">
+              <input type="checkbox" className="w-4 h-4" checked={fittedOnly} onChange={(e) => setFittedOnly(e.target.checked)} />
+              Fitted tyres only
             </label>
-            <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'tyre_age_compliance')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
-              <FileSpreadsheet size={14} /> Excel
-            </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Tyre Age Compliance', 'tyre_age_compliance', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
-              <FileText size={14} /> PDF
-            </button>
+            <button type="button" onClick={doExcel} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!table.length}><FileSpreadsheet size={14} /> Excel</button>
+            <button type="button" onClick={doPdf} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!table.length}><FileText size={14} /> PDF</button>
             <EmailPdfButton
-              disabled={!filtered.length}
-              className="btn-secondary text-sm inline-flex items-center gap-1.5 disabled:opacity-50"
-              getPdf={async () => ({
-                base64: await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Tyre Age Compliance', 'tyre_age_compliance', 'landscape', '', { returnBase64: true }),
-                filename: 'tyre_age_compliance.pdf',
-                subject: 'Tyre Age Compliance',
-                bodyHtml: '<p>Attached is the Tyre Age Compliance report.</p>',
-              })}
+              disabled={!table.length}
+              className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] disabled:opacity-50"
+              getPdf={async () => {
+                const { exportToPdf } = await loadExportUtils()
+                const name = await fileBase()
+                return {
+                  base64: await exportToPdf(exportRows, pdfCols, 'Tyre Age Compliance', name, 'landscape', '', { returnBase64: true }),
+                  filename: `${name}.pdf`,
+                  subject: 'Tyre Age Compliance',
+                  bodyHtml: '<p>Attached is the Tyre Age Compliance report.</p>',
+                }
+              }}
             />
           </div>
         }
       />
 
       {error && (
-        <div className="card border border-red-800/50 flex items-start gap-3">
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-          <div className="flex-1">
-            <p className="text-red-300 font-medium">Could not load tyre records.</p>
-            <p className="text-[var(--text-muted)] text-sm mt-1">{error}</p>
-          </div>
-          <button onClick={load} className="btn-secondary text-sm" disabled={refreshing}>Retry</button>
+        <div className="card border border-red-800/50 flex flex-wrap items-start gap-3" role="alert">
+          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
+          <div className="flex-1 min-w-0"><p className="text-red-300 font-medium">Could not load tyre records.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
+          <button type="button" onClick={load} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={refreshing}><RotateCcw size={14} /> Retry</button>
+        </div>
+      )}
+      {actionError && (
+        <div className="card border border-red-800/50 flex items-start gap-3" role="alert">
+          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
+          <p className="flex-1 text-sm text-red-300">{actionError}</p>
+          <button type="button" onClick={() => setActionError('')} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Dismiss message"><X size={16} /></button>
         </div>
       )}
 
-      {/* Policy note */}
-      <div className="card flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-[var(--text-muted)] py-3">
-        <span className="inline-flex items-center gap-1.5 font-medium text-[var(--text-secondary)]"><Info size={13} /> Age policy</span>
-        <span className="inline-flex items-center gap-1.5"><Dot hex={BAND_HEX.ok} /> OK under {DEFAULT_AGE_POLICY.watchYears} yr</span>
-        <span className="inline-flex items-center gap-1.5"><Dot hex={BAND_HEX.watch} /> Watch {DEFAULT_AGE_POLICY.watchYears} to {DEFAULT_AGE_POLICY.replaceYears} yr</span>
-        <span className="inline-flex items-center gap-1.5"><Dot hex={BAND_HEX.replace} /> Replace {DEFAULT_AGE_POLICY.replaceYears} to {DEFAULT_AGE_POLICY.overdueYears} yr</span>
-        <span className="inline-flex items-center gap-1.5"><Dot hex={BAND_HEX.overdue} /> Overdue over {DEFAULT_AGE_POLICY.overdueYears} yr</span>
+      {/* Policy legend and band tiles (click to filter; the tiles hold out the band filter) */}
+      <div className="card space-y-3">
+        <p className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--text-secondary)]"><Info size={13} aria-hidden="true" /> Age policy and band counts. Select a band to filter the register.</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2" role="group" aria-label="Filter by age band">
+          <button type="button" onClick={() => setBandFilter('all')} aria-pressed={bandFilter === 'all'}
+            className={`text-left rounded-lg border px-3 py-2 min-h-[44px] ${bandFilter === 'all' ? 'border-[var(--accent)] bg-[var(--input-bg)]' : 'border-[var(--input-border)]'}`}>
+            <p className="text-[11px] text-[var(--text-muted)]">All bands</p>
+            <p className="text-lg font-bold tabular-nums text-[var(--text-primary)]">{loaded ? fmtNum(counts.total) : 'N/A'}</p>
+          </button>
+          {AGE_BANDS.map((b) => {
+            const range = b === 'ok' ? `Under ${DEFAULT_AGE_POLICY.watchYears} yr`
+              : b === 'watch' ? `${DEFAULT_AGE_POLICY.watchYears} to ${DEFAULT_AGE_POLICY.replaceYears} yr`
+                : b === 'replace' ? `${DEFAULT_AGE_POLICY.replaceYears} to ${DEFAULT_AGE_POLICY.overdueYears} yr`
+                  : b === 'overdue' ? `Over ${DEFAULT_AGE_POLICY.overdueYears} yr` : 'No birth date'
+            return (
+              <button type="button" key={b} onClick={() => setBandFilter(bandFilter === b ? 'all' : b)} aria-pressed={bandFilter === b}
+                className={`text-left rounded-lg border px-3 py-2 min-h-[44px] ${bandFilter === b ? 'border-[var(--accent)] bg-[var(--input-bg)]' : 'border-[var(--input-border)]'}`}
+                style={{ borderLeft: `4px solid ${BAND_HEX[b]}` }}>
+                <p className="text-[11px] text-[var(--text-muted)]">{AGE_BAND_META[b].label} | {range}</p>
+                <p className="text-lg font-bold tabular-nums text-[var(--text-primary)]">{loaded ? fmtNum(counts[b]) : 'N/A'}</p>
+              </button>
+            )
+          })}
+        </div>
       </div>
 
-      {/* KPI tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
-        {kpiTiles.map((k) => {
-          const Icon = k.icon
-          return (
-            <div key={k.label} className="card">
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
-                <Icon size={16} className={k.tone} />
-              </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
-              {k.sub && <p className="text-[11px] text-[var(--text-dim)] mt-1">{k.sub}</p>}
-            </div>
-          )
-        })}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+        {tiles.map((t, i) => <StatTile key={t.label} index={i} label={t.label} value={t.value} icon={t.icon} tone={t.tone} sub={t.sub} />)}
       </div>
+      {loaded && (
+        <p className="text-xs text-[var(--text-muted)] -mt-3">
+          These figures cover the {fmtNum(scope.length)} tyre{scope.length === 1 ? '' : 's'} matching the site, brand, source and search filters. The band filter narrows only the register.
+        </p>
+      )}
 
-      {/* Oldest tyre callout */}
       {oldest && (
         <div className="card border border-red-800/40 flex flex-wrap items-center gap-x-6 gap-y-2">
-          <div className="inline-flex items-center gap-2 text-red-300 font-medium">
-            <CalendarClock size={16} /> Oldest tyre on the fleet
-          </div>
-          <Fact label="Age" value={fmtAge(oldest.ageYears)} strong />
-          <Fact label="Serial" value={dash(oldest.serial)} mono />
-          <Fact label="Asset" value={dash(oldest.asset_no)} />
-          <Fact label="Site" value={dash(oldest.site)} />
-          <Fact label="Brand" value={dash(oldest.brand)} />
+          <div className="inline-flex items-center gap-2 text-red-400 font-medium"><CalendarClock size={16} aria-hidden="true" /> Oldest tyre in scope</div>
+          {[['Age', fmtAge(oldest.ageYears)], ['Serial', dash(oldest.serial)], ['Asset', dash(oldest.asset_no)], ['Site', dash(oldest.site)], ['Brand', dash(oldest.brand)]].map(([l, v]) => (
+            <div key={l} className="text-sm"><span className="text-[var(--text-muted)] text-xs">{l}: </span><span className="text-[var(--text-primary)] font-medium">{v}</span></div>
+          ))}
         </div>
       )}
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="card">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Age band distribution</h3>
-          <div className="h-64">{rows && rows.length ? <Doughnut data={donutData} options={donutOpts} /> : <EmptyChart loading={rows === null} />}</div>
+          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Age band distribution</h2>
+          <div className="h-64" role="img" aria-label="Tyres by age band">
+            {!loaded ? <div className="h-full bg-[var(--input-bg)] rounded animate-pulse" />
+              : scope.length ? <Doughnut data={donutData} options={DONUT_OPTS} />
+                : <p className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No tyres in this scope.</p>}
+          </div>
         </div>
         <div className="card">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-[var(--text-primary)]">Average age by {breakdownDim} (top 10)</h3>
-            <div className="inline-flex rounded-md border border-[var(--input-border)] overflow-hidden text-xs">
+          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Age profile (years)</h2>
+          <div className="h-64" role="img" aria-label="Number of tyres per year of age">
+            {!loaded ? <div className="h-full bg-[var(--input-bg)] rounded animate-pulse" />
+              : scope.length ? <Bar data={histData} options={BAR_OPTS} />
+                : <p className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No tyres in this scope.</p>}
+          </div>
+        </div>
+        <div className="card">
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <h2 className="text-sm font-semibold text-[var(--text-primary)]">Average age by {breakdownDim}</h2>
+            <div className="inline-flex rounded-lg border border-[var(--input-border)] overflow-hidden text-xs" role="group" aria-label="Break down by">
               {['site', 'brand'].map((d) => (
-                <button key={d} onClick={() => setBreakdownDim(d)}
-                  className={`px-2.5 py-1 capitalize ${breakdownDim === d ? 'bg-[var(--input-bg)] text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
-                  {d}
-                </button>
+                <button type="button" key={d} onClick={() => setBreakdownDim(d)} aria-pressed={breakdownDim === d}
+                  className={`px-3 min-h-[44px] capitalize ${breakdownDim === d ? 'bg-[var(--input-bg)] text-[var(--text-primary)] font-semibold' : 'text-[var(--text-muted)]'}`}>{d}</button>
               ))}
             </div>
           </div>
-          <div className="h-64">{breakdown.length ? <Bar data={barData} options={chartOpts} /> : <EmptyChart loading={rows === null} empty="No dated tyres to break down." />}</div>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="card space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <input className="input pl-9 w-full" placeholder="Search serial, asset, brand, size" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <div className="h-64" role="img" aria-label={`Average tyre age by ${breakdownDim}, top 10; orange bars hold non-compliant tyres`}>
+            {!loaded ? <div className="h-full bg-[var(--input-bg)] rounded animate-pulse" />
+              : breakdown.length ? <Bar data={barData} options={BAR_OPTS} />
+                : <p className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No dated tyres to break down.</p>}
           </div>
-          <select className="input" value={bandFilter} onChange={(e) => setBandFilter(e.target.value)} aria-label="Status">
-            <option value="all">All statuses</option>
-            {AGE_BANDS.map((b) => <option key={b} value={b}>{AGE_BAND_META[b].label}</option>)}
-          </select>
-          <select className="input" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} aria-label="Site">
-            <option value="">All sites</option>
-            {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-          <select className="input" value={brandFilter} onChange={(e) => setBrandFilter(e.target.value)} aria-label="Brand">
-            <option value="">All brands</option>
-            {brandOptions.map((b) => <option key={b} value={b}>{b}</option>)}
-          </select>
-          {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
-          <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {counts.total}</span>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="card overflow-hidden !p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                {['Serial', 'Asset', 'Brand / Size', 'Position', 'Site'].map((h) => <th key={h} className="px-4 py-3 font-semibold whitespace-nowrap">{h}</th>)}
-                <th className="px-4 py-3 font-semibold whitespace-nowrap">
-                  <button onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))} className="inline-flex items-center gap-1 uppercase tracking-wider hover:text-[var(--text-secondary)]">
-                    Age {sortDir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
-                  </button>
-                </th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap">Source</th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows === null ? (
-                [0, 1, 2, 3, 4].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={8} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
-              ) : noData ? (
-                <tr><td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]"><Database size={22} className="mx-auto mb-2 opacity-60" />No tyre records found for this scope.</td></tr>
-              ) : filtered.length === 0 ? (
-                <tr><td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]"><Filter size={22} className="mx-auto mb-2 opacity-60" />No tyres match these filters.</td></tr>
-              ) : (
-                pager.pageRows.map((r) => (
-                  <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                    <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{dash(serialOf(r))}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{dash(r.asset_no)}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{dash(r.brand)}{r.size ? ` / ${r.size}` : ''}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{dash(positionOf(r))}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{dash(r.site)}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtAge(r.ageYears)}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-dim)] text-xs whitespace-nowrap">
-                      {r.dateEstimated && r.dateSource !== 'unknown' ? 'Est. ' : ''}{DATE_SOURCE_META[r.dateSource]?.label?.replace(' (estimated)', '') || 'N/A'}
-                    </td>
-                    <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${BAND_STYLES[r.ageBand]}`}>{AGE_BAND_META[r.ageBand]?.label}</span></td>
-                  </tr>
-                ))
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="card">
+          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2"><ShieldAlert size={15} aria-hidden="true" /> Removal worklist (oldest non-compliant)</h2>
+          {!loaded ? <div className="h-24 bg-[var(--input-bg)] rounded animate-pulse" />
+            : worklist.length === 0 ? <p className="text-sm text-[var(--text-muted)]">No tyre in this scope is past the replace threshold.</p>
+              : (
+                <ol className="divide-y divide-[var(--input-border)]">
+                  {worklist.map((r, i) => (
+                    <li key={r.id || i} className="flex items-center justify-between gap-3 py-2 text-sm">
+                      <span className="min-w-0 truncate"><span className="font-mono text-xs text-[var(--text-primary)]">{dash(serialOf(r))}</span> <span className="text-[var(--text-muted)]">| {dash(r.asset_no)} | {dash(r.site)}</span></span>
+                      <span className="flex items-center gap-2 shrink-0"><span className="tabular-nums font-semibold">{fmtAge(r.ageYears)}</span><BandBadge band={r.ageBand} /></span>
+                    </li>
+                  ))}
+                </ol>
               )}
-            </tbody>
-          </table>
         </div>
-        <TablePagination {...pager} />
+        <div className="card">
+          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-1 flex items-center gap-2"><Database size={15} aria-hidden="true" /> How birth dates were established</h2>
+          <p className="text-xs text-[var(--text-muted)] mb-3">Issue and fitment dates are estimates: a tyre can be older than the day it was fitted. Record DOT codes to firm these up.</p>
+          {!loaded ? <div className="h-24 bg-[var(--input-bg)] rounded animate-pulse" />
+            : !sources.length ? <p className="text-sm text-[var(--text-muted)]">No tyres in this scope.</p>
+              : (
+                <ul className="space-y-2">
+                  {sources.map((s, i) => {
+                    const pct = scope.length ? Math.round((s.count / scope.length) * 100) : 0
+                    return (
+                      <li key={s.key} className="flex items-center gap-3">
+                        <span className="w-44 shrink-0 text-xs text-[var(--text-secondary)]">{s.label}</span>
+                        <div className="flex-1 h-2.5 rounded-full bg-[var(--input-bg)] overflow-hidden" aria-hidden="true"><div className="h-full rounded-full" style={{ width: `${pct}%`, background: s.key === 'unknown' ? BAND_HEX.unknown : colorAt(i) }} /></div>
+                        <span className="text-xs tabular-nums text-[var(--text-secondary)] w-20 text-right">{fmtNum(s.count)} | {pct}%</span>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+        </div>
       </div>
-    </div>
-  )
-}
 
-function Dot({ hex }) {
-  return <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: hex }} />
-}
+      <div className="card">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
+          <div className="sm:col-span-2 lg:col-span-1">
+            <label htmlFor="age-search" className="label">Search</label>
+            <div className="relative">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+              <input id="age-search" className={`${FIELD} pl-9`} placeholder="Serial, asset, brand, size" value={search} onChange={(e) => setSearch(e.target.value)} />
+            </div>
+          </div>
+          <div>
+            <label htmlFor="age-band" className="label">Status</label>
+            <select id="age-band" className={FIELD} value={bandFilter} onChange={(e) => setBandFilter(e.target.value)}>
+              <option value="all">All statuses</option>
+              {AGE_BANDS.map((b) => <option key={b} value={b}>{AGE_BAND_META[b].label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="age-site" className="label">Site</label>
+            <select id="age-site" className={FIELD} value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)}>
+              <option value="">All sites</option>
+              {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="age-brand" className="label">Brand</label>
+            <select id="age-brand" className={FIELD} value={brandFilter} onChange={(e) => setBrandFilter(e.target.value)}>
+              <option value="">All brands</option>
+              {brandOptions.map((b) => <option key={b} value={b}>{b}</option>)}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="age-source" className="label">Date source</label>
+            <select id="age-source" className={FIELD} value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}>
+              <option value="">All sources</option>
+              {DATE_SOURCES.map((s) => <option key={s} value={s}>{DATE_SOURCE_META[s].label}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 mt-3">
+          {hasFilters && <button type="button" onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><X size={14} /> Clear filters</button>}
+          <span className="text-xs text-[var(--text-muted)] ml-auto" aria-live="polite">{fmtNum(table.length)} of {fmtNum(assessed.length)} tyres</span>
+        </div>
+      </div>
 
-function Fact({ label, value, mono, strong }) {
-  return (
-    <div className="text-sm">
-      <span className="text-[var(--text-muted)] text-xs">{label}: </span>
-      <span className={`${strong ? 'font-semibold text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'} ${mono ? 'font-mono text-xs' : ''}`}>{value}</span>
-    </div>
-  )
-}
-
-function EmptyChart({ loading, empty = 'No data.' }) {
-  return (
-    <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">
-      {loading ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" /> : empty}
+      <EnterpriseTable
+        columns={columns}
+        data={table}
+        getRowId={(r, i) => String(r.id ?? i)}
+        loading={!loaded && !error}
+        error={error && !loaded ? error : null}
+        onRetry={load}
+        emptyMessage={assessed.length === 0 ? 'No tyre records found for this scope.' : 'No tyres match these filters.'}
+        enableGlobalFilter={false}
+        enableColumnFilters={false}
+        enableExport={false}
+        viewKey="tyre-age-compliance"
+      />
     </div>
   )
 }

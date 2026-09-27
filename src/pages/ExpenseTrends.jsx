@@ -62,18 +62,23 @@ import {
 } from 'chart.js'
 import { Bar, Line, Doughnut } from 'react-chartjs-2'
 import {
-  TrendingUp, TrendingDown, LineChart, Layers, Calendar, FileSpreadsheet,
-  FileText, RefreshCcw, AlertTriangle, Sparkles, Gauge, X, Coins, Hash,
+  TrendingUp, TrendingDown, LineChart, Calendar, FileSpreadsheet,
+  FileText, RefreshCcw, AlertTriangle, Sparkles, Gauge, X, Coins, Hash, Globe, Table2,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import Card from '../components/ui/Card'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import ReportingScopeBar from '../components/shell/ReportingScopeBar'
 import { useSettings } from '../contexts/SettingsContext'
 import { getExpensePeriodTrend, getExpensePeriodTrendMulti } from '../lib/api/expenseTrends'
 import {
-  byCountry, buildCountryTrend, CATEGORIES, CATEGORY_LABEL, num,
+  byCountry, buildCountryTrend, CATEGORIES, CATEGORY_LABEL,
   filterPeriods, availableYears, MONTHS, GRAINS,
 } from '../lib/expenseTrends'
+import {
+  fmtMoney, fmtPct, grainLabels, tyreSharePct, periodTableRows,
+  countrySummaryRows, scopeEntries as buildScopeEntries, expenseExportRows, EXPORT_COLUMNS,
+} from '../lib/expenseTrendsAnalytics'
 import { scopeLabel } from '../lib/reportingScope'
 import {
   scopeRequestCountries, scopeQueryKey, rowsInScope,
@@ -87,32 +92,28 @@ import { colorAt, withAlpha } from '../lib/reportColors'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement, Filler, Tooltip, Legend)
 
-const CAT_TONE = { tyre: '#3b82f6', spare: '#f59e0b', lubricant: '#10b981' }
+// Category + forecast colours follow the super-admin report palette, so the
+// charts retheme with every other report. Resolved at render time.
+const catTone = (k) => colorAt(CATEGORIES.indexOf(k))
+const forecastTone = () => colorAt(4)
+const INSIGHT_TONE = { good: 'var(--color-success, #16a34a)', warning: 'var(--color-warning, #d97706)' }
+const INSIGHT_LABEL = { good: 'Improving', warning: 'Watch', accent: 'Forecast', info: 'Note' }
 
-function fmtMoney(v, cur) {
-  if (num(v) == null) return 'N/A'
-  return `${cur ? cur + ' ' : ''}${Math.round(Number(v)).toLocaleString()}`
-}
-function fmtPct(v) {
-  if (num(v) == null) return 'N/A'
-  const n = Math.round(Number(v) * 10) / 10
-  return `${n > 0 ? '+' : ''}${n}%`
-}
+const AXIS = 'var(--text-muted)'
+const LEGEND = 'var(--text-secondary)'
 
-function Stat({ icon: Icon, label, value, sub, tone = 'text-slate-100' }) {
+function Stat({ icon: Icon, label, value, sub, tone = 'var(--text-primary)' }) {
   return (
-    // `p-4` would be DEAD on a Card - padding is set inline there and a plain
-    // utility loses to it - but `pad="tight"` IS --space-4, the same 1rem.
-    // Card is `flex flex-col` and Tailwind emits `.flex-col` after `.flex-row`,
-    // so the icon-beside-text row direction has to be an inline style.
-    // `tone` here is this component's own text-colour prop on the VALUE line; it
-    // is deliberately not Card's `tone` (which tints the border, not text).
+    // Card sets padding inline, so `pad="tight"` (--space-4) is the lever, and
+    // the row direction must go in `style` (Tailwind's .flex-col wins otherwise).
     <Card pad="tight" className="items-start gap-3" style={{ flexDirection: 'row' }}>
-      <div className="rounded-lg bg-white/5 p-2"><Icon className="w-5 h-5 text-emerald-400" /></div>
+      <div className="rounded-lg p-2 bg-[var(--surface-2)] border border-[var(--border-dim)]" aria-hidden="true">
+        <Icon className="w-5 h-5 text-[var(--text-secondary)]" />
+      </div>
       <div className="min-w-0">
-        <div className="text-xs uppercase tracking-wide text-slate-400">{label}</div>
-        <div className={`text-lg font-semibold ${tone}`}>{value}</div>
-        {sub && <div className="text-xs text-slate-500 mt-0.5">{sub}</div>}
+        <div className="text-xs uppercase tracking-wide text-[var(--text-muted)]">{label}</div>
+        <div className="text-lg font-semibold tabular-nums" style={{ color: tone }}>{value}</div>
+        {sub && <div className="text-xs text-[var(--text-dim)] mt-0.5">{sub}</div>}
       </div>
     </Card>
   )
@@ -121,152 +122,167 @@ function Stat({ icon: Icon, label, value, sub, tone = 'text-slate-100' }) {
 function CountryTrend({ entry, grain }) {
   const t = useMemo(() => buildCountryTrend(entry, grain), [entry, grain])
   const cur = t.currency
+  const { per, change, short } = grainLabels(grain)
   const histLabels = t.years.map((y) => y.label)
   const fcLabels = t.forecast.map((y) => y.label)
   const allLabels = [...histLabels, ...fcLabels]
-  const perLabel = grain === 'month' ? 'Month' : grain === 'quarter' ? 'Quarter' : 'Year'
-  const yoyLabel = grain === 'month' ? 'MoM' : grain === 'quarter' ? 'QoQ' : 'YoY'
   const last = t.years[t.years.length - 1]
   const fc1 = t.forecast[0]
+  const share = tyreSharePct(last)
+  const tableRows = useMemo(() => periodTableRows(t), [t])
 
-  // Stacked bars per category across history; forecast total shown as a trailing outline series.
+  // Stacked bars per category across history; forecast total as a trailing dashed line.
   const stacked = {
     labels: allLabels,
     datasets: [
       ...CATEGORIES.map((k) => ({
         label: CATEGORY_LABEL[k], stack: 'spend',
         data: [...t.years.map((y) => y[k]), ...fcLabels.map(() => null)],
-        backgroundColor: withAlpha(CAT_TONE[k], 0.85), borderWidth: 0,
+        backgroundColor: withAlpha(catTone(k), 0.85), borderWidth: 0,
       })),
       {
         label: 'Forecast (total)', type: 'line', stack: undefined,
         data: [...histLabels.map(() => null), ...t.forecast.map((y) => y.total)],
-        borderColor: '#e879f9', borderDash: [6, 4], pointRadius: 3, borderWidth: 2, fill: false,
+        borderColor: forecastTone(), borderDash: [6, 4], pointRadius: 3, borderWidth: 2, fill: false,
       },
     ],
   }
-  // Category trend lines with dashed forecast continuation.
   const lineData = {
     labels: allLabels,
-    datasets: CATEGORIES.map((k, i) => ({
+    datasets: CATEGORIES.map((k) => ({
       label: CATEGORY_LABEL[k],
       data: [...t.years.map((y) => y[k]), ...t.forecast.map((y) => y[k])],
-      borderColor: CAT_TONE[k], backgroundColor: withAlpha(CAT_TONE[k], 0.15),
+      borderColor: catTone(k), backgroundColor: withAlpha(catTone(k), 0.15),
       pointRadius: 2, borderWidth: 2, tension: 0.25,
       segment: { borderDash: (ctx) => (ctx.p1DataIndex >= histLabels.length ? [6, 4] : undefined) },
     })),
   }
   const shareData = {
     labels: t.share.map((s) => CATEGORY_LABEL[s.category]),
-    datasets: [{ data: t.share.map((s) => s.value), backgroundColor: t.share.map((s) => CAT_TONE[s.category]), borderWidth: 0 }],
+    datasets: [{ data: t.share.map((s) => s.value), backgroundColor: t.share.map((s) => catTone(s.category)), borderWidth: 0 }],
   }
-  const moneyAxis = { ticks: { color: '#94a3b8', callback: (v) => (v >= 1000 ? `${Math.round(v / 1000)}k` : v) }, grid: { color: 'var(--panel-2)' } }
-  const catAxis = { stacked: true, ticks: { color: '#94a3b8' }, grid: { color: 'var(--panel-2)' } }
+  const moneyAxis = { ticks: { color: AXIS, callback: (v) => (v >= 1000 ? `${Math.round(v / 1000)}k` : v) }, grid: { color: 'var(--panel-2)' } }
+  const catAxis = { stacked: true, ticks: { color: AXIS }, grid: { color: 'var(--panel-2)' } }
+  const legend = { labels: { color: LEGEND } }
+
+  const columns = useMemo(() => [
+    { id: 'order', header: 'Seq', accessorFn: (r) => r.order, size: 60, meta: { align: 'right', export: false } },
+    { id: 'label', header: per, accessorFn: (r) => r.label, size: 130,
+      cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original.label}</span> },
+    { id: 'kind', header: 'Type', accessorFn: (r) => r.kind, size: 110, meta: { filterVariant: 'select', filterOptions: ['Actual', 'Forecast'] },
+      cell: ({ row }) => (
+        <span className={row.original.kind === 'Forecast'
+          ? 'text-[11px] px-2 py-0.5 rounded-full border border-dashed border-[var(--border-bright)] text-[var(--text-secondary)]'
+          : 'text-[11px] px-2 py-0.5 rounded-full border border-[var(--border-dim)] text-[var(--text-muted)]'}>
+          {row.original.kind === 'Forecast' ? 'Forecast (estimate)' : 'Actual'}
+        </span>
+      ) },
+    ...CATEGORIES.map((k) => ({
+      id: k, header: CATEGORY_LABEL[k], accessorFn: (r) => r[k], size: 120, meta: { align: 'right' },
+      cell: ({ row }) => <span className="tabular-nums">{fmtMoney(row.original[k], '')}</span>,
+    })),
+    { id: 'total', header: `Total${cur ? ` (${cur})` : ''}`, accessorFn: (r) => r.total, size: 130, meta: { align: 'right' },
+      cell: ({ row }) => <span className="tabular-nums font-semibold text-[var(--text-primary)]">{fmtMoney(row.original.total, '')}</span> },
+    { id: 'tyreShare', header: 'Tyre share', accessorFn: (r) => r.tyreShare, size: 100, meta: { align: 'right' },
+      cell: ({ row }) => <span className="tabular-nums">{row.original.tyreShare == null ? 'N/A' : `${row.original.tyreShare}%`}</span> },
+    { id: 'change', header: change, accessorFn: (r) => r.change, size: 100, meta: { align: 'right' },
+      cell: ({ row }) => {
+        const v = row.original.change
+        if (v == null) return <span className="text-[var(--text-dim)]">N/A</span>
+        // Direction carried by the arrow AND the sign, never by colour alone.
+        return (
+          <span className="tabular-nums inline-flex items-center gap-1 text-[var(--text-secondary)]">
+            {v > 0 ? <TrendingUp className="w-3.5 h-3.5" aria-hidden="true" /> : <TrendingDown className="w-3.5 h-3.5" aria-hidden="true" />}
+            {fmtPct(v)}
+          </span>
+        )
+      } },
+  ], [per, change, cur])
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <h3 className="text-base font-semibold text-slate-100">{t.country}</h3>
-        <span className="text-xs text-slate-500">{cur || 'Currency not recorded'} | {t.years.length} periods</span>
+    <section className="space-y-4" aria-labelledby={`et-${String(t.country).replace(/\W+/g, '-')}`}>
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 id={`et-${String(t.country).replace(/\W+/g, '-')}`} className="text-base font-semibold text-[var(--text-primary)]">{t.country}</h3>
+        <span className="text-xs text-[var(--text-muted)]">{cur || 'Currency not recorded'} | {t.years.length} periods</span>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Stat icon={Calendar} label={`Latest ${perLabel.toLowerCase()} (${last?.label ?? '-'})`} value={fmtMoney(last?.total, cur)} />
-        <Stat icon={t.cagr != null && t.cagr >= 0 ? TrendingUp : TrendingDown} label={`Avg growth / ${grain === "month" ? "mo" : grain === "quarter" ? "qtr" : "yr"} (CAGR)`}
-          value={fmtPct(t.cagr)} tone={t.cagr != null && t.cagr > 0 ? 'text-amber-300' : 'text-emerald-300'} />
-        <Stat icon={Sparkles} label={`Forecast ${fc1?.label ?? ''}`} value={fmtMoney(fc1?.total, cur)} sub="least-squares estimate" tone="text-fuchsia-300" />
-        <Stat icon={Gauge} label={`Tyre share (${last?.label ?? '-'})`}
-          value={last?.total ? `${Math.round((last.tyre / last.total) * 100)}%` : 'N/A'} />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <Stat icon={Calendar} label={`Latest ${per.toLowerCase()} (${last?.label ?? 'N/A'})`} value={fmtMoney(last?.total, cur)} />
+        <Stat icon={t.cagr != null && t.cagr >= 0 ? TrendingUp : TrendingDown} label={`Avg growth / ${short} (CAGR)`}
+          value={fmtPct(t.cagr)} sub={t.cagr == null ? 'Needs two measured periods' : t.cagr > 0 ? 'Spend rising' : 'Spend falling'} />
+        <Stat icon={Sparkles} label={`Forecast ${fc1?.label ?? ''}`} value={fmtMoney(fc1?.total, cur)} sub="Least-squares estimate" />
+        <Stat icon={Gauge} label={`Tyre share (${last?.label ?? 'N/A'})`} value={share == null ? 'N/A' : `${share}%`} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Titles stay hand-rolled rather than moving to CardHeader: CardHeader
-            renders its title inside `truncate`, and at phone width that would
-            clip "(with forecast)" / "& forecast" off the end - the one word that
-            tells the reader part of what is plotted is a projection. The chart
-            well keeps its own `h-64`, which is the definite height chart.js
-            needs under maintainAspectRatio:false. */}
+        {/* Titles stay hand-rolled (CardHeader truncates, which would clip
+            "(with forecast)" at phone width). The chart well keeps a definite
+            height, which chart.js needs under maintainAspectRatio:false. */}
         <Card pad="tight" className="lg:col-span-2">
-          <div className="text-sm font-medium text-slate-200 mb-3">Spend by {perLabel.toLowerCase()} &amp; category (with forecast)</div>
-          <div className="h-64">
+          <div className="text-sm font-medium text-[var(--text-secondary)] mb-3">Spend by {per.toLowerCase()} and category (with forecast)</div>
+          <div className="h-64" role="img" aria-label={`${t.country} spend by ${per.toLowerCase()} and category, with forecast`}>
             <Bar data={stacked} options={{
               maintainAspectRatio: false,
-              plugins: { legend: { labels: { color: '#cbd5e1' } } },
+              plugins: { legend },
               scales: { x: catAxis, y: { ...moneyAxis, stacked: true } },
             }} />
           </div>
         </Card>
         <Card pad="tight">
-          <div className="text-sm font-medium text-slate-200 mb-3">Category share ({last?.label ?? '-'})</div>
-          <div className="h-64"><Doughnut data={shareData} options={{ maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#cbd5e1' } } } }} /></div>
+          <div className="text-sm font-medium text-[var(--text-secondary)] mb-3">Category share ({last?.label ?? 'N/A'})</div>
+          <div className="h-64" role="img" aria-label={`${t.country} category share for ${last?.label ?? 'the latest period'}`}>
+            <Doughnut data={shareData} options={{ maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: LEGEND } } } }} />
+          </div>
         </Card>
       </div>
 
       <Card pad="tight">
-        <div className="text-sm font-medium text-slate-200 mb-3 flex items-center gap-2"><LineChart className="w-4 h-4" /> Category trend &amp; forecast</div>
-        <div className="h-64">
+        <div className="text-sm font-medium text-[var(--text-secondary)] mb-3 flex items-center gap-2"><LineChart className="w-4 h-4" aria-hidden="true" /> Category trend and forecast</div>
+        <div className="h-64" role="img" aria-label={`${t.country} category trend with dashed forecast`}>
           <Line data={lineData} options={{
             maintainAspectRatio: false,
-            plugins: { legend: { labels: { color: '#cbd5e1' } } },
-            scales: { x: { ticks: { color: '#94a3b8' }, grid: { color: 'var(--panel-2)' } }, y: moneyAxis },
+            plugins: { legend },
+            scales: { x: { ticks: { color: AXIS }, grid: { color: 'var(--panel-2)' } }, y: moneyAxis },
           }} />
         </div>
       </Card>
 
-      {/* YoY table. It stays a raw <table>: the rows ARE the message. Periods
-          run in chronological order and the forecast rows are appended after the
-          actuals in their own tint, so a sortable header would interleave
-          projections with measured periods and destroy both orderings. */}
-      <Card clip>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-white/5 text-slate-400">
-              <tr>
-                <th className="text-left px-3 py-2">{perLabel}</th>
-                <th className="text-right px-3 py-2">Tyres</th>
-                <th className="text-right px-3 py-2">Spare</th>
-                <th className="text-right px-3 py-2">Lubricants</th>
-                <th className="text-right px-3 py-2">Total</th>
-                <th className="text-right px-3 py-2">{yoyLabel}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {t.yoy.map((y, index) => (
-                <tr key={`actual-${y.period}-${index}`} className="border-t border-white/5">
-                  <td className="px-3 py-2 font-medium text-slate-200">{y.label}</td>
-                  <td className="px-3 py-2 text-right">{fmtMoney(y.tyre, '')}</td>
-                  <td className="px-3 py-2 text-right">{fmtMoney(y.spare, '')}</td>
-                  <td className="px-3 py-2 text-right">{fmtMoney(y.lubricant, '')}</td>
-                  <td className="px-3 py-2 text-right font-semibold text-slate-100">{fmtMoney(y.total, '')}</td>
-                  <td className={`px-3 py-2 text-right ${y.pct == null ? 'text-slate-500' : y.pct > 0 ? 'text-amber-300' : 'text-emerald-300'}`}>{fmtPct(y.pct)}</td>
-                </tr>
-              ))}
-              {t.forecast.map((y, index) => (
-                <tr key={`forecast-${y.period}-${index}`} className="border-t border-fuchsia-500/20 bg-fuchsia-500/5">
-                  <td className="px-3 py-2 font-medium text-fuchsia-300">{y.label} (forecast)</td>
-                  <td className="px-3 py-2 text-right text-fuchsia-200">{fmtMoney(y.tyre, '')}</td>
-                  <td className="px-3 py-2 text-right text-fuchsia-200">{fmtMoney(y.spare, '')}</td>
-                  <td className="px-3 py-2 text-right text-fuchsia-200">{fmtMoney(y.lubricant, '')}</td>
-                  <td className="px-3 py-2 text-right font-semibold text-fuchsia-200">{fmtMoney(y.total, '')}</td>
-                  <td className="px-3 py-2 text-right text-slate-500">N/A</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {/* Period table. Default order is the timeline (Seq): actuals then the
+          forecast. Every row states its Type in text, so sorting by any column
+          can never make a projection read as a measured period. */}
+      <Card pad="tight">
+        <div className="text-sm font-medium text-[var(--text-secondary)] mb-3 flex items-center gap-2">
+          <Table2 className="w-4 h-4" aria-hidden="true" /> {per}-by-{per.toLowerCase()} detail ({cur || 'currency not recorded'})
         </div>
+        <EnterpriseTable
+          columns={columns}
+          data={tableRows}
+          getRowId={(r) => r.id}
+          initialPageSize={25}
+          searchPlaceholder={`Search ${per.toLowerCase()}s`}
+          emptyMessage="No periods in the selected window."
+          exportFileName={`Expense Trends ${t.country}`}
+          reportMeta={{ title: `Expense Trends ${t.country}`, currency: cur }}
+        />
       </Card>
 
       {t.insights.length > 0 && (
         <Card pad="tight" className="space-y-1.5">
-          {t.insights.map((ins, i) => (
-            <div key={i} className="text-sm text-slate-300 flex items-start gap-2">
-              <span className="mt-1 w-1.5 h-1.5 rounded-full shrink-0" style={{ background: ins.tone === 'good' ? '#10b981' : ins.tone === 'warning' ? '#f59e0b' : ins.tone === 'accent' ? '#e879f9' : '#3b82f6' }} />
-              {ins.text}
-            </div>
-          ))}
+          <div className="text-sm font-medium text-[var(--text-secondary)]">Findings</div>
+          <ul className="space-y-1.5">
+            {t.insights.map((ins, i) => (
+              <li key={i} className="text-sm text-[var(--text-secondary)] flex items-start gap-2">
+                <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded border border-[var(--border-dim)] shrink-0"
+                  style={{ color: INSIGHT_TONE[ins.tone] || 'var(--text-muted)' }}>
+                  {INSIGHT_LABEL[ins.tone] || 'Note'}
+                </span>
+                {ins.text}
+              </li>
+            ))}
+          </ul>
         </Card>
       )}
-    </div>
+    </section>
   )
 }
 
@@ -453,28 +469,62 @@ export default function ExpenseTrends() {
 
   // ── Scope summary. Built from the SAME windowed `countries` the panels render,
   // so the header can never describe a different set of periods than the charts.
-  const scopeEntries = useMemo(() => countries.map((c) => ({
-    country: c.country,
-    currency: c.currency,
-    total: c.years.reduce((s, y) => s + (num(y.total) ?? 0), 0),
-    lines: c.years.reduce((s, y) => s + (num(y.lines) ?? 0), 0),
-  })), [countries])
+  const scopeEntries = useMemo(() => buildScopeEntries(countries), [countries])
   // Money: withheld as N/A the moment more than one currency is in scope.
   const scopeMoney = useMemo(() => scopeMoneyTotal(scopeEntries), [scopeEntries])
   const scopeMoneyNote = moneyTotalNote(scopeMoney)
   // Counts carry no currency, so aggregating them across countries is honest.
   const scopeLines = useMemo(() => scopeCount(scopeEntries, 'lines'), [scopeEntries])
+  const summaryRows = useMemo(() => countrySummaryRows(countries, grain), [countries, grain])
+  const periodsCovered = useMemo(() => {
+    const set = new Set()
+    for (const c of countries) for (const y of c.years) set.add(y.period)
+    return set.size
+  }, [countries])
+  const { per } = grainLabels(grain)
 
-  function exportAll() {
-    const out = []
-    for (const c of countries) {
-      for (const y of c.years) out.push({ country: c.country, currency: c.currency, year: y.label, tyre: y.tyre, spare: y.spare, lubricant: y.lubricant, total: y.total, lines: y.lines })
-      for (const y of buildCountryTrend(c, grain).forecast) out.push({ country: c.country, currency: c.currency, year: `${y.label} (forecast)`, tyre: y.tyre, spare: y.spare, lubricant: y.lubricant, total: y.total, lines: '' })
+  const [exportError, setExportError] = useState('')
+  async function runExport(kind) {
+    setExportError('')
+    try {
+      const rows = expenseExportRows(countries, grain)
+      const keys = EXPORT_COLUMNS.map(([k]) => k)
+      const heads = EXPORT_COLUMNS.map(([, h]) => h)
+      if (kind === 'excel') await exportToExcel(rows, keys, heads, `Expense Trends ${scopeTitle}`)
+      else await exportToPdf(rows, keys.map((k, i) => ({ key: k, header: heads[i] })), `Expense Trends and Forecast (${scopeTitle})`, `Expense Trends ${scopeTitle}`, 'landscape')
+    } catch (err) {
+      setExportError(toUserMessage(err, 'Could not export. Try again.'))
     }
-    return out
   }
-  const cols = ['country', 'currency', 'year', 'tyre', 'spare', 'lubricant', 'total', 'lines']
-  const heads = ['Country', 'Currency', 'Year', 'Tyres', 'Spare', 'Lubricants', 'Total', 'Lines']
+
+  const summaryColumns = useMemo(() => [
+    { id: 'country', header: 'Country', accessorFn: (r) => r.country, size: 110,
+      cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original.country}</span> },
+    { id: 'currency', header: 'Currency', accessorFn: (r) => r.currency || 'N/A', size: 90 },
+    { id: 'periods', header: 'Periods', accessorFn: (r) => r.periods, size: 90, meta: { align: 'right' } },
+    { id: 'total', header: 'Spend in window', accessorFn: (r) => r.total, size: 150, meta: { align: 'right' },
+      cell: ({ row }) => <span className="tabular-nums font-semibold">{fmtMoney(row.original.total, row.original.currency)}</span> },
+    ...CATEGORIES.map((k) => ({
+      id: k, header: CATEGORY_LABEL[k], accessorFn: (r) => r[k], size: 130, meta: { align: 'right' },
+      cell: ({ row }) => <span className="tabular-nums">{fmtMoney(row.original[k], row.original.currency)}</span>,
+    })),
+    { id: 'lines', header: 'Lines', accessorFn: (r) => r.lines, size: 90, meta: { align: 'right' },
+      cell: ({ row }) => <span className="tabular-nums">{row.original.lines == null ? 'N/A' : Math.round(row.original.lines).toLocaleString()}</span> },
+    { id: 'tyreShare', header: 'Tyre share (latest)', accessorFn: (r) => r.tyreShare, size: 130, meta: { align: 'right' },
+      cell: ({ row }) => <span className="tabular-nums">{row.original.tyreShare == null ? 'N/A' : `${row.original.tyreShare}%`}</span> },
+    { id: 'cagr', header: 'Avg growth', accessorFn: (r) => r.cagr, size: 110, meta: { align: 'right' },
+      cell: ({ row }) => <span className="tabular-nums">{fmtPct(row.original.cagr)}</span> },
+    { id: 'nextForecast', header: 'Next forecast', accessorFn: (r) => r.nextForecast, size: 150, meta: { align: 'right' },
+      cell: ({ row }) => (
+        <span className="tabular-nums">
+          {fmtMoney(row.original.nextForecast, row.original.currency)}
+          {row.original.nextForecastLabel ? <span className="text-[var(--text-dim)]"> ({row.original.nextForecastLabel})</span> : null}
+        </span>
+      ) },
+  ], [])
+
+  const btn = 'inline-flex items-center justify-center gap-1.5 min-h-[44px] px-3 rounded-lg text-sm border border-[var(--input-border)] bg-[var(--input-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-bright)] disabled:opacity-50 disabled:cursor-not-allowed'
+  const selectCls = 'input text-sm min-h-[44px]'
 
   return (
     <div className="space-y-5">
@@ -483,114 +533,153 @@ export default function ExpenseTrends() {
       {inRouter && <ReportUrlSync params={urlParams} />}
       <PageHeader
         title="Expense Trends & Forecast"
-        subtitle="Spend by year, quarter or month, split by tyres / spare parts / lubricants, with period-on-period comparison and a forward forecast."
+        subtitle="Spend by year, quarter or month, split by tyres, spare parts and lubricants, with period-on-period comparison and a forward forecast."
         icon={TrendingUp}
         actions={
-          <div className="flex gap-2 items-center">
-            <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: 'var(--input-bg)', border: '1px solid var(--input-border)' }}>
+          <div className="flex flex-wrap gap-2 items-center">
+            <div role="group" aria-label="Period grain" className="flex items-center gap-1 p-1 rounded-lg" style={{ background: 'var(--input-bg)', border: '1px solid var(--input-border)' }}>
               {GRAIN_OPTS.map(([g, label]) => (
-                <button key={g} onClick={() => setGrain(g)}
-                  className={`px-3 py-1 text-xs rounded-md font-medium transition-colors ${grain === g ? 'bg-emerald-600 text-white' : 'text-slate-400'}`}>
+                <button key={g} type="button" onClick={() => setGrain(g)} aria-pressed={grain === g}
+                  className={`min-h-[40px] px-3 text-xs rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-bright)] ${grain === g ? 'bg-emerald-600 text-white' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}>
                   {label}
                 </button>
               ))}
             </div>
-            <button onClick={load} className="btn-ghost" title="Refresh"><RefreshCcw className="w-4 h-4" /></button>
-            <button onClick={() => exportToExcel(exportAll(), cols, heads, 'Expense Trends')} disabled={!countries.length} className="btn-ghost gap-1"><FileSpreadsheet className="w-4 h-4" /> Excel</button>
-            <button onClick={() => exportToPdf(exportAll(), cols.map((k, i) => ({ key: k, header: heads[i] })), `Expense Trends & Forecast (${scopeTitle})`, 'Expense Trends', 'landscape')} disabled={!countries.length} className="btn-ghost gap-1"><FileText className="w-4 h-4" /> PDF</button>
+            <button type="button" onClick={load} className={btn} aria-label="Refresh expense trends" title="Refresh">
+              <RefreshCcw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
+            </button>
+            <button type="button" onClick={() => runExport('excel')} disabled={!countries.length} className={btn}>
+              <FileSpreadsheet className="w-4 h-4" aria-hidden="true" /> Excel
+            </button>
+            <button type="button" onClick={() => runExport('pdf')} disabled={!countries.length} className={btn}>
+              <FileText className="w-4 h-4" aria-hidden="true" /> PDF
+            </button>
           </div>
         }
       />
 
       {/* Reporting scope: which countries this report aggregates. Separate from
-          the working context in the top bar, and it drives the queries below. */}
-      {/* No `clip`: this card holds the scope menu. That popover portals, so it
-          was never actually clipped by the legacy .card overflow - but leaving a
-          card unclipped is the kit default for a reason, and the next control
-          dropped in here may not portal. */}
+          the working context in the top bar, and it drives the queries below.
+          No `clip`: this card holds the scope menu. */}
       <Card pad="tight" className="flex-wrap items-start justify-between gap-4" style={{ flexDirection: 'row' }}>
         <ReportingScopeBar />
         {scopeEntries.length > 0 && (
           <div className="flex flex-wrap items-start gap-4 text-xs">
             <div className="min-w-0" role="group" aria-label="Combined spend">
-              <div className="text-slate-500 flex items-center gap-1"><Coins className="w-3.5 h-3.5" aria-hidden="true" /> Combined spend</div>
-              <div className={`font-semibold ${scopeMoney.total == null ? 'text-slate-400' : 'text-slate-100'}`}>
+              <div className="text-[var(--text-muted)] flex items-center gap-1"><Coins className="w-3.5 h-3.5" aria-hidden="true" /> Combined spend</div>
+              <div className={`font-semibold ${scopeMoney.total == null ? 'text-[var(--text-muted)]' : 'text-[var(--text-primary)]'}`}>
                 {scopeMoney.total == null ? 'N/A' : fmtMoney(scopeMoney.total, scopeMoney.currency)}
               </div>
             </div>
             <div className="min-w-0" role="group" aria-label="Expense lines">
-              <div className="text-slate-500 flex items-center gap-1"><Hash className="w-3.5 h-3.5" aria-hidden="true" /> Expense lines</div>
-              <div className="font-semibold text-slate-100">
+              <div className="text-[var(--text-muted)] flex items-center gap-1"><Hash className="w-3.5 h-3.5" aria-hidden="true" /> Expense lines</div>
+              <div className="font-semibold text-[var(--text-primary)]">
                 {scopeLines == null ? 'N/A' : Math.round(scopeLines).toLocaleString()}
               </div>
             </div>
             <div className="min-w-0 max-w-md" role="group" aria-label="Spend per country">
-              <div className="text-slate-500">Per country</div>
-              <div className="font-medium text-slate-200">
+              <div className="text-[var(--text-muted)]">Per country</div>
+              <div className="font-medium text-[var(--text-secondary)] break-words">
                 {scopeEntries.map((e) => `${e.country}: ${fmtMoney(e.total, e.currency)}`).join('  |  ')}
               </div>
             </div>
           </div>
         )}
         {scopeMoneyNote && (
-          <p className="w-full text-[11px] text-slate-500">{scopeMoneyNote}</p>
+          <p className="w-full text-[11px] text-[var(--text-muted)]">{scopeMoneyNote}</p>
         )}
       </Card>
 
       {/* Date-range window (feeds the trend + forecast) */}
-      <Card pad="tight" className="flex-wrap items-center gap-3" style={{ flexDirection: 'row' }}>
-        <span className="text-xs uppercase tracking-wide text-slate-400 flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> Date range</span>
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs text-slate-500">From</span>
-          <select value={fromMonth} onChange={(e) => setFromMonth(e.target.value)} className="input py-1 text-xs">
+      <Card pad="tight" className="flex-wrap items-end gap-3" style={{ flexDirection: 'row' }}>
+        <span className="text-xs uppercase tracking-wide text-[var(--text-muted)] flex items-center gap-1 self-center"><Calendar className="w-3.5 h-3.5" aria-hidden="true" /> Date range</span>
+        <fieldset className="flex flex-wrap items-end gap-1.5">
+          <legend className="text-xs text-[var(--text-muted)] mb-1">From</legend>
+          <label className="sr-only" htmlFor="et-from-month">From month</label>
+          <select id="et-from-month" value={fromMonth} onChange={(e) => setFromMonth(e.target.value)} className={selectCls}>
             <option value="">Any month</option>
             {MONTHS.map((m, i) => <option key={m} value={String(i + 1).padStart(2, '0')}>{m}</option>)}
           </select>
-          <select value={fromYear} onChange={(e) => setFromYear(e.target.value)} className="input py-1 text-xs">
+          <label className="sr-only" htmlFor="et-from-year">From year</label>
+          <select id="et-from-year" value={fromYear} onChange={(e) => setFromYear(e.target.value)} className={selectCls}>
             <option value="">Any year</option>
             {yearOpts.map((y) => <option key={y} value={y}>{y}</option>)}
           </select>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs text-slate-500">To</span>
-          <select value={toMonth} onChange={(e) => setToMonth(e.target.value)} className="input py-1 text-xs">
+        </fieldset>
+        <fieldset className="flex flex-wrap items-end gap-1.5">
+          <legend className="text-xs text-[var(--text-muted)] mb-1">To</legend>
+          <label className="sr-only" htmlFor="et-to-month">To month</label>
+          <select id="et-to-month" value={toMonth} onChange={(e) => setToMonth(e.target.value)} className={selectCls}>
             <option value="">Any month</option>
             {MONTHS.map((m, i) => <option key={m} value={String(i + 1).padStart(2, '0')}>{m}</option>)}
           </select>
-          <select value={toYear} onChange={(e) => setToYear(e.target.value)} className="input py-1 text-xs">
+          <label className="sr-only" htmlFor="et-to-year">To year</label>
+          <select id="et-to-year" value={toYear} onChange={(e) => setToYear(e.target.value)} className={selectCls}>
             <option value="">Any year</option>
             {yearOpts.map((y) => <option key={y} value={y}>{y}</option>)}
           </select>
-        </div>
-        {rangeActive && <button onClick={clearRange} className="btn-ghost text-xs gap-1"><X className="w-3.5 h-3.5" /> Clear</button>}
-        <span className="text-xs text-slate-500 ml-auto">{rangeActive ? 'Forecast is projected from the selected window.' : 'All periods'}</span>
+        </fieldset>
+        {rangeActive && <button type="button" onClick={clearRange} className={btn}><X className="w-3.5 h-3.5" aria-hidden="true" /> Clear dates</button>}
+        <span className="text-xs text-[var(--text-muted)] sm:ml-auto self-center">{rangeActive ? 'Forecast is projected from the selected window.' : 'All periods'}</span>
       </Card>
 
-      {error && (
-        // `border border-red-500/40` was DEAD here - Card sets `border` inline -
-        // so the red edge this banner depends on is now `tone="crit"`.
-        <Card pad="tight" tone="crit" className="items-center justify-between" style={{ flexDirection: 'row' }}>
-          <div className="flex items-center gap-2 text-red-300"><AlertTriangle className="w-4 h-4" /> {error}</div>
-          <button onClick={load} className="btn-ghost">Retry</button>
+      {exportError && (
+        <Card pad="tight" tone="crit" role="alert" className="items-center gap-2" style={{ flexDirection: 'row' }}>
+          <AlertTriangle className="w-4 h-4 text-red-400" aria-hidden="true" />
+          <span className="text-sm text-[var(--text-primary)]">{exportError}</span>
         </Card>
       )}
 
-      {/* `p-10` would be dead on a Card, and roominess is the whole point of an
-          empty state, so it goes inline as the same 2.5rem --space-10 step. */}
+      {error && (
+        <Card pad="tight" tone="crit" role="alert" className="flex-wrap items-center justify-between gap-2" style={{ flexDirection: 'row' }}>
+          <div className="flex items-center gap-2 text-[var(--text-primary)]"><AlertTriangle className="w-4 h-4 text-red-400" aria-hidden="true" /> {error}</div>
+          <button type="button" onClick={load} className={btn}>Retry</button>
+        </Card>
+      )}
+
       {loading ? (
-        <Card className="text-center text-slate-400" style={{ padding: 'var(--space-10)' }}>Loading expense history…</Card>
+        <Card className="text-center text-[var(--text-muted)]" style={{ padding: 'var(--space-10)' }} aria-busy="true">Loading expense history...</Card>
       ) : scopeCountryList.length === 0 ? (
-        <Card className="text-center text-slate-400" style={{ padding: 'var(--space-10)' }}>
+        <Card className="text-center text-[var(--text-muted)]" style={{ padding: 'var(--space-10)' }}>
           No countries are selected in the reporting scope, so there is nothing to report on.
         </Card>
+      ) : error ? (
+        <Card className="text-center text-[var(--text-muted)]" style={{ padding: 'var(--space-10)' }}>
+          Expense history could not be read, so no figures are shown. Use Retry above.
+        </Card>
       ) : countries.length === 0 ? (
-        <Card className="text-center text-slate-400" style={{ padding: 'var(--space-10)' }}>
+        <Card className="text-center text-[var(--text-muted)]" style={{ padding: 'var(--space-10)' }}>
           No expense history for {scopeTitle}{rangeActive ? ' in the selected date range' : ''} yet.
         </Card>
       ) : (
         <div className="space-y-8">
+          {/* Scope KPI strip: counts aggregate, money never crosses currencies. */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <Stat icon={Globe} label="Countries reported" value={countries.length.toLocaleString()} sub={scopeTitle} />
+            <Stat icon={Calendar} label={`${per}s covered`} value={periodsCovered.toLocaleString()} sub={rangeActive ? 'Within the selected window' : 'All recorded periods'} />
+            <Stat icon={Coins} label="Combined spend" value={scopeMoney.total == null ? 'N/A' : fmtMoney(scopeMoney.total, scopeMoney.currency)}
+              sub={scopeMoney.total == null ? 'Currencies are never added together' : 'Single currency in scope'} />
+            <Stat icon={Hash} label="Expense lines" value={scopeLines == null ? 'N/A' : Math.round(scopeLines).toLocaleString()} sub="Counted across every country" />
+          </div>
+
+          <Card pad="tight">
+            <div className="text-sm font-medium text-[var(--text-secondary)] mb-3 flex items-center gap-2">
+              <Table2 className="w-4 h-4" aria-hidden="true" /> Country summary (each in its own currency)
+            </div>
+            <EnterpriseTable
+              columns={summaryColumns}
+              data={summaryRows}
+              getRowId={(r) => r.id}
+              initialPageSize={25}
+              searchPlaceholder="Search countries"
+              emptyMessage="No countries in scope."
+              exportFileName="Expense Trends Country Summary"
+              reportMeta={{ title: `Expense Trends Country Summary (${scopeTitle})` }}
+            />
+          </Card>
+
           {countries.map((c) => (
-            <div key={c.country} className="space-y-4"><CountryTrend entry={c} grain={grain} /></div>
+            <CountryTrend key={c.country} entry={c} grain={grain} />
           ))}
         </div>
       )}

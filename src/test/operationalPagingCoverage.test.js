@@ -14,8 +14,15 @@ describe('operational registers expose honest paging', () => {
     expect(source).not.toMatch(/\.slice\(0,\s*\d+\)\.map/)
   })
 
+  it('UploadApprovals pages every queue and staged-row preview through EnterpriseTable', () => {
+    // Moved off usePagedRows: EnterpriseTable pages and sorts the WHOLE set,
+    // and no queue or preview clips rows before handing them in.
+    const source = pageSource('UploadApprovals')
+    expect(source).toContain('<EnterpriseTable')
+    expect(source).not.toMatch(/\.slice\(0,\s*\d+\)\.map/)
+  })
+
   it.each([
-    'UploadApprovals',
     'TyreScrapManagement',
     'DataIntakeHistory',
     'CustomData',

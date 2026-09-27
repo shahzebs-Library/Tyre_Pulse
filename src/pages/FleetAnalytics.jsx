@@ -1,20 +1,40 @@
+/**
+ * FleetAnalytics (route /fleet-analytics) - per-asset tyre history, cost,
+ * failure frequency and lifecycle.
+ *
+ * Per-asset metrics: `report_asset_metrics` RPC. Per-asset tyre COST: the
+ * expense grid (`loadGridTyreByAsset`), with the tyre-record sum as the
+ * fallback for an asset the grid does not carry - each row states its basis.
+ * All shaping, filtering and KPI maths live in the pure `fleetAnalyticsView`
+ * engine (which reuses `analyticsEngine` for the monthly buckets and trend).
+ *
+ * States: skeleton while loading, error + Retry on a failed read (never an
+ * empty register), honest "no match" empty state. Light + dark via tokens.
+ */
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useLanguage } from '../contexts/LanguageContext'
 import * as analytics from '../lib/api/analyticsReads'
 import { useSettings } from '../contexts/SettingsContext'
-import { bucketByMonth, linearRegression, recordCost } from '../lib/analyticsEngine'
+import { recordCost } from '../lib/analyticsEngine'
 import { loadGridTyreByAsset } from '../lib/api/costSummary'
-import { BarChart2, Download, FileText, AlertTriangle, RefreshCw } from 'lucide-react'
+import {
+  BarChart2, Download, FileText, AlertTriangle, RefreshCw, X, Layers, Activity, Coins, ShieldAlert, Eye,
+} from 'lucide-react'
 import { SkeletonCards, SkeletonChart } from '../components/ui/Skeleton'
-import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import Card from '../components/ui/Card'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import DateField from '../components/ui/DateField'
 import EmailPdfButton from '../components/EmailPdfButton'
 import SectionTabs, { FLEET_TABS } from '../components/ui/SectionTabs'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
-import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import { toUserMessage } from '../lib/safeError'
 import { formatCurrencyCompact } from '../lib/formatters'
+import { colorAt, withAlpha } from '../lib/reportColors'
+import {
+  withGridCost, assetRows, siteOptions, brandOptions, filterAssets, activeFilterCount,
+  fleetKpis, assetTrend, trendNote, serialLifecycle, exportRows, EXPORT_COLUMNS, HIGH_FREQ_PER_MONTH,
+} from '../lib/fleetAnalyticsView'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
   PointElement, Title, Tooltip, Legend, Filler,
@@ -24,11 +44,30 @@ import { Bar, Line } from 'react-chartjs-2'
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement,
   PointElement, Title, Tooltip, Legend, Filler)
 
+// Risk keeps its semantic tint; the level is always printed as text too.
 const RISK_BADGE = {
-  High:    'bg-red-900/40 text-red-400 border-red-700/50',
-  Medium:  'bg-yellow-900/40 text-yellow-400 border-yellow-700/50',
-  Low:     'bg-green-900/40 text-green-400 border-green-700/50',
-  Unknown: 'bg-gray-800 text-gray-400 border-gray-700',
+  Critical: 'bg-red-500/15 text-red-400 border-red-500/40',
+  High:     'bg-red-500/15 text-red-400 border-red-500/40',
+  Medium:   'bg-amber-500/15 text-amber-300 border-amber-500/40',
+  Low:      'bg-green-500/15 text-green-400 border-green-500/40',
+  Unknown:  'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-dim)]',
+}
+
+const BTN = 'inline-flex items-center justify-center gap-1.5 min-h-[44px] px-3 rounded-lg text-sm border border-[var(--input-border)] bg-[var(--input-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-bright)] disabled:opacity-50 disabled:cursor-not-allowed'
+const SELECT = 'input text-sm min-h-[44px]'
+const EMPTY_FILTERS = { search: '', from: '', to: '', site: '', brand: '', risk: '' }
+
+function Kpi({ icon: Icon, label, value, sub }) {
+  return (
+    <Card pad="tight">
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-[var(--text-muted)]">{label}</p>
+        <Icon size={15} className="text-[var(--text-muted)]" aria-hidden="true" />
+      </div>
+      <p className="text-2xl font-bold text-[var(--text-primary)] mt-1 tabular-nums">{value}</p>
+      {sub && <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{sub}</p>}
+    </Card>
+  )
 }
 
 export default function FleetAnalytics() {
@@ -38,16 +77,15 @@ export default function FleetAnalytics() {
   // Authoritative per-asset tyre cost from the expense grid (V347). null when the
   // grid is unavailable for this scope -> per-asset totals fall back to tyre_records.
   const [gridCost, setGridCost] = useState(null)
-  const [totalRecords, setTotalRecords] = useState(0)
-  const [selectedRecords, setSelectedRecords] = useState([])
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState(null)
-  const [search, setSearch]     = useState('')
+  const [exportError, setExportError] = useState('')
+  const [filters, setFilters]   = useState(EMPTY_FILTERS)
   const [selected, setSelected] = useState(null)
-  const [sortBy, setSortBy]     = useState('count')
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo]     = useState('')
-  const [siteFilter, setSiteFilter] = useState('')
+  const [selectedRecords, setSelectedRecords] = useState([])
+  const [selectedLoading, setSelectedLoading] = useState(false)
+  const [selectedError, setSelectedError] = useState('')
+  const [selectedNonce, setSelectedNonce] = useState(0)
 
   // Guards against a slow earlier response overwriting a newer one after the
   // active country changes (fetch-race cancellation).
@@ -62,11 +100,9 @@ export default function FleetAnalytics() {
         loadGridTyreByAsset({ country: activeCountry }),
       ])
       if (myReq !== reqIdRef.current) return
-      if (e) throw new Error(e.message || e)
-      const m = data || []
-      setAssetMetrics(m)
+      if (e) throw e
+      setAssetMetrics(data || [])
       setGridCost(grid && grid.map ? grid.map : null)
-      setTotalRecords(m.reduce((s, a) => s + (a.count || 0), 0))
     } catch (e) {
       if (myReq === reqIdRef.current) setError(toUserMessage(e, t('fleetanalytics.loadErrorFallback')))
     } finally {
@@ -78,58 +114,88 @@ export default function FleetAnalytics() {
 
   // Lazy-load the selected asset's raw rows for the detail view.
   useEffect(() => {
-    if (!selected) { setSelectedRecords([]); return }
+    if (!selected) { setSelectedRecords([]); setSelectedError(''); return }
     let cancelled = false
+    setSelectedLoading(true); setSelectedError('')
     analytics.listAssetTyreRecords({ assetNo: selected, country: activeCountry })
-      .then(({ data }) => { if (!cancelled) setSelectedRecords(data || []) })
-      .catch(() => { if (!cancelled) setSelectedRecords([]) })
+      .then(({ data, error: e }) => {
+        if (cancelled) return
+        if (e) { setSelectedError(toUserMessage(e, 'Could not load this asset\'s records.')); setSelectedRecords([]) }
+        else setSelectedRecords(data || [])
+      })
+      .catch((e) => { if (!cancelled) { setSelectedError(toUserMessage(e, 'Could not load this asset\'s records.')); setSelectedRecords([]) } })
+      .finally(() => { if (!cancelled) setSelectedLoading(false) })
     return () => { cancelled = true }
-  }, [selected, activeCountry])
+  }, [selected, activeCountry, selectedNonce])
 
-  // Overlay the authoritative expense-grid tyre cost onto each asset's totalCost
-  // (key = asset_no UPPER/trim). Absent grid, or an asset the grid does not carry,
-  // keeps the tyre_records total (honest fallback). Every downstream per-asset and
-  // fleet total (summary, table, sort, export, drill header) then reconciles to
-  // the Expense module.
-  const assetMetricsView = useMemo(() => {
-    if (!gridCost) return assetMetrics
-    return assetMetrics.map(a => {
-      const key = String(a.assetNo ?? '').trim().toUpperCase()
-      return gridCost.has(key) ? { ...a, totalCost: gridCost.get(key) } : a
-    })
-  }, [assetMetrics, gridCost])
+  const rows = useMemo(() => assetRows(withGridCost(assetMetrics, gridCost)), [assetMetrics, gridCost])
+  const sites = useMemo(() => siteOptions(rows), [rows])
+  const brands = useMemo(() => brandOptions(rows), [rows])
+  const filtered = useMemo(() => filterAssets(rows, filters), [rows, filters])
+  const filterCount = activeFilterCount(filters)
+  const kpis = useMemo(() => fleetKpis(filtered), [filtered])
+  const setFilter = (k, v) => setFilters((f) => ({ ...f, [k]: v }))
+  const money = (v) => (v == null ? 'N/A' : formatCurrencyCompact(v, activeCurrency))
 
-  const sorted = useMemo(() => {
-    const arr = [...assetMetricsView]
-    if (sortBy === 'count')    return arr.sort((a, b) => b.count - a.count)
-    if (sortBy === 'cost')     return arr.sort((a, b) => b.totalCost - a.totalCost)
-    if (sortBy === 'risk')     return arr.sort((a, b) => b.highRiskCount - a.highRiskCount)
-    if (sortBy === 'freq')     return arr.sort((a, b) => b.failureFreqPerMonth - a.failureFreqPerMonth)
-    return arr
-  }, [assetMetricsView, sortBy])
+  const columns = useMemo(() => [
+    { id: 'assetNo', header: t('fleetanalytics.table.assetNo'), accessorFn: (a) => a.assetNo, size: 140,
+      cell: ({ row }) => (
+        <span className="inline-flex items-center gap-1.5 font-mono text-xs font-medium text-[var(--text-primary)]">
+          {row.original.assetNo}
+          {selected === row.original.assetNo && <span className="text-[10px] font-sans px-1.5 py-0.5 rounded border border-[var(--border-bright)] text-[var(--text-secondary)]">Open</span>}
+        </span>
+      ) },
+    { id: 'count', header: t('fleetanalytics.table.records'), accessorFn: (a) => a.count, size: 100, meta: { align: 'right' } },
+    { id: 'totalCost', header: t('fleetanalytics.table.totalCost'), accessorFn: (a) => a.totalCost, size: 140, meta: { align: 'right', exportValue: (a) => a.totalCost ?? 'N/A' },
+      cell: ({ row }) => (
+        <span className="tabular-nums" title={row.original.costBasis === 'grid' ? 'From the expense grid' : 'From tyre records (asset not in the expense grid)'}>
+          {money(row.original.totalCost)}
+          {row.original.costBasis !== 'grid' && <span className="text-[var(--text-dim)] text-[10px]"> (records)</span>}
+        </span>
+      ) },
+    { id: 'highRiskCount', header: t('fleetanalytics.table.highRisk'), accessorFn: (a) => a.highRiskCount, size: 110, meta: { align: 'right' },
+      cell: ({ row }) => (row.original.highRiskCount > 0
+        ? <span className="text-xs px-2 py-0.5 rounded-full border bg-red-500/15 text-red-400 border-red-500/40 tabular-nums">{row.original.highRiskCount} high</span>
+        : <span className="text-[var(--text-dim)] tabular-nums">0</span>) },
+    { id: 'failureFreqPerMonth', header: t('fleetanalytics.table.failPerMonth'), accessorFn: (a) => a.failureFreqPerMonth, size: 100, meta: { align: 'right' },
+      cell: ({ row }) => {
+        const v = row.original.failureFreqPerMonth
+        return <span className={`tabular-nums text-xs ${v != null && v > HIGH_FREQ_PER_MONTH ? 'font-semibold text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>{v == null ? 'N/A' : v.toFixed(1)}</span>
+      } },
+    { id: 'sites', header: t('fleetanalytics.table.sites'), accessorFn: (a) => a.sites.join(', '), size: 180,
+      cell: ({ row }) => <span className="text-xs text-[var(--text-secondary)] whitespace-normal">{row.original.sites.join(', ') || 'N/A'}</span> },
+    { id: 'brands', header: t('fleetanalytics.table.brands'), accessorFn: (a) => a.brands.join(', '), size: 180,
+      cell: ({ row }) => <span className="text-xs text-[var(--text-secondary)] whitespace-normal">{row.original.brands.join(', ') || 'N/A'}</span> },
+    { id: 'lastSeen', header: t('fleetanalytics.table.lastSeen'), accessorFn: (a) => a.lastSeen, size: 120,
+      cell: ({ row }) => <span className="text-xs text-[var(--text-muted)]">{row.original.lastSeen || 'N/A'}</span> },
+    { id: 'open', header: '', enableSorting: false, size: 90, meta: { export: false },
+      cell: ({ row }) => (
+        <button type="button"
+          onClick={(e) => { e.stopPropagation(); setSelected(selected === row.original.assetNo ? null : row.original.assetNo) }}
+          aria-label={`${selected === row.original.assetNo ? 'Close' : 'Open'} detail for asset ${row.original.assetNo}`}
+          aria-expanded={selected === row.original.assetNo}
+          className="inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-bright)]">
+          <Eye size={16} aria-hidden="true" />
+        </button>
+      ) },
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [t, selected, activeCurrency])
 
-  // Unique sites derived from per-asset metrics
-  const allSites = useMemo(() =>
-    [...new Set(assetMetricsView.flatMap(a => a.sites || []))].sort(),
-    [assetMetricsView]
-  )
+  const pdfColumns = EXPORT_COLUMNS.map(([key, header]) => ({ key, header }))
+  const pdfRows = () => exportRows(filtered).map((r) => ({ ...r, total_cost: r.total_cost === 'N/A' ? 'N/A' : formatCurrencyCompact(r.total_cost, activeCurrency) }))
 
-  const filtered = useMemo(() => {
-    return sorted.filter(a => {
-      if (search && !a.assetNo.toLowerCase().includes(search.toLowerCase())) return false
-      if (dateFrom && a.lastSeen && a.lastSeen < dateFrom) return false
-      if (dateTo && a.lastSeen && a.lastSeen > dateTo) return false
-      if (siteFilter && !a.sites.includes(siteFilter)) return false
-      return true
-    })
-  }, [sorted, search, dateFrom, dateTo, siteFilter])
+  async function runExport(kind) {
+    setExportError('')
+    try {
+      if (kind === 'excel') {
+        await exportToExcel(exportRows(filtered), EXPORT_COLUMNS.map(([k]) => k), EXPORT_COLUMNS.map(([, h]) => h), 'TyrePulse_FleetAnalytics')
+      } else {
+        await exportToPdf(pdfRows(), pdfColumns, 'Fleet Analytics Report', 'TyrePulse_FleetAnalytics', 'landscape')
+      }
+    } catch (e) { setExportError(toUserMessage(e, 'Could not export. Try again.')) }
+  }
 
-  // Paged, not capped. The per-asset table used to render filtered.slice(0, 100)
-  // under a "showing N of M" line that named the gap but gave no way to cross it.
-  // Declared before the early returns below so the hook order stays stable.
-  const pager = usePagedRows(filtered)
-
-  if (loading) return (
+  if (loading && !assetMetrics.length) return (
     <div className="space-y-5">
       <PageHeader title={t('fleetanalytics.title')} subtitle={t('fleetanalytics.loading')} icon={BarChart2} />
       <SkeletonCards count={4} />
@@ -140,421 +206,299 @@ export default function FleetAnalytics() {
   if (error && !assetMetrics.length) return (
     <div className="space-y-5">
       <PageHeader title={t('fleetanalytics.title')} subtitle={t('fleetanalytics.subtitleError')} icon={BarChart2} />
-      <div className="card p-8 text-center">
-        <AlertTriangle size={40} className="mx-auto text-red-400 mb-3" />
-        <p className="text-red-300 font-medium mb-1">{t('fleetanalytics.loadErrorTitle')}</p>
-        <p className="text-gray-400 text-sm mb-4">{error}</p>
-        <button onClick={load} className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors">
-          <RefreshCw size={16} /> {t('fleetanalytics.retry')}
+      <Card tone="crit" role="alert" className="items-center text-center gap-2" style={{ padding: 'var(--space-8)' }}>
+        <AlertTriangle size={40} className="text-red-400" aria-hidden="true" />
+        <p className="text-[var(--text-primary)] font-medium">{t('fleetanalytics.loadErrorTitle')}</p>
+        <p className="text-[var(--text-muted)] text-sm">{error}</p>
+        <button type="button" onClick={load} className={BTN}>
+          <RefreshCw size={16} aria-hidden="true" /> {t('fleetanalytics.retry')}
         </button>
-      </div>
+      </Card>
     </div>
   )
 
   const selectedAsset = selected
-    ? { ...assetMetricsView.find(a => a.assetNo === selected), records: selectedRecords }
+    ? { ...(rows.find(a => a.assetNo === selected) || { assetNo: selected, sites: [], brands: [], count: 0, totalCost: null }), records: selectedRecords }
     : null
 
   return (
     <div className="space-y-6">
       <SectionTabs tabs={FLEET_TABS} />
-      {/* Header */}
       <PageHeader
         title={t('fleetanalytics.title')}
         subtitle={t('fleetanalytics.subtitleFull')}
         icon={BarChart2}
-      />
-
-      {error && (
-        <div className="flex items-center justify-between gap-3 bg-red-900/30 border border-red-700 rounded-xl p-3 text-red-300 text-sm">
-          <span className="flex items-center gap-2"><AlertTriangle size={16} /> {error}</span>
-          <button onClick={load} className="flex items-center gap-1 text-red-200 hover:text-white"><RefreshCw size={14} /> {t('fleetanalytics.retry')}</button>
-        </div>
-      )}
-
-      {/* Summary row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { label: t('fleetanalytics.summary.totalAssets'),    value: assetMetrics.length,       color: 'text-blue-400' },
-          { label: t('fleetanalytics.summary.totalRecords'),   value: totalRecords.toLocaleString(), color: 'text-white' },
-          { label: t('fleetanalytics.summary.highFreqAssets'),
-            value: assetMetrics.filter(a => a.failureFreqPerMonth > 2).length,
-            color: 'text-red-400' },
-          { label: t('fleetanalytics.summary.avgCostPerAsset'),
-            value: assetMetricsView.length
-              ? formatCurrencyCompact(assetMetricsView.reduce((s, a) => s + a.totalCost, 0) / assetMetricsView.length, activeCurrency)
-              : '-',
-            color: 'text-green-400' },
-        ].map(({ label, value, color }, i) => (
-          <motion.div key={label} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}>
-            <div className="card text-center">
-              <p className={`text-2xl font-bold ${color}`}>{value}</p>
-              <p className="text-gray-400 text-sm mt-1">{label}</p>
-            </div>
-          </motion.div>
-        ))}
-      </div>
-
-      {/* Asset list */}
-      <div className="card">
-        <div className="flex flex-wrap gap-3 mb-3">
-          <input
-            className="input flex-1 min-w-48"
-            placeholder={t('fleetanalytics.filters.searchPlaceholder')}
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-          <select className="input w-44" value={sortBy} onChange={e => setSortBy(e.target.value)}>
-            <option value="count">{t('fleetanalytics.filters.sortCount')}</option>
-            <option value="cost">{t('fleetanalytics.filters.sortCost')}</option>
-            <option value="risk">{t('fleetanalytics.filters.sortRisk')}</option>
-            <option value="freq">{t('fleetanalytics.filters.sortFreq')}</option>
-          </select>
-          <div className="flex gap-2 ml-auto">
-            <button
-              onClick={async () => { try { await exportToExcel(
-                filtered.slice(0, 1000).map(a => ({
-                  asset_no: a.assetNo, records: a.count,
-                  total_cost: a.totalCost, high_risk: a.highRiskCount,
-                  fail_per_month: a.failureFreqPerMonth.toFixed(1),
-                  sites: a.sites.join(', '), brands: a.brands.join(', '),
-                  last_seen: a.lastSeen ?? '',
-                })),
-                ['asset_no','records','total_cost','high_risk','fail_per_month','sites','brands','last_seen'],
-                ['Asset No','Records','Total Cost','High Risk','Fail/Mo','Sites','Brands','Last Seen'],
-                'TyrePulse_FleetAnalytics'
-              ) } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
-              className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
-            >
-              <Download size={14} /> {t('fleetanalytics.actions.excel')}
+        onRefresh={load}
+        refreshing={loading}
+        actions={(
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => runExport('excel')} disabled={!filtered.length} className={BTN}>
+              <Download size={14} aria-hidden="true" /> {t('fleetanalytics.actions.excel')}
             </button>
-            <button
-              onClick={async () => { try { await exportToPdf(
-                filtered.slice(0, 200).map(a => ({
-                  asset_no: a.assetNo, records: a.count,
-                  total_cost: formatCurrencyCompact(a.totalCost, activeCurrency),
-                  high_risk: a.highRiskCount,
-                  fail_per_month: a.failureFreqPerMonth.toFixed(1),
-                })),
-                [
-                  { key: 'asset_no',       header: 'Asset No' },
-                  { key: 'records',        header: 'Records' },
-                  { key: 'total_cost',     header: 'Total Cost' },
-                  { key: 'high_risk',      header: 'High Risk' },
-                  { key: 'fail_per_month', header: 'Fail/Mo' },
-                ],
-                'Fleet Analytics Report',
-                'TyrePulse_FleetAnalytics',
-                'landscape'
-              ) } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
-              className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
-            >
-              <FileText size={14} /> {t('fleetanalytics.actions.pdf')}
+            <button type="button" onClick={() => runExport('pdf')} disabled={!filtered.length} className={BTN}>
+              <FileText size={14} aria-hidden="true" /> {t('fleetanalytics.actions.pdf')}
             </button>
             <EmailPdfButton
-              className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+              className={BTN}
               getPdf={async () => ({
-                base64: await exportToPdf(
-                  filtered.slice(0, 200).map(a => ({
-                    asset_no: a.assetNo, records: a.count,
-                    total_cost: formatCurrencyCompact(a.totalCost, activeCurrency),
-                    high_risk: a.highRiskCount,
-                    fail_per_month: a.failureFreqPerMonth.toFixed(1),
-                  })),
-                  [
-                    { key: 'asset_no',       header: 'Asset No' },
-                    { key: 'records',        header: 'Records' },
-                    { key: 'total_cost',     header: 'Total Cost' },
-                    { key: 'high_risk',      header: 'High Risk' },
-                    { key: 'fail_per_month', header: 'Fail/Mo' },
-                  ],
-                  'Fleet Analytics Report',
-                  'TyrePulse_FleetAnalytics',
-                  'landscape',
-                  '',
-                  { returnBase64: true }
-                ),
+                base64: await exportToPdf(pdfRows(), pdfColumns, 'Fleet Analytics Report', 'TyrePulse_FleetAnalytics', 'landscape', '', { returnBase64: true }),
                 filename: 'TyrePulse_FleetAnalytics.pdf',
                 subject: 'Fleet Analytics',
                 bodyHtml: '<p>Attached is the Fleet Analytics report.</p>',
               })}
             />
           </div>
-        </div>
-        <div className="flex flex-wrap gap-3 mb-4 items-center">
-          <span className="text-xs text-gray-400">{t('fleetanalytics.filters.dateRange')}</span>
-          <DateField
-            className="text-sm w-40"
-            value={dateFrom}
-            onChange={setDateFrom}
-            placeholder={t('fleetanalytics.filters.fromPlaceholder')}
-            ariaLabel="From date"
-          />
-          <span className="text-gray-500 text-xs">{t('fleetanalytics.filters.to')}</span>
-          <DateField
-            className="text-sm w-40"
-            value={dateTo}
-            onChange={setDateTo}
-            placeholder={t('fleetanalytics.filters.toPlaceholder')}
-            ariaLabel="To date"
-            min={dateFrom || undefined}
-          />
-          {(dateFrom || dateTo) && (
-            <button
-              onClick={() => { setDateFrom(''); setDateTo('') }}
-              className="text-xs text-gray-400 hover:text-white"
-            >
-              {t('fleetanalytics.filters.clearDates')}
-            </button>
-          )}
-          <select
-            className="input w-44"
-            value={siteFilter}
-            onChange={e => setSiteFilter(e.target.value)}
-          >
-            <option value="">{t('fleetanalytics.filters.allSites')}</option>
-            {allSites.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-          {siteFilter && (
-            <button
-              onClick={() => setSiteFilter('')}
-              className="text-xs text-gray-400 hover:text-white"
-            >
-              {t('fleetanalytics.filters.clearSite')}
-            </button>
-          )}
-        </div>
+        )}
+      />
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-gray-400 border-b border-gray-800">
-                <th className="pb-2 pr-4">{t('fleetanalytics.table.assetNo')}</th>
-                <th className="pb-2 pr-4 text-right">{t('fleetanalytics.table.records')}</th>
-                <th className="pb-2 pr-4 text-right">{t('fleetanalytics.table.totalCost')}</th>
-                <th className="pb-2 pr-4 text-right">{t('fleetanalytics.table.highRisk')}</th>
-                <th className="pb-2 pr-4 text-right">{t('fleetanalytics.table.failPerMonth')}</th>
-                <th className="pb-2 pr-4">{t('fleetanalytics.table.sites')}</th>
-                <th className="pb-2 pr-4">{t('fleetanalytics.table.brands')}</th>
-                <th className="pb-2">{t('fleetanalytics.table.lastSeen')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pager.pageRows.map(a => (
-                <tr
-                  key={a.assetNo}
-                  onClick={() => setSelected(selected === a.assetNo ? null : a.assetNo)}
-                  className={`border-b border-gray-800/50 cursor-pointer transition-colors ${
-                    selected === a.assetNo ? 'bg-blue-900/20' : 'hover:bg-gray-800/20'
-                  }`}
-                >
-                  <td className="py-2 pr-4 font-mono text-xs text-blue-400 font-medium">{a.assetNo}</td>
-                  <td className="py-2 pr-4 text-gray-300 text-right">{a.count}</td>
-                  <td className="py-2 pr-4 text-gray-300 text-right">
-                    {formatCurrencyCompact(a.totalCost, activeCurrency)}
-                  </td>
-                  <td className="py-2 pr-4 text-right">
-                    {a.highRiskCount > 0
-                      ? <span className="text-xs px-2 py-0.5 rounded-full bg-red-900/40 text-red-400">{a.highRiskCount}</span>
-                      : <span className="text-gray-600">0</span>
-                    }
-                  </td>
-                  <td className="py-2 pr-4 text-right text-xs text-gray-400">{a.failureFreqPerMonth.toFixed(1)}</td>
-                  <td className="py-2 pr-4 text-gray-400 text-xs">{a.sites.slice(0, 2).join(', ')}</td>
-                  <td className="py-2 pr-4 text-gray-400 text-xs">{a.brands.slice(0, 2).join(', ')}</td>
-                  <td className="py-2 text-gray-500 text-xs">{a.lastSeen || '-'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {filtered.length === 0 && (
-            <div className="text-center py-10">
-              <BarChart2 size={32} className="text-gray-700 mx-auto mb-2" />
-              <p className="text-gray-500 text-sm">{t('fleetanalytics.empty.noMatch')}</p>
-            </div>
-          )}
+      {error && (
+        <Card tone="crit" role="alert" className="flex-wrap items-center justify-between gap-3" style={{ flexDirection: 'row' }}>
+          <span className="flex items-center gap-2 text-sm text-[var(--text-primary)]"><AlertTriangle size={16} className="text-red-400" aria-hidden="true" /> {error}</span>
+          <button type="button" onClick={load} className={BTN}><RefreshCw size={14} aria-hidden="true" /> {t('fleetanalytics.retry')}</button>
+        </Card>
+      )}
+      {exportError && (
+        <Card tone="crit" role="alert" className="items-center gap-2" style={{ flexDirection: 'row' }}>
+          <AlertTriangle size={16} className="text-red-400" aria-hidden="true" />
+          <span className="text-sm text-[var(--text-primary)]">{exportError}</span>
+        </Card>
+      )}
+
+      {/* KPI strip - describes exactly the assets matching the filters. */}
+      <div>
+        <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-4 gap-3">
+          <Kpi icon={Layers} label={t('fleetanalytics.summary.totalAssets')} value={kpis.assets.toLocaleString()} sub={`${kpis.records.toLocaleString()} tyre records`} />
+          <Kpi icon={Activity} label={t('fleetanalytics.summary.highFreqAssets')} value={kpis.highFreq.toLocaleString()} sub={`Above ${HIGH_FREQ_PER_MONTH} failures per month`} />
+          <Kpi icon={ShieldAlert} label="Assets with high-risk tyres" value={kpis.highRiskAssets.toLocaleString()} sub="At least one high-risk record" />
+          <Kpi icon={Coins} label={t('fleetanalytics.summary.avgCostPerAsset')} value={money(kpis.avgCost)}
+            sub={`${kpis.gridCosted.toLocaleString()} of ${kpis.assets.toLocaleString()} costed from the expense grid`} />
         </div>
-        <TablePagination {...pager} />
+        {filterCount > 0 && (
+          <p className="text-xs text-[var(--text-muted)] mt-2">These figures cover the {kpis.assets.toLocaleString()} assets matching the current filters.</p>
+        )}
       </div>
 
-      {/* Drill-down */}
-      {selectedAsset && <AssetDrillDown asset={selectedAsset} currency={activeCurrency} />}
+      {/* Filters */}
+      <Card pad="tight" className="gap-3">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="text-xs text-[var(--text-muted)] space-y-1 flex-1 min-w-[12rem]">
+            <span className="block">Asset</span>
+            <input className="input w-full min-h-[44px]" placeholder={t('fleetanalytics.filters.searchPlaceholder')}
+              value={filters.search} onChange={e => setFilter('search', e.target.value)} />
+          </label>
+          <div className="text-xs text-[var(--text-muted)] space-y-1">
+            <span className="block">Last activity from</span>
+            <DateField className="text-sm w-40" value={filters.from} onChange={(v) => setFilter('from', v)} placeholder={t('fleetanalytics.filters.fromPlaceholder')} ariaLabel="Last activity from" />
+          </div>
+          <div className="text-xs text-[var(--text-muted)] space-y-1">
+            <span className="block">Last activity to</span>
+            <DateField className="text-sm w-40" value={filters.to} onChange={(v) => setFilter('to', v)} placeholder={t('fleetanalytics.filters.toPlaceholder')} ariaLabel="Last activity to" min={filters.from || undefined} />
+          </div>
+          <label className="text-xs text-[var(--text-muted)] space-y-1">
+            <span className="block">Site</span>
+            <select className={SELECT} value={filters.site} onChange={e => setFilter('site', e.target.value)}>
+              <option value="">{t('fleetanalytics.filters.allSites')}</option>
+              {sites.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </label>
+          <label className="text-xs text-[var(--text-muted)] space-y-1">
+            <span className="block">Brand</span>
+            <select className={SELECT} value={filters.brand} onChange={e => setFilter('brand', e.target.value)}>
+              <option value="">All brands</option>
+              {brands.map(b => <option key={b} value={b}>{b}</option>)}
+            </select>
+          </label>
+          <label className="text-xs text-[var(--text-muted)] space-y-1">
+            <span className="block">Risk</span>
+            <select className={SELECT} value={filters.risk} onChange={e => setFilter('risk', e.target.value)}>
+              <option value="">All assets</option>
+              <option value="high">With high-risk tyres</option>
+              <option value="frequent">Frequent failures</option>
+            </select>
+          </label>
+          {(filterCount > 0 || filters.search) && (
+            <button type="button" onClick={() => setFilters(EMPTY_FILTERS)} className={BTN}>
+              <X size={14} aria-hidden="true" /> Clear filters{filterCount ? ` (${filterCount})` : ''}
+            </button>
+          )}
+        </div>
+      </Card>
+
+      <Card pad="tight">
+        <EnterpriseTable
+          columns={columns}
+          data={filtered}
+          getRowId={(a) => a.id}
+          loading={loading}
+          enableGlobalFilter={false}
+          initialPageSize={25}
+          onRowClick={(a) => setSelected((cur) => (cur === a.assetNo ? null : a.assetNo))}
+          emptyMessage={t('fleetanalytics.empty.noMatch')}
+          exportFileName="Fleet Analytics"
+          reportMeta={{ title: 'Fleet Analytics', currency: activeCurrency }}
+        />
+      </Card>
+
+      {selectedAsset && (
+        <AssetDrillDown
+          asset={selectedAsset}
+          currency={activeCurrency}
+          loading={selectedLoading}
+          error={selectedError}
+          onRetry={() => setSelectedNonce((n) => n + 1)}
+          onClose={() => setSelected(null)}
+        />
+      )}
     </div>
   )
 }
 
-function AssetDrillDown({ asset, currency }) {
+function AssetDrillDown({ asset, currency, loading, error, onRetry, onClose }) {
   const { t } = useLanguage()
-  const monthly = useMemo(() =>
-    bucketByMonth(asset.records, r => r.issue_date, r => recordCost(r)),
-    [asset]
-  )
-
-  const points    = monthly.map((d, i) => [i, d.count])
-  const reg       = points.length >= 2 ? linearRegression(points) : null
+  const { monthly, reg } = useMemo(() => assetTrend(asset.records), [asset.records])
+  const serials = useMemo(() => serialLifecycle(asset.records), [asset.records])
+  const note = trendNote(reg)
 
   const costData = {
     labels: monthly.map(d => d.month),
     datasets: [{
       label: t('fleetanalytics.drill.costDataset', { currency }),
       data: monthly.map(d => Math.round(d.total)),
-      backgroundColor: 'rgba(59,130,246,0.5)',
-      borderColor: 'rgba(59,130,246,1)',
+      backgroundColor: withAlpha(colorAt(0), 0.55),
+      borderColor: colorAt(0),
       borderRadius: 4,
     }],
   }
-
   const countData = {
     labels: monthly.map(d => d.month),
     datasets: [
       {
         label: t('fleetanalytics.drill.recordsDataset'),
         data: monthly.map(d => d.count),
-        borderColor: 'rgba(16,185,129,1)',
-        backgroundColor: 'rgba(16,185,129,0.1)',
+        borderColor: colorAt(1),
+        backgroundColor: withAlpha(colorAt(1), 0.12),
         fill: true, tension: 0.4,
       },
       reg && {
         label: t('fleetanalytics.drill.trendDataset'),
         data: monthly.map((_, i) => Math.max(0, parseFloat(reg.predict(i).toFixed(1)))),
-        borderColor: 'rgba(107,114,128,0.6)',
+        borderColor: 'var(--text-muted)',
         borderDash: [4, 4], fill: false, pointRadius: 0,
       },
     ].filter(Boolean),
   }
-
   const chartOpts = {
     responsive: true, maintainAspectRatio: false,
-    plugins: { legend: { labels: { color: '#9ca3af', font: { size: 11 } } } },
+    plugins: { legend: { labels: { color: 'var(--text-secondary)', font: { size: 11 } } } },
     scales: {
-      x: { grid: { color: 'var(--panel-2)' }, ticks: { color: '#9ca3af', font: { size: 10 } } },
-      y: { grid: { color: 'var(--panel-2)' }, ticks: { color: '#9ca3af' } },
+      x: { grid: { color: 'var(--panel-2)' }, ticks: { color: 'var(--text-muted)', font: { size: 10 } } },
+      y: { grid: { color: 'var(--panel-2)' }, ticks: { color: 'var(--text-muted)' } },
     },
   }
+  const barOpts = { ...chartOpts, plugins: { ...chartOpts.plugins, legend: { display: false } } }
 
-  const barOpts = {
-    ...chartOpts,
-    plugins: { ...chartOpts.plugins, legend: { display: false } },
-  }
-
-  // Tyre lifecycle: group by serial_no
-  const bySerial = {}
-  asset.records.forEach(r => {
-    if (!r.serial_no) return
-    if (!bySerial[r.serial_no]) bySerial[r.serial_no] = []
-    bySerial[r.serial_no].push(r)
-  })
-  const serials = Object.entries(bySerial)
-    .sort(([, a], [, b]) => new Date(b[0].issue_date) - new Date(a[0].issue_date))
-    .slice(0, 10)
+  const serialColumns = [
+    { id: 'serial', header: t('fleetanalytics.drill.columns.serial'), accessorFn: (r) => r.serial, size: 160,
+      cell: ({ row }) => <span className="font-mono text-xs text-[var(--text-primary)]">{row.original.serial}</span> },
+    { id: 'risk', header: t('fleetanalytics.drill.columns.risk'), accessorFn: (r) => r.risk || 'Unknown', size: 110, meta: { filterVariant: 'select' },
+      cell: ({ row }) => <span className={`text-xs px-2 py-0.5 rounded-full border ${RISK_BADGE[row.original.risk] || RISK_BADGE.Unknown}`}>{row.original.risk || t('fleetanalytics.drill.unknownRisk')}</span> },
+    { id: 'brand', header: t('fleetanalytics.drill.columns.brand'), accessorFn: (r) => r.brand || t('fleetanalytics.drill.unknownBrand'), size: 140 },
+    { id: 'category', header: t('fleetanalytics.drill.columns.category'), accessorFn: (r) => r.category || t('fleetanalytics.drill.uncategorised'), size: 140 },
+    { id: 'events', header: 'Events', accessorFn: (r) => r.events, size: 90, meta: { align: 'right' } },
+    { id: 'firstDate', header: 'First seen', accessorFn: (r) => r.firstDate, size: 120 },
+    { id: 'latestDate', header: 'Latest', accessorFn: (r) => r.latestDate, size: 120 },
+  ]
+  const historyColumns = [
+    { id: 'issue_date', header: t('fleetanalytics.drill.columns.date'), accessorFn: (r) => r.issue_date, size: 110,
+      cell: ({ row }) => <span className="text-[var(--text-muted)]">{row.original.issue_date || 'N/A'}</span> },
+    { id: 'serial_no', header: t('fleetanalytics.drill.columns.serial'), accessorFn: (r) => r.serial_no || '', size: 150,
+      cell: ({ row }) => <span className="font-mono text-[var(--text-secondary)]">{row.original.serial_no || 'N/A'}</span> },
+    { id: 'brand', header: t('fleetanalytics.drill.columns.brand'), accessorFn: (r) => r.brand || '', size: 120 },
+    { id: 'category', header: t('fleetanalytics.drill.columns.category'), accessorFn: (r) => r.category || '', size: 120 },
+    { id: 'risk_level', header: t('fleetanalytics.drill.columns.risk'), accessorFn: (r) => r.risk_level || 'Unknown', size: 100, meta: { filterVariant: 'select' },
+      cell: ({ row }) => <span className={`px-1.5 py-0.5 rounded text-xs border ${RISK_BADGE[row.original.risk_level] || RISK_BADGE.Unknown}`}>{row.original.risk_level || 'Unknown'}</span> },
+    { id: 'cost', header: t('fleetanalytics.drill.columns.cost'), accessorFn: (r) => (r.cost_per_tyre == null ? null : recordCost(r)), size: 110, meta: { align: 'right' },
+      cell: ({ row }) => <span className="tabular-nums">{row.original.cost_per_tyre == null ? 'N/A' : formatCurrencyCompact(recordCost(row.original), currency)}</span> },
+    { id: 'remarks', header: t('fleetanalytics.drill.columns.remarks'), accessorFn: (r) => r.remarks_cleaned || r.remarks || '', size: 260,
+      cell: ({ row }) => <span className="text-[var(--text-muted)] whitespace-normal">{row.original.remarks_cleaned || row.original.remarks || 'N/A'}</span> },
+  ]
 
   return (
-    <div className="card border border-blue-500/30 space-y-6">
-      {/* Asset header */}
+    <Card className="gap-6" aria-labelledby="fa-drill-title">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h3 className="text-white font-bold text-lg font-mono">{asset.assetNo}</h3>
-          <p className="text-gray-400 text-sm mt-1">
-            {t('fleetanalytics.drill.recordsSummary', {
-              count: asset.count,
-              cost: formatCurrencyCompact(asset.totalCost, currency),
-              date: asset.firstSeen || '?',
-            })}
+          <h3 id="fa-drill-title" className="text-[var(--text-primary)] font-bold text-lg font-mono">{asset.assetNo}</h3>
+          <p className="text-[var(--text-muted)] text-sm mt-1">
+            {`${(asset.count ?? 0).toLocaleString()} records | ${asset.totalCost == null ? 'N/A' : formatCurrencyCompact(asset.totalCost, currency)} tyre cost${asset.costBasis === 'grid' ? ' (expense grid)' : ' (tyre records)'} | active since ${asset.firstSeen || 'N/A'}`}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {asset.sites.map(s => (
-            <span key={s} className="text-xs bg-blue-900/30 text-blue-400 border border-blue-700/50 px-2 py-0.5 rounded-full">{s}</span>
+        <div className="flex flex-wrap items-center gap-2">
+          {(asset.sites || []).map(s => (
+            <span key={s} className="text-xs px-2 py-0.5 rounded-full border border-[var(--border-dim)] text-[var(--text-secondary)]">{s}</span>
           ))}
+          <button type="button" onClick={onClose} aria-label={`Close detail for asset ${asset.assetNo}`}
+            className="inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-bright)]">
+            <X size={18} aria-hidden="true" />
+          </button>
         </div>
       </div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <p className="text-xs text-gray-400 mb-2">{t('fleetanalytics.drill.monthlyCost', { currency })}</p>
-          <div style={{ height: 200 }}>
-            <Bar data={costData} options={barOpts} />
-          </div>
-          <p className="text-xs text-gray-500 mt-1">Breakdown from tyre records; authoritative total from the expense grid.</p>
+      {error ? (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-500/40 p-3">
+          <span className="flex items-center gap-2 text-sm text-[var(--text-primary)]"><AlertTriangle size={16} className="text-red-400" aria-hidden="true" /> {error}</span>
+          <button type="button" onClick={onRetry} className={BTN}><RefreshCw size={14} aria-hidden="true" /> Retry</button>
         </div>
-        <div>
-          <p className="text-xs text-gray-400 mb-2">{t('fleetanalytics.drill.failureFrequency')}</p>
-          <div style={{ height: 200 }}>
-            <Line data={countData} options={chartOpts} />
+      ) : loading ? (
+        <SkeletonChart />
+      ) : (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <p className="text-xs text-[var(--text-muted)] mb-2">{t('fleetanalytics.drill.monthlyCost', { currency })}</p>
+              <div style={{ height: 200 }} role="img" aria-label={`Monthly tyre record cost for ${asset.assetNo}`}>
+                {monthly.length ? <Bar data={costData} options={barOpts} /> : <p className="text-xs text-[var(--text-muted)]">No dated records.</p>}
+              </div>
+              <p className="text-xs text-[var(--text-dim)] mt-1">Breakdown from tyre records; the authoritative total comes from the expense grid.</p>
+            </div>
+            <div>
+              <p className="text-xs text-[var(--text-muted)] mb-2">{t('fleetanalytics.drill.failureFrequency')}</p>
+              <div style={{ height: 200 }} role="img" aria-label={`Monthly record count and trend for ${asset.assetNo}`}>
+                {monthly.length ? <Line data={countData} options={chartOpts} /> : <p className="text-xs text-[var(--text-muted)]">No dated records.</p>}
+              </div>
+              <p className="text-xs text-[var(--text-dim)] mt-1">{note || 'Trend needs at least two months of records.'}</p>
+            </div>
           </div>
-          {reg && (
-            <p className="text-xs text-gray-500 mt-1">
-              R² = {reg.r2.toFixed(2)} · {t('fleetanalytics.drill.slope')} {reg.slope > 0 ? '↑' : '↓'}{Math.abs(reg.slope).toFixed(2)}{t('fleetanalytics.drill.perMonth')}
-            </p>
-          )}
-        </div>
-      </div>
 
-      {/* Tyre Lifecycle / Serial number history */}
-      <div>
-        <p className="text-sm font-medium text-gray-300 mb-3">{t('fleetanalytics.drill.lifecycleTitle')}</p>
-        {serials.length > 0 ? (
-          <div className="space-y-2">
-            {serials.map(([serial, recs]) => {
-              const latest = recs[0]
-              return (
-                <div key={serial} className="bg-gray-800/40 rounded-lg p-3 flex flex-wrap items-center gap-3">
-                  <span className="font-mono text-xs text-blue-300">{serial}</span>
-                  <span className={`text-xs px-2 py-0.5 rounded-full border ${RISK_BADGE[latest.risk_level] || RISK_BADGE.Unknown}`}>
-                    {latest.risk_level || t('fleetanalytics.drill.unknownRisk')}
-                  </span>
-                  <span className="text-xs text-gray-400">{latest.brand || t('fleetanalytics.drill.unknownBrand')}</span>
-                  <span className="text-xs text-gray-400">{latest.category || t('fleetanalytics.drill.uncategorised')}</span>
-                  <span className="text-xs text-gray-500 ml-auto">{t('fleetanalytics.drill.events', { count: recs.length })}</span>
-                  <span className="text-xs text-gray-600">{latest.issue_date || '-'}</span>
-                </div>
-              )
-            })}
+          <div>
+            <p className="text-sm font-medium text-[var(--text-secondary)] mb-3">Tyre lifecycle by serial number</p>
+            <EnterpriseTable
+              columns={serialColumns}
+              data={serials}
+              getRowId={(r) => r.id}
+              initialPageSize={10}
+              pageSizeOptions={[10, 25, 50]}
+              searchPlaceholder="Search serials"
+              emptyMessage={t('fleetanalytics.drill.noSerialData')}
+              exportFileName={`Tyre lifecycle ${asset.assetNo}`}
+              reportMeta={{ title: `Tyre lifecycle ${asset.assetNo}` }}
+            />
           </div>
-        ) : (
-          <p className="text-gray-500 text-sm">{t('fleetanalytics.drill.noSerialData')}</p>
-        )}
-      </div>
 
-      {/* Full record history table */}
-      <div>
-        <p className="text-sm font-medium text-gray-300 mb-3">{t('fleetanalytics.drill.fullHistory')}</p>
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="text-gray-400 border-b border-gray-800 text-left">
-                <th className="pb-1.5 pr-3">{t('fleetanalytics.drill.columns.date')}</th>
-                <th className="pb-1.5 pr-3">{t('fleetanalytics.drill.columns.serial')}</th>
-                <th className="pb-1.5 pr-3">{t('fleetanalytics.drill.columns.brand')}</th>
-                <th className="pb-1.5 pr-3">{t('fleetanalytics.drill.columns.category')}</th>
-                <th className="pb-1.5 pr-3">{t('fleetanalytics.drill.columns.risk')}</th>
-                <th className="pb-1.5 pr-3 text-right">{t('fleetanalytics.drill.columns.cost')}</th>
-                <th className="pb-1.5">{t('fleetanalytics.drill.columns.remarks')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {asset.records.slice(0, 30).map(r => (
-                <tr key={r.id} className="border-b border-gray-800/30 hover:bg-gray-800/20">
-                  <td className="py-1.5 pr-3 text-gray-400">{r.issue_date || '-'}</td>
-                  <td className="py-1.5 pr-3 font-mono text-gray-400">{r.serial_no || '-'}</td>
-                  <td className="py-1.5 pr-3 text-gray-300">{r.brand || '-'}</td>
-                  <td className="py-1.5 pr-3 text-gray-400">{r.category || '-'}</td>
-                  <td className="py-1.5 pr-3">
-                    <span className={`px-1.5 py-0.5 rounded text-xs border ${RISK_BADGE[r.risk_level] || RISK_BADGE.Unknown}`}>
-                      {r.risk_level || '?'}
-                    </span>
-                  </td>
-                  <td className="py-1.5 pr-3 text-right text-gray-400">
-                    {formatCurrencyCompact(recordCost(r), currency)}
-                  </td>
-                  <td className="py-1.5 text-gray-500 max-w-xs truncate">{r.remarks_cleaned || r.remarks || '-'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
+          <div>
+            <p className="text-sm font-medium text-[var(--text-secondary)] mb-3">Full record history</p>
+            <EnterpriseTable
+              columns={historyColumns}
+              data={asset.records}
+              getRowId={(r, i) => String(r.id ?? i)}
+              initialPageSize={25}
+              searchPlaceholder="Search records"
+              emptyMessage="No tyre records for this asset."
+              exportFileName={`Tyre records ${asset.assetNo}`}
+              reportMeta={{ title: `Tyre records ${asset.assetNo}`, currency }}
+            />
+          </div>
+        </>
+      )}
+    </Card>
   )
 }

@@ -19,7 +19,7 @@ const moduleSection = MODULES.map((m) => `### ${m.name}\n${m.description}`).join
 
 const body = `# Tyre Pulse
 
-> Tyre Pulse is a commercial tyre, fleet, inspection and workshop intelligence platform. It connects tyre lifecycle, fleet maintenance, workshop control, field inspections, approvals and executive reporting in one system for multi-site and multi-country operations. Tagline: Smarter Wheels. Stronger Fleet.
+> Tyre Pulse is a PMV (plant, machinery and vehicles) operations platform. It connects asset records, preventive maintenance, workshop job cards, field inspections, tyre lifecycle, stores and procurement, costs, approvals and reporting in one system for multi-site and multi-country operations.
 
 This file is the long form reference for language models and AI assistants. It is written so an assistant can answer questions about Tyre Pulse directly, without guessing.
 
@@ -81,7 +81,7 @@ A quote depends on fleet size, users, modules, countries and integration require
 
 ## How to get started
 
-1. Read the product overview at ${SITE_URL}/product.
+1. Read the product overview at ${SITE_URL}/platform.
 2. Check the industry fit at ${SITE_URL}/industries.
 3. Request a tailored demo at ${SITE_URL}/contact. The form asks for fleet size, country and industry so the walkthrough covers the relevant workflows.
 4. Existing customers sign in at ${APP_URL}. Field staff install the Android app from ${PLAY_STORE_URL}.

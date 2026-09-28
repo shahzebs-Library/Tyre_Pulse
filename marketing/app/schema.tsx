@@ -15,7 +15,7 @@
  * several modules already import SITE_URL from this one.
  */
 export { SITE_URL, APP_URL } from "@/lib/site";
-import { SITE_URL, APP_URL } from "@/lib/site";
+import { SITE_URL, APP_URL, WHATSAPP_URL } from "@/lib/site";
 
 export const ANDROID_PACKAGE = "com.shahzebrahman.tyrepulseinspector";
 export const ANDROID_APP_NAME = "Tyre Pulse Inspector";
@@ -47,10 +47,10 @@ export const PLATFORM_SENTENCE = HAS_IOS_APP
 
 export const BRAND_NAME = "Tyre Pulse";
 export const BRAND_TAGLINE = "Smarter Wheels. Stronger Fleet.";
-export const BRAND_COLOR = "#16a34a";
+export const BRAND_COLOR = "#161616";
 
 export const PRODUCT_DESCRIPTION =
-  "Tyre Pulse is a commercial tyre, fleet, inspection and workshop intelligence platform. It connects tyre lifecycle, fleet maintenance, workshop control, field inspections, approvals and executive reporting in one system for multi-site and multi-country operations.";
+  "Tyre Pulse is a PMV (plant, machinery and vehicles) operations platform. It connects asset records, preventive maintenance, workshop job cards, field inspections, tyre lifecycle, stores and procurement, costs, approvals and reporting in one system for multi-site and multi-country operations.";
 
 /** The eight capability groups the product page describes. */
 export const MODULES: ReadonlyArray<{ name: string; description: string }> = [
@@ -86,9 +86,9 @@ export function organizationSchema(): Json {
     url: SITE_URL,
     logo: {
       "@type": "ImageObject",
-      url: `${SITE_URL}/brand/logo.png`,
-      width: 360,
-      height: 116,
+      url: `${SITE_URL}/brand/logo-pmv.png`,
+      width: 640,
+      height: 160,
     },
     description: PRODUCT_DESCRIPTION,
     contactPoint: [
@@ -98,6 +98,7 @@ export function organizationSchema(): Json {
         url: `${SITE_URL}/contact`,
         availableLanguage: ["English", "Arabic"],
       },
+      ...(WHATSAPP_URL ? [{ "@type": "ContactPoint", contactType: "sales", url: WHATSAPP_URL, availableLanguage: ["English", "Arabic"] }] : []),
     ],
   };
 }

@@ -28,3 +28,20 @@ export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://www.tyrepu
  * set NEXT_PUBLIC_APP_URL=https://app.tyrepulse.app and nothing else changes.
  */
 export const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || "https://www.tyrepulse.app").replace(/\/$/, "");
+
+/**
+ * Sales WhatsApp number in international format, digits only. Supplied by the
+ * owner 2026-09-28 (+971 56 672 6276). It drives the floating button on every
+ * page, the contact page link and the WhatsApp ContactPoint in the structured
+ * data; an empty value turns all three off.
+ * Can also be set without a code change via NEXT_PUBLIC_WHATSAPP_NUMBER.
+ */
+export const WHATSAPP_NUMBER: string | null =
+  (process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "971566726276").replace(/\D/g, "") || null;
+
+export const WHATSAPP_URL = WHATSAPP_NUMBER
+  ? `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent("Hello Tyre Pulse, I would like a demo.")}`
+  : null;
+
+/** Share-preview image (WhatsApp, LinkedIn, X, Slack). Every page's openGraph must carry it. */
+export const OG_IMAGES = [{ url: "/og-image.jpg", width: 1200, height: 630, alt: "Tyre Pulse: complete control of your PMV operations" }];

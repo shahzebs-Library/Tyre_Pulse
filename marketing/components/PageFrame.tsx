@@ -10,7 +10,7 @@ export function PageFrame({ children }: { children: React.ReactNode }) {
         focus here rather than only scrolling, so a keyboard user genuinely
         lands past the navigation instead of tabbing back through it.
       */}
-      <main id="main" tabIndex={-1}>{children}</main>
+      <main id="main-content" tabIndex={-1}>{children}</main>
       <Footer />
     </>
   );

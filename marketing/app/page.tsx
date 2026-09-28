@@ -1,45 +1,63 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
 import {
-  ArrowRight, BarChart3, CheckCircle2, ClipboardCheck, Gauge, Globe2, Layers3,
-  ShieldCheck, Smartphone, Sparkles, Truck, Wrench, Workflow, CircleDollarSign
+  ArrowRight, BarChart3, Box, Camera, CheckCircle2, CircleDot, ClipboardCheck, CloudUpload, FileSignature,
+  Fuel, Gauge, ShieldCheck, Truck, Wrench, ClipboardList, PenLine, Settings, FileCheck2,
 } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
-import { Hero3D } from "@/components/Hero3D";
-import { SectionTitle } from "@/components/SectionTitle";
-import { CTA } from "@/components/CTA";
+import { CtaBand } from "@/components/CtaBand";
+import { Tabs } from "@/components/Tabs";
+import { Photo } from "@/components/art/Photos";
+import {
+  ApprovalCard, AssetRecord, CompleteCard, FleetCostPanel, NewInspectionCard, OfflineInspectionPhone,
+  OpsOverview, PartsCard,
+} from "@/components/mock/Screens";
 import { alternatesFor } from "./schema";
+import { OG_IMAGES } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: { absolute: "Tyre Pulse | Tyre, Fleet and Workshop Intelligence Platform" },
+  title: { absolute: "Tyre Pulse | Complete control of your PMV operations" },
   description:
-    "Tyre Pulse connects tyre lifecycle, fleet maintenance, workshop control, inspections, approvals and executive reporting in one platform. Web and Android, English and Arabic.",
+    "Connect plant, machinery and vehicles with your workshop, field teams and stores. Work orders, inspections, tyres, parts, costs and approvals in one place.",
   alternates: alternatesFor("/"),
-  openGraph: {
-    title: "Tyre Pulse | Smarter Wheels. Stronger Fleet.",
-    description:
-      "Control every tyre. Understand every cost. One commercial platform for tyre, fleet, workshop and inspection operations.",
+  openGraph: { images: OG_IMAGES,
+    title: "Tyre Pulse | Complete control of your PMV operations",
+    description: "Assets, workshop, field teams and stores in one operational workspace.",
     url: "/",
     type: "website",
   },
 };
 
-const features = [
-  { icon: Truck, title: "Tyre lifecycle control", text: "Track fitment, removal, pressure, tread, repairs, warranty, scrap and cost per kilometre from one history." },
-  { icon: Wrench, title: "Workshop intelligence", text: "Control open job cards, downtime, technician workload, blocked hours, parts delays and completion quality." },
-  { icon: ClipboardCheck, title: "Field inspections", text: "Give inspectors and tyre teams mobile workflows with photos, signatures, drafts, approvals and offline continuity." },
-  { icon: BarChart3, title: "Executive reporting", text: "Turn operational records into KPI scorecards, white-label reports, PPTX exports and live display dashboards." },
-  { icon: Workflow, title: "Approval workflows", text: "Route work by country, site, department, role, risk and financial limit without hardcoding employee names." },
-  { icon: ShieldCheck, title: "Enterprise access", text: "Keep organizations isolated while controlling roles, locations, sensitive fields, exports and approval authority." },
+function TabCopy({ title, text, points, href }: { title: string; text: string; points: string[]; href: string }) {
+  return (
+    <div className="tab-copy">
+      <h3>{title}</h3>
+      <p>{text}</p>
+      <ul className="tick-list">
+        {points.map((p) => <li key={p}><CheckCircle2 size={18} aria-hidden="true" />{p}</li>)}
+      </ul>
+      <Link className="btn-text" href={href}>See how it works <ArrowRight size={16} aria-hidden="true" /></Link>
+    </div>
+  );
+}
+
+const STEPS = [
+  { icon: ClipboardList, title: "Report and inspect", text: "Log issues, capture photos and record inspection results in the field.", card: <NewInspectionCard /> },
+  { icon: FileCheck2, title: "Review and approve", text: "Technically review, add work details and approve the job.", card: <ApprovalCard /> },
+  { icon: Wrench, title: "Repair and issue parts", text: "Complete the repair, issue parts from stores and record labour and costs.", card: <PartsCard /> },
+  { icon: FileSignature, title: "Verify and release", text: "Confirm work is complete, update records and return the asset to service.", card: <CompleteCard /> },
 ];
 
-const checks = [
-  "One data source for dashboards, PDF, PPTX and Excel",
-  "Country, site and role-aware access and approvals",
-  "Arabic RTL, English LTR and multi-country structure",
-  "Web, Android, PWA and executive TV experiences",
+const MODULES = [
+  { icon: Truck, title: "Fleet and asset lifecycle", text: "Track plant, machinery and vehicles from acquisition to disposal.", href: "/platform/fleet-assets" },
+  { icon: Wrench, title: "Preventive maintenance", text: "Plan and manage maintenance to keep assets working and compliant.", href: "/platform/maintenance" },
+  { icon: Settings, title: "Workshop and job cards", text: "Manage jobs, labour, parts and third-party services.", href: "/platform/maintenance" },
+  { icon: CircleDot, title: "Tyre lifecycle", text: "Track tyre inspections, fitments, rotations and cost per kilometre or hour.", href: "/platform/inspections" },
+  { icon: ShieldCheck, title: "Accidents and insurance", text: "Record incidents, manage claims and track insurance details.", href: "/platform" },
+  { icon: Box, title: "Stores and procurement", text: "Control inventory, purchases and suppliers across all sites.", href: "/platform/inventory" },
+  { icon: Fuel, title: "Fuel and operating costs", text: "See operating costs by asset, site or project.", href: "/platform/inventory" },
+  { icon: BarChart3, title: "Approvals and reporting", text: "Manage approvals and get clear reports across your operations.", href: "/platform/inventory" },
 ];
 
 export default function HomePage() {
@@ -47,110 +65,126 @@ export default function HomePage() {
     <>
       <Header />
       <main id="main-content" tabIndex={-1}>
-        <section className="hero">
-          <div className="site-shell hero-grid">
-            <div className="hero-copy">
-              <span className="eyebrow"><Sparkles size={15} /> Fleet intelligence built around real operations</span>
-              <h1 className="display">Control every tyre. Understand every cost.</h1>
-              <p className="lead">Tyre Pulse connects tyre lifecycle, fleet maintenance, workshop control, inspections, approvals and executive reporting in one commercial platform.</p>
-              <div className="hero-actions">
-                <Link className="btn btn-primary" href="/contact">Book a tailored demo <ArrowRight size={18} /></Link>
-                <Link className="btn btn-secondary" href="/product">Explore the platform</Link>
-              </div>
-              <div className="hero-proof">
-                <span><CheckCircle2 size={17} color="#0b9b6c" /> Multi-company and multi-country</span>
-                <span><CheckCircle2 size={17} color="#0b9b6c" /> Built for field and management teams</span>
-                <span><CheckCircle2 size={17} color="#0b9b6c" /> English and Arabic</span>
-              </div>
-            </div>
-            <div className="hero-stage">
-              <Hero3D />
-              <div className="floating-panel panel-one"><span className="muted">Fleet availability</span><strong>Live KPI</strong><span style={{ color: "var(--success)" }}>Target, trend and variance</span></div>
-              <div className="floating-panel panel-two"><span className="muted">Tyre cost control</span><strong>CPK + lifecycle</strong><span>From purchase to final disposal</span></div>
-            </div>
-          </div>
-        </section>
-
-        <section className="section-tight">
-          <div className="site-shell">
-            <p className="muted" style={{ textAlign: "center", marginBottom: 18 }}>Designed for operations that cannot rely on scattered spreadsheets</p>
-            <div className="logo-strip">
-              {["Construction Fleets", "Transport & Logistics", "Ready-Mix Operations", "Heavy Equipment", "Workshop Networks"].map(x => <div className="logo-chip" key={x}>{x}</div>)}
-            </div>
-          </div>
-        </section>
-
-        <section className="section">
-          <div className="site-shell">
-            <SectionTitle eyebrow="One operational platform" title="Built around the work your teams actually perform." text="Tyre Pulse keeps field activity, approvals, inventory, maintenance and management reporting connected instead of creating another disconnected dashboard." />
-            <div className="grid-3">
-              {features.map(({ icon: Icon, title, text }) => <article className="card feature-card" key={title}><div className="icon-box"><Icon /></div><h3 className="h3">{title}</h3><p>{text}</p></article>)}
-            </div>
-          </div>
-        </section>
-
-        <section className="section" style={{ background: "rgba(255,255,255,.58)" }}>
-          <div className="site-shell product-showcase">
+        <section className="home-hero">
+          <div className="site-shell home-hero-grid">
             <div>
-              <span className="eyebrow">Executive clarity</span>
-              <h2 className="h2">Less reporting work. Better management decisions.</h2>
-              <p className="lead">Build reports from the same approved data users see on screen. Keep the focus on targets, variance, cost, root cause and the next action.</p>
-              <div className="check-list">
-                {checks.map(c => <div className="check-item" key={c}><CheckCircle2 size={20} /><span>{c}</span></div>)}
+              <span className="kicker">Plant, machinery and vehicles</span>
+              <h1 className="hero-h1">Complete control of your PMV operations.</h1>
+              <p className="hero-lead">Connect your assets, workshop, field teams and stores in one operational workspace.</p>
+              <div className="hero-cta">
+                <Link className="btn btn-primary" href="/contact">Book a demo <ArrowRight size={18} aria-hidden="true" /></Link>
+                <Link className="btn-text" href="/platform">Explore the platform <ArrowRight size={17} aria-hidden="true" /></Link>
               </div>
-              <div className="hero-actions"><Link className="btn btn-dark" href="/product">See reporting capabilities <ArrowRight size={17} /></Link></div>
+              <ul className="segments" aria-label="Industries we serve">
+                <li>Construction</li><li>Ready-mix</li><li>Transport</li><li>Equipment rental</li>
+              </ul>
             </div>
-            <div className="product-window"><Image src="/screenshots/executive-report.png" alt="Tyre Pulse executive intelligence report" width={1600} height={900} /></div>
+            <OpsOverview />
           </div>
         </section>
 
-        <section className="section dark-section">
+        <section className="section-pad" aria-labelledby="one-asset">
           <div className="site-shell">
-            <SectionTitle eyebrow="Connected execution" title="From field action to executive visibility." text="Each workflow keeps responsibility, evidence, time, cost and approval history connected." />
-            <div className="workflow">
-              {[
-                ["01", "Capture", "Inspection, job card, tyre event, accident or request."],
-                ["02", "Route", "Assign the right person by location, role and authority."],
-                ["03", "Control", "Track progress, blockers, cost, SLA and approval."],
-                ["04", "Understand", "Convert results into KPIs, risks and actions."],
-              ].map(([n,t,d]) => <div className="workflow-step" key={n}><span className="n">{n}</span><h3 className="h3">{t}</h3><p className="muted">{d}</p></div>)}
-            </div>
+            <h2 className="sec-h" id="one-asset">One asset. Every record. Every team.</h2>
+            <Tabs
+              label="Platform areas"
+              items={[
+                { id: "fleet", label: "Fleet and assets", icon: <Truck size={20} aria-hidden="true" />, panel: <AssetRecord /> },
+                {
+                  id: "maint", label: "Maintenance and workshop", icon: <Wrench size={20} aria-hidden="true" />,
+                  panel: <div className="tab-panel"><Photo name="technicianGenerator" position="45% 40%" /><TabCopy title="Every job, planned and tracked." text="Preventive schedules and breakdowns land in one work order queue your workshop can run from." points={["Preventive plans by hours, kilometres or date", "Job cards with labour, parts and outside services", "Technician allocation and workload"]} href="/platform/maintenance" /></div>,
+                },
+                {
+                  id: "insp", label: "Inspections and safety", icon: <ShieldCheck size={20} aria-hidden="true" />,
+                  panel: <div className="tab-panel"><TabCopy title="Inspect anything, anywhere." text="Field teams run checklists on the phone, with photos, readings and a signature, even without signal." points={["Configurable checklists by asset type", "Defects raise actions and work orders", "Offline capture that syncs later"]} href="/platform/inspections" /><div style={{ padding: 24, background: "#fafaf8" }}><NewInspectionCard /></div></div>,
+                },
+                {
+                  id: "inv", label: "Inventory and procurement", icon: <Box size={20} aria-hidden="true" />,
+                  panel: <div className="tab-panel"><Photo name="loaderSite" /><TabCopy title="The right part, on the right site." text="Stores issue parts straight to job cards, and purchase requests go through approval before an order is placed." points={["Stock by site with reorder levels", "Parts issued against the job and asset", "Purchase requests with approval"]} href="/platform/inventory" /></div>,
+                },
+                {
+                  id: "cost", label: "Costs and reporting", icon: <BarChart3 size={20} aria-hidden="true" />,
+                  panel: <div className="tab-panel"><TabCopy title="Know what every asset costs." text="Maintenance, tyres, parts and fuel roll up by asset, site and category, from the same records your teams entered." points={["Cost by asset, site and category", "Availability and utilisation", "Scheduled reports and exports"]} href="/platform/inventory" /><div style={{ padding: 20 }}><FleetCostPanel /></div></div>,
+                },
+              ]}
+            />
           </div>
         </section>
 
-        <section className="section">
+        <section className="dark-band" aria-labelledby="field-to-closed">
           <div className="site-shell">
-            <SectionTitle eyebrow="Management intelligence" title="Numbers first. Root cause next. Action always." text="Dashboards and AI insights are designed to help managers act, not read long generic summaries." />
-            <div className="insight-grid">
-              <div className="card insight-large">
-                <div><div className="icon-box"><Gauge /></div><h3 className="h3">Performance at a glance</h3><p className="muted">Compare current value, target, prior period and variance across tyre, maintenance and workshop KPIs.</p></div>
-                <div className="spark" aria-label="Illustrative KPI trend"><span style={{ height: "35%" }} /><span style={{ height: "48%" }} /><span style={{ height: "44%" }} /><span style={{ height: "61%" }} /><span style={{ height: "72%" }} /><span style={{ height: "66%" }} /><span style={{ height: "84%" }} /></div>
+            <h2 className="sec-h" id="field-to-closed">From a field issue to a closed job.</h2>
+            <ol className="flow">
+              {STEPS.map(({ icon: Icon, title, text, card }, i) => (
+                <li key={title}>
+                  <div className="flow-step">
+                    <span className="flow-n" aria-hidden="true">{i + 1}</span>
+                    <Icon size={26} aria-hidden="true" />
+                    <div><h3>{title}</h3><p>{text}</p></div>
+                  </div>
+                  {card}
+                </li>
+              ))}
+            </ol>
+          </div>
+        </section>
+
+        <section className="section-pad" aria-labelledby="people">
+          <div className="site-shell">
+            <h2 className="sec-h" id="people">Built for the people doing the work.</h2>
+            <div className="people">
+              <div className="people-art">
+                <Photo name="technicianPhone" position="40% 30%" />
+                <OfflineInspectionPhone />
               </div>
-              <div className="insight-side">
-                <div className="card insight-mini"><div className="icon-box"><CircleDollarSign /></div><h3 className="h3">Cost control</h3><p className="muted">CPK, downtime, repair, warranty and vendor performance by asset, site and country.</p></div>
-                <div className="card insight-mini"><div className="icon-box"><Layers3 /></div><h3 className="h3">One source of truth</h3><p className="muted">The same controlled calculations power screens, reports, exports and executive displays.</p></div>
-              </div>
+              <Tabs
+                label="Roles"
+                className="role-tabs"
+                items={[
+                  { id: "tech", label: "Technician", panel: <RoleCopy title="Tools that work where you work." text="Capture inspections offline, add photos, take meter readings, record work and get signatures, even without a network connection." /> },
+                  { id: "store", label: "Storekeeper", panel: <RoleCopy title="Issue parts without the paperwork." text="See what each job needs, issue stock against the job card and keep reorder levels honest across every store." /> },
+                  { id: "sup", label: "Supervisor", panel: <RoleCopy title="See the day before it starts." text="Review defects, approve work, allocate technicians and follow every open job from one queue." /> },
+                  { id: "pmv", label: "PMV Manager", panel: <RoleCopy title="Availability and cost, asset by asset." text="Track availability, preventive compliance and spend across sites, and decide which assets to repair, replace or move." /> },
+                ]}
+              />
+              <div className="sig-standalone"><Photo name="signature" /></div>
             </div>
           </div>
         </section>
 
-        <section className="section-tight">
-          <div className="site-shell grid-4">
-            {[
-              [Smartphone, "Field-ready", "Mobile and PWA workflows"],
-              [Globe2, "Multi-country", "Location-aware operations"],
-              [ShieldCheck, "Controlled access", "Roles, scope and approvals"],
-              [Sparkles, "AI-ready", "Data-backed recommendations"],
-            ].map(([Icon, value, label]) => {
-              const C = Icon as typeof Smartphone;
-              return <div className="card metric" key={String(value)}><C color="var(--brand)" /><div className="value">{String(value)}</div><div className="label">{String(label)}</div></div>;
-            })}
+        <section className="section-pad" style={{ paddingTop: 0 }} aria-labelledby="full-picture">
+          <div className="site-shell">
+            <h2 className="sec-h" id="full-picture">The full PMV picture.</h2>
+            <ul className="module-grid">
+              {MODULES.map(({ icon: Icon, title, text, href }) => (
+                <li key={title}>
+                  <Icon size={32} strokeWidth={1.6} aria-hidden="true" />
+                  <div><h3>{title}</h3><p>{text}</p><Link href={href} aria-label={`Learn more about ${title.toLowerCase()}`}>Learn more <ArrowRight size={14} aria-hidden="true" /></Link></div>
+                </li>
+              ))}
+            </ul>
           </div>
         </section>
 
-        <CTA />
+        <CtaBand title="Bring every site into view." text="Unite your assets, people and processes in one platform." />
       </main>
       <Footer />
     </>
+  );
+}
+
+function RoleCopy({ title, text }: { title: string; text: string }) {
+  const caps: [React.ComponentType<{ size?: number; "aria-hidden"?: boolean }>, string][] = [
+    [Camera, "Photos"], [Gauge, "Readings"], [PenLine, "Signatures"], [CloudUpload, "Offline sync"],
+  ];
+  return (
+    <div className="role-copy">
+      <h3>{title}</h3>
+      <p>{text}</p>
+      <ul className="caps">
+        {caps.map(([Icon, l]) => <li key={l}><Icon size={22} aria-hidden={true} />{l}</li>)}
+      </ul>
+      <p className="muted-sm" style={{ marginTop: 16 }}><ClipboardCheck size={13} aria-hidden="true" style={{ verticalAlign: -2 }} /> Works on Android phones and tablets, and in any modern browser.</p>
+    </div>
   );
 }

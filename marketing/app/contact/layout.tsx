@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { JsonLd, alternatesFor, pageBreadcrumb } from "../schema";
+import { OG_IMAGES } from "@/lib/site";
 
 /**
  * The contact page itself is a client component, so its metadata lives here.
@@ -7,9 +8,9 @@ import { JsonLd, alternatesFor, pageBreadcrumb } from "../schema";
 export const metadata: Metadata = {
   title: "Contact",
   description:
-    "Book a tailored Tyre Pulse demo. Tell us how many assets, countries, sites and users you manage and the walkthrough will cover the workflows and controls that matter to your operation.",
+    "Book a tailored Tyre Pulse demo. Tell us your assets, countries, sites and users, and the walkthrough will cover the workflows that matter to you.",
   alternates: alternatesFor("/contact"),
-  openGraph: {
+  openGraph: { images: OG_IMAGES,
     title: "Contact | Tyre Pulse",
     description: "Book a demo built around your real operation, not a generic product tour.",
     url: "/contact",

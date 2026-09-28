@@ -3,13 +3,14 @@ import { Database, Fingerprint, KeyRound, LockKeyhole, ScrollText, ShieldCheck }
 import { PageFrame } from "@/components/PageFrame";
 import { JsonLd, alternatesFor, pageBreadcrumb } from "../schema";
 import { CTA } from "@/components/CTA";
+import { OG_IMAGES } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Security",
   description:
     "Tyre Pulse tenant separation, role and location control, privileged access, data protection, auditability and safe integration controls.",
   alternates: alternatesFor("/security"),
-  openGraph: {
+  openGraph: { images: OG_IMAGES,
     title: "Security | Tyre Pulse",
     description: "Control access without slowing operations, with platform ownership, company administration, locations, roles and approval authority kept separate.",
     url: "/security",
@@ -29,7 +30,7 @@ const items = [
 export default function SecurityPage() {
   return <PageFrame>
     <JsonLd data={pageBreadcrumb("Security", "/security")} />
-    <section className="page-hero" id="main-content" tabIndex={-1}><div className="site-shell"><span className="eyebrow">Security by design</span><h1 className="display">Control access without slowing down operations.</h1><p className="lead">Tyre Pulse is designed to separate platform ownership, company administration, locations, roles, financial visibility and approval authority.</p></div></section>
+    <section className="page-hero"><div className="site-shell"><span className="eyebrow">Security by design</span><h1 className="display">Control access without slowing down operations.</h1><p className="lead">Tyre Pulse is designed to separate platform ownership, company administration, locations, roles, financial visibility and approval authority.</p></div></section>
     <section className="page-content"><div className="site-shell grid-3">
       {items.map(([Icon, title, text]) => { const C = Icon as typeof ShieldCheck; return <article className="card feature-card" key={String(title)}><div className="icon-box"><C /></div><h2 className="h3">{String(title)}</h2><p>{String(text)}</p></article>; })}
     </div></section>

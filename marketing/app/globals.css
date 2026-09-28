@@ -1,42 +1,29 @@
 /*
- * Palette.
- *
- * These greens are the product's own, not a choice made on this page. The web
- * app defines --brand: #16a34a and the Android launcher icon is recoloured to
- * the same value, so a blue marketing site was selling a green product. The
- * viewport themeColor in layout.tsx already declared #16a34a while every pixel
- * here was blue, which is the contradiction this resolves.
- *
- * Two greens, because one cannot do both jobs on a light page:
- *   --brand        #15803d  interactive and text. White on it measures 5.01:1,
- *                           so button labels clear WCAG AA for normal text.
- *                           This is byte-identical to the mobile app's own
- *                           light-theme primary, chosen there for the same
- *                           reason: it has to survive direct sun.
- *   --brand-strong #16a34a  identity only. White on it is 3.30:1, which FAILS
- *                           AA for normal text, so it is never used behind
- *                           label text. Decorative fills, glows and the 3D
- *                           scene only.
+ * Palette: site yellow on asphalt, taken from the owner's approved mockups
+ * (2026-09-28). Yellow is only ever a fill behind dark text (#161616 on
+ * #FFC629 measures 12.6:1); it is never used as text colour on white, where
+ * it would fail contrast. --brand-ink is the readable accent for text/icons
+ * on light surfaces.
  */
 :root {
-  --bg: #f5faf7;
+  --bg: #ffffff;
   --surface: #ffffff;
-  --surface-2: #eaf5ef;
-  --ink: #071710;
-  --muted: #5c6f63;
-  --line: #dae7df;
-  --brand: #15803d;
-  --brand-strong: #16a34a;
-  --brand-2: #0d9488;
-  --deep: #06170f;
-  /* Kept as an alias so no rule has to change. The value is no longer navy:
-     it is the product's near-black with a green undertone. */
+  --surface-2: #f4f4f1;
+  --ink: #161616;
+  --muted: #56564f;
+  --line: #e3e3dd;
+  --brand: #ffc629;
+  --brand-strong: #ffc629;
+  --brand-ink: #8a5a00;
+  --brand-2: #e0a800;
+  --deep: #161616;
   --navy: var(--deep);
-  --success: #0b9b6c;
-  --warning: #f0a202;
-  --danger: #d83b4c;
-  --shadow: 0 24px 70px rgba(6, 23, 15, 0.12);
-  --radius: 24px;
+  --success: #1f8a4c;
+  --warning: #b86e00;
+  --danger: #c8312f;
+  --info: #2459c7;
+  --shadow: 0 20px 50px rgba(22, 22, 22, 0.14);
+  --radius: 10px;
 }
 
 * { box-sizing: border-box; }
@@ -44,11 +31,8 @@ html { scroll-behavior: smooth; }
 body {
   margin: 0;
   color: var(--ink);
-  background:
-    radial-gradient(circle at 8% 0%, rgba(22,163,74,.12), transparent 26rem),
-    radial-gradient(circle at 94% 10%, rgba(13,148,136,.10), transparent 23rem),
-    var(--bg);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--bg);
+  font-family: var(--font-body), Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   line-height: 1.6;
 }
 
@@ -64,11 +48,11 @@ img { max-width: 100%; height: auto; }
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  border: 1px solid rgba(21,128,61,.22);
-  background: rgba(255,255,255,.76);
-  border-radius: 999px;
-  padding: 8px 12px;
-  color: var(--brand);
+  border: 0;
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  color: var(--ink);
   font-weight: 700;
   font-size: .78rem;
   letter-spacing: .08em;
@@ -99,7 +83,8 @@ img { max-width: 100%; height: auto; }
   transition: transform .2s ease, box-shadow .2s ease, background .2s ease;
 }
 .btn:hover { transform: translateY(-2px); }
-.btn-primary { background: var(--brand); color: white; box-shadow: 0 14px 32px rgba(21,128,61,.28); }
+.btn-primary { background: var(--brand); color: var(--ink); }
+.btn-primary:hover { background: #ffd24f; }
 .btn-secondary { background: rgba(255,255,255,.84); border-color: var(--line); }
 .btn-dark { background: var(--navy); color: white; }
 
@@ -182,7 +167,7 @@ img { max-width: 100%; height: auto; }
 .metric .label { color: var(--muted); font-size: .9rem; }
 
 .feature-card { padding: 26px; min-height: 230px; }
-.icon-box { width: 46px; height: 46px; display: grid; place-items: center; border-radius: 14px; color: var(--brand); background: rgba(21,128,61,.10); margin-bottom: 22px; }
+.icon-box { width: 46px; height: 46px; display: grid; place-items: center; border-radius: 14px; color: var(--ink); background: var(--brand); margin-bottom: 22px; }
 .feature-card p { color: var(--muted); margin: 0; }
 
 .product-showcase { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); align-items: center; gap: 36px; }
@@ -190,10 +175,9 @@ img { max-width: 100%; height: auto; }
 .product-window img { display: block; border-radius: 17px; width: 100%; }
 .check-list { display: grid; gap: 13px; margin-top: 24px; }
 .check-item { display: flex; gap: 11px; align-items: flex-start; }
-.check-item svg { color: var(--success); flex: 0 0 auto; margin-top: 3px; }
+.check-item svg { color: var(--ink); flex: 0 0 auto; margin-top: 3px; }
 
 .dark-section { background: var(--navy); color: white; position: relative; overflow: hidden; }
-.dark-section::before { content: ""; position: absolute; width: 520px; height: 520px; border-radius: 50%; background: rgba(34,197,94,.16); filter: blur(100px); right: -140px; top: -180px; }
 /*
  * On the dark section, body copy must not keep the light-theme muted colour.
  *
@@ -204,10 +188,10 @@ img { max-width: 100%; height: auto; }
  * measures 10.4:1 on the same background.
  */
 .dark-section .muted,
-.dark-section .lead { color: #a9cab8; }
+.dark-section .lead { color: #c9c9c2; }
 .workflow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-top: 40px; }
 .workflow-step { min-height: 180px; padding: 22px; border: 1px solid rgba(255,255,255,.12); border-radius: 20px; background: rgba(255,255,255,.055); }
-.workflow-step .n { color: #6ee7a8; font-weight: 800; margin-bottom: 30px; display: block; }
+.workflow-step .n { color: var(--brand); font-weight: 800; margin-bottom: 30px; display: block; }
 
 .insight-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: 20px; }
 .insight-large { padding: 30px; min-height: 430px; display: flex; flex-direction: column; justify-content: space-between; }
@@ -216,8 +200,8 @@ img { max-width: 100%; height: auto; }
 .spark { height: 120px; display: flex; gap: 8px; align-items: end; margin-top: 24px; }
 .spark span { flex: 1; border-radius: 8px 8px 2px 2px; background: linear-gradient(180deg, var(--brand-2), var(--brand)); opacity: .8; }
 
-.cta { padding: 52px; display: flex; justify-content: space-between; gap: 28px; align-items: center; background: linear-gradient(135deg, #061a10, #0f4a2a); color: white; }
-.cta p { color: #c6e3d2; margin-bottom: 0; }
+.cta { padding: 52px; display: flex; justify-content: space-between; gap: 28px; align-items: center; background: var(--brand); color: var(--ink); border: 0; }
+.cta p { color: #2c2a22; margin-bottom: 0; }
 
 .footer { background: #05160e; color: #d2e8dc; padding: 64px 0 30px; }
 .footer-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr)); gap: 34px; }
@@ -232,7 +216,7 @@ img { max-width: 100%; height: auto; }
 .feature-row { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 18px; padding: 24px; }
 .price-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; align-items: stretch; }
 .price-card { padding: 28px; display: flex; flex-direction: column; }
-.price-card.featured { border-color: rgba(21,128,61,.55); box-shadow: 0 25px 60px rgba(21,128,61,.16); transform: translateY(-8px); }
+.price-card.featured { border: 2px solid var(--ink); box-shadow: 0 25px 60px rgba(22,22,22,.12); transform: translateY(-8px); }
 .price-card ul { padding: 0; margin: 22px 0; list-style: none; display: grid; gap: 11px; color: var(--muted); }
 .price-card .btn { margin-top: auto; }
 
@@ -240,7 +224,7 @@ img { max-width: 100%; height: auto; }
 .field { display: grid; gap: 7px; }
 .field.full { grid-column: 1 / -1; }
 .field label { font-weight: 700; font-size: .9rem; }
-.field input, .field select, .field textarea { width: 100%; border: 1px solid var(--line); border-radius: 13px; padding: 13px 14px; background: white; color: var(--ink); }
+.field input, .field select, .field textarea { width: 100%; border: 1px solid #c9c9c2; border-radius: 8px; padding: 13px 14px; background: white; color: var(--ink); }
 .field textarea { min-height: 130px; resize: vertical; }
 .form-note { font-size: .85rem; color: var(--muted); }
 
@@ -309,7 +293,7 @@ img { max-width: 100%; height: auto; }
 .skip-link:focus-visible,
 .skip-link:focus {
   top: 16px;
-  outline: 3px solid var(--brand);
+  outline: 3px solid var(--ink);
   outline-offset: 2px;
 }
 [id="main-content"]:focus { outline: none; }

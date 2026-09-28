@@ -76,6 +76,37 @@ batching stops them being started at all.
 
 ---
 
+# ⚑ SESSION 2026-09-28 (part 13) — MARKETING SITE REBUILT TO THE OWNER'S PMV MOCKUPS (yellow/black). No migration.
+Branch `claude/marketing-pmv-redesign`. marketing/ only; the app is untouched.
+- **Brand on the marketing site is now signal yellow `#FFC629` on asphalt `#161616`** (owner's mockups). This REVERSES the
+  2026-09-24 green marketing palette. Yellow is a FILL behind dark text only (12.6:1); never yellow text on white.
+  `--brand-ink #8a5a00` is the readable accent on white. Fonts: Archivo 800 display + Inter body via next/font.
+- **Pages:** `/` (PMV home), `/platform`, `/platform/fleet-assets`, `/platform/maintenance`, `/platform/inspections`,
+  `/platform/inventory`. `/product` is DELETED and 308-redirects to `/platform` (next.config.ts). Page map lives once
+  in `marketing/lib/nav.ts` (header, footer read it).
+- **REAL PHOTOS (owner instruction, same day, reversing the SVG approach):** `components/art/Photos.tsx` + `public/photos/*.webp`.
+  Sources are owner-supplied ONLY: crops of the owner's own mockup images (loader + detail crops, technician with
+  tablet, signature phone, inspector) upscaled 3x, and the Flutter app's vehicle/login photos (tyre_pulse_flutter/assets).
+  Self-hosted, no external image host. The loader crop carries a CAT logo (as in the mockup); flagged to the owner.
+  Owner then supplied 3 site photos (technician at a generator x2, engineer with tablet on a Dubai rooftop): a THIRD
+  company's logo ("VoiceQuote") was on the vests and was removed by OpenCV inpaint; a baked-in comments panel with
+  people's names was cropped off photo 1. RULE: check every supplied photo for other brands' logos before publishing.
+- **SEO/AI/WhatsApp pass:** every page has og:image (`public/og-image.jpg`, 1200x630, via `OG_IMAGES` in lib/site.ts;
+  a page-level `openGraph` REPLACES the layout's, so every page must list `images: OG_IMAGES` or its WhatsApp preview
+  has no picture), descriptions <=160 chars, yellow `app/icon.png` + apple-icon, schema logo `brand/logo-pmv.png`,
+  PMV wording in schema + llms.txt/llms-full.txt (new pages listed). robots.txt already allows GPTBot/ClaudeBot/etc.
+  **WhatsApp:** sales number **+971 56 672 6276** (owner, 2026-09-28) in `WHATSAPP_NUMBER` (lib/site.ts; env
+  `NEXT_PUBLIC_WHATSAPP_NUMBER` overrides): floating wa.me button on every page, contact-page link, schema ContactPoint.
+  **CAVEAT:** SITE_URL defaults to www.tyrepulse.app, which still serves the APP, so og:image/canonical/sitemap URLs
+  resolve to the app host until the domain moves or NEXT_PUBLIC_SITE_URL is set on tyre-pulse-eezl.
+  Product screens stay HTML in `components/mock/Screens.tsx` over `lib/sample.ts`, each tagged "Sample data".
+- three.js hero (Hero3D/HeroScene) + three/@react-three/framer-motion deps REMOVED; /ar uses the loader SVG.
+- Verified: build + lint (0 errors) + 8 tests; no horizontal overflow at 320/390/768/1024 on all 11 pages; menus close
+  on Escape. GOTCHA: a stale `next start` keeps serving the OLD css chunk (404) after a rebuild, making every layout
+  measurement wrong. Kill the server before re-measuring.
+
+---
+
 # ⚑ SESSION 2026-09-28 (part 12) — FLUTTER ACCIDENT SCREENS TO 4 OWNER MOCKS + FLEET SUPERVISOR. PR #367 merged (6922e34). No migration.
 Flutter only (owner: "keep flutter only"; Expo app + listing untouched). NO build triggered; owner runs
 "Flutter Release - Play Internal Testing" on main -> **0.1.0+5** (Internal track of com.shahzebrahman.tyrepulse only).

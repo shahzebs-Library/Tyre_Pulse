@@ -1,17 +1,27 @@
 import type { Metadata } from "next";
+import { Archivo, Inter } from "next/font/google";
 import "./globals.css";
+import "./pmv.css";
+
+const display = Archivo({ subsets: ["latin"], weight: ["700", "800"], variable: "--font-display", display: "swap" });
+const body = Inter({ subsets: ["latin"], variable: "--font-body", display: "swap" });
+import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { BRAND_COLOR, JsonLd, SITE_URL, alternatesFor, siteSchemaGraph } from "./schema";
+import { OG_IMAGES } from "@/lib/site";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "Tyre Pulse | Tyre, Fleet and Workshop Intelligence",
+    default: "Tyre Pulse | PMV operations: assets, workshop, inspections and stores",
     template: "%s | Tyre Pulse",
   },
   description:
-    "Tyre Pulse helps fleet, tyre and workshop teams control costs, inspections, maintenance, approvals and executive reporting from one platform. Available on web and Android.",
+    "Tyre Pulse connects plant, machinery and vehicle assets with the workshop, field teams and stores in one operational workspace. Available on web and Android.",
   applicationName: "Tyre Pulse",
   keywords: [
+    "PMV management software",
+    "plant and machinery management",
+    "fleet management software Saudi Arabia",
     "tyre management software",
     "fleet maintenance software",
     "workshop management system",
@@ -23,34 +33,21 @@ export const metadata: Metadata = {
   creator: "Tyre Pulse",
   publisher: "Tyre Pulse",
   alternates: alternatesFor("/"),
-  icons: {
-    icon: "/brand/icon.png",
-    apple: "/brand/icon.png",
-  },
-  openGraph: {
+  openGraph: { images: OG_IMAGES,
     siteName: "Tyre Pulse",
-    title: "Tyre Pulse | Smarter Wheels. Stronger Fleet.",
+    title: "Tyre Pulse | Complete control of your PMV operations",
     description:
-      "A commercial tyre, fleet, inspection and workshop intelligence platform for modern operations.",
+      "Assets, workshop, inspections and stores for plant, machinery and vehicles in one workspace.",
     type: "website",
     url: SITE_URL,
     locale: "en_US",
     alternateLocale: "ar_SA",
-    images: [
-      {
-        url: "/screenshots/executive-report.png",
-        width: 1600,
-        height: 900,
-        alt: "Tyre Pulse executive intelligence report",
-      },
-    ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Tyre Pulse | Smarter Wheels. Stronger Fleet.",
+    title: "Tyre Pulse | Complete control of your PMV operations",
     description:
-      "Tyre lifecycle, fleet maintenance, workshop control, inspections, approvals and executive reporting in one platform.",
-    images: ["/screenshots/executive-report.png"],
+      "Assets, workshop, inspections and stores for plant, machinery and vehicles in one workspace.",
   },
   robots: {
     index: true,
@@ -68,13 +65,14 @@ export const viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${display.variable} ${body.variable}`}>
       <body>
         <JsonLd data={siteSchemaGraph()} />
         <a className="skip-link" href="#main-content">
           Skip to main content
         </a>
         {children}
+        <WhatsAppButton />
       </body>
     </html>
   );

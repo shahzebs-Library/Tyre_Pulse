@@ -1252,5 +1252,345 @@
         "type": "String"
       }
     }
-  }
+  },
+  "adminHubTitle": "ایڈمن کنسول",
+  "adminHubSubtitle": "صارفین، رسائی، منظوریاں اور سائٹس",
+  "adminHubPendingApprovals": "زیر التوا منظوریاں",
+  "adminHubPendingSignups": "زیر التوا رجسٹریشن",
+  "adminHubLockedUsers": "مقفل صارفین",
+  "adminHubCountUnavailable": "لوڈ نہیں ہو سکا",
+  "adminHubSectionManage": "انتظام",
+  "adminHubSectionMore": "رپورٹس اور ٹیم",
+  "adminHubUsersTitle": "صارفین",
+  "adminHubUsersSubtitle": "منظوری، مقفل کرنا اور کردار بدلنا",
+  "adminHubAccessTitle": "موبائل رسائی",
+  "adminHubAccessSubtitle": "ہر فرد کے لیے ایپ ماڈیول کی اجازت یا ممانعت",
+  "adminHubApprovalsTitle": "منظوریاں",
+  "adminHubApprovalsSubtitle": "دستخط کی منتظر معائنے اور چیک لسٹیں",
+  "adminHubSitesTitle": "سائٹس",
+  "adminHubSitesSubtitle": "علاقے اور فعال حیثیت",
+  "adminHubAiTitle": "فلیٹ اے آئی چیٹ",
+  "adminHubAiSubtitle": "فلیٹ مینجمنٹ کے بارے میں سوال پوچھیں",
+  "adminHubOpenModule": "یہ ماڈیول کھولیں",
+  "adminModuleInspect": "نیا معائنہ",
+  "adminModuleScan": "اسکین",
+  "adminModuleSerial": "سیریل تلاش",
+  "adminModuleTyreChange": "ٹائر کی تبدیلی",
+  "adminModuleChecklists": "چیک لسٹیں",
+  "adminModuleMeter": "میٹر لاگ",
+  "adminModuleWashing": "گاڑیوں کی دھلائی",
+  "adminModuleReportIssue": "مسئلے کی اطلاع",
+  "adminModuleRepairRequest": "مرمت کی درخواست",
+  "adminModuleRecords": "ٹائر ریکارڈز",
+  "adminModuleVehicles": "گاڑیاں",
+  "adminModuleHistory": "تاریخچہ",
+  "adminModuleAlerts": "الرٹس",
+  "adminModuleCalendar": "کیلنڈر",
+  "adminModuleAccidents": "حادثات",
+  "adminModuleReportAccident": "حادثہ درج کریں",
+  "adminModuleWorkorders": "ورک آرڈرز",
+  "adminModuleRca": "بنیادی وجہ",
+  "adminModuleTasks": "کام",
+  "adminModuleStock": "اسٹاک گنتی",
+  "adminModulePm": "واجب الادا دیکھ بھال",
+  "adminModuleWorkshop": "میرے کام",
+  "adminModuleOverview": "جائزہ",
+  "adminModuleReports": "رپورٹس",
+  "adminModuleAnalytics": "تجزیات",
+  "adminModuleStockManage": "اسٹاک مینجمنٹ",
+  "adminModuleAi": "فلیٹ اے آئی",
+  "adminModuleTeam": "ٹیم",
+  "adminModuleApprovals": "منظوریاں",
+  "adminModuleAdmin": "ایڈمن کنسول",
+  "adminModuleUsers": "صارفین کا انتظام",
+  "adminUsersTitle": "صارفین",
+  "adminUsersCount": "{count, plural, =1{1 صارف} other{{count} صارفین}}",
+  "@adminUsersCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "adminUsersSearchHint": "نام، یوزر نیم یا ملازم نمبر سے تلاش کریں",
+  "adminUsersFilterAll": "سب",
+  "adminUsersStatusPending": "زیر التوا",
+  "adminUsersStatusActive": "فعال",
+  "adminUsersStatusLocked": "مقفل",
+  "adminUsersAllRoles": "تمام کردار",
+  "adminUsersEmptyTitle": "کوئی صارف نہیں ملا",
+  "adminUsersEmptyMessage": "کوئی اور تلاش یا فلٹر آزمائیں۔",
+  "adminUsersLoadFailed": "صارفین لوڈ نہیں ہو سکے۔",
+  "adminUsersReadOnlyNote": "صرف سپر ایڈمن صارفین میں تبدیلی کر سکتا ہے۔ آپ فہرست دیکھ سکتے ہیں۔",
+  "adminUsersSelfNote": "یہ آپ کا اپنا اکاؤنٹ ہے۔ آپ اسے مقفل یا اس کا کردار تبدیل نہیں کر سکتے۔",
+  "adminUsersNoName": "بے نام صارف",
+  "adminUsersNoRole": "کوئی کردار تفویض نہیں",
+  "adminUsersSuperAdminBadge": "سپر ایڈمن",
+  "adminUsersFieldRole": "کردار",
+  "adminUsersFieldUsername": "یوزر نیم",
+  "adminUsersFieldEmployeeId": "ملازم نمبر",
+  "adminUsersFieldEmail": "ای میل",
+  "adminUsersFieldSite": "سائٹ",
+  "adminUsersFieldCountry": "ملک",
+  "adminUsersFieldJoined": "شمولیت",
+  "adminUsersFieldPendingReason": "رجسٹریشن نوٹ",
+  "adminUsersActionApprove": "منظور کریں",
+  "adminUsersActionLock": "مقفل کریں",
+  "adminUsersActionUnlock": "غیر مقفل کریں",
+  "adminUsersActionDeactivate": "غیر فعال کریں",
+  "adminUsersActionSetRole": "کردار تبدیل کریں",
+  "adminUsersConfirmApproveTitle": "اس صارف کو منظور کریں؟",
+  "adminUsersConfirmApproveMessage": "{name} سائن ان کر کے ایپ استعمال کر سکے گا۔",
+  "@adminUsersConfirmApproveMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "adminUsersConfirmLockTitle": "اس صارف کو مقفل کریں؟",
+  "adminUsersConfirmLockMessage": "{name} غیر مقفل ہونے تک سائن ان نہیں کر سکے گا۔",
+  "@adminUsersConfirmLockMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "adminUsersConfirmUnlockTitle": "اس صارف کو غیر مقفل کریں؟",
+  "adminUsersConfirmUnlockMessage": "{name} دوبارہ سائن ان کر سکے گا۔",
+  "@adminUsersConfirmUnlockMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "adminUsersDeactivateTitle": "اس صارف کو غیر فعال کریں",
+  "adminUsersDeactivateMessage": "{name} کی رسائی ختم ہو جائے گی اور اکاؤنٹ مقفل ہو گا۔ وجہ لازمی ہے۔",
+  "@adminUsersDeactivateMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "adminUsersSetRoleTitle": "کردار تبدیل کریں",
+  "adminUsersSetRoleMessage": "{name} کے لیے نیا کردار منتخب کریں۔ وجہ لازمی ہے۔",
+  "@adminUsersSetRoleMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "adminUsersReasonLabel": "وجہ",
+  "adminUsersReasonRequired": "وجہ درج کریں۔",
+  "adminUsersRoleRequired": "کردار منتخب کریں۔",
+  "adminUsersActionDone": "محفوظ ہو گیا۔",
+  "adminUsersActionFailed": "تبدیلی محفوظ نہیں ہو سکی۔",
+  "adminAccessTitle": "موبائل رسائی",
+  "adminAccessPickUser": "کسی فرد کو منتخب کریں",
+  "adminAccessChangeUser": "فرد تبدیل کریں",
+  "adminAccessIntro": "تبدیلیاں صرف اس فرد کی موبائل ایپ پر لاگو ہوتی ہیں۔ ڈیفالٹ ان کے کردار کے مطابق ہے۔",
+  "adminAccessDefault": "ڈیفالٹ",
+  "adminAccessAllow": "اجازت",
+  "adminAccessDeny": "ممانعت",
+  "adminAccessRoleDefaultAllowed": "کردار کا ڈیفالٹ: اجازت ہے",
+  "adminAccessRoleDefaultDenied": "کردار کا ڈیفالٹ: اجازت نہیں",
+  "adminAccessRoleDefaultAdminOnly": "ڈیفالٹ طور پر صرف ایڈمن",
+  "adminAccessAdminNote": "ایڈمن اور سپر ایڈمن کی مکمل رسائی ہمیشہ برقرار رہتی ہے۔",
+  "adminAccessReadOnlyNote": "صرف سپر ایڈمن رسائی تبدیل کر سکتا ہے۔",
+  "adminAccessLoadFailed": "اس فرد کی رسائی لوڈ نہیں ہو سکی۔",
+  "adminAccessSaveFailed": "رسائی اپ ڈیٹ نہیں ہو سکی۔",
+  "adminAccessSaved": "رسائی اپ ڈیٹ ہو گئی۔",
+  "adminAccessGroupField": "فیلڈ",
+  "adminAccessGroupFleet": "فلیٹ",
+  "adminAccessGroupMaintenance": "دیکھ بھال",
+  "adminAccessGroupManagement": "انتظامیہ",
+  "adminAccessGroupAdmin": "ایڈمن",
+  "adminApprovalsTabInspections": "معائنے",
+  "adminApprovalsTabChecklists": "چیک لسٹیں",
+  "adminSitesTitle": "سائٹس",
+  "adminSitesCount": "{count, plural, =1{1 سائٹ} other{{count} سائٹس}}",
+  "@adminSitesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "adminSitesSearchHint": "سائٹ، علاقہ یا کوڈ تلاش کریں",
+  "adminSitesActive": "فعال",
+  "adminSitesInactive": "غیر فعال",
+  "adminSitesNoRegion": "کوئی علاقہ نہیں",
+  "adminSitesEmptyTitle": "کوئی سائٹ نہیں",
+  "adminSitesEmptyMessage": "آپ کی تنظیم کے لیے ابھی کوئی سائٹ درج نہیں ہے۔",
+  "adminSitesLoadFailed": "سائٹس لوڈ نہیں ہو سکیں۔",
+  "adminSitesReadOnlyNote": "صرف ایڈمن یا مینیجر سائٹس میں ترمیم کر سکتا ہے۔",
+  "adminSitesEditTitle": "سائٹ میں ترمیم",
+  "adminSitesRegionLabel": "علاقہ",
+  "adminSitesActiveLabel": "فعال سائٹ",
+  "adminSitesSave": "محفوظ کریں",
+  "adminSitesSaved": "سائٹ اپ ڈیٹ ہو گئی۔",
+  "adminSitesSaveFailed": "سائٹ اپ ڈیٹ نہیں ہو سکی۔",
+  "adminAiTitle": "فلیٹ اے آئی چیٹ",
+  "adminAiSubtitle": "جوابات اے آئی سروس سے آتے ہیں۔ اہم اعداد ایپ میں چیک کریں۔",
+  "adminAiHint": "فلیٹ مینجمنٹ کے بارے میں پوچھیں",
+  "adminAiSend": "بھیجیں",
+  "adminAiClear": "چیٹ صاف کریں",
+  "adminAiEmptyTitle": "سوال پوچھیں",
+  "adminAiEmptyMessage": "مثلاً، فی کلومیٹر ٹائر کی لاگت کیسے کم کی جائے۔",
+  "adminAiThinking": "سوچ رہا ہے",
+  "adminAiYou": "آپ",
+  "adminAiAssistant": "فلیٹ اے آئی",
+  "adminAiErrorDisabled": "اے آئی خصوصیات آپ کے ایڈمن نے بند کر رکھی ہیں۔",
+  "adminAiErrorBudget": "ماہانہ اے آئی بجٹ پورا ہو چکا ہے۔",
+  "adminAiErrorRateLimit": "بہت زیادہ درخواستیں۔ تھوڑی دیر انتظار کر کے دوبارہ کوشش کریں۔",
+  "adminAiErrorEmpty": "اے آئی سروس نے کوئی جواب نہیں دیا۔",
+  "adminAiErrorUnavailable": "اے آئی سروس ابھی دستیاب نہیں۔ کچھ دیر بعد کوشش کریں۔",
+  "extrasFleetAiTitle": "فلیٹ اے آئی",
+  "extrasFleetAiSubtitle": "آپ کے فلیٹ کے تازہ ڈیٹا سے جوابات",
+  "extrasFleetAiSnapshotLoading": "فلیٹ کا تازہ ڈیٹا پڑھا جا رہا ہے",
+  "extrasFleetAiNoData": "فلیٹ کا تازہ ڈیٹا نہیں پڑھا جا سکا، اس لیے معاون ابھی آپ کے ریکارڈ سے جواب نہیں دے سکتا۔",
+  "extrasFleetAiGroundedOn": "فلیٹ کی 5 تازہ گنتیوں میں سے {n} کی بنیاد پر",
+  "@extrasFleetAiGroundedOn": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "extrasFleetAiEmptyTitle": "اپنے فلیٹ کے بارے میں پوچھیں",
+  "extrasFleetAiEmptyMessage": "معاون صرف آپ کے فلیٹ کی تازہ گنتیوں سے جواب دیتا ہے اور بتائے گا جب کوئی چیز یہاں دستیاب نہ ہو۔",
+  "extrasFleetAiSuggestedTitle": "یہ پوچھ کر دیکھیں",
+  "extrasFleetAiSuggestOverview": "مجھے فلیٹ کی صحت کا جائزہ دیں",
+  "extrasFleetAiSuggestRisk": "کتنے ٹائر شدید یا زیادہ خطرے میں ہیں؟",
+  "extrasFleetAiSuggestActions": "سب سے پہلے کس چیز پر توجہ دینی چاہیے؟",
+  "extrasFleetAiSuggestAccidents": "پچھلے 30 دنوں میں کتنے حادثات رپورٹ ہوئے؟",
+  "extrasFleetAiInputHint": "اپنے فلیٹ کے بارے میں سوال پوچھیں",
+  "extrasFleetAiSend": "بھیجیں",
+  "extrasFleetAiThinking": "سوچا جا رہا ہے",
+  "extrasFleetAiClear": "گفتگو صاف کریں",
+  "extrasFleetAiDisclaimer": "اے آئی کے جوابات غلط ہو سکتے ہیں۔ کوئی قدم اٹھانے سے پہلے اہم اعداد ایپ میں چیک کریں۔",
+  "extrasFleetAiYou": "آپ",
+  "extrasFleetAiErrDisabled": "آپ کے منتظم نے اے آئی کی سہولیات بند کر دی ہیں۔",
+  "extrasFleetAiErrBudget": "اے آئی کا ماہانہ بجٹ ختم ہو گیا ہے۔ اپنے منتظم سے رابطہ کریں۔",
+  "extrasFleetAiErrRateLimited": "مختصر وقت میں بہت زیادہ سوالات۔ تھوڑا انتظار کر کے دوبارہ کوشش کریں۔",
+  "extrasFleetAiErrOffline": "کنکشن نہیں ہے۔ آپ کا سوال نہیں بھیجا گیا۔",
+  "extrasFleetAiErrUnavailable": "معاون اس وقت دستیاب نہیں ہے۔ تھوڑی دیر بعد دوبارہ کوشش کریں۔",
+  "repairReqCatEngine": "انجن",
+  "repairReqCatTransmission": "ٹرانسمیشن",
+  "repairReqCatBrakes": "بریکیں",
+  "repairReqCatTyres": "ٹائر",
+  "repairReqCatHydraulics": "ہائیڈرولکس",
+  "repairReqCatElectrical": "برقی نظام",
+  "repairReqCatBody": "باڈی",
+  "repairReqCatDrumMixer": "ڈرم / مکسر",
+  "repairReqCatPump": "پمپ",
+  "repairReqCatAirSystem": "ایئر سسٹم",
+  "repairReqCatCooling": "کولنگ",
+  "repairReqCatOther": "دیگر",
+  "repairReqTitle": "مرمت کی درخواست",
+  "repairReqSubtitle": "ورکشاپ کو خرابی کی اطلاع دیں",
+  "repairReqMachine": "مشین",
+  "repairReqChooseAsset": "مشین منتخب کریں",
+  "repairReqSelect": "منتخب کریں",
+  "repairReqChange": "تبدیل کریں",
+  "repairReqPlate": "پلیٹ {plate}",
+  "@repairReqPlate": {
+    "placeholders": {
+      "plate": {
+        "type": "String"
+      }
+    }
+  },
+  "repairReqErrAsset": "وہ مشین منتخب کریں جس میں خرابی ہے۔",
+  "repairReqSite": "سائٹ",
+  "repairReqSiteHint": "مشین کی رجسٹرڈ سائٹ سے بھرا جاتا ہے",
+  "repairReqCategory": "کیا خرابی ہے",
+  "repairReqDescription": "خرابی بیان کریں",
+  "repairReqDescriptionHint": "کیا ہوا، آپ کیا دیکھ یا سن رہے ہیں",
+  "repairReqErrDescription": "بھیجنے سے پہلے خرابی بیان کریں۔",
+  "repairReqPriority": "ترجیح",
+  "repairReqOdometer": "اوڈومیٹر (کلومیٹر)",
+  "repairReqEngineHours": "انجن کے گھنٹے",
+  "repairReqOptional": "اختیاری",
+  "repairReqErrMeter": "صفر یا اس سے زیادہ عدد درج کریں، یا خالی چھوڑ دیں۔",
+  "repairReqOnlineNote": "یہ درخواست براہ راست ورکشاپ کو بھیجی جاتی ہے اور اس کے لیے کنکشن ضروری ہے۔ آر ایف آر نمبر دفتر جاری کرتا ہے۔",
+  "repairReqSubmit": "مرمت کی درخواست بھیجیں",
+  "repairReqErrNoProfile": "آپ کی پروفائل ابھی لوڈ نہیں ہوئی۔ کچھ دیر بعد دوبارہ کوشش کریں۔",
+  "repairReqErrOffline": "کنکشن نہیں ہے۔ کچھ نہیں بھیجا گیا۔ آپ کی معلومات محفوظ ہیں، سگنل آنے پر دوبارہ بھیجیں۔",
+  "repairReqErrPermission": "آپ کے اکاؤنٹ کو مرمت کی درخواست دینے کی اجازت نہیں ہے۔ اپنے منتظم سے رابطہ کریں۔",
+  "repairReqErrFailed": "درخواست نہیں بھیجی جا سکی۔ آپ کی معلومات محفوظ ہیں، دوبارہ کوشش کریں۔",
+  "repairReqSentTitle": "مرمت کی درخواست بھیج دی گئی",
+  "repairReqSentWithNumber": "ورکشاپ کو یہ {rfr} کے طور پر موصول ہو گئی ہے۔",
+  "@repairReqSentWithNumber": {
+    "placeholders": {
+      "rfr": {
+        "type": "String"
+      }
+    }
+  },
+  "repairReqSentNoNumber": "ورکشاپ کو یہ موصول ہو گئی ہے۔ دفتر آر ایف آر نمبر جاری کرے گا۔",
+  "repairReqAnother": "ایک اور درخواست",
+  "repairReqDone": "مکمل",
+  "repairReqSearchHint": "اثاثہ، پلیٹ، قسم یا سائٹ سے تلاش کریں",
+  "repairReqNoAssets": "آپ کے دائرہ کار میں کوئی مشین رجسٹرڈ نہیں ہے۔",
+  "repairReqNoMatch": "اس تلاش سے کوئی مشین نہیں ملی۔",
+  "repairReqRefineSearch": "{n} مشینیں ملیں۔ فہرست محدود کرنے کے لیے مزید لکھیں۔",
+  "@repairReqRefineSearch": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "repairReqCachedList": "آف لائن: اس ڈیوائس پر محفوظ فلیٹ دکھایا جا رہا ہے۔",
+  "registerTitle": "اکاؤنٹ بنائیں",
+  "registerChecking": "دیکھا جا رہا ہے کہ رجسٹریشن کھلی ہے یا نہیں",
+  "registerUnreachableTitle": "سرور تک رسائی نہیں ہو سکی",
+  "registerUnreachableMessage": "رجسٹریشن کے لیے کنکشن ضروری ہے۔ سگنل چیک کر کے دوبارہ کوشش کریں۔",
+  "registerClosedTitle": "رجسٹریشن بند ہے",
+  "registerClosedMessage": "اکاؤنٹ آپ کا منتظم بناتا ہے۔ دعوت کے لیے اپنے منتظم سے رابطہ کریں۔",
+  "registerBackToSignIn": "سائن ان پر واپس جائیں",
+  "registerDoneTitle": "اکاؤنٹ بن گیا",
+  "registerDoneMessage": "آپ کا اکاؤنٹ منظوری کا منتظر ہے۔ منتظم آپ کا کردار اور سائٹ مقرر کرے گا، پھر آپ سائن ان کر سکیں گے۔",
+  "registerIntro": "اپنے صارف نام اور ملازم آئی ڈی سے اکاؤنٹ کی درخواست دیں۔ منتظم اسے منظور کر کے آپ کا کردار اور سائٹ مقرر کرتا ہے۔",
+  "registerFullName": "پورا نام",
+  "registerOptional": "اختیاری",
+  "registerUsername": "صارف نام",
+  "registerUsernameHelp": "کم از کم 3 حروف: حروف، اعداد، نقطہ، انڈر اسکور یا ہائفن",
+  "registerEmployeeId": "ملازم آئی ڈی",
+  "registerPassword": "پاس ورڈ",
+  "registerPasswordHelp": "کم از کم {n} حروف",
+  "@registerPasswordHelp": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "registerConfirm": "پاس ورڈ کی تصدیق",
+  "registerShowPassword": "پاس ورڈ دکھائیں",
+  "registerHidePassword": "پاس ورڈ چھپائیں",
+  "registerApprovalNote": "یہاں آپ کردار یا سائٹ منتخب نہیں کر سکتے۔ نئے اکاؤنٹ منتظم کی منظوری تک زیر التوا رہتے ہیں۔",
+  "registerSubmit": "اکاؤنٹ کی درخواست کریں",
+  "registerHaveAccount": "پہلے سے اکاؤنٹ ہے؟ سائن ان کریں",
+  "registerErrUsernameShort": "کم از کم 3 حروف کا صارف نام درج کریں۔",
+  "registerErrUsernameChars": "صرف حروف، اعداد، نقطہ، انڈر اسکور یا ہائفن استعمال کریں۔",
+  "registerErrEmployeeId": "اپنی ملازم آئی ڈی درج کریں۔",
+  "registerErrPasswordShort": "پاس ورڈ کم از کم {n} حروف کا ہونا چاہیے۔",
+  "@registerErrPasswordShort": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "registerErrMismatch": "پاس ورڈ ایک جیسے نہیں ہیں۔",
+  "registerErrTaken": "یہ صارف نام یا ملازم آئی ڈی پہلے سے استعمال میں ہے۔ کوئی اور منتخب کریں۔",
+  "registerErrOffline": "کنکشن نہیں ہے۔ آپ کا اکاؤنٹ نہیں بنا۔ سگنل آنے پر دوبارہ کوشش کریں۔",
+  "registerErrFailed": "آپ کا اکاؤنٹ نہیں بن سکا۔ دوبارہ کوشش کریں۔",
+  "loginCreateAccount": "اکاؤنٹ بنائیں"
 }

@@ -1252,5 +1252,345 @@
         "type": "String"
       }
     }
-  }
+  },
+  "adminHubTitle": "لوحة الإدارة",
+  "adminHubSubtitle": "المستخدمون والصلاحيات والموافقات والمواقع",
+  "adminHubPendingApprovals": "موافقات معلقة",
+  "adminHubPendingSignups": "تسجيلات معلقة",
+  "adminHubLockedUsers": "مستخدمون مقفلون",
+  "adminHubCountUnavailable": "تعذر التحميل",
+  "adminHubSectionManage": "الإدارة",
+  "adminHubSectionMore": "التقارير والفريق",
+  "adminHubUsersTitle": "المستخدمون",
+  "adminHubUsersSubtitle": "الموافقة والقفل وتغيير الأدوار",
+  "adminHubAccessTitle": "صلاحيات التطبيق",
+  "adminHubAccessSubtitle": "السماح بوحدات التطبيق أو منعها لكل شخص",
+  "adminHubApprovalsTitle": "الموافقات",
+  "adminHubApprovalsSubtitle": "فحوصات وقوائم تحقق بانتظار التوقيع",
+  "adminHubSitesTitle": "المواقع",
+  "adminHubSitesSubtitle": "المناطق وحالة التفعيل",
+  "adminHubAiTitle": "محادثة الذكاء الاصطناعي للأسطول",
+  "adminHubAiSubtitle": "اطرح أسئلة حول إدارة الأسطول",
+  "adminHubOpenModule": "فتح هذه الوحدة",
+  "adminModuleInspect": "فحص جديد",
+  "adminModuleScan": "مسح",
+  "adminModuleSerial": "البحث بالرقم التسلسلي",
+  "adminModuleTyreChange": "تغيير الإطار",
+  "adminModuleChecklists": "قوائم التحقق",
+  "adminModuleMeter": "سجل العداد",
+  "adminModuleWashing": "غسيل المركبات",
+  "adminModuleReportIssue": "الإبلاغ عن مشكلة",
+  "adminModuleRepairRequest": "طلب إصلاح",
+  "adminModuleRecords": "سجلات الإطارات",
+  "adminModuleVehicles": "المركبات",
+  "adminModuleHistory": "السجل",
+  "adminModuleAlerts": "التنبيهات",
+  "adminModuleCalendar": "التقويم",
+  "adminModuleAccidents": "الحوادث",
+  "adminModuleReportAccident": "تسجيل حادث",
+  "adminModuleWorkorders": "أوامر العمل",
+  "adminModuleRca": "السبب الجذري",
+  "adminModuleTasks": "المهام",
+  "adminModuleStock": "جرد المخزون",
+  "adminModulePm": "الصيانة المستحقة",
+  "adminModuleWorkshop": "مهامي",
+  "adminModuleOverview": "نظرة عامة",
+  "adminModuleReports": "التقارير",
+  "adminModuleAnalytics": "التحليلات",
+  "adminModuleStockManage": "إدارة المخزون",
+  "adminModuleAi": "الذكاء الاصطناعي للأسطول",
+  "adminModuleTeam": "الفريق",
+  "adminModuleApprovals": "الموافقات",
+  "adminModuleAdmin": "لوحة الإدارة",
+  "adminModuleUsers": "إدارة المستخدمين",
+  "adminUsersTitle": "المستخدمون",
+  "adminUsersCount": "{count, plural, =0{لا يوجد مستخدمون} =1{مستخدم واحد} =2{مستخدمان} few{{count} مستخدمين} many{{count} مستخدمًا} other{{count} مستخدم}}",
+  "@adminUsersCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "adminUsersSearchHint": "ابحث بالاسم أو اسم المستخدم أو الرقم الوظيفي",
+  "adminUsersFilterAll": "الكل",
+  "adminUsersStatusPending": "معلق",
+  "adminUsersStatusActive": "نشط",
+  "adminUsersStatusLocked": "مقفل",
+  "adminUsersAllRoles": "كل الأدوار",
+  "adminUsersEmptyTitle": "لا يوجد مستخدمون مطابقون",
+  "adminUsersEmptyMessage": "جرّب بحثًا أو تصفية أخرى.",
+  "adminUsersLoadFailed": "تعذر تحميل المستخدمين.",
+  "adminUsersReadOnlyNote": "لا يمكن تعديل المستخدمين إلا لمسؤول أعلى. يمكنك عرض القائمة.",
+  "adminUsersSelfNote": "هذا حسابك. لا يمكنك قفله أو تغيير دوره.",
+  "adminUsersNoName": "مستخدم بلا اسم",
+  "adminUsersNoRole": "لا يوجد دور مسند",
+  "adminUsersSuperAdminBadge": "مسؤول أعلى",
+  "adminUsersFieldRole": "الدور",
+  "adminUsersFieldUsername": "اسم المستخدم",
+  "adminUsersFieldEmployeeId": "الرقم الوظيفي",
+  "adminUsersFieldEmail": "البريد الإلكتروني",
+  "adminUsersFieldSite": "الموقع",
+  "adminUsersFieldCountry": "الدولة",
+  "adminUsersFieldJoined": "تاريخ الانضمام",
+  "adminUsersFieldPendingReason": "ملاحظة التسجيل",
+  "adminUsersActionApprove": "موافقة",
+  "adminUsersActionLock": "قفل",
+  "adminUsersActionUnlock": "إلغاء القفل",
+  "adminUsersActionDeactivate": "إلغاء التفعيل",
+  "adminUsersActionSetRole": "تغيير الدور",
+  "adminUsersConfirmApproveTitle": "الموافقة على هذا المستخدم؟",
+  "adminUsersConfirmApproveMessage": "سيتمكن {name} من تسجيل الدخول واستخدام التطبيق.",
+  "@adminUsersConfirmApproveMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "adminUsersConfirmLockTitle": "قفل هذا المستخدم؟",
+  "adminUsersConfirmLockMessage": "لن يتمكن {name} من تسجيل الدخول حتى يُلغى القفل.",
+  "@adminUsersConfirmLockMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "adminUsersConfirmUnlockTitle": "إلغاء قفل هذا المستخدم؟",
+  "adminUsersConfirmUnlockMessage": "سيتمكن {name} من تسجيل الدخول مجددًا.",
+  "@adminUsersConfirmUnlockMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "adminUsersDeactivateTitle": "إلغاء تفعيل هذا المستخدم",
+  "adminUsersDeactivateMessage": "سيفقد {name} الوصول وسيُقفل حسابه. السبب مطلوب.",
+  "@adminUsersDeactivateMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "adminUsersSetRoleTitle": "تغيير الدور",
+  "adminUsersSetRoleMessage": "اختر الدور الجديد لـ {name}. السبب مطلوب.",
+  "@adminUsersSetRoleMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "adminUsersReasonLabel": "السبب",
+  "adminUsersReasonRequired": "أدخل السبب.",
+  "adminUsersRoleRequired": "اختر دورًا.",
+  "adminUsersActionDone": "تم الحفظ.",
+  "adminUsersActionFailed": "تعذر حفظ التغيير.",
+  "adminAccessTitle": "صلاحيات التطبيق",
+  "adminAccessPickUser": "اختر شخصًا",
+  "adminAccessChangeUser": "تغيير الشخص",
+  "adminAccessIntro": "تنطبق التعديلات على تطبيق الهاتف لهذا الشخص فقط. الافتراضي يتبع دوره.",
+  "adminAccessDefault": "افتراضي",
+  "adminAccessAllow": "سماح",
+  "adminAccessDeny": "منع",
+  "adminAccessRoleDefaultAllowed": "افتراضي الدور: مسموح",
+  "adminAccessRoleDefaultDenied": "افتراضي الدور: غير مسموح",
+  "adminAccessRoleDefaultAdminOnly": "للمسؤولين فقط افتراضيًا",
+  "adminAccessAdminNote": "يحتفظ المسؤولون والمسؤولون الأعلى دائمًا بصلاحيات كاملة.",
+  "adminAccessReadOnlyNote": "لا يمكن تغيير الصلاحيات إلا لمسؤول أعلى.",
+  "adminAccessLoadFailed": "تعذر تحميل صلاحيات هذا الشخص.",
+  "adminAccessSaveFailed": "تعذر تحديث الصلاحيات.",
+  "adminAccessSaved": "تم تحديث الصلاحيات.",
+  "adminAccessGroupField": "الميدان",
+  "adminAccessGroupFleet": "الأسطول",
+  "adminAccessGroupMaintenance": "الصيانة",
+  "adminAccessGroupManagement": "الإدارة",
+  "adminAccessGroupAdmin": "المسؤول",
+  "adminApprovalsTabInspections": "الفحوصات",
+  "adminApprovalsTabChecklists": "قوائم التحقق",
+  "adminSitesTitle": "المواقع",
+  "adminSitesCount": "{count, plural, =0{لا توجد مواقع} =1{موقع واحد} =2{موقعان} few{{count} مواقع} many{{count} موقعًا} other{{count} موقع}}",
+  "@adminSitesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "adminSitesSearchHint": "ابحث بالموقع أو المنطقة أو الرمز",
+  "adminSitesActive": "نشط",
+  "adminSitesInactive": "غير نشط",
+  "adminSitesNoRegion": "بلا منطقة",
+  "adminSitesEmptyTitle": "لا توجد مواقع",
+  "adminSitesEmptyMessage": "لم تُسجل أي مواقع لمؤسستك بعد.",
+  "adminSitesLoadFailed": "تعذر تحميل المواقع.",
+  "adminSitesReadOnlyNote": "لا يمكن تعديل المواقع إلا لمسؤول أو مدير.",
+  "adminSitesEditTitle": "تعديل الموقع",
+  "adminSitesRegionLabel": "المنطقة",
+  "adminSitesActiveLabel": "موقع نشط",
+  "adminSitesSave": "حفظ",
+  "adminSitesSaved": "تم تحديث الموقع.",
+  "adminSitesSaveFailed": "تعذر تحديث الموقع.",
+  "adminAiTitle": "محادثة الذكاء الاصطناعي للأسطول",
+  "adminAiSubtitle": "الإجابات من خدمة الذكاء الاصطناعي. تحقق من الأرقام المهمة في التطبيق.",
+  "adminAiHint": "اسأل عن إدارة الأسطول",
+  "adminAiSend": "إرسال",
+  "adminAiClear": "مسح المحادثة",
+  "adminAiEmptyTitle": "اطرح سؤالًا",
+  "adminAiEmptyMessage": "مثلًا، كيف تخفض تكلفة الإطار لكل كيلومتر.",
+  "adminAiThinking": "جارٍ التفكير",
+  "adminAiYou": "أنت",
+  "adminAiAssistant": "الذكاء الاصطناعي للأسطول",
+  "adminAiErrorDisabled": "ميزات الذكاء الاصطناعي معطلة من قبل المسؤول.",
+  "adminAiErrorBudget": "تم بلوغ ميزانية الذكاء الاصطناعي الشهرية.",
+  "adminAiErrorRateLimit": "طلبات كثيرة. انتظر قليلًا ثم حاول مجددًا.",
+  "adminAiErrorEmpty": "لم تُرجع خدمة الذكاء الاصطناعي أي إجابة.",
+  "adminAiErrorUnavailable": "خدمة الذكاء الاصطناعي غير متاحة حاليًا. حاول بعد قليل.",
+  "extrasFleetAiTitle": "الذكاء الاصطناعي للأسطول",
+  "extrasFleetAiSubtitle": "إجابات من بيانات أسطولك الحية",
+  "extrasFleetAiSnapshotLoading": "جارٍ قراءة بيانات الأسطول الحية",
+  "extrasFleetAiNoData": "تعذرت قراءة بيانات الأسطول الحية، لذا لا يستطيع المساعد الإجابة من سجلاتك الآن.",
+  "extrasFleetAiGroundedOn": "استنادًا إلى {n} من 5 أرقام حية للأسطول",
+  "@extrasFleetAiGroundedOn": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "extrasFleetAiEmptyTitle": "اسأل عن أسطولك",
+  "extrasFleetAiEmptyMessage": "يجيب المساعد فقط من الأرقام الحية لأسطولك، وسيوضح عندما لا تتوفر معلومة هنا.",
+  "extrasFleetAiSuggestedTitle": "جرّب أن تسأل",
+  "extrasFleetAiSuggestOverview": "أعطني نظرة عامة على حالة الأسطول",
+  "extrasFleetAiSuggestRisk": "كم عدد الإطارات ذات الخطورة الحرجة أو العالية؟",
+  "extrasFleetAiSuggestActions": "ما الذي يحتاج إلى اهتمامي أولًا؟",
+  "extrasFleetAiSuggestAccidents": "كم عدد الحوادث المبلغ عنها في آخر 30 يومًا؟",
+  "extrasFleetAiInputHint": "اطرح سؤالًا عن أسطولك",
+  "extrasFleetAiSend": "إرسال",
+  "extrasFleetAiThinking": "جارٍ التفكير",
+  "extrasFleetAiClear": "مسح المحادثة",
+  "extrasFleetAiDisclaimer": "قد تكون إجابات الذكاء الاصطناعي خاطئة. تحقق من الأرقام المهمة في التطبيق قبل التصرف.",
+  "extrasFleetAiYou": "أنت",
+  "extrasFleetAiErrDisabled": "أوقف المسؤول ميزات الذكاء الاصطناعي.",
+  "extrasFleetAiErrBudget": "تم بلوغ ميزانية الذكاء الاصطناعي الشهرية. تواصل مع المسؤول.",
+  "extrasFleetAiErrRateLimited": "عدد كبير من الأسئلة في وقت قصير. انتظر قليلًا ثم حاول مجددًا.",
+  "extrasFleetAiErrOffline": "لا يوجد اتصال. لم يُرسل سؤالك.",
+  "extrasFleetAiErrUnavailable": "المساعد غير متاح الآن. حاول مرة أخرى بعد قليل.",
+  "repairReqCatEngine": "المحرك",
+  "repairReqCatTransmission": "ناقل الحركة",
+  "repairReqCatBrakes": "الفرامل",
+  "repairReqCatTyres": "الإطارات",
+  "repairReqCatHydraulics": "الهيدروليك",
+  "repairReqCatElectrical": "الكهرباء",
+  "repairReqCatBody": "الهيكل",
+  "repairReqCatDrumMixer": "الخلاط / الأسطوانة",
+  "repairReqCatPump": "المضخة",
+  "repairReqCatAirSystem": "نظام الهواء",
+  "repairReqCatCooling": "التبريد",
+  "repairReqCatOther": "أخرى",
+  "repairReqTitle": "طلب إصلاح",
+  "repairReqSubtitle": "أبلغ الورشة عن عطل",
+  "repairReqMachine": "المعدة",
+  "repairReqChooseAsset": "اختر المعدة",
+  "repairReqSelect": "اختيار",
+  "repairReqChange": "تغيير",
+  "repairReqPlate": "اللوحة {plate}",
+  "@repairReqPlate": {
+    "placeholders": {
+      "plate": {
+        "type": "String"
+      }
+    }
+  },
+  "repairReqErrAsset": "اختر المعدة التي بها العطل.",
+  "repairReqSite": "الموقع",
+  "repairReqSiteHint": "يُملأ من الموقع المسجل للمعدة",
+  "repairReqCategory": "نوع العطل",
+  "repairReqDescription": "صف العطل",
+  "repairReqDescriptionHint": "ما الذي حدث، وما الذي تراه أو تسمعه",
+  "repairReqErrDescription": "صف العطل قبل الإرسال.",
+  "repairReqPriority": "الأولوية",
+  "repairReqOdometer": "عداد المسافة (كم)",
+  "repairReqEngineHours": "ساعات تشغيل المحرك",
+  "repairReqOptional": "اختياري",
+  "repairReqErrMeter": "أدخل رقمًا يساوي صفرًا أو أكثر، أو اتركه فارغًا.",
+  "repairReqOnlineNote": "يُرسل هذا الطلب مباشرة إلى الورشة ويحتاج إلى اتصال. يصدر المكتب رقم طلب الإصلاح.",
+  "repairReqSubmit": "إرسال طلب الإصلاح",
+  "repairReqErrNoProfile": "لم يُحمَّل ملفك الشخصي بعد. حاول بعد لحظات.",
+  "repairReqErrOffline": "لا يوجد اتصال. لم يُرسل شيء. بياناتك محفوظة، أرسلها مجددًا عند توفر الشبكة.",
+  "repairReqErrPermission": "لا يُسمح لحسابك بتقديم طلبات الإصلاح. تواصل مع المسؤول.",
+  "repairReqErrFailed": "تعذر إرسال الطلب. بياناتك محفوظة، حاول مجددًا.",
+  "repairReqSentTitle": "تم إرسال طلب الإصلاح",
+  "repairReqSentWithNumber": "استلمته الورشة برقم {rfr}.",
+  "@repairReqSentWithNumber": {
+    "placeholders": {
+      "rfr": {
+        "type": "String"
+      }
+    }
+  },
+  "repairReqSentNoNumber": "استلمته الورشة. سيصدر المكتب رقم طلب الإصلاح.",
+  "repairReqAnother": "تقديم طلب آخر",
+  "repairReqDone": "تم",
+  "repairReqSearchHint": "ابحث برقم الأصل أو اللوحة أو النوع أو الموقع",
+  "repairReqNoAssets": "لا توجد معدات مسجلة ضمن نطاقك.",
+  "repairReqNoMatch": "لا توجد معدة مطابقة لهذا البحث.",
+  "repairReqRefineSearch": "{n} معدة مطابقة. اكتب المزيد لتضييق القائمة.",
+  "@repairReqRefineSearch": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "repairReqCachedList": "غير متصل: يتم عرض الأسطول المحفوظ على هذا الجهاز.",
+  "registerTitle": "إنشاء حساب",
+  "registerChecking": "جارٍ التحقق مما إذا كان التسجيل مفتوحًا",
+  "registerUnreachableTitle": "تعذر الوصول إلى الخادم",
+  "registerUnreachableMessage": "يتطلب التسجيل اتصالًا. تحقق من الشبكة وحاول مجددًا.",
+  "registerClosedTitle": "التسجيل مغلق",
+  "registerClosedMessage": "ينشئ المسؤول الحسابات. تواصل مع المسؤول لتتم دعوتك.",
+  "registerBackToSignIn": "العودة لتسجيل الدخول",
+  "registerDoneTitle": "تم إنشاء الحساب",
+  "registerDoneMessage": "حسابك بانتظار الموافقة. سيحدد المسؤول دورك وموقعك، ثم يمكنك تسجيل الدخول.",
+  "registerIntro": "اطلب حسابًا باسم المستخدم ورقمك الوظيفي. يوافق عليه المسؤول ويحدد دورك وموقعك.",
+  "registerFullName": "الاسم الكامل",
+  "registerOptional": "اختياري",
+  "registerUsername": "اسم المستخدم",
+  "registerUsernameHelp": "3 أحرف على الأقل: حروف أو أرقام أو نقطة أو شرطة سفلية أو شرطة",
+  "registerEmployeeId": "الرقم الوظيفي",
+  "registerPassword": "كلمة المرور",
+  "registerPasswordHelp": "{n} أحرف على الأقل",
+  "@registerPasswordHelp": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "registerConfirm": "تأكيد كلمة المرور",
+  "registerShowPassword": "إظهار كلمة المرور",
+  "registerHidePassword": "إخفاء كلمة المرور",
+  "registerApprovalNote": "لا يمكنك اختيار دور أو موقع هنا. تبدأ الحسابات الجديدة معلّقة حتى يوافق عليها المسؤول.",
+  "registerSubmit": "طلب حساب",
+  "registerHaveAccount": "لديك حساب بالفعل؟ سجّل الدخول",
+  "registerErrUsernameShort": "أدخل اسم مستخدم من 3 أحرف على الأقل.",
+  "registerErrUsernameChars": "استخدم الحروف والأرقام والنقطة والشرطة السفلية والشرطة فقط.",
+  "registerErrEmployeeId": "أدخل رقمك الوظيفي.",
+  "registerErrPasswordShort": "يجب ألا تقل كلمة المرور عن {n} أحرف.",
+  "@registerErrPasswordShort": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "registerErrMismatch": "كلمتا المرور غير متطابقتين.",
+  "registerErrTaken": "اسم المستخدم أو الرقم الوظيفي مستخدم بالفعل. اختر غيره.",
+  "registerErrOffline": "لا يوجد اتصال. لم يُنشأ حسابك. حاول مجددًا عند توفر الشبكة.",
+  "registerErrFailed": "تعذر إنشاء حسابك. حاول مجددًا.",
+  "loginCreateAccount": "إنشاء حساب"
 }

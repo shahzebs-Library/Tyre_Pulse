@@ -3158,5 +3158,1066 @@
         "type": "String"
       }
     }
+  },
+  "adminHubTitle": "Admin console",
+  "@adminHubTitle": {
+    "description": "Admin hub title"
+  },
+  "adminHubSubtitle": "Users, access, approvals and sites",
+  "@adminHubSubtitle": {
+    "description": "Admin hub subtitle"
+  },
+  "adminHubPendingApprovals": "Pending approvals",
+  "@adminHubPendingApprovals": {
+    "description": "Hub count label"
+  },
+  "adminHubPendingSignups": "Pending sign-ups",
+  "@adminHubPendingSignups": {
+    "description": "Hub count label"
+  },
+  "adminHubLockedUsers": "Locked users",
+  "@adminHubLockedUsers": {
+    "description": "Hub count label"
+  },
+  "adminHubCountUnavailable": "Could not load",
+  "@adminHubCountUnavailable": {
+    "description": "Shown when a count query failed"
+  },
+  "adminHubSectionManage": "Manage",
+  "@adminHubSectionManage": {
+    "description": "Hub section header"
+  },
+  "adminHubSectionMore": "Reports and team",
+  "@adminHubSectionMore": {
+    "description": "Hub section header"
+  },
+  "adminHubUsersTitle": "Users",
+  "@adminHubUsersTitle": {
+    "description": "Hub tile"
+  },
+  "adminHubUsersSubtitle": "Approve, lock and change roles",
+  "@adminHubUsersSubtitle": {
+    "description": "Hub tile subtitle"
+  },
+  "adminHubAccessTitle": "Mobile access",
+  "@adminHubAccessTitle": {
+    "description": "Hub tile"
+  },
+  "adminHubAccessSubtitle": "Allow or deny app modules per person",
+  "@adminHubAccessSubtitle": {
+    "description": "Hub tile subtitle"
+  },
+  "adminHubApprovalsTitle": "Approvals",
+  "@adminHubApprovalsTitle": {
+    "description": "Hub tile"
+  },
+  "adminHubApprovalsSubtitle": "Inspections and checklists waiting for sign-off",
+  "@adminHubApprovalsSubtitle": {
+    "description": "Hub tile subtitle"
+  },
+  "adminHubSitesTitle": "Sites",
+  "@adminHubSitesTitle": {
+    "description": "Hub tile"
+  },
+  "adminHubSitesSubtitle": "Regions and active status",
+  "@adminHubSitesSubtitle": {
+    "description": "Hub tile subtitle"
+  },
+  "adminHubAiTitle": "Fleet AI chat",
+  "@adminHubAiTitle": {
+    "description": "Hub tile"
+  },
+  "adminHubAiSubtitle": "Ask questions about fleet management",
+  "@adminHubAiSubtitle": {
+    "description": "Hub tile subtitle"
+  },
+  "adminHubOpenModule": "Open this module",
+  "@adminHubOpenModule": {
+    "description": "Subtitle on links to other modules"
+  },
+  "adminModuleInspect": "New Inspection",
+  "@adminModuleInspect": {
+    "description": "Mobile module label in the admin access editor"
+  },
+  "adminModuleScan": "Scan",
+  "@adminModuleScan": {
+    "description": "Mobile module label in the admin access editor"
+  },
+  "adminModuleSerial": "Serial Search",
+  "@adminModuleSerial": {
+    "description": "Mobile module label in the admin access editor"
+  },
+  "adminModuleTyreChange": "Tyre Change",
+  "@adminModuleTyreChange": {
+    "description": "Mobile module label in the admin access editor"
+  },
+  "adminModuleChecklists": "Checklists",
+  "@adminModuleChecklists": {
+    "description": "Mobile module label in the admin access editor"
+  },
+  "adminModuleMeter": "Meter Log",
+  "@adminModuleMeter": {
+    "description": "Mobile module label in the admin access editor"
+  },
+  "adminModuleWashing": "Vehicle Washing",
+  "@adminModuleWashing": {
+    "description": "Mobile module label in the admin access editor"
+  },
+  "adminModuleReportIssue": "Report Issue",
+  "@adminModuleReportIssue": {
+    "description": "Mobile module label in the admin access editor"
+  },
+  "adminModuleRepairRequest": "Repair Request",
+  "@adminModuleRepairRequest": {
+    "description": "Mobile module label in the admin access editor"
+  },
+  "adminModuleRecords": "Tyre Records",
+  "@adminModuleRecords": {
+    "description": "Mobile module label in the admin access editor"
+  },
+  "adminModuleVehicles": "Vehicles",
+  "@adminModuleVehicles": {
+    "description": "Mobile module label in the admin access editor"
+  },
+  "adminModuleHistory": "History",
+  "@adminModuleHistory": {
+    "description": "Mobile module label in the admin access editor"
+  },
+  "adminModuleAlerts": "Alerts",
+  "@adminModuleAlerts": {
+    "description": "Mobile module label in the admin access editor"
+  },
+  "adminModuleCalendar": "Calendar",
+  "@adminModuleCalendar": {
+    "description": "Mobile module label in the admin access editor"
+  },
+  "adminModuleAccidents": "Accidents",
+  "@adminModuleAccidents": {
+    "description": "Mobile module label in the admin access editor"
+  },
+  "adminModuleReportAccident": "File Accident",
+  "@adminModuleReportAccident": {
+    "description": "Mobile module label in the admin access editor"
+  },
+  "adminModuleWorkorders": "Work Orders",
+  "@adminModuleWorkorders": {
+    "description": "Mobile module label in the admin access editor"
+  },
+  "adminModuleRca": "Root Cause",
+  "@adminModuleRca": {
+    "description": "Mobile module label in the admin access editor"
+  },
+  "adminModuleTasks": "Tasks",
+  "@adminModuleTasks": {
+    "description": "Mobile module label in the admin access editor"
+  },
+  "adminModuleStock": "Stock Count",
+  "@adminModuleStock": {
+    "description": "Mobile module label in the admin access editor"
+  },
+  "adminModulePm": "Maintenance Due",
+  "@adminModulePm": {
+    "description": "Mobile module label in the admin access editor"
+  },
+  "adminModuleWorkshop": "My Jobs",
+  "@adminModuleWorkshop": {
+    "description": "Mobile module label in the admin access editor"
+  },
+  "adminModuleOverview": "Overview",
+  "@adminModuleOverview": {
+    "description": "Mobile module label in the admin access editor"
+  },
+  "adminModuleReports": "Reports",
+  "@adminModuleReports": {
+    "description": "Mobile module label in the admin access editor"
+  },
+  "adminModuleAnalytics": "Analytics",
+  "@adminModuleAnalytics": {
+    "description": "Mobile module label in the admin access editor"
+  },
+  "adminModuleStockManage": "Stock Management",
+  "@adminModuleStockManage": {
+    "description": "Mobile module label in the admin access editor"
+  },
+  "adminModuleAi": "Fleet AI",
+  "@adminModuleAi": {
+    "description": "Mobile module label in the admin access editor"
+  },
+  "adminModuleTeam": "Team",
+  "@adminModuleTeam": {
+    "description": "Mobile module label in the admin access editor"
+  },
+  "adminModuleApprovals": "Approvals",
+  "@adminModuleApprovals": {
+    "description": "Mobile module label in the admin access editor"
+  },
+  "adminModuleAdmin": "Admin Console",
+  "@adminModuleAdmin": {
+    "description": "Mobile module label in the admin access editor"
+  },
+  "adminModuleUsers": "User Management",
+  "@adminModuleUsers": {
+    "description": "Mobile module label in the admin access editor"
+  },
+  "adminUsersTitle": "Users",
+  "@adminUsersTitle": {
+    "description": "Users screen title"
+  },
+  "adminUsersCount": "{count, plural, =1{1 user} other{{count} users}}",
+  "@adminUsersCount": {
+    "description": "Users count",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "adminUsersSearchHint": "Search name, username or employee ID",
+  "@adminUsersSearchHint": {
+    "description": "Search hint"
+  },
+  "adminUsersFilterAll": "All",
+  "@adminUsersFilterAll": {
+    "description": "Filter: all"
+  },
+  "adminUsersStatusPending": "Pending",
+  "@adminUsersStatusPending": {
+    "description": "User status"
+  },
+  "adminUsersStatusActive": "Active",
+  "@adminUsersStatusActive": {
+    "description": "User status"
+  },
+  "adminUsersStatusLocked": "Locked",
+  "@adminUsersStatusLocked": {
+    "description": "User status"
+  },
+  "adminUsersAllRoles": "All roles",
+  "@adminUsersAllRoles": {
+    "description": "Role filter: all"
+  },
+  "adminUsersEmptyTitle": "No users match",
+  "@adminUsersEmptyTitle": {
+    "description": "Empty state title"
+  },
+  "adminUsersEmptyMessage": "Try another search or filter.",
+  "@adminUsersEmptyMessage": {
+    "description": "Empty state message"
+  },
+  "adminUsersLoadFailed": "Could not load users.",
+  "@adminUsersLoadFailed": {
+    "description": "Load error"
+  },
+  "adminUsersReadOnlyNote": "Only a super admin can change users. You can view the list.",
+  "@adminUsersReadOnlyNote": {
+    "description": "Read-only note"
+  },
+  "adminUsersSelfNote": "This is your own account. You cannot lock it or change its role.",
+  "@adminUsersSelfNote": {
+    "description": "Self note"
+  },
+  "adminUsersNoName": "Unnamed user",
+  "@adminUsersNoName": {
+    "description": "Fallback when no name"
+  },
+  "adminUsersNoRole": "No role assigned",
+  "@adminUsersNoRole": {
+    "description": "Fallback when no role"
+  },
+  "adminUsersSuperAdminBadge": "Super admin",
+  "@adminUsersSuperAdminBadge": {
+    "description": "Badge"
+  },
+  "adminUsersFieldRole": "Role",
+  "@adminUsersFieldRole": {
+    "description": "Field label"
+  },
+  "adminUsersFieldUsername": "Username",
+  "@adminUsersFieldUsername": {
+    "description": "Field label"
+  },
+  "adminUsersFieldEmployeeId": "Employee ID",
+  "@adminUsersFieldEmployeeId": {
+    "description": "Field label"
+  },
+  "adminUsersFieldEmail": "Email",
+  "@adminUsersFieldEmail": {
+    "description": "Field label"
+  },
+  "adminUsersFieldSite": "Site",
+  "@adminUsersFieldSite": {
+    "description": "Field label"
+  },
+  "adminUsersFieldCountry": "Country",
+  "@adminUsersFieldCountry": {
+    "description": "Field label"
+  },
+  "adminUsersFieldJoined": "Joined",
+  "@adminUsersFieldJoined": {
+    "description": "Field label"
+  },
+  "adminUsersFieldPendingReason": "Sign-up note",
+  "@adminUsersFieldPendingReason": {
+    "description": "Field label"
+  },
+  "adminUsersActionApprove": "Approve",
+  "@adminUsersActionApprove": {
+    "description": "Action"
+  },
+  "adminUsersActionLock": "Lock",
+  "@adminUsersActionLock": {
+    "description": "Action"
+  },
+  "adminUsersActionUnlock": "Unlock",
+  "@adminUsersActionUnlock": {
+    "description": "Action"
+  },
+  "adminUsersActionDeactivate": "Deactivate",
+  "@adminUsersActionDeactivate": {
+    "description": "Action"
+  },
+  "adminUsersActionSetRole": "Change role",
+  "@adminUsersActionSetRole": {
+    "description": "Action"
+  },
+  "adminUsersConfirmApproveTitle": "Approve this user?",
+  "@adminUsersConfirmApproveTitle": {
+    "description": "Dialog title"
+  },
+  "adminUsersConfirmApproveMessage": "{name} will be able to sign in and use the app.",
+  "@adminUsersConfirmApproveMessage": {
+    "description": "Dialog message",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "adminUsersConfirmLockTitle": "Lock this user?",
+  "@adminUsersConfirmLockTitle": {
+    "description": "Dialog title"
+  },
+  "adminUsersConfirmLockMessage": "{name} will not be able to sign in until unlocked.",
+  "@adminUsersConfirmLockMessage": {
+    "description": "Dialog message",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "adminUsersConfirmUnlockTitle": "Unlock this user?",
+  "@adminUsersConfirmUnlockTitle": {
+    "description": "Dialog title"
+  },
+  "adminUsersConfirmUnlockMessage": "{name} will be able to sign in again.",
+  "@adminUsersConfirmUnlockMessage": {
+    "description": "Dialog message",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "adminUsersDeactivateTitle": "Deactivate this user",
+  "@adminUsersDeactivateTitle": {
+    "description": "Dialog title"
+  },
+  "adminUsersDeactivateMessage": "{name} will lose access and be locked. A reason is required.",
+  "@adminUsersDeactivateMessage": {
+    "description": "Dialog message",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "adminUsersSetRoleTitle": "Change role",
+  "@adminUsersSetRoleTitle": {
+    "description": "Dialog title"
+  },
+  "adminUsersSetRoleMessage": "Choose the new role for {name}. A reason is required.",
+  "@adminUsersSetRoleMessage": {
+    "description": "Dialog message",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "adminUsersReasonLabel": "Reason",
+  "@adminUsersReasonLabel": {
+    "description": "Field label"
+  },
+  "adminUsersReasonRequired": "Enter a reason.",
+  "@adminUsersReasonRequired": {
+    "description": "Validation"
+  },
+  "adminUsersRoleRequired": "Choose a role.",
+  "@adminUsersRoleRequired": {
+    "description": "Validation"
+  },
+  "adminUsersActionDone": "Saved.",
+  "@adminUsersActionDone": {
+    "description": "Snack after success"
+  },
+  "adminUsersActionFailed": "Could not save the change.",
+  "@adminUsersActionFailed": {
+    "description": "Snack after failure"
+  },
+  "adminAccessTitle": "Mobile access",
+  "@adminAccessTitle": {
+    "description": "Access screen title"
+  },
+  "adminAccessPickUser": "Choose a person",
+  "@adminAccessPickUser": {
+    "description": "Subtitle while no user selected"
+  },
+  "adminAccessChangeUser": "Change person",
+  "@adminAccessChangeUser": {
+    "description": "Button"
+  },
+  "adminAccessIntro": "Overrides apply to this person's mobile app only. Default follows their role.",
+  "@adminAccessIntro": {
+    "description": "Intro note"
+  },
+  "adminAccessDefault": "Default",
+  "@adminAccessDefault": {
+    "description": "Choice"
+  },
+  "adminAccessAllow": "Allow",
+  "@adminAccessAllow": {
+    "description": "Choice"
+  },
+  "adminAccessDeny": "Deny",
+  "@adminAccessDeny": {
+    "description": "Choice"
+  },
+  "adminAccessRoleDefaultAllowed": "Role default: allowed",
+  "@adminAccessRoleDefaultAllowed": {
+    "description": "Role default hint"
+  },
+  "adminAccessRoleDefaultDenied": "Role default: not allowed",
+  "@adminAccessRoleDefaultDenied": {
+    "description": "Role default hint"
+  },
+  "adminAccessRoleDefaultAdminOnly": "Admins only by default",
+  "@adminAccessRoleDefaultAdminOnly": {
+    "description": "Role default hint"
+  },
+  "adminAccessAdminNote": "Admins and super admins always keep full access.",
+  "@adminAccessAdminNote": {
+    "description": "Note for admin targets"
+  },
+  "adminAccessReadOnlyNote": "Only a super admin can change access.",
+  "@adminAccessReadOnlyNote": {
+    "description": "Read-only note"
+  },
+  "adminAccessLoadFailed": "Could not load this person's access.",
+  "@adminAccessLoadFailed": {
+    "description": "Load error"
+  },
+  "adminAccessSaveFailed": "Could not update access.",
+  "@adminAccessSaveFailed": {
+    "description": "Save error"
+  },
+  "adminAccessSaved": "Access updated.",
+  "@adminAccessSaved": {
+    "description": "Save success"
+  },
+  "adminAccessGroupField": "Field",
+  "@adminAccessGroupField": {
+    "description": "Module group"
+  },
+  "adminAccessGroupFleet": "Fleet",
+  "@adminAccessGroupFleet": {
+    "description": "Module group"
+  },
+  "adminAccessGroupMaintenance": "Maintenance",
+  "@adminAccessGroupMaintenance": {
+    "description": "Module group"
+  },
+  "adminAccessGroupManagement": "Management",
+  "@adminAccessGroupManagement": {
+    "description": "Module group"
+  },
+  "adminAccessGroupAdmin": "Admin",
+  "@adminAccessGroupAdmin": {
+    "description": "Module group"
+  },
+  "adminApprovalsTabInspections": "Inspections",
+  "@adminApprovalsTabInspections": {
+    "description": "Tab"
+  },
+  "adminApprovalsTabChecklists": "Checklists",
+  "@adminApprovalsTabChecklists": {
+    "description": "Tab"
+  },
+  "adminSitesTitle": "Sites",
+  "@adminSitesTitle": {
+    "description": "Sites title"
+  },
+  "adminSitesCount": "{count, plural, =1{1 site} other{{count} sites}}",
+  "@adminSitesCount": {
+    "description": "Sites count",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "adminSitesSearchHint": "Search site, region or code",
+  "@adminSitesSearchHint": {
+    "description": "Search hint"
+  },
+  "adminSitesActive": "Active",
+  "@adminSitesActive": {
+    "description": "Site status"
+  },
+  "adminSitesInactive": "Inactive",
+  "@adminSitesInactive": {
+    "description": "Site status"
+  },
+  "adminSitesNoRegion": "No region",
+  "@adminSitesNoRegion": {
+    "description": "Fallback when region is blank"
+  },
+  "adminSitesEmptyTitle": "No sites",
+  "@adminSitesEmptyTitle": {
+    "description": "Empty title"
+  },
+  "adminSitesEmptyMessage": "No sites are registered for your organisation yet.",
+  "@adminSitesEmptyMessage": {
+    "description": "Empty message"
+  },
+  "adminSitesLoadFailed": "Could not load sites.",
+  "@adminSitesLoadFailed": {
+    "description": "Load error"
+  },
+  "adminSitesReadOnlyNote": "Only an Admin or Manager can edit sites.",
+  "@adminSitesReadOnlyNote": {
+    "description": "Read-only note"
+  },
+  "adminSitesEditTitle": "Edit site",
+  "@adminSitesEditTitle": {
+    "description": "Sheet title"
+  },
+  "adminSitesRegionLabel": "Region",
+  "@adminSitesRegionLabel": {
+    "description": "Field label"
+  },
+  "adminSitesActiveLabel": "Active site",
+  "@adminSitesActiveLabel": {
+    "description": "Switch label"
+  },
+  "adminSitesSave": "Save",
+  "@adminSitesSave": {
+    "description": "Button"
+  },
+  "adminSitesSaved": "Site updated.",
+  "@adminSitesSaved": {
+    "description": "Success"
+  },
+  "adminSitesSaveFailed": "Could not update the site.",
+  "@adminSitesSaveFailed": {
+    "description": "Error"
+  },
+  "adminAiTitle": "Fleet AI chat",
+  "@adminAiTitle": {
+    "description": "AI title"
+  },
+  "adminAiSubtitle": "Answers come from the AI service. Check important figures in the app.",
+  "@adminAiSubtitle": {
+    "description": "AI subtitle"
+  },
+  "adminAiHint": "Ask about fleet management",
+  "@adminAiHint": {
+    "description": "Input hint"
+  },
+  "adminAiSend": "Send",
+  "@adminAiSend": {
+    "description": "Send button tooltip"
+  },
+  "adminAiClear": "Clear chat",
+  "@adminAiClear": {
+    "description": "Clear tooltip"
+  },
+  "adminAiEmptyTitle": "Ask a question",
+  "@adminAiEmptyTitle": {
+    "description": "Empty title"
+  },
+  "adminAiEmptyMessage": "For example, how to reduce tyre cost per kilometre.",
+  "@adminAiEmptyMessage": {
+    "description": "Empty message"
+  },
+  "adminAiThinking": "Thinking",
+  "@adminAiThinking": {
+    "description": "Loading label"
+  },
+  "adminAiYou": "You",
+  "@adminAiYou": {
+    "description": "Bubble author"
+  },
+  "adminAiAssistant": "Fleet AI",
+  "@adminAiAssistant": {
+    "description": "Bubble author"
+  },
+  "adminAiErrorDisabled": "AI features are turned off by your administrator.",
+  "@adminAiErrorDisabled": {
+    "description": "AI error"
+  },
+  "adminAiErrorBudget": "The monthly AI budget has been reached.",
+  "@adminAiErrorBudget": {
+    "description": "AI error"
+  },
+  "adminAiErrorRateLimit": "Too many requests. Wait a moment and try again.",
+  "@adminAiErrorRateLimit": {
+    "description": "AI error"
+  },
+  "adminAiErrorEmpty": "The AI service returned no answer.",
+  "@adminAiErrorEmpty": {
+    "description": "AI error"
+  },
+  "adminAiErrorUnavailable": "The AI service is unavailable right now. Try again shortly.",
+  "@adminAiErrorUnavailable": {
+    "description": "AI error"
+  },
+  "extrasFleetAiTitle": "Fleet AI",
+  "@extrasFleetAiTitle": {
+    "description": "Fleet AI screen title"
+  },
+  "extrasFleetAiSubtitle": "Answers from your live fleet data",
+  "@extrasFleetAiSubtitle": {
+    "description": "Fleet AI subtitle"
+  },
+  "extrasFleetAiSnapshotLoading": "Reading live fleet data",
+  "@extrasFleetAiSnapshotLoading": {
+    "description": "Shown while grounding counts load"
+  },
+  "extrasFleetAiNoData": "Live fleet data could not be read, so the assistant cannot answer from your records right now.",
+  "@extrasFleetAiNoData": {
+    "description": "No grounding data could be read"
+  },
+  "extrasFleetAiGroundedOn": "Based on {n} of 5 live fleet counts",
+  "@extrasFleetAiGroundedOn": {
+    "description": "How many grounding counts were read",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "extrasFleetAiEmptyTitle": "Ask about your fleet",
+  "@extrasFleetAiEmptyTitle": {
+    "description": "Empty conversation title"
+  },
+  "extrasFleetAiEmptyMessage": "The assistant answers only from live counts of your fleet. It will say when something is not available here.",
+  "@extrasFleetAiEmptyMessage": {
+    "description": "Empty conversation explanation"
+  },
+  "extrasFleetAiSuggestedTitle": "Try asking",
+  "@extrasFleetAiSuggestedTitle": {
+    "description": "Suggested questions heading"
+  },
+  "extrasFleetAiSuggestOverview": "Give me a fleet health overview",
+  "@extrasFleetAiSuggestOverview": {
+    "description": "Suggested question"
+  },
+  "extrasFleetAiSuggestRisk": "How many tyres are at critical or high risk?",
+  "@extrasFleetAiSuggestRisk": {
+    "description": "Suggested question"
+  },
+  "extrasFleetAiSuggestActions": "What needs my attention first?",
+  "@extrasFleetAiSuggestActions": {
+    "description": "Suggested question"
+  },
+  "extrasFleetAiSuggestAccidents": "How many accidents were reported in the last 30 days?",
+  "@extrasFleetAiSuggestAccidents": {
+    "description": "Suggested question"
+  },
+  "extrasFleetAiInputHint": "Ask a question about your fleet",
+  "@extrasFleetAiInputHint": {
+    "description": "Composer hint"
+  },
+  "extrasFleetAiSend": "Send",
+  "@extrasFleetAiSend": {
+    "description": "Send button tooltip"
+  },
+  "extrasFleetAiThinking": "Thinking",
+  "@extrasFleetAiThinking": {
+    "description": "Shown while waiting for an answer"
+  },
+  "extrasFleetAiClear": "Clear conversation",
+  "@extrasFleetAiClear": {
+    "description": "Clear conversation action"
+  },
+  "extrasFleetAiDisclaimer": "AI answers can be wrong. Check important figures in the app before acting.",
+  "@extrasFleetAiDisclaimer": {
+    "description": "Disclaimer under composer"
+  },
+  "extrasFleetAiYou": "You",
+  "@extrasFleetAiYou": {
+    "description": "Semantics label for user messages"
+  },
+  "extrasFleetAiErrDisabled": "AI features are switched off by your administrator.",
+  "@extrasFleetAiErrDisabled": {
+    "description": "chat-ai 403"
+  },
+  "extrasFleetAiErrBudget": "The monthly AI budget has been reached. Contact your administrator.",
+  "@extrasFleetAiErrBudget": {
+    "description": "chat-ai 402"
+  },
+  "extrasFleetAiErrRateLimited": "Too many questions in a short time. Wait a moment and try again.",
+  "@extrasFleetAiErrRateLimited": {
+    "description": "chat-ai 429"
+  },
+  "extrasFleetAiErrOffline": "No connection. Your question was not sent.",
+  "@extrasFleetAiErrOffline": {
+    "description": "Offline"
+  },
+  "extrasFleetAiErrUnavailable": "The assistant is unavailable right now. Try again shortly.",
+  "@extrasFleetAiErrUnavailable": {
+    "description": "Generic AI failure"
+  },
+  "repairReqCatEngine": "Engine",
+  "@repairReqCatEngine": {
+    "description": "Repair request fault category"
+  },
+  "repairReqCatTransmission": "Transmission",
+  "@repairReqCatTransmission": {
+    "description": "Repair request fault category"
+  },
+  "repairReqCatBrakes": "Brakes",
+  "@repairReqCatBrakes": {
+    "description": "Repair request fault category"
+  },
+  "repairReqCatTyres": "Tyres",
+  "@repairReqCatTyres": {
+    "description": "Repair request fault category"
+  },
+  "repairReqCatHydraulics": "Hydraulics",
+  "@repairReqCatHydraulics": {
+    "description": "Repair request fault category"
+  },
+  "repairReqCatElectrical": "Electrical",
+  "@repairReqCatElectrical": {
+    "description": "Repair request fault category"
+  },
+  "repairReqCatBody": "Body",
+  "@repairReqCatBody": {
+    "description": "Repair request fault category"
+  },
+  "repairReqCatDrumMixer": "Drum / Mixer",
+  "@repairReqCatDrumMixer": {
+    "description": "Repair request fault category"
+  },
+  "repairReqCatPump": "Pump",
+  "@repairReqCatPump": {
+    "description": "Repair request fault category"
+  },
+  "repairReqCatAirSystem": "Air system",
+  "@repairReqCatAirSystem": {
+    "description": "Repair request fault category"
+  },
+  "repairReqCatCooling": "Cooling",
+  "@repairReqCatCooling": {
+    "description": "Repair request fault category"
+  },
+  "repairReqCatOther": "Other",
+  "@repairReqCatOther": {
+    "description": "Repair request fault category"
+  },
+  "repairReqTitle": "Repair request",
+  "@repairReqTitle": {
+    "description": "Screen title"
+  },
+  "repairReqSubtitle": "Report a fault to the workshop",
+  "@repairReqSubtitle": {
+    "description": "Screen subtitle"
+  },
+  "repairReqMachine": "Machine",
+  "@repairReqMachine": {
+    "description": "Asset section label"
+  },
+  "repairReqChooseAsset": "Choose the machine",
+  "@repairReqChooseAsset": {
+    "description": "Asset picker prompt"
+  },
+  "repairReqSelect": "Select",
+  "@repairReqSelect": {
+    "description": "Select asset action"
+  },
+  "repairReqChange": "Change",
+  "@repairReqChange": {
+    "description": "Change asset action"
+  },
+  "repairReqPlate": "Plate {plate}",
+  "@repairReqPlate": {
+    "description": "Plate line",
+    "placeholders": {
+      "plate": {
+        "type": "String"
+      }
+    }
+  },
+  "repairReqErrAsset": "Choose the machine that has the fault.",
+  "@repairReqErrAsset": {
+    "description": "Validation"
+  },
+  "repairReqSite": "Site",
+  "@repairReqSite": {
+    "description": "Site field label"
+  },
+  "repairReqSiteHint": "Filled from the machine's registered site",
+  "@repairReqSiteHint": {
+    "description": "Site hint"
+  },
+  "repairReqCategory": "What is wrong",
+  "@repairReqCategory": {
+    "description": "Fault category label"
+  },
+  "repairReqDescription": "Describe the fault",
+  "@repairReqDescription": {
+    "description": "Description label"
+  },
+  "repairReqDescriptionHint": "What happened, what you see or hear",
+  "@repairReqDescriptionHint": {
+    "description": "Description hint"
+  },
+  "repairReqErrDescription": "Describe the fault before sending.",
+  "@repairReqErrDescription": {
+    "description": "Validation"
+  },
+  "repairReqPriority": "Priority",
+  "@repairReqPriority": {
+    "description": "Priority label"
+  },
+  "repairReqOdometer": "Odometer (km)",
+  "@repairReqOdometer": {
+    "description": "Odometer label"
+  },
+  "repairReqEngineHours": "Engine hours",
+  "@repairReqEngineHours": {
+    "description": "Engine hours label"
+  },
+  "repairReqOptional": "Optional",
+  "@repairReqOptional": {
+    "description": "Optional hint"
+  },
+  "repairReqErrMeter": "Enter a number of zero or more, or leave it blank.",
+  "@repairReqErrMeter": {
+    "description": "Meter validation"
+  },
+  "repairReqOnlineNote": "This request is sent straight to the workshop and needs a connection. The office issues the RFR number.",
+  "@repairReqOnlineNote": {
+    "description": "Online-only note"
+  },
+  "repairReqSubmit": "Send repair request",
+  "@repairReqSubmit": {
+    "description": "Submit button"
+  },
+  "repairReqErrNoProfile": "Your profile is not loaded yet. Try again in a moment.",
+  "@repairReqErrNoProfile": {
+    "description": "Missing workspace"
+  },
+  "repairReqErrOffline": "No connection. Nothing was sent. Your entries are kept, send again when you have signal.",
+  "@repairReqErrOffline": {
+    "description": "Offline error"
+  },
+  "repairReqErrPermission": "Your account is not allowed to raise repair requests. Contact your administrator.",
+  "@repairReqErrPermission": {
+    "description": "Permission error"
+  },
+  "repairReqErrFailed": "The request could not be sent. Your entries are kept, try again.",
+  "@repairReqErrFailed": {
+    "description": "Generic error"
+  },
+  "repairReqSentTitle": "Repair request sent",
+  "@repairReqSentTitle": {
+    "description": "Success title"
+  },
+  "repairReqSentWithNumber": "The workshop has it as {rfr}.",
+  "@repairReqSentWithNumber": {
+    "description": "Success with RFR number",
+    "placeholders": {
+      "rfr": {
+        "type": "String"
+      }
+    }
+  },
+  "repairReqSentNoNumber": "The workshop has it. The office will issue the RFR number.",
+  "@repairReqSentNoNumber": {
+    "description": "Success without number"
+  },
+  "repairReqAnother": "Raise another",
+  "@repairReqAnother": {
+    "description": "Start another"
+  },
+  "repairReqDone": "Done",
+  "@repairReqDone": {
+    "description": "Finish"
+  },
+  "repairReqSearchHint": "Search by asset, plate, type or site",
+  "@repairReqSearchHint": {
+    "description": "Asset search hint"
+  },
+  "repairReqNoAssets": "No machines are registered for your scope.",
+  "@repairReqNoAssets": {
+    "description": "Empty fleet"
+  },
+  "repairReqNoMatch": "No machine matches that search.",
+  "@repairReqNoMatch": {
+    "description": "No search match"
+  },
+  "repairReqRefineSearch": "{n} machines match. Type more to narrow the list.",
+  "@repairReqRefineSearch": {
+    "description": "Too many matches",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "repairReqCachedList": "Offline: showing the fleet saved on this device.",
+  "@repairReqCachedList": {
+    "description": "Cached fleet notice"
+  },
+  "registerTitle": "Create account",
+  "@registerTitle": {
+    "description": "Register screen title"
+  },
+  "registerChecking": "Checking whether registration is open",
+  "@registerChecking": {
+    "description": "Loading policy"
+  },
+  "registerUnreachableTitle": "Cannot reach the server",
+  "@registerUnreachableTitle": {
+    "description": "Offline title"
+  },
+  "registerUnreachableMessage": "Registration needs a connection. Check your signal and try again.",
+  "@registerUnreachableMessage": {
+    "description": "Offline message"
+  },
+  "registerClosedTitle": "Registration is closed",
+  "@registerClosedTitle": {
+    "description": "Closed title"
+  },
+  "registerClosedMessage": "Accounts are created by your administrator. Contact your administrator to be invited.",
+  "@registerClosedMessage": {
+    "description": "Closed message"
+  },
+  "registerBackToSignIn": "Back to sign in",
+  "@registerBackToSignIn": {
+    "description": "Back to login"
+  },
+  "registerDoneTitle": "Account created",
+  "@registerDoneTitle": {
+    "description": "Success title"
+  },
+  "registerDoneMessage": "Your account is waiting for approval. Your administrator will assign your role and site, then you can sign in.",
+  "@registerDoneMessage": {
+    "description": "Success message"
+  },
+  "registerIntro": "Request an account with your username and employee ID. An administrator approves it and sets your role and site.",
+  "@registerIntro": {
+    "description": "Intro"
+  },
+  "registerFullName": "Full name",
+  "@registerFullName": {
+    "description": "Full name label"
+  },
+  "registerOptional": "Optional",
+  "@registerOptional": {
+    "description": "Optional hint"
+  },
+  "registerUsername": "Username",
+  "@registerUsername": {
+    "description": "Username label"
+  },
+  "registerUsernameHelp": "At least 3 characters: letters, numbers, dot, underscore or hyphen",
+  "@registerUsernameHelp": {
+    "description": "Username rules"
+  },
+  "registerEmployeeId": "Employee ID",
+  "@registerEmployeeId": {
+    "description": "Employee ID label"
+  },
+  "registerPassword": "Password",
+  "@registerPassword": {
+    "description": "Password label"
+  },
+  "registerPasswordHelp": "At least {n} characters",
+  "@registerPasswordHelp": {
+    "description": "Password rule",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "registerConfirm": "Confirm password",
+  "@registerConfirm": {
+    "description": "Confirm label"
+  },
+  "registerShowPassword": "Show password",
+  "@registerShowPassword": {
+    "description": "Toggle"
+  },
+  "registerHidePassword": "Hide password",
+  "@registerHidePassword": {
+    "description": "Toggle"
+  },
+  "registerApprovalNote": "You cannot choose a role or site here. New accounts start pending until an administrator approves them.",
+  "@registerApprovalNote": {
+    "description": "Approval note"
+  },
+  "registerSubmit": "Request account",
+  "@registerSubmit": {
+    "description": "Submit"
+  },
+  "registerHaveAccount": "Already have an account? Sign in",
+  "@registerHaveAccount": {
+    "description": "Link to login"
+  },
+  "registerErrUsernameShort": "Enter a username of at least 3 characters.",
+  "@registerErrUsernameShort": {
+    "description": "Validation"
+  },
+  "registerErrUsernameChars": "Use only letters, numbers, dot, underscore or hyphen.",
+  "@registerErrUsernameChars": {
+    "description": "Validation"
+  },
+  "registerErrEmployeeId": "Enter your employee ID.",
+  "@registerErrEmployeeId": {
+    "description": "Validation"
+  },
+  "registerErrPasswordShort": "The password needs at least {n} characters.",
+  "@registerErrPasswordShort": {
+    "description": "Validation",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "registerErrMismatch": "The passwords do not match.",
+  "@registerErrMismatch": {
+    "description": "Validation"
+  },
+  "registerErrTaken": "That username or employee ID is already taken. Choose another.",
+  "@registerErrTaken": {
+    "description": "Duplicate"
+  },
+  "registerErrOffline": "No connection. Your account was not created. Try again when you have signal.",
+  "@registerErrOffline": {
+    "description": "Offline"
+  },
+  "registerErrFailed": "Your account could not be created. Try again.",
+  "@registerErrFailed": {
+    "description": "Generic"
+  },
+  "loginCreateAccount": "Create an account",
+  "@loginCreateAccount": {
+    "description": "Login access-help dialog: opens the self-registration screen (the account is created pending administrator approval)."
   }
 }

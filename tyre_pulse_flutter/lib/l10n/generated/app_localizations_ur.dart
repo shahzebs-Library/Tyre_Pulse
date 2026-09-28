@@ -3715,4 +3715,831 @@ class AppLocalizationsUr extends AppLocalizations {
   String managementReportsPdfCurrency(String code) {
     return 'کرنسی: $code';
   }
+
+  @override
+  String get adminHubTitle => 'ایڈمن کنسول';
+
+  @override
+  String get adminHubSubtitle => 'صارفین، رسائی، منظوریاں اور سائٹس';
+
+  @override
+  String get adminHubPendingApprovals => 'زیر التوا منظوریاں';
+
+  @override
+  String get adminHubPendingSignups => 'زیر التوا رجسٹریشن';
+
+  @override
+  String get adminHubLockedUsers => 'مقفل صارفین';
+
+  @override
+  String get adminHubCountUnavailable => 'لوڈ نہیں ہو سکا';
+
+  @override
+  String get adminHubSectionManage => 'انتظام';
+
+  @override
+  String get adminHubSectionMore => 'رپورٹس اور ٹیم';
+
+  @override
+  String get adminHubUsersTitle => 'صارفین';
+
+  @override
+  String get adminHubUsersSubtitle => 'منظوری، مقفل کرنا اور کردار بدلنا';
+
+  @override
+  String get adminHubAccessTitle => 'موبائل رسائی';
+
+  @override
+  String get adminHubAccessSubtitle =>
+      'ہر فرد کے لیے ایپ ماڈیول کی اجازت یا ممانعت';
+
+  @override
+  String get adminHubApprovalsTitle => 'منظوریاں';
+
+  @override
+  String get adminHubApprovalsSubtitle => 'دستخط کی منتظر معائنے اور چیک لسٹیں';
+
+  @override
+  String get adminHubSitesTitle => 'سائٹس';
+
+  @override
+  String get adminHubSitesSubtitle => 'علاقے اور فعال حیثیت';
+
+  @override
+  String get adminHubAiTitle => 'فلیٹ اے آئی چیٹ';
+
+  @override
+  String get adminHubAiSubtitle => 'فلیٹ مینجمنٹ کے بارے میں سوال پوچھیں';
+
+  @override
+  String get adminHubOpenModule => 'یہ ماڈیول کھولیں';
+
+  @override
+  String get adminModuleInspect => 'نیا معائنہ';
+
+  @override
+  String get adminModuleScan => 'اسکین';
+
+  @override
+  String get adminModuleSerial => 'سیریل تلاش';
+
+  @override
+  String get adminModuleTyreChange => 'ٹائر کی تبدیلی';
+
+  @override
+  String get adminModuleChecklists => 'چیک لسٹیں';
+
+  @override
+  String get adminModuleMeter => 'میٹر لاگ';
+
+  @override
+  String get adminModuleWashing => 'گاڑیوں کی دھلائی';
+
+  @override
+  String get adminModuleReportIssue => 'مسئلے کی اطلاع';
+
+  @override
+  String get adminModuleRepairRequest => 'مرمت کی درخواست';
+
+  @override
+  String get adminModuleRecords => 'ٹائر ریکارڈز';
+
+  @override
+  String get adminModuleVehicles => 'گاڑیاں';
+
+  @override
+  String get adminModuleHistory => 'تاریخچہ';
+
+  @override
+  String get adminModuleAlerts => 'الرٹس';
+
+  @override
+  String get adminModuleCalendar => 'کیلنڈر';
+
+  @override
+  String get adminModuleAccidents => 'حادثات';
+
+  @override
+  String get adminModuleReportAccident => 'حادثہ درج کریں';
+
+  @override
+  String get adminModuleWorkorders => 'ورک آرڈرز';
+
+  @override
+  String get adminModuleRca => 'بنیادی وجہ';
+
+  @override
+  String get adminModuleTasks => 'کام';
+
+  @override
+  String get adminModuleStock => 'اسٹاک گنتی';
+
+  @override
+  String get adminModulePm => 'واجب الادا دیکھ بھال';
+
+  @override
+  String get adminModuleWorkshop => 'میرے کام';
+
+  @override
+  String get adminModuleOverview => 'جائزہ';
+
+  @override
+  String get adminModuleReports => 'رپورٹس';
+
+  @override
+  String get adminModuleAnalytics => 'تجزیات';
+
+  @override
+  String get adminModuleStockManage => 'اسٹاک مینجمنٹ';
+
+  @override
+  String get adminModuleAi => 'فلیٹ اے آئی';
+
+  @override
+  String get adminModuleTeam => 'ٹیم';
+
+  @override
+  String get adminModuleApprovals => 'منظوریاں';
+
+  @override
+  String get adminModuleAdmin => 'ایڈمن کنسول';
+
+  @override
+  String get adminModuleUsers => 'صارفین کا انتظام';
+
+  @override
+  String get adminUsersTitle => 'صارفین';
+
+  @override
+  String adminUsersCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count صارفین',
+      one: '1 صارف',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get adminUsersSearchHint => 'نام، یوزر نیم یا ملازم نمبر سے تلاش کریں';
+
+  @override
+  String get adminUsersFilterAll => 'سب';
+
+  @override
+  String get adminUsersStatusPending => 'زیر التوا';
+
+  @override
+  String get adminUsersStatusActive => 'فعال';
+
+  @override
+  String get adminUsersStatusLocked => 'مقفل';
+
+  @override
+  String get adminUsersAllRoles => 'تمام کردار';
+
+  @override
+  String get adminUsersEmptyTitle => 'کوئی صارف نہیں ملا';
+
+  @override
+  String get adminUsersEmptyMessage => 'کوئی اور تلاش یا فلٹر آزمائیں۔';
+
+  @override
+  String get adminUsersLoadFailed => 'صارفین لوڈ نہیں ہو سکے۔';
+
+  @override
+  String get adminUsersReadOnlyNote =>
+      'صرف سپر ایڈمن صارفین میں تبدیلی کر سکتا ہے۔ آپ فہرست دیکھ سکتے ہیں۔';
+
+  @override
+  String get adminUsersSelfNote =>
+      'یہ آپ کا اپنا اکاؤنٹ ہے۔ آپ اسے مقفل یا اس کا کردار تبدیل نہیں کر سکتے۔';
+
+  @override
+  String get adminUsersNoName => 'بے نام صارف';
+
+  @override
+  String get adminUsersNoRole => 'کوئی کردار تفویض نہیں';
+
+  @override
+  String get adminUsersSuperAdminBadge => 'سپر ایڈمن';
+
+  @override
+  String get adminUsersFieldRole => 'کردار';
+
+  @override
+  String get adminUsersFieldUsername => 'یوزر نیم';
+
+  @override
+  String get adminUsersFieldEmployeeId => 'ملازم نمبر';
+
+  @override
+  String get adminUsersFieldEmail => 'ای میل';
+
+  @override
+  String get adminUsersFieldSite => 'سائٹ';
+
+  @override
+  String get adminUsersFieldCountry => 'ملک';
+
+  @override
+  String get adminUsersFieldJoined => 'شمولیت';
+
+  @override
+  String get adminUsersFieldPendingReason => 'رجسٹریشن نوٹ';
+
+  @override
+  String get adminUsersActionApprove => 'منظور کریں';
+
+  @override
+  String get adminUsersActionLock => 'مقفل کریں';
+
+  @override
+  String get adminUsersActionUnlock => 'غیر مقفل کریں';
+
+  @override
+  String get adminUsersActionDeactivate => 'غیر فعال کریں';
+
+  @override
+  String get adminUsersActionSetRole => 'کردار تبدیل کریں';
+
+  @override
+  String get adminUsersConfirmApproveTitle => 'اس صارف کو منظور کریں؟';
+
+  @override
+  String adminUsersConfirmApproveMessage(String name) {
+    return '$name سائن ان کر کے ایپ استعمال کر سکے گا۔';
+  }
+
+  @override
+  String get adminUsersConfirmLockTitle => 'اس صارف کو مقفل کریں؟';
+
+  @override
+  String adminUsersConfirmLockMessage(String name) {
+    return '$name غیر مقفل ہونے تک سائن ان نہیں کر سکے گا۔';
+  }
+
+  @override
+  String get adminUsersConfirmUnlockTitle => 'اس صارف کو غیر مقفل کریں؟';
+
+  @override
+  String adminUsersConfirmUnlockMessage(String name) {
+    return '$name دوبارہ سائن ان کر سکے گا۔';
+  }
+
+  @override
+  String get adminUsersDeactivateTitle => 'اس صارف کو غیر فعال کریں';
+
+  @override
+  String adminUsersDeactivateMessage(String name) {
+    return '$name کی رسائی ختم ہو جائے گی اور اکاؤنٹ مقفل ہو گا۔ وجہ لازمی ہے۔';
+  }
+
+  @override
+  String get adminUsersSetRoleTitle => 'کردار تبدیل کریں';
+
+  @override
+  String adminUsersSetRoleMessage(String name) {
+    return '$name کے لیے نیا کردار منتخب کریں۔ وجہ لازمی ہے۔';
+  }
+
+  @override
+  String get adminUsersReasonLabel => 'وجہ';
+
+  @override
+  String get adminUsersReasonRequired => 'وجہ درج کریں۔';
+
+  @override
+  String get adminUsersRoleRequired => 'کردار منتخب کریں۔';
+
+  @override
+  String get adminUsersActionDone => 'محفوظ ہو گیا۔';
+
+  @override
+  String get adminUsersActionFailed => 'تبدیلی محفوظ نہیں ہو سکی۔';
+
+  @override
+  String get adminAccessTitle => 'موبائل رسائی';
+
+  @override
+  String get adminAccessPickUser => 'کسی فرد کو منتخب کریں';
+
+  @override
+  String get adminAccessChangeUser => 'فرد تبدیل کریں';
+
+  @override
+  String get adminAccessIntro =>
+      'تبدیلیاں صرف اس فرد کی موبائل ایپ پر لاگو ہوتی ہیں۔ ڈیفالٹ ان کے کردار کے مطابق ہے۔';
+
+  @override
+  String get adminAccessDefault => 'ڈیفالٹ';
+
+  @override
+  String get adminAccessAllow => 'اجازت';
+
+  @override
+  String get adminAccessDeny => 'ممانعت';
+
+  @override
+  String get adminAccessRoleDefaultAllowed => 'کردار کا ڈیفالٹ: اجازت ہے';
+
+  @override
+  String get adminAccessRoleDefaultDenied => 'کردار کا ڈیفالٹ: اجازت نہیں';
+
+  @override
+  String get adminAccessRoleDefaultAdminOnly => 'ڈیفالٹ طور پر صرف ایڈمن';
+
+  @override
+  String get adminAccessAdminNote =>
+      'ایڈمن اور سپر ایڈمن کی مکمل رسائی ہمیشہ برقرار رہتی ہے۔';
+
+  @override
+  String get adminAccessReadOnlyNote => 'صرف سپر ایڈمن رسائی تبدیل کر سکتا ہے۔';
+
+  @override
+  String get adminAccessLoadFailed => 'اس فرد کی رسائی لوڈ نہیں ہو سکی۔';
+
+  @override
+  String get adminAccessSaveFailed => 'رسائی اپ ڈیٹ نہیں ہو سکی۔';
+
+  @override
+  String get adminAccessSaved => 'رسائی اپ ڈیٹ ہو گئی۔';
+
+  @override
+  String get adminAccessGroupField => 'فیلڈ';
+
+  @override
+  String get adminAccessGroupFleet => 'فلیٹ';
+
+  @override
+  String get adminAccessGroupMaintenance => 'دیکھ بھال';
+
+  @override
+  String get adminAccessGroupManagement => 'انتظامیہ';
+
+  @override
+  String get adminAccessGroupAdmin => 'ایڈمن';
+
+  @override
+  String get adminApprovalsTabInspections => 'معائنے';
+
+  @override
+  String get adminApprovalsTabChecklists => 'چیک لسٹیں';
+
+  @override
+  String get adminSitesTitle => 'سائٹس';
+
+  @override
+  String adminSitesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count سائٹس',
+      one: '1 سائٹ',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get adminSitesSearchHint => 'سائٹ، علاقہ یا کوڈ تلاش کریں';
+
+  @override
+  String get adminSitesActive => 'فعال';
+
+  @override
+  String get adminSitesInactive => 'غیر فعال';
+
+  @override
+  String get adminSitesNoRegion => 'کوئی علاقہ نہیں';
+
+  @override
+  String get adminSitesEmptyTitle => 'کوئی سائٹ نہیں';
+
+  @override
+  String get adminSitesEmptyMessage =>
+      'آپ کی تنظیم کے لیے ابھی کوئی سائٹ درج نہیں ہے۔';
+
+  @override
+  String get adminSitesLoadFailed => 'سائٹس لوڈ نہیں ہو سکیں۔';
+
+  @override
+  String get adminSitesReadOnlyNote =>
+      'صرف ایڈمن یا مینیجر سائٹس میں ترمیم کر سکتا ہے۔';
+
+  @override
+  String get adminSitesEditTitle => 'سائٹ میں ترمیم';
+
+  @override
+  String get adminSitesRegionLabel => 'علاقہ';
+
+  @override
+  String get adminSitesActiveLabel => 'فعال سائٹ';
+
+  @override
+  String get adminSitesSave => 'محفوظ کریں';
+
+  @override
+  String get adminSitesSaved => 'سائٹ اپ ڈیٹ ہو گئی۔';
+
+  @override
+  String get adminSitesSaveFailed => 'سائٹ اپ ڈیٹ نہیں ہو سکی۔';
+
+  @override
+  String get adminAiTitle => 'فلیٹ اے آئی چیٹ';
+
+  @override
+  String get adminAiSubtitle =>
+      'جوابات اے آئی سروس سے آتے ہیں۔ اہم اعداد ایپ میں چیک کریں۔';
+
+  @override
+  String get adminAiHint => 'فلیٹ مینجمنٹ کے بارے میں پوچھیں';
+
+  @override
+  String get adminAiSend => 'بھیجیں';
+
+  @override
+  String get adminAiClear => 'چیٹ صاف کریں';
+
+  @override
+  String get adminAiEmptyTitle => 'سوال پوچھیں';
+
+  @override
+  String get adminAiEmptyMessage =>
+      'مثلاً، فی کلومیٹر ٹائر کی لاگت کیسے کم کی جائے۔';
+
+  @override
+  String get adminAiThinking => 'سوچ رہا ہے';
+
+  @override
+  String get adminAiYou => 'آپ';
+
+  @override
+  String get adminAiAssistant => 'فلیٹ اے آئی';
+
+  @override
+  String get adminAiErrorDisabled =>
+      'اے آئی خصوصیات آپ کے ایڈمن نے بند کر رکھی ہیں۔';
+
+  @override
+  String get adminAiErrorBudget => 'ماہانہ اے آئی بجٹ پورا ہو چکا ہے۔';
+
+  @override
+  String get adminAiErrorRateLimit =>
+      'بہت زیادہ درخواستیں۔ تھوڑی دیر انتظار کر کے دوبارہ کوشش کریں۔';
+
+  @override
+  String get adminAiErrorEmpty => 'اے آئی سروس نے کوئی جواب نہیں دیا۔';
+
+  @override
+  String get adminAiErrorUnavailable =>
+      'اے آئی سروس ابھی دستیاب نہیں۔ کچھ دیر بعد کوشش کریں۔';
+
+  @override
+  String get extrasFleetAiTitle => 'فلیٹ اے آئی';
+
+  @override
+  String get extrasFleetAiSubtitle => 'آپ کے فلیٹ کے تازہ ڈیٹا سے جوابات';
+
+  @override
+  String get extrasFleetAiSnapshotLoading => 'فلیٹ کا تازہ ڈیٹا پڑھا جا رہا ہے';
+
+  @override
+  String get extrasFleetAiNoData =>
+      'فلیٹ کا تازہ ڈیٹا نہیں پڑھا جا سکا، اس لیے معاون ابھی آپ کے ریکارڈ سے جواب نہیں دے سکتا۔';
+
+  @override
+  String extrasFleetAiGroundedOn(int n) {
+    return 'فلیٹ کی 5 تازہ گنتیوں میں سے $n کی بنیاد پر';
+  }
+
+  @override
+  String get extrasFleetAiEmptyTitle => 'اپنے فلیٹ کے بارے میں پوچھیں';
+
+  @override
+  String get extrasFleetAiEmptyMessage =>
+      'معاون صرف آپ کے فلیٹ کی تازہ گنتیوں سے جواب دیتا ہے اور بتائے گا جب کوئی چیز یہاں دستیاب نہ ہو۔';
+
+  @override
+  String get extrasFleetAiSuggestedTitle => 'یہ پوچھ کر دیکھیں';
+
+  @override
+  String get extrasFleetAiSuggestOverview => 'مجھے فلیٹ کی صحت کا جائزہ دیں';
+
+  @override
+  String get extrasFleetAiSuggestRisk =>
+      'کتنے ٹائر شدید یا زیادہ خطرے میں ہیں؟';
+
+  @override
+  String get extrasFleetAiSuggestActions =>
+      'سب سے پہلے کس چیز پر توجہ دینی چاہیے؟';
+
+  @override
+  String get extrasFleetAiSuggestAccidents =>
+      'پچھلے 30 دنوں میں کتنے حادثات رپورٹ ہوئے؟';
+
+  @override
+  String get extrasFleetAiInputHint => 'اپنے فلیٹ کے بارے میں سوال پوچھیں';
+
+  @override
+  String get extrasFleetAiSend => 'بھیجیں';
+
+  @override
+  String get extrasFleetAiThinking => 'سوچا جا رہا ہے';
+
+  @override
+  String get extrasFleetAiClear => 'گفتگو صاف کریں';
+
+  @override
+  String get extrasFleetAiDisclaimer =>
+      'اے آئی کے جوابات غلط ہو سکتے ہیں۔ کوئی قدم اٹھانے سے پہلے اہم اعداد ایپ میں چیک کریں۔';
+
+  @override
+  String get extrasFleetAiYou => 'آپ';
+
+  @override
+  String get extrasFleetAiErrDisabled =>
+      'آپ کے منتظم نے اے آئی کی سہولیات بند کر دی ہیں۔';
+
+  @override
+  String get extrasFleetAiErrBudget =>
+      'اے آئی کا ماہانہ بجٹ ختم ہو گیا ہے۔ اپنے منتظم سے رابطہ کریں۔';
+
+  @override
+  String get extrasFleetAiErrRateLimited =>
+      'مختصر وقت میں بہت زیادہ سوالات۔ تھوڑا انتظار کر کے دوبارہ کوشش کریں۔';
+
+  @override
+  String get extrasFleetAiErrOffline =>
+      'کنکشن نہیں ہے۔ آپ کا سوال نہیں بھیجا گیا۔';
+
+  @override
+  String get extrasFleetAiErrUnavailable =>
+      'معاون اس وقت دستیاب نہیں ہے۔ تھوڑی دیر بعد دوبارہ کوشش کریں۔';
+
+  @override
+  String get repairReqCatEngine => 'انجن';
+
+  @override
+  String get repairReqCatTransmission => 'ٹرانسمیشن';
+
+  @override
+  String get repairReqCatBrakes => 'بریکیں';
+
+  @override
+  String get repairReqCatTyres => 'ٹائر';
+
+  @override
+  String get repairReqCatHydraulics => 'ہائیڈرولکس';
+
+  @override
+  String get repairReqCatElectrical => 'برقی نظام';
+
+  @override
+  String get repairReqCatBody => 'باڈی';
+
+  @override
+  String get repairReqCatDrumMixer => 'ڈرم / مکسر';
+
+  @override
+  String get repairReqCatPump => 'پمپ';
+
+  @override
+  String get repairReqCatAirSystem => 'ایئر سسٹم';
+
+  @override
+  String get repairReqCatCooling => 'کولنگ';
+
+  @override
+  String get repairReqCatOther => 'دیگر';
+
+  @override
+  String get repairReqTitle => 'مرمت کی درخواست';
+
+  @override
+  String get repairReqSubtitle => 'ورکشاپ کو خرابی کی اطلاع دیں';
+
+  @override
+  String get repairReqMachine => 'مشین';
+
+  @override
+  String get repairReqChooseAsset => 'مشین منتخب کریں';
+
+  @override
+  String get repairReqSelect => 'منتخب کریں';
+
+  @override
+  String get repairReqChange => 'تبدیل کریں';
+
+  @override
+  String repairReqPlate(String plate) {
+    return 'پلیٹ $plate';
+  }
+
+  @override
+  String get repairReqErrAsset => 'وہ مشین منتخب کریں جس میں خرابی ہے۔';
+
+  @override
+  String get repairReqSite => 'سائٹ';
+
+  @override
+  String get repairReqSiteHint => 'مشین کی رجسٹرڈ سائٹ سے بھرا جاتا ہے';
+
+  @override
+  String get repairReqCategory => 'کیا خرابی ہے';
+
+  @override
+  String get repairReqDescription => 'خرابی بیان کریں';
+
+  @override
+  String get repairReqDescriptionHint => 'کیا ہوا، آپ کیا دیکھ یا سن رہے ہیں';
+
+  @override
+  String get repairReqErrDescription => 'بھیجنے سے پہلے خرابی بیان کریں۔';
+
+  @override
+  String get repairReqPriority => 'ترجیح';
+
+  @override
+  String get repairReqOdometer => 'اوڈومیٹر (کلومیٹر)';
+
+  @override
+  String get repairReqEngineHours => 'انجن کے گھنٹے';
+
+  @override
+  String get repairReqOptional => 'اختیاری';
+
+  @override
+  String get repairReqErrMeter =>
+      'صفر یا اس سے زیادہ عدد درج کریں، یا خالی چھوڑ دیں۔';
+
+  @override
+  String get repairReqOnlineNote =>
+      'یہ درخواست براہ راست ورکشاپ کو بھیجی جاتی ہے اور اس کے لیے کنکشن ضروری ہے۔ آر ایف آر نمبر دفتر جاری کرتا ہے۔';
+
+  @override
+  String get repairReqSubmit => 'مرمت کی درخواست بھیجیں';
+
+  @override
+  String get repairReqErrNoProfile =>
+      'آپ کی پروفائل ابھی لوڈ نہیں ہوئی۔ کچھ دیر بعد دوبارہ کوشش کریں۔';
+
+  @override
+  String get repairReqErrOffline =>
+      'کنکشن نہیں ہے۔ کچھ نہیں بھیجا گیا۔ آپ کی معلومات محفوظ ہیں، سگنل آنے پر دوبارہ بھیجیں۔';
+
+  @override
+  String get repairReqErrPermission =>
+      'آپ کے اکاؤنٹ کو مرمت کی درخواست دینے کی اجازت نہیں ہے۔ اپنے منتظم سے رابطہ کریں۔';
+
+  @override
+  String get repairReqErrFailed =>
+      'درخواست نہیں بھیجی جا سکی۔ آپ کی معلومات محفوظ ہیں، دوبارہ کوشش کریں۔';
+
+  @override
+  String get repairReqSentTitle => 'مرمت کی درخواست بھیج دی گئی';
+
+  @override
+  String repairReqSentWithNumber(String rfr) {
+    return 'ورکشاپ کو یہ $rfr کے طور پر موصول ہو گئی ہے۔';
+  }
+
+  @override
+  String get repairReqSentNoNumber =>
+      'ورکشاپ کو یہ موصول ہو گئی ہے۔ دفتر آر ایف آر نمبر جاری کرے گا۔';
+
+  @override
+  String get repairReqAnother => 'ایک اور درخواست';
+
+  @override
+  String get repairReqDone => 'مکمل';
+
+  @override
+  String get repairReqSearchHint => 'اثاثہ، پلیٹ، قسم یا سائٹ سے تلاش کریں';
+
+  @override
+  String get repairReqNoAssets =>
+      'آپ کے دائرہ کار میں کوئی مشین رجسٹرڈ نہیں ہے۔';
+
+  @override
+  String get repairReqNoMatch => 'اس تلاش سے کوئی مشین نہیں ملی۔';
+
+  @override
+  String repairReqRefineSearch(int n) {
+    return '$n مشینیں ملیں۔ فہرست محدود کرنے کے لیے مزید لکھیں۔';
+  }
+
+  @override
+  String get repairReqCachedList =>
+      'آف لائن: اس ڈیوائس پر محفوظ فلیٹ دکھایا جا رہا ہے۔';
+
+  @override
+  String get registerTitle => 'اکاؤنٹ بنائیں';
+
+  @override
+  String get registerChecking => 'دیکھا جا رہا ہے کہ رجسٹریشن کھلی ہے یا نہیں';
+
+  @override
+  String get registerUnreachableTitle => 'سرور تک رسائی نہیں ہو سکی';
+
+  @override
+  String get registerUnreachableMessage =>
+      'رجسٹریشن کے لیے کنکشن ضروری ہے۔ سگنل چیک کر کے دوبارہ کوشش کریں۔';
+
+  @override
+  String get registerClosedTitle => 'رجسٹریشن بند ہے';
+
+  @override
+  String get registerClosedMessage =>
+      'اکاؤنٹ آپ کا منتظم بناتا ہے۔ دعوت کے لیے اپنے منتظم سے رابطہ کریں۔';
+
+  @override
+  String get registerBackToSignIn => 'سائن ان پر واپس جائیں';
+
+  @override
+  String get registerDoneTitle => 'اکاؤنٹ بن گیا';
+
+  @override
+  String get registerDoneMessage =>
+      'آپ کا اکاؤنٹ منظوری کا منتظر ہے۔ منتظم آپ کا کردار اور سائٹ مقرر کرے گا، پھر آپ سائن ان کر سکیں گے۔';
+
+  @override
+  String get registerIntro =>
+      'اپنے صارف نام اور ملازم آئی ڈی سے اکاؤنٹ کی درخواست دیں۔ منتظم اسے منظور کر کے آپ کا کردار اور سائٹ مقرر کرتا ہے۔';
+
+  @override
+  String get registerFullName => 'پورا نام';
+
+  @override
+  String get registerOptional => 'اختیاری';
+
+  @override
+  String get registerUsername => 'صارف نام';
+
+  @override
+  String get registerUsernameHelp =>
+      'کم از کم 3 حروف: حروف، اعداد، نقطہ، انڈر اسکور یا ہائفن';
+
+  @override
+  String get registerEmployeeId => 'ملازم آئی ڈی';
+
+  @override
+  String get registerPassword => 'پاس ورڈ';
+
+  @override
+  String registerPasswordHelp(int n) {
+    return 'کم از کم $n حروف';
+  }
+
+  @override
+  String get registerConfirm => 'پاس ورڈ کی تصدیق';
+
+  @override
+  String get registerShowPassword => 'پاس ورڈ دکھائیں';
+
+  @override
+  String get registerHidePassword => 'پاس ورڈ چھپائیں';
+
+  @override
+  String get registerApprovalNote =>
+      'یہاں آپ کردار یا سائٹ منتخب نہیں کر سکتے۔ نئے اکاؤنٹ منتظم کی منظوری تک زیر التوا رہتے ہیں۔';
+
+  @override
+  String get registerSubmit => 'اکاؤنٹ کی درخواست کریں';
+
+  @override
+  String get registerHaveAccount => 'پہلے سے اکاؤنٹ ہے؟ سائن ان کریں';
+
+  @override
+  String get registerErrUsernameShort =>
+      'کم از کم 3 حروف کا صارف نام درج کریں۔';
+
+  @override
+  String get registerErrUsernameChars =>
+      'صرف حروف، اعداد، نقطہ، انڈر اسکور یا ہائفن استعمال کریں۔';
+
+  @override
+  String get registerErrEmployeeId => 'اپنی ملازم آئی ڈی درج کریں۔';
+
+  @override
+  String registerErrPasswordShort(int n) {
+    return 'پاس ورڈ کم از کم $n حروف کا ہونا چاہیے۔';
+  }
+
+  @override
+  String get registerErrMismatch => 'پاس ورڈ ایک جیسے نہیں ہیں۔';
+
+  @override
+  String get registerErrTaken =>
+      'یہ صارف نام یا ملازم آئی ڈی پہلے سے استعمال میں ہے۔ کوئی اور منتخب کریں۔';
+
+  @override
+  String get registerErrOffline =>
+      'کنکشن نہیں ہے۔ آپ کا اکاؤنٹ نہیں بنا۔ سگنل آنے پر دوبارہ کوشش کریں۔';
+
+  @override
+  String get registerErrFailed => 'آپ کا اکاؤنٹ نہیں بن سکا۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get loginCreateAccount => 'اکاؤنٹ بنائیں';
 }

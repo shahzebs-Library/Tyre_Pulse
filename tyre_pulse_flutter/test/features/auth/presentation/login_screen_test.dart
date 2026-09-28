@@ -733,12 +733,17 @@ void main() {
         find.textContaining('Password resets are managed'),
         findsOneWidget,
       );
+      // The password help offers no account creation.
+      expect(find.byKey(LoginActionKeys.createAccount), findsNothing);
       await tester.tap(find.text('Close'));
       await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(LoginActionKeys.accessHelp));
       await tester.pumpAndSettle();
       expect(find.textContaining('manages mobile access'), findsOneWidget);
+      // Access help lets new staff request an account themselves.
+      expect(find.byKey(LoginActionKeys.createAccount), findsOneWidget);
+      expect(find.text('Create an account'), findsOneWidget);
     },
   );
 

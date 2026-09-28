@@ -3700,4 +3700,830 @@ class AppLocalizationsEn extends AppLocalizations {
   String managementReportsPdfCurrency(String code) {
     return 'Currency: $code';
   }
+
+  @override
+  String get adminHubTitle => 'Admin console';
+
+  @override
+  String get adminHubSubtitle => 'Users, access, approvals and sites';
+
+  @override
+  String get adminHubPendingApprovals => 'Pending approvals';
+
+  @override
+  String get adminHubPendingSignups => 'Pending sign-ups';
+
+  @override
+  String get adminHubLockedUsers => 'Locked users';
+
+  @override
+  String get adminHubCountUnavailable => 'Could not load';
+
+  @override
+  String get adminHubSectionManage => 'Manage';
+
+  @override
+  String get adminHubSectionMore => 'Reports and team';
+
+  @override
+  String get adminHubUsersTitle => 'Users';
+
+  @override
+  String get adminHubUsersSubtitle => 'Approve, lock and change roles';
+
+  @override
+  String get adminHubAccessTitle => 'Mobile access';
+
+  @override
+  String get adminHubAccessSubtitle => 'Allow or deny app modules per person';
+
+  @override
+  String get adminHubApprovalsTitle => 'Approvals';
+
+  @override
+  String get adminHubApprovalsSubtitle =>
+      'Inspections and checklists waiting for sign-off';
+
+  @override
+  String get adminHubSitesTitle => 'Sites';
+
+  @override
+  String get adminHubSitesSubtitle => 'Regions and active status';
+
+  @override
+  String get adminHubAiTitle => 'Fleet AI chat';
+
+  @override
+  String get adminHubAiSubtitle => 'Ask questions about fleet management';
+
+  @override
+  String get adminHubOpenModule => 'Open this module';
+
+  @override
+  String get adminModuleInspect => 'New Inspection';
+
+  @override
+  String get adminModuleScan => 'Scan';
+
+  @override
+  String get adminModuleSerial => 'Serial Search';
+
+  @override
+  String get adminModuleTyreChange => 'Tyre Change';
+
+  @override
+  String get adminModuleChecklists => 'Checklists';
+
+  @override
+  String get adminModuleMeter => 'Meter Log';
+
+  @override
+  String get adminModuleWashing => 'Vehicle Washing';
+
+  @override
+  String get adminModuleReportIssue => 'Report Issue';
+
+  @override
+  String get adminModuleRepairRequest => 'Repair Request';
+
+  @override
+  String get adminModuleRecords => 'Tyre Records';
+
+  @override
+  String get adminModuleVehicles => 'Vehicles';
+
+  @override
+  String get adminModuleHistory => 'History';
+
+  @override
+  String get adminModuleAlerts => 'Alerts';
+
+  @override
+  String get adminModuleCalendar => 'Calendar';
+
+  @override
+  String get adminModuleAccidents => 'Accidents';
+
+  @override
+  String get adminModuleReportAccident => 'File Accident';
+
+  @override
+  String get adminModuleWorkorders => 'Work Orders';
+
+  @override
+  String get adminModuleRca => 'Root Cause';
+
+  @override
+  String get adminModuleTasks => 'Tasks';
+
+  @override
+  String get adminModuleStock => 'Stock Count';
+
+  @override
+  String get adminModulePm => 'Maintenance Due';
+
+  @override
+  String get adminModuleWorkshop => 'My Jobs';
+
+  @override
+  String get adminModuleOverview => 'Overview';
+
+  @override
+  String get adminModuleReports => 'Reports';
+
+  @override
+  String get adminModuleAnalytics => 'Analytics';
+
+  @override
+  String get adminModuleStockManage => 'Stock Management';
+
+  @override
+  String get adminModuleAi => 'Fleet AI';
+
+  @override
+  String get adminModuleTeam => 'Team';
+
+  @override
+  String get adminModuleApprovals => 'Approvals';
+
+  @override
+  String get adminModuleAdmin => 'Admin Console';
+
+  @override
+  String get adminModuleUsers => 'User Management';
+
+  @override
+  String get adminUsersTitle => 'Users';
+
+  @override
+  String adminUsersCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count users',
+      one: '1 user',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get adminUsersSearchHint => 'Search name, username or employee ID';
+
+  @override
+  String get adminUsersFilterAll => 'All';
+
+  @override
+  String get adminUsersStatusPending => 'Pending';
+
+  @override
+  String get adminUsersStatusActive => 'Active';
+
+  @override
+  String get adminUsersStatusLocked => 'Locked';
+
+  @override
+  String get adminUsersAllRoles => 'All roles';
+
+  @override
+  String get adminUsersEmptyTitle => 'No users match';
+
+  @override
+  String get adminUsersEmptyMessage => 'Try another search or filter.';
+
+  @override
+  String get adminUsersLoadFailed => 'Could not load users.';
+
+  @override
+  String get adminUsersReadOnlyNote =>
+      'Only a super admin can change users. You can view the list.';
+
+  @override
+  String get adminUsersSelfNote =>
+      'This is your own account. You cannot lock it or change its role.';
+
+  @override
+  String get adminUsersNoName => 'Unnamed user';
+
+  @override
+  String get adminUsersNoRole => 'No role assigned';
+
+  @override
+  String get adminUsersSuperAdminBadge => 'Super admin';
+
+  @override
+  String get adminUsersFieldRole => 'Role';
+
+  @override
+  String get adminUsersFieldUsername => 'Username';
+
+  @override
+  String get adminUsersFieldEmployeeId => 'Employee ID';
+
+  @override
+  String get adminUsersFieldEmail => 'Email';
+
+  @override
+  String get adminUsersFieldSite => 'Site';
+
+  @override
+  String get adminUsersFieldCountry => 'Country';
+
+  @override
+  String get adminUsersFieldJoined => 'Joined';
+
+  @override
+  String get adminUsersFieldPendingReason => 'Sign-up note';
+
+  @override
+  String get adminUsersActionApprove => 'Approve';
+
+  @override
+  String get adminUsersActionLock => 'Lock';
+
+  @override
+  String get adminUsersActionUnlock => 'Unlock';
+
+  @override
+  String get adminUsersActionDeactivate => 'Deactivate';
+
+  @override
+  String get adminUsersActionSetRole => 'Change role';
+
+  @override
+  String get adminUsersConfirmApproveTitle => 'Approve this user?';
+
+  @override
+  String adminUsersConfirmApproveMessage(String name) {
+    return '$name will be able to sign in and use the app.';
+  }
+
+  @override
+  String get adminUsersConfirmLockTitle => 'Lock this user?';
+
+  @override
+  String adminUsersConfirmLockMessage(String name) {
+    return '$name will not be able to sign in until unlocked.';
+  }
+
+  @override
+  String get adminUsersConfirmUnlockTitle => 'Unlock this user?';
+
+  @override
+  String adminUsersConfirmUnlockMessage(String name) {
+    return '$name will be able to sign in again.';
+  }
+
+  @override
+  String get adminUsersDeactivateTitle => 'Deactivate this user';
+
+  @override
+  String adminUsersDeactivateMessage(String name) {
+    return '$name will lose access and be locked. A reason is required.';
+  }
+
+  @override
+  String get adminUsersSetRoleTitle => 'Change role';
+
+  @override
+  String adminUsersSetRoleMessage(String name) {
+    return 'Choose the new role for $name. A reason is required.';
+  }
+
+  @override
+  String get adminUsersReasonLabel => 'Reason';
+
+  @override
+  String get adminUsersReasonRequired => 'Enter a reason.';
+
+  @override
+  String get adminUsersRoleRequired => 'Choose a role.';
+
+  @override
+  String get adminUsersActionDone => 'Saved.';
+
+  @override
+  String get adminUsersActionFailed => 'Could not save the change.';
+
+  @override
+  String get adminAccessTitle => 'Mobile access';
+
+  @override
+  String get adminAccessPickUser => 'Choose a person';
+
+  @override
+  String get adminAccessChangeUser => 'Change person';
+
+  @override
+  String get adminAccessIntro =>
+      'Overrides apply to this person\'s mobile app only. Default follows their role.';
+
+  @override
+  String get adminAccessDefault => 'Default';
+
+  @override
+  String get adminAccessAllow => 'Allow';
+
+  @override
+  String get adminAccessDeny => 'Deny';
+
+  @override
+  String get adminAccessRoleDefaultAllowed => 'Role default: allowed';
+
+  @override
+  String get adminAccessRoleDefaultDenied => 'Role default: not allowed';
+
+  @override
+  String get adminAccessRoleDefaultAdminOnly => 'Admins only by default';
+
+  @override
+  String get adminAccessAdminNote =>
+      'Admins and super admins always keep full access.';
+
+  @override
+  String get adminAccessReadOnlyNote => 'Only a super admin can change access.';
+
+  @override
+  String get adminAccessLoadFailed => 'Could not load this person\'s access.';
+
+  @override
+  String get adminAccessSaveFailed => 'Could not update access.';
+
+  @override
+  String get adminAccessSaved => 'Access updated.';
+
+  @override
+  String get adminAccessGroupField => 'Field';
+
+  @override
+  String get adminAccessGroupFleet => 'Fleet';
+
+  @override
+  String get adminAccessGroupMaintenance => 'Maintenance';
+
+  @override
+  String get adminAccessGroupManagement => 'Management';
+
+  @override
+  String get adminAccessGroupAdmin => 'Admin';
+
+  @override
+  String get adminApprovalsTabInspections => 'Inspections';
+
+  @override
+  String get adminApprovalsTabChecklists => 'Checklists';
+
+  @override
+  String get adminSitesTitle => 'Sites';
+
+  @override
+  String adminSitesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count sites',
+      one: '1 site',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get adminSitesSearchHint => 'Search site, region or code';
+
+  @override
+  String get adminSitesActive => 'Active';
+
+  @override
+  String get adminSitesInactive => 'Inactive';
+
+  @override
+  String get adminSitesNoRegion => 'No region';
+
+  @override
+  String get adminSitesEmptyTitle => 'No sites';
+
+  @override
+  String get adminSitesEmptyMessage =>
+      'No sites are registered for your organisation yet.';
+
+  @override
+  String get adminSitesLoadFailed => 'Could not load sites.';
+
+  @override
+  String get adminSitesReadOnlyNote =>
+      'Only an Admin or Manager can edit sites.';
+
+  @override
+  String get adminSitesEditTitle => 'Edit site';
+
+  @override
+  String get adminSitesRegionLabel => 'Region';
+
+  @override
+  String get adminSitesActiveLabel => 'Active site';
+
+  @override
+  String get adminSitesSave => 'Save';
+
+  @override
+  String get adminSitesSaved => 'Site updated.';
+
+  @override
+  String get adminSitesSaveFailed => 'Could not update the site.';
+
+  @override
+  String get adminAiTitle => 'Fleet AI chat';
+
+  @override
+  String get adminAiSubtitle =>
+      'Answers come from the AI service. Check important figures in the app.';
+
+  @override
+  String get adminAiHint => 'Ask about fleet management';
+
+  @override
+  String get adminAiSend => 'Send';
+
+  @override
+  String get adminAiClear => 'Clear chat';
+
+  @override
+  String get adminAiEmptyTitle => 'Ask a question';
+
+  @override
+  String get adminAiEmptyMessage =>
+      'For example, how to reduce tyre cost per kilometre.';
+
+  @override
+  String get adminAiThinking => 'Thinking';
+
+  @override
+  String get adminAiYou => 'You';
+
+  @override
+  String get adminAiAssistant => 'Fleet AI';
+
+  @override
+  String get adminAiErrorDisabled =>
+      'AI features are turned off by your administrator.';
+
+  @override
+  String get adminAiErrorBudget => 'The monthly AI budget has been reached.';
+
+  @override
+  String get adminAiErrorRateLimit =>
+      'Too many requests. Wait a moment and try again.';
+
+  @override
+  String get adminAiErrorEmpty => 'The AI service returned no answer.';
+
+  @override
+  String get adminAiErrorUnavailable =>
+      'The AI service is unavailable right now. Try again shortly.';
+
+  @override
+  String get extrasFleetAiTitle => 'Fleet AI';
+
+  @override
+  String get extrasFleetAiSubtitle => 'Answers from your live fleet data';
+
+  @override
+  String get extrasFleetAiSnapshotLoading => 'Reading live fleet data';
+
+  @override
+  String get extrasFleetAiNoData =>
+      'Live fleet data could not be read, so the assistant cannot answer from your records right now.';
+
+  @override
+  String extrasFleetAiGroundedOn(int n) {
+    return 'Based on $n of 5 live fleet counts';
+  }
+
+  @override
+  String get extrasFleetAiEmptyTitle => 'Ask about your fleet';
+
+  @override
+  String get extrasFleetAiEmptyMessage =>
+      'The assistant answers only from live counts of your fleet. It will say when something is not available here.';
+
+  @override
+  String get extrasFleetAiSuggestedTitle => 'Try asking';
+
+  @override
+  String get extrasFleetAiSuggestOverview => 'Give me a fleet health overview';
+
+  @override
+  String get extrasFleetAiSuggestRisk =>
+      'How many tyres are at critical or high risk?';
+
+  @override
+  String get extrasFleetAiSuggestActions => 'What needs my attention first?';
+
+  @override
+  String get extrasFleetAiSuggestAccidents =>
+      'How many accidents were reported in the last 30 days?';
+
+  @override
+  String get extrasFleetAiInputHint => 'Ask a question about your fleet';
+
+  @override
+  String get extrasFleetAiSend => 'Send';
+
+  @override
+  String get extrasFleetAiThinking => 'Thinking';
+
+  @override
+  String get extrasFleetAiClear => 'Clear conversation';
+
+  @override
+  String get extrasFleetAiDisclaimer =>
+      'AI answers can be wrong. Check important figures in the app before acting.';
+
+  @override
+  String get extrasFleetAiYou => 'You';
+
+  @override
+  String get extrasFleetAiErrDisabled =>
+      'AI features are switched off by your administrator.';
+
+  @override
+  String get extrasFleetAiErrBudget =>
+      'The monthly AI budget has been reached. Contact your administrator.';
+
+  @override
+  String get extrasFleetAiErrRateLimited =>
+      'Too many questions in a short time. Wait a moment and try again.';
+
+  @override
+  String get extrasFleetAiErrOffline =>
+      'No connection. Your question was not sent.';
+
+  @override
+  String get extrasFleetAiErrUnavailable =>
+      'The assistant is unavailable right now. Try again shortly.';
+
+  @override
+  String get repairReqCatEngine => 'Engine';
+
+  @override
+  String get repairReqCatTransmission => 'Transmission';
+
+  @override
+  String get repairReqCatBrakes => 'Brakes';
+
+  @override
+  String get repairReqCatTyres => 'Tyres';
+
+  @override
+  String get repairReqCatHydraulics => 'Hydraulics';
+
+  @override
+  String get repairReqCatElectrical => 'Electrical';
+
+  @override
+  String get repairReqCatBody => 'Body';
+
+  @override
+  String get repairReqCatDrumMixer => 'Drum / Mixer';
+
+  @override
+  String get repairReqCatPump => 'Pump';
+
+  @override
+  String get repairReqCatAirSystem => 'Air system';
+
+  @override
+  String get repairReqCatCooling => 'Cooling';
+
+  @override
+  String get repairReqCatOther => 'Other';
+
+  @override
+  String get repairReqTitle => 'Repair request';
+
+  @override
+  String get repairReqSubtitle => 'Report a fault to the workshop';
+
+  @override
+  String get repairReqMachine => 'Machine';
+
+  @override
+  String get repairReqChooseAsset => 'Choose the machine';
+
+  @override
+  String get repairReqSelect => 'Select';
+
+  @override
+  String get repairReqChange => 'Change';
+
+  @override
+  String repairReqPlate(String plate) {
+    return 'Plate $plate';
+  }
+
+  @override
+  String get repairReqErrAsset => 'Choose the machine that has the fault.';
+
+  @override
+  String get repairReqSite => 'Site';
+
+  @override
+  String get repairReqSiteHint => 'Filled from the machine\'s registered site';
+
+  @override
+  String get repairReqCategory => 'What is wrong';
+
+  @override
+  String get repairReqDescription => 'Describe the fault';
+
+  @override
+  String get repairReqDescriptionHint => 'What happened, what you see or hear';
+
+  @override
+  String get repairReqErrDescription => 'Describe the fault before sending.';
+
+  @override
+  String get repairReqPriority => 'Priority';
+
+  @override
+  String get repairReqOdometer => 'Odometer (km)';
+
+  @override
+  String get repairReqEngineHours => 'Engine hours';
+
+  @override
+  String get repairReqOptional => 'Optional';
+
+  @override
+  String get repairReqErrMeter =>
+      'Enter a number of zero or more, or leave it blank.';
+
+  @override
+  String get repairReqOnlineNote =>
+      'This request is sent straight to the workshop and needs a connection. The office issues the RFR number.';
+
+  @override
+  String get repairReqSubmit => 'Send repair request';
+
+  @override
+  String get repairReqErrNoProfile =>
+      'Your profile is not loaded yet. Try again in a moment.';
+
+  @override
+  String get repairReqErrOffline =>
+      'No connection. Nothing was sent. Your entries are kept, send again when you have signal.';
+
+  @override
+  String get repairReqErrPermission =>
+      'Your account is not allowed to raise repair requests. Contact your administrator.';
+
+  @override
+  String get repairReqErrFailed =>
+      'The request could not be sent. Your entries are kept, try again.';
+
+  @override
+  String get repairReqSentTitle => 'Repair request sent';
+
+  @override
+  String repairReqSentWithNumber(String rfr) {
+    return 'The workshop has it as $rfr.';
+  }
+
+  @override
+  String get repairReqSentNoNumber =>
+      'The workshop has it. The office will issue the RFR number.';
+
+  @override
+  String get repairReqAnother => 'Raise another';
+
+  @override
+  String get repairReqDone => 'Done';
+
+  @override
+  String get repairReqSearchHint => 'Search by asset, plate, type or site';
+
+  @override
+  String get repairReqNoAssets => 'No machines are registered for your scope.';
+
+  @override
+  String get repairReqNoMatch => 'No machine matches that search.';
+
+  @override
+  String repairReqRefineSearch(int n) {
+    return '$n machines match. Type more to narrow the list.';
+  }
+
+  @override
+  String get repairReqCachedList =>
+      'Offline: showing the fleet saved on this device.';
+
+  @override
+  String get registerTitle => 'Create account';
+
+  @override
+  String get registerChecking => 'Checking whether registration is open';
+
+  @override
+  String get registerUnreachableTitle => 'Cannot reach the server';
+
+  @override
+  String get registerUnreachableMessage =>
+      'Registration needs a connection. Check your signal and try again.';
+
+  @override
+  String get registerClosedTitle => 'Registration is closed';
+
+  @override
+  String get registerClosedMessage =>
+      'Accounts are created by your administrator. Contact your administrator to be invited.';
+
+  @override
+  String get registerBackToSignIn => 'Back to sign in';
+
+  @override
+  String get registerDoneTitle => 'Account created';
+
+  @override
+  String get registerDoneMessage =>
+      'Your account is waiting for approval. Your administrator will assign your role and site, then you can sign in.';
+
+  @override
+  String get registerIntro =>
+      'Request an account with your username and employee ID. An administrator approves it and sets your role and site.';
+
+  @override
+  String get registerFullName => 'Full name';
+
+  @override
+  String get registerOptional => 'Optional';
+
+  @override
+  String get registerUsername => 'Username';
+
+  @override
+  String get registerUsernameHelp =>
+      'At least 3 characters: letters, numbers, dot, underscore or hyphen';
+
+  @override
+  String get registerEmployeeId => 'Employee ID';
+
+  @override
+  String get registerPassword => 'Password';
+
+  @override
+  String registerPasswordHelp(int n) {
+    return 'At least $n characters';
+  }
+
+  @override
+  String get registerConfirm => 'Confirm password';
+
+  @override
+  String get registerShowPassword => 'Show password';
+
+  @override
+  String get registerHidePassword => 'Hide password';
+
+  @override
+  String get registerApprovalNote =>
+      'You cannot choose a role or site here. New accounts start pending until an administrator approves them.';
+
+  @override
+  String get registerSubmit => 'Request account';
+
+  @override
+  String get registerHaveAccount => 'Already have an account? Sign in';
+
+  @override
+  String get registerErrUsernameShort =>
+      'Enter a username of at least 3 characters.';
+
+  @override
+  String get registerErrUsernameChars =>
+      'Use only letters, numbers, dot, underscore or hyphen.';
+
+  @override
+  String get registerErrEmployeeId => 'Enter your employee ID.';
+
+  @override
+  String registerErrPasswordShort(int n) {
+    return 'The password needs at least $n characters.';
+  }
+
+  @override
+  String get registerErrMismatch => 'The passwords do not match.';
+
+  @override
+  String get registerErrTaken =>
+      'That username or employee ID is already taken. Choose another.';
+
+  @override
+  String get registerErrOffline =>
+      'No connection. Your account was not created. Try again when you have signal.';
+
+  @override
+  String get registerErrFailed =>
+      'Your account could not be created. Try again.';
+
+  @override
+  String get loginCreateAccount => 'Create an account';
 }

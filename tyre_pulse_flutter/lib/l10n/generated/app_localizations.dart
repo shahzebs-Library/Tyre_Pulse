@@ -6495,6 +6495,1500 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Currency: {code}'**
   String managementReportsPdfCurrency(String code);
+
+  /// Admin hub title
+  ///
+  /// In en, this message translates to:
+  /// **'Admin console'**
+  String get adminHubTitle;
+
+  /// Admin hub subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Users, access, approvals and sites'**
+  String get adminHubSubtitle;
+
+  /// Hub count label
+  ///
+  /// In en, this message translates to:
+  /// **'Pending approvals'**
+  String get adminHubPendingApprovals;
+
+  /// Hub count label
+  ///
+  /// In en, this message translates to:
+  /// **'Pending sign-ups'**
+  String get adminHubPendingSignups;
+
+  /// Hub count label
+  ///
+  /// In en, this message translates to:
+  /// **'Locked users'**
+  String get adminHubLockedUsers;
+
+  /// Shown when a count query failed
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load'**
+  String get adminHubCountUnavailable;
+
+  /// Hub section header
+  ///
+  /// In en, this message translates to:
+  /// **'Manage'**
+  String get adminHubSectionManage;
+
+  /// Hub section header
+  ///
+  /// In en, this message translates to:
+  /// **'Reports and team'**
+  String get adminHubSectionMore;
+
+  /// Hub tile
+  ///
+  /// In en, this message translates to:
+  /// **'Users'**
+  String get adminHubUsersTitle;
+
+  /// Hub tile subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Approve, lock and change roles'**
+  String get adminHubUsersSubtitle;
+
+  /// Hub tile
+  ///
+  /// In en, this message translates to:
+  /// **'Mobile access'**
+  String get adminHubAccessTitle;
+
+  /// Hub tile subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Allow or deny app modules per person'**
+  String get adminHubAccessSubtitle;
+
+  /// Hub tile
+  ///
+  /// In en, this message translates to:
+  /// **'Approvals'**
+  String get adminHubApprovalsTitle;
+
+  /// Hub tile subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Inspections and checklists waiting for sign-off'**
+  String get adminHubApprovalsSubtitle;
+
+  /// Hub tile
+  ///
+  /// In en, this message translates to:
+  /// **'Sites'**
+  String get adminHubSitesTitle;
+
+  /// Hub tile subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Regions and active status'**
+  String get adminHubSitesSubtitle;
+
+  /// Hub tile
+  ///
+  /// In en, this message translates to:
+  /// **'Fleet AI chat'**
+  String get adminHubAiTitle;
+
+  /// Hub tile subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Ask questions about fleet management'**
+  String get adminHubAiSubtitle;
+
+  /// Subtitle on links to other modules
+  ///
+  /// In en, this message translates to:
+  /// **'Open this module'**
+  String get adminHubOpenModule;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'New Inspection'**
+  String get adminModuleInspect;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Scan'**
+  String get adminModuleScan;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Serial Search'**
+  String get adminModuleSerial;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre Change'**
+  String get adminModuleTyreChange;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Checklists'**
+  String get adminModuleChecklists;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Meter Log'**
+  String get adminModuleMeter;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle Washing'**
+  String get adminModuleWashing;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Report Issue'**
+  String get adminModuleReportIssue;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Repair Request'**
+  String get adminModuleRepairRequest;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre Records'**
+  String get adminModuleRecords;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicles'**
+  String get adminModuleVehicles;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'History'**
+  String get adminModuleHistory;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Alerts'**
+  String get adminModuleAlerts;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Calendar'**
+  String get adminModuleCalendar;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Accidents'**
+  String get adminModuleAccidents;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'File Accident'**
+  String get adminModuleReportAccident;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Work Orders'**
+  String get adminModuleWorkorders;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Root Cause'**
+  String get adminModuleRca;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Tasks'**
+  String get adminModuleTasks;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Stock Count'**
+  String get adminModuleStock;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Maintenance Due'**
+  String get adminModulePm;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'My Jobs'**
+  String get adminModuleWorkshop;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Overview'**
+  String get adminModuleOverview;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Reports'**
+  String get adminModuleReports;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Analytics'**
+  String get adminModuleAnalytics;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Stock Management'**
+  String get adminModuleStockManage;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Fleet AI'**
+  String get adminModuleAi;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Team'**
+  String get adminModuleTeam;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Approvals'**
+  String get adminModuleApprovals;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Admin Console'**
+  String get adminModuleAdmin;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'User Management'**
+  String get adminModuleUsers;
+
+  /// Users screen title
+  ///
+  /// In en, this message translates to:
+  /// **'Users'**
+  String get adminUsersTitle;
+
+  /// Users count
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 user} other{{count} users}}'**
+  String adminUsersCount(int count);
+
+  /// Search hint
+  ///
+  /// In en, this message translates to:
+  /// **'Search name, username or employee ID'**
+  String get adminUsersSearchHint;
+
+  /// Filter: all
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get adminUsersFilterAll;
+
+  /// User status
+  ///
+  /// In en, this message translates to:
+  /// **'Pending'**
+  String get adminUsersStatusPending;
+
+  /// User status
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get adminUsersStatusActive;
+
+  /// User status
+  ///
+  /// In en, this message translates to:
+  /// **'Locked'**
+  String get adminUsersStatusLocked;
+
+  /// Role filter: all
+  ///
+  /// In en, this message translates to:
+  /// **'All roles'**
+  String get adminUsersAllRoles;
+
+  /// Empty state title
+  ///
+  /// In en, this message translates to:
+  /// **'No users match'**
+  String get adminUsersEmptyTitle;
+
+  /// Empty state message
+  ///
+  /// In en, this message translates to:
+  /// **'Try another search or filter.'**
+  String get adminUsersEmptyMessage;
+
+  /// Load error
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load users.'**
+  String get adminUsersLoadFailed;
+
+  /// Read-only note
+  ///
+  /// In en, this message translates to:
+  /// **'Only a super admin can change users. You can view the list.'**
+  String get adminUsersReadOnlyNote;
+
+  /// Self note
+  ///
+  /// In en, this message translates to:
+  /// **'This is your own account. You cannot lock it or change its role.'**
+  String get adminUsersSelfNote;
+
+  /// Fallback when no name
+  ///
+  /// In en, this message translates to:
+  /// **'Unnamed user'**
+  String get adminUsersNoName;
+
+  /// Fallback when no role
+  ///
+  /// In en, this message translates to:
+  /// **'No role assigned'**
+  String get adminUsersNoRole;
+
+  /// Badge
+  ///
+  /// In en, this message translates to:
+  /// **'Super admin'**
+  String get adminUsersSuperAdminBadge;
+
+  /// Field label
+  ///
+  /// In en, this message translates to:
+  /// **'Role'**
+  String get adminUsersFieldRole;
+
+  /// Field label
+  ///
+  /// In en, this message translates to:
+  /// **'Username'**
+  String get adminUsersFieldUsername;
+
+  /// Field label
+  ///
+  /// In en, this message translates to:
+  /// **'Employee ID'**
+  String get adminUsersFieldEmployeeId;
+
+  /// Field label
+  ///
+  /// In en, this message translates to:
+  /// **'Email'**
+  String get adminUsersFieldEmail;
+
+  /// Field label
+  ///
+  /// In en, this message translates to:
+  /// **'Site'**
+  String get adminUsersFieldSite;
+
+  /// Field label
+  ///
+  /// In en, this message translates to:
+  /// **'Country'**
+  String get adminUsersFieldCountry;
+
+  /// Field label
+  ///
+  /// In en, this message translates to:
+  /// **'Joined'**
+  String get adminUsersFieldJoined;
+
+  /// Field label
+  ///
+  /// In en, this message translates to:
+  /// **'Sign-up note'**
+  String get adminUsersFieldPendingReason;
+
+  /// Action
+  ///
+  /// In en, this message translates to:
+  /// **'Approve'**
+  String get adminUsersActionApprove;
+
+  /// Action
+  ///
+  /// In en, this message translates to:
+  /// **'Lock'**
+  String get adminUsersActionLock;
+
+  /// Action
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock'**
+  String get adminUsersActionUnlock;
+
+  /// Action
+  ///
+  /// In en, this message translates to:
+  /// **'Deactivate'**
+  String get adminUsersActionDeactivate;
+
+  /// Action
+  ///
+  /// In en, this message translates to:
+  /// **'Change role'**
+  String get adminUsersActionSetRole;
+
+  /// Dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Approve this user?'**
+  String get adminUsersConfirmApproveTitle;
+
+  /// Dialog message
+  ///
+  /// In en, this message translates to:
+  /// **'{name} will be able to sign in and use the app.'**
+  String adminUsersConfirmApproveMessage(String name);
+
+  /// Dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Lock this user?'**
+  String get adminUsersConfirmLockTitle;
+
+  /// Dialog message
+  ///
+  /// In en, this message translates to:
+  /// **'{name} will not be able to sign in until unlocked.'**
+  String adminUsersConfirmLockMessage(String name);
+
+  /// Dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock this user?'**
+  String get adminUsersConfirmUnlockTitle;
+
+  /// Dialog message
+  ///
+  /// In en, this message translates to:
+  /// **'{name} will be able to sign in again.'**
+  String adminUsersConfirmUnlockMessage(String name);
+
+  /// Dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Deactivate this user'**
+  String get adminUsersDeactivateTitle;
+
+  /// Dialog message
+  ///
+  /// In en, this message translates to:
+  /// **'{name} will lose access and be locked. A reason is required.'**
+  String adminUsersDeactivateMessage(String name);
+
+  /// Dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Change role'**
+  String get adminUsersSetRoleTitle;
+
+  /// Dialog message
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the new role for {name}. A reason is required.'**
+  String adminUsersSetRoleMessage(String name);
+
+  /// Field label
+  ///
+  /// In en, this message translates to:
+  /// **'Reason'**
+  String get adminUsersReasonLabel;
+
+  /// Validation
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a reason.'**
+  String get adminUsersReasonRequired;
+
+  /// Validation
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a role.'**
+  String get adminUsersRoleRequired;
+
+  /// Snack after success
+  ///
+  /// In en, this message translates to:
+  /// **'Saved.'**
+  String get adminUsersActionDone;
+
+  /// Snack after failure
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save the change.'**
+  String get adminUsersActionFailed;
+
+  /// Access screen title
+  ///
+  /// In en, this message translates to:
+  /// **'Mobile access'**
+  String get adminAccessTitle;
+
+  /// Subtitle while no user selected
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a person'**
+  String get adminAccessPickUser;
+
+  /// Button
+  ///
+  /// In en, this message translates to:
+  /// **'Change person'**
+  String get adminAccessChangeUser;
+
+  /// Intro note
+  ///
+  /// In en, this message translates to:
+  /// **'Overrides apply to this person\'s mobile app only. Default follows their role.'**
+  String get adminAccessIntro;
+
+  /// Choice
+  ///
+  /// In en, this message translates to:
+  /// **'Default'**
+  String get adminAccessDefault;
+
+  /// Choice
+  ///
+  /// In en, this message translates to:
+  /// **'Allow'**
+  String get adminAccessAllow;
+
+  /// Choice
+  ///
+  /// In en, this message translates to:
+  /// **'Deny'**
+  String get adminAccessDeny;
+
+  /// Role default hint
+  ///
+  /// In en, this message translates to:
+  /// **'Role default: allowed'**
+  String get adminAccessRoleDefaultAllowed;
+
+  /// Role default hint
+  ///
+  /// In en, this message translates to:
+  /// **'Role default: not allowed'**
+  String get adminAccessRoleDefaultDenied;
+
+  /// Role default hint
+  ///
+  /// In en, this message translates to:
+  /// **'Admins only by default'**
+  String get adminAccessRoleDefaultAdminOnly;
+
+  /// Note for admin targets
+  ///
+  /// In en, this message translates to:
+  /// **'Admins and super admins always keep full access.'**
+  String get adminAccessAdminNote;
+
+  /// Read-only note
+  ///
+  /// In en, this message translates to:
+  /// **'Only a super admin can change access.'**
+  String get adminAccessReadOnlyNote;
+
+  /// Load error
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load this person\'s access.'**
+  String get adminAccessLoadFailed;
+
+  /// Save error
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update access.'**
+  String get adminAccessSaveFailed;
+
+  /// Save success
+  ///
+  /// In en, this message translates to:
+  /// **'Access updated.'**
+  String get adminAccessSaved;
+
+  /// Module group
+  ///
+  /// In en, this message translates to:
+  /// **'Field'**
+  String get adminAccessGroupField;
+
+  /// Module group
+  ///
+  /// In en, this message translates to:
+  /// **'Fleet'**
+  String get adminAccessGroupFleet;
+
+  /// Module group
+  ///
+  /// In en, this message translates to:
+  /// **'Maintenance'**
+  String get adminAccessGroupMaintenance;
+
+  /// Module group
+  ///
+  /// In en, this message translates to:
+  /// **'Management'**
+  String get adminAccessGroupManagement;
+
+  /// Module group
+  ///
+  /// In en, this message translates to:
+  /// **'Admin'**
+  String get adminAccessGroupAdmin;
+
+  /// Tab
+  ///
+  /// In en, this message translates to:
+  /// **'Inspections'**
+  String get adminApprovalsTabInspections;
+
+  /// Tab
+  ///
+  /// In en, this message translates to:
+  /// **'Checklists'**
+  String get adminApprovalsTabChecklists;
+
+  /// Sites title
+  ///
+  /// In en, this message translates to:
+  /// **'Sites'**
+  String get adminSitesTitle;
+
+  /// Sites count
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 site} other{{count} sites}}'**
+  String adminSitesCount(int count);
+
+  /// Search hint
+  ///
+  /// In en, this message translates to:
+  /// **'Search site, region or code'**
+  String get adminSitesSearchHint;
+
+  /// Site status
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get adminSitesActive;
+
+  /// Site status
+  ///
+  /// In en, this message translates to:
+  /// **'Inactive'**
+  String get adminSitesInactive;
+
+  /// Fallback when region is blank
+  ///
+  /// In en, this message translates to:
+  /// **'No region'**
+  String get adminSitesNoRegion;
+
+  /// Empty title
+  ///
+  /// In en, this message translates to:
+  /// **'No sites'**
+  String get adminSitesEmptyTitle;
+
+  /// Empty message
+  ///
+  /// In en, this message translates to:
+  /// **'No sites are registered for your organisation yet.'**
+  String get adminSitesEmptyMessage;
+
+  /// Load error
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load sites.'**
+  String get adminSitesLoadFailed;
+
+  /// Read-only note
+  ///
+  /// In en, this message translates to:
+  /// **'Only an Admin or Manager can edit sites.'**
+  String get adminSitesReadOnlyNote;
+
+  /// Sheet title
+  ///
+  /// In en, this message translates to:
+  /// **'Edit site'**
+  String get adminSitesEditTitle;
+
+  /// Field label
+  ///
+  /// In en, this message translates to:
+  /// **'Region'**
+  String get adminSitesRegionLabel;
+
+  /// Switch label
+  ///
+  /// In en, this message translates to:
+  /// **'Active site'**
+  String get adminSitesActiveLabel;
+
+  /// Button
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get adminSitesSave;
+
+  /// Success
+  ///
+  /// In en, this message translates to:
+  /// **'Site updated.'**
+  String get adminSitesSaved;
+
+  /// Error
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update the site.'**
+  String get adminSitesSaveFailed;
+
+  /// AI title
+  ///
+  /// In en, this message translates to:
+  /// **'Fleet AI chat'**
+  String get adminAiTitle;
+
+  /// AI subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Answers come from the AI service. Check important figures in the app.'**
+  String get adminAiSubtitle;
+
+  /// Input hint
+  ///
+  /// In en, this message translates to:
+  /// **'Ask about fleet management'**
+  String get adminAiHint;
+
+  /// Send button tooltip
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get adminAiSend;
+
+  /// Clear tooltip
+  ///
+  /// In en, this message translates to:
+  /// **'Clear chat'**
+  String get adminAiClear;
+
+  /// Empty title
+  ///
+  /// In en, this message translates to:
+  /// **'Ask a question'**
+  String get adminAiEmptyTitle;
+
+  /// Empty message
+  ///
+  /// In en, this message translates to:
+  /// **'For example, how to reduce tyre cost per kilometre.'**
+  String get adminAiEmptyMessage;
+
+  /// Loading label
+  ///
+  /// In en, this message translates to:
+  /// **'Thinking'**
+  String get adminAiThinking;
+
+  /// Bubble author
+  ///
+  /// In en, this message translates to:
+  /// **'You'**
+  String get adminAiYou;
+
+  /// Bubble author
+  ///
+  /// In en, this message translates to:
+  /// **'Fleet AI'**
+  String get adminAiAssistant;
+
+  /// AI error
+  ///
+  /// In en, this message translates to:
+  /// **'AI features are turned off by your administrator.'**
+  String get adminAiErrorDisabled;
+
+  /// AI error
+  ///
+  /// In en, this message translates to:
+  /// **'The monthly AI budget has been reached.'**
+  String get adminAiErrorBudget;
+
+  /// AI error
+  ///
+  /// In en, this message translates to:
+  /// **'Too many requests. Wait a moment and try again.'**
+  String get adminAiErrorRateLimit;
+
+  /// AI error
+  ///
+  /// In en, this message translates to:
+  /// **'The AI service returned no answer.'**
+  String get adminAiErrorEmpty;
+
+  /// AI error
+  ///
+  /// In en, this message translates to:
+  /// **'The AI service is unavailable right now. Try again shortly.'**
+  String get adminAiErrorUnavailable;
+
+  /// Fleet AI screen title
+  ///
+  /// In en, this message translates to:
+  /// **'Fleet AI'**
+  String get extrasFleetAiTitle;
+
+  /// Fleet AI subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Answers from your live fleet data'**
+  String get extrasFleetAiSubtitle;
+
+  /// Shown while grounding counts load
+  ///
+  /// In en, this message translates to:
+  /// **'Reading live fleet data'**
+  String get extrasFleetAiSnapshotLoading;
+
+  /// No grounding data could be read
+  ///
+  /// In en, this message translates to:
+  /// **'Live fleet data could not be read, so the assistant cannot answer from your records right now.'**
+  String get extrasFleetAiNoData;
+
+  /// How many grounding counts were read
+  ///
+  /// In en, this message translates to:
+  /// **'Based on {n} of 5 live fleet counts'**
+  String extrasFleetAiGroundedOn(int n);
+
+  /// Empty conversation title
+  ///
+  /// In en, this message translates to:
+  /// **'Ask about your fleet'**
+  String get extrasFleetAiEmptyTitle;
+
+  /// Empty conversation explanation
+  ///
+  /// In en, this message translates to:
+  /// **'The assistant answers only from live counts of your fleet. It will say when something is not available here.'**
+  String get extrasFleetAiEmptyMessage;
+
+  /// Suggested questions heading
+  ///
+  /// In en, this message translates to:
+  /// **'Try asking'**
+  String get extrasFleetAiSuggestedTitle;
+
+  /// Suggested question
+  ///
+  /// In en, this message translates to:
+  /// **'Give me a fleet health overview'**
+  String get extrasFleetAiSuggestOverview;
+
+  /// Suggested question
+  ///
+  /// In en, this message translates to:
+  /// **'How many tyres are at critical or high risk?'**
+  String get extrasFleetAiSuggestRisk;
+
+  /// Suggested question
+  ///
+  /// In en, this message translates to:
+  /// **'What needs my attention first?'**
+  String get extrasFleetAiSuggestActions;
+
+  /// Suggested question
+  ///
+  /// In en, this message translates to:
+  /// **'How many accidents were reported in the last 30 days?'**
+  String get extrasFleetAiSuggestAccidents;
+
+  /// Composer hint
+  ///
+  /// In en, this message translates to:
+  /// **'Ask a question about your fleet'**
+  String get extrasFleetAiInputHint;
+
+  /// Send button tooltip
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get extrasFleetAiSend;
+
+  /// Shown while waiting for an answer
+  ///
+  /// In en, this message translates to:
+  /// **'Thinking'**
+  String get extrasFleetAiThinking;
+
+  /// Clear conversation action
+  ///
+  /// In en, this message translates to:
+  /// **'Clear conversation'**
+  String get extrasFleetAiClear;
+
+  /// Disclaimer under composer
+  ///
+  /// In en, this message translates to:
+  /// **'AI answers can be wrong. Check important figures in the app before acting.'**
+  String get extrasFleetAiDisclaimer;
+
+  /// Semantics label for user messages
+  ///
+  /// In en, this message translates to:
+  /// **'You'**
+  String get extrasFleetAiYou;
+
+  /// chat-ai 403
+  ///
+  /// In en, this message translates to:
+  /// **'AI features are switched off by your administrator.'**
+  String get extrasFleetAiErrDisabled;
+
+  /// chat-ai 402
+  ///
+  /// In en, this message translates to:
+  /// **'The monthly AI budget has been reached. Contact your administrator.'**
+  String get extrasFleetAiErrBudget;
+
+  /// chat-ai 429
+  ///
+  /// In en, this message translates to:
+  /// **'Too many questions in a short time. Wait a moment and try again.'**
+  String get extrasFleetAiErrRateLimited;
+
+  /// Offline
+  ///
+  /// In en, this message translates to:
+  /// **'No connection. Your question was not sent.'**
+  String get extrasFleetAiErrOffline;
+
+  /// Generic AI failure
+  ///
+  /// In en, this message translates to:
+  /// **'The assistant is unavailable right now. Try again shortly.'**
+  String get extrasFleetAiErrUnavailable;
+
+  /// Repair request fault category
+  ///
+  /// In en, this message translates to:
+  /// **'Engine'**
+  String get repairReqCatEngine;
+
+  /// Repair request fault category
+  ///
+  /// In en, this message translates to:
+  /// **'Transmission'**
+  String get repairReqCatTransmission;
+
+  /// Repair request fault category
+  ///
+  /// In en, this message translates to:
+  /// **'Brakes'**
+  String get repairReqCatBrakes;
+
+  /// Repair request fault category
+  ///
+  /// In en, this message translates to:
+  /// **'Tyres'**
+  String get repairReqCatTyres;
+
+  /// Repair request fault category
+  ///
+  /// In en, this message translates to:
+  /// **'Hydraulics'**
+  String get repairReqCatHydraulics;
+
+  /// Repair request fault category
+  ///
+  /// In en, this message translates to:
+  /// **'Electrical'**
+  String get repairReqCatElectrical;
+
+  /// Repair request fault category
+  ///
+  /// In en, this message translates to:
+  /// **'Body'**
+  String get repairReqCatBody;
+
+  /// Repair request fault category
+  ///
+  /// In en, this message translates to:
+  /// **'Drum / Mixer'**
+  String get repairReqCatDrumMixer;
+
+  /// Repair request fault category
+  ///
+  /// In en, this message translates to:
+  /// **'Pump'**
+  String get repairReqCatPump;
+
+  /// Repair request fault category
+  ///
+  /// In en, this message translates to:
+  /// **'Air system'**
+  String get repairReqCatAirSystem;
+
+  /// Repair request fault category
+  ///
+  /// In en, this message translates to:
+  /// **'Cooling'**
+  String get repairReqCatCooling;
+
+  /// Repair request fault category
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get repairReqCatOther;
+
+  /// Screen title
+  ///
+  /// In en, this message translates to:
+  /// **'Repair request'**
+  String get repairReqTitle;
+
+  /// Screen subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Report a fault to the workshop'**
+  String get repairReqSubtitle;
+
+  /// Asset section label
+  ///
+  /// In en, this message translates to:
+  /// **'Machine'**
+  String get repairReqMachine;
+
+  /// Asset picker prompt
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the machine'**
+  String get repairReqChooseAsset;
+
+  /// Select asset action
+  ///
+  /// In en, this message translates to:
+  /// **'Select'**
+  String get repairReqSelect;
+
+  /// Change asset action
+  ///
+  /// In en, this message translates to:
+  /// **'Change'**
+  String get repairReqChange;
+
+  /// Plate line
+  ///
+  /// In en, this message translates to:
+  /// **'Plate {plate}'**
+  String repairReqPlate(String plate);
+
+  /// Validation
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the machine that has the fault.'**
+  String get repairReqErrAsset;
+
+  /// Site field label
+  ///
+  /// In en, this message translates to:
+  /// **'Site'**
+  String get repairReqSite;
+
+  /// Site hint
+  ///
+  /// In en, this message translates to:
+  /// **'Filled from the machine\'s registered site'**
+  String get repairReqSiteHint;
+
+  /// Fault category label
+  ///
+  /// In en, this message translates to:
+  /// **'What is wrong'**
+  String get repairReqCategory;
+
+  /// Description label
+  ///
+  /// In en, this message translates to:
+  /// **'Describe the fault'**
+  String get repairReqDescription;
+
+  /// Description hint
+  ///
+  /// In en, this message translates to:
+  /// **'What happened, what you see or hear'**
+  String get repairReqDescriptionHint;
+
+  /// Validation
+  ///
+  /// In en, this message translates to:
+  /// **'Describe the fault before sending.'**
+  String get repairReqErrDescription;
+
+  /// Priority label
+  ///
+  /// In en, this message translates to:
+  /// **'Priority'**
+  String get repairReqPriority;
+
+  /// Odometer label
+  ///
+  /// In en, this message translates to:
+  /// **'Odometer (km)'**
+  String get repairReqOdometer;
+
+  /// Engine hours label
+  ///
+  /// In en, this message translates to:
+  /// **'Engine hours'**
+  String get repairReqEngineHours;
+
+  /// Optional hint
+  ///
+  /// In en, this message translates to:
+  /// **'Optional'**
+  String get repairReqOptional;
+
+  /// Meter validation
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a number of zero or more, or leave it blank.'**
+  String get repairReqErrMeter;
+
+  /// Online-only note
+  ///
+  /// In en, this message translates to:
+  /// **'This request is sent straight to the workshop and needs a connection. The office issues the RFR number.'**
+  String get repairReqOnlineNote;
+
+  /// Submit button
+  ///
+  /// In en, this message translates to:
+  /// **'Send repair request'**
+  String get repairReqSubmit;
+
+  /// Missing workspace
+  ///
+  /// In en, this message translates to:
+  /// **'Your profile is not loaded yet. Try again in a moment.'**
+  String get repairReqErrNoProfile;
+
+  /// Offline error
+  ///
+  /// In en, this message translates to:
+  /// **'No connection. Nothing was sent. Your entries are kept, send again when you have signal.'**
+  String get repairReqErrOffline;
+
+  /// Permission error
+  ///
+  /// In en, this message translates to:
+  /// **'Your account is not allowed to raise repair requests. Contact your administrator.'**
+  String get repairReqErrPermission;
+
+  /// Generic error
+  ///
+  /// In en, this message translates to:
+  /// **'The request could not be sent. Your entries are kept, try again.'**
+  String get repairReqErrFailed;
+
+  /// Success title
+  ///
+  /// In en, this message translates to:
+  /// **'Repair request sent'**
+  String get repairReqSentTitle;
+
+  /// Success with RFR number
+  ///
+  /// In en, this message translates to:
+  /// **'The workshop has it as {rfr}.'**
+  String repairReqSentWithNumber(String rfr);
+
+  /// Success without number
+  ///
+  /// In en, this message translates to:
+  /// **'The workshop has it. The office will issue the RFR number.'**
+  String get repairReqSentNoNumber;
+
+  /// Start another
+  ///
+  /// In en, this message translates to:
+  /// **'Raise another'**
+  String get repairReqAnother;
+
+  /// Finish
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get repairReqDone;
+
+  /// Asset search hint
+  ///
+  /// In en, this message translates to:
+  /// **'Search by asset, plate, type or site'**
+  String get repairReqSearchHint;
+
+  /// Empty fleet
+  ///
+  /// In en, this message translates to:
+  /// **'No machines are registered for your scope.'**
+  String get repairReqNoAssets;
+
+  /// No search match
+  ///
+  /// In en, this message translates to:
+  /// **'No machine matches that search.'**
+  String get repairReqNoMatch;
+
+  /// Too many matches
+  ///
+  /// In en, this message translates to:
+  /// **'{n} machines match. Type more to narrow the list.'**
+  String repairReqRefineSearch(int n);
+
+  /// Cached fleet notice
+  ///
+  /// In en, this message translates to:
+  /// **'Offline: showing the fleet saved on this device.'**
+  String get repairReqCachedList;
+
+  /// Register screen title
+  ///
+  /// In en, this message translates to:
+  /// **'Create account'**
+  String get registerTitle;
+
+  /// Loading policy
+  ///
+  /// In en, this message translates to:
+  /// **'Checking whether registration is open'**
+  String get registerChecking;
+
+  /// Offline title
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot reach the server'**
+  String get registerUnreachableTitle;
+
+  /// Offline message
+  ///
+  /// In en, this message translates to:
+  /// **'Registration needs a connection. Check your signal and try again.'**
+  String get registerUnreachableMessage;
+
+  /// Closed title
+  ///
+  /// In en, this message translates to:
+  /// **'Registration is closed'**
+  String get registerClosedTitle;
+
+  /// Closed message
+  ///
+  /// In en, this message translates to:
+  /// **'Accounts are created by your administrator. Contact your administrator to be invited.'**
+  String get registerClosedMessage;
+
+  /// Back to login
+  ///
+  /// In en, this message translates to:
+  /// **'Back to sign in'**
+  String get registerBackToSignIn;
+
+  /// Success title
+  ///
+  /// In en, this message translates to:
+  /// **'Account created'**
+  String get registerDoneTitle;
+
+  /// Success message
+  ///
+  /// In en, this message translates to:
+  /// **'Your account is waiting for approval. Your administrator will assign your role and site, then you can sign in.'**
+  String get registerDoneMessage;
+
+  /// Intro
+  ///
+  /// In en, this message translates to:
+  /// **'Request an account with your username and employee ID. An administrator approves it and sets your role and site.'**
+  String get registerIntro;
+
+  /// Full name label
+  ///
+  /// In en, this message translates to:
+  /// **'Full name'**
+  String get registerFullName;
+
+  /// Optional hint
+  ///
+  /// In en, this message translates to:
+  /// **'Optional'**
+  String get registerOptional;
+
+  /// Username label
+  ///
+  /// In en, this message translates to:
+  /// **'Username'**
+  String get registerUsername;
+
+  /// Username rules
+  ///
+  /// In en, this message translates to:
+  /// **'At least 3 characters: letters, numbers, dot, underscore or hyphen'**
+  String get registerUsernameHelp;
+
+  /// Employee ID label
+  ///
+  /// In en, this message translates to:
+  /// **'Employee ID'**
+  String get registerEmployeeId;
+
+  /// Password label
+  ///
+  /// In en, this message translates to:
+  /// **'Password'**
+  String get registerPassword;
+
+  /// Password rule
+  ///
+  /// In en, this message translates to:
+  /// **'At least {n} characters'**
+  String registerPasswordHelp(int n);
+
+  /// Confirm label
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm password'**
+  String get registerConfirm;
+
+  /// Toggle
+  ///
+  /// In en, this message translates to:
+  /// **'Show password'**
+  String get registerShowPassword;
+
+  /// Toggle
+  ///
+  /// In en, this message translates to:
+  /// **'Hide password'**
+  String get registerHidePassword;
+
+  /// Approval note
+  ///
+  /// In en, this message translates to:
+  /// **'You cannot choose a role or site here. New accounts start pending until an administrator approves them.'**
+  String get registerApprovalNote;
+
+  /// Submit
+  ///
+  /// In en, this message translates to:
+  /// **'Request account'**
+  String get registerSubmit;
+
+  /// Link to login
+  ///
+  /// In en, this message translates to:
+  /// **'Already have an account? Sign in'**
+  String get registerHaveAccount;
+
+  /// Validation
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a username of at least 3 characters.'**
+  String get registerErrUsernameShort;
+
+  /// Validation
+  ///
+  /// In en, this message translates to:
+  /// **'Use only letters, numbers, dot, underscore or hyphen.'**
+  String get registerErrUsernameChars;
+
+  /// Validation
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your employee ID.'**
+  String get registerErrEmployeeId;
+
+  /// Validation
+  ///
+  /// In en, this message translates to:
+  /// **'The password needs at least {n} characters.'**
+  String registerErrPasswordShort(int n);
+
+  /// Validation
+  ///
+  /// In en, this message translates to:
+  /// **'The passwords do not match.'**
+  String get registerErrMismatch;
+
+  /// Duplicate
+  ///
+  /// In en, this message translates to:
+  /// **'That username or employee ID is already taken. Choose another.'**
+  String get registerErrTaken;
+
+  /// Offline
+  ///
+  /// In en, this message translates to:
+  /// **'No connection. Your account was not created. Try again when you have signal.'**
+  String get registerErrOffline;
+
+  /// Generic
+  ///
+  /// In en, this message translates to:
+  /// **'Your account could not be created. Try again.'**
+  String get registerErrFailed;
+
+  /// Login access-help dialog: opens the self-registration screen (the account is created pending administrator approval).
+  ///
+  /// In en, this message translates to:
+  /// **'Create an account'**
+  String get loginCreateAccount;
 }
 
 class _AppLocalizationsDelegate

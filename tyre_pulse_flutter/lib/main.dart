@@ -29,6 +29,7 @@ import 'package:tyre_pulse/core/telemetry/telemetry_service.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/accidents/'
     'accidents_screen_registrations.dart';
+import 'package:tyre_pulse/features/admin/admin_screen_registrations.dart';
 import 'package:tyre_pulse/features/alerts/alerts_screen_registrations.dart';
 import 'package:tyre_pulse/features/approvals/'
     'checklist_approvals_screen_registrations.dart';
@@ -39,6 +40,7 @@ import 'package:tyre_pulse/features/auth/auth_screen_registrations.dart';
 import 'package:tyre_pulse/features/calendar/calendar_screen_registrations.dart';
 import 'package:tyre_pulse/features/checklists/'
     'checklists_screen_registrations.dart';
+import 'package:tyre_pulse/features/extras/extras_screen_registrations.dart';
 import 'package:tyre_pulse/features/home/home_screen_registrations.dart';
 import 'package:tyre_pulse/features/inspections/'
     'inspections_screen_registrations.dart';
@@ -324,6 +326,8 @@ Future<void> main() async {
         screenRegistryProvider.overrideWithValue(
           TpScreenRegistry.empty
               .withAll(assetsScreenRegistrations)
+              .withAll(adminScreenRegistrations)
+              .withAll(extrasScreenRegistrations)
               .withAll(tyresScreenRegistrations)
               .withAll(recordsScreenRegistrations)
               .withAll(rcaScreenRegistrations)

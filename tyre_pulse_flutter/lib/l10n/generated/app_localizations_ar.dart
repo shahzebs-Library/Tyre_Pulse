@@ -3702,4 +3702,833 @@ class AppLocalizationsAr extends AppLocalizations {
   String managementReportsPdfCurrency(String code) {
     return 'العملة: $code';
   }
+
+  @override
+  String get adminHubTitle => 'لوحة الإدارة';
+
+  @override
+  String get adminHubSubtitle => 'المستخدمون والصلاحيات والموافقات والمواقع';
+
+  @override
+  String get adminHubPendingApprovals => 'موافقات معلقة';
+
+  @override
+  String get adminHubPendingSignups => 'تسجيلات معلقة';
+
+  @override
+  String get adminHubLockedUsers => 'مستخدمون مقفلون';
+
+  @override
+  String get adminHubCountUnavailable => 'تعذر التحميل';
+
+  @override
+  String get adminHubSectionManage => 'الإدارة';
+
+  @override
+  String get adminHubSectionMore => 'التقارير والفريق';
+
+  @override
+  String get adminHubUsersTitle => 'المستخدمون';
+
+  @override
+  String get adminHubUsersSubtitle => 'الموافقة والقفل وتغيير الأدوار';
+
+  @override
+  String get adminHubAccessTitle => 'صلاحيات التطبيق';
+
+  @override
+  String get adminHubAccessSubtitle => 'السماح بوحدات التطبيق أو منعها لكل شخص';
+
+  @override
+  String get adminHubApprovalsTitle => 'الموافقات';
+
+  @override
+  String get adminHubApprovalsSubtitle => 'فحوصات وقوائم تحقق بانتظار التوقيع';
+
+  @override
+  String get adminHubSitesTitle => 'المواقع';
+
+  @override
+  String get adminHubSitesSubtitle => 'المناطق وحالة التفعيل';
+
+  @override
+  String get adminHubAiTitle => 'محادثة الذكاء الاصطناعي للأسطول';
+
+  @override
+  String get adminHubAiSubtitle => 'اطرح أسئلة حول إدارة الأسطول';
+
+  @override
+  String get adminHubOpenModule => 'فتح هذه الوحدة';
+
+  @override
+  String get adminModuleInspect => 'فحص جديد';
+
+  @override
+  String get adminModuleScan => 'مسح';
+
+  @override
+  String get adminModuleSerial => 'البحث بالرقم التسلسلي';
+
+  @override
+  String get adminModuleTyreChange => 'تغيير الإطار';
+
+  @override
+  String get adminModuleChecklists => 'قوائم التحقق';
+
+  @override
+  String get adminModuleMeter => 'سجل العداد';
+
+  @override
+  String get adminModuleWashing => 'غسيل المركبات';
+
+  @override
+  String get adminModuleReportIssue => 'الإبلاغ عن مشكلة';
+
+  @override
+  String get adminModuleRepairRequest => 'طلب إصلاح';
+
+  @override
+  String get adminModuleRecords => 'سجلات الإطارات';
+
+  @override
+  String get adminModuleVehicles => 'المركبات';
+
+  @override
+  String get adminModuleHistory => 'السجل';
+
+  @override
+  String get adminModuleAlerts => 'التنبيهات';
+
+  @override
+  String get adminModuleCalendar => 'التقويم';
+
+  @override
+  String get adminModuleAccidents => 'الحوادث';
+
+  @override
+  String get adminModuleReportAccident => 'تسجيل حادث';
+
+  @override
+  String get adminModuleWorkorders => 'أوامر العمل';
+
+  @override
+  String get adminModuleRca => 'السبب الجذري';
+
+  @override
+  String get adminModuleTasks => 'المهام';
+
+  @override
+  String get adminModuleStock => 'جرد المخزون';
+
+  @override
+  String get adminModulePm => 'الصيانة المستحقة';
+
+  @override
+  String get adminModuleWorkshop => 'مهامي';
+
+  @override
+  String get adminModuleOverview => 'نظرة عامة';
+
+  @override
+  String get adminModuleReports => 'التقارير';
+
+  @override
+  String get adminModuleAnalytics => 'التحليلات';
+
+  @override
+  String get adminModuleStockManage => 'إدارة المخزون';
+
+  @override
+  String get adminModuleAi => 'الذكاء الاصطناعي للأسطول';
+
+  @override
+  String get adminModuleTeam => 'الفريق';
+
+  @override
+  String get adminModuleApprovals => 'الموافقات';
+
+  @override
+  String get adminModuleAdmin => 'لوحة الإدارة';
+
+  @override
+  String get adminModuleUsers => 'إدارة المستخدمين';
+
+  @override
+  String get adminUsersTitle => 'المستخدمون';
+
+  @override
+  String adminUsersCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count مستخدم',
+      many: '$count مستخدمًا',
+      few: '$count مستخدمين',
+      two: 'مستخدمان',
+      one: 'مستخدم واحد',
+      zero: 'لا يوجد مستخدمون',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get adminUsersSearchHint =>
+      'ابحث بالاسم أو اسم المستخدم أو الرقم الوظيفي';
+
+  @override
+  String get adminUsersFilterAll => 'الكل';
+
+  @override
+  String get adminUsersStatusPending => 'معلق';
+
+  @override
+  String get adminUsersStatusActive => 'نشط';
+
+  @override
+  String get adminUsersStatusLocked => 'مقفل';
+
+  @override
+  String get adminUsersAllRoles => 'كل الأدوار';
+
+  @override
+  String get adminUsersEmptyTitle => 'لا يوجد مستخدمون مطابقون';
+
+  @override
+  String get adminUsersEmptyMessage => 'جرّب بحثًا أو تصفية أخرى.';
+
+  @override
+  String get adminUsersLoadFailed => 'تعذر تحميل المستخدمين.';
+
+  @override
+  String get adminUsersReadOnlyNote =>
+      'لا يمكن تعديل المستخدمين إلا لمسؤول أعلى. يمكنك عرض القائمة.';
+
+  @override
+  String get adminUsersSelfNote => 'هذا حسابك. لا يمكنك قفله أو تغيير دوره.';
+
+  @override
+  String get adminUsersNoName => 'مستخدم بلا اسم';
+
+  @override
+  String get adminUsersNoRole => 'لا يوجد دور مسند';
+
+  @override
+  String get adminUsersSuperAdminBadge => 'مسؤول أعلى';
+
+  @override
+  String get adminUsersFieldRole => 'الدور';
+
+  @override
+  String get adminUsersFieldUsername => 'اسم المستخدم';
+
+  @override
+  String get adminUsersFieldEmployeeId => 'الرقم الوظيفي';
+
+  @override
+  String get adminUsersFieldEmail => 'البريد الإلكتروني';
+
+  @override
+  String get adminUsersFieldSite => 'الموقع';
+
+  @override
+  String get adminUsersFieldCountry => 'الدولة';
+
+  @override
+  String get adminUsersFieldJoined => 'تاريخ الانضمام';
+
+  @override
+  String get adminUsersFieldPendingReason => 'ملاحظة التسجيل';
+
+  @override
+  String get adminUsersActionApprove => 'موافقة';
+
+  @override
+  String get adminUsersActionLock => 'قفل';
+
+  @override
+  String get adminUsersActionUnlock => 'إلغاء القفل';
+
+  @override
+  String get adminUsersActionDeactivate => 'إلغاء التفعيل';
+
+  @override
+  String get adminUsersActionSetRole => 'تغيير الدور';
+
+  @override
+  String get adminUsersConfirmApproveTitle => 'الموافقة على هذا المستخدم؟';
+
+  @override
+  String adminUsersConfirmApproveMessage(String name) {
+    return 'سيتمكن $name من تسجيل الدخول واستخدام التطبيق.';
+  }
+
+  @override
+  String get adminUsersConfirmLockTitle => 'قفل هذا المستخدم؟';
+
+  @override
+  String adminUsersConfirmLockMessage(String name) {
+    return 'لن يتمكن $name من تسجيل الدخول حتى يُلغى القفل.';
+  }
+
+  @override
+  String get adminUsersConfirmUnlockTitle => 'إلغاء قفل هذا المستخدم؟';
+
+  @override
+  String adminUsersConfirmUnlockMessage(String name) {
+    return 'سيتمكن $name من تسجيل الدخول مجددًا.';
+  }
+
+  @override
+  String get adminUsersDeactivateTitle => 'إلغاء تفعيل هذا المستخدم';
+
+  @override
+  String adminUsersDeactivateMessage(String name) {
+    return 'سيفقد $name الوصول وسيُقفل حسابه. السبب مطلوب.';
+  }
+
+  @override
+  String get adminUsersSetRoleTitle => 'تغيير الدور';
+
+  @override
+  String adminUsersSetRoleMessage(String name) {
+    return 'اختر الدور الجديد لـ $name. السبب مطلوب.';
+  }
+
+  @override
+  String get adminUsersReasonLabel => 'السبب';
+
+  @override
+  String get adminUsersReasonRequired => 'أدخل السبب.';
+
+  @override
+  String get adminUsersRoleRequired => 'اختر دورًا.';
+
+  @override
+  String get adminUsersActionDone => 'تم الحفظ.';
+
+  @override
+  String get adminUsersActionFailed => 'تعذر حفظ التغيير.';
+
+  @override
+  String get adminAccessTitle => 'صلاحيات التطبيق';
+
+  @override
+  String get adminAccessPickUser => 'اختر شخصًا';
+
+  @override
+  String get adminAccessChangeUser => 'تغيير الشخص';
+
+  @override
+  String get adminAccessIntro =>
+      'تنطبق التعديلات على تطبيق الهاتف لهذا الشخص فقط. الافتراضي يتبع دوره.';
+
+  @override
+  String get adminAccessDefault => 'افتراضي';
+
+  @override
+  String get adminAccessAllow => 'سماح';
+
+  @override
+  String get adminAccessDeny => 'منع';
+
+  @override
+  String get adminAccessRoleDefaultAllowed => 'افتراضي الدور: مسموح';
+
+  @override
+  String get adminAccessRoleDefaultDenied => 'افتراضي الدور: غير مسموح';
+
+  @override
+  String get adminAccessRoleDefaultAdminOnly => 'للمسؤولين فقط افتراضيًا';
+
+  @override
+  String get adminAccessAdminNote =>
+      'يحتفظ المسؤولون والمسؤولون الأعلى دائمًا بصلاحيات كاملة.';
+
+  @override
+  String get adminAccessReadOnlyNote =>
+      'لا يمكن تغيير الصلاحيات إلا لمسؤول أعلى.';
+
+  @override
+  String get adminAccessLoadFailed => 'تعذر تحميل صلاحيات هذا الشخص.';
+
+  @override
+  String get adminAccessSaveFailed => 'تعذر تحديث الصلاحيات.';
+
+  @override
+  String get adminAccessSaved => 'تم تحديث الصلاحيات.';
+
+  @override
+  String get adminAccessGroupField => 'الميدان';
+
+  @override
+  String get adminAccessGroupFleet => 'الأسطول';
+
+  @override
+  String get adminAccessGroupMaintenance => 'الصيانة';
+
+  @override
+  String get adminAccessGroupManagement => 'الإدارة';
+
+  @override
+  String get adminAccessGroupAdmin => 'المسؤول';
+
+  @override
+  String get adminApprovalsTabInspections => 'الفحوصات';
+
+  @override
+  String get adminApprovalsTabChecklists => 'قوائم التحقق';
+
+  @override
+  String get adminSitesTitle => 'المواقع';
+
+  @override
+  String adminSitesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count موقع',
+      many: '$count موقعًا',
+      few: '$count مواقع',
+      two: 'موقعان',
+      one: 'موقع واحد',
+      zero: 'لا توجد مواقع',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get adminSitesSearchHint => 'ابحث بالموقع أو المنطقة أو الرمز';
+
+  @override
+  String get adminSitesActive => 'نشط';
+
+  @override
+  String get adminSitesInactive => 'غير نشط';
+
+  @override
+  String get adminSitesNoRegion => 'بلا منطقة';
+
+  @override
+  String get adminSitesEmptyTitle => 'لا توجد مواقع';
+
+  @override
+  String get adminSitesEmptyMessage => 'لم تُسجل أي مواقع لمؤسستك بعد.';
+
+  @override
+  String get adminSitesLoadFailed => 'تعذر تحميل المواقع.';
+
+  @override
+  String get adminSitesReadOnlyNote =>
+      'لا يمكن تعديل المواقع إلا لمسؤول أو مدير.';
+
+  @override
+  String get adminSitesEditTitle => 'تعديل الموقع';
+
+  @override
+  String get adminSitesRegionLabel => 'المنطقة';
+
+  @override
+  String get adminSitesActiveLabel => 'موقع نشط';
+
+  @override
+  String get adminSitesSave => 'حفظ';
+
+  @override
+  String get adminSitesSaved => 'تم تحديث الموقع.';
+
+  @override
+  String get adminSitesSaveFailed => 'تعذر تحديث الموقع.';
+
+  @override
+  String get adminAiTitle => 'محادثة الذكاء الاصطناعي للأسطول';
+
+  @override
+  String get adminAiSubtitle =>
+      'الإجابات من خدمة الذكاء الاصطناعي. تحقق من الأرقام المهمة في التطبيق.';
+
+  @override
+  String get adminAiHint => 'اسأل عن إدارة الأسطول';
+
+  @override
+  String get adminAiSend => 'إرسال';
+
+  @override
+  String get adminAiClear => 'مسح المحادثة';
+
+  @override
+  String get adminAiEmptyTitle => 'اطرح سؤالًا';
+
+  @override
+  String get adminAiEmptyMessage => 'مثلًا، كيف تخفض تكلفة الإطار لكل كيلومتر.';
+
+  @override
+  String get adminAiThinking => 'جارٍ التفكير';
+
+  @override
+  String get adminAiYou => 'أنت';
+
+  @override
+  String get adminAiAssistant => 'الذكاء الاصطناعي للأسطول';
+
+  @override
+  String get adminAiErrorDisabled =>
+      'ميزات الذكاء الاصطناعي معطلة من قبل المسؤول.';
+
+  @override
+  String get adminAiErrorBudget => 'تم بلوغ ميزانية الذكاء الاصطناعي الشهرية.';
+
+  @override
+  String get adminAiErrorRateLimit =>
+      'طلبات كثيرة. انتظر قليلًا ثم حاول مجددًا.';
+
+  @override
+  String get adminAiErrorEmpty => 'لم تُرجع خدمة الذكاء الاصطناعي أي إجابة.';
+
+  @override
+  String get adminAiErrorUnavailable =>
+      'خدمة الذكاء الاصطناعي غير متاحة حاليًا. حاول بعد قليل.';
+
+  @override
+  String get extrasFleetAiTitle => 'الذكاء الاصطناعي للأسطول';
+
+  @override
+  String get extrasFleetAiSubtitle => 'إجابات من بيانات أسطولك الحية';
+
+  @override
+  String get extrasFleetAiSnapshotLoading => 'جارٍ قراءة بيانات الأسطول الحية';
+
+  @override
+  String get extrasFleetAiNoData =>
+      'تعذرت قراءة بيانات الأسطول الحية، لذا لا يستطيع المساعد الإجابة من سجلاتك الآن.';
+
+  @override
+  String extrasFleetAiGroundedOn(int n) {
+    return 'استنادًا إلى $n من 5 أرقام حية للأسطول';
+  }
+
+  @override
+  String get extrasFleetAiEmptyTitle => 'اسأل عن أسطولك';
+
+  @override
+  String get extrasFleetAiEmptyMessage =>
+      'يجيب المساعد فقط من الأرقام الحية لأسطولك، وسيوضح عندما لا تتوفر معلومة هنا.';
+
+  @override
+  String get extrasFleetAiSuggestedTitle => 'جرّب أن تسأل';
+
+  @override
+  String get extrasFleetAiSuggestOverview => 'أعطني نظرة عامة على حالة الأسطول';
+
+  @override
+  String get extrasFleetAiSuggestRisk =>
+      'كم عدد الإطارات ذات الخطورة الحرجة أو العالية؟';
+
+  @override
+  String get extrasFleetAiSuggestActions => 'ما الذي يحتاج إلى اهتمامي أولًا؟';
+
+  @override
+  String get extrasFleetAiSuggestAccidents =>
+      'كم عدد الحوادث المبلغ عنها في آخر 30 يومًا؟';
+
+  @override
+  String get extrasFleetAiInputHint => 'اطرح سؤالًا عن أسطولك';
+
+  @override
+  String get extrasFleetAiSend => 'إرسال';
+
+  @override
+  String get extrasFleetAiThinking => 'جارٍ التفكير';
+
+  @override
+  String get extrasFleetAiClear => 'مسح المحادثة';
+
+  @override
+  String get extrasFleetAiDisclaimer =>
+      'قد تكون إجابات الذكاء الاصطناعي خاطئة. تحقق من الأرقام المهمة في التطبيق قبل التصرف.';
+
+  @override
+  String get extrasFleetAiYou => 'أنت';
+
+  @override
+  String get extrasFleetAiErrDisabled => 'أوقف المسؤول ميزات الذكاء الاصطناعي.';
+
+  @override
+  String get extrasFleetAiErrBudget =>
+      'تم بلوغ ميزانية الذكاء الاصطناعي الشهرية. تواصل مع المسؤول.';
+
+  @override
+  String get extrasFleetAiErrRateLimited =>
+      'عدد كبير من الأسئلة في وقت قصير. انتظر قليلًا ثم حاول مجددًا.';
+
+  @override
+  String get extrasFleetAiErrOffline => 'لا يوجد اتصال. لم يُرسل سؤالك.';
+
+  @override
+  String get extrasFleetAiErrUnavailable =>
+      'المساعد غير متاح الآن. حاول مرة أخرى بعد قليل.';
+
+  @override
+  String get repairReqCatEngine => 'المحرك';
+
+  @override
+  String get repairReqCatTransmission => 'ناقل الحركة';
+
+  @override
+  String get repairReqCatBrakes => 'الفرامل';
+
+  @override
+  String get repairReqCatTyres => 'الإطارات';
+
+  @override
+  String get repairReqCatHydraulics => 'الهيدروليك';
+
+  @override
+  String get repairReqCatElectrical => 'الكهرباء';
+
+  @override
+  String get repairReqCatBody => 'الهيكل';
+
+  @override
+  String get repairReqCatDrumMixer => 'الخلاط / الأسطوانة';
+
+  @override
+  String get repairReqCatPump => 'المضخة';
+
+  @override
+  String get repairReqCatAirSystem => 'نظام الهواء';
+
+  @override
+  String get repairReqCatCooling => 'التبريد';
+
+  @override
+  String get repairReqCatOther => 'أخرى';
+
+  @override
+  String get repairReqTitle => 'طلب إصلاح';
+
+  @override
+  String get repairReqSubtitle => 'أبلغ الورشة عن عطل';
+
+  @override
+  String get repairReqMachine => 'المعدة';
+
+  @override
+  String get repairReqChooseAsset => 'اختر المعدة';
+
+  @override
+  String get repairReqSelect => 'اختيار';
+
+  @override
+  String get repairReqChange => 'تغيير';
+
+  @override
+  String repairReqPlate(String plate) {
+    return 'اللوحة $plate';
+  }
+
+  @override
+  String get repairReqErrAsset => 'اختر المعدة التي بها العطل.';
+
+  @override
+  String get repairReqSite => 'الموقع';
+
+  @override
+  String get repairReqSiteHint => 'يُملأ من الموقع المسجل للمعدة';
+
+  @override
+  String get repairReqCategory => 'نوع العطل';
+
+  @override
+  String get repairReqDescription => 'صف العطل';
+
+  @override
+  String get repairReqDescriptionHint => 'ما الذي حدث، وما الذي تراه أو تسمعه';
+
+  @override
+  String get repairReqErrDescription => 'صف العطل قبل الإرسال.';
+
+  @override
+  String get repairReqPriority => 'الأولوية';
+
+  @override
+  String get repairReqOdometer => 'عداد المسافة (كم)';
+
+  @override
+  String get repairReqEngineHours => 'ساعات تشغيل المحرك';
+
+  @override
+  String get repairReqOptional => 'اختياري';
+
+  @override
+  String get repairReqErrMeter =>
+      'أدخل رقمًا يساوي صفرًا أو أكثر، أو اتركه فارغًا.';
+
+  @override
+  String get repairReqOnlineNote =>
+      'يُرسل هذا الطلب مباشرة إلى الورشة ويحتاج إلى اتصال. يصدر المكتب رقم طلب الإصلاح.';
+
+  @override
+  String get repairReqSubmit => 'إرسال طلب الإصلاح';
+
+  @override
+  String get repairReqErrNoProfile =>
+      'لم يُحمَّل ملفك الشخصي بعد. حاول بعد لحظات.';
+
+  @override
+  String get repairReqErrOffline =>
+      'لا يوجد اتصال. لم يُرسل شيء. بياناتك محفوظة، أرسلها مجددًا عند توفر الشبكة.';
+
+  @override
+  String get repairReqErrPermission =>
+      'لا يُسمح لحسابك بتقديم طلبات الإصلاح. تواصل مع المسؤول.';
+
+  @override
+  String get repairReqErrFailed =>
+      'تعذر إرسال الطلب. بياناتك محفوظة، حاول مجددًا.';
+
+  @override
+  String get repairReqSentTitle => 'تم إرسال طلب الإصلاح';
+
+  @override
+  String repairReqSentWithNumber(String rfr) {
+    return 'استلمته الورشة برقم $rfr.';
+  }
+
+  @override
+  String get repairReqSentNoNumber =>
+      'استلمته الورشة. سيصدر المكتب رقم طلب الإصلاح.';
+
+  @override
+  String get repairReqAnother => 'تقديم طلب آخر';
+
+  @override
+  String get repairReqDone => 'تم';
+
+  @override
+  String get repairReqSearchHint =>
+      'ابحث برقم الأصل أو اللوحة أو النوع أو الموقع';
+
+  @override
+  String get repairReqNoAssets => 'لا توجد معدات مسجلة ضمن نطاقك.';
+
+  @override
+  String get repairReqNoMatch => 'لا توجد معدة مطابقة لهذا البحث.';
+
+  @override
+  String repairReqRefineSearch(int n) {
+    return '$n معدة مطابقة. اكتب المزيد لتضييق القائمة.';
+  }
+
+  @override
+  String get repairReqCachedList =>
+      'غير متصل: يتم عرض الأسطول المحفوظ على هذا الجهاز.';
+
+  @override
+  String get registerTitle => 'إنشاء حساب';
+
+  @override
+  String get registerChecking => 'جارٍ التحقق مما إذا كان التسجيل مفتوحًا';
+
+  @override
+  String get registerUnreachableTitle => 'تعذر الوصول إلى الخادم';
+
+  @override
+  String get registerUnreachableMessage =>
+      'يتطلب التسجيل اتصالًا. تحقق من الشبكة وحاول مجددًا.';
+
+  @override
+  String get registerClosedTitle => 'التسجيل مغلق';
+
+  @override
+  String get registerClosedMessage =>
+      'ينشئ المسؤول الحسابات. تواصل مع المسؤول لتتم دعوتك.';
+
+  @override
+  String get registerBackToSignIn => 'العودة لتسجيل الدخول';
+
+  @override
+  String get registerDoneTitle => 'تم إنشاء الحساب';
+
+  @override
+  String get registerDoneMessage =>
+      'حسابك بانتظار الموافقة. سيحدد المسؤول دورك وموقعك، ثم يمكنك تسجيل الدخول.';
+
+  @override
+  String get registerIntro =>
+      'اطلب حسابًا باسم المستخدم ورقمك الوظيفي. يوافق عليه المسؤول ويحدد دورك وموقعك.';
+
+  @override
+  String get registerFullName => 'الاسم الكامل';
+
+  @override
+  String get registerOptional => 'اختياري';
+
+  @override
+  String get registerUsername => 'اسم المستخدم';
+
+  @override
+  String get registerUsernameHelp =>
+      '3 أحرف على الأقل: حروف أو أرقام أو نقطة أو شرطة سفلية أو شرطة';
+
+  @override
+  String get registerEmployeeId => 'الرقم الوظيفي';
+
+  @override
+  String get registerPassword => 'كلمة المرور';
+
+  @override
+  String registerPasswordHelp(int n) {
+    return '$n أحرف على الأقل';
+  }
+
+  @override
+  String get registerConfirm => 'تأكيد كلمة المرور';
+
+  @override
+  String get registerShowPassword => 'إظهار كلمة المرور';
+
+  @override
+  String get registerHidePassword => 'إخفاء كلمة المرور';
+
+  @override
+  String get registerApprovalNote =>
+      'لا يمكنك اختيار دور أو موقع هنا. تبدأ الحسابات الجديدة معلّقة حتى يوافق عليها المسؤول.';
+
+  @override
+  String get registerSubmit => 'طلب حساب';
+
+  @override
+  String get registerHaveAccount => 'لديك حساب بالفعل؟ سجّل الدخول';
+
+  @override
+  String get registerErrUsernameShort => 'أدخل اسم مستخدم من 3 أحرف على الأقل.';
+
+  @override
+  String get registerErrUsernameChars =>
+      'استخدم الحروف والأرقام والنقطة والشرطة السفلية والشرطة فقط.';
+
+  @override
+  String get registerErrEmployeeId => 'أدخل رقمك الوظيفي.';
+
+  @override
+  String registerErrPasswordShort(int n) {
+    return 'يجب ألا تقل كلمة المرور عن $n أحرف.';
+  }
+
+  @override
+  String get registerErrMismatch => 'كلمتا المرور غير متطابقتين.';
+
+  @override
+  String get registerErrTaken =>
+      'اسم المستخدم أو الرقم الوظيفي مستخدم بالفعل. اختر غيره.';
+
+  @override
+  String get registerErrOffline =>
+      'لا يوجد اتصال. لم يُنشأ حسابك. حاول مجددًا عند توفر الشبكة.';
+
+  @override
+  String get registerErrFailed => 'تعذر إنشاء حسابك. حاول مجددًا.';
+
+  @override
+  String get loginCreateAccount => 'إنشاء حساب';
 }

@@ -4,6 +4,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
@@ -34,6 +35,7 @@ abstract final class LoginActionKeys {
   static const Key passwordToggle = Key('login.password_toggle');
   static const Key forgotPassword = Key('login.forgot_password');
   static const Key accessHelp = Key('login.access_help');
+  static const Key createAccount = Key('login.create_account');
 }
 
 @immutable
@@ -198,7 +200,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
-  Future<void> _showLoginHelp(String message) {
+  Future<void> _showLoginHelp(String message, {bool offerRegister = false}) {
     final LoginSecurityCopy copy = LoginSecurityCopy.of(context);
     return showDialog<void>(
       context: context,
@@ -206,6 +208,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         title: Text(copy.helpTitle),
         content: Text(message),
         actions: <Widget>[
+          // New staff can request an account themselves; it is created as a
+          // pending account an administrator approves. The register screen
+          // itself says so when the administrator has closed registration.
+          if (offerRegister)
+            TextButton(
+              key: LoginActionKeys.createAccount,
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                context.go(const RegisterRoute().location);
+              },
+              child:
+                  Text(AppLocalizations.of(dialogContext).loginCreateAccount),
+            ),
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
             child: Text(AppLocalizations.of(dialogContext).actionClose),
@@ -357,7 +372,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     _showLoginHelp(LoginSecurityCopy.of(context).forgotHelp),
                   ),
                   onAccessHelp: () => unawaited(
-                    _showLoginHelp(LoginSecurityCopy.of(context).accessHelp),
+                    _showLoginHelp(
+                      LoginSecurityCopy.of(context).accessHelp,
+                      offerRegister: true,
+                    ),
                   ),
                   onBiometric: _authenticateWithBiometrics,
                   onSubmit: _submit,
@@ -434,7 +452,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       _showLoginHelp(LoginSecurityCopy.of(context).forgotHelp),
                     ),
                     onAccessHelp: () => unawaited(
-                      _showLoginHelp(LoginSecurityCopy.of(context).accessHelp),
+                      _showLoginHelp(
+                        LoginSecurityCopy.of(context).accessHelp,
+                        offerRegister: true,
+                      ),
                     ),
                     onBiometric: _authenticateWithBiometrics,
                     onSubmit: _submit,

@@ -508,10 +508,13 @@ void main() {
     // 918 + 148 = 1066. Driver workspace moved off its private English copy map
     // (driverWs*), vehicle class labels (vehicleClass*), scanner camera-start
     // failure (scannerCameraStartFailed*), Management Overview/Reports/Team.
-    test('en, ar and ur each carry exactly 1066 translatable keys today', () {
-      expect(_translatableKeys(en).length, 1066);
-      expect(_translatableKeys(ar).length, 1066);
-      expect(_translatableKeys(ur).length, 1066);
+    // 1066 + 147 + 101 = 1314. Phone admin screens (admin*), Fleet AI, the
+    // self-registration screen and Request For Repair (extras*/register*/repairReq*).
+    // + 1 = 1315: loginCreateAccount, the access-help link to self-registration.
+    test('en, ar and ur each carry exactly 1315 translatable keys today', () {
+      expect(_translatableKeys(en).length, 1315);
+      expect(_translatableKeys(ar).length, 1315);
+      expect(_translatableKeys(ur).length, 1315);
     });
   });
 

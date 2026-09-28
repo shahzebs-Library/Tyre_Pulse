@@ -4,7 +4,7 @@ import { PageFrame } from "@/components/PageFrame";
 import { PageTop, SubNav } from "@/components/PageTop";
 import { CtaBand } from "@/components/CtaBand";
 import { PartsLabour, TechAllocation, WorkOrderDetails, WorkOrdersTable } from "@/components/mock/Screens";
-import { TipperScene } from "@/components/art/Machines";
+import { Photo } from "@/components/art/Photos";
 import { JsonLd, alternatesFor, pageBreadcrumb } from "../../schema";
 
 export const metadata: Metadata = {
@@ -42,7 +42,7 @@ export default function MaintenancePage() {
               {["Service plans by engine hours, kilometres or calendar", "Due and overdue work surfaced before it becomes a breakdown", "Recording a service advances the next due date automatically", "Compliance by site, asset type and plan"].map((t) => <li key={t}><CheckCircle2 size={18} aria-hidden="true" />{t}</li>)}
             </ul>
           </div>
-          <TipperScene className="art" />
+          <Photo name="concretePump" className="art art-dark" fit="contain" />
         </div>
       </section>
       <CtaBand title="Streamline your maintenance operations." text="See how Tyre Pulse can support your workshop and field teams." />

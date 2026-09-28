@@ -13,7 +13,7 @@ import {
 import {
   ASSETS, ASSET_HISTORY, INVENTORY, PARTS, PRIORITY_WORK, SPEND, STATUS_TONE, TECHNICIANS, WORK_ORDERS,
 } from "@/lib/sample";
-import { BucketDetail, CabDetail, TyreCloseup, WheelLoaderScene } from "@/components/art/Machines";
+import { Photo } from "@/components/art/Photos";
 
 export function Pill({ label, tone }: { label: string; tone?: string }) {
   return <span className={`pill pill-${tone ?? STATUS_TONE[label] ?? "grey"}`}>{label}</span>;
@@ -152,13 +152,13 @@ export function AssetRecord({ wide = false }: { wide?: boolean }) {
           <span className="ar-strong">Owned</span>
         </div>
         <div className="ar-media">
-          <WheelLoaderScene className="ar-photo" />
+          <Photo name="loader" className="ar-photo" priority sizes="(max-width: 720px) 100vw, 560px" />
           <div className="ar-thumbs">
-            <WheelLoaderScene className="thumb" title="Loader, side view" />
-            <CabDetail className="thumb" />
-            <TyreCloseup className="thumb" />
+            <Photo name="loaderSite" className="thumb" sizes="120px" />
+            <Photo name="loaderCab" className="thumb" sizes="120px" />
+            <Photo name="loaderTyre" className="thumb" sizes="120px" />
             <span className="thumb more">+3</span>
-            <BucketDetail className="thumb hide-sm" />
+            <Photo name="loaderBucket" className="thumb hide-sm" sizes="120px" />
           </div>
         </div>
         <dl className="ar-info">
@@ -221,7 +221,7 @@ export function NewInspectionCard() {
       <div className="cond-row"><span className="cond good on"><CheckCircle2 size={12} />Good</span><span className="cond issue"><TriangleAlert size={12} />Issue</span><span className="cond bad"><XCircle size={12} />Not safe</span></div>
       <span className="muted-xs">Comments</span>
       <span className="fake-input">Hydraulic leak at front left cylinder.</span>
-      <div className="photo-row"><TyreCloseup className="ph" /><WheelLoaderScene className="ph" title="Loader photo" /><span className="ph add"><Plus size={14} /></span></div>
+      <div className="photo-row"><Photo name="loaderTyre" className="ph" sizes="120px" /><Photo name="loaderCab" className="ph" sizes="120px" /><span className="ph add"><Plus size={14} /></span></div>
     </div>
   );
 }
@@ -267,7 +267,7 @@ export function CompleteCard() {
       <span className="muted-xs">Work completed</span>
       <span className="fc-v">Hydraulic hose replaced and leak fixed. System tested, no further leaks.</span>
       <span className="muted-xs">Completion photos</span>
-      <div className="photo-row"><CabDetail className="ph" /><BucketDetail className="ph" /><span className="ph add"><Plus size={14} /></span></div>
+      <div className="photo-row"><Photo name="loaderSite" className="ph" sizes="120px" /><Photo name="loaderTyre" className="ph" sizes="120px" /><span className="ph add"><Plus size={14} /></span></div>
       <div className="fc-split">
         <div><span className="muted-xs">Meter reading</span><span className="fc-v">6,248 h</span></div>
         <div><span className="muted-xs">Date</span><span className="fc-v">12 Mar 2026</span></div>
@@ -323,17 +323,6 @@ export function Signature({ className }: { className?: string }) {
     <svg className={className} viewBox="0 0 160 60" aria-hidden="true">
       <path d="M8 44 C 20 10, 30 10, 28 40 S 44 58, 52 24 S 66 8, 70 38 C 72 50, 82 50, 90 30 C 96 18, 104 22, 104 34 C 104 44, 118 40, 150 30" fill="none" stroke="#161616" strokeWidth="2.4" strokeLinecap="round" />
     </svg>
-  );
-}
-
-export function SignaturePhone() {
-  return (
-    <Phone label="Sample job completion signature on the mobile app">
-      <div className="ph-head"><strong>Job completion</strong></div>
-      <span className="muted-xs">Technician signature</span>
-      <div className="sig-pad"><Signature className="sig" /><span className="clear">Clear</span></div>
-      <span className="yellow-btn full">Save</span>
-    </Phone>
   );
 }
 
@@ -412,7 +401,7 @@ export function DefectCard() {
   return (
     <div className="panel">
       <div className="panel-head"><strong>Capture defects</strong></div>
-      <div className="photo-row big"><TyreCloseup className="ph" /><WheelLoaderScene className="ph" title="Defect photo" /><BucketDetail className="ph" /></div>
+      <div className="photo-row big"><Photo name="loaderTyre" className="ph" sizes="140px" /><Photo name="loaderCab" className="ph" sizes="140px" /><Photo name="loaderBucket" className="ph" sizes="140px" /></div>
       <span className="fc-v">Hydraulic leak at front left cylinder.</span>
     </div>
   );

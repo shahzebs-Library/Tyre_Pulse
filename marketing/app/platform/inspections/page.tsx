@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, WifiOff } from "lucide-react";
+import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { PageFrame } from "@/components/PageFrame";
 import { PageTop, SubNav } from "@/components/PageTop";
 import { CtaBand } from "@/components/CtaBand";
 import { ConditionCard, DefectCard, MeterCard, OfflineInspectionPhone, SignOffCard } from "@/components/mock/Screens";
-import { WheelLoaderScene } from "@/components/art/Machines";
+import { Photo } from "@/components/art/Photos";
 import { JsonLd, alternatesFor, pageBreadcrumb } from "../../schema";
 
 export const metadata: Metadata = {
@@ -38,8 +38,7 @@ export default function InspectionsPage() {
               <Link className="btn-text" href="/contact">Book a demo <ArrowRight size={16} aria-hidden="true" /></Link>
             </div>
             <div className="art-box">
-              <WheelLoaderScene className="art" />
-              <span className="badge-float"><WifiOff size={14} aria-hidden="true" />Works offline</span>
+              <Photo name="inspector" alt="Inspector using a tablet beside a loader, marked works offline" />
             </div>
           </div>
           <div className="grid-4p">

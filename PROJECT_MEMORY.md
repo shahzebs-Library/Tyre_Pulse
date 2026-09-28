@@ -84,10 +84,11 @@ Branch `claude/marketing-pmv-redesign`. marketing/ only; the app is untouched.
 - **Pages:** `/` (PMV home), `/platform`, `/platform/fleet-assets`, `/platform/maintenance`, `/platform/inspections`,
   `/platform/inventory`. `/product` is DELETED and 308-redirects to `/platform` (next.config.ts). Page map lives once
   in `marketing/lib/nav.ts` (header, footer read it).
-- **NO PHOTOS, by design (copyright):** all imagery is original SVG in `components/art/Machines.tsx` (wheel loader,
-  excavator, tipper, mixer, tyre/cab/bucket details, no brand livery) and product screens drawn in HTML in
-  `components/mock/Screens.tsx` over `lib/sample.ts`. Every screen carries a "Sample data" tag; the footer says so.
-  RULE: do not add stock photos or manufacturer imagery.
+- **REAL PHOTOS (owner instruction, same day, reversing the SVG approach):** `components/art/Photos.tsx` + `public/photos/*.webp`.
+  Sources are owner-supplied ONLY: crops of the owner's own mockup images (loader + detail crops, technician with
+  tablet, signature phone, inspector) upscaled 3x, and the Flutter app's vehicle/login photos (tyre_pulse_flutter/assets).
+  Self-hosted, no external image host. The loader crop carries a CAT logo (as in the mockup); flagged to the owner.
+  Product screens stay HTML in `components/mock/Screens.tsx` over `lib/sample.ts`, each tagged "Sample data".
 - three.js hero (Hero3D/HeroScene) + three/@react-three/framer-motion deps REMOVED; /ar uses the loader SVG.
 - Verified: build + lint (0 errors) + 8 tests; no horizontal overflow at 320/390/768/1024 on all 11 pages; menus close
   on Escape. GOTCHA: a stale `next start` keeps serving the OLD css chunk (404) after a rebuild, making every layout

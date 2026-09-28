@@ -8,10 +8,10 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { CtaBand } from "@/components/CtaBand";
 import { Tabs } from "@/components/Tabs";
-import { ExcavatorScene, TipperScene, WheelLoaderScene } from "@/components/art/Machines";
+import { Photo } from "@/components/art/Photos";
 import {
   ApprovalCard, AssetRecord, CompleteCard, FleetCostPanel, NewInspectionCard, OfflineInspectionPhone,
-  OpsOverview, PartsCard, SignaturePhone,
+  OpsOverview, PartsCard,
 } from "@/components/mock/Screens";
 import { alternatesFor } from "./schema";
 
@@ -91,7 +91,7 @@ export default function HomePage() {
                 { id: "fleet", label: "Fleet and assets", icon: <Truck size={20} aria-hidden="true" />, panel: <AssetRecord /> },
                 {
                   id: "maint", label: "Maintenance and workshop", icon: <Wrench size={20} aria-hidden="true" />,
-                  panel: <div className="tab-panel"><ExcavatorScene className="art" /><TabCopy title="Every job, planned and tracked." text="Preventive schedules and breakdowns land in one work order queue your workshop can run from." points={["Preventive plans by hours, kilometres or date", "Job cards with labour, parts and outside services", "Technician allocation and workload"]} href="/platform/maintenance" /></div>,
+                  panel: <div className="tab-panel"><Photo name="concretePump" fit="contain" className="art art-dark" /><TabCopy title="Every job, planned and tracked." text="Preventive schedules and breakdowns land in one work order queue your workshop can run from." points={["Preventive plans by hours, kilometres or date", "Job cards with labour, parts and outside services", "Technician allocation and workload"]} href="/platform/maintenance" /></div>,
                 },
                 {
                   id: "insp", label: "Inspections and safety", icon: <ShieldCheck size={20} aria-hidden="true" />,
@@ -99,7 +99,7 @@ export default function HomePage() {
                 },
                 {
                   id: "inv", label: "Inventory and procurement", icon: <Box size={20} aria-hidden="true" />,
-                  panel: <div className="tab-panel"><TipperScene className="art" /><TabCopy title="The right part, on the right site." text="Stores issue parts straight to job cards, and purchase requests go through approval before an order is placed." points={["Stock by site with reorder levels", "Parts issued against the job and asset", "Purchase requests with approval"]} href="/platform/inventory" /></div>,
+                  panel: <div className="tab-panel"><Photo name="loaderSite" /><TabCopy title="The right part, on the right site." text="Stores issue parts straight to job cards, and purchase requests go through approval before an order is placed." points={["Stock by site with reorder levels", "Parts issued against the job and asset", "Purchase requests with approval"]} href="/platform/inventory" /></div>,
                 },
                 {
                   id: "cost", label: "Costs and reporting", icon: <BarChart3 size={20} aria-hidden="true" />,
@@ -133,7 +133,7 @@ export default function HomePage() {
             <h2 className="sec-h" id="people">Built for the people doing the work.</h2>
             <div className="people">
               <div className="people-art">
-                <WheelLoaderScene className="art" />
+                <Photo name="technician" position="30% 30%" />
                 <OfflineInspectionPhone />
               </div>
               <Tabs
@@ -146,7 +146,7 @@ export default function HomePage() {
                   { id: "pmv", label: "PMV Manager", panel: <RoleCopy title="Availability and cost, asset by asset." text="Track availability, preventive compliance and spend across sites, and decide which assets to repair, replace or move." /> },
                 ]}
               />
-              <div className="sig-standalone" aria-hidden="true"><SignaturePhone /></div>
+              <div className="sig-standalone"><Photo name="signature" /></div>
             </div>
           </div>
         </section>

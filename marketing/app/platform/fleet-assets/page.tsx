@@ -4,7 +4,7 @@ import { PageFrame } from "@/components/PageFrame";
 import { PageTop, SubNav } from "@/components/PageTop";
 import { CtaBand } from "@/components/CtaBand";
 import { AssetHistoryTable, AssetRecord, AssetStats, SampleTag } from "@/components/mock/Screens";
-import { ExcavatorScene, MixerScene } from "@/components/art/Machines";
+import { Photo } from "@/components/art/Photos";
 import { JsonLd, alternatesFor, pageBreadcrumb } from "../../schema";
 
 export const metadata: Metadata = {
@@ -44,12 +44,12 @@ export default function FleetPage() {
               {["Hour and kilometre readings from inspections, job cards and telematics", "Readings that go backwards are flagged, never silently accepted", "Utilisation by asset, site and asset type", "Preventive schedules driven by the real meter"].map((t) => <li key={t}><CheckCircle2 size={18} aria-hidden="true" />{t}</li>)}
             </ul>
           </div>
-          <ExcavatorScene className="art" />
+          <Photo name="fleetLineup" className="art art-frame" fit="contain" />
         </div>
       </section>
       <section className="section-pad anchor-sec" id="documents" aria-labelledby="docs-h">
         <div className="site-shell split">
-          <MixerScene className="art" />
+          <Photo name="mixer" className="art art-dark" fit="contain" />
           <div id="lifecycle" className="anchor-sec">
             <h2 className="sec-h" id="docs-h">Documents and lifecycle in the same record.</h2>
             <ul className="tick-list">

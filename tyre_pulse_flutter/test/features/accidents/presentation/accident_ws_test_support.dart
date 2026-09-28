@@ -15,6 +15,7 @@ import 'package:tyre_pulse/core/permissions/roles.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/core/workspace/workspace_scope.dart';
+import 'package:tyre_pulse/features/accidents/data/accident_capability.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_case_rows.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_sla_repository.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
@@ -176,4 +177,16 @@ Future<void> pumpAccidentWorkspace(
 Future<void> reveal(WidgetTester tester, Finder finder) async {
   await tester.ensureVisible(finder);
   await tester.pumpAndSettle();
+}
+
+/// Answers accident capabilities without the server. Null [allowed] grants
+/// every capability (an elevated user); otherwise only the listed ones.
+final class FakeAccidentCapabilityChecker implements AccidentCapabilityChecker {
+  const FakeAccidentCapabilityChecker({this.allowed});
+
+  final Set<String>? allowed;
+
+  @override
+  Future<bool> can(String capability) async =>
+      allowed == null || allowed!.contains(capability);
 }

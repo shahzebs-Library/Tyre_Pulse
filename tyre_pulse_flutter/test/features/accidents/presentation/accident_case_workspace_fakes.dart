@@ -18,6 +18,7 @@ import 'package:tyre_pulse/core/storage/storage_providers.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_assessment_repository.dart';
+import 'package:tyre_pulse/features/accidents/data/accident_capability.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_case_docs_repository.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_claim_package_repository.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_claim_repository.dart';
@@ -176,6 +177,9 @@ List<Override> accidentCaseWorkspaceOverrides({
 }) {
   final FakeAccidentCaseRows caseRows = rows ?? FakeAccidentCaseRows();
   return <Override>[
+    accidentCapabilityCheckerProvider.overrideWithValue(
+      const FakeAccidentCapabilityChecker(),
+    ),
     workspaceContextProvider.overrideWithValue(workspace),
     secureStoreProvider.overrideWithValue(MemorySecureStore()),
     privateStorageReferenceResolverProvider.overrideWithValue(

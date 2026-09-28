@@ -86,7 +86,7 @@ void main() {
       expect(netClaimable(double.nan, 1), isNull);
     });
 
-    test('recovered total ignores written-off and rejected rows', () {
+    test('recovered total counts only recovered and partial rows', () {
       final List<AccidentClaimRecovery> rows = <AccidentClaimRecovery>[
         const AccidentClaimRecovery(id: 'a', amount: 400, status: 'recovered'),
         const AccidentClaimRecovery(id: 'b', amount: 100, status: 'rejected'),
@@ -97,8 +97,15 @@ void main() {
           status: 'not_applicable',
         ),
         const AccidentClaimRecovery(id: 'c', amount: 50),
+        const AccidentClaimRecovery(id: 'p', amount: 60, status: 'pending'),
+        const AccidentClaimRecovery(
+          id: 'i',
+          amount: 80,
+          status: 'in_progress',
+        ),
+        const AccidentClaimRecovery(id: 't', amount: 25, status: 'partial'),
       ];
-      expect(recoveredTotal(rows), 450);
+      expect(recoveredTotal(rows), 425);
     });
 
     test('outstanding is approved (else claimed) less recovered', () {

@@ -18,6 +18,7 @@ import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/accidents/accidents_providers.dart';
+import 'package:tyre_pulse/features/accidents/data/accident_capability.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_case_docs_repository.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_liability_repository.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_photo_capture.dart';
@@ -724,15 +725,27 @@ class _AccidentResponsibilityMockWorkspaceState
           const SizedBox(height: TpSpace.md),
           _documentsCard(copy, palette),
           const SizedBox(height: TpSpace.lg),
-          TpButton.secondary(
-            key: const Key('accident.resp.save'),
-            label: copy('saveDetails'),
-            icon: Icons.bookmark_border_rounded,
-            isFullWidth: true,
-            isBusy: _saving,
-            onPressed: _saving || _locked ? null : () => unawaited(_save()),
-          ),
-          const SizedBox(height: TpSpace.sm),
+          // The liability decision is written only by a role holding
+          // approve_liability (or an elevated role); others are not offered
+          // a save that the server would refuse.
+          if (ref
+                  .watch(
+                    accidentCapabilityProvider(
+                      AccidentCapability.approveLiability,
+                    ),
+                  )
+                  .value ??
+              false) ...<Widget>[
+            TpButton.secondary(
+              key: const Key('accident.resp.save'),
+              label: copy('saveDetails'),
+              icon: Icons.bookmark_border_rounded,
+              isFullWidth: true,
+              isBusy: _saving,
+              onPressed: _saving || _locked ? null : () => unawaited(_save()),
+            ),
+            const SizedBox(height: TpSpace.sm),
+          ],
           AccidentMockToneButton(
             key: const Key('accident.resp.requestTaqdeer'),
             label: copy('requestTaqdeer'),

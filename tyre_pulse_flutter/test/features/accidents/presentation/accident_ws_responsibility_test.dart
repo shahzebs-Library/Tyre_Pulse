@@ -14,11 +14,14 @@ import 'package:tyre_pulse/core/storage/storage_providers.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/core/workspace/workspace_scope.dart';
+import 'package:tyre_pulse/features/accidents/data/accident_capability.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_case_docs_repository.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_liability_repository.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_models.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_mock_kit.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_responsibility.dart';
+
+import 'accident_ws_test_support.dart';
 
 const WorkspaceContext _context = WorkspaceContext(
   userId: 'user-1',
@@ -82,6 +85,9 @@ final class _Fakes {
   int _ids = 0;
 
   List<Override> overrides() => <Override>[
+        accidentCapabilityCheckerProvider.overrideWithValue(
+          const FakeAccidentCapabilityChecker(),
+        ),
         workspaceContextProvider.overrideWithValue(_context),
         secureStoreProvider.overrideWithValue(store),
         accidentLiabilityRepositoryProvider.overrideWithValue(

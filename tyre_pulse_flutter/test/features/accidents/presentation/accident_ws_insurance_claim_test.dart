@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/network/supabase_tables.dart';
+import 'package:tyre_pulse/features/accidents/data/accident_capability.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_claim_package_repository.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_claim_repository.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_case_vocab.dart';
@@ -67,8 +68,12 @@ void _seedDocs(FakeAccidentCaseRows rows, {Set<String> except = const {}}) {
 List<Override> _overrides(
   FakeAccidentCaseRows rows, {
   Map<String, dynamic>? claimRow,
+  Set<String>? capabilities,
 }) =>
     <Override>[
+      accidentCapabilityCheckerProvider.overrideWithValue(
+        FakeAccidentCapabilityChecker(allowed: capabilities),
+      ),
       accidentClaimPackageRepositoryProvider.overrideWithValue(
         AccidentClaimPackageRepository(
           rows,
@@ -155,6 +160,29 @@ void main() {
       find.byKey(const Key('accident.ws.insurance.updateRecovery')),
     );
     expect(recovery.onPressed, isNull);
+  });
+
+  testWidgets(
+      'a role without insurance or cost rights is not offered register or '
+      'recovery', (WidgetTester tester) async {
+    final FakeAccidentCaseRows rows = FakeAccidentCaseRows();
+    _seedDocs(rows, except: const <String>{});
+    await pumpAccidentWorkspace(
+      tester,
+      _widget(),
+      overrides: _overrides(
+        rows,
+        capabilities: const <String>{'validate', 'submit'},
+      ),
+    );
+    expect(
+      find.byKey(const Key('accident.ws.insurance.register')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const Key('accident.ws.insurance.updateRecovery')),
+      findsNothing,
+    );
   });
 
   testWidgets('requesting a missing document logs a case communication',

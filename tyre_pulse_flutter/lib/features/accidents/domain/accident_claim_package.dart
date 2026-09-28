@@ -56,19 +56,19 @@ final class AccidentClaimRecovery {
   final DateTime? updatedAt;
   final String? status;
 
-  /// A written-off or not-applicable recovery (and the legacy rejected /
-  /// cancelled / void tokens) is history, not money in the bank.
+  /// Only money that has genuinely come back counts: `recovered` or
+  /// `partial`, the same rule as the web `COUNTED_RECOVERY_STATUSES`. A
+  /// pending, in-progress, written-off or unstated row is not money in the
+  /// bank.
   bool get counts {
     final String token = status?.trim().toLowerCase() ?? '';
-    return !const <String>{
-      'written_off',
-      'not_applicable',
-      'rejected',
-      'cancelled',
-      'void',
-    }.contains(token);
+    return countedRecoveryStatuses.contains(token);
   }
 }
+
+/// Recovery statuses whose amount is counted as recovered. Mirrors
+/// `COUNTED_RECOVERY_STATUSES` in `src/lib/claimPackage.js`; change both.
+const Set<String> countedRecoveryStatuses = <String>{'recovered', 'partial'};
 
 /// `accident_claim_recoveries.source` CHECK tokens, in the order the
 /// recovery form offers them.

@@ -244,20 +244,19 @@ class AccidentClaimPackageRepository with SupabaseGateway {
     });
   }
 
-  /// The case's own country; unreadable reads as unknown, never a guess.
+  /// The case's own country. A failed read fails the whole load like every
+  /// other read here, so the workspace shows its error and Retry instead of
+  /// quietly dropping the case currency. Null only when the case has no
+  /// country recorded.
   Future<String?> _caseCountry(String id) async {
-    try {
-      final List<Map<String, dynamic>> rows = await guard(
-        () => _rows.select(
-          SupabaseTables.accidents,
-          <String, Object>{'id': id},
-          limit: 1,
-        ),
-      );
-      return rows.isEmpty ? null : _string(rows.first['country']);
-    } on Object {
-      return null;
-    }
+    final List<Map<String, dynamic>> rows = await guard(
+      () => _rows.select(
+        SupabaseTables.accidents,
+        <String, Object>{'id': id},
+        limit: 1,
+      ),
+    );
+    return rows.isEmpty ? null : _string(rows.first['country']);
   }
 
   /// Real people behind each notify chip: the workstream owner when one is

@@ -15,6 +15,7 @@ import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/accidents/accidents_providers.dart';
+import 'package:tyre_pulse/features/accidents/data/accident_capability.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_claim_package_repository.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_photo_capture.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_case_vocab.dart';
@@ -154,6 +155,16 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
       package: docs,
       alreadyRegistered: registered,
     );
+    // Registration and recovery are written by the insurance and finance
+    // teams; a role without those rights is not offered the buttons.
+    final bool mayRegister = ref
+            .watch(accidentCapabilityProvider(AccidentCapability.editInsurance))
+            .value ??
+        false;
+    final bool mayRecord = ref
+            .watch(accidentCapabilityProvider(AccidentCapability.postCost))
+            .value ??
+        false;
     final num? claimAmount = claim != null
         ? (claim.claimAmount ?? _record.claimAmount)
         : (num.tryParse(_claimAmount.text.trim()) ?? _record.claimAmount);
@@ -275,28 +286,30 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
         emphasis: true,
       ),
       const SizedBox(height: TpSpace.sm),
-      TpButton.primary(
-        key: const Key('accident.ws.insurance.register'),
-        label: registered ? l10n.accClaimRegistered : l10n.accRegisterClaim,
-        icon: registered
-            ? Icons.verified_outlined
-            : canRegister
-                ? Icons.how_to_reg_outlined
-                : Icons.lock_outline_rounded,
-        isFullWidth: true,
-        isBusy: _busy,
-        onPressed: canRegister && !_busy ? () => _register(context) : null,
-      ),
-      if (!canRegister && !registered)
-        Padding(
-          padding: const EdgeInsets.only(top: TpSpace.xs),
-          child: Text(
-            l10n.accClaimEnableWhenComplete,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: palette.textSecondary,
-                ),
-          ),
+      if (registered || mayRegister) ...<Widget>[
+        TpButton.primary(
+          key: const Key('accident.ws.insurance.register'),
+          label: registered ? l10n.accClaimRegistered : l10n.accRegisterClaim,
+          icon: registered
+              ? Icons.verified_outlined
+              : canRegister
+                  ? Icons.how_to_reg_outlined
+                  : Icons.lock_outline_rounded,
+          isFullWidth: true,
+          isBusy: _busy,
+          onPressed: canRegister && !_busy ? () => _register(context) : null,
         ),
+        if (!canRegister && !registered)
+          Padding(
+            padding: const EdgeInsets.only(top: TpSpace.xs),
+            child: Text(
+              l10n.accClaimEnableWhenComplete,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: palette.textSecondary,
+                  ),
+            ),
+          ),
+      ],
     ];
 
     final List<Widget> recoveryLeft = <Widget>[
@@ -476,7 +489,7 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
                 onSave: _saveRecovery,
                 sourceLabel: (String s) => _sourceLabel(l10n, s),
               )
-            else
+            else if (mayRecord)
               Align(
                 alignment: AlignmentDirectional.centerEnd,
                 child: TpButton.text(

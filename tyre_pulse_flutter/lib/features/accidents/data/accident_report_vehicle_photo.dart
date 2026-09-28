@@ -27,8 +27,9 @@ const String accidentVehiclePhotoBucket = 'vehicle-photos';
 /// Signed-URL lifetime, matching the web (`createSignedUrl(path, 3600)`).
 const int accidentVehiclePhotoUrlTtlSeconds = 3600;
 
-/// Upper bound on the photo index read. Photos are rare (0 today); the bound
-/// only stops a future bulk upload from turning this into a table scan.
+/// Page size for the photo index read. The server caps every response at
+/// 1000 rows, so the index is read in pages until a short page arrives;
+/// no uploaded photo past the first page is ever dropped.
 const int accidentVehiclePhotoIndexLimit = 1000;
 
 /// What an asset card should draw.
@@ -83,18 +84,23 @@ final class SupabaseAccidentVehiclePhotoSource
 
   @override
   Future<Map<String, String>> uploadedPhotoPaths() async {
-    final List<Map<String, dynamic>> rows = await _client
-        .from(SupabaseTables.vehicleFleet)
-        .select('id,image_path')
-        .not('image_path', 'is', null)
-        .order('id')
-        .limit(accidentVehiclePhotoIndexLimit);
     final Map<String, String> paths = <String, String>{};
-    for (final Map<String, dynamic> row in rows) {
-      final Object? id = row['id'];
-      final Object? path = row['image_path'];
-      if (id == null || path is! String || path.trim().isEmpty) continue;
-      paths[id.toString()] = path.trim();
+    for (int from = 0;; from += accidentVehiclePhotoIndexLimit) {
+      // Ordered on the unique id so a page boundary never drops or repeats
+      // a row.
+      final List<Map<String, dynamic>> rows = await _client
+          .from(SupabaseTables.vehicleFleet)
+          .select('id,image_path')
+          .not('image_path', 'is', null)
+          .order('id')
+          .range(from, from + accidentVehiclePhotoIndexLimit - 1);
+      for (final Map<String, dynamic> row in rows) {
+        final Object? id = row['id'];
+        final Object? path = row['image_path'];
+        if (id == null || path is! String || path.trim().isEmpty) continue;
+        paths[id.toString()] = path.trim();
+      }
+      if (rows.length < accidentVehiclePhotoIndexLimit) break;
     }
     return paths;
   }

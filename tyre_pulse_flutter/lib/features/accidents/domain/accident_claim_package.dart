@@ -39,20 +39,66 @@ final class AccidentClaimRecovery {
     required this.amount,
     this.source,
     this.recoveredAt,
+    this.updatedAt,
     this.status,
   });
 
   final String id;
   final num amount;
+
+  /// One of [claimRecoverySources] (the live CHECK), or null on old rows.
   final String? source;
+
+  /// `recovered_at` is a DATE column: the day the money arrived.
   final DateTime? recoveredAt;
+
+  /// `updated_at ?? created_at`: when the row itself last changed.
+  final DateTime? updatedAt;
   final String? status;
 
-  /// A rejected or cancelled recovery is history, not money in the bank.
+  /// A written-off or not-applicable recovery (and the legacy rejected /
+  /// cancelled / void tokens) is history, not money in the bank.
   bool get counts {
     final String token = status?.trim().toLowerCase() ?? '';
-    return token != 'rejected' && token != 'cancelled' && token != 'void';
+    return !const <String>{
+      'written_off',
+      'not_applicable',
+      'rejected',
+      'cancelled',
+      'void',
+    }.contains(token);
   }
+}
+
+/// `accident_claim_recoveries.source` CHECK tokens, in the order the
+/// recovery form offers them.
+const List<String> claimRecoverySources = <String>[
+  'insurer',
+  'third_party',
+  'driver',
+  'other',
+];
+
+/// One "After registration notify" chip: a team and the real people behind
+/// it. [names] come from the workstream owner (`owner_id`) or, for a team
+/// with no workstream, from the approved profiles holding its roles. Empty
+/// [names] means nobody could be resolved and the chip prints [fallbackRole].
+@immutable
+final class ClaimNotifyRecipient {
+  const ClaimNotifyRecipient({
+    required this.roleKey,
+    required this.names,
+    required this.fallbackRole,
+    this.visibilityOnly = false,
+  });
+
+  final String roleKey;
+  final List<String> names;
+  final String fallbackRole;
+  final bool visibilityOnly;
+
+  /// The single named person, when exactly one is known.
+  String? get singleName => names.length == 1 ? names.single : null;
 }
 
 enum ClaimDocumentState { received, missing }
@@ -164,12 +210,20 @@ num recoveredTotal(Iterable<AccidentClaimRecovery> recoveries) {
   return total;
 }
 
-/// Outstanding = approved amount less what was recovered. Null until the
-/// insurer has approved something, because "outstanding" against nothing is
-/// not a number.
-num? outstandingAmount(num? approvedAmount, num recovered) {
-  if (approvedAmount == null || !approvedAmount.isFinite) return null;
-  final num left = approvedAmount - recovered;
+/// Outstanding = what is still owed less what was recovered. The insurer's
+/// approved amount is the base once it exists; before that the claimed
+/// amount is what the company is asking for, so it is the base (mock M4
+/// prints the claim amount as outstanding on an unregistered claim). Null
+/// when neither is known, because "outstanding" against nothing is not a
+/// number.
+num? outstandingAmount(num? approvedAmount, num recovered, {num? claimAmount}) {
+  final num? base = (approvedAmount != null && approvedAmount.isFinite)
+      ? approvedAmount
+      : (claimAmount != null && claimAmount.isFinite)
+          ? claimAmount
+          : null;
+  if (base == null) return null;
+  final num left = base - recovered;
   return left < 0 ? 0 : left;
 }
 

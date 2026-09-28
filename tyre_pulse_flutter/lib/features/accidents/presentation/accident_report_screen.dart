@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/back_navigation.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
+import 'package:tyre_pulse/app/router/tp_back.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
@@ -95,9 +96,6 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
   /// not part of the report, so typing it never marks the draft dirty.
   final TextEditingController _assetSearch = TextEditingController();
 
-  /// True once the reporter has typed or chosen the incident site. A fleet
-  /// home site then never overwrites it (see [incidentSiteAfterAssetChange]).
-  bool _incidentSiteEdited = false;
   _DraftState _draftState = _DraftState.ready;
   DateTime? _draftSavedAt;
   Timer? _saveDebounce;
@@ -112,7 +110,7 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
   void initState() {
     super.initState();
     _asset = _controller();
-    _incidentSite = _controller()..addListener(_noteIncidentSiteEdit);
+    _incidentSite = _controller();
     _incidentLocation = _controller();
     _meterAtIncident = _controller();
     _narrative = _controller();
@@ -140,13 +138,6 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
     controller.addListener(_markDraftDirty);
     _ownedControllers.add(controller);
     return controller;
-  }
-
-  /// Programmatic fills (asset selection, draft restore) run under
-  /// [_suppressDraftChanges]; anything else is the reporter's own edit.
-  void _noteIncidentSiteEdit() {
-    if (_suppressDraftChanges) return;
-    _incidentSiteEdited = true;
   }
 
   @override
@@ -218,10 +209,6 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
         : draft.effectiveAssetNo;
     _incidentAt = draft.incidentAt;
     _incidentSite.text = draft.incidentSite;
-    // A saved site that differs from the asset's home site was chosen by
-    // the reporter; keep protecting it after the restore.
-    _incidentSiteEdited = draft.incidentSite.trim().isNotEmpty &&
-        draft.incidentSite.trim() != (draft.vehicle?.site?.trim() ?? '');
     _incidentLocation.text = draft.incidentLocation;
     _meterAtIncident.text = draft.meterAtIncident;
     _type = draft.accidentType;
@@ -389,13 +376,9 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
     _suppressDraftChanges = true;
     _selectedVehicle = selected;
     _asset.text = selected.assetNo ?? selected.fleetNumber ?? '';
-    final String nextSite = incidentSiteAfterAssetChange(
-      current: _incidentSite.text,
-      userEdited: _incidentSiteEdited,
-      previousHomeSite: previous?.site,
-      nextHomeSite: selected.site,
-    );
-    if (nextSite != _incidentSite.text) _incidentSite.text = nextSite;
+    // The incident site is the reporter's own statement (mock M1 leaves the
+    // picker empty after an asset loads). The fleet home site is offered in
+    // the picker, never written into the report on its own.
     final String previousDriver = previous?.operatorName?.trim() ?? '';
     if (_driverName.text.trim().isEmpty ||
         _driverName.text.trim() == previousDriver) {
@@ -410,13 +393,28 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
     _change(() {});
   }
 
-  Future<void> _openScanner() async {
-    await context.push(const ScannerRoute().location);
-    if (!mounted) return;
+  Future<void> _openScanner(List<VehicleAsset> assets) async {
+    final String? code = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (BuildContext context) => const AccidentAssetScanSheet(),
+    );
+    if (!mounted || code == null || code.trim().isEmpty) return;
+    final VehicleAsset? match = matchScannedAsset(assets, code);
+    if (match != null) {
+      _assetSearch.text = code.trim();
+      setState(() => _assetQuery = code.trim());
+      _selectVehicle(match);
+      return;
+    }
+    // Not uniquely in the loaded register: show what the search finds for
+    // the code and say so, rather than guessing a vehicle.
+    _assetSearch.text = code.trim();
+    setState(() => _assetQuery = code.trim());
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(_l10n.accReportUseScannedAsset),
-      ),
+      SnackBar(content: Text(_l10n.accRptScanNotFound(code.trim()))),
     );
   }
 
@@ -731,13 +729,26 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
     return TpScaffold(
       backFallback: fallback,
       resizeToAvoidBottomInset: true,
-      appBar: TpAppBar(
-        title: copy('reportTitle'),
-        subtitle: l10n.accidentReportCaptureSubtitle,
-        backFallback: fallback,
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        backgroundColor: TpPalette.of(context).surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        titleSpacing: 0,
+        toolbarHeight: 64,
+        leading: IconButton(
+          key: const ValueKey<String>('accident.report.back'),
+          tooltip: l10n.actionBack,
+          icon: Icon(
+            Icons.arrow_back_rounded,
+            color: TpPalette.of(context).primary,
+          ),
+          onPressed: () => backTo(TpBack.of(context), fallback: fallback),
+        ),
+        title: const TpBrandLockup(),
         actions: <Widget>[
           ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 152),
+            constraints: const BoxConstraints(maxWidth: 136),
             child: Center(child: _draftStatus()),
           ),
           if (_currentStep.index > 0)
@@ -778,6 +789,17 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
             TpSpace.xxxl,
           ),
           children: <Widget>[
+            Semantics(
+              header: true,
+              child: Text(
+                l10n.accRptTitle,
+                key: AccidentReportIntakeKeys.reportTitle,
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+            ),
+            const SizedBox(height: TpSpace.xs),
             AccidentReportProgress(
               current: _currentStep,
               onSelect: _goToStep,
@@ -816,12 +838,9 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
     required List<AccidentEvidenceRequirement> evidenceRequirements,
   }) =>
       switch (_currentStep) {
-        AccidentIntakePage.identifyAsset => AccidentIntakeCanvas(
-            title: accidentReportStepLabel(context, _currentStep),
-            subtitle: _l10n.accReportStepAssetSubtitle,
-            icon: Icons.local_shipping_outlined,
-            child: _identifyStep(fleet, assets, copy),
-          ),
+        // Mock M1: the progress eyebrow already names the step, so Step 1
+        // goes straight into the scan / search / asset cards.
+        AccidentIntakePage.identifyAsset => _identifyStep(fleet, assets, copy),
         AccidentIntakePage.incident => AccidentSection(
             title: accidentReportStepLabel(context, _currentStep),
             subtitle: _l10n.accReportStepIncidentSubtitle,
@@ -931,9 +950,10 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
             TpButton.secondary(
-              label: _l10n.accReportScanCode,
-              icon: Icons.qr_code_scanner_rounded,
-              onPressed: _openScanner,
+              key: AccidentReportIntakeKeys.scanAsset,
+              label: _l10n.accRptScanAsset,
+              icon: Icons.qr_code_2_rounded,
+              onPressed: () => _openScanner(assets),
               isFullWidth: true,
             ),
             const SizedBox(height: TpSpace.sm),
@@ -1047,32 +1067,12 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
             textCapitalization: TextCapitalization.characters,
           ),
         const SizedBox(height: TpSpace.md),
-        TpInput(
-          label: _l10n.accReportMeterAtIncident,
-          controller: _meterAtIncident,
-          hint: _selectedVehicle?.currentKm == null
-              ? _l10n.accReportMeterHint
-              : _l10n.accReportMeterFleetMaster(
-                  formatVehicleOdometer(_selectedVehicle!.currentKm!),
-                ),
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          prefixIcon: Icons.speed_outlined,
-        ),
-        const SizedBox(height: TpSpace.lg),
         AccidentIncidentSiteSelector(
-          controller: _incidentSite,
-          knownSites: knownSitesFrom(assets),
+          value: _incidentSite.text,
+          knownSites: knownSitesFrom(assets, limit: 200),
           homeSite: _selectedVehicle?.site,
-          onSiteChosen: (String site) {
-            _incidentSiteEdited = true;
-            _change(() => _incidentSite.text = site);
-          },
-        ),
-        const SizedBox(height: TpSpace.sm),
-        TpInput(
-          label: _l10n.accReportRoadLocation,
-          controller: _incidentLocation,
-          prefixIcon: Icons.location_on_outlined,
+          onSiteChosen: (String site) =>
+              _change(() => _incidentSite.text = site),
         ),
       ],
     );
@@ -1105,6 +1105,18 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: TpSpace.md),
+          TpInput(
+            label: _l10n.accReportMeterAtIncident,
+            controller: _meterAtIncident,
+            hint: _selectedVehicle?.currentKm == null
+                ? _l10n.accReportMeterHint
+                : _l10n.accReportMeterFleetMaster(
+                    formatVehicleOdometer(_selectedVehicle!.currentKm!),
+                  ),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            prefixIcon: Icons.speed_outlined,
           ),
           const SizedBox(height: TpSpace.md),
           TpInput(

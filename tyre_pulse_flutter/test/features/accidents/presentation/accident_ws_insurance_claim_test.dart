@@ -45,6 +45,10 @@ const AccidentCaseSnapshot _snapshot = AccidentCaseSnapshot(
 );
 
 void _seedDocs(FakeAccidentCaseRows rows, {Set<String> except = const {}}) {
+  rows.seed(SupabaseTables.accidents, <String, dynamic>{
+    'id': 'case-1',
+    'country': 'UAE',
+  });
   for (final VocabItem doc in claimPackageDocs) {
     if (except.contains(doc.key)) continue;
     final int copies = doc.countable ? 9 : 1;
@@ -111,7 +115,12 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Request driving licence'), findsOneWidget);
-    expect(find.text('Auto-generated after registration'), findsOneWidget);
+    expect(find.text('Register insurance claim'), findsOneWidget);
+    expect(find.text('Added when the insurer issues it'), findsOneWidget);
+    expect(
+      find.text('Complete all required documents to enable'),
+      findsOneWidget,
+    );
     expect(find.text('Not registered'), findsOneWidget);
     expect(find.text('Other Party'), findsOneWidget);
     expect(find.text('$testCurrency 750.00'), findsOneWidget);
@@ -123,12 +132,23 @@ void main() {
       find.text('Enable once all required documents are complete.'),
       findsOneWidget,
     );
-    expect(find.text('Fleet Supervisor · Fleet'), findsOneWidget);
-    expect(find.textContaining('(for visibility)'), findsOneWidget);
+    // Outstanding before approval is the claimed amount less recoveries.
     expect(
-      find.textContaining('is monitoring SLA and missing documents.'),
+      find.descendant(
+        of: find.byKey(const Key('accident.ws.insurance.outstanding')),
+        matching: find.text('$testCurrency 1,000.00'),
+      ),
       findsOneWidget,
     );
+    // No profiles could be resolved: chips fall back to the role names and
+    // no monitoring person is claimed.
+    expect(find.text('Fleet Supervisor'), findsOneWidget);
+    expect(find.text('For visibility'), findsOneWidget);
+    expect(
+      find.byKey(const Key('accident.ws.insurance.monitor')),
+      findsNothing,
+    );
+    expect(find.text('Complete documents'), findsOneWidget);
     expect(find.textContaining('Ms. Fatima'), findsNothing);
     expect(find.textContaining('SAR'), findsNothing);
     final TpButton recovery = tester.widget<TpButton>(
@@ -213,5 +233,111 @@ void main() {
     await tester.tap(update);
     await tester.pumpAndSettle();
     expect(find.text('Save recovery'), findsOneWidget);
+  });
+
+  testWidgets('notify chips and the monitor note name real people',
+      (WidgetTester tester) async {
+    final FakeAccidentCaseRows rows = FakeAccidentCaseRows();
+    _seedDocs(rows);
+    rows.seed(SupabaseTables.accidentCaseWorkstreams, <String, dynamic>{
+      'accident_id': 'case-1',
+      'workstream_key': 'fleet_validation',
+      'owner_id': 'u-fleet',
+    });
+    rows.seed(SupabaseTables.profiles, <String, dynamic>{
+      'id': 'u-fleet',
+      'full_name': 'Assigned Fleet Owner',
+    });
+    rows.seed(SupabaseTables.profiles, <String, dynamic>{
+      'id': 'u-dmo',
+      'full_name': 'Monitor Person',
+      'role': 'Data Monitor Officer',
+      'approved': true,
+    });
+    for (final String name in <String>['Shop A', 'Shop B']) {
+      rows.seed(SupabaseTables.profiles, <String, dynamic>{
+        'id': 'u-$name',
+        'full_name': name,
+        'role': 'Workshop Supervisor',
+        'approved': true,
+      });
+    }
+    await pumpAccidentWorkspace(
+      tester,
+      _widget(),
+      overrides: _overrides(rows),
+    );
+    expect(find.text('Assigned Fleet Owner'), findsOneWidget);
+    expect(find.text('2 people'), findsOneWidget);
+    expect(find.text('Monitor Person'), findsOneWidget);
+    expect(
+      find.text('Monitor Person is monitoring SLA and missing documents.'),
+      findsOneWidget,
+    );
+    // Complete package: the footer primary registers the claim.
+    expect(find.text('Register claim'), findsOneWidget);
+  });
+
+  testWidgets(
+      'a case in another country is never labelled with this '
+      "workspace's currency", (WidgetTester tester) async {
+    final FakeAccidentCaseRows rows = FakeAccidentCaseRows();
+    rows.seed(SupabaseTables.accidents, <String, dynamic>{
+      'id': 'case-1',
+      'country': 'KSA',
+    });
+    await pumpAccidentWorkspace(
+      tester,
+      _widget(),
+      overrides: _overrides(rows),
+    );
+    expect(find.textContaining(testCurrency), findsNothing);
+    expect(find.text('750.00'), findsOneWidget);
+  });
+
+  testWidgets('recording a recovery writes the live table shape',
+      (WidgetTester tester) async {
+    final FakeAccidentCaseRows rows = FakeAccidentCaseRows();
+    _seedDocs(rows);
+    await pumpAccidentWorkspace(
+      tester,
+      _widget(),
+      overrides: _overrides(
+        rows,
+        claimRow: <String, dynamic>{
+          'id': 'claim-1',
+          'insurer': 'Recorded insurer',
+          'policy_no': 'POL-77',
+          'decision': 'registered',
+          'case_claim_amount': 1000,
+        },
+      ),
+    );
+    final Finder update =
+        find.byKey(const Key('accident.ws.insurance.updateRecovery'));
+    await reveal(tester, update);
+    await tester.tap(update);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, '400');
+    final Finder third =
+        find.byKey(const Key('accident.ws.insurance.source.third_party'));
+    await reveal(tester, third);
+    await tester.tap(third);
+    await tester.pumpAndSettle();
+    final Finder save =
+        find.byKey(const Key('accident.ws.insurance.saveRecovery'));
+    await reveal(tester, save);
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+    final Map<String, dynamic> row =
+        rows.table(SupabaseTables.accidentClaimRecoveries).single;
+    expect(row['accident_id'], 'case-1');
+    expect(row.containsKey('claim_id'), isFalse);
+    expect(row['amount'], 400);
+    expect(row['source'], 'third_party');
+    expect(row['status'], 'recovered');
+    expect(row['currency'], testCurrency);
+    expect(row['recovered_at'], matches(RegExp(r'^\d{4}-\d{2}-\d{2}$')));
+    expect(find.text('Recovery recorded.'), findsOneWidget);
   });
 }

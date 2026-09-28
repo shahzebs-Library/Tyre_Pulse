@@ -210,9 +210,31 @@ final class ModuleDef {
     if (id == null) {
       return false;
     }
-    return defaultRoles.contains(id);
+    return defaultRoles.contains(id) ||
+        (flutterRoleDefaultExtensions[key]?.contains(id) ?? false);
   }
 }
+
+/// Role defaults this app adds ON TOP of the phone registry parity lists.
+///
+/// [ModuleDef.defaultRoles] must stay byte-equal to the frozen Expo registry
+/// (`mobile/lib/permissions.ts`), which the drift guard pins, and that
+/// registry cannot be edited. A role the Expo app never learned therefore
+/// needs its reach stated somewhere else, and it is stated here, once, in the
+/// open - not smuggled into the parity lists where the drift guard would
+/// rightly fail it.
+///
+/// Fleet Supervisor: the web grants it accidents create and edit (never
+/// delete) through the per-org capability override, and the accident report
+/// wizard is its job. `reportAccident` lets it file the report; `accidents`
+/// lets it land on the register after submitting and work case workstream 1.
+/// The server boundary is unchanged: row access is still RLS through
+/// `app_user_can('accidents', ...)`.
+const Map<ModuleKey, Set<RoleId>> flutterRoleDefaultExtensions =
+    <ModuleKey, Set<RoleId>>{
+  ModuleKey.accidents: <RoleId>{RoleId.fleetSupervisor},
+  ModuleKey.reportAccident: <RoleId>{RoleId.fleetSupervisor},
+};
 
 /// The registry itself.
 abstract final class ModuleRegistry {

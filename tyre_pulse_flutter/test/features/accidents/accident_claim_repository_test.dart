@@ -92,4 +92,33 @@ void main() {
       throwsA(isA<SupabaseFailure>()),
     );
   });
+
+  test('a blank claim number is sent as null, never invented', () async {
+    Map<String, dynamic>? sent;
+    final repo = AccidentClaimRepository(
+      (id) async => null,
+      (name, params) async {
+        sent = params;
+        return <String, dynamic>{
+          'ok': true,
+          'claim': <String, dynamic>{'id': 'claim', 'decision': 'registered'},
+        };
+      },
+    );
+    await repo.register(
+      accidentId: 'case',
+      insurer: 'I',
+      policyNo: 'P',
+      claimNo: '   ',
+      claimAmount: 10,
+    );
+    expect(sent!['p_claim_no'], isNull);
+    await repo.register(
+      accidentId: 'case',
+      insurer: 'I',
+      policyNo: 'P',
+      claimAmount: 10,
+    );
+    expect(sent!['p_claim_no'], isNull);
+  });
 }

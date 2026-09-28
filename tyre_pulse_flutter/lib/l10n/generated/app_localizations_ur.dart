@@ -6956,4 +6956,195 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get designAccReportStepTodo => 'شروع نہیں ہوا';
+
+  @override
+  String get accClaimTitle => 'انشورنس کلیم رجسٹر کریں';
+
+  @override
+  String get accClaimRouteInternal => 'اندرونی ورکشاپ میں مرمت کا جائزہ';
+
+  @override
+  String get accClaimRouteOnSite => 'سائٹ پر مرمت کا جائزہ';
+
+  @override
+  String get accClaimDocAccidentReport => 'حادثہ رپورٹ PDF';
+
+  @override
+  String get accClaimDocFleetValidation => 'فلیٹ کی تصدیق';
+
+  @override
+  String get accClaimDocWorkshopAssessment => 'ورکشاپ جائزہ PDF';
+
+  @override
+  String get accClaimDocDamagePhotos => 'نقصان کی تصاویر';
+
+  @override
+  String get accClaimDocPoliceNajm => 'پولیس / نجم رپورٹ';
+
+  @override
+  String get accClaimDocRegistration => 'گاڑی کی رجسٹریشن';
+
+  @override
+  String get accClaimDocLicence => 'ڈرائیونگ لائسنس';
+
+  @override
+  String get accClaimDocPolicy => 'پالیسی دستاویز';
+
+  @override
+  String get accClaimDocReceived => 'موصول';
+
+  @override
+  String get accClaimDocMissing => 'موجود نہیں';
+
+  @override
+  String accClaimDocCount(int count) {
+    return '$count موصول';
+  }
+
+  @override
+  String accClaimProgress(int received, int total) {
+    return '$total میں سے $received مطلوبہ دستاویزات';
+  }
+
+  @override
+  String get accClaimLockedHint =>
+      'فعال کرنے کے لیے تمام مطلوبہ دستاویزات مکمل کریں';
+
+  @override
+  String get accClaimNumberPending => 'انشورر کے جاری کرنے پر شامل ہوگا';
+
+  @override
+  String get accClaimNumberOptional => 'انشورر کا کلیم نمبر (اختیاری)';
+
+  @override
+  String get accClaimEditDetails => 'کلیم کی تفصیلات میں ترمیم کریں';
+
+  @override
+  String get accClaimDoneEditing => 'ترمیم مکمل';
+
+  @override
+  String get accClaimStatus => 'کلیم کی حالت';
+
+  @override
+  String get accClaimStatusNotRegistered => 'رجسٹرڈ نہیں';
+
+  @override
+  String get accClaimStatusRegistered => 'رجسٹرڈ';
+
+  @override
+  String get accClaimUpdateRecoveryLink => 'وصولی کی رقم اپ ڈیٹ کریں';
+
+  @override
+  String get accClaimSourceInsurer => 'انشورر';
+
+  @override
+  String get accClaimSourceThirdParty => 'فریق ثالث';
+
+  @override
+  String get accClaimSourceDriver => 'ڈرائیور';
+
+  @override
+  String get accClaimSourceOther => 'دیگر';
+
+  @override
+  String accClaimNotifyPeople(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count افراد',
+      one: '1 فرد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get accClaimNotifyVisibility => 'معلومات کے لیے';
+
+  @override
+  String get accClaimTeamFleet => 'فلیٹ';
+
+  @override
+  String get accClaimTeamWorkshop => 'ورکشاپ';
+
+  @override
+  String get accClaimTeamInsurance => 'انشورنس';
+
+  @override
+  String get accClaimTeamCommandCenter => 'کمانڈ سینٹر';
+
+  @override
+  String get accClaimTeamPmvManager => 'پی ایم وی مینیجر';
+
+  @override
+  String get accClaimRegisterShort => 'کلیم رجسٹر کریں';
+
+  @override
+  String accClaimRegisterConfirmNoNumber(String insurer, String policyNo) {
+    return '$insurer کے ساتھ پالیسی $policyNo کے تحت کلیم کیس پر رجسٹر ہو جائے گا۔ انشورر کے جاری کرنے پر کلیم نمبر شامل کریں۔ اسے ایپ سے واپس نہیں کیا جا سکتا۔';
+  }
+
+  @override
+  String get accClaimRegisteredNoNumberSnack =>
+      'کلیم انشورر کے ساتھ رجسٹر ہو گیا۔';
+
+  @override
+  String accRptPlateChip(String plate) {
+    return 'پلیٹ $plate';
+  }
+
+  @override
+  String get accRptSelectedAsset => 'منتخب اثاثہ';
+
+  @override
+  String get accRptReadOnly => 'صرف پڑھنے کے لیے';
+
+  @override
+  String get accRptIncidentSiteInfo =>
+      'حادثے کی جگہ وہ مقام ہے جہاں حادثہ پیش آیا۔ یہ الگ سے درج کی جاتی ہے اور اثاثے کی ہوم سائٹ سے کبھی نقل نہیں کی جاتی۔';
+
+  @override
+  String get accRptSelectIncidentSite => 'حادثے کی سائٹ / مقام منتخب کریں';
+
+  @override
+  String get accRptSiteSheetTitle => 'حادثے کی سائٹ / مقام';
+
+  @override
+  String get accRptSiteSheetHint => 'فلیٹ سائٹ تلاش کریں یا مقام لکھیں';
+
+  @override
+  String accRptUseTypedSite(String site) {
+    return '\"$site\" استعمال کریں';
+  }
+
+  @override
+  String get accRptFleetSites => 'فلیٹ سائٹس';
+
+  @override
+  String get accRptNoFleetSites =>
+      'کوئی فلیٹ سائٹ نہیں ملی۔ اوپر سائٹ یا مقام لکھیں۔';
+
+  @override
+  String get accRptScanAsset => 'اثاثے کا QR / بارکوڈ اسکین کریں';
+
+  @override
+  String get accRptScanHint =>
+      'کیمرہ اثاثے پر لگے QR کوڈ یا بارکوڈ کی طرف کریں۔';
+
+  @override
+  String get accRptScanCameraUnavailable =>
+      'کیمرہ دستیاب نہیں ہے۔ اس کے بجائے نیچے اثاثے کا کوڈ لکھیں۔';
+
+  @override
+  String get accRptScanTypeCode => 'یا اثاثے کا کوڈ لکھیں';
+
+  @override
+  String get accRptScanFindAsset => 'اثاثہ تلاش کریں';
+
+  @override
+  String accRptScanNotFound(String code) {
+    return '$code کسی ایک فلیٹ اثاثے سے مطابقت نہیں رکھتا۔ نیچے دیے گئے نتائج میں سے منتخب کریں۔';
+  }
+
+  @override
+  String get accRptTitle => 'حادثہ رپورٹ کریں';
 }

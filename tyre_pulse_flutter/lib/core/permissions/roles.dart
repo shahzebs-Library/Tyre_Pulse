@@ -45,7 +45,7 @@
 ///    two real people are using today".
 library;
 
-/// The fifteen roles this application recognises.
+/// The sixteen roles this application recognises.
 ///
 /// Ported from the `UserRole` union and the `normaliseRole` allowlist in
 /// `mobile/lib/types.ts`, cross-checked against the built-in allowlist inside
@@ -99,6 +99,21 @@ enum RoleId {
   workshopMaintenanceAreaManager(
     token: 'workshop_maintenance_area_manager',
     databaseName: 'Workshop Maintenance Area Manager',
+    isBuiltIn: false,
+  ),
+
+  /// A real `custom_roles` row (V282/V592) held by three people. The web
+  /// grants it accidents create and edit through the per-org capability
+  /// override, and it fills the accident report wizard and owns case
+  /// workstream 1 (fleet validation). Until this token existed the phone
+  /// resolved it to [UserRole.unknown], which denied every module, so a
+  /// Fleet Supervisor could not file an accident on the phone at all.
+  /// Its module reach is stated in `flutterRoleDefaultExtensions`, NOT in
+  /// the phone-parity role lists, because the frozen Expo registry never
+  /// learned this role.
+  fleetSupervisor(
+    token: 'fleet_supervisor',
+    databaseName: 'Fleet Supervisor',
     isBuiltIn: false,
   );
 
@@ -157,7 +172,6 @@ const List<String> knownUnmappedDatabaseRoles = <String>[
   // Custom roles seeded by V592 and named in V282 with no mobile token.
   'Data Monitor Officer',
   'Store Keeper',
-  'Fleet Supervisor',
   'Insurance Officer',
   // RECORDED live 2026-08-18: a real assigned role that appears in no module
   // list and in no allowlist, so that person is currently a reporter on the

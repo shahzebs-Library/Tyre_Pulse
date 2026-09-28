@@ -1,15 +1,21 @@
 /// Reusable presentation pieces for the accident-report intake only.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:tyre_pulse/app/localization/tp_direction.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/features/accidents/data/accident_report_vehicle_photo.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_report_intake.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
+import 'package:tyre_pulse/features/scanning/domain/scan_payload.dart';
 
 /// The wizard pages are the validation groups themselves, numbered by
 /// `reportWizardSteps`, so there is exactly one "Step N of 7" in the app.
@@ -95,6 +101,20 @@ abstract final class AccidentReportIntakeKeys {
       ValueKey<String>('accident.report.siteChip.$site');
   static const ValueKey<String> lockNote =
       ValueKey<String>('accident.report.lockNote');
+  static const ValueKey<String> autoFilled =
+      ValueKey<String>('accident.report.autoFilled');
+  static const ValueKey<String> changeAsset =
+      ValueKey<String>('accident.report.changeAsset');
+  static const ValueKey<String> scanAsset =
+      ValueKey<String>('accident.report.scanAsset');
+  static const ValueKey<String> scanCodeField =
+      ValueKey<String>('accident.report.scanCode');
+  static const ValueKey<String> incidentSiteField =
+      ValueKey<String>('accident.report.incidentSite.field');
+  static const ValueKey<String> useTypedSite =
+      ValueKey<String>('accident.report.incidentSite.useTyped');
+  static const ValueKey<String> reportTitle =
+      ValueKey<String>('accident.report.title');
 }
 
 /// The localized label of a wizard step (the domain keeps the English
@@ -271,6 +291,9 @@ class _StepSegment extends StatelessWidget {
   }
 }
 
+/// The app-bar draft state (M1): a cloud icon beside two short lines, as in
+/// the mock ("Draft saved / on device"). Colour follows the state but the
+/// icon and the words carry it too, so colour is never the only signal.
 class AccidentDraftStatus extends StatelessWidget {
   const AccidentDraftStatus({
     required this.label,
@@ -291,65 +314,110 @@ class AccidentDraftStatus extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
-    final TpStatusColors colors = failed
-        ? palette.critical
+    final Color ink = failed
+        ? palette.critical.base
         : saving
-            ? palette.warning
-            : palette.ok;
+            ? palette.warning.base
+            : palette.primary;
     return Semantics(
       liveRegion: true,
       label: label,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: colors.soft,
-          borderRadius: BorderRadius.circular(TpRadius.pill),
-          border: Border.all(color: colors.base),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: TpSpace.sm,
-            vertical: TpSpace.xs,
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              if (saving)
-                SizedBox.square(
-                  dimension: TpSizing.iconSm,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: colors.base,
+      excludeSemantics: true,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          if (saving)
+            SizedBox.square(
+              dimension: TpSizing.iconMd,
+              child: CircularProgressIndicator(strokeWidth: 2, color: ink),
+            )
+          else
+            Icon(
+              failed ? Icons.cloud_off_outlined : Icons.cloud_done_outlined,
+              size: TpSizing.iconLg,
+              color: ink,
+            ),
+          const SizedBox(width: TpSpace.xs),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: maxLines,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: ink,
+                    fontWeight: FontWeight.w600,
+                    height: 1.2,
                   ),
-                )
-              else
-                Icon(
-                  failed ? Icons.cloud_off_outlined : Icons.cloud_done_outlined,
-                  size: TpSizing.iconSm,
-                  color: colors.onSoft,
-                ),
-              const SizedBox(width: TpSpace.xs),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: maxLines,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: colors.onSoft,
-                        fontWeight: FontWeight.w700,
-                      ),
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
 }
 
-/// One Step 1 match row (M7): vehicle illustration, asset no, type and a
-/// plate chip. The illustration is the shared fleet artwork resolver; an
-/// asset with no artwork shows its class icon, never a placeholder image.
+/// The picture of one fleet asset, in the order the whole app uses: its own
+/// uploaded photo, then the class photo for its type/make/model, then a
+/// neutral icon. Never a different vehicle.
+class AccidentVehicleImageView extends ConsumerWidget {
+  const AccidentVehicleImageView({
+    required this.asset,
+    required this.semanticLabel,
+    this.placeholderSize = 32,
+    super.key,
+  });
+
+  final VehicleAsset asset;
+  final String semanticLabel;
+  final double placeholderSize;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final String? uploaded = asset.id.isEmpty
+        ? null
+        : ref.watch(accidentUploadedVehiclePhotoUrlProvider(asset.id)).value;
+    final AccidentVehicleImage image = resolveAccidentVehicleImage(
+      uploadedUrl: uploaded,
+      classPhotoAsset: vehiclePhotoAsset(asset),
+    );
+    final Widget placeholder = Icon(
+      Icons.local_shipping_outlined,
+      size: placeholderSize,
+      color: TpPalette.of(context).textMuted,
+      semanticLabel: semanticLabel,
+    );
+    return switch (image) {
+      AccidentVehicleUploadedPhoto(url: final String url) => Image.network(
+          url,
+          fit: BoxFit.contain,
+          semanticLabel: semanticLabel,
+          errorBuilder: (_, __, ___) {
+            final String? art = vehiclePhotoAsset(asset);
+            return art == null
+                ? placeholder
+                : Image.asset(
+                    art,
+                    fit: BoxFit.contain,
+                    semanticLabel: semanticLabel,
+                  );
+          },
+        ),
+      AccidentVehicleClassPhoto(assetPath: final String path) => Image.asset(
+          path,
+          fit: BoxFit.contain,
+          width: double.infinity,
+          height: double.infinity,
+          semanticLabel: semanticLabel,
+        ),
+      AccidentVehiclePlaceholder() => placeholder,
+    };
+  }
+}
+
+/// One Step 1 match row (mock M1): vehicle picture on the leading panel,
+/// the asset number, the vehicle type and a "Plate ..." chip. The selected
+/// row is tinted with a green border and a filled check; others show a
+/// chevron. Selection is also announced, so colour is not the only signal.
 class AccidentAssetMatchRow extends StatelessWidget {
   const AccidentAssetMatchRow({
     required this.asset,
@@ -366,97 +434,154 @@ class AccidentAssetMatchRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String? photo = vehiclePhotoAsset(asset);
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    final TextTheme text = Theme.of(context).textTheme;
     final String identity = asset.displayIdentity ?? unavailableLabel;
     final String? plate = _clean(asset.registrationNo);
-    final String details = <String?>[
-      asset.vehicleType,
-      asset.make,
-      asset.model,
-      asset.site,
-    ]
-        .whereType<String>()
-        .map((String value) => value.trim())
-        .where((String value) => value.isNotEmpty)
-        .join(' · ');
-    final TpPalette palette = TpPalette.of(context);
-    return TpCard(
-      key: AccidentReportIntakeKeys.matchRow(asset.id),
-      padding: EdgeInsets.zero,
+    final String? kind = _clean(asset.vehicleType) ??
+        _clean(
+          <String?>[asset.make, asset.model]
+              .whereType<String>()
+              .map((String value) => value.trim())
+              .where((String value) => value.isNotEmpty)
+              .join(' '),
+        );
+    final Color edge = selected ? palette.primary : palette.border;
+    return Semantics(
+      button: true,
+      selected: selected,
       child: Material(
-        color: Colors.transparent,
-        child: ListTile(
-          selected: selected,
-          selectedTileColor: palette.primarySoft,
+        key: AccidentReportIntakeKeys.matchRow(asset.id),
+        color: selected ? palette.primarySoft : palette.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(TpRadius.md),
+          side: BorderSide(
+            color: edge,
+            width: selected ? TpBorderWidth.strong : TpBorderWidth.hairline,
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
           onTap: onTap,
-          contentPadding: const EdgeInsets.all(TpSpace.sm),
-          leading: Container(
-            width: 78,
-            height: 62,
-            clipBehavior: Clip.antiAlias,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: palette.surfaceAlt,
-              borderRadius: BorderRadius.circular(TpRadius.sm),
-            ),
-            child: photo == null
-                ? Icon(
-                    vehicleFallbackIcon(asset),
-                    color: palette.primary,
-                    size: 32,
-                  )
-                : Image.asset(
-                    photo,
-                    fit: BoxFit.contain,
-                    width: double.infinity,
-                    height: double.infinity,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 96),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: <Widget>[
+                Container(
+                  width: 112,
+                  height: 96,
+                  padding: const EdgeInsets.all(TpSpace.xs),
+                  decoration: BoxDecoration(
+                    color: palette.surface,
+                    border: BorderDirectional(end: BorderSide(color: edge)),
+                  ),
+                  child: AccidentVehicleImageView(
+                    asset: asset,
                     semanticLabel: identity,
                   ),
-          ),
-          title: Directionality(
-            textDirection: TextDirection.ltr,
-            child: Text(
-              identity,
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-            ),
-          ),
-          subtitle: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              if (details.isNotEmpty)
-                Text(
-                  details,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
                 ),
-              if (plate != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: TpSpace.xs),
-                  child: Align(
-                    alignment: AlignmentDirectional.centerStart,
-                    child: TpStatusChip(
-                      status: TpStatus.neutral,
-                      label: plate,
-                      icon: Icons.badge_outlined,
-                      isCompact: true,
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: TpSpace.md,
+                      vertical: TpSpace.sm,
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Directionality(
+                          textDirection: TextDirection.ltr,
+                          child: Text(
+                            identity,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: text.titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                        if (kind != null) ...<Widget>[
+                          const SizedBox(height: 2),
+                          Text(
+                            kind,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: text.bodyMedium,
+                          ),
+                        ],
+                        if (plate != null) ...<Widget>[
+                          const SizedBox(height: TpSpace.xs),
+                          _PlateChip(label: l10n.accRptPlateChip(plate)),
+                        ],
+                      ],
                     ),
                   ),
                 ),
-            ],
+                Padding(
+                  padding: const EdgeInsetsDirectional.only(end: TpSpace.md),
+                  child: Center(
+                    child: selected
+                        ? Icon(
+                            Icons.check_circle,
+                            color: palette.primary,
+                            size: 28,
+                            semanticLabel: l10n.accRptSelectedAsset,
+                          )
+                        : Icon(
+                            Icons.chevron_right_rounded,
+                            color: palette.textSecondary,
+                          ),
+                  ),
+                ),
+              ],
+            ),
           ),
-          trailing:
-              Icon(selected ? Icons.check_circle : Icons.chevron_right_rounded),
         ),
       ),
     );
   }
 }
 
-/// M7 "Asset loaded from fleet master" card plus the read-only auto-filled
-/// lock fields. Every value is the register's own; a missing value reads
-/// [unavailableLabel], never a guess.
+class _PlateChip extends StatelessWidget {
+  const _PlateChip({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border.all(color: palette.borderStrong),
+        borderRadius: BorderRadius.circular(TpRadius.sm),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        child: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context)
+              .textTheme
+              .labelMedium
+              ?.copyWith(color: palette.textSecondary),
+        ),
+      ),
+    );
+  }
+}
+
+/// The asset status word the mock shows as a pill: the operational status
+/// when the register carries one, otherwise the fleet status.
+String? accidentAssetStatusWord(VehicleAsset asset) =>
+    _clean(asset.opsStatus) ?? _clean(asset.status);
+
+/// Mock M1 "Asset loaded from fleet master" card followed by the separate
+/// "Auto-filled from fleet master" read-only card. Every value is the
+/// register's own; a missing value reads [unavailableLabel], never a guess,
+/// and a missing meter is never shown as 0.
 class AccidentFleetMasterCard extends StatelessWidget {
   const AccidentFleetMasterCard({
     required this.asset,
@@ -474,7 +599,8 @@ class AccidentFleetMasterCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final String? photo = vehiclePhotoAsset(asset);
+    final TpPalette palette = TpPalette.of(context);
+    final TextTheme text = Theme.of(context).textTheme;
     final String meter = asset.currentKm == null
         ? unavailableLabel
         : l10n.accKmValue(formatVehicleOdometer(asset.currentKm!));
@@ -483,199 +609,266 @@ class AccidentFleetMasterCard extends StatelessWidget {
         .map((String value) => value.trim())
         .where((String value) => value.isNotEmpty)
         .join(' ');
-    final TpPalette palette = TpPalette.of(context);
     final String assetNo =
         _shown(asset.assetNo ?? asset.fleetNumber, unavailableLabel);
-    final List<(String, String)> cardRows = <(String, String)>[
-      (l10n.accIntakeAssetNo, assetNo),
-      (l10n.accIntakeVehicleType, _shown(asset.vehicleType, unavailableLabel)),
-      (l10n.accPlate, _shown(asset.registrationNo, unavailableLabel)),
-      (l10n.accIntakeMakeModel, _shown(makeModel, unavailableLabel)),
-      (l10n.accIntakeHomeSite, _shown(asset.site, unavailableLabel)),
-      (l10n.accIntakeCountry, _shown(asset.country, unavailableLabel)),
-      (l10n.accIntakeCurrentMeter, meter),
-      (l10n.accIntakeStatus, _shown(asset.status, unavailableLabel)),
+    final String plate = _shown(asset.registrationNo, unavailableLabel);
+    final String? statusWord = accidentAssetStatusWord(asset);
+    final String homeSite = _shown(asset.site, unavailableLabel);
+    final String homeSiteWithCountry = <String?>[
+      _clean(asset.site),
+      _clean(asset.country),
+    ].whereType<String>().join(', ');
+
+    final List<(String, String, bool)> identity = <(String, String, bool)>[
+      (l10n.accIntakeAssetNo, assetNo, true),
+      (
+        l10n.accIntakeVehicleType,
+        _shown(asset.vehicleType, unavailableLabel),
+        false,
+      ),
+      (l10n.accPlate, plate, true),
+      (l10n.accIntakeMakeModel, _shown(makeModel, unavailableLabel), false),
+      (l10n.accIntakeHomeSite, homeSite, false),
+      (l10n.accIntakeCountry, _shown(asset.country, unavailableLabel), false),
     ];
+
+    Widget valueRow(String label, Widget value) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 3),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Expanded(
+                flex: 4,
+                child: Text(
+                  label,
+                  style: text.bodyMedium?.copyWith(color: palette.textMuted),
+                ),
+              ),
+              const SizedBox(width: TpSpace.sm),
+              Expanded(flex: 5, child: value),
+            ],
+          ),
+        );
+    final TextStyle? strong =
+        text.bodyLarge?.copyWith(fontWeight: FontWeight.w700);
+
+    final Widget values = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        for (final (String label, String value, bool isId) in identity)
+          valueRow(
+            label,
+            isId
+                ? TpIdentifierText(value, style: strong)
+                : Text(value, style: strong),
+          ),
+        const Divider(height: TpSpace.lg),
+        valueRow(l10n.accIntakeCurrentMeter, Text(meter, style: strong)),
+        valueRow(
+          l10n.accIntakeStatus,
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: TpStatusChip(
+              status: vehicleStatusTone(statusWord),
+              label: statusWord ?? unavailableLabel,
+              isCompact: true,
+            ),
+          ),
+        ),
+      ],
+    );
+
+    final Widget photo = SizedBox(
+      key: const ValueKey<String>('accident.report.assetPhoto'),
+      height: 150,
+      child: AccidentVehicleImageView(
+        asset: asset,
+        semanticLabel: asset.displayIdentity ?? unavailableLabel,
+        placeholderSize: 72,
+      ),
+    );
+
+    final List<Widget> locked = <Widget>[
+      ReadOnlyAssetValue(
+        label: l10n.accIntakeAssetNo,
+        value: assetNo,
+        identifier: true,
+      ),
+      ReadOnlyAssetValue(label: l10n.accPlate, value: plate, identifier: true),
+      ReadOnlyAssetValue(
+        label: l10n.accIntakeMakeModel,
+        value: _shown(makeModel, unavailableLabel),
+      ),
+      ReadOnlyAssetValue(
+        label: l10n.accIntakeVehicleType,
+        value: _shown(asset.vehicleType, unavailableLabel),
+      ),
+      ReadOnlyAssetValue(
+        label: l10n.accIntakeHomeSite,
+        value: homeSiteWithCountry.isEmpty
+            ? unavailableLabel
+            : homeSiteWithCountry,
+      ),
+      ReadOnlyAssetValue(label: l10n.accIntakeCurrentMeter, value: meter),
+      ReadOnlyAssetValue(
+        label: l10n.accIntakeStatus,
+        value: statusWord ?? unavailableLabel,
+      ),
+    ];
+
     return Column(
       key: AccidentReportIntakeKeys.assetMaster,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        Row(
-          children: <Widget>[
-            const Icon(Icons.verified_outlined, size: TpSizing.iconMd),
-            const SizedBox(width: TpSpace.sm),
-            Expanded(
-              child: Text(
-                l10n.accIntakeAssetLoaded,
-                style: Theme.of(context).textTheme.titleSmall,
-              ),
-            ),
-            TpStatusChip(
-              status: vehicleStatusTone(asset.status),
-              label: _shown(asset.status, unavailableLabel),
-              isCompact: true,
-            ),
-          ],
-        ),
-        const SizedBox(height: TpSpace.sm),
         TpCard(
-          padding: const EdgeInsets.all(TpSpace.sm),
+          padding: const EdgeInsets.all(TpSpace.md),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              SizedBox(
-                key: const ValueKey<String>('accident.report.assetPhoto'),
-                height: 164,
-                child: photo != null
-                    ? Image.asset(
-                        photo,
-                        fit: BoxFit.contain,
-                        semanticLabel:
-                            asset.displayIdentity ?? unavailableLabel,
-                      )
-                    : Icon(vehicleFallbackIcon(asset), size: 72),
-              ),
-              const SizedBox(height: TpSpace.xs),
-              for (final (String label, String value) in cardRows)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+              LayoutBuilder(
+                builder: (BuildContext context, BoxConstraints constraints) {
+                  final Widget title = Row(
                     children: <Widget>[
+                      Icon(
+                        Icons.check_circle,
+                        color: palette.primary,
+                        size: TpSizing.iconLg,
+                      ),
+                      const SizedBox(width: TpSpace.sm),
                       Expanded(
-                        child: Text(
-                          label,
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: palette.textMuted,
-                                  ),
+                        child: Semantics(
+                          header: true,
+                          child: Text(
+                            l10n.accIntakeAssetLoaded,
+                            style: text.titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
                         ),
                       ),
-                      Expanded(
-                        flex: 2,
-                        child: label == 'Asset no' || label == 'Plate'
-                            ? TpIdentifierText(
-                                value,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(fontWeight: FontWeight.w700),
-                              )
-                            : Text(
-                                value,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(fontWeight: FontWeight.w700),
-                              ),
-                      ),
                     ],
-                  ),
-                ),
-              const SizedBox(height: TpSpace.xs),
-              Align(
-                alignment: AlignmentDirectional.centerEnd,
-                child: TextButton.icon(
-                  onPressed: onChange,
-                  icon: const Icon(Icons.swap_horiz_rounded),
-                  label: Text(changeLabel),
-                ),
+                  );
+                  final Widget change = TextButton.icon(
+                    key: AccidentReportIntakeKeys.changeAsset,
+                    onPressed: onChange,
+                    icon: const Icon(Icons.edit_outlined),
+                    label: Text(changeLabel),
+                  );
+                  // A narrow phone keeps the title whole and moves the action
+                  // under it rather than squeezing the heading to one word.
+                  if (constraints.maxWidth <
+                      300 * MediaQuery.textScalerOf(context).scale(1)) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        title,
+                        Align(
+                          alignment: AlignmentDirectional.centerEnd,
+                          child: change,
+                        ),
+                      ],
+                    );
+                  }
+                  return Row(
+                    children: <Widget>[
+                      Expanded(child: title),
+                      change,
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: TpSpace.sm),
+              LayoutBuilder(
+                builder: (BuildContext context, BoxConstraints constraints) {
+                  if (constraints.maxWidth < 360) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        photo,
+                        const SizedBox(height: TpSpace.sm),
+                        values,
+                      ],
+                    );
+                  }
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Expanded(flex: 5, child: photo),
+                      const SizedBox(width: TpSpace.md),
+                      Expanded(flex: 6, child: values),
+                    ],
+                  );
+                },
               ),
             ],
           ),
         ),
         const SizedBox(height: TpSpace.md),
-        Row(
-          children: <Widget>[
-            Icon(
-              Icons.lock_outline,
-              size: TpSizing.iconSm,
-              color: palette.textMuted,
-            ),
-            const SizedBox(width: TpSpace.xs),
-            Expanded(
-              child: Text(
-                l10n.accIntakeAutoFilled,
-                style: Theme.of(context).textTheme.titleSmall,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: TpSpace.sm),
-        LayoutBuilder(
-          builder: (BuildContext context, BoxConstraints constraints) {
-            final bool compact = constraints.maxWidth < 560;
-            final List<Widget> values = <Widget>[
-              ReadOnlyAssetValue(
-                label: l10n.accIntakeAssetNo,
-                value: assetNo,
-                identifier: true,
-              ),
-              ReadOnlyAssetValue(
-                label: l10n.accPlate,
-                value: _shown(asset.registrationNo, unavailableLabel),
-                identifier: true,
-              ),
-              ReadOnlyAssetValue(
-                label: l10n.accIntakeMakeModel,
-                value: _shown(makeModel, unavailableLabel),
-              ),
-              ReadOnlyAssetValue(
-                label: l10n.accIntakeVehicleType,
-                value: _shown(asset.vehicleType, unavailableLabel),
-              ),
-              ReadOnlyAssetValue(
-                label: l10n.accIntakeHomeSite,
-                value: _shown(asset.site, unavailableLabel),
-              ),
-              ReadOnlyAssetValue(
-                label: l10n.accIntakeCurrentMeter,
-                value: meter,
-              ),
-              ReadOnlyAssetValue(
-                label: l10n.accIntakeStatus,
-                value: _shown(asset.status, unavailableLabel),
-              ),
-            ];
-            if (compact) {
-              return Column(
+        TpCard(
+          key: AccidentReportIntakeKeys.autoFilled,
+          padding: const EdgeInsets.all(TpSpace.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Row(
                 children: <Widget>[
-                  for (int index = 0; index < values.length; index += 2)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: TpSpace.sm),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Expanded(child: values[index]),
-                          const SizedBox(width: TpSpace.sm),
-                          Expanded(
-                            child: index + 1 < values.length
-                                ? values[index + 1]
-                                : const SizedBox.shrink(),
-                          ),
-                        ],
+                  Icon(
+                    Icons.check_circle_outline,
+                    color: palette.primary,
+                    size: TpSizing.iconLg,
+                  ),
+                  const SizedBox(width: TpSpace.sm),
+                  Expanded(
+                    child: Semantics(
+                      header: true,
+                      child: Text(
+                        l10n.accIntakeAutoFilled,
+                        style: text.titleSmall
+                            ?.copyWith(fontWeight: FontWeight.w700),
                       ),
                     ),
+                  ),
+                  Icon(
+                    Icons.lock,
+                    size: TpSizing.iconSm,
+                    color: palette.textSecondary,
+                  ),
+                  const SizedBox(width: TpSpace.xs),
+                  Text(
+                    l10n.accRptReadOnly,
+                    style: text.labelMedium
+                        ?.copyWith(color: palette.textSecondary),
+                  ),
                 ],
-              );
-            }
-            return Wrap(
-              spacing: TpSpace.sm,
-              runSpacing: TpSpace.sm,
-              children: <Widget>[
-                for (final Widget value in values)
-                  SizedBox(width: 230, child: value),
-              ],
-            );
-          },
-        ),
-        const SizedBox(height: TpSpace.xs),
-        Text(
-          accidentFleetMasterLockNote(context),
-          key: AccidentReportIntakeKeys.lockNote,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: palette.textSecondary,
               ),
+              const SizedBox(height: TpSpace.sm),
+              LayoutBuilder(
+                builder: (BuildContext context, BoxConstraints constraints) {
+                  final int perRow = constraints.maxWidth >= 560
+                      ? 4
+                      : constraints.maxWidth >= 300
+                          ? 2
+                          : 1;
+                  final double width =
+                      (constraints.maxWidth - TpSpace.sm * (perRow - 1)) /
+                          perRow;
+                  return Wrap(
+                    spacing: TpSpace.sm,
+                    runSpacing: TpSpace.sm,
+                    children: <Widget>[
+                      for (final Widget value in locked)
+                        SizedBox(width: width, child: value),
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: TpSpace.sm),
+              Text(
+                accidentFleetMasterLockNote(context),
+                key: AccidentReportIntakeKeys.lockNote,
+                style: text.bodySmall?.copyWith(color: palette.textSecondary),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -697,53 +890,337 @@ class ReadOnlyAssetValue extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: palette.surfaceAlt,
-        borderRadius: BorderRadius.circular(TpRadius.md),
-        border: Border.all(color: palette.border),
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TextStyle? style = Theme.of(context).textTheme.bodyMedium;
+    return Semantics(
+      label: '$label, $value, ${l10n.accRptReadOnly}',
+      excludeSemantics: true,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: palette.surface,
+          borderRadius: BorderRadius.circular(TpRadius.md),
+          border: Border.all(color: palette.border),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(TpSpace.sm),
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      label,
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                            color: palette.textSecondary,
+                          ),
+                    ),
+                    const SizedBox(height: 2),
+                    if (identifier)
+                      TpIdentifierText(
+                        value,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: style,
+                      )
+                    else
+                      Text(
+                        value,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: style,
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: TpSpace.xs),
+              Icon(
+                Icons.lock_outline,
+                size: TpSizing.iconSm,
+                color: palette.textMuted,
+              ),
+            ],
+          ),
+        ),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(TpSpace.sm),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: Text(
-                    label,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: palette.textMuted,
-                        ),
+    );
+  }
+}
+
+/// Mock M1 "Where did the incident occur?" card. The incident site is its
+/// own statement, separate from the asset's home site: the row stays empty
+/// until the reporter chooses, and the fleet register never fills it. The
+/// picker offers the home site and the other fleet sites, and accepts a
+/// typed site or location that is not in the list.
+class AccidentIncidentSiteSelector extends StatelessWidget {
+  const AccidentIncidentSiteSelector({
+    required this.value,
+    required this.knownSites,
+    required this.onSiteChosen,
+    this.homeSite,
+    super.key,
+  });
+
+  /// The chosen incident site; blank shows the prompt.
+  final String value;
+
+  /// Distinct site names from the loaded fleet cache, already sorted.
+  final List<String> knownSites;
+
+  final ValueChanged<String> onSiteChosen;
+
+  /// The selected asset's home site, offered first and labelled.
+  final String? homeSite;
+
+  Future<void> _pick(BuildContext context) async {
+    final String? chosen = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (BuildContext context) => _IncidentSiteSheet(
+        initial: value,
+        knownSites: knownSites,
+        homeSite: _clean(homeSite),
+      ),
+    );
+    final String? cleaned = _clean(chosen);
+    if (cleaned != null) onSiteChosen(cleaned);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    final TextTheme text = Theme.of(context).textTheme;
+    final String? chosen = _clean(value);
+    return TpCard(
+      padding: const EdgeInsets.all(TpSpace.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Semantics(
+            header: true,
+            child: Text(
+              l10n.accIntakeWhereOccurred,
+              style: text.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+          ),
+          const SizedBox(height: TpSpace.xs),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  accidentIncidentSiteHelp(context),
+                  style:
+                      text.bodyMedium?.copyWith(color: palette.textSecondary),
+                ),
+              ),
+              Tooltip(
+                message: l10n.accRptIncidentSiteInfo,
+                triggerMode: TooltipTriggerMode.tap,
+                child: Semantics(
+                  button: true,
+                  label: l10n.accRptIncidentSiteInfo,
+                  excludeSemantics: true,
+                  child: SizedBox.square(
+                    dimension: TpSizing.minTouchTarget,
+                    child: Icon(
+                      Icons.info_outline,
+                      size: TpSizing.iconMd,
+                      color: palette.textSecondary,
+                    ),
                   ),
                 ),
-                Icon(
-                  Icons.lock_outline,
-                  size: 13,
-                  color: palette.textMuted,
-                ),
-              ],
-            ),
-            const SizedBox(height: 2),
-            if (identifier)
-              TpIdentifierText(
-                value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-              )
-            else
-              Text(
-                value,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
               ),
+            ],
+          ),
+          const SizedBox(height: TpSpace.sm),
+          Semantics(
+            button: true,
+            label: chosen == null
+                ? l10n.accRptSelectIncidentSite
+                : '${l10n.accReportIncidentSite}: $chosen',
+            excludeSemantics: true,
+            child: Material(
+              key: AccidentReportIntakeKeys.incidentSite,
+              color: palette.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(TpRadius.md),
+                side: BorderSide(color: palette.border),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: () => _pick(context),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    minHeight: TpSizing.controlHeight,
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: TpSpace.md,
+                      vertical: TpSpace.sm,
+                    ),
+                    child: Row(
+                      children: <Widget>[
+                        Icon(
+                          Icons.location_on_outlined,
+                          color: chosen == null
+                              ? palette.textSecondary
+                              : palette.primary,
+                        ),
+                        const SizedBox(width: TpSpace.md),
+                        Expanded(
+                          child: Text(
+                            chosen ?? l10n.accRptSelectIncidentSite,
+                            style: text.bodyLarge?.copyWith(
+                              color: chosen == null
+                                  ? palette.textSecondary
+                                  : palette.text,
+                              fontWeight: chosen == null
+                                  ? FontWeight.w400
+                                  : FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          color: palette.textSecondary,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Owns its own text controller for exactly as long as the sheet route is
+/// mounted, like the fleet picker: the reverse animation can outlive the
+/// sheet's future.
+class _IncidentSiteSheet extends StatefulWidget {
+  const _IncidentSiteSheet({
+    required this.initial,
+    required this.knownSites,
+    this.homeSite,
+  });
+
+  final String initial;
+  final List<String> knownSites;
+  final String? homeSite;
+
+  @override
+  State<_IncidentSiteSheet> createState() => _IncidentSiteSheetState();
+}
+
+class _IncidentSiteSheetState extends State<_IncidentSiteSheet> {
+  late final TextEditingController _text =
+      TextEditingController(text: widget.initial.trim());
+
+  @override
+  void dispose() {
+    _text.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TextTheme text = Theme.of(context).textTheme;
+    final String typed = _text.text.trim();
+    final String needle = typed.toLowerCase();
+    final List<String> sites = <String>[
+      if (widget.homeSite != null) widget.homeSite!,
+      for (final String site in widget.knownSites)
+        if (site != widget.homeSite) site,
+    ]
+        .where(
+          (String site) =>
+              needle.isEmpty || site.toLowerCase().contains(needle),
+        )
+        .toList(growable: false);
+    final bool typedIsListed = sites.any(
+      (String site) => site.toLowerCase() == needle,
+    );
+    return Padding(
+      padding: EdgeInsets.only(
+        left: TpSpace.lg,
+        right: TpSpace.lg,
+        bottom: MediaQuery.viewInsetsOf(context).bottom + TpSpace.lg,
+      ),
+      child: SizedBox(
+        height: MediaQuery.sizeOf(context).height * .7,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Semantics(
+              header: true,
+              child: Text(l10n.accRptSiteSheetTitle, style: text.titleLarge),
+            ),
+            const SizedBox(height: TpSpace.xs),
+            Text(accidentIncidentSiteHelp(context), style: text.bodySmall),
+            const SizedBox(height: TpSpace.md),
+            TextField(
+              key: AccidentReportIntakeKeys.incidentSiteField,
+              controller: _text,
+              autofocus: widget.knownSites.isEmpty,
+              textCapitalization: TextCapitalization.words,
+              textInputAction: TextInputAction.done,
+              decoration: InputDecoration(
+                labelText: l10n.accReportIncidentSite,
+                hintText: l10n.accRptSiteSheetHint,
+                prefixIcon: const Icon(Icons.search),
+              ),
+              onChanged: (_) => setState(() {}),
+              onSubmitted: (String value) {
+                if (value.trim().isNotEmpty) {
+                  Navigator.of(context).pop(value.trim());
+                }
+              },
+            ),
+            if (typed.isNotEmpty && !typedIsListed) ...<Widget>[
+              const SizedBox(height: TpSpace.sm),
+              TpButton.secondary(
+                key: AccidentReportIntakeKeys.useTypedSite,
+                label: l10n.accRptUseTypedSite(typed),
+                icon: Icons.check_rounded,
+                onPressed: () => Navigator.of(context).pop(typed),
+                isFullWidth: true,
+              ),
+            ],
+            const SizedBox(height: TpSpace.md),
+            Text(l10n.accRptFleetSites, style: text.labelLarge),
+            const SizedBox(height: TpSpace.xs),
+            Expanded(
+              child: sites.isEmpty
+                  ? Text(l10n.accRptNoFleetSites, style: text.bodyMedium)
+                  : ListView.builder(
+                      itemCount: sites.length,
+                      itemBuilder: (BuildContext context, int index) {
+                        final String site = sites[index];
+                        final bool isHome = site == widget.homeSite;
+                        return ListTile(
+                          key: AccidentReportIntakeKeys.siteChip(site),
+                          leading: Icon(
+                            isHome
+                                ? Icons.home_work_outlined
+                                : Icons.location_on_outlined,
+                          ),
+                          title: Text(
+                            isHome ? l10n.accIntakeHomeSiteChip(site) : site,
+                          ),
+                          selected: site == widget.initial.trim(),
+                          onTap: () => Navigator.of(context).pop(site),
+                        );
+                      },
+                    ),
+            ),
           ],
         ),
       ),
@@ -751,77 +1228,107 @@ class ReadOnlyAssetValue extends StatelessWidget {
   }
 }
 
-/// M7 "Where did the incident occur?" - a free-text incident site with the
-/// known fleet sites offered as one-tap choices. The text is the report's
-/// `site`; the chips only fill it.
-class AccidentIncidentSiteSelector extends StatelessWidget {
-  const AccidentIncidentSiteSelector({
-    required this.controller,
-    required this.knownSites,
-    required this.onSiteChosen,
-    this.homeSite,
-    super.key,
-  });
+/// Scans an asset QR code or barcode inside the report and returns the
+/// extracted code, so the report can select the asset from the fleet it
+/// already loaded. A typed code is the fallback when the camera cannot run.
+class AccidentAssetScanSheet extends StatefulWidget {
+  const AccidentAssetScanSheet({super.key});
 
-  final TextEditingController controller;
+  @override
+  State<AccidentAssetScanSheet> createState() => _AccidentAssetScanSheetState();
+}
 
-  /// Distinct site names from the loaded fleet cache, already sorted.
-  final List<String> knownSites;
+class _AccidentAssetScanSheetState extends State<AccidentAssetScanSheet> {
+  final MobileScannerController _camera = MobileScannerController();
+  final TextEditingController _code = TextEditingController();
+  bool _done = false;
 
-  /// Called when a chip fills the field, so the host records a user edit.
-  final ValueChanged<String> onSiteChosen;
+  @override
+  void dispose() {
+    unawaited(_camera.dispose());
+    _code.dispose();
+    super.dispose();
+  }
 
-  /// The selected asset's home site, labelled on its chip.
-  final String? homeSite;
+  void _finish(String raw) {
+    if (_done) return;
+    final String code = extractScanCode(raw);
+    if (code.isEmpty) return;
+    _done = true;
+    Navigator.of(context).pop(code);
+  }
 
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final String current = controller.text.trim();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        Text(
-          l10n.accIntakeWhereOccurred,
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-        const SizedBox(height: TpSpace.xs),
-        Text(
-          accidentIncidentSiteHelp(context),
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-        const SizedBox(height: TpSpace.sm),
-        TpInput(
-          key: AccidentReportIntakeKeys.incidentSite,
-          label: l10n.accReportIncidentSite,
-          controller: controller,
-          isRequired: true,
-          prefixIcon: Icons.location_on_outlined,
-          hint: l10n.accIntakeSiteHint,
-        ),
-        if (knownSites.isNotEmpty) ...<Widget>[
-          const SizedBox(height: TpSpace.sm),
-          Wrap(
-            spacing: TpSpace.xs,
-            runSpacing: TpSpace.xs,
-            children: <Widget>[
-              for (final String site in knownSites)
-                ChoiceChip(
-                  key: AccidentReportIntakeKeys.siteChip(site),
-                  label: Text(
-                    site == homeSite?.trim()
-                        ? l10n.accIntakeHomeSiteChip(site)
-                        : site,
-                  ),
-                  selected: site == current,
-                  onSelected: (bool selected) {
-                    if (selected) onSiteChosen(site);
+    final TextTheme text = Theme.of(context).textTheme;
+    return Padding(
+      padding: EdgeInsets.only(
+        left: TpSpace.lg,
+        right: TpSpace.lg,
+        bottom: MediaQuery.viewInsetsOf(context).bottom + TpSpace.lg,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Semantics(
+              header: true,
+              child: Text(l10n.accRptScanAsset, style: text.titleLarge),
+            ),
+            const SizedBox(height: TpSpace.xs),
+            Text(l10n.accRptScanHint, style: text.bodySmall),
+            const SizedBox(height: TpSpace.md),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(TpRadius.lg),
+              child: SizedBox(
+                height: 240,
+                child: MobileScanner(
+                  controller: _camera,
+                  onDetect: (BarcodeCapture capture) {
+                    for (final Barcode barcode in capture.barcodes) {
+                      final String raw = barcode.rawValue?.trim() ?? '';
+                      if (raw.isNotEmpty) {
+                        _finish(raw);
+                        return;
+                      }
+                    }
                   },
+                  errorBuilder:
+                      (BuildContext context, MobileScannerException error) =>
+                          Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(TpSpace.lg),
+                      child: Text(
+                        l10n.accRptScanCameraUnavailable,
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
                 ),
-            ],
-          ),
-        ],
-      ],
+              ),
+            ),
+            const SizedBox(height: TpSpace.md),
+            TextField(
+              key: AccidentReportIntakeKeys.scanCodeField,
+              controller: _code,
+              textCapitalization: TextCapitalization.characters,
+              decoration: InputDecoration(
+                labelText: l10n.accRptScanTypeCode,
+                prefixIcon: const Icon(Icons.pin_outlined),
+              ),
+              onSubmitted: _finish,
+            ),
+            const SizedBox(height: TpSpace.sm),
+            TpButton.primary(
+              label: l10n.accRptScanFindAsset,
+              icon: Icons.search,
+              onPressed: () => _finish(_code.text),
+              isFullWidth: true,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

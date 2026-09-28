@@ -19,6 +19,7 @@ import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_sla_repository.dart';
+import 'package:tyre_pulse/features/accidents/data/accident_workstream_repository.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_case_vocab.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_models.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_mock_copy.dart';
@@ -77,11 +78,22 @@ class AccidentWorkstreamHeader extends ConsumerWidget {
             'n': '${step.n}',
             't': '${caseFlow.length}',
           });
-    final String title = step?.label ?? humaniseAccidentToken(workstreamKey);
+    final String title = step == null
+        ? humaniseAccidentToken(workstreamKey)
+        : accidentVocabLabel(copy, 'flow', step.key, step.label);
     final String owner = accidentWorkstreamOwner(
       copy,
       snapshot.workstreams,
       workstreamKey,
+    );
+    final AccidentCasePeople people =
+        ref.watch(accidentCasePeopleProvider(snapshot.accident.id)).value ??
+            AccidentCasePeople.unknown;
+    final String ownerShown = accidentOwnerDisplay(
+      copy,
+      people,
+      workstreamKey,
+      owner,
     );
     final AsyncValue<AccidentSlaLoad> sla =
         ref.watch(accidentSlaLoadProvider(snapshot.accident.id));
@@ -124,6 +136,12 @@ class AccidentWorkstreamHeader extends ConsumerWidget {
                   status: accidentTone(status),
                   label: humaniseAccidentToken(status),
                   isCompact: true,
+                )
+              else
+                Icon(
+                  Icons.fact_check_outlined,
+                  size: TpSizing.iconMd,
+                  color: palette.primary,
                 ),
               Text.rich(
                 TextSpan(
@@ -133,7 +151,7 @@ class AccidentWorkstreamHeader extends ConsumerWidget {
                       text: title,
                       style: TextStyle(color: palette.primary),
                     ),
-                    TextSpan(text: ' | ${copy('ownerLabel')}: $owner'),
+                    TextSpan(text: ' | ${copy('ownerLabel')}: $ownerShown'),
                   ],
                 ),
                 key: const Key('accident.ws.header.line1'),
@@ -201,6 +219,23 @@ class _SegmentView extends StatelessWidget {
           },
         AccidentSlaSegmentKind.info => Icons.info_outline,
       };
+}
+
+/// "Owner" as the mock prints it: the assigned person and the team
+/// ("A. Name · Fleet"), "Unassigned · Fleet" when the lookup ran and nobody
+/// is assigned, and just the team when no lookup result is available.
+String accidentOwnerDisplay(
+  AccidentMockCopy copy,
+  AccidentCasePeople people,
+  String workstreamKey,
+  String team,
+) {
+  final String? name = people.ownerName(workstreamKey)?.trim();
+  if (name != null && name.isNotEmpty) return '$name · $team';
+  if (people.isUnassigned(workstreamKey)) {
+    return '${copy('unassigned')} · $team';
+  }
+  return team;
 }
 
 /// Colour for an SLA urgency: warning while running, critical when overdue or

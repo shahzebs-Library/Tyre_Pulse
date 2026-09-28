@@ -25,7 +25,7 @@ void main() {
         expect(tokens.add(id.token), isTrue, reason: 'duplicate ${id.token}');
         expect(names.add(id.databaseName), isTrue);
       }
-      expect(RoleId.values, hasLength(15));
+      expect(RoleId.values, hasLength(16));
     });
 
     test(

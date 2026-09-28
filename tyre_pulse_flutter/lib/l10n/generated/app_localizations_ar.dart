@@ -6957,4 +6957,197 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get designAccReportStepTodo => 'لم تبدأ';
+
+  @override
+  String get accClaimTitle => 'تسجيل مطالبة التأمين';
+
+  @override
+  String get accClaimRouteInternal => 'تقييم الإصلاح في الورشة الداخلية';
+
+  @override
+  String get accClaimRouteOnSite => 'تقييم الإصلاح في الموقع';
+
+  @override
+  String get accClaimDocAccidentReport => 'تقرير الحادث PDF';
+
+  @override
+  String get accClaimDocFleetValidation => 'تحقق الأسطول';
+
+  @override
+  String get accClaimDocWorkshopAssessment => 'تقييم الورشة PDF';
+
+  @override
+  String get accClaimDocDamagePhotos => 'صور الأضرار';
+
+  @override
+  String get accClaimDocPoliceNajm => 'تقرير الشرطة / نجم';
+
+  @override
+  String get accClaimDocRegistration => 'استمارة المركبة';
+
+  @override
+  String get accClaimDocLicence => 'رخصة القيادة';
+
+  @override
+  String get accClaimDocPolicy => 'وثيقة التأمين';
+
+  @override
+  String get accClaimDocReceived => 'مستلم';
+
+  @override
+  String get accClaimDocMissing => 'مفقود';
+
+  @override
+  String accClaimDocCount(int count) {
+    return 'تم استلام $count';
+  }
+
+  @override
+  String accClaimProgress(int received, int total) {
+    return '$received من $total من المستندات المطلوبة';
+  }
+
+  @override
+  String get accClaimLockedHint => 'أكمل جميع المستندات المطلوبة للتفعيل';
+
+  @override
+  String get accClaimNumberPending => 'يضاف عند إصداره من شركة التأمين';
+
+  @override
+  String get accClaimNumberOptional =>
+      'رقم المطالبة لدى شركة التأمين (اختياري)';
+
+  @override
+  String get accClaimEditDetails => 'تعديل تفاصيل المطالبة';
+
+  @override
+  String get accClaimDoneEditing => 'انتهى التعديل';
+
+  @override
+  String get accClaimStatus => 'حالة المطالبة';
+
+  @override
+  String get accClaimStatusNotRegistered => 'غير مسجلة';
+
+  @override
+  String get accClaimStatusRegistered => 'مسجلة';
+
+  @override
+  String get accClaimUpdateRecoveryLink => 'تحديث مبلغ الاسترداد';
+
+  @override
+  String get accClaimSourceInsurer => 'شركة التأمين';
+
+  @override
+  String get accClaimSourceThirdParty => 'طرف ثالث';
+
+  @override
+  String get accClaimSourceDriver => 'السائق';
+
+  @override
+  String get accClaimSourceOther => 'أخرى';
+
+  @override
+  String accClaimNotifyPeople(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count شخصًا',
+      few: '$count أشخاص',
+      two: 'شخصان',
+      one: 'شخص واحد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get accClaimNotifyVisibility => 'للاطلاع';
+
+  @override
+  String get accClaimTeamFleet => 'الأسطول';
+
+  @override
+  String get accClaimTeamWorkshop => 'الورشة';
+
+  @override
+  String get accClaimTeamInsurance => 'التأمين';
+
+  @override
+  String get accClaimTeamCommandCenter => 'مركز القيادة';
+
+  @override
+  String get accClaimTeamPmvManager => 'مدير المركبات';
+
+  @override
+  String get accClaimRegisterShort => 'تسجيل المطالبة';
+
+  @override
+  String accClaimRegisterConfirmNoNumber(String insurer, String policyNo) {
+    return 'سيتم تسجيل المطالبة لدى $insurer بموجب الوثيقة $policyNo على الحالة. أضف رقم المطالبة عند إصداره من شركة التأمين. لا يمكن التراجع عن ذلك من التطبيق.';
+  }
+
+  @override
+  String get accClaimRegisteredNoNumberSnack =>
+      'تم تسجيل المطالبة لدى شركة التأمين.';
+
+  @override
+  String accRptPlateChip(String plate) {
+    return 'اللوحة $plate';
+  }
+
+  @override
+  String get accRptSelectedAsset => 'الأصل المحدد';
+
+  @override
+  String get accRptReadOnly => 'للقراءة فقط';
+
+  @override
+  String get accRptIncidentSiteInfo =>
+      'موقع الحادث هو المكان الذي وقع فيه الحادث. يسجل بشكل منفصل ولا ينسخ أبدا من الموقع الأساسي للأصل.';
+
+  @override
+  String get accRptSelectIncidentSite => 'اختر موقع الحادث / المكان';
+
+  @override
+  String get accRptSiteSheetTitle => 'موقع الحادث / المكان';
+
+  @override
+  String get accRptSiteSheetHint => 'ابحث عن موقع في الأسطول أو اكتب مكانا';
+
+  @override
+  String accRptUseTypedSite(String site) {
+    return 'استخدم \"$site\"';
+  }
+
+  @override
+  String get accRptFleetSites => 'مواقع الأسطول';
+
+  @override
+  String get accRptNoFleetSites =>
+      'لا يوجد موقع مطابق في الأسطول. اكتب الموقع أو المكان أعلاه.';
+
+  @override
+  String get accRptScanAsset => 'امسح رمز QR / الباركود للأصل';
+
+  @override
+  String get accRptScanHint =>
+      'وجه الكاميرا نحو رمز QR أو الباركود الموجود على الأصل.';
+
+  @override
+  String get accRptScanCameraUnavailable =>
+      'الكاميرا غير متاحة. اكتب رمز الأصل أدناه بدلا من ذلك.';
+
+  @override
+  String get accRptScanTypeCode => 'أو اكتب رمز الأصل';
+
+  @override
+  String get accRptScanFindAsset => 'ابحث عن الأصل';
+
+  @override
+  String accRptScanNotFound(String code) {
+    return '$code لا يطابق أصلا واحدا في الأسطول. اختره من النتائج أدناه.';
+  }
+
+  @override
+  String get accRptTitle => 'الإبلاغ عن حادث';
 }

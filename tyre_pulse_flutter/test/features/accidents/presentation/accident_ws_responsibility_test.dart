@@ -17,6 +17,7 @@ import 'package:tyre_pulse/core/workspace/workspace_scope.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_case_docs_repository.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_liability_repository.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_models.dart';
+import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_mock_kit.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_responsibility.dart';
 
 const WorkspaceContext _context = WorkspaceContext(
@@ -160,7 +161,11 @@ void main() {
     final _Fakes fakes = _Fakes();
     await _pump(tester, fakes);
 
-    expect(find.text('4 of 7 · Responsibility and payment'), findsOneWidget);
+    expect(find.text('of 7 · Responsibility and payment'), findsOneWidget);
+    expect(
+      find.bySemanticsLabel('4 of 7 · Responsibility and payment'),
+      findsOneWidget,
+    );
     expect(
       find.text('Owner: Fleet | Insurance review: Insurance / '
           'Insurance Officer'),
@@ -218,7 +223,7 @@ void main() {
     );
     expect(
       tester
-          .widget<TpButton>(
+          .widget<AccidentMockToneButton>(
             find.byKey(const Key('accident.resp.requestTaqdeer')),
           )
           .onPressed,
@@ -276,6 +281,7 @@ void main() {
       find.byKey(const Key('accident.resp.notProvisioned')),
       findsOneWidget,
     );
+    await _tapKey(tester, 'accident.resp.row.third_party_plate');
     final TpSegmented<String> verify = tester.widget<TpSegmented<String>>(
       find.byKey(const Key('accident.resp.verify.third_party_plate')),
     );

@@ -22,11 +22,14 @@ import 'package:tyre_pulse/features/accidents/data/accident_case_docs_repository
 import 'package:tyre_pulse/features/accidents/data/accident_liability_repository.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_photo_capture.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_responsibility_draft_store.dart';
+import 'package:tyre_pulse/features/accidents/data/accident_workstream_repository.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_case_vocab.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_models.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_copy.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_mock_copy.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_ui.dart';
+import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_header.dart';
+import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_mock_kit.dart';
 
 const String _workstreamKey = 'liability';
 
@@ -34,12 +37,18 @@ class AccidentResponsibilityMockWorkspace extends ConsumerStatefulWidget {
   const AccidentResponsibilityMockWorkspace({
     required this.snapshot,
     required this.onNavigate,
+    this.showWorkstreamHeader = true,
     this.now,
     super.key,
   });
 
   final AccidentCaseSnapshot snapshot;
   final void Function(String workspaceKey) onNavigate;
+
+  /// False inside the case screen, which already states "Workstream 4 of 7"
+  /// once in its header; the "4 of 7 · Responsibility and payment" eyebrow
+  /// is then not repeated.
+  final bool showWorkstreamHeader;
 
   /// Injected clock for deterministic tests.
   final DateTime? now;
@@ -67,6 +76,9 @@ class _AccidentResponsibilityMockWorkspaceState
   bool _saving = false;
   bool _requesting = false;
   String? _uploadingKey;
+
+  /// `profiles.id -> full_name` for document uploaders and verifiers.
+  Map<String, String> _names = const <String, String>{};
 
   AccidentRecord get _record => widget.snapshot.accident;
   WorkspaceContext? get _workspace => ref.read(workspaceContextProvider);
@@ -108,8 +120,10 @@ class _AccidentResponsibilityMockWorkspaceState
       final AccidentResponsibilityDraft? draft = await ref
           .read(accidentResponsibilityDraftStoreProvider)
           .load(_draftScope);
+      final Map<String, String> names = await _lookupNames(docs);
       if (!mounted) return;
       setState(() {
+        _names = names;
         _extended = load.extendedProvisioned;
         _assessment = load.assessment ?? const AccidentLiabilityAssessment();
         _authority
@@ -137,6 +151,23 @@ class _AccidentResponsibilityMockWorkspaceState
         _error = accidentAppError(error, AccidentCopy.of(context));
         _loading = false;
       });
+    }
+  }
+
+  /// Resolves uploader and verifier ids to names. A failed lookup only
+  /// costs the names (the row then says "Not set"), never the screen.
+  Future<Map<String, String>> _lookupNames(AccidentEvidenceLoad docs) async {
+    try {
+      return await ref.read(accidentCasePeopleRepositoryProvider).namesFor(
+        <String?>[
+          for (final AccidentEvidenceDoc doc in docs.docs) ...<String?>[
+            doc.uploadedBy,
+            doc.verifiedBy,
+          ],
+        ],
+      );
+    } on Object {
+      return const <String, String>{};
     }
   }
 
@@ -475,8 +506,12 @@ class _AccidentResponsibilityMockWorkspaceState
       final AccidentEvidenceLoad docs = await ref
           .read(accidentCaseDocsRepositoryProvider)
           .listEvidence(_record.id);
+      final Map<String, String> names = await _lookupNames(docs);
       if (!mounted) return;
-      setState(() => _docs = docs);
+      setState(() {
+        _docs = docs;
+        _names = names;
+      });
     } on UnsupportedError catch (error) {
       if (!mounted) return;
       _toast(error.message ?? copy('uploadFailed'));
@@ -495,22 +530,84 @@ class _AccidentResponsibilityMockWorkspaceState
   bool get _taqdeerMissing =>
       _assessment.taqdeerRequired == true && !_docs.has('taqdeer_assessment');
 
+  static const Map<String, IconData> _faultIcons = <String, IconData>{
+    'our_driver_full': Icons.person_outline,
+    'third_party_full': Icons.directions_car_outlined,
+    'shared': Icons.people_outline,
+    'under_investigation': Icons.manage_search_rounded,
+    'not_applicable': Icons.remove_circle_outline_rounded,
+  };
+
+  static const Map<String, IconData> _payerIcons = <String, IconData>{
+    'other_party_insurance': Icons.shield_outlined,
+    'our_insurance': Icons.verified_user_outlined,
+    'company': Icons.apartment_outlined,
+    'driver_recovery': Icons.person_search_outlined,
+    'warranty': Icons.workspace_premium_outlined,
+    'pending': Icons.schedule_rounded,
+  };
+
+  static const Map<String, IconData> _authorityIcons = <String, IconData>{
+    'third_party_plate': Icons.pin_outlined,
+    'third_party_driver': Icons.person_outline,
+    'third_party_phone': Icons.phone_outlined,
+    'police_report_no': Icons.local_police_outlined,
+    'najm_report': Icons.description_outlined,
+    'taqdeer_required': Icons.gavel_outlined,
+    'taqdeer_no': Icons.tag_rounded,
+  };
+
+  static const Map<String, IconData> _docIcons = <String, IconData>{
+    'police_accident_report': Icons.description_outlined,
+    'najm_report': Icons.description_outlined,
+    'taqdeer_assessment': Icons.gavel_outlined,
+    'third_party_registration_card': Icons.badge_outlined,
+    'third_party_insurance_policy': Icons.shield_outlined,
+    'driver_licence': Icons.credit_card_outlined,
+    'company_letter_undertaking': Icons.mail_outline_rounded,
+  };
+
+  String _faultLabel(AccidentMockCopy copy, FaultTile tile) =>
+      accidentVocabLabel(copy, 'fault', tile.key, tile.label);
+
+  String _payerLabel(AccidentMockCopy copy, String? key) {
+    for (final VocabItem tile in payerTiles) {
+      if (tile.key == key) {
+        return accidentVocabLabel(copy, 'payer', tile.key, tile.label);
+      }
+    }
+    return '';
+  }
+
   @override
   Widget build(BuildContext context) {
     final AccidentMockCopy copy = AccidentMockCopy.of(context);
     final TpPalette palette = TpPalette.of(context);
     final NumberedStep? step = caseFlowStep(_workstreamKey);
-    final String fleetOwner = accidentWorkstreamOwner(
+    final AccidentCasePeople people =
+        ref.watch(accidentCasePeopleProvider(_record.id)).value ??
+            AccidentCasePeople.unknown;
+    final List<AccidentWorkstream> rows = widget.snapshot.workstreams;
+    final String fleetOwner = accidentOwnerDisplay(
       copy,
-      widget.snapshot.workstreams,
+      people,
       _workstreamKey,
+      accidentWorkstreamOwner(copy, rows, _workstreamKey),
     );
-    final String insuranceOwner = accidentWorkstreamOwner(
+    final String insuranceOwner = accidentOwnerDisplay(
       copy,
-      widget.snapshot.workstreams,
+      people,
       'insurance',
+      accidentWorkstreamOwner(copy, rows, 'insurance'),
     );
     final AppError? error = _error;
+    final TextTheme text = Theme.of(context).textTheme;
+    final String eyebrow = step == null
+        ? humaniseAccidentToken(_workstreamKey)
+        : copy.fill('stepOfShort', <String, String>{
+            't': '${caseFlow.length}',
+            's': accidentVocabLabel(copy, 'flow', step.key, step.label),
+          });
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -518,36 +615,76 @@ class _AccidentResponsibilityMockWorkspaceState
         Wrap(
           spacing: TpSpace.sm,
           runSpacing: TpSpace.xs,
+          alignment: WrapAlignment.spaceBetween,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: <Widget>[
-            Text(
-              step == null
-                  ? humaniseAccidentToken(_workstreamKey)
-                  : '${step.n} of ${caseFlow.length} · ${step.label}',
-              key: const Key('accident.resp.eyebrow'),
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: palette.primary,
-                    fontWeight: FontWeight.w800,
-                  ),
-            ),
+            if (widget.showWorkstreamHeader)
+              Semantics(
+                header: true,
+                label: step == null ? eyebrow : '${step.n} $eyebrow',
+                excludeSemantics: true,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    if (step != null) ...<Widget>[
+                      CircleAvatar(
+                        radius: 12,
+                        backgroundColor: palette.primary,
+                        child: Text(
+                          '${step.n}',
+                          style: TextStyle(
+                            color: palette.onPrimary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: TpSpace.sm),
+                    ],
+                    Flexible(
+                      child: Text(
+                        eyebrow,
+                        key: const Key('accident.resp.eyebrow'),
+                        style: text.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             if (_draftExists)
-              TpStatusChip(
+              Row(
                 key: const Key('accident.resp.draftChip'),
-                status: TpStatus.info,
-                label: copy('draftSaved'),
-                icon: Icons.save_outlined,
-                isCompact: true,
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Icon(
+                    Icons.cloud_done_outlined,
+                    size: TpSizing.iconMd,
+                    color: palette.primary,
+                  ),
+                  const SizedBox(width: TpSpace.xs),
+                  Text(
+                    copy('draftSaved'),
+                    style: text.bodySmall?.copyWith(color: palette.primary),
+                  ),
+                ],
               ),
           ],
         ),
         const SizedBox(height: TpSpace.xs),
-        Text(
-          '${copy('ownerLabel')}: $fleetOwner | '
-          '${copy('insuranceReview')}: $insuranceOwner',
-          key: const Key('accident.resp.owners'),
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: palette.textSecondary,
-              ),
+        Wrap(
+          key: const Key('accident.resp.ownersLine'),
+          spacing: TpSpace.md,
+          runSpacing: TpSpace.xs,
+          children: <Widget>[
+            _personLine(
+              '${copy('ownerLabel')}: $fleetOwner | '
+              '${copy('insuranceReview')}: $insuranceOwner',
+              const Key('accident.resp.owners'),
+              palette,
+            ),
+          ],
         ),
         const SizedBox(height: TpSpace.md),
         if (_loading)
@@ -565,16 +702,18 @@ class _AccidentResponsibilityMockWorkspaceState
           TpErrorState(error: error, onRetry: _load)
         else ...<Widget>[
           if (!_extended) ...<Widget>[
-            _notice(
-              copy('liabilityNotProvisioned'),
-              TpStatus.unknown,
-              palette,
+            AccidentMockNotice(
               key: const Key('accident.resp.notProvisioned'),
+              text: copy('liabilityNotProvisioned'),
+              tone: TpStatus.unknown,
             ),
             const SizedBox(height: TpSpace.md),
           ],
           if (_locked) ...<Widget>[
-            _notice(copy('lockedNotice'), TpStatus.neutral, palette),
+            AccidentMockNotice(
+              text: copy('lockedNotice'),
+              tone: TpStatus.neutral,
+            ),
             const SizedBox(height: TpSpace.md),
           ],
           _faultCard(copy, palette),
@@ -584,29 +723,20 @@ class _AccidentResponsibilityMockWorkspaceState
           _authorityCard(copy, palette),
           const SizedBox(height: TpSpace.md),
           _documentsCard(copy, palette),
-          if (_taqdeerMissing) ...<Widget>[
-            const SizedBox(height: TpSpace.md),
-            _notice(
-              copy('taqdeerWarning'),
-              TpStatus.warning,
-              palette,
-              key: const Key('accident.resp.taqdeerWarning'),
-            ),
-          ],
           const SizedBox(height: TpSpace.lg),
-          TpButton.primary(
+          TpButton.secondary(
             key: const Key('accident.resp.save'),
             label: copy('saveDetails'),
-            icon: Icons.save_outlined,
+            icon: Icons.bookmark_border_rounded,
             isFullWidth: true,
             isBusy: _saving,
             onPressed: _saving || _locked ? null : () => unawaited(_save()),
           ),
           const SizedBox(height: TpSpace.sm),
-          TpButton.secondary(
+          AccidentMockToneButton(
             key: const Key('accident.resp.requestTaqdeer'),
             label: copy('requestTaqdeer'),
-            icon: Icons.request_page_outlined,
+            icon: Icons.note_add_outlined,
             isFullWidth: true,
             isBusy: _requesting,
             onPressed: _requesting || !_taqdeerMissing
@@ -614,10 +744,10 @@ class _AccidentResponsibilityMockWorkspaceState
                 : () => unawaited(_requestTaqdeer()),
           ),
           const SizedBox(height: TpSpace.sm),
-          TpButton.text(
+          TpButton.primary(
             key: const Key('accident.resp.continue'),
             label: copy('continueDamage'),
-            icon: Icons.arrow_forward_rounded,
+            icon: Icons.arrow_circle_right_outlined,
             isFullWidth: true,
             onPressed: () => widget.onNavigate('damage_map'),
           ),
@@ -626,78 +756,171 @@ class _AccidentResponsibilityMockWorkspaceState
     );
   }
 
+  Widget _personLine(String value, Key key, TpPalette palette) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(
+            Icons.person_outline,
+            size: TpSizing.iconMd,
+            color: palette.primary,
+          ),
+          const SizedBox(width: TpSpace.xs),
+          Flexible(
+            child: Text(
+              value,
+              key: key,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: palette.textSecondary,
+                  ),
+            ),
+          ),
+        ],
+      );
+
   Widget _faultCard(AccidentMockCopy copy, TpPalette palette) {
     final String? type = _assessment.liabilityType;
     final bool shared = type == 'shared';
     final String status = faultStatusFor(type, _assessment.ourLiabilityPct);
-    return _numbered(
-      1,
-      copy('whoAtFault'),
-      <Widget>[
-        Wrap(
-          spacing: TpSpace.sm,
-          runSpacing: TpSpace.sm,
-          children: <Widget>[
-            for (final FaultTile tile in faultTiles)
-              ChoiceChip(
-                key: Key('accident.resp.fault.${tile.key}'),
-                label: Text(tile.label),
-                selected: type == tile.key,
-                onSelected: _locked
-                    ? null
-                    : (bool selected) {
-                        if (selected) _selectFault(tile);
-                      },
-              ),
-          ],
-        ),
-        const SizedBox(height: TpSpace.md),
-        AccidentInfoRow(
-          copy('faultStatus'),
-          status.isEmpty ? copy('notSet') : status,
-        ),
-        if (shared) ...<Widget>[
-          Row(
+    final TpStatus statusTone = switch (status) {
+      'Faulty' => TpStatus.critical,
+      'Non-faulty' => TpStatus.ok,
+      '' => TpStatus.unknown,
+      _ => TpStatus.warning,
+    };
+    return AccidentMockSection(
+      number: 1,
+      title: copy('whoAtFault'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          AccidentMockTileGrid(
+            minTileWidth: 92,
+            maxColumns: 5,
             children: <Widget>[
-              Expanded(
-                child: TpInput(
-                  key: const Key('accident.resp.ourPct'),
-                  label: copy('gccLiability'),
-                  controller: _ourPctController,
-                  keyboardType: TextInputType.number,
-                  enabled: !_locked,
-                  onChanged: (String raw) => _setPct(ours: true, raw: raw),
+              for (final FaultTile tile in faultTiles)
+                AccidentMockChoiceTile(
+                  key: Key('accident.resp.fault.${tile.key}'),
+                  label: _faultLabel(copy, tile),
+                  icon: _faultIcons[tile.key] ?? Icons.help_outline,
+                  iconColor: tile.key == 'shared'
+                      ? palette.warning.base
+                      : tile.key == 'not_applicable'
+                          ? palette.textSecondary
+                          : null,
+                  selected: type == tile.key,
+                  onTap: _locked ? null : () => _selectFault(tile),
+                ),
+            ],
+          ),
+          Divider(height: TpSpace.xl, color: palette.border),
+          AccidentMockTileGrid(
+            minTileWidth: 130,
+            maxColumns: 4,
+            children: <Widget>[
+              _metric(
+                copy('faultStatus'),
+                status.isEmpty
+                    ? copy('notSet')
+                    : accidentFaultStatusText(copy, status),
+                palette.forStatus(statusTone).onSoft,
+                icon: Icons.verified_user_outlined,
+              ),
+              if (!shared) ...<Widget>[
+                _metric(
+                  copy('gccLiability'),
+                  _pctOrNotSet(copy, _assessment.ourLiabilityPct),
+                  (_assessment.ourLiabilityPct ?? 0) > 0
+                      ? palette.critical.base
+                      : palette.ok.onSoft,
+                ),
+                _metric(
+                  copy('otherLiability'),
+                  _pctOrNotSet(copy, _assessment.thirdPartyPct),
+                  (_assessment.thirdPartyPct ?? 0) > 0
+                      ? palette.critical.base
+                      : palette.ok.onSoft,
+                ),
+              ],
+              _metric(
+                copy('auditNote'),
+                copy('provisionalNote'),
+                palette.text,
+                icon: Icons.info_outline_rounded,
+                small: true,
+              ),
+            ],
+          ),
+          if (shared) ...<Widget>[
+            const SizedBox(height: TpSpace.sm),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: TpInput(
+                    key: const Key('accident.resp.ourPct'),
+                    label: copy('gccLiability'),
+                    controller: _ourPctController,
+                    keyboardType: TextInputType.number,
+                    enabled: !_locked,
+                    onChanged: (String raw) => _setPct(ours: true, raw: raw),
+                  ),
+                ),
+                const SizedBox(width: TpSpace.sm),
+                Expanded(
+                  child: TpInput(
+                    key: const Key('accident.resp.otherPct'),
+                    label: copy('otherLiability'),
+                    controller: _otherPctController,
+                    keyboardType: TextInputType.number,
+                    enabled: !_locked,
+                    onChanged: (String raw) => _setPct(ours: false, raw: raw),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _metric(
+    String label,
+    String value,
+    Color color, {
+    IconData? icon,
+    bool small = false,
+  }) {
+    final TextTheme text = Theme.of(context).textTheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        if (icon != null) ...<Widget>[
+          Icon(
+            icon,
+            size: TpSizing.iconMd,
+            color: TpPalette.of(context).textSecondary,
+          ),
+          const SizedBox(width: TpSpace.xs),
+        ],
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                label,
+                style: text.labelSmall?.copyWith(
+                  color: TpPalette.of(context).textSecondary,
                 ),
               ),
-              const SizedBox(width: TpSpace.sm),
-              Expanded(
-                child: TpInput(
-                  key: const Key('accident.resp.otherPct'),
-                  label: copy('otherLiability'),
-                  controller: _otherPctController,
-                  keyboardType: TextInputType.number,
-                  enabled: !_locked,
-                  onChanged: (String raw) => _setPct(ours: false, raw: raw),
+              Text(
+                value,
+                style: (small ? text.bodySmall : text.titleMedium)?.copyWith(
+                  color: color,
+                  fontWeight: small ? FontWeight.w600 : FontWeight.w800,
                 ),
               ),
             ],
           ),
-        ] else ...<Widget>[
-          AccidentInfoRow(
-            copy('gccLiability'),
-            _pctOrNotSet(copy, _assessment.ourLiabilityPct),
-          ),
-          AccidentInfoRow(
-            copy('otherLiability'),
-            _pctOrNotSet(copy, _assessment.thirdPartyPct),
-          ),
-        ],
-        const SizedBox(height: TpSpace.xs),
-        Text(
-          copy('provisionalNote'),
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: palette.textMuted,
-              ),
         ),
       ],
     );
@@ -715,95 +938,162 @@ class _AccidentResponsibilityMockWorkspaceState
         _assessment.recoveryRequired ?? recoveryRequiredFor(payer);
     String faultParty = copy('notSet');
     for (final FaultTile tile in faultTiles) {
-      if (tile.key == _assessment.liabilityType) faultParty = tile.label;
+      if (tile.key == _assessment.liabilityType) {
+        faultParty = _faultLabel(copy, tile);
+      }
     }
-    final String payerText = payerLabel(payer);
-    return _numbered(
-      2,
-      copy('whoWillPay'),
-      <Widget>[
-        Wrap(
-          spacing: TpSpace.sm,
-          runSpacing: TpSpace.sm,
-          children: <Widget>[
-            for (final VocabItem tile in payerTiles)
-              ChoiceChip(
-                key: Key('accident.resp.payer.${tile.key}'),
-                label: Text(tile.label),
-                selected: payer == tile.key,
-                onSelected: _locked
-                    ? null
-                    : (bool selected) {
-                        if (selected) _selectPayer(tile.key);
-                      },
-              ),
-          ],
-        ),
-        const SizedBox(height: TpSpace.md),
-        AccidentInfoRow(copy('faultParty'), faultParty),
-        AccidentInfoRow(
-          copy('payer'),
-          payerText.isEmpty ? copy('notSet') : payerText,
-        ),
-        const SizedBox(height: TpSpace.xs),
-        TpInput(
-          key: const Key('accident.resp.company'),
-          label: copy('responsibleCompany'),
-          controller: _companyController,
-          enabled: !_locked,
-          textCapitalization: TextCapitalization.words,
-          onChanged: (String raw) {
-            _assessment = _assessment.copyWith(
-              responsibleCompany: raw.trim().isEmpty ? null : raw.trim(),
-            );
-            _markDirty();
-          },
-        ),
-        const SizedBox(height: TpSpace.sm),
-        AccidentInfoRow(
-          copy('recoveryRequired'),
-          '${copy(recovery ? 'yes' : 'no')}'
-          '${autoRecovery ? ' · ${copy('auto')}' : ''}',
-        ),
-        TpSegmented<String>(
-          key: const Key('accident.resp.recovery'),
-          expanded: true,
-          value: autoRecovery ? 'auto' : (recovery ? 'yes' : 'no'),
-          options: <TpSegmentedOption<String>>[
-            TpSegmentedOption<String>(value: 'auto', label: copy('auto')),
-            TpSegmentedOption<String>(value: 'yes', label: copy('yes')),
-            TpSegmentedOption<String>(value: 'no', label: copy('no')),
-          ],
-          onChanged: _locked
-              ? null
-              : (String value) {
-                  _assessment = _assessment.copyWith(
-                    recoveryRequired: value == 'auto' ? null : value == 'yes',
-                  );
-                  _markDirty();
-                },
+    final String payerText = _payerLabel(copy, payer);
+    return AccidentMockSection(
+      number: 2,
+      title: copy('whoWillPay'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          AccidentMockTileGrid(
+            minTileWidth: 92,
+            maxColumns: 6,
+            children: <Widget>[
+              for (final VocabItem tile in payerTiles)
+                AccidentMockChoiceTile(
+                  key: Key('accident.resp.payer.${tile.key}'),
+                  label:
+                      accidentVocabLabel(copy, 'payer', tile.key, tile.label),
+                  icon: _payerIcons[tile.key] ?? Icons.help_outline,
+                  iconColor: tile.key == 'other_party_insurance'
+                      ? palette.warning.base
+                      : tile.key == 'pending'
+                          ? palette.textSecondary
+                          : null,
+                  selected: payer == tile.key,
+                  onTap: _locked ? null : () => _selectPayer(tile.key),
+                ),
+            ],
+          ),
+          Divider(height: TpSpace.xl, color: palette.border),
+          _payRow(Icons.person_outline, copy('faultParty'), faultParty),
+          _payRow(
+            Icons.account_balance_wallet_outlined,
+            copy('payer'),
+            payerText.isEmpty ? copy('notSet') : payerText,
+          ),
+          const SizedBox(height: TpSpace.xs),
+          TpInput(
+            key: const Key('accident.resp.company'),
+            label: copy('responsibleCompany'),
+            controller: _companyController,
+            enabled: !_locked,
+            textCapitalization: TextCapitalization.words,
+            onChanged: (String raw) {
+              _assessment = _assessment.copyWith(
+                responsibleCompany: raw.trim().isEmpty ? null : raw.trim(),
+              );
+              _markDirty();
+            },
+          ),
+          const SizedBox(height: TpSpace.sm),
+          _payRow(
+            Icons.currency_exchange_rounded,
+            copy('recoveryRequired'),
+            '${copy(recovery ? 'yes' : 'no')}'
+            '${autoRecovery ? ' · ${copy('auto')}' : ''}',
+          ),
+          const SizedBox(height: TpSpace.xs),
+          TpSegmented<String>(
+            key: const Key('accident.resp.recovery'),
+            expanded: true,
+            value: autoRecovery ? 'auto' : (recovery ? 'yes' : 'no'),
+            options: <TpSegmentedOption<String>>[
+              TpSegmentedOption<String>(value: 'auto', label: copy('auto')),
+              TpSegmentedOption<String>(value: 'yes', label: copy('yes')),
+              TpSegmentedOption<String>(value: 'no', label: copy('no')),
+            ],
+            onChanged: _locked
+                ? null
+                : (String value) {
+                    _assessment = _assessment.copyWith(
+                      recoveryRequired: value == 'auto' ? null : value == 'yes',
+                    );
+                    _markDirty();
+                  },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _payRow(IconData icon, String label, String value) {
+    final TpPalette palette = TpPalette.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: TpSpace.xs),
+      child: Row(
+        children: <Widget>[
+          Icon(icon, size: TpSizing.iconMd, color: palette.primary),
+          const SizedBox(width: TpSpace.sm),
+          Expanded(
+            flex: 4,
+            child: Text(label, style: Theme.of(context).textTheme.bodyMedium),
+          ),
+          Expanded(
+            flex: 5,
+            child: Text(
+              value,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: palette.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static TpStatus _verificationTone(String state) => switch (state) {
+        'verified' => TpStatus.ok,
+        'missing' => TpStatus.critical,
+        _ => TpStatus.warning,
+      };
+
+  static IconData _verificationIcon(String state) => switch (state) {
+        'verified' => Icons.check_circle_outline_rounded,
+        'missing' => Icons.error_outline_rounded,
+        'not_required' => Icons.remove_circle_outline_rounded,
+        _ => Icons.error_outline_rounded,
+      };
+
+  Widget _statusText(String label, TpStatus tone, IconData icon) {
+    final Color color = TpPalette.of(context).forStatus(tone).onSoft;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Icon(icon, size: TpSizing.iconSm, color: color),
+        const SizedBox(width: TpSpace.xs),
+        Flexible(
+          child: Text(
+            label,
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall
+                ?.copyWith(color: color, fontWeight: FontWeight.w600),
+          ),
         ),
       ],
     );
   }
 
   Widget _authorityCard(AccidentMockCopy copy, TpPalette palette) {
-    return _numbered(
-      3,
-      copy('authorityTitle'),
-      <Widget>[
-        Text(
-          '${copy('value')} | ${copy('recordedBy')} | ${copy('verification')}',
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: palette.textSecondary,
-                fontWeight: FontWeight.w700,
-              ),
-        ),
-        for (final VocabItem row in authorityRows) ...<Widget>[
-          Divider(height: TpSpace.lg, color: palette.border),
-          _authorityRow(copy, palette, row),
+    return AccidentMockSection(
+      number: 3,
+      title: copy('authorityTitle'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          for (int i = 0; i < authorityRows.length; i++) ...<Widget>[
+            if (i > 0) Divider(height: 1, color: palette.border),
+            _authorityRow(copy, palette, authorityRows[i]),
+          ],
         ],
-      ],
+      ),
     );
   }
 
@@ -815,73 +1105,149 @@ class _AccidentResponsibilityMockWorkspaceState
     final AccidentFieldAudit audit = _audit(row.key);
     final String verification = _verificationOf(row.key);
     final bool editing = _editingRow == row.key;
-    final String recordedBy = audit.recordedBy?.trim().isNotEmpty ?? false
-        ? audit.recordedBy!.trim()
-        : copy('notSet');
+    final String who = <String?>[audit.verifiedBy, audit.recordedBy]
+        .map((String? v) => v?.trim() ?? '')
+        .firstWhere((String v) => v.isNotEmpty, orElse: () => '');
+    final String label = accidentVocabLabel(copy, 'auth', row.key, row.label);
+    final String value = _rowText(copy, row.key);
+    final bool highlight = (row.key == 'najm_report' &&
+            (_rowValue(row.key) == 'available' ||
+                _rowValue(row.key) == 'received')) ||
+        (row.key == 'taqdeer_required' && _rowValue(row.key) == 'yes');
+    final Widget status = _statusText(
+      copy(verification),
+      _verificationTone(verification),
+      _verificationIcon(verification),
+    );
+    final Text valueText = Text(
+      value,
+      key: Key('accident.resp.value.${row.key}'),
+      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: highlight
+                ? (row.key == 'taqdeer_required'
+                    ? palette.warning.onSoft
+                    : palette.ok.onSoft)
+                : null,
+          ),
+    );
+    final Text whoText = Text(
+      who.isEmpty ? copy('notSet') : who,
+      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: palette.textSecondary,
+          ),
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        Text(
-          row.label,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w700,
+        Semantics(
+          button: true,
+          label: '$label: $value, $who, ${copy(verification)}',
+          excludeSemantics: true,
+          child: InkWell(
+            key: Key('accident.resp.row.${row.key}'),
+            onTap: _locked
+                ? null
+                : () => setState(() {
+                      _editingRow = editing ? null : row.key;
+                      _rowController.text = _rowValue(row.key) ?? '';
+                    }),
+            child: ConstrainedBox(
+              constraints:
+                  const BoxConstraints(minHeight: TpSizing.minTouchTarget),
+              child: LayoutBuilder(
+                builder: (BuildContext context, BoxConstraints box) {
+                  final Widget lead = Row(
+                    children: <Widget>[
+                      Icon(
+                        _authorityIcons[row.key] ?? Icons.notes_rounded,
+                        size: TpSizing.iconMd,
+                        color: palette.textSecondary,
+                      ),
+                      const SizedBox(width: TpSpace.sm),
+                      Expanded(
+                        child: Text(
+                          label,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ),
+                    ],
+                  );
+                  if (box.maxWidth >= 520) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: TpSpace.sm,
+                      ),
+                      child: Row(
+                        children: <Widget>[
+                          Expanded(flex: 4, child: lead),
+                          Expanded(flex: 4, child: valueText),
+                          Expanded(flex: 3, child: whoText),
+                          Expanded(flex: 3, child: status),
+                        ],
+                      ),
+                    );
+                  }
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: TpSpace.sm),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        Row(
+                          children: <Widget>[
+                            Expanded(child: lead),
+                            status,
+                          ],
+                        ),
+                        Padding(
+                          padding: const EdgeInsetsDirectional.only(
+                            start: TpSizing.iconMd + TpSpace.sm,
+                          ),
+                          child: Row(
+                            children: <Widget>[
+                              Expanded(child: valueText),
+                              const SizedBox(width: TpSpace.sm),
+                              Flexible(child: whoText),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
-        ),
-        const SizedBox(height: TpSpace.xs),
-        InkWell(
-          key: Key('accident.resp.row.${row.key}'),
-          onTap: _locked
-              ? null
-              : () => setState(() {
-                    _editingRow = editing ? null : row.key;
-                    _rowController.text = _rowValue(row.key) ?? '';
-                  }),
-          child: Row(
-            children: <Widget>[
-              Expanded(
-                child: Text(
-                  _rowText(copy, row.key),
-                  key: Key('accident.resp.value.${row.key}'),
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-              ),
-              Icon(
-                Icons.edit_outlined,
-                size: TpSizing.iconSm,
-                color: palette.textMuted,
-              ),
-            ],
+            ),
           ),
         ),
         if (editing) ...<Widget>[
-          const SizedBox(height: TpSpace.xs),
           _rowEditor(copy, row.key),
+          const SizedBox(height: TpSpace.sm),
+          if (audit.recordedAt != null)
+            Text(
+              '${copy('recordedBy')}: '
+              '${audit.recordedBy?.trim().isNotEmpty ?? false ? audit.recordedBy!.trim() : copy('notSet')}'
+              ' · ${accidentDayClock(context, audit.recordedAt!)}',
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: palette.textSecondary,
+                  ),
+            ),
+          const SizedBox(height: TpSpace.xs),
+          TpSegmented<String>(
+            key: Key('accident.resp.verify.${row.key}'),
+            expanded: true,
+            value: verification,
+            options: <TpSegmentedOption<String>>[
+              for (final String state in verificationStates)
+                TpSegmentedOption<String>(
+                  value: state,
+                  label: copy(state),
+                ),
+            ],
+            onChanged: _locked || !_extended
+                ? null
+                : (String state) => _setVerification(row.key, state),
+          ),
+          const SizedBox(height: TpSpace.sm),
         ],
-        const SizedBox(height: TpSpace.xs),
-        Text(
-          '${copy('recordedBy')}: $recordedBy'
-          '${audit.recordedAt == null ? '' : ' · '
-              '${accidentDayClock(context, audit.recordedAt!)}'}',
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: palette.textSecondary,
-              ),
-        ),
-        const SizedBox(height: TpSpace.xs),
-        TpSegmented<String>(
-          key: Key('accident.resp.verify.${row.key}'),
-          expanded: true,
-          value: verification,
-          options: <TpSegmentedOption<String>>[
-            for (final String state in verificationStates)
-              TpSegmentedOption<String>(
-                value: state,
-                label: copy(state),
-              ),
-          ],
-          onChanged: _locked || !_extended
-              ? null
-              : (String state) => _setVerification(row.key, state),
-        ),
       ],
     );
   }
@@ -952,183 +1318,193 @@ class _AccidentResponsibilityMockWorkspaceState
         .toList(growable: false);
     final int have =
         required.where((VocabItem doc) => _docs.has(doc.key)).length;
-    return _numbered(
-      4,
-      copy('docsTitle'),
-      <Widget>[
-        Text(
-          copy.fill('requiredDocs', <String, String>{
-            'a': '$have',
-            'b': '${required.length}',
-          }),
-          key: const Key('accident.resp.docCount'),
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: palette.textSecondary,
-                fontWeight: FontWeight.w700,
-              ),
-        ),
-        const SizedBox(height: TpSpace.xs),
-        Text(
-          '${copy('document')} | ${copy('status')} | ${copy('uploader')} | '
-          '${copy('time')} | ${copy('verification')}',
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: palette.textSecondary,
-                fontWeight: FontWeight.w700,
-              ),
-        ),
-        if (!_docs.provisioned) ...<Widget>[
-          const SizedBox(height: TpSpace.sm),
-          _notice(copy('docsNotProvisioned'), TpStatus.unknown, palette),
+    return AccidentMockSection(
+      number: 4,
+      title: copy('docsTitle'),
+      sectionKey: const Key('accident.resp.docsSection'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Text(
+            copy.fill('requiredDocs', <String, String>{
+              'a': '$have',
+              'b': '${required.length}',
+            }),
+            key: const Key('accident.resp.docCount'),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: palette.textSecondary,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          if (!_docs.provisioned) ...<Widget>[
+            const SizedBox(height: TpSpace.sm),
+            AccidentMockNotice(
+              text: copy('docsNotProvisioned'),
+              tone: TpStatus.unknown,
+            ),
+          ],
+          for (final VocabItem doc in responsibilityDocs) ...<Widget>[
+            Divider(height: TpSpace.md, color: palette.border),
+            _documentRow(copy, palette, doc),
+          ],
+          if (_taqdeerMissing) ...<Widget>[
+            const SizedBox(height: TpSpace.md),
+            AccidentMockNotice(
+              key: const Key('accident.resp.taqdeerWarning'),
+              text: copy('taqdeerWarning'),
+            ),
+          ],
         ],
-        for (final VocabItem doc in responsibilityDocs) ...<Widget>[
-          Divider(height: TpSpace.lg, color: palette.border),
-          _documentRow(copy, palette, doc),
-        ],
-      ],
+      ),
     );
+  }
+
+  String _personName(AccidentMockCopy copy, String? id) {
+    final String value = id?.trim() ?? '';
+    if (value.isEmpty) return copy('notSet');
+    final String? name = _names[value];
+    if (name != null && name.trim().isNotEmpty) return name.trim();
+    return value == _workspace?.userId ? copy('you') : copy('anotherUser');
   }
 
   Widget _documentRow(AccidentMockCopy copy, TpPalette palette, VocabItem doc) {
     final AccidentEvidenceDoc? stored = _docs.forRequirement(doc.key);
     final bool uploading = _uploadingKey == doc.key;
-    final TpStatus statusTone = stored != null
-        ? TpStatus.ok
+    final String label = accidentVocabLabel(copy, 'doc', doc.key, doc.label);
+    final String verificationToken = stored == null
+        ? (doc.required ? 'missing' : 'not_required')
+        : switch (stored.verificationStatus) {
+            'verified' => 'verified',
+            'rejected' => 'rejected',
+            _ => 'pending',
+          };
+    final (String, TpStatus) status = stored != null
+        ? stored.verificationStatus == 'verified'
+            ? (copy('verified'), TpStatus.ok)
+            : (copy('received'), TpStatus.ok)
         : doc.required
-            ? TpStatus.warning
-            : TpStatus.neutral;
-    final String statusLabel = stored != null
-        ? copy('uploaded')
-        : doc.required
-            ? copy('missing')
-            : copy('optional');
-    final String uploader = stored == null
-        ? copy('notSet')
-        : stored.uploadedBy != null && stored.uploadedBy == _workspace?.userId
-            ? copy('you')
-            : stored.uploadedBy == null
-                ? copy('notSet')
-                : copy('anotherUser');
-    final String time = stored?.uploadedAt == null
-        ? copy('notSet')
-        : accidentDayClock(context, stored!.uploadedAt!);
-    final String verification = switch (stored?.verificationStatus) {
+            ? (copy('missing'), TpStatus.critical)
+            : (copy('optional'), TpStatus.neutral);
+    final String verificationLabel = switch (verificationToken) {
       'verified' => copy('verified'),
       'rejected' => copy('rejected'),
-      null => copy('notSet'),
+      'missing' => copy('missing'),
+      'not_required' => copy('notRequired'),
       _ => copy('unverified'),
     };
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    final TpStatus verificationTone = switch (verificationToken) {
+      'verified' => TpStatus.ok,
+      'rejected' || 'missing' => TpStatus.critical,
+      'not_required' => TpStatus.neutral,
+      _ => TpStatus.warning,
+    };
+    final String uploader =
+        stored == null ? copy('notSet') : _personName(copy, stored.uploadedBy);
+    final String time = stored?.uploadedAt == null
+        ? copy('notSet')
+        : accidentClock(context, stored!.uploadedAt!);
+    final TextStyle? small = Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: palette.textSecondary,
+        );
+    final Widget statusText = Text(
+      status.$1,
+      key: Key('accident.resp.docStatus.${doc.key}'),
+      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: palette.forStatus(status.$2).onSoft,
+            fontWeight: FontWeight.w700,
+          ),
+    );
+    final Widget verification = _statusText(
+      verificationLabel,
+      verificationTone,
+      _verificationIcon(
+        verificationToken == 'rejected' ? 'missing' : verificationToken,
+      ),
+    );
+    final Widget action = IconButton(
+      key: Key('accident.resp.upload.${doc.key}'),
+      tooltip: copy('upload'),
+      onPressed: uploading || !_docs.provisioned || _locked
+          ? null
+          : () => unawaited(_upload(doc.key)),
+      icon: uploading
+          ? const SizedBox.square(
+              dimension: TpSizing.iconMd,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Icon(
+              stored == null
+                  ? Icons.upload_file_outlined
+                  : Icons.chevron_right_rounded,
+            ),
+    );
+    return Semantics(
+      container: true,
+      label: '$label, ${status.$1}, $uploader, $time, $verificationLabel',
+      child: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints box) {
+          final Widget lead = Row(
             children: <Widget>[
-              Text(
-                doc.required ? doc.label : '${doc.label} (${copy('optional')})',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+              Icon(
+                _docIcons[doc.key] ?? Icons.description_outlined,
+                size: TpSizing.iconMd,
+                color: palette.textSecondary,
               ),
-              const SizedBox(height: TpSpace.xs),
-              Wrap(
-                spacing: TpSpace.sm,
-                runSpacing: TpSpace.xs,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: <Widget>[
-                  TpStatusChip(
-                    key: Key('accident.resp.docStatus.${doc.key}'),
-                    status: statusTone,
-                    label: statusLabel,
-                    isCompact: true,
-                  ),
-                  Text(
-                    '$uploader · $time · $verification',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: palette.textSecondary,
-                        ),
-                  ),
-                ],
+              const SizedBox(width: TpSpace.sm),
+              Expanded(
+                child: Text(
+                  label,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
               ),
             ],
-          ),
-        ),
-        const SizedBox(width: TpSpace.sm),
-        IconButton(
-          key: Key('accident.resp.upload.${doc.key}'),
-          tooltip: copy('upload'),
-          onPressed: uploading || !_docs.provisioned
-              ? null
-              : () => unawaited(_upload(doc.key)),
-          icon: uploading
-              ? const SizedBox.square(
-                  dimension: TpSizing.iconMd,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.upload_file_outlined),
-        ),
-      ],
-    );
-  }
-
-  Widget _numbered(int number, String title, List<Widget> children) => TpCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            Row(
+          );
+          if (box.maxWidth >= 560) {
+            return Row(
               children: <Widget>[
-                CircleAvatar(
-                  radius: 13,
-                  backgroundColor: TpPalette.of(context).primary,
-                  foregroundColor: TpPalette.of(context).onPrimary,
-                  child: Text('$number', style: const TextStyle(fontSize: 13)),
-                ),
-                const SizedBox(width: TpSpace.sm),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                ),
+                Expanded(flex: 5, child: lead),
+                Expanded(flex: 2, child: statusText),
+                Expanded(flex: 2, child: Text(uploader, style: small)),
+                Expanded(flex: 2, child: Text(time, style: small)),
+                Expanded(flex: 3, child: verification),
+                action,
               ],
-            ),
-            const SizedBox(height: TpSpace.md),
-            ...children,
-          ],
-        ),
-      );
-
-  Widget _notice(
-    String text,
-    TpStatus tone,
-    TpPalette palette, {
-    Key? key,
-  }) {
-    final TpStatusColors colors = palette.forStatus(tone);
-    return DecoratedBox(
-      key: key,
-      decoration: BoxDecoration(
-        color: colors.soft,
-        border: Border.all(color: colors.base),
-        borderRadius: BorderRadius.circular(TpRadius.md),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(TpSpace.md),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Icon(Icons.info_outline_rounded, color: colors.onSoft),
-            const SizedBox(width: TpSpace.sm),
-            Expanded(
-              child: Text(
-                text,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: colors.onSoft,
+            );
+          }
+          return Row(
+            children: <Widget>[
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    Row(
+                      children: <Widget>[
+                        Expanded(child: lead),
+                        statusText,
+                      ],
                     ),
+                    Padding(
+                      padding: const EdgeInsetsDirectional.only(
+                        start: TpSizing.iconMd + TpSpace.sm,
+                        top: TpSpace.xs,
+                      ),
+                      child: Wrap(
+                        spacing: TpSpace.md,
+                        runSpacing: TpSpace.xs,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: <Widget>[
+                          Text('$uploader · $time', style: small),
+                          verification,
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
-        ),
+              action,
+            ],
+          );
+        },
       ),
     );
   }

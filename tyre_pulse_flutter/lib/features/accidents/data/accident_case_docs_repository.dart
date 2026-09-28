@@ -69,6 +69,8 @@ final class AccidentEvidenceDoc {
     this.verificationStatus,
     this.uploadedBy,
     this.uploadedAt,
+    this.verifiedBy,
+    this.verifiedAt,
   });
 
   factory AccidentEvidenceDoc.fromRow(Map<String, dynamic> row) =>
@@ -84,6 +86,8 @@ final class AccidentEvidenceDoc {
         uploadedBy: accidentRowText(row['uploaded_by']),
         uploadedAt: accidentRowDate(row['uploaded_at']) ??
             accidentRowDate(row['created_at']),
+        verifiedBy: accidentRowText(row['verified_by']),
+        verifiedAt: accidentRowDate(row['verified_at']),
       );
 
   final String id;
@@ -97,6 +101,10 @@ final class AccidentEvidenceDoc {
   final String? verificationStatus;
   final String? uploadedBy;
   final DateTime? uploadedAt;
+
+  /// `profiles.id` of whoever set [verificationStatus], when recorded.
+  final String? verifiedBy;
+  final DateTime? verifiedAt;
 }
 
 @immutable
@@ -145,7 +153,7 @@ class AccidentCaseDocsRepository with SupabaseGateway {
 
   static const String columns = 'id,accident_id,workstream_key,'
       'requirement_key,kind,storage_ref,file_name,verification_status,'
-      'uploaded_by,uploaded_at,created_at';
+      'uploaded_by,uploaded_at,verified_by,verified_at,created_at';
 
   static const Set<String> kinds = <String>{'photo', 'video', 'document'};
 

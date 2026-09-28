@@ -28,7 +28,7 @@ export default function ContactPage() {
   }
 
   return <PageFrame>
-    <section className="page-hero" id="main-content" tabIndex={-1}><div className="site-shell"><span className="eyebrow">Talk to Tyre Pulse</span><h1 className="display">Book a demo around your real operation.</h1><p className="lead">Tell us how many assets, countries, sites and users you manage. The walkthrough will focus on the workflows and controls that matter to you.</p></div></section>
+    <section className="page-hero"><div className="site-shell"><span className="eyebrow">Talk to Tyre Pulse</span><h1 className="display">Book a demo around your real operation.</h1><p className="lead">Tell us how many assets, countries, sites and users you manage. The walkthrough will focus on the workflows and controls that matter to you.</p></div></section>
     <section className="page-content"><div className="site-shell"><div className="card" style={{ maxWidth: 860, margin: "0 auto", padding: 30 }}>
       <form onSubmit={submit} className="form-grid">
         <div className="field"><label htmlFor="name">Full name</label><input id="name" name="name" required autoComplete="name" /></div>

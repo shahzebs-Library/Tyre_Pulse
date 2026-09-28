@@ -47,7 +47,7 @@ export const PLATFORM_SENTENCE = HAS_IOS_APP
 
 export const BRAND_NAME = "Tyre Pulse";
 export const BRAND_TAGLINE = "Smarter Wheels. Stronger Fleet.";
-export const BRAND_COLOR = "#16a34a";
+export const BRAND_COLOR = "#161616";
 
 export const PRODUCT_DESCRIPTION =
   "Tyre Pulse is a commercial tyre, fleet, inspection and workshop intelligence platform. It connects tyre lifecycle, fleet maintenance, workshop control, field inspections, approvals and executive reporting in one system for multi-site and multi-country operations.";

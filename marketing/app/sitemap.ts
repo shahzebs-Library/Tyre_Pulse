@@ -23,7 +23,11 @@ type Entry = {
  */
 const ENTRIES: Entry[] = [
   { path: "/", changeFrequency: "weekly", priority: 1, alternates: HOME_ALTERNATES },
-  { path: "/product", changeFrequency: "monthly", priority: 0.9 },
+  { path: "/platform", changeFrequency: "monthly", priority: 0.9 },
+  { path: "/platform/fleet-assets", changeFrequency: "monthly", priority: 0.8 },
+  { path: "/platform/maintenance", changeFrequency: "monthly", priority: 0.8 },
+  { path: "/platform/inspections", changeFrequency: "monthly", priority: 0.8 },
+  { path: "/platform/inventory", changeFrequency: "monthly", priority: 0.8 },
   { path: "/industries", changeFrequency: "monthly", priority: 0.8 },
   { path: "/pricing", changeFrequency: "monthly", priority: 0.8 },
   { path: "/security", changeFrequency: "monthly", priority: 0.7 },

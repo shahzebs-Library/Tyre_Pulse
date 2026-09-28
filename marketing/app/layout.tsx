@@ -1,15 +1,20 @@
 import type { Metadata } from "next";
+import { Archivo, Inter } from "next/font/google";
 import "./globals.css";
+import "./pmv.css";
+
+const display = Archivo({ subsets: ["latin"], weight: ["700", "800"], variable: "--font-display", display: "swap" });
+const body = Inter({ subsets: ["latin"], variable: "--font-body", display: "swap" });
 import { BRAND_COLOR, JsonLd, SITE_URL, alternatesFor, siteSchemaGraph } from "./schema";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "Tyre Pulse | Tyre, Fleet and Workshop Intelligence",
+    default: "Tyre Pulse | PMV operations: assets, workshop, inspections and stores",
     template: "%s | Tyre Pulse",
   },
   description:
-    "Tyre Pulse helps fleet, tyre and workshop teams control costs, inspections, maintenance, approvals and executive reporting from one platform. Available on web and Android.",
+    "Tyre Pulse connects plant, machinery and vehicle assets with the workshop, field teams and stores in one operational workspace. Available on web and Android.",
   applicationName: "Tyre Pulse",
   keywords: [
     "tyre management software",
@@ -68,7 +73,7 @@ export const viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${display.variable} ${body.variable}`}>
       <body>
         <JsonLd data={siteSchemaGraph()} />
         <a className="skip-link" href="#main-content">

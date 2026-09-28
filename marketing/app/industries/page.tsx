@@ -29,7 +29,7 @@ const industries = [
 export default function IndustriesPage() {
   return <PageFrame>
     <JsonLd data={pageBreadcrumb("Industries", "/industries")} />
-    <section className="page-hero" id="main-content" tabIndex={-1}><div className="site-shell"><span className="eyebrow">Industry workflows</span><h1 className="display">Configured for the way your operation works.</h1><p className="lead">Use one core platform while adapting locations, asset types, approvals, KPIs and reports to each business model.</p></div></section>
+    <section className="page-hero"><div className="site-shell"><span className="eyebrow">Industry workflows</span><h1 className="display">Configured for the way your operation works.</h1><p className="lead">Use one core platform while adapting locations, asset types, approvals, KPIs and reports to each business model.</p></div></section>
     <section className="page-content"><div className="site-shell grid-3">
       {industries.map(([Icon, title, text]) => { const C = Icon as typeof Truck; return <article className="card feature-card" key={String(title)}><div className="icon-box"><C /></div><h2 className="h3">{String(title)}</h2><p>{String(text)}</p></article>; })}
     </div></section>

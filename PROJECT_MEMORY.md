@@ -76,6 +76,25 @@ batching stops them being started at all.
 
 ---
 
+# ⚑ SESSION 2026-09-28 (part 13) — MARKETING SITE REBUILT TO THE OWNER'S PMV MOCKUPS (yellow/black). No migration.
+Branch `claude/marketing-pmv-redesign`. marketing/ only; the app is untouched.
+- **Brand on the marketing site is now signal yellow `#FFC629` on asphalt `#161616`** (owner's mockups). This REVERSES the
+  2026-09-24 green marketing palette. Yellow is a FILL behind dark text only (12.6:1); never yellow text on white.
+  `--brand-ink #8a5a00` is the readable accent on white. Fonts: Archivo 800 display + Inter body via next/font.
+- **Pages:** `/` (PMV home), `/platform`, `/platform/fleet-assets`, `/platform/maintenance`, `/platform/inspections`,
+  `/platform/inventory`. `/product` is DELETED and 308-redirects to `/platform` (next.config.ts). Page map lives once
+  in `marketing/lib/nav.ts` (header, footer read it).
+- **NO PHOTOS, by design (copyright):** all imagery is original SVG in `components/art/Machines.tsx` (wheel loader,
+  excavator, tipper, mixer, tyre/cab/bucket details, no brand livery) and product screens drawn in HTML in
+  `components/mock/Screens.tsx` over `lib/sample.ts`. Every screen carries a "Sample data" tag; the footer says so.
+  RULE: do not add stock photos or manufacturer imagery.
+- three.js hero (Hero3D/HeroScene) + three/@react-three/framer-motion deps REMOVED; /ar uses the loader SVG.
+- Verified: build + lint (0 errors) + 8 tests; no horizontal overflow at 320/390/768/1024 on all 11 pages; menus close
+  on Escape. GOTCHA: a stale `next start` keeps serving the OLD css chunk (404) after a rebuild, making every layout
+  measurement wrong. Kill the server before re-measuring.
+
+---
+
 # ⚑ SESSION 2026-09-28 (part 12) — FLUTTER ACCIDENT SCREENS TO 4 OWNER MOCKS + FLEET SUPERVISOR. PR #367 merged (6922e34). No migration.
 Flutter only (owner: "keep flutter only"; Expo app + listing untouched). NO build triggered; owner runs
 "Flutter Release - Play Internal Testing" on main -> **0.1.0+5** (Internal track of com.shahzebrahman.tyrepulse only).

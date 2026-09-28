@@ -81,7 +81,7 @@ A quote depends on fleet size, users, modules, countries and integration require
 
 ## How to get started
 
-1. Read the product overview at ${SITE_URL}/product.
+1. Read the product overview at ${SITE_URL}/platform.
 2. Check the industry fit at ${SITE_URL}/industries.
 3. Request a tailored demo at ${SITE_URL}/contact. The form asks for fleet size, country and industry so the walkthrough covers the relevant workflows.
 4. Existing customers sign in at ${APP_URL}. Field staff install the Android app from ${PLAY_STORE_URL}.

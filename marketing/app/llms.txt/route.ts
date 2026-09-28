@@ -20,7 +20,7 @@ Tyre Pulse is used by construction fleets, transport and logistics operators, re
 ## Pages
 
 - [Home](${SITE_URL}/): What Tyre Pulse does, the six core capability areas, and how field work flows through to executive reporting.
-- [Product](${SITE_URL}/product): The eight capability groups, covering tyre and fleet lifecycle, maintenance and workshop, digital inspections, inventory and procurement, approvals and organization, reports and executive intelligence, access and tenant control, and AI and automation.
+- [Platform](${SITE_URL}/platform): The platform overview and module pages (fleet and assets, maintenance and workshop, inspections and safety, inventory and reporting), covering tyre and fleet lifecycle, maintenance and workshop, digital inspections, inventory and procurement, approvals and organization, reports and executive intelligence, access and tenant control, and AI and automation.
 - [Industries](${SITE_URL}/industries): How the platform is configured for construction, transport and logistics, ready-mix concrete, heavy equipment rental, workshop networks, and government and enterprise fleets.
 - [Pricing](${SITE_URL}/pricing): Four plan tiers, Solo, Team, Professional and Enterprise. Pricing is quoted on request and is based on fleet size, users, modules, countries and integration requirements. No public price list is published.
 - [Security](${SITE_URL}/security): Tenant separation, role and location control, privileged access, data protection, auditability and safe integrations.

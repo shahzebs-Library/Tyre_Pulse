@@ -34,6 +34,8 @@ const nextConfig: NextConfig = {
    */
   async redirects() {
     return [
+      // /product was replaced by the platform section on 2026-09-28.
+      { source: "/product", destination: "/platform", permanent: true },
       {
         source: "/:path*",
         has: [{ type: "query", key: "source", value: "pwa" }],

@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
+import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/permissions/access_resolver.dart';
 import 'package:tyre_pulse/core/permissions/roles.dart';
 import 'package:tyre_pulse/core/storage/secure_key_value_store.dart';
@@ -16,6 +17,7 @@ import 'package:tyre_pulse/core/workspace/workspace_scope.dart';
 import 'package:tyre_pulse/features/accidents/accidents_providers.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_report_draft_store.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_report_repository.dart';
+import 'package:tyre_pulse/features/accidents/data/accident_report_vehicle_photo.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_report_screen.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_report_intake_widgets.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
@@ -63,11 +65,16 @@ void main() {
     expect(find.text('No matching fleet asset'), findsOneWidget);
     await tester.enterText(search, 'CP3012');
     await tester.pump();
-    final Finder result = find.widgetWithText(ListTile, 'CP3012');
+    final Finder result =
+        find.byKey(AccidentReportIntakeKeys.matchRow('pump-5-axle'));
     await tester.ensureVisible(result);
     await tester.tap(result);
     await tester.pumpAndSettle();
-    expect(tester.widget<ListTile>(result).selected, isTrue);
+    // Selected: a filled check replaces the chevron (not colour alone).
+    expect(
+      find.descendant(of: result, matching: find.byIcon(Icons.check_circle)),
+      findsOneWidget,
+    );
     expect(find.byKey(AccidentReportIntakeKeys.assetMaster), findsOneWidget);
     expect(find.text('Country'), findsOneWidget);
     expect(find.text('Where did the incident occur?'), findsOneWidget);
@@ -94,7 +101,8 @@ void main() {
 
     await tester.enterText(search, 'CP3012');
     await tester.pump();
-    final Finder result = find.widgetWithText(ListTile, 'CP3012');
+    final Finder result =
+        find.byKey(AccidentReportIntakeKeys.matchRow('pump-5-axle'));
     await tester.ensureVisible(result);
     await tester.tap(result);
     await tester.pumpAndSettle();
@@ -165,20 +173,25 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     bool changed = false;
     await tester.pumpWidget(
-      MaterialApp(
-        theme: TpTheme.light,
-        supportedLocales: TpLocalizations.supportedLocales,
-        localizationsDelegates: TpLocalizations.delegates,
-        home: Directionality(
-          textDirection: TextDirection.rtl,
-          child: Scaffold(
-            body: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: AccidentFleetMasterCard(
-                asset: _pump,
-                onChange: () => changed = true,
-                changeLabel: 'Change asset',
-                unavailableLabel: 'Not recorded',
+      ProviderScope(
+        overrides: [
+          accidentVehiclePhotoSourceProvider.overrideWithValue(_NoPhotos()),
+        ],
+        child: MaterialApp(
+          theme: TpTheme.light,
+          supportedLocales: TpLocalizations.supportedLocales,
+          localizationsDelegates: TpLocalizations.delegates,
+          home: Directionality(
+            textDirection: TextDirection.rtl,
+            child: Scaffold(
+              body: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: AccidentFleetMasterCard(
+                  asset: _pump,
+                  onChange: () => changed = true,
+                  changeLabel: 'Change asset',
+                  unavailableLabel: 'Not recorded',
+                ),
               ),
             ),
           ),
@@ -189,9 +202,12 @@ void main() {
     final Finder photo = find.byKey(
       const ValueKey<String>('accident.report.assetPhoto'),
     );
-    expect(tester.getSize(photo).height, 164);
+    expect(tester.getSize(photo).height, 150);
     final Image image = tester.widget<Image>(
-      find.descendant(of: photo, matching: find.byType(Image)),
+      find.descendant(
+        of: photo,
+        matching: find.byType(Image),
+      ),
     );
     expect(
       (image.image as AssetImage).assetName,
@@ -218,20 +234,26 @@ void main() {
       );
     }
     expect(find.text('Step 1 of 7: Identify asset'), findsOneWidget);
-    expect(find.text('Scan QR / barcode'), findsOneWidget);
+    expect(find.text('Scan asset QR / barcode'), findsOneWidget);
+    expect(find.text('Report Accident'), findsOneWidget);
 
     await tester.ensureVisible(find.text('Select fleet asset'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Select fleet asset'));
     await tester.pumpAndSettle();
     final Image vehicleImage = tester.widget<Image>(
-      find.byType(Image).first,
+      find.descendant(
+        of: find.byKey(AccidentReportIntakeKeys.matchRow('pump-5-axle')).last,
+        matching: find.byType(Image),
+      ),
     );
     expect(
       (vehicleImage.image as AssetImage).assetName,
       'assets/vehicle_photos/concrete_pump.png',
     );
-    await tester.tap(find.widgetWithText(ListTile, 'CP3012').last);
+    await tester.tap(
+      find.byKey(AccidentReportIntakeKeys.matchRow('pump-5-axle')).last,
+    );
     await tester.pumpAndSettle();
 
     expect(
@@ -277,12 +299,23 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Select fleet asset'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ListTile, 'CP3012').last);
+    await tester.tap(
+      find.byKey(AccidentReportIntakeKeys.matchRow('pump-5-axle')).last,
+    );
     await tester.pumpAndSettle();
     await tester
         .tap(find.byKey(const ValueKey<String>('accident.report.continue')));
     await tester.pumpAndSettle();
     expect(find.text('Step 2 of 7: Incident details'), findsOneWidget);
+    // The fleet home site is never filled in for the reporter any more.
+    final Finder site = find.descendant(
+      of: find.widgetWithText(TpInput, 'Incident site'),
+      matching: find.byType(TextField),
+    );
+    await tester.ensureVisible(site);
+    expect(tester.widget<TextField>(site).controller?.text, isEmpty);
+    await tester.enterText(site, 'Diriyah');
+    await tester.pumpAndSettle();
     await tester.ensureVisible(
       find.byType(DropdownButtonFormField<String>).first,
     );
@@ -445,6 +478,7 @@ Future<void> _pumpReport(
         workspaceContextProvider.overrideWithValue(_workspace),
         secureStoreProvider.overrideWithValue(store),
         accidentReportRepositoryProvider.overrideWithValue(reports),
+        accidentVehiclePhotoSourceProvider.overrideWithValue(_NoPhotos()),
         vehicleFleetListProvider.overrideWith(
           (Ref ref) async => const VehicleFleetListLoaded(
             assets: <VehicleAsset>[_pump],
@@ -528,3 +562,13 @@ final class _MemorySecureStore extends SecureKeyValueStore {
 const String _lockNote =
     'These details are sourced from fleet master and cannot be edited here. '
     'If any detail is incorrect, please update it in the fleet system.';
+
+/// No asset in the register has an uploaded photo (the live state today).
+final class _NoPhotos implements AccidentVehiclePhotoSource {
+  @override
+  Future<Map<String, String>> uploadedPhotoPaths() async =>
+      const <String, String>{};
+
+  @override
+  Future<String> signedUrl(String path) async => throw StateError(path);
+}

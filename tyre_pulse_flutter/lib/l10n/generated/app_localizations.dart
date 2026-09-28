@@ -12184,6 +12184,336 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Not started'**
   String get designAccReportStepTodo;
+
+  /// Heading of the insurance claim workstream screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Register insurance claim'**
+  String get accClaimTitle;
+
+  /// Banner when the workshop chose an internal repair route.
+  ///
+  /// In en, this message translates to:
+  /// **'Internal workshop repair assessment'**
+  String get accClaimRouteInternal;
+
+  /// Banner when the workshop chose an on-site repair route.
+  ///
+  /// In en, this message translates to:
+  /// **'On-site repair assessment'**
+  String get accClaimRouteOnSite;
+
+  /// Claim package document.
+  ///
+  /// In en, this message translates to:
+  /// **'Accident report PDF'**
+  String get accClaimDocAccidentReport;
+
+  /// Claim package document.
+  ///
+  /// In en, this message translates to:
+  /// **'Fleet validation'**
+  String get accClaimDocFleetValidation;
+
+  /// Claim package document.
+  ///
+  /// In en, this message translates to:
+  /// **'Workshop assessment PDF'**
+  String get accClaimDocWorkshopAssessment;
+
+  /// Claim package document.
+  ///
+  /// In en, this message translates to:
+  /// **'Damage photographs'**
+  String get accClaimDocDamagePhotos;
+
+  /// Claim package document.
+  ///
+  /// In en, this message translates to:
+  /// **'Police / Najm report'**
+  String get accClaimDocPoliceNajm;
+
+  /// Claim package document.
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle registration'**
+  String get accClaimDocRegistration;
+
+  /// Claim package document.
+  ///
+  /// In en, this message translates to:
+  /// **'Driving licence'**
+  String get accClaimDocLicence;
+
+  /// Claim package document.
+  ///
+  /// In en, this message translates to:
+  /// **'Policy document'**
+  String get accClaimDocPolicy;
+
+  /// A claim document is on the case.
+  ///
+  /// In en, this message translates to:
+  /// **'Received'**
+  String get accClaimDocReceived;
+
+  /// A claim document is not on the case.
+  ///
+  /// In en, this message translates to:
+  /// **'Missing'**
+  String get accClaimDocMissing;
+
+  /// How many damage photographs are on the case.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} received'**
+  String accClaimDocCount(int count);
+
+  /// Claim package progress.
+  ///
+  /// In en, this message translates to:
+  /// **'{received} of {total} required documents'**
+  String accClaimProgress(int received, int total);
+
+  /// Lock note beside the claim registration section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Complete all required documents to enable'**
+  String get accClaimLockedHint;
+
+  /// Claim number read-out when the insurer has not issued one yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Added when the insurer issues it'**
+  String get accClaimNumberPending;
+
+  /// Input label for the insurer's claim number.
+  ///
+  /// In en, this message translates to:
+  /// **'Insurer claim number (optional)'**
+  String get accClaimNumberOptional;
+
+  /// Opens the claim registration fields for editing.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit claim details'**
+  String get accClaimEditDetails;
+
+  /// Closes the claim registration fields.
+  ///
+  /// In en, this message translates to:
+  /// **'Done editing'**
+  String get accClaimDoneEditing;
+
+  /// Label of the claim status pill.
+  ///
+  /// In en, this message translates to:
+  /// **'Claim status'**
+  String get accClaimStatus;
+
+  /// Claim status when no claim is registered.
+  ///
+  /// In en, this message translates to:
+  /// **'Not registered'**
+  String get accClaimStatusNotRegistered;
+
+  /// Claim status once registered and awaiting a decision.
+  ///
+  /// In en, this message translates to:
+  /// **'Registered'**
+  String get accClaimStatusRegistered;
+
+  /// Opens the recovery entry form.
+  ///
+  /// In en, this message translates to:
+  /// **'Update recovery amount'**
+  String get accClaimUpdateRecoveryLink;
+
+  /// Recovery source token insurer.
+  ///
+  /// In en, this message translates to:
+  /// **'Insurer'**
+  String get accClaimSourceInsurer;
+
+  /// Recovery source token third_party.
+  ///
+  /// In en, this message translates to:
+  /// **'Third party'**
+  String get accClaimSourceThirdParty;
+
+  /// Recovery source token driver.
+  ///
+  /// In en, this message translates to:
+  /// **'Driver'**
+  String get accClaimSourceDriver;
+
+  /// Recovery source token other.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get accClaimSourceOther;
+
+  /// A notify chip whose team has several people.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 person} other{{count} people}}'**
+  String accClaimNotifyPeople(int count);
+
+  /// A notify chip that is informed only.
+  ///
+  /// In en, this message translates to:
+  /// **'For visibility'**
+  String get accClaimNotifyVisibility;
+
+  /// Notify team.
+  ///
+  /// In en, this message translates to:
+  /// **'Fleet'**
+  String get accClaimTeamFleet;
+
+  /// Notify team.
+  ///
+  /// In en, this message translates to:
+  /// **'Workshop'**
+  String get accClaimTeamWorkshop;
+
+  /// Notify team.
+  ///
+  /// In en, this message translates to:
+  /// **'Insurance'**
+  String get accClaimTeamInsurance;
+
+  /// Notify team.
+  ///
+  /// In en, this message translates to:
+  /// **'Command Center'**
+  String get accClaimTeamCommandCenter;
+
+  /// Notify team.
+  ///
+  /// In en, this message translates to:
+  /// **'PMV Manager'**
+  String get accClaimTeamPmvManager;
+
+  /// Footer primary once all documents are complete.
+  ///
+  /// In en, this message translates to:
+  /// **'Register claim'**
+  String get accClaimRegisterShort;
+
+  /// Register confirmation without a claim number.
+  ///
+  /// In en, this message translates to:
+  /// **'The claim for {insurer} under policy {policyNo} will be registered on the case. Add the insurer\'s claim number when it is issued. This cannot be undone from the app.'**
+  String accClaimRegisterConfirmNoNumber(String insurer, String policyNo);
+
+  /// Snack after registering without a claim number.
+  ///
+  /// In en, this message translates to:
+  /// **'Claim registered with the insurer.'**
+  String get accClaimRegisteredNoNumberSnack;
+
+  /// Chip on an accident report asset result showing its registration plate.
+  ///
+  /// In en, this message translates to:
+  /// **'Plate {plate}'**
+  String accRptPlateChip(String plate);
+
+  /// Screen reader label for the check on the selected asset card.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected asset'**
+  String get accRptSelectedAsset;
+
+  /// Label on the auto-filled fleet master fields in the accident report.
+  ///
+  /// In en, this message translates to:
+  /// **'Read-only'**
+  String get accRptReadOnly;
+
+  /// Info tooltip under Where did the incident occur.
+  ///
+  /// In en, this message translates to:
+  /// **'The incident site is where the accident happened. It is recorded separately and is never copied from the asset\'s home site.'**
+  String get accRptIncidentSiteInfo;
+
+  /// Prompt on the incident site picker row.
+  ///
+  /// In en, this message translates to:
+  /// **'Select incident site / location'**
+  String get accRptSelectIncidentSite;
+
+  /// Title of the incident site picker sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Incident site / location'**
+  String get accRptSiteSheetTitle;
+
+  /// Hint in the incident site picker text field.
+  ///
+  /// In en, this message translates to:
+  /// **'Search a fleet site or type a location'**
+  String get accRptSiteSheetHint;
+
+  /// Button to use a typed incident site that is not in the fleet list.
+  ///
+  /// In en, this message translates to:
+  /// **'Use \"{site}\"'**
+  String accRptUseTypedSite(String site);
+
+  /// Heading over the list of known fleet sites in the incident site picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Fleet sites'**
+  String get accRptFleetSites;
+
+  /// Empty state of the incident site picker list.
+  ///
+  /// In en, this message translates to:
+  /// **'No fleet site matches. Type the site or location above.'**
+  String get accRptNoFleetSites;
+
+  /// Button and sheet title to scan an asset code in the accident report.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan asset QR / barcode'**
+  String get accRptScanAsset;
+
+  /// Instruction in the accident report scan sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Point the camera at the QR code or barcode on the asset.'**
+  String get accRptScanHint;
+
+  /// Shown in the scan sheet when the camera cannot start.
+  ///
+  /// In en, this message translates to:
+  /// **'The camera is not available. Type the asset code below instead.'**
+  String get accRptScanCameraUnavailable;
+
+  /// Label of the manual code field in the scan sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Or type the asset code'**
+  String get accRptScanTypeCode;
+
+  /// Button that looks up a typed asset code in the scan sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Find asset'**
+  String get accRptScanFindAsset;
+
+  /// Snackbar when a scanned code does not uniquely match the loaded fleet.
+  ///
+  /// In en, this message translates to:
+  /// **'{code} is not a single fleet asset. Pick it from the matches below.'**
+  String accRptScanNotFound(String code);
+
+  /// Page title of the accident report wizard.
+  ///
+  /// In en, this message translates to:
+  /// **'Report Accident'**
+  String get accRptTitle;
 }
 
 class _AppLocalizationsDelegate

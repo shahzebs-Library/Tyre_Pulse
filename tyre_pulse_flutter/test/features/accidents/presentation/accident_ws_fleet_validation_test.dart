@@ -17,6 +17,7 @@ import 'package:tyre_pulse/features/accidents/data/accident_sla_repository.dart'
 import 'package:tyre_pulse/features/accidents/data/accident_workstream_repository.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_models.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_fleet_validation.dart';
+import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_mock_kit.dart';
 
 const WorkspaceContext _context = WorkspaceContext(
   userId: 'user-1',
@@ -59,12 +60,13 @@ final class _Fakes {
   final List<Map<String, Object?>> upserts = <Map<String, Object?>>[];
   final List<Map<String, Object?>> inserts = <Map<String, Object?>>[];
   final List<Map<String, dynamic>> rpcCalls = <Map<String, dynamic>>[];
+  final List<Map<String, dynamic>> slaRows = <Map<String, dynamic>>[];
   bool provisioned = true;
 
   List<Override> overrides() => <Override>[
         workspaceContextProvider.overrideWithValue(_context),
         accidentSlaRepositoryProvider.overrideWithValue(
-          AccidentSlaRepository((_) async => <Map<String, dynamic>>[]),
+          AccidentSlaRepository((_) async => slaRows),
         ),
         accidentFleetValidationRepositoryProvider.overrideWithValue(
           AccidentFleetValidationRepository(
@@ -152,23 +154,27 @@ void main() {
 
     expect(find.text('Major accident'), findsOneWidget);
     expect(find.text('Open'), findsOneWidget);
+    expect(find.byType(AccidentMockDotStatus), findsWidgets);
     expect(
       find.text('Workstream 1 of 7: Fleet validation | Owner: Fleet'),
       findsOneWidget,
     );
     expect(find.text('Incident summary'), findsOneWidget);
-    expect(find.text('Type: Collision'), findsOneWidget);
-    expect(find.text('Location: Riyadh yard · Gate 3'), findsOneWidget);
+    expect(find.text('Collision'), findsOneWidget);
+    expect(find.text('Riyadh yard · Gate 3'), findsOneWidget);
+    expect(find.text('Driver Recorded driver'), findsOneWidget);
     expect(find.text('0 marked damage areas · 1 photos'), findsOneWidget);
     expect(find.text('No injuries'), findsOneWidget);
     expect(find.text('Third party involved'), findsOneWidget);
     expect(find.text('View complete incident report'), findsOneWidget);
-    expect(find.text('Share case summary PDF'), findsOneWidget);
     expect(
-      _button(tester, 'accident.fleet.shareSummaryPdf').onPressed,
+      tester
+          .widget<InkWell>(find.byKey(const Key('accident.fleet.viewReport')))
+          .onTap,
       isNotNull,
-      reason: 'the case summary PDF is a real action, not a note',
+      reason: 'the incident report row opens the real case PDF',
     );
+    expect(find.text('Open incident record'), findsOneWidget);
     expect(find.textContaining('not available in this app'), findsNothing);
 
     expect(find.text('Fleet validation checklist'), findsOneWidget);
@@ -190,7 +196,11 @@ void main() {
     expect(find.text('Assigned recipient'), findsOneWidget);
     expect(find.text('Insurance'), findsWidgets);
     expect(find.text('Send when required documents complete'), findsOneWidget);
-    expect(find.text('Command Center is monitoring SLA'), findsOneWidget);
+    expect(
+      find.byKey(const Key('accident.fleet.monitoring')),
+      findsNothing,
+      reason: 'no SLA clock is running, so nobody is claimed to monitor it',
+    );
     expect(
       find.text('Complete Fleet validation and notify Insurance'),
       findsOneWidget,
@@ -199,6 +209,10 @@ void main() {
       _button(tester, 'accident.fleet.complete').onPressed,
       isNull,
       reason: 'the checklist is not complete',
+    );
+    expect(
+      find.text('Complete all required checklist items to enable.'),
+      findsOneWidget,
     );
     expect(find.textContaining('Ms.'), findsNothing);
     expect(tester.takeException(), isNull);
@@ -236,8 +250,23 @@ void main() {
 
     expect(
       _button(tester, 'accident.fleet.complete').onPressed,
+      isNull,
+      reason: 'all six satisfied, but "send when required documents '
+          'complete" waits for the missing Najm report',
+    );
+    expect(
+      find.byKey(const Key('accident.fleet.completeHint')),
+      findsOneWidget,
+    );
+    final Finder waitBox =
+        find.byKey(const Key('accident.fleet.sendWhenComplete'));
+    await tester.ensureVisible(waitBox);
+    await tester.tap(waitBox);
+    await tester.pumpAndSettle();
+    expect(
+      _button(tester, 'accident.fleet.complete').onPressed,
       isNotNull,
-      reason: 'the assessment workstream is completed, all six satisfied',
+      reason: 'unticked: notify with what is available',
     );
     await tester.ensureVisible(
       find.byKey(const Key('accident.fleet.complete')),
@@ -250,6 +279,11 @@ void main() {
     expect(fakes.rpcCalls.single['p_workstream_key'], 'fleet_validation');
     expect(fakes.rpcCalls.single['p_status'], 'completed');
     expect(fakes.inserts.last['table'], 'accident_case_communications');
+    expect(
+      fakes.inserts.last['body'].toString(),
+      contains('Najm Report'),
+      reason: 'the completion note names what is still missing',
+    );
     expect(find.text('Fleet validation completed'), findsOneWidget);
   });
 
@@ -297,5 +331,65 @@ void main() {
     expect(fakes.upserts, isEmpty);
     expect(_button(tester, 'accident.fleet.complete').onPressed, isNull);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a running SLA clock shows the monitoring note',
+      (WidgetTester tester) async {
+    final _Fakes fakes = _Fakes()
+      ..slaRows.add(<String, dynamic>{
+        'workstream_key': 'fleet_validation',
+        'state': 'running',
+        'team': 'Fleet',
+        'start_at': '2026-09-16T11:35:00Z',
+        'due_at': '2026-09-16T18:00:00Z',
+      });
+    await _pump(tester, fakes);
+    expect(
+      find.byKey(const Key('accident.fleet.monitoring')),
+      findsOneWidget,
+    );
+    expect(find.text('Command Center is monitoring SLA.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Arabic renders the translated checklist without overflow',
+      (WidgetTester tester) async {
+    final _Fakes fakes = _Fakes();
+    tester.view.physicalSize = const Size(360, 1800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: fakes.overrides(),
+        child: MaterialApp(
+          theme: TpTheme.light,
+          locale: const Locale('ar'),
+          supportedLocales: TpLocalizations.supportedLocales,
+          localizationsDelegates: TpLocalizations.delegates,
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: AccidentFleetValidationMockWorkspace(
+                snapshot: _snapshot,
+                onNavigate: (_) {},
+                onOpenIncident: () {},
+                now: DateTime(2026, 9, 16, 15),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('تم تأكيد الأصل والسائق'), findsOneWidget);
+    expect(find.text('Asset and driver confirmed'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('checklist rows meet the tap target guideline',
+      (WidgetTester tester) async {
+    final SemanticsHandle handle = tester.ensureSemantics();
+    await _pump(tester, _Fakes());
+    await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
+    handle.dispose();
   });
 }

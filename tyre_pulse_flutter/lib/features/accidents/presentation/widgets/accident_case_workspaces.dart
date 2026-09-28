@@ -19,11 +19,13 @@ import 'package:tyre_pulse/features/accidents/domain/accident_models.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_case_workflow_copy.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_copy.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_damage_copy.dart';
+import 'package:tyre_pulse/features/accidents/presentation/accident_mock_copy.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_ui.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_dispatch_handover.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_fleet_validation.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_header.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_insurance_claim.dart';
+import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_mock_kit.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_responsibility.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_timeline.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_workshop_assessment.dart';
@@ -243,6 +245,7 @@ class AccidentCaseWorkspaceView extends StatelessWidget {
       AccidentCaseWorkspace.responsibility => <Widget>[
           AccidentResponsibilityMockWorkspace(
             snapshot: snapshot,
+            showWorkstreamHeader: false,
             onNavigate: _navigate,
           ),
         ],
@@ -393,6 +396,10 @@ class _WorkspaceHeader extends StatelessWidget {
           ),
         ),
         const SizedBox(height: TpSpace.sm),
+        if (workspace == AccidentCaseWorkspace.fleet) ...<Widget>[
+          _CaseStateLine(record: record),
+          const SizedBox(height: TpSpace.sm),
+        ],
         AccidentWorkstreamHeader(
           snapshot: snapshot,
           workstreamKey: workspace.flowKey,
@@ -407,6 +414,41 @@ class _WorkspaceHeader extends StatelessWidget {
           value: next == null
               ? workflowCopy('noNextHandoff')
               : '${workstreamLabel(copy, next!.key)} • ${_owner(next, copy)}',
+        ),
+      ],
+    );
+  }
+}
+
+/// "● Major accident | ● Open" under the headline (WS1 mock). Severity and
+/// open/closed come straight from the accident row.
+class _CaseStateLine extends StatelessWidget {
+  const _CaseStateLine({required this.record});
+  final AccidentRecord record;
+
+  @override
+  Widget build(BuildContext context) {
+    final AccidentMockCopy copy = AccidentMockCopy.of(context);
+    final bool closed = accidentIsClosed(record);
+    return Wrap(
+      key: const Key('accident.case.stateLine'),
+      spacing: TpSpace.md,
+      runSpacing: TpSpace.xs,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: <Widget>[
+        AccidentMockDotStatus(
+          key: const Key('accident.fleet.severity'),
+          label: accidentSeverityBadge(copy, record.severity),
+          tone: accidentTone(record.severity),
+        ),
+        Text(
+          '|',
+          style: TextStyle(color: TpPalette.of(context).border),
+        ),
+        AccidentMockDotStatus(
+          key: const Key('accident.fleet.openState'),
+          label: copy(closed ? 'closed' : 'open'),
+          tone: closed ? TpStatus.neutral : TpStatus.warning,
         ),
       ],
     );

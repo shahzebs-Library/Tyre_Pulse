@@ -6938,4 +6938,194 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get designAccReportStepTodo => 'Not started';
+
+  @override
+  String get accClaimTitle => 'Register insurance claim';
+
+  @override
+  String get accClaimRouteInternal => 'Internal workshop repair assessment';
+
+  @override
+  String get accClaimRouteOnSite => 'On-site repair assessment';
+
+  @override
+  String get accClaimDocAccidentReport => 'Accident report PDF';
+
+  @override
+  String get accClaimDocFleetValidation => 'Fleet validation';
+
+  @override
+  String get accClaimDocWorkshopAssessment => 'Workshop assessment PDF';
+
+  @override
+  String get accClaimDocDamagePhotos => 'Damage photographs';
+
+  @override
+  String get accClaimDocPoliceNajm => 'Police / Najm report';
+
+  @override
+  String get accClaimDocRegistration => 'Vehicle registration';
+
+  @override
+  String get accClaimDocLicence => 'Driving licence';
+
+  @override
+  String get accClaimDocPolicy => 'Policy document';
+
+  @override
+  String get accClaimDocReceived => 'Received';
+
+  @override
+  String get accClaimDocMissing => 'Missing';
+
+  @override
+  String accClaimDocCount(int count) {
+    return '$count received';
+  }
+
+  @override
+  String accClaimProgress(int received, int total) {
+    return '$received of $total required documents';
+  }
+
+  @override
+  String get accClaimLockedHint => 'Complete all required documents to enable';
+
+  @override
+  String get accClaimNumberPending => 'Added when the insurer issues it';
+
+  @override
+  String get accClaimNumberOptional => 'Insurer claim number (optional)';
+
+  @override
+  String get accClaimEditDetails => 'Edit claim details';
+
+  @override
+  String get accClaimDoneEditing => 'Done editing';
+
+  @override
+  String get accClaimStatus => 'Claim status';
+
+  @override
+  String get accClaimStatusNotRegistered => 'Not registered';
+
+  @override
+  String get accClaimStatusRegistered => 'Registered';
+
+  @override
+  String get accClaimUpdateRecoveryLink => 'Update recovery amount';
+
+  @override
+  String get accClaimSourceInsurer => 'Insurer';
+
+  @override
+  String get accClaimSourceThirdParty => 'Third party';
+
+  @override
+  String get accClaimSourceDriver => 'Driver';
+
+  @override
+  String get accClaimSourceOther => 'Other';
+
+  @override
+  String accClaimNotifyPeople(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count people',
+      one: '1 person',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get accClaimNotifyVisibility => 'For visibility';
+
+  @override
+  String get accClaimTeamFleet => 'Fleet';
+
+  @override
+  String get accClaimTeamWorkshop => 'Workshop';
+
+  @override
+  String get accClaimTeamInsurance => 'Insurance';
+
+  @override
+  String get accClaimTeamCommandCenter => 'Command Center';
+
+  @override
+  String get accClaimTeamPmvManager => 'PMV Manager';
+
+  @override
+  String get accClaimRegisterShort => 'Register claim';
+
+  @override
+  String accClaimRegisterConfirmNoNumber(String insurer, String policyNo) {
+    return 'The claim for $insurer under policy $policyNo will be registered on the case. Add the insurer\'s claim number when it is issued. This cannot be undone from the app.';
+  }
+
+  @override
+  String get accClaimRegisteredNoNumberSnack =>
+      'Claim registered with the insurer.';
+
+  @override
+  String accRptPlateChip(String plate) {
+    return 'Plate $plate';
+  }
+
+  @override
+  String get accRptSelectedAsset => 'Selected asset';
+
+  @override
+  String get accRptReadOnly => 'Read-only';
+
+  @override
+  String get accRptIncidentSiteInfo =>
+      'The incident site is where the accident happened. It is recorded separately and is never copied from the asset\'s home site.';
+
+  @override
+  String get accRptSelectIncidentSite => 'Select incident site / location';
+
+  @override
+  String get accRptSiteSheetTitle => 'Incident site / location';
+
+  @override
+  String get accRptSiteSheetHint => 'Search a fleet site or type a location';
+
+  @override
+  String accRptUseTypedSite(String site) {
+    return 'Use \"$site\"';
+  }
+
+  @override
+  String get accRptFleetSites => 'Fleet sites';
+
+  @override
+  String get accRptNoFleetSites =>
+      'No fleet site matches. Type the site or location above.';
+
+  @override
+  String get accRptScanAsset => 'Scan asset QR / barcode';
+
+  @override
+  String get accRptScanHint =>
+      'Point the camera at the QR code or barcode on the asset.';
+
+  @override
+  String get accRptScanCameraUnavailable =>
+      'The camera is not available. Type the asset code below instead.';
+
+  @override
+  String get accRptScanTypeCode => 'Or type the asset code';
+
+  @override
+  String get accRptScanFindAsset => 'Find asset';
+
+  @override
+  String accRptScanNotFound(String code) {
+    return '$code is not a single fleet asset. Pick it from the matches below.';
+  }
+
+  @override
+  String get accRptTitle => 'Report Accident';
 }

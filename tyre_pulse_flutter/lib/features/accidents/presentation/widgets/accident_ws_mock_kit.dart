@@ -386,3 +386,223 @@ class AccidentMockCountedList extends StatelessWidget {
     );
   }
 }
+
+/// One "dot + label" status, as the mock prints severity and case state
+/// under the case headline ("● Major accident | ● Open"). The words always
+/// carry the meaning; the dot only repeats it.
+class AccidentMockDotStatus extends StatelessWidget {
+  const AccidentMockDotStatus({
+    required this.label,
+    required this.tone,
+    super.key,
+  });
+  final String label;
+  final TpStatus tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpStatusColors colors = TpPalette.of(context).forStatus(tone);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        ExcludeSemantics(
+          child: Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              color: colors.base,
+              shape: BoxShape.circle,
+            ),
+          ),
+        ),
+        const SizedBox(width: TpSpace.sm),
+        Flexible(
+          child: Text(
+            label,
+            style: Theme.of(context)
+                .textTheme
+                .bodyMedium
+                ?.copyWith(fontWeight: FontWeight.w700),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// An outlined action tinted by [tone] (the mock's amber "Request missing
+/// document" beside the green outlined send action). Always 48dp tall.
+class AccidentMockToneButton extends StatelessWidget {
+  const AccidentMockToneButton({
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+    this.tone = TpStatus.warning,
+    this.isBusy = false,
+    this.isFullWidth = false,
+    super.key,
+  });
+  final String label;
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final TpStatus tone;
+  final bool isBusy;
+  final bool isFullWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final Color color =
+        tone == TpStatus.ok ? palette.primary : palette.forStatus(tone).onSoft;
+    final Widget button = OutlinedButton.icon(
+      onPressed: isBusy ? null : onPressed,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: color,
+        minimumSize:
+            const Size(TpSizing.minTouchTarget, TpSizing.minTouchTarget),
+        side: BorderSide(
+          color: onPressed == null ? palette.border : color,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(TpRadius.md),
+        ),
+      ),
+      icon: isBusy
+          ? const SizedBox.square(
+              dimension: TpSizing.iconMd,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Icon(icon, size: TpSizing.iconMd),
+      label: Text(label, textAlign: TextAlign.center),
+    );
+    return isFullWidth
+        ? SizedBox(width: double.infinity, child: button)
+        : button;
+  }
+}
+
+/// A selectable icon tile (the mock's "Who was at fault?" / "Who will pay?"
+/// grids). Selected tiles get a primary border and a check badge; the
+/// selection is also announced, so colour is never the only signal.
+class AccidentMockChoiceTile extends StatelessWidget {
+  const AccidentMockChoiceTile({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+    this.iconColor,
+    super.key,
+  });
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback? onTap;
+  final Color? iconColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return Semantics(
+      button: true,
+      selected: selected,
+      enabled: onTap != null,
+      label: label,
+      excludeSemantics: true,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: <Widget>[
+          Material(
+            color: selected ? palette.primarySoft : palette.surface,
+            shape: RoundedRectangleBorder(
+              side: BorderSide(
+                color: selected ? palette.primary : palette.border,
+                width: selected ? TpBorderWidth.strong : TpBorderWidth.hairline,
+              ),
+              borderRadius: BorderRadius.circular(TpRadius.md),
+            ),
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(TpRadius.md),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 84),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: TpSpace.xs,
+                    vertical: TpSpace.sm,
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: <Widget>[
+                      Icon(
+                        icon,
+                        size: TpSizing.iconLg,
+                        color: iconColor ?? palette.primary,
+                      ),
+                      const SizedBox(height: TpSpace.xs),
+                      Text(
+                        label,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: palette.text,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (selected)
+            PositionedDirectional(
+              top: -6,
+              end: -6,
+              child: CircleAvatar(
+                radius: 10,
+                backgroundColor: palette.primary,
+                child: Icon(
+                  Icons.check_rounded,
+                  size: 14,
+                  color: palette.onPrimary,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Lays [children] out as an even grid whose column count follows the
+/// available width (never narrower than [minTileWidth]).
+class AccidentMockTileGrid extends StatelessWidget {
+  const AccidentMockTileGrid({
+    required this.children,
+    this.minTileWidth = 96,
+    this.maxColumns = 6,
+    super.key,
+  });
+  final List<Widget> children;
+  final double minTileWidth;
+  final int maxColumns;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          const double gap = TpSpace.sm;
+          final int fit =
+              ((constraints.maxWidth + gap) / (minTileWidth + gap)).floor();
+          final int columns = fit.clamp(1, maxColumns);
+          final double width =
+              (constraints.maxWidth - (columns - 1) * gap) / columns;
+          return Wrap(
+            spacing: gap,
+            runSpacing: TpSpace.md,
+            children: <Widget>[
+              for (final Widget child in children)
+                SizedBox(width: width, child: child),
+            ],
+          );
+        },
+      );
+}

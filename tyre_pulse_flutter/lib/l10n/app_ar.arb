@@ -2876,5 +2876,115 @@
   "designAccReportStepReview": "المراجعة والإرسال",
   "designAccReportStepDone": "مكتملة",
   "designAccReportStepCurrent": "الخطوة الحالية",
-  "designAccReportStepTodo": "لم تبدأ"
+  "designAccReportStepTodo": "لم تبدأ",
+  "accClaimTitle": "تسجيل مطالبة التأمين",
+  "accClaimRouteInternal": "تقييم الإصلاح في الورشة الداخلية",
+  "accClaimRouteOnSite": "تقييم الإصلاح في الموقع",
+  "accClaimDocAccidentReport": "تقرير الحادث PDF",
+  "accClaimDocFleetValidation": "تحقق الأسطول",
+  "accClaimDocWorkshopAssessment": "تقييم الورشة PDF",
+  "accClaimDocDamagePhotos": "صور الأضرار",
+  "accClaimDocPoliceNajm": "تقرير الشرطة / نجم",
+  "accClaimDocRegistration": "استمارة المركبة",
+  "accClaimDocLicence": "رخصة القيادة",
+  "accClaimDocPolicy": "وثيقة التأمين",
+  "accClaimDocReceived": "مستلم",
+  "accClaimDocMissing": "مفقود",
+  "accClaimDocCount": "تم استلام {count}",
+  "@accClaimDocCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "accClaimProgress": "{received} من {total} من المستندات المطلوبة",
+  "@accClaimProgress": {
+    "placeholders": {
+      "received": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "accClaimLockedHint": "أكمل جميع المستندات المطلوبة للتفعيل",
+  "accClaimNumberPending": "يضاف عند إصداره من شركة التأمين",
+  "accClaimNumberOptional": "رقم المطالبة لدى شركة التأمين (اختياري)",
+  "accClaimEditDetails": "تعديل تفاصيل المطالبة",
+  "accClaimDoneEditing": "انتهى التعديل",
+  "accClaimStatus": "حالة المطالبة",
+  "accClaimStatusNotRegistered": "غير مسجلة",
+  "accClaimStatusRegistered": "مسجلة",
+  "accClaimUpdateRecoveryLink": "تحديث مبلغ الاسترداد",
+  "accClaimSourceInsurer": "شركة التأمين",
+  "accClaimSourceThirdParty": "طرف ثالث",
+  "accClaimSourceDriver": "السائق",
+  "accClaimSourceOther": "أخرى",
+  "accClaimNotifyPeople": "{count, plural, =1{شخص واحد} =2{شخصان} few{{count} أشخاص} other{{count} شخصًا}}",
+  "@accClaimNotifyPeople": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "accClaimNotifyVisibility": "للاطلاع",
+  "accClaimTeamFleet": "الأسطول",
+  "accClaimTeamWorkshop": "الورشة",
+  "accClaimTeamInsurance": "التأمين",
+  "accClaimTeamCommandCenter": "مركز القيادة",
+  "accClaimTeamPmvManager": "مدير المركبات",
+  "accClaimRegisterShort": "تسجيل المطالبة",
+  "accClaimRegisterConfirmNoNumber": "سيتم تسجيل المطالبة لدى {insurer} بموجب الوثيقة {policyNo} على الحالة. أضف رقم المطالبة عند إصداره من شركة التأمين. لا يمكن التراجع عن ذلك من التطبيق.",
+  "@accClaimRegisterConfirmNoNumber": {
+    "placeholders": {
+      "insurer": {
+        "type": "String"
+      },
+      "policyNo": {
+        "type": "String"
+      }
+    }
+  },
+  "accClaimRegisteredNoNumberSnack": "تم تسجيل المطالبة لدى شركة التأمين.",
+  "accRptPlateChip": "اللوحة {plate}",
+  "@accRptPlateChip": {
+    "placeholders": {
+      "plate": {
+        "type": "String"
+      }
+    }
+  },
+  "accRptSelectedAsset": "الأصل المحدد",
+  "accRptReadOnly": "للقراءة فقط",
+  "accRptIncidentSiteInfo": "موقع الحادث هو المكان الذي وقع فيه الحادث. يسجل بشكل منفصل ولا ينسخ أبدا من الموقع الأساسي للأصل.",
+  "accRptSelectIncidentSite": "اختر موقع الحادث / المكان",
+  "accRptSiteSheetTitle": "موقع الحادث / المكان",
+  "accRptSiteSheetHint": "ابحث عن موقع في الأسطول أو اكتب مكانا",
+  "accRptUseTypedSite": "استخدم \"{site}\"",
+  "@accRptUseTypedSite": {
+    "placeholders": {
+      "site": {
+        "type": "String"
+      }
+    }
+  },
+  "accRptFleetSites": "مواقع الأسطول",
+  "accRptNoFleetSites": "لا يوجد موقع مطابق في الأسطول. اكتب الموقع أو المكان أعلاه.",
+  "accRptScanAsset": "امسح رمز QR / الباركود للأصل",
+  "accRptScanHint": "وجه الكاميرا نحو رمز QR أو الباركود الموجود على الأصل.",
+  "accRptScanCameraUnavailable": "الكاميرا غير متاحة. اكتب رمز الأصل أدناه بدلا من ذلك.",
+  "accRptScanTypeCode": "أو اكتب رمز الأصل",
+  "accRptScanFindAsset": "ابحث عن الأصل",
+  "accRptScanNotFound": "{code} لا يطابق أصلا واحدا في الأسطول. اختره من النتائج أدناه.",
+  "@accRptScanNotFound": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "accRptTitle": "الإبلاغ عن حادث"
 }

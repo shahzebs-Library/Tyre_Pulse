@@ -12,6 +12,7 @@ import 'package:tyre_pulse/core/network/supabase_gateway.dart';
 import 'package:tyre_pulse/core/network/supabase_tables.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_case_rows.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_claim_repository.dart';
+import 'package:tyre_pulse/features/accidents/domain/accident_case_vocab.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_claim.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_claim_package.dart';
 
@@ -23,9 +24,11 @@ final class AccidentClaimPackage {
     required this.evidence,
     required this.recoveries,
     required this.notes,
+    this.recipients = const <ClaimNotifyRecipient>[],
     this.liabilityType,
     this.ourLiabilityPct,
     this.repairRoute,
+    this.caseCountry,
   });
 
   final AccidentClaim? claim;
@@ -38,8 +41,17 @@ final class AccidentClaimPackage {
   final String? liabilityType;
   final num? ourLiabilityPct;
 
-  /// `accident_repair_orders.repair_route`; 'external' raises the M4 banner.
+  /// `accident_repair_orders.repair_route` (internal / external / on_site):
+  /// the chosen route raises the M4 banner.
   final String? repairRoute;
+
+  /// `accidents.country` of the case itself. Money is labelled with a
+  /// currency only when the workspace is on this same country, so a case is
+  /// never shown in another country's currency.
+  final String? caseCountry;
+
+  /// "After registration notify" chips, resolved to real people.
+  final List<ClaimNotifyRecipient> recipients;
 }
 
 class AccidentClaimPackageRepository with SupabaseGateway {
@@ -65,17 +77,16 @@ class AccidentClaimPackageRepository with SupabaseGateway {
       ),
     );
 
-    final List<Map<String, dynamic>> recoveryRows = claim == null
-        ? const <Map<String, dynamic>>[]
-        : await _read(
-            notes,
-            'Claim recoveries',
-            () => _rows.select(
-              SupabaseTables.accidentClaimRecoveries,
-              <String, Object>{'claim_id': claim.id},
-              orderBy: 'recovered_at',
-            ),
-          );
+    // The live table keys recoveries on the case (`accident_id`); it has no
+    // `claim_id` column. Newest row first: it is the "last updated" one.
+    final List<Map<String, dynamic>> recoveryRows = await _read(
+      notes,
+      'Claim recoveries',
+      () => _rows.select(
+        SupabaseTables.accidentClaimRecoveries,
+        <String, Object>{'accident_id': id},
+      ),
+    );
 
     final List<Map<String, dynamic>> liabilityRows = await _read(
       notes,
@@ -99,8 +110,13 @@ class AccidentClaimPackageRepository with SupabaseGateway {
       ),
     );
 
+    final String? caseCountry = await _caseCountry(id);
+    final List<ClaimNotifyRecipient> recipients = await _recipients(id);
+
     return AccidentClaimPackage(
       claim: claim,
+      caseCountry: caseCountry,
+      recipients: recipients,
       evidence: evidenceRows.map(evidenceFromRow).toList(growable: false),
       recoveries: recoveryRows.map(_recoveryFromRow).toList(growable: false),
       liabilityType: _string(liability?['liability_type']),
@@ -182,43 +198,141 @@ class AccidentClaimPackageRepository with SupabaseGateway {
     });
   }
 
-  /// One recovery row. Recoveries stay editable after operational closure;
-  /// every row carries its own timestamp, which is the audit.
+  /// One recovery row against the case. Recoveries stay editable after
+  /// operational closure; every row carries its own timestamps, which is the
+  /// audit. [source] must be one of [claimRecoverySources] (the live CHECK)
+  /// and the row is written as `recovered`, because the amount entered is
+  /// money that arrived.
   Future<AccidentClaimRecovery> addRecovery({
-    required String claimId,
+    required String accidentId,
     required num amount,
     required String source,
+    String? currency,
     String? country,
     String? site,
+    DateTime? now,
   }) {
-    if (claimId.trim().isEmpty ||
+    final String token = source.trim();
+    if (accidentId.trim().isEmpty ||
         !amount.isFinite ||
         amount < 0 ||
-        source.trim().isEmpty) {
-      throw ArgumentError('A claim, a nonnegative amount and a source');
+        !claimRecoverySources.contains(token)) {
+      throw ArgumentError('A case, a nonnegative amount and a known source');
     }
+    final DateTime day = (now ?? DateTime.now()).toLocal();
+    final String date = '${day.year.toString().padLeft(4, '0')}-'
+        '${day.month.toString().padLeft(2, '0')}-'
+        '${day.day.toString().padLeft(2, '0')}';
     return guard(() async {
       final Map<String, dynamic> row = await insertTolerant(
         _rows,
         SupabaseTables.accidentClaimRecoveries,
         core: <String, Object?>{
-          'claim_id': claimId,
+          'accident_id': accidentId,
           'amount': amount,
-          'source': source.trim(),
-          'recovered_at': DateTime.now().toUtc().toIso8601String(),
+          'source': token,
+          'status': 'recovered',
+          'recovered_at': date,
         },
-        optional: <String, Object?>{'country': country, 'site': site},
+        optional: <String, Object?>{
+          'currency': currency,
+          'country': country,
+          'site': site,
+        },
       );
       return _recoveryFromRow(row);
     });
+  }
+
+  /// The case's own country. A failed read fails the whole load like every
+  /// other read here, so the workspace shows its error and Retry instead of
+  /// quietly dropping the case currency. Null only when the case has no
+  /// country recorded.
+  Future<String?> _caseCountry(String id) async {
+    final List<Map<String, dynamic>> rows = await guard(
+      () => _rows.select(
+        SupabaseTables.accidents,
+        <String, Object>{'id': id},
+        limit: 1,
+      ),
+    );
+    return rows.isEmpty ? null : _string(rows.first['country']);
+  }
+
+  /// Real people behind each notify chip: the workstream owner when one is
+  /// assigned, else the approved, unlocked profiles holding the team's
+  /// configured roles. A failed read leaves the chip on its role label.
+  Future<List<ClaimNotifyRecipient>> _recipients(String id) async {
+    Map<String, String> owners = const <String, String>{};
+    try {
+      final List<Map<String, dynamic>> streams = await guard(
+        () => _rows.select(
+          SupabaseTables.accidentCaseWorkstreams,
+          <String, Object>{'accident_id': id},
+        ),
+      );
+      owners = <String, String>{
+        for (final Map<String, dynamic> w in streams)
+          if (_string(w['workstream_key']) != null &&
+              _string(w['owner_id']) != null)
+            _string(w['workstream_key'])!: _string(w['owner_id'])!,
+      };
+    } on Object {
+      owners = const <String, String>{};
+    }
+    final List<ClaimNotifyRecipient> out = <ClaimNotifyRecipient>[];
+    for (final NotifyRole role in notifyRoles) {
+      if (!claimNotifyRoleKeys.contains(role.key)) continue;
+      final String? stream = notifyRoleWorkstream[role.key];
+      final String? ownerId = stream == null ? null : owners[stream];
+      List<String> names = const <String>[];
+      if (ownerId != null) {
+        names = await _profileNames(<String, Object>{'id': ownerId});
+      }
+      if (names.isEmpty) {
+        final Set<String> seen = <String>{};
+        for (final String r in role.roles) {
+          seen.addAll(
+            await _profileNames(<String, Object>{'role': r, 'approved': true}),
+          );
+        }
+        names = seen.toList(growable: false)..sort();
+      }
+      out.add(
+        ClaimNotifyRecipient(
+          roleKey: role.key,
+          names: names,
+          fallbackRole: role.roles.isEmpty ? role.label : role.roles.first,
+          visibilityOnly: role.visibilityOnly,
+        ),
+      );
+    }
+    return List<ClaimNotifyRecipient>.unmodifiable(out);
+  }
+
+  Future<List<String>> _profileNames(Map<String, Object> eq) async {
+    try {
+      final List<Map<String, dynamic>> rows = await guard(
+        () => _rows.select(SupabaseTables.profiles, eq, limit: 50),
+      );
+      return <String>[
+        for (final Map<String, dynamic> p in rows)
+          if (p['locked'] != true)
+            if (_string(p['full_name']) ?? _string(p['username'])
+                case final String name)
+              name,
+      ];
+    } on Object {
+      return const <String>[];
+    }
   }
 
   Future<AccidentClaim> register({
     required String accidentId,
     required String insurer,
     required String policyNo,
-    required String claimNo,
     required num claimAmount,
+    String? claimNo,
     num? deductible,
   }) =>
       _claims.register(
@@ -284,7 +398,8 @@ AccidentClaimRecovery _recoveryFromRow(Map<String, dynamic> row) =>
       id: _string(row['id']) ?? '',
       amount: row['amount'] is num ? row['amount'] as num : 0,
       source: _string(row['source']),
-      recoveredAt: _dateTime(row['recovered_at'] ?? row['created_at']),
+      recoveredAt: _dateTime(row['recovered_at']),
+      updatedAt: _dateTime(row['updated_at'] ?? row['created_at']),
       status: _string(row['status']),
     );
 
@@ -295,6 +410,14 @@ String? _string(Object? value) {
 
 DateTime? _dateTime(Object? value) =>
     value is String ? DateTime.tryParse(value)?.toLocal() : null;
+
+/// The notify roles mock M4 prints under "After registration notify".
+const List<String> claimNotifyRoleKeys = <String>[
+  'fleet',
+  'workshop',
+  'command_center',
+  'pmv_manager',
+];
 
 final accidentClaimPackageRepositoryProvider =
     Provider<AccidentClaimPackageRepository>(

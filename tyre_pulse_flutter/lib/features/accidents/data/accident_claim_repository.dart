@@ -60,14 +60,18 @@ class AccidentClaimRepository with SupabaseGateway {
     required String accidentId,
     required String insurer,
     required String policyNo,
-    required String claimNo,
     required num claimAmount,
+    String? claimNo,
     num? deductible,
   }) async {
+    // The claim number is the insurer's reference. The live RPC stores null
+    // when none is given yet (nullif(btrim(p_claim_no), '')), so it is never
+    // invented here; it is added once the insurer issues it.
+    final String? claimNumber =
+        (claimNo?.trim().isEmpty ?? true) ? null : claimNo!.trim();
     if (accidentId.trim().isEmpty ||
         insurer.trim().isEmpty ||
         policyNo.trim().isEmpty ||
-        claimNo.trim().isEmpty ||
         !claimAmount.isFinite ||
         claimAmount < 0 ||
         (deductible != null && (!deductible.isFinite || deductible < 0))) {
@@ -81,7 +85,7 @@ class AccidentClaimRepository with SupabaseGateway {
         'p_accident_id': accidentId,
         'p_insurer': insurer.trim(),
         'p_policy_no': policyNo.trim(),
-        'p_claim_no': claimNo.trim(),
+        'p_claim_no': claimNumber,
         'p_claim_amount': claimAmount,
         'p_deductible': deductible,
       });

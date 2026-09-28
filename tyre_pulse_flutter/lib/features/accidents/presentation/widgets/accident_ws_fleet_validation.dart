@@ -24,6 +24,7 @@ import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_case_docs_repository.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_fleet_validation_repository.dart';
+import 'package:tyre_pulse/features/accidents/data/accident_sla_repository.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_workstream_repository.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_case_vocab.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_damage_map.dart';
@@ -33,6 +34,7 @@ import 'package:tyre_pulse/features/accidents/presentation/accident_copy.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_mock_copy.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_ui.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_header.dart';
+import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_mock_kit.dart';
 
 const String _workstreamKey = 'fleet_validation';
 
@@ -87,7 +89,12 @@ class _AccidentFleetValidationMockWorkspaceState
   final Set<String> _busy = <String>{};
   String? _noteKey;
   final TextEditingController _noteController = TextEditingController();
-  bool _sendWhenComplete = false;
+
+  /// "Send when required documents complete". While ticked, completing the
+  /// workstream (and so notifying Insurance) waits for the Police / Najm
+  /// documents; unticked, completion notifies with what is available and
+  /// lists what is still missing.
+  bool _sendWhenComplete = true;
   bool _completing = false;
   bool _savingAll = false;
   bool _notifying = false;
@@ -206,6 +213,19 @@ class _AccidentFleetValidationMockWorkspaceState
     };
   }
 
+  /// Server-side (English vocab) labels of the missing authority documents,
+  /// as written into the case timeline note.
+  List<String> get _missingDocLabels => <String>[
+        if (_policeMissing) responsibilityDocs[0].label,
+        if (_najmMissing) responsibilityDocs[1].label,
+      ];
+
+  /// Completion is allowed once every checklist row is satisfied and, while
+  /// "Send when required documents complete" is ticked, the authority
+  /// documents are on file.
+  bool get _canComplete =>
+      _allSatisfied && (!_sendWhenComplete || _missingAuthorityDocs == 0);
+
   bool get _allSatisfied => fleetValidationItems
       .every((VocabItem item) => _effective(item.key).isSatisfied);
 
@@ -251,22 +271,16 @@ class _AccidentFleetValidationMockWorkspaceState
       };
 
   static IconData _stateIcon(String state) => switch (state) {
-        'done' => Icons.check_circle_rounded,
+        'done' => Icons.check_circle_outline_rounded,
         'attention' => Icons.error_outline_rounded,
         'not_applicable' => Icons.remove_circle_outline_rounded,
-        _ => Icons.radio_button_unchecked_rounded,
+        _ => Icons.schedule_rounded,
       };
 
   String get _insuranceOwner => accidentWorkstreamOwner(
         AccidentMockCopy.of(context),
         widget.snapshot.workstreams,
         'insurance',
-      );
-
-  String get _monitoringOwner => accidentWorkstreamOwner(
-        AccidentMockCopy.of(context),
-        widget.snapshot.workstreams,
-        'timeline',
       );
 
   WorkspaceContext? get _workspace => ref.read(workspaceContextProvider);
@@ -402,10 +416,7 @@ class _AccidentFleetValidationMockWorkspaceState
     final AccidentMockCopy copy = AccidentMockCopy.of(context);
     setState(() => _notifying = true);
     try {
-      final List<String> missing = <String>[
-        if (_policeMissing) responsibilityDocs[0].label,
-        if (_najmMissing) responsibilityDocs[1].label,
-      ];
+      final List<String> missing = _missingDocLabels;
       await _logCommunication(
         subject: copy(requestMissing ? 'requestSubject' : 'sendSubject'),
         body: requestMissing
@@ -432,9 +443,13 @@ class _AccidentFleetValidationMockWorkspaceState
             workstreamKey: _workstreamKey,
             status: 'completed',
           );
+      final List<String> missing = _missingDocLabels;
       await _logCommunication(
         subject: copy('completeSubject'),
-        body: copy('packageList'),
+        body: missing.isEmpty
+            ? copy('packageList')
+            : '${copy('packageList')}. ${copy('missing')}: '
+                '${missing.join(', ')}',
       );
       if (!mounted) return;
       _toast(copy('validationCompleted'));
@@ -477,35 +492,50 @@ class _AccidentFleetValidationMockWorkspaceState
 
   // --- Build -------------------------------------------------------------
 
+  String _itemLabel(AccidentMockCopy copy, VocabItem item) =>
+      accidentVocabLabel(copy, 'fv', item.key, item.label);
+
+  /// A running SLA clock on this workstream is what makes "monitoring" true;
+  /// without one the note is not shown.
+  bool _slaRunning(AccidentSlaLoad? load) {
+    if (load == null || !load.provisioned) return false;
+    final AccidentSlaInstance? clock = load.forWorkstream(_workstreamKey);
+    return clock != null && clock.state == 'running';
+  }
+
   @override
   Widget build(BuildContext context) {
     final AccidentMockCopy copy = AccidentMockCopy.of(context);
     final TpPalette palette = TpPalette.of(context);
     final bool closed = accidentIsClosed(_record);
+    final AccidentSlaLoad? sla =
+        ref.watch(accidentSlaLoadProvider(_record.id)).value;
+    final bool canComplete =
+        !_loading && _canComplete && !_completing && !closed;
+    final String completeHint =
+        !_allSatisfied ? copy('completeLockedHint') : copy('completeDocsHint');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        Wrap(
-          spacing: TpSpace.sm,
-          runSpacing: TpSpace.xs,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: <Widget>[
-            TpStatusChip(
-              key: const Key('accident.fleet.severity'),
-              status: accidentTone(_record.severity),
-              label: accidentSeverityBadge(copy, _record.severity),
-              isCompact: true,
-            ),
-            TpStatusChip(
-              key: const Key('accident.fleet.openState'),
-              status: closed ? TpStatus.neutral : TpStatus.info,
-              label: copy(closed ? 'closed' : 'open'),
-              isCompact: true,
-            ),
-          ],
-        ),
-        const SizedBox(height: TpSpace.sm),
         if (widget.showWorkstreamHeader) ...<Widget>[
+          Wrap(
+            spacing: TpSpace.md,
+            runSpacing: TpSpace.xs,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: <Widget>[
+              AccidentMockDotStatus(
+                key: const Key('accident.fleet.severity'),
+                label: accidentSeverityBadge(copy, _record.severity),
+                tone: accidentTone(_record.severity),
+              ),
+              AccidentMockDotStatus(
+                key: const Key('accident.fleet.openState'),
+                label: copy(closed ? 'closed' : 'open'),
+                tone: closed ? TpStatus.neutral : TpStatus.warning,
+              ),
+            ],
+          ),
+          const SizedBox(height: TpSpace.sm),
           AccidentWorkstreamHeader(
             snapshot: widget.snapshot,
             workstreamKey: _workstreamKey,
@@ -513,40 +543,48 @@ class _AccidentFleetValidationMockWorkspaceState
           ),
           const SizedBox(height: TpSpace.md),
         ],
-        _summaryCard(copy),
+        _summaryCard(copy, palette),
         const SizedBox(height: TpSpace.md),
         _checklistCard(copy, palette),
         const SizedBox(height: TpSpace.md),
         _notifyCard(copy, palette),
+        if (_slaRunning(sla)) ...<Widget>[
+          const SizedBox(height: TpSpace.md),
+          _notice(
+            copy('monitoringSlaTeam'),
+            TpStatus.info,
+            palette,
+            icon: Icons.account_circle_outlined,
+            key: const Key('accident.fleet.monitoring'),
+          ),
+        ],
         const SizedBox(height: TpSpace.lg),
-        Text(
-          copy.fill('monitoringSla', <String, String>{
-            'owner': _monitoringOwner,
-          }),
-          key: const Key('accident.fleet.monitoring'),
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: palette.textSecondary,
-              ),
-        ),
-        const SizedBox(height: TpSpace.sm),
         TpButton.primary(
           key: const Key('accident.fleet.complete'),
           label: copy.fill('completeAndNotify', <String, String>{
             'owner': _insuranceOwner,
           }),
-          icon: Icons.task_alt_rounded,
+          icon: canComplete ? Icons.task_alt_rounded : Icons.lock_outline,
           isFullWidth: true,
           isBusy: _completing,
-          onPressed: !_loading && _allSatisfied && !_completing && !closed
-              ? () => unawaited(_complete())
-              : null,
+          onPressed: canComplete ? () => unawaited(_complete()) : null,
         ),
+        if (!canComplete && !_loading && !closed && !_completing) ...<Widget>[
+          const SizedBox(height: TpSpace.xs),
+          Text(
+            completeHint,
+            key: const Key('accident.fleet.completeHint'),
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: palette.textSecondary,
+                ),
+          ),
+        ],
         const SizedBox(height: TpSpace.sm),
         TpButton.secondary(
           key: const Key('accident.fleet.save'),
           label: copy('saveProgress'),
-          icon: Icons.save_outlined,
+          icon: Icons.bookmark_border_rounded,
           isFullWidth: true,
           isBusy: _savingAll,
           onPressed:
@@ -556,110 +594,143 @@ class _AccidentFleetValidationMockWorkspaceState
     );
   }
 
-  Widget _summaryCard(AccidentMockCopy copy) {
+  Widget _summaryCard(AccidentMockCopy copy, TpPalette palette) {
     final String siteLocation = <String?>[_record.site, _record.location]
         .map((String? value) => value?.trim() ?? '')
         .where((String value) => value.isNotEmpty)
         .join(' · ');
+    final String type = humaniseAccidentToken(_record.accidentType);
+    final String driver = _record.driverName?.trim() ?? '';
+    final List<_SummaryFact> facts = <_SummaryFact>[
+      _SummaryFact(Icons.car_crash_outlined, copy('type'), type),
+      _SummaryFact(Icons.location_on_outlined, copy('location'), siteLocation),
+      _SummaryFact(
+        Icons.person_outline,
+        copy('driver'),
+        driver.isEmpty ? '' : '${copy('driver')} $driver',
+      ),
+      _SummaryFact(
+        Icons.photo_camera_outlined,
+        '',
+        copy.fill('damageAndPhotos', <String, String>{
+          'a': '$_damageMarkCount',
+          'b': '${_record.photos.length}',
+        }),
+      ),
+      _SummaryFact(
+        Icons.health_and_safety_outlined,
+        '',
+        switch (_record.injuries) {
+          true => copy('injuriesReported'),
+          false => copy('noInjuries'),
+          null => copy('injuriesNotSet'),
+        },
+      ),
+      _SummaryFact(
+        Icons.groups_outlined,
+        '',
+        switch (_record.thirdPartyInvolved) {
+          true => copy('thirdPartyInvolved'),
+          false => copy('noThirdParty'),
+          null => copy('thirdPartyNotSet'),
+        },
+      ),
+    ];
     return AccidentSection(
       title: copy('incidentSummary'),
       icon: Icons.car_crash_outlined,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          _line(
-            Icons.category_outlined,
-            copy('type'),
-            humaniseAccidentToken(_record.accidentType),
-            copy,
-          ),
-          _line(
-            Icons.location_on_outlined,
-            copy('location'),
-            siteLocation,
-            copy,
-          ),
-          _line(
-            Icons.person_outline,
-            copy('driver'),
-            _record.driverName,
-            copy,
-          ),
-          _line(
-            Icons.photo_library_outlined,
-            '',
-            copy.fill('damageAndPhotos', <String, String>{
-              'a': '$_damageMarkCount',
-              'b': '${_record.photos.length}',
-            }),
-            copy,
-          ),
-          _line(
-            Icons.health_and_safety_outlined,
-            '',
-            switch (_record.injuries) {
-              true => copy('injuriesReported'),
-              false => copy('noInjuries'),
-              null => copy('injuriesNotSet'),
+          LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              final int columns = constraints.maxWidth >= 480 ? 2 : 1;
+              final double width =
+                  (constraints.maxWidth - (columns - 1) * TpSpace.lg) / columns;
+              return Wrap(
+                spacing: TpSpace.lg,
+                children: <Widget>[
+                  for (final _SummaryFact fact in facts)
+                    SizedBox(width: width, child: _factLine(copy, fact)),
+                ],
+              );
             },
-            copy,
           ),
-          _line(
-            Icons.groups_outlined,
-            '',
-            switch (_record.thirdPartyInvolved) {
-              true => copy('thirdPartyInvolved'),
-              false => copy('noThirdParty'),
-              null => copy('thirdPartyNotSet'),
-            },
-            copy,
-          ),
-          const SizedBox(height: TpSpace.sm),
-          TpButton.text(
+          Divider(height: TpSpace.xl, color: palette.border),
+          InkWell(
             key: const Key('accident.fleet.viewReport'),
-            label: copy('viewReport'),
-            icon: Icons.article_outlined,
-            onPressed: _openIncident,
+            onTap: _sharing ? null : _shareSummary,
+            borderRadius: BorderRadius.circular(TpRadius.sm),
+            child: ConstrainedBox(
+              constraints:
+                  const BoxConstraints(minHeight: TpSizing.minTouchTarget),
+              child: Row(
+                children: <Widget>[
+                  Icon(
+                    Icons.picture_as_pdf_outlined,
+                    color: palette.critical.base,
+                  ),
+                  const SizedBox(width: TpSpace.sm),
+                  Expanded(
+                    child: Text(
+                      copy('viewReport'),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: palette.primary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                  ),
+                  if (_sharing)
+                    const SizedBox.square(
+                      dimension: TpSizing.iconMd,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  else
+                    const Icon(Icons.chevron_right_rounded),
+                ],
+              ),
+            ),
           ),
-          TpButton.text(
-            key: const Key('accident.fleet.shareSummaryPdf'),
-            label: AppLocalizations.of(context).accCaseSummaryShare,
-            icon: Icons.picture_as_pdf_outlined,
-            isBusy: _sharing,
-            onPressed: _sharing ? null : _shareSummary,
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: TpButton.text(
+              key: const Key('accident.fleet.openIncident'),
+              label: copy('openIncidentRecord'),
+              icon: Icons.article_outlined,
+              isCompact: true,
+              onPressed: _openIncident,
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _line(
-    IconData icon,
-    String label,
-    String? value,
-    AccidentMockCopy copy,
-  ) {
-    final String shown = value?.trim() ?? '';
-    return Padding(
-      padding: const EdgeInsetsDirectional.symmetric(vertical: TpSpace.xs),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Icon(
-            icon,
-            size: TpSizing.iconMd,
-            color: TpPalette.of(context).primary,
-          ),
-          const SizedBox(width: TpSpace.sm),
-          Expanded(
-            child: Text(
-              label.isEmpty
-                  ? (shown.isEmpty ? copy('notSet') : shown)
-                  : '$label: ${shown.isEmpty ? copy('notSet') : shown}',
-              style: Theme.of(context).textTheme.bodyMedium,
+  Widget _factLine(AccidentMockCopy copy, _SummaryFact fact) {
+    final String shown =
+        fact.value.trim().isEmpty ? copy('notSet') : fact.value;
+    return Semantics(
+      label: fact.label.isEmpty ? shown : '${fact.label}: $shown',
+      excludeSemantics: true,
+      child: Padding(
+        padding: const EdgeInsetsDirectional.symmetric(vertical: TpSpace.xs),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Icon(
+              fact.icon,
+              size: TpSizing.iconMd,
+              color: TpPalette.of(context).primary,
             ),
-          ),
-        ],
+            const SizedBox(width: TpSpace.sm),
+            Expanded(
+              child: Text(
+                shown,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -682,114 +753,170 @@ class _AccidentFleetValidationMockWorkspaceState
             )
           : error != null
               ? TpErrorState(error: error, onRetry: _load)
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: <Widget>[
-                    if (!_provisioned) ...<Widget>[
-                      _notice(
-                        copy('checklistNotProvisioned'),
-                        TpStatus.unknown,
-                        palette,
-                        key: const Key('accident.fleet.notProvisioned'),
-                      ),
-                      const SizedBox(height: TpSpace.sm),
-                    ],
-                    for (int i = 0;
-                        i < fleetValidationItems.length;
-                        i++) ...<Widget>[
-                      if (i > 0) Divider(height: 1, color: palette.border),
-                      _itemRow(copy, palette, fleetValidationItems[i]),
-                    ],
-                  ],
+              : LayoutBuilder(
+                  builder: (BuildContext context, BoxConstraints box) {
+                    final bool wide = box.maxWidth >= 440;
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        if (!_provisioned) ...<Widget>[
+                          _notice(
+                            copy('checklistNotProvisioned'),
+                            TpStatus.unknown,
+                            palette,
+                            key: const Key('accident.fleet.notProvisioned'),
+                          ),
+                          const SizedBox(height: TpSpace.sm),
+                        ],
+                        for (int i = 0;
+                            i < fleetValidationItems.length;
+                            i++) ...<Widget>[
+                          if (i > 0) Divider(height: 1, color: palette.border),
+                          _itemRow(
+                            copy,
+                            palette,
+                            fleetValidationItems[i],
+                            wide: wide,
+                          ),
+                        ],
+                      ],
+                    );
+                  },
                 ),
     );
   }
 
-  Widget _itemRow(AccidentMockCopy copy, TpPalette palette, VocabItem vocab) {
+  Widget _itemRow(
+    AccidentMockCopy copy,
+    TpPalette palette,
+    VocabItem vocab, {
+    required bool wide,
+  }) {
     final AccidentFleetValidationItem item = _effective(vocab.key);
     final TpStatusColors colors = palette.forStatus(_stateTone(item.state));
     final bool busy = _busy.contains(vocab.key);
-    final String subtitle = <String>[
-      _countText(copy, item),
-      if (item.checkedAt != null) accidentClock(context, item.checkedAt!),
-      if (item.checkedByName?.trim().isNotEmpty ?? false)
-        item.checkedByName!.trim(),
-    ].join(' · ');
+    final String label = _itemLabel(copy, vocab);
+    final String count = _countText(copy, item);
+    final String time =
+        item.checkedAt == null ? '' : accidentClock(context, item.checkedAt!);
+    final String checker = item.checkedByName?.trim() ?? '';
     final bool hasNote = item.note?.trim().isNotEmpty ?? false;
+    final TextStyle? countStyle =
+        Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: item.state == 'attention'
+                  ? palette.warning.onSoft
+                  : palette.textSecondary,
+              fontWeight: item.state == 'attention' ? FontWeight.w700 : null,
+            );
+    final Widget statusIcon = busy
+        ? const SizedBox.square(
+            dimension: TpSizing.iconLg,
+            child: Padding(
+              padding: EdgeInsets.all(2),
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          )
+        : Icon(
+            _stateIcon(item.state),
+            color: colors.base,
+            size: TpSizing.iconLg,
+          );
+    final Widget detail = Text(
+      <String>[
+        count,
+        if (!wide && time.isNotEmpty) time,
+        if (checker.isNotEmpty) checker,
+      ].join(' · '),
+      key: Key('accident.fleet.count.${vocab.key}'),
+      style: countStyle,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        InkWell(
-          key: Key('accident.fleet.item.${vocab.key}'),
-          onTap: busy ? null : () => unawaited(_toggle(vocab.key)),
-          child: Padding(
-            padding: const EdgeInsetsDirectional.symmetric(
-              vertical: TpSpace.sm,
-            ),
-            child: Row(
-              children: <Widget>[
-                busy
-                    ? const SizedBox.square(
-                        dimension: TpSizing.iconLg,
-                        child: Padding(
-                          padding: EdgeInsets.all(2),
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      )
-                    : Icon(
-                        _stateIcon(item.state),
-                        color: colors.base,
-                        size: TpSizing.iconLg,
-                        semanticLabel: _stateLabel(copy, item.state),
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: Semantics(
+                button: true,
+                toggled: item.isSatisfied,
+                label: '$label, ${_stateLabel(copy, item.state)}, $count',
+                excludeSemantics: true,
+                child: InkWell(
+                  key: Key('accident.fleet.item.${vocab.key}'),
+                  onTap: busy ? null : () => unawaited(_toggle(vocab.key)),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      minHeight: TpSizing.minTouchTarget,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsetsDirectional.symmetric(
+                        vertical: TpSpace.xs,
                       ),
-                const SizedBox(width: TpSpace.sm),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        vocab.label,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
+                      child: Row(
+                        children: <Widget>[
+                          statusIcon,
+                          const SizedBox(width: TpSpace.sm),
+                          Expanded(
+                            flex: 5,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Text(
+                                  label,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                                if (!wide) detail,
+                                if (hasNote)
+                                  Text(
+                                    item.note!.trim(),
+                                    style:
+                                        Theme.of(context).textTheme.bodySmall,
+                                  ),
+                              ],
                             ),
-                      ),
-                      Text(
-                        subtitle,
-                        key: Key('accident.fleet.count.${vocab.key}'),
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: palette.textSecondary,
+                          ),
+                          if (wide) ...<Widget>[
+                            const SizedBox(width: TpSpace.sm),
+                            Expanded(flex: 3, child: detail),
+                            SizedBox(
+                              width: 52,
+                              child: Text(
+                                time,
+                                textAlign: TextAlign.end,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
                             ),
+                          ],
+                        ],
                       ),
-                      if (hasNote)
-                        Text(
-                          item.note!.trim(),
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                    ],
+                    ),
                   ),
                 ),
-                IconButton(
-                  key: Key('accident.fleet.note.${vocab.key}'),
-                  tooltip: copy(hasNote ? 'editNote' : 'addNote'),
-                  onPressed: () => _openNote(vocab.key),
-                  icon: Icon(
-                    hasNote
-                        ? Icons.sticky_note_2
-                        : Icons.sticky_note_2_outlined,
-                    size: TpSizing.iconMd,
-                  ),
-                ),
-                IconButton(
-                  key: Key('accident.fleet.open.${vocab.key}'),
-                  tooltip: copy('openRelated'),
-                  onPressed: () => widget.onNavigate(
-                    fleetValidationRelatedWorkspace[vocab.key] ?? 'damage_map',
-                  ),
-                  icon: const Icon(Icons.chevron_right_rounded),
-                ),
-              ],
+              ),
             ),
-          ),
+            IconButton(
+              key: Key('accident.fleet.note.${vocab.key}'),
+              tooltip: copy(hasNote ? 'editNote' : 'addNote'),
+              onPressed: () => _openNote(vocab.key),
+              icon: Icon(
+                hasNote
+                    ? Icons.description_rounded
+                    : Icons.description_outlined,
+                size: TpSizing.iconMd,
+              ),
+            ),
+            IconButton(
+              key: Key('accident.fleet.open.${vocab.key}'),
+              tooltip: copy('openRelated'),
+              onPressed: () => widget.onNavigate(
+                fleetValidationRelatedWorkspace[vocab.key] ?? 'damage_map',
+              ),
+              icon: const Icon(Icons.chevron_right_rounded),
+            ),
+          ],
         ),
         if (_noteKey == vocab.key)
           Padding(
@@ -837,17 +964,30 @@ class _AccidentFleetValidationMockWorkspaceState
         : _policeMissing
             ? copy('policeMissingWarning')
             : null;
+    final TpStatus priorityTone = accidentTone(_record.severity);
     return AccidentSection(
       title: copy('notifyTitle'),
       icon: Icons.forward_to_inbox_outlined,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          AccidentInfoRow(copy('assignedRecipient'), _insuranceOwner),
-          AccidentInfoRow(copy('packageIncludes'), copy('packageList')),
-          AccidentInfoRow(
+          _notifyRow(
+            Icons.person_outline,
+            copy('assignedRecipient'),
+            Text(_insuranceOwner),
+          ),
+          _notifyRow(
+            Icons.groups_outlined,
+            copy('packageIncludes'),
+            Text(copy('packageList')),
+          ),
+          _notifyRow(
+            Icons.flag_outlined,
             copy('priority'),
-            accidentSeverityLevel(copy, _record.severity),
+            AccidentMockDotStatus(
+              label: accidentSeverityLevel(copy, _record.severity),
+              tone: priorityTone,
+            ),
           ),
           CheckboxListTile(
             key: const Key('accident.fleet.sendWhenComplete'),
@@ -862,47 +1002,95 @@ class _AccidentFleetValidationMockWorkspaceState
             ),
           ),
           if (warning != null) ...<Widget>[
-            _notice(
-              warning,
-              TpStatus.warning,
-              palette,
+            AccidentMockNotice(
               key: const Key('accident.fleet.docWarning'),
+              text: warning,
             ),
-            const SizedBox(height: TpSpace.sm),
+            const SizedBox(height: TpSpace.md),
           ],
-          Wrap(
-            spacing: TpSpace.sm,
-            runSpacing: TpSpace.sm,
-            children: <Widget>[
-              TpButton.secondary(
+          LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints box) {
+              final Widget request = AccidentMockToneButton(
                 key: const Key('accident.fleet.requestDoc'),
                 label: copy('requestMissingDocument'),
-                icon: Icons.request_page_outlined,
-                isCompact: true,
+                icon: Icons.note_add_outlined,
+                isFullWidth: true,
                 onPressed: _notifying || _missingAuthorityDocs == 0
                     ? null
                     : () => unawaited(_notify(requestMissing: true)),
-              ),
-              TpButton.secondary(
+              );
+              final Widget send = AccidentMockToneButton(
                 key: const Key('accident.fleet.sendNow'),
                 label: copy('sendAvailableNow'),
                 icon: Icons.send_outlined,
-                isCompact: true,
+                tone: TpStatus.ok,
+                isFullWidth: true,
                 onPressed: _notifying
                     ? null
                     : () => unawaited(_notify(requestMissing: false)),
-              ),
-            ],
+              );
+              if (box.maxWidth < 360) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    request,
+                    const SizedBox(height: TpSpace.sm),
+                    send,
+                  ],
+                );
+              }
+              return Row(
+                children: <Widget>[
+                  Expanded(child: request),
+                  const SizedBox(width: TpSpace.sm),
+                  Expanded(child: send),
+                ],
+              );
+            },
           ),
         ],
       ),
     );
   }
 
+  Widget _notifyRow(IconData icon, String label, Widget value) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: TpSpace.xs),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Icon(
+              icon,
+              size: TpSizing.iconMd,
+              color: TpPalette.of(context).primary,
+            ),
+            const SizedBox(width: TpSpace.sm),
+            Expanded(
+              flex: 4,
+              child: Text(
+                label,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ),
+            const SizedBox(width: TpSpace.sm),
+            Expanded(
+              flex: 5,
+              child: DefaultTextStyle.merge(
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(fontWeight: FontWeight.w600),
+                child: value,
+              ),
+            ),
+          ],
+        ),
+      );
+
   Widget _notice(
     String text,
     TpStatus tone,
     TpPalette palette, {
+    IconData icon = Icons.info_outline_rounded,
     Key? key,
   }) {
     final TpStatusColors colors = palette.forStatus(tone);
@@ -918,7 +1106,7 @@ class _AccidentFleetValidationMockWorkspaceState
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Icon(Icons.info_outline_rounded, color: colors.onSoft),
+            Icon(icon, color: colors.onSoft),
             const SizedBox(width: TpSpace.sm),
             Expanded(
               child: Text(
@@ -933,4 +1121,12 @@ class _AccidentFleetValidationMockWorkspaceState
       ),
     );
   }
+}
+
+@immutable
+final class _SummaryFact {
+  const _SummaryFact(this.icon, this.label, this.value);
+  final IconData icon;
+  final String label;
+  final String value;
 }

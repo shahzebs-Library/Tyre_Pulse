@@ -7444,5 +7444,266 @@
   "designAccReportStepTodo": "Not started",
   "@designAccReportStepTodo": {
     "description": "Accident report progress: screen-reader state of a step not reached yet."
+  },
+  "accClaimTitle": "Register insurance claim",
+  "@accClaimTitle": {
+    "description": "Heading of the insurance claim workstream screen."
+  },
+  "accClaimRouteInternal": "Internal workshop repair assessment",
+  "@accClaimRouteInternal": {
+    "description": "Banner when the workshop chose an internal repair route."
+  },
+  "accClaimRouteOnSite": "On-site repair assessment",
+  "@accClaimRouteOnSite": {
+    "description": "Banner when the workshop chose an on-site repair route."
+  },
+  "accClaimDocAccidentReport": "Accident report PDF",
+  "@accClaimDocAccidentReport": {
+    "description": "Claim package document."
+  },
+  "accClaimDocFleetValidation": "Fleet validation",
+  "@accClaimDocFleetValidation": {
+    "description": "Claim package document."
+  },
+  "accClaimDocWorkshopAssessment": "Workshop assessment PDF",
+  "@accClaimDocWorkshopAssessment": {
+    "description": "Claim package document."
+  },
+  "accClaimDocDamagePhotos": "Damage photographs",
+  "@accClaimDocDamagePhotos": {
+    "description": "Claim package document."
+  },
+  "accClaimDocPoliceNajm": "Police / Najm report",
+  "@accClaimDocPoliceNajm": {
+    "description": "Claim package document."
+  },
+  "accClaimDocRegistration": "Vehicle registration",
+  "@accClaimDocRegistration": {
+    "description": "Claim package document."
+  },
+  "accClaimDocLicence": "Driving licence",
+  "@accClaimDocLicence": {
+    "description": "Claim package document."
+  },
+  "accClaimDocPolicy": "Policy document",
+  "@accClaimDocPolicy": {
+    "description": "Claim package document."
+  },
+  "accClaimDocReceived": "Received",
+  "@accClaimDocReceived": {
+    "description": "A claim document is on the case."
+  },
+  "accClaimDocMissing": "Missing",
+  "@accClaimDocMissing": {
+    "description": "A claim document is not on the case."
+  },
+  "accClaimDocCount": "{count} received",
+  "@accClaimDocCount": {
+    "description": "How many damage photographs are on the case.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "accClaimProgress": "{received} of {total} required documents",
+  "@accClaimProgress": {
+    "description": "Claim package progress.",
+    "placeholders": {
+      "received": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "accClaimLockedHint": "Complete all required documents to enable",
+  "@accClaimLockedHint": {
+    "description": "Lock note beside the claim registration section title."
+  },
+  "accClaimNumberPending": "Added when the insurer issues it",
+  "@accClaimNumberPending": {
+    "description": "Claim number read-out when the insurer has not issued one yet."
+  },
+  "accClaimNumberOptional": "Insurer claim number (optional)",
+  "@accClaimNumberOptional": {
+    "description": "Input label for the insurer's claim number."
+  },
+  "accClaimEditDetails": "Edit claim details",
+  "@accClaimEditDetails": {
+    "description": "Opens the claim registration fields for editing."
+  },
+  "accClaimDoneEditing": "Done editing",
+  "@accClaimDoneEditing": {
+    "description": "Closes the claim registration fields."
+  },
+  "accClaimStatus": "Claim status",
+  "@accClaimStatus": {
+    "description": "Label of the claim status pill."
+  },
+  "accClaimStatusNotRegistered": "Not registered",
+  "@accClaimStatusNotRegistered": {
+    "description": "Claim status when no claim is registered."
+  },
+  "accClaimStatusRegistered": "Registered",
+  "@accClaimStatusRegistered": {
+    "description": "Claim status once registered and awaiting a decision."
+  },
+  "accClaimUpdateRecoveryLink": "Update recovery amount",
+  "@accClaimUpdateRecoveryLink": {
+    "description": "Opens the recovery entry form."
+  },
+  "accClaimSourceInsurer": "Insurer",
+  "@accClaimSourceInsurer": {
+    "description": "Recovery source token insurer."
+  },
+  "accClaimSourceThirdParty": "Third party",
+  "@accClaimSourceThirdParty": {
+    "description": "Recovery source token third_party."
+  },
+  "accClaimSourceDriver": "Driver",
+  "@accClaimSourceDriver": {
+    "description": "Recovery source token driver."
+  },
+  "accClaimSourceOther": "Other",
+  "@accClaimSourceOther": {
+    "description": "Recovery source token other."
+  },
+  "accClaimNotifyPeople": "{count, plural, =1{1 person} other{{count} people}}",
+  "@accClaimNotifyPeople": {
+    "description": "A notify chip whose team has several people.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "accClaimNotifyVisibility": "For visibility",
+  "@accClaimNotifyVisibility": {
+    "description": "A notify chip that is informed only."
+  },
+  "accClaimTeamFleet": "Fleet",
+  "@accClaimTeamFleet": {
+    "description": "Notify team."
+  },
+  "accClaimTeamWorkshop": "Workshop",
+  "@accClaimTeamWorkshop": {
+    "description": "Notify team."
+  },
+  "accClaimTeamInsurance": "Insurance",
+  "@accClaimTeamInsurance": {
+    "description": "Notify team."
+  },
+  "accClaimTeamCommandCenter": "Command Center",
+  "@accClaimTeamCommandCenter": {
+    "description": "Notify team."
+  },
+  "accClaimTeamPmvManager": "PMV Manager",
+  "@accClaimTeamPmvManager": {
+    "description": "Notify team."
+  },
+  "accClaimRegisterShort": "Register claim",
+  "@accClaimRegisterShort": {
+    "description": "Footer primary once all documents are complete."
+  },
+  "accClaimRegisterConfirmNoNumber": "The claim for {insurer} under policy {policyNo} will be registered on the case. Add the insurer's claim number when it is issued. This cannot be undone from the app.",
+  "@accClaimRegisterConfirmNoNumber": {
+    "description": "Register confirmation without a claim number.",
+    "placeholders": {
+      "insurer": {
+        "type": "String"
+      },
+      "policyNo": {
+        "type": "String"
+      }
+    }
+  },
+  "accClaimRegisteredNoNumberSnack": "Claim registered with the insurer.",
+  "@accClaimRegisteredNoNumberSnack": {
+    "description": "Snack after registering without a claim number."
+  },
+  "accRptPlateChip": "Plate {plate}",
+  "@accRptPlateChip": {
+    "description": "Chip on an accident report asset result showing its registration plate.",
+    "placeholders": {
+      "plate": {
+        "type": "String"
+      }
+    }
+  },
+  "accRptSelectedAsset": "Selected asset",
+  "@accRptSelectedAsset": {
+    "description": "Screen reader label for the check on the selected asset card."
+  },
+  "accRptReadOnly": "Read-only",
+  "@accRptReadOnly": {
+    "description": "Label on the auto-filled fleet master fields in the accident report."
+  },
+  "accRptIncidentSiteInfo": "The incident site is where the accident happened. It is recorded separately and is never copied from the asset's home site.",
+  "@accRptIncidentSiteInfo": {
+    "description": "Info tooltip under Where did the incident occur."
+  },
+  "accRptSelectIncidentSite": "Select incident site / location",
+  "@accRptSelectIncidentSite": {
+    "description": "Prompt on the incident site picker row."
+  },
+  "accRptSiteSheetTitle": "Incident site / location",
+  "@accRptSiteSheetTitle": {
+    "description": "Title of the incident site picker sheet."
+  },
+  "accRptSiteSheetHint": "Search a fleet site or type a location",
+  "@accRptSiteSheetHint": {
+    "description": "Hint in the incident site picker text field."
+  },
+  "accRptUseTypedSite": "Use \"{site}\"",
+  "@accRptUseTypedSite": {
+    "description": "Button to use a typed incident site that is not in the fleet list.",
+    "placeholders": {
+      "site": {
+        "type": "String"
+      }
+    }
+  },
+  "accRptFleetSites": "Fleet sites",
+  "@accRptFleetSites": {
+    "description": "Heading over the list of known fleet sites in the incident site picker."
+  },
+  "accRptNoFleetSites": "No fleet site matches. Type the site or location above.",
+  "@accRptNoFleetSites": {
+    "description": "Empty state of the incident site picker list."
+  },
+  "accRptScanAsset": "Scan asset QR / barcode",
+  "@accRptScanAsset": {
+    "description": "Button and sheet title to scan an asset code in the accident report."
+  },
+  "accRptScanHint": "Point the camera at the QR code or barcode on the asset.",
+  "@accRptScanHint": {
+    "description": "Instruction in the accident report scan sheet."
+  },
+  "accRptScanCameraUnavailable": "The camera is not available. Type the asset code below instead.",
+  "@accRptScanCameraUnavailable": {
+    "description": "Shown in the scan sheet when the camera cannot start."
+  },
+  "accRptScanTypeCode": "Or type the asset code",
+  "@accRptScanTypeCode": {
+    "description": "Label of the manual code field in the scan sheet."
+  },
+  "accRptScanFindAsset": "Find asset",
+  "@accRptScanFindAsset": {
+    "description": "Button that looks up a typed asset code in the scan sheet."
+  },
+  "accRptScanNotFound": "{code} is not a single fleet asset. Pick it from the matches below.",
+  "@accRptScanNotFound": {
+    "description": "Snackbar when a scanned code does not uniquely match the loaded fleet.",
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "accRptTitle": "Report Accident",
+  "@accRptTitle": {
+    "description": "Page title of the accident report wizard."
   }
 }

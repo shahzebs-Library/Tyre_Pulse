@@ -103,6 +103,31 @@ AccidentAssetMatchPage matchAssetsForReport(
   );
 }
 
+/// The fleet asset a scanned code names, or null.
+///
+/// Matched on the asset number first, then the fleet number, comparing with
+/// case, spaces and hyphens folded (a label printed `CP-045` names the
+/// register's `CP045`). When the code matches more than one row - the same
+/// asset number exists in two countries and is a different machine in each -
+/// nothing is chosen: guessing would file the report against the wrong
+/// vehicle, so the caller shows the matches instead.
+VehicleAsset? matchScannedAsset(List<VehicleAsset> assets, String code) {
+  final String wanted = _scanKey(code);
+  if (wanted.isEmpty) return null;
+  final List<VehicleAsset> byAssetNo = assets
+      .where((VehicleAsset asset) => _scanKey(asset.assetNo) == wanted)
+      .toList(growable: false);
+  if (byAssetNo.length == 1) return byAssetNo.single;
+  if (byAssetNo.length > 1) return null;
+  final List<VehicleAsset> byFleetNo = assets
+      .where((VehicleAsset asset) => _scanKey(asset.fleetNumber) == wanted)
+      .toList(growable: false);
+  return byFleetNo.length == 1 ? byFleetNo.single : null;
+}
+
+String _scanKey(String? value) =>
+    (value ?? '').toUpperCase().replaceAll(RegExp(r'[\s-]'), '');
+
 /// The incident site to keep after the selected asset changes.
 ///
 /// The home site is only ever a convenience default: it fills an empty

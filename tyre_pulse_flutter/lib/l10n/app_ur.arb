@@ -2876,5 +2876,115 @@
   "designAccReportStepReview": "جائزہ اور جمع کرائیں",
   "designAccReportStepDone": "مکمل",
   "designAccReportStepCurrent": "موجودہ مرحلہ",
-  "designAccReportStepTodo": "شروع نہیں ہوا"
+  "designAccReportStepTodo": "شروع نہیں ہوا",
+  "accClaimTitle": "انشورنس کلیم رجسٹر کریں",
+  "accClaimRouteInternal": "اندرونی ورکشاپ میں مرمت کا جائزہ",
+  "accClaimRouteOnSite": "سائٹ پر مرمت کا جائزہ",
+  "accClaimDocAccidentReport": "حادثہ رپورٹ PDF",
+  "accClaimDocFleetValidation": "فلیٹ کی تصدیق",
+  "accClaimDocWorkshopAssessment": "ورکشاپ جائزہ PDF",
+  "accClaimDocDamagePhotos": "نقصان کی تصاویر",
+  "accClaimDocPoliceNajm": "پولیس / نجم رپورٹ",
+  "accClaimDocRegistration": "گاڑی کی رجسٹریشن",
+  "accClaimDocLicence": "ڈرائیونگ لائسنس",
+  "accClaimDocPolicy": "پالیسی دستاویز",
+  "accClaimDocReceived": "موصول",
+  "accClaimDocMissing": "موجود نہیں",
+  "accClaimDocCount": "{count} موصول",
+  "@accClaimDocCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "accClaimProgress": "{total} میں سے {received} مطلوبہ دستاویزات",
+  "@accClaimProgress": {
+    "placeholders": {
+      "received": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "accClaimLockedHint": "فعال کرنے کے لیے تمام مطلوبہ دستاویزات مکمل کریں",
+  "accClaimNumberPending": "انشورر کے جاری کرنے پر شامل ہوگا",
+  "accClaimNumberOptional": "انشورر کا کلیم نمبر (اختیاری)",
+  "accClaimEditDetails": "کلیم کی تفصیلات میں ترمیم کریں",
+  "accClaimDoneEditing": "ترمیم مکمل",
+  "accClaimStatus": "کلیم کی حالت",
+  "accClaimStatusNotRegistered": "رجسٹرڈ نہیں",
+  "accClaimStatusRegistered": "رجسٹرڈ",
+  "accClaimUpdateRecoveryLink": "وصولی کی رقم اپ ڈیٹ کریں",
+  "accClaimSourceInsurer": "انشورر",
+  "accClaimSourceThirdParty": "فریق ثالث",
+  "accClaimSourceDriver": "ڈرائیور",
+  "accClaimSourceOther": "دیگر",
+  "accClaimNotifyPeople": "{count, plural, =1{1 فرد} other{{count} افراد}}",
+  "@accClaimNotifyPeople": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "accClaimNotifyVisibility": "معلومات کے لیے",
+  "accClaimTeamFleet": "فلیٹ",
+  "accClaimTeamWorkshop": "ورکشاپ",
+  "accClaimTeamInsurance": "انشورنس",
+  "accClaimTeamCommandCenter": "کمانڈ سینٹر",
+  "accClaimTeamPmvManager": "پی ایم وی مینیجر",
+  "accClaimRegisterShort": "کلیم رجسٹر کریں",
+  "accClaimRegisterConfirmNoNumber": "{insurer} کے ساتھ پالیسی {policyNo} کے تحت کلیم کیس پر رجسٹر ہو جائے گا۔ انشورر کے جاری کرنے پر کلیم نمبر شامل کریں۔ اسے ایپ سے واپس نہیں کیا جا سکتا۔",
+  "@accClaimRegisterConfirmNoNumber": {
+    "placeholders": {
+      "insurer": {
+        "type": "String"
+      },
+      "policyNo": {
+        "type": "String"
+      }
+    }
+  },
+  "accClaimRegisteredNoNumberSnack": "کلیم انشورر کے ساتھ رجسٹر ہو گیا۔",
+  "accRptPlateChip": "پلیٹ {plate}",
+  "@accRptPlateChip": {
+    "placeholders": {
+      "plate": {
+        "type": "String"
+      }
+    }
+  },
+  "accRptSelectedAsset": "منتخب اثاثہ",
+  "accRptReadOnly": "صرف پڑھنے کے لیے",
+  "accRptIncidentSiteInfo": "حادثے کی جگہ وہ مقام ہے جہاں حادثہ پیش آیا۔ یہ الگ سے درج کی جاتی ہے اور اثاثے کی ہوم سائٹ سے کبھی نقل نہیں کی جاتی۔",
+  "accRptSelectIncidentSite": "حادثے کی سائٹ / مقام منتخب کریں",
+  "accRptSiteSheetTitle": "حادثے کی سائٹ / مقام",
+  "accRptSiteSheetHint": "فلیٹ سائٹ تلاش کریں یا مقام لکھیں",
+  "accRptUseTypedSite": "\"{site}\" استعمال کریں",
+  "@accRptUseTypedSite": {
+    "placeholders": {
+      "site": {
+        "type": "String"
+      }
+    }
+  },
+  "accRptFleetSites": "فلیٹ سائٹس",
+  "accRptNoFleetSites": "کوئی فلیٹ سائٹ نہیں ملی۔ اوپر سائٹ یا مقام لکھیں۔",
+  "accRptScanAsset": "اثاثے کا QR / بارکوڈ اسکین کریں",
+  "accRptScanHint": "کیمرہ اثاثے پر لگے QR کوڈ یا بارکوڈ کی طرف کریں۔",
+  "accRptScanCameraUnavailable": "کیمرہ دستیاب نہیں ہے۔ اس کے بجائے نیچے اثاثے کا کوڈ لکھیں۔",
+  "accRptScanTypeCode": "یا اثاثے کا کوڈ لکھیں",
+  "accRptScanFindAsset": "اثاثہ تلاش کریں",
+  "accRptScanNotFound": "{code} کسی ایک فلیٹ اثاثے سے مطابقت نہیں رکھتا۔ نیچے دیے گئے نتائج میں سے منتخب کریں۔",
+  "@accRptScanNotFound": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "accRptTitle": "حادثہ رپورٹ کریں"
 }

@@ -4,7 +4,7 @@
 /// claim registration (through the verified `accident_claim_register` RPC),
 /// payment and recovery, and the after-registration notify strip. Every
 /// derived figure comes from `accident_claim_package.dart`; nothing here
-/// invents a number, a name or a currency.
+/// invents a number, a name, a claim number or a currency.
 library;
 
 import 'package:flutter/material.dart';
@@ -15,6 +15,7 @@ import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/accidents/accidents_providers.dart';
+import 'package:tyre_pulse/features/accidents/data/accident_capability.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_claim_package_repository.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_photo_capture.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_case_vocab.dart';
@@ -29,6 +30,11 @@ import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_s
 /// server until "Register claim with insurer".
 final Map<String, Map<String, String>> _claimDrafts =
     <String, Map<String, String>>{};
+
+/// Width at which the registration and recovery sections split into the
+/// mock's two columns. Below it they stack, so a phone never squeezes two
+/// money columns into 180 dp each.
+const double _twoColumnMinWidth = 560;
 
 class AccidentInsuranceClaimMockWorkspace extends ConsumerStatefulWidget {
   const AccidentInsuranceClaimMockWorkspace({
@@ -57,8 +63,9 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
   late final TextEditingController _claimAmount;
   late final TextEditingController _deductible;
   final TextEditingController _recoveryAmount = TextEditingController();
-  final TextEditingController _recoverySource = TextEditingController();
+  String _recoverySource = claimRecoverySources.first;
   bool _recoveryOpen = false;
+  bool _editing = false;
   bool _busy = false;
 
   AccidentRecord get _record => widget.snapshot.accident;
@@ -74,13 +81,20 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
     _policyNo = TextEditingController(
       text: draft['policy_no'] ?? _record.policyNo ?? '',
     );
-    _claimNo = TextEditingController(text: draft['claim_no'] ?? '');
+    _claimNo = TextEditingController(
+      text: draft['claim_no'] ?? _record.insuranceClaimNo ?? '',
+    );
     _claimAmount = TextEditingController(
       text: draft['claim_amount'] ?? _record.claimAmount?.toString() ?? '',
     );
     _deductible = TextEditingController(
       text: draft['deductible'] ?? _record.deductible?.toString() ?? '',
     );
+    // Open the fields for typing when anything registration needs is blank;
+    // otherwise the recorded values read as facts, as the mock prints them.
+    _editing = _insurer.text.trim().isEmpty ||
+        _policyNo.text.trim().isEmpty ||
+        num.tryParse(_claimAmount.text.trim()) == null;
   }
 
   @override
@@ -91,7 +105,6 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
     _claimAmount.dispose();
     _deductible.dispose();
     _recoveryAmount.dispose();
-    _recoverySource.dispose();
     super.dispose();
   }
 
@@ -117,9 +130,23 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
     );
   }
 
+  /// The currency of the CASE's country. The workspace carries the server's
+  /// `country_currency` answer for its active country only, so it is used
+  /// only when that country is the case's; otherwise the figure stands
+  /// alone rather than wearing another country's code.
+  String? _caseCurrency(AccidentClaimPackage package) {
+    final String? caseCountry = package.caseCountry;
+    final String? active =
+        ref.watch(workspaceContextProvider)?.activeCountry?.trim();
+    if (caseCountry == null || active == null) return null;
+    if (active.toLowerCase() != caseCountry.trim().toLowerCase()) return null;
+    return ref.watch(activeCurrencyProvider);
+  }
+
   Widget _body(BuildContext context, AccidentClaimPackage package) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final String? currency = ref.watch(activeCurrencyProvider);
+    final TpPalette palette = TpPalette.of(context);
+    final String? currency = _caseCurrency(package);
     final ClaimPackageStatus docs =
         ClaimPackageStatus.fromEvidence(package.evidence);
     final AccidentClaim? claim = package.claim;
@@ -128,21 +155,32 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
       package: docs,
       alreadyRegistered: registered,
     );
+    // Registration and recovery are written by the insurance and finance
+    // teams; a role without those rights is not offered the buttons.
+    final bool mayRegister = ref
+            .watch(accidentCapabilityProvider(AccidentCapability.editInsurance))
+            .value ??
+        false;
+    final bool mayRecord = ref
+            .watch(accidentCapabilityProvider(AccidentCapability.postCost))
+            .value ??
+        false;
     final num? claimAmount = claim != null
         ? (claim.claimAmount ?? _record.claimAmount)
         : (num.tryParse(_claimAmount.text.trim()) ?? _record.claimAmount);
     final num? deductible = claim != null
         ? (claim.deductible ?? _record.deductible)
-        : (num.tryParse(_deductible.text.trim()) ?? _record.deductible);
+        : (_deductible.text.trim().isEmpty
+            ? null
+            : num.tryParse(_deductible.text.trim()));
     final num recovered = package.recoveries.isEmpty
         ? (_record.recoveredAmount ?? 0)
         : recoveredTotal(package.recoveries);
     final num? approved = claim?.approvedAmount ?? _record.claimApprovedAmount;
+    final num? outstanding =
+        outstandingAmount(approved, recovered, claimAmount: claimAmount);
     final AccidentClaimRecovery? lastRecovery =
         package.recoveries.isEmpty ? null : package.recoveries.first;
-    final AccidentWorkstream? stream = widget.snapshot.workstreams
-        .where((AccidentWorkstream w) => w.key == 'insurance')
-        .firstOrNull;
     final String liability = package.liabilityType == null
         ? accidentWsText(context, _record.liableParty)
         : faultTiles
@@ -150,6 +188,155 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
                 .firstOrNull
                 ?.label ??
             accidentWsText(context, package.liabilityType);
+    final ClaimDocumentStatus? firstMissing = docs.missingRequired.firstOrNull;
+    final String? routeBanner = _routeBanner(l10n, package.repairRoute);
+    final ClaimNotifyRecipient? monitor = package.recipients
+        .where((ClaimNotifyRecipient r) => r.roleKey == 'command_center')
+        .firstOrNull;
+
+    final List<Widget> registrationLeft = <Widget>[
+      if (registered || !_editing) ...<Widget>[
+        _Fact(
+          label: l10n.accInsurer,
+          value: accidentWsText(
+            context,
+            registered ? (claim.insurer ?? _record.insurer) : _insurer.text,
+          ),
+        ),
+        _Fact(
+          label: l10n.accPolicyNo,
+          value: accidentWsText(
+            context,
+            registered ? (claim.policyNo ?? _record.policyNo) : _policyNo.text,
+          ),
+        ),
+        _Fact(
+          label: l10n.accClaimNumber,
+          value: _claimNumberText(context, l10n, claim),
+          muted: _claimNumberText(context, l10n, claim) ==
+              l10n.accClaimNumberPending,
+        ),
+      ] else ...<Widget>[
+        TpInput(
+          label: l10n.accInsurer,
+          controller: _insurer,
+          isRequired: true,
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: TpSpace.sm),
+        TpInput(
+          label: l10n.accPolicyNo,
+          controller: _policyNo,
+          isRequired: true,
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: TpSpace.sm),
+        TpInput(
+          label: l10n.accClaimNumberOptional,
+          controller: _claimNo,
+          hint: l10n.accClaimNumberPending,
+        ),
+        const SizedBox(height: TpSpace.sm),
+      ],
+      _Fact(label: l10n.accLiability, value: liability),
+      _Fact(
+        label: l10n.accGccLiabilityPct,
+        value: package.ourLiabilityPct == null
+            ? accidentWsNotSet(context)
+            : '${package.ourLiabilityPct}%',
+      ),
+    ];
+
+    final List<Widget> registrationRight = <Widget>[
+      if (registered || !_editing) ...<Widget>[
+        _Fact(
+          label: l10n.accClaimAmount,
+          value: accidentWsMoney(context, claimAmount, currency),
+        ),
+        _Fact(
+          label: l10n.accDeductible,
+          value: accidentWsMoney(context, deductible, currency),
+        ),
+      ] else ...<Widget>[
+        TpInput(
+          label: l10n.accClaimAmount,
+          controller: _claimAmount,
+          isRequired: true,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: TpSpace.sm),
+        TpInput(
+          label: l10n.accDeductible,
+          controller: _deductible,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: TpSpace.sm),
+      ],
+      Divider(height: TpSpace.md, color: palette.border),
+      _Fact(
+        label: l10n.accNetClaimable,
+        value: accidentWsMoney(
+          context,
+          netClaimable(claimAmount, deductible),
+          currency,
+        ),
+        valueColor: palette.ok.onSoft,
+        emphasis: true,
+      ),
+      const SizedBox(height: TpSpace.sm),
+      if (registered || mayRegister) ...<Widget>[
+        TpButton.primary(
+          key: const Key('accident.ws.insurance.register'),
+          label: registered ? l10n.accClaimRegistered : l10n.accRegisterClaim,
+          icon: registered
+              ? Icons.verified_outlined
+              : canRegister
+                  ? Icons.how_to_reg_outlined
+                  : Icons.lock_outline_rounded,
+          isFullWidth: true,
+          isBusy: _busy,
+          onPressed: canRegister && !_busy ? () => _register(context) : null,
+        ),
+        if (!canRegister && !registered)
+          Padding(
+            padding: const EdgeInsets.only(top: TpSpace.xs),
+            child: Text(
+              l10n.accClaimEnableWhenComplete,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: palette.textSecondary,
+                  ),
+            ),
+          ),
+      ],
+    ];
+
+    final List<Widget> recoveryLeft = <Widget>[
+      _Fact(
+        label: l10n.accClaimStatus,
+        value: '',
+        trailing: _ClaimStatusPill(registered: registered, claim: claim),
+      ),
+      _Fact(
+        label: l10n.accRecoveredAmount,
+        value: accidentWsMoney(context, recovered, currency),
+        valueColor: palette.ok.onSoft,
+      ),
+    ];
+    final List<Widget> recoveryRight = <Widget>[
+      _Fact(
+        label: l10n.accApprovedAmount,
+        value: accidentWsMoney(context, approved, currency),
+      ),
+      _Fact(
+        key: const Key('accident.ws.insurance.outstanding'),
+        label: l10n.accOutstanding,
+        value: accidentWsMoney(context, outstanding, currency),
+        valueColor: (outstanding ?? 0) > 0 ? palette.critical.base : null,
+        emphasis: true,
+      ),
+    ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -161,15 +348,24 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
           ),
           const SizedBox(height: TpSpace.md),
         ],
-        if (package.repairRoute == 'external') ...<Widget>[
-          AccidentWsWarning(
+        if (routeBanner != null) ...<Widget>[
+          _RouteBanner(
             key: const Key('accident.ws.insurance.banner'),
-            tone: TpStatus.info,
-            message: l10n.accClaimExternalRepairBanner,
+            text: routeBanner,
           ),
           const SizedBox(height: TpSpace.md),
         ],
         AccidentWsNotes(notes: package.notes),
+        Semantics(
+          header: true,
+          child: Text(
+            l10n.accClaimTitle,
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+        ),
+        const SizedBox(height: TpSpace.md),
 
         // 1 Claim document package
         KeyedSubtree(
@@ -178,43 +374,51 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
             number: 1,
             title: l10n.accClaimDocumentPackage,
             trailing: Text(
-              docs.progressLabel,
+              l10n.accClaimProgress(docs.requiredReceived, docs.requiredTotal),
               key: const Key('accident.ws.insurance.package.progress'),
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
                     fontWeight: FontWeight.w800,
+                    color: docs.isComplete
+                        ? palette.ok.onSoft
+                        : palette.warning.onSoft,
                   ),
             ),
             children: <Widget>[
-              for (final ClaimDocumentStatus row in docs.rows)
-                _DocumentRow(
-                  row: row,
-                  onRequest: row.isMissingRequired && !_busy
-                      ? () => _request(row)
-                      : null,
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  border: Border.all(color: palette.border),
+                  borderRadius: BorderRadius.circular(TpRadius.md),
                 ),
-              const SizedBox(height: TpSpace.sm),
-              if (!docs.isComplete)
-                AccidentWsWarning(
-                  message: l10n.accClaimRegistrationLocked,
+                child: Column(
+                  children: <Widget>[
+                    for (int i = 0; i < docs.rows.length; i++) ...<Widget>[
+                      if (i > 0) Divider(height: 1, color: palette.border),
+                      _DocumentRow(row: docs.rows[i]),
+                    ],
+                  ],
                 ),
+              ),
+              if (!docs.isComplete) ...<Widget>[
+                const SizedBox(height: TpSpace.sm),
+                AccidentWsWarning(message: l10n.accClaimRegistrationLocked),
+              ],
               const SizedBox(height: TpSpace.sm),
-              Wrap(
-                spacing: TpSpace.sm,
-                runSpacing: TpSpace.xs,
+              _TwoUp(
                 children: <Widget>[
-                  for (final ClaimDocumentStatus row in docs.missingRequired)
-                    TpButton.secondary(
+                  if (firstMissing != null)
+                    _WarningOutlinedButton(
+                      key: const Key('accident.ws.insurance.request'),
                       label: l10n.accRequestDocument(
-                        row.doc.label.toLowerCase(),
+                        _requestLabel(context, firstMissing.doc.key),
                       ),
-                      icon: Icons.forward_to_inbox_outlined,
-                      isCompact: true,
-                      onPressed: _busy ? null : () => _request(row),
+                      icon: Icons.person_search_outlined,
+                      onPressed: _busy ? null : () => _request(firstMissing),
                     ),
                   TpButton.secondary(
+                    key: const Key('accident.ws.insurance.upload'),
                     label: l10n.accUploadDocument,
-                    icon: Icons.upload_file_outlined,
-                    isCompact: true,
+                    icon: Icons.upload_outlined,
+                    isFullWidth: true,
                     onPressed: _busy ? null : () => _upload(docs),
                   ),
                 ],
@@ -228,107 +432,22 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
         AccidentWsSection(
           number: 2,
           title: l10n.accClaimRegistration,
+          trailing: registered || docs.isComplete
+              ? null
+              : _LockNote(text: l10n.accClaimLockedHint),
           children: <Widget>[
-            if (registered) ...<Widget>[
-              AccidentWsFact(
-                label: l10n.accInsurer,
-                value:
-                    accidentWsText(context, claim.insurer ?? _record.insurer),
-              ),
-              AccidentWsFact(
-                label: l10n.accPolicyNo,
-                value: accidentWsText(
-                  context,
-                  claim.policyNo ?? _record.policyNo,
-                ),
-              ),
-            ] else ...<Widget>[
-              TpInput(
-                label: l10n.accInsurer,
-                controller: _insurer,
-                isRequired: true,
-              ),
-              const SizedBox(height: TpSpace.sm),
-              TpInput(
-                label: l10n.accPolicyNo,
-                controller: _policyNo,
-                isRequired: true,
-              ),
-              const SizedBox(height: TpSpace.sm),
-            ],
-            AccidentWsFact(
-              label: l10n.accClaimNumber,
-              value: registered
-                  ? accidentWsText(
-                      context,
-                      claim.claimNo ?? _record.insuranceClaimNo,
-                    )
-                  : l10n.accClaimNumberAuto,
-            ),
-            AccidentWsFact(label: l10n.accLiability, value: liability),
-            AccidentWsFact(
-              label: l10n.accGccLiabilityPct,
-              value: package.ourLiabilityPct == null
-                  ? accidentWsNotSet(context)
-                  : '${package.ourLiabilityPct}%',
-            ),
-            if (registered) ...<Widget>[
-              AccidentWsFact(
-                label: l10n.accClaimAmount,
-                value: accidentWsMoney(context, claimAmount, currency),
-              ),
-              AccidentWsFact(
-                label: l10n.accDeductible,
-                value: accidentWsMoney(context, deductible, currency),
-              ),
-            ] else ...<Widget>[
-              const SizedBox(height: TpSpace.sm),
-              TpInput(
-                label: l10n.accClaimAmount,
-                controller: _claimAmount,
-                isRequired: true,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                onChanged: (_) => setState(() {}),
-              ),
-              const SizedBox(height: TpSpace.sm),
-              TpInput(
-                label: l10n.accDeductible,
-                controller: _deductible,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                onChanged: (_) => setState(() {}),
-              ),
-              const SizedBox(height: TpSpace.sm),
-            ],
-            AccidentWsFact(
-              label: l10n.accNetClaimable,
-              value: accidentWsMoney(
-                context,
-                netClaimable(claimAmount, deductible),
-                currency,
-              ),
-              emphasis: true,
-            ),
-            const SizedBox(height: TpSpace.sm),
-            TpButton.primary(
-              key: const Key('accident.ws.insurance.register'),
-              label:
-                  registered ? l10n.accClaimRegistered : l10n.accRegisterClaim,
-              icon: Icons.verified_outlined,
-              isFullWidth: true,
-              isBusy: _busy,
-              onPressed:
-                  canRegister && !_busy ? () => _register(context) : null,
-            ),
-            if (!canRegister && !registered)
-              Padding(
-                padding: const EdgeInsets.only(top: TpSpace.xs),
-                child: Text(
-                  l10n.accClaimEnableWhenComplete,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: TpPalette.of(context).textSecondary,
-                      ),
+            _Columns(left: registrationLeft, right: registrationRight),
+            if (!registered)
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: TpButton.text(
+                  key: const Key('accident.ws.insurance.editDetails'),
+                  label: _editing
+                      ? l10n.accClaimDoneEditing
+                      : l10n.accClaimEditDetails,
+                  icon: _editing ? Icons.check_rounded : Icons.edit_outlined,
+                  onPressed:
+                      _busy ? null : () => setState(() => _editing = !_editing),
                 ),
               ),
           ],
@@ -339,94 +458,48 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
         AccidentWsSection(
           number: 3,
           title: l10n.accPaymentAndRecovery,
-          trailing: TpStatusChip(
-            status: registered ? TpStatus.info : TpStatus.unknown,
-            label: claimStatusLabel(
-              registered: registered,
-              decision: claim?.decision,
-            ),
-            isCompact: true,
-          ),
           children: <Widget>[
-            AccidentWsFact(
-              label: l10n.accApprovedAmount,
-              value: accidentWsMoney(context, approved, currency),
+            _Columns(left: recoveryLeft, right: recoveryRight),
+            Divider(height: TpSpace.lg, color: palette.border),
+            Wrap(
+              spacing: TpSpace.lg,
+              runSpacing: TpSpace.xs,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: <Widget>[
+                _InlineFact(
+                  label: l10n.accRecoverySource,
+                  value: lastRecovery?.source == null
+                      ? accidentWsNotSet(context)
+                      : _sourceLabel(l10n, lastRecovery!.source!),
+                ),
+                _InlineFact(
+                  label: l10n.accLastUpdated,
+                  value: accidentWsDateTime(context, lastRecovery?.updatedAt),
+                ),
+              ],
             ),
-            AccidentWsFact(
-              label: l10n.accRecoveredAmount,
-              value: accidentWsMoney(context, recovered, currency),
-            ),
-            AccidentWsFact(
-              label: l10n.accOutstanding,
-              value: accidentWsMoney(
-                context,
-                outstandingAmount(approved, recovered),
-                currency,
-              ),
-              emphasis: true,
-            ),
-            AccidentWsFact(
-              label: l10n.accRecoverySource,
-              value: accidentWsText(
-                context,
-                lastRecovery?.source ?? _record.recoveryStatus,
-              ),
-            ),
-            AccidentWsFact(
-              label: l10n.accLastUpdated,
-              value: accidentWsDateTime(
-                context,
-                lastRecovery?.recoveredAt ?? stream?.updatedAt,
-              ),
-            ),
-            const SizedBox(height: TpSpace.sm),
-            if (_recoveryOpen) ...<Widget>[
-              TpInput(
-                label: l10n.accRecoveredAmount,
-                controller: _recoveryAmount,
-                isRequired: true,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-              ),
-              const SizedBox(height: TpSpace.sm),
-              TpInput(
-                label: l10n.accRecoverySource,
-                controller: _recoverySource,
-                isRequired: true,
-                hint: l10n.accRecoverySourceHint,
-              ),
-              const SizedBox(height: TpSpace.sm),
-              Row(
-                children: <Widget>[
-                  Expanded(
-                    child: TpButton.secondary(
-                      label: l10n.actionCancel,
-                      onPressed: _busy
-                          ? null
-                          : () => setState(() => _recoveryOpen = false),
-                    ),
-                  ),
-                  const SizedBox(width: TpSpace.sm),
-                  Expanded(
-                    child: TpButton.primary(
-                      label: l10n.accSaveRecovery,
-                      isBusy: _busy,
-                      onPressed: _busy || claim == null
-                          ? null
-                          : () => _saveRecovery(claim),
-                    ),
-                  ),
-                ],
-              ),
-            ] else
-              TpButton.secondary(
-                key: const Key('accident.ws.insurance.updateRecovery'),
-                label: l10n.accUpdateRecovery,
-                icon: Icons.edit_outlined,
-                isFullWidth: true,
-                onPressed: registered && !_busy
-                    ? () => setState(() => _recoveryOpen = true)
-                    : null,
+            const SizedBox(height: TpSpace.xs),
+            if (_recoveryOpen)
+              _RecoveryForm(
+                amount: _recoveryAmount,
+                source: _recoverySource,
+                busy: _busy,
+                onSource: (String s) => setState(() => _recoverySource = s),
+                onCancel: () => setState(() => _recoveryOpen = false),
+                onSave: _saveRecovery,
+                sourceLabel: (String s) => _sourceLabel(l10n, s),
+              )
+            else if (mayRecord)
+              Align(
+                alignment: AlignmentDirectional.centerEnd,
+                child: TpButton.text(
+                  key: const Key('accident.ws.insurance.updateRecovery'),
+                  label: l10n.accClaimUpdateRecoveryLink,
+                  icon: Icons.chevron_right_rounded,
+                  onPressed: registered && !_busy
+                      ? () => setState(() => _recoveryOpen = true)
+                      : null,
+                ),
               ),
             if (!registered)
               Padding(
@@ -434,7 +507,7 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
                 child: Text(
                   l10n.accRegisterClaimFirst,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: TpPalette.of(context).textSecondary,
+                        color: palette.textSecondary,
                       ),
                 ),
               ),
@@ -452,83 +525,128 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
           number: 4,
           title: l10n.accAfterRegistrationNotify,
           children: <Widget>[
-            AccidentWsNotifyChips(
-              snapshot: widget.snapshot,
-              keys: const <String>[
-                'fleet',
-                'workshop',
-                'command_center',
-                'pmv_manager',
+            _TwoUp(
+              children: <Widget>[
+                for (final ClaimNotifyRecipient r in package.recipients)
+                  _RecipientTile(recipient: r),
               ],
             ),
+            if (package.recipients.isEmpty)
+              AccidentWsNotifyChips(
+                snapshot: widget.snapshot,
+                keys: claimNotifyRoleKeys,
+              ),
             const SizedBox(height: TpSpace.sm),
-            Text(
-              l10n.accClaimNotificationIncludes,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: TpPalette.of(context).textSecondary,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Icon(
+                  Icons.mail_outline_rounded,
+                  size: TpSizing.iconSm,
+                  color: palette.textSecondary,
+                ),
+                const SizedBox(width: TpSpace.sm),
+                Expanded(
+                  child: Text(
+                    l10n.accClaimNotificationIncludes,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: palette.textSecondary,
+                        ),
                   ),
+                ),
+              ],
             ),
           ],
         ),
         const SizedBox(height: TpSpace.md),
-        Row(
-          children: <Widget>[
-            Expanded(
-              child: TpButton.secondary(
-                key: const Key('accident.ws.insurance.saveDraft'),
-                label: l10n.accSaveClaimDraft,
-                icon: Icons.save_outlined,
-                onPressed: registered || _busy ? null : _saveDraft,
+        if (!registered)
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: TpButton.secondary(
+                  key: const Key('accident.ws.insurance.saveDraft'),
+                  label: l10n.accSaveClaimDraft,
+                  icon: Icons.bookmark_border_rounded,
+                  onPressed: _busy ? null : _saveDraft,
+                ),
               ),
-            ),
-            const SizedBox(width: TpSpace.sm),
-            Expanded(
-              child: TpButton.primary(
-                key: const Key('accident.ws.insurance.completeDocuments'),
-                label: l10n.accCompleteDocuments,
-                icon: Icons.checklist_rounded,
-                onPressed: docs.isComplete ? null : _scrollToPackage,
+              const SizedBox(width: TpSpace.sm),
+              Expanded(
+                child: docs.isComplete
+                    ? TpButton.primary(
+                        key: const Key(
+                          'accident.ws.insurance.completeDocuments',
+                        ),
+                        label: l10n.accClaimRegisterShort,
+                        icon: Icons.check_circle_outline_rounded,
+                        isBusy: _busy,
+                        onPressed: canRegister && !_busy
+                            ? () => _register(context)
+                            : null,
+                      )
+                    : TpButton.primary(
+                        key: const Key(
+                          'accident.ws.insurance.completeDocuments',
+                        ),
+                        label: l10n.accCompleteDocuments,
+                        icon: Icons.check_circle_outline_rounded,
+                        onPressed: _scrollToPackage,
+                      ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: TpSpace.md),
-        Row(
-          children: <Widget>[
-            Icon(
-              Icons.monitor_heart_outlined,
-              size: TpSizing.iconSm,
-              color: TpPalette.of(context).textSecondary,
-            ),
-            const SizedBox(width: TpSpace.xs),
-            Expanded(
-              child: Text(
-                l10n.accCommandCenterMonitoring(_commandCenterLabel(l10n)),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: TpPalette.of(context).textSecondary,
-                    ),
-              ),
-            ),
-          ],
-        ),
+            ],
+          ),
+        if (monitor?.singleName != null) ...<Widget>[
+          const SizedBox(height: TpSpace.md),
+          _MonitorNote(
+            key: const Key('accident.ws.insurance.monitor'),
+            text: l10n.accCommandCenterMonitoring(monitor!.singleName!),
+          ),
+        ],
       ],
     );
   }
 
-  String _commandCenterLabel(AppLocalizations l10n) {
-    final NotifyRole role =
-        notifyRoles.firstWhere((NotifyRole r) => r.key == 'command_center');
-    return role.roles.isEmpty
-        ? role.label
-        : l10n.accCommandCenterRole(role.roles.first);
+  String _claimNumberText(
+    BuildContext context,
+    AppLocalizations l10n,
+    AccidentClaim? claim,
+  ) {
+    final String number = (claim?.claimNo ?? _claimNo.text).trim();
+    return number.isEmpty ? l10n.accClaimNumberPending : number;
   }
+
+  String? _routeBanner(AppLocalizations l10n, String? route) =>
+      switch (route?.trim().toLowerCase()) {
+        'external' => l10n.accClaimExternalRepairBanner,
+        'internal' => l10n.accClaimRouteInternal,
+        'on_site' => l10n.accClaimRouteOnSite,
+        _ => null,
+      };
+
+  /// "Request driving licence": lower case in languages that have case.
+  String _requestLabel(BuildContext context, String key) {
+    final String label = claimDocLabel(AppLocalizations.of(context), key);
+    return Localizations.localeOf(context).languageCode == 'en'
+        ? label.toLowerCase()
+        : label;
+  }
+
+  String _sourceLabel(AppLocalizations l10n, String token) => switch (token) {
+        'insurer' => l10n.accClaimSourceInsurer,
+        'third_party' => l10n.accClaimSourceThirdParty,
+        'driver' => l10n.accClaimSourceDriver,
+        'other' => l10n.accClaimSourceOther,
+        _ => token,
+      };
 
   void _scrollToPackage() {
     final BuildContext? target = _packageKey.currentContext;
     if (target == null) return;
     Scrollable.ensureVisible(
       target,
-      duration: const Duration(milliseconds: 300),
+      duration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : const Duration(milliseconds: 300),
     ).ignore();
   }
 
@@ -568,7 +686,7 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
             country: ref.read(workspaceContextProvider)?.activeCountry,
             site: _record.site,
           );
-      _snack(l10n.accDocumentRequestLogged(row.doc.label));
+      _snack(l10n.accDocumentRequestLogged(claimDocLabel(l10n, row.doc.key)));
     });
   }
 
@@ -591,13 +709,9 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
             ),
             for (final ClaimDocumentStatus row in docs.rows)
               ListTile(
-                leading: Icon(
-                  row.state == ClaimDocumentState.received
-                      ? Icons.check_circle_outline
-                      : Icons.radio_button_unchecked,
-                ),
-                title: Text(row.doc.label),
-                subtitle: Text(row.label),
+                leading: Icon(claimDocIcon(row.doc.key)),
+                title: Text(claimDocLabel(l10n, row.doc.key)),
+                subtitle: Text(claimDocStateLabel(l10n, row)),
                 onTap: () => Navigator.of(sheet).pop(row.doc),
               ),
           ],
@@ -605,8 +719,10 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
       ),
     );
     if (doc == null || !mounted) return;
-    final AccidentPhotoSource? source =
-        await pickAccidentEvidenceSource(context, doc.label);
+    final AccidentPhotoSource? source = await pickAccidentEvidenceSource(
+      context,
+      claimDocLabel(l10n, doc.key),
+    );
     if (source == null || !mounted) return;
     await _run(() async {
       final String? path = await ref.read(accidentPhotoCaptureProvider).capture(
@@ -622,35 +738,41 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
             country: ref.read(workspaceContextProvider)?.activeCountry,
             site: _record.site,
           );
-      _snack(l10n.accDocumentUploaded(doc.label));
+      _snack(l10n.accDocumentUploaded(claimDocLabel(l10n, doc.key)));
     });
   }
 
   Future<void> _register(BuildContext context) async {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final num? amount = num.tryParse(_claimAmount.text.trim());
-    final num? deductible = _deductible.text.trim().isEmpty
-        ? null
-        : num.tryParse(_deductible.text.trim());
+    final String deductibleText = _deductible.text.trim();
+    final num? deductible =
+        deductibleText.isEmpty ? null : num.tryParse(deductibleText);
     if (_insurer.text.trim().isEmpty ||
         _policyNo.text.trim().isEmpty ||
-        amount == null) {
+        amount == null ||
+        (deductibleText.isNotEmpty && deductible == null)) {
+      setState(() => _editing = true);
       _snack(l10n.accClaimRegisterMissing);
       return;
     }
-    final String claimNo = _claimNo.text.trim().isEmpty
-        ? 'CLM-${_record.reference}'
-        : _claimNo.text.trim();
+    // The claim number is the insurer's; none is invented when blank.
+    final String claimNo = _claimNo.text.trim();
     final bool? ok = await showDialog<bool>(
       context: context,
       builder: (BuildContext dialog) => AlertDialog(
         title: Text(l10n.accRegisterClaim),
         content: Text(
-          l10n.accRegisterClaimConfirm(
-            claimNo,
-            _insurer.text.trim(),
-            _policyNo.text.trim(),
-          ),
+          claimNo.isEmpty
+              ? l10n.accClaimRegisterConfirmNoNumber(
+                  _insurer.text.trim(),
+                  _policyNo.text.trim(),
+                )
+              : l10n.accRegisterClaimConfirm(
+                  claimNo,
+                  _insurer.text.trim(),
+                  _policyNo.text.trim(),
+                ),
         ),
         actions: <Widget>[
           TextButton(
@@ -670,32 +792,40 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
             accidentId: _record.id,
             insurer: _insurer.text,
             policyNo: _policyNo.text,
-            claimNo: claimNo,
+            claimNo: claimNo.isEmpty ? null : claimNo,
             claimAmount: amount,
             deductible: deductible,
           );
       _claimDrafts.remove(_record.id);
-      _snack(l10n.accClaimRegisteredSnack(claimNo));
+      _snack(
+        claimNo.isEmpty
+            ? l10n.accClaimRegisteredNoNumberSnack
+            : l10n.accClaimRegisteredSnack(claimNo),
+      );
     });
   }
 
-  Future<void> _saveRecovery(AccidentClaim claim) async {
+  Future<void> _saveRecovery() async {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final num? amount = num.tryParse(_recoveryAmount.text.trim());
-    if (amount == null || _recoverySource.text.trim().isEmpty) {
+    if (amount == null || amount < 0) {
       _snack(l10n.accRecoveryMissing);
       return;
     }
+    final AccidentClaimPackage? package =
+        ref.read(accidentClaimPackageProvider(_record.id)).value;
+    final String? currency = package == null ? null : _caseCurrency(package);
     await _run(() async {
       await ref.read(accidentClaimPackageRepositoryProvider).addRecovery(
-            claimId: claim.id,
+            accidentId: _record.id,
             amount: amount,
-            source: _recoverySource.text,
-            country: ref.read(workspaceContextProvider)?.activeCountry,
+            source: _recoverySource,
+            currency: currency,
+            country: package?.caseCountry ??
+                ref.read(workspaceContextProvider)?.activeCountry,
             site: _record.site,
           );
       _recoveryAmount.clear();
-      _recoverySource.clear();
       if (mounted) setState(() => _recoveryOpen = false);
       _snack(l10n.accRecoveryRecorded);
     });
@@ -708,59 +838,589 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
   }
 }
 
+/// Localized label of one claim package document, keyed by requirement key.
+String claimDocLabel(AppLocalizations l10n, String key) => switch (key) {
+      'accident_report_pdf' => l10n.accClaimDocAccidentReport,
+      'fleet_validation' => l10n.accClaimDocFleetValidation,
+      'workshop_assessment_pdf' => l10n.accClaimDocWorkshopAssessment,
+      'damage_photographs' => l10n.accClaimDocDamagePhotos,
+      'police_najm_report' => l10n.accClaimDocPoliceNajm,
+      'vehicle_registration' => l10n.accClaimDocRegistration,
+      'driving_licence' => l10n.accClaimDocLicence,
+      'policy_document' => l10n.accClaimDocPolicy,
+      _ => claimPackageDocs
+              .where((VocabItem d) => d.key == key)
+              .firstOrNull
+              ?.label ??
+          key,
+    };
+
+IconData claimDocIcon(String key) => switch (key) {
+      'accident_report_pdf' => Icons.description_outlined,
+      'fleet_validation' => Icons.verified_user_outlined,
+      'workshop_assessment_pdf' => Icons.build_outlined,
+      'damage_photographs' => Icons.photo_camera_outlined,
+      'police_najm_report' => Icons.local_police_outlined,
+      'vehicle_registration' => Icons.directions_car_outlined,
+      'driving_licence' => Icons.badge_outlined,
+      'policy_document' => Icons.article_outlined,
+      _ => Icons.insert_drive_file_outlined,
+    };
+
+/// "Received" / "Missing" / "9 received", localized.
+String claimDocStateLabel(AppLocalizations l10n, ClaimDocumentStatus row) =>
+    switch (row.state) {
+      ClaimDocumentState.missing => l10n.accClaimDocMissing,
+      ClaimDocumentState.received when row.doc.countable =>
+        l10n.accClaimDocCount(row.count),
+      ClaimDocumentState.received => l10n.accClaimDocReceived,
+    };
+
 class _DocumentRow extends StatelessWidget {
-  const _DocumentRow({required this.row, this.onRequest});
+  const _DocumentRow({required this.row});
 
   final ClaimDocumentStatus row;
-  final VoidCallback? onRequest;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    final bool received = row.state == ClaimDocumentState.received;
+    final TpStatusColors tone = received
+        ? palette.ok
+        : row.doc.required
+            ? palette.warning
+            : palette.forStatus(TpStatus.unknown);
+    final String label = row.doc.required
+        ? claimDocLabel(l10n, row.doc.key)
+        : l10n.accOptionalSuffix(claimDocLabel(l10n, row.doc.key));
+    final String state = claimDocStateLabel(l10n, row);
+    return MergeSemantics(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: TpSizing.minTouchTarget),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: TpSpace.md,
+            vertical: TpSpace.sm,
+          ),
+          child: Row(
+            children: <Widget>[
+              Icon(
+                claimDocIcon(row.doc.key),
+                size: TpSizing.iconMd,
+                color: palette.primary,
+              ),
+              const SizedBox(width: TpSpace.md),
+              Expanded(child: Text(label)),
+              const SizedBox(width: TpSpace.sm),
+              // The countable row prints its count alone; the others pair
+              // an icon with the word, so state never rests on colour.
+              if (!(received && row.doc.countable)) ...<Widget>[
+                Icon(
+                  received
+                      ? Icons.check_circle_outline_rounded
+                      : Icons.error_outline_rounded,
+                  size: TpSizing.iconSm,
+                  color: tone.onSoft,
+                ),
+                const SizedBox(width: TpSpace.xs),
+              ],
+              Text(
+                state,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: tone.onSoft,
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A label/value line; [valueColor] colours only the value, never the label.
+class _Fact extends StatelessWidget {
+  const _Fact({
+    required this.label,
+    required this.value,
+    this.trailing,
+    this.valueColor,
+    this.emphasis = false,
+    this.muted = false,
+    super.key,
+  });
+
+  final String label;
+  final String value;
+  final Widget? trailing;
+  final Color? valueColor;
+  final bool emphasis;
+  final bool muted;
 
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
-    final bool received = row.state == ClaimDocumentState.received;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: TpSpace.xs),
-      child: Row(
-        children: <Widget>[
-          Icon(
-            received
-                ? Icons.check_circle_rounded
-                : row.doc.required
-                    ? Icons.error_outline_rounded
-                    : Icons.radio_button_unchecked,
-            size: TpSizing.iconMd,
-            color: received
-                ? palette.ok.base
-                : row.doc.required
-                    ? palette.critical.base
-                    : palette.textMuted,
+    final TextTheme text = Theme.of(context).textTheme;
+    return MergeSemantics(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: TpSpace.xs),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Expanded(
+              child: Text(
+                label,
+                style: text.bodyMedium?.copyWith(color: palette.textSecondary),
+              ),
+            ),
+            const SizedBox(width: TpSpace.sm),
+            if (value.isNotEmpty)
+              Flexible(
+                child: Text(
+                  value,
+                  textAlign: TextAlign.end,
+                  style: text.bodyMedium?.copyWith(
+                    color: muted ? palette.textMuted : valueColor,
+                    fontWeight: muted
+                        ? FontWeight.w400
+                        : emphasis
+                            ? FontWeight.w800
+                            : FontWeight.w600,
+                  ),
+                ),
+              ),
+            if (trailing != null) trailing!,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _InlineFact extends StatelessWidget {
+  const _InlineFact({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final TextTheme text = Theme.of(context).textTheme;
+    return MergeSemantics(
+      child: Text.rich(
+        TextSpan(
+          children: <InlineSpan>[
+            TextSpan(
+              text: '$label  ',
+              style: text.bodyMedium?.copyWith(
+                color: TpPalette.of(context).textSecondary,
+              ),
+            ),
+            TextSpan(
+              text: value,
+              style: text.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Two columns with a divider between them on a wide card, stacked on a
+/// phone.
+class _Columns extends StatelessWidget {
+  const _Columns({required this.left, required this.right});
+
+  final List<Widget> left;
+  final List<Widget> right;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          final Widget l = Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: left,
+          );
+          final Widget r = Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: right,
+          );
+          if (constraints.maxWidth < _twoColumnMinWidth) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[l, const SizedBox(height: TpSpace.sm), r],
+            );
+          }
+          return IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Expanded(child: l),
+                VerticalDivider(
+                  width: TpSpace.lg,
+                  color: TpPalette.of(context).border,
+                ),
+                Expanded(child: r),
+              ],
+            ),
+          );
+        },
+      );
+}
+
+/// Two equal buttons or tiles per row when they fit, one per row when not.
+class _TwoUp extends StatelessWidget {
+  const _TwoUp({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          final bool twoUp = constraints.maxWidth >= 340;
+          final double width = twoUp
+              ? (constraints.maxWidth - TpSpace.sm) / 2
+              : constraints.maxWidth;
+          return Wrap(
+            spacing: TpSpace.sm,
+            runSpacing: TpSpace.sm,
+            children: <Widget>[
+              for (final Widget child in children)
+                SizedBox(width: width, child: child),
+            ],
+          );
+        },
+      );
+}
+
+class _RouteBanner extends StatelessWidget {
+  const _RouteBanner({required this.text, super.key});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpStatusColors colors = TpPalette.of(context).warning;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.soft,
+        borderRadius: BorderRadius.circular(TpRadius.md),
+        border: Border.all(color: colors.base),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: TpSpace.md,
+          vertical: TpSpace.sm,
+        ),
+        child: Row(
+          children: <Widget>[
+            Icon(
+              Icons.assignment_turned_in_outlined,
+              size: TpSizing.iconMd,
+              color: colors.onSoft,
+            ),
+            const SizedBox(width: TpSpace.sm),
+            Expanded(
+              child: Text(
+                text,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: colors.onSoft,
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LockNote extends StatelessWidget {
+  const _LockNote({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color color = TpPalette.of(context).textSecondary;
+    return Row(
+      children: <Widget>[
+        Icon(Icons.lock_outline_rounded, size: TpSizing.iconSm, color: color),
+        const SizedBox(width: TpSpace.xs),
+        Flexible(
+          child: Text(
+            text,
+            style:
+                Theme.of(context).textTheme.bodySmall?.copyWith(color: color),
           ),
-          const SizedBox(width: TpSpace.sm),
-          Expanded(
-            child: Text(
-              row.doc.required
-                  ? row.doc.label
-                  : AppLocalizations.of(context)
-                      .accOptionalSuffix(row.doc.label),
+        ),
+      ],
+    );
+  }
+}
+
+class _WarningOutlinedButton extends StatelessWidget {
+  const _WarningOutlinedButton({
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+    super.key,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpStatusColors colors = TpPalette.of(context).warning;
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: TpSizing.iconMd),
+      label: Text(label, textAlign: TextAlign.center),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: colors.onSoft,
+        backgroundColor: colors.soft,
+        side: BorderSide(color: colors.base, width: 1.5),
+        minimumSize: const Size.fromHeight(TpSizing.minTouchTarget),
+        padding: const EdgeInsets.symmetric(
+          horizontal: TpSpace.md,
+          vertical: TpSpace.sm,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(TpRadius.md),
+        ),
+      ),
+    );
+  }
+}
+
+class _ClaimStatusPill extends StatelessWidget {
+  const _ClaimStatusPill({required this.registered, required this.claim});
+
+  final bool registered;
+  final AccidentClaim? claim;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final String token = claim?.decision?.trim().toLowerCase() ?? '';
+    final TpStatus tone = !registered
+        ? TpStatus.critical
+        : switch (token) {
+            'rejected' || 'disputed' || 'legal_escalation' => TpStatus.critical,
+            'fully_approved' || 'settled' => TpStatus.ok,
+            'partially_approved' ||
+            'documents_incomplete' ||
+            'withdrawn' =>
+              TpStatus.warning,
+            _ => TpStatus.info,
+          };
+    final String label = !registered
+        ? l10n.accClaimStatusNotRegistered
+        : token.isEmpty || token == 'registered'
+            ? l10n.accClaimStatusRegistered
+            : claimStatusLabel(registered: true, decision: token);
+    return TpStatusChip(status: tone, label: label, isCompact: true);
+  }
+}
+
+class _RecoveryForm extends StatelessWidget {
+  const _RecoveryForm({
+    required this.amount,
+    required this.source,
+    required this.busy,
+    required this.onSource,
+    required this.onCancel,
+    required this.onSave,
+    required this.sourceLabel,
+  });
+
+  final TextEditingController amount;
+  final String source;
+  final bool busy;
+  final ValueChanged<String> onSource;
+  final VoidCallback onCancel;
+  final VoidCallback onSave;
+  final String Function(String token) sourceLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        const SizedBox(height: TpSpace.sm),
+        TpInput(
+          label: l10n.accRecoveredAmount,
+          controller: amount,
+          isRequired: true,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        ),
+        const SizedBox(height: TpSpace.sm),
+        Text(
+          l10n.accRecoverySource,
+          style: Theme.of(context).textTheme.labelLarge,
+        ),
+        const SizedBox(height: TpSpace.xs),
+        Wrap(
+          spacing: TpSpace.sm,
+          runSpacing: TpSpace.xs,
+          children: <Widget>[
+            for (final String token in claimRecoverySources)
+              ChoiceChip(
+                key: Key('accident.ws.insurance.source.$token'),
+                label: Text(sourceLabel(token)),
+                selected: source == token,
+                materialTapTargetSize: MaterialTapTargetSize.padded,
+                onSelected: busy ? null : (_) => onSource(token),
+              ),
+          ],
+        ),
+        const SizedBox(height: TpSpace.sm),
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: TpButton.secondary(
+                label: l10n.actionCancel,
+                onPressed: busy ? null : onCancel,
+              ),
+            ),
+            const SizedBox(width: TpSpace.sm),
+            Expanded(
+              child: TpButton.primary(
+                key: const Key('accident.ws.insurance.saveRecovery'),
+                label: l10n.accSaveRecovery,
+                isBusy: busy,
+                onPressed: busy ? null : onSave,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _RecipientTile extends StatelessWidget {
+  const _RecipientTile({required this.recipient});
+
+  final ClaimNotifyRecipient recipient;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    final String who = switch (recipient.names.length) {
+      0 => recipient.fallbackRole,
+      1 => recipient.names.single,
+      final int n => l10n.accClaimNotifyPeople(n),
+    };
+    final String team = switch (recipient.roleKey) {
+      'fleet' => l10n.accClaimTeamFleet,
+      'workshop' => l10n.accClaimTeamWorkshop,
+      'command_center' => l10n.accClaimTeamCommandCenter,
+      'pmv_manager' => l10n.accClaimTeamPmvManager,
+      'insurance' => l10n.accClaimTeamInsurance,
+      _ => recipient.roleKey,
+    };
+    return MergeSemantics(
+      child: Tooltip(
+        message: recipient.names.length > 1 ? recipient.names.join(', ') : '',
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border.all(color: palette.border),
+            borderRadius: BorderRadius.circular(TpRadius.md),
+          ),
+          child: ConstrainedBox(
+            constraints:
+                const BoxConstraints(minHeight: TpSizing.minTouchTarget),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: TpSpace.sm,
+                vertical: TpSpace.sm,
+              ),
+              child: Row(
+                children: <Widget>[
+                  Icon(
+                    recipient.visibilityOnly
+                        ? Icons.visibility_outlined
+                        : Icons.person_outline_rounded,
+                    size: TpSizing.iconMd,
+                    color: palette.textSecondary,
+                  ),
+                  const SizedBox(width: TpSpace.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          who,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        Text(
+                          recipient.visibilityOnly
+                              ? l10n.accClaimNotifyVisibility
+                              : team,
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: palette.textSecondary,
+                                  ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-          TpStatusChip(
-            status: received
-                ? TpStatus.ok
-                : row.doc.required
-                    ? TpStatus.critical
-                    : TpStatus.unknown,
-            label: row.label,
-            isCompact: true,
-          ),
-          if (onRequest != null)
-            IconButton(
-              tooltip: AppLocalizations.of(context)
-                  .accRequestDocument(row.doc.label),
-              onPressed: onRequest,
-              icon: const Icon(Icons.forward_to_inbox_outlined),
+        ),
+      ),
+    );
+  }
+}
+
+class _MonitorNote extends StatelessWidget {
+  const _MonitorNote({required this.text, super.key});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpStatusColors colors = TpPalette.of(context).info;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.soft,
+        borderRadius: BorderRadius.circular(TpRadius.md),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(TpSpace.md),
+        child: Row(
+          children: <Widget>[
+            Icon(
+              Icons.person_outline_rounded,
+              size: TpSizing.iconMd,
+              color: colors.onSoft,
             ),
-        ],
+            const SizedBox(width: TpSpace.sm),
+            Expanded(
+              child: Text(
+                text,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(color: colors.onSoft),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

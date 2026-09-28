@@ -522,10 +522,12 @@ void main() {
     // checklist meter (clFix*) and saved-signature states (profileFix*).
     // 1974 + 40 = 2014. Design review: accident step progress, SLA line,
     // report footer and damage sheet copy moved into ARB (designAcc*).
-    test('en, ar and ur each carry exactly 2014 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2014);
-      expect(_translatableKeys(ar).length, 2014);
-      expect(_translatableKeys(ur).length, 2014);
+    // 2014 + 55 = 2069. Accident mock pass 2: insurance claim workstream
+    // (accClaim*) and report step 1 identify asset (accRpt*).
+    test('en, ar and ur each carry exactly 2069 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2069);
+      expect(_translatableKeys(ar).length, 2069);
+      expect(_translatableKeys(ur).length, 2069);
     });
   });
 

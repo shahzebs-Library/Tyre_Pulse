@@ -518,4 +518,24 @@ void main() {
     expect(notes, contains('Third-party invoice number: INV-4482'));
     expect(notes, contains('Najm notified: No'));
   });
+
+  group('matchScannedAsset', () {
+    const VehicleAsset a = VehicleAsset(id: 'a', assetNo: 'CP045');
+    const VehicleAsset b =
+        VehicleAsset(id: 'b', assetNo: 'TM514', fleetNumber: 'F-77');
+    test('matches the asset number with case, spaces and hyphens folded', () {
+      expect(matchScannedAsset(<VehicleAsset>[a, b], ' cp-045 '), a);
+    });
+    test('falls back to the fleet number', () {
+      expect(matchScannedAsset(<VehicleAsset>[a, b], 'f77'), b);
+    });
+    test('an ambiguous code picks nothing rather than guessing', () {
+      const VehicleAsset twin = VehicleAsset(id: 'c', assetNo: 'CP045');
+      expect(matchScannedAsset(<VehicleAsset>[a, twin], 'CP045'), isNull);
+    });
+    test('an unknown or blank code is null', () {
+      expect(matchScannedAsset(<VehicleAsset>[a], 'XX9'), isNull);
+      expect(matchScannedAsset(<VehicleAsset>[a], '  '), isNull);
+    });
+  });
 }

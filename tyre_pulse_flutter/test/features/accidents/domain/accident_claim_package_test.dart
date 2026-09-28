@@ -86,17 +86,42 @@ void main() {
       expect(netClaimable(double.nan, 1), isNull);
     });
 
-    test('recovered total ignores rejected rows; outstanding needs approval',
-        () {
+    test('recovered total counts only recovered and partial rows', () {
       final List<AccidentClaimRecovery> rows = <AccidentClaimRecovery>[
-        const AccidentClaimRecovery(id: 'a', amount: 400, status: 'received'),
+        const AccidentClaimRecovery(id: 'a', amount: 400, status: 'recovered'),
         const AccidentClaimRecovery(id: 'b', amount: 100, status: 'rejected'),
+        const AccidentClaimRecovery(id: 'w', amount: 70, status: 'written_off'),
+        const AccidentClaimRecovery(
+          id: 'n',
+          amount: 30,
+          status: 'not_applicable',
+        ),
         const AccidentClaimRecovery(id: 'c', amount: 50),
+        const AccidentClaimRecovery(id: 'p', amount: 60, status: 'pending'),
+        const AccidentClaimRecovery(
+          id: 'i',
+          amount: 80,
+          status: 'in_progress',
+        ),
+        const AccidentClaimRecovery(id: 't', amount: 25, status: 'partial'),
       ];
-      expect(recoveredTotal(rows), 450);
+      expect(recoveredTotal(rows), 425);
+    });
+
+    test('outstanding is approved (else claimed) less recovered', () {
       expect(outstandingAmount(1000, 450), 550);
       expect(outstandingAmount(300, 450), 0);
       expect(outstandingAmount(null, 450), isNull);
+      expect(outstandingAmount(null, 0, claimAmount: 46900), 46900);
+      expect(outstandingAmount(900, 100, claimAmount: 46900), 800);
+      expect(outstandingAmount(double.nan, 0, claimAmount: 10), 10);
+    });
+
+    test('recovery sources are the live CHECK tokens', () {
+      expect(
+        claimRecoverySources,
+        <String>['insurer', 'third_party', 'driver', 'other'],
+      );
     });
   });
 

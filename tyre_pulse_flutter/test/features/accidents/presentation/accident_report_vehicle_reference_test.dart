@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
+import 'package:tyre_pulse/features/accidents/data/accident_report_vehicle_photo.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_damage_map.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_report_screen.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_damage_map_section.dart';
@@ -35,6 +36,7 @@ Future<void> _pumpReport(WidgetTester tester) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        accidentVehiclePhotoSourceProvider.overrideWithValue(_NoPhotos()),
         vehicleFleetListProvider.overrideWith(
           (Ref ref) async => const VehicleFleetListLoaded(
             assets: <VehicleAsset>[_pump, _loader],
@@ -131,7 +133,9 @@ void main() {
       final Finder search = find.byType(TextField).first;
       await tester.enterText(search, 'CP3012');
       await tester.pump();
-      await tester.tap(find.widgetWithText(ListTile, 'CP3012').last);
+      await tester.tap(
+        find.byKey(AccidentReportIntakeKeys.matchRow('pump-5-axle')).last,
+      );
       await tester.pump(const Duration(milliseconds: 20));
       await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
       await tester.pumpAndSettle();
@@ -202,7 +206,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Change asset').first);
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ListTile, 'WL509').last);
+    await tester.tap(
+      find.byKey(AccidentReportIntakeKeys.matchRow('wheel-loader')).last,
+    );
     await tester.pumpAndSettle();
     tester
         .state<ScrollableState>(find.byType(Scrollable).first)
@@ -229,9 +235,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('an incident site the reporter typed survives an asset change', (
-    WidgetTester tester,
-  ) async {
+  testWidgets(
+      'the incident site is chosen by the reporter and survives an asset change',
+      (WidgetTester tester) async {
     await _pumpReport(tester);
     await _selectPump(tester);
     expect(find.text('Step 1 of 7: Identify asset'), findsOneWidget);
@@ -240,14 +246,36 @@ void main() {
     expect(find.text(_siteHelp), findsOneWidget);
     expect(find.text(_lockNote), findsOneWidget);
 
-    final Finder siteField = find.descendant(
-      of: find.byKey(AccidentReportIntakeKeys.incidentSite),
-      matching: find.byType(TextField),
-    );
-    await tester.ensureVisible(siteField);
-    expect(tester.widget<TextField>(siteField).controller?.text, 'Diriyah');
-    await tester.enterText(siteField, 'Riyadh Metro');
+    // Mock M1: the fleet home site is never written in for the reporter.
+    final Finder siteRow = find.byKey(AccidentReportIntakeKeys.incidentSite);
+    await tester.ensureVisible(siteRow);
     await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: siteRow,
+        matching: find.text('Select incident site / location'),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(siteRow);
+    await tester.pumpAndSettle();
+    // The home site is offered first, labelled, as one choice among many.
+    expect(
+      find.byKey(AccidentReportIntakeKeys.siteChip('Diriyah')),
+      findsOneWidget,
+    );
+    await tester.enterText(
+      find.byKey(AccidentReportIntakeKeys.incidentSiteField),
+      'Riyadh Metro',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(AccidentReportIntakeKeys.useTypedSite));
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(of: siteRow, matching: find.text('Riyadh Metro')),
+      findsOneWidget,
+    );
 
     tester
         .state<ScrollableState>(find.byType(Scrollable).first)
@@ -258,12 +286,16 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Change asset').first);
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ListTile, 'WL509').last);
+    await tester.tap(
+      find.byKey(AccidentReportIntakeKeys.matchRow('wheel-loader')).last,
+    );
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(siteRow);
+    await tester.pumpAndSettle();
     expect(
-      tester.widget<TextField>(siteField).controller?.text,
-      'Riyadh Metro',
+      find.descendant(of: siteRow, matching: find.text('Riyadh Metro')),
+      findsOneWidget,
       reason: 'the loader home site (Qiddiya G2) must not overwrite it',
     );
     expect(tester.takeException(), isNull);
@@ -277,3 +309,12 @@ const String _lockNote =
 const String _siteHelp =
     'Select the site/location of this incident. This may be different from '
     "the asset's home site.";
+
+final class _NoPhotos implements AccidentVehiclePhotoSource {
+  @override
+  Future<Map<String, String>> uploadedPhotoPaths() async =>
+      const <String, String>{};
+
+  @override
+  Future<String> signedUrl(String path) async => throw StateError(path);
+}

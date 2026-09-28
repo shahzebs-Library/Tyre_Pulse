@@ -21,7 +21,7 @@
  * (?tab=overview | gate | releases).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Smartphone, ShieldAlert, Rocket, Save, Bell, Users, History, Layers } from 'lucide-react'
+import { Smartphone, ShieldAlert, Rocket, Save, Bell, Users, History, Layers, Image as ImageIcon } from 'lucide-react'
 import {
   Panel, PanelHeader, Note, StatTile, Btn, Badge, LoadingState, ErrorState, Modal, Segmented, EmptyState,
   Table, THead, Th, Tr, Td,
@@ -36,9 +36,10 @@ import ExportButtons from './shared/ExportButtons'
 import { PageHeader, useUrlTab, AttentionList, ConsoleLink, TabPanel, whenText, ageText } from './shared/pageKit'
 import { getDeviceVersions } from './mobileApp/deviceVersions'
 import { latestRisk, gateImpact, behindLatest } from './mobileApp/releaseGuard'
+import LoginArtworkPanel from './mobileApp/LoginArtworkPanel'
 
 const nf = new Intl.NumberFormat('en-US')
-const TABS = ['overview', 'gate', 'releases']
+const TABS = ['overview', 'gate', 'releases', 'login']
 const INPUT = 'w-56 max-w-full rounded-lg bg-gray-900 border border-gray-700 px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:border-orange-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 disabled:opacity-50'
 const VERSION_EXPORT = [
   { key: 'app_version', header: 'App version', value: (r) => r.app_version || 'Unknown' },
@@ -186,6 +187,7 @@ export default function ConsoleMobileApp() {
             { key: 'overview', label: <><Users size={13} aria-hidden="true" />Install base</>, count: devices ? devices.byVersion.length : null },
             { key: 'gate', label: <><ShieldAlert size={13} aria-hidden="true" />Forced update</> },
             { key: 'releases', label: <><History size={13} aria-hidden="true" />Record a release</> },
+            { key: 'login', label: <><ImageIcon size={13} aria-hidden="true" />Login pictures</> },
           ]} />
         </nav>
       )}
@@ -324,6 +326,12 @@ export default function ConsoleMobileApp() {
               <p className="text-xs text-gray-500">Push reach and device sign-outs are managed in <ConsoleLink plain to="/console/sessions">Sessions & Devices</ConsoleLink>.</p>
             </div>
           </Panel>
+        </TabPanel>
+      )}
+
+      {tab === 'login' && (
+        <TabPanel label="Login pictures">
+          <LoginArtworkPanel onSaved={(json) => logAction?.('set_mobile_login_art', null, 'system', { value: json })} />
         </TabPanel>
       )}
 

@@ -28,7 +28,7 @@ import { toUserMessage } from '../safeError'
 export const PUBLIC_CONFIG_KEYS = Object.freeze([
   'maintenance_mode', 'maintenance_message', 'registration_open', 'allow_signups',
   'require_approval', 'app_version', 'session_timeout_hours', 'two_factor_required',
-  'password_min_length', 'default_currency',
+  'password_min_length', 'default_currency', 'mobile_login_hero',
 ])
 
 /** App defaults — the effective value when a key is unset/unreadable. Enforcement

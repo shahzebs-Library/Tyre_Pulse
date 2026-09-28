@@ -249,6 +249,11 @@ abstract final class SupabaseRpcs {
   /// what makes the lockout real: someone who cannot sign in cannot reset it.
   static const String resetLoginAttempts = 'reset_login_attempts';
 
+  /// Anon-safe public subset of `system_config` (never secrets). Read before
+  /// sign-in for presentation such as the administrator-chosen login artwork
+  /// (`mobile_login_hero`).
+  static const String getPublicConfig = 'get_public_config';
+
   /// Asked AFTER a password sign-in succeeds: does this user's organisation
   /// require SSO (`sso_connections.enforce_sso`)? Returns jsonb
   /// `{allowed, reason}`; super admins are exempt server-side. Created by

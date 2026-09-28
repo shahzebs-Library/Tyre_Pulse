@@ -15,7 +15,9 @@ import 'package:tyre_pulse/core/auth/auth_dependency_providers.dart';
 import 'package:tyre_pulse/core/auth/sign_in_outcome.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/security/device_biometric_authenticator.dart';
+import 'package:tyre_pulse/features/auth/domain/login_artwork.dart';
 import 'package:tyre_pulse/features/auth/domain/login_country.dart';
+import 'package:tyre_pulse/features/auth/presentation/login_artwork_provider.dart';
 import 'package:tyre_pulse/features/auth/presentation/login_country_preference_provider.dart';
 import 'package:tyre_pulse/features/auth/presentation/login_security_copy.dart';
 import 'package:tyre_pulse/features/auth/presentation/widgets/login_country_hero.dart';
@@ -318,6 +320,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 child: _ExactLoginHero(
                   key: const Key('login.brand.panel'),
                   country: selectedCountry,
+                  artwork: ref
+                      .watch(loginArtworkProvider)
+                      .forCountry(selectedCountry),
                 ),
               ),
               Positioned(
@@ -388,6 +393,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 child: LoginCountryHero(
                   key: const Key('login.brand.panel'),
                   country: selectedCountry,
+                  artwork: ref
+                      .watch(loginArtworkProvider)
+                      .forCountry(selectedCountry),
                   compact: false,
                   onChangeCountry: () =>
                       unawaited(_chooseCountry(selectedCountry)),
@@ -459,23 +467,9 @@ const double _kCompactHeroHeight = 424;
 const double _kCompactFormTop = 344;
 const double _kFormEdgeDip = 80;
 
-/// Every country uses its full-resolution landmark composition. The earlier
-/// Saudi cut-outs were low-resolution crops of the mock with its white curve
-/// baked in, which showed as a hard box around the machine.
-String _countryHeroAsset(LoginCountry country) => switch (country) {
-      LoginCountry.saudiArabia => 'assets/login/saudi_arabia_hero.png',
-      LoginCountry.unitedArabEmirates =>
-        'assets/login/united_arab_emirates_hero.png',
-      LoginCountry.egypt => 'assets/login/egypt_hero.png',
-    };
-
-/// Where each composition is anchored inside the compact hero, so the
-/// landmark and the PMV machine both sit above the form's curved edge.
-Alignment _countryHeroAlignment(LoginCountry country) => switch (country) {
-      LoginCountry.saudiArabia => const Alignment(0, 0.86),
-      LoginCountry.unitedArabEmirates => const Alignment(0, 0.66),
-      LoginCountry.egypt => const Alignment(0, 0.84),
-    };
+/// The artwork itself is chosen per country by an administrator (Console ->
+/// Mobile App -> Login pictures) and resolved by [loginArtworkProvider];
+/// each [LoginArtwork] carries its own asset and compact anchor.
 
 /// Brightness 1.1x, a touch of contrast and saturation; alpha untouched.
 const List<double> _kHeroLift = <double>[
@@ -494,14 +488,21 @@ const List<Shadow> _kHeroTextShadow = <Shadow>[
 const Color _kHeroNight = Color(0xFF030A29);
 
 class _ExactLoginHero extends StatelessWidget {
-  const _ExactLoginHero({required this.country, super.key});
+  const _ExactLoginHero({
+    required this.country,
+    required this.artwork,
+    super.key,
+  });
 
   final LoginCountry country;
+
+  /// The administrator-chosen picture for [country].
+  final LoginArtwork artwork;
 
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final String asset = _countryHeroAsset(country);
+    final String asset = artwork.assetPath;
     final TextTheme text = Theme.of(context).textTheme;
 
     return Semantics(
@@ -525,7 +526,7 @@ class _ExactLoginHero extends StatelessWidget {
                 asset,
                 key: ValueKey<String>(asset),
                 fit: BoxFit.cover,
-                alignment: _countryHeroAlignment(country),
+                alignment: artwork.compactAlignment,
                 excludeFromSemantics: true,
                 filterQuality: FilterQuality.high,
               ),

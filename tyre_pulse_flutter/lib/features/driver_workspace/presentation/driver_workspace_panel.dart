@@ -8,100 +8,40 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/approvals/presentation/widgets/inspection_approval_signature_pad.dart';
 import 'package:tyre_pulse/features/driver_workspace/data/driver_workspace_repository.dart';
 import 'package:tyre_pulse/features/driver_workspace/domain/driver_workspace.dart';
-import 'package:tyre_pulse/features/driver_workspace/presentation/driver_workspace_copy.dart';
+import 'package:tyre_pulse/features/driver_workspace/presentation/driver_workspace_l10n.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
-
-const Map<String, String> _names = <String, String>{
-  'direct_payment': 'I will pay directly',
-  'already_paid': 'Already paid',
-  'dispute': 'Dispute / incorrect assignment',
-  'company_recovery': 'Request company payment / recovery',
-  'instalments': 'Request instalments',
-  'create_driver': 'Add verified driver',
-  'link_account': 'Link login account',
-  'assign_team': 'Assign team and vehicle',
-  'create_fine': 'Issue traffic fine',
-  'link_record': 'Link work record',
-  'respond_fine': 'Review and sign',
-  'review_fine': 'Review response / payment',
-};
-String _human(String key) => _names[key] ?? key.replaceAll('_', ' ');
-
-const Map<String, List<List<String>>> _fields = <String, List<List<String>>>{
-  'create_driver': <List<String>>[
-    ['driver_id', 'Employee ID'],
-    ['driver_name', 'Driver name'],
-    ['country', 'Country'],
-    ['site', 'Site'],
-  ],
-  'link_account': <List<String>>[
-    ['user_id', 'Login account (none removes link)', 'users'],
-    ['reason', 'Identity verification / reason'],
-  ],
-  'assign_team': <List<String>>[
-    ['supervisor_id', 'Supervisor', 'users'],
-    ['manager_id', 'Manager', 'users'],
-    ['vehicle_id', 'Vehicle', 'vehicles'],
-    ['reason', 'Assignment reason'],
-  ],
-  'create_fine': <List<String>>[
-    ['vehicle_id', 'Vehicle', 'vehicles'],
-    ['authority', 'Issuing authority'],
-    ['notice_reference', 'Notice reference'],
-    ['incident_at', 'Incident date and time (YYYY-MM-DDTHH:mm)'],
-    ['due_date', 'Due date (YYYY-MM-DD)'],
-    ['amount', 'Fine amount', 'number'],
-    ['currency', 'Currency code'],
-    ['description', 'Notice details'],
-    ['assignment_reason', 'Evidence confirming driver assignment'],
-  ],
-  'link_record': <List<String>>[
-    ['source_type', 'Record type', 'record_type'],
-    ['source_id', 'Existing record', 'records'],
-    ['reason', 'How driver identity was verified'],
-  ],
-  'respond_fine': <List<String>>[
-    ['resolution', 'Preferred resolution', 'resolution'],
-    ['explanation', 'Explanation / proposed arrangement'],
-    ['payment_reference', 'Payment reference (if paid)'],
-    ['proposed_date', 'Proposed payment date (YYYY-MM-DD)'],
-  ],
-  'review_fine': <List<String>>[
-    ['decision', 'Decision', 'decision'],
-    ['reason', 'Review reason / approved arrangement'],
-    ['payment_reference', 'Verified payment reference'],
-    ['payment_amount', 'Verified payment amount', 'number'],
-  ],
-};
 
 /// Uses the existing authenticated Profile surface. The router and offline
 /// command registry remain owned by their existing infrastructure.
 class DriverWorkspaceEntry extends StatelessWidget {
   const DriverWorkspaceEntry({super.key});
   @override
-  Widget build(BuildContext context) => Card(
-        child: ListTile(
-          leading: const Icon(Icons.badge_outlined),
-          title: const DriverText('Driver workspace'),
-          subtitle:
-              const DriverText('My fines, team assignments and verified work'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => showModalBottomSheet<void>(
-            context: context,
-            isScrollControlled: true,
-            useSafeArea: true,
-            builder: (BuildContext context) => const FractionallySizedBox(
-              heightFactor: 0.96,
-              child: DriverWorkspacePanel(),
-            ),
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    return Card(
+      child: ListTile(
+        leading: const Icon(Icons.badge_outlined),
+        title: Text(l10n.driverWsTitle),
+        subtitle: Text(l10n.driverWsEntrySubtitle),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => showModalBottomSheet<void>(
+          context: context,
+          isScrollControlled: true,
+          useSafeArea: true,
+          builder: (BuildContext context) => const FractionallySizedBox(
+            heightFactor: 0.96,
+            child: DriverWorkspacePanel(),
           ),
         ),
-      );
+      ),
+    );
+  }
 }
 
 class DriverWorkspacePanel extends ConsumerStatefulWidget {
@@ -116,7 +56,7 @@ class _DriverWorkspacePanelState extends ConsumerState<DriverWorkspacePanel> {
   String? _driverId;
   String _owner = '';
   String _search = '';
-  String? _error;
+  String Function(AppLocalizations)? _error;
   bool _loading = false;
   int _generation = 0;
   DriverWorkspaceRepository get _repository =>
@@ -137,10 +77,7 @@ class _DriverWorkspacePanelState extends ConsumerState<DriverWorkspacePanel> {
       }
     } catch (_) {
       if (mounted && generation == _generation) {
-        setState(
-          () => _error =
-              'Workspace unavailable. Check connection, account linking and access, then refresh.',
-        );
+        setState(() => _error = (AppLocalizations l) => l.driverWsLoadError);
       }
     } finally {
       if (mounted && generation == _generation) {
@@ -171,23 +108,29 @@ class _DriverWorkspacePanelState extends ConsumerState<DriverWorkspacePanel> {
     final DriverWorkspaceSnapshot? data = _snapshot;
     if (data?.driver == null || data!.truncated) return;
     try {
+      // The PDF is written in English on purpose: the default PDF font has no
+      // Arabic or Urdu glyphs and no Arabic-capable font is bundled, so a
+      // localized PDF would print empty boxes. The strings still come from
+      // the ARB catalog (English locale), never from literals here.
+      final AppLocalizations pdf =
+          await AppLocalizations.delegate.load(const Locale('en'));
       final pw.Document document = pw.Document();
       document.addPage(
         pw.MultiPage(
           build: (pw.Context context) => <pw.Widget>[
             pw.Header(
               level: 0,
-              text: 'Driver statement: ${data.driver!['driver_name']}',
+              text: pdf.driverWsPdfTitle('${data.driver!['driver_name']}'),
             ),
-            pw.Text('Employee ID: ${data.driver!['driver_id']}'),
+            pw.Text(pdf.driverWsPdfEmployeeId('${data.driver!['driver_id']}')),
             pw.TableHelper.fromTextArray(
               headers: <String>[
-                'Notice',
-                'Currency',
-                'Amount',
-                'Paid',
-                'Status',
-                'Response',
+                pdf.driverWsPdfColNotice,
+                pdf.driverWsPdfColCurrency,
+                pdf.driverWsPdfColAmount,
+                pdf.driverWsPdfColPaid,
+                pdf.driverWsPdfColStatus,
+                pdf.driverWsPdfColResponse,
               ],
               data: data
                   .rows('fines')
@@ -197,8 +140,8 @@ class _DriverWorkspacePanelState extends ConsumerState<DriverWorkspacePanel> {
                       '${f['currency']}',
                       '${f['amount']}',
                       '${f['paid_amount']}',
-                      '${f['status']}',
-                      '${f['response_status']}',
+                      driverWsTermLabel(pdf, '${f['status']}'),
+                      driverWsTermLabel(pdf, '${f['response_status']}'),
                     ],
                   )
                   .toList(),
@@ -212,13 +155,16 @@ class _DriverWorkspacePanelState extends ConsumerState<DriverWorkspacePanel> {
       );
     } catch (_) {
       if (mounted) {
-        setState(() => _error = 'Report could not be shared. Try again.');
+        setState(
+          () => _error = (AppLocalizations l) => l.driverWsReportShareError,
+        );
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final workspace = ref.watch(workspaceContextProvider);
     final String owner =
         workspace == null ? '' : '${workspace.userId}_${workspace.tenantId}';
@@ -242,9 +188,9 @@ class _DriverWorkspacePanelState extends ConsumerState<DriverWorkspacePanel> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: const DriverText('Driver workspace'),
+          title: Text(l10n.driverWsTitle),
           leading: IconButton(
-            tooltip: 'Back',
+            tooltip: l10n.actionBack,
             icon: const Icon(Icons.arrow_back),
             onPressed: () {
               if (_driverId == null) {
@@ -257,50 +203,43 @@ class _DriverWorkspacePanelState extends ConsumerState<DriverWorkspacePanel> {
           ),
           actions: <Widget>[
             IconButton(
-              tooltip: 'Refresh',
+              tooltip: l10n.driverWsRefresh,
               onPressed: _loading || owner.isEmpty ? null : _load,
               icon: const Icon(Icons.refresh),
             ),
           ],
         ),
         body: owner.isEmpty
-            ? const Center(child: DriverText('Sign in to view your workspace.'))
+            ? Center(child: Text(l10n.driverWsSignInRequired))
             : ListView(
                 padding: const EdgeInsets.all(16),
                 children: <Widget>[
                   if (_loading) const LinearProgressIndicator(),
                   if (_error != null)
-                    DriverText(
-                      _error!,
+                    Text(
+                      _error!(l10n),
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.error,
                       ),
                     ),
-                  if (data?.offline == true)
-                    const DriverText(
-                      'Offline cached view. Connect and refresh before responding or reviewing.',
-                    ),
+                  if (data?.offline == true) Text(l10n.driverWsOfflineNotice),
                   if (data?.truncated == true)
-                    const DriverText(
-                      'This view is incomplete because it reached the record limit. Export is disabled.',
-                    ),
+                    Text(l10n.driverWsTruncatedNotice),
                   if (data != null && _driverId == null) ...<Widget>[
                     if (data.canManage)
                       FilledButton(
                         onPressed: () => _action('create_driver'),
-                        child: const DriverText('Add verified driver'),
+                        child: Text(driverWsTermLabel(l10n, 'create_driver')),
                       ),
                     TextField(
-                      decoration: const InputDecoration(
-                        labelText: 'Search drivers',
+                      decoration: InputDecoration(
+                        labelText: l10n.driverWsSearchDrivers,
                       ),
                       onChanged: (String value) =>
                           setState(() => _search = value),
                     ),
                     if (data.rows('drivers').isEmpty)
-                      const DriverText(
-                        'No linked driver or assigned team is available. Ask an authorized manager to verify your account and assignment.',
-                      ),
+                      Text(l10n.driverWsNoDrivers),
                     ...data
                         .rows('drivers')
                         .where(
@@ -312,11 +251,15 @@ class _DriverWorkspacePanelState extends ConsumerState<DriverWorkspacePanel> {
                         .map(
                           (DriverRow d) => Card(
                             child: ListTile(
-                              title: DriverText(
+                              title: Text(
                                 '${d['driver_name']} · ${d['driver_id']}',
                               ),
-                              subtitle: DriverText(
-                                '${d['site']} · ${d['open_fines']} open fines · ${d['awaiting_response']} awaiting response',
+                              subtitle: Text(
+                                l10n.driverWsDriverSubtitle(
+                                  '${d['site'] ?? l10n.driverWsNotSupplied}',
+                                  '${d['open_fines'] ?? 0}',
+                                  '${d['awaiting_response'] ?? 0}',
+                                ),
                               ),
                               onTap: () {
                                 setState(
@@ -329,11 +272,11 @@ class _DriverWorkspacePanelState extends ConsumerState<DriverWorkspacePanel> {
                         ),
                   ],
                   if (data?.driver != null) ...<Widget>[
-                    DriverText(
+                    Text(
                       '${data!.driver!['driver_name']} · ${data.driver!['driver_id']}',
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
-                    DriverText(
+                    Text(
                       '${data.driver!['country']} · ${data.driver!['site']}',
                     ),
                     if (data.canManage)
@@ -344,27 +287,29 @@ class _DriverWorkspacePanelState extends ConsumerState<DriverWorkspacePanel> {
                       ].map(
                         (String action) => OutlinedButton(
                           onPressed: () => _action(action),
-                          child: DriverText(_human(action)),
+                          child: Text(driverWsTermLabel(l10n, action)),
                         ),
                       ),
                     if (data.canReview)
                       FilledButton(
                         onPressed: () => _action('create_fine'),
-                        child: const DriverText('Issue traffic fine'),
+                        child: Text(driverWsTermLabel(l10n, 'create_fine')),
                       ),
                     OutlinedButton(
                       onPressed: data.truncated ? null : _report,
-                      child: const DriverText('Share fine statement PDF'),
+                      child: Text(l10n.driverWsSharePdf),
                     ),
                     ...data.rows('balances').map(
-                          (DriverRow b) => DriverText(
-                            'Outstanding: ${b['outstanding']} ${b['currency']}',
+                          (DriverRow b) => Text(
+                            l10n.driverWsOutstanding(
+                              '${b['outstanding']}',
+                              '${b['currency']}',
+                            ),
                           ),
                         ),
                     const SizedBox(height: 16),
-                    const DriverText('Traffic fines'),
-                    if (data.rows('fines').isEmpty)
-                      const DriverText('No fines recorded.'),
+                    Text(l10n.driverWsTrafficFines),
+                    if (data.rows('fines').isEmpty) Text(l10n.driverWsNoFines),
                     ...data.rows('fines').map(
                           (DriverRow f) => DriverFineCard(
                             key: ValueKey<String>('${f['id']}-${f['version']}'),
@@ -375,9 +320,9 @@ class _DriverWorkspacePanelState extends ConsumerState<DriverWorkspacePanel> {
                           ),
                         ),
                     const SizedBox(height: 16),
-                    const DriverText('Team and vehicle assignment history'),
+                    Text(l10n.driverWsAssignmentHistory),
                     if (data.rows('assignments').isEmpty)
-                      const DriverText('No assignment recorded.'),
+                      Text(l10n.driverWsNoAssignment),
                     ...data.rows('assignments').map(
                           (DriverRow a) => Card(
                             child: Padding(
@@ -385,46 +330,62 @@ class _DriverWorkspacePanelState extends ConsumerState<DriverWorkspacePanel> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: <Widget>[
-                                  DriverText(
-                                    '${a['ends_at'] == null ? 'Current' : 'Previous'} · ${a['asset_no'] ?? 'No vehicle'}',
+                                  Text(
+                                    '${a['ends_at'] == null ? l10n.driverWsAssignmentCurrent : l10n.driverWsAssignmentPrevious} · ${a['asset_no'] ?? l10n.driverWsNoVehicle}',
                                   ),
-                                  DriverText(
-                                    'Supervisor: ${a['supervisor_name'] ?? 'Not assigned'}',
+                                  Text(
+                                    l10n.driverWsSupervisorLine(
+                                      '${a['supervisor_name'] ?? l10n.driverWsNotAssigned}',
+                                    ),
                                   ),
-                                  DriverText(
-                                    'Manager: ${a['manager_name'] ?? 'Not assigned'}',
+                                  Text(
+                                    l10n.driverWsManagerLine(
+                                      '${a['manager_name'] ?? l10n.driverWsNotAssigned}',
+                                    ),
                                   ),
-                                  DriverText(
-                                    '${a['starts_at']} → ${a['ends_at'] ?? 'Present'}',
+                                  Text(
+                                    l10n.driverWsAssignmentPeriod(
+                                      '${a['starts_at']}',
+                                      '${a['ends_at'] ?? l10n.driverWsPresent}',
+                                    ),
                                   ),
-                                  DriverText('${a['reason']}'),
+                                  if (a['reason'] != null)
+                                    Text('${a['reason']}'),
                                 ],
                               ),
                             ),
                           ),
                         ),
                     const SizedBox(height: 16),
-                    const DriverText('Assigned work'),
+                    Text(l10n.driverWsAssignedWork),
                     ...data.rows('work').map(
                           (DriverRow work) => ListTile(
-                            title: DriverText('${work['title']}'),
-                            subtitle: DriverText(
-                              _human('${work['status'] ?? 'Not supplied'}'),
+                            title: Text('${work['title']}'),
+                            subtitle: Text(
+                              work['status'] == null
+                                  ? l10n.driverWsNotSupplied
+                                  : driverWsTermLabel(
+                                      l10n,
+                                      '${work['status']}',
+                                    ),
                             ),
                           ),
                         ),
-                    const DriverText('Verified work and driver records'),
-                    const DriverText(
-                      'Unmatched historical records require identity review before they appear here.',
-                    ),
+                    Text(l10n.driverWsVerifiedRecords),
+                    Text(l10n.driverWsUnmatchedNotice),
                     ...data.rows('records').map((DriverRow link) {
                       final DriverRow? row = link['record'] is Map
                           ? Map<String, Object?>.from(link['record']! as Map)
                           : null;
                       return Card(
                         child: ExpansionTile(
-                          title: DriverText(_human('${link['source_type']}')),
-                          subtitle: DriverText(driverRecordLabel(row)),
+                          title: Text(
+                            driverWsTermLabel(l10n, '${link['source_type']}'),
+                          ),
+                          subtitle: Text(
+                            driverRecordLabel(row) ??
+                                l10n.driverWsRecordUnavailable,
+                          ),
                           children: <Widget>[
                             if (row != null)
                               ...row.entries
@@ -435,8 +396,13 @@ class _DriverWorkspacePanelState extends ConsumerState<DriverWorkspacePanel> {
                                   )
                                   .map(
                                     (entry) => ListTile(
-                                      title: DriverText(_human(entry.key)),
-                                      subtitle: DriverText('${entry.value}'),
+                                      title: Text(
+                                        driverWsRecordFieldLabel(
+                                          l10n,
+                                          entry.key,
+                                        ),
+                                      ),
+                                      subtitle: Text('${entry.value}'),
                                     ),
                                   ),
                           ],
@@ -444,15 +410,15 @@ class _DriverWorkspacePanelState extends ConsumerState<DriverWorkspacePanel> {
                       );
                     }),
                     ExpansionTile(
-                      title: const DriverText('Activity history'),
+                      title: Text(l10n.driverWsActivityHistory),
                       children: data.rows('events').map((DriverRow e) {
                         final DriverRow details =
                             Map<String, Object?>.from(e['details']! as Map);
                         return ListTile(
-                          title: DriverText(
-                            '${e['actor_name'] ?? 'Recorded user'} · ${_human('${e['action']}')}',
+                          title: Text(
+                            '${e['actor_name'] ?? l10n.driverWsRecordedUser} · ${driverWsTermLabel(l10n, '${e['action']}')}',
                           ),
-                          subtitle: DriverText(
+                          subtitle: Text(
                             '${e['created_at']} · ${details['reason'] ?? details['explanation'] ?? ''}',
                           ),
                         );
@@ -483,7 +449,7 @@ class DriverFineCard extends ConsumerStatefulWidget {
 }
 
 class _DriverFineCardState extends ConsumerState<DriverFineCard> {
-  String? _error;
+  String Function(AppLocalizations)? _error;
   String? _signature;
   bool _uploading = false;
   DriverWorkspaceRepository get repository =>
@@ -510,10 +476,7 @@ class _DriverFineCardState extends ConsumerState<DriverFineCard> {
       }
     } catch (_) {
       if (mounted) {
-        setState(
-          () => _error =
-              'Photo could not be attached. Your local photo has not been deleted.',
-        );
+        setState(() => _error = (AppLocalizations l) => l.driverWsPhotoError);
       }
     } finally {
       if (mounted) setState(() => _uploading = false);
@@ -522,24 +485,32 @@ class _DriverFineCardState extends ConsumerState<DriverFineCard> {
 
   @override
   Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final DriverRow f = widget.fine;
     return Card(
       child: ExpansionTile(
-        title: DriverText(
+        title: Text(
           '${f['notice_reference']} · ${f['amount']} ${f['currency']}',
         ),
-        subtitle: DriverText(
-          '${_human('${f['status']}')} · ${_human('${f['response_status']}')}',
+        subtitle: Text(
+          '${driverWsTermLabel(l10n, '${f['status']}')} · ${driverWsTermLabel(l10n, '${f['response_status']}')}',
         ),
         childrenPadding: const EdgeInsets.all(12),
         children: <Widget>[
-          DriverText(
+          Text(
             '${f['authority']} · ${f['asset_no']} · ${f['incident_at']}',
           ),
-          DriverText('${f['description']}'),
-          DriverText('Assignment: ${f['assignment_reason']}'),
-          DriverText(
-            'Due: ${f['due_date'] ?? 'Not supplied'} · Paid: ${f['paid_amount']}',
+          if (f['description'] != null) Text('${f['description']}'),
+          Text(
+            l10n.driverWsAssignmentLine(
+              '${f['assignment_reason'] ?? l10n.driverWsNotSupplied}',
+            ),
+          ),
+          Text(
+            l10n.driverWsDueLine(
+              '${f['due_date'] ?? l10n.driverWsNotSupplied}',
+              '${f['paid_amount']}',
+            ),
           ),
           if (widget.data.canRespond &&
               f['status'] == 'open' &&
@@ -547,12 +518,12 @@ class _DriverFineCardState extends ConsumerState<DriverFineCard> {
                   .contains(f['response_status']))
             FilledButton(
               onPressed: () => widget.onAction('respond_fine', f),
-              child: const DriverText('Acknowledge and respond'),
+              child: Text(l10n.driverWsAcknowledgeRespond),
             ),
           if (widget.data.canReview)
             OutlinedButton(
               onPressed: () => widget.onAction('review_fine', f),
-              child: const DriverText('Review / record payment'),
+              child: Text(l10n.driverWsReviewPayment),
             ),
           ...driverRows(f['evidence']).map(
             (DriverRow e) => TextButton(
@@ -568,40 +539,45 @@ class _DriverFineCardState extends ConsumerState<DriverFineCard> {
                   }
                 } catch (_) {
                   if (mounted) {
-                    setState(() => _error = 'Evidence could not be opened.');
+                    setState(
+                      () => _error =
+                          (AppLocalizations l) => l.driverWsEvidenceOpenError,
+                    );
                   }
                 }
               },
-              child: DriverText('${_human('${e['kind']}')}: ${e['file_name']}'),
+              child: Text(
+                '${driverWsEvidenceKindLabel(l10n, '${e['kind']}')}: ${e['file_name']}',
+              ),
             ),
           ),
           if ((widget.data.canReview || widget.data.canRespond) &&
               f['status'] == 'open') ...<Widget>[
             OutlinedButton(
               onPressed: _uploading ? null : () => _photo('payment'),
-              child: const DriverText('Attach receipt photo'),
+              child: Text(l10n.driverWsAttachReceipt),
             ),
             OutlinedButton(
               onPressed: _uploading ? null : () => _photo('supporting'),
-              child: const DriverText('Attach supporting photo'),
+              child: Text(l10n.driverWsAttachSupporting),
             ),
             if (widget.data.canReview &&
                 <String>['awaiting_response', 'returned']
                     .contains(f['response_status']))
               OutlinedButton(
                 onPressed: _uploading ? null : () => _photo('notice'),
-                child: const DriverText('Attach official notice photo'),
+                child: Text(l10n.driverWsAttachNotice),
               ),
           ],
           ...driverRows(f['responses']).map(
             (DriverRow r) => Column(
               children: <Widget>[
-                DriverText(
-                  '${_human('${r['resolution']}')} · ${r['signed_at']}',
+                Text(
+                  '${driverWsTermLabel(l10n, '${r['resolution']}')} · ${r['signed_at']}',
                 ),
-                DriverText('${r['explanation']}'),
+                Text('${r['explanation']}'),
                 if (r['payment_reference'] != null)
-                  DriverText('${r['payment_reference']}'),
+                  Text('${r['payment_reference']}'),
                 TextButton(
                   onPressed: () async {
                     try {
@@ -610,17 +586,20 @@ class _DriverFineCardState extends ConsumerState<DriverFineCard> {
                       if (mounted) setState(() => _signature = signature);
                     } catch (_) {
                       if (mounted) {
-                        setState(() => _error = 'Signature unavailable.');
+                        setState(
+                          () => _error = (AppLocalizations l) =>
+                              l.driverWsSignatureUnavailable,
+                        );
                       }
                     }
                   },
-                  child: const DriverText('View signed acknowledgment'),
+                  child: Text(l10n.driverWsViewSignature),
                 ),
               ],
             ),
           ),
           if (_signature != null) ...<Widget>[
-            const DriverText(driverReceiptStatement),
+            Text(l10n.driverWsReceiptStatement),
             ColoredBox(
               color: Colors.white,
               child: _signature!.startsWith('<svg')
@@ -629,13 +608,13 @@ class _DriverFineCardState extends ConsumerState<DriverFineCard> {
                       base64Decode(_signature!.split(',').last),
                       height: 160,
                       errorBuilder: (_, __, ___) =>
-                          const DriverText('Signature could not be displayed.'),
+                          Text(l10n.driverWsSignatureDisplayError),
                     ),
             ),
           ],
           if (_error != null)
-            DriverText(
-              _error!,
+            Text(
+              _error!(l10n),
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
         ],
@@ -670,7 +649,7 @@ class _DriverWorkspaceFormState extends ConsumerState<DriverWorkspaceForm> {
   String _request = const Uuid().v4();
   bool _ready = false;
   bool _saving = false;
-  String? _message;
+  String Function(AppLocalizations)? _message;
   DriverWorkspaceRepository get repository =>
       ref.read(driverWorkspaceRepositoryProvider);
   String get draftKey => 'draft_${widget.fine?['id'] ?? 'new'}';
@@ -698,8 +677,7 @@ class _DriverWorkspaceFormState extends ConsumerState<DriverWorkspaceForm> {
     } catch (_) {
       if (mounted) {
         setState(
-          () => _message =
-              'Saved draft could not be read. Nothing has been overwritten.',
+          () => _message = (AppLocalizations l) => l.driverWsDraftReadError,
         );
       }
     }
@@ -723,11 +701,13 @@ class _DriverWorkspaceFormState extends ConsumerState<DriverWorkspaceForm> {
 
   Future<void> _submit() async {
     if (!_ready || _saving) return;
-    final String? issue = widget.action == 'respond_fine'
+    final DriverFineResponseIssue? issue = widget.action == 'respond_fine'
         ? validateDriverFineResponse(_values)
         : null;
     if (issue != null) {
-      setState(() => _message = issue);
+      setState(
+        () => _message = (AppLocalizations l) => driverWsIssueMessage(l, issue),
+      );
       return;
     }
     setState(() {
@@ -746,7 +726,7 @@ class _DriverWorkspaceFormState extends ConsumerState<DriverWorkspaceForm> {
         },
       };
       if (widget.action == 'respond_fine') {
-        payload['statement_version'] = 'receipt-v1';
+        payload['statement_version'] = driverReceiptStatementVersion;
         final String language = Localizations.localeOf(context).languageCode;
         payload['statement_language'] =
             <String>['en', 'ar', 'ur'].contains(language) ? language : 'en';
@@ -775,8 +755,7 @@ class _DriverWorkspaceFormState extends ConsumerState<DriverWorkspaceForm> {
     } catch (_) {
       if (mounted) {
         setState(
-          () => _message =
-              'Could not submit. Check the required fields and connection. Refresh if the notice changed.',
+          () => _message = (AppLocalizations l) => l.driverWsSubmitError,
         );
       }
     } finally {
@@ -785,113 +764,114 @@ class _DriverWorkspaceFormState extends ConsumerState<DriverWorkspaceForm> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: DriverText(_human(widget.action))),
-        body: ListView(
-          padding: EdgeInsets.fromLTRB(
-            16,
-            16,
-            16,
-            MediaQuery.viewInsetsOf(context).bottom + 24,
-          ),
-          children: <Widget>[
-            const DriverText(
-              'Submission requires a connection so the current notice and your access can be checked.',
-            ),
-            if (_ready)
-              ..._fields[widget.action]!.map((List<String> field) {
-                final String key = field[0];
-                final String label = field[1];
-                final String type = field.length > 2 ? field[2] : 'text';
-                if (<String>['users', 'vehicles', 'records'].contains(type)) {
-                  return DriverWorkspacePicker(
-                    label: label,
-                    kind:
-                        type == 'records' ? '${_values['source_type']}' : type,
-                    value: _values[key],
-                    onChanged: (Object? v) => _set(key, v),
-                  );
-                }
-                if (<String>['resolution', 'decision', 'record_type']
-                    .contains(type)) {
-                  final List<String> options = type == 'resolution'
-                      ? driverFineResolutions
-                      : type == 'record_type'
-                          ? driverRecordTypes
-                          : <String>[
-                              'approve',
-                              'return',
-                              'payment',
-                              'cancel',
-                              'reopen',
-                            ];
-                  return DropdownButtonFormField<String>(
-                    initialValue: _values[key] as String?,
-                    isExpanded: true,
-                    decoration: InputDecoration(labelText: label),
-                    items: options
-                        .map(
-                          (String v) => DropdownMenuItem<String>(
-                            value: v,
-                            child: DriverText(_human(v)),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (String? v) => _set(key, v),
-                  );
-                }
-                return TextFormField(
-                  initialValue: '${_values[key] ?? ''}',
-                  decoration: InputDecoration(labelText: label),
-                  maxLength: 4000,
-                  keyboardType: type == 'number'
-                      ? const TextInputType.numberWithOptions(decimal: true)
-                      : TextInputType.text,
-                  onChanged: (String v) => _set(key, v),
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    return Scaffold(
+      appBar: AppBar(title: Text(driverWsTermLabel(l10n, widget.action))),
+      body: ListView(
+        padding: EdgeInsets.fromLTRB(
+          16,
+          16,
+          16,
+          MediaQuery.viewInsetsOf(context).bottom + 24,
+        ),
+        children: <Widget>[
+          Text(l10n.driverWsConnectionRequired),
+          if (_ready)
+            ...driverWsFields[widget.action]!.map((DriverWsField field) {
+              final String key = field.key;
+              final String label = field.label(l10n);
+              final String type = field.type;
+              if (<String>['users', 'vehicles', 'records'].contains(type)) {
+                return DriverWorkspacePicker(
+                  label: label,
+                  kind: type == 'records' ? '${_values['source_type']}' : type,
+                  value: _values[key],
+                  onChanged: (Object? v) => _set(key, v),
                 );
-              }),
-            if (_ready && widget.action == 'respond_fine') ...<Widget>[
-              CheckboxListTile(
-                value: _values['acknowledged'] == true,
-                onChanged: (bool? v) => _set('acknowledged', v),
-                title: const DriverText(driverReceiptStatement),
-              ),
-              InspectionApprovalSignaturePad(
-                value: _values['signature'] as String?,
-                onChanged: (InspectionApprovalSignatureCapture? capture) =>
-                    _set('signature', capture?.dataUrl),
-              ),
-              OutlinedButton(
-                onPressed: () async {
-                  try {
-                    await _saveDraft();
-                    if (mounted) {
-                      setState(
-                        () => _message =
-                            'Draft saved. It has not been submitted.',
-                      );
-                    }
-                  } catch (_) {
-                    if (mounted) {
-                      setState(() => _message = 'Draft could not be saved.');
-                    }
+              }
+              if (<String>['resolution', 'decision', 'record_type']
+                  .contains(type)) {
+                final List<String> options = type == 'resolution'
+                    ? driverFineResolutions
+                    : type == 'record_type'
+                        ? driverRecordTypes
+                        : <String>[
+                            'approve',
+                            'return',
+                            'payment',
+                            'cancel',
+                            'reopen',
+                          ];
+                return DropdownButtonFormField<String>(
+                  initialValue: _values[key] as String?,
+                  isExpanded: true,
+                  decoration: InputDecoration(labelText: label),
+                  items: options
+                      .map(
+                        (String v) => DropdownMenuItem<String>(
+                          value: v,
+                          child: Text(driverWsTermLabel(l10n, v)),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (String? v) => _set(key, v),
+                );
+              }
+              return TextFormField(
+                initialValue: '${_values[key] ?? ''}',
+                decoration: InputDecoration(labelText: label),
+                maxLength: 4000,
+                keyboardType: type == 'number'
+                    ? const TextInputType.numberWithOptions(decimal: true)
+                    : TextInputType.text,
+                onChanged: (String v) => _set(key, v),
+              );
+            }),
+          if (_ready && widget.action == 'respond_fine') ...<Widget>[
+            CheckboxListTile(
+              value: _values['acknowledged'] == true,
+              onChanged: (bool? v) => _set('acknowledged', v),
+              title: Text(l10n.driverWsReceiptStatement),
+            ),
+            InspectionApprovalSignaturePad(
+              value: _values['signature'] as String?,
+              onChanged: (InspectionApprovalSignatureCapture? capture) =>
+                  _set('signature', capture?.dataUrl),
+            ),
+            OutlinedButton(
+              onPressed: () async {
+                try {
+                  await _saveDraft();
+                  if (mounted) {
+                    setState(
+                      () => _message =
+                          (AppLocalizations l) => l.driverWsDraftSaved,
+                    );
                   }
-                },
-                child: const DriverText('Save draft on this device'),
-              ),
-            ],
-            if (widget.action == 'review_fine')
-              const DriverText(
-                'Approval records the reviewed arrangement. It does not execute payment or payroll deduction. Record only verified payments.',
-              ),
-            if (_message != null) DriverText(_message!),
-            FilledButton(
-              onPressed: !_ready || _saving ? null : _submit,
-              child: DriverText(_saving ? 'Saving…' : 'Submit'),
+                } catch (_) {
+                  if (mounted) {
+                    setState(
+                      () => _message =
+                          (AppLocalizations l) => l.driverWsDraftSaveError,
+                    );
+                  }
+                }
+              },
+              child: Text(l10n.driverWsSaveDraft),
             ),
           ],
-        ),
-      );
+          if (widget.action == 'review_fine')
+            Text(l10n.driverWsReviewDisclaimer),
+          if (_message != null) Text(_message!(l10n)),
+          FilledButton(
+            onPressed: !_ready || _saving ? null : _submit,
+            child: Text(_saving ? l10n.driverWsSaving : l10n.driverWsSubmit),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class DriverWorkspacePicker extends ConsumerStatefulWidget {
@@ -928,7 +908,7 @@ class _DriverWorkspacePickerState extends ConsumerState<DriverWorkspacePicker> {
   @override
   Widget build(BuildContext context) => OutlinedButton(
         onPressed: _choose,
-        child: DriverText('${widget.label}${widget.value == null ? '' : ' ✓'}'),
+        child: Text('${widget.label}${widget.value == null ? '' : ' ✓'}'),
       );
 }
 
@@ -943,7 +923,7 @@ class _DriverOptions extends ConsumerStatefulWidget {
 class _DriverOptionsState extends ConsumerState<_DriverOptions> {
   List<DriverRow> _rows = <DriverRow>[];
   String _search = '';
-  String? _error;
+  bool _error = false;
   int _offset = 0;
   int _generation = 0;
   @override
@@ -961,67 +941,70 @@ class _DriverOptionsState extends ConsumerState<_DriverOptions> {
       if (mounted && generation == _generation) {
         setState(() {
           _rows = rows;
-          _error = null;
+          _error = false;
         });
       }
     } catch (_) {
       if (mounted && generation == _generation) {
-        setState(() => _error = 'Options unavailable. Try again.');
+        setState(() => _error = true);
       }
     }
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: DriverText(widget.label)),
-        body: ListView(
-          padding: const EdgeInsets.all(16),
-          children: <Widget>[
-            TextField(
-              decoration: const InputDecoration(labelText: 'Search'),
-              onChanged: (String value) => _search = value,
-              onSubmitted: (_) {
-                _offset = 0;
-                _load();
-              },
-            ),
-            OutlinedButton(
-              onPressed: () {
-                _offset = 0;
-                _load();
-              },
-              child: const DriverText('Search'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(''),
-              child: const DriverText('None / clear selection'),
-            ),
-            if (_error != null) DriverText(_error!),
-            ..._rows.take(100).map(
-                  (DriverRow r) => ListTile(
-                    title: DriverText(
-                      '${r['label'] ?? driverRecordLabel(r['record'] is Map ? Map<String, Object?>.from(r['record']! as Map) : null)}',
-                    ),
-                    onTap: () => Navigator.of(context).pop(r['id']),
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    return Scaffold(
+      appBar: AppBar(title: Text(widget.label)),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: <Widget>[
+          TextField(
+            decoration: InputDecoration(labelText: l10n.driverWsSearch),
+            onChanged: (String value) => _search = value,
+            onSubmitted: (_) {
+              _offset = 0;
+              _load();
+            },
+          ),
+          OutlinedButton(
+            onPressed: () {
+              _offset = 0;
+              _load();
+            },
+            child: Text(l10n.driverWsSearch),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(''),
+            child: Text(l10n.driverWsClearSelection),
+          ),
+          if (_error) Text(l10n.driverWsOptionsError),
+          ..._rows.take(100).map(
+                (DriverRow r) => ListTile(
+                  title: Text(
+                    '${r['label'] ?? driverRecordLabel(r['record'] is Map ? Map<String, Object?>.from(r['record']! as Map) : null) ?? l10n.driverWsRecordUnavailable}',
                   ),
+                  onTap: () => Navigator.of(context).pop(r['id']),
                 ),
-            if (_offset > 0)
-              TextButton(
-                onPressed: () {
-                  _offset -= 100;
-                  _load();
-                },
-                child: const DriverText('Previous options'),
               ),
-            if (_rows.length > 100)
-              TextButton(
-                onPressed: () {
-                  _offset += 100;
-                  _load();
-                },
-                child: const DriverText('More options'),
-              ),
-          ],
-        ),
-      );
+          if (_offset > 0)
+            TextButton(
+              onPressed: () {
+                _offset -= 100;
+                _load();
+              },
+              child: Text(l10n.driverWsPreviousOptions),
+            ),
+          if (_rows.length > 100)
+            TextButton(
+              onPressed: () {
+                _offset += 100;
+                _load();
+              },
+              child: Text(l10n.driverWsMoreOptions),
+            ),
+        ],
+      ),
+    );
+  }
 }

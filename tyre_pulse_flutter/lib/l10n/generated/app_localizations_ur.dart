@@ -3118,4 +3118,601 @@ class AppLocalizationsUr extends AppLocalizations {
   @override
   String get tyreActionRotateFailedMessage =>
       'روٹیشن محفوظ نہیں ہو سکی۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String driverWsTerm(String term) {
+    String _temp0 = intl.Intl.selectLogic(
+      term,
+      {
+        'create_driver': 'تصدیق شدہ ڈرائیور شامل کریں',
+        'link_account': 'لاگ ان اکاؤنٹ منسلک کریں',
+        'assign_team': 'ٹیم اور گاڑی تفویض کریں',
+        'create_fine': 'ٹریفک جرمانہ درج کریں',
+        'link_record': 'کام کا ریکارڈ منسلک کریں',
+        'respond_fine': 'جائزہ لیں اور دستخط کریں',
+        'review_fine': 'جواب یا ادائیگی کا جائزہ',
+        'correct_fine': 'جرمانہ درست کریں',
+        'reassign_fine': 'جرمانہ دوبارہ تفویض کریں',
+        'direct_payment': 'میں براہ راست ادائیگی کروں گا',
+        'already_paid': 'پہلے ہی ادا کر دیا ہے',
+        'dispute': 'اعتراض یا غلط تفویض',
+        'company_recovery': 'کمپنی کی ادائیگی یا وصولی کی درخواست',
+        'instalments': 'قسطوں کی درخواست',
+        'approve': 'درخواست منظور کریں',
+        'return': 'ڈرائیور کو واپس بھیجیں',
+        'payment': 'تصدیق شدہ ادائیگی درج کریں',
+        'cancel': 'جرمانہ منسوخ کریں',
+        'reopen': 'دوبارہ کھولیں',
+        'open': 'کھلا',
+        'settled': 'ادا شدہ',
+        'cancelled': 'منسوخ',
+        'awaiting_response': 'جواب کا انتظار',
+        'submitted': 'جواب جمع ہو گیا',
+        'returned': 'ڈرائیور کو واپس',
+        'approved': 'منظور شدہ',
+        'driver_documents': 'ڈرائیور کے دستاویزات',
+        'driver_training': 'ڈرائیور کی تربیت',
+        'driver_coaching': 'ڈرائیور کی رہنمائی',
+        'driver_safety_events': 'ڈرائیور کے حفاظتی واقعات',
+        'driver_expenses': 'ڈرائیور کے اخراجات',
+        'tyre_records': 'ٹائر کے ریکارڈ',
+        'accidents': 'حادثات',
+        'wo_tasks': 'ورک آرڈر کے کام',
+        'checklist_submissions': 'جمع شدہ چیک لسٹیں',
+        'odometer_logs': 'اوڈومیٹر ریڈنگز',
+        'wash_records': 'دھلائی کے ریکارڈ',
+        'other': '',
+      },
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String driverWsRecordField(String field) {
+    String _temp0 = intl.Intl.selectLogic(
+      field,
+      {
+        'country': 'ملک',
+        'site': 'مقام',
+        'asset_no': 'اثاثہ نمبر',
+        'driver_name': 'ڈرائیور کا نام',
+        'title': 'عنوان',
+        'doc_type': 'دستاویز کی قسم',
+        'doc_number': 'دستاویز نمبر',
+        'expiry_date': 'میعاد ختم ہونے کی تاریخ',
+        'course_name': 'کورس کا نام',
+        'result': 'نتیجہ',
+        'completed_date': 'تکمیل کی تاریخ',
+        'coaching_status': 'رہنمائی کی حالت',
+        'period': 'مدت',
+        'event_type': 'واقعے کی قسم',
+        'severity': 'شدت',
+        'event_at': 'واقعے کا وقت',
+        'category': 'زمرہ',
+        'amount': 'رقم',
+        'currency': 'کرنسی',
+        'expense_date': 'خرچ کی تاریخ',
+        'status': 'حالت',
+        'incident_date': 'واقعے کی تاریخ',
+        'accident_type': 'حادثے کی قسم',
+        'due_date': 'آخری تاریخ',
+        'created_at': 'بنانے کی تاریخ',
+        'reading_date': 'ریڈنگ کی تاریخ',
+        'odometer_km': 'اوڈومیٹر (کلومیٹر)',
+        'wash_date': 'دھلائی کی تاریخ',
+        'template_name': 'چیک لسٹ کا نام',
+        'approval_status': 'منظوری کی حالت',
+        'brand': 'برانڈ',
+        'serial_no': 'سیریل نمبر',
+        'issue_date': 'اجراء کی تاریخ',
+        'qty': 'مقدار',
+        'cost_per_tyre': 'فی ٹائر لاگت',
+        'other': '',
+      },
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String driverWsEvidenceKind(String kind) {
+    String _temp0 = intl.Intl.selectLogic(
+      kind,
+      {
+        'payment': 'ادائیگی کی رسید',
+        'supporting': 'معاون تصویر',
+        'notice': 'سرکاری نوٹس',
+        'other': '',
+      },
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get driverWsTitle => 'ڈرائیور کا کام';
+
+  @override
+  String get driverWsEntrySubtitle =>
+      'میرے جرمانے، ٹیم کی ذمہ داریاں اور تصدیق شدہ کام';
+
+  @override
+  String get driverWsLoadError =>
+      'کام کی جگہ دستیاب نہیں۔ رابطہ، اکاؤنٹ کا ربط اور اجازت چیک کریں، پھر تازہ کریں۔';
+
+  @override
+  String get driverWsRefresh => 'تازہ کریں';
+
+  @override
+  String get driverWsSignInRequired => 'اپنا کام دیکھنے کے لیے سائن ان کریں۔';
+
+  @override
+  String get driverWsOfflineNotice =>
+      'آف لائن محفوظ منظر۔ جواب یا جائزے سے پہلے رابطہ بحال کرکے تازہ کریں۔';
+
+  @override
+  String get driverWsTruncatedNotice =>
+      'یہ منظر نامکمل ہے کیونکہ ریکارڈ کی حد پوری ہو گئی۔ ایکسپورٹ بند ہے۔';
+
+  @override
+  String get driverWsSearchDrivers => 'ڈرائیور تلاش کریں';
+
+  @override
+  String get driverWsNoDrivers =>
+      'کوئی منسلک ڈرائیور یا تفویض شدہ ٹیم موجود نہیں۔ مجاز منیجر سے اکاؤنٹ اور ذمہ داری کی تصدیق کروائیں۔';
+
+  @override
+  String get driverWsSharePdf => 'جرمانوں کی PDF تفصیل شیئر کریں';
+
+  @override
+  String get driverWsReportShareError =>
+      'رپورٹ شیئر نہیں ہو سکی۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get driverWsTrafficFines => 'ٹریفک جرمانے';
+
+  @override
+  String get driverWsNoFines => 'کوئی جرمانہ درج نہیں ہے۔';
+
+  @override
+  String get driverWsAssignmentHistory => 'ٹیم اور گاڑی کی ذمہ داریوں کی تاریخ';
+
+  @override
+  String get driverWsNoAssignment => 'کوئی ذمہ داری درج نہیں ہے۔';
+
+  @override
+  String get driverWsAssignmentCurrent => 'موجودہ';
+
+  @override
+  String get driverWsAssignmentPrevious => 'سابقہ';
+
+  @override
+  String get driverWsNoVehicle => 'کوئی گاڑی نہیں';
+
+  @override
+  String get driverWsNotAssigned => 'تفویض نہیں';
+
+  @override
+  String get driverWsPresent => 'اب تک';
+
+  @override
+  String get driverWsAssignedWork => 'تفویض شدہ کام';
+
+  @override
+  String get driverWsNotSupplied => 'فراہم نہیں کیا گیا';
+
+  @override
+  String get driverWsVerifiedRecords => 'تصدیق شدہ کام اور ڈرائیور کے ریکارڈ';
+
+  @override
+  String get driverWsUnmatchedNotice =>
+      'پرانے غیر منسلک ریکارڈ یہاں ظاہر ہونے سے پہلے شناخت کی تصدیق چاہتے ہیں۔';
+
+  @override
+  String get driverWsRecordUnavailable => 'ریکارڈ اب دستیاب نہیں';
+
+  @override
+  String get driverWsActivityHistory => 'سرگرمی کی تاریخ';
+
+  @override
+  String get driverWsRecordedUser => 'درج شدہ صارف';
+
+  @override
+  String get driverWsPhotoError =>
+      'تصویر منسلک نہیں ہو سکی۔ آپ کی مقامی تصویر حذف نہیں ہوئی۔';
+
+  @override
+  String get driverWsAcknowledgeRespond => 'وصولی تسلیم کریں اور جواب دیں';
+
+  @override
+  String get driverWsReviewPayment => 'جائزہ لیں یا ادائیگی درج کریں';
+
+  @override
+  String get driverWsEvidenceOpenError => 'ثبوت نہیں کھل سکا۔';
+
+  @override
+  String get driverWsAttachReceipt => 'رسید کی تصویر منسلک کریں';
+
+  @override
+  String get driverWsAttachSupporting => 'معاون تصویر منسلک کریں';
+
+  @override
+  String get driverWsAttachNotice => 'سرکاری نوٹس کی تصویر منسلک کریں';
+
+  @override
+  String get driverWsSignatureUnavailable => 'دستخط دستیاب نہیں۔';
+
+  @override
+  String get driverWsViewSignature => 'دستخط شدہ رسید دیکھیں';
+
+  @override
+  String get driverWsSignatureDisplayError => 'دستخط دکھایا نہیں جا سکا۔';
+
+  @override
+  String get driverWsReceiptStatement =>
+      'میں اس نوٹس کی وصولی اور جائزے کی تصدیق کرتا ہوں اور اوپر دیا گیا جواب جمع کرتا ہوں۔ وصولی ذمہ داری قبول کرنے کا اقرار نہیں ہے۔ ادائیگی یا وصولی کی درخواست خودکار ادائیگی یا تنخواہ کی کٹوتی کی اجازت نہیں دیتی۔';
+
+  @override
+  String get driverWsDraftReadError =>
+      'محفوظ مسودہ پڑھا نہیں جا سکا۔ کچھ بھی تبدیل نہیں ہوا۔';
+
+  @override
+  String get driverWsSubmitError =>
+      'جمع نہیں ہو سکا۔ لازمی خانے اور رابطہ چیک کریں۔ نوٹس بدل گیا ہو تو تازہ کریں۔';
+
+  @override
+  String get driverWsConnectionRequired =>
+      'جمع کرنے کے لیے رابطہ ضروری ہے تاکہ موجودہ نوٹس اور آپ کی اجازت کی جانچ ہو۔';
+
+  @override
+  String get driverWsDraftSaved => 'مسودہ محفوظ ہو گیا۔ ابھی جمع نہیں ہوا۔';
+
+  @override
+  String get driverWsDraftSaveError => 'مسودہ محفوظ نہیں ہو سکا۔';
+
+  @override
+  String get driverWsSaveDraft => 'اس آلے پر مسودہ محفوظ کریں';
+
+  @override
+  String get driverWsReviewDisclaimer =>
+      'منظوری جائزہ شدہ انتظام درج کرتی ہے۔ یہ ادائیگی یا تنخواہ سے کٹوتی نہیں کرتی۔ صرف تصدیق شدہ ادائیگیاں درج کریں۔';
+
+  @override
+  String get driverWsSaving => 'محفوظ ہو رہا ہے...';
+
+  @override
+  String get driverWsSubmit => 'جمع کریں';
+
+  @override
+  String get driverWsErrResolution => 'حل کا انتخاب کریں۔';
+
+  @override
+  String get driverWsErrExplanation =>
+      'اپنی درخواست کی وضاحت کریں، مجوزہ انتظام سمیت۔';
+
+  @override
+  String get driverWsErrPaymentReference => 'اپنی ادائیگی کا حوالہ درج کریں۔';
+
+  @override
+  String get driverWsErrProposedDate =>
+      'اپنی مجوزہ ادائیگی کی تاریخ منتخب کریں۔';
+
+  @override
+  String get driverWsErrSignature =>
+      'جمع کرنے سے پہلے بیان کا جائزہ لیں اور دستخط کریں۔';
+
+  @override
+  String get driverWsOptionsError => 'اختیارات دستیاب نہیں۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get driverWsSearch => 'تلاش';
+
+  @override
+  String get driverWsClearSelection => 'کوئی نہیں یا انتخاب ختم کریں';
+
+  @override
+  String get driverWsPreviousOptions => 'پچھلے اختیارات';
+
+  @override
+  String get driverWsMoreOptions => 'مزید اختیارات';
+
+  @override
+  String get driverWsFieldEmployeeId => 'ملازم نمبر';
+
+  @override
+  String get driverWsFieldDriverName => 'ڈرائیور کا نام';
+
+  @override
+  String get driverWsFieldCountry => 'ملک';
+
+  @override
+  String get driverWsFieldSite => 'مقام';
+
+  @override
+  String get driverWsFieldLoginAccount =>
+      'لاگ ان اکاؤنٹ (کوئی نہیں سے ربط ختم ہوگا)';
+
+  @override
+  String get driverWsFieldIdentityReason => 'شناخت کی تصدیق یا وجہ';
+
+  @override
+  String get driverWsFieldSupervisor => 'نگران';
+
+  @override
+  String get driverWsFieldManager => 'منیجر';
+
+  @override
+  String get driverWsFieldVehicle => 'گاڑی';
+
+  @override
+  String get driverWsFieldAssignmentReason => 'تفویض کی وجہ';
+
+  @override
+  String get driverWsFieldAuthority => 'جاری کرنے والا ادارہ';
+
+  @override
+  String get driverWsFieldNoticeReference => 'نوٹس کا حوالہ';
+
+  @override
+  String get driverWsFieldIncidentAt =>
+      'واقعے کی تاریخ اور وقت (YYYY-MM-DDTHH:mm)';
+
+  @override
+  String get driverWsFieldDueDate => 'آخری تاریخ (YYYY-MM-DD)';
+
+  @override
+  String get driverWsFieldAmount => 'جرمانے کی رقم';
+
+  @override
+  String get driverWsFieldCurrency => 'کرنسی کوڈ';
+
+  @override
+  String get driverWsFieldNoticeDetails => 'نوٹس کی تفصیلات';
+
+  @override
+  String get driverWsFieldAssignmentEvidence =>
+      'ڈرائیور کی ذمہ داری کی تصدیق کا ثبوت';
+
+  @override
+  String get driverWsFieldRecordType => 'ریکارڈ کی قسم';
+
+  @override
+  String get driverWsFieldExistingRecord => 'موجودہ ریکارڈ';
+
+  @override
+  String get driverWsFieldIdentityMethod =>
+      'ڈرائیور کی شناخت کیسے تصدیق کی گئی';
+
+  @override
+  String get driverWsFieldResolution => 'مطلوبہ حل';
+
+  @override
+  String get driverWsFieldExplanation => 'وضاحت یا مجوزہ انتظام';
+
+  @override
+  String get driverWsFieldPaymentReference =>
+      'ادائیگی کا حوالہ (اگر ادا ہو چکا ہے)';
+
+  @override
+  String get driverWsFieldProposedDate => 'مجوزہ ادائیگی کی تاریخ (YYYY-MM-DD)';
+
+  @override
+  String get driverWsFieldDecision => 'فیصلہ';
+
+  @override
+  String get driverWsFieldReviewReason => 'جائزے کی وجہ یا منظور شدہ انتظام';
+
+  @override
+  String get driverWsFieldVerifiedReference => 'تصدیق شدہ ادائیگی کا حوالہ';
+
+  @override
+  String get driverWsFieldVerifiedAmount => 'تصدیق شدہ ادائیگی کی رقم';
+
+  @override
+  String get driverWsPdfColNotice => 'نوٹس';
+
+  @override
+  String get driverWsPdfColCurrency => 'کرنسی';
+
+  @override
+  String get driverWsPdfColAmount => 'رقم';
+
+  @override
+  String get driverWsPdfColPaid => 'ادا شدہ';
+
+  @override
+  String get driverWsPdfColStatus => 'حالت';
+
+  @override
+  String get driverWsPdfColResponse => 'جواب';
+
+  @override
+  String driverWsDriverSubtitle(String site, String open, String awaiting) {
+    return '$site · $open کھلے جرمانے · $awaiting جواب کے منتظر';
+  }
+
+  @override
+  String driverWsOutstanding(String amount, String currency) {
+    return 'واجب الادا: $amount $currency';
+  }
+
+  @override
+  String driverWsSupervisorLine(String name) {
+    return 'نگران: $name';
+  }
+
+  @override
+  String driverWsManagerLine(String name) {
+    return 'منیجر: $name';
+  }
+
+  @override
+  String driverWsAssignmentPeriod(String start, String end) {
+    return '$start سے $end تک';
+  }
+
+  @override
+  String driverWsAssignmentLine(String reason) {
+    return 'تفویض: $reason';
+  }
+
+  @override
+  String driverWsDueLine(String due, String paid) {
+    return 'آخری تاریخ: $due · ادا شدہ: $paid';
+  }
+
+  @override
+  String driverWsPdfTitle(String name) {
+    return 'ڈرائیور کا گوشوارہ: $name';
+  }
+
+  @override
+  String driverWsPdfEmployeeId(String id) {
+    return 'ملازم نمبر: $id';
+  }
+
+  @override
+  String get vehicleClassTransitMixer => 'ٹرانزٹ مکسر';
+
+  @override
+  String get vehicleClassConcretePump => 'کنکریٹ پمپ';
+
+  @override
+  String get vehicleClassLinePump => 'ٹرک پر نصب لائن پمپ';
+
+  @override
+  String get vehicleClassStaffBus => 'اسٹاف بس';
+
+  @override
+  String get vehicleClassStaffVan => 'اسٹاف وین';
+
+  @override
+  String get vehicleClassDoubleCabPickup => 'ڈبل کیبن پک اپ';
+
+  @override
+  String get vehicleClassWheelLoader => 'وہیل لوڈر';
+
+  @override
+  String get vehicleClassSkidSteerLoader => 'اسکڈ اسٹیئر لوڈر';
+
+  @override
+  String get vehicleClassTowablePump => 'کھینچا جانے والا کنکریٹ پمپ';
+
+  @override
+  String get vehicleClassStationaryPump => 'ساکن کنکریٹ پمپ';
+
+  @override
+  String get vehicleClassGenerator => 'بند جنریٹر';
+
+  @override
+  String get vehicleClassChiller => 'صنعتی چلر';
+
+  @override
+  String get vehicleClassWaterChiller => 'صنعتی واٹر چلر';
+
+  @override
+  String get vehicleClassBatchingPlant => 'کنکریٹ بیچنگ پلانٹ';
+
+  @override
+  String get vehicleClassPlacingBoom => 'آزاد کھڑا پلیسنگ بوم';
+
+  @override
+  String vehicleClassConcretePumpAxles(int axles) {
+    return 'کنکریٹ پمپ · $axles ایکسل';
+  }
+
+  @override
+  String vehicleClassLinePumpAxles(int axles) {
+    return 'ٹرک پر نصب لائن پمپ · $axles ایکسل';
+  }
+
+  @override
+  String get scannerCameraStartFailedTitle => 'کیمرا شروع نہیں ہو سکا';
+
+  @override
+  String get scannerCameraStartFailedMessage =>
+      'ہو سکتا ہے کوئی اور ایپ اسے استعمال کر رہی ہو یا یہ اچانک رک گیا ہو۔ دوبارہ کوشش کریں یا نیچے کوڈ لکھیں۔';
+
+  @override
+  String get managementOverviewSiteRollup => 'مقامات ایک نظر میں';
+
+  @override
+  String get managementOverviewSiteRollupEmpty =>
+      'اس مدت میں کسی مقام پر ٹائر درج نہیں ہوئے۔';
+
+  @override
+  String get managementOverviewAtRiskShare => 'زیادہ یا انتہائی خطرے والے ٹائر';
+
+  @override
+  String get managementReportsShare => 'رپورٹ PDF شیئر کریں';
+
+  @override
+  String get managementReportsShareError =>
+      'رپورٹ شیئر نہیں ہو سکی۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get managementReportsPdfMetric => 'پیمانہ';
+
+  @override
+  String get managementReportsPdfValue => 'قدر';
+
+  @override
+  String get managementReportsPdfShare => 'حصہ';
+
+  @override
+  String get managementTeamRole => 'کردار';
+
+  @override
+  String get managementTeamUsername => 'صارف نام';
+
+  @override
+  String get managementTeamSite => 'مقام';
+
+  @override
+  String get managementTeamCountry => 'ملک';
+
+  @override
+  String get managementTeamPhone => 'فون';
+
+  @override
+  String get managementTeamEmail => 'ای میل';
+
+  @override
+  String get managementTeamStatus => 'حالت';
+
+  @override
+  String get managementTeamApproved => 'منظور شدہ';
+
+  @override
+  String get managementTeamLastLogin => 'آخری سائن ان';
+
+  @override
+  String get managementTeamNotRecorded => 'درج نہیں';
+
+  @override
+  String get managementTeamCall => 'کال کریں';
+
+  @override
+  String get managementTeamSendEmail => 'ای میل بھیجیں';
+
+  @override
+  String get managementTeamActionError => 'یہ عمل اس آلے پر دستیاب نہیں۔';
+
+  @override
+  String managementOverviewSiteTyres(String count) {
+    return '$count ٹائر';
+  }
+
+  @override
+  String managementOverviewSiteShare(String percent) {
+    return 'بیڑے کے ٹائروں کا $percent%';
+  }
+
+  @override
+  String managementReportsPdfPeriod(int days) {
+    return 'مدت: آخری $days دن';
+  }
+
+  @override
+  String managementReportsPdfCurrency(String code) {
+    return 'کرنسی: $code';
+  }
 }

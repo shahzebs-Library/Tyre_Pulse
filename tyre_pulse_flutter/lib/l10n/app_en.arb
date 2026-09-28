@@ -2461,5 +2461,702 @@
   "tyreActionRotateFailedMessage": "The rotation could not be saved. Try again.",
   "@tyreActionRotateFailedMessage": {
     "description": "Rotate sheet: generic failure message"
+  },
+  "driverWsTerm": "{term, select, create_driver{Add verified driver} link_account{Link login account} assign_team{Assign team and vehicle} create_fine{Issue traffic fine} link_record{Link work record} respond_fine{Review and sign} review_fine{Review response / payment} correct_fine{Correct fine} reassign_fine{Reassign fine} direct_payment{I will pay directly} already_paid{Already paid} dispute{Dispute / incorrect assignment} company_recovery{Request company payment / recovery} instalments{Request instalments} approve{Approve request} return{Return to driver} payment{Record verified payment} cancel{Cancel fine} reopen{Reopen} open{Open} settled{Settled} cancelled{Cancelled} awaiting_response{Awaiting response} submitted{Response submitted} returned{Returned to driver} approved{Approved} driver_documents{Driver documents} driver_training{Driver training} driver_coaching{Driver coaching} driver_safety_events{Driver safety events} driver_expenses{Driver expenses} tyre_records{Tyre records} accidents{Accidents} wo_tasks{Work order tasks} checklist_submissions{Checklist submissions} odometer_logs{Odometer readings} wash_records{Wash records} other{}}",
+  "@driverWsTerm": {
+    "description": "Driver workspace: display name for a workflow action, fine resolution, review decision, fine status, response status or linked record type. Keys are the server tokens; an unknown token renders empty and the app falls back to the token itself.",
+    "placeholders": {
+      "term": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsRecordField": "{field, select, country{Country} site{Site} asset_no{Asset number} driver_name{Driver name} title{Title} doc_type{Document type} doc_number{Document number} expiry_date{Expiry date} course_name{Course name} result{Result} completed_date{Completed date} coaching_status{Coaching status} period{Period} event_type{Event type} severity{Severity} event_at{Event time} category{Category} amount{Amount} currency{Currency} expense_date{Expense date} status{Status} incident_date{Incident date} accident_type{Accident type} due_date{Due date} created_at{Created at} reading_date{Reading date} odometer_km{Odometer (km)} wash_date{Wash date} template_name{Checklist name} approval_status{Approval status} brand{Brand} serial_no{Serial number} issue_date{Issue date} qty{Quantity} cost_per_tyre{Cost per tyre} other{}}",
+  "@driverWsRecordField": {
+    "description": "Driver workspace: label for a column of a linked work record. Unknown columns render empty and the app shows the column name.",
+    "placeholders": {
+      "field": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsEvidenceKind": "{kind, select, payment{Payment receipt} supporting{Supporting photo} notice{Official notice} other{}}",
+  "@driverWsEvidenceKind": {
+    "description": "Driver workspace: kind of evidence attached to a fine.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsTitle": "Driver workspace",
+  "@driverWsTitle": {
+    "description": "Driver workspace: title."
+  },
+  "driverWsEntrySubtitle": "My fines, team assignments and verified work",
+  "@driverWsEntrySubtitle": {
+    "description": "Driver workspace: Profile entry subtitle."
+  },
+  "driverWsLoadError": "Workspace unavailable. Check connection, account linking and access, then refresh.",
+  "@driverWsLoadError": {
+    "description": "Driver workspace: load failure."
+  },
+  "driverWsRefresh": "Refresh",
+  "@driverWsRefresh": {
+    "description": "Driver workspace: refresh tooltip."
+  },
+  "driverWsSignInRequired": "Sign in to view your workspace.",
+  "@driverWsSignInRequired": {
+    "description": "Driver workspace: no session."
+  },
+  "driverWsOfflineNotice": "Offline cached view. Connect and refresh before responding or reviewing.",
+  "@driverWsOfflineNotice": {
+    "description": "Driver workspace: offline notice."
+  },
+  "driverWsTruncatedNotice": "This view is incomplete because it reached the record limit. Export is disabled.",
+  "@driverWsTruncatedNotice": {
+    "description": "Driver workspace: truncated view notice."
+  },
+  "driverWsSearchDrivers": "Search drivers",
+  "@driverWsSearchDrivers": {
+    "description": "Driver workspace: driver search label."
+  },
+  "driverWsNoDrivers": "No linked driver or assigned team is available. Ask an authorized manager to verify your account and assignment.",
+  "@driverWsNoDrivers": {
+    "description": "Driver workspace: empty driver list."
+  },
+  "driverWsSharePdf": "Share fine statement PDF",
+  "@driverWsSharePdf": {
+    "description": "Driver workspace: share statement button."
+  },
+  "driverWsReportShareError": "Report could not be shared. Try again.",
+  "@driverWsReportShareError": {
+    "description": "Driver workspace: PDF share failure."
+  },
+  "driverWsTrafficFines": "Traffic fines",
+  "@driverWsTrafficFines": {
+    "description": "Driver workspace: section heading."
+  },
+  "driverWsNoFines": "No fines recorded.",
+  "@driverWsNoFines": {
+    "description": "Driver workspace: no fines."
+  },
+  "driverWsAssignmentHistory": "Team and vehicle assignment history",
+  "@driverWsAssignmentHistory": {
+    "description": "Driver workspace: section heading."
+  },
+  "driverWsNoAssignment": "No assignment recorded.",
+  "@driverWsNoAssignment": {
+    "description": "Driver workspace: no assignments."
+  },
+  "driverWsAssignmentCurrent": "Current",
+  "@driverWsAssignmentCurrent": {
+    "description": "Driver workspace: current assignment tag."
+  },
+  "driverWsAssignmentPrevious": "Previous",
+  "@driverWsAssignmentPrevious": {
+    "description": "Driver workspace: previous assignment tag."
+  },
+  "driverWsNoVehicle": "No vehicle",
+  "@driverWsNoVehicle": {
+    "description": "Driver workspace: assignment without vehicle."
+  },
+  "driverWsNotAssigned": "Not assigned",
+  "@driverWsNotAssigned": {
+    "description": "Driver workspace: no supervisor or manager."
+  },
+  "driverWsPresent": "Present",
+  "@driverWsPresent": {
+    "description": "Driver workspace: open-ended assignment end."
+  },
+  "driverWsAssignedWork": "Assigned work",
+  "@driverWsAssignedWork": {
+    "description": "Driver workspace: section heading."
+  },
+  "driverWsNotSupplied": "Not supplied",
+  "@driverWsNotSupplied": {
+    "description": "Driver workspace: missing value."
+  },
+  "driverWsVerifiedRecords": "Verified work and driver records",
+  "@driverWsVerifiedRecords": {
+    "description": "Driver workspace: section heading."
+  },
+  "driverWsUnmatchedNotice": "Unmatched historical records require identity review before they appear here.",
+  "@driverWsUnmatchedNotice": {
+    "description": "Driver workspace: records notice."
+  },
+  "driverWsRecordUnavailable": "Record no longer available",
+  "@driverWsRecordUnavailable": {
+    "description": "Driver workspace: deleted linked record."
+  },
+  "driverWsActivityHistory": "Activity history",
+  "@driverWsActivityHistory": {
+    "description": "Driver workspace: section heading."
+  },
+  "driverWsRecordedUser": "Recorded user",
+  "@driverWsRecordedUser": {
+    "description": "Driver workspace: event with no actor name."
+  },
+  "driverWsPhotoError": "Photo could not be attached. Your local photo has not been deleted.",
+  "@driverWsPhotoError": {
+    "description": "Driver workspace: photo upload failure."
+  },
+  "driverWsAcknowledgeRespond": "Acknowledge and respond",
+  "@driverWsAcknowledgeRespond": {
+    "description": "Driver workspace: driver response button."
+  },
+  "driverWsReviewPayment": "Review / record payment",
+  "@driverWsReviewPayment": {
+    "description": "Driver workspace: staff review button."
+  },
+  "driverWsEvidenceOpenError": "Evidence could not be opened.",
+  "@driverWsEvidenceOpenError": {
+    "description": "Driver workspace: evidence open failure."
+  },
+  "driverWsAttachReceipt": "Attach receipt photo",
+  "@driverWsAttachReceipt": {
+    "description": "Driver workspace: attach button."
+  },
+  "driverWsAttachSupporting": "Attach supporting photo",
+  "@driverWsAttachSupporting": {
+    "description": "Driver workspace: attach button."
+  },
+  "driverWsAttachNotice": "Attach official notice photo",
+  "@driverWsAttachNotice": {
+    "description": "Driver workspace: attach button."
+  },
+  "driverWsSignatureUnavailable": "Signature unavailable.",
+  "@driverWsSignatureUnavailable": {
+    "description": "Driver workspace: signature load failure."
+  },
+  "driverWsViewSignature": "View signed acknowledgment",
+  "@driverWsViewSignature": {
+    "description": "Driver workspace: view signature."
+  },
+  "driverWsSignatureDisplayError": "Signature could not be displayed.",
+  "@driverWsSignatureDisplayError": {
+    "description": "Driver workspace: signature render failure."
+  },
+  "driverWsReceiptStatement": "I acknowledge receipt and review of this notice and submit the response shown above. Receipt does not mean admission of responsibility. A payment or recovery request does not authorize an automatic payment or payroll deduction.",
+  "@driverWsReceiptStatement": {
+    "description": "Driver workspace: signed receipt statement, version receipt-v1. The wording is a recorded legal statement: do not change it without a new statement_version."
+  },
+  "driverWsDraftReadError": "Saved draft could not be read. Nothing has been overwritten.",
+  "@driverWsDraftReadError": {
+    "description": "Driver workspace: draft read failure."
+  },
+  "driverWsSubmitError": "Could not submit. Check the required fields and connection. Refresh if the notice changed.",
+  "@driverWsSubmitError": {
+    "description": "Driver workspace: submit failure."
+  },
+  "driverWsConnectionRequired": "Submission requires a connection so the current notice and your access can be checked.",
+  "@driverWsConnectionRequired": {
+    "description": "Driver workspace: form notice."
+  },
+  "driverWsDraftSaved": "Draft saved. It has not been submitted.",
+  "@driverWsDraftSaved": {
+    "description": "Driver workspace: draft saved."
+  },
+  "driverWsDraftSaveError": "Draft could not be saved.",
+  "@driverWsDraftSaveError": {
+    "description": "Driver workspace: draft save failure."
+  },
+  "driverWsSaveDraft": "Save draft on this device",
+  "@driverWsSaveDraft": {
+    "description": "Driver workspace: save draft button."
+  },
+  "driverWsReviewDisclaimer": "Approval records the reviewed arrangement. It does not execute payment or payroll deduction. Record only verified payments.",
+  "@driverWsReviewDisclaimer": {
+    "description": "Driver workspace: review disclaimer."
+  },
+  "driverWsSaving": "Saving...",
+  "@driverWsSaving": {
+    "description": "Driver workspace: submit in progress."
+  },
+  "driverWsSubmit": "Submit",
+  "@driverWsSubmit": {
+    "description": "Driver workspace: submit button."
+  },
+  "driverWsErrResolution": "Choose a resolution.",
+  "@driverWsErrResolution": {
+    "description": "Driver workspace: validation."
+  },
+  "driverWsErrExplanation": "Explain your request, including the proposed arrangement.",
+  "@driverWsErrExplanation": {
+    "description": "Driver workspace: validation."
+  },
+  "driverWsErrPaymentReference": "Enter your payment reference.",
+  "@driverWsErrPaymentReference": {
+    "description": "Driver workspace: validation."
+  },
+  "driverWsErrProposedDate": "Choose your proposed payment date.",
+  "@driverWsErrProposedDate": {
+    "description": "Driver workspace: validation."
+  },
+  "driverWsErrSignature": "Review the statement and sign before submitting.",
+  "@driverWsErrSignature": {
+    "description": "Driver workspace: validation."
+  },
+  "driverWsOptionsError": "Options unavailable. Try again.",
+  "@driverWsOptionsError": {
+    "description": "Driver workspace: picker load failure."
+  },
+  "driverWsSearch": "Search",
+  "@driverWsSearch": {
+    "description": "Driver workspace: picker search."
+  },
+  "driverWsClearSelection": "None / clear selection",
+  "@driverWsClearSelection": {
+    "description": "Driver workspace: picker clear."
+  },
+  "driverWsPreviousOptions": "Previous options",
+  "@driverWsPreviousOptions": {
+    "description": "Driver workspace: picker paging."
+  },
+  "driverWsMoreOptions": "More options",
+  "@driverWsMoreOptions": {
+    "description": "Driver workspace: picker paging."
+  },
+  "driverWsFieldEmployeeId": "Employee ID",
+  "@driverWsFieldEmployeeId": {
+    "description": "Driver workspace: form field."
+  },
+  "driverWsFieldDriverName": "Driver name",
+  "@driverWsFieldDriverName": {
+    "description": "Driver workspace: form field."
+  },
+  "driverWsFieldCountry": "Country",
+  "@driverWsFieldCountry": {
+    "description": "Driver workspace: form field."
+  },
+  "driverWsFieldSite": "Site",
+  "@driverWsFieldSite": {
+    "description": "Driver workspace: form field."
+  },
+  "driverWsFieldLoginAccount": "Login account (none removes link)",
+  "@driverWsFieldLoginAccount": {
+    "description": "Driver workspace: form field."
+  },
+  "driverWsFieldIdentityReason": "Identity verification / reason",
+  "@driverWsFieldIdentityReason": {
+    "description": "Driver workspace: form field."
+  },
+  "driverWsFieldSupervisor": "Supervisor",
+  "@driverWsFieldSupervisor": {
+    "description": "Driver workspace: form field."
+  },
+  "driverWsFieldManager": "Manager",
+  "@driverWsFieldManager": {
+    "description": "Driver workspace: form field."
+  },
+  "driverWsFieldVehicle": "Vehicle",
+  "@driverWsFieldVehicle": {
+    "description": "Driver workspace: form field."
+  },
+  "driverWsFieldAssignmentReason": "Assignment reason",
+  "@driverWsFieldAssignmentReason": {
+    "description": "Driver workspace: form field."
+  },
+  "driverWsFieldAuthority": "Issuing authority",
+  "@driverWsFieldAuthority": {
+    "description": "Driver workspace: form field."
+  },
+  "driverWsFieldNoticeReference": "Notice reference",
+  "@driverWsFieldNoticeReference": {
+    "description": "Driver workspace: form field."
+  },
+  "driverWsFieldIncidentAt": "Incident date and time (YYYY-MM-DDTHH:mm)",
+  "@driverWsFieldIncidentAt": {
+    "description": "Driver workspace: form field."
+  },
+  "driverWsFieldDueDate": "Due date (YYYY-MM-DD)",
+  "@driverWsFieldDueDate": {
+    "description": "Driver workspace: form field."
+  },
+  "driverWsFieldAmount": "Fine amount",
+  "@driverWsFieldAmount": {
+    "description": "Driver workspace: form field."
+  },
+  "driverWsFieldCurrency": "Currency code",
+  "@driverWsFieldCurrency": {
+    "description": "Driver workspace: form field."
+  },
+  "driverWsFieldNoticeDetails": "Notice details",
+  "@driverWsFieldNoticeDetails": {
+    "description": "Driver workspace: form field."
+  },
+  "driverWsFieldAssignmentEvidence": "Evidence confirming driver assignment",
+  "@driverWsFieldAssignmentEvidence": {
+    "description": "Driver workspace: form field."
+  },
+  "driverWsFieldRecordType": "Record type",
+  "@driverWsFieldRecordType": {
+    "description": "Driver workspace: form field."
+  },
+  "driverWsFieldExistingRecord": "Existing record",
+  "@driverWsFieldExistingRecord": {
+    "description": "Driver workspace: form field."
+  },
+  "driverWsFieldIdentityMethod": "How driver identity was verified",
+  "@driverWsFieldIdentityMethod": {
+    "description": "Driver workspace: form field."
+  },
+  "driverWsFieldResolution": "Preferred resolution",
+  "@driverWsFieldResolution": {
+    "description": "Driver workspace: form field."
+  },
+  "driverWsFieldExplanation": "Explanation / proposed arrangement",
+  "@driverWsFieldExplanation": {
+    "description": "Driver workspace: form field."
+  },
+  "driverWsFieldPaymentReference": "Payment reference (if paid)",
+  "@driverWsFieldPaymentReference": {
+    "description": "Driver workspace: form field."
+  },
+  "driverWsFieldProposedDate": "Proposed payment date (YYYY-MM-DD)",
+  "@driverWsFieldProposedDate": {
+    "description": "Driver workspace: form field."
+  },
+  "driverWsFieldDecision": "Decision",
+  "@driverWsFieldDecision": {
+    "description": "Driver workspace: form field."
+  },
+  "driverWsFieldReviewReason": "Review reason / approved arrangement",
+  "@driverWsFieldReviewReason": {
+    "description": "Driver workspace: form field."
+  },
+  "driverWsFieldVerifiedReference": "Verified payment reference",
+  "@driverWsFieldVerifiedReference": {
+    "description": "Driver workspace: form field."
+  },
+  "driverWsFieldVerifiedAmount": "Verified payment amount",
+  "@driverWsFieldVerifiedAmount": {
+    "description": "Driver workspace: form field."
+  },
+  "driverWsPdfColNotice": "Notice",
+  "@driverWsPdfColNotice": {
+    "description": "Driver workspace: statement PDF column."
+  },
+  "driverWsPdfColCurrency": "Currency",
+  "@driverWsPdfColCurrency": {
+    "description": "Driver workspace: statement PDF column."
+  },
+  "driverWsPdfColAmount": "Amount",
+  "@driverWsPdfColAmount": {
+    "description": "Driver workspace: statement PDF column."
+  },
+  "driverWsPdfColPaid": "Paid",
+  "@driverWsPdfColPaid": {
+    "description": "Driver workspace: statement PDF column."
+  },
+  "driverWsPdfColStatus": "Status",
+  "@driverWsPdfColStatus": {
+    "description": "Driver workspace: statement PDF column."
+  },
+  "driverWsPdfColResponse": "Response",
+  "@driverWsPdfColResponse": {
+    "description": "Driver workspace: statement PDF column."
+  },
+  "driverWsDriverSubtitle": "{site} · {open} open fines · {awaiting} awaiting response",
+  "@driverWsDriverSubtitle": {
+    "description": "Driver workspace: driver list row subtitle.",
+    "placeholders": {
+      "site": {
+        "type": "String"
+      },
+      "open": {
+        "type": "String"
+      },
+      "awaiting": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsOutstanding": "Outstanding: {amount} {currency}",
+  "@driverWsOutstanding": {
+    "description": "Driver workspace: outstanding balance line.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "currency": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsSupervisorLine": "Supervisor: {name}",
+  "@driverWsSupervisorLine": {
+    "description": "Driver workspace: assignment card.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsManagerLine": "Manager: {name}",
+  "@driverWsManagerLine": {
+    "description": "Driver workspace: assignment card.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsAssignmentPeriod": "{start} to {end}",
+  "@driverWsAssignmentPeriod": {
+    "description": "Driver workspace: assignment period.",
+    "placeholders": {
+      "start": {
+        "type": "String"
+      },
+      "end": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsAssignmentLine": "Assignment: {reason}",
+  "@driverWsAssignmentLine": {
+    "description": "Driver workspace: fine assignment evidence.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsDueLine": "Due: {due} · Paid: {paid}",
+  "@driverWsDueLine": {
+    "description": "Driver workspace: fine due and paid line.",
+    "placeholders": {
+      "due": {
+        "type": "String"
+      },
+      "paid": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsPdfTitle": "Driver statement: {name}",
+  "@driverWsPdfTitle": {
+    "description": "Driver workspace: statement PDF heading.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsPdfEmployeeId": "Employee ID: {id}",
+  "@driverWsPdfEmployeeId": {
+    "description": "Driver workspace: statement PDF line.",
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "vehicleClassTransitMixer": "Transit mixer",
+  "@vehicleClassTransitMixer": {
+    "description": "Vehicle class name for a five-view reference board."
+  },
+  "vehicleClassConcretePump": "Concrete pump",
+  "@vehicleClassConcretePump": {
+    "description": "Vehicle class name for a five-view reference board."
+  },
+  "vehicleClassLinePump": "Truck-mounted line pump",
+  "@vehicleClassLinePump": {
+    "description": "Vehicle class name for a five-view reference board."
+  },
+  "vehicleClassStaffBus": "Staff bus",
+  "@vehicleClassStaffBus": {
+    "description": "Vehicle class name for a five-view reference board."
+  },
+  "vehicleClassStaffVan": "Staff van",
+  "@vehicleClassStaffVan": {
+    "description": "Vehicle class name for a five-view reference board."
+  },
+  "vehicleClassDoubleCabPickup": "Double-cab pickup",
+  "@vehicleClassDoubleCabPickup": {
+    "description": "Vehicle class name for a five-view reference board."
+  },
+  "vehicleClassWheelLoader": "Wheel loader",
+  "@vehicleClassWheelLoader": {
+    "description": "Vehicle class name for a five-view reference board."
+  },
+  "vehicleClassSkidSteerLoader": "Skid-steer loader",
+  "@vehicleClassSkidSteerLoader": {
+    "description": "Vehicle class name for a five-view reference board."
+  },
+  "vehicleClassTowablePump": "Towable concrete pump",
+  "@vehicleClassTowablePump": {
+    "description": "Vehicle class name for a five-view reference board."
+  },
+  "vehicleClassStationaryPump": "Stationary concrete pump",
+  "@vehicleClassStationaryPump": {
+    "description": "Vehicle class name for a five-view reference board."
+  },
+  "vehicleClassGenerator": "Enclosed generator",
+  "@vehicleClassGenerator": {
+    "description": "Vehicle class name for a five-view reference board."
+  },
+  "vehicleClassChiller": "Industrial chiller",
+  "@vehicleClassChiller": {
+    "description": "Vehicle class name for a five-view reference board."
+  },
+  "vehicleClassWaterChiller": "Industrial water chiller",
+  "@vehicleClassWaterChiller": {
+    "description": "Vehicle class name for a five-view reference board."
+  },
+  "vehicleClassBatchingPlant": "Concrete batching plant",
+  "@vehicleClassBatchingPlant": {
+    "description": "Vehicle class name for a five-view reference board."
+  },
+  "vehicleClassPlacingBoom": "Freestanding placing boom",
+  "@vehicleClassPlacingBoom": {
+    "description": "Vehicle class name for a five-view reference board."
+  },
+  "vehicleClassConcretePumpAxles": "Concrete pump · {axles} axle",
+  "@vehicleClassConcretePumpAxles": {
+    "description": "Vehicle class name with axle count.",
+    "placeholders": {
+      "axles": {
+        "type": "int"
+      }
+    }
+  },
+  "vehicleClassLinePumpAxles": "Truck-mounted line pump · {axles} axle",
+  "@vehicleClassLinePumpAxles": {
+    "description": "Vehicle class name with axle count.",
+    "placeholders": {
+      "axles": {
+        "type": "int"
+      }
+    }
+  },
+  "scannerCameraStartFailedTitle": "The camera could not start",
+  "@scannerCameraStartFailedTitle": {
+    "description": "Scanner: camera failed to start for a reason other than permission."
+  },
+  "scannerCameraStartFailedMessage": "Another app may be using it, or it stopped unexpectedly. Try again, or type the code below.",
+  "@scannerCameraStartFailedMessage": {
+    "description": "Scanner: camera start failure explanation."
+  },
+  "managementOverviewSiteRollup": "Sites at a glance",
+  "@managementOverviewSiteRollup": {
+    "description": "Management overview: per-site section heading."
+  },
+  "managementOverviewSiteRollupEmpty": "No site has recorded tyres in this period.",
+  "@managementOverviewSiteRollupEmpty": {
+    "description": "Management overview: empty per-site rollup."
+  },
+  "managementOverviewAtRiskShare": "Tyres at high or critical risk",
+  "@managementOverviewAtRiskShare": {
+    "description": "Management overview: risk share tile."
+  },
+  "managementReportsShare": "Share report PDF",
+  "@managementReportsShare": {
+    "description": "Management reports: share action."
+  },
+  "managementReportsShareError": "The report could not be shared. Try again.",
+  "@managementReportsShareError": {
+    "description": "Management reports: share failure."
+  },
+  "managementReportsPdfMetric": "Metric",
+  "@managementReportsPdfMetric": {
+    "description": "Management reports: PDF column."
+  },
+  "managementReportsPdfValue": "Value",
+  "@managementReportsPdfValue": {
+    "description": "Management reports: PDF column."
+  },
+  "managementReportsPdfShare": "Share",
+  "@managementReportsPdfShare": {
+    "description": "Management reports: PDF column."
+  },
+  "managementTeamRole": "Role",
+  "@managementTeamRole": {
+    "description": "Team member detail field."
+  },
+  "managementTeamUsername": "Username",
+  "@managementTeamUsername": {
+    "description": "Team member detail field."
+  },
+  "managementTeamSite": "Site",
+  "@managementTeamSite": {
+    "description": "Team member detail field."
+  },
+  "managementTeamCountry": "Country",
+  "@managementTeamCountry": {
+    "description": "Team member detail field."
+  },
+  "managementTeamPhone": "Phone",
+  "@managementTeamPhone": {
+    "description": "Team member detail field."
+  },
+  "managementTeamEmail": "Email",
+  "@managementTeamEmail": {
+    "description": "Team member detail field."
+  },
+  "managementTeamStatus": "Status",
+  "@managementTeamStatus": {
+    "description": "Team member detail field."
+  },
+  "managementTeamApproved": "Approved",
+  "@managementTeamApproved": {
+    "description": "Team member approved status."
+  },
+  "managementTeamLastLogin": "Last sign-in",
+  "@managementTeamLastLogin": {
+    "description": "Team member detail field."
+  },
+  "managementTeamNotRecorded": "Not recorded",
+  "@managementTeamNotRecorded": {
+    "description": "Team member missing value."
+  },
+  "managementTeamCall": "Call",
+  "@managementTeamCall": {
+    "description": "Team member call action."
+  },
+  "managementTeamSendEmail": "Send email",
+  "@managementTeamSendEmail": {
+    "description": "Team member email action."
+  },
+  "managementTeamActionError": "This action is not available on this device.",
+  "@managementTeamActionError": {
+    "description": "Team member call/email could not launch."
+  },
+  "managementOverviewSiteTyres": "{count} tyres",
+  "@managementOverviewSiteTyres": {
+    "description": "Management overview: tyres at a site.",
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "managementOverviewSiteShare": "{percent}% of fleet tyres",
+  "@managementOverviewSiteShare": {
+    "description": "Management overview: site share.",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "managementReportsPdfPeriod": "Period: last {days} days",
+  "@managementReportsPdfPeriod": {
+    "description": "Management reports: PDF period line.",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "managementReportsPdfCurrency": "Currency: {code}",
+  "@managementReportsPdfCurrency": {
+    "description": "Management reports: PDF currency line.",
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
   }
 }

@@ -963,5 +963,294 @@
   "tyreActionRotateSavedMessage": "روٹیشن اس ٹائر کی سروس ہسٹری میں محفوظ ہو گئی ہے۔ اس سے ٹائر رجسٹر میں دکھائی گئی جگہ تبدیل نہیں ہوتی۔",
   "tyreActionRotateFailedTitle": "روٹیشن محفوظ نہیں ہوئی",
   "tyreActionRotateOfflineMessage": "کنکشن نہیں ہے۔ روٹیشن صرف آن لائن محفوظ ہوتی ہے، اس لیے یہ درج نہیں ہوئی۔ کنکشن ملنے پر دوبارہ کوشش کریں۔",
-  "tyreActionRotateFailedMessage": "روٹیشن محفوظ نہیں ہو سکی۔ دوبارہ کوشش کریں۔"
+  "tyreActionRotateFailedMessage": "روٹیشن محفوظ نہیں ہو سکی۔ دوبارہ کوشش کریں۔",
+  "driverWsTerm": "{term, select, create_driver{تصدیق شدہ ڈرائیور شامل کریں} link_account{لاگ ان اکاؤنٹ منسلک کریں} assign_team{ٹیم اور گاڑی تفویض کریں} create_fine{ٹریفک جرمانہ درج کریں} link_record{کام کا ریکارڈ منسلک کریں} respond_fine{جائزہ لیں اور دستخط کریں} review_fine{جواب یا ادائیگی کا جائزہ} correct_fine{جرمانہ درست کریں} reassign_fine{جرمانہ دوبارہ تفویض کریں} direct_payment{میں براہ راست ادائیگی کروں گا} already_paid{پہلے ہی ادا کر دیا ہے} dispute{اعتراض یا غلط تفویض} company_recovery{کمپنی کی ادائیگی یا وصولی کی درخواست} instalments{قسطوں کی درخواست} approve{درخواست منظور کریں} return{ڈرائیور کو واپس بھیجیں} payment{تصدیق شدہ ادائیگی درج کریں} cancel{جرمانہ منسوخ کریں} reopen{دوبارہ کھولیں} open{کھلا} settled{ادا شدہ} cancelled{منسوخ} awaiting_response{جواب کا انتظار} submitted{جواب جمع ہو گیا} returned{ڈرائیور کو واپس} approved{منظور شدہ} driver_documents{ڈرائیور کے دستاویزات} driver_training{ڈرائیور کی تربیت} driver_coaching{ڈرائیور کی رہنمائی} driver_safety_events{ڈرائیور کے حفاظتی واقعات} driver_expenses{ڈرائیور کے اخراجات} tyre_records{ٹائر کے ریکارڈ} accidents{حادثات} wo_tasks{ورک آرڈر کے کام} checklist_submissions{جمع شدہ چیک لسٹیں} odometer_logs{اوڈومیٹر ریڈنگز} wash_records{دھلائی کے ریکارڈ} other{}}",
+  "@driverWsTerm": {
+    "placeholders": {
+      "term": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsRecordField": "{field, select, country{ملک} site{مقام} asset_no{اثاثہ نمبر} driver_name{ڈرائیور کا نام} title{عنوان} doc_type{دستاویز کی قسم} doc_number{دستاویز نمبر} expiry_date{میعاد ختم ہونے کی تاریخ} course_name{کورس کا نام} result{نتیجہ} completed_date{تکمیل کی تاریخ} coaching_status{رہنمائی کی حالت} period{مدت} event_type{واقعے کی قسم} severity{شدت} event_at{واقعے کا وقت} category{زمرہ} amount{رقم} currency{کرنسی} expense_date{خرچ کی تاریخ} status{حالت} incident_date{واقعے کی تاریخ} accident_type{حادثے کی قسم} due_date{آخری تاریخ} created_at{بنانے کی تاریخ} reading_date{ریڈنگ کی تاریخ} odometer_km{اوڈومیٹر (کلومیٹر)} wash_date{دھلائی کی تاریخ} template_name{چیک لسٹ کا نام} approval_status{منظوری کی حالت} brand{برانڈ} serial_no{سیریل نمبر} issue_date{اجراء کی تاریخ} qty{مقدار} cost_per_tyre{فی ٹائر لاگت} other{}}",
+  "@driverWsRecordField": {
+    "placeholders": {
+      "field": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsEvidenceKind": "{kind, select, payment{ادائیگی کی رسید} supporting{معاون تصویر} notice{سرکاری نوٹس} other{}}",
+  "@driverWsEvidenceKind": {
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsTitle": "ڈرائیور کا کام",
+  "driverWsEntrySubtitle": "میرے جرمانے، ٹیم کی ذمہ داریاں اور تصدیق شدہ کام",
+  "driverWsLoadError": "کام کی جگہ دستیاب نہیں۔ رابطہ، اکاؤنٹ کا ربط اور اجازت چیک کریں، پھر تازہ کریں۔",
+  "driverWsRefresh": "تازہ کریں",
+  "driverWsSignInRequired": "اپنا کام دیکھنے کے لیے سائن ان کریں۔",
+  "driverWsOfflineNotice": "آف لائن محفوظ منظر۔ جواب یا جائزے سے پہلے رابطہ بحال کرکے تازہ کریں۔",
+  "driverWsTruncatedNotice": "یہ منظر نامکمل ہے کیونکہ ریکارڈ کی حد پوری ہو گئی۔ ایکسپورٹ بند ہے۔",
+  "driverWsSearchDrivers": "ڈرائیور تلاش کریں",
+  "driverWsNoDrivers": "کوئی منسلک ڈرائیور یا تفویض شدہ ٹیم موجود نہیں۔ مجاز منیجر سے اکاؤنٹ اور ذمہ داری کی تصدیق کروائیں۔",
+  "driverWsSharePdf": "جرمانوں کی PDF تفصیل شیئر کریں",
+  "driverWsReportShareError": "رپورٹ شیئر نہیں ہو سکی۔ دوبارہ کوشش کریں۔",
+  "driverWsTrafficFines": "ٹریفک جرمانے",
+  "driverWsNoFines": "کوئی جرمانہ درج نہیں ہے۔",
+  "driverWsAssignmentHistory": "ٹیم اور گاڑی کی ذمہ داریوں کی تاریخ",
+  "driverWsNoAssignment": "کوئی ذمہ داری درج نہیں ہے۔",
+  "driverWsAssignmentCurrent": "موجودہ",
+  "driverWsAssignmentPrevious": "سابقہ",
+  "driverWsNoVehicle": "کوئی گاڑی نہیں",
+  "driverWsNotAssigned": "تفویض نہیں",
+  "driverWsPresent": "اب تک",
+  "driverWsAssignedWork": "تفویض شدہ کام",
+  "driverWsNotSupplied": "فراہم نہیں کیا گیا",
+  "driverWsVerifiedRecords": "تصدیق شدہ کام اور ڈرائیور کے ریکارڈ",
+  "driverWsUnmatchedNotice": "پرانے غیر منسلک ریکارڈ یہاں ظاہر ہونے سے پہلے شناخت کی تصدیق چاہتے ہیں۔",
+  "driverWsRecordUnavailable": "ریکارڈ اب دستیاب نہیں",
+  "driverWsActivityHistory": "سرگرمی کی تاریخ",
+  "driverWsRecordedUser": "درج شدہ صارف",
+  "driverWsPhotoError": "تصویر منسلک نہیں ہو سکی۔ آپ کی مقامی تصویر حذف نہیں ہوئی۔",
+  "driverWsAcknowledgeRespond": "وصولی تسلیم کریں اور جواب دیں",
+  "driverWsReviewPayment": "جائزہ لیں یا ادائیگی درج کریں",
+  "driverWsEvidenceOpenError": "ثبوت نہیں کھل سکا۔",
+  "driverWsAttachReceipt": "رسید کی تصویر منسلک کریں",
+  "driverWsAttachSupporting": "معاون تصویر منسلک کریں",
+  "driverWsAttachNotice": "سرکاری نوٹس کی تصویر منسلک کریں",
+  "driverWsSignatureUnavailable": "دستخط دستیاب نہیں۔",
+  "driverWsViewSignature": "دستخط شدہ رسید دیکھیں",
+  "driverWsSignatureDisplayError": "دستخط دکھایا نہیں جا سکا۔",
+  "driverWsReceiptStatement": "میں اس نوٹس کی وصولی اور جائزے کی تصدیق کرتا ہوں اور اوپر دیا گیا جواب جمع کرتا ہوں۔ وصولی ذمہ داری قبول کرنے کا اقرار نہیں ہے۔ ادائیگی یا وصولی کی درخواست خودکار ادائیگی یا تنخواہ کی کٹوتی کی اجازت نہیں دیتی۔",
+  "driverWsDraftReadError": "محفوظ مسودہ پڑھا نہیں جا سکا۔ کچھ بھی تبدیل نہیں ہوا۔",
+  "driverWsSubmitError": "جمع نہیں ہو سکا۔ لازمی خانے اور رابطہ چیک کریں۔ نوٹس بدل گیا ہو تو تازہ کریں۔",
+  "driverWsConnectionRequired": "جمع کرنے کے لیے رابطہ ضروری ہے تاکہ موجودہ نوٹس اور آپ کی اجازت کی جانچ ہو۔",
+  "driverWsDraftSaved": "مسودہ محفوظ ہو گیا۔ ابھی جمع نہیں ہوا۔",
+  "driverWsDraftSaveError": "مسودہ محفوظ نہیں ہو سکا۔",
+  "driverWsSaveDraft": "اس آلے پر مسودہ محفوظ کریں",
+  "driverWsReviewDisclaimer": "منظوری جائزہ شدہ انتظام درج کرتی ہے۔ یہ ادائیگی یا تنخواہ سے کٹوتی نہیں کرتی۔ صرف تصدیق شدہ ادائیگیاں درج کریں۔",
+  "driverWsSaving": "محفوظ ہو رہا ہے...",
+  "driverWsSubmit": "جمع کریں",
+  "driverWsErrResolution": "حل کا انتخاب کریں۔",
+  "driverWsErrExplanation": "اپنی درخواست کی وضاحت کریں، مجوزہ انتظام سمیت۔",
+  "driverWsErrPaymentReference": "اپنی ادائیگی کا حوالہ درج کریں۔",
+  "driverWsErrProposedDate": "اپنی مجوزہ ادائیگی کی تاریخ منتخب کریں۔",
+  "driverWsErrSignature": "جمع کرنے سے پہلے بیان کا جائزہ لیں اور دستخط کریں۔",
+  "driverWsOptionsError": "اختیارات دستیاب نہیں۔ دوبارہ کوشش کریں۔",
+  "driverWsSearch": "تلاش",
+  "driverWsClearSelection": "کوئی نہیں یا انتخاب ختم کریں",
+  "driverWsPreviousOptions": "پچھلے اختیارات",
+  "driverWsMoreOptions": "مزید اختیارات",
+  "driverWsFieldEmployeeId": "ملازم نمبر",
+  "driverWsFieldDriverName": "ڈرائیور کا نام",
+  "driverWsFieldCountry": "ملک",
+  "driverWsFieldSite": "مقام",
+  "driverWsFieldLoginAccount": "لاگ ان اکاؤنٹ (کوئی نہیں سے ربط ختم ہوگا)",
+  "driverWsFieldIdentityReason": "شناخت کی تصدیق یا وجہ",
+  "driverWsFieldSupervisor": "نگران",
+  "driverWsFieldManager": "منیجر",
+  "driverWsFieldVehicle": "گاڑی",
+  "driverWsFieldAssignmentReason": "تفویض کی وجہ",
+  "driverWsFieldAuthority": "جاری کرنے والا ادارہ",
+  "driverWsFieldNoticeReference": "نوٹس کا حوالہ",
+  "driverWsFieldIncidentAt": "واقعے کی تاریخ اور وقت (YYYY-MM-DDTHH:mm)",
+  "driverWsFieldDueDate": "آخری تاریخ (YYYY-MM-DD)",
+  "driverWsFieldAmount": "جرمانے کی رقم",
+  "driverWsFieldCurrency": "کرنسی کوڈ",
+  "driverWsFieldNoticeDetails": "نوٹس کی تفصیلات",
+  "driverWsFieldAssignmentEvidence": "ڈرائیور کی ذمہ داری کی تصدیق کا ثبوت",
+  "driverWsFieldRecordType": "ریکارڈ کی قسم",
+  "driverWsFieldExistingRecord": "موجودہ ریکارڈ",
+  "driverWsFieldIdentityMethod": "ڈرائیور کی شناخت کیسے تصدیق کی گئی",
+  "driverWsFieldResolution": "مطلوبہ حل",
+  "driverWsFieldExplanation": "وضاحت یا مجوزہ انتظام",
+  "driverWsFieldPaymentReference": "ادائیگی کا حوالہ (اگر ادا ہو چکا ہے)",
+  "driverWsFieldProposedDate": "مجوزہ ادائیگی کی تاریخ (YYYY-MM-DD)",
+  "driverWsFieldDecision": "فیصلہ",
+  "driverWsFieldReviewReason": "جائزے کی وجہ یا منظور شدہ انتظام",
+  "driverWsFieldVerifiedReference": "تصدیق شدہ ادائیگی کا حوالہ",
+  "driverWsFieldVerifiedAmount": "تصدیق شدہ ادائیگی کی رقم",
+  "driverWsPdfColNotice": "نوٹس",
+  "driverWsPdfColCurrency": "کرنسی",
+  "driverWsPdfColAmount": "رقم",
+  "driverWsPdfColPaid": "ادا شدہ",
+  "driverWsPdfColStatus": "حالت",
+  "driverWsPdfColResponse": "جواب",
+  "driverWsDriverSubtitle": "{site} · {open} کھلے جرمانے · {awaiting} جواب کے منتظر",
+  "@driverWsDriverSubtitle": {
+    "placeholders": {
+      "site": {
+        "type": "String"
+      },
+      "open": {
+        "type": "String"
+      },
+      "awaiting": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsOutstanding": "واجب الادا: {amount} {currency}",
+  "@driverWsOutstanding": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "currency": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsSupervisorLine": "نگران: {name}",
+  "@driverWsSupervisorLine": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsManagerLine": "منیجر: {name}",
+  "@driverWsManagerLine": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsAssignmentPeriod": "{start} سے {end} تک",
+  "@driverWsAssignmentPeriod": {
+    "placeholders": {
+      "start": {
+        "type": "String"
+      },
+      "end": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsAssignmentLine": "تفویض: {reason}",
+  "@driverWsAssignmentLine": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsDueLine": "آخری تاریخ: {due} · ادا شدہ: {paid}",
+  "@driverWsDueLine": {
+    "placeholders": {
+      "due": {
+        "type": "String"
+      },
+      "paid": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsPdfTitle": "ڈرائیور کا گوشوارہ: {name}",
+  "@driverWsPdfTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsPdfEmployeeId": "ملازم نمبر: {id}",
+  "@driverWsPdfEmployeeId": {
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "vehicleClassTransitMixer": "ٹرانزٹ مکسر",
+  "vehicleClassConcretePump": "کنکریٹ پمپ",
+  "vehicleClassLinePump": "ٹرک پر نصب لائن پمپ",
+  "vehicleClassStaffBus": "اسٹاف بس",
+  "vehicleClassStaffVan": "اسٹاف وین",
+  "vehicleClassDoubleCabPickup": "ڈبل کیبن پک اپ",
+  "vehicleClassWheelLoader": "وہیل لوڈر",
+  "vehicleClassSkidSteerLoader": "اسکڈ اسٹیئر لوڈر",
+  "vehicleClassTowablePump": "کھینچا جانے والا کنکریٹ پمپ",
+  "vehicleClassStationaryPump": "ساکن کنکریٹ پمپ",
+  "vehicleClassGenerator": "بند جنریٹر",
+  "vehicleClassChiller": "صنعتی چلر",
+  "vehicleClassWaterChiller": "صنعتی واٹر چلر",
+  "vehicleClassBatchingPlant": "کنکریٹ بیچنگ پلانٹ",
+  "vehicleClassPlacingBoom": "آزاد کھڑا پلیسنگ بوم",
+  "vehicleClassConcretePumpAxles": "کنکریٹ پمپ · {axles} ایکسل",
+  "@vehicleClassConcretePumpAxles": {
+    "placeholders": {
+      "axles": {
+        "type": "int"
+      }
+    }
+  },
+  "vehicleClassLinePumpAxles": "ٹرک پر نصب لائن پمپ · {axles} ایکسل",
+  "@vehicleClassLinePumpAxles": {
+    "placeholders": {
+      "axles": {
+        "type": "int"
+      }
+    }
+  },
+  "scannerCameraStartFailedTitle": "کیمرا شروع نہیں ہو سکا",
+  "scannerCameraStartFailedMessage": "ہو سکتا ہے کوئی اور ایپ اسے استعمال کر رہی ہو یا یہ اچانک رک گیا ہو۔ دوبارہ کوشش کریں یا نیچے کوڈ لکھیں۔",
+  "managementOverviewSiteRollup": "مقامات ایک نظر میں",
+  "managementOverviewSiteRollupEmpty": "اس مدت میں کسی مقام پر ٹائر درج نہیں ہوئے۔",
+  "managementOverviewAtRiskShare": "زیادہ یا انتہائی خطرے والے ٹائر",
+  "managementReportsShare": "رپورٹ PDF شیئر کریں",
+  "managementReportsShareError": "رپورٹ شیئر نہیں ہو سکی۔ دوبارہ کوشش کریں۔",
+  "managementReportsPdfMetric": "پیمانہ",
+  "managementReportsPdfValue": "قدر",
+  "managementReportsPdfShare": "حصہ",
+  "managementTeamRole": "کردار",
+  "managementTeamUsername": "صارف نام",
+  "managementTeamSite": "مقام",
+  "managementTeamCountry": "ملک",
+  "managementTeamPhone": "فون",
+  "managementTeamEmail": "ای میل",
+  "managementTeamStatus": "حالت",
+  "managementTeamApproved": "منظور شدہ",
+  "managementTeamLastLogin": "آخری سائن ان",
+  "managementTeamNotRecorded": "درج نہیں",
+  "managementTeamCall": "کال کریں",
+  "managementTeamSendEmail": "ای میل بھیجیں",
+  "managementTeamActionError": "یہ عمل اس آلے پر دستیاب نہیں۔",
+  "managementOverviewSiteTyres": "{count} ٹائر",
+  "@managementOverviewSiteTyres": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "managementOverviewSiteShare": "بیڑے کے ٹائروں کا {percent}%",
+  "@managementOverviewSiteShare": {
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "managementReportsPdfPeriod": "مدت: آخری {days} دن",
+  "@managementReportsPdfPeriod": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "managementReportsPdfCurrency": "کرنسی: {code}",
+  "@managementReportsPdfCurrency": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  }
 }

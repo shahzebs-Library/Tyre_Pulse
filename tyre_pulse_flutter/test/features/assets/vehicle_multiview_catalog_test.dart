@@ -1,6 +1,8 @@
 import 'dart:io';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_multiview_catalog.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
@@ -164,5 +166,38 @@ void main() {
         expect(vehicleMultiViewAsset(asset), isNull);
       });
     }
+  });
+
+  test('every board has a localized class label in every language', () async {
+    for (final String code in <String>['en', 'ar', 'ur']) {
+      final AppLocalizations l10n =
+          await AppLocalizations.delegate.load(Locale(code));
+      for (final VehicleMultiViewCatalogEntry entry
+          in kVehicleMultiViewCatalog) {
+        expect(
+          vehicleClassLabel(l10n, entry).trim(),
+          isNotEmpty,
+          reason: '$code ${entry.id}',
+        );
+      }
+    }
+    final AppLocalizations en =
+        await AppLocalizations.delegate.load(const Locale('en'));
+    expect(
+      vehicleClassLabel(
+        en,
+        vehicleMultiViewCatalogEntry('sany-concrete-pump-5axle')!,
+      ),
+      'Concrete pump · 5 axle',
+    );
+    final AppLocalizations ar =
+        await AppLocalizations.delegate.load(const Locale('ar'));
+    expect(
+      vehicleClassLabel(
+        ar,
+        vehicleMultiViewCatalogEntry('transit-mixer-3axle')!,
+      ),
+      'خلاطة خرسانة متنقلة',
+    );
   });
 }

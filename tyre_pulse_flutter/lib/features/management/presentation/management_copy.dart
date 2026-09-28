@@ -4,8 +4,13 @@ import 'package:flutter/widgets.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 
 final class ManagementCopy {
-  factory ManagementCopy.of(BuildContext context) {
-    final String catalog = AppLocalizations.of(context).managementCopyCatalog;
+  factory ManagementCopy.of(BuildContext context) =>
+      ManagementCopy.fromL10n(AppLocalizations.of(context));
+
+  /// Builds the copy from an explicit catalog, e.g. the English one used for
+  /// a PDF that cannot render Arabic-script glyphs.
+  factory ManagementCopy.fromL10n(AppLocalizations l10n) {
+    final String catalog = l10n.managementCopyCatalog;
     return ManagementCopy._(<String, String>{
       for (final String entry in catalog.split('~'))
         if (entry.indexOf('=') > 0)

@@ -3110,4 +3110,596 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get tyreActionRotateFailedMessage =>
       'تعذّر حفظ التدوير. حاول مرة أخرى.';
+
+  @override
+  String driverWsTerm(String term) {
+    String _temp0 = intl.Intl.selectLogic(
+      term,
+      {
+        'create_driver': 'إضافة سائق موثّق',
+        'link_account': 'ربط حساب الدخول',
+        'assign_team': 'تعيين الفريق والمركبة',
+        'create_fine': 'تسجيل مخالفة مرورية',
+        'link_record': 'ربط سجل عمل',
+        'respond_fine': 'مراجعة وتوقيع',
+        'review_fine': 'مراجعة الرد أو السداد',
+        'correct_fine': 'تصحيح المخالفة',
+        'reassign_fine': 'إعادة إسناد المخالفة',
+        'direct_payment': 'سأسدد مباشرة',
+        'already_paid': 'تم السداد بالفعل',
+        'dispute': 'اعتراض أو إسناد غير صحيح',
+        'company_recovery': 'طلب سداد الشركة أو الاسترداد',
+        'instalments': 'طلب التقسيط',
+        'approve': 'اعتماد الطلب',
+        'return': 'إعادة للسائق',
+        'payment': 'تسجيل سداد متحقق منه',
+        'cancel': 'إلغاء المخالفة',
+        'reopen': 'إعادة فتح',
+        'open': 'مفتوحة',
+        'settled': 'مسددة',
+        'cancelled': 'ملغاة',
+        'awaiting_response': 'بانتظار الرد',
+        'submitted': 'تم إرسال الرد',
+        'returned': 'أعيدت للسائق',
+        'approved': 'معتمدة',
+        'driver_documents': 'مستندات السائق',
+        'driver_training': 'تدريب السائق',
+        'driver_coaching': 'توجيه السائق',
+        'driver_safety_events': 'أحداث سلامة السائق',
+        'driver_expenses': 'مصروفات السائق',
+        'tyre_records': 'سجلات الإطارات',
+        'accidents': 'الحوادث',
+        'wo_tasks': 'مهام أوامر العمل',
+        'checklist_submissions': 'قوائم الفحص المرسلة',
+        'odometer_logs': 'قراءات عداد المسافات',
+        'wash_records': 'سجلات الغسيل',
+        'other': '',
+      },
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String driverWsRecordField(String field) {
+    String _temp0 = intl.Intl.selectLogic(
+      field,
+      {
+        'country': 'الدولة',
+        'site': 'الموقع',
+        'asset_no': 'رقم الأصل',
+        'driver_name': 'اسم السائق',
+        'title': 'العنوان',
+        'doc_type': 'نوع المستند',
+        'doc_number': 'رقم المستند',
+        'expiry_date': 'تاريخ الانتهاء',
+        'course_name': 'اسم الدورة',
+        'result': 'النتيجة',
+        'completed_date': 'تاريخ الإكمال',
+        'coaching_status': 'حالة التوجيه',
+        'period': 'الفترة',
+        'event_type': 'نوع الحدث',
+        'severity': 'الخطورة',
+        'event_at': 'وقت الحدث',
+        'category': 'الفئة',
+        'amount': 'المبلغ',
+        'currency': 'العملة',
+        'expense_date': 'تاريخ المصروف',
+        'status': 'الحالة',
+        'incident_date': 'تاريخ الحادث',
+        'accident_type': 'نوع الحادث',
+        'due_date': 'تاريخ الاستحقاق',
+        'created_at': 'تاريخ الإنشاء',
+        'reading_date': 'تاريخ القراءة',
+        'odometer_km': 'عداد المسافات (كم)',
+        'wash_date': 'تاريخ الغسيل',
+        'template_name': 'اسم قائمة الفحص',
+        'approval_status': 'حالة الاعتماد',
+        'brand': 'العلامة التجارية',
+        'serial_no': 'الرقم التسلسلي',
+        'issue_date': 'تاريخ الإصدار',
+        'qty': 'الكمية',
+        'cost_per_tyre': 'التكلفة لكل إطار',
+        'other': '',
+      },
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String driverWsEvidenceKind(String kind) {
+    String _temp0 = intl.Intl.selectLogic(
+      kind,
+      {
+        'payment': 'إيصال السداد',
+        'supporting': 'صورة داعمة',
+        'notice': 'المخالفة الرسمية',
+        'other': '',
+      },
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get driverWsTitle => 'مساحة عمل السائق';
+
+  @override
+  String get driverWsEntrySubtitle =>
+      'مخالفاتي وتكليفات الفريق والعمل المرتبط بي';
+
+  @override
+  String get driverWsLoadError =>
+      'مساحة العمل غير متاحة. تحقق من الاتصال وربط الحساب والصلاحيات ثم حدّث.';
+
+  @override
+  String get driverWsRefresh => 'تحديث';
+
+  @override
+  String get driverWsSignInRequired => 'سجّل الدخول لعرض مساحة عملك.';
+
+  @override
+  String get driverWsOfflineNotice =>
+      'عرض محفوظ دون اتصال. اتصل وحدّث قبل الرد أو المراجعة.';
+
+  @override
+  String get driverWsTruncatedNotice =>
+      'هذا العرض غير مكتمل لأنه بلغ الحد الأقصى للسجلات. التصدير معطّل.';
+
+  @override
+  String get driverWsSearchDrivers => 'البحث عن السائقين';
+
+  @override
+  String get driverWsNoDrivers =>
+      'لا يوجد سائق مرتبط أو فريق مكلّف. اطلب من مدير مخوّل التحقق من حسابك وتكليفك.';
+
+  @override
+  String get driverWsSharePdf => 'مشاركة كشف المخالفات PDF';
+
+  @override
+  String get driverWsReportShareError =>
+      'تعذّرت مشاركة التقرير. حاول مرة أخرى.';
+
+  @override
+  String get driverWsTrafficFines => 'المخالفات المرورية';
+
+  @override
+  String get driverWsNoFines => 'لا توجد مخالفات مسجلة.';
+
+  @override
+  String get driverWsAssignmentHistory => 'سجل تكليفات الفريق والمركبة';
+
+  @override
+  String get driverWsNoAssignment => 'لا يوجد تكليف مسجل.';
+
+  @override
+  String get driverWsAssignmentCurrent => 'حالي';
+
+  @override
+  String get driverWsAssignmentPrevious => 'سابق';
+
+  @override
+  String get driverWsNoVehicle => 'بدون مركبة';
+
+  @override
+  String get driverWsNotAssigned => 'غير معيّن';
+
+  @override
+  String get driverWsPresent => 'حتى الآن';
+
+  @override
+  String get driverWsAssignedWork => 'العمل المكلّف به';
+
+  @override
+  String get driverWsNotSupplied => 'غير مُدخل';
+
+  @override
+  String get driverWsVerifiedRecords => 'سجلات العمل والسائق الموثّقة';
+
+  @override
+  String get driverWsUnmatchedNotice =>
+      'تتطلب السجلات السابقة غير المرتبطة التحقق من الهوية قبل عرضها هنا.';
+
+  @override
+  String get driverWsRecordUnavailable => 'السجل لم يعد متاحاً';
+
+  @override
+  String get driverWsActivityHistory => 'سجل النشاط';
+
+  @override
+  String get driverWsRecordedUser => 'مستخدم مسجّل';
+
+  @override
+  String get driverWsPhotoError =>
+      'تعذّر إرفاق الصورة. لم تُحذف صورتك المحلية.';
+
+  @override
+  String get driverWsAcknowledgeRespond => 'الإقرار بالاستلام والرد';
+
+  @override
+  String get driverWsReviewPayment => 'مراجعة أو تسجيل سداد';
+
+  @override
+  String get driverWsEvidenceOpenError => 'تعذّر فتح الدليل.';
+
+  @override
+  String get driverWsAttachReceipt => 'إرفاق صورة إيصال';
+
+  @override
+  String get driverWsAttachSupporting => 'إرفاق صورة داعمة';
+
+  @override
+  String get driverWsAttachNotice => 'إرفاق صورة المخالفة الرسمية';
+
+  @override
+  String get driverWsSignatureUnavailable => 'التوقيع غير متاح.';
+
+  @override
+  String get driverWsViewSignature => 'عرض الإقرار الموقّع';
+
+  @override
+  String get driverWsSignatureDisplayError => 'تعذّر عرض التوقيع.';
+
+  @override
+  String get driverWsReceiptStatement =>
+      'أقر باستلام هذه المخالفة ومراجعتها وأقدم الرد الموضح أعلاه. الاستلام لا يعني الإقرار بالمسؤولية. طلب السداد أو الاسترداد لا يجيز سداداً تلقائياً أو خصماً من الراتب.';
+
+  @override
+  String get driverWsDraftReadError =>
+      'تعذّرت قراءة المسودة المحفوظة. لم يُستبدل أي شيء.';
+
+  @override
+  String get driverWsSubmitError =>
+      'تعذّر الإرسال. تحقق من الحقول المطلوبة والاتصال، وحدّث إذا تغيّرت المخالفة.';
+
+  @override
+  String get driverWsConnectionRequired =>
+      'يتطلب الإرسال اتصالاً للتحقق من آخر نسخة للمخالفة وصلاحياتك.';
+
+  @override
+  String get driverWsDraftSaved => 'تم حفظ المسودة ولم تُرسل بعد.';
+
+  @override
+  String get driverWsDraftSaveError => 'تعذّر حفظ المسودة.';
+
+  @override
+  String get driverWsSaveDraft => 'حفظ مسودة على هذا الجهاز';
+
+  @override
+  String get driverWsReviewDisclaimer =>
+      'يسجّل الاعتماد الترتيب الذي تمت مراجعته ولا ينفّذ سداداً أو خصماً من الراتب. سجّل الدفعات المتحقق منها فقط.';
+
+  @override
+  String get driverWsSaving => 'جارٍ الحفظ...';
+
+  @override
+  String get driverWsSubmit => 'إرسال';
+
+  @override
+  String get driverWsErrResolution => 'اختر طريقة المعالجة.';
+
+  @override
+  String get driverWsErrExplanation => 'وضّح طلبك بما في ذلك الترتيب المقترح.';
+
+  @override
+  String get driverWsErrPaymentReference => 'أدخل مرجع السداد.';
+
+  @override
+  String get driverWsErrProposedDate => 'اختر تاريخ السداد المقترح.';
+
+  @override
+  String get driverWsErrSignature => 'راجع الإقرار ووقّع قبل الإرسال.';
+
+  @override
+  String get driverWsOptionsError => 'الخيارات غير متاحة. حاول مرة أخرى.';
+
+  @override
+  String get driverWsSearch => 'بحث';
+
+  @override
+  String get driverWsClearSelection => 'بدون أو مسح الاختيار';
+
+  @override
+  String get driverWsPreviousOptions => 'الخيارات السابقة';
+
+  @override
+  String get driverWsMoreOptions => 'مزيد من الخيارات';
+
+  @override
+  String get driverWsFieldEmployeeId => 'الرقم الوظيفي';
+
+  @override
+  String get driverWsFieldDriverName => 'اسم السائق';
+
+  @override
+  String get driverWsFieldCountry => 'الدولة';
+
+  @override
+  String get driverWsFieldSite => 'الموقع';
+
+  @override
+  String get driverWsFieldLoginAccount => 'حساب الدخول (بدون يلغي الربط)';
+
+  @override
+  String get driverWsFieldIdentityReason => 'التحقق من الهوية أو السبب';
+
+  @override
+  String get driverWsFieldSupervisor => 'المشرف';
+
+  @override
+  String get driverWsFieldManager => 'المدير';
+
+  @override
+  String get driverWsFieldVehicle => 'المركبة';
+
+  @override
+  String get driverWsFieldAssignmentReason => 'سبب التكليف';
+
+  @override
+  String get driverWsFieldAuthority => 'الجهة المُصدرة';
+
+  @override
+  String get driverWsFieldNoticeReference => 'رقم المخالفة';
+
+  @override
+  String get driverWsFieldIncidentAt =>
+      'تاريخ ووقت المخالفة (YYYY-MM-DDTHH:mm)';
+
+  @override
+  String get driverWsFieldDueDate => 'تاريخ الاستحقاق (YYYY-MM-DD)';
+
+  @override
+  String get driverWsFieldAmount => 'قيمة المخالفة';
+
+  @override
+  String get driverWsFieldCurrency => 'رمز العملة';
+
+  @override
+  String get driverWsFieldNoticeDetails => 'تفاصيل المخالفة';
+
+  @override
+  String get driverWsFieldAssignmentEvidence => 'دليل إسناد المخالفة للسائق';
+
+  @override
+  String get driverWsFieldRecordType => 'نوع السجل';
+
+  @override
+  String get driverWsFieldExistingRecord => 'السجل الموجود';
+
+  @override
+  String get driverWsFieldIdentityMethod => 'كيفية التحقق من هوية السائق';
+
+  @override
+  String get driverWsFieldResolution => 'طريقة المعالجة المطلوبة';
+
+  @override
+  String get driverWsFieldExplanation => 'التوضيح أو الترتيب المقترح';
+
+  @override
+  String get driverWsFieldPaymentReference => 'مرجع السداد إن تم';
+
+  @override
+  String get driverWsFieldProposedDate => 'تاريخ السداد المقترح (YYYY-MM-DD)';
+
+  @override
+  String get driverWsFieldDecision => 'القرار';
+
+  @override
+  String get driverWsFieldReviewReason => 'سبب المراجعة أو الترتيب المعتمد';
+
+  @override
+  String get driverWsFieldVerifiedReference => 'مرجع السداد المتحقق منه';
+
+  @override
+  String get driverWsFieldVerifiedAmount => 'قيمة السداد المتحقق منها';
+
+  @override
+  String get driverWsPdfColNotice => 'المخالفة';
+
+  @override
+  String get driverWsPdfColCurrency => 'العملة';
+
+  @override
+  String get driverWsPdfColAmount => 'المبلغ';
+
+  @override
+  String get driverWsPdfColPaid => 'المدفوع';
+
+  @override
+  String get driverWsPdfColStatus => 'الحالة';
+
+  @override
+  String get driverWsPdfColResponse => 'الرد';
+
+  @override
+  String driverWsDriverSubtitle(String site, String open, String awaiting) {
+    return '$site · $open مخالفات مفتوحة · $awaiting بانتظار الرد';
+  }
+
+  @override
+  String driverWsOutstanding(String amount, String currency) {
+    return 'المستحق: $amount $currency';
+  }
+
+  @override
+  String driverWsSupervisorLine(String name) {
+    return 'المشرف: $name';
+  }
+
+  @override
+  String driverWsManagerLine(String name) {
+    return 'المدير: $name';
+  }
+
+  @override
+  String driverWsAssignmentPeriod(String start, String end) {
+    return 'من $start إلى $end';
+  }
+
+  @override
+  String driverWsAssignmentLine(String reason) {
+    return 'الإسناد: $reason';
+  }
+
+  @override
+  String driverWsDueLine(String due, String paid) {
+    return 'الاستحقاق: $due · المدفوع: $paid';
+  }
+
+  @override
+  String driverWsPdfTitle(String name) {
+    return 'كشف السائق: $name';
+  }
+
+  @override
+  String driverWsPdfEmployeeId(String id) {
+    return 'الرقم الوظيفي: $id';
+  }
+
+  @override
+  String get vehicleClassTransitMixer => 'خلاطة خرسانة متنقلة';
+
+  @override
+  String get vehicleClassConcretePump => 'مضخة خرسانة';
+
+  @override
+  String get vehicleClassLinePump => 'مضخة خط محمولة على شاحنة';
+
+  @override
+  String get vehicleClassStaffBus => 'حافلة موظفين';
+
+  @override
+  String get vehicleClassStaffVan => 'فان موظفين';
+
+  @override
+  String get vehicleClassDoubleCabPickup => 'بيك أب بكابينة مزدوجة';
+
+  @override
+  String get vehicleClassWheelLoader => 'لودر بعجلات';
+
+  @override
+  String get vehicleClassSkidSteerLoader => 'لودر انزلاقي التوجيه';
+
+  @override
+  String get vehicleClassTowablePump => 'مضخة خرسانة قابلة للقطر';
+
+  @override
+  String get vehicleClassStationaryPump => 'مضخة خرسانة ثابتة';
+
+  @override
+  String get vehicleClassGenerator => 'مولد مغلق';
+
+  @override
+  String get vehicleClassChiller => 'مبرد صناعي';
+
+  @override
+  String get vehicleClassWaterChiller => 'مبرد مياه صناعي';
+
+  @override
+  String get vehicleClassBatchingPlant => 'محطة خلط الخرسانة';
+
+  @override
+  String get vehicleClassPlacingBoom => 'ذراع صب خرسانة قائم بذاته';
+
+  @override
+  String vehicleClassConcretePumpAxles(int axles) {
+    return 'مضخة خرسانة · $axles محاور';
+  }
+
+  @override
+  String vehicleClassLinePumpAxles(int axles) {
+    return 'مضخة خط محمولة على شاحنة · $axles محاور';
+  }
+
+  @override
+  String get scannerCameraStartFailedTitle => 'تعذّر تشغيل الكاميرا';
+
+  @override
+  String get scannerCameraStartFailedMessage =>
+      'قد يكون تطبيق آخر يستخدمها أو توقفت بشكل غير متوقع. حاول مرة أخرى أو اكتب الرمز أدناه.';
+
+  @override
+  String get managementOverviewSiteRollup => 'المواقع في لمحة';
+
+  @override
+  String get managementOverviewSiteRollupEmpty =>
+      'لم يسجل أي موقع إطارات في هذه الفترة.';
+
+  @override
+  String get managementOverviewAtRiskShare =>
+      'الإطارات ذات الخطورة العالية أو الحرجة';
+
+  @override
+  String get managementReportsShare => 'مشاركة التقرير PDF';
+
+  @override
+  String get managementReportsShareError =>
+      'تعذّرت مشاركة التقرير. حاول مرة أخرى.';
+
+  @override
+  String get managementReportsPdfMetric => 'المؤشر';
+
+  @override
+  String get managementReportsPdfValue => 'القيمة';
+
+  @override
+  String get managementReportsPdfShare => 'النسبة';
+
+  @override
+  String get managementTeamRole => 'الدور';
+
+  @override
+  String get managementTeamUsername => 'اسم المستخدم';
+
+  @override
+  String get managementTeamSite => 'الموقع';
+
+  @override
+  String get managementTeamCountry => 'الدولة';
+
+  @override
+  String get managementTeamPhone => 'الهاتف';
+
+  @override
+  String get managementTeamEmail => 'البريد الإلكتروني';
+
+  @override
+  String get managementTeamStatus => 'الحالة';
+
+  @override
+  String get managementTeamApproved => 'معتمد';
+
+  @override
+  String get managementTeamLastLogin => 'آخر تسجيل دخول';
+
+  @override
+  String get managementTeamNotRecorded => 'غير مسجل';
+
+  @override
+  String get managementTeamCall => 'اتصال';
+
+  @override
+  String get managementTeamSendEmail => 'إرسال بريد';
+
+  @override
+  String get managementTeamActionError =>
+      'هذا الإجراء غير متاح على هذا الجهاز.';
+
+  @override
+  String managementOverviewSiteTyres(String count) {
+    return '$count إطارات';
+  }
+
+  @override
+  String managementOverviewSiteShare(String percent) {
+    return '$percent% من إطارات الأسطول';
+  }
+
+  @override
+  String managementReportsPdfPeriod(int days) {
+    return 'الفترة: آخر $days يوماً';
+  }
+
+  @override
+  String managementReportsPdfCurrency(String code) {
+    return 'العملة: $code';
+  }
 }

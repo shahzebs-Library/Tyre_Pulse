@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
 import 'package:tyre_pulse/features/scanning/domain/scan_lookup.dart';
@@ -226,5 +227,55 @@ void main() {
     expect(find.text('View asset'), findsNothing);
     final TextField field = tester.widget<TextField>(find.byType(TextField));
     expect(field.controller?.text, isEmpty);
+  });
+
+  test('only an explicit unsupported error claims the build cannot scan', () {
+    expect(
+      scannerCameraFailureOf(MobileScannerErrorCode.permissionDenied),
+      ScannerCameraFailure.permissionDenied,
+    );
+    expect(
+      scannerCameraFailureOf(MobileScannerErrorCode.unsupported),
+      ScannerCameraFailure.unsupported,
+    );
+    for (final MobileScannerErrorCode code in MobileScannerErrorCode.values) {
+      if (code == MobileScannerErrorCode.permissionDenied ||
+          code == MobileScannerErrorCode.unsupported) {
+        continue;
+      }
+      expect(
+        scannerCameraFailureOf(code),
+        ScannerCameraFailure.couldNotStart,
+        reason: '$code',
+      );
+    }
+  });
+
+  testWidgets('camera start failure explains itself and offers Retry', (
+    WidgetTester tester,
+  ) async {
+    int retries = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: TpTheme.light,
+        locale: const Locale('en'),
+        supportedLocales: TpLocalizations.supportedLocales,
+        localizationsDelegates: TpLocalizations.delegates,
+        home: Scaffold(
+          body: SizedBox(
+            height: 240,
+            child: CameraStartFailedNotice(onRetry: () => retries++),
+          ),
+        ),
+      ),
+    );
+    expect(find.text('The camera could not start'), findsOneWidget);
+    expect(
+      find.text('Camera scanning is not available in this build'),
+      findsNothing,
+    );
+    await tester.tap(find.text('Try again'));
+    expect(retries, 1);
+    expect(tester.takeException(), isNull);
   });
 }

@@ -3104,4 +3104,600 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get tyreActionRotateFailedMessage =>
       'The rotation could not be saved. Try again.';
+
+  @override
+  String driverWsTerm(String term) {
+    String _temp0 = intl.Intl.selectLogic(
+      term,
+      {
+        'create_driver': 'Add verified driver',
+        'link_account': 'Link login account',
+        'assign_team': 'Assign team and vehicle',
+        'create_fine': 'Issue traffic fine',
+        'link_record': 'Link work record',
+        'respond_fine': 'Review and sign',
+        'review_fine': 'Review response / payment',
+        'correct_fine': 'Correct fine',
+        'reassign_fine': 'Reassign fine',
+        'direct_payment': 'I will pay directly',
+        'already_paid': 'Already paid',
+        'dispute': 'Dispute / incorrect assignment',
+        'company_recovery': 'Request company payment / recovery',
+        'instalments': 'Request instalments',
+        'approve': 'Approve request',
+        'return': 'Return to driver',
+        'payment': 'Record verified payment',
+        'cancel': 'Cancel fine',
+        'reopen': 'Reopen',
+        'open': 'Open',
+        'settled': 'Settled',
+        'cancelled': 'Cancelled',
+        'awaiting_response': 'Awaiting response',
+        'submitted': 'Response submitted',
+        'returned': 'Returned to driver',
+        'approved': 'Approved',
+        'driver_documents': 'Driver documents',
+        'driver_training': 'Driver training',
+        'driver_coaching': 'Driver coaching',
+        'driver_safety_events': 'Driver safety events',
+        'driver_expenses': 'Driver expenses',
+        'tyre_records': 'Tyre records',
+        'accidents': 'Accidents',
+        'wo_tasks': 'Work order tasks',
+        'checklist_submissions': 'Checklist submissions',
+        'odometer_logs': 'Odometer readings',
+        'wash_records': 'Wash records',
+        'other': '',
+      },
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String driverWsRecordField(String field) {
+    String _temp0 = intl.Intl.selectLogic(
+      field,
+      {
+        'country': 'Country',
+        'site': 'Site',
+        'asset_no': 'Asset number',
+        'driver_name': 'Driver name',
+        'title': 'Title',
+        'doc_type': 'Document type',
+        'doc_number': 'Document number',
+        'expiry_date': 'Expiry date',
+        'course_name': 'Course name',
+        'result': 'Result',
+        'completed_date': 'Completed date',
+        'coaching_status': 'Coaching status',
+        'period': 'Period',
+        'event_type': 'Event type',
+        'severity': 'Severity',
+        'event_at': 'Event time',
+        'category': 'Category',
+        'amount': 'Amount',
+        'currency': 'Currency',
+        'expense_date': 'Expense date',
+        'status': 'Status',
+        'incident_date': 'Incident date',
+        'accident_type': 'Accident type',
+        'due_date': 'Due date',
+        'created_at': 'Created at',
+        'reading_date': 'Reading date',
+        'odometer_km': 'Odometer (km)',
+        'wash_date': 'Wash date',
+        'template_name': 'Checklist name',
+        'approval_status': 'Approval status',
+        'brand': 'Brand',
+        'serial_no': 'Serial number',
+        'issue_date': 'Issue date',
+        'qty': 'Quantity',
+        'cost_per_tyre': 'Cost per tyre',
+        'other': '',
+      },
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String driverWsEvidenceKind(String kind) {
+    String _temp0 = intl.Intl.selectLogic(
+      kind,
+      {
+        'payment': 'Payment receipt',
+        'supporting': 'Supporting photo',
+        'notice': 'Official notice',
+        'other': '',
+      },
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get driverWsTitle => 'Driver workspace';
+
+  @override
+  String get driverWsEntrySubtitle =>
+      'My fines, team assignments and verified work';
+
+  @override
+  String get driverWsLoadError =>
+      'Workspace unavailable. Check connection, account linking and access, then refresh.';
+
+  @override
+  String get driverWsRefresh => 'Refresh';
+
+  @override
+  String get driverWsSignInRequired => 'Sign in to view your workspace.';
+
+  @override
+  String get driverWsOfflineNotice =>
+      'Offline cached view. Connect and refresh before responding or reviewing.';
+
+  @override
+  String get driverWsTruncatedNotice =>
+      'This view is incomplete because it reached the record limit. Export is disabled.';
+
+  @override
+  String get driverWsSearchDrivers => 'Search drivers';
+
+  @override
+  String get driverWsNoDrivers =>
+      'No linked driver or assigned team is available. Ask an authorized manager to verify your account and assignment.';
+
+  @override
+  String get driverWsSharePdf => 'Share fine statement PDF';
+
+  @override
+  String get driverWsReportShareError =>
+      'Report could not be shared. Try again.';
+
+  @override
+  String get driverWsTrafficFines => 'Traffic fines';
+
+  @override
+  String get driverWsNoFines => 'No fines recorded.';
+
+  @override
+  String get driverWsAssignmentHistory => 'Team and vehicle assignment history';
+
+  @override
+  String get driverWsNoAssignment => 'No assignment recorded.';
+
+  @override
+  String get driverWsAssignmentCurrent => 'Current';
+
+  @override
+  String get driverWsAssignmentPrevious => 'Previous';
+
+  @override
+  String get driverWsNoVehicle => 'No vehicle';
+
+  @override
+  String get driverWsNotAssigned => 'Not assigned';
+
+  @override
+  String get driverWsPresent => 'Present';
+
+  @override
+  String get driverWsAssignedWork => 'Assigned work';
+
+  @override
+  String get driverWsNotSupplied => 'Not supplied';
+
+  @override
+  String get driverWsVerifiedRecords => 'Verified work and driver records';
+
+  @override
+  String get driverWsUnmatchedNotice =>
+      'Unmatched historical records require identity review before they appear here.';
+
+  @override
+  String get driverWsRecordUnavailable => 'Record no longer available';
+
+  @override
+  String get driverWsActivityHistory => 'Activity history';
+
+  @override
+  String get driverWsRecordedUser => 'Recorded user';
+
+  @override
+  String get driverWsPhotoError =>
+      'Photo could not be attached. Your local photo has not been deleted.';
+
+  @override
+  String get driverWsAcknowledgeRespond => 'Acknowledge and respond';
+
+  @override
+  String get driverWsReviewPayment => 'Review / record payment';
+
+  @override
+  String get driverWsEvidenceOpenError => 'Evidence could not be opened.';
+
+  @override
+  String get driverWsAttachReceipt => 'Attach receipt photo';
+
+  @override
+  String get driverWsAttachSupporting => 'Attach supporting photo';
+
+  @override
+  String get driverWsAttachNotice => 'Attach official notice photo';
+
+  @override
+  String get driverWsSignatureUnavailable => 'Signature unavailable.';
+
+  @override
+  String get driverWsViewSignature => 'View signed acknowledgment';
+
+  @override
+  String get driverWsSignatureDisplayError =>
+      'Signature could not be displayed.';
+
+  @override
+  String get driverWsReceiptStatement =>
+      'I acknowledge receipt and review of this notice and submit the response shown above. Receipt does not mean admission of responsibility. A payment or recovery request does not authorize an automatic payment or payroll deduction.';
+
+  @override
+  String get driverWsDraftReadError =>
+      'Saved draft could not be read. Nothing has been overwritten.';
+
+  @override
+  String get driverWsSubmitError =>
+      'Could not submit. Check the required fields and connection. Refresh if the notice changed.';
+
+  @override
+  String get driverWsConnectionRequired =>
+      'Submission requires a connection so the current notice and your access can be checked.';
+
+  @override
+  String get driverWsDraftSaved => 'Draft saved. It has not been submitted.';
+
+  @override
+  String get driverWsDraftSaveError => 'Draft could not be saved.';
+
+  @override
+  String get driverWsSaveDraft => 'Save draft on this device';
+
+  @override
+  String get driverWsReviewDisclaimer =>
+      'Approval records the reviewed arrangement. It does not execute payment or payroll deduction. Record only verified payments.';
+
+  @override
+  String get driverWsSaving => 'Saving...';
+
+  @override
+  String get driverWsSubmit => 'Submit';
+
+  @override
+  String get driverWsErrResolution => 'Choose a resolution.';
+
+  @override
+  String get driverWsErrExplanation =>
+      'Explain your request, including the proposed arrangement.';
+
+  @override
+  String get driverWsErrPaymentReference => 'Enter your payment reference.';
+
+  @override
+  String get driverWsErrProposedDate => 'Choose your proposed payment date.';
+
+  @override
+  String get driverWsErrSignature =>
+      'Review the statement and sign before submitting.';
+
+  @override
+  String get driverWsOptionsError => 'Options unavailable. Try again.';
+
+  @override
+  String get driverWsSearch => 'Search';
+
+  @override
+  String get driverWsClearSelection => 'None / clear selection';
+
+  @override
+  String get driverWsPreviousOptions => 'Previous options';
+
+  @override
+  String get driverWsMoreOptions => 'More options';
+
+  @override
+  String get driverWsFieldEmployeeId => 'Employee ID';
+
+  @override
+  String get driverWsFieldDriverName => 'Driver name';
+
+  @override
+  String get driverWsFieldCountry => 'Country';
+
+  @override
+  String get driverWsFieldSite => 'Site';
+
+  @override
+  String get driverWsFieldLoginAccount => 'Login account (none removes link)';
+
+  @override
+  String get driverWsFieldIdentityReason => 'Identity verification / reason';
+
+  @override
+  String get driverWsFieldSupervisor => 'Supervisor';
+
+  @override
+  String get driverWsFieldManager => 'Manager';
+
+  @override
+  String get driverWsFieldVehicle => 'Vehicle';
+
+  @override
+  String get driverWsFieldAssignmentReason => 'Assignment reason';
+
+  @override
+  String get driverWsFieldAuthority => 'Issuing authority';
+
+  @override
+  String get driverWsFieldNoticeReference => 'Notice reference';
+
+  @override
+  String get driverWsFieldIncidentAt =>
+      'Incident date and time (YYYY-MM-DDTHH:mm)';
+
+  @override
+  String get driverWsFieldDueDate => 'Due date (YYYY-MM-DD)';
+
+  @override
+  String get driverWsFieldAmount => 'Fine amount';
+
+  @override
+  String get driverWsFieldCurrency => 'Currency code';
+
+  @override
+  String get driverWsFieldNoticeDetails => 'Notice details';
+
+  @override
+  String get driverWsFieldAssignmentEvidence =>
+      'Evidence confirming driver assignment';
+
+  @override
+  String get driverWsFieldRecordType => 'Record type';
+
+  @override
+  String get driverWsFieldExistingRecord => 'Existing record';
+
+  @override
+  String get driverWsFieldIdentityMethod => 'How driver identity was verified';
+
+  @override
+  String get driverWsFieldResolution => 'Preferred resolution';
+
+  @override
+  String get driverWsFieldExplanation => 'Explanation / proposed arrangement';
+
+  @override
+  String get driverWsFieldPaymentReference => 'Payment reference (if paid)';
+
+  @override
+  String get driverWsFieldProposedDate => 'Proposed payment date (YYYY-MM-DD)';
+
+  @override
+  String get driverWsFieldDecision => 'Decision';
+
+  @override
+  String get driverWsFieldReviewReason =>
+      'Review reason / approved arrangement';
+
+  @override
+  String get driverWsFieldVerifiedReference => 'Verified payment reference';
+
+  @override
+  String get driverWsFieldVerifiedAmount => 'Verified payment amount';
+
+  @override
+  String get driverWsPdfColNotice => 'Notice';
+
+  @override
+  String get driverWsPdfColCurrency => 'Currency';
+
+  @override
+  String get driverWsPdfColAmount => 'Amount';
+
+  @override
+  String get driverWsPdfColPaid => 'Paid';
+
+  @override
+  String get driverWsPdfColStatus => 'Status';
+
+  @override
+  String get driverWsPdfColResponse => 'Response';
+
+  @override
+  String driverWsDriverSubtitle(String site, String open, String awaiting) {
+    return '$site · $open open fines · $awaiting awaiting response';
+  }
+
+  @override
+  String driverWsOutstanding(String amount, String currency) {
+    return 'Outstanding: $amount $currency';
+  }
+
+  @override
+  String driverWsSupervisorLine(String name) {
+    return 'Supervisor: $name';
+  }
+
+  @override
+  String driverWsManagerLine(String name) {
+    return 'Manager: $name';
+  }
+
+  @override
+  String driverWsAssignmentPeriod(String start, String end) {
+    return '$start to $end';
+  }
+
+  @override
+  String driverWsAssignmentLine(String reason) {
+    return 'Assignment: $reason';
+  }
+
+  @override
+  String driverWsDueLine(String due, String paid) {
+    return 'Due: $due · Paid: $paid';
+  }
+
+  @override
+  String driverWsPdfTitle(String name) {
+    return 'Driver statement: $name';
+  }
+
+  @override
+  String driverWsPdfEmployeeId(String id) {
+    return 'Employee ID: $id';
+  }
+
+  @override
+  String get vehicleClassTransitMixer => 'Transit mixer';
+
+  @override
+  String get vehicleClassConcretePump => 'Concrete pump';
+
+  @override
+  String get vehicleClassLinePump => 'Truck-mounted line pump';
+
+  @override
+  String get vehicleClassStaffBus => 'Staff bus';
+
+  @override
+  String get vehicleClassStaffVan => 'Staff van';
+
+  @override
+  String get vehicleClassDoubleCabPickup => 'Double-cab pickup';
+
+  @override
+  String get vehicleClassWheelLoader => 'Wheel loader';
+
+  @override
+  String get vehicleClassSkidSteerLoader => 'Skid-steer loader';
+
+  @override
+  String get vehicleClassTowablePump => 'Towable concrete pump';
+
+  @override
+  String get vehicleClassStationaryPump => 'Stationary concrete pump';
+
+  @override
+  String get vehicleClassGenerator => 'Enclosed generator';
+
+  @override
+  String get vehicleClassChiller => 'Industrial chiller';
+
+  @override
+  String get vehicleClassWaterChiller => 'Industrial water chiller';
+
+  @override
+  String get vehicleClassBatchingPlant => 'Concrete batching plant';
+
+  @override
+  String get vehicleClassPlacingBoom => 'Freestanding placing boom';
+
+  @override
+  String vehicleClassConcretePumpAxles(int axles) {
+    return 'Concrete pump · $axles axle';
+  }
+
+  @override
+  String vehicleClassLinePumpAxles(int axles) {
+    return 'Truck-mounted line pump · $axles axle';
+  }
+
+  @override
+  String get scannerCameraStartFailedTitle => 'The camera could not start';
+
+  @override
+  String get scannerCameraStartFailedMessage =>
+      'Another app may be using it, or it stopped unexpectedly. Try again, or type the code below.';
+
+  @override
+  String get managementOverviewSiteRollup => 'Sites at a glance';
+
+  @override
+  String get managementOverviewSiteRollupEmpty =>
+      'No site has recorded tyres in this period.';
+
+  @override
+  String get managementOverviewAtRiskShare => 'Tyres at high or critical risk';
+
+  @override
+  String get managementReportsShare => 'Share report PDF';
+
+  @override
+  String get managementReportsShareError =>
+      'The report could not be shared. Try again.';
+
+  @override
+  String get managementReportsPdfMetric => 'Metric';
+
+  @override
+  String get managementReportsPdfValue => 'Value';
+
+  @override
+  String get managementReportsPdfShare => 'Share';
+
+  @override
+  String get managementTeamRole => 'Role';
+
+  @override
+  String get managementTeamUsername => 'Username';
+
+  @override
+  String get managementTeamSite => 'Site';
+
+  @override
+  String get managementTeamCountry => 'Country';
+
+  @override
+  String get managementTeamPhone => 'Phone';
+
+  @override
+  String get managementTeamEmail => 'Email';
+
+  @override
+  String get managementTeamStatus => 'Status';
+
+  @override
+  String get managementTeamApproved => 'Approved';
+
+  @override
+  String get managementTeamLastLogin => 'Last sign-in';
+
+  @override
+  String get managementTeamNotRecorded => 'Not recorded';
+
+  @override
+  String get managementTeamCall => 'Call';
+
+  @override
+  String get managementTeamSendEmail => 'Send email';
+
+  @override
+  String get managementTeamActionError =>
+      'This action is not available on this device.';
+
+  @override
+  String managementOverviewSiteTyres(String count) {
+    return '$count tyres';
+  }
+
+  @override
+  String managementOverviewSiteShare(String percent) {
+    return '$percent% of fleet tyres';
+  }
+
+  @override
+  String managementReportsPdfPeriod(int days) {
+    return 'Period: last $days days';
+  }
+
+  @override
+  String managementReportsPdfCurrency(String code) {
+    return 'Currency: $code';
+  }
 }

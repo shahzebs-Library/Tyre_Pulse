@@ -22,10 +22,21 @@ const List<String> driverRecordTypes = <String>[
   'odometer_logs',
   'wash_records',
 ];
-const String driverReceiptStatement =
-    'I acknowledge receipt and review of this notice and submit the response shown above. '
-    'Receipt does not mean admission of responsibility. A payment or recovery request '
-    'does not authorize an automatic payment or payroll deduction.';
+
+/// The version of the signed receipt statement the app shows. Its wording
+/// lives in the ARB catalogs (`driverWsReceiptStatement`) in every language;
+/// changing that wording requires a new version here.
+const String driverReceiptStatementVersion = 'receipt-v1';
+
+/// Why a driver's fine response cannot be submitted yet. The presentation
+/// layer maps each value to a localized sentence.
+enum DriverFineResponseIssue {
+  resolution,
+  explanation,
+  paymentReference,
+  proposedDate,
+  signature,
+}
 
 final class DriverWorkspaceSnapshot {
   const DriverWorkspaceSnapshot({
@@ -52,8 +63,10 @@ List<DriverRow> driverRows(Object? raw) => raw is List
         .toList()
     : <DriverRow>[];
 
-String driverRecordLabel(DriverRow? row) {
-  if (row == null) return 'Record no longer available';
+/// A compact label for a linked record, or null when the record no longer
+/// exists (the caller renders its own localized "no longer available").
+String? driverRecordLabel(DriverRow? row) {
+  if (row == null) return null;
   final List<Object?> parts = <Object?>[
     row['title'] ??
         row['course_name'] ??
@@ -75,24 +88,24 @@ String driverRecordLabel(DriverRow? row) {
   return label.isEmpty ? '${row['id'] ?? ''}' : label;
 }
 
-String? validateDriverFineResponse(DriverRow values) {
+DriverFineResponseIssue? validateDriverFineResponse(DriverRow values) {
   if (!driverFineResolutions.contains(values['resolution'])) {
-    return 'Choose a resolution.';
+    return DriverFineResponseIssue.resolution;
   }
   if ('${values['explanation'] ?? ''}'.trim().length < 3) {
-    return 'Explain your request, including the proposed arrangement.';
+    return DriverFineResponseIssue.explanation;
   }
   if (values['resolution'] == 'already_paid' &&
       '${values['payment_reference'] ?? ''}'.trim().length < 3) {
-    return 'Enter your payment reference.';
+    return DriverFineResponseIssue.paymentReference;
   }
   if (values['resolution'] == 'direct_payment' &&
       '${values['proposed_date'] ?? ''}'.isEmpty) {
-    return 'Choose your proposed payment date.';
+    return DriverFineResponseIssue.proposedDate;
   }
   if (values['acknowledged'] != true ||
       '${values['signature'] ?? ''}'.isEmpty) {
-    return 'Review the statement and sign before submitting.';
+    return DriverFineResponseIssue.signature;
   }
   return null;
 }

@@ -505,10 +505,13 @@ void main() {
     // the role, so "Nothing needs you right now" cannot be claimed) = 3.
     // 902 + 16 = 918. Tyre Take Action: the Rotate tyre form, its validation
     // and online-only save outcomes (tyreAction*).
-    test('en, ar and ur each carry exactly 918 translatable keys today', () {
-      expect(_translatableKeys(en).length, 918);
-      expect(_translatableKeys(ar).length, 918);
-      expect(_translatableKeys(ur).length, 918);
+    // 918 + 148 = 1066. Driver workspace moved off its private English copy map
+    // (driverWs*), vehicle class labels (vehicleClass*), scanner camera-start
+    // failure (scannerCameraStartFailed*), Management Overview/Reports/Team.
+    test('en, ar and ur each carry exactly 1066 translatable keys today', () {
+      expect(_translatableKeys(en).length, 1066);
+      expect(_translatableKeys(ar).length, 1066);
+      expect(_translatableKeys(ur).length, 1066);
     });
   });
 

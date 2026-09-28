@@ -5607,6 +5607,894 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The rotation could not be saved. Try again.'**
   String get tyreActionRotateFailedMessage;
+
+  /// Driver workspace: display name for a workflow action, fine resolution, review decision, fine status, response status or linked record type. Keys are the server tokens; an unknown token renders empty and the app falls back to the token itself.
+  ///
+  /// In en, this message translates to:
+  /// **'{term, select, create_driver{Add verified driver} link_account{Link login account} assign_team{Assign team and vehicle} create_fine{Issue traffic fine} link_record{Link work record} respond_fine{Review and sign} review_fine{Review response / payment} correct_fine{Correct fine} reassign_fine{Reassign fine} direct_payment{I will pay directly} already_paid{Already paid} dispute{Dispute / incorrect assignment} company_recovery{Request company payment / recovery} instalments{Request instalments} approve{Approve request} return{Return to driver} payment{Record verified payment} cancel{Cancel fine} reopen{Reopen} open{Open} settled{Settled} cancelled{Cancelled} awaiting_response{Awaiting response} submitted{Response submitted} returned{Returned to driver} approved{Approved} driver_documents{Driver documents} driver_training{Driver training} driver_coaching{Driver coaching} driver_safety_events{Driver safety events} driver_expenses{Driver expenses} tyre_records{Tyre records} accidents{Accidents} wo_tasks{Work order tasks} checklist_submissions{Checklist submissions} odometer_logs{Odometer readings} wash_records{Wash records} other{}}'**
+  String driverWsTerm(String term);
+
+  /// Driver workspace: label for a column of a linked work record. Unknown columns render empty and the app shows the column name.
+  ///
+  /// In en, this message translates to:
+  /// **'{field, select, country{Country} site{Site} asset_no{Asset number} driver_name{Driver name} title{Title} doc_type{Document type} doc_number{Document number} expiry_date{Expiry date} course_name{Course name} result{Result} completed_date{Completed date} coaching_status{Coaching status} period{Period} event_type{Event type} severity{Severity} event_at{Event time} category{Category} amount{Amount} currency{Currency} expense_date{Expense date} status{Status} incident_date{Incident date} accident_type{Accident type} due_date{Due date} created_at{Created at} reading_date{Reading date} odometer_km{Odometer (km)} wash_date{Wash date} template_name{Checklist name} approval_status{Approval status} brand{Brand} serial_no{Serial number} issue_date{Issue date} qty{Quantity} cost_per_tyre{Cost per tyre} other{}}'**
+  String driverWsRecordField(String field);
+
+  /// Driver workspace: kind of evidence attached to a fine.
+  ///
+  /// In en, this message translates to:
+  /// **'{kind, select, payment{Payment receipt} supporting{Supporting photo} notice{Official notice} other{}}'**
+  String driverWsEvidenceKind(String kind);
+
+  /// Driver workspace: title.
+  ///
+  /// In en, this message translates to:
+  /// **'Driver workspace'**
+  String get driverWsTitle;
+
+  /// Driver workspace: Profile entry subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'My fines, team assignments and verified work'**
+  String get driverWsEntrySubtitle;
+
+  /// Driver workspace: load failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Workspace unavailable. Check connection, account linking and access, then refresh.'**
+  String get driverWsLoadError;
+
+  /// Driver workspace: refresh tooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get driverWsRefresh;
+
+  /// Driver workspace: no session.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to view your workspace.'**
+  String get driverWsSignInRequired;
+
+  /// Driver workspace: offline notice.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline cached view. Connect and refresh before responding or reviewing.'**
+  String get driverWsOfflineNotice;
+
+  /// Driver workspace: truncated view notice.
+  ///
+  /// In en, this message translates to:
+  /// **'This view is incomplete because it reached the record limit. Export is disabled.'**
+  String get driverWsTruncatedNotice;
+
+  /// Driver workspace: driver search label.
+  ///
+  /// In en, this message translates to:
+  /// **'Search drivers'**
+  String get driverWsSearchDrivers;
+
+  /// Driver workspace: empty driver list.
+  ///
+  /// In en, this message translates to:
+  /// **'No linked driver or assigned team is available. Ask an authorized manager to verify your account and assignment.'**
+  String get driverWsNoDrivers;
+
+  /// Driver workspace: share statement button.
+  ///
+  /// In en, this message translates to:
+  /// **'Share fine statement PDF'**
+  String get driverWsSharePdf;
+
+  /// Driver workspace: PDF share failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Report could not be shared. Try again.'**
+  String get driverWsReportShareError;
+
+  /// Driver workspace: section heading.
+  ///
+  /// In en, this message translates to:
+  /// **'Traffic fines'**
+  String get driverWsTrafficFines;
+
+  /// Driver workspace: no fines.
+  ///
+  /// In en, this message translates to:
+  /// **'No fines recorded.'**
+  String get driverWsNoFines;
+
+  /// Driver workspace: section heading.
+  ///
+  /// In en, this message translates to:
+  /// **'Team and vehicle assignment history'**
+  String get driverWsAssignmentHistory;
+
+  /// Driver workspace: no assignments.
+  ///
+  /// In en, this message translates to:
+  /// **'No assignment recorded.'**
+  String get driverWsNoAssignment;
+
+  /// Driver workspace: current assignment tag.
+  ///
+  /// In en, this message translates to:
+  /// **'Current'**
+  String get driverWsAssignmentCurrent;
+
+  /// Driver workspace: previous assignment tag.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous'**
+  String get driverWsAssignmentPrevious;
+
+  /// Driver workspace: assignment without vehicle.
+  ///
+  /// In en, this message translates to:
+  /// **'No vehicle'**
+  String get driverWsNoVehicle;
+
+  /// Driver workspace: no supervisor or manager.
+  ///
+  /// In en, this message translates to:
+  /// **'Not assigned'**
+  String get driverWsNotAssigned;
+
+  /// Driver workspace: open-ended assignment end.
+  ///
+  /// In en, this message translates to:
+  /// **'Present'**
+  String get driverWsPresent;
+
+  /// Driver workspace: section heading.
+  ///
+  /// In en, this message translates to:
+  /// **'Assigned work'**
+  String get driverWsAssignedWork;
+
+  /// Driver workspace: missing value.
+  ///
+  /// In en, this message translates to:
+  /// **'Not supplied'**
+  String get driverWsNotSupplied;
+
+  /// Driver workspace: section heading.
+  ///
+  /// In en, this message translates to:
+  /// **'Verified work and driver records'**
+  String get driverWsVerifiedRecords;
+
+  /// Driver workspace: records notice.
+  ///
+  /// In en, this message translates to:
+  /// **'Unmatched historical records require identity review before they appear here.'**
+  String get driverWsUnmatchedNotice;
+
+  /// Driver workspace: deleted linked record.
+  ///
+  /// In en, this message translates to:
+  /// **'Record no longer available'**
+  String get driverWsRecordUnavailable;
+
+  /// Driver workspace: section heading.
+  ///
+  /// In en, this message translates to:
+  /// **'Activity history'**
+  String get driverWsActivityHistory;
+
+  /// Driver workspace: event with no actor name.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded user'**
+  String get driverWsRecordedUser;
+
+  /// Driver workspace: photo upload failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo could not be attached. Your local photo has not been deleted.'**
+  String get driverWsPhotoError;
+
+  /// Driver workspace: driver response button.
+  ///
+  /// In en, this message translates to:
+  /// **'Acknowledge and respond'**
+  String get driverWsAcknowledgeRespond;
+
+  /// Driver workspace: staff review button.
+  ///
+  /// In en, this message translates to:
+  /// **'Review / record payment'**
+  String get driverWsReviewPayment;
+
+  /// Driver workspace: evidence open failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Evidence could not be opened.'**
+  String get driverWsEvidenceOpenError;
+
+  /// Driver workspace: attach button.
+  ///
+  /// In en, this message translates to:
+  /// **'Attach receipt photo'**
+  String get driverWsAttachReceipt;
+
+  /// Driver workspace: attach button.
+  ///
+  /// In en, this message translates to:
+  /// **'Attach supporting photo'**
+  String get driverWsAttachSupporting;
+
+  /// Driver workspace: attach button.
+  ///
+  /// In en, this message translates to:
+  /// **'Attach official notice photo'**
+  String get driverWsAttachNotice;
+
+  /// Driver workspace: signature load failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Signature unavailable.'**
+  String get driverWsSignatureUnavailable;
+
+  /// Driver workspace: view signature.
+  ///
+  /// In en, this message translates to:
+  /// **'View signed acknowledgment'**
+  String get driverWsViewSignature;
+
+  /// Driver workspace: signature render failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Signature could not be displayed.'**
+  String get driverWsSignatureDisplayError;
+
+  /// Driver workspace: signed receipt statement, version receipt-v1. The wording is a recorded legal statement: do not change it without a new statement_version.
+  ///
+  /// In en, this message translates to:
+  /// **'I acknowledge receipt and review of this notice and submit the response shown above. Receipt does not mean admission of responsibility. A payment or recovery request does not authorize an automatic payment or payroll deduction.'**
+  String get driverWsReceiptStatement;
+
+  /// Driver workspace: draft read failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved draft could not be read. Nothing has been overwritten.'**
+  String get driverWsDraftReadError;
+
+  /// Driver workspace: submit failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not submit. Check the required fields and connection. Refresh if the notice changed.'**
+  String get driverWsSubmitError;
+
+  /// Driver workspace: form notice.
+  ///
+  /// In en, this message translates to:
+  /// **'Submission requires a connection so the current notice and your access can be checked.'**
+  String get driverWsConnectionRequired;
+
+  /// Driver workspace: draft saved.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft saved. It has not been submitted.'**
+  String get driverWsDraftSaved;
+
+  /// Driver workspace: draft save failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft could not be saved.'**
+  String get driverWsDraftSaveError;
+
+  /// Driver workspace: save draft button.
+  ///
+  /// In en, this message translates to:
+  /// **'Save draft on this device'**
+  String get driverWsSaveDraft;
+
+  /// Driver workspace: review disclaimer.
+  ///
+  /// In en, this message translates to:
+  /// **'Approval records the reviewed arrangement. It does not execute payment or payroll deduction. Record only verified payments.'**
+  String get driverWsReviewDisclaimer;
+
+  /// Driver workspace: submit in progress.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving...'**
+  String get driverWsSaving;
+
+  /// Driver workspace: submit button.
+  ///
+  /// In en, this message translates to:
+  /// **'Submit'**
+  String get driverWsSubmit;
+
+  /// Driver workspace: validation.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a resolution.'**
+  String get driverWsErrResolution;
+
+  /// Driver workspace: validation.
+  ///
+  /// In en, this message translates to:
+  /// **'Explain your request, including the proposed arrangement.'**
+  String get driverWsErrExplanation;
+
+  /// Driver workspace: validation.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your payment reference.'**
+  String get driverWsErrPaymentReference;
+
+  /// Driver workspace: validation.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose your proposed payment date.'**
+  String get driverWsErrProposedDate;
+
+  /// Driver workspace: validation.
+  ///
+  /// In en, this message translates to:
+  /// **'Review the statement and sign before submitting.'**
+  String get driverWsErrSignature;
+
+  /// Driver workspace: picker load failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Options unavailable. Try again.'**
+  String get driverWsOptionsError;
+
+  /// Driver workspace: picker search.
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get driverWsSearch;
+
+  /// Driver workspace: picker clear.
+  ///
+  /// In en, this message translates to:
+  /// **'None / clear selection'**
+  String get driverWsClearSelection;
+
+  /// Driver workspace: picker paging.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous options'**
+  String get driverWsPreviousOptions;
+
+  /// Driver workspace: picker paging.
+  ///
+  /// In en, this message translates to:
+  /// **'More options'**
+  String get driverWsMoreOptions;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Employee ID'**
+  String get driverWsFieldEmployeeId;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Driver name'**
+  String get driverWsFieldDriverName;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Country'**
+  String get driverWsFieldCountry;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Site'**
+  String get driverWsFieldSite;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Login account (none removes link)'**
+  String get driverWsFieldLoginAccount;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Identity verification / reason'**
+  String get driverWsFieldIdentityReason;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Supervisor'**
+  String get driverWsFieldSupervisor;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Manager'**
+  String get driverWsFieldManager;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle'**
+  String get driverWsFieldVehicle;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Assignment reason'**
+  String get driverWsFieldAssignmentReason;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Issuing authority'**
+  String get driverWsFieldAuthority;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Notice reference'**
+  String get driverWsFieldNoticeReference;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Incident date and time (YYYY-MM-DDTHH:mm)'**
+  String get driverWsFieldIncidentAt;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Due date (YYYY-MM-DD)'**
+  String get driverWsFieldDueDate;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Fine amount'**
+  String get driverWsFieldAmount;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Currency code'**
+  String get driverWsFieldCurrency;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Notice details'**
+  String get driverWsFieldNoticeDetails;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Evidence confirming driver assignment'**
+  String get driverWsFieldAssignmentEvidence;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Record type'**
+  String get driverWsFieldRecordType;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Existing record'**
+  String get driverWsFieldExistingRecord;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'How driver identity was verified'**
+  String get driverWsFieldIdentityMethod;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Preferred resolution'**
+  String get driverWsFieldResolution;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Explanation / proposed arrangement'**
+  String get driverWsFieldExplanation;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment reference (if paid)'**
+  String get driverWsFieldPaymentReference;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Proposed payment date (YYYY-MM-DD)'**
+  String get driverWsFieldProposedDate;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Decision'**
+  String get driverWsFieldDecision;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Review reason / approved arrangement'**
+  String get driverWsFieldReviewReason;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Verified payment reference'**
+  String get driverWsFieldVerifiedReference;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Verified payment amount'**
+  String get driverWsFieldVerifiedAmount;
+
+  /// Driver workspace: statement PDF column.
+  ///
+  /// In en, this message translates to:
+  /// **'Notice'**
+  String get driverWsPdfColNotice;
+
+  /// Driver workspace: statement PDF column.
+  ///
+  /// In en, this message translates to:
+  /// **'Currency'**
+  String get driverWsPdfColCurrency;
+
+  /// Driver workspace: statement PDF column.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount'**
+  String get driverWsPdfColAmount;
+
+  /// Driver workspace: statement PDF column.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid'**
+  String get driverWsPdfColPaid;
+
+  /// Driver workspace: statement PDF column.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get driverWsPdfColStatus;
+
+  /// Driver workspace: statement PDF column.
+  ///
+  /// In en, this message translates to:
+  /// **'Response'**
+  String get driverWsPdfColResponse;
+
+  /// Driver workspace: driver list row subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{site} · {open} open fines · {awaiting} awaiting response'**
+  String driverWsDriverSubtitle(String site, String open, String awaiting);
+
+  /// Driver workspace: outstanding balance line.
+  ///
+  /// In en, this message translates to:
+  /// **'Outstanding: {amount} {currency}'**
+  String driverWsOutstanding(String amount, String currency);
+
+  /// Driver workspace: assignment card.
+  ///
+  /// In en, this message translates to:
+  /// **'Supervisor: {name}'**
+  String driverWsSupervisorLine(String name);
+
+  /// Driver workspace: assignment card.
+  ///
+  /// In en, this message translates to:
+  /// **'Manager: {name}'**
+  String driverWsManagerLine(String name);
+
+  /// Driver workspace: assignment period.
+  ///
+  /// In en, this message translates to:
+  /// **'{start} to {end}'**
+  String driverWsAssignmentPeriod(String start, String end);
+
+  /// Driver workspace: fine assignment evidence.
+  ///
+  /// In en, this message translates to:
+  /// **'Assignment: {reason}'**
+  String driverWsAssignmentLine(String reason);
+
+  /// Driver workspace: fine due and paid line.
+  ///
+  /// In en, this message translates to:
+  /// **'Due: {due} · Paid: {paid}'**
+  String driverWsDueLine(String due, String paid);
+
+  /// Driver workspace: statement PDF heading.
+  ///
+  /// In en, this message translates to:
+  /// **'Driver statement: {name}'**
+  String driverWsPdfTitle(String name);
+
+  /// Driver workspace: statement PDF line.
+  ///
+  /// In en, this message translates to:
+  /// **'Employee ID: {id}'**
+  String driverWsPdfEmployeeId(String id);
+
+  /// Vehicle class name for a five-view reference board.
+  ///
+  /// In en, this message translates to:
+  /// **'Transit mixer'**
+  String get vehicleClassTransitMixer;
+
+  /// Vehicle class name for a five-view reference board.
+  ///
+  /// In en, this message translates to:
+  /// **'Concrete pump'**
+  String get vehicleClassConcretePump;
+
+  /// Vehicle class name for a five-view reference board.
+  ///
+  /// In en, this message translates to:
+  /// **'Truck-mounted line pump'**
+  String get vehicleClassLinePump;
+
+  /// Vehicle class name for a five-view reference board.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff bus'**
+  String get vehicleClassStaffBus;
+
+  /// Vehicle class name for a five-view reference board.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff van'**
+  String get vehicleClassStaffVan;
+
+  /// Vehicle class name for a five-view reference board.
+  ///
+  /// In en, this message translates to:
+  /// **'Double-cab pickup'**
+  String get vehicleClassDoubleCabPickup;
+
+  /// Vehicle class name for a five-view reference board.
+  ///
+  /// In en, this message translates to:
+  /// **'Wheel loader'**
+  String get vehicleClassWheelLoader;
+
+  /// Vehicle class name for a five-view reference board.
+  ///
+  /// In en, this message translates to:
+  /// **'Skid-steer loader'**
+  String get vehicleClassSkidSteerLoader;
+
+  /// Vehicle class name for a five-view reference board.
+  ///
+  /// In en, this message translates to:
+  /// **'Towable concrete pump'**
+  String get vehicleClassTowablePump;
+
+  /// Vehicle class name for a five-view reference board.
+  ///
+  /// In en, this message translates to:
+  /// **'Stationary concrete pump'**
+  String get vehicleClassStationaryPump;
+
+  /// Vehicle class name for a five-view reference board.
+  ///
+  /// In en, this message translates to:
+  /// **'Enclosed generator'**
+  String get vehicleClassGenerator;
+
+  /// Vehicle class name for a five-view reference board.
+  ///
+  /// In en, this message translates to:
+  /// **'Industrial chiller'**
+  String get vehicleClassChiller;
+
+  /// Vehicle class name for a five-view reference board.
+  ///
+  /// In en, this message translates to:
+  /// **'Industrial water chiller'**
+  String get vehicleClassWaterChiller;
+
+  /// Vehicle class name for a five-view reference board.
+  ///
+  /// In en, this message translates to:
+  /// **'Concrete batching plant'**
+  String get vehicleClassBatchingPlant;
+
+  /// Vehicle class name for a five-view reference board.
+  ///
+  /// In en, this message translates to:
+  /// **'Freestanding placing boom'**
+  String get vehicleClassPlacingBoom;
+
+  /// Vehicle class name with axle count.
+  ///
+  /// In en, this message translates to:
+  /// **'Concrete pump · {axles} axle'**
+  String vehicleClassConcretePumpAxles(int axles);
+
+  /// Vehicle class name with axle count.
+  ///
+  /// In en, this message translates to:
+  /// **'Truck-mounted line pump · {axles} axle'**
+  String vehicleClassLinePumpAxles(int axles);
+
+  /// Scanner: camera failed to start for a reason other than permission.
+  ///
+  /// In en, this message translates to:
+  /// **'The camera could not start'**
+  String get scannerCameraStartFailedTitle;
+
+  /// Scanner: camera start failure explanation.
+  ///
+  /// In en, this message translates to:
+  /// **'Another app may be using it, or it stopped unexpectedly. Try again, or type the code below.'**
+  String get scannerCameraStartFailedMessage;
+
+  /// Management overview: per-site section heading.
+  ///
+  /// In en, this message translates to:
+  /// **'Sites at a glance'**
+  String get managementOverviewSiteRollup;
+
+  /// Management overview: empty per-site rollup.
+  ///
+  /// In en, this message translates to:
+  /// **'No site has recorded tyres in this period.'**
+  String get managementOverviewSiteRollupEmpty;
+
+  /// Management overview: risk share tile.
+  ///
+  /// In en, this message translates to:
+  /// **'Tyres at high or critical risk'**
+  String get managementOverviewAtRiskShare;
+
+  /// Management reports: share action.
+  ///
+  /// In en, this message translates to:
+  /// **'Share report PDF'**
+  String get managementReportsShare;
+
+  /// Management reports: share failure.
+  ///
+  /// In en, this message translates to:
+  /// **'The report could not be shared. Try again.'**
+  String get managementReportsShareError;
+
+  /// Management reports: PDF column.
+  ///
+  /// In en, this message translates to:
+  /// **'Metric'**
+  String get managementReportsPdfMetric;
+
+  /// Management reports: PDF column.
+  ///
+  /// In en, this message translates to:
+  /// **'Value'**
+  String get managementReportsPdfValue;
+
+  /// Management reports: PDF column.
+  ///
+  /// In en, this message translates to:
+  /// **'Share'**
+  String get managementReportsPdfShare;
+
+  /// Team member detail field.
+  ///
+  /// In en, this message translates to:
+  /// **'Role'**
+  String get managementTeamRole;
+
+  /// Team member detail field.
+  ///
+  /// In en, this message translates to:
+  /// **'Username'**
+  String get managementTeamUsername;
+
+  /// Team member detail field.
+  ///
+  /// In en, this message translates to:
+  /// **'Site'**
+  String get managementTeamSite;
+
+  /// Team member detail field.
+  ///
+  /// In en, this message translates to:
+  /// **'Country'**
+  String get managementTeamCountry;
+
+  /// Team member detail field.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone'**
+  String get managementTeamPhone;
+
+  /// Team member detail field.
+  ///
+  /// In en, this message translates to:
+  /// **'Email'**
+  String get managementTeamEmail;
+
+  /// Team member detail field.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get managementTeamStatus;
+
+  /// Team member approved status.
+  ///
+  /// In en, this message translates to:
+  /// **'Approved'**
+  String get managementTeamApproved;
+
+  /// Team member detail field.
+  ///
+  /// In en, this message translates to:
+  /// **'Last sign-in'**
+  String get managementTeamLastLogin;
+
+  /// Team member missing value.
+  ///
+  /// In en, this message translates to:
+  /// **'Not recorded'**
+  String get managementTeamNotRecorded;
+
+  /// Team member call action.
+  ///
+  /// In en, this message translates to:
+  /// **'Call'**
+  String get managementTeamCall;
+
+  /// Team member email action.
+  ///
+  /// In en, this message translates to:
+  /// **'Send email'**
+  String get managementTeamSendEmail;
+
+  /// Team member call/email could not launch.
+  ///
+  /// In en, this message translates to:
+  /// **'This action is not available on this device.'**
+  String get managementTeamActionError;
+
+  /// Management overview: tyres at a site.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} tyres'**
+  String managementOverviewSiteTyres(String count);
+
+  /// Management overview: site share.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% of fleet tyres'**
+  String managementOverviewSiteShare(String percent);
+
+  /// Management reports: PDF period line.
+  ///
+  /// In en, this message translates to:
+  /// **'Period: last {days} days'**
+  String managementReportsPdfPeriod(int days);
+
+  /// Management reports: PDF currency line.
+  ///
+  /// In en, this message translates to:
+  /// **'Currency: {code}'**
+  String managementReportsPdfCurrency(String code);
 }
 
 class _AppLocalizationsDelegate

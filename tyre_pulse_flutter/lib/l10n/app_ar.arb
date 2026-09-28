@@ -963,5 +963,294 @@
   "tyreActionRotateSavedMessage": "تم حفظ التدوير في سجل خدمة هذا الإطار. ولا يغيّر الموضع الظاهر في سجل الإطارات.",
   "tyreActionRotateFailedTitle": "لم يتم حفظ التدوير",
   "tyreActionRotateOfflineMessage": "لا يوجد اتصال. تُحفظ عمليات التدوير عبر الإنترنت فقط، لذلك لم يُسجَّل هذا التدوير. حاول مرة أخرى عند الاتصال.",
-  "tyreActionRotateFailedMessage": "تعذّر حفظ التدوير. حاول مرة أخرى."
+  "tyreActionRotateFailedMessage": "تعذّر حفظ التدوير. حاول مرة أخرى.",
+  "driverWsTerm": "{term, select, create_driver{إضافة سائق موثّق} link_account{ربط حساب الدخول} assign_team{تعيين الفريق والمركبة} create_fine{تسجيل مخالفة مرورية} link_record{ربط سجل عمل} respond_fine{مراجعة وتوقيع} review_fine{مراجعة الرد أو السداد} correct_fine{تصحيح المخالفة} reassign_fine{إعادة إسناد المخالفة} direct_payment{سأسدد مباشرة} already_paid{تم السداد بالفعل} dispute{اعتراض أو إسناد غير صحيح} company_recovery{طلب سداد الشركة أو الاسترداد} instalments{طلب التقسيط} approve{اعتماد الطلب} return{إعادة للسائق} payment{تسجيل سداد متحقق منه} cancel{إلغاء المخالفة} reopen{إعادة فتح} open{مفتوحة} settled{مسددة} cancelled{ملغاة} awaiting_response{بانتظار الرد} submitted{تم إرسال الرد} returned{أعيدت للسائق} approved{معتمدة} driver_documents{مستندات السائق} driver_training{تدريب السائق} driver_coaching{توجيه السائق} driver_safety_events{أحداث سلامة السائق} driver_expenses{مصروفات السائق} tyre_records{سجلات الإطارات} accidents{الحوادث} wo_tasks{مهام أوامر العمل} checklist_submissions{قوائم الفحص المرسلة} odometer_logs{قراءات عداد المسافات} wash_records{سجلات الغسيل} other{}}",
+  "@driverWsTerm": {
+    "placeholders": {
+      "term": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsRecordField": "{field, select, country{الدولة} site{الموقع} asset_no{رقم الأصل} driver_name{اسم السائق} title{العنوان} doc_type{نوع المستند} doc_number{رقم المستند} expiry_date{تاريخ الانتهاء} course_name{اسم الدورة} result{النتيجة} completed_date{تاريخ الإكمال} coaching_status{حالة التوجيه} period{الفترة} event_type{نوع الحدث} severity{الخطورة} event_at{وقت الحدث} category{الفئة} amount{المبلغ} currency{العملة} expense_date{تاريخ المصروف} status{الحالة} incident_date{تاريخ الحادث} accident_type{نوع الحادث} due_date{تاريخ الاستحقاق} created_at{تاريخ الإنشاء} reading_date{تاريخ القراءة} odometer_km{عداد المسافات (كم)} wash_date{تاريخ الغسيل} template_name{اسم قائمة الفحص} approval_status{حالة الاعتماد} brand{العلامة التجارية} serial_no{الرقم التسلسلي} issue_date{تاريخ الإصدار} qty{الكمية} cost_per_tyre{التكلفة لكل إطار} other{}}",
+  "@driverWsRecordField": {
+    "placeholders": {
+      "field": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsEvidenceKind": "{kind, select, payment{إيصال السداد} supporting{صورة داعمة} notice{المخالفة الرسمية} other{}}",
+  "@driverWsEvidenceKind": {
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsTitle": "مساحة عمل السائق",
+  "driverWsEntrySubtitle": "مخالفاتي وتكليفات الفريق والعمل المرتبط بي",
+  "driverWsLoadError": "مساحة العمل غير متاحة. تحقق من الاتصال وربط الحساب والصلاحيات ثم حدّث.",
+  "driverWsRefresh": "تحديث",
+  "driverWsSignInRequired": "سجّل الدخول لعرض مساحة عملك.",
+  "driverWsOfflineNotice": "عرض محفوظ دون اتصال. اتصل وحدّث قبل الرد أو المراجعة.",
+  "driverWsTruncatedNotice": "هذا العرض غير مكتمل لأنه بلغ الحد الأقصى للسجلات. التصدير معطّل.",
+  "driverWsSearchDrivers": "البحث عن السائقين",
+  "driverWsNoDrivers": "لا يوجد سائق مرتبط أو فريق مكلّف. اطلب من مدير مخوّل التحقق من حسابك وتكليفك.",
+  "driverWsSharePdf": "مشاركة كشف المخالفات PDF",
+  "driverWsReportShareError": "تعذّرت مشاركة التقرير. حاول مرة أخرى.",
+  "driverWsTrafficFines": "المخالفات المرورية",
+  "driverWsNoFines": "لا توجد مخالفات مسجلة.",
+  "driverWsAssignmentHistory": "سجل تكليفات الفريق والمركبة",
+  "driverWsNoAssignment": "لا يوجد تكليف مسجل.",
+  "driverWsAssignmentCurrent": "حالي",
+  "driverWsAssignmentPrevious": "سابق",
+  "driverWsNoVehicle": "بدون مركبة",
+  "driverWsNotAssigned": "غير معيّن",
+  "driverWsPresent": "حتى الآن",
+  "driverWsAssignedWork": "العمل المكلّف به",
+  "driverWsNotSupplied": "غير مُدخل",
+  "driverWsVerifiedRecords": "سجلات العمل والسائق الموثّقة",
+  "driverWsUnmatchedNotice": "تتطلب السجلات السابقة غير المرتبطة التحقق من الهوية قبل عرضها هنا.",
+  "driverWsRecordUnavailable": "السجل لم يعد متاحاً",
+  "driverWsActivityHistory": "سجل النشاط",
+  "driverWsRecordedUser": "مستخدم مسجّل",
+  "driverWsPhotoError": "تعذّر إرفاق الصورة. لم تُحذف صورتك المحلية.",
+  "driverWsAcknowledgeRespond": "الإقرار بالاستلام والرد",
+  "driverWsReviewPayment": "مراجعة أو تسجيل سداد",
+  "driverWsEvidenceOpenError": "تعذّر فتح الدليل.",
+  "driverWsAttachReceipt": "إرفاق صورة إيصال",
+  "driverWsAttachSupporting": "إرفاق صورة داعمة",
+  "driverWsAttachNotice": "إرفاق صورة المخالفة الرسمية",
+  "driverWsSignatureUnavailable": "التوقيع غير متاح.",
+  "driverWsViewSignature": "عرض الإقرار الموقّع",
+  "driverWsSignatureDisplayError": "تعذّر عرض التوقيع.",
+  "driverWsReceiptStatement": "أقر باستلام هذه المخالفة ومراجعتها وأقدم الرد الموضح أعلاه. الاستلام لا يعني الإقرار بالمسؤولية. طلب السداد أو الاسترداد لا يجيز سداداً تلقائياً أو خصماً من الراتب.",
+  "driverWsDraftReadError": "تعذّرت قراءة المسودة المحفوظة. لم يُستبدل أي شيء.",
+  "driverWsSubmitError": "تعذّر الإرسال. تحقق من الحقول المطلوبة والاتصال، وحدّث إذا تغيّرت المخالفة.",
+  "driverWsConnectionRequired": "يتطلب الإرسال اتصالاً للتحقق من آخر نسخة للمخالفة وصلاحياتك.",
+  "driverWsDraftSaved": "تم حفظ المسودة ولم تُرسل بعد.",
+  "driverWsDraftSaveError": "تعذّر حفظ المسودة.",
+  "driverWsSaveDraft": "حفظ مسودة على هذا الجهاز",
+  "driverWsReviewDisclaimer": "يسجّل الاعتماد الترتيب الذي تمت مراجعته ولا ينفّذ سداداً أو خصماً من الراتب. سجّل الدفعات المتحقق منها فقط.",
+  "driverWsSaving": "جارٍ الحفظ...",
+  "driverWsSubmit": "إرسال",
+  "driverWsErrResolution": "اختر طريقة المعالجة.",
+  "driverWsErrExplanation": "وضّح طلبك بما في ذلك الترتيب المقترح.",
+  "driverWsErrPaymentReference": "أدخل مرجع السداد.",
+  "driverWsErrProposedDate": "اختر تاريخ السداد المقترح.",
+  "driverWsErrSignature": "راجع الإقرار ووقّع قبل الإرسال.",
+  "driverWsOptionsError": "الخيارات غير متاحة. حاول مرة أخرى.",
+  "driverWsSearch": "بحث",
+  "driverWsClearSelection": "بدون أو مسح الاختيار",
+  "driverWsPreviousOptions": "الخيارات السابقة",
+  "driverWsMoreOptions": "مزيد من الخيارات",
+  "driverWsFieldEmployeeId": "الرقم الوظيفي",
+  "driverWsFieldDriverName": "اسم السائق",
+  "driverWsFieldCountry": "الدولة",
+  "driverWsFieldSite": "الموقع",
+  "driverWsFieldLoginAccount": "حساب الدخول (بدون يلغي الربط)",
+  "driverWsFieldIdentityReason": "التحقق من الهوية أو السبب",
+  "driverWsFieldSupervisor": "المشرف",
+  "driverWsFieldManager": "المدير",
+  "driverWsFieldVehicle": "المركبة",
+  "driverWsFieldAssignmentReason": "سبب التكليف",
+  "driverWsFieldAuthority": "الجهة المُصدرة",
+  "driverWsFieldNoticeReference": "رقم المخالفة",
+  "driverWsFieldIncidentAt": "تاريخ ووقت المخالفة (YYYY-MM-DDTHH:mm)",
+  "driverWsFieldDueDate": "تاريخ الاستحقاق (YYYY-MM-DD)",
+  "driverWsFieldAmount": "قيمة المخالفة",
+  "driverWsFieldCurrency": "رمز العملة",
+  "driverWsFieldNoticeDetails": "تفاصيل المخالفة",
+  "driverWsFieldAssignmentEvidence": "دليل إسناد المخالفة للسائق",
+  "driverWsFieldRecordType": "نوع السجل",
+  "driverWsFieldExistingRecord": "السجل الموجود",
+  "driverWsFieldIdentityMethod": "كيفية التحقق من هوية السائق",
+  "driverWsFieldResolution": "طريقة المعالجة المطلوبة",
+  "driverWsFieldExplanation": "التوضيح أو الترتيب المقترح",
+  "driverWsFieldPaymentReference": "مرجع السداد إن تم",
+  "driverWsFieldProposedDate": "تاريخ السداد المقترح (YYYY-MM-DD)",
+  "driverWsFieldDecision": "القرار",
+  "driverWsFieldReviewReason": "سبب المراجعة أو الترتيب المعتمد",
+  "driverWsFieldVerifiedReference": "مرجع السداد المتحقق منه",
+  "driverWsFieldVerifiedAmount": "قيمة السداد المتحقق منها",
+  "driverWsPdfColNotice": "المخالفة",
+  "driverWsPdfColCurrency": "العملة",
+  "driverWsPdfColAmount": "المبلغ",
+  "driverWsPdfColPaid": "المدفوع",
+  "driverWsPdfColStatus": "الحالة",
+  "driverWsPdfColResponse": "الرد",
+  "driverWsDriverSubtitle": "{site} · {open} مخالفات مفتوحة · {awaiting} بانتظار الرد",
+  "@driverWsDriverSubtitle": {
+    "placeholders": {
+      "site": {
+        "type": "String"
+      },
+      "open": {
+        "type": "String"
+      },
+      "awaiting": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsOutstanding": "المستحق: {amount} {currency}",
+  "@driverWsOutstanding": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "currency": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsSupervisorLine": "المشرف: {name}",
+  "@driverWsSupervisorLine": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsManagerLine": "المدير: {name}",
+  "@driverWsManagerLine": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsAssignmentPeriod": "من {start} إلى {end}",
+  "@driverWsAssignmentPeriod": {
+    "placeholders": {
+      "start": {
+        "type": "String"
+      },
+      "end": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsAssignmentLine": "الإسناد: {reason}",
+  "@driverWsAssignmentLine": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsDueLine": "الاستحقاق: {due} · المدفوع: {paid}",
+  "@driverWsDueLine": {
+    "placeholders": {
+      "due": {
+        "type": "String"
+      },
+      "paid": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsPdfTitle": "كشف السائق: {name}",
+  "@driverWsPdfTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsPdfEmployeeId": "الرقم الوظيفي: {id}",
+  "@driverWsPdfEmployeeId": {
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "vehicleClassTransitMixer": "خلاطة خرسانة متنقلة",
+  "vehicleClassConcretePump": "مضخة خرسانة",
+  "vehicleClassLinePump": "مضخة خط محمولة على شاحنة",
+  "vehicleClassStaffBus": "حافلة موظفين",
+  "vehicleClassStaffVan": "فان موظفين",
+  "vehicleClassDoubleCabPickup": "بيك أب بكابينة مزدوجة",
+  "vehicleClassWheelLoader": "لودر بعجلات",
+  "vehicleClassSkidSteerLoader": "لودر انزلاقي التوجيه",
+  "vehicleClassTowablePump": "مضخة خرسانة قابلة للقطر",
+  "vehicleClassStationaryPump": "مضخة خرسانة ثابتة",
+  "vehicleClassGenerator": "مولد مغلق",
+  "vehicleClassChiller": "مبرد صناعي",
+  "vehicleClassWaterChiller": "مبرد مياه صناعي",
+  "vehicleClassBatchingPlant": "محطة خلط الخرسانة",
+  "vehicleClassPlacingBoom": "ذراع صب خرسانة قائم بذاته",
+  "vehicleClassConcretePumpAxles": "مضخة خرسانة · {axles} محاور",
+  "@vehicleClassConcretePumpAxles": {
+    "placeholders": {
+      "axles": {
+        "type": "int"
+      }
+    }
+  },
+  "vehicleClassLinePumpAxles": "مضخة خط محمولة على شاحنة · {axles} محاور",
+  "@vehicleClassLinePumpAxles": {
+    "placeholders": {
+      "axles": {
+        "type": "int"
+      }
+    }
+  },
+  "scannerCameraStartFailedTitle": "تعذّر تشغيل الكاميرا",
+  "scannerCameraStartFailedMessage": "قد يكون تطبيق آخر يستخدمها أو توقفت بشكل غير متوقع. حاول مرة أخرى أو اكتب الرمز أدناه.",
+  "managementOverviewSiteRollup": "المواقع في لمحة",
+  "managementOverviewSiteRollupEmpty": "لم يسجل أي موقع إطارات في هذه الفترة.",
+  "managementOverviewAtRiskShare": "الإطارات ذات الخطورة العالية أو الحرجة",
+  "managementReportsShare": "مشاركة التقرير PDF",
+  "managementReportsShareError": "تعذّرت مشاركة التقرير. حاول مرة أخرى.",
+  "managementReportsPdfMetric": "المؤشر",
+  "managementReportsPdfValue": "القيمة",
+  "managementReportsPdfShare": "النسبة",
+  "managementTeamRole": "الدور",
+  "managementTeamUsername": "اسم المستخدم",
+  "managementTeamSite": "الموقع",
+  "managementTeamCountry": "الدولة",
+  "managementTeamPhone": "الهاتف",
+  "managementTeamEmail": "البريد الإلكتروني",
+  "managementTeamStatus": "الحالة",
+  "managementTeamApproved": "معتمد",
+  "managementTeamLastLogin": "آخر تسجيل دخول",
+  "managementTeamNotRecorded": "غير مسجل",
+  "managementTeamCall": "اتصال",
+  "managementTeamSendEmail": "إرسال بريد",
+  "managementTeamActionError": "هذا الإجراء غير متاح على هذا الجهاز.",
+  "managementOverviewSiteTyres": "{count} إطارات",
+  "@managementOverviewSiteTyres": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "managementOverviewSiteShare": "{percent}% من إطارات الأسطول",
+  "@managementOverviewSiteShare": {
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "managementReportsPdfPeriod": "الفترة: آخر {days} يوماً",
+  "@managementReportsPdfPeriod": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "managementReportsPdfCurrency": "العملة: {code}",
+  "@managementReportsPdfCurrency": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  }
 }

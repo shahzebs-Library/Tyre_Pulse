@@ -4,6 +4,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/back_navigation.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
@@ -15,6 +18,13 @@ import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/management/domain/management_models.dart';
 import 'package:tyre_pulse/features/management/management_providers.dart';
 import 'package:tyre_pulse/features/management/presentation/management_copy.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+/// What a management fleet screen is for. Overview and Analytics read the
+/// same authoritative aggregate (`get_mobile_analytics`) but answer different
+/// questions: Overview is the at-a-glance health of the fleet and each site,
+/// Analytics is the drill-down with a site filter and full distributions.
+enum _FleetView { overview, analytics }
 
 class OverviewScreen extends StatelessWidget {
   const OverviewScreen({required this.route, super.key});
@@ -24,7 +34,7 @@ class OverviewScreen extends StatelessWidget {
   Widget build(BuildContext context) => _AnalyticsView(
         route: route,
         titleKey: 'overviewTitle',
-        showDistributions: true,
+        view: _FleetView.overview,
       );
 }
 
@@ -36,7 +46,7 @@ class AnalyticsScreen extends StatelessWidget {
   Widget build(BuildContext context) => _AnalyticsView(
         route: route,
         titleKey: 'analyticsTitle',
-        showDistributions: true,
+        view: _FleetView.analytics,
       );
 }
 
@@ -44,11 +54,11 @@ class _AnalyticsView extends ConsumerStatefulWidget {
   const _AnalyticsView({
     required this.route,
     required this.titleKey,
-    required this.showDistributions,
+    required this.view,
   });
   final TpRoute route;
   final String titleKey;
-  final bool showDistributions;
+  final _FleetView view;
 
   @override
   ConsumerState<_AnalyticsView> createState() => _AnalyticsViewState();
@@ -141,7 +151,8 @@ class _AnalyticsViewState extends ConsumerState<_AnalyticsView> {
               unawaited(_load());
             },
           ),
-          if (data.sites.isNotEmpty) ...<Widget>[
+          if (widget.view == _FleetView.analytics &&
+              data.sites.isNotEmpty) ...<Widget>[
             const SizedBox(height: TpSpace.sm),
             SizedBox(
               height: 42,
@@ -172,25 +183,200 @@ class _AnalyticsViewState extends ConsumerState<_AnalyticsView> {
             ),
           ],
           const SizedBox(height: TpSpace.md),
-          _MetricGrid(
-            values: <MapEntry<String, num>>[
-              MapEntry<String, num>(copy('tyres'), data.tyresTotal),
-              MapEntry<String, num>(copy('vehicles'), data.vehiclesTotal),
-              MapEntry<String, num>(copy('critical'), data.tyresCritical),
-              MapEntry<String, num>(copy('openActions'), data.openActions),
-              MapEntry<String, num>(copy('highRisk'), data.tyresHigh),
-              MapEntry<String, num>(copy('inspections30'), data.inspections30d),
+          if (widget.view == _FleetView.overview)
+            ..._overview(copy, data)
+          else
+            ..._analytics(copy, data),
+        ],
+      ),
+    );
+  }
+
+  /// The at-a-glance fleet health: headline KPIs, the share of tyres at
+  /// high or critical risk, spend, and a per-site rollup. Every figure comes
+  /// from the loaded aggregate; nothing is derived that the server did not
+  /// measure (a share is only shown when the tyre total is not zero).
+  List<Widget> _overview(ManagementCopy copy, FleetAnalytics data) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final String? currency = ref.watch(activeCurrencyProvider);
+    final num atRisk = data.tyresCritical + data.tyresHigh;
+    return <Widget>[
+      _MetricGrid(
+        values: <MapEntry<String, num>>[
+          MapEntry<String, num>(copy('tyres'), data.tyresTotal),
+          MapEntry<String, num>(copy('vehicles'), data.vehiclesTotal),
+          MapEntry<String, num>(copy('openActions'), data.openActions),
+          MapEntry<String, num>(copy('inspections30'), data.inspections30d),
+        ],
+      ),
+      const SizedBox(height: TpSpace.sm),
+      _ShareCard(
+        key: const Key('overview.atRisk'),
+        label: l10n.managementOverviewAtRiskShare,
+        value: atRisk,
+        total: data.tyresTotal,
+      ),
+      if (data.tyreSpend != null) ...<Widget>[
+        const SizedBox(height: TpSpace.sm),
+        _CostValueCard(
+          label: copy('tyreSpend'),
+          value: data.tyreSpend!,
+          currency: currency,
+        ),
+      ],
+      const SizedBox(height: TpSpace.xl),
+      Text(
+        l10n.managementOverviewSiteRollup,
+        style: Theme.of(context).textTheme.titleMedium,
+      ),
+      const SizedBox(height: TpSpace.sm),
+      if (data.bySite.isEmpty)
+        TpEmptyState(
+          icon: Icons.location_off_outlined,
+          title: l10n.managementOverviewSiteRollupEmpty,
+        )
+      else
+        for (final MetricSlice site in data.bySite)
+          _SiteRollupRow(
+            site: site,
+            total: data.tyresTotal,
+            currency: currency,
+          ),
+    ];
+  }
+
+  /// The drill-down: the full KPI grid and every distribution.
+  List<Widget> _analytics(ManagementCopy copy, FleetAnalytics data) => <Widget>[
+        _MetricGrid(
+          values: <MapEntry<String, num>>[
+            MapEntry<String, num>(copy('tyres'), data.tyresTotal),
+            MapEntry<String, num>(copy('vehicles'), data.vehiclesTotal),
+            MapEntry<String, num>(copy('critical'), data.tyresCritical),
+            MapEntry<String, num>(copy('openActions'), data.openActions),
+            MapEntry<String, num>(copy('highRisk'), data.tyresHigh),
+            MapEntry<String, num>(copy('inspections30'), data.inspections30d),
+          ],
+        ),
+        if (data.tyreSpend != null) ...<Widget>[
+          const SizedBox(height: TpSpace.sm),
+          _ValueCard(label: copy('tyreSpend'), value: data.tyreSpend!),
+        ],
+        _Distribution(title: copy('risk'), rows: data.byRisk),
+        _Distribution(title: copy('sites'), rows: data.bySite),
+        _Distribution(title: copy('brands'), rows: data.byBrand),
+      ];
+}
+
+/// A count out of a total, shown as a share. The share is `-` when the total
+/// is zero: a 0% would read as a real, reassuring measurement.
+class _ShareCard extends StatelessWidget {
+  const _ShareCard({
+    required this.label,
+    required this.value,
+    required this.total,
+    super.key,
+  });
+  final String label;
+  final num value;
+  final num total;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final double? ratio = total > 0 ? (value / total).clamp(0, 1) : null;
+    return TpCard(
+      padding: const EdgeInsets.all(TpSpace.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  label,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+              ),
+              Text(
+                ratio == null ? '-' : '${(ratio * 100).round()}%',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
             ],
           ),
-          if (data.tyreSpend != null) ...<Widget>[
-            const SizedBox(height: TpSpace.sm),
-            _ValueCard(label: copy('tyreSpend'), value: data.tyreSpend!),
-          ],
-          if (widget.showDistributions) ...<Widget>[
-            _Distribution(title: copy('risk'), rows: data.byRisk),
-            _Distribution(title: copy('sites'), rows: data.bySite),
-            _Distribution(title: copy('brands'), rows: data.byBrand),
-          ],
+          const SizedBox(height: TpSpace.sm),
+          LinearProgressIndicator(
+            value: ratio ?? 0,
+            color: palette.critical.base,
+            backgroundColor: palette.surfaceAlt,
+            minHeight: 8,
+            borderRadius: BorderRadius.circular(TpRadius.pill),
+          ),
+          const SizedBox(height: TpSpace.xs),
+          Text(
+            '${_compact(value)} / ${_compact(total)}',
+            style: TextStyle(color: palette.textSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One site of the overview rollup: its tyre count, its share of the fleet's
+/// tyres and, when the server supplied it (single-country scope), its spend.
+class _SiteRollupRow extends StatelessWidget {
+  const _SiteRollupRow({
+    required this.site,
+    required this.total,
+    required this.currency,
+  });
+  final MetricSlice site;
+  final num total;
+  final String? currency;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    return TpCard(
+      key: Key('overview.site.${site.label}'),
+      margin: const EdgeInsets.only(bottom: TpSpace.sm),
+      padding: const EdgeInsets.all(TpSpace.md),
+      child: Row(
+        children: <Widget>[
+          Icon(Icons.location_on_outlined, color: palette.primaryDark),
+          const SizedBox(width: TpSpace.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  site.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleSmall
+                      ?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                Text(
+                  <String>[
+                    l10n.managementOverviewSiteTyres(_compact(site.count)),
+                    if (total > 0)
+                      l10n.managementOverviewSiteShare(
+                        '${(site.count / total * 100).round()}',
+                      ),
+                  ].join(' · '),
+                  style: TextStyle(color: palette.textSecondary),
+                ),
+              ],
+            ),
+          ),
+          if (site.cost != null)
+            Text(
+              _money(site.cost!, currency),
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
         ],
       ),
     );
@@ -209,6 +395,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   ExecutiveSnapshot? _snapshot;
   Object? _error;
   bool _loading = true;
+  bool _sharing = false;
   int _period = 30;
 
   @override
@@ -244,16 +431,61 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     }
   }
 
+  /// Shares the report that is on screen as a PDF: the same authoritative
+  /// snapshot, the same period, only the values the screen shows (a null
+  /// cost is omitted, never printed as zero).
+  ///
+  /// The PDF is written in English on purpose: the default PDF font has no
+  /// Arabic-script glyphs and none is bundled, so a localized PDF would print
+  /// empty boxes. Its labels still come from the ARB catalog.
+  Future<void> _share() async {
+    final ExecutiveSnapshot? snapshot = _snapshot;
+    if (snapshot == null || !snapshot.available || _sharing) return;
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final String? currency = ref.read(activeCurrencyProvider);
+    final ScaffoldMessengerState? messenger =
+        ScaffoldMessenger.maybeOf(context);
+    setState(() => _sharing = true);
+    try {
+      final AppLocalizations en =
+          await AppLocalizations.delegate.load(const Locale('en'));
+      final ManagementCopy copy = ManagementCopy.fromL10n(en);
+      final pw.Document document =
+          buildManagementReportPdf(snapshot, copy, en, _period, currency);
+      await Printing.sharePdf(
+        bytes: await document.save(),
+        filename: 'fleet-financial-report-${_period}d.pdf',
+      );
+    } on Object {
+      messenger?.showSnackBar(
+        SnackBar(content: Text(l10n.managementReportsShareError)),
+      );
+    } finally {
+      if (mounted) setState(() => _sharing = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final ManagementCopy copy = ManagementCopy.of(context);
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final String fallback = TpBackFallbacks.forRoute(widget.route);
+    final bool canShare =
+        !_loading && _error == null && (_snapshot?.available ?? false);
     return TpScaffold(
       backFallback: fallback,
       appBar: TpAppBar(
         title: copy('reportsTitle'),
         subtitle: copy('reportsSubtitle'),
         backFallback: fallback,
+        actions: <Widget>[
+          IconButton(
+            key: const Key('reports.share'),
+            tooltip: l10n.managementReportsShare,
+            icon: const Icon(Icons.ios_share_rounded),
+            onPressed: canShare && !_sharing ? _share : null,
+          ),
+        ],
       ),
       body: _body(copy),
     );
@@ -424,6 +656,18 @@ class _TeamScreenState extends ConsumerState<TeamScreen> {
     );
   }
 
+  /// The member's detail, from the fields the roster already loaded. No
+  /// extra query: the roster select carries every field shown here.
+  Future<void> _showMember(TeamMember member, ManagementCopy copy) =>
+      TpBottomSheet.show<void>(
+        context: context,
+        title: member.displayName,
+        builder: (BuildContext context) => _MemberDetail(
+          member: member,
+          copy: copy,
+        ),
+      );
+
   Widget _body(ManagementCopy copy) {
     if (_loading) return const TpLoadingState();
     if (_error != null) {
@@ -485,7 +729,11 @@ class _TeamScreenState extends ConsumerState<TeamScreen> {
             )
           else
             for (final TeamMember member in shown) ...<Widget>[
-              _MemberCard(member: member, copy: copy),
+              _MemberCard(
+                member: member,
+                copy: copy,
+                onTap: () => _showMember(member, copy),
+              ),
               const SizedBox(height: TpSpace.sm),
             ],
         ],
@@ -579,7 +827,7 @@ class _FinancialReportHeader extends StatelessWidget {
                 ? TpStatus.unknown
                 : TpStatus.info,
             label: currency == null || currency!.trim().isEmpty
-                ? '—'
+                ? '-'
                 : currency!.trim().toUpperCase(),
             isCompact: true,
           ),
@@ -825,9 +1073,14 @@ class _Distribution extends StatelessWidget {
 }
 
 class _MemberCard extends StatelessWidget {
-  const _MemberCard({required this.member, required this.copy});
+  const _MemberCard({
+    required this.member,
+    required this.copy,
+    required this.onTap,
+  });
   final TeamMember member;
   final ManagementCopy copy;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -835,6 +1088,7 @@ class _MemberCard extends StatelessWidget {
     return TpCard(
       key: Key('team.member.${member.id}'),
       padding: const EdgeInsets.all(TpSpace.md),
+      onTap: onTap,
       child: Row(
         children: <Widget>[
           CircleAvatar(
@@ -870,11 +1124,221 @@ class _MemberCard extends StatelessWidget {
               label: copy('pending'),
               isCompact: true,
             ),
+          const SizedBox(width: TpSpace.xs),
+          Icon(Icons.chevron_right, color: palette.textMuted),
         ],
       ),
     );
   }
 }
+
+class _MemberDetail extends StatefulWidget {
+  const _MemberDetail({required this.member, required this.copy});
+  final TeamMember member;
+  final ManagementCopy copy;
+
+  @override
+  State<_MemberDetail> createState() => _MemberDetailState();
+}
+
+class _MemberDetailState extends State<_MemberDetail> {
+  bool _launchFailed = false;
+
+  Future<void> _launch(Uri uri) async {
+    setState(() => _launchFailed = false);
+    bool ok = false;
+    try {
+      ok = await launchUrl(uri);
+    } on Object {
+      ok = false;
+    }
+    if (!ok && mounted) setState(() => _launchFailed = true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    final TeamMember member = widget.member;
+    final String missing = l10n.managementTeamNotRecorded;
+    final DateTime? lastLogin = member.lastLoginAt;
+    final List<MapEntry<String, String>> rows = <MapEntry<String, String>>[
+      MapEntry<String, String>(l10n.managementTeamRole, member.role ?? missing),
+      MapEntry<String, String>(
+        l10n.managementTeamUsername,
+        member.username ?? missing,
+      ),
+      MapEntry<String, String>(l10n.managementTeamSite, member.site ?? missing),
+      MapEntry<String, String>(
+        l10n.managementTeamCountry,
+        member.country ?? missing,
+      ),
+      MapEntry<String, String>(
+        l10n.managementTeamPhone,
+        member.phone ?? missing,
+      ),
+      MapEntry<String, String>(
+        l10n.managementTeamEmail,
+        member.email ?? missing,
+      ),
+      MapEntry<String, String>(
+        l10n.managementTeamStatus,
+        switch (member.approved) {
+          true => l10n.managementTeamApproved,
+          false => widget.copy('pending'),
+          null => missing,
+        },
+      ),
+      MapEntry<String, String>(
+        l10n.managementTeamLastLogin,
+        lastLogin == null
+            ? missing
+            : MaterialLocalizations.of(context)
+                .formatMediumDate(lastLogin.toLocal()),
+      ),
+    ];
+    return ListView(
+      key: Key('team.detail.${member.id}'),
+      shrinkWrap: true,
+      padding: const EdgeInsets.symmetric(horizontal: TpSpace.xl),
+      children: <Widget>[
+        for (final MapEntry<String, String> row in rows)
+          Padding(
+            padding: const EdgeInsets.only(bottom: TpSpace.sm),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                SizedBox(
+                  width: 112,
+                  child: Text(
+                    row.key,
+                    style: TextStyle(color: palette.textSecondary),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    row.value,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        if (member.phone != null || member.email != null) ...<Widget>[
+          const SizedBox(height: TpSpace.sm),
+          Wrap(
+            spacing: TpSpace.sm,
+            runSpacing: TpSpace.sm,
+            children: <Widget>[
+              if (member.phone != null)
+                TpButton.secondary(
+                  label: l10n.managementTeamCall,
+                  icon: Icons.call_outlined,
+                  onPressed: () =>
+                      _launch(Uri(scheme: 'tel', path: member.phone)),
+                ),
+              if (member.email != null)
+                TpButton.secondary(
+                  label: l10n.managementTeamSendEmail,
+                  icon: Icons.mail_outline,
+                  onPressed: () =>
+                      _launch(Uri(scheme: 'mailto', path: member.email)),
+                ),
+            ],
+          ),
+        ],
+        if (_launchFailed) ...<Widget>[
+          const SizedBox(height: TpSpace.sm),
+          Text(
+            l10n.managementTeamActionError,
+            style: TextStyle(color: palette.critical.base),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Builds the PDF of the report on screen. Public for tests.
+@visibleForTesting
+pw.Document buildManagementReportPdf(
+  ExecutiveSnapshot snapshot,
+  ManagementCopy copy,
+  AppLocalizations l10n,
+  int periodDays,
+  String? currency,
+) {
+  final String code = (currency ?? '').trim().toUpperCase();
+  final pw.Document document = pw.Document();
+  final List<List<String>> kpis = <List<String>>[
+    for (final MapEntry<String, num> entry in snapshot.kpis.entries)
+      <String>[copy(entry.key), _compact(entry.value)],
+  ];
+  final List<List<String>> costs = <List<String>>[
+    for (final MapEntry<String, num?> entry in snapshot.cost.entries)
+      if (entry.value != null)
+        <String>[copy(entry.key), _money(entry.value!, currency)],
+  ];
+  document.addPage(
+    pw.MultiPage(
+      build: (pw.Context context) => <pw.Widget>[
+        pw.Header(level: 0, text: copy('reportsTitle')),
+        pw.Text(snapshot.company),
+        pw.Text(l10n.managementReportsPdfPeriod(periodDays)),
+        if (code.isNotEmpty) pw.Text(l10n.managementReportsPdfCurrency(code)),
+        if (snapshot.generatedAt != null)
+          pw.Text(
+            '${copy('generated')} ${_isoDate(snapshot.generatedAt!.toLocal())}',
+          ),
+        pw.SizedBox(height: 12),
+        pw.TableHelper.fromTextArray(
+          headers: <String>[
+            l10n.managementReportsPdfMetric,
+            l10n.managementReportsPdfValue,
+          ],
+          data: kpis,
+        ),
+        if (costs.isNotEmpty) ...<pw.Widget>[
+          pw.SizedBox(height: 12),
+          pw.Header(level: 1, text: copy('costPerformance')),
+          pw.TableHelper.fromTextArray(
+            headers: <String>[
+              l10n.managementReportsPdfMetric,
+              l10n.managementReportsPdfValue,
+            ],
+            data: costs,
+          ),
+        ],
+        for (final MapEntry<String, List<MetricSlice>> entry
+            in snapshot.breakdowns.entries)
+          if (entry.value.isNotEmpty) ...<pw.Widget>[
+            pw.SizedBox(height: 12),
+            pw.Header(level: 1, text: copy(entry.key)),
+            pw.TableHelper.fromTextArray(
+              headers: <String>[
+                l10n.managementReportsPdfMetric,
+                l10n.managementReportsPdfValue,
+              ],
+              data: <List<String>>[
+                for (final MetricSlice row in entry.value)
+                  <String>[
+                    row.label,
+                    row.cost == null
+                        ? _compact(row.count)
+                        : _money(row.cost!, currency),
+                  ],
+              ],
+            ),
+          ],
+      ],
+    ),
+  );
+  return document;
+}
+
+String _isoDate(DateTime value) => '${value.year.toString().padLeft(4, '0')}-'
+    '${value.month.toString().padLeft(2, '0')}-'
+    '${value.day.toString().padLeft(2, '0')}';
 
 AppError _asError(Object error, String fallback) => switch (error) {
       final SupabaseFailure failure => failure.error,
@@ -896,6 +1360,6 @@ String _compact(num value) {
 
 String _money(num value, String? currency) {
   final String code = (currency ?? '').trim().toUpperCase();
-  if (code.isEmpty) return '—';
+  if (code.isEmpty) return '-';
   return '$code ${_compact(value)}';
 }

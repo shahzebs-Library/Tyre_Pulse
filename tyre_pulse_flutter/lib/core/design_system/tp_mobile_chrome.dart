@@ -155,10 +155,10 @@ class TpActionRow extends StatelessWidget {
             trailing!,
           ] else if (onTap != null) ...<Widget>[
             const SizedBox(width: TpSpace.xs),
+            // chevron_right_rounded mirrors itself under RTL
+            // (matchTextDirection); never flip it by hand.
             Icon(
-              Directionality.of(context) == TextDirection.rtl
-                  ? Icons.chevron_left_rounded
-                  : Icons.chevron_right_rounded,
+              Icons.chevron_right_rounded,
               color: palette.text,
             ),
           ],

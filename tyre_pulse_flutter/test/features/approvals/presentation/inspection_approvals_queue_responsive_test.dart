@@ -138,8 +138,14 @@ void main() {
       InspectionApprovalsQueueKeys.row(_pendingItem.id),
     );
     expect(
-      find.descendant(of: row, matching: find.byIcon(Icons.chevron_left)),
+      find.descendant(of: row, matching: find.byIcon(Icons.chevron_right)),
       findsOneWidget,
+    );
+    // chevron_right sets matchTextDirection, so Flutter mirrors it under RTL;
+    // a hand-picked chevron_left would cancel that mirror.
+    expect(
+      find.descendant(of: row, matching: find.byIcon(Icons.chevron_left)),
+      findsNothing,
     );
     expect(tester.takeException(), isNull);
   });

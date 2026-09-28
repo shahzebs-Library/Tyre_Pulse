@@ -111,12 +111,13 @@ final Provider<ChecklistPhotoCapture> checklistPhotoCaptureProvider =
     Provider<ChecklistPhotoCapture>((ref) => ChecklistPhotoCapture());
 
 /// The latest recorded odometer reading for one asset, for the hub's
-/// "Odometer & hour-meter reading" row. Reuses the meter-log feature's own
-/// best-effort read ([MeterLogRepository.getLastOdometer] never throws and
-/// returns null when there is no reading OR it could not be read), so the
-/// hub never renders a date it did not read.
+/// "Odometer & hour-meter reading" row. Uses the meter-log feature's HONEST
+/// read ([MeterLogRepository.readLastOdometer]): null means the server
+/// confirmed there is no reading, an error means the read failed. The row
+/// renders the two differently, so an offline device never claims "no
+/// reading yet" for an asset that has one.
 final lastChecklistOdometerProvider =
     FutureProvider.autoDispose.family<LastOdometerReading?, String>(
   (ref, assetNo) =>
-      ref.watch(meterLogRepositoryProvider).getLastOdometer(assetNo),
+      ref.watch(meterLogRepositoryProvider).readLastOdometer(assetNo),
 );

@@ -1051,9 +1051,7 @@ class _SelectedChecklistAssetCard extends StatelessWidget {
               ),
               if (onTap != null)
                 Icon(
-                  Directionality.of(context) == TextDirection.rtl
-                      ? Icons.chevron_left_rounded
-                      : Icons.chevron_right_rounded,
+                  Icons.chevron_right_rounded,
                   color: _checklistNavy(palette),
                 ),
             ],
@@ -1162,11 +1160,16 @@ class _ChecklistLanguageOption extends StatelessWidget {
           constraints: const BoxConstraints(minHeight: 52),
           decoration: BoxDecoration(
             color: selected ? accent.withValues(alpha: 0.06) : null,
-            border: BorderDirectional(
-              start: showDivider
-                  ? BorderSide(color: palette.border)
-                  : BorderSide.none,
-            ),
+            // The selected option is marked by a 1.5px accent outline, not
+            // only a faint tint: a 6% tint alone fails non-text contrast.
+            border: selected
+                ? Border.all(color: accent, width: 1.5)
+                : BorderDirectional(
+                    start: showDivider
+                        ? BorderSide(color: palette.border)
+                        : BorderSide.none,
+                  ),
+            borderRadius: selected ? BorderRadius.circular(TpRadius.md) : null,
           ),
           alignment: Alignment.center,
           padding: const EdgeInsets.symmetric(horizontal: TpSpace.xs),
@@ -1531,9 +1534,7 @@ class _RequiredChecklistRow extends StatelessWidget {
                       child: Text(actionLabel),
                     )
                   : Icon(
-                      Directionality.of(context) == TextDirection.rtl
-                          ? Icons.chevron_left_rounded
-                          : Icons.chevron_right_rounded,
+                      Icons.chevron_right_rounded,
                       color: accent,
                       semanticLabel: actionLabel,
                     );
@@ -1593,8 +1594,8 @@ class _RequiredChecklistRow extends StatelessWidget {
 
 /// "Odometer & hour-meter reading" - the last odometer date actually
 /// recorded in `odometer_logs` for this asset, and a Record action into the
-/// meter log. Loading shows a quiet line; a reading that could not be read
-/// is shown as "no reading", which is what the best-effort read reports.
+/// meter log. Loading shows a quiet line; a read that failed says it could
+/// not check, which is a different fact from "no reading recorded yet".
 class _MeterReadingRow extends StatelessWidget {
   const _MeterReadingRow({required this.reading, required this.onRecord});
 
@@ -1606,20 +1607,26 @@ class _MeterReadingRow extends StatelessWidget {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final TpPalette palette = TpPalette.of(context);
     final String locale = Localizations.localeOf(context).toLanguageTag();
-    final String subtitle = reading.when(
-      loading: () => l10n.stateLoading,
-      error: (Object error, StackTrace stackTrace) => l10n.clMockMeterNoReading,
-      data: (LastOdometerReading? value) {
-        final DateTime? at = value?.readingDate == null
-            ? null
-            : DateTime.tryParse(value!.readingDate!);
-        return at == null
-            ? l10n.clMockMeterNoReading
-            : l10n.clMockMeterLastRecorded(
-                DateFormat('d MMM', locale).format(at),
-              );
-      },
-    );
+    // Riverpod retries a failed read, which can surface as "loading" while
+    // it still carries the error: a failure is reported as a failure either
+    // way, never as a spinner and never as "no reading".
+    final String subtitle = reading.hasError && !reading.hasValue
+        ? l10n.clFixMeterUnreadable
+        : reading.when(
+            loading: () => l10n.stateLoading,
+            error: (Object error, StackTrace stackTrace) =>
+                l10n.clFixMeterUnreadable,
+            data: (LastOdometerReading? value) {
+              final DateTime? at = value?.readingDate == null
+                  ? null
+                  : DateTime.tryParse(value!.readingDate!);
+              return at == null
+                  ? l10n.clMockMeterNoReading
+                  : l10n.clMockMeterLastRecorded(
+                      DateFormat('d MMM', locale).format(at),
+                    );
+            },
+          );
     return InkWell(
       key: ChecklistsHomeScreenKeys.meterReading,
       onTap: onRecord,
@@ -1816,9 +1823,7 @@ class _ChecklistHubLink extends StatelessWidget {
             Icon(
               expanded
                   ? Icons.expand_less_rounded
-                  : Directionality.of(context) == TextDirection.rtl
-                      ? Icons.chevron_left_rounded
-                      : Icons.chevron_right_rounded,
+                  : Icons.chevron_right_rounded,
               color: accent,
             ),
           ],
@@ -2082,9 +2087,7 @@ class _ChecklistRowLayout extends StatelessWidget {
             ),
             const SizedBox(width: TpSpace.xs),
             Icon(
-              Directionality.of(context) == TextDirection.rtl
-                  ? Icons.arrow_back_rounded
-                  : Icons.arrow_forward_rounded,
+              Icons.arrow_forward_rounded,
               color: actionColor,
               size: TpSizing.iconSm,
             ),

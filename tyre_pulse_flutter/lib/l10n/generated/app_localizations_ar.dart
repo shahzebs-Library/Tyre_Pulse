@@ -6788,4 +6788,173 @@ class AppLocalizationsAr extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String myWorkFixIncomplete(String sources) {
+    return 'تم تحميل جزء فقط من $sources الخاصة بك، لذا قد يكون بعض العمل مفقودًا.';
+  }
+
+  @override
+  String get assetsFixFinIncompleteTitle => 'الأرقام غير مكتملة';
+
+  @override
+  String assetsFixFinIncompleteBody(int n) {
+    return 'الأرقام غير مكتملة: تم تسجيل أكثر من $n قيد لهذا الأصل في هذه الفترة، لذلك لا تُعرض الإجماليات. اختر فترة أقصر.';
+  }
+
+  @override
+  String get clFixMeterUnreadable => 'تعذر التحقق من آخر قراءة';
+
+  @override
+  String get assetsFixFinUnlabelledTitle => 'العملة غير مسجلة';
+
+  @override
+  String assetsFixFinUnlabelledBody(int n) {
+    return 'بنود التكلفة بدون عملة في هذه الفترة: $n. لا تُعرض الإجماليات لأن عملتها غير معروفة.';
+  }
+
+  @override
+  String assetsFixChartSummary(int months, String month, String value) {
+    return 'مخطط التكلفة الشهرية، $months شهر. أعلى شهر: $month، $value.';
+  }
+
+  @override
+  String assetsFixChartSummaryEmpty(int months) {
+    return 'مخطط التكلفة الشهرية، $months شهر. لا توجد تكلفة مسجلة.';
+  }
+
+  @override
+  String get profileFixSignatureCouldNotCheck => 'تعذّر التحقق';
+
+  @override
+  String get profileFixSignatureRemoveFailed =>
+      'تعذّرت إزالة توقيعك. تحقّق من الاتصال وحاول مرة أخرى.';
+
+  @override
+  String get designAccZoneArea => 'المنطقة';
+
+  @override
+  String get designAccZoneDamageType => 'نوع الضرر';
+
+  @override
+  String get designAccZoneLevel => 'المستوى';
+
+  @override
+  String get designAccZoneCorrectionNote => 'ملاحظة التصحيح (اختيارية)';
+
+  @override
+  String get designAccZoneNote => 'ملاحظة (اختيارية)';
+
+  @override
+  String get designAccZonePhotoUpdateFailed => 'تعذر تحديث صور الضرر عن قرب.';
+
+  @override
+  String get designAccZoneSelectedArea => 'المنطقة المحددة';
+
+  @override
+  String designAccZoneSelectedAreaNumber(int number) {
+    return 'المنطقة المحددة $number';
+  }
+
+  @override
+  String get designAccZoneFinderSuggestion => 'اقتراح Finder';
+
+  @override
+  String get designAccZoneConfirm => 'تأكيد';
+
+  @override
+  String get designAccZoneCorrect => 'تصحيح';
+
+  @override
+  String get designAccZoneConfirmedByReporter => 'تم التأكيد بواسطة المبلّغ';
+
+  @override
+  String get designAccZoneCorrectedByReporter => 'تم التصحيح بواسطة المبلّغ';
+
+  @override
+  String get designAccZoneCloseUpPhotos => 'صور الضرر عن قرب';
+
+  @override
+  String get designAccZoneAddedFromEvidence => 'تُضاف من خطوة الأدلة';
+
+  @override
+  String designAccZoneAttachedCount(int count) {
+    return '$count مرفقة';
+  }
+
+  @override
+  String get designAccZoneAddCloseUp => 'إضافة صورة قريبة';
+
+  @override
+  String get designAccZoneAddAnother => 'إضافة أخرى';
+
+  @override
+  String get designAccZoneSaveAndContinue => 'حفظ المنطقة والمتابعة';
+
+  @override
+  String get designAccZoneRemove => 'إزالة';
+
+  @override
+  String get designAccZoneSaveMarked => 'حفظ المنطقة المحددة';
+
+  @override
+  String get designAccDamageTypeDent => 'انبعاج';
+
+  @override
+  String get designAccDamageTypeScratch => 'خدش';
+
+  @override
+  String get designAccDamageTypeCracked => 'متشقق';
+
+  @override
+  String get designAccDamageTypeBroken => 'مكسور';
+
+  @override
+  String get designAccDamageTypeMissing => 'مفقود';
+
+  @override
+  String get designAccDamageTypeBent => 'منحنٍ';
+
+  @override
+  String get designAccDamageTypeOther => 'أخرى';
+
+  @override
+  String designAccReportStepLead(int step) {
+    return 'الخطوة $step';
+  }
+
+  @override
+  String designAccReportStepTail(int total, String label) {
+    return ' من $total: $label';
+  }
+
+  @override
+  String get designAccReportStepIdentifyAsset => 'تحديد الأصل';
+
+  @override
+  String get designAccReportStepIncident => 'تفاصيل الحادث';
+
+  @override
+  String get designAccReportStepPeople => 'الأشخاص والجهات الرسمية';
+
+  @override
+  String get designAccReportStepDamage => 'تحديد الضرر';
+
+  @override
+  String get designAccReportStepEvidence => 'الأدلة';
+
+  @override
+  String get designAccReportStepDocuments => 'المستندات';
+
+  @override
+  String get designAccReportStepReview => 'المراجعة والإرسال';
+
+  @override
+  String get designAccReportStepDone => 'مكتملة';
+
+  @override
+  String get designAccReportStepCurrent => 'الخطوة الحالية';
+
+  @override
+  String get designAccReportStepTodo => 'لم تبدأ';
 }

@@ -11,7 +11,7 @@ import '../../my_work/my_work_test_support.dart';
 
 const CalendarScreen _screen = CalendarScreen(route: CalendarRoute());
 
-MyWorkGateway _gateway() => MyWorkGateway(
+MyWorkGateway _gateway({bool cappedPlans = false}) => MyWorkGateway(
       checklists: () async => const MyWorkChecklistData(
         assignments: <ChecklistAssignmentRecord>[
           ChecklistAssignmentRecord(
@@ -41,16 +41,19 @@ MyWorkGateway _gateway() => MyWorkGateway(
           ),
         ],
       ),
-      inspectionPlans: () async => <InspectionPlan>[
-        InspectionPlan(
-          id: 'p1',
-          assetNo: 'PUMP-014',
-          site: 'Al Quoz Yard',
-          scheduledDate: DateTime.utc(2026, 8, 28),
-          state: InspectionPlanState.due,
-          inspectionTime: '13:00',
-        ),
-      ],
+      inspectionPlans: () async => MyWorkPage<InspectionPlan>(
+        <InspectionPlan>[
+          InspectionPlan(
+            id: 'p1',
+            assetNo: 'PUMP-014',
+            site: 'Al Quoz Yard',
+            scheduledDate: DateTime.utc(2026, 8, 28),
+            state: InspectionPlanState.due,
+            inspectionTime: '13:00',
+          ),
+        ],
+        truncated: cappedPlans,
+      ),
       checklistApprovals: () async => const MyWorkQueueCount(2),
       inspectionApprovals: () async => const MyWorkQueueCount(5),
     );
@@ -83,6 +86,24 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a capped plan read says plans may be missing', (
+    WidgetTester tester,
+  ) async {
+    await pumpMyWork(tester, _screen, gateway: _gateway(cappedPlans: true));
+    expect(find.byKey(MyWorkKeys.partial), findsOneWidget);
+    expect(find.byKey(MyWorkKeys.incomplete), findsOneWidget);
+    expect(find.textContaining('inspection plans'), findsOneWidget);
+    // The plans that did load are still shown.
+    expect(find.byKey(CalendarScreenKeys.item('plan:p1')), findsOneWidget);
+  });
+
+  testWidgets('an uncapped plan read shows no partial banner', (
+    WidgetTester tester,
+  ) async {
+    await pumpMyWork(tester, _screen, gateway: _gateway());
+    expect(find.byKey(MyWorkKeys.partial), findsNothing);
+  });
+
   testWidgets('the day strip moves to tomorrow', (WidgetTester tester) async {
     await pumpMyWork(tester, _screen, gateway: _gateway());
     await tester.tap(find.byKey(CalendarScreenKeys.day(1)));
@@ -112,7 +133,7 @@ void main() {
       _screen,
       gateway: MyWorkGateway(
         inspectionPlans: () =>
-            Future<List<InspectionPlan>>.error(Exception('offline')),
+            Future<MyWorkPage<InspectionPlan>>.error(Exception('offline')),
       ),
     );
     expect(find.byKey(TpStateKeys.error), findsOneWidget);

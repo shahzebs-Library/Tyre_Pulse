@@ -317,4 +317,33 @@ void main() {
       expect(repo.fetchPageCalls.last.query.sort, TyreRecordsSort.oldestFitted);
     });
   });
+
+  group('the load time belongs to one query', () {
+    testWidgets(
+      'a filter change whose first page fails shows no stale load time',
+      (WidgetTester tester) async {
+        final FakeTyreRecordsRepository repo = FakeTyreRecordsRepository(
+          dataset: <TyreRecord>[buildTyreRecord(id: '1')],
+        );
+        await _pump(tester, access: _admin, repo: repo);
+        await tester.pumpAndSettle();
+        expect(find.textContaining('Loaded '), findsOneWidget);
+
+        repo.queueFailure(
+          const AppError(kind: AppErrorKind.validation, message: 'no'),
+        );
+        await tester.tap(
+          find.descendant(
+            of: find.byKey(TyreRecordsListKeys.statusTabs),
+            matching: find.text('Removed'),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(repo.fetchPageCalls.last.query.status, kTyreStatusRemoved);
+        expect(find.byKey(TpStateKeys.error), findsOneWidget);
+        expect(find.textContaining('Loaded '), findsNothing);
+      },
+    );
+  });
 }

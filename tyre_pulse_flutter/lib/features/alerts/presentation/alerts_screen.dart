@@ -291,7 +291,6 @@ class _AlertCard extends StatelessWidget {
     final TpPalette palette = TpPalette.of(context);
     final TpStatusColors tone = palette.forStatus(alert.status);
     final String asset = alert.assetNo ?? copy('unknownAsset');
-    final bool isRtl = TpDirection.isRtl(context);
 
     return Semantics(
       container: true,
@@ -373,9 +372,7 @@ class _AlertCard extends StatelessWidget {
             if (onTap != null) ...<Widget>[
               const SizedBox(width: TpSpace.xs),
               Icon(
-                isRtl
-                    ? Icons.chevron_left_rounded
-                    : Icons.chevron_right_rounded,
+                Icons.chevron_right_rounded,
                 color: palette.textMuted,
               ),
             ],

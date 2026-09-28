@@ -517,10 +517,15 @@ void main() {
     // inspection header (tyreMock*), fleet list, Vehicle 360 and the per-asset
     // financial report (fleetMock*), My tasks / field plan (myWork*), and the
     // checklists home, checklist approval review and profile (clMock*).
-    test('en, ar and ur each carry exactly 1964 translatable keys today', () {
-      expect(_translatableKeys(en).length, 1964);
-      expect(_translatableKeys(ar).length, 1964);
-      expect(_translatableKeys(ur).length, 1964);
+    // 1964 + 10 = 1974. Review fixes: incomplete My work read (myWorkFix*),
+    // capped/unlabelled asset costs and chart summary (assetsFix*), unreadable
+    // checklist meter (clFix*) and saved-signature states (profileFix*).
+    // 1974 + 40 = 2014. Design review: accident step progress, SLA line,
+    // report footer and damage sheet copy moved into ARB (designAcc*).
+    test('en, ar and ur each carry exactly 2014 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2014);
+      expect(_translatableKeys(ar).length, 2014);
+      expect(_translatableKeys(ur).length, 2014);
     });
   });
 

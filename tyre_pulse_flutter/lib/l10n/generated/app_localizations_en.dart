@@ -6768,4 +6768,174 @@ class AppLocalizationsEn extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String myWorkFixIncomplete(String sources) {
+    return 'Only part of your $sources could be loaded, so some work may be missing.';
+  }
+
+  @override
+  String get assetsFixFinIncompleteTitle => 'Figures are incomplete';
+
+  @override
+  String assetsFixFinIncompleteBody(int n) {
+    return 'Figures are incomplete: more than $n entries were recorded for this asset in this window, so totals are not shown. Choose a shorter period.';
+  }
+
+  @override
+  String get clFixMeterUnreadable => 'Could not check last reading';
+
+  @override
+  String get assetsFixFinUnlabelledTitle => 'Currency not recorded';
+
+  @override
+  String assetsFixFinUnlabelledBody(int n) {
+    return 'Cost lines without a currency in this period: $n. Totals are not shown because their currency is unknown.';
+  }
+
+  @override
+  String assetsFixChartSummary(int months, String month, String value) {
+    return 'Monthly cost chart, $months months. Highest month: $month, $value.';
+  }
+
+  @override
+  String assetsFixChartSummaryEmpty(int months) {
+    return 'Monthly cost chart, $months months. No cost recorded.';
+  }
+
+  @override
+  String get profileFixSignatureCouldNotCheck => 'Could not check';
+
+  @override
+  String get profileFixSignatureRemoveFailed =>
+      'Could not remove your signature. Check your connection and try again.';
+
+  @override
+  String get designAccZoneArea => 'Area';
+
+  @override
+  String get designAccZoneDamageType => 'Damage type';
+
+  @override
+  String get designAccZoneLevel => 'Level';
+
+  @override
+  String get designAccZoneCorrectionNote => 'Correction note (optional)';
+
+  @override
+  String get designAccZoneNote => 'Note (optional)';
+
+  @override
+  String get designAccZonePhotoUpdateFailed =>
+      'The close-up damage photos could not be updated.';
+
+  @override
+  String get designAccZoneSelectedArea => 'Selected area';
+
+  @override
+  String designAccZoneSelectedAreaNumber(int number) {
+    return 'Selected area $number';
+  }
+
+  @override
+  String get designAccZoneFinderSuggestion => 'Finder suggestion';
+
+  @override
+  String get designAccZoneConfirm => 'Confirm';
+
+  @override
+  String get designAccZoneCorrect => 'Correct';
+
+  @override
+  String get designAccZoneConfirmedByReporter => 'Confirmed by reporter';
+
+  @override
+  String get designAccZoneCorrectedByReporter => 'Corrected by reporter';
+
+  @override
+  String get designAccZoneCloseUpPhotos => 'Close-up damage photos';
+
+  @override
+  String get designAccZoneAddedFromEvidence => 'Added from the evidence step';
+
+  @override
+  String designAccZoneAttachedCount(int count) {
+    return '$count attached';
+  }
+
+  @override
+  String get designAccZoneAddCloseUp => 'Add close-up photo';
+
+  @override
+  String get designAccZoneAddAnother => 'Add another';
+
+  @override
+  String get designAccZoneSaveAndContinue => 'Save area and continue';
+
+  @override
+  String get designAccZoneRemove => 'Remove';
+
+  @override
+  String get designAccZoneSaveMarked => 'Save marked area';
+
+  @override
+  String get designAccDamageTypeDent => 'Dent';
+
+  @override
+  String get designAccDamageTypeScratch => 'Scratch';
+
+  @override
+  String get designAccDamageTypeCracked => 'Cracked';
+
+  @override
+  String get designAccDamageTypeBroken => 'Broken';
+
+  @override
+  String get designAccDamageTypeMissing => 'Missing';
+
+  @override
+  String get designAccDamageTypeBent => 'Bent';
+
+  @override
+  String get designAccDamageTypeOther => 'Other';
+
+  @override
+  String designAccReportStepLead(int step) {
+    return 'Step $step';
+  }
+
+  @override
+  String designAccReportStepTail(int total, String label) {
+    return ' of $total: $label';
+  }
+
+  @override
+  String get designAccReportStepIdentifyAsset => 'Identify asset';
+
+  @override
+  String get designAccReportStepIncident => 'Incident details';
+
+  @override
+  String get designAccReportStepPeople => 'People and authority';
+
+  @override
+  String get designAccReportStepDamage => 'Mark damage';
+
+  @override
+  String get designAccReportStepEvidence => 'Evidence';
+
+  @override
+  String get designAccReportStepDocuments => 'Documents';
+
+  @override
+  String get designAccReportStepReview => 'Review and submit';
+
+  @override
+  String get designAccReportStepDone => 'Completed';
+
+  @override
+  String get designAccReportStepCurrent => 'Current step';
+
+  @override
+  String get designAccReportStepTodo => 'Not started';
 }

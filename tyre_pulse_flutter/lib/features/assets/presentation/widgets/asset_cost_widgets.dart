@@ -199,66 +199,183 @@ class AssetKpiTile extends StatelessWidget {
 /// Monthly cost bars with value labels. Drawn with plain widgets - the
 /// project carries no chart package, and a handful of bars does not justify
 /// one.
+///
+/// Every month in [monthly] is drawn: the chart must never show fewer months
+/// than the total it sits beside counts. The height grows with the text
+/// scale (labels above and below the bars keep their room), and the chart is
+/// read to a screen reader as one summary instead of a bar at a time.
+///
+/// Labels never shrink below [minLabelSize] (no `FittedBox`: shrinking text
+/// back down would cancel the reader's own text size, WCAG 1.4.4). When a
+/// label is wider than its bar's slot, alternate labels are skipped instead,
+/// anchored on the latest month, and the peak month always keeps its value.
 class AssetMonthlyBars extends StatelessWidget {
   const AssetMonthlyBars({required this.monthly, super.key});
 
   final List<AssetMonthlyCost> monthly;
 
+  /// Tallest bar, in logical pixels.
+  static const double barHeight = 110;
+
+  /// Smallest label font size, before the reader's text scale.
+  static const double minLabelSize = 12;
+
+  /// Indices whose label is drawn when each label needs [step] slots: the
+  /// [pinned] index first (when given), then the latest month backwards,
+  /// never closer than [step] to a label already chosen.
+  static Set<int> labelIndices(int count, int step, {int? pinned}) {
+    final Set<int> chosen = <int>{if (pinned != null) pinned};
+    for (int i = count - 1; i >= 0; i--) {
+      if (chosen.every((int j) => (i - j).abs() >= step)) chosen.add(i);
+    }
+    return chosen;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final TpPalette palette = TpPalette.of(context);
     final TextTheme text = Theme.of(context).textTheme;
     final String locale = Localizations.localeOf(context).toString();
-    final List<AssetMonthlyCost> shown =
-        monthly.length > 12 ? monthly.sublist(monthly.length - 12) : monthly;
-    final double max = shown.fold<double>(
-      0,
-      (double m, AssetMonthlyCost c) => c.total > m ? c.total : m,
+    final TextStyle base = text.labelSmall ?? const TextStyle();
+    final TextStyle labelStyle = base.copyWith(
+      fontSize: (base.fontSize ?? minLabelSize) < minLabelSize
+          ? minLabelSize
+          : base.fontSize,
     );
-    return SizedBox(
-      height: 170,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: <Widget>[
-          for (final AssetMonthlyCost c in shown)
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 3),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: <Widget>[
-                    if (c.total > 0)
-                      FittedBox(
-                        child: Text(
-                          formatAssetCompact(c.total),
-                          style: text.labelSmall?.copyWith(fontSize: 10),
-                        ),
-                      ),
-                    const SizedBox(height: 2),
-                    Container(
-                      height:
-                          max <= 0 ? 2 : (c.total / max * 110).clamp(2, 110),
-                      decoration: BoxDecoration(
-                        color: c.total > 0 ? palette.primary : palette.border,
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(3),
-                        ),
+    final TextScaler scaler = MediaQuery.textScalerOf(context);
+    final double lineHeight =
+        scaler.scale(labelStyle.fontSize!) * (labelStyle.height ?? 1.5);
+    // Value label + gap + bar + gap + month label, with slack for rounding.
+    final double chartHeight = barHeight + lineHeight * 2 + 2 + TpSpace.xs + 8;
+    AssetMonthlyCost? peak;
+    int? peakIndex;
+    for (int i = 0; i < monthly.length; i++) {
+      final AssetMonthlyCost c = monthly[i];
+      if (c.total > 0 && (peak == null || c.total > peak.total)) {
+        peak = c;
+        peakIndex = i;
+      }
+    }
+    final double max = peak?.total ?? 0;
+    final String summary = peak == null
+        ? l10n.assetsFixChartSummaryEmpty(monthly.length)
+        : l10n.assetsFixChartSummary(
+            monthly.length,
+            DateFormat.yMMM(locale).format(peak.month),
+            formatAssetMoney(peak.total),
+          );
+    final List<String> values = <String>[
+      for (final AssetMonthlyCost c in monthly)
+        c.total > 0 ? formatAssetCompact(c.total) : '',
+    ];
+    final List<String> months = <String>[
+      for (final AssetMonthlyCost c in monthly)
+        DateFormat.MMM(locale).format(c.month),
+    ];
+    final TextDirection direction = Directionality.of(context);
+    double widest(List<String> labels) {
+      double w = 0;
+      for (final String label in labels) {
+        if (label.isEmpty) continue;
+        final TextPainter painter = TextPainter(
+          text: TextSpan(text: label, style: labelStyle),
+          textDirection: direction,
+          textScaler: scaler,
+          maxLines: 1,
+        )..layout();
+        if (painter.width > w) w = painter.width;
+        painter.dispose();
+      }
+      return w;
+    }
+
+    final double valueWidth = widest(values);
+    final double monthWidth = widest(months);
+    return Semantics(
+      label: summary,
+      container: true,
+      excludeSemantics: true,
+      child: SizedBox(
+        height: chartHeight,
+        child: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            final int count = monthly.isEmpty ? 1 : monthly.length;
+            final double slot = constraints.maxWidth / count;
+            int stepFor(double width) {
+              if (slot <= 0) return 1;
+              final int step = ((width + TpSpace.xs) / slot).ceil();
+              return step < 1 ? 1 : step;
+            }
+
+            final Set<int> shownValues = labelIndices(
+              monthly.length,
+              stepFor(valueWidth),
+              pinned: peakIndex,
+            );
+            final Set<int> shownMonths =
+                labelIndices(monthly.length, stepFor(monthWidth));
+            // A label wider than its slot overflows centred into the
+            // neighbouring slots, which are left empty by the step above.
+            Widget label(String value, double width, TextStyle style) =>
+                SizedBox(
+                  height: lineHeight,
+                  child: OverflowBox(
+                    maxWidth: width + 1,
+                    child: Text(
+                      value,
+                      maxLines: 1,
+                      softWrap: false,
+                      style: style,
+                    ),
+                  ),
+                );
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: <Widget>[
+                for (int i = 0; i < monthly.length; i++)
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 3),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: <Widget>[
+                          if (monthly[i].total > 0 && shownValues.contains(i))
+                            label(values[i], valueWidth, labelStyle),
+                          const SizedBox(height: 2),
+                          Container(
+                            height: max <= 0
+                                ? 2
+                                : (monthly[i].total / max * barHeight)
+                                    .clamp(2, barHeight),
+                            decoration: BoxDecoration(
+                              color: monthly[i].total > 0
+                                  ? palette.primary
+                                  : palette.border,
+                              borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(3),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: TpSpace.xs),
+                          if (shownMonths.contains(i))
+                            label(
+                              months[i],
+                              monthWidth,
+                              labelStyle.copyWith(
+                                color: palette.textSecondary,
+                              ),
+                            )
+                          else
+                            SizedBox(height: lineHeight),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: TpSpace.xs),
-                    FittedBox(
-                      child: Text(
-                        DateFormat.MMM(locale).format(c.month),
-                        style: text.labelSmall?.copyWith(
-                          color: palette.textSecondary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-        ],
+                  ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }

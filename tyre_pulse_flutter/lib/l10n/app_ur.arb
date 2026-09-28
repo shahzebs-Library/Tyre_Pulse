@@ -2754,5 +2754,127 @@
         "type": "int"
       }
     }
-  }
+  },
+  "myWorkFixIncomplete": "آپ کے {sources} کا صرف ایک حصہ لوڈ ہو سکا، اس لیے کچھ کام غائب ہو سکتا ہے۔",
+  "@myWorkFixIncomplete": {
+    "placeholders": {
+      "sources": {
+        "type": "String"
+      }
+    }
+  },
+  "assetsFixFinIncompleteTitle": "اعداد و شمار نامکمل ہیں",
+  "assetsFixFinIncompleteBody": "اعداد و شمار نامکمل ہیں: اس مدت میں اس اثاثے کے لیے {n} سے زیادہ اندراجات درج ہوئے، اس لیے میزان نہیں دکھائے جا رہے۔ کم مدت منتخب کریں۔",
+  "@assetsFixFinIncompleteBody": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "clFixMeterUnreadable": "آخری ریڈنگ چیک نہیں ہو سکی",
+  "assetsFixFinUnlabelledTitle": "کرنسی درج نہیں",
+  "assetsFixFinUnlabelledBody": "اس مدت میں بغیر کرنسی کی لاگت کی لائنیں: {n}۔ میزان نہیں دکھائے جا رہے کیونکہ ان کی کرنسی معلوم نہیں۔",
+  "@assetsFixFinUnlabelledBody": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "assetsFixChartSummary": "ماہانہ لاگت کا چارٹ، {months} مہینے۔ سب سے زیادہ مہینہ: {month}، {value}۔",
+  "@assetsFixChartSummary": {
+    "placeholders": {
+      "months": {
+        "type": "int"
+      },
+      "month": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "assetsFixChartSummaryEmpty": "ماہانہ لاگت کا چارٹ، {months} مہینے۔ کوئی لاگت درج نہیں۔",
+  "@assetsFixChartSummaryEmpty": {
+    "placeholders": {
+      "months": {
+        "type": "int"
+      }
+    }
+  },
+  "profileFixSignatureCouldNotCheck": "جانچ نہیں ہو سکی",
+  "profileFixSignatureRemoveFailed": "آپ کے دستخط ہٹائے نہیں جا سکے۔ اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔",
+  "designAccZoneArea": "حصہ",
+  "designAccZoneDamageType": "نقصان کی قسم",
+  "designAccZoneLevel": "درجہ",
+  "designAccZoneCorrectionNote": "تصحیحی نوٹ (اختیاری)",
+  "designAccZoneNote": "نوٹ (اختیاری)",
+  "designAccZonePhotoUpdateFailed": "نقصان کی قریبی تصاویر اپ ڈیٹ نہیں ہو سکیں۔",
+  "designAccZoneSelectedArea": "منتخب حصہ",
+  "designAccZoneSelectedAreaNumber": "منتخب حصہ {number}",
+  "@designAccZoneSelectedAreaNumber": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "designAccZoneFinderSuggestion": "Finder کی تجویز",
+  "designAccZoneConfirm": "تصدیق",
+  "designAccZoneCorrect": "درست کریں",
+  "designAccZoneConfirmedByReporter": "رپورٹر نے تصدیق کی",
+  "designAccZoneCorrectedByReporter": "رپورٹر نے درست کیا",
+  "designAccZoneCloseUpPhotos": "نقصان کی قریبی تصاویر",
+  "designAccZoneAddedFromEvidence": "ثبوت کے مرحلے سے شامل کی جاتی ہیں",
+  "designAccZoneAttachedCount": "{count} منسلک",
+  "@designAccZoneAttachedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "designAccZoneAddCloseUp": "قریبی تصویر شامل کریں",
+  "designAccZoneAddAnother": "مزید شامل کریں",
+  "designAccZoneSaveAndContinue": "حصہ محفوظ کریں اور جاری رکھیں",
+  "designAccZoneRemove": "ہٹائیں",
+  "designAccZoneSaveMarked": "نشان زدہ حصہ محفوظ کریں",
+  "designAccDamageTypeDent": "ڈینٹ",
+  "designAccDamageTypeScratch": "خراش",
+  "designAccDamageTypeCracked": "دراڑ",
+  "designAccDamageTypeBroken": "ٹوٹا ہوا",
+  "designAccDamageTypeMissing": "غائب",
+  "designAccDamageTypeBent": "مڑا ہوا",
+  "designAccDamageTypeOther": "دیگر",
+  "designAccReportStepLead": "مرحلہ {step}",
+  "@designAccReportStepLead": {
+    "placeholders": {
+      "step": {
+        "type": "int"
+      }
+    }
+  },
+  "designAccReportStepTail": " از {total}: {label}",
+  "@designAccReportStepTail": {
+    "placeholders": {
+      "total": {
+        "type": "int"
+      },
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "designAccReportStepIdentifyAsset": "اثاثہ کی شناخت",
+  "designAccReportStepIncident": "واقعے کی تفصیلات",
+  "designAccReportStepPeople": "افراد اور حکام",
+  "designAccReportStepDamage": "نقصان کی نشاندہی",
+  "designAccReportStepEvidence": "ثبوت",
+  "designAccReportStepDocuments": "دستاویزات",
+  "designAccReportStepReview": "جائزہ اور جمع کرائیں",
+  "designAccReportStepDone": "مکمل",
+  "designAccReportStepCurrent": "موجودہ مرحلہ",
+  "designAccReportStepTodo": "شروع نہیں ہوا"
 }

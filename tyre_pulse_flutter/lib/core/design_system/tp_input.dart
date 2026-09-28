@@ -123,7 +123,10 @@ class TpInput extends StatelessWidget {
               vertical: TpSpace.md,
             ),
             enabledBorder: borderWith(
-              hasError ? palette.critical.base : palette.borderStrong,
+              hasError
+                  ? palette.critical.base
+                  // 3:1 identifying boundary for a control (WCAG 1.4.11).
+                  : palette.controlBorder,
               TpBorderWidth.hairline,
             ),
             focusedBorder: borderWith(palette.focus, TpBorderWidth.strong),

@@ -88,6 +88,25 @@ void main() {
     expect(s.mixedCurrencies, <String>['AED', 'SAR']);
   });
 
+  test('money with no currency is never labelled with a currency', () {
+    final AssetFinancialSummary s = computeAssetFinancials(
+      period: ytd,
+      lines: <AssetCostLine>[
+        _line('2026-02-01', spare: 10),
+        AssetCostLine.fromRow(<String, dynamic>{
+          'event_date': '2026-02-02',
+          'spare_cost': 25,
+          'oil_cost': 0,
+          'tyre_cost': 0,
+          'currency': null,
+        })!,
+      ],
+    );
+    expect(s.hasUnlabelledCurrency, isTrue);
+    expect(s.unlabelledLineCount, 1);
+    expect(s.currency, isNull);
+  });
+
   test('cost per km needs two readings and a positive distance', () {
     final List<AssetCostLine> lines = <AssetCostLine>[
       _line('2026-02-01', spare: 1000),

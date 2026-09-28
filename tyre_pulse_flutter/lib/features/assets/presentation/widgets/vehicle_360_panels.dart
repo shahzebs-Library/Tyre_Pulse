@@ -29,6 +29,7 @@ abstract final class Vehicle360Keys {
   static const Key timelineFilter = Key('vehicle_360.timeline.filter');
   static const Key timelinePartial = Key('vehicle_360.timeline.partial');
   static const Key costs = Key('vehicle_360.costs');
+  static const Key costsIncomplete = Key('vehicle_360.costs.incomplete');
   static const Key openReport = Key('vehicle_360.open_financial_report');
   static Key event(int index) => Key('vehicle_360.timeline.event.$index');
 }
@@ -80,6 +81,16 @@ class _AssetTimelinePanelState extends ConsumerState<AssetTimelinePanel> {
         ref.watch(canAccessModuleProvider(ModuleKey.inspect));
     final bool canAccidents =
         ref.watch(canAccessModuleProvider(ModuleKey.accidents));
+    final Set<AssetTimelineFilter> visibleSources =
+        ref.watch(assetTimelineSourcesProvider);
+    // A filter for a source the person may not see is not offered at all.
+    final List<AssetTimelineFilter> filters = <AssetTimelineFilter>[
+      AssetTimelineFilter.all,
+      for (final AssetTimelineFilter f in AssetTimelineFilter.values)
+        if (f != AssetTimelineFilter.all && visibleSources.contains(f)) f,
+    ];
+    final AssetTimelineFilter filter =
+        filters.contains(_filter) ? _filter : AssetTimelineFilter.all;
 
     return Column(
       key: Vehicle360Keys.timeline,
@@ -106,8 +117,8 @@ class _AssetTimelinePanelState extends ConsumerState<AssetTimelinePanel> {
               child: _Menu<AssetTimelineFilter>(
                 key: Vehicle360Keys.timelineFilter,
                 icon: Icons.tune_rounded,
-                value: _filter,
-                values: AssetTimelineFilter.values,
+                value: filter,
+                values: filters,
                 labelOf: (AssetTimelineFilter f) => _filterLabel(l10n, f),
                 onSelected: (AssetTimelineFilter f) =>
                     setState(() => _filter = f),
@@ -127,7 +138,7 @@ class _AssetTimelinePanelState extends ConsumerState<AssetTimelinePanel> {
           ),
           data: (AssetTimelineData d) {
             final List<AssetTimelineEvent> events = d.events
-                .where((AssetTimelineEvent e) => e.matches(_filter))
+                .where((AssetTimelineEvent e) => e.matches(filter))
                 .toList();
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -276,7 +287,6 @@ class _TimelineRow extends StatelessWidget {
       if (event.photoCount != null)
         l10n.fleetMockEventPhotos(event.photoCount!),
     ];
-    final bool rtl = Directionality.of(context) == TextDirection.rtl;
 
     return InkWell(
       onTap: onTap,
@@ -338,9 +348,7 @@ class _TimelineRow extends StatelessWidget {
             if (onTap != null)
               Center(
                 child: Icon(
-                  rtl
-                      ? Icons.chevron_left_rounded
-                      : Icons.chevron_right_rounded,
+                  Icons.chevron_right_rounded,
                   color: palette.text,
                 ),
               ),
@@ -446,6 +454,23 @@ class AssetCostSnapshotPanel extends ConsumerWidget {
             ),
             data: (AssetFinancialData d) {
               final AssetFinancialSummary s = d.summary;
+              if (d.isIncomplete) {
+                // A capped read totals a prefix of the ledger; publishing it
+                // would understate the asset's cost. Refuse the figures.
+                return Text(
+                  key: Vehicle360Keys.costsIncomplete,
+                  l10n.assetsFixFinIncompleteBody(d.truncatedAt!),
+                  style: text.bodySmall?.copyWith(
+                    color: palette.warning.onSoft,
+                  ),
+                );
+              }
+              if (s.hasUnlabelledCurrency) {
+                return Text(
+                  l10n.assetsFixFinUnlabelledBody(s.unlabelledLineCount),
+                  style: text.bodySmall,
+                );
+              }
               if (s.isMixed) {
                 return Text(
                   l10n.fleetMockFinMixedBody(s.mixedCurrencies.join(', ')),
@@ -528,9 +553,7 @@ class AssetCostSnapshotPanel extends ConsumerWidget {
                     ),
                   ),
                   Icon(
-                    Directionality.of(context) == TextDirection.rtl
-                        ? Icons.chevron_left_rounded
-                        : Icons.chevron_right_rounded,
+                    Icons.chevron_right_rounded,
                     color: palette.text,
                   ),
                 ],

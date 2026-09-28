@@ -93,6 +93,7 @@ library;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tyre_pulse/core/database/dao/queue_dao.dart'
     show QueuedMediaAttachment;
+import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/network/supabase_gateway.dart';
 import 'package:tyre_pulse/core/network/supabase_tables.dart';
 import 'package:tyre_pulse/core/sync/command_registry.dart';
@@ -182,6 +183,13 @@ abstract interface class MeterLogRepository {
   /// panel about the OLD one could be fetched.
   Future<LastOdometerReading?> getLastOdometer(String assetNo);
 
+  /// The same read as [getLastOdometer] but HONEST about failure: returns
+  /// null only when the server confirmed there is no reading, and throws
+  /// (an `AppError`) when the read itself failed or the device is offline.
+  /// For a display that must tell "no reading yet" apart from "could not
+  /// check" - `getLastOdometer` collapses both into null by design.
+  Future<LastOdometerReading?> readLastOdometer(String assetNo);
+
   /// Recent meter readings (this org, country-scoped by RLS), newest first,
   /// bounded to [limit] (matches the TS source's own default of 50). Throws
   /// on failure - this is a real informational list, not a best-effort
@@ -227,6 +235,16 @@ final class SupabaseMeterLogRepository
 
   @override
   Future<LastOdometerReading?> getLastOdometer(String assetNo) async {
+    try {
+      return await readLastOdometer(assetNo);
+    } on Object {
+      // Best-effort - see this method's own doc comment.
+      return null;
+    }
+  }
+
+  @override
+  Future<LastOdometerReading?> readLastOdometer(String assetNo) async {
     final String asset = assetNo.trim();
     if (asset.isEmpty) return null;
     try {
@@ -247,9 +265,8 @@ final class SupabaseMeterLogRepository
         odometerKm: _numOrNull(row['odometer_km']),
         readingDate: _stringOrNull(row['reading_date']),
       );
-    } on Object {
-      // Best-effort - see this method's own doc comment.
-      return null;
+    } on SupabaseFailure catch (failure) {
+      throw failure.error;
     }
   }
 

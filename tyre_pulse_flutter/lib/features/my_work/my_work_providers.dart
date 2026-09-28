@@ -17,8 +17,11 @@ import 'package:tyre_pulse/features/checklists/data/checklist_remote_models.dart
 import 'package:tyre_pulse/features/home/domain/home_work.dart';
 import 'package:tyre_pulse/features/home/home_providers.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_plan_repository.dart';
+import 'package:tyre_pulse/features/inspections/domain/inspection_plan.dart';
 import 'package:tyre_pulse/features/inspections/inspections_providers.dart';
 import 'package:tyre_pulse/features/my_work/data/my_work_loader.dart';
+import 'package:tyre_pulse/features/tasks/data/task_item.dart';
+import 'package:tyre_pulse/features/tasks/data/tasks_repository.dart';
 import 'package:tyre_pulse/features/tasks/tasks_providers.dart';
 import 'package:tyre_pulse/features/workshop/workshop_providers.dart';
 
@@ -36,6 +39,7 @@ final Provider<MyWorkGateway> myWorkGatewayProvider =
   bool can(ModuleKey key) => ref.watch(canAccessModuleProvider(key));
 
   final String userId = workspace.userId;
+  final String assignee = workspace.fullName?.trim() ?? '';
   final String? country = workspace.activeCountry;
   final String? role =
       workspace.role.rawValue.isEmpty ? null : workspace.role.rawValue;
@@ -81,14 +85,33 @@ final Provider<MyWorkGateway> myWorkGatewayProvider =
                       assignedTo: userId,
                       country: country,
                     );
-            return page.plans;
+            // Keep the RPC's row-ceiling signal: a capped country-wide page
+            // may have dropped some of this person's plans, and the screen
+            // must say so rather than show the page as the whole list.
+            return MyWorkPage<InspectionPlan>(
+              page.plans,
+              truncated: page.truncated,
+            );
           },
     workOrders: !workOrders || userId.isEmpty
         ? null
         : () => ref.read(workshopRepositoryProvider).listMyJobs(userId),
-    correctiveActions: !tasks
+    // `corrective_actions.assigned_to` holds a NAME, not an id. With no name
+    // on the profile nothing can be matched to this person, so the source is
+    // not read at all rather than showing colleagues' actions as theirs.
+    correctiveActions: !tasks || assignee.isEmpty
         ? null
-        : () => ref.read(tasksRepositoryProvider).listRecent(country: country),
+        : () async {
+            final List<TaskItem> items =
+                await ref.read(tasksRepositoryProvider).listAssignedTo(
+                      assignee: assignee,
+                      country: country,
+                    );
+            return MyWorkPage<TaskItem>(
+              items,
+              truncated: items.length >= kTasksAssignedPage,
+            );
+          },
     checklistApprovals: !approvals
         ? null
         : () async {

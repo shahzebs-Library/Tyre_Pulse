@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/permissions/access_resolver.dart';
 import 'package:tyre_pulse/core/permissions/module_registry.dart';
 import 'package:tyre_pulse/core/permissions/permission_providers.dart';
@@ -128,6 +129,7 @@ Future<ProviderContainer> _pump(
   bool canOpenVehicles = true,
   bool canLogMeter = false,
   LastOdometerReading? lastOdometer,
+  bool lastOdometerFails = false,
   int? pendingInspectionApprovals,
 }) async {
   tester.view.physicalSize = size;
@@ -159,8 +161,15 @@ Future<ProviderContainer> _pump(
       (Ref ref) async =>
           HomePendingApprovals(count: pendingInspectionApprovals ?? 0),
     ),
-    lastChecklistOdometerProvider('CP-045')
-        .overrideWith((Ref ref) async => lastOdometer),
+    lastChecklistOdometerProvider('CP-045').overrideWith(
+      (Ref ref) async => lastOdometerFails
+          ? throw const AppError(
+              kind: AppErrorKind.network,
+              message: 'offline',
+              isRetryable: true,
+            )
+          : lastOdometer,
+    ),
   ];
 
   await tester.pumpWidget(
@@ -478,6 +487,25 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets(
+      'a meter read that failed says it could not check, never "no reading"',
+      (WidgetTester tester) async {
+    await _pump(tester, canLogMeter: true, lastOdometerFails: true);
+    await tester.pumpAndSettle();
+    expect(find.byKey(ChecklistsHomeScreenKeys.meterReading), findsOneWidget);
+    expect(find.text('Could not check last reading'), findsOneWidget);
+    expect(find.text('No reading recorded yet'), findsNothing);
+  });
+
+  testWidgets('a confirmed empty meter history says no reading yet', (
+    WidgetTester tester,
+  ) async {
+    await _pump(tester, canLogMeter: true);
+    await tester.pumpAndSettle();
+    expect(find.text('No reading recorded yet'), findsOneWidget);
+    expect(find.text('Could not check last reading'), findsNothing);
+  });
 
   testWidgets('no meter permission hides the meter row entirely', (
     WidgetTester tester,

@@ -2754,5 +2754,127 @@
         "type": "int"
       }
     }
-  }
+  },
+  "myWorkFixIncomplete": "تم تحميل جزء فقط من {sources} الخاصة بك، لذا قد يكون بعض العمل مفقودًا.",
+  "@myWorkFixIncomplete": {
+    "placeholders": {
+      "sources": {
+        "type": "String"
+      }
+    }
+  },
+  "assetsFixFinIncompleteTitle": "الأرقام غير مكتملة",
+  "assetsFixFinIncompleteBody": "الأرقام غير مكتملة: تم تسجيل أكثر من {n} قيد لهذا الأصل في هذه الفترة، لذلك لا تُعرض الإجماليات. اختر فترة أقصر.",
+  "@assetsFixFinIncompleteBody": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "clFixMeterUnreadable": "تعذر التحقق من آخر قراءة",
+  "assetsFixFinUnlabelledTitle": "العملة غير مسجلة",
+  "assetsFixFinUnlabelledBody": "بنود التكلفة بدون عملة في هذه الفترة: {n}. لا تُعرض الإجماليات لأن عملتها غير معروفة.",
+  "@assetsFixFinUnlabelledBody": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "assetsFixChartSummary": "مخطط التكلفة الشهرية، {months} شهر. أعلى شهر: {month}، {value}.",
+  "@assetsFixChartSummary": {
+    "placeholders": {
+      "months": {
+        "type": "int"
+      },
+      "month": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "assetsFixChartSummaryEmpty": "مخطط التكلفة الشهرية، {months} شهر. لا توجد تكلفة مسجلة.",
+  "@assetsFixChartSummaryEmpty": {
+    "placeholders": {
+      "months": {
+        "type": "int"
+      }
+    }
+  },
+  "profileFixSignatureCouldNotCheck": "تعذّر التحقق",
+  "profileFixSignatureRemoveFailed": "تعذّرت إزالة توقيعك. تحقّق من الاتصال وحاول مرة أخرى.",
+  "designAccZoneArea": "المنطقة",
+  "designAccZoneDamageType": "نوع الضرر",
+  "designAccZoneLevel": "المستوى",
+  "designAccZoneCorrectionNote": "ملاحظة التصحيح (اختيارية)",
+  "designAccZoneNote": "ملاحظة (اختيارية)",
+  "designAccZonePhotoUpdateFailed": "تعذر تحديث صور الضرر عن قرب.",
+  "designAccZoneSelectedArea": "المنطقة المحددة",
+  "designAccZoneSelectedAreaNumber": "المنطقة المحددة {number}",
+  "@designAccZoneSelectedAreaNumber": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "designAccZoneFinderSuggestion": "اقتراح Finder",
+  "designAccZoneConfirm": "تأكيد",
+  "designAccZoneCorrect": "تصحيح",
+  "designAccZoneConfirmedByReporter": "تم التأكيد بواسطة المبلّغ",
+  "designAccZoneCorrectedByReporter": "تم التصحيح بواسطة المبلّغ",
+  "designAccZoneCloseUpPhotos": "صور الضرر عن قرب",
+  "designAccZoneAddedFromEvidence": "تُضاف من خطوة الأدلة",
+  "designAccZoneAttachedCount": "{count} مرفقة",
+  "@designAccZoneAttachedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "designAccZoneAddCloseUp": "إضافة صورة قريبة",
+  "designAccZoneAddAnother": "إضافة أخرى",
+  "designAccZoneSaveAndContinue": "حفظ المنطقة والمتابعة",
+  "designAccZoneRemove": "إزالة",
+  "designAccZoneSaveMarked": "حفظ المنطقة المحددة",
+  "designAccDamageTypeDent": "انبعاج",
+  "designAccDamageTypeScratch": "خدش",
+  "designAccDamageTypeCracked": "متشقق",
+  "designAccDamageTypeBroken": "مكسور",
+  "designAccDamageTypeMissing": "مفقود",
+  "designAccDamageTypeBent": "منحنٍ",
+  "designAccDamageTypeOther": "أخرى",
+  "designAccReportStepLead": "الخطوة {step}",
+  "@designAccReportStepLead": {
+    "placeholders": {
+      "step": {
+        "type": "int"
+      }
+    }
+  },
+  "designAccReportStepTail": " من {total}: {label}",
+  "@designAccReportStepTail": {
+    "placeholders": {
+      "total": {
+        "type": "int"
+      },
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "designAccReportStepIdentifyAsset": "تحديد الأصل",
+  "designAccReportStepIncident": "تفاصيل الحادث",
+  "designAccReportStepPeople": "الأشخاص والجهات الرسمية",
+  "designAccReportStepDamage": "تحديد الضرر",
+  "designAccReportStepEvidence": "الأدلة",
+  "designAccReportStepDocuments": "المستندات",
+  "designAccReportStepReview": "المراجعة والإرسال",
+  "designAccReportStepDone": "مكتملة",
+  "designAccReportStepCurrent": "الخطوة الحالية",
+  "designAccReportStepTodo": "لم تبدأ"
 }

@@ -228,6 +228,7 @@ class AssetFinancialSummary {
     required this.monthly,
     required this.entries,
     required this.lineCount,
+    this.unlabelledLineCount = 0,
     this.previousTotal,
     this.previousMaintenance,
     this.distanceKm,
@@ -255,6 +256,13 @@ class AssetFinancialSummary {
   final List<AssetMonthlyCost> monthly;
   final List<AssetCostEntry> entries;
   final int lineCount;
+
+  /// Lines in the period that carry money but no currency. When non-zero no
+  /// total is labelled with a currency: the money is real but its unit is
+  /// unknown, and assuming the country's currency would mislabel it.
+  final int unlabelledLineCount;
+
+  bool get hasUnlabelledCurrency => unlabelledLineCount > 0;
 
   /// The same window a year earlier. Null when nothing was recorded then, so
   /// the change percentage is not computed against an empty year.
@@ -333,6 +341,12 @@ AssetFinancialSummary computeAssetFinancials({
       if (l.currency != null) l.currency!,
   }.toList()
     ..sort();
+
+  // A line with money but no currency cannot be labelled SAR/AED/EGP by
+  // assumption. Counted separately; the summary then carries no currency.
+  final int unlabelled = current
+      .where((AssetCostLine l) => l.currency == null && l.total != 0)
+      .length;
 
   double spare = 0, oil = 0, tyre = 0;
   for (final AssetCostLine l in current) {
@@ -423,8 +437,10 @@ AssetFinancialSummary computeAssetFinancials({
 
   return AssetFinancialSummary(
     period: period,
-    currency: currencies.length == 1 ? currencies.single : null,
+    currency:
+        currencies.length == 1 && unlabelled == 0 ? currencies.single : null,
     mixedCurrencies: currencies,
+    unlabelledLineCount: unlabelled,
     spare: spare,
     lubricants: oil,
     tyres: tyre,

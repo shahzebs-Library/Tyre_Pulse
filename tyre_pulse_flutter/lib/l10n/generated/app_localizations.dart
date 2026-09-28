@@ -11884,6 +11884,306 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count, plural, =0{None} =1{1 stored on this device} other{{count} stored on this device}}'**
   String clMockDraftsStored(int count);
+
+  /// My work banner line when a source hit its row ceiling and may be incomplete
+  ///
+  /// In en, this message translates to:
+  /// **'Only part of your {sources} could be loaded, so some work may be missing.'**
+  String myWorkFixIncomplete(String sources);
+
+  /// Vehicle 360 financial report: title shown instead of totals when the cost read reached its row cap.
+  ///
+  /// In en, this message translates to:
+  /// **'Figures are incomplete'**
+  String get assetsFixFinIncompleteTitle;
+
+  /// Vehicle 360 costs: explains that the cost read stopped at the row cap so totals would be understated. n is the cap.
+  ///
+  /// In en, this message translates to:
+  /// **'Figures are incomplete: more than {n} entries were recorded for this asset in this window, so totals are not shown. Choose a shorter period.'**
+  String assetsFixFinIncompleteBody(int n);
+
+  /// Checklists hub meter row: the last odometer reading could not be read (offline or server error). Different from no reading recorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not check last reading'**
+  String get clFixMeterUnreadable;
+
+  /// Vehicle 360 costs: title when some cost lines carry no currency, so no currency-labelled total is shown.
+  ///
+  /// In en, this message translates to:
+  /// **'Currency not recorded'**
+  String get assetsFixFinUnlabelledTitle;
+
+  /// Vehicle 360 costs: body when n cost lines carry money but no currency.
+  ///
+  /// In en, this message translates to:
+  /// **'Cost lines without a currency in this period: {n}. Totals are not shown because their currency is unknown.'**
+  String assetsFixFinUnlabelledBody(int n);
+
+  /// Screen reader summary of the monthly cost bar chart.
+  ///
+  /// In en, this message translates to:
+  /// **'Monthly cost chart, {months} months. Highest month: {month}, {value}.'**
+  String assetsFixChartSummary(int months, String month, String value);
+
+  /// Screen reader summary of the monthly cost bar chart when every month is zero.
+  ///
+  /// In en, this message translates to:
+  /// **'Monthly cost chart, {months} months. No cost recorded.'**
+  String assetsFixChartSummaryEmpty(int months);
+
+  /// Profile saved-signature row and sheet when the saved signature could not be read (no signal or no session). Distinct from 'Not saved'.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not check'**
+  String get profileFixSignatureCouldNotCheck;
+
+  /// Error under the saved-signature sheet when removing the saved signature failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not remove your signature. Check your connection and try again.'**
+  String get profileFixSignatureRemoveFailed;
+
+  /// Damage zone sheet: area field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Area'**
+  String get designAccZoneArea;
+
+  /// Damage zone sheet: damage type section label.
+  ///
+  /// In en, this message translates to:
+  /// **'Damage type'**
+  String get designAccZoneDamageType;
+
+  /// Damage zone sheet: damage level section label.
+  ///
+  /// In en, this message translates to:
+  /// **'Level'**
+  String get designAccZoneLevel;
+
+  /// Damage zone sheet: optional note when the reporter corrects a suggestion.
+  ///
+  /// In en, this message translates to:
+  /// **'Correction note (optional)'**
+  String get designAccZoneCorrectionNote;
+
+  /// Damage zone sheet: optional note field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Note (optional)'**
+  String get designAccZoneNote;
+
+  /// Damage zone sheet: error when close-up photos fail to update.
+  ///
+  /// In en, this message translates to:
+  /// **'The close-up damage photos could not be updated.'**
+  String get designAccZonePhotoUpdateFailed;
+
+  /// Damage zone sheet: header when the marker has no number.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected area'**
+  String get designAccZoneSelectedArea;
+
+  /// Damage zone sheet: header naming the numbered marker.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected area {number}'**
+  String designAccZoneSelectedAreaNumber(int number);
+
+  /// Damage zone sheet: heading of the automatic damage suggestion. Finder is a product name.
+  ///
+  /// In en, this message translates to:
+  /// **'Finder suggestion'**
+  String get designAccZoneFinderSuggestion;
+
+  /// Damage zone sheet: confirm the suggestion.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm'**
+  String get designAccZoneConfirm;
+
+  /// Damage zone sheet: correct the suggestion.
+  ///
+  /// In en, this message translates to:
+  /// **'Correct'**
+  String get designAccZoneCorrect;
+
+  /// Damage zone sheet: suggestion state after confirming.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirmed by reporter'**
+  String get designAccZoneConfirmedByReporter;
+
+  /// Damage zone sheet: suggestion state after correcting.
+  ///
+  /// In en, this message translates to:
+  /// **'Corrected by reporter'**
+  String get designAccZoneCorrectedByReporter;
+
+  /// Damage zone sheet: close-up photos row title.
+  ///
+  /// In en, this message translates to:
+  /// **'Close-up damage photos'**
+  String get designAccZoneCloseUpPhotos;
+
+  /// Damage zone sheet: hint when photos are added later in the evidence step.
+  ///
+  /// In en, this message translates to:
+  /// **'Added from the evidence step'**
+  String get designAccZoneAddedFromEvidence;
+
+  /// Damage zone sheet: number of close-up photos attached.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} attached'**
+  String designAccZoneAttachedCount(int count);
+
+  /// Damage zone sheet: add the first close-up photo.
+  ///
+  /// In en, this message translates to:
+  /// **'Add close-up photo'**
+  String get designAccZoneAddCloseUp;
+
+  /// Damage zone sheet: add another close-up photo.
+  ///
+  /// In en, this message translates to:
+  /// **'Add another'**
+  String get designAccZoneAddAnother;
+
+  /// Damage zone sheet: save the new area and continue.
+  ///
+  /// In en, this message translates to:
+  /// **'Save area and continue'**
+  String get designAccZoneSaveAndContinue;
+
+  /// Damage zone sheet: remove the marked area.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get designAccZoneRemove;
+
+  /// Damage zone sheet: save an existing marked area.
+  ///
+  /// In en, this message translates to:
+  /// **'Save marked area'**
+  String get designAccZoneSaveMarked;
+
+  /// Accident damage type.
+  ///
+  /// In en, this message translates to:
+  /// **'Dent'**
+  String get designAccDamageTypeDent;
+
+  /// Accident damage type.
+  ///
+  /// In en, this message translates to:
+  /// **'Scratch'**
+  String get designAccDamageTypeScratch;
+
+  /// Accident damage type.
+  ///
+  /// In en, this message translates to:
+  /// **'Cracked'**
+  String get designAccDamageTypeCracked;
+
+  /// Accident damage type.
+  ///
+  /// In en, this message translates to:
+  /// **'Broken'**
+  String get designAccDamageTypeBroken;
+
+  /// Accident damage type.
+  ///
+  /// In en, this message translates to:
+  /// **'Missing'**
+  String get designAccDamageTypeMissing;
+
+  /// Accident damage type.
+  ///
+  /// In en, this message translates to:
+  /// **'Bent'**
+  String get designAccDamageTypeBent;
+
+  /// Accident damage type.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get designAccDamageTypeOther;
+
+  /// Accident report progress eyebrow, highlighted lead part.
+  ///
+  /// In en, this message translates to:
+  /// **'Step {step}'**
+  String designAccReportStepLead(int step);
+
+  /// Accident report progress eyebrow, remainder after the step number. Starts with a space.
+  ///
+  /// In en, this message translates to:
+  /// **' of {total}: {label}'**
+  String designAccReportStepTail(int total, String label);
+
+  /// Accident report step 1 label.
+  ///
+  /// In en, this message translates to:
+  /// **'Identify asset'**
+  String get designAccReportStepIdentifyAsset;
+
+  /// Accident report step 2 label.
+  ///
+  /// In en, this message translates to:
+  /// **'Incident details'**
+  String get designAccReportStepIncident;
+
+  /// Accident report step 3 label.
+  ///
+  /// In en, this message translates to:
+  /// **'People and authority'**
+  String get designAccReportStepPeople;
+
+  /// Accident report step 4 label.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark damage'**
+  String get designAccReportStepDamage;
+
+  /// Accident report step 5 label.
+  ///
+  /// In en, this message translates to:
+  /// **'Evidence'**
+  String get designAccReportStepEvidence;
+
+  /// Accident report step 6 label.
+  ///
+  /// In en, this message translates to:
+  /// **'Documents'**
+  String get designAccReportStepDocuments;
+
+  /// Accident report step 7 label.
+  ///
+  /// In en, this message translates to:
+  /// **'Review and submit'**
+  String get designAccReportStepReview;
+
+  /// Accident report progress: screen-reader state of a completed step.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get designAccReportStepDone;
+
+  /// Accident report progress: screen-reader state of the current step.
+  ///
+  /// In en, this message translates to:
+  /// **'Current step'**
+  String get designAccReportStepCurrent;
+
+  /// Accident report progress: screen-reader state of a step not reached yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Not started'**
+  String get designAccReportStepTodo;
 }
 
 class _AppLocalizationsDelegate

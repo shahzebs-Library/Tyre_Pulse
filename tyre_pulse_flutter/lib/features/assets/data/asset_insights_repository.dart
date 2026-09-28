@@ -48,13 +48,15 @@ typedef AssetScope = ({String assetNo, String? country});
 /// The raw reads, behind an interface so the orchestration is testable with
 /// a plain fake.
 abstract interface class AssetInsightsSource {
-  Future<List<Map<String, dynamic>>> costLines(
+  /// Paged and capped: [PagedRows.truncated] is true when the cap was hit, so
+  /// the caller can refuse to publish the partial rows as a complete ledger.
+  Future<PagedRows<Map<String, dynamic>>> costLines(
     AssetScope scope, {
     required String fromIso,
     required String toIso,
   });
 
-  Future<List<Map<String, dynamic>>> jobCards(
+  Future<PagedRows<Map<String, dynamic>>> jobCards(
     AssetScope scope, {
     required String fromIso,
     required String toIso,
@@ -81,11 +83,13 @@ final class SupabaseAssetInsightsSource
 
   final SupabaseClient _client;
 
-  static const int _maxRows = 5000;
+  /// Row cap for one asset's ledger read. Public so the screen can name the
+  /// figure when a read hits it.
+  static const int maxRows = 5000;
   static const int _timelineLimit = 60;
 
   @override
-  Future<List<Map<String, dynamic>>> costLines(
+  Future<PagedRows<Map<String, dynamic>>> costLines(
     AssetScope scope, {
     required String fromIso,
     required String toIso,
@@ -104,13 +108,13 @@ final class SupabaseAssetInsightsSource
         if (scope.country != null) q = q.eq('country', scope.country!);
         return q.order('event_date').order('id').range(from, to);
       }),
-      maxRows: _maxRows,
+      maxRows: maxRows,
     );
-    return paged.rows;
+    return paged;
   }
 
   @override
-  Future<List<Map<String, dynamic>>> jobCards(
+  Future<PagedRows<Map<String, dynamic>>> jobCards(
     AssetScope scope, {
     required String fromIso,
     required String toIso,
@@ -129,9 +133,9 @@ final class SupabaseAssetInsightsSource
         if (scope.country != null) q = q.eq('country', scope.country!);
         return q.order('opened_at').order('id').range(from, to);
       }),
-      maxRows: _maxRows,
+      maxRows: maxRows,
     );
-    return paged.rows;
+    return paged;
   }
 
   @override
@@ -219,9 +223,17 @@ class AssetFinancialData {
   const AssetFinancialData({
     required this.summary,
     required this.labourIncluded,
+    this.truncatedAt,
   });
 
   final AssetFinancialSummary summary;
+
+  /// Non-null when the expense grid or the job cards reached the row cap:
+  /// the value is that cap. The rows then are a PREFIX of the ledger, so any
+  /// total built from them is understated and must not be shown as complete.
+  final int? truncatedAt;
+
+  bool get isIncomplete => truncatedAt != null;
 
   /// False when the job cards could not be read: the totals then carry the
   /// grid only, and the screen says so.
@@ -269,9 +281,9 @@ final class AssetInsightsRepository {
     final String toIso = AssetCostPeriod.isoDay(period.to);
     final String periodFrom = AssetCostPeriod.isoDay(period.from);
 
-    final List<Map<String, dynamic>> lineRows;
+    final PagedRows<Map<String, dynamic>> linePage;
     try {
-      lineRows = await _source.costLines(
+      linePage = await _source.costLines(
         scope,
         fromIso: fromIso,
         toIso: toIso,
@@ -279,16 +291,20 @@ final class AssetInsightsRepository {
     } on SupabaseFailure catch (failure) {
       throw failure.error;
     }
+    final List<Map<String, dynamic>> lineRows = linePage.rows;
+    bool truncated = linePage.truncated;
 
     List<Map<String, dynamic>> cardRows = const <Map<String, dynamic>>[];
     bool labourIncluded = scope.country != null;
     if (labourIncluded) {
       try {
-        cardRows = await _source.jobCards(
+        final PagedRows<Map<String, dynamic>> cardPage = await _source.jobCards(
           scope,
           fromIso: fromIso,
           toIso: toIso,
         );
+        cardRows = cardPage.rows;
+        truncated = truncated || cardPage.truncated;
       } on Object {
         labourIncluded = false;
       }
@@ -321,6 +337,7 @@ final class AssetInsightsRepository {
 
     return AssetFinancialData(
       labourIncluded: labourIncluded,
+      truncatedAt: truncated ? SupabaseAssetInsightsSource.maxRows : null,
       summary: computeAssetFinancials(
         period: period,
         lines: lineRows
@@ -339,17 +356,28 @@ final class AssetInsightsRepository {
     );
   }
 
-  /// Reads every timeline source since [from]. Throws the first [AppError]
-  /// only when EVERY source failed.
+  /// Reads every timeline source in [sources] since [from]. Throws the first
+  /// [AppError] only when EVERY requested source failed.
+  ///
+  /// [sources] is the set the person may see (see
+  /// `assetTimelineSourcesProvider`). A source outside it is never queried,
+  /// so a person without, for example, Accidents never receives an accident
+  /// row - hiding it in the UI after reading it would still put it on the
+  /// device.
   Future<AssetTimelineData> loadTimeline(
     AssetScope scope,
-    DateTime from,
-  ) async {
+    DateTime from, {
+    required Set<AssetTimelineFilter> sources,
+  }) async {
     final String fromIso = AssetCostPeriod.isoDay(from);
     final List<AssetTimelineEvent> events = <AssetTimelineEvent>[];
     final List<AssetTimelineFilter> failed = <AssetTimelineFilter>[];
+    final List<AssetTimelineFilter> requested = <AssetTimelineFilter>[
+      for (final AssetTimelineFilter s in timelineSources)
+        if (sources.contains(s)) s,
+    ];
     AppError? firstError;
-    for (final AssetTimelineFilter source in timelineSources) {
+    for (final AssetTimelineFilter source in requested) {
       try {
         final List<Map<String, dynamic>> rows =
             await _source.timelineRows(scope, source, fromIso: fromIso);
@@ -374,7 +402,9 @@ final class AssetInsightsRepository {
         firstError ??= failure.error;
       }
     }
-    if (failed.length == timelineSources.length && firstError != null) {
+    if (requested.isNotEmpty &&
+        failed.length == requested.length &&
+        firstError != null) {
       throw firstError;
     }
     final DateTime fromDay = DateTime(from.year, from.month, from.day);

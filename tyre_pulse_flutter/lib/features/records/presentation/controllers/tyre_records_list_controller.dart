@@ -209,6 +209,8 @@ final class TyreRecordsListController extends Notifier<TyreRecordsListState> {
 
   void _applyQueryChange(TyreRecordsQuery next) {
     if (next == state.query) return;
+    // The old query's load time must not be shown against the new one.
+    state = state.copyWith(clearLoadedAt: true);
     unawaited(_reset(next));
   }
 
@@ -273,6 +275,7 @@ final class TyreRecordsListController extends Notifier<TyreRecordsListState> {
           items: const <TyreRecord>[],
           isLoadingMore: false,
           loadError: appError,
+          clearLoadedAt: true,
         );
       } else {
         // Roll back: the page that just failed is retried on the next

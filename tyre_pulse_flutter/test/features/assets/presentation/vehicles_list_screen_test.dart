@@ -556,4 +556,65 @@ void main() {
     expect(find.byKey(VehiclesListScreenKeys.asset('v3')), findsOneWidget);
     expect(find.byKey(VehiclesListScreenKeys.scanner), findsOneWidget);
   });
+
+  testWidgets(
+      'group tabs announce selection, keep a minimum (not fixed) height at a '
+      'large text scale, and read as unselected while a search bypasses them',
+      (WidgetTester tester) async {
+    final SemanticsHandle semantics = tester.ensureSemantics();
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await _pump(
+      tester,
+      _resolved(
+        const VehicleFleetListLoaded(
+          assets: <VehicleAsset>[
+            VehicleAsset(id: 'v1', assetNo: 'TM514', status: 'Active'),
+            VehicleAsset(id: 'v2', assetNo: 'GN101', status: 'Active'),
+          ],
+          truncated: false,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
+    final Finder stationary =
+        find.byKey(VehiclesListScreenKeys.groupTab(FleetClassGroup.stationary));
+    expect(tester.getSize(stationary).height, greaterThanOrEqualTo(44));
+    // At 2x the tab row scrolls horizontally; bring the tab on screen.
+    await tester.ensureVisible(stationary);
+    await tester.pumpAndSettle();
+    await tester.tap(stationary);
+    await tester.pumpAndSettle();
+    expect(
+      tester.getSemantics(stationary),
+      matchesSemantics(
+        isButton: true,
+        isSelected: true,
+        hasSelectedState: true,
+        isEnabled: true,
+        hasEnabledState: true,
+        isInMutuallyExclusiveGroup: true,
+        hasTapAction: true,
+        hasFocusAction: true,
+        isFocusable: true,
+        label: 'Stationary',
+      ),
+    );
+
+    await tester.enterText(find.byType(TextField), 'TM514');
+    await tester.pumpAndSettle();
+    expect(
+      tester.getSemantics(stationary),
+      matchesSemantics(
+        isButton: true,
+        hasSelectedState: true,
+        hasEnabledState: true,
+        isInMutuallyExclusiveGroup: true,
+        label: 'Stationary',
+      ),
+    );
+    semantics.dispose();
+  });
 }

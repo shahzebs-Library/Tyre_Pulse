@@ -561,9 +561,7 @@ class _TyreRecordCard extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(top: TpSpace.lg),
                 child: Icon(
-                  TpDirection.isRtl(context)
-                      ? Icons.chevron_left
-                      : Icons.chevron_right,
+                  Icons.chevron_right,
                   color: palette.textMuted,
                 ),
               ),
@@ -1007,7 +1005,7 @@ class _ListStatusLine extends StatelessWidget {
         : l10n.tyreMockSortNewest;
     return Padding(
       key: TyreRecordsListKeys.statusLine,
-      padding: const EdgeInsets.fromLTRB(
+      padding: const EdgeInsetsDirectional.fromSTEB(
         TpSpace.lg,
         TpSpace.xs,
         TpSpace.sm,

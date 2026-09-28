@@ -343,6 +343,9 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
         _GroupTabs(
           key: VehiclesListScreenKeys.groupTabs,
           selected: _group,
+          // A search covers the whole fleet and bypasses the group, so while
+          // one is typed no tab may look selected (see the filter above).
+          searching: _searchTerm.trim().isNotEmpty,
           onSelect: (FleetClassGroup? g) => setState(() => _group = g),
         ),
         const SizedBox(height: TpSpace.sm),
@@ -500,11 +503,22 @@ class _ScanBar extends StatelessWidget {
 }
 
 /// All / Vehicles / Plant and equipment / Stationary, underline tabs.
+///
+/// Each tab is a selectable button in one mutually exclusive group, and
+/// carries a MINIMUM (not fixed) touch height so a large text scale grows the
+/// row instead of clipping the label. While [searching], the search covers
+/// the whole fleet, so no tab reads as selected and the tabs are disabled.
 class _GroupTabs extends StatelessWidget {
-  const _GroupTabs({required this.selected, required this.onSelect, super.key});
+  const _GroupTabs({
+    required this.selected,
+    required this.onSelect,
+    this.searching = false,
+    super.key,
+  });
 
   final FleetClassGroup? selected;
   final ValueChanged<FleetClassGroup?> onSelect;
+  final bool searching;
 
   @override
   Widget build(BuildContext context) {
@@ -521,40 +535,62 @@ class _GroupTabs extends StatelessWidget {
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: palette.border)),
       ),
-      height: TpSizing.minTouchTarget,
-      child: ListView(
+      child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
-        children: <Widget>[
-          for (final (FleetClassGroup? group, String label) in tabs)
-            InkWell(
-              key: VehiclesListScreenKeys.groupTab(group),
-              onTap: () => onSelect(group),
-              child: Container(
-                alignment: Alignment.center,
-                padding: const EdgeInsets.symmetric(horizontal: TpSpace.md),
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color:
-                          selected == group ? palette.text : Colors.transparent,
-                      width: 3,
-                    ),
-                  ),
-                ),
-                child: Text(
-                  label,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: selected == group
-                            ? palette.text
-                            : palette.textSecondary,
-                        fontWeight: selected == group
-                            ? FontWeight.w800
-                            : FontWeight.w500,
-                      ),
-                ),
+        child: Row(
+          children: <Widget>[
+            for (final (FleetClassGroup? group, String label) in tabs)
+              _groupTab(context, palette, group, label),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _groupTab(
+    BuildContext context,
+    TpPalette palette,
+    FleetClassGroup? group,
+    String label,
+  ) {
+    final bool on = !searching && selected == group;
+    return Semantics(
+      button: true,
+      selected: on,
+      enabled: !searching,
+      inMutuallyExclusiveGroup: true,
+      child: InkWell(
+        key: VehiclesListScreenKeys.groupTab(group),
+        onTap: searching ? null : () => onSelect(group),
+        child: Container(
+          constraints: const BoxConstraints(
+            minHeight: TpSizing.minTouchTarget,
+          ),
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(
+            horizontal: TpSpace.md,
+            vertical: TpSpace.xs,
+          ),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: on ? palette.text : Colors.transparent,
+                width: 3,
               ),
             ),
-        ],
+          ),
+          child: Text(
+            label,
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: searching
+                      ? palette.textMuted
+                      : on
+                          ? palette.text
+                          : palette.textSecondary,
+                  fontWeight: on ? FontWeight.w800 : FontWeight.w500,
+                ),
+          ),
+        ),
       ),
     );
   }
@@ -633,7 +669,7 @@ class _FleetFilterMenu extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: TpSpace.md),
         decoration: BoxDecoration(
           color: palette.surface,
-          border: Border.all(color: palette.borderStrong),
+          border: Border.all(color: palette.controlBorder),
           borderRadius: BorderRadius.circular(TpRadius.md),
         ),
         child: Row(
@@ -703,8 +739,8 @@ class _FleetAssetCard extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
-          child: SizedBox(
-            height: 124,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 124),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: <Widget>[
@@ -740,15 +776,51 @@ class _FleetAssetCard extends StatelessWidget {
                 const SizedBox(width: TpSpace.md),
                 Expanded(
                   child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      TpIdentifierText(
-                        identity,
-                        style: text.titleMedium?.copyWith(
-                          color: palette.text,
-                          fontWeight: FontWeight.w900,
-                        ),
+                      // Identity and status share the title row, as in
+                      // the fleet mock: the status belongs to the vehicle,
+                      // not to the chevron.
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Expanded(
+                            child: TpIdentifierText(
+                              identity,
+                              style: text.titleMedium?.copyWith(
+                                color: palette.text,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                          if (displayStatus?.isNotEmpty == true) ...<Widget>[
+                            const SizedBox(width: TpSpace.sm),
+                            Flexible(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: TpSpace.sm,
+                                  vertical: 5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: statusColors.soft,
+                                  borderRadius:
+                                      BorderRadius.circular(TpRadius.md),
+                                  border: Border.all(color: statusColors.base),
+                                ),
+                                child: Text(
+                                  displayStatus!,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: text.labelSmall?.copyWith(
+                                    color: statusColors.onSoft,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                       if (description != null) ...<Widget>[
                         const SizedBox(height: 3),
@@ -756,7 +828,7 @@ class _FleetAssetCard extends StatelessWidget {
                           description,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: text.labelSmall?.copyWith(
+                          style: text.bodySmall?.copyWith(
                             color: palette.textSecondary,
                           ),
                         ),
@@ -806,39 +878,11 @@ class _FleetAssetCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(width: TpSpace.sm),
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: <Widget>[
-                    if (displayStatus?.isNotEmpty == true)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: TpSpace.sm,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: statusColors.soft,
-                          borderRadius: BorderRadius.circular(TpRadius.md),
-                          border: Border.all(color: statusColors.base),
-                        ),
-                        child: Text(
-                          displayStatus!,
-                          style: text.labelSmall?.copyWith(
-                            color: statusColors.onSoft,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: TpSpace.md),
-                    Icon(
-                      Directionality.of(context) == TextDirection.rtl
-                          ? Icons.chevron_left_rounded
-                          : Icons.chevron_right_rounded,
-                      color: palette.text,
-                      size: TpSizing.iconLg,
-                    ),
-                  ],
+                const SizedBox(width: TpSpace.xs),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: palette.text,
+                  size: TpSizing.iconLg,
                 ),
                 const SizedBox(width: TpSpace.sm),
               ],

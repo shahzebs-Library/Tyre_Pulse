@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show SemanticsNode;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
@@ -21,6 +22,7 @@ const TasksScreen _screen = TasksScreen(route: TasksRoute());
 MyWorkGateway _gateway({
   bool failTasks = false,
   bool bilingual = false,
+  bool cappedTasks = false,
 }) =>
     MyWorkGateway(
       checklists: () async => MyWorkChecklistData(
@@ -95,8 +97,11 @@ MyWorkGateway _gateway({
         ),
       ],
       correctiveActions: failTasks
-          ? () => Future<List<TaskItem>>.error(Exception('offline'))
-          : () async => const <TaskItem>[],
+          ? () => Future<MyWorkPage<TaskItem>>.error(Exception('offline'))
+          : () async => MyWorkPage<TaskItem>(
+                const <TaskItem>[],
+                truncated: cappedTasks,
+              ),
       checklistApprovals: () async => const MyWorkQueueCount(2),
       inspectionApprovals: () async => const MyWorkQueueCount(5),
     );
@@ -173,6 +178,89 @@ void main() {
     expect(find.text('Record odometer and hours'), findsOneWidget);
   });
 
+  testWidgets('a capped source is flagged as possibly incomplete', (
+    WidgetTester tester,
+  ) async {
+    await pumpMyWork(tester, _screen, gateway: _gateway(cappedTasks: true));
+    expect(find.byKey(MyWorkKeys.partial), findsOneWidget);
+    expect(find.byKey(MyWorkKeys.incomplete), findsOneWidget);
+    expect(
+      find.text(
+        'Only part of your corrective actions could be loaded, so some '
+        'work may be missing.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Record odometer and hours'), findsOneWidget);
+  });
+
+  testWidgets('status tabs announce which one is selected', (
+    WidgetTester tester,
+  ) async {
+    final SemanticsHandle handle = tester.ensureSemantics();
+    await pumpMyWork(tester, _screen, gateway: _gateway());
+
+    SemanticsNode node(Key key) => tester.getSemantics(
+          find
+              .ancestor(
+                of: find.byKey(key),
+                matching: find.byType(Semantics),
+              )
+              .first,
+        );
+
+    expect(
+      node(TasksScreenKeys.todayTab),
+      matchesSemantics(
+        label: 'Assigned',
+        isButton: true,
+        hasSelectedState: true,
+        isSelected: true,
+        isInMutuallyExclusiveGroup: true,
+        hasTapAction: true,
+        isFocusable: true,
+        hasFocusAction: true,
+      ),
+    );
+    expect(
+      node(TasksScreenKeys.completedTab),
+      matchesSemantics(
+        label: 'Completed',
+        isButton: true,
+        hasSelectedState: true,
+        isInMutuallyExclusiveGroup: true,
+        hasTapAction: true,
+        isFocusable: true,
+        hasFocusAction: true,
+      ),
+    );
+
+    await tester.tap(find.byKey(TasksScreenKeys.completedTab));
+    await tester.pumpAndSettle();
+    expect(
+      node(TasksScreenKeys.completedTab),
+      matchesSemantics(
+        label: 'Completed',
+        isButton: true,
+        hasSelectedState: true,
+        isSelected: true,
+        isInMutuallyExclusiveGroup: true,
+        hasTapAction: true,
+        isFocusable: true,
+        hasFocusAction: true,
+      ),
+    );
+    handle.dispose();
+  });
+
+  testWidgets('a complete load shows no partial banner', (
+    WidgetTester tester,
+  ) async {
+    await pumpMyWork(tester, _screen, gateway: _gateway());
+    expect(find.byKey(MyWorkKeys.partial), findsNothing);
+    expect(find.byKey(MyWorkKeys.incomplete), findsNothing);
+  });
+
   testWidgets('every source failing renders a retryable error state', (
     WidgetTester tester,
   ) async {
@@ -181,7 +269,7 @@ void main() {
       _screen,
       gateway: MyWorkGateway(
         correctiveActions: () =>
-            Future<List<TaskItem>>.error(Exception('offline')),
+            Future<MyWorkPage<TaskItem>>.error(Exception('offline')),
       ),
     );
     expect(find.byKey(TpStateKeys.error), findsOneWidget);
@@ -206,7 +294,7 @@ void main() {
       tester,
       _screen,
       gateway: MyWorkGateway(
-        correctiveActions: () async => const <TaskItem>[],
+        correctiveActions: () async => const MyWorkPage<TaskItem>(<TaskItem>[]),
       ),
     );
     expect(find.byKey(TpStateKeys.empty), findsOneWidget);
@@ -221,7 +309,7 @@ void main() {
       _screen,
       access: const AccessState(role: UserRole.known(RoleId.reporter)),
       gateway: MyWorkGateway(
-        correctiveActions: () async => const <TaskItem>[],
+        correctiveActions: () async => const MyWorkPage<TaskItem>(<TaskItem>[]),
       ),
     );
     expect(find.byKey(MyWorkKeys.approvals), findsNothing);
@@ -239,7 +327,57 @@ void main() {
       Directionality.of(tester.element(find.text('مهامي'))),
       TextDirection.rtl,
     );
+    // chevron_right mirrors itself in RTL (matchTextDirection); picking
+    // chevron_left for RTL would flip it back to pointing the LTR way.
+    expect(find.byIcon(Icons.chevron_left_rounded), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'a narrow phone at 2x text keeps the title whole and drops Report an '
+      'issue below the date line', (WidgetTester tester) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await pumpMyWork(tester, _screen, gateway: _gateway());
+    tester.view.physicalSize = const Size(320, 1600);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    final Rect title = tester.getRect(find.text('My tasks'));
+    final Rect report = tester.getRect(find.byKey(TasksScreenKeys.reportIssue));
+    expect(report.top, greaterThanOrEqualTo(title.bottom));
+    // The title is laid out on one line, not squeezed into a column.
+    expect(title.height, lessThan(title.width));
+  });
+
+  testWidgets('a standard phone keeps Report an issue beside the title', (
+    WidgetTester tester,
+  ) async {
+    await pumpMyWork(tester, _screen, gateway: _gateway());
+    expect(tester.takeException(), isNull);
+    final Rect title = tester.getRect(find.text('My tasks'));
+    final Rect report = tester.getRect(find.byKey(TasksScreenKeys.reportIssue));
+    expect(report.top, lessThan(title.bottom));
+  });
+
+  testWidgets('search and filter are both outlined 48dp controls', (
+    WidgetTester tester,
+  ) async {
+    await pumpMyWork(tester, _screen, gateway: _gateway());
+    for (final Key key in <Key>[
+      TasksScreenKeys.searchToggle,
+      TasksScreenKeys.filter,
+    ]) {
+      final Size size = tester.getSize(find.byKey(key));
+      expect(size.height, greaterThanOrEqualTo(48), reason: '$key');
+      expect(size.width, greaterThanOrEqualTo(48), reason: '$key');
+    }
+    final IconButton filter = tester.widget<IconButton>(
+      find.descendant(
+        of: find.byKey(TasksScreenKeys.filter),
+        matching: find.byType(IconButton),
+      ),
+    );
+    expect(filter.style?.side?.resolve(<WidgetState>{}), isNotNull);
   });
 
   testWidgets('compact phone layout does not overflow', (

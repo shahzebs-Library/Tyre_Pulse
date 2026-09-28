@@ -18,6 +18,26 @@ void main() {
     });
   });
 
+  group('tasksAssignedTo', () {
+    const List<TaskItem> items = <TaskItem>[
+      TaskItem(id: 'a', title: 'Mine', assignedTo: 'Field Operator'),
+      TaskItem(id: 'b', title: 'Colleague', assignedTo: 'Eng Vinay'),
+      TaskItem(id: 'c', title: 'Unassigned'),
+    ];
+
+    test('keeps only actions assigned to exactly this person', () {
+      expect(
+        tasksAssignedTo(items, ' Field Operator ').map((TaskItem t) => t.id),
+        <String>['a'],
+      );
+    });
+
+    test('a blank assignee matches nobody, never everyone', () {
+      expect(tasksAssignedTo(items, ''), isEmpty);
+      expect(tasksAssignedTo(items, '   '), isEmpty);
+    });
+  });
+
   group('TaskItem.fromRow', () {
     test('decodes the verified corrective_actions projection', () {
       final TaskItem task = TaskItem.fromRow(<String, Object?>{

@@ -63,8 +63,10 @@ class TpSegmented<T> extends StatelessWidget {
       decoration: BoxDecoration(
         color: palette.surfaceAlt,
         borderRadius: BorderRadius.circular(TpRadius.pill),
+        // controlBorder, not border: the track outline is what tells a reader
+        // this is a control (WCAG 1.4.11, 3:1).
         border: Border.all(
-          color: palette.border,
+          color: palette.controlBorder,
           width: TpBorderWidth.hairline,
         ),
       ),

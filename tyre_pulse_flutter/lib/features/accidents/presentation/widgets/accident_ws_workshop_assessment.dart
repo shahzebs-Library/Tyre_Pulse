@@ -32,11 +32,16 @@ class AccidentWorkshopAssessmentMockWorkspace extends ConsumerStatefulWidget {
   const AccidentWorkshopAssessmentMockWorkspace({
     required this.snapshot,
     required this.onNavigate,
+    this.showWorkstreamHeader = true,
     super.key,
   });
 
   final AccidentCaseSnapshot snapshot;
   final void Function(String workspaceKey) onNavigate;
+
+  /// False when the case screen already shows the single workstream header
+  /// above this workspace, so the step is never stated twice.
+  final bool showWorkstreamHeader;
 
   @override
   ConsumerState<AccidentWorkshopAssessmentMockWorkspace> createState() =>
@@ -162,11 +167,13 @@ class _State extends ConsumerState<AccidentWorkshopAssessmentMockWorkspace> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        AccidentWorkstreamHeader(
-          snapshot: widget.snapshot,
-          workstreamKey: 'assessment',
-        ),
-        const SizedBox(height: TpSpace.md),
+        if (widget.showWorkstreamHeader) ...<Widget>[
+          AccidentWorkstreamHeader(
+            snapshot: widget.snapshot,
+            workstreamKey: 'assessment',
+          ),
+          const SizedBox(height: TpSpace.md),
+        ],
         AccidentWsNotes(notes: bundle.notes),
         _VehicleCard(
           record: _record,

@@ -8,7 +8,9 @@
 /// - inspection plans: `InspectionPlanRepository.myPlans` (this profile only);
 /// - work orders: `WorkshopRepository.listMyJobs` (`wo_assignments` +
 ///   `work_orders.assigned_owner_id`);
-/// - corrective actions: `TasksRepository.listRecent`;
+/// - corrective actions: `TasksRepository.listAssignedTo` (the signed-in
+///   person's name, matched on the server exactly as the production "Mine"
+///   view matches it);
 /// - approval queue sizes: the checklist and inspection approval queues.
 ///
 /// # One source failing is not the screen failing
@@ -18,6 +20,13 @@
 /// checked - it never renders a failed read as "nothing assigned". Only when
 /// every attempted source failed does the load throw, so the screen shows
 /// its error state with Retry.
+///
+/// # A capped read is not a complete read
+///
+/// A source read as a bounded page that came back full (the schedule RPC's
+/// row ceiling, the corrective-action page) may be missing work. It is
+/// RECORDED in [MyWorkSnapshot.incomplete] and the screen says so beside the
+/// failed sources, instead of presenting the page as everything assigned.
 library;
 
 import 'package:flutter/foundation.dart';
@@ -61,6 +70,16 @@ final class MyWorkQueueCount {
   final bool capped;
 }
 
+/// A bounded page of one source. [truncated] when the read hit its ceiling,
+/// so items may exist that [items] does not contain.
+@immutable
+final class MyWorkPage<T> {
+  const MyWorkPage(this.items, {this.truncated = false});
+
+  final List<T> items;
+  final bool truncated;
+}
+
 /// The real reads, one function per source. Screens never build this; the
 /// provider does, and tests replace it.
 @immutable
@@ -77,9 +96,9 @@ final class MyWorkGateway {
 
   final Future<MyWorkChecklistData> Function()? checklists;
   final Future<List<ChecklistDraftHeader>> Function()? drafts;
-  final Future<List<InspectionPlan>> Function()? inspectionPlans;
+  final Future<MyWorkPage<InspectionPlan>> Function()? inspectionPlans;
   final Future<List<WorkshopJob>> Function()? workOrders;
-  final Future<List<TaskItem>> Function()? correctiveActions;
+  final Future<MyWorkPage<TaskItem>> Function()? correctiveActions;
   final Future<MyWorkQueueCount> Function()? checklistApprovals;
   final Future<MyWorkQueueCount> Function()? inspectionApprovals;
 }
@@ -91,6 +110,7 @@ final class MyWorkSnapshot {
     required this.loadedAt,
     this.attempted = const <MyWorkSource>{},
     this.failed = const <MyWorkSource>{},
+    this.incomplete = const <MyWorkSource>{},
     this.templateLangs = const <String, Set<String>>{},
     this.checklistApprovals,
     this.inspectionApprovals,
@@ -101,6 +121,9 @@ final class MyWorkSnapshot {
   final Set<MyWorkSource> attempted;
   final Set<MyWorkSource> failed;
 
+  /// Sources that loaded but hit their row ceiling, so work may be missing.
+  final Set<MyWorkSource> incomplete;
+
   /// Template id -> checklist content languages that template carries.
   final Map<String, Set<String>> templateLangs;
 
@@ -109,7 +132,9 @@ final class MyWorkSnapshot {
   final MyWorkQueueCount? checklistApprovals;
   final MyWorkQueueCount? inspectionApprovals;
 
-  bool get partial => failed.isNotEmpty;
+  /// True when any part of the list could not be fully checked: a source
+  /// failed, or came back capped.
+  bool get partial => failed.isNotEmpty || incomplete.isNotEmpty;
 
   /// Languages carried by the checklists in [items].
   Set<String> contentLanguagesFor(Iterable<MyWorkItem> items) {
@@ -171,6 +196,14 @@ Future<MyWorkSnapshot> loadMyWork(
     throw MyWorkLoadFailure(firstError ?? StateError('no source'));
   }
 
+  final MyWorkPage<InspectionPlan>? plans =
+      results[2] as MyWorkPage<InspectionPlan>?;
+  final MyWorkPage<TaskItem>? corrective = results[4] as MyWorkPage<TaskItem>?;
+  final Set<MyWorkSource> incomplete = <MyWorkSource>{
+    if (plans?.truncated ?? false) MyWorkSource.inspectionPlans,
+    if (corrective?.truncated ?? false) MyWorkSource.correctiveActions,
+  };
+
   final MyWorkChecklistData? checklists = results[0] as MyWorkChecklistData?;
   final Map<String, Set<String>> langs = <String, Set<String>>{
     for (final ChecklistTemplateRecord r
@@ -185,13 +218,14 @@ Future<MyWorkSnapshot> loadMyWork(
           checklists?.assignments ?? const <ChecklistAssignmentRecord>[],
       drafts: (results[1] as List<ChecklistDraftHeader>?) ??
           const <ChecklistDraftHeader>[],
-      plans: (results[2] as List<InspectionPlan>?) ?? const <InspectionPlan>[],
+      plans: plans?.items ?? const <InspectionPlan>[],
       workOrders: (results[3] as List<WorkshopJob>?) ?? const <WorkshopJob>[],
-      correctiveActions: (results[4] as List<TaskItem>?) ?? const <TaskItem>[],
+      correctiveActions: corrective?.items ?? const <TaskItem>[],
     ),
     loadedAt: now,
     attempted: attempted,
     failed: failed,
+    incomplete: incomplete,
     templateLangs: langs,
     checklistApprovals: results[5] as MyWorkQueueCount?,
     inspectionApprovals: results[6] as MyWorkQueueCount?,

@@ -150,12 +150,6 @@ class _AccidentCaseScreenState extends ConsumerState<AccidentCaseScreen>
         actions: hasRecord
             ? <Widget>[
                 IconButton(
-                  key: AccidentCaseScreenKeys.tabs,
-                  tooltip: copy('endToEnd'),
-                  onPressed: _chooseWorkspace,
-                  icon: const Icon(Icons.account_tree_outlined),
-                ),
-                IconButton(
                   key: AccidentCaseScreenKeys.boundaryAction,
                   tooltip: copy('boundary'),
                   onPressed: () => _showReadOnlyBoundary(copy),
@@ -273,63 +267,90 @@ class _AccidentCaseScreenState extends ConsumerState<AccidentCaseScreen>
         AccidentCaseWorkspace.values[_tabController.index];
     final AccidentCaseWorkflowCopy copy = AccidentCaseWorkflowCopy.of(context);
     final MaterialLocalizations labels = MaterialLocalizations.of(context);
+    final int total = AccidentCaseWorkspace.values.length;
+    final String label = copy(current.labelKey);
     final String step = copy('stepOf')
         .replaceAll('%step%', '${current.step}')
-        .replaceAll('%total%', '${AccidentCaseWorkspace.values.length}');
+        .replaceAll('%total%', '$total');
     final bool canUpdate = _editableWorkstreams.any(
       (item) => current.workstreamKeys.contains(item.key),
     );
+    final TextTheme text = Theme.of(context).textTheme;
+    final TpPalette palette = TpPalette.of(context);
     return Material(
       key: AccidentCaseScreenKeys.workspaceNavigation,
       color: TpPalette.of(context).surface,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Row(
-            children: <Widget>[
-              IconButton(
-                key: AccidentCaseScreenKeys.previousWorkspace,
-                tooltip: labels.previousPageTooltip,
-                onPressed: current.index == 0
-                    ? null
-                    : () => _tabController.animateTo(current.index - 1),
-                icon: const Icon(Icons.chevron_left),
-              ),
-              Expanded(
-                child: TextButton(
-                  key: AccidentCaseScreenKeys.workspaceSelector,
-                  onPressed: _chooseWorkspace,
-                  child: Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: Column(
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: TpSpace.xs),
+            child: Row(
+              children: <Widget>[
+                IconButton(
+                  key: AccidentCaseScreenKeys.previousWorkspace,
+                  tooltip: labels.previousPageTooltip,
+                  onPressed: current.index == 0
+                      ? null
+                      : () => _tabController.animateTo(current.index - 1),
+                  icon: const Icon(Icons.chevron_left),
+                ),
+                Expanded(
+                  child: Semantics(
+                    button: true,
+                    label: '$step: $label',
+                    excludeSemantics: true,
+                    child: InkWell(
+                      key: AccidentCaseScreenKeys.workspaceSelector,
+                      onTap: _chooseWorkspace,
+                      borderRadius: BorderRadius.circular(TpRadius.md),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          minHeight: TpSizing.minTouchTarget,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: <Widget>[
                             Text(
-                              step,
-                              style: Theme.of(context).textTheme.labelSmall,
+                              '${current.step}/$total',
+                              key: const Key('accident.case.navigation.step'),
+                              style: text.labelMedium?.copyWith(
+                                color: palette.textSecondary,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
-                            Text(
-                              copy(current.labelKey),
-                              textAlign: TextAlign.center,
+                            const SizedBox(width: TpSpace.sm),
+                            Flexible(
+                              child: Text(
+                                label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: text.labelLarge?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            Icon(
+                              Icons.expand_more,
+                              size: 20,
+                              color: palette.textSecondary,
                             ),
                           ],
                         ),
                       ),
-                      const Icon(Icons.expand_more),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-              IconButton(
-                key: AccidentCaseScreenKeys.nextWorkspace,
-                tooltip: labels.nextPageTooltip,
-                onPressed:
-                    current.index == AccidentCaseWorkspace.values.length - 1
-                        ? null
-                        : () => _tabController.animateTo(current.index + 1),
-                icon: const Icon(Icons.chevron_right),
-              ),
-            ],
+                IconButton(
+                  key: AccidentCaseScreenKeys.nextWorkspace,
+                  tooltip: labels.nextPageTooltip,
+                  onPressed: current.index == total - 1
+                      ? null
+                      : () => _tabController.animateTo(current.index + 1),
+                  icon: const Icon(Icons.chevron_right),
+                ),
+              ],
+            ),
           ),
           if (current == AccidentCaseWorkspace.insurance || canUpdate)
             Wrap(

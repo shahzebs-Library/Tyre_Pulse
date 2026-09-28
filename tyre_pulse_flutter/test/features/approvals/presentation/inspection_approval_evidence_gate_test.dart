@@ -9,6 +9,7 @@ import 'package:tyre_pulse/features/approvals/data/inspection_approval_item.dart
 import 'package:tyre_pulse/features/approvals/data/inspection_approval_repository.dart';
 import 'package:tyre_pulse/features/approvals/inspection_approvals_providers.dart';
 import 'package:tyre_pulse/features/approvals/presentation/inspection_approval_review_screen.dart';
+import 'package:tyre_pulse/features/approvals/presentation/widgets/approval_decision_bar.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_diagram_layouts.dart';
 
 const String _inspectionId = 'inspection-evidence-gate';
@@ -70,8 +71,12 @@ Future<void> _pump(
   await tester.pump(const Duration(milliseconds: 100));
 }
 
-TpButton _button(WidgetTester tester, Key key) {
-  return tester.widget<TpButton>(find.byKey(key));
+/// The decision buttons: Approve is a [TpButton], Return is the outlined
+/// button inside [ApprovalDecisionBar]. Both expose `onPressed`.
+({VoidCallback? onPressed}) _button(WidgetTester tester, Key key) {
+  final Widget widget = tester.widget(find.byKey(key));
+  if (widget is TpButton) return (onPressed: widget.onPressed);
+  return (onPressed: (widget as ButtonStyleButton).onPressed);
 }
 
 void main() {
@@ -153,6 +158,23 @@ void main() {
     expect(
       _button(tester, InspectionApprovalReviewKeys.approve).onPressed,
       isNotNull,
+    );
+    // The shared decision bar: Return is outlined, Approve the one primary.
+    expect(find.byType(ApprovalDecisionBar), findsOneWidget);
+    expect(
+      tester.widget(
+        find.byKey(InspectionApprovalReviewKeys.returnForCorrection),
+      ),
+      isA<OutlinedButton>(),
+    );
+    expect(
+      find.descendant(
+        of: find.byType(ApprovalDecisionBar),
+        matching: find.byWidgetPredicate(
+          (Widget w) => w is TpButton && w.variant == TpButtonVariant.danger,
+        ),
+      ),
+      findsNothing,
     );
   });
 

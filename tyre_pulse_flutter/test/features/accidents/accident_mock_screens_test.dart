@@ -53,9 +53,18 @@ void main() {
     expect(
       find.descendant(
         of: navigation,
-        matching: find.text('Workstream 3 of 7'),
+        matching: find.text('3/7'),
       ),
       findsOneWidget,
+    );
+    // The pager is a thin control: the full "Workstream N of 7" is stated
+    // once, by the workstream header below it, and announced by the pager.
+    expect(
+      find.descendant(
+        of: navigation,
+        matching: find.textContaining('Workstream'),
+      ),
+      findsNothing,
     );
     for (int index = 2; index > 0; index--) {
       await tester.tap(find.byKey(AccidentCaseScreenKeys.previousWorkspace));
@@ -73,7 +82,7 @@ void main() {
       expect(
         find.descendant(
           of: navigation,
-          matching: find.text('Workstream $step of 7'),
+          matching: find.text('$step/7'),
         ),
         findsOneWidget,
       );
@@ -147,14 +156,16 @@ void main() {
     );
 
     // The case opens on its active workstream: insurance, workstream 3 of 7.
-    expect(find.byKey(AccidentCaseScreenKeys.tabs), findsOneWidget);
+    // The duplicate chooser icon is gone; the pager dropdown opens it.
+    expect(find.byKey(AccidentCaseScreenKeys.tabs), findsNothing);
+    expect(find.byIcon(Icons.account_tree_outlined), findsNothing);
     expect(find.byKey(AccidentCaseScreenKeys.insurance), findsOneWidget);
-    expect(find.text('Workstream 3 of 7'), findsWidgets);
+    expect(find.textContaining('Workstream 3 of 7'), findsOneWidget);
     expect(find.byType(AccidentInsuranceClaimMockWorkspace), findsOneWidget);
 
     await _selectCaseWorkspace(tester, 'Damage mapping');
     expect(find.byKey(AccidentCaseScreenKeys.damageMapping), findsOneWidget);
-    expect(find.text('Workstream 5 of 7'), findsWidgets);
+    expect(find.textContaining('Workstream 5 of 7'), findsOneWidget);
     expect(find.byType(VehicleDamageDiagram), findsOneWidget);
     expect(find.text('Boom section 3'), findsOneWidget);
     expect(find.textContaining('ACC-2026-0182'), findsWidgets);
@@ -168,12 +179,12 @@ void main() {
 
     await _selectCaseWorkspace(tester, 'Fleet validation');
     expect(find.byKey(AccidentCaseScreenKeys.fleet), findsOneWidget);
-    expect(find.text('Workstream 1 of 7'), findsWidgets);
+    expect(find.textContaining('Workstream 1 of 7'), findsOneWidget);
     expect(find.byType(AccidentFleetValidationMockWorkspace), findsOneWidget);
 
     await _selectCaseWorkspace(tester, 'Workshop assessment');
     expect(find.byKey(AccidentCaseScreenKeys.assessment), findsOneWidget);
-    expect(find.text('Workstream 2 of 7'), findsWidgets);
+    expect(find.textContaining('Workstream 2 of 7'), findsOneWidget);
     expect(
       find.byType(AccidentWorkshopAssessmentMockWorkspace),
       findsOneWidget,
@@ -181,17 +192,17 @@ void main() {
 
     await _selectCaseWorkspace(tester, 'Responsibility & payer');
     expect(find.byKey(AccidentCaseScreenKeys.responsibility), findsOneWidget);
-    expect(find.text('Workstream 4 of 7'), findsWidgets);
+    expect(find.textContaining('Workstream 4 of 7'), findsOneWidget);
     expect(find.byType(AccidentResponsibilityMockWorkspace), findsOneWidget);
 
     await _selectCaseWorkspace(tester, 'External workshop');
     expect(find.byKey(AccidentCaseScreenKeys.externalWorkshop), findsOneWidget);
-    expect(find.text('Workstream 6 of 7'), findsWidgets);
+    expect(find.textContaining('Workstream 6 of 7'), findsOneWidget);
     expect(find.byType(AccidentDispatchHandoverMockWorkspace), findsOneWidget);
 
     await _selectCaseWorkspace(tester, 'Timeline & notifications');
     expect(find.byKey(AccidentCaseScreenKeys.timeline), findsOneWidget);
-    expect(find.text('Workstream 7 of 7'), findsWidgets);
+    expect(find.textContaining('Workstream 7 of 7'), findsOneWidget);
     expect(find.byType(AccidentTimelineMockWorkspace), findsOneWidget);
     expect(find.text('Local workflow preview'), findsNothing);
 
@@ -221,7 +232,7 @@ void main() {
     view.onNavigateWorkspace!(AccidentCaseWorkspace.fromFlowKey('handover')!);
     await tester.pumpAndSettle();
     expect(find.byKey(AccidentCaseScreenKeys.externalWorkshop), findsOneWidget);
-    expect(find.text('Workstream 6 of 7'), findsWidgets);
+    expect(find.textContaining('Workstream 6 of 7'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -249,7 +260,7 @@ void main() {
 }
 
 Future<void> _selectCaseWorkspace(WidgetTester tester, String label) async {
-  await tester.tap(find.byKey(AccidentCaseScreenKeys.tabs));
+  await tester.tap(find.byKey(AccidentCaseScreenKeys.workspaceSelector));
   await tester.pumpAndSettle();
   await tester.tap(find.widgetWithText(ListTile, label));
   await tester.pumpAndSettle();

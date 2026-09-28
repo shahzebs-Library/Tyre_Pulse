@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show SemanticsNode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
@@ -313,6 +314,118 @@ void main() {
     expect(find.text('Driver name'), findsOneWidget);
     expect(find.text('Incident site'), findsNothing);
     expect(reports.submitCalls, 0);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('progress: 7 segments, 48dp targets, one selected current step',
+      (WidgetTester tester) async {
+    final SemanticsHandle handle = tester.ensureSemantics();
+    await _pumpReport(
+      tester,
+      store: _MemorySecureStore(),
+      reports: _FakeReportRepository(),
+    );
+    await tester.tap(
+      find.byKey(AccidentReportIntakeKeys.step(AccidentIntakePage.damage)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Step 4 of 7: Mark damage'), findsOneWidget);
+    for (final AccidentIntakePage page in AccidentIntakePage.values) {
+      final Size size =
+          tester.getSize(find.byKey(AccidentReportIntakeKeys.step(page)));
+      expect(size.height, greaterThanOrEqualTo(48));
+      final String state = page.index < AccidentIntakePage.damage.index
+          ? 'completed'
+          : page == AccidentIntakePage.damage
+              ? 'current'
+              : 'upcoming';
+      expect(
+        find.byKey(
+          ValueKey<String>(
+            'accident.report.segment.${page.name}.$state',
+          ),
+        ),
+        findsOneWidget,
+      );
+    }
+    // Completed, current and upcoming are drawn differently (height).
+    double barHeight(String key) =>
+        tester.getSize(find.byKey(ValueKey<String>(key))).height;
+    expect(
+      barHeight('accident.report.segment.damage.current'),
+      greaterThan(barHeight('accident.report.segment.incident.completed')),
+    );
+    final SemanticsNode current = tester.getSemantics(
+      find.byKey(AccidentReportIntakeKeys.step(AccidentIntakePage.damage)),
+    );
+    expect(
+      current,
+      matchesSemantics(
+        label: 'Step 4 of 7: Mark damage, Current step',
+        isButton: true,
+        hasSelectedState: true,
+        isSelected: true,
+        isInMutuallyExclusiveGroup: true,
+        hasTapAction: true,
+      ),
+    );
+    final SemanticsNode done = tester.getSemantics(
+      find.byKey(AccidentReportIntakeKeys.step(AccidentIntakePage.incident)),
+    );
+    expect(
+      done,
+      matchesSemantics(
+        label: 'Step 2 of 7: Incident details, Completed',
+        isButton: true,
+        hasSelectedState: true,
+        isInMutuallyExclusiveGroup: true,
+        hasTapAction: true,
+      ),
+    );
+    handle.dispose();
+  });
+
+  testWidgets('footer is one row; save and exit moves to the menu after step 1',
+      (WidgetTester tester) async {
+    await _pumpReport(
+      tester,
+      store: _MemorySecureStore(),
+      reports: _FakeReportRepository(),
+    );
+    // Draft status lives in the app bar, not the footer.
+    expect(
+      find.descendant(
+        of: find.byType(AppBar),
+        matching:
+            find.byKey(const ValueKey<String>('accident.report.draftStatus')),
+      ),
+      findsOneWidget,
+    );
+    final Finder save =
+        find.byKey(const ValueKey<String>('accident.report.saveAndExit'));
+    final Finder next =
+        find.byKey(const ValueKey<String>('accident.report.continue'));
+    expect(save, findsOneWidget);
+    expect(tester.getCenter(save).dy, tester.getCenter(next).dy);
+    expect(
+      find.byKey(const ValueKey<String>('accident.report.moreActions')),
+      findsNothing,
+    );
+
+    await tester.tap(
+      find.byKey(AccidentReportIntakeKeys.step(AccidentIntakePage.incident)),
+    );
+    await tester.pumpAndSettle();
+    expect(save, findsNothing);
+    expect(find.text('Back'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey<String>('accident.report.moreActions')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey<String>('accident.report.saveAndExit.menu')),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 }

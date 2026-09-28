@@ -46,6 +46,9 @@ import 'package:tyre_pulse/features/tyres/domain/tyre_fitment.dart';
 /// Stable finders for the responsive root step of the inspection wizard.
 @visibleForTesting
 abstract final class NewInspectionScreenKeys {
+  /// The pinned primary action on the tyre map step: "Edit details" while
+  /// wheels are still outstanding, "Save & Next" once every wheel is done.
+  static const Key tyresPrimaryAction = Key('inspection.tyres.primary_action');
   static const Key headerHero = Key('inspection.header.hero');
   static const Key resumeSection = Key('inspection.header.resume');
   static const Key vehicleSection = Key('inspection.header.vehicle');
@@ -552,9 +555,7 @@ class _ResumeDraftRow extends StatelessWidget {
             ),
           ),
           Icon(
-            TpDirection.isRtl(context)
-                ? Icons.chevron_left
-                : Icons.chevron_right,
+            Icons.chevron_right,
             color: palette.textMuted,
           ),
         ],
@@ -1441,9 +1442,7 @@ class _VehicleChip extends StatelessWidget {
                         const SizedBox(height: TpSpace.sm),
                       ],
                       Icon(
-                        TpDirection.isRtl(context)
-                            ? Icons.chevron_left_rounded
-                            : Icons.chevron_right_rounded,
+                        Icons.chevron_right_rounded,
                         color: palette.textSecondary,
                       ),
                     ],
@@ -1546,10 +1545,12 @@ class _TyresStepState extends ConsumerState<_TyresStep> {
           ),
         ],
       ),
-      bottomNavigationBar: _InspectionTyresActionBar(
-        label: l10n.inspectionSaveAndNext,
-        enabled: state.canAdvanceToReview,
-        onPressed: controller.advanceToReview,
+      bottomNavigationBar: _tyresActionBar(
+        context,
+        ref,
+        l10n,
+        state,
+        selectedPosition,
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
@@ -1631,6 +1632,10 @@ class _TyresStepState extends ConsumerState<_TyresStep> {
               onSelect: (String position) =>
                   setState(() => _selectedPosition = position),
               onEdit: () => _openEditor(context, ref, selectedPosition),
+              // While wheels are outstanding the pinned bar IS "Edit details"
+              // for this tyre, so the card does not repeat it: one primary
+              // action on screen at a time.
+              showEditButton: state.canAdvanceToReview,
               odometerKm: state.odometerInput.value,
               hourMeter: state.hourMeterInput.value,
             ),
@@ -1689,6 +1694,45 @@ class _TyresStepState extends ConsumerState<_TyresStep> {
       if (state.tyreConditions[position]?.isTouched != true) return position;
     }
     return null;
+  }
+
+  /// The pinned bar never sits disabled while the inspector works. Until
+  /// every wheel is recorded it opens the editor for the selected tyre (or
+  /// the next outstanding one); once the inspection can advance it becomes
+  /// "Save & Next".
+  Widget _tyresActionBar(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l10n,
+    InspectionWizardState state,
+    String? selectedPosition,
+  ) {
+    if (state.canAdvanceToReview) {
+      return _InspectionTyresActionBar(
+        label: l10n.inspectionSaveAndNext,
+        onPressed: ref
+            .read(inspectionWizardControllerProvider.notifier)
+            .advanceToReview,
+      );
+    }
+    final String? target = selectedPosition ?? _nextOutstanding(state);
+    if (target == null) {
+      // No wheel to act on and nothing to advance: honest disabled state.
+      return _InspectionTyresActionBar(
+        label: l10n.inspectionSaveAndNext,
+        onPressed: null,
+      );
+    }
+    return _InspectionTyresActionBar(
+      label: l10n.tyreDetailEditDetailsButton,
+      icon: Icons.edit_outlined,
+      onPressed: () {
+        if (selectedPosition == null) {
+          setState(() => _selectedPosition = target);
+        }
+        _openEditor(context, ref, target);
+      },
+    );
   }
 
   String? _resolvedSelection(InspectionWizardState state) {
@@ -2137,9 +2181,13 @@ class _SelectedInspectionTyreCard extends StatelessWidget {
     required this.nextPosition,
     required this.onSelect,
     required this.onEdit,
+    this.showEditButton = true,
     this.odometerKm,
     this.hourMeter,
   });
+
+  /// False while the pinned action bar already offers "Edit details".
+  final bool showEditButton;
 
   /// The odometer and hour meter entered on this inspection's header, or
   /// null when not entered.
@@ -2468,18 +2516,20 @@ class _SelectedInspectionTyreCard extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: TpSpace.md),
-              _Raised(
-                radius: TpRadius.md,
-                tint: palette.primary,
-                strength: 0.8,
-                child: TpButton.primary(
-                  label: l10n.tyreDetailEditDetailsButton,
-                  icon: Icons.edit_outlined,
-                  isFullWidth: true,
-                  onPressed: onEdit,
+              if (showEditButton) ...<Widget>[
+                const SizedBox(height: TpSpace.md),
+                _Raised(
+                  radius: TpRadius.md,
+                  tint: palette.primary,
+                  strength: 0.8,
+                  child: TpButton.primary(
+                    label: l10n.tyreDetailEditDetailsButton,
+                    icon: Icons.edit_outlined,
+                    isFullWidth: true,
+                    onPressed: onEdit,
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ),
@@ -3055,13 +3105,15 @@ IconData _vehicleClassIcon(String resolvedClass) {
 class _InspectionTyresActionBar extends StatelessWidget {
   const _InspectionTyresActionBar({
     required this.label,
-    required this.enabled,
     required this.onPressed,
+    this.icon,
   });
 
   final String label;
-  final bool enabled;
-  final VoidCallback onPressed;
+  final IconData? icon;
+
+  /// Null only when there is genuinely nothing to act on.
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -3081,9 +3133,11 @@ class _InspectionTyresActionBar extends StatelessWidget {
             TpSpace.sm,
           ),
           child: TpButton.primary(
+            key: NewInspectionScreenKeys.tyresPrimaryAction,
             label: label,
+            icon: icon,
             isFullWidth: true,
-            onPressed: enabled ? onPressed : null,
+            onPressed: onPressed,
           ),
         ),
       ),

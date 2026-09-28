@@ -372,11 +372,21 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Add Evidence (Photo)'), findsOneWidget);
+      // Wheels are still outstanding: the pinned primary is "Edit details"
+      // for the selected tyre (the card does not repeat it), and no disabled
+      // "Save & Next" sits on screen.
       expect(
         find.widgetWithText(TpButton, 'Edit details'),
         findsOneWidget,
       );
-      expect(find.text('Save & Next'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(NewInspectionScreenKeys.tyresPrimaryAction),
+          matching: find.text('Edit details'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Save & Next'), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
@@ -527,6 +537,14 @@ void main() {
       find.widgetWithText(TpButton, 'Save & Next'),
     );
     expect(reviewButton.onPressed, isNotNull);
+    expect(
+      tester
+          .widget<TpButton>(
+            find.byKey(NewInspectionScreenKeys.tyresPrimaryAction),
+          )
+          .label,
+      'Save & Next',
+    );
   });
 
   testWidgets('compact root step stacks meter inputs without clipping', (
@@ -787,10 +805,54 @@ void main() {
     expect(diagram.width, lessThanOrEqualTo(380));
     expect(
       tester.getBottomRight(find.byType(VehicleTyreDiagram)).dy,
-      lessThan(tester.getTopLeft(find.text('Save & Next')).dy),
+      lessThan(
+        tester
+            .getTopLeft(find.byKey(NewInspectionScreenKeys.tyresPrimaryAction))
+            .dy,
+      ),
     );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'pinned action reads Edit details while wheels are outstanding and '
+    'opens the editor, never a disabled Save & Next',
+    (WidgetTester tester) async {
+      const List<String> positions = <String>['FL', 'FR', 'RL', 'RR'];
+      await _pumpScreen(
+        tester,
+        size: const Size(390, 900),
+        initialState: InspectionWizardState(
+          step: InspectionWizardStep.tyres,
+          selectedAssetNo: 'PL101',
+          selectedVehicleType: '',
+          selectedSite: 'Site A',
+          positions: positions,
+          tyreConditions: <String, TyrePositionReading>{
+            for (final String position in positions)
+              position: position == 'FL'
+                  ? const TyrePositionReading(position: 'FL', checked: true)
+                  : TyrePositionReading.seed(position),
+          },
+        ),
+      );
+
+      TpButton primary() => tester.widget<TpButton>(
+            find.byKey(NewInspectionScreenKeys.tyresPrimaryAction),
+          );
+      expect(primary().label, 'Edit details');
+      expect(primary().onPressed, isNotNull);
+      expect(find.text('Save & Next'), findsNothing);
+
+      await tester.tap(find.byKey(NewInspectionScreenKeys.tyresPrimaryAction));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.byType(TyrePositionEditorSheet), findsOneWidget);
+      // The complete case (Save & Next in the same slot) is pinned by
+      // 'fully checked TM749 is Ready for review'.
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('an untouched wheel still opens the add-details sheet', (
     WidgetTester tester,

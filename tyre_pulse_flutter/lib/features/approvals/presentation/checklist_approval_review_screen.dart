@@ -97,6 +97,7 @@ import 'package:tyre_pulse/features/approvals/data/checklist_approval_template_i
 import 'package:tyre_pulse/features/approvals/domain/approval_decision_requirements.dart';
 import 'package:tyre_pulse/features/approvals/domain/checklist_approval.dart';
 import 'package:tyre_pulse/features/approvals/domain/checklist_review_outcome.dart';
+import 'package:tyre_pulse/features/approvals/presentation/widgets/approval_decision_bar.dart';
 import 'package:tyre_pulse/features/approvals/presentation/widgets/approval_signature_preview.dart';
 import 'package:tyre_pulse/features/approvals/presentation/widgets/checklist_approval_signature_pad.dart';
 import 'package:tyre_pulse/features/approvals/presentation/widgets/checklist_approval_status_chip.dart';
@@ -1411,9 +1412,7 @@ class _SectionsCardState extends State<_SectionsCard> {
                   Icon(
                     allOpen
                         ? Icons.expand_less_rounded
-                        : Directionality.of(context) == TextDirection.rtl
-                            ? Icons.chevron_left_rounded
-                            : Icons.chevron_right_rounded,
+                        : Icons.chevron_right_rounded,
                     color: palette.primary,
                   ),
                 ],
@@ -2412,51 +2411,17 @@ class _DecisionForm extends StatelessWidget {
           ),
         ),
         const SizedBox(height: TpSpace.lg),
-        Row(
-          children: <Widget>[
-            Expanded(
-              child: SizedBox(
-                height: 52,
-                child: OutlinedButton.icon(
-                  key: ChecklistApprovalReviewKeys.returnForCorrection,
-                  onPressed: isBusy ? null : onReturn,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: palette.critical.base,
-                    side: BorderSide(color: palette.critical.base, width: 1.5),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(TpRadius.md),
-                    ),
-                  ),
-                  icon: busy == _DecisionBusy.rejecting
-                      ? SizedBox(
-                          width: TpSizing.iconSm,
-                          height: TpSizing.iconSm,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: palette.critical.base,
-                          ),
-                        )
-                      : const Icon(Icons.undo_rounded),
-                  label: Text(
-                    l10n.clMockReturnForCorrection,
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: TpSpace.md),
-            Expanded(
-              child: TpButton.primary(
-                key: ChecklistApprovalReviewKeys.approve,
-                label: closing
-                    ? l10n.checklistApprovalApproveAndCloseButton
-                    : l10n.clMockApprove,
-                icon: Icons.check_circle_outline,
-                isBusy: busy == _DecisionBusy.approving,
-                onPressed: isBusy || !canApprove ? null : onApprove,
-              ),
-            ),
-          ],
+        ApprovalDecisionBar(
+          returnKey: ChecklistApprovalReviewKeys.returnForCorrection,
+          approveKey: ChecklistApprovalReviewKeys.approve,
+          returnLabel: l10n.clMockReturnForCorrection,
+          approveLabel: closing
+              ? l10n.checklistApprovalApproveAndCloseButton
+              : l10n.clMockApprove,
+          isReturning: busy == _DecisionBusy.rejecting,
+          isApproving: busy == _DecisionBusy.approving,
+          onReturn: isBusy ? null : onReturn,
+          onApprove: isBusy || !canApprove ? null : onApprove,
         ),
         if (!canApprove && !isBusy) ...<Widget>[
           const SizedBox(height: TpSpace.xs),

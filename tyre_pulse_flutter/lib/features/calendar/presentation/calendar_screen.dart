@@ -203,7 +203,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           ),
           if (snapshot.partial) ...<Widget>[
             const SizedBox(height: TpSpace.md),
-            MyWorkPartialBanner(failed: snapshot.failed, onRetry: _refresh),
+            MyWorkPartialBanner(
+              failed: snapshot.failed,
+              incomplete: snapshot.incomplete,
+              onRetry: _refresh,
+            ),
           ],
           const SizedBox(height: TpSpace.sm),
           if (dayItems.isEmpty)

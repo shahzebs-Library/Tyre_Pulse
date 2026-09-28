@@ -19,10 +19,20 @@
 /// Free text, numbers, dates and reference pickers are answered or not,
 /// never "passed" - counting a typed operator name as a pass would inflate
 /// the outcome the reviewer signs against.
+///
+/// # Hidden fields
+///
+/// A field a `visibleWhen` rule hides (judged by the checklists domain's own
+/// [isFieldVisible] against the submitted answers) was never asked, so it is
+/// never counted as a required field, never reported as unanswered and never
+/// scored. The ONE exception is a mark in `option_sets.legend.blocking`: the
+/// close guard scans every answer regardless of visibility, so a leftover
+/// blocking mark on a hidden field is still shown as a finding.
 library;
 
 import 'package:tyre_pulse/features/checklists/domain/checklist_field.dart';
 import 'package:tyre_pulse/features/checklists/domain/checklist_field_type.dart';
+import 'package:tyre_pulse/features/checklists/domain/checklist_visibility.dart';
 
 /// One decoded `option_sets` entry, reduced to what classification needs.
 final class ReviewOptionSet {
@@ -175,6 +185,14 @@ bool _isBlank(Object? v) =>
 
 const Set<String> _naWords = <String>{'n/a', 'na', 'not applicable'};
 
+bool _hasLegendBlockingMark(Object? value, List<String> legendBlocking) {
+  if (legendBlocking.isEmpty || _isBlank(value)) return false;
+  final List<Object?> values = value is List ? value : <Object?>[value];
+  return values.any(
+    (Object? v) => v != null && legendBlocking.contains(v.toString()),
+  );
+}
+
 /// Classifies one answer. [legendBlocking] is the template-level
 /// `option_sets.legend.blocking` list the close guard reads.
 ReviewVerdict classifyReviewAnswer(
@@ -265,6 +283,21 @@ ChecklistReviewOutcome buildChecklistReviewOutcome({
       flush();
       heading = f;
       current = <ReviewItem>[];
+      continue;
+    }
+    if (!isFieldVisible(f, answers)) {
+      // Never asked: only a close-guard blocking mark keeps it on screen.
+      final Object? hiddenValue = answers[f.id];
+      if (_hasLegendBlockingMark(hiddenValue, legendBlocking)) {
+        current.add(
+          ReviewItem(
+            field: f,
+            verdict: ReviewVerdict.fail,
+            value: hiddenValue,
+            photoCount: (photos[f.id] ?? const <String>[]).length,
+          ),
+        );
+      }
       continue;
     }
     final List<String> fieldPhotos = photos[f.id] ?? const <String>[];

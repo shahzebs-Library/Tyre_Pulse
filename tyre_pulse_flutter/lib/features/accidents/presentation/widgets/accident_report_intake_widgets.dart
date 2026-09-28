@@ -97,6 +97,28 @@ abstract final class AccidentReportIntakeKeys {
       ValueKey<String>('accident.report.lockNote');
 }
 
+/// The localized label of a wizard step (the domain keeps the English
+/// vocabulary for the web parity checks).
+String accidentReportStepLabel(BuildContext context, AccidentReportStep step) {
+  final AppLocalizations l10n = AppLocalizations.of(context);
+  return switch (step) {
+    AccidentReportStep.identifyAsset => l10n.designAccReportStepIdentifyAsset,
+    AccidentReportStep.incident => l10n.designAccReportStepIncident,
+    AccidentReportStep.peopleAuthority => l10n.designAccReportStepPeople,
+    AccidentReportStep.damage => l10n.designAccReportStepDamage,
+    AccidentReportStep.evidence => l10n.designAccReportStepEvidence,
+    AccidentReportStep.documents => l10n.designAccReportStepDocuments,
+    AccidentReportStep.review => l10n.designAccReportStepReview,
+  };
+}
+
+/// Where a step sits relative to the current one.
+enum AccidentReportStepState { completed, current, upcoming }
+
+/// The mock's progress header: a "**Step N** of 7: Label" eyebrow over a
+/// seven-segment bar. Completed, current and upcoming segments differ in
+/// fill, outline and height, not colour alone, and each segment is a 48dp
+/// tap target announced as a selectable step.
 class AccidentReportProgress extends StatelessWidget {
   const AccidentReportProgress({
     required this.current,
@@ -107,101 +129,140 @@ class AccidentReportProgress extends StatelessWidget {
   final AccidentReportStep current;
   final ValueChanged<AccidentReportStep> onSelect;
 
+  static AccidentReportStepState stateOf(
+    AccidentReportStep step,
+    AccidentReportStep current,
+  ) =>
+      step == current
+          ? AccidentReportStepState.current
+          : step.index < current.index
+              ? AccidentReportStepState.completed
+              : AccidentReportStepState.upcoming;
+
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
-    return Semantics(
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TextTheme text = Theme.of(context).textTheme;
+    final int total = AccidentReportStep.values.length;
+    final String lead = l10n.designAccReportStepLead(current.number);
+    final String tail = l10n.designAccReportStepTail(
+      total,
+      accidentReportStepLabel(context, current),
+    );
+    return Column(
       key: AccidentReportIntakeKeys.progress,
-      container: true,
-      label: current.eyebrow,
-      child: TpCard(
-        padding: const EdgeInsets.all(TpSpace.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(
-              current.eyebrow,
-              key: AccidentReportIntakeKeys.eyebrow,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Semantics(
+          header: true,
+          child: Text.rich(
+            TextSpan(
+              children: <InlineSpan>[
+                TextSpan(
+                  text: lead,
+                  style: TextStyle(
                     color: palette.primary,
                     fontWeight: FontWeight.w800,
                   ),
-            ),
-            const SizedBox(height: TpSpace.sm),
-            Wrap(
-              spacing: TpSpace.xs,
-              runSpacing: TpSpace.xs,
-              children: <Widget>[
-                for (final AccidentReportStep step
-                    in AccidentReportStep.values) ...<Widget>[
-                  _StepDot(
-                    step: step,
-                    selected: step == current,
-                    completed: step.index < current.index,
-                    onTap: () => onSelect(step),
-                  ),
-                ],
+                ),
+                TextSpan(text: tail),
               ],
             ),
+            key: AccidentReportIntakeKeys.eyebrow,
+            style: text.titleMedium?.copyWith(color: palette.textSecondary),
+          ),
+        ),
+        const SizedBox(height: TpSpace.xs),
+        Row(
+          children: <Widget>[
+            for (final AccidentReportStep step in AccidentReportStep.values)
+              Expanded(
+                child: _StepSegment(
+                  step: step,
+                  total: total,
+                  state: stateOf(step, current),
+                  onTap: () => onSelect(step),
+                ),
+              ),
           ],
         ),
-      ),
+      ],
     );
   }
 }
 
-class _StepDot extends StatelessWidget {
-  const _StepDot({
+class _StepSegment extends StatelessWidget {
+  const _StepSegment({
     required this.step,
-    required this.selected,
-    required this.completed,
+    required this.total,
+    required this.state,
     required this.onTap,
   });
 
   final AccidentReportStep step;
-  final bool selected;
-  final bool completed;
+  final int total;
+  final AccidentReportStepState state;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
-    final Color foreground =
-        selected || completed ? palette.onPrimary : palette.textSecondary;
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final String stateLabel = switch (state) {
+      AccidentReportStepState.completed => l10n.designAccReportStepDone,
+      AccidentReportStepState.current => l10n.designAccReportStepCurrent,
+      AccidentReportStepState.upcoming => l10n.designAccReportStepTodo,
+    };
+    final String label = '${l10n.designAccReportStepLead(step.number)}'
+        '${l10n.designAccReportStepTail(total, accidentReportStepLabel(context, step))}'
+        ', $stateLabel';
+    final bool isCurrent = state == AccidentReportStepState.current;
+    final BoxDecoration bar = switch (state) {
+      AccidentReportStepState.completed => BoxDecoration(
+          color: palette.primary,
+          borderRadius: BorderRadius.circular(TpRadius.pill),
+        ),
+      AccidentReportStepState.current => BoxDecoration(
+          color: palette.primarySoft,
+          borderRadius: BorderRadius.circular(TpRadius.pill),
+          border: Border.all(
+            color: palette.primary,
+            width: TpBorderWidth.strong,
+          ),
+        ),
+      AccidentReportStepState.upcoming => BoxDecoration(
+          color: palette.surfaceSunken,
+          borderRadius: BorderRadius.circular(TpRadius.pill),
+          border: Border.all(color: palette.borderStrong),
+        ),
+    };
     return Semantics(
       button: true,
-      selected: selected,
-      label: '${step.number}. ${step.label}',
-      child: Material(
-        color: selected || completed ? palette.primary : palette.surfaceAlt,
-        borderRadius: BorderRadius.circular(TpRadius.pill),
-        child: InkWell(
-          key: AccidentReportIntakeKeys.step(step),
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(TpRadius.pill),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: TpSpace.sm,
-              vertical: TpSpace.xs,
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Icon(
-                  completed ? Icons.check_rounded : Icons.circle,
-                  color: foreground,
-                  size: 13,
+      selected: isCurrent,
+      inMutuallyExclusiveGroup: true,
+      label: label,
+      onTap: onTap,
+      excludeSemantics: true,
+      child: InkWell(
+        key: AccidentReportIntakeKeys.step(step),
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(TpRadius.sm),
+        child: SizedBox(
+          height: TpSizing.minTouchTarget,
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: AnimatedContainer(
+                key: ValueKey<String>(
+                  'accident.report.segment.${step.name}.${state.name}',
                 ),
-                const SizedBox(width: 4),
-                Text(
-                  step.label,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: foreground,
-                        fontWeight:
-                            selected ? FontWeight.w800 : FontWeight.w600,
-                      ),
-                ),
-              ],
+                duration: MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero
+                    : const Duration(milliseconds: 180),
+                height: isCurrent ? 10 : 6,
+                decoration: bar,
+              ),
             ),
           ),
         ),
@@ -215,12 +276,17 @@ class AccidentDraftStatus extends StatelessWidget {
     required this.label,
     required this.saving,
     required this.failed,
+    this.maxLines = 1,
     super.key,
   });
 
   final String label;
   final bool saving;
   final bool failed;
+
+  /// Two lets the app-bar placement wrap "Draft saved on device" like the
+  /// mock instead of truncating it.
+  final int maxLines;
 
   @override
   Widget build(BuildContext context) {
@@ -265,7 +331,7 @@ class AccidentDraftStatus extends StatelessWidget {
               Flexible(
                 child: Text(
                   label,
-                  maxLines: 1,
+                  maxLines: maxLines,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
                         color: colors.onSoft,

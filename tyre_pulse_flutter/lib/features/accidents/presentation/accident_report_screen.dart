@@ -735,6 +735,36 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
         title: copy('reportTitle'),
         subtitle: l10n.accidentReportCaptureSubtitle,
         backFallback: fallback,
+        actions: <Widget>[
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 152),
+            child: Center(child: _draftStatus()),
+          ),
+          if (_currentStep.index > 0)
+            PopupMenuButton<String>(
+              key: const ValueKey<String>('accident.report.moreActions'),
+              tooltip: MaterialLocalizations.of(context).moreButtonTooltip,
+              enabled: !_submitting && _busyEvidenceKey == null,
+              onSelected: (String action) {
+                if (action == 'saveAndExit') unawaited(_saveAndExit());
+              },
+              itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                PopupMenuItem<String>(
+                  key: const ValueKey<String>(
+                    'accident.report.saveAndExit.menu',
+                  ),
+                  value: 'saveAndExit',
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.save_outlined),
+                    title: Text(l10n.accReportSaveAndExit),
+                  ),
+                ),
+              ],
+            )
+          else
+            const SizedBox(width: TpSpace.sm),
+        ],
       ),
       bottomNavigationBar: _bottomBar(),
       body: AbsorbPointer(
@@ -787,19 +817,19 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
   }) =>
       switch (_currentStep) {
         AccidentIntakePage.identifyAsset => AccidentIntakeCanvas(
-            title: _currentStep.label,
+            title: accidentReportStepLabel(context, _currentStep),
             subtitle: _l10n.accReportStepAssetSubtitle,
             icon: Icons.local_shipping_outlined,
             child: _identifyStep(fleet, assets, copy),
           ),
         AccidentIntakePage.incident => AccidentSection(
-            title: _currentStep.label,
+            title: accidentReportStepLabel(context, _currentStep),
             subtitle: _l10n.accReportStepIncidentSubtitle,
             icon: Icons.event_note_outlined,
             child: _incidentStep(),
           ),
         AccidentIntakePage.peopleAuthority => AccidentSection(
-            title: _currentStep.label,
+            title: accidentReportStepLabel(context, _currentStep),
             subtitle: _l10n.accReportStepPeopleSubtitle,
             icon: Icons.people_outline,
             child: Column(
@@ -814,7 +844,7 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
             ),
           ),
         AccidentIntakePage.damage => AccidentIntakeCanvas(
-            title: _currentStep.label,
+            title: accidentReportStepLabel(context, _currentStep),
             subtitle: <String?>[
               _selectedVehicle?.displayIdentity,
               _selectedVehicle?.vehicleType,
@@ -842,7 +872,7 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
             ),
           ),
         AccidentIntakePage.evidence => AccidentSection(
-            title: _currentStep.label,
+            title: accidentReportStepLabel(context, _currentStep),
             subtitle: _l10n.accReportStepEvidenceSubtitle,
             icon: Icons.fact_check_outlined,
             child: Column(
@@ -862,7 +892,7 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
             ),
           ),
         AccidentIntakePage.documents => AccidentSection(
-            title: _currentStep.label,
+            title: accidentReportStepLabel(context, _currentStep),
             subtitle: _l10n.accReportStepDocumentsSubtitle,
             icon: Icons.folder_copy_outlined,
             child: AccidentOptionalDocumentList(
@@ -874,7 +904,7 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
             ),
           ),
         AccidentIntakePage.review => AccidentSection(
-            title: _currentStep.label,
+            title: accidentReportStepLabel(context, _currentStep),
             subtitle: _l10n.accReportStepReviewSubtitle,
             icon: Icons.assignment_turned_in_outlined,
             child: _reviewStep(snapshot, evidenceRequirements),
@@ -1464,7 +1494,7 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
     );
   }
 
-  Widget _bottomBar() {
+  Widget _draftStatus() {
     final String statusLabel = switch (_draftState) {
       _DraftState.ready => _l10n.accReportDraftAutoSaves,
       _DraftState.dirty => _l10n.accReportDraftUnsaved,
@@ -1479,37 +1509,40 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
       _DraftState.failed => _l10n.accReportDraftSaveFailedShort,
       _DraftState.restoring => _l10n.accReportDraftRestoring,
     };
-    final Widget draftStatus = AccidentDraftStatus(
+    return AccidentDraftStatus(
+      key: const ValueKey<String>('accident.report.draftStatus'),
       label: statusLabel,
       saving: _draftState == _DraftState.saving ||
           _draftState == _DraftState.restoring,
       failed: _draftState == _DraftState.failed,
+      maxLines: 2,
     );
-    final Widget status = Row(
-      children: <Widget>[
-        Expanded(child: draftStatus),
-        TextButton.icon(
-          key: const ValueKey<String>('accident.report.saveAndExit'),
-          onPressed:
-              _submitting || _busyEvidenceKey != null ? null : _saveAndExit,
-          icon: const Icon(Icons.save_outlined),
-          label: Text(_l10n.accReportSaveAndExit),
-        ),
-      ],
-    );
+  }
+
+  /// One action row, as in the mock. Step 1 has no Back, so Save and exit
+  /// takes that slot as the secondary action; from step 2 it lives in the
+  /// app-bar overflow menu and Back takes the slot.
+  Widget _bottomBar() {
+    final bool firstStep = _currentStep.index == 0;
+    final Widget secondary = firstStep
+        ? TpButton.secondary(
+            key: const ValueKey<String>('accident.report.saveAndExit'),
+            label: _l10n.accReportSaveAndExit,
+            icon: Icons.save_outlined,
+            onPressed:
+                _submitting || _busyEvidenceKey != null ? null : _saveAndExit,
+            isFullWidth: true,
+          )
+        : TpButton.secondary(
+            label: _l10n.accReportBack,
+            icon: Icons.arrow_back_rounded,
+            onPressed: _submitting ? null : _backStep,
+            isFullWidth: true,
+          );
     final Widget actions = Row(
       children: <Widget>[
-        if (_currentStep.index > 0) ...<Widget>[
-          Expanded(
-            child: TpButton.secondary(
-              label: _l10n.accReportBack,
-              icon: Icons.arrow_back_rounded,
-              onPressed: _submitting ? null : _backStep,
-              isFullWidth: true,
-            ),
-          ),
-          const SizedBox(width: TpSpace.sm),
-        ],
+        Expanded(child: secondary),
+        const SizedBox(width: TpSpace.sm),
         Expanded(
           flex: 2,
           child: TpButton.primary(
@@ -1542,30 +1575,13 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
         top: false,
         child: Padding(
           padding: const EdgeInsets.all(TpSpace.sm),
-          child: LayoutBuilder(
-            builder: (BuildContext context, BoxConstraints constraints) {
-              if (constraints.maxWidth < 520) {
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: <Widget>[
-                    Align(
-                      alignment: AlignmentDirectional.centerStart,
-                      child: status,
-                    ),
-                    const SizedBox(height: TpSpace.xs),
-                    actions,
-                  ],
-                );
-              }
-              return Row(
-                children: <Widget>[
-                  Expanded(child: status),
-                  const SizedBox(width: TpSpace.md),
-                  SizedBox(width: 380, child: actions),
-                ],
-              );
-            },
+          child: Align(
+            alignment: AlignmentDirectional.centerEnd,
+            heightFactor: 1,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 560),
+              child: actions,
+            ),
           ),
         ),
       ),

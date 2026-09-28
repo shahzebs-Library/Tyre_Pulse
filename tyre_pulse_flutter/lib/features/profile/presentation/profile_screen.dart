@@ -158,6 +158,14 @@ abstract final class ProfileScreenKeys {
   static const Key siteRow = Key('profile.site');
   static const Key signatureRow = Key('profile.signature');
   static const Key offlineDraftsRow = Key('profile.offlineDrafts');
+  static const Key signatureSheet = Key('profile.signatureSheet');
+  static const Key signaturePaper = Key('profile.signatureSheet.paper');
+  static const Key signatureError = Key('profile.signatureSheet.error');
+  static const Key signatureRedraw = Key('profile.signatureSheet.redraw');
+  static const Key signatureSave = Key('profile.signatureSheet.save');
+  static const Key signatureCancel = Key('profile.signatureSheet.cancel');
+  static const Key signatureRemove = Key('profile.signatureSheet.remove');
+  static const Key signatureRetry = Key('profile.signatureSheet.retry');
 }
 
 /// The three languages the app ships (en/ar/ur ARB catalogs). Names are the
@@ -404,8 +412,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final AsyncValue<int> drafts = ref.watch(profileDraftCountProvider);
     final String checklistLanguage =
         ref.watch(checklistContentLanguageProvider);
-    final AsyncValue<SavedSignature?> savedSignature =
-        ref.watch(mySavedSignatureProvider);
+    final AsyncValue<SavedSignatureLookup> savedSignature =
+        ref.watch(mySavedSignatureLookupProvider);
     final String? currency = ref.watch(workspaceContextProvider)?.currency;
     final int moduleCount = ref.watch(allowedModulesProvider).length;
 
@@ -966,7 +974,7 @@ class _SettingsColumn extends StatelessWidget {
   final String? currency;
   final int moduleCount;
   final String checklistLanguage;
-  final AsyncValue<SavedSignature?> savedSignature;
+  final AsyncValue<SavedSignatureLookup> savedSignature;
   final VoidCallback onChooseLanguage;
   final VoidCallback onChooseTheme;
   final VoidCallback onChooseChecklistLanguage;
@@ -981,10 +989,16 @@ class _SettingsColumn extends StatelessWidget {
     final int? pending = pendingSync.asData?.value;
     final int? draftCount = drafts.asData?.value;
     final String locale = Localizations.localeOf(context).toLanguageTag();
+    final bool signatureUnknown = savedSignature.hasError ||
+        savedSignature.asData?.value.status == SavedSignatureStatus.unavailable;
     final String signatureValue = savedSignature.when(
       loading: () => l10n.stateLoading,
       error: (Object e, StackTrace st) => l10n.valueUnavailable,
-      data: (SavedSignature? value) {
+      data: (SavedSignatureLookup lookup) {
+        final SavedSignature? value = lookup.signature;
+        if (lookup.status == SavedSignatureStatus.unavailable) {
+          return l10n.profileFixSignatureCouldNotCheck;
+        }
         if (value == null) return l10n.clMockSignatureNotSaved;
         final DateTime? at = value.updatedAt?.toLocal();
         return at == null
@@ -1069,6 +1083,7 @@ class _SettingsColumn extends StatelessWidget {
               tone: palette.ok,
               label: l10n.clMockSavedSignature,
               value: signatureValue,
+              valueColor: signatureUnknown ? palette.textMuted : null,
               onTap: onOpenSignature,
             ),
           ],
@@ -1160,7 +1175,7 @@ class _SavedSignatureSheetState extends ConsumerState<_SavedSignatureSheet> {
     });
     try {
       await ref.read(savedSignatureRepositoryProvider).save(value);
-      ref.invalidate(mySavedSignatureProvider);
+      ref.invalidate(mySavedSignatureLookupProvider);
       if (!mounted) return;
       setState(() {
         _busy = false;
@@ -1193,27 +1208,44 @@ class _SavedSignatureSheetState extends ConsumerState<_SavedSignatureSheet> {
     });
     try {
       await ref.read(savedSignatureRepositoryProvider).clear();
-      ref.invalidate(mySavedSignatureProvider);
+      ref.invalidate(mySavedSignatureLookupProvider);
       if (!mounted) return;
       setState(() => _busy = false);
     } on Object {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _error = l10n.clMockSignatureSaveFailed;
+        _error = l10n.profileFixSignatureRemoveFailed;
       });
     }
+  }
+
+  /// Leaves drawing mode without saving; the stored signature is untouched.
+  void _cancelDrawing() {
+    setState(() {
+      _drawing = false;
+      _drawn = null;
+      _error = null;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final TpPalette palette = TpPalette.of(context);
-    final AsyncValue<SavedSignature?> saved =
-        ref.watch(mySavedSignatureProvider);
-    final SavedSignature? current = saved.asData?.value;
+    final AsyncValue<SavedSignatureLookup> saved =
+        ref.watch(mySavedSignatureLookupProvider);
+    final SavedSignature? current = saved.asData?.value.signature;
+    // A failed read is NOT "nothing saved": the paper says so, and Remove is
+    // not offered for a state we could not see (Try again re-reads instead).
+    final bool unavailable = saved.hasError ||
+        saved.asData?.value.status == SavedSignatureStatus.unavailable;
+    // The signature is dark ink on paper in every theme, so the preview
+    // always sits on the LIGHT palette's surface, never on a dark card.
+    const TpPalette paper = TpPalette.light;
 
     return Padding(
+      key: ProfileScreenKeys.signatureSheet,
       padding: EdgeInsets.fromLTRB(
         TpSpace.lg,
         TpSpace.lg,
@@ -1246,20 +1278,24 @@ class _SavedSignatureSheetState extends ConsumerState<_SavedSignatureSheet> {
             const SizedBox(height: 140, child: TpLoadingState())
           else
             Container(
+              key: ProfileScreenKeys.signaturePaper,
               height: 140,
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: paper.surface,
                 borderRadius: BorderRadius.circular(TpRadius.md),
                 border: Border.all(color: palette.border),
               ),
               alignment: Alignment.center,
               child: current == null
                   ? Text(
-                      l10n.clMockSignatureNotSaved,
+                      unavailable
+                          ? l10n.profileFixSignatureCouldNotCheck
+                          : l10n.clMockSignatureNotSaved,
+                      textAlign: TextAlign.center,
                       style: Theme.of(context)
                           .textTheme
                           .bodyMedium
-                          ?.copyWith(color: Colors.black54),
+                          ?.copyWith(color: paper.textMuted),
                     )
                   : ApprovalSignaturePreview(
                       value: current.value,
@@ -1270,6 +1306,7 @@ class _SavedSignatureSheetState extends ConsumerState<_SavedSignatureSheet> {
             const SizedBox(height: TpSpace.sm),
             Text(
               _error!,
+              key: ProfileScreenKeys.signatureError,
               style: Theme.of(context)
                   .textTheme
                   .bodySmall
@@ -1277,22 +1314,42 @@ class _SavedSignatureSheetState extends ConsumerState<_SavedSignatureSheet> {
             ),
           ],
           const SizedBox(height: TpSpace.md),
-          if (_drawing)
+          if (_drawing) ...<Widget>[
             TpButton.primary(
+              key: ProfileScreenKeys.signatureSave,
               label: l10n.clMockSignatureSave,
               icon: Icons.save_outlined,
               isBusy: _busy,
               onPressed: _drawn == null || _busy ? null : _save,
-            )
-          else ...<Widget>[
+            ),
+            const SizedBox(height: TpSpace.sm),
+            TpButton.text(
+              key: ProfileScreenKeys.signatureCancel,
+              label: l10n.actionCancel,
+              onPressed: _busy ? null : _cancelDrawing,
+            ),
+          ] else ...<Widget>[
             TpButton.primary(
+              key: ProfileScreenKeys.signatureRedraw,
               label: l10n.checklistApprovalSignatureRedraw,
               icon: Icons.edit_outlined,
               onPressed: _busy ? null : () => setState(() => _drawing = true),
             ),
+            if (unavailable) ...<Widget>[
+              const SizedBox(height: TpSpace.sm),
+              TpButton.secondary(
+                key: ProfileScreenKeys.signatureRetry,
+                label: l10n.actionRetry,
+                icon: Icons.refresh_rounded,
+                onPressed: _busy
+                    ? null
+                    : () => ref.invalidate(mySavedSignatureLookupProvider),
+              ),
+            ],
             if (current != null) ...<Widget>[
               const SizedBox(height: TpSpace.sm),
               TpButton.danger(
+                key: ProfileScreenKeys.signatureRemove,
                 label: l10n.clMockSignatureRemove,
                 icon: Icons.delete_outline_rounded,
                 isBusy: _busy,

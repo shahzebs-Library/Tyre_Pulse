@@ -79,6 +79,7 @@ abstract final class MyWorkKeys {
   static Key action(String id) => ValueKey<String>('myWork.action.$id');
   static const Key stats = ValueKey<String>('myWork.stats');
   static const Key partial = ValueKey<String>('myWork.partial');
+  static const Key incomplete = ValueKey<String>('myWork.incomplete');
   static const Key language = ValueKey<String>('myWork.language');
   static Key languageOption(String code) =>
       ValueKey<String>('myWork.language.$code');
@@ -262,15 +263,20 @@ PreferredSizeWidget myWorkAppBar(
     leading: canPop
         ? IconButton(
             tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-            icon: Icon(
-              TpDirection.isRtl(context)
-                  ? Icons.arrow_forward_rounded
-                  : Icons.arrow_back_rounded,
-            ),
+            // arrow_back_rounded mirrors itself in RTL (matchTextDirection);
+            // choosing a different icon for RTL would flip it back.
+            icon: const Icon(Icons.arrow_back_rounded),
             onPressed: () => Navigator.of(context).maybePop(),
           )
         : null,
-    title: const TpBrandLockup(compact: true),
+    // The lockup is a logotype (WCAG 1.4.4 exempts it from text resize):
+    // at large text sizes it scales down to the room the actions leave it
+    // instead of overflowing the bar.
+    title: const FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: AlignmentDirectional.centerStart,
+      child: TpBrandLockup(compact: true),
+    ),
     actions: <Widget>[
       switch (pendingSync) {
         AsyncData<int>(:final int value) => Padding(
@@ -549,9 +555,7 @@ class MyWorkRow extends StatelessWidget {
                     Icon(
                       expandable && expanded
                           ? Icons.keyboard_arrow_up_rounded
-                          : (TpDirection.isRtl(context)
-                              ? Icons.chevron_left_rounded
-                              : Icons.chevron_right_rounded),
+                          : Icons.chevron_right_rounded,
                       color: palette.primaryDark,
                     ),
                 ],
@@ -929,9 +933,7 @@ class _QueueTile extends StatelessWidget {
                   ),
             ),
             Icon(
-              TpDirection.isRtl(context)
-                  ? Icons.chevron_left_rounded
-                  : Icons.chevron_right_rounded,
+              Icons.chevron_right_rounded,
               color: palette.primaryDark,
             ),
           ],
@@ -949,19 +951,28 @@ class MyWorkPartialBanner extends StatelessWidget {
   const MyWorkPartialBanner({
     required this.failed,
     required this.onRetry,
+    this.incomplete = const <MyWorkSource>{},
     super.key,
   });
 
+  /// Sources whose read failed.
   final Set<MyWorkSource> failed;
+
+  /// Sources that loaded but hit their row ceiling, so work may be missing.
+  final Set<MyWorkSource> incomplete;
   final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final TpPalette palette = TpPalette.of(context);
-    final String names = <String>{
-      for (final MyWorkSource s in failed) myWorkSourceLabel(l10n, s),
-    }.join(', ');
+    String names(Set<MyWorkSource> sources) => <String>{
+          for (final MyWorkSource s in sources) myWorkSourceLabel(l10n, s),
+        }.join(', ');
+    final TextStyle? style = Theme.of(context)
+        .textTheme
+        .bodySmall
+        ?.copyWith(color: palette.warning.onSoft);
     return TpCard(
       key: MyWorkKeys.partial,
       background: palette.warning.soft,
@@ -972,12 +983,18 @@ class MyWorkPartialBanner extends StatelessWidget {
           Icon(Icons.warning_amber_rounded, color: palette.warning.base),
           const SizedBox(width: TpSpace.sm),
           Expanded(
-            child: Text(
-              l10n.myWorkPartial(names),
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: palette.warning.onSoft),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                if (failed.isNotEmpty)
+                  Text(l10n.myWorkPartial(names(failed)), style: style),
+                if (incomplete.isNotEmpty)
+                  Text(
+                    l10n.myWorkFixIncomplete(names(incomplete)),
+                    key: MyWorkKeys.incomplete,
+                    style: style,
+                  ),
+              ],
             ),
           ),
           TextButton(onPressed: onRetry, child: Text(l10n.myWorkRetry)),

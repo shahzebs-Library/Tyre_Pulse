@@ -115,7 +115,9 @@ final class TyreRecordsListState {
   final int? totalCount;
 
   /// When the first page of the active query last loaded successfully, on
-  /// this device's clock. Null until then.
+  /// this device's clock. Null until then, and cleared again the moment the
+  /// query changes or its first page fails - a "Loaded 09:14" line must
+  /// never sit above rows (or an error) belonging to a different query.
   final DateTime? loadedAt;
 
   /// A real, measured zero: the current query resolved and matched nothing.
@@ -143,6 +145,7 @@ final class TyreRecordsListState {
     int? totalCount,
     bool clearTotalCount = false,
     DateTime? loadedAt,
+    bool clearLoadedAt = false,
   }) {
     return TyreRecordsListState(
       phase: phase ?? this.phase,
@@ -156,7 +159,7 @@ final class TyreRecordsListState {
       searchInput: searchInput ?? this.searchInput,
       availableSites: availableSites ?? this.availableSites,
       totalCount: clearTotalCount ? null : (totalCount ?? this.totalCount),
-      loadedAt: loadedAt ?? this.loadedAt,
+      loadedAt: clearLoadedAt ? null : (loadedAt ?? this.loadedAt),
     );
   }
 

@@ -7190,5 +7190,259 @@
         "type": "int"
       }
     }
+  },
+  "myWorkFixIncomplete": "Only part of your {sources} could be loaded, so some work may be missing.",
+  "@myWorkFixIncomplete": {
+    "description": "My work banner line when a source hit its row ceiling and may be incomplete",
+    "placeholders": {
+      "sources": {
+        "type": "String"
+      }
+    }
+  },
+  "assetsFixFinIncompleteTitle": "Figures are incomplete",
+  "@assetsFixFinIncompleteTitle": {
+    "description": "Vehicle 360 financial report: title shown instead of totals when the cost read reached its row cap."
+  },
+  "assetsFixFinIncompleteBody": "Figures are incomplete: more than {n} entries were recorded for this asset in this window, so totals are not shown. Choose a shorter period.",
+  "@assetsFixFinIncompleteBody": {
+    "description": "Vehicle 360 costs: explains that the cost read stopped at the row cap so totals would be understated. n is the cap.",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "clFixMeterUnreadable": "Could not check last reading",
+  "@clFixMeterUnreadable": {
+    "description": "Checklists hub meter row: the last odometer reading could not be read (offline or server error). Different from no reading recorded."
+  },
+  "assetsFixFinUnlabelledTitle": "Currency not recorded",
+  "@assetsFixFinUnlabelledTitle": {
+    "description": "Vehicle 360 costs: title when some cost lines carry no currency, so no currency-labelled total is shown."
+  },
+  "assetsFixFinUnlabelledBody": "Cost lines without a currency in this period: {n}. Totals are not shown because their currency is unknown.",
+  "@assetsFixFinUnlabelledBody": {
+    "description": "Vehicle 360 costs: body when n cost lines carry money but no currency.",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "assetsFixChartSummary": "Monthly cost chart, {months} months. Highest month: {month}, {value}.",
+  "@assetsFixChartSummary": {
+    "description": "Screen reader summary of the monthly cost bar chart.",
+    "placeholders": {
+      "months": {
+        "type": "int"
+      },
+      "month": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "assetsFixChartSummaryEmpty": "Monthly cost chart, {months} months. No cost recorded.",
+  "@assetsFixChartSummaryEmpty": {
+    "description": "Screen reader summary of the monthly cost bar chart when every month is zero.",
+    "placeholders": {
+      "months": {
+        "type": "int"
+      }
+    }
+  },
+  "profileFixSignatureCouldNotCheck": "Could not check",
+  "@profileFixSignatureCouldNotCheck": {
+    "description": "Profile saved-signature row and sheet when the saved signature could not be read (no signal or no session). Distinct from 'Not saved'."
+  },
+  "profileFixSignatureRemoveFailed": "Could not remove your signature. Check your connection and try again.",
+  "@profileFixSignatureRemoveFailed": {
+    "description": "Error under the saved-signature sheet when removing the saved signature failed."
+  },
+  "designAccZoneArea": "Area",
+  "@designAccZoneArea": {
+    "description": "Damage zone sheet: area field label."
+  },
+  "designAccZoneDamageType": "Damage type",
+  "@designAccZoneDamageType": {
+    "description": "Damage zone sheet: damage type section label."
+  },
+  "designAccZoneLevel": "Level",
+  "@designAccZoneLevel": {
+    "description": "Damage zone sheet: damage level section label."
+  },
+  "designAccZoneCorrectionNote": "Correction note (optional)",
+  "@designAccZoneCorrectionNote": {
+    "description": "Damage zone sheet: optional note when the reporter corrects a suggestion."
+  },
+  "designAccZoneNote": "Note (optional)",
+  "@designAccZoneNote": {
+    "description": "Damage zone sheet: optional note field label."
+  },
+  "designAccZonePhotoUpdateFailed": "The close-up damage photos could not be updated.",
+  "@designAccZonePhotoUpdateFailed": {
+    "description": "Damage zone sheet: error when close-up photos fail to update."
+  },
+  "designAccZoneSelectedArea": "Selected area",
+  "@designAccZoneSelectedArea": {
+    "description": "Damage zone sheet: header when the marker has no number."
+  },
+  "designAccZoneSelectedAreaNumber": "Selected area {number}",
+  "@designAccZoneSelectedAreaNumber": {
+    "description": "Damage zone sheet: header naming the numbered marker.",
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "designAccZoneFinderSuggestion": "Finder suggestion",
+  "@designAccZoneFinderSuggestion": {
+    "description": "Damage zone sheet: heading of the automatic damage suggestion. Finder is a product name."
+  },
+  "designAccZoneConfirm": "Confirm",
+  "@designAccZoneConfirm": {
+    "description": "Damage zone sheet: confirm the suggestion."
+  },
+  "designAccZoneCorrect": "Correct",
+  "@designAccZoneCorrect": {
+    "description": "Damage zone sheet: correct the suggestion."
+  },
+  "designAccZoneConfirmedByReporter": "Confirmed by reporter",
+  "@designAccZoneConfirmedByReporter": {
+    "description": "Damage zone sheet: suggestion state after confirming."
+  },
+  "designAccZoneCorrectedByReporter": "Corrected by reporter",
+  "@designAccZoneCorrectedByReporter": {
+    "description": "Damage zone sheet: suggestion state after correcting."
+  },
+  "designAccZoneCloseUpPhotos": "Close-up damage photos",
+  "@designAccZoneCloseUpPhotos": {
+    "description": "Damage zone sheet: close-up photos row title."
+  },
+  "designAccZoneAddedFromEvidence": "Added from the evidence step",
+  "@designAccZoneAddedFromEvidence": {
+    "description": "Damage zone sheet: hint when photos are added later in the evidence step."
+  },
+  "designAccZoneAttachedCount": "{count} attached",
+  "@designAccZoneAttachedCount": {
+    "description": "Damage zone sheet: number of close-up photos attached.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "designAccZoneAddCloseUp": "Add close-up photo",
+  "@designAccZoneAddCloseUp": {
+    "description": "Damage zone sheet: add the first close-up photo."
+  },
+  "designAccZoneAddAnother": "Add another",
+  "@designAccZoneAddAnother": {
+    "description": "Damage zone sheet: add another close-up photo."
+  },
+  "designAccZoneSaveAndContinue": "Save area and continue",
+  "@designAccZoneSaveAndContinue": {
+    "description": "Damage zone sheet: save the new area and continue."
+  },
+  "designAccZoneRemove": "Remove",
+  "@designAccZoneRemove": {
+    "description": "Damage zone sheet: remove the marked area."
+  },
+  "designAccZoneSaveMarked": "Save marked area",
+  "@designAccZoneSaveMarked": {
+    "description": "Damage zone sheet: save an existing marked area."
+  },
+  "designAccDamageTypeDent": "Dent",
+  "@designAccDamageTypeDent": {
+    "description": "Accident damage type."
+  },
+  "designAccDamageTypeScratch": "Scratch",
+  "@designAccDamageTypeScratch": {
+    "description": "Accident damage type."
+  },
+  "designAccDamageTypeCracked": "Cracked",
+  "@designAccDamageTypeCracked": {
+    "description": "Accident damage type."
+  },
+  "designAccDamageTypeBroken": "Broken",
+  "@designAccDamageTypeBroken": {
+    "description": "Accident damage type."
+  },
+  "designAccDamageTypeMissing": "Missing",
+  "@designAccDamageTypeMissing": {
+    "description": "Accident damage type."
+  },
+  "designAccDamageTypeBent": "Bent",
+  "@designAccDamageTypeBent": {
+    "description": "Accident damage type."
+  },
+  "designAccDamageTypeOther": "Other",
+  "@designAccDamageTypeOther": {
+    "description": "Accident damage type."
+  },
+  "designAccReportStepLead": "Step {step}",
+  "@designAccReportStepLead": {
+    "description": "Accident report progress eyebrow, highlighted lead part.",
+    "placeholders": {
+      "step": {
+        "type": "int"
+      }
+    }
+  },
+  "designAccReportStepTail": " of {total}: {label}",
+  "@designAccReportStepTail": {
+    "description": "Accident report progress eyebrow, remainder after the step number. Starts with a space.",
+    "placeholders": {
+      "total": {
+        "type": "int"
+      },
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "designAccReportStepIdentifyAsset": "Identify asset",
+  "@designAccReportStepIdentifyAsset": {
+    "description": "Accident report step 1 label."
+  },
+  "designAccReportStepIncident": "Incident details",
+  "@designAccReportStepIncident": {
+    "description": "Accident report step 2 label."
+  },
+  "designAccReportStepPeople": "People and authority",
+  "@designAccReportStepPeople": {
+    "description": "Accident report step 3 label."
+  },
+  "designAccReportStepDamage": "Mark damage",
+  "@designAccReportStepDamage": {
+    "description": "Accident report step 4 label."
+  },
+  "designAccReportStepEvidence": "Evidence",
+  "@designAccReportStepEvidence": {
+    "description": "Accident report step 5 label."
+  },
+  "designAccReportStepDocuments": "Documents",
+  "@designAccReportStepDocuments": {
+    "description": "Accident report step 6 label."
+  },
+  "designAccReportStepReview": "Review and submit",
+  "@designAccReportStepReview": {
+    "description": "Accident report step 7 label."
+  },
+  "designAccReportStepDone": "Completed",
+  "@designAccReportStepDone": {
+    "description": "Accident report progress: screen-reader state of a completed step."
+  },
+  "designAccReportStepCurrent": "Current step",
+  "@designAccReportStepCurrent": {
+    "description": "Accident report progress: screen-reader state of the current step."
+  },
+  "designAccReportStepTodo": "Not started",
+  "@designAccReportStepTodo": {
+    "description": "Accident report progress: screen-reader state of a step not reached yet."
   }
 }

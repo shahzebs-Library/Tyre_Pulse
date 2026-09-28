@@ -69,7 +69,12 @@ ChecklistDue classifyChecklistDue({
       ? DateTime(parsed.year, parsed.month, parsed.day)
       : _day(parsed.toLocal());
   final DateTime today = _day(now);
-  final int delta = due.difference(today).inDays;
+  // Calendar-day difference measured on UTC midnights: two LOCAL midnights
+  // either side of a daylight-saving change are 23 or 25 hours apart, and
+  // `inDays` would truncate the 23-hour gap to 0 (tomorrow read as today).
+  final int delta = DateTime.utc(due.year, due.month, due.day)
+      .difference(DateTime.utc(today.year, today.month, today.day))
+      .inDays;
   if (normalisedStatus == 'overdue' || delta < 0) {
     return ChecklistDue(ChecklistDueKind.overdue, date: due);
   }

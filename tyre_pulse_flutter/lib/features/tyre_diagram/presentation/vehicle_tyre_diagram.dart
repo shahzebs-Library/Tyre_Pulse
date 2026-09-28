@@ -428,13 +428,25 @@ String? _entryText(Map<String, Object?>? entry, List<String> keys) {
 /// below a readable size.
 @visibleForTesting
 abstract final class TyreCaptureStageMetrics {
-  /// The position code drawn above each card.
-  static const double labelHeight = 12;
+  /// The position code drawn above each card, at a text scale of 1.0.
+  ///
+  /// The code is `labelSmall` (12) with a tight line height, so at 1.0 it
+  /// needs exactly 12dp. The live height comes from [labelHeightFor]: a
+  /// fixed 12dp box clipped LHCO / RHF1 as soon as the reader enlarged the
+  /// system text (WCAG 1.4.4 Resize Text).
+  static const double baseLabelHeight = 12;
   static const double labelGap = 2;
 
   /// Card height. Never below [TpSizing.minTouchTarget].
   static const double cardHeight = 48;
-  static const double slotExtent = labelHeight + labelGap + cardHeight;
+
+  /// The label height for the reader's text scale. Never below the base.
+  static double labelHeightFor(TextScaler scaler) =>
+      math.max(baseLabelHeight, scaler.scale(baseLabelHeight));
+
+  /// One wheel's slot: its code, the gap, then its card.
+  static double slotExtentFor(double labelHeight) =>
+      labelHeight + labelGap + cardHeight;
 
   /// Gap between the rows of ONE physical axle (a dual's Outer and Inner).
   static const double rowGap = 4;
@@ -448,15 +460,23 @@ abstract final class TyreCaptureStageMetrics {
   static double cardWidthFor(double stageWidth) =>
       (stageWidth * 0.2).clamp(62, 74).toDouble();
 
-  static double groupHeight(int rows) =>
-      rows <= 0 ? 0 : (rows * slotExtent) + ((rows - 1) * rowGap);
+  static double groupHeight(
+    int rows, {
+    double labelHeight = baseLabelHeight,
+  }) =>
+      rows <= 0
+          ? 0
+          : (rows * slotExtentFor(labelHeight)) + ((rows - 1) * rowGap);
 
   /// The height one side needs to show every row without overlap.
-  static double requiredHeight(List<int> rowsPerGroup) {
+  static double requiredHeight(
+    List<int> rowsPerGroup, {
+    double labelHeight = baseLabelHeight,
+  }) {
     if (rowsPerGroup.isEmpty) return 0;
     double total = inset * 2;
     for (final int rows in rowsPerGroup) {
-      total += groupHeight(rows);
+      total += groupHeight(rows, labelHeight: labelHeight);
     }
     return total + ((rowsPerGroup.length - 1) * groupGap);
   }
@@ -483,6 +503,9 @@ class _FigmaTyreCaptureStage extends StatelessWidget {
     // The stage is laid out physically (vehicle left is screen left), so it
     // is pinned LTR below. Card text still follows the reader's direction.
     final TextDirection readingDirection = Directionality.of(context);
+    final double labelHeight = TyreCaptureStageMetrics.labelHeightFor(
+      MediaQuery.textScalerOf(context),
+    );
     final bool tall = layout.viewH >= 360;
     final double cardWidth = TyreCaptureStageMetrics.cardWidthFor(width);
     final double photoWidth =
@@ -513,12 +536,20 @@ class _FigmaTyreCaptureStage extends StatelessWidget {
     final double stageHeight = math.max(
       tall ? 430.0 : 324.0,
       math.max(
-        TyreCaptureStageMetrics.requiredHeight(<int>[
-          for (final _CaptureAxleGroup group in leftAxles) group.wheels.length,
-        ]),
-        TyreCaptureStageMetrics.requiredHeight(<int>[
-          for (final _CaptureAxleGroup group in rightAxles) group.wheels.length,
-        ]),
+        TyreCaptureStageMetrics.requiredHeight(
+          <int>[
+            for (final _CaptureAxleGroup group in leftAxles)
+              group.wheels.length,
+          ],
+          labelHeight: labelHeight,
+        ),
+        TyreCaptureStageMetrics.requiredHeight(
+          <int>[
+            for (final _CaptureAxleGroup group in rightAxles)
+              group.wheels.length,
+          ],
+          labelHeight: labelHeight,
+        ),
       ),
     );
 
@@ -568,11 +599,13 @@ class _FigmaTyreCaptureStage extends StatelessWidget {
       leftAxles,
       targetY: targetY,
       stageHeight: stageHeight,
+      labelHeight: labelHeight,
     );
     final List<double> rightTops = _topsForGroups(
       rightAxles,
       targetY: targetY,
       stageHeight: stageHeight,
+      labelHeight: labelHeight,
     );
 
     List<Widget> side({
@@ -592,9 +625,9 @@ class _FigmaTyreCaptureStage extends StatelessWidget {
               left: leaderLeft,
               top: tops[i] +
                   (row *
-                      (TyreCaptureStageMetrics.slotExtent +
+                      (TyreCaptureStageMetrics.slotExtentFor(labelHeight) +
                           TyreCaptureStageMetrics.rowGap)) +
-                  TyreCaptureStageMetrics.labelHeight +
+                  labelHeight +
                   TyreCaptureStageMetrics.labelGap +
                   ((TyreCaptureStageMetrics.cardHeight -
                           TyreCaptureStageMetrics.knobSize) /
@@ -613,11 +646,13 @@ class _FigmaTyreCaptureStage extends StatelessWidget {
             width: cardWidth,
             height: TyreCaptureStageMetrics.groupHeight(
               groups[i].wheels.length,
+              labelHeight: labelHeight,
             ),
             child: _CaptureAxleControls(
               key: ValueKey<String>('tyre.diagram.axle.$sideKey.$i'),
               group: groups[i],
               cardWidth: cardWidth,
+              labelHeight: labelHeight,
               readingDirection: readingDirection,
               selectedPosition: selectedPosition,
               onPositionTap: onPositionTap,
@@ -748,18 +783,22 @@ class _FigmaTyreCaptureStage extends StatelessWidget {
     List<_CaptureAxleGroup> groups, {
     required double Function(double layoutCentre) targetY,
     required double stageHeight,
+    required double labelHeight,
   }) {
     if (groups.isEmpty) return const <double>[];
     const double inset = TyreCaptureStageMetrics.inset;
     const double gap = TyreCaptureStageMetrics.groupGap;
-    const double rowPitch =
-        TyreCaptureStageMetrics.slotExtent + TyreCaptureStageMetrics.rowGap;
-    const double firstCardCentre = TyreCaptureStageMetrics.labelHeight +
+    final double rowPitch = TyreCaptureStageMetrics.slotExtentFor(labelHeight) +
+        TyreCaptureStageMetrics.rowGap;
+    final double firstCardCentre = labelHeight +
         TyreCaptureStageMetrics.labelGap +
         (TyreCaptureStageMetrics.cardHeight / 2);
     final List<double> heights = <double>[
       for (final _CaptureAxleGroup group in groups)
-        TyreCaptureStageMetrics.groupHeight(group.wheels.length),
+        TyreCaptureStageMetrics.groupHeight(
+          group.wheels.length,
+          labelHeight: labelHeight,
+        ),
     ];
     // Centre the axle's cards (not its labels) on the axle.
     final List<double> tops = <double>[
@@ -802,6 +841,7 @@ class _CaptureAxleControls extends StatelessWidget {
   const _CaptureAxleControls({
     required this.group,
     required this.cardWidth,
+    required this.labelHeight,
     required this.readingDirection,
     required this.selectedPosition,
     required this.onPositionTap,
@@ -810,6 +850,9 @@ class _CaptureAxleControls extends StatelessWidget {
 
   final _CaptureAxleGroup group;
   final double cardWidth;
+
+  /// The code row's height, already scaled for the reader's text size.
+  final double labelHeight;
   final TextDirection readingDirection;
   final String? selectedPosition;
   final ValueChanged<String>? onPositionTap;
@@ -823,19 +866,23 @@ class _CaptureAxleControls extends StatelessWidget {
         for (int i = 0; i < group.wheels.length; i++) ...<Widget>[
           if (i > 0) const SizedBox(height: TyreCaptureStageMetrics.rowGap),
           SizedBox(
-            height: TyreCaptureStageMetrics.labelHeight,
+            // Grows with the reader's text scale (see labelHeightFor), so
+            // the code is never clipped vertically.
+            height: labelHeight,
             // The card's own semantics already carry the code; a second,
             // non-tappable node here would only duplicate it.
             child: ExcludeSemantics(
-              child: Center(
+              // Width is fixed by the card. A long code at a large text scale
+              // shrinks to fit rather than being cut to an ellipsis: a half
+              // position code names the wrong wheel.
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
                 child: TpIdentifierText(
                   group.wheels[i].code,
                   maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
                         color: palette.text,
-                        fontSize: 10,
-                        height: 1.2,
+                        height: 1,
                         fontWeight: FontWeight.w800,
                       ),
                 ),
@@ -870,6 +917,24 @@ class _CaptureAxleControls extends StatelessWidget {
 TpStatus _captureTone(_ResolvedWheel wheel) =>
     wheel.isRecorded ? wheel.status : TpStatus.unknown;
 
+/// The colours a capture card and its leader knob are drawn in.
+///
+/// A wheel nobody has recorded yet is painted a QUIET grey, not the purple
+/// [TpPalette.unknown] family. On a 12 to 14 position mixer or pump the
+/// unrecorded wheels are most of the stage, and a saturated hue there
+/// outshouted the one red wheel that actually needs attention. "Not
+/// measured" still cannot be mistaken for a clean result: it keeps its own
+/// minus icon, its dashed leader, and its own words on the card.
+TpStatusColors _captureColors(TpPalette palette, TpStatus tone) {
+  if (tone != TpStatus.unknown) return palette.forStatus(tone);
+  return TpStatusColors(
+    base: palette.borderStrong,
+    soft: palette.surfaceAlt,
+    onBase: palette.textSecondary,
+    onSoft: palette.textSecondary,
+  );
+}
+
 IconData _captureStatusIcon(TpStatus tone) => switch (tone) {
       TpStatus.ok => Icons.check_rounded,
       TpStatus.critical => Icons.priority_high_rounded,
@@ -891,7 +956,7 @@ class _CaptureLeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
     final TpStatus tone = _captureTone(wheel);
-    final TpStatusColors colors = palette.forStatus(tone);
+    final TpStatusColors colors = _captureColors(palette, tone);
     final Color lineColor =
         tone == TpStatus.unknown ? palette.borderStrong : colors.base;
     const double knob = TyreCaptureStageMetrics.knobSize;
@@ -1095,7 +1160,7 @@ class _FigmaTyreStatusCard extends StatelessWidget {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final TpPalette palette = TpPalette.of(context);
     final TpStatus tone = _captureTone(wheel);
-    final TpStatusColors colors = palette.forStatus(tone);
+    final TpStatusColors colors = _captureColors(palette, tone);
     final String statusLabel = !wheel.isRecorded || wheel.condition == null
         ? l10n.tyreDiagramListNotRecorded
         : tyreConditionLabel(l10n, wheel.condition!);
@@ -1198,9 +1263,12 @@ class _FigmaTyreStatusCard extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: valueStyle,
                             ),
+                          // The call to action, as in the owner's mock. The
+                          // honest "Not recorded" status stays in the card's
+                          // semantics label and in the selected-tyre summary.
                           if (!wheel.isRecorded)
                             Text(
-                              l10n.tyreDiagramListNotRecorded,
+                              l10n.tyreDetailAddDetailsButton,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: valueStyle?.copyWith(

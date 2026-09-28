@@ -11,7 +11,6 @@
 library;
 
 import 'package:flutter/material.dart';
-import 'package:tyre_pulse/app/localization/tp_direction.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/back_navigation.dart';
 import 'package:tyre_pulse/app/router/tp_back.dart';
@@ -64,7 +63,6 @@ class TpAppBar extends StatelessWidget implements PreferredSizeWidget {
     final TpPalette palette = TpPalette.of(context);
     final AppLocalizations l10n = AppLocalizations.of(context);
     final TextTheme text = Theme.of(context).textTheme;
-    final bool isRtl = TpDirection.isRtl(context);
 
     return AppBar(
       backgroundColor: palette.surface,
@@ -82,11 +80,12 @@ class TpAppBar extends StatelessWidget implements PreferredSizeWidget {
       titleSpacing: showBack ? 0 : TpSpace.lg,
       leading: showBack
           ? IconButton(
-              // Mirrors under RTL. Flutter does not flip arrow_back for us.
+              // arrow_back_ios_new_rounded sets matchTextDirection, so
+              // Flutter already mirrors it under RTL. Flipping it by hand as
+              // well cancelled the mirror and pointed Back the wrong way in
+              // Arabic and Urdu.
               icon: Icon(
-                isRtl
-                    ? Icons.arrow_forward_ios_rounded
-                    : Icons.arrow_back_ios_new_rounded,
+                Icons.arrow_back_ios_new_rounded,
                 color: palette.text,
               ),
               tooltip: l10n.actionBack,

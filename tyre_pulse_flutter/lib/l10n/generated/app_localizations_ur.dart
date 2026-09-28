@@ -6785,4 +6785,175 @@ class AppLocalizationsUr extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String myWorkFixIncomplete(String sources) {
+    return 'آپ کے $sources کا صرف ایک حصہ لوڈ ہو سکا، اس لیے کچھ کام غائب ہو سکتا ہے۔';
+  }
+
+  @override
+  String get assetsFixFinIncompleteTitle => 'اعداد و شمار نامکمل ہیں';
+
+  @override
+  String assetsFixFinIncompleteBody(int n) {
+    return 'اعداد و شمار نامکمل ہیں: اس مدت میں اس اثاثے کے لیے $n سے زیادہ اندراجات درج ہوئے، اس لیے میزان نہیں دکھائے جا رہے۔ کم مدت منتخب کریں۔';
+  }
+
+  @override
+  String get clFixMeterUnreadable => 'آخری ریڈنگ چیک نہیں ہو سکی';
+
+  @override
+  String get assetsFixFinUnlabelledTitle => 'کرنسی درج نہیں';
+
+  @override
+  String assetsFixFinUnlabelledBody(int n) {
+    return 'اس مدت میں بغیر کرنسی کی لاگت کی لائنیں: $n۔ میزان نہیں دکھائے جا رہے کیونکہ ان کی کرنسی معلوم نہیں۔';
+  }
+
+  @override
+  String assetsFixChartSummary(int months, String month, String value) {
+    return 'ماہانہ لاگت کا چارٹ، $months مہینے۔ سب سے زیادہ مہینہ: $month، $value۔';
+  }
+
+  @override
+  String assetsFixChartSummaryEmpty(int months) {
+    return 'ماہانہ لاگت کا چارٹ، $months مہینے۔ کوئی لاگت درج نہیں۔';
+  }
+
+  @override
+  String get profileFixSignatureCouldNotCheck => 'جانچ نہیں ہو سکی';
+
+  @override
+  String get profileFixSignatureRemoveFailed =>
+      'آپ کے دستخط ہٹائے نہیں جا سکے۔ اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔';
+
+  @override
+  String get designAccZoneArea => 'حصہ';
+
+  @override
+  String get designAccZoneDamageType => 'نقصان کی قسم';
+
+  @override
+  String get designAccZoneLevel => 'درجہ';
+
+  @override
+  String get designAccZoneCorrectionNote => 'تصحیحی نوٹ (اختیاری)';
+
+  @override
+  String get designAccZoneNote => 'نوٹ (اختیاری)';
+
+  @override
+  String get designAccZonePhotoUpdateFailed =>
+      'نقصان کی قریبی تصاویر اپ ڈیٹ نہیں ہو سکیں۔';
+
+  @override
+  String get designAccZoneSelectedArea => 'منتخب حصہ';
+
+  @override
+  String designAccZoneSelectedAreaNumber(int number) {
+    return 'منتخب حصہ $number';
+  }
+
+  @override
+  String get designAccZoneFinderSuggestion => 'Finder کی تجویز';
+
+  @override
+  String get designAccZoneConfirm => 'تصدیق';
+
+  @override
+  String get designAccZoneCorrect => 'درست کریں';
+
+  @override
+  String get designAccZoneConfirmedByReporter => 'رپورٹر نے تصدیق کی';
+
+  @override
+  String get designAccZoneCorrectedByReporter => 'رپورٹر نے درست کیا';
+
+  @override
+  String get designAccZoneCloseUpPhotos => 'نقصان کی قریبی تصاویر';
+
+  @override
+  String get designAccZoneAddedFromEvidence =>
+      'ثبوت کے مرحلے سے شامل کی جاتی ہیں';
+
+  @override
+  String designAccZoneAttachedCount(int count) {
+    return '$count منسلک';
+  }
+
+  @override
+  String get designAccZoneAddCloseUp => 'قریبی تصویر شامل کریں';
+
+  @override
+  String get designAccZoneAddAnother => 'مزید شامل کریں';
+
+  @override
+  String get designAccZoneSaveAndContinue => 'حصہ محفوظ کریں اور جاری رکھیں';
+
+  @override
+  String get designAccZoneRemove => 'ہٹائیں';
+
+  @override
+  String get designAccZoneSaveMarked => 'نشان زدہ حصہ محفوظ کریں';
+
+  @override
+  String get designAccDamageTypeDent => 'ڈینٹ';
+
+  @override
+  String get designAccDamageTypeScratch => 'خراش';
+
+  @override
+  String get designAccDamageTypeCracked => 'دراڑ';
+
+  @override
+  String get designAccDamageTypeBroken => 'ٹوٹا ہوا';
+
+  @override
+  String get designAccDamageTypeMissing => 'غائب';
+
+  @override
+  String get designAccDamageTypeBent => 'مڑا ہوا';
+
+  @override
+  String get designAccDamageTypeOther => 'دیگر';
+
+  @override
+  String designAccReportStepLead(int step) {
+    return 'مرحلہ $step';
+  }
+
+  @override
+  String designAccReportStepTail(int total, String label) {
+    return ' از $total: $label';
+  }
+
+  @override
+  String get designAccReportStepIdentifyAsset => 'اثاثہ کی شناخت';
+
+  @override
+  String get designAccReportStepIncident => 'واقعے کی تفصیلات';
+
+  @override
+  String get designAccReportStepPeople => 'افراد اور حکام';
+
+  @override
+  String get designAccReportStepDamage => 'نقصان کی نشاندہی';
+
+  @override
+  String get designAccReportStepEvidence => 'ثبوت';
+
+  @override
+  String get designAccReportStepDocuments => 'دستاویزات';
+
+  @override
+  String get designAccReportStepReview => 'جائزہ اور جمع کرائیں';
+
+  @override
+  String get designAccReportStepDone => 'مکمل';
+
+  @override
+  String get designAccReportStepCurrent => 'موجودہ مرحلہ';
+
+  @override
+  String get designAccReportStepTodo => 'شروع نہیں ہوا';
 }

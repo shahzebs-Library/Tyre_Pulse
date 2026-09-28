@@ -9,10 +9,14 @@
 /// # Reads degrade, writes throw
 ///
 /// A signature that cannot be loaded on a weak signal must leave a reviewer
-/// with a blank pad they can still sign on - so [mine] returns null on any
-/// failure. [save] and [clear] are explicit actions, so they throw: a silent
-/// failure would leave someone believing their signature is stored when it
-/// is not.
+/// with a blank pad they can still sign on - so `mine()` returns null on any
+/// failure. Profile, which SHOWS the saved state and offers Remove, reads
+/// `lookup()` instead: it never throws either, but it keeps "nothing is
+/// saved" and "we could not check" apart, because a failed read shown as
+/// "Not saved" hides a signature that is really stored and the Remove action
+/// with it. `save()` and `clear()` are explicit actions, so they throw: a
+/// silent failure would leave someone believing their signature is stored
+/// (or removed) when it is not.
 ///
 /// # Online-only, on purpose
 ///
@@ -58,35 +62,82 @@ final class SavedSignature {
   final DateTime? updatedAt;
 }
 
+/// What a read of the caller's saved signature found.
+enum SavedSignatureStatus {
+  /// A usable signature is stored.
+  found,
+
+  /// The read succeeded and nothing usable is stored.
+  none,
+
+  /// The read could not be made (no session, no signal, refused). Nothing
+  /// is known about what is stored.
+  unavailable,
+}
+
+/// The result of [SavedSignatureRepository.lookup].
+final class SavedSignatureLookup {
+  const SavedSignatureLookup.found(SavedSignature this.signature)
+      : status = SavedSignatureStatus.found;
+
+  const SavedSignatureLookup.none()
+      : status = SavedSignatureStatus.none,
+        signature = null;
+
+  const SavedSignatureLookup.unavailable()
+      : status = SavedSignatureStatus.unavailable,
+        signature = null;
+
+  final SavedSignatureStatus status;
+
+  /// Set only when [status] is [SavedSignatureStatus.found].
+  final SavedSignature? signature;
+}
+
 abstract interface class SavedSignatureRepository {
+  /// The caller's saved signature, keeping a failed read distinct from
+  /// "nothing saved". Never throws.
+  Future<SavedSignatureLookup> lookup();
+
   /// The caller's saved signature, or null when none is saved OR it could
-  /// not be read. Never throws.
+  /// not be read. Never throws. For the approval pad pre-fill, where both
+  /// cases mean the same thing: start from a blank pad.
   Future<SavedSignature?> mine();
 
   /// Stores [signature] as the caller's signature, replacing any earlier
   /// one. Throws on refusal, on an unusable mark, or with no session.
   Future<SavedSignature> save(String signature);
 
-  /// Forgets the caller's saved signature. Throws on failure.
+  /// Forgets the caller's saved signature. Throws on failure, and with no
+  /// session (nothing was removed, so it must not look as though it was).
   Future<void> clear();
 }
 
 final class SupabaseSavedSignatureRepository
     with SupabaseGateway
     implements SavedSignatureRepository {
-  SupabaseSavedSignatureRepository(this._client);
+  SupabaseSavedSignatureRepository(
+    this._client, {
+    String? Function()? currentUserId,
+  }) : _currentUserId = currentUserId;
 
   final SupabaseClient _client;
 
+  /// Test seam: resolves the signed-in user id. Defaults to the live
+  /// session, which is the only source the app ever uses.
+  final String? Function()? _currentUserId;
+
   String? get _uid {
-    final String? id = _client.auth.currentUser?.id;
+    final String? Function()? resolve = _currentUserId;
+    final String? id =
+        resolve != null ? resolve() : _client.auth.currentUser?.id;
     return (id == null || id.isEmpty) ? null : id;
   }
 
   @override
-  Future<SavedSignature?> mine() async {
+  Future<SavedSignatureLookup> lookup() async {
     final String? uid = _uid;
-    if (uid == null) return null;
+    if (uid == null) return const SavedSignatureLookup.unavailable();
     try {
       final List<Map<String, dynamic>> rows =
           await guard<List<Map<String, dynamic>>>(
@@ -96,12 +147,18 @@ final class SupabaseSavedSignatureRepository
             .eq('user_id', uid)
             .limit(1),
       );
-      if (rows.isEmpty) return null;
-      return savedSignatureFromRow(rows.first);
+      if (rows.isEmpty) return const SavedSignatureLookup.none();
+      final SavedSignature? found = savedSignatureFromRow(rows.first);
+      return found == null
+          ? const SavedSignatureLookup.none()
+          : SavedSignatureLookup.found(found);
     } on Object {
-      return null;
+      return const SavedSignatureLookup.unavailable();
     }
   }
+
+  @override
+  Future<SavedSignature?> mine() async => (await lookup()).signature;
 
   @override
   Future<SavedSignature> save(String signature) async {
@@ -130,7 +187,9 @@ final class SupabaseSavedSignatureRepository
   @override
   Future<void> clear() async {
     final String? uid = _uid;
-    if (uid == null) return;
+    if (uid == null) {
+      throw StateError('No signed-in session');
+    }
     await guard<void>(
       () => _client
           .from(SupabaseTables.userSignatures)

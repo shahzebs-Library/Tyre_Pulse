@@ -85,7 +85,10 @@ class TpDropdown<T> extends StatelessWidget {
             color: isEnabled ? palette.surface : palette.surfaceAlt,
             borderRadius: BorderRadius.circular(TpRadius.md),
             border: Border.all(
-              color: hasError ? palette.critical.base : palette.borderStrong,
+              color: hasError
+                  ? palette.critical.base
+                  // 3:1 identifying boundary for a control (WCAG 1.4.11).
+                  : (isEnabled ? palette.controlBorder : palette.border),
               width: TpBorderWidth.hairline,
             ),
           ),

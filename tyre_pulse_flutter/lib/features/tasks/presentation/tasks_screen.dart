@@ -18,7 +18,6 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:tyre_pulse/app/localization/tp_direction.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/back_navigation.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
@@ -185,7 +184,11 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
           ),
           if (snapshot.partial) ...<Widget>[
             const SizedBox(height: TpSpace.md),
-            MyWorkPartialBanner(failed: snapshot.failed, onRetry: _refresh),
+            MyWorkPartialBanner(
+              failed: snapshot.failed,
+              incomplete: snapshot.incomplete,
+              onRetry: _refresh,
+            ),
           ],
           if (langs.length > 1) ...<Widget>[
             const SizedBox(height: TpSpace.md),
@@ -217,9 +220,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                 label: l10n.myWorkHistory,
                 showDivider: false,
                 trailing: Icon(
-                  TpDirection.isRtl(context)
-                      ? Icons.chevron_left_rounded
-                      : Icons.chevron_right_rounded,
+                  Icons.chevron_right_rounded,
                   color: palette.primaryDark,
                 ),
                 onTap: () => context.push(
@@ -377,42 +378,66 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final TpPalette palette = TpPalette.of(context);
-    return Row(
+    final Widget heading = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                l10n.myWorkTasksTitle,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
+        Text(
+          l10n.myWorkTasksTitle,
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w900,
               ),
-              const SizedBox(height: TpSpace.xs),
-              Text(
-                MaterialLocalizations.of(context).formatMediumDate(now),
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyMedium
-                    ?.copyWith(color: palette.textSecondary),
-              ),
-            ],
-          ),
         ),
-        if (access.reportIssue)
-          TpButton(
-            key: TasksScreenKeys.reportIssue,
-            label: l10n.myWorkReportIssue,
-            icon: Icons.report_problem_outlined,
-            variant: TpButtonVariant.secondary,
-            isCompact: true,
-            onPressed: () => context.push(const ReportIssueRoute().location),
-          ),
+        const SizedBox(height: TpSpace.xs),
+        Text(
+          MaterialLocalizations.of(context).formatMediumDate(now),
+          style: Theme.of(context)
+              .textTheme
+              .bodyMedium
+              ?.copyWith(color: palette.textSecondary),
+        ),
       ],
     );
+    if (!access.reportIssue) return heading;
+    final Widget report = TpButton(
+      key: TasksScreenKeys.reportIssue,
+      label: l10n.myWorkReportIssue,
+      icon: Icons.report_problem_outlined,
+      variant: TpButtonVariant.secondary,
+      isCompact: true,
+      onPressed: () => context.push(const ReportIssueRoute().location),
+    );
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        // The title is the page's identity: it never gives way to the
+        // action. When the row cannot hold both at the reader's text size
+        // (a narrow phone, Arabic or Urdu labels, large text), the action
+        // drops below the date line instead of squeezing the title.
+        final double scale = MediaQuery.textScalerOf(context).scale(1);
+        final bool stacked = constraints.maxWidth / scale < _stackBelow;
+        if (stacked) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              heading,
+              const SizedBox(height: TpSpace.md),
+              report,
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Expanded(child: heading),
+            const SizedBox(width: TpSpace.sm),
+            Flexible(child: report),
+          ],
+        );
+      },
+    );
   }
+
+  /// Logical width (at 1x text) below which the action stacks.
+  static const double _stackBelow = 340;
 }
 
 class _TabRow extends StatelessWidget {
@@ -438,42 +463,58 @@ class _TabRow extends StatelessWidget {
     final TpPalette palette = TpPalette.of(context);
     Widget tab(Key key, TasksTab value, String label) {
       final bool on = selected == value;
+      // Selection is announced, not only drawn: colour and weight alone are
+      // invisible to TalkBack and VoiceOver.
       return Expanded(
-        child: InkWell(
-          key: key,
-          onTap: () => onTab(value),
-          child: Container(
-            constraints:
-                const BoxConstraints(minHeight: TpSizing.minTouchTarget),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  width: 3,
-                  color: on ? palette.primaryDark : Colors.transparent,
+        child: Semantics(
+          button: true,
+          selected: on,
+          inMutuallyExclusiveGroup: true,
+          child: InkWell(
+            key: key,
+            onTap: () => onTab(value),
+            child: Container(
+              constraints:
+                  const BoxConstraints(minHeight: TpSizing.minTouchTarget),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(
+                    width: 3,
+                    color: on ? palette.primaryDark : Colors.transparent,
+                  ),
                 ),
               ),
-            ),
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: on ? palette.primaryDark : palette.textSecondary,
-                    fontWeight: on ? FontWeight.w800 : FontWeight.w600,
-                  ),
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: on ? palette.primaryDark : palette.textSecondary,
+                      fontWeight: on ? FontWeight.w800 : FontWeight.w600,
+                    ),
+              ),
             ),
           ),
         ),
       );
     }
 
+    // Search and filter share one outlined 48dp box so both read as
+    // controls, matching the tab strip beside them.
+    final ButtonStyle boxed = IconButton.styleFrom(
+      minimumSize: const Size.square(TpSizing.minTouchTarget),
+      side: BorderSide(color: palette.controlBorder),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(TpRadius.md),
+      ),
+    );
     return Row(
       children: <Widget>[
         Expanded(
           child: DecoratedBox(
             decoration: BoxDecoration(
-              border: Border.all(color: palette.border),
+              border: Border.all(color: palette.controlBorder),
               borderRadius: BorderRadius.circular(TpRadius.md),
             ),
             child: Row(
@@ -500,13 +541,16 @@ class _TabRow extends StatelessWidget {
         const SizedBox(width: TpSpace.xs),
         IconButton.outlined(
           key: TasksScreenKeys.searchToggle,
+          style: boxed,
           tooltip: l10n.myWorkSearchTooltip,
           isSelected: searching,
           onPressed: onSearch,
           icon: const Icon(Icons.search_rounded),
         ),
+        const SizedBox(width: TpSpace.xs),
         PopupMenuButton<int>(
           key: TasksScreenKeys.filter,
+          style: boxed,
           tooltip: l10n.myWorkFilterTooltip,
           initialValue: kind?.index ?? -1,
           onSelected: (int v) => onKind(v < 0 ? null : MyWorkKind.values[v]),

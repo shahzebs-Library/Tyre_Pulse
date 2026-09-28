@@ -48,8 +48,11 @@ enum AssetReportPeriod { yearToDate, last12Months, last90Days, last30Days }
 extension AssetReportPeriodX on AssetReportPeriod {
   AssetCostPeriod resolve(DateTime now) => switch (this) {
         AssetReportPeriod.yearToDate => AssetCostPeriod.yearToDate(now),
+        // Twelve CALENDAR months, starting on the 1st: a day-anchored start
+        // spans thirteen months, and the monthly chart would then show fewer
+        // months than the total counts.
         AssetReportPeriod.last12Months => AssetCostPeriod(
-            from: DateTime(now.year - 1, now.month, now.day + 1),
+            from: DateTime(now.year, now.month - 11),
             to: DateTime(now.year, now.month, now.day),
           ),
         AssetReportPeriod.last90Days => AssetCostPeriod.lastDays(now, 90),
@@ -88,6 +91,8 @@ abstract final class AssetFinancialReportKeys {
   static const Key export = Key('asset_fin.export');
   static const Key exportIcon = Key('asset_fin.export_icon');
   static const Key mixed = Key('asset_fin.mixed');
+  static const Key incomplete = Key('asset_fin.incomplete');
+  static const Key unlabelled = Key('asset_fin.unlabelled');
 }
 
 class AssetFinancialReportScreen extends StatelessWidget {
@@ -155,6 +160,7 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
         ref.watch(assetFinancialsProvider(request));
     final AssetFinancialData? loaded = data.asData?.value;
     final bool canExport = loaded != null &&
+        !loaded.isIncomplete &&
         loaded.summary.currency != null &&
         loaded.summary.hasCost &&
         !_exporting;
@@ -230,6 +236,34 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
     final AssetFinancialSummary s = data.summary;
     final TpPalette palette = TpPalette.of(context);
     final TextTheme text = Theme.of(context).textTheme;
+    if (data.isIncomplete) {
+      // The read stopped at the row cap: the rows are a prefix of the ledger
+      // and any total built from them is understated. No totals, no export.
+      return <Widget>[
+        SizedBox(
+          key: AssetFinancialReportKeys.incomplete,
+          height: 280,
+          child: TpEmptyState(
+            icon: Icons.warning_amber_rounded,
+            title: l10n.assetsFixFinIncompleteTitle,
+            message: l10n.assetsFixFinIncompleteBody(data.truncatedAt!),
+          ),
+        ),
+      ];
+    }
+    if (s.hasUnlabelledCurrency) {
+      return <Widget>[
+        SizedBox(
+          key: AssetFinancialReportKeys.unlabelled,
+          height: 280,
+          child: TpEmptyState(
+            icon: Icons.currency_exchange_rounded,
+            title: l10n.assetsFixFinUnlabelledTitle,
+            message: l10n.assetsFixFinUnlabelledBody(s.unlabelledLineCount),
+          ),
+        ),
+      ];
+    }
     if (s.isMixed) {
       return <Widget>[
         SizedBox(
@@ -780,7 +814,7 @@ class _Pill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: TpSpace.md),
       decoration: BoxDecoration(
         color: palette.surface,
-        border: Border.all(color: palette.borderStrong),
+        border: Border.all(color: palette.controlBorder),
         borderRadius: BorderRadius.circular(TpRadius.md),
       ),
       child: Row(

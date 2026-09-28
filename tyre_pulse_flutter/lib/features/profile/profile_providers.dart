@@ -49,14 +49,26 @@ final Provider<SavedSignatureRepository> savedSignatureRepositoryProvider =
   (ref) => SupabaseSavedSignatureRepository(ref.watch(supabaseClientProvider)),
 );
 
-/// The caller's saved signature, or null when none is saved or it could not
-/// be read (the repository never throws on a read). Shared by Profile's
-/// "My saved signature" row and the checklist approval pad pre-fill.
-final FutureProvider<SavedSignature?> mySavedSignatureProvider =
-    FutureProvider<SavedSignature?>((ref) {
+/// What a read of the caller's saved signature found: found, none, or
+/// unavailable (the read failed). Profile's "My saved signature" row and its
+/// sheet read this, so a failed read says "Could not check" instead of
+/// "Not saved" and never hides Remove from a signature that is stored.
+final FutureProvider<SavedSignatureLookup> mySavedSignatureLookupProvider =
+    FutureProvider<SavedSignatureLookup>((ref) {
   // Re-read when the signed-in person changes.
   ref.watch(workspaceContextProvider.select((w) => w?.userId));
-  return ref.watch(savedSignatureRepositoryProvider).mine();
+  return ref.watch(savedSignatureRepositoryProvider).lookup();
+});
+
+/// The caller's saved signature, or null when none is saved or it could not
+/// be read. For the checklist approval pad pre-fill, where both mean "start
+/// from a blank pad". Derived from [mySavedSignatureLookupProvider], so
+/// invalidating that one refreshes this too.
+final FutureProvider<SavedSignature?> mySavedSignatureProvider =
+    FutureProvider<SavedSignature?>((ref) async {
+  final SavedSignatureLookup lookup =
+      await ref.watch(mySavedSignatureLookupProvider.future);
+  return lookup.signature;
 });
 
 /// Unfinished drafts (checklist + inspection) with real content that are

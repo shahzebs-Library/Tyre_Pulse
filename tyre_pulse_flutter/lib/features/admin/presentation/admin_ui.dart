@@ -146,9 +146,8 @@ class AdminNavTile extends StatelessWidget {
           ],
           const SizedBox(width: TpSpace.xs),
           Icon(
-            Directionality.of(context) == TextDirection.rtl
-                ? Icons.chevron_left_rounded
-                : Icons.chevron_right_rounded,
+            // Mirrors itself under RTL (matchTextDirection).
+            Icons.chevron_right_rounded,
             color: palette.textMuted,
           ),
         ],

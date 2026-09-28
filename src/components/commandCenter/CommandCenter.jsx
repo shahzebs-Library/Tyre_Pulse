@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Truck, CheckCircle2, AlertTriangle, AlertOctagon, FileText, ShieldCheck, ArrowUp, ArrowDown,
@@ -6,78 +6,13 @@ import {
   Receipt, Settings2, Hammer, Disc3, Scissors, Target, ClipboardList,
 } from 'lucide-react'
 import { useSettings } from '../../contexts/SettingsContext'
-import { toUserMessage } from '../../lib/safeError'
 import {
   greeting, timeAgo, fleetStats, tyreHealth, actionBuckets, maintenanceDue, workStatus,
   utilizationByMonth, monthLabel, changePct, compact, COUNTRY_POINTS,
 } from '../../lib/commandCenter'
 import * as cc from '../../lib/api/commandCenter'
 import { WORLD_LAND_PATH, WORLD_W, WORLD_H, project } from './worldLand'
-import './commandCenter.css'
-
-/* ── data hook: one per card, so each card fails and retries on its own ───── */
-function useCard(loader, deps) {
-  const [state, setState] = useState({ loading: true, data: null, error: null })
-  const seq = useRef(0)
-  const run = useCallback(() => {
-    const id = ++seq.current
-    setState((s) => ({ ...s, loading: true, error: null }))
-    Promise.resolve().then(loader).then(
-      (data) => { if (id === seq.current) setState({ loading: false, data, error: null }) },
-      (e) => { if (id === seq.current) setState({ loading: false, data: null, error: toUserMessage(e, 'Could not load this section.') }) },
-    )
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps)
-  useEffect(() => { run() }, [run])
-  return { ...state, retry: run }
-}
-
-function Card({ area, title, sub, action, children, className = '' }) {
-  return (
-    <section className={`cc-card ${area || ''} ${className}`} aria-label={title}>
-      {(title || action) && (
-        <div className="cc-card-head">
-          <div>
-            {title && <h2 className="cc-card-title">{title}</h2>}
-            {sub && <p className="cc-card-sub">{sub}</p>}
-          </div>
-          {action}
-        </div>
-      )}
-      {children}
-    </section>
-  )
-}
-
-function ViewAll({ to, label = 'View all' }) {
-  return <Link className="cc-link" to={to}>{label} <ArrowRight size={13} aria-hidden="true" /></Link>
-}
-
-function CardState({ state, empty, lines = 4, children }) {
-  if (state.loading && !state.data) {
-    return <div style={{ display: 'grid', gap: 10 }}>{Array.from({ length: lines }, (_, i) => <div key={i} className="cc-skel" style={{ height: 30 }} />)}</div>
-  }
-  if (state.error) {
-    return <div className="cc-empty" role="alert"><div>{state.error}<br /><button className="cc-btn" onClick={state.retry}>Try again</button></div></div>
-  }
-  if (empty) return <div className="cc-empty">{empty}</div>
-  return children
-}
-
-function Tabs({ tabs, value, onChange, label }) {
-  return (
-    <div className="cc-tabs" role="tablist" aria-label={label}>
-      {tabs.map((t) => (
-        <button key={t.key} type="button" role="tab" className="cc-tab" aria-selected={value === t.key} onClick={() => onChange(t.key)}>
-          {t.label}{t.count != null && <span className={`cc-count ${t.countTone || ''}`}>{t.count}</span>}
-        </button>
-      ))}
-    </div>
-  )
-}
-
-const fmtInt = (n) => (n == null ? 'N/A' : Number(n).toLocaleString('en-US'))
-const fmtPct = (n) => (n == null ? 'N/A' : `${Math.round(n)}%`)
+import { useCard, Card, ViewAll, CardState, Tabs, Kpi, fmtInt, fmtPct } from './kit'
 
 /* ── hero ─────────────────────────────────────────────────────────────── */
 function Hero({ fleet }) {
@@ -99,32 +34,6 @@ function Hero({ fleet }) {
         </div>
       )}
     </div>
-  )
-}
-
-/* ── KPI strip ────────────────────────────────────────────────────────── */
-function Trend({ value, goodWhenUp = true }) {
-  if (value == null) return null
-  if (value === 0) return <span className="cc-kpi-trend flat"><ArrowRight size={12} aria-hidden="true" /> 0%</span>
-  const up = value > 0
-  const cls = up === goodWhenUp ? (up ? 'up-good' : 'down-good') : (up ? 'up-bad' : 'down-bad')
-  return (
-    <span className={`cc-kpi-trend ${cls}`} title="Change over the last 30 days">
-      {up ? <ArrowUp size={12} aria-hidden="true" /> : <ArrowDown size={12} aria-hidden="true" />}{Math.abs(value)}%
-    </span>
-  )
-}
-
-function Kpi({ icon: Icon, tone, value, label, to, trend, goodWhenUp, loading }) {
-  return (
-    <Link to={to} className="cc-card cc-kpi">
-      <span className={`cc-kpi-icon ${tone}`}><Icon size={21} aria-hidden="true" /></span>
-      <div className="cc-kpi-body">
-        <div className="cc-kpi-val" style={tone === 't-red' ? { color: 'var(--cc-red)' } : undefined}>{loading ? '...' : fmtInt(value)}</div>
-        <div className="cc-kpi-label">{label}</div>
-      </div>
-      <Trend value={trend} goodWhenUp={goodWhenUp} />
-    </Link>
   )
 }
 
@@ -581,7 +490,7 @@ export default function CommandCenter() {
         <Kpi icon={Truck} tone="t-green" value={f?.total} label="Total Vehicles" to="/fleet-master" trend={f?.trend.total} loading={fleet.loading} />
         <Kpi icon={CheckCircle2} tone="t-green" value={f?.active} label="Active Vehicles" to="/fleet-master" trend={f?.trend.active} loading={fleet.loading} />
         <Kpi icon={AlertTriangle} tone="t-amber" value={maint.data?.total} label="Maintenance Due" to="/pm-programs" loading={maint.loading} />
-        <Kpi icon={AlertOctagon} tone="t-red" value={critical} label="Critical Tyre Issues" to="/tyre-lifecycle" loading={tyres.loading} />
+        <Kpi icon={AlertOctagon} tone="t-red" danger value={critical} label="Critical Tyre Issues" to="/tyre-lifecycle" loading={tyres.loading} />
         <Kpi icon={FileWarning} tone="t-green" value={f?.missingSpecs} label="Missing Specs" to="/fleet-master" loading={fleet.loading} />
         <Kpi icon={ShieldCheck} tone="t-green" value={f?.noPolicy} label="No Policy Set" to="/fleet-master" loading={fleet.loading} />
       </div>

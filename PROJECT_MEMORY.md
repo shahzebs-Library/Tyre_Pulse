@@ -76,6 +76,29 @@ batching stops them being started at all.
 
 ---
 
+# ⚑ SESSION 2026-09-28 (part 12) — FLUTTER ACCIDENT SCREENS TO 4 OWNER MOCKS + FLEET SUPERVISOR. PR #367 merged (6922e34). No migration.
+Flutter only (owner: "keep flutter only"; Expo app + listing untouched). NO build triggered; owner runs
+"Flutter Release - Play Internal Testing" on main -> **0.1.0+5** (Internal track of com.shahzebrahman.tyrepulse only).
+- **Mocks matched:** Report step 1 "Identify asset" (scan sheet, photo result cards, read-only fleet-master tiles, SEPARATE
+  incident-site picker), WS1 Fleet validation, WS3 Insurance/Claims (8-doc package, register, payment+recovery), WS4
+  Responsibility & payment. Each workstream screen = one person's job.
+- **Vehicle photo order:** uploaded asset photo (vehicle-photos bucket, signed URL, index PAGED with .order('id').range) >
+  class photo > neutral icon. `accident_report_vehicle_photo.dart`.
+- **Real bugs fixed:** recoveries now keyed on accident_id with CHECK-valid source/status/date (never saved before); claim
+  number no longer invented; recovered total counts ONLY recovered|partial (mirror of web COUNTED_RECOVERY_STATUSES);
+  case-country read no longer swallows errors.
+- **Fleet Supervisor:** mapped on mobile (was unmapped = denied). NEW `accident_capability.dart`
+  (`accidentCapabilityProvider`: server `app_is_elevated` then `app_user_can('accidents',cap)`, fails closed) hides claim
+  register/recovery (edit_insurance/post_cost) and responsibility save (approve_liability) from users who lack them.
+  Tests override `accidentCapabilityCheckerProvider` with `FakeAccidentCapabilityChecker` (null = allow all).
+- Demo reviewer account `demo.manager` (org "Tyre Pulse Demo Fleet") exists for Play App access;
+  `store-assets/FLUTTER_CLOSED_TESTING.md` = the closed-testing checklist (data safety, listing, app access).
+- ARB parity 2069. Goldens re-run on Windows found no change. Local `flutter test` on the whole accident folder exceeds 25 min
+  in the scratchpad copy - rely on CI for the full run.
+- **OPEN (owner):** should the web accident pages also match these 4 mocks; which person's screens next (WS2/5/6/7).
+
+---
+
 # ⚑ SESSION 2026-09-28 (part 11) — 22 OWNER MOCKS MATCHED + PLUGIN-SKILL REVIEW APPLIED. PR #366. No migration. NO mobile build.
 Branch `claude/project-review-audit-t07hbp`. Owner rule: work must be reviewed AND confirmed through the installed plugin skills
 (vgv-ai-flutter-plugin flutter-reviewer/accessibility/testing, dart-flutter, design critique/accessibility-review, frontend-design) before merge.

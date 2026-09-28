@@ -88,6 +88,9 @@ Branch `claude/marketing-pmv-redesign`. marketing/ only; the app is untouched.
   Sources are owner-supplied ONLY: crops of the owner's own mockup images (loader + detail crops, technician with
   tablet, signature phone, inspector) upscaled 3x, and the Flutter app's vehicle/login photos (tyre_pulse_flutter/assets).
   Self-hosted, no external image host. The loader crop carries a CAT logo (as in the mockup); flagged to the owner.
+  Owner then supplied 3 site photos (technician at a generator x2, engineer with tablet on a Dubai rooftop): a THIRD
+  company's logo ("VoiceQuote") was on the vests and was removed by OpenCV inpaint; a baked-in comments panel with
+  people's names was cropped off photo 1. RULE: check every supplied photo for other brands' logos before publishing.
   Product screens stay HTML in `components/mock/Screens.tsx` over `lib/sample.ts`, each tagged "Sample data".
 - three.js hero (Hero3D/HeroScene) + three/@react-three/framer-motion deps REMOVED; /ar uses the loader SVG.
 - Verified: build + lint (0 errors) + 8 tests; no horizontal overflow at 320/390/768/1024 on all 11 pages; menus close

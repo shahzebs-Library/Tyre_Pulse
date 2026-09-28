@@ -91,7 +91,7 @@ export default function HomePage() {
                 { id: "fleet", label: "Fleet and assets", icon: <Truck size={20} aria-hidden="true" />, panel: <AssetRecord /> },
                 {
                   id: "maint", label: "Maintenance and workshop", icon: <Wrench size={20} aria-hidden="true" />,
-                  panel: <div className="tab-panel"><Photo name="concretePump" fit="contain" className="art art-dark" /><TabCopy title="Every job, planned and tracked." text="Preventive schedules and breakdowns land in one work order queue your workshop can run from." points={["Preventive plans by hours, kilometres or date", "Job cards with labour, parts and outside services", "Technician allocation and workload"]} href="/platform/maintenance" /></div>,
+                  panel: <div className="tab-panel"><Photo name="technicianGenerator" position="45% 40%" /><TabCopy title="Every job, planned and tracked." text="Preventive schedules and breakdowns land in one work order queue your workshop can run from." points={["Preventive plans by hours, kilometres or date", "Job cards with labour, parts and outside services", "Technician allocation and workload"]} href="/platform/maintenance" /></div>,
                 },
                 {
                   id: "insp", label: "Inspections and safety", icon: <ShieldCheck size={20} aria-hidden="true" />,
@@ -133,7 +133,7 @@ export default function HomePage() {
             <h2 className="sec-h" id="people">Built for the people doing the work.</h2>
             <div className="people">
               <div className="people-art">
-                <Photo name="technician" position="30% 30%" />
+                <Photo name="technicianPhone" position="40% 30%" />
                 <OfflineInspectionPhone />
               </div>
               <Tabs

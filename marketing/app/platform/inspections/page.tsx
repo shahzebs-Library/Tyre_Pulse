@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, CheckCircle2 } from "lucide-react";
+import { ArrowRight, CheckCircle2, WifiOff } from "lucide-react";
 import { PageFrame } from "@/components/PageFrame";
 import { PageTop, SubNav } from "@/components/PageTop";
 import { CtaBand } from "@/components/CtaBand";
@@ -38,7 +38,8 @@ export default function InspectionsPage() {
               <Link className="btn-text" href="/contact">Book a demo <ArrowRight size={16} aria-hidden="true" /></Link>
             </div>
             <div className="art-box">
-              <Photo name="inspector" alt="Inspector using a tablet beside a loader, marked works offline" />
+              <Photo name="engineer" position="35% 15%" />
+              <span className="badge-float"><WifiOff size={14} aria-hidden="true" />Works offline</span>
             </div>
           </div>
           <div className="grid-4p">

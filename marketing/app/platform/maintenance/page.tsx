@@ -42,7 +42,7 @@ export default function MaintenancePage() {
               {["Service plans by engine hours, kilometres or calendar", "Due and overdue work surfaced before it becomes a breakdown", "Recording a service advances the next due date automatically", "Compliance by site, asset type and plan"].map((t) => <li key={t}><CheckCircle2 size={18} aria-hidden="true" />{t}</li>)}
             </ul>
           </div>
-          <Photo name="concretePump" className="art art-dark" fit="contain" />
+          <Photo name="technicianGenerator" position="45% 40%" />
         </div>
       </section>
       <CtaBand title="Streamline your maintenance operations." text="See how Tyre Pulse can support your workshop and field teams." />

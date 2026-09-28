@@ -76,6 +76,26 @@ batching stops them being started at all.
 
 ---
 
+# ⚑ SESSION 2026-09-28 (part 10) — ADMIN PICKS THE LOGIN PICTURE + EVERY HALF-BUILT FLUTTER SCREEN FINISHED.
+Branch `claude/project-review-audit-t07hbp`. Migration `20260928090000_public_config_mobile_login_hero` APPLIED LIVE. NO mobile build.
+- **Login picture is an admin setting**: Console -> Mobile App -> Login pictures (`src/console/pages/mobileApp/LoginArtworkPanel.jsx`,
+  pure `src/lib/mobileLoginArt.js`). `system_config.mobile_login_hero` = JSON {saudi_arabia|united_arab_emirates|egypt: artKey}; art keys
+  saudi_landmark / uae_landmark / egypt_landmark / fleet_machines = ONLY pictures bundled in the Flutter app (previews in `public/login-art/`).
+  Added to `get_public_config` (anon, pre-auth). Flutter: `features/auth/domain/login_artwork.dart` (MIRROR of the JS, test pins both),
+  repository caches last value for offline starts, unknown/unreadable -> country landmark. Owner decides the Saudi picture there now.
+- **Flutter completion pass (5 agents, audit-driven)**: tyre Take Action Rotate saves a `tyre_service_events` rotation (Remove/Retread/Spare
+  hidden: no field write path); driver workspace + vehicle class labels + accidents fully in ARB (key count now 1732, parity test pinned);
+  Management Overview has its own content, Reports PDF export, team detail sheet; scanner camera-failed + Retry; new screens for /admin,
+  /admin/users|access|approvals|sites|ai-chat (`features/admin`), /ai Fleet AI, /register (pending account, honours registration_open;
+  login Access help -> "Create an account"), /repair-request (`repair_requests`, moved out of `knownFabrications`); accident case PDF;
+  dead accident demo code with fabricated data deleted. Registrations: `.withAll(adminScreenRegistrations)` + `extrasScreenRegistrations` in main.dart.
+- ARB workflow for parallel agents: each agent writes a fragment JSON, lead merges with a script (append-only, keeps file layout).
+- Honest gaps: case/management/fine PDFs are English-only when no Arabic font can load; Repair request online-only, no photos
+  (`REPAIR_REQUEST` not in protected command_registry); Rotate does not move `tyre_records.position` (managers-only update).
+- `scripts/sync-driver-workspace-copy.mjs` no longer writes the retired Dart copy.
+
+---
+
 # ⚑ SESSION 2026-09-27 (part 9) — FLUTTER SCREENS MATCHED TO THE OWNER'S 19 MOCKS + LOGIC AUDIT FIXES. No DB migration.
 Branch `claude/project-review-audit-t07hbp`, ONE push. Mocks: owner zip "Tyre_Pulse_Mobile_Mock_References" (01-19; file 12 arrived EMPTY - ask for it again). NO mobile build (standing rule).
 - **Toolchain FACT that changes the skill's "no SDK here" line:** Flutter 3.47.2 CAN be downloaded into the session scratchpad and run (`fl.sh flutter ...`). Verify in a COPY of the tree, never run pub get/tests in the real tree while agents edit it.

@@ -2397,5 +2397,69 @@
   "homeNothingForRoleTitle": "Nothing to check for your role",
   "@homeNothingForRoleTitle": {
     "description": "Home Today's work: shown when no work source (drafts, tyre alerts, sign-offs) applies to the signed-in role, so 'nothing needs you' cannot be claimed."
+  },
+  "tyreActionRotateSubtitle": "Record that this tyre was moved to another position",
+  "@tyreActionRotateSubtitle": {
+    "description": "Take Action: Rotate tyre row subtitle"
+  },
+  "tyreActionRotateFromLabel": "Current position",
+  "@tyreActionRotateFromLabel": {
+    "description": "Rotate sheet: read-only current position field"
+  },
+  "tyreActionRotateToLabel": "New position",
+  "@tyreActionRotateToLabel": {
+    "description": "Rotate sheet: destination position field"
+  },
+  "tyreActionRotateToHint": "For example RHF1",
+  "@tyreActionRotateToHint": {
+    "description": "Rotate sheet: destination position hint"
+  },
+  "tyreActionRotateNotesLabel": "Notes (optional)",
+  "@tyreActionRotateNotesLabel": {
+    "description": "Rotate sheet: notes field"
+  },
+  "tyreActionRotateNotesHint": "Anything the next fitter should know",
+  "@tyreActionRotateNotesHint": {
+    "description": "Rotate sheet: notes hint"
+  },
+  "tyreActionRotateOnlineNote": "Needs a connection. Rotations are saved straight to the server.",
+  "@tyreActionRotateOnlineNote": {
+    "description": "Rotate sheet: helper stating the write is online only"
+  },
+  "tyreActionRotateSubmit": "Record rotation",
+  "@tyreActionRotateSubmit": {
+    "description": "Rotate sheet: submit button"
+  },
+  "tyreActionRotateToRequiredTitle": "New position needed",
+  "@tyreActionRotateToRequiredTitle": {
+    "description": "Rotate sheet: validation dialog title"
+  },
+  "tyreActionRotateToRequiredMessage": "Enter the position this tyre was moved to.",
+  "@tyreActionRotateToRequiredMessage": {
+    "description": "Rotate sheet: destination missing"
+  },
+  "tyreActionRotateSamePositionMessage": "The new position must be different from the current one.",
+  "@tyreActionRotateSamePositionMessage": {
+    "description": "Rotate sheet: destination equals current position"
+  },
+  "tyreActionRotateSavedTitle": "Rotation recorded",
+  "@tyreActionRotateSavedTitle": {
+    "description": "Rotate sheet: success dialog title"
+  },
+  "tyreActionRotateSavedMessage": "The rotation is saved in this tyre's service history. It does not change the position shown in the tyre register.",
+  "@tyreActionRotateSavedMessage": {
+    "description": "Rotate sheet: success message, states the register is not rewritten"
+  },
+  "tyreActionRotateFailedTitle": "Rotation not saved",
+  "@tyreActionRotateFailedTitle": {
+    "description": "Rotate sheet: failure dialog title"
+  },
+  "tyreActionRotateOfflineMessage": "No connection. Rotations are saved online only, so this one was not recorded. Try again when you are connected.",
+  "@tyreActionRotateOfflineMessage": {
+    "description": "Rotate sheet: network failure, honest not-saved message"
+  },
+  "tyreActionRotateFailedMessage": "The rotation could not be saved. Try again.",
+  "@tyreActionRotateFailedMessage": {
+    "description": "Rotate sheet: generic failure message"
   }
 }

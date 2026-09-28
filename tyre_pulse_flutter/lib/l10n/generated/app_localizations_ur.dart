@@ -3062,4 +3062,60 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get homeNothingForRoleTitle => 'آپ کے کردار کے لیے جانچنے کو کچھ نہیں';
+
+  @override
+  String get tyreActionRotateSubtitle =>
+      'درج کریں کہ یہ ٹائر دوسری جگہ منتقل کیا گیا';
+
+  @override
+  String get tyreActionRotateFromLabel => 'موجودہ جگہ';
+
+  @override
+  String get tyreActionRotateToLabel => 'نئی جگہ';
+
+  @override
+  String get tyreActionRotateToHint => 'مثال کے طور پر RHF1';
+
+  @override
+  String get tyreActionRotateNotesLabel => 'نوٹس (اختیاری)';
+
+  @override
+  String get tyreActionRotateNotesHint =>
+      'کوئی بھی بات جو اگلے فٹر کو معلوم ہونی چاہیے';
+
+  @override
+  String get tyreActionRotateOnlineNote =>
+      'کنکشن درکار ہے۔ روٹیشن براہ راست سرور پر محفوظ ہوتی ہے۔';
+
+  @override
+  String get tyreActionRotateSubmit => 'روٹیشن درج کریں';
+
+  @override
+  String get tyreActionRotateToRequiredTitle => 'نئی جگہ درکار ہے';
+
+  @override
+  String get tyreActionRotateToRequiredMessage =>
+      'وہ جگہ درج کریں جہاں یہ ٹائر منتقل کیا گیا۔';
+
+  @override
+  String get tyreActionRotateSamePositionMessage =>
+      'نئی جگہ موجودہ جگہ سے مختلف ہونی چاہیے۔';
+
+  @override
+  String get tyreActionRotateSavedTitle => 'روٹیشن درج ہو گئی';
+
+  @override
+  String get tyreActionRotateSavedMessage =>
+      'روٹیشن اس ٹائر کی سروس ہسٹری میں محفوظ ہو گئی ہے۔ اس سے ٹائر رجسٹر میں دکھائی گئی جگہ تبدیل نہیں ہوتی۔';
+
+  @override
+  String get tyreActionRotateFailedTitle => 'روٹیشن محفوظ نہیں ہوئی';
+
+  @override
+  String get tyreActionRotateOfflineMessage =>
+      'کنکشن نہیں ہے۔ روٹیشن صرف آن لائن محفوظ ہوتی ہے، اس لیے یہ درج نہیں ہوئی۔ کنکشن ملنے پر دوبارہ کوشش کریں۔';
+
+  @override
+  String get tyreActionRotateFailedMessage =>
+      'روٹیشن محفوظ نہیں ہو سکی۔ دوبارہ کوشش کریں۔';
 }

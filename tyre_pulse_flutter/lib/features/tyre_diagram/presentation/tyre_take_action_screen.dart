@@ -31,15 +31,29 @@
 /// documented idiom: "A disabled button is honest; a button that does
 /// nothing when pressed is what repository rule 7 forbids."
 ///
-/// Four rows are honestly disabled outright - **Rotate tyre**, **Remove
-/// tyre**, **Send to retread**, **Mark as spare** - because nothing in this
-/// codebase's command registry, repositories or RPC map backs any of them
-/// today (verified against `lib/core/sync/command_registry.dart`'s full
-/// [CommandType] enum and `docs/flutter-migration/02-backend-table-rpc-map
-/// .md`). They are shown, not removed, so the full vocabulary of what a
-/// workshop can eventually do stays visible - but each one carries the same
-/// "not available in this build yet" caption rather than a control that
-/// looks live and silently does nothing.
+/// **Rotate tyre** is real and online: it records one `rotation` row in
+/// `tyre_service_events` through [TyreServiceEventRepository] (see that
+/// file for the verified table, CHECK vocabulary and INSERT policy). It is
+/// only offered when the screen knows a tyre serial or an asset number,
+/// the same requirement the web's own writer enforces. It records the move
+/// in the tyre's service history; it does not rewrite the register's
+/// position, and the confirmation says so.
+///
+/// Three actions from the reference design are deliberately NOT shown,
+/// because nothing real backs them for a field user, and a disabled
+/// "coming soon" row is not an action:
+///
+///  - **Remove tyre** - a removal without a replacement is an UPDATE of the
+///    existing `tyre_records` row. No offline command updates that table,
+///    its UPDATE policy is managers only, and `tyre_service_events` has no
+///    removal event type. A removal that is really a replacement is already
+///    the Replace tyre row.
+///  - **Send to retread** - no retread event type exists in
+///    `tyre_service_events`, and `retread_claims` records a claim, not a
+///    dispatch. Filing it under `other` would hide it from every report.
+///  - **Mark as spare** - the only spare register is `tyre_pool`, whose
+///    INSERT policy admits Admin/Manager/Director only and which would
+///    contradict a tyre the register still shows fitted to this wheel.
 library;
 
 import 'package:flutter/material.dart';
@@ -50,9 +64,12 @@ import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/core/errors/app_error.dart';
+import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/tyre_diagram/data/tyre_defect_report_repository.dart';
+import 'package:tyre_pulse/features/tyre_diagram/data/tyre_service_event_repository.dart';
 import 'package:tyre_pulse/features/tyre_diagram/tyre_diagram_providers.dart';
 
 /// Pushes [TyreTakeActionScreen]. See [pushTyreDetailScreen]'s own doc
@@ -132,30 +149,13 @@ class TyreTakeActionScreen extends ConsumerWidget {
                 : l10n.takeActionAdjustReadingUnavailableCaption,
             onTap: onAdjustReading,
           ),
-          _ActionTile(
-            icon: Icons.rotate_right_outlined,
-            title: l10n.takeActionRotateTyre,
-            subtitle: l10n.takeActionComingSoonCaption,
-            onTap: null,
-          ),
-          _ActionTile(
-            icon: Icons.remove_circle_outline,
-            title: l10n.takeActionRemoveTyre,
-            subtitle: l10n.takeActionComingSoonCaption,
-            onTap: null,
-          ),
-          _ActionTile(
-            icon: Icons.autorenew,
-            title: l10n.takeActionSendToRetread,
-            subtitle: l10n.takeActionComingSoonCaption,
-            onTap: null,
-          ),
-          _ActionTile(
-            icon: Icons.inventory_2_outlined,
-            title: l10n.takeActionMarkAsSpare,
-            subtitle: l10n.takeActionComingSoonCaption,
-            onTap: null,
-          ),
+          if (_canRotate)
+            _ActionTile(
+              icon: Icons.rotate_right_outlined,
+              title: l10n.takeActionRotateTyre,
+              subtitle: l10n.tyreActionRotateSubtitle,
+              onTap: () => _rotateTyre(context),
+            ),
         ],
       ),
     );
@@ -179,6 +179,25 @@ class TyreTakeActionScreen extends ConsumerWidget {
       context: context,
       title: l10n.reportDefectTitle,
       builder: (BuildContext sheetContext) => _ReportDefectForm(
+        positionCode: positionCode,
+        assetNo: assetNo,
+        siteName: siteName,
+        tyreSerial: tyreSerial,
+      ),
+    );
+  }
+
+  /// A rotation event must name a tyre serial or an asset - see
+  /// [TyreServiceEventRepository.recordRotation].
+  bool get _canRotate =>
+      _blankToNull(tyreSerial) != null || _blankToNull(assetNo) != null;
+
+  Future<void> _rotateTyre(BuildContext context) async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    await TpBottomSheet.show<void>(
+      context: context,
+      title: l10n.takeActionRotateTyre,
+      builder: (BuildContext sheetContext) => _RotateTyreForm(
         positionCode: positionCode,
         assetNo: assetNo,
         siteName: siteName,
@@ -441,6 +460,167 @@ class _ReportDefectFormState extends ConsumerState<_ReportDefectForm> {
           const SizedBox(height: TpSpace.xl),
           TpButton.primary(
             label: l10n.reportDefectSubmitAction,
+            icon: Icons.save_outlined,
+            isFullWidth: true,
+            isBusy: _submitting,
+            onPressed: _submitting ? null : _submit,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RotateTyreForm extends ConsumerStatefulWidget {
+  const _RotateTyreForm({
+    required this.positionCode,
+    this.assetNo,
+    this.siteName,
+    this.tyreSerial,
+  });
+
+  final String positionCode;
+  final String? assetNo;
+  final String? siteName;
+  final String? tyreSerial;
+
+  @override
+  ConsumerState<_RotateTyreForm> createState() => _RotateTyreFormState();
+}
+
+class _RotateTyreFormState extends ConsumerState<_RotateTyreForm> {
+  late final TextEditingController _fromController =
+      TextEditingController(text: widget.positionCode);
+  final TextEditingController _toController = TextEditingController();
+  final TextEditingController _notesController = TextEditingController();
+  bool _submitting = false;
+
+  @override
+  void dispose() {
+    _fromController.dispose();
+    _toController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_submitting) return;
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final String to = _toController.text.trim();
+    if (to.isEmpty) {
+      await _showInfo(
+        title: l10n.tyreActionRotateToRequiredTitle,
+        message: l10n.tyreActionRotateToRequiredMessage,
+      );
+      return;
+    }
+    if (to.toUpperCase() == widget.positionCode.trim().toUpperCase()) {
+      await _showInfo(
+        title: l10n.tyreActionRotateToRequiredTitle,
+        message: l10n.tyreActionRotateSamePositionMessage,
+      );
+      return;
+    }
+
+    final WorkspaceContext? workspace = ref.read(workspaceContextProvider);
+    if (workspace == null) return;
+
+    setState(() => _submitting = true);
+    try {
+      await ref.read(tyreServiceEventRepositoryProvider).recordRotation(
+            workspace: workspace,
+            input: RecordTyreRotationInput(
+              fromPosition: widget.positionCode,
+              toPosition: to,
+              eventDate: DateTime.now(),
+              assetNo: widget.assetNo,
+              tyreSerial: widget.tyreSerial,
+              site: widget.siteName,
+              notes: _notesController.text,
+            ),
+          );
+      if (!mounted) return;
+      await _showInfo(
+        title: l10n.tyreActionRotateSavedTitle,
+        message: l10n.tyreActionRotateSavedMessage,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pop();
+    } on Object catch (error) {
+      if (!mounted) return;
+      await _showInfo(
+        title: l10n.tyreActionRotateFailedTitle,
+        message: _isNetwork(error)
+            ? l10n.tyreActionRotateOfflineMessage
+            : l10n.tyreActionRotateFailedMessage,
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  /// The repository's writes go through `SupabaseGateway.guard`, which
+  /// throws a [SupabaseFailure] wrapping the classified [AppError].
+  static bool _isNetwork(Object error) {
+    final AppErrorKind? kind = switch (error) {
+      SupabaseFailure(:final AppError error) => error.kind,
+      AppError(:final AppErrorKind kind) => kind,
+      _ => null,
+    };
+    return kind == AppErrorKind.network;
+  }
+
+  Future<void> _showInfo({required String title, required String message}) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    return showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: <Widget>[
+          TpButton.primary(
+            label: l10n.actionClose,
+            onPressed: () => Navigator.of(dialogContext).pop(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: TpSpace.xl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          TpInput(
+            label: l10n.tyreActionRotateFromLabel,
+            controller: _fromController,
+            enabled: false,
+          ),
+          const SizedBox(height: TpSpace.md),
+          TpInput(
+            label: l10n.tyreActionRotateToLabel,
+            controller: _toController,
+            hint: l10n.tyreActionRotateToHint,
+            isRequired: true,
+            textCapitalization: TextCapitalization.characters,
+          ),
+          const SizedBox(height: TpSpace.md),
+          TpInput(
+            label: l10n.tyreActionRotateNotesLabel,
+            controller: _notesController,
+            hint: l10n.tyreActionRotateNotesHint,
+            maxLines: 3,
+            helperText: l10n.tyreActionRotateOnlineNote,
+          ),
+          const SizedBox(height: TpSpace.xl),
+          TpButton.primary(
+            label: l10n.tyreActionRotateSubmit,
             icon: Icons.save_outlined,
             isFullWidth: true,
             isBusy: _submitting,

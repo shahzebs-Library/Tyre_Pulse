@@ -947,5 +947,21 @@
   "profileSyncUnknownFooter": "تعذّر التحقق من المزامنة المعلقة. قد يكون هناك عمل غير متزامن على هذا الجهاز",
   "homeRecentInspectionsTitle": "فحوصاتك الأخيرة",
   "homeAssetNotChecked": "لم يُفحص",
-  "homeNothingForRoleTitle": "لا يوجد ما يلزم فحصه لدورك"
+  "homeNothingForRoleTitle": "لا يوجد ما يلزم فحصه لدورك",
+  "tyreActionRotateSubtitle": "سجّل نقل هذا الإطار إلى موضع آخر",
+  "tyreActionRotateFromLabel": "الموضع الحالي",
+  "tyreActionRotateToLabel": "الموضع الجديد",
+  "tyreActionRotateToHint": "مثال: RHF1",
+  "tyreActionRotateNotesLabel": "ملاحظات (اختياري)",
+  "tyreActionRotateNotesHint": "أي شيء يجب أن يعرفه الفني التالي",
+  "tyreActionRotateOnlineNote": "يتطلب اتصالاً بالإنترنت. تُحفظ عمليات التدوير مباشرة على الخادم.",
+  "tyreActionRotateSubmit": "تسجيل التدوير",
+  "tyreActionRotateToRequiredTitle": "الموضع الجديد مطلوب",
+  "tyreActionRotateToRequiredMessage": "أدخل الموضع الذي نُقل إليه هذا الإطار.",
+  "tyreActionRotateSamePositionMessage": "يجب أن يختلف الموضع الجديد عن الموضع الحالي.",
+  "tyreActionRotateSavedTitle": "تم تسجيل التدوير",
+  "tyreActionRotateSavedMessage": "تم حفظ التدوير في سجل خدمة هذا الإطار. ولا يغيّر الموضع الظاهر في سجل الإطارات.",
+  "tyreActionRotateFailedTitle": "لم يتم حفظ التدوير",
+  "tyreActionRotateOfflineMessage": "لا يوجد اتصال. تُحفظ عمليات التدوير عبر الإنترنت فقط، لذلك لم يُسجَّل هذا التدوير. حاول مرة أخرى عند الاتصال.",
+  "tyreActionRotateFailedMessage": "تعذّر حفظ التدوير. حاول مرة أخرى."
 }

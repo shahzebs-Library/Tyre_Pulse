@@ -947,5 +947,21 @@
   "profileSyncUnknownFooter": "زیر التواء ہم آہنگی کی جانچ نہیں ہو سکی۔ ممکن ہے اس ڈیوائس پر غیر ہم آہنگ کام موجود ہو",
   "homeRecentInspectionsTitle": "آپ کے حالیہ معائنے",
   "homeAssetNotChecked": "جانچ نہیں ہوئی",
-  "homeNothingForRoleTitle": "آپ کے کردار کے لیے جانچنے کو کچھ نہیں"
+  "homeNothingForRoleTitle": "آپ کے کردار کے لیے جانچنے کو کچھ نہیں",
+  "tyreActionRotateSubtitle": "درج کریں کہ یہ ٹائر دوسری جگہ منتقل کیا گیا",
+  "tyreActionRotateFromLabel": "موجودہ جگہ",
+  "tyreActionRotateToLabel": "نئی جگہ",
+  "tyreActionRotateToHint": "مثال کے طور پر RHF1",
+  "tyreActionRotateNotesLabel": "نوٹس (اختیاری)",
+  "tyreActionRotateNotesHint": "کوئی بھی بات جو اگلے فٹر کو معلوم ہونی چاہیے",
+  "tyreActionRotateOnlineNote": "کنکشن درکار ہے۔ روٹیشن براہ راست سرور پر محفوظ ہوتی ہے۔",
+  "tyreActionRotateSubmit": "روٹیشن درج کریں",
+  "tyreActionRotateToRequiredTitle": "نئی جگہ درکار ہے",
+  "tyreActionRotateToRequiredMessage": "وہ جگہ درج کریں جہاں یہ ٹائر منتقل کیا گیا۔",
+  "tyreActionRotateSamePositionMessage": "نئی جگہ موجودہ جگہ سے مختلف ہونی چاہیے۔",
+  "tyreActionRotateSavedTitle": "روٹیشن درج ہو گئی",
+  "tyreActionRotateSavedMessage": "روٹیشن اس ٹائر کی سروس ہسٹری میں محفوظ ہو گئی ہے۔ اس سے ٹائر رجسٹر میں دکھائی گئی جگہ تبدیل نہیں ہوتی۔",
+  "tyreActionRotateFailedTitle": "روٹیشن محفوظ نہیں ہوئی",
+  "tyreActionRotateOfflineMessage": "کنکشن نہیں ہے۔ روٹیشن صرف آن لائن محفوظ ہوتی ہے، اس لیے یہ درج نہیں ہوئی۔ کنکشن ملنے پر دوبارہ کوشش کریں۔",
+  "tyreActionRotateFailedMessage": "روٹیشن محفوظ نہیں ہو سکی۔ دوبارہ کوشش کریں۔"
 }

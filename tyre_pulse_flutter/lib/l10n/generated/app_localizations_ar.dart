@@ -3056,4 +3056,58 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get homeNothingForRoleTitle => 'لا يوجد ما يلزم فحصه لدورك';
+
+  @override
+  String get tyreActionRotateSubtitle => 'سجّل نقل هذا الإطار إلى موضع آخر';
+
+  @override
+  String get tyreActionRotateFromLabel => 'الموضع الحالي';
+
+  @override
+  String get tyreActionRotateToLabel => 'الموضع الجديد';
+
+  @override
+  String get tyreActionRotateToHint => 'مثال: RHF1';
+
+  @override
+  String get tyreActionRotateNotesLabel => 'ملاحظات (اختياري)';
+
+  @override
+  String get tyreActionRotateNotesHint => 'أي شيء يجب أن يعرفه الفني التالي';
+
+  @override
+  String get tyreActionRotateOnlineNote =>
+      'يتطلب اتصالاً بالإنترنت. تُحفظ عمليات التدوير مباشرة على الخادم.';
+
+  @override
+  String get tyreActionRotateSubmit => 'تسجيل التدوير';
+
+  @override
+  String get tyreActionRotateToRequiredTitle => 'الموضع الجديد مطلوب';
+
+  @override
+  String get tyreActionRotateToRequiredMessage =>
+      'أدخل الموضع الذي نُقل إليه هذا الإطار.';
+
+  @override
+  String get tyreActionRotateSamePositionMessage =>
+      'يجب أن يختلف الموضع الجديد عن الموضع الحالي.';
+
+  @override
+  String get tyreActionRotateSavedTitle => 'تم تسجيل التدوير';
+
+  @override
+  String get tyreActionRotateSavedMessage =>
+      'تم حفظ التدوير في سجل خدمة هذا الإطار. ولا يغيّر الموضع الظاهر في سجل الإطارات.';
+
+  @override
+  String get tyreActionRotateFailedTitle => 'لم يتم حفظ التدوير';
+
+  @override
+  String get tyreActionRotateOfflineMessage =>
+      'لا يوجد اتصال. تُحفظ عمليات التدوير عبر الإنترنت فقط، لذلك لم يُسجَّل هذا التدوير. حاول مرة أخرى عند الاتصال.';
+
+  @override
+  String get tyreActionRotateFailedMessage =>
+      'تعذّر حفظ التدوير. حاول مرة أخرى.';
 }

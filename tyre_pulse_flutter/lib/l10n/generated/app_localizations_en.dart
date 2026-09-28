@@ -3048,4 +3048,60 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get homeNothingForRoleTitle => 'Nothing to check for your role';
+
+  @override
+  String get tyreActionRotateSubtitle =>
+      'Record that this tyre was moved to another position';
+
+  @override
+  String get tyreActionRotateFromLabel => 'Current position';
+
+  @override
+  String get tyreActionRotateToLabel => 'New position';
+
+  @override
+  String get tyreActionRotateToHint => 'For example RHF1';
+
+  @override
+  String get tyreActionRotateNotesLabel => 'Notes (optional)';
+
+  @override
+  String get tyreActionRotateNotesHint =>
+      'Anything the next fitter should know';
+
+  @override
+  String get tyreActionRotateOnlineNote =>
+      'Needs a connection. Rotations are saved straight to the server.';
+
+  @override
+  String get tyreActionRotateSubmit => 'Record rotation';
+
+  @override
+  String get tyreActionRotateToRequiredTitle => 'New position needed';
+
+  @override
+  String get tyreActionRotateToRequiredMessage =>
+      'Enter the position this tyre was moved to.';
+
+  @override
+  String get tyreActionRotateSamePositionMessage =>
+      'The new position must be different from the current one.';
+
+  @override
+  String get tyreActionRotateSavedTitle => 'Rotation recorded';
+
+  @override
+  String get tyreActionRotateSavedMessage =>
+      'The rotation is saved in this tyre\'s service history. It does not change the position shown in the tyre register.';
+
+  @override
+  String get tyreActionRotateFailedTitle => 'Rotation not saved';
+
+  @override
+  String get tyreActionRotateOfflineMessage =>
+      'No connection. Rotations are saved online only, so this one was not recorded. Try again when you are connected.';
+
+  @override
+  String get tyreActionRotateFailedMessage =>
+      'The rotation could not be saved. Try again.';
 }

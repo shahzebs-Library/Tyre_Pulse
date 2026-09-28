@@ -503,10 +503,12 @@ void main() {
     // inspections), homeAssetNotChecked (a card whose inspection recorded no
     // tyre evidence) and homeNothingForRoleTitle (no work source applies to
     // the role, so "Nothing needs you right now" cannot be claimed) = 3.
-    test('en, ar and ur each carry exactly 902 translatable keys today', () {
-      expect(_translatableKeys(en).length, 902);
-      expect(_translatableKeys(ar).length, 902);
-      expect(_translatableKeys(ur).length, 902);
+    // 902 + 16 = 918. Tyre Take Action: the Rotate tyre form, its validation
+    // and online-only save outcomes (tyreAction*).
+    test('en, ar and ur each carry exactly 918 translatable keys today', () {
+      expect(_translatableKeys(en).length, 918);
+      expect(_translatableKeys(ar).length, 918);
+      expect(_translatableKeys(ur).length, 918);
     });
   });
 

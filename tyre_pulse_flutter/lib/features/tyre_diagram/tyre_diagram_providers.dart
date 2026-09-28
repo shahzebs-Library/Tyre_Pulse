@@ -9,8 +9,10 @@ library;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tyre_pulse/core/database/app_database.dart';
 import 'package:tyre_pulse/core/database/app_database_provider.dart';
+import 'package:tyre_pulse/core/network/supabase_client_provider.dart';
 import 'package:tyre_pulse/core/sync/queued_command_repository.dart';
 import 'package:tyre_pulse/features/tyre_diagram/data/tyre_defect_report_repository.dart';
+import 'package:tyre_pulse/features/tyre_diagram/data/tyre_service_event_repository.dart';
 
 final Provider<QueuedCommandRepository>
     tyreDiagramQueuedCommandRepositoryProvider =
@@ -23,5 +25,14 @@ final Provider<TyreDefectReportRepository> tyreDefectReportRepositoryProvider =
     Provider<TyreDefectReportRepository>(
   (ref) => DefaultTyreDefectReportRepository(
     ref.watch(tyreDiagramQueuedCommandRepositoryProvider),
+  ),
+);
+
+/// The online "Rotate tyre" writer - see `tyre_service_event_repository.dart`
+/// for why it is a direct insert rather than a queued command.
+final Provider<TyreServiceEventRepository> tyreServiceEventRepositoryProvider =
+    Provider<TyreServiceEventRepository>(
+  (ref) => SupabaseTyreServiceEventRepository(
+    ref.watch(supabaseClientProvider),
   ),
 );

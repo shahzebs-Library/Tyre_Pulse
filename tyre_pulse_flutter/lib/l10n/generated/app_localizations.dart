@@ -5511,6 +5511,102 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Nothing to check for your role'**
   String get homeNothingForRoleTitle;
+
+  /// Take Action: Rotate tyre row subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Record that this tyre was moved to another position'**
+  String get tyreActionRotateSubtitle;
+
+  /// Rotate sheet: read-only current position field
+  ///
+  /// In en, this message translates to:
+  /// **'Current position'**
+  String get tyreActionRotateFromLabel;
+
+  /// Rotate sheet: destination position field
+  ///
+  /// In en, this message translates to:
+  /// **'New position'**
+  String get tyreActionRotateToLabel;
+
+  /// Rotate sheet: destination position hint
+  ///
+  /// In en, this message translates to:
+  /// **'For example RHF1'**
+  String get tyreActionRotateToHint;
+
+  /// Rotate sheet: notes field
+  ///
+  /// In en, this message translates to:
+  /// **'Notes (optional)'**
+  String get tyreActionRotateNotesLabel;
+
+  /// Rotate sheet: notes hint
+  ///
+  /// In en, this message translates to:
+  /// **'Anything the next fitter should know'**
+  String get tyreActionRotateNotesHint;
+
+  /// Rotate sheet: helper stating the write is online only
+  ///
+  /// In en, this message translates to:
+  /// **'Needs a connection. Rotations are saved straight to the server.'**
+  String get tyreActionRotateOnlineNote;
+
+  /// Rotate sheet: submit button
+  ///
+  /// In en, this message translates to:
+  /// **'Record rotation'**
+  String get tyreActionRotateSubmit;
+
+  /// Rotate sheet: validation dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'New position needed'**
+  String get tyreActionRotateToRequiredTitle;
+
+  /// Rotate sheet: destination missing
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the position this tyre was moved to.'**
+  String get tyreActionRotateToRequiredMessage;
+
+  /// Rotate sheet: destination equals current position
+  ///
+  /// In en, this message translates to:
+  /// **'The new position must be different from the current one.'**
+  String get tyreActionRotateSamePositionMessage;
+
+  /// Rotate sheet: success dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Rotation recorded'**
+  String get tyreActionRotateSavedTitle;
+
+  /// Rotate sheet: success message, states the register is not rewritten
+  ///
+  /// In en, this message translates to:
+  /// **'The rotation is saved in this tyre\'s service history. It does not change the position shown in the tyre register.'**
+  String get tyreActionRotateSavedMessage;
+
+  /// Rotate sheet: failure dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Rotation not saved'**
+  String get tyreActionRotateFailedTitle;
+
+  /// Rotate sheet: network failure, honest not-saved message
+  ///
+  /// In en, this message translates to:
+  /// **'No connection. Rotations are saved online only, so this one was not recorded. Try again when you are connected.'**
+  String get tyreActionRotateOfflineMessage;
+
+  /// Rotate sheet: generic failure message
+  ///
+  /// In en, this message translates to:
+  /// **'The rotation could not be saved. Try again.'**
+  String get tyreActionRotateFailedMessage;
 }
 
 class _AppLocalizationsDelegate

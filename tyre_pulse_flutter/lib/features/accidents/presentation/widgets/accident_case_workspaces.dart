@@ -22,6 +22,7 @@ import 'package:tyre_pulse/features/accidents/presentation/accident_damage_copy.
 import 'package:tyre_pulse/features/accidents/presentation/accident_ui.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_dispatch_handover.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_fleet_validation.dart';
+import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_header.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_insurance_claim.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_responsibility.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_timeline.dart';
@@ -60,6 +61,18 @@ enum AccidentCaseWorkspace {
 
 extension AccidentCaseWorkspaceDefinition on AccidentCaseWorkspace {
   int get step => index + 1;
+
+  /// The `caseFlow` key this workspace renders (inverse of
+  /// [AccidentCaseWorkspace.fromFlowKey]).
+  String get flowKey => switch (this) {
+        AccidentCaseWorkspace.fleet => 'fleet_validation',
+        AccidentCaseWorkspace.assessment => 'assessment',
+        AccidentCaseWorkspace.insurance => 'insurance',
+        AccidentCaseWorkspace.responsibility => 'liability',
+        AccidentCaseWorkspace.damageMapping => 'damage_map',
+        AccidentCaseWorkspace.externalWorkshop => 'handover',
+        AccidentCaseWorkspace.timeline => 'timeline',
+      };
 
   String get labelKey => switch (this) {
         AccidentCaseWorkspace.fleet => 'workspaceFleet',
@@ -208,6 +221,7 @@ class AccidentCaseWorkspaceView extends StatelessWidget {
       AccidentCaseWorkspace.fleet => <Widget>[
           AccidentFleetValidationMockWorkspace(
             snapshot: snapshot,
+            showWorkstreamHeader: false,
             onNavigate: _navigate,
             onOpenIncident: onOpenIncident,
           ),
@@ -215,12 +229,14 @@ class AccidentCaseWorkspaceView extends StatelessWidget {
       AccidentCaseWorkspace.assessment => <Widget>[
           AccidentWorkshopAssessmentMockWorkspace(
             snapshot: snapshot,
+            showWorkstreamHeader: false,
             onNavigate: _navigate,
           ),
         ],
       AccidentCaseWorkspace.insurance => <Widget>[
           AccidentInsuranceClaimMockWorkspace(
             snapshot: snapshot,
+            showWorkstreamHeader: false,
             onNavigate: _navigate,
           ),
         ],
@@ -233,12 +249,14 @@ class AccidentCaseWorkspaceView extends StatelessWidget {
       AccidentCaseWorkspace.externalWorkshop => <Widget>[
           AccidentDispatchHandoverMockWorkspace(
             snapshot: snapshot,
+            showWorkstreamHeader: false,
             onNavigate: _navigate,
           ),
         ],
       AccidentCaseWorkspace.timeline => <Widget>[
           AccidentTimelineMockWorkspace(
             snapshot: snapshot,
+            showWorkstreamHeader: false,
             onNavigate: _navigate,
           ),
         ],
@@ -328,6 +346,10 @@ class AccidentCaseWorkspaceView extends StatelessWidget {
   }
 }
 
+/// The one header block every case workspace opens with (mock order):
+/// the case reference and asset as a large headline, then the workstream
+/// line ("Workstream N of 7: X | Owner") and its timing strip, then the next
+/// handoff. The step is stated once, here, never repeated per workspace.
 class _WorkspaceHeader extends StatelessWidget {
   const _WorkspaceHeader({
     required this.workspace,
@@ -348,7 +370,6 @@ class _WorkspaceHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AccidentRecord record = snapshot.accident;
-    final TpPalette palette = TpPalette.of(context);
     final bool rtl = TpDirection.isRtl(context);
     final String title = <String>[
       rtl ? TpDirection.isolateLtr(record.reference) : record.reference,
@@ -357,159 +378,39 @@ class _WorkspaceHeader extends StatelessWidget {
     ].join(' • ');
     final String statusToken = current?.status?.trim() ?? '';
     return Column(
+      key: const Key('accident.case.workspaceHeader'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        Text(
-          title,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.3,
-              ),
+        Semantics(
+          header: true,
+          child: Text(
+            title,
+            key: const Key('accident.case.headline'),
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.3,
+                ),
+          ),
         ),
         const SizedBox(height: TpSpace.sm),
-        Wrap(
-          spacing: TpSpace.sm,
-          runSpacing: TpSpace.xs,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: <Widget>[
-            _StepChip(
-              label: workflowCopy('stepOf')
-                  .replaceAll('%step%', '${workspace.step}')
-                  .replaceAll(
-                    '%total%',
-                    '${AccidentCaseWorkspace.values.length}',
-                  ),
-            ),
-            Text(
-              workflowCopy(workspace.labelKey),
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: palette.primary,
-                    fontWeight: FontWeight.w800,
-                  ),
-            ),
-            TpStatusChip(
-              status: accidentTone(statusToken),
-              label: statusToken.isEmpty
-                  ? copy('notRecorded')
-                  : humaniseAccidentToken(statusToken),
-              isCompact: true,
-            ),
-          ],
+        AccidentWorkstreamHeader(
+          snapshot: snapshot,
+          workstreamKey: workspace.flowKey,
+          statusToken: statusToken.isEmpty ? null : statusToken,
         ),
-        const SizedBox(height: TpSpace.md),
-        ExpansionTile(
-          initiallyExpanded: true,
-          tilePadding: EdgeInsets.zero,
-          shape: const Border(),
-          collapsedShape: const Border(),
-          leading: Icon(Icons.person_outline, color: palette.primary),
-          title: Text(
-            _owner(current, copy),
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          subtitle: Text(workflowCopy('workspaceOwner')),
-          children: [
-            _OwnershipStrip(
-              current: current,
-              next: next,
-              copy: copy,
-              workflowCopy: workflowCopy,
-            ),
-          ],
+        const SizedBox(height: TpSpace.sm),
+        Divider(height: 1, color: TpPalette.of(context).border),
+        const SizedBox(height: TpSpace.sm),
+        _OwnershipItem(
+          icon: Icons.arrow_forward_rounded,
+          label: workflowCopy('nextHandoff'),
+          value: next == null
+              ? workflowCopy('noNextHandoff')
+              : '${workstreamLabel(copy, next!.key)} • ${_owner(next, copy)}',
         ),
       ],
     );
   }
-}
-
-class _StepChip extends StatelessWidget {
-  const _StepChip({required this.label});
-  final String label;
-
-  @override
-  Widget build(BuildContext context) => DecoratedBox(
-        decoration: BoxDecoration(
-          color: TpPalette.of(context).primarySoft,
-          borderRadius: BorderRadius.circular(TpRadius.pill),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: TpSpace.sm,
-            vertical: TpSpace.xs,
-          ),
-          child: Text(
-            label,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: TpPalette.of(context).primary,
-                  fontWeight: FontWeight.w800,
-                ),
-          ),
-        ),
-      );
-}
-
-class _OwnershipStrip extends StatelessWidget {
-  const _OwnershipStrip({
-    required this.current,
-    required this.next,
-    required this.copy,
-    required this.workflowCopy,
-  });
-
-  final AccidentWorkstream? current;
-  final AccidentWorkstream? next;
-  final AccidentCopy copy;
-  final AccidentCaseWorkflowCopy workflowCopy;
-
-  @override
-  Widget build(BuildContext context) => LayoutBuilder(
-        builder: (BuildContext context, BoxConstraints constraints) {
-          final List<Widget> items = <Widget>[
-            _OwnershipItem(
-              icon: Icons.person_outline_rounded,
-              label: workflowCopy('workspaceOwner'),
-              value: _owner(current, copy),
-            ),
-            _OwnershipItem(
-              icon: Icons.arrow_forward_rounded,
-              label: workflowCopy('nextHandoff'),
-              value: next == null
-                  ? workflowCopy('noNextHandoff')
-                  : '${workstreamLabel(copy, next!.key)} • ${_owner(next, copy)}',
-            ),
-          ];
-          if (constraints.maxWidth < 460) {
-            return TpCard(
-              padding: const EdgeInsets.all(TpSpace.md),
-              child: Column(
-                children: <Widget>[
-                  items.first,
-                  const SizedBox(height: TpSpace.sm),
-                  Divider(height: 1, color: TpPalette.of(context).border),
-                  const SizedBox(height: TpSpace.sm),
-                  items.last,
-                ],
-              ),
-            );
-          }
-          return TpCard(
-            padding: const EdgeInsets.all(TpSpace.md),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Expanded(child: items.first),
-                const SizedBox(width: TpSpace.md),
-                SizedBox(
-                  height: 44,
-                  child: VerticalDivider(color: TpPalette.of(context).border),
-                ),
-                const SizedBox(width: TpSpace.md),
-                Expanded(child: items.last),
-              ],
-            ),
-          );
-        },
-      );
 }
 
 class _OwnershipItem extends StatelessWidget {

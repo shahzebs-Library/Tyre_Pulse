@@ -81,8 +81,10 @@ final class TyreRecordsListController extends Notifier<TyreRecordsListState> {
       _debounce?.cancel();
     });
 
+    // Opens on the Installed tab, like the register mock: the tyres on a
+    // vehicle right now are the ones a person acts on.
     final TyreRecordsQuery initialQuery = _scopedQuery(
-      const TyreRecordsQuery(),
+      const TyreRecordsQuery(status: kTyreStatusInstalled),
     );
 
     // Fired and left to run: `build()` itself must stay synchronous, and
@@ -165,6 +167,18 @@ final class TyreRecordsListController extends Notifier<TyreRecordsListState> {
     );
   }
 
+  /// Switches the lifecycle status tab. Null shows every status.
+  void setStatusTab(String? status) {
+    _applyQueryChange(
+      state.query.copyWith(status: status, clearStatus: status == null),
+    );
+  }
+
+  /// Changes the row ordering.
+  void setSort(TyreRecordsSort sort) {
+    _applyQueryChange(state.query.copyWith(sort: sort));
+  }
+
   /// Clears the site and risk filters. Deliberately leaves the search text
   /// alone - the filter sheet's "Clear filters" is not "start over" on the
   /// search box, matching the production "Clear all" chip.
@@ -195,6 +209,8 @@ final class TyreRecordsListController extends Notifier<TyreRecordsListState> {
 
   void _applyQueryChange(TyreRecordsQuery next) {
     if (next == state.query) return;
+    // The old query's load time must not be shown against the new one.
+    state = state.copyWith(clearLoadedAt: true);
     unawaited(_reset(next));
   }
 
@@ -209,7 +225,9 @@ final class TyreRecordsListController extends Notifier<TyreRecordsListState> {
       clearLoadError: true,
       clearLoadMoreError: true,
       query: query,
+      clearTotalCount: true,
     );
+    unawaited(_loadCount(query));
     await _fetchPage(seq: seq, pageIndex: 0, isFresh: true);
   }
 
@@ -231,6 +249,7 @@ final class TyreRecordsListController extends Notifier<TyreRecordsListState> {
       if (seq != _requestSeq) return;
 
       _page = pageIndex;
+      final DateTime? loadedAt = isFresh ? DateTime.now() : null;
       final List<TyreRecord> merged =
           isFresh ? page.items : <TyreRecord>[...state.items, ...page.items];
 
@@ -241,6 +260,7 @@ final class TyreRecordsListController extends Notifier<TyreRecordsListState> {
         isLoadingMore: false,
         clearLoadError: true,
         clearLoadMoreError: true,
+        loadedAt: loadedAt,
       );
     } on Object catch (error) {
       // Only the newest request's OWN failure may be shown. A stale error
@@ -255,6 +275,7 @@ final class TyreRecordsListController extends Notifier<TyreRecordsListState> {
           items: const <TyreRecord>[],
           isLoadingMore: false,
           loadError: appError,
+          clearLoadedAt: true,
         );
       } else {
         // Roll back: the page that just failed is retried on the next
@@ -263,6 +284,23 @@ final class TyreRecordsListController extends Notifier<TyreRecordsListState> {
         state = state.copyWith(isLoadingMore: false, loadMoreError: appError);
       }
     }
+  }
+
+  /// Reads the exact match count for [query]. Only the request that is still
+  /// current may write it, like every other fetch here; a failed count
+  /// leaves the header without a number rather than a stale one.
+  Future<void> _loadCount(TyreRecordsQuery query) async {
+    int? count;
+    try {
+      count = await _repository.fetchCount(query: query);
+    } on Object {
+      count = null;
+    }
+    // A newer query has replaced this one: its own count will land.
+    if (state.query != query) return;
+    state = count == null
+        ? state.copyWith(clearTotalCount: true)
+        : state.copyWith(totalCount: count);
   }
 
   /// Loads the filter sheet's site options once, best-effort. Mirrors the

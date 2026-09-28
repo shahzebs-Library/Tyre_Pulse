@@ -272,7 +272,6 @@ class QueueListRow extends StatelessWidget {
     final bool isLast = !showDivider;
     const Radius corner = Radius.circular(TpRadius.lg);
     final TextTheme text = Theme.of(context).textTheme;
-    final bool rtl = Directionality.of(context) == TextDirection.rtl;
     final List<String> lines = <String>[
       for (final String line in details)
         if (line.trim().isNotEmpty) line.trim(),
@@ -366,7 +365,7 @@ class QueueListRow extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 12),
               child: Icon(
-                rtl ? Icons.chevron_left : Icons.chevron_right,
+                Icons.chevron_right,
                 color: palette.textMuted,
               ),
             ),

@@ -76,6 +76,28 @@ batching stops them being started at all.
 
 ---
 
+# ⚑ SESSION 2026-09-28 (part 11) — 22 OWNER MOCKS MATCHED + PLUGIN-SKILL REVIEW APPLIED. PR #366. No migration. NO mobile build.
+Branch `claude/project-review-audit-t07hbp`. Owner rule: work must be reviewed AND confirmed through the installed plugin skills
+(vgv-ai-flutter-plugin flutter-reviewer/accessibility/testing, dart-flutter, design critique/accessibility-review, frontend-design) before merge.
+- **Mock parity (22 screens):** accident report/case, tyre records, inspection header, fleet list, Vehicle 360 Timeline+Costs, NEW per-asset
+  financial report (expense grid, one currency, Navigator.push, no route), NEW `features/my_work` (My tasks / Today's field plan snapshot),
+  checklists home, checklist approval review, profile saved signature.
+- **Review fixes (Codex 5 + VGV 12 + design 15):** Vehicle 360 timeline gates source READS by module (`assetTimelineSourcesProvider`);
+  capped reads (`PagedRows.truncated`) refuse totals + disable export; `readLastOdometer` throws so "could not check" != "no reading";
+  corrective actions scoped by `assigned_to`; saved signature `lookup()` found/none/unavailable; hidden visibleWhen fields not required;
+  DST-safe due days; null-currency cost lines never labelled.
+- **RTL RULE (app-wide fix):** `Icons.chevron_left/right`, `arrow_back*`, `arrow_forward_ios*` have `matchTextDirection: true`, Flutter
+  mirrors them. NEVER write `isRtl ? chevron_left : chevron_right` (double-flips). Always the LTR icon. Pinned by tp_app_bar_test.
+- **New shared pieces:** `TpPalette.controlBorder` (#75849F light 3.78:1 / #6B7A8C dark) for interactive outlines; `ApprovalDecisionBar`
+  (outlined critical Return + primary Approve) used by BOTH inspection + checklist review screens; unrecorded tyre wheels grey "Add details";
+  tyre label height scales with textScaler; accident case single header + coloured SLA segments + 7-segment step bar; Vehicle 360 sticky
+  primary "Inspect now".
+- ARB parity pinned at **2014** (en/ar/ur). Goldens regenerated on Windows (`[update-goldens]` f6ede5d). A bot-pushed goldens commit leaves
+  its CI runs as `action_required`: re-run them (`rerun_workflow_run`) under the owner account.
+- Verified in a fresh copy: analyze clean, 3165 tests pass, the 18 failures were all goldens (now regenerated). CI green on f6ede5d.
+
+---
+
 # ⚑ SESSION 2026-09-28 (part 10) — ADMIN PICKS THE LOGIN PICTURE + EVERY HALF-BUILT FLUTTER SCREEN FINISHED.
 Branch `claude/project-review-audit-t07hbp`. Migration `20260928090000_public_config_mobile_login_hero` APPLIED LIVE. NO mobile build.
 - **Login picture is an admin setting**: Console -> Mobile App -> Login pictures (`src/console/pages/mobileApp/LoginArtworkPanel.jsx`,

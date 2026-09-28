@@ -168,7 +168,14 @@ void main() {
               find.byKey(NewInspectionScreenKeys.tyreWorkflowProgress),
             )
             .data,
-        '0 of 12 checked',
+        '0% complete',
+      );
+      // Nothing recorded yet: the app bar still says Draft, never a
+      // condition nobody measured.
+      expect(find.byKey(NewInspectionScreenKeys.tyreDraftChip), findsOneWidget);
+      expect(
+        find.byKey(NewInspectionScreenKeys.tyreOverallStatus),
+        findsNothing,
       );
       expect(
         tester
@@ -188,6 +195,53 @@ void main() {
       expect(find.textContaining('tyres recorded'), findsNothing);
     },
   );
+
+  testWidgets(
+      'selected panel shows the machine meter entered on this inspection '
+      'and a Good overall status', (WidgetTester tester) async {
+    await _pumpScreen(
+      tester,
+      size: const Size(390, 1600),
+      initialState: InspectionWizardState(
+        step: InspectionWizardStep.tyres,
+        selectedAssetNo: 'TM749',
+        selectedVehicleType: '',
+        selectedSite: 'Site A',
+        hourMeterText: '8742',
+        positions: _tmPositions,
+        tyreConditions: <String, TyrePositionReading>{
+          for (final String position in _tmPositions)
+            position: position == 'F1L'
+                ? const TyrePositionReading(
+                    position: 'F1L',
+                    pressurePsi: 110,
+                    condition: TyreReadingCondition.good,
+                    checked: true,
+                  )
+                : TyrePositionReading.seed(position),
+        },
+      ),
+    );
+
+    final TpStatusChip overall = tester.widget<TpStatusChip>(
+      find.byKey(NewInspectionScreenKeys.tyreOverallStatus),
+    );
+    expect(overall.status, TpStatus.ok);
+    expect(overall.label, 'Good');
+    final Finder meter = find.byKey(NewInspectionScreenKeys.tyreMeterRow);
+    expect(meter, findsOneWidget);
+    expect(
+      find.descendant(of: meter, matching: find.text('Machine meter')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: meter, matching: find.textContaining('8742 h')),
+      findsOneWidget,
+    );
+    expect(find.text('Previous tyre'), findsOneWidget);
+    expect(find.text('Next tyre'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('one checked TM749 tyre is In progress, not a result', (
     WidgetTester tester,
@@ -218,7 +272,8 @@ void main() {
     );
     expect(status.status, TpStatus.info);
     expect(status.label, 'In progress');
-    expect(find.text('1 of 12 checked'), findsOneWidget);
+    expect(find.text('8% complete'), findsOneWidget);
+    expect(find.text('1 / 12'), findsOneWidget);
     expect(
       tester
           .widget<Text>(
@@ -260,13 +315,22 @@ void main() {
         ),
       );
 
-      expect(find.text('Inspection'), findsOneWidget);
-      expect(find.byKey(NewInspectionScreenKeys.tyreDraftChip), findsOneWidget);
+      expect(find.text('Tyre inspection'), findsOneWidget);
+      expect(find.text('TM749 · Site A'), findsOneWidget);
+      // A damaged wheel makes the whole inspection read Critical at the top.
+      final TpStatusChip overall = tester.widget<TpStatusChip>(
+        find.byKey(NewInspectionScreenKeys.tyreOverallStatus),
+      );
+      expect(overall.status, TpStatus.critical);
+      expect(overall.label, 'Critical');
+      expect(find.byKey(NewInspectionScreenKeys.tyreDraftChip), findsNothing);
       expect(find.text('12-Tyre Configuration'), findsOneWidget);
-      expect(find.text('Step 2 of 4'), findsOneWidget);
+      expect(find.text('Inspection progress'), findsOneWidget);
       expect(find.text('Good'), findsWidgets);
       expect(find.text('Attention'), findsOneWidget);
-      expect(find.text('Critical'), findsOneWidget);
+      expect(find.text('Critical'), findsNWidgets(2));
+      // No meter was entered on this inspection: no meter strip is invented.
+      expect(find.byKey(NewInspectionScreenKeys.tyreMeterRow), findsNothing);
       // Legend and every unrecorded wheel card use the same honest wording.
       expect(find.text('Not recorded'), findsWidgets);
       expect(
@@ -308,11 +372,21 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Add Evidence (Photo)'), findsOneWidget);
+      // Wheels are still outstanding: the pinned primary is "Edit details"
+      // for the selected tyre (the card does not repeat it), and no disabled
+      // "Save & Next" sits on screen.
       expect(
         find.widgetWithText(TpButton, 'Edit details'),
         findsOneWidget,
       );
-      expect(find.text('Save & Next'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(NewInspectionScreenKeys.tyresPrimaryAction),
+          matching: find.text('Edit details'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Save & Next'), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
@@ -452,7 +526,7 @@ void main() {
     );
     expect(status.status, TpStatus.ok);
     expect(status.label, 'Ready for review');
-    expect(find.text('12 of 12 checked'), findsOneWidget);
+    expect(find.text('100% complete'), findsOneWidget);
     expect(
       find.text(
         'All tyre positions are checked. Review and sign is ready.',
@@ -463,6 +537,14 @@ void main() {
       find.widgetWithText(TpButton, 'Save & Next'),
     );
     expect(reviewButton.onPressed, isNotNull);
+    expect(
+      tester
+          .widget<TpButton>(
+            find.byKey(NewInspectionScreenKeys.tyresPrimaryAction),
+          )
+          .label,
+      'Save & Next',
+    );
   });
 
   testWidgets('compact root step stacks meter inputs without clipping', (
@@ -723,10 +805,54 @@ void main() {
     expect(diagram.width, lessThanOrEqualTo(380));
     expect(
       tester.getBottomRight(find.byType(VehicleTyreDiagram)).dy,
-      lessThan(tester.getTopLeft(find.text('Save & Next')).dy),
+      lessThan(
+        tester
+            .getTopLeft(find.byKey(NewInspectionScreenKeys.tyresPrimaryAction))
+            .dy,
+      ),
     );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'pinned action reads Edit details while wheels are outstanding and '
+    'opens the editor, never a disabled Save & Next',
+    (WidgetTester tester) async {
+      const List<String> positions = <String>['FL', 'FR', 'RL', 'RR'];
+      await _pumpScreen(
+        tester,
+        size: const Size(390, 900),
+        initialState: InspectionWizardState(
+          step: InspectionWizardStep.tyres,
+          selectedAssetNo: 'PL101',
+          selectedVehicleType: '',
+          selectedSite: 'Site A',
+          positions: positions,
+          tyreConditions: <String, TyrePositionReading>{
+            for (final String position in positions)
+              position: position == 'FL'
+                  ? const TyrePositionReading(position: 'FL', checked: true)
+                  : TyrePositionReading.seed(position),
+          },
+        ),
+      );
+
+      TpButton primary() => tester.widget<TpButton>(
+            find.byKey(NewInspectionScreenKeys.tyresPrimaryAction),
+          );
+      expect(primary().label, 'Edit details');
+      expect(primary().onPressed, isNotNull);
+      expect(find.text('Save & Next'), findsNothing);
+
+      await tester.tap(find.byKey(NewInspectionScreenKeys.tyresPrimaryAction));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.byType(TyrePositionEditorSheet), findsOneWidget);
+      // The complete case (Save & Next in the same slot) is pinned by
+      // 'fully checked TM749 is Ready for review'.
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('an untouched wheel still opens the add-details sheet', (
     WidgetTester tester,

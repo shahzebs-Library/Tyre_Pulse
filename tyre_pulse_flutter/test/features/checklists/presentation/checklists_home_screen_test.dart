@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/permissions/access_resolver.dart';
 import 'package:tyre_pulse/core/permissions/module_registry.dart';
 import 'package:tyre_pulse/core/permissions/permission_providers.dart';
@@ -22,9 +23,13 @@ import 'package:tyre_pulse/features/checklists/checklists_providers.dart';
 import 'package:tyre_pulse/features/checklists/data/checklist_draft_repository.dart';
 import 'package:tyre_pulse/features/checklists/data/checklist_remote_models.dart';
 import 'package:tyre_pulse/features/checklists/data/checklist_remote_repository.dart';
+import 'package:tyre_pulse/features/checklists/domain/checklist_due.dart';
 import 'package:tyre_pulse/features/checklists/domain/checklist_field.dart';
 import 'package:tyre_pulse/features/checklists/domain/checklist_template.dart';
 import 'package:tyre_pulse/features/checklists/presentation/checklists_home_screen.dart';
+import 'package:tyre_pulse/features/home/domain/home_work.dart';
+import 'package:tyre_pulse/features/home/home_providers.dart';
+import 'package:tyre_pulse/features/meter_logs/data/meter_reading.dart';
 
 const WorkspaceContext _workspace = WorkspaceContext(
   userId: 'operator-1',
@@ -122,6 +127,10 @@ Future<ProviderContainer> _pump(
   bool canScan = true,
   bool canInspect = true,
   bool canOpenVehicles = true,
+  bool canLogMeter = false,
+  LastOdometerReading? lastOdometer,
+  bool lastOdometerFails = false,
+  int? pendingInspectionApprovals,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -142,6 +151,25 @@ Future<ProviderContainer> _pump(
         .overrideWith((Ref ref) => canInspect),
     canAccessModuleProvider(ModuleKey.vehicles)
         .overrideWith((Ref ref) => canOpenVehicles),
+    canAccessModuleProvider(ModuleKey.meter)
+        .overrideWith((Ref ref) => canLogMeter),
+    canAccessModuleProvider(ModuleKey.approvals)
+        .overrideWith((Ref ref) => pendingInspectionApprovals != null),
+    homeCanSignInspectionApprovalsProvider
+        .overrideWith((Ref ref) => pendingInspectionApprovals != null),
+    homePendingInspectionApprovalsProvider.overrideWith(
+      (Ref ref) async =>
+          HomePendingApprovals(count: pendingInspectionApprovals ?? 0),
+    ),
+    lastChecklistOdometerProvider('CP-045').overrideWith(
+      (Ref ref) async => lastOdometerFails
+          ? throw const AppError(
+              kind: AppErrorKind.network,
+              message: 'offline',
+              isRetryable: true,
+            )
+          : lastOdometer,
+    ),
   ];
 
   await tester.pumpWidget(
@@ -201,6 +229,11 @@ void main() {
       expect(find.textContaining('CP-045 · Concrete Pump'), findsOneWidget);
       expect(find.textContaining('Dubai Industrial City'), findsNWidgets(2));
       expect(find.text('68,420 km'), findsOneWidget);
+      // Read live from the fleet register, so it is stated as verified.
+      expect(
+        find.byKey(ChecklistsHomeScreenKeys.masterDataVerified),
+        findsOneWidget,
+      );
       expect(find.text('Required for this asset'), findsOneWidget);
 
       final Finder selectedAsset = find.byKey(
@@ -226,7 +259,7 @@ void main() {
       );
       expect(find.text('General checklist library'), findsOneWidget);
       expect(find.text('Tyre inspection'), findsOneWidget);
-      expect(find.text('My checklist history'), findsOneWidget);
+      expect(find.text('Checklist history for CP-045'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
@@ -340,6 +373,11 @@ void main() {
 
     expect(find.byKey(TpStateKeys.offlineCached), findsOneWidget);
     expect(find.text('Synced'), findsNothing);
+    // A cached copy is not claimed as verified master data.
+    expect(
+      find.byKey(ChecklistsHomeScreenKeys.masterDataVerified),
+      findsNothing,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -375,4 +413,109 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  test('due classification reads the stored day and never guesses', () {
+    final DateTime now = DateTime(2026, 8, 28, 10, 18);
+    expect(
+      classifyChecklistDue(dueDate: '2026-08-28', status: null, now: now).kind,
+      ChecklistDueKind.today,
+    );
+    expect(
+      classifyChecklistDue(dueDate: '2026-08-29', status: 'pending', now: now)
+          .kind,
+      ChecklistDueKind.tomorrow,
+    );
+    expect(
+      classifyChecklistDue(dueDate: '2026-08-20', status: 'pending', now: now)
+          .kind,
+      ChecklistDueKind.overdue,
+    );
+    expect(
+      classifyChecklistDue(dueDate: null, status: 'overdue', now: now).kind,
+      ChecklistDueKind.overdue,
+    );
+    expect(
+      classifyChecklistDue(dueDate: null, status: 'pending', now: now).kind,
+      ChecklistDueKind.none,
+    );
+    expect(cadenceFor(1), ChecklistCadence.daily);
+    expect(cadenceFor(7), ChecklistCadence.weekly);
+    expect(cadenceFor(30), ChecklistCadence.monthly);
+    expect(cadenceFor(10), ChecklistCadence.everyNDays);
+    expect(cadenceFor(null), ChecklistCadence.none);
+  });
+
+  testWidgets(
+    'due-today assignment leads with a filled Start, and the meter row and '
+    'pending-approval chip appear only when permitted',
+    (WidgetTester tester) async {
+      final String today = DateTime.now().toIso8601String().substring(0, 10);
+      final ChecklistAssignmentRecord dueToday = ChecklistAssignmentRecord(
+        id: 'assignment-today',
+        templateId: 'pre-start',
+        templateName: 'Pre-start equipment checklist',
+        site: 'Dubai Industrial City',
+        assetNo: 'CP-045',
+        dueDate: today,
+        status: 'pending',
+      );
+      await _pump(
+        tester,
+        remote: _ChecklistRemoteFake(
+          assignments: <ChecklistAssignmentRecord>[dueToday],
+        ),
+        canLogMeter: true,
+        lastOdometer: const LastOdometerReading(
+          odometerKm: 68420,
+          readingDate: '2026-08-26',
+        ),
+        pendingInspectionApprovals: 5,
+      );
+
+      expect(find.text('Due now'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Start'), findsOneWidget);
+      expect(find.byKey(ChecklistsHomeScreenKeys.meterReading), findsOneWidget);
+      expect(find.text('Last recorded 26 Aug'), findsOneWidget);
+      expect(find.byKey(ChecklistsHomeScreenKeys.meterRecord), findsOneWidget);
+
+      await tester.scrollUntilVisible(
+        find.byKey(ChecklistsHomeScreenKeys.pendingApprovals),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('5'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+      'a meter read that failed says it could not check, never "no reading"',
+      (WidgetTester tester) async {
+    await _pump(tester, canLogMeter: true, lastOdometerFails: true);
+    await tester.pumpAndSettle();
+    expect(find.byKey(ChecklistsHomeScreenKeys.meterReading), findsOneWidget);
+    expect(find.text('Could not check last reading'), findsOneWidget);
+    expect(find.text('No reading recorded yet'), findsNothing);
+  });
+
+  testWidgets('a confirmed empty meter history says no reading yet', (
+    WidgetTester tester,
+  ) async {
+    await _pump(tester, canLogMeter: true);
+    await tester.pumpAndSettle();
+    expect(find.text('No reading recorded yet'), findsOneWidget);
+    expect(find.text('Could not check last reading'), findsNothing);
+  });
+
+  testWidgets('no meter permission hides the meter row entirely', (
+    WidgetTester tester,
+  ) async {
+    await _pump(tester);
+    expect(find.byKey(ChecklistsHomeScreenKeys.meterReading), findsNothing);
+    expect(
+      find.byKey(ChecklistsHomeScreenKeys.pendingApprovals),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
 }

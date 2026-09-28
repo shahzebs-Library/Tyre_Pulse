@@ -35,12 +35,17 @@ class AccidentDispatchHandoverMockWorkspace extends ConsumerStatefulWidget {
   const AccidentDispatchHandoverMockWorkspace({
     required this.snapshot,
     required this.onNavigate,
+    this.showWorkstreamHeader = true,
     this.clock,
     super.key,
   });
 
   final AccidentCaseSnapshot snapshot;
   final void Function(String workspaceKey) onNavigate;
+
+  /// False when the case screen already shows the single workstream header
+  /// above this workspace, so the step is never stated twice.
+  final bool showWorkstreamHeader;
 
   /// Injected clock for deterministic tests; production leaves it null.
   final DateTime Function()? clock;
@@ -366,12 +371,14 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        AccidentWorkstreamHeader(
-          snapshot: widget.snapshot,
-          workstreamKey: 'handover',
-          now: widget.clock?.call(),
-        ),
-        const SizedBox(height: TpSpace.md),
+        if (widget.showWorkstreamHeader) ...<Widget>[
+          AccidentWorkstreamHeader(
+            snapshot: widget.snapshot,
+            workstreamKey: 'handover',
+            now: widget.clock?.call(),
+          ),
+          const SizedBox(height: TpSpace.md),
+        ],
         AccidentMockTitle(
           c.l10n.accDhDispatchHandover,
         ),
@@ -383,7 +390,8 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
             AccidentMockChip(
               label: c.l10n.accDhRepairRoute,
               value: route,
-              tone: TpStatus.info,
+              tone: TpStatus.ok,
+              icon: Icons.place_outlined,
             ),
             AccidentMockChip(
               label: c.l10n.accDhDispatchStatus,
@@ -393,15 +401,16 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
                   : d.custodyAccepted
                       ? TpStatus.ok
                       : d.isInTransit
-                          ? TpStatus.warning
-                          : TpStatus.info,
+                          ? TpStatus.info
+                          : TpStatus.warning,
+              icon: Icons.local_shipping_outlined,
             ),
             AccidentMockChip(
               key: const Key('accident.dispatch.transit'),
               label: c.l10n.accDhTransitElapsed,
               value: transit == null ? c.notSet : formatElapsed(transit),
-              tone:
-                  transitTimerRunning(d) ? TpStatus.warning : TpStatus.neutral,
+              tone: transitTimerRunning(d) ? TpStatus.info : TpStatus.neutral,
+              icon: Icons.timer_outlined,
             ),
             AccidentMockChip(
               key: const Key('accident.dispatch.vendorSla'),
@@ -416,6 +425,7 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
                 VendorSlaTone.running => TpStatus.info,
                 VendorSlaTone.neutral => TpStatus.neutral,
               },
+              icon: Icons.alarm_outlined,
             ),
           ],
         ),
@@ -1214,71 +1224,111 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
 
   Widget _stepper(WsKitCopy c, AccidentDispatch? d) {
     final TpPalette palette = TpPalette.of(context);
+    final TextTheme text = Theme.of(context).textTheme;
+    const List<NumberedStep> steps = dispatchStepper;
     return AccidentMockPanel(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          for (final NumberedStep step in dispatchStepper)
-            Builder(
-              builder: (BuildContext context) {
-                final DispatchStepState state = dispatchStepState(step.key, d);
-                final DateTime? at = dispatchStepTime(step.key, d);
-                final TpStatus tone = switch (state) {
-                  DispatchStepState.complete => TpStatus.ok,
-                  DispatchStepState.next => TpStatus.info,
-                  DispatchStepState.pending => TpStatus.neutral,
-                };
-                final String label = switch (state) {
-                  DispatchStepState.complete => c.l10n.accDhComplete,
-                  DispatchStepState.next => c.l10n.accDhNext,
-                  DispatchStepState.pending => c.l10n.accDhPending,
-                };
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: TpSpace.xs),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          for (int i = 0; i < steps.length; i++)
+            Expanded(
+              child: Builder(
+                builder: (BuildContext context) {
+                  final NumberedStep step = steps[i];
+                  final DispatchStepState state =
+                      dispatchStepState(step.key, d);
+                  final DateTime? at = dispatchStepTime(step.key, d);
+                  // Mock colours: done green, the step being waited on
+                  // orange, anything later grey.
+                  final TpStatus tone = switch (state) {
+                    DispatchStepState.complete => TpStatus.ok,
+                    DispatchStepState.next => TpStatus.warning,
+                    DispatchStepState.pending => TpStatus.neutral,
+                  };
+                  final TpStatusColors colors = palette.forStatus(tone);
+                  final String label = switch (state) {
+                    DispatchStepState.complete => c.l10n.accDhComplete,
+                    DispatchStepState.next => c.l10n.accDhNext,
+                    DispatchStepState.pending => c.l10n.accDhPending,
+                  };
+                  final bool done = state == DispatchStepState.complete;
+                  Widget connector(bool visible) => Expanded(
+                        child: visible
+                            ? Divider(
+                                thickness: 2,
+                                color: done ? colors.base : palette.border,
+                              )
+                            : const SizedBox.shrink(),
+                      );
+                  return Column(
+                    key: Key('accident.dispatch.step.${step.key}'),
                     children: <Widget>[
-                      CircleAvatar(
-                        radius: 12,
-                        backgroundColor: palette.forStatus(tone).base,
-                        child: Text(
-                          '${step.n}',
-                          style: TextStyle(
-                            color: palette.forStatus(tone).onBase,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
+                      Row(
+                        children: <Widget>[
+                          connector(i > 0),
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: done ? colors.soft : palette.surface,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: state == DispatchStepState.pending
+                                    ? palette.border
+                                    : colors.base,
+                                width: 2,
+                              ),
+                            ),
+                            child: Icon(
+                              _stepIcon(step.key),
+                              size: TpSizing.iconMd,
+                              color: state == DispatchStepState.pending
+                                  ? palette.textMuted
+                                  : colors.base,
+                            ),
                           ),
+                          connector(i < steps.length - 1),
+                        ],
+                      ),
+                      const SizedBox(height: TpSpace.xs),
+                      Text(
+                        '${step.n}. ${_stepLabel(c, step.key)}',
+                        textAlign: TextAlign.center,
+                        style: text.labelSmall
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                      if (at != null)
+                        Text(
+                          accidentMockDateTime(context, at),
+                          textAlign: TextAlign.center,
+                          style: text.labelSmall,
+                        ),
+                      Text(
+                        label,
+                        textAlign: TextAlign.center,
+                        style: text.labelSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: state == DispatchStepState.pending
+                              ? palette.textMuted
+                              : colors.onSoft,
                         ),
                       ),
-                      const SizedBox(width: TpSpace.sm),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Text(
-                              _stepLabel(c, step.key),
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w700),
-                            ),
-                            Text(
-                              at == null
-                                  ? c.notSet
-                                  : accidentMockDateTime(context, at),
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                        ),
-                      ),
-                      TpStatusChip(status: tone, label: label, isCompact: true),
                     ],
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
         ],
       ),
     );
   }
+
+  IconData _stepIcon(String key) => switch (key) {
+        'dispatched' => Icons.local_shipping_outlined,
+        'arrived' => Icons.place_outlined,
+        'signed_acceptance' => Icons.draw_outlined,
+        _ => Icons.description_outlined,
+      };
 
   String _stepLabel(WsKitCopy c, String key) => switch (key) {
         'dispatched' => c.l10n.accDhDispatched,

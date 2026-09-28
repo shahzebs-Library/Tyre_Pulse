@@ -18,6 +18,22 @@ library;
 
 import 'package:flutter/foundation.dart';
 
+/// The lifecycle statuses `tyre_records.status` actually holds today
+/// (measured live: `Active`, `Removed`, `Scrapped`). These are stored
+/// values, matched exactly; a register tab maps onto one of them.
+const String kTyreStatusInstalled = 'Active';
+const String kTyreStatusRemoved = 'Removed';
+const String kTyreStatusScrapped = 'Scrapped';
+
+/// The two orderings the register offers. Both keep the `id` tiebreak.
+enum TyreRecordsSort {
+  /// Most recent fitment first (the default).
+  newestFitted,
+
+  /// Oldest fitment first.
+  oldestFitted,
+}
+
 @immutable
 final class TyreRecordsQuery {
   const TyreRecordsQuery({
@@ -26,6 +42,8 @@ final class TyreRecordsQuery {
     this.riskLevel,
     this.country,
     this.restrictToSite,
+    this.status,
+    this.sort = TyreRecordsSort.newestFitted,
   });
 
   /// The debounced search text. Matched against asset number, serial number
@@ -47,6 +65,15 @@ final class TyreRecordsQuery {
   /// The workspace's legacy `profiles.site` scalar, applied only when [site]
   /// is null. See the library comment.
   final String? restrictToSite;
+
+  /// The lifecycle status tab: one of [kTyreStatusInstalled],
+  /// [kTyreStatusRemoved], [kTyreStatusScrapped], or null for every status.
+  /// A tab, not a filter chip: it does not count in [activeFilterCount] and
+  /// "Clear filters" leaves it alone.
+  final String? status;
+
+  /// The row ordering.
+  final TyreRecordsSort sort;
 
   /// The site a fetch should actually filter by: the explicit choice, else
   /// the scope fallback, else no site filter at all.
@@ -71,6 +98,9 @@ final class TyreRecordsQuery {
     bool clearCountry = false,
     String? restrictToSite,
     bool clearRestrictToSite = false,
+    String? status,
+    bool clearStatus = false,
+    TyreRecordsSort? sort,
   }) {
     return TyreRecordsQuery(
       search: search ?? this.search,
@@ -79,6 +109,8 @@ final class TyreRecordsQuery {
       country: clearCountry ? null : (country ?? this.country),
       restrictToSite:
           clearRestrictToSite ? null : (restrictToSite ?? this.restrictToSite),
+      status: clearStatus ? null : (status ?? this.status),
+      sort: sort ?? this.sort,
     );
   }
 
@@ -96,13 +128,23 @@ final class TyreRecordsQuery {
           other.site == site &&
           other.riskLevel == riskLevel &&
           other.country == country &&
-          other.restrictToSite == restrictToSite;
+          other.restrictToSite == restrictToSite &&
+          other.status == status &&
+          other.sort == sort;
 
   @override
-  int get hashCode =>
-      Object.hash(search, site, riskLevel, country, restrictToSite);
+  int get hashCode => Object.hash(
+        search,
+        site,
+        riskLevel,
+        country,
+        restrictToSite,
+        status,
+        sort,
+      );
 
   @override
   String toString() => 'TyreRecordsQuery(search: "$search", site: $site, '
-      'risk: $riskLevel, country: $country, restrictToSite: $restrictToSite)';
+      'risk: $riskLevel, country: $country, restrictToSite: $restrictToSite, '
+      'status: $status, sort: $sort)';
 }

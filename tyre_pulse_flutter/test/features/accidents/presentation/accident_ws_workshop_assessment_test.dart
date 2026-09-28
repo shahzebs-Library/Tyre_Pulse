@@ -192,6 +192,61 @@ void main() {
     expect(find.text('Assessment submitted'), findsOneWidget);
   });
 
+  testWidgets(
+      'route tiles sit side by side, one tap selects, and the vendor strip '
+      'prints the recorded workshop', (WidgetTester tester) async {
+    final FakeAccidentCaseRows rows = FakeAccidentCaseRows();
+    _seedAssessment(rows);
+    await pumpAccidentWorkspace(
+      tester,
+      AccidentWorkshopAssessmentMockWorkspace(
+        snapshot: _snapshot(),
+        onNavigate: (_) {},
+      ),
+      overrides: _overrides(rows),
+    );
+    final Finder internal =
+        find.byKey(const Key('accident.ws.assessment.route.internal'));
+    final Finder external =
+        find.byKey(const Key('accident.ws.assessment.route.external'));
+    final Finder onSite =
+        find.byKey(const Key('accident.ws.assessment.route.on_site'));
+    await reveal(tester, external);
+    // One row, three tiles: same top edge, left to right.
+    expect(tester.getTopLeft(internal).dy, tester.getTopLeft(onSite).dy);
+    expect(
+      tester.getTopLeft(internal).dx < tester.getTopLeft(external).dx,
+      isTrue,
+    );
+    expect(
+      find.descendant(
+        of: external,
+        matching: find.byIcon(Icons.check_circle_rounded),
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(onSite);
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: onSite,
+        matching: find.byIcon(Icons.check_circle_rounded),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: external,
+        matching: find.byIcon(Icons.check_circle_rounded),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const Key('accident.ws.assessment.vendorSummary')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('saving without the parity columns drops them and says so',
       (WidgetTester tester) async {
     final FakeAccidentCaseRows rows = FakeAccidentCaseRows(

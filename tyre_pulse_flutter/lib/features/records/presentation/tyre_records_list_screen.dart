@@ -58,6 +58,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart' show NumberFormat;
 import 'package:tyre_pulse/app/localization/tp_direction.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
@@ -134,8 +135,9 @@ class _TyreRecordsListBody extends ConsumerWidget {
         backFallback: backFallback,
         actions: <Widget>[
           IconButton(
-            icon: const Icon(Icons.document_scanner_outlined),
-            tooltip: l10n.serialSearchTitle,
+            key: TyreRecordsListKeys.scanAction,
+            icon: const Icon(Icons.qr_code_scanner_rounded),
+            tooltip: l10n.tyreMockScanSerial,
             onPressed: () => context.push(const SerialSearchRoute().location),
           ),
           _FilterButton(
@@ -143,6 +145,9 @@ class _TyreRecordsListBody extends ConsumerWidget {
             onPressed: () => _openFilterSheet(context),
           ),
         ],
+      ),
+      bottomNavigationBar: _ScanBar(
+        onScan: () => context.push(const SerialSearchRoute().location),
       ),
       body: Column(
         children: <Widget>[
@@ -158,8 +163,16 @@ class _TyreRecordsListBody extends ConsumerWidget {
               onChanged: controller.updateSearch,
             ),
           ),
-          if (state.query.hasActiveFilters)
-            _ActiveFilterChips(query: state.query, controller: controller),
+          _FilterPillsRow(
+            query: state.query,
+            controller: controller,
+            onOpenSheet: () => _openFilterSheet(context),
+          ),
+          _StatusTabs(
+            selected: state.query.status,
+            onSelected: controller.setStatusTab,
+          ),
+          _ListStatusLine(state: state, controller: controller),
           Expanded(child: _buildBody(state, controller)),
         ],
       ),
@@ -167,6 +180,12 @@ class _TyreRecordsListBody extends ConsumerWidget {
   }
 
   String? _subtitle(AppLocalizations l10n, TyreRecordsListState state) {
+    final int? total = state.totalCount;
+    if (total != null) {
+      final String count = l10n.tyreMockRecordsCount(total);
+      final String? country = state.query.country;
+      return country == null ? count : '$count · $country';
+    }
     return switch (state.phase) {
       TyreRecordsListPhase.loading => l10n.stateLoading,
       TyreRecordsListPhase.failed => null,
@@ -298,6 +317,7 @@ class _RecordsListView extends StatelessWidget {
           final TyreRecord record = state.items[index];
           return _TyreRecordCard(
             record: record,
+            showStatus: state.query.status == null,
             onTap: () => showTyreDetailSheet(context, record),
           );
         },
@@ -379,151 +399,737 @@ class _PagingFooter extends StatelessWidget {
   }
 }
 
+/// Stable keys for the register's mock-parity controls.
+abstract final class TyreRecordsListKeys {
+  static const Key scanAction = Key('records.scan_action');
+  static const Key scanBar = Key('records.scan_bar');
+  static const Key statusTabs = Key('records.status_tabs');
+  static const Key statusLine = Key('records.status_line');
+  static const Key sortButton = Key('records.sort');
+  static const Key sitePill = Key('records.site_pill');
+  static const Key riskPill = Key('records.risk_pill');
+}
+
+final NumberFormat _kmFormat = NumberFormat.decimalPattern('en_US')
+  ..maximumFractionDigits = 1;
+
+String _fmtNumber(num value) => _kmFormat.format(value);
+
+/// The tab label for a stored `tyre_records.status` value.
+String _statusLabel(AppLocalizations l10n, String? status) => switch (status) {
+      null => l10n.tyreMockTabAll,
+      kTyreStatusInstalled => l10n.tyreMockTabInstalled,
+      kTyreStatusRemoved => l10n.tyreMockTabRemoved,
+      kTyreStatusScrapped => l10n.tyreMockTabScrapped,
+      _ => status,
+    };
+
+TpStatus _statusTone(String? status) => switch (status) {
+      kTyreStatusInstalled => TpStatus.ok,
+      kTyreStatusScrapped => TpStatus.critical,
+      kTyreStatusRemoved => TpStatus.neutral,
+      _ => TpStatus.unknown,
+    };
+
 class _TyreRecordCard extends StatelessWidget {
-  const _TyreRecordCard({required this.record, required this.onTap});
+  const _TyreRecordCard({
+    required this.record,
+    required this.showStatus,
+    required this.onTap,
+  });
 
   final TyreRecord record;
+
+  /// True on the All tab, where the lifecycle status is not implied by the
+  /// tab and has to be read off each row.
+  final bool showStatus;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final TpPalette palette = TpPalette.of(context);
-    final TpStatus status = tyreRiskStatus(record.riskLevel);
+    final TextTheme text = Theme.of(context).textTheme;
+    final TpStatus riskStatus = tyreRiskStatus(record.riskLevel);
+    final String? code = record.tyrePosition;
+    final String? legacyPosition =
+        record.position != null && record.position != code
+            ? record.position
+            : null;
+    final bool removedLike = record.status == kTyreStatusRemoved ||
+        record.status == kTyreStatusScrapped;
 
     return TpCard(
       onTap: onTap,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Stack(
-            clipBehavior: Clip.none,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Container(
-                width: 78,
-                height: 78,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: palette.surfaceAlt,
-                  border: Border.all(color: palette.borderStrong),
-                ),
-                alignment: Alignment.center,
-                child: Icon(
-                  Icons.tire_repair_outlined,
-                  size: 44,
-                  color: palette.text,
-                ),
-              ),
-              if (record.riskLevel != null)
-                PositionedDirectional(
-                  end: -2,
-                  bottom: -2,
-                  child: Container(
-                    width: 24,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      color: palette.forStatus(status).base,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: palette.surface, width: 2),
-                    ),
-                    alignment: Alignment.center,
-                    child: Icon(
-                      status == TpStatus.ok
-                          ? Icons.check_rounded
-                          : Icons.priority_high_rounded,
-                      size: 15,
-                      color: palette.forStatus(status).onBase,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(width: TpSpace.lg),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Row(
+              _TyreAvatar(record: record),
+              const SizedBox(width: TpSpace.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
-                    Expanded(
-                      child: TpIdentifierText(
-                        record.serialNo ??
-                            record.assetNo ??
-                            l10n.recordsDetailFallbackTitle,
-                        style: Theme.of(context).textTheme.titleMedium,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                    Row(
+                      children: <Widget>[
+                        Flexible(
+                          child: TpIdentifierText(
+                            record.serialNo ??
+                                record.assetNo ??
+                                l10n.recordsDetailFallbackTitle,
+                            style: text.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w800),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (record.riskLevel != null) ...<Widget>[
+                          const SizedBox(width: TpSpace.sm),
+                          TpStatusChip(
+                            status: riskStatus,
+                            label: record.riskLevel,
+                            isCompact: true,
+                          ),
+                        ],
+                        if (showStatus && record.status != null) ...<Widget>[
+                          const SizedBox(width: TpSpace.xs),
+                          TpStatusChip(
+                            status: _statusTone(record.status),
+                            label: _statusLabel(l10n, record.status),
+                            isCompact: true,
+                          ),
+                        ],
+                      ],
                     ),
-                    if (record.riskLevel != null) ...<Widget>[
-                      const SizedBox(width: TpSpace.sm),
-                      TpStatusChip(
-                        status: status,
-                        label: record.riskLevel,
-                        isCompact: true,
-                      ),
-                    ],
-                  ],
-                ),
-                const SizedBox(height: TpSpace.xs),
-                Text(
-                  _brandAndCategory(record),
-                  style: Theme.of(context).textTheme.bodyMedium,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: TpSpace.xs),
-                Wrap(
-                  spacing: TpSpace.md,
-                  runSpacing: TpSpace.xs,
-                  children: <Widget>[
+                    const SizedBox(height: 2),
+                    Text(
+                      _brandAndSize(record),
+                      style: text.bodyMedium
+                          ?.copyWith(color: palette.textSecondary),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: TpSpace.xs),
                     if (record.assetNo != null)
                       _MetaItem(
                         icon: Icons.local_shipping_outlined,
                         text: record.assetNo!,
+                        isIdentifier: true,
                       ),
-                    if (record.bestPosition != null)
-                      _MetaItem(
-                        icon: Icons.location_on_outlined,
-                        text: record.bestPosition!,
+                    if (code != null || legacyPosition != null) ...<Widget>[
+                      const SizedBox(height: 2),
+                      Row(
+                        children: <Widget>[
+                          Icon(
+                            Icons.location_on_outlined,
+                            size: TpSizing.iconSm,
+                            color: palette.textMuted,
+                          ),
+                          const SizedBox(width: TpSpace.xs),
+                          if (legacyPosition != null)
+                            Flexible(
+                              child: Text(
+                                legacyPosition,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: text.labelMedium
+                                    ?.copyWith(color: palette.textSecondary),
+                              ),
+                            ),
+                          if (code != null) ...<Widget>[
+                            if (legacyPosition != null)
+                              const SizedBox(width: TpSpace.xs),
+                            _CodeChip(code: code),
+                          ],
+                        ],
                       ),
-                    if (record.site != null)
+                    ],
+                    if (record.site != null) ...<Widget>[
+                      const SizedBox(height: 2),
                       _MetaItem(
                         icon: Icons.business_outlined,
                         text: record.site!,
                       ),
-                    if (record.issueDate != null)
-                      _MetaItem(
-                        icon: Icons.event_outlined,
-                        text: record.issueDate!,
-                      ),
+                    ],
                   ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: TpSpace.lg),
+                child: Icon(
+                  Icons.chevron_right,
+                  color: palette.textMuted,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: TpSpace.md),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Expanded(
+                  child: _Metric(
+                    label: l10n.tyreMockMetricFitted,
+                    value: record.issueDate,
+                  ),
+                ),
+                const _MetricDivider(),
+                Expanded(
+                  child: removedLike
+                      ? _Metric(
+                          label: l10n.tyreMockMetricRemoved,
+                          value: record.removalDate,
+                        )
+                      : record.treadDepth != null
+                          ? _Metric(
+                              label: l10n.tyreMockMetricTread,
+                              value: l10n.tyreDiagramListTreadValue(
+                                _fmtNumber(record.treadDepth!),
+                              ),
+                            )
+                          : _Metric(
+                              label: l10n.recordsKmFitment,
+                              value: record.kmAtFitment == null
+                                  ? null
+                                  : l10n.tyreMockKmValue(
+                                      _fmtNumber(record.kmAtFitment!),
+                                    ),
+                            ),
+                ),
+                const _MetricDivider(),
+                Expanded(
+                  child: _Metric(
+                    label: l10n.tyreMockMetricKmRun,
+                    value: record.kmRun == null
+                        ? null
+                        : l10n.tyreMockKmValue(_fmtNumber(record.kmRun!)),
+                  ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: TpSpace.sm),
-          Icon(Icons.chevron_right, color: palette.textMuted),
         ],
       ),
     );
   }
 
-  String _brandAndCategory(TyreRecord record) {
+  String _brandAndSize(TyreRecord record) {
     final List<String> parts = <String>[
       if (record.brand != null) record.brand!,
-      if (record.category != null) record.category!,
+      if (record.size != null) record.size!,
+      if (record.size == null && record.category != null) record.category!,
     ];
-    return parts.isEmpty ? '-' : parts.join(' · ');
+    return parts.isEmpty ? '-' : parts.join(' ');
+  }
+}
+
+/// The circular tyre mark with the lifecycle badge on its corner: a check
+/// while installed, a minus once removed, a cross once scrapped. The risk
+/// level takes the badge instead when the tyre has been risk-scored.
+class _TyreAvatar extends StatelessWidget {
+  const _TyreAvatar({required this.record});
+
+  final TyreRecord record;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final TpStatus tone = record.riskLevel != null
+        ? tyreRiskStatus(record.riskLevel)
+        : _statusTone(record.status);
+    final IconData badge = switch (tone) {
+      TpStatus.ok => Icons.check_rounded,
+      TpStatus.critical when record.riskLevel == null => Icons.close_rounded,
+      TpStatus.neutral => Icons.remove_rounded,
+      TpStatus.unknown => Icons.remove_rounded,
+      _ => Icons.priority_high_rounded,
+    };
+    return Stack(
+      clipBehavior: Clip.none,
+      children: <Widget>[
+        Container(
+          width: 64,
+          height: 64,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: palette.surfaceAlt,
+            border: Border.all(color: palette.border),
+          ),
+          alignment: Alignment.center,
+          child: Icon(
+            Icons.tire_repair_outlined,
+            size: 36,
+            color: palette.text,
+          ),
+        ),
+        if (record.riskLevel != null || record.status != null)
+          PositionedDirectional(
+            end: -2,
+            bottom: -2,
+            child: Container(
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                color: palette.forStatus(tone).base,
+                shape: BoxShape.circle,
+                border: Border.all(color: palette.surface, width: 2),
+              ),
+              alignment: Alignment.center,
+              child: Icon(
+                badge,
+                size: 14,
+                color: palette.forStatus(tone).onBase,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _CodeChip extends StatelessWidget {
+  const _CodeChip({required this.code});
+
+  final String code;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: palette.info.soft,
+        borderRadius: BorderRadius.circular(TpRadius.sm),
+        border: Border.all(color: palette.info.base, width: 0.8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+        child: TpIdentifierText(
+          code,
+          maxLines: 1,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: palette.info.onSoft,
+                fontWeight: FontWeight.w700,
+              ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Metric extends StatelessWidget {
+  const _Metric({required this.label, required this.value});
+
+  final String label;
+
+  /// Null renders `-`: a value nobody recorded is never shown as zero.
+  final String? value;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final TextTheme text = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: TpSpace.xs),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: text.labelSmall?.copyWith(color: palette.textMuted),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value ?? '-',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textDirection: TextDirection.ltr,
+            style: text.titleSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: value == null ? palette.textMuted : palette.text,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MetricDivider extends StatelessWidget {
+  const _MetricDivider();
+
+  @override
+  Widget build(BuildContext context) => VerticalDivider(
+        width: TpSpace.md,
+        thickness: 1,
+        color: TpPalette.of(context).border,
+      );
+}
+
+/// Site and Risk as always-visible pills, like the mock's dropdown row.
+/// Tapping either opens the filter sheet; a set filter shows its value and
+/// "Clear filters" appears beside them.
+class _FilterPillsRow extends StatelessWidget {
+  const _FilterPillsRow({
+    required this.query,
+    required this.controller,
+    required this.onOpenSheet,
+  });
+
+  final TyreRecordsQuery query;
+  final TyreRecordsListController controller;
+  final VoidCallback onOpenSheet;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(TpSpace.lg, TpSpace.sm, TpSpace.lg, 0),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: <Widget>[
+            _DropdownPill(
+              key: TyreRecordsListKeys.sitePill,
+              label: l10n.tyreMockSitePill(query.site ?? l10n.tyreMockTabAll),
+              isActive: query.site != null,
+              onTap: onOpenSheet,
+            ),
+            const SizedBox(width: TpSpace.sm),
+            _DropdownPill(
+              key: TyreRecordsListKeys.riskPill,
+              label: l10n.tyreMockRiskPill(
+                query.riskLevel ?? l10n.tyreMockTabAll,
+              ),
+              isActive: query.riskLevel != null,
+              onTap: onOpenSheet,
+            ),
+            if (query.hasActiveFilters) ...<Widget>[
+              const SizedBox(width: TpSpace.xs),
+              TpButton.text(
+                label: l10n.recordsClearFilters,
+                isCompact: true,
+                onPressed: controller.clearFilters,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DropdownPill extends StatelessWidget {
+  const _DropdownPill({
+    required this.label,
+    required this.isActive,
+    required this.onTap,
+    super.key,
+  });
+
+  final String label;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final Color border = isActive ? palette.primary : palette.border;
+    return Semantics(
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      child: Material(
+        color: palette.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(TpRadius.md),
+          side: BorderSide(color: border),
+        ),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(TpRadius.md),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              minHeight: TpSizing.minTouchTarget,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: TpSpace.md),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Text(
+                    label,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: isActive ? palette.primary : palette.text,
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                  const SizedBox(width: TpSpace.xs),
+                  Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    size: TpSizing.iconMd,
+                    color: palette.textSecondary,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Installed / Removed / Scrapped / All, over the statuses the table holds.
+class _StatusTabs extends StatelessWidget {
+  const _StatusTabs({required this.selected, required this.onSelected});
+
+  final String? selected;
+  final ValueChanged<String?> onSelected;
+
+  static const List<String?> _tabs = <String?>[
+    kTyreStatusInstalled,
+    kTyreStatusRemoved,
+    kTyreStatusScrapped,
+    null,
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    return Container(
+      key: TyreRecordsListKeys.statusTabs,
+      margin: const EdgeInsets.only(top: TpSpace.sm),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: palette.border)),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: TpSpace.md),
+        child: Row(
+          children: <Widget>[
+            for (final String? status in _tabs)
+              _StatusTab(
+                label: _statusLabel(l10n, status),
+                isSelected: selected == status,
+                onTap: () => onSelected(status),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusTab extends StatelessWidget {
+  const _StatusTab({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          constraints: const BoxConstraints(
+            minHeight: TpSizing.minTouchTarget,
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: TpSpace.md),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: isSelected ? palette.primary : Colors.transparent,
+                width: 3,
+              ),
+            ),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: isSelected ? palette.text : palette.textSecondary,
+                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
+                ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// "Showing installed tyres · Loaded 10:48" and the sort choice.
+class _ListStatusLine extends StatelessWidget {
+  const _ListStatusLine({required this.state, required this.controller});
+
+  final TyreRecordsListState state;
+  final TyreRecordsListController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    final TextTheme text = Theme.of(context).textTheme;
+    final String showing = switch (state.query.status) {
+      kTyreStatusInstalled => l10n.tyreMockShowingInstalled,
+      kTyreStatusRemoved => l10n.tyreMockShowingRemoved,
+      kTyreStatusScrapped => l10n.tyreMockShowingScrapped,
+      _ => l10n.tyreMockShowingAll,
+    };
+    final DateTime? loadedAt = state.loadedAt;
+    final String line = loadedAt == null
+        ? showing
+        : '$showing · ${l10n.tyreMockLoadedAt(
+            MaterialLocalizations.of(context).formatTimeOfDay(
+              TimeOfDay.fromDateTime(loadedAt),
+            ),
+          )}';
+    final String sortLabel = state.query.sort == TyreRecordsSort.oldestFitted
+        ? l10n.tyreMockSortOldest
+        : l10n.tyreMockSortNewest;
+    return Padding(
+      key: TyreRecordsListKeys.statusLine,
+      padding: const EdgeInsetsDirectional.fromSTEB(
+        TpSpace.lg,
+        TpSpace.xs,
+        TpSpace.sm,
+        0,
+      ),
+      child: Row(
+        children: <Widget>[
+          Icon(
+            loadedAt == null
+                ? Icons.cloud_queue_rounded
+                : Icons.cloud_done_outlined,
+            size: TpSizing.iconSm,
+            color: loadedAt == null ? palette.textMuted : palette.ok.base,
+          ),
+          const SizedBox(width: TpSpace.xs),
+          Expanded(
+            child: Text(
+              line,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: text.labelMedium?.copyWith(color: palette.textSecondary),
+            ),
+          ),
+          PopupMenuButton<TyreRecordsSort>(
+            key: TyreRecordsListKeys.sortButton,
+            tooltip: l10n.tyreMockSortTooltip,
+            initialValue: state.query.sort,
+            onSelected: controller.setSort,
+            itemBuilder: (BuildContext context) =>
+                <PopupMenuEntry<TyreRecordsSort>>[
+              PopupMenuItem<TyreRecordsSort>(
+                value: TyreRecordsSort.newestFitted,
+                child: Text(l10n.tyreMockSortNewest),
+              ),
+              PopupMenuItem<TyreRecordsSort>(
+                value: TyreRecordsSort.oldestFitted,
+                child: Text(l10n.tyreMockSortOldest),
+              ),
+            ],
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                minHeight: TpSizing.minTouchTarget,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: TpSpace.sm),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Text(
+                      sortLabel,
+                      style: text.labelLarge?.copyWith(
+                        color: palette.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: TpSizing.iconMd,
+                      color: palette.primary,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The fixed bottom action: scan a tyre serial. The mock's second button,
+/// "Add tyre record", is deliberately absent: the app has no tyre-record
+/// create path (tyres enter the register through tyre changes and imports),
+/// and a button that could only fail would be a control that does nothing.
+class _ScanBar extends StatelessWidget {
+  const _ScanBar({required this.onScan});
+
+  final VoidCallback onScan;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: palette.surface,
+        border: Border(top: BorderSide(color: palette.border)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            TpSpace.lg,
+            TpSpace.sm,
+            TpSpace.lg,
+            TpSpace.sm,
+          ),
+          child: TpButton.secondary(
+            key: TyreRecordsListKeys.scanBar,
+            label: l10n.tyreMockScanSerial,
+            icon: Icons.qr_code_scanner_rounded,
+            isFullWidth: true,
+            onPressed: onScan,
+          ),
+        ),
+      ),
+    );
   }
 }
 
 class _MetaItem extends StatelessWidget {
-  const _MetaItem({required this.icon, required this.text});
+  const _MetaItem({
+    required this.icon,
+    required this.text,
+    this.isIdentifier = false,
+  });
 
   final IconData icon;
   final String text;
+
+  /// Asset numbers and serials draw through [TpIdentifierText] so they keep
+  /// their left-to-right order under Arabic and Urdu.
+  final bool isIdentifier;
 
   @override
   Widget build(BuildContext context) {
@@ -533,101 +1139,24 @@ class _MetaItem extends StatelessWidget {
       children: <Widget>[
         Icon(icon, size: TpSizing.iconSm, color: palette.textMuted),
         const SizedBox(width: TpSpace.xs),
-        Text(
-          text,
-          style: Theme.of(context)
-              .textTheme
-              .labelSmall
-              ?.copyWith(color: palette.textMuted),
-        ),
+        if (isIdentifier)
+          TpIdentifierText(
+            text,
+            maxLines: 1,
+            style: Theme.of(context)
+                .textTheme
+                .labelMedium
+                ?.copyWith(color: palette.textSecondary),
+          )
+        else
+          Text(
+            text,
+            style: Theme.of(context)
+                .textTheme
+                .labelSmall
+                ?.copyWith(color: palette.textMuted),
+          ),
       ],
-    );
-  }
-}
-
-class _ActiveFilterChips extends StatelessWidget {
-  const _ActiveFilterChips({required this.query, required this.controller});
-
-  final TyreRecordsQuery query;
-  final TyreRecordsListController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    final AppLocalizations l10n = AppLocalizations.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(TpSpace.lg, TpSpace.sm, TpSpace.lg, 0),
-      child: Wrap(
-        spacing: TpSpace.xs,
-        runSpacing: TpSpace.xs,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: <Widget>[
-          if (query.site != null)
-            _RemovableChip(
-              label: query.site!,
-              onRemoved: () => controller.setSiteFilter(null),
-            ),
-          if (query.riskLevel != null)
-            _RemovableChip(
-              label: query.riskLevel!,
-              status: tyreRiskStatus(query.riskLevel),
-              onRemoved: () => controller.setRiskFilter(null),
-            ),
-          TpButton.text(
-            label: l10n.recordsClearFilters,
-            isCompact: true,
-            onPressed: controller.clearFilters,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RemovableChip extends StatelessWidget {
-  const _RemovableChip({
-    required this.label,
-    required this.onRemoved,
-    this.status = TpStatus.neutral,
-  });
-
-  final String label;
-  final TpStatus status;
-  final VoidCallback onRemoved;
-
-  @override
-  Widget build(BuildContext context) {
-    final TpPalette palette = TpPalette.of(context);
-    final TpStatusColors colors = palette.forStatus(status);
-    return InkWell(
-      onTap: onRemoved,
-      borderRadius: BorderRadius.circular(TpRadius.pill),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: colors.soft,
-          borderRadius: BorderRadius.circular(TpRadius.pill),
-          border: Border.all(color: colors.base, width: TpBorderWidth.hairline),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: TpSpace.md,
-            vertical: TpSpace.xs,
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Text(
-                label,
-                style: Theme.of(context)
-                    .textTheme
-                    .labelMedium
-                    ?.copyWith(color: colors.onSoft),
-              ),
-              const SizedBox(width: TpSpace.xs),
-              Icon(Icons.close, size: TpSizing.iconSm, color: colors.onSoft),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

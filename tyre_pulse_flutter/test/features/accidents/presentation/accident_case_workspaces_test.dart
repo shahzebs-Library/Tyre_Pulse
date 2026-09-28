@@ -7,6 +7,7 @@ import 'package:tyre_pulse/features/accidents/domain/accident_models.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_case_workspaces.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_dispatch_handover.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_fleet_validation.dart';
+import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_header.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_insurance_claim.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_responsibility.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_timeline.dart';
@@ -143,7 +144,10 @@ void main() {
         (WidgetTester tester) async {
       await _pump(tester, workspace);
       expect(tester.takeException(), isNull);
-      expect(find.text('Workstream $step of 7'), findsOneWidget);
+      // The step is stated exactly once: one workstream header, no chip.
+      expect(find.textContaining('Workstream $step of 7'), findsOneWidget);
+      expect(find.byType(AccidentWorkstreamHeader), findsOneWidget);
+      expect(find.byKey(const Key('accident.case.headline')), findsOneWidget);
       expect(_mockFinder(workspace), findsOneWidget);
       expect(find.text('Local workflow preview'), findsNothing);
       expect(
@@ -160,7 +164,7 @@ void main() {
         Directionality.of(tester.element(find.byKey(const Key('body')))),
         TextDirection.rtl,
       );
-      expect(find.text('مسار العمل $step من 7'), findsOneWidget);
+      expect(find.textContaining('مسار العمل $step من 7'), findsOneWidget);
       expect(_mockFinder(workspace), findsOneWidget);
       expect(find.text('Local workflow preview'), findsNothing);
     });
@@ -206,8 +210,23 @@ void main() {
       (WidgetTester tester) async {
     await _pump(tester, AccidentCaseWorkspace.timeline);
     expect(find.text('Case timeline & notifications'), findsOneWidget);
-    expect(find.text('Workstream 7 of 7'), findsOneWidget);
+    expect(find.textContaining('Workstream 7 of 7'), findsOneWidget);
     expect(find.textContaining('Delivered'), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the case headline is the reference and asset in headlineSmall',
+      (WidgetTester tester) async {
+    await _pump(tester, AccidentCaseWorkspace.insurance);
+    final Text headline =
+        tester.widget<Text>(find.byKey(const Key('accident.case.headline')));
+    expect(headline.data, 'ACC-2026-0148 • CP-045');
+    final ThemeData theme = Theme.of(
+      tester.element(
+        find.byKey(const Key('accident.case.headline')),
+      ),
+    );
+    expect(headline.style?.fontSize, theme.textTheme.headlineSmall?.fontSize);
+    expect(headline.style?.fontWeight, FontWeight.w800);
   });
 }

@@ -5937,4 +5937,1023 @@ class AppLocalizationsUr extends AppLocalizations {
   String accTlOverdueBy(String elapsed) {
     return 'تاخیر $elapsed';
   }
+
+  @override
+  String tyreMockRecordsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count ٹائر',
+      one: '1 ٹائر',
+      zero: 'کوئی ٹائر نہیں',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get tyreMockTabAll => 'سب';
+
+  @override
+  String get tyreMockTabInstalled => 'نصب شدہ';
+
+  @override
+  String get tyreMockTabRemoved => 'اتارے گئے';
+
+  @override
+  String get tyreMockTabScrapped => 'اسکریپ شدہ';
+
+  @override
+  String get tyreMockShowingInstalled => 'نصب شدہ ٹائر دکھائے جا رہے ہیں';
+
+  @override
+  String get tyreMockShowingRemoved => 'اتارے گئے ٹائر دکھائے جا رہے ہیں';
+
+  @override
+  String get tyreMockShowingScrapped => 'اسکریپ شدہ ٹائر دکھائے جا رہے ہیں';
+
+  @override
+  String get tyreMockShowingAll => 'تمام ٹائر دکھائے جا رہے ہیں';
+
+  @override
+  String tyreMockLoadedAt(String time) {
+    return 'لوڈ ہوا $time';
+  }
+
+  @override
+  String get tyreMockSortTooltip => 'ترتیب';
+
+  @override
+  String get tyreMockSortNewest => 'تازہ ترین نصب';
+
+  @override
+  String get tyreMockSortOldest => 'قدیم ترین نصب';
+
+  @override
+  String tyreMockSitePill(String value) {
+    return 'سائٹ: $value';
+  }
+
+  @override
+  String tyreMockRiskPill(String value) {
+    return 'خطرہ: $value';
+  }
+
+  @override
+  String get tyreMockMetricFitted => 'نصب کی تاریخ';
+
+  @override
+  String get tyreMockMetricRemoved => 'اتارنے کی تاریخ';
+
+  @override
+  String get tyreMockMetricTread => 'ٹریڈ';
+
+  @override
+  String get tyreMockMetricKmRun => 'طے شدہ کلومیٹر';
+
+  @override
+  String tyreMockKmValue(String value) {
+    return '$value کلومیٹر';
+  }
+
+  @override
+  String tyreMockHoursValue(String value) {
+    return '$value گھنٹے';
+  }
+
+  @override
+  String get tyreMockScanSerial => 'ٹائر سیریل اسکین کریں';
+
+  @override
+  String get tyreMockInspectionTitle => 'ٹائر معائنہ';
+
+  @override
+  String get tyreMockInspectionProgress => 'معائنے کی پیش رفت';
+
+  @override
+  String tyreMockProgressComplete(int percent) {
+    return '$percent% مکمل';
+  }
+
+  @override
+  String get tyreMockMachineMeter => 'مشین میٹر';
+
+  @override
+  String get tyreMockPreviousTyre => 'پچھلا ٹائر';
+
+  @override
+  String get tyreMockNextTyre => 'اگلا ٹائر';
+
+  @override
+  String get fleetMockClassVehicles => 'گاڑیاں';
+
+  @override
+  String get fleetMockClassPlant => 'پلانٹ اور آلات';
+
+  @override
+  String get fleetMockClassStationary => 'اسٹیشنری';
+
+  @override
+  String fleetMockActiveAssets(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count فعال اثاثے',
+      one: '1 فعال اثاثہ',
+      zero: 'کوئی فعال اثاثہ نہیں',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fleetMockScopeAllSites => 'تمام مجاز سائٹس';
+
+  @override
+  String get fleetMockScopeAllCountries => 'تمام ممالک';
+
+  @override
+  String get fleetMockScanAssetQr => 'اثاثے کا QR اسکین کریں';
+
+  @override
+  String get fleetMockTabTimeline => 'ٹائم لائن';
+
+  @override
+  String get fleetMockTabCosts => 'اخراجات';
+
+  @override
+  String get fleetMockPeriodYtd => 'اس سال اب تک';
+
+  @override
+  String get fleetMockPeriod12m => 'پچھلے 12 ماہ';
+
+  @override
+  String get fleetMockPeriod90d => 'پچھلے 90 دن';
+
+  @override
+  String get fleetMockPeriod30d => 'پچھلے 30 دن';
+
+  @override
+  String get fleetMockTimelineAll => 'تمام واقعات';
+
+  @override
+  String get fleetMockTimelineWorkOrders => 'ورک آرڈرز';
+
+  @override
+  String get fleetMockTimelineInspections => 'معائنے';
+
+  @override
+  String get fleetMockTimelineWashes => 'دھلائی';
+
+  @override
+  String get fleetMockTimelineTyres => 'ٹائر';
+
+  @override
+  String get fleetMockTimelineAccidents => 'حادثات';
+
+  @override
+  String get fleetMockEventWorkOrder => 'جاب کارڈ کھولا گیا';
+
+  @override
+  String get fleetMockEventInspection => 'ٹائر معائنہ';
+
+  @override
+  String get fleetMockEventWash => 'گاڑی کی دھلائی';
+
+  @override
+  String get fleetMockEventTyreFitted => 'ٹائر لگایا گیا';
+
+  @override
+  String get fleetMockEventTyreRemoved => 'ٹائر اتارا گیا';
+
+  @override
+  String get fleetMockEventAccident => 'حادثے کی اطلاع دی گئی';
+
+  @override
+  String fleetMockEventPhotos(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count تصاویر',
+      one: '1 تصویر',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fleetMockTimelineEmptyTitle => 'اس مدت میں کوئی ریکارڈ نہیں';
+
+  @override
+  String get fleetMockTimelineEmptyBody =>
+      'منتخب مدت میں اس اثاثے کے لیے کچھ ریکارڈ نہیں ہوا۔';
+
+  @override
+  String get fleetMockTimelinePartial =>
+      'کچھ ریکارڈ لوڈ نہیں ہو سکا۔ فہرست نامکمل ہو سکتی ہے۔';
+
+  @override
+  String get fleetMockSnapshotTitle => 'مالی خلاصہ';
+
+  @override
+  String get fleetMockOpenFinReport => 'مکمل مالی رپورٹ کھولیں';
+
+  @override
+  String get fleetMockFinReportTitle => 'مالی رپورٹ';
+
+  @override
+  String fleetMockFinScopeNote(String currency) {
+    return 'ایک اثاثے کی رپورٹ، قدریں صرف $currency میں';
+  }
+
+  @override
+  String fleetMockFinVsYear(String year) {
+    return '$year کی اسی مدت کے مقابلے میں';
+  }
+
+  @override
+  String get fleetMockFinTotalOperating => 'کل آپریٹنگ لاگت';
+
+  @override
+  String get fleetMockFinMaintenance => 'دیکھ بھال';
+
+  @override
+  String get fleetMockFinCostPerKm => 'فی کلومیٹر لاگت';
+
+  @override
+  String get fleetMockFinCostPerHour => 'فی انجن گھنٹہ لاگت';
+
+  @override
+  String get fleetMockFinDowntime => 'ڈاؤن ٹائم';
+
+  @override
+  String fleetMockFinHours(String hours) {
+    return '$hours گھنٹے';
+  }
+
+  @override
+  String get fleetMockFinNotMeasurable => 'قابل پیمائش نہیں';
+
+  @override
+  String get fleetMockFinNoKmReadings =>
+      'مدت میں اوڈومیٹر کی دو ریڈنگز درکار ہیں';
+
+  @override
+  String get fleetMockFinNotRecorded => 'درج نہیں';
+
+  @override
+  String get fleetMockFinNoComparison => 'موازنے کے لیے ڈیٹا نہیں';
+
+  @override
+  String get fleetMockFinCostTrend => 'لاگت کا رجحان';
+
+  @override
+  String fleetMockFinMonthlyCost(String currency) {
+    return 'ماہانہ لاگت ($currency)';
+  }
+
+  @override
+  String get fleetMockFinComposition => 'لاگت کی تقسیم';
+
+  @override
+  String get fleetMockFinBucketParts => 'اسپیئر پارٹس';
+
+  @override
+  String get fleetMockFinBucketLubricants => 'تیل اور چکنائی';
+
+  @override
+  String get fleetMockFinBucketTyres => 'ٹائر';
+
+  @override
+  String get fleetMockFinBucketLabour => 'مزدوری';
+
+  @override
+  String get fleetMockFinRecentEntries => 'حالیہ لاگت کے اندراجات';
+
+  @override
+  String fleetMockFinViewAll(int count) {
+    return 'تمام لاگت کے اندراجات دیکھیں ($count)';
+  }
+
+  @override
+  String get fleetMockFinShowFewer => 'کم دکھائیں';
+
+  @override
+  String fleetMockFinLines(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count لائنیں',
+      one: '1 لائن',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fleetMockFinExport => 'رپورٹ ایکسپورٹ کریں';
+
+  @override
+  String get fleetMockFinExportError =>
+      'رپورٹ ایکسپورٹ نہیں ہو سکی۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get fleetMockFinNoCostTitle => 'کوئی لاگت درج نہیں';
+
+  @override
+  String get fleetMockFinNoCostBody =>
+      'منتخب مدت میں اس اثاثے کے لیے کوئی اخراجات یا مزدوری درج نہیں ہوئی۔';
+
+  @override
+  String get fleetMockFinMixedTitle => 'ایک سے زیادہ کرنسی';
+
+  @override
+  String fleetMockFinMixedBody(String currencies) {
+    return 'اس اثاثے کی لاگت کی لائنیں $currencies استعمال کرتی ہیں۔ مختلف کرنسیوں کو کبھی جمع نہیں کیا جاتا۔ اعداد دیکھنے کے لیے ایک ملک منتخب کریں۔';
+  }
+
+  @override
+  String get fleetMockFinLabourMissing => 'جاب کارڈز کی مزدوری شامل نہیں ہے۔';
+
+  @override
+  String get fleetMockFinSourceNote =>
+      'پارٹس، تیل اور ٹائر اخراجات کے ریکارڈ سے۔ مزدوری اور ڈاؤن ٹائم جاب کارڈز سے۔ اس اثاثے کا کوئی بجٹ درج نہیں۔';
+
+  @override
+  String get fleetMockFinMeters => 'مدت میں میٹر';
+
+  @override
+  String get fleetMockFinDistance => 'فاصلہ';
+
+  @override
+  String get fleetMockFinRunningHours => 'انجن گھنٹے';
+
+  @override
+  String get myWorkAllSites => 'تمام تفویض شدہ سائٹس';
+
+  @override
+  String myWorkAnswered(int answered, int total) {
+    return '$answered/$total جواب دیے گئے';
+  }
+
+  @override
+  String get myWorkApprovalQueues => 'منظوری کی قطاریں';
+
+  @override
+  String get myWorkAssignedTo => 'تفویض کردہ';
+
+  @override
+  String get myWorkChecklistApprovals => 'عمومی چیک لسٹ منظوریاں';
+
+  @override
+  String get myWorkCompletedEmpty => 'ابھی کوئی مکمل کام نہیں';
+
+  @override
+  String myWorkContentAvailable(String languages) {
+    return '$languages مواد دستیاب ہے';
+  }
+
+  @override
+  String get myWorkContentLanguage => 'چیک لسٹ مواد کی زبان';
+
+  @override
+  String get myWorkDayEmpty => 'اس دن کے لیے کچھ منصوبہ بند نہیں';
+
+  @override
+  String get myWorkDraftSaved => 'مسودہ محفوظ ہے';
+
+  @override
+  String myWorkDueOn(String date) {
+    return 'واجب الادا $date';
+  }
+
+  @override
+  String get myWorkDueToday => 'آج واجب';
+
+  @override
+  String get myWorkEmptyBody =>
+      'آپ یا آپ کے کردار کو تفویض کردہ کام یہاں ظاہر ہوتا ہے۔';
+
+  @override
+  String get myWorkEmptyFiltered => 'اس فلٹر سے کوئی کام میل نہیں کھاتا';
+
+  @override
+  String get myWorkEmptyTitle => 'کچھ تفویض نہیں';
+
+  @override
+  String get myWorkFieldPlanTitle => 'آج کا فیلڈ پلان';
+
+  @override
+  String get myWorkFilterAll => 'تمام اقسام';
+
+  @override
+  String get myWorkFilterTooltip => 'قسم کے لحاظ سے فلٹر';
+
+  @override
+  String get myWorkHistory => 'میرے کام کی تاریخ دیکھیں';
+
+  @override
+  String get myWorkInspectionApprovals => 'ٹائر معائنہ منظوریاں';
+
+  @override
+  String get myWorkKindChecklist => 'چیک لسٹ';
+
+  @override
+  String get myWorkKindCorrective => 'اصلاحی کارروائی';
+
+  @override
+  String get myWorkKindDraft => 'چیک لسٹ مسودہ';
+
+  @override
+  String get myWorkKindInspection => 'ٹائر معائنہ';
+
+  @override
+  String get myWorkKindWorkOrder => 'ورک آرڈر';
+
+  @override
+  String myWorkLateDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count دن',
+      one: '1 دن',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String myWorkLateHours(int count) {
+    return '$count گھنٹے';
+  }
+
+  @override
+  String myWorkLateMinutes(int count) {
+    return '$count منٹ';
+  }
+
+  @override
+  String get myWorkLoadError => 'میرا کام ابھی لوڈ نہیں ہو سکا۔';
+
+  @override
+  String get myWorkNoDueDate => 'کوئی مقررہ تاریخ نہیں';
+
+  @override
+  String get myWorkNotRecorded => 'درج نہیں';
+
+  @override
+  String get myWorkOverdueBy => 'تاخیر';
+
+  @override
+  String myWorkPartial(String sources) {
+    return 'کچھ کام چیک نہیں ہو سکا: $sources۔';
+  }
+
+  @override
+  String get myWorkPriority => 'ترجیح';
+
+  @override
+  String get myWorkReportIssue => 'مسئلہ رپورٹ کریں';
+
+  @override
+  String get myWorkResume => 'دوبارہ شروع کریں';
+
+  @override
+  String get myWorkRetry => 'دوبارہ کوشش کریں';
+
+  @override
+  String get myWorkSearchHint => 'کام، اثاثہ یا سائٹ تلاش کریں';
+
+  @override
+  String get myWorkSearchTooltip => 'تلاش';
+
+  @override
+  String get myWorkSectionComingUp => 'آنے والا';
+
+  @override
+  String get myWorkSectionCompleted => 'مکمل';
+
+  @override
+  String get myWorkSectionDueToday => 'آج واجب';
+
+  @override
+  String get myWorkSectionInProgress => 'جاری';
+
+  @override
+  String get myWorkSectionOverdue => 'تاخیر شدہ';
+
+  @override
+  String get myWorkSectionWorkOrders => 'ورک آرڈرز';
+
+  @override
+  String get myWorkSourceApprovals => 'منظوری کی قطاریں';
+
+  @override
+  String get myWorkSourceChecklists => 'چیک لسٹیں';
+
+  @override
+  String get myWorkSourceCorrective => 'اصلاحی کارروائیاں';
+
+  @override
+  String get myWorkSourceDrafts => 'اس ڈیوائس پر مسودے';
+
+  @override
+  String get myWorkSourcePlans => 'معائنہ منصوبے';
+
+  @override
+  String get myWorkSourceWorkOrders => 'ورک آرڈرز';
+
+  @override
+  String get myWorkStart => 'شروع کریں';
+
+  @override
+  String get myWorkStartInspection => 'معائنہ شروع کریں';
+
+  @override
+  String get myWorkStatAssigned => 'تفویض شدہ';
+
+  @override
+  String get myWorkStatCompleted => 'مکمل';
+
+  @override
+  String get myWorkStatDueToday => 'آج واجب';
+
+  @override
+  String get myWorkStatOverdue => 'تاخیر شدہ';
+
+  @override
+  String get myWorkStatTasks => 'کام';
+
+  @override
+  String get myWorkStateCompleted => 'مکمل';
+
+  @override
+  String get myWorkStateDueToday => 'آج واجب';
+
+  @override
+  String get myWorkStateInProgress => 'جاری';
+
+  @override
+  String get myWorkStateOverdue => 'تاخیر شدہ';
+
+  @override
+  String get myWorkStateUpcoming => 'آنے والا';
+
+  @override
+  String get myWorkStatus => 'حیثیت';
+
+  @override
+  String myWorkSyncPending(int count) {
+    return '$count مطابقت کے منتظر';
+  }
+
+  @override
+  String get myWorkTabAssigned => 'تفویض شدہ';
+
+  @override
+  String get myWorkTabCompleted => 'مکمل';
+
+  @override
+  String get myWorkTabInProgress => 'جاری';
+
+  @override
+  String get myWorkTasksTitle => 'میرے کام';
+
+  @override
+  String get myWorkTyreWorkflowTag => 'خصوصی ٹائر ورک فلو';
+
+  @override
+  String get myWorkView => 'دیکھیں';
+
+  @override
+  String get clMockDueNow => 'ابھی واجب';
+
+  @override
+  String get clMockDueTomorrow => 'کل واجب';
+
+  @override
+  String clMockDueOn(String date) {
+    return 'واجب $date';
+  }
+
+  @override
+  String get clMockCadenceDaily => 'روزانہ';
+
+  @override
+  String get clMockCadenceWeekly => 'ہفتہ وار';
+
+  @override
+  String get clMockCadenceMonthly => 'ماہانہ';
+
+  @override
+  String clMockCadenceEveryDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'ہر $count دن',
+      one: 'ہر روز',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get clMockMeterRowTitle => 'اوڈومیٹر اور آور میٹر ریڈنگ';
+
+  @override
+  String clMockMeterLastRecorded(String date) {
+    return 'آخری اندراج $date';
+  }
+
+  @override
+  String get clMockMeterNoReading => 'ابھی کوئی ریڈنگ درج نہیں';
+
+  @override
+  String get clMockMeterRecord => 'درج کریں';
+
+  @override
+  String get clMockPendingApproval => 'منظوری زیر التوا';
+
+  @override
+  String get clMockAwaitingYourApproval => 'آپ کی منظوری کا انتظار';
+
+  @override
+  String get clMockReviewerLabel => 'جائزہ کار';
+
+  @override
+  String clMockSubmittedOn(String date) {
+    return 'جمع کرایا گیا $date';
+  }
+
+  @override
+  String clMockFilledBy(String name) {
+    return '$name نے پُر کیا';
+  }
+
+  @override
+  String get clMockOperatorSignatureCaptured => 'آپریٹر کے دستخط محفوظ ہیں';
+
+  @override
+  String get clMockOperatorSignatureMissing => 'آپریٹر کے دستخط نہیں';
+
+  @override
+  String get clMockRungInProgress => 'جاری ہے';
+
+  @override
+  String get clMockRungPending => 'زیر التوا';
+
+  @override
+  String get clMockInspectionOutcome => 'معائنے کا نتیجہ';
+
+  @override
+  String get clMockPass => 'درست';
+
+  @override
+  String get clMockFail => 'ناکام';
+
+  @override
+  String get clMockNotApplicable => 'لاگو نہیں';
+
+  @override
+  String get clMockNoChecksScored => 'اس شیٹ میں درست یا ناکام جانچ نہیں ہے';
+
+  @override
+  String get clMockRequiredFields => 'لازمی خانے';
+
+  @override
+  String get clMockPhotos => 'تصاویر';
+
+  @override
+  String get clMockSignatures => 'دستخط';
+
+  @override
+  String get clMockFindingsTitle => 'جائزے کے متقاضی نتائج';
+
+  @override
+  String clMockFindingNote(String note) {
+    return 'نوٹ: $note';
+  }
+
+  @override
+  String clMockPhotosAttached(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count تصاویر منسلک',
+      one: '1 تصویر منسلک',
+      zero: 'کوئی تصویر منسلک نہیں',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get clMockSectionGeneral => 'عمومی';
+
+  @override
+  String clMockSectionFindings(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count نتائج',
+      one: '1 نتیجہ',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String clMockSectionPassed(int passed, int total) {
+    return '$passed/$total درست';
+  }
+
+  @override
+  String get clMockSectionComplete => 'مکمل';
+
+  @override
+  String clMockSectionAnswered(int answered, int total) {
+    return '$answered/$total جواب دیے گئے';
+  }
+
+  @override
+  String get clMockViewAllAnswers => 'چیک لسٹ کے تمام جوابات دیکھیں';
+
+  @override
+  String get clMockHideAllAnswers => 'چیک لسٹ کے جوابات چھپائیں';
+
+  @override
+  String get clMockReviewerAction => 'جائزہ کار کی کارروائی';
+
+  @override
+  String get clMockDecisionNote => 'فیصلے کا نوٹ';
+
+  @override
+  String get clMockDecisionNoteHint => 'درستی کے لیے واپس بھیجتے وقت لازمی';
+
+  @override
+  String get clMockReturnForCorrection => 'درستی کے لیے واپس کریں';
+
+  @override
+  String get clMockApprove => 'منظور کریں';
+
+  @override
+  String get clMockApproveNeeds =>
+      'منظوری کے لیے دستخط کریں اور اپنا نام درج کریں';
+
+  @override
+  String get clMockDecisionRecorded =>
+      'فیصلہ، نوٹ، دستخط اور وقت محفوظ کیے جاتے ہیں۔';
+
+  @override
+  String get clMockSavedSignatureApplied =>
+      'آپ کے محفوظ دستخط شامل کر دیے گئے ہیں۔ منظوری کے لیے پھر بھی آپ کو بٹن دبانا ہوگا۔';
+
+  @override
+  String get clMockProfileVerified => 'تصدیق شدہ اکاؤنٹ';
+
+  @override
+  String get clMockPendingDrafts => 'زیر التوا مسودے';
+
+  @override
+  String get clMockActiveSite => 'فعال سائٹ';
+
+  @override
+  String get clMockCountryCurrency => 'ملک اور کرنسی';
+
+  @override
+  String get clMockRolesAccess => 'میرے کردار اور رسائی';
+
+  @override
+  String clMockModuleCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count ماڈیولز',
+      one: '1 ماڈیول',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get clMockChecklistLanguage => 'چیک لسٹ مواد کی زبان';
+
+  @override
+  String get clMockChecklistLanguageCaption => 'ایپ کی زبان سے الگ';
+
+  @override
+  String get clMockSectionSecurity => 'سیکیورٹی اور شناخت';
+
+  @override
+  String get clMockSavedSignature => 'میرے محفوظ دستخط';
+
+  @override
+  String get clMockSignatureNotSaved => 'محفوظ نہیں';
+
+  @override
+  String get clMockSignatureCaptured => 'محفوظ شدہ';
+
+  @override
+  String clMockSignatureCapturedOn(String date) {
+    return 'محفوظ · تازہ کاری $date';
+  }
+
+  @override
+  String get clMockSignatureSheetHint =>
+      'منظوری کی اسکرینیں یہ آپ کے لیے بھر دیتی ہیں۔ منظور آپ خود ہی دباتے ہیں۔';
+
+  @override
+  String get clMockSignatureSave => 'بطور میرے دستخط محفوظ کریں';
+
+  @override
+  String get clMockSignatureRemove => 'محفوظ دستخط ہٹائیں';
+
+  @override
+  String get clMockSignatureRemoveTitle =>
+      'کیا آپ اپنے محفوظ دستخط ہٹانا چاہتے ہیں؟';
+
+  @override
+  String get clMockSignatureRemoveMessage =>
+      'نئے دستخط محفوظ کرنے تک منظوریاں خالی دستخط خانے سے شروع ہوں گی۔';
+
+  @override
+  String get clMockSignatureSaveFailed =>
+      'آپ کے دستخط اپ ڈیٹ نہیں ہو سکے۔ کنکشن چیک کریں اور دوبارہ کوشش کریں۔';
+
+  @override
+  String get clMockOfflineDrafts => 'آف لائن مسودے';
+
+  @override
+  String clMockDraftsStored(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count اس ڈیوائس پر محفوظ',
+      one: '1 اس ڈیوائس پر محفوظ',
+      zero: 'کوئی نہیں',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String myWorkFixIncomplete(String sources) {
+    return 'آپ کے $sources کا صرف ایک حصہ لوڈ ہو سکا، اس لیے کچھ کام غائب ہو سکتا ہے۔';
+  }
+
+  @override
+  String get assetsFixFinIncompleteTitle => 'اعداد و شمار نامکمل ہیں';
+
+  @override
+  String assetsFixFinIncompleteBody(int n) {
+    return 'اعداد و شمار نامکمل ہیں: اس مدت میں اس اثاثے کے لیے $n سے زیادہ اندراجات درج ہوئے، اس لیے میزان نہیں دکھائے جا رہے۔ کم مدت منتخب کریں۔';
+  }
+
+  @override
+  String get clFixMeterUnreadable => 'آخری ریڈنگ چیک نہیں ہو سکی';
+
+  @override
+  String get assetsFixFinUnlabelledTitle => 'کرنسی درج نہیں';
+
+  @override
+  String assetsFixFinUnlabelledBody(int n) {
+    return 'اس مدت میں بغیر کرنسی کی لاگت کی لائنیں: $n۔ میزان نہیں دکھائے جا رہے کیونکہ ان کی کرنسی معلوم نہیں۔';
+  }
+
+  @override
+  String assetsFixChartSummary(int months, String month, String value) {
+    return 'ماہانہ لاگت کا چارٹ، $months مہینے۔ سب سے زیادہ مہینہ: $month، $value۔';
+  }
+
+  @override
+  String assetsFixChartSummaryEmpty(int months) {
+    return 'ماہانہ لاگت کا چارٹ، $months مہینے۔ کوئی لاگت درج نہیں۔';
+  }
+
+  @override
+  String get profileFixSignatureCouldNotCheck => 'جانچ نہیں ہو سکی';
+
+  @override
+  String get profileFixSignatureRemoveFailed =>
+      'آپ کے دستخط ہٹائے نہیں جا سکے۔ اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔';
+
+  @override
+  String get designAccZoneArea => 'حصہ';
+
+  @override
+  String get designAccZoneDamageType => 'نقصان کی قسم';
+
+  @override
+  String get designAccZoneLevel => 'درجہ';
+
+  @override
+  String get designAccZoneCorrectionNote => 'تصحیحی نوٹ (اختیاری)';
+
+  @override
+  String get designAccZoneNote => 'نوٹ (اختیاری)';
+
+  @override
+  String get designAccZonePhotoUpdateFailed =>
+      'نقصان کی قریبی تصاویر اپ ڈیٹ نہیں ہو سکیں۔';
+
+  @override
+  String get designAccZoneSelectedArea => 'منتخب حصہ';
+
+  @override
+  String designAccZoneSelectedAreaNumber(int number) {
+    return 'منتخب حصہ $number';
+  }
+
+  @override
+  String get designAccZoneFinderSuggestion => 'Finder کی تجویز';
+
+  @override
+  String get designAccZoneConfirm => 'تصدیق';
+
+  @override
+  String get designAccZoneCorrect => 'درست کریں';
+
+  @override
+  String get designAccZoneConfirmedByReporter => 'رپورٹر نے تصدیق کی';
+
+  @override
+  String get designAccZoneCorrectedByReporter => 'رپورٹر نے درست کیا';
+
+  @override
+  String get designAccZoneCloseUpPhotos => 'نقصان کی قریبی تصاویر';
+
+  @override
+  String get designAccZoneAddedFromEvidence =>
+      'ثبوت کے مرحلے سے شامل کی جاتی ہیں';
+
+  @override
+  String designAccZoneAttachedCount(int count) {
+    return '$count منسلک';
+  }
+
+  @override
+  String get designAccZoneAddCloseUp => 'قریبی تصویر شامل کریں';
+
+  @override
+  String get designAccZoneAddAnother => 'مزید شامل کریں';
+
+  @override
+  String get designAccZoneSaveAndContinue => 'حصہ محفوظ کریں اور جاری رکھیں';
+
+  @override
+  String get designAccZoneRemove => 'ہٹائیں';
+
+  @override
+  String get designAccZoneSaveMarked => 'نشان زدہ حصہ محفوظ کریں';
+
+  @override
+  String get designAccDamageTypeDent => 'ڈینٹ';
+
+  @override
+  String get designAccDamageTypeScratch => 'خراش';
+
+  @override
+  String get designAccDamageTypeCracked => 'دراڑ';
+
+  @override
+  String get designAccDamageTypeBroken => 'ٹوٹا ہوا';
+
+  @override
+  String get designAccDamageTypeMissing => 'غائب';
+
+  @override
+  String get designAccDamageTypeBent => 'مڑا ہوا';
+
+  @override
+  String get designAccDamageTypeOther => 'دیگر';
+
+  @override
+  String designAccReportStepLead(int step) {
+    return 'مرحلہ $step';
+  }
+
+  @override
+  String designAccReportStepTail(int total, String label) {
+    return ' از $total: $label';
+  }
+
+  @override
+  String get designAccReportStepIdentifyAsset => 'اثاثہ کی شناخت';
+
+  @override
+  String get designAccReportStepIncident => 'واقعے کی تفصیلات';
+
+  @override
+  String get designAccReportStepPeople => 'افراد اور حکام';
+
+  @override
+  String get designAccReportStepDamage => 'نقصان کی نشاندہی';
+
+  @override
+  String get designAccReportStepEvidence => 'ثبوت';
+
+  @override
+  String get designAccReportStepDocuments => 'دستاویزات';
+
+  @override
+  String get designAccReportStepReview => 'جائزہ اور جمع کرائیں';
+
+  @override
+  String get designAccReportStepDone => 'مکمل';
+
+  @override
+  String get designAccReportStepCurrent => 'موجودہ مرحلہ';
+
+  @override
+  String get designAccReportStepTodo => 'شروع نہیں ہوا';
 }

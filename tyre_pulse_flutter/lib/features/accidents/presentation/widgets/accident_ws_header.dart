@@ -5,23 +5,50 @@
 /// Received 14:35 · With Fleet 42m · SLA 1h 18m remaining
 /// ```
 ///
-/// Line 2 is read from `accident_sla_instances`; when no clock exists for the
-/// workstream it says "No SLA started" rather than inventing one.
+/// Line 1 carries the workstream name in the primary colour. Line 2 is a wrap
+/// of icon + text segments read from `accident_sla_instances`; the SLA
+/// segment is tinted by its state (warning while running, critical when
+/// overdue or breached, ok when met) and always keeps its words, so colour is
+/// never the only signal. When no clock exists for the workstream it says
+/// "No SLA started" rather than inventing one.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
+import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_sla_repository.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_case_vocab.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_models.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_mock_copy.dart';
+import 'package:tyre_pulse/features/accidents/presentation/accident_ui.dart';
+
+/// What a line-2 segment describes; drives its icon.
+enum AccidentSlaSegmentKind { received, withTeam, sla, info }
+
+/// How urgent the SLA segment is. [neutral] renders in secondary text.
+enum AccidentSlaUrgency { neutral, running, overdue, met }
+
+/// One icon + text piece of line 2.
+@immutable
+final class AccidentSlaSegment {
+  const AccidentSlaSegment(
+    this.kind,
+    this.text, {
+    this.urgency = AccidentSlaUrgency.neutral,
+  });
+
+  final AccidentSlaSegmentKind kind;
+  final String text;
+  final AccidentSlaUrgency urgency;
+}
 
 class AccidentWorkstreamHeader extends ConsumerWidget {
   const AccidentWorkstreamHeader({
     required this.snapshot,
     required this.workstreamKey,
+    this.statusToken,
     this.now,
     super.key,
   });
@@ -31,6 +58,10 @@ class AccidentWorkstreamHeader extends ConsumerWidget {
   /// A `caseFlow` key such as `fleet_validation`.
   final String workstreamKey;
 
+  /// Optional workstream status (e.g. `in_progress`). When set, a compact
+  /// status chip with the status words leads line 1.
+  final String? statusToken;
+
   /// Injected clock for deterministic tests. Production leaves it null.
   final DateTime? now;
 
@@ -38,6 +69,7 @@ class AccidentWorkstreamHeader extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final AccidentMockCopy copy = AccidentMockCopy.of(context);
     final TpPalette palette = TpPalette.of(context);
+    final TextTheme text = Theme.of(context).textTheme;
     final NumberedStep? step = caseFlowStep(workstreamKey);
     final String stepLabel = step == null
         ? humaniseAccidentToken(workstreamKey)
@@ -54,9 +86,8 @@ class AccidentWorkstreamHeader extends ConsumerWidget {
     final AsyncValue<AccidentSlaLoad> sla =
         ref.watch(accidentSlaLoadProvider(snapshot.accident.id));
 
-    final String line1 = '$stepLabel: $title | ${copy('ownerLabel')}: $owner';
-    final String line2 = sla.when(
-      data: (AccidentSlaLoad load) => accidentSlaLine(
+    final List<AccidentSlaSegment> segments = sla.when(
+      data: (AccidentSlaLoad load) => accidentSlaSegments(
         context: context,
         copy: copy,
         load: load,
@@ -64,9 +95,16 @@ class AccidentWorkstreamHeader extends ConsumerWidget {
         fallbackTeam: owner,
         now: now ?? DateTime.now(),
       ),
-      loading: () => copy('checkingSla'),
-      error: (Object error, StackTrace stackTrace) => copy('slaUnavailable'),
+      loading: () => <AccidentSlaSegment>[
+        AccidentSlaSegment(AccidentSlaSegmentKind.info, copy('checkingSla')),
+      ],
+      error: (Object error, StackTrace stackTrace) => <AccidentSlaSegment>[
+        AccidentSlaSegment(AccidentSlaSegmentKind.info, copy('slaUnavailable')),
+      ],
     );
+    final String line2 =
+        segments.map((AccidentSlaSegment s) => s.text).join(' · ');
+    final String status = statusToken?.trim() ?? '';
 
     return Semantics(
       container: true,
@@ -75,20 +113,49 @@ class AccidentWorkstreamHeader extends ConsumerWidget {
         key: const Key('accident.ws.header'),
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(
-            line1,
-            key: const Key('accident.ws.header.line1'),
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
+          Wrap(
+            spacing: TpSpace.sm,
+            runSpacing: TpSpace.xs,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: <Widget>[
+              if (status.isNotEmpty)
+                TpStatusChip(
+                  key: const Key('accident.ws.header.status'),
+                  status: accidentTone(status),
+                  label: humaniseAccidentToken(status),
+                  isCompact: true,
                 ),
+              Text.rich(
+                TextSpan(
+                  children: <InlineSpan>[
+                    TextSpan(text: '$stepLabel: '),
+                    TextSpan(
+                      text: title,
+                      style: TextStyle(color: palette.primary),
+                    ),
+                    TextSpan(text: ' | ${copy('ownerLabel')}: $owner'),
+                  ],
+                ),
+                key: const Key('accident.ws.header.line1'),
+                style: text.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+              ),
+            ],
           ),
-          const SizedBox(height: TpSpace.xs),
-          Text(
-            line2,
-            key: const Key('accident.ws.header.line2'),
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: palette.textSecondary,
-                ),
+          const SizedBox(height: TpSpace.sm),
+          Semantics(
+            container: true,
+            label: line2,
+            excludeSemantics: true,
+            child: Wrap(
+              key: const Key('accident.ws.header.line2'),
+              spacing: TpSpace.md,
+              runSpacing: TpSpace.xs,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: <Widget>[
+                for (final AccidentSlaSegment segment in segments)
+                  _SegmentView(segment: segment, palette: palette),
+              ],
+            ),
           ),
         ],
       ),
@@ -96,8 +163,58 @@ class AccidentWorkstreamHeader extends ConsumerWidget {
   }
 }
 
-/// Pure line-2 composer, exported for the header test.
-String accidentSlaLine({
+class _SegmentView extends StatelessWidget {
+  const _SegmentView({required this.segment, required this.palette});
+
+  final AccidentSlaSegment segment;
+  final TpPalette palette;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color color = accidentSlaUrgencyColor(palette, segment.urgency);
+    final bool strong = segment.urgency != AccidentSlaUrgency.neutral;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Icon(_icon(segment), size: 16, color: color),
+        const SizedBox(width: TpSpace.xs),
+        Flexible(
+          child: Text(
+            segment.text,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: color,
+                  fontWeight: strong ? FontWeight.w700 : null,
+                ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  static IconData _icon(AccidentSlaSegment s) => switch (s.kind) {
+        AccidentSlaSegmentKind.received => Icons.schedule_outlined,
+        AccidentSlaSegmentKind.withTeam => Icons.groups_outlined,
+        AccidentSlaSegmentKind.sla => switch (s.urgency) {
+            AccidentSlaUrgency.met => Icons.check_circle_outline,
+            AccidentSlaUrgency.overdue => Icons.error_outline,
+            _ => Icons.timer_outlined,
+          },
+        AccidentSlaSegmentKind.info => Icons.info_outline,
+      };
+}
+
+/// Colour for an SLA urgency: warning while running, critical when overdue or
+/// breached, ok when met, secondary text otherwise.
+Color accidentSlaUrgencyColor(TpPalette palette, AccidentSlaUrgency urgency) =>
+    switch (urgency) {
+      AccidentSlaUrgency.running => palette.warning.onSoft,
+      AccidentSlaUrgency.overdue => palette.critical.base,
+      AccidentSlaUrgency.met => palette.ok.onSoft,
+      AccidentSlaUrgency.neutral => palette.textSecondary,
+    };
+
+/// Line-2 segments, exported for the header test.
+List<AccidentSlaSegment> accidentSlaSegments({
   required BuildContext context,
   required AccidentMockCopy copy,
   required AccidentSlaLoad load,
@@ -105,41 +222,103 @@ String accidentSlaLine({
   required String fallbackTeam,
   required DateTime now,
 }) {
-  if (!load.provisioned) return copy('slaNotProvisioned');
+  if (!load.provisioned) {
+    return <AccidentSlaSegment>[
+      AccidentSlaSegment(
+        AccidentSlaSegmentKind.info,
+        copy('slaNotProvisioned'),
+      ),
+    ];
+  }
   final AccidentSlaInstance? clock = load.forWorkstream(workstreamKey);
-  if (clock == null) return copy('noSla');
+  if (clock == null) {
+    return <AccidentSlaSegment>[
+      AccidentSlaSegment(AccidentSlaSegmentKind.info, copy('noSla')),
+    ];
+  }
 
-  final List<String> parts = <String>[];
+  final List<AccidentSlaSegment> parts = <AccidentSlaSegment>[];
   final DateTime? startAt = clock.startAt;
   if (startAt != null) {
-    parts.add('${copy('received')} ${accidentClock(context, startAt)}');
+    parts.add(
+      AccidentSlaSegment(
+        AccidentSlaSegmentKind.received,
+        '${copy('received')} ${accidentClock(context, startAt)}',
+      ),
+    );
     final String team = clock.team?.trim().isNotEmpty ?? false
         ? clock.team!.trim()
         : fallbackTeam;
     final Duration held = now.difference(startAt);
     parts.add(
-      '${copy('withTeam')} $team '
-      '${accidentShortDuration(held.isNegative ? Duration.zero : held)}',
+      AccidentSlaSegment(
+        AccidentSlaSegmentKind.withTeam,
+        '${copy('withTeam')} $team '
+        '${accidentShortDuration(held.isNegative ? Duration.zero : held)}',
+      ),
     );
   }
 
   final DateTime? dueAt = clock.dueAt;
   parts.add(
     switch (clock.state) {
-      'paused' => copy('slaPaused'),
-      'met' => copy('slaMet'),
-      'breached' => copy('slaBreached'),
-      'cancelled' => copy('slaCancelled'),
+      'paused' => AccidentSlaSegment(
+          AccidentSlaSegmentKind.sla,
+          copy('slaPaused'),
+        ),
+      'met' => AccidentSlaSegment(
+          AccidentSlaSegmentKind.sla,
+          copy('slaMet'),
+          urgency: AccidentSlaUrgency.met,
+        ),
+      'breached' => AccidentSlaSegment(
+          AccidentSlaSegmentKind.sla,
+          copy('slaBreached'),
+          urgency: AccidentSlaUrgency.overdue,
+        ),
+      'cancelled' => AccidentSlaSegment(
+          AccidentSlaSegmentKind.sla,
+          copy('slaCancelled'),
+        ),
       _ => dueAt == null
-          ? copy('slaDueNotSet')
+          ? AccidentSlaSegment(
+              AccidentSlaSegmentKind.sla,
+              copy('slaDueNotSet'),
+            )
           : now.isAfter(dueAt)
-              ? copy.fill('slaOverdue', <String, String>{
-                  'd': accidentShortDuration(now.difference(dueAt)),
-                })
-              : copy.fill('slaRemaining', <String, String>{
-                  'd': accidentShortDuration(dueAt.difference(now)),
-                }),
+              ? AccidentSlaSegment(
+                  AccidentSlaSegmentKind.sla,
+                  copy.fill('slaOverdue', <String, String>{
+                    'd': accidentShortDuration(now.difference(dueAt)),
+                  }),
+                  urgency: AccidentSlaUrgency.overdue,
+                )
+              : AccidentSlaSegment(
+                  AccidentSlaSegmentKind.sla,
+                  copy.fill('slaRemaining', <String, String>{
+                    'd': accidentShortDuration(dueAt.difference(now)),
+                  }),
+                  urgency: AccidentSlaUrgency.running,
+                ),
     },
   );
-  return parts.join(' · ');
+  return parts;
 }
+
+/// Pure line-2 composer (the segments joined with a middle dot).
+String accidentSlaLine({
+  required BuildContext context,
+  required AccidentMockCopy copy,
+  required AccidentSlaLoad load,
+  required String workstreamKey,
+  required String fallbackTeam,
+  required DateTime now,
+}) =>
+    accidentSlaSegments(
+      context: context,
+      copy: copy,
+      load: load,
+      workstreamKey: workstreamKey,
+      fallbackTeam: fallbackTeam,
+      now: now,
+    ).map((AccidentSlaSegment s) => s.text).join(' · ');

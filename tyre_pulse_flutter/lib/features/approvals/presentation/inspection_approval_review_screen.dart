@@ -55,6 +55,7 @@ import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/approvals/data/inspection_approval_item.dart';
 import 'package:tyre_pulse/features/approvals/data/inspection_approval_repository.dart';
 import 'package:tyre_pulse/features/approvals/inspection_approvals_providers.dart';
+import 'package:tyre_pulse/features/approvals/presentation/widgets/approval_decision_bar.dart';
 import 'package:tyre_pulse/features/approvals/presentation/widgets/approval_signature_preview.dart';
 import 'package:tyre_pulse/features/approvals/presentation/widgets/inspection_approval_signature_pad.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
@@ -1647,28 +1648,16 @@ class _ApprovalDecisionActionBar extends StatelessWidget {
                 ),
                 const SizedBox(height: TpSpace.sm),
               ],
-              Row(
-                children: <Widget>[
-                  Expanded(
-                    child: TpButton.danger(
-                      key: InspectionApprovalReviewKeys.returnForCorrection,
-                      label: l10n.inspectionApprovalReturnButton,
-                      icon: Icons.undo_outlined,
-                      isBusy: busy == _DecisionBusy.rejecting,
-                      onPressed: isBusy ? null : onReturn,
-                    ),
-                  ),
-                  const SizedBox(width: TpSpace.md),
-                  Expanded(
-                    child: TpButton.primary(
-                      key: InspectionApprovalReviewKeys.approve,
-                      label: l10n.inspectionApprovalApproveButton,
-                      icon: Icons.check_circle_outline,
-                      isBusy: busy == _DecisionBusy.approving,
-                      onPressed: isBusy || !canApprove ? null : onApprove,
-                    ),
-                  ),
-                ],
+              ApprovalDecisionBar(
+                returnKey: InspectionApprovalReviewKeys.returnForCorrection,
+                approveKey: InspectionApprovalReviewKeys.approve,
+                returnLabel: l10n.inspectionApprovalReturnButton,
+                approveLabel: l10n.inspectionApprovalApproveButton,
+                returnIcon: Icons.undo_outlined,
+                isReturning: busy == _DecisionBusy.rejecting,
+                isApproving: busy == _DecisionBusy.approving,
+                onReturn: isBusy ? null : onReturn,
+                onApprove: isBusy || !canApprove ? null : onApprove,
               ),
             ],
           ),

@@ -83,6 +83,7 @@ class TpPalette {
     required this.onPrimary,
     required this.border,
     required this.borderStrong,
+    required this.controlBorder,
     required this.focus,
     required this.overlay,
     required this.ok,
@@ -110,6 +111,7 @@ class TpPalette {
     onPrimary: Color(0xFFFFFFFF),
     border: Color(0xFFDCE4F2),
     borderStrong: Color(0xFFBECBE1),
+    controlBorder: Color(0xFF75849F),
     focus: Color(0xFF07883F),
     overlay: Color(0x80080E18),
     ok: TpStatusColors(
@@ -175,6 +177,7 @@ class TpPalette {
     onPrimary: Color(0xFFFFFFFF),
     border: Color(0xFFD1D9E8),
     borderStrong: Color(0xFFB8C4D7),
+    controlBorder: Color(0xFF75849F),
     focus: Color(0xFF007333),
     overlay: Color(0x80080E18),
     ok: TpStatusColors(
@@ -233,6 +236,7 @@ class TpPalette {
     onPrimary: Color(0xFF181200),
     border: Color(0xFF252C33),
     borderStrong: Color(0xFF39424C),
+    controlBorder: Color(0xFF6B7A8C),
     focus: Color(0xFFFFD400),
     overlay: Color(0xB302060E),
     ok: TpStatusColors(
@@ -292,6 +296,17 @@ class TpPalette {
 
   final Color border;
   final Color borderStrong;
+
+  /// The identifying outline of an INTERACTIVE control: a search field, a
+  /// text input, a dropdown, a segmented control.
+  ///
+  /// WCAG 2.2 1.4.11 Non-text Contrast asks 3:1 for the boundary that tells a
+  /// reader "this is a field". [border] (1.28:1 on white) and [borderStrong]
+  /// (1.64:1) are for cards and dividers, which are not controls, and stay
+  /// quiet on purpose. This token is at least 3:1 on every surface a control
+  /// sits on in its own brightness: light 3.8:1 on surface, 3.3:1 on
+  /// surfaceSunken; dark 4.2:1 on surface, 3.9:1 on surfaceAlt.
+  final Color controlBorder;
 
   final Color focus;
 

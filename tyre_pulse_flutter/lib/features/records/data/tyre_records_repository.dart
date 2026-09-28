@@ -73,7 +73,8 @@ import 'package:tyre_pulse/features/records/domain/tyre_records_search.dart';
 /// query and the decoder cannot silently drift apart.
 const String _tyreRecordColumns = 'id,asset_no,serial_no,brand,site,'
     'position,tyre_position,issue_date,risk_level,category,cost_per_tyre,'
-    'km_at_fitment,km_at_removal,description,remarks,country';
+    'km_at_fitment,km_at_removal,description,remarks,country,status,size,'
+    'total_km,removal_date,tread_depth';
 
 /// The columns the free-text search box matches against. Mirrors the
 /// production screen's `orIlike(['asset_no', 'serial_no', 'brand'], ...)`
@@ -112,6 +113,11 @@ abstract interface class TyreRecordsRepository {
   /// rather than reusing the row the list already holds.
   Future<TyreRecord?> fetchById(String id);
 
+  /// The exact number of rows [query] matches, for the register header.
+  /// Null when the count could not be read: a header that cannot be
+  /// measured says nothing rather than a guessed number.
+  Future<int?> fetchCount({TyreRecordsQuery query = const TyreRecordsQuery()});
+
   /// The distinct, non-blank site names to offer in the filter sheet.
   ///
   /// When [restrictToSite] is set, the caller is scoped to exactly one site
@@ -144,31 +150,7 @@ final class SupabaseTyreRecordsRepository
       var builder =
           _client.from(SupabaseTables.tyreRecords).select(_tyreRecordColumns);
 
-      final String? searchOr = orIlikeFilter(_searchColumns, query.search);
-      if (searchOr != null) {
-        builder = builder.or(searchOr);
-      }
-
-      final String? site = query.effectiveSite;
-      if (site != null) {
-        builder = builder.eq('site', site);
-      }
-
-      final String? riskLevel = query.riskLevel;
-      if (riskLevel != null) {
-        builder = builder.eq('risk_level', riskLevel);
-      }
-
-      // Null-safe on purpose: a row whose own `country` is NULL is visible
-      // to every country scope by this application's own convention (see
-      // `WorkspaceContext.filtersByCountry`'s doc comment), and a plain
-      // `.eq('country', ...)` would silently hide it - recorded there as
-      // the exact defect that once hid 55,606 country-less job cards from
-      // every country view on the web application.
-      final String? country = query.country;
-      if (country != null) {
-        builder = builder.or('country.is.null,country.eq.$country');
-      }
+      builder = _applyFilters(builder, query);
 
       // `issue_date` alone is NOT unique - many tyres share a fitment day -
       // so the production screen's own ordering
@@ -180,8 +162,11 @@ final class SupabaseTyreRecordsRepository
       // term is a deliberate correctness improvement over the parity
       // source, not a reproduction of it.
       final List<Map<String, dynamic>> rows = await builder
-          .order('issue_date', ascending: false)
-          .order('id', ascending: false)
+          .order(
+            'issue_date',
+            ascending: query.sort == TyreRecordsSort.oldestFitted,
+          )
+          .order('id', ascending: query.sort == TyreRecordsSort.oldestFitted)
           .range(range.from, range.to);
 
       final List<TyreRecord> items =
@@ -192,6 +177,64 @@ final class SupabaseTyreRecordsRepository
         hasMore: rows.length == kTyreRecordsPageSize,
       );
     });
+  }
+
+  /// Every filter a page read and the header count share, so the number
+  /// in the header can never describe a different set from the rows below.
+  PostgrestFilterBuilder<T> _applyFilters<T>(
+    PostgrestFilterBuilder<T> source,
+    TyreRecordsQuery query,
+  ) {
+    var builder = source;
+    final String? searchOr = orIlikeFilter(_searchColumns, query.search);
+    if (searchOr != null) {
+      builder = builder.or(searchOr);
+    }
+
+    final String? site = query.effectiveSite;
+    if (site != null) {
+      builder = builder.eq('site', site);
+    }
+
+    final String? riskLevel = query.riskLevel;
+    if (riskLevel != null) {
+      builder = builder.eq('risk_level', riskLevel);
+    }
+
+    // Null-safe on purpose: a row whose own `country` is NULL is visible
+    // to every country scope by this application's own convention (see
+    // `WorkspaceContext.filtersByCountry`'s doc comment), and a plain
+    // `.eq('country', ...)` would silently hide it - recorded there as
+    // the exact defect that once hid 55,606 country-less job cards from
+    // every country view on the web application.
+    final String? country = query.country;
+    if (country != null) {
+      builder = builder.or('country.is.null,country.eq.$country');
+    }
+
+    final String? status = query.status;
+    if (status != null) {
+      builder = builder.eq('status', status);
+    }
+    return builder;
+  }
+
+  @override
+  Future<int?> fetchCount({
+    TyreRecordsQuery query = const TyreRecordsQuery(),
+  }) async {
+    try {
+      return await guard<int>(() async {
+        return _applyFilters(
+          _client.from(SupabaseTables.tyreRecords).count(CountOption.exact),
+          query,
+        );
+      });
+    } on Object {
+      // The count is a header nicety; a failed count must never block the
+      // register, which reads its rows independently.
+      return null;
+    }
   }
 
   @override

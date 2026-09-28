@@ -10,6 +10,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
@@ -187,12 +188,7 @@ class _AccidentDamageZoneSheetState extends State<_AccidentDamageZoneSheet> {
                   ),
                   const SizedBox(height: TpSpace.lg),
                   TpInput(
-                    label: _localized(
-                      context,
-                      en: 'Area',
-                      ar: 'المنطقة',
-                      ur: 'حصہ',
-                    ),
+                    label: AppLocalizations.of(context).designAccZoneArea,
                     controller: _area,
                     isRequired: true,
                     prefixIcon: Icons.place_outlined,
@@ -200,12 +196,7 @@ class _AccidentDamageZoneSheetState extends State<_AccidentDamageZoneSheet> {
                   ),
                   const SizedBox(height: TpSpace.md),
                   Text(
-                    _localized(
-                      context,
-                      en: 'Damage type',
-                      ar: 'نوع الضرر',
-                      ur: 'نقصان کی قسم',
-                    ),
+                    AppLocalizations.of(context).designAccZoneDamageType,
                     style: Theme.of(context).textTheme.labelLarge,
                   ),
                   const SizedBox(height: TpSpace.xs),
@@ -218,6 +209,10 @@ class _AccidentDamageZoneSheetState extends State<_AccidentDamageZoneSheet> {
                           in AccidentDamageType.values)
                         ChoiceChip(
                           key: AccidentDamageZoneSheetKeys.damageTypeChip(type),
+                          avatar: Icon(
+                            accidentDamageTypeIcon(type),
+                            size: TpSizing.iconSm,
+                          ),
                           label: Text(accidentDamageTypeLabel(context, type)),
                           selected: _damageType == type,
                           onSelected: (bool selected) {
@@ -230,29 +225,15 @@ class _AccidentDamageZoneSheetState extends State<_AccidentDamageZoneSheet> {
                   ),
                   const SizedBox(height: TpSpace.md),
                   Text(
-                    _localized(
-                      context,
-                      en: 'Level',
-                      ar: 'المستوى',
-                      ur: 'درجہ',
-                    ),
+                    AppLocalizations.of(context).designAccZoneLevel,
                     style: Theme.of(context).textTheme.labelLarge,
                   ),
                   const SizedBox(height: TpSpace.xs),
-                  TpSegmented<AccidentDamageSeverity>(
+                  AccidentDamageLevelSelector(
                     key: AccidentDamageZoneSheetKeys.level,
-                    expanded: true,
                     value: _severity,
                     onChanged: (AccidentDamageSeverity value) =>
                         setState(() => _severity = value),
-                    options: <TpSegmentedOption<AccidentDamageSeverity>>[
-                      for (final AccidentDamageSeverity severity
-                          in AccidentDamageSeverity.values)
-                        TpSegmentedOption<AccidentDamageSeverity>(
-                          value: severity,
-                          label: accidentDamageLevelLabel(context, severity),
-                        ),
-                    ],
                   ),
                   if (_suggestion
                       case final AccidentDamageSuggestion
@@ -268,12 +249,8 @@ class _AccidentDamageZoneSheetState extends State<_AccidentDamageZoneSheet> {
                         AccidentDamageSuggestionDecision.corrected) ...<Widget>[
                       const SizedBox(height: TpSpace.md),
                       TpInput(
-                        label: _localized(
-                          context,
-                          en: 'Correction note (optional)',
-                          ar: 'ملاحظة التصحيح (اختيارية)',
-                          ur: 'تصحیحی نوٹ (اختیاری)',
-                        ),
+                        label: AppLocalizations.of(context)
+                            .designAccZoneCorrectionNote,
                         controller: _correctionNote,
                         maxLines: 2,
                       ),
@@ -299,12 +276,7 @@ class _AccidentDamageZoneSheetState extends State<_AccidentDamageZoneSheet> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       Text(
-                        _localized(
-                          context,
-                          en: 'Note (optional)',
-                          ar: 'ملاحظة (اختيارية)',
-                          ur: 'نوٹ (اختیاری)',
-                        ),
+                        AppLocalizations.of(context).designAccZoneNote,
                         style: Theme.of(context).textTheme.labelMedium,
                       ),
                       const SizedBox(height: TpSpace.xs),
@@ -423,12 +395,8 @@ class _AccidentDamageZoneSheetState extends State<_AccidentDamageZoneSheet> {
     } on Object {
       if (!mounted) return;
       setState(() {
-        _photoError = _localized(
-          context,
-          en: 'The close-up damage photos could not be updated.',
-          ar: 'تعذر تحديث صور الضرر عن قرب.',
-          ur: 'نقصان کی قریبی تصاویر اپ ڈیٹ نہیں ہو سکیں۔',
-        );
+        _photoError =
+            AppLocalizations.of(context).designAccZonePhotoUpdateFailed;
       });
     } finally {
       if (mounted) setState(() => _editingPhotos = false);
@@ -513,18 +481,10 @@ class _SelectedPointHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Text(
-                _localized(
-                  context,
-                  en: markerNumber == null
-                      ? 'Selected area'
-                      : 'Selected area $markerNumber',
-                  ar: markerNumber == null
-                      ? 'المنطقة المحددة'
-                      : 'المنطقة المحددة $markerNumber',
-                  ur: markerNumber == null
-                      ? 'منتخب حصہ'
-                      : 'منتخب حصہ $markerNumber',
-                ),
+                markerNumber == null
+                    ? AppLocalizations.of(context).designAccZoneSelectedArea
+                    : AppLocalizations.of(context)
+                        .designAccZoneSelectedAreaNumber(markerNumber!),
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               Text(
@@ -596,12 +556,7 @@ class _SuggestionPanel extends StatelessWidget {
                 const SizedBox(width: TpSpace.sm),
                 Expanded(
                   child: Text(
-                    _localized(
-                      context,
-                      en: 'Finder suggestion',
-                      ar: 'اقتراح Finder',
-                      ur: 'Finder کی تجویز',
-                    ),
+                    AppLocalizations.of(context).designAccZoneFinderSuggestion,
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
                           color: palette.info.onSoft,
                         ),
@@ -633,12 +588,7 @@ class _SuggestionPanel extends StatelessWidget {
                   Expanded(
                     child: TpButton.primary(
                       key: AccidentDamageZoneSheetKeys.confirmSuggestion,
-                      label: _localized(
-                        context,
-                        en: 'Confirm',
-                        ar: 'تأكيد',
-                        ur: 'تصدیق',
-                      ),
+                      label: AppLocalizations.of(context).designAccZoneConfirm,
                       icon: Icons.check,
                       isCompact: true,
                       onPressed: onConfirm,
@@ -648,12 +598,7 @@ class _SuggestionPanel extends StatelessWidget {
                   Expanded(
                     child: TpButton.secondary(
                       key: AccidentDamageZoneSheetKeys.correctSuggestion,
-                      label: _localized(
-                        context,
-                        en: 'Correct',
-                        ar: 'تصحيح',
-                        ur: 'درست کریں',
-                      ),
+                      label: AppLocalizations.of(context).designAccZoneCorrect,
                       icon: Icons.edit_outlined,
                       isCompact: true,
                       onPressed: onCorrect,
@@ -665,18 +610,10 @@ class _SuggestionPanel extends StatelessWidget {
               const SizedBox(height: TpSpace.xs),
               Text(
                 decision == AccidentDamageSuggestionDecision.confirmed
-                    ? _localized(
-                        context,
-                        en: 'Confirmed by reporter',
-                        ar: 'تم التأكيد بواسطة المبلّغ',
-                        ur: 'رپورٹر نے تصدیق کی',
-                      )
-                    : _localized(
-                        context,
-                        en: 'Corrected by reporter',
-                        ar: 'تم التصحيح بواسطة المبلّغ',
-                        ur: 'رپورٹر نے درست کیا',
-                      ),
+                    ? AppLocalizations.of(context)
+                        .designAccZoneConfirmedByReporter
+                    : AppLocalizations.of(context)
+                        .designAccZoneCorrectedByReporter,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: palette.info.onSoft,
                       fontWeight: FontWeight.w700,
@@ -735,28 +672,15 @@ class _PhotoReferenceRow extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       Text(
-                        _localized(
-                          context,
-                          en: 'Close-up damage photos',
-                          ar: 'صور الضرر عن قرب',
-                          ur: 'نقصان کی قریبی تصاویر',
-                        ),
+                        AppLocalizations.of(context).designAccZoneCloseUpPhotos,
                         style: Theme.of(context).textTheme.labelMedium,
                       ),
                       Text(
                         onPressed == null && count == 0
-                            ? _localized(
-                                context,
-                                en: 'Added from the evidence step',
-                                ar: 'تُضاف من خطوة الأدلة',
-                                ur: 'ثبوت کے مرحلے سے شامل کی جاتی ہیں',
-                              )
-                            : _localized(
-                                context,
-                                en: '$count attached',
-                                ar: '$count مرفقة',
-                                ur: '$count منسلک',
-                              ),
+                            ? AppLocalizations.of(context)
+                                .designAccZoneAddedFromEvidence
+                            : AppLocalizations.of(context)
+                                .designAccZoneAttachedCount(count),
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: palette.textMuted,
                             ),
@@ -771,12 +695,9 @@ class _PhotoReferenceRow extends StatelessWidget {
                 alignment: AlignmentDirectional.centerEnd,
                 child: TpButton.text(
                   key: AccidentDamageZoneSheetKeys.photoAction,
-                  label: _localized(
-                    context,
-                    en: count == 0 ? 'Add close-up photo' : 'Add another',
-                    ar: count == 0 ? 'إضافة صورة قريبة' : 'إضافة أخرى',
-                    ur: count == 0 ? 'قریبی تصویر شامل کریں' : 'مزید شامل کریں',
-                  ),
+                  label: count == 0
+                      ? AppLocalizations.of(context).designAccZoneAddCloseUp
+                      : AppLocalizations.of(context).designAccZoneAddAnother,
                   icon: Icons.add_a_photo_outlined,
                   isCompact: true,
                   isBusy: isBusy,
@@ -808,12 +729,7 @@ class _SheetActions extends StatelessWidget {
     if (!hasExistingMark) {
       return TpButton.primary(
         key: AccidentDamageZoneSheetKeys.save,
-        label: _localized(
-          context,
-          en: 'Save area and continue',
-          ar: 'حفظ المنطقة والمتابعة',
-          ur: 'حصہ محفوظ کریں اور جاری رکھیں',
-        ),
+        label: AppLocalizations.of(context).designAccZoneSaveAndContinue,
         icon: Icons.check,
         isFullWidth: true,
         onPressed: canSave ? onSave : null,
@@ -824,12 +740,7 @@ class _SheetActions extends StatelessWidget {
         Expanded(
           child: TpButton.danger(
             key: AccidentDamageZoneSheetKeys.remove,
-            label: _localized(
-              context,
-              en: 'Remove',
-              ar: 'إزالة',
-              ur: 'ہٹائیں',
-            ),
+            label: AppLocalizations.of(context).designAccZoneRemove,
             icon: Icons.delete_outline,
             isCompact: true,
             onPressed: onRemove,
@@ -840,12 +751,7 @@ class _SheetActions extends StatelessWidget {
           flex: 2,
           child: TpButton.primary(
             key: AccidentDamageZoneSheetKeys.save,
-            label: _localized(
-              context,
-              en: 'Save marked area',
-              ar: 'حفظ المنطقة المحددة',
-              ur: 'نشان زدہ حصہ محفوظ کریں',
-            ),
+            label: AppLocalizations.of(context).designAccZoneSaveMarked,
             icon: Icons.check,
             isCompact: true,
             onPressed: canSave ? onSave : null,
@@ -856,38 +762,151 @@ class _SheetActions extends StatelessWidget {
   }
 }
 
+/// The status tone of a damage level: Minor reads ok, Moderate warning and
+/// Major (stored `severe`) critical, matching the owner's mock.
+TpStatus accidentDamageLevelTone(AccidentDamageSeverity severity) =>
+    switch (severity) {
+      AccidentDamageSeverity.minor => TpStatus.ok,
+      AccidentDamageSeverity.moderate => TpStatus.warning,
+      AccidentDamageSeverity.severe => TpStatus.critical,
+    };
+
+/// Minor / Moderate / Major as one exclusive control. The selected option is
+/// tinted with its status colour and keeps its text label and a check icon,
+/// so colour is never the only signal.
+class AccidentDamageLevelSelector extends StatelessWidget {
+  const AccidentDamageLevelSelector({
+    required this.value,
+    required this.onChanged,
+    super.key,
+  });
+
+  final AccidentDamageSeverity? value;
+  final ValueChanged<AccidentDamageSeverity>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return Row(
+      children: <Widget>[
+        for (final AccidentDamageSeverity severity
+            in AccidentDamageSeverity.values) ...<Widget>[
+          if (severity.index > 0) const SizedBox(width: TpSpace.sm),
+          Expanded(
+            child: _LevelOption(
+              severity: severity,
+              selected: severity == value,
+              colors: palette.forStatus(accidentDamageLevelTone(severity)),
+              palette: palette,
+              onTap: onChanged == null ? null : () => onChanged!(severity),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _LevelOption extends StatelessWidget {
+  const _LevelOption({
+    required this.severity,
+    required this.selected,
+    required this.colors,
+    required this.palette,
+    required this.onTap,
+  });
+
+  final AccidentDamageSeverity severity;
+  final bool selected;
+  final TpStatusColors colors;
+  final TpPalette palette;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final String label = accidentDamageLevelLabel(context, severity);
+    final Color foreground = selected ? colors.onSoft : palette.text;
+    return Semantics(
+      button: true,
+      selected: selected,
+      inMutuallyExclusiveGroup: true,
+      label: label,
+      onTap: onTap,
+      excludeSemantics: true,
+      child: Material(
+        key: ValueKey<String>('accident.damageZone.level.${severity.name}'),
+        color: selected ? colors.soft : palette.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(TpRadius.md),
+          side: BorderSide(
+            // controlBorder keeps the unselected outline above 3:1 (WCAG 1.4.11).
+            color: selected ? colors.base : palette.controlBorder,
+            width: selected ? TpBorderWidth.strong : TpBorderWidth.hairline,
+          ),
+        ),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(TpRadius.md),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              minHeight: TpSizing.minTouchTarget,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: TpSpace.sm),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  Icon(
+                    selected ? Icons.check_circle_rounded : Icons.circle,
+                    size: selected ? TpSizing.iconSm : 10,
+                    color: colors.base,
+                  ),
+                  const SizedBox(width: TpSpace.xs),
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                            color: foreground,
+                            fontWeight:
+                                selected ? FontWeight.w800 : FontWeight.w600,
+                          ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 String accidentDamageTypeLabel(
   BuildContext context,
   AccidentDamageType type,
 ) {
-  final String language = Localizations.localeOf(context).languageCode;
-  return switch ((language, type)) {
-    ('ar', AccidentDamageType.dent) => 'انبعاج',
-    ('ar', AccidentDamageType.scratch) => 'خدش',
-    ('ar', AccidentDamageType.cracked) => 'متشقق',
-    ('ar', AccidentDamageType.broken) => 'مكسور',
-    ('ar', AccidentDamageType.missing) => 'مفقود',
-    ('ar', AccidentDamageType.bent) => 'منحنٍ',
-    ('ar', AccidentDamageType.other) => 'أخرى',
-    ('ur', AccidentDamageType.dent) => 'ڈینٹ',
-    ('ur', AccidentDamageType.scratch) => 'خراش',
-    ('ur', AccidentDamageType.cracked) => 'دراڑ',
-    ('ur', AccidentDamageType.broken) => 'ٹوٹا ہوا',
-    ('ur', AccidentDamageType.missing) => 'غائب',
-    ('ur', AccidentDamageType.bent) => 'مڑا ہوا',
-    ('ur', AccidentDamageType.other) => 'دیگر',
-    (_, _) => accidentDamageTypeVocabLabel(type),
+  final AppLocalizations l10n = AppLocalizations.of(context);
+  return switch (type) {
+    AccidentDamageType.dent => l10n.designAccDamageTypeDent,
+    AccidentDamageType.scratch => l10n.designAccDamageTypeScratch,
+    AccidentDamageType.cracked => l10n.designAccDamageTypeCracked,
+    AccidentDamageType.broken => l10n.designAccDamageTypeBroken,
+    AccidentDamageType.missing => l10n.designAccDamageTypeMissing,
+    AccidentDamageType.bent => l10n.designAccDamageTypeBent,
+    AccidentDamageType.other => l10n.designAccDamageTypeOther,
   };
 }
 
-String _localized(
-  BuildContext context, {
-  required String en,
-  required String ar,
-  required String ur,
-}) =>
-    switch (Localizations.localeOf(context).languageCode) {
-      'ar' => ar,
-      'ur' => ur,
-      _ => en,
+/// Icon for a damage-type chip; the label is always shown beside it.
+IconData accidentDamageTypeIcon(AccidentDamageType type) => switch (type) {
+      AccidentDamageType.dent => Icons.compress_rounded,
+      AccidentDamageType.scratch => Icons.gesture_rounded,
+      AccidentDamageType.cracked => Icons.broken_image_outlined,
+      AccidentDamageType.broken => Icons.heart_broken_outlined,
+      AccidentDamageType.missing => Icons.remove_circle_outline,
+      AccidentDamageType.bent => Icons.turn_right_rounded,
+      AccidentDamageType.other => Icons.more_horiz_rounded,
     };

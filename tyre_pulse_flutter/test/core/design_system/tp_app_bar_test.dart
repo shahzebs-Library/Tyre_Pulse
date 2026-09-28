@@ -82,19 +82,45 @@ void main() {
     });
   });
 
-  testWidgets('under a right-to-left locale the chevron mirrors', (
-    WidgetTester tester,
-  ) async {
-    // Spec section 52: Flutter does not flip arrow_back for us, so the
-    // widget has to choose the glyph itself from the ambient locale.
-    await _pumpAppBar(
-      tester,
-      const TpAppBar(title: 'Tyre Records'),
-      locale: const Locale('ar'),
-    );
+  group('under right-to-left', () {
+    // arrow_back_ios_new_rounded sets matchTextDirection, so Flutter mirrors
+    // it by itself under RTL. The widget must NOT also swap the glyph: doing
+    // both cancels out and points Back the wrong way in Arabic and Urdu.
+    testWidgets(
+        'an Arabic locale keeps the plain back glyph, mirrored by '
+        'Flutter', (WidgetTester tester) async {
+      await _pumpAppBar(
+        tester,
+        const TpAppBar(title: 'Tyre Records'),
+        locale: const Locale('ar'),
+      );
 
-    expect(find.byIcon(Icons.arrow_forward_ios_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.arrow_back_ios_new_rounded), findsNothing);
+      final Finder icon = find.byIcon(Icons.arrow_back_ios_new_rounded);
+      expect(icon, findsOneWidget);
+      expect(find.byIcon(Icons.arrow_forward_ios_rounded), findsNothing);
+      expect(Icons.arrow_back_ios_new_rounded.matchTextDirection, isTrue);
+      expect(Directionality.of(tester.element(icon)), TextDirection.rtl);
+    });
+
+    testWidgets('an explicit rtl Directionality does not hand-flip the glyph',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        tpApp(
+          home: const Directionality(
+            textDirection: TextDirection.rtl,
+            child: Scaffold(
+              appBar: TpAppBar(title: 'Tyre Records'),
+              body: SizedBox(),
+            ),
+          ),
+        ),
+      );
+
+      final Finder icon = find.byIcon(Icons.arrow_back_ios_new_rounded);
+      expect(icon, findsOneWidget);
+      expect(find.byIcon(Icons.arrow_forward_ios_rounded), findsNothing);
+      expect(Directionality.of(tester.element(icon)), TextDirection.rtl);
+    });
   });
 
   group('the Back control', () {

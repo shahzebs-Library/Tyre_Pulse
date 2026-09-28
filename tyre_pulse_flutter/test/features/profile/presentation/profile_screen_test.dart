@@ -19,6 +19,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 // identical comment.
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:signature/signature.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_display_settings.dart';
@@ -29,12 +30,58 @@ import 'package:tyre_pulse/core/auth/auth_profile_repository.dart';
 import 'package:tyre_pulse/core/auth/auth_repository.dart';
 import 'package:tyre_pulse/core/auth/auth_state.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/core/permissions/module_registry.dart';
+import 'package:tyre_pulse/core/permissions/permission_providers.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
+import 'package:tyre_pulse/features/checklists/checklists_providers.dart';
 import 'package:tyre_pulse/features/notifications/notifications_providers.dart';
+import 'package:tyre_pulse/features/profile/data/saved_signature_repository.dart';
 import 'package:tyre_pulse/features/profile/presentation/profile_screen.dart';
 import 'package:tyre_pulse/features/profile/profile_providers.dart';
 
 import '../../../core/auth/auth_test_support.dart';
+
+/// In-memory [SavedSignatureRepository]: [stored] is what the server holds,
+/// [readFails] makes `lookup()` report unavailable, and the two `fail*`
+/// flags make the explicit writes throw.
+final class _FakeSignatureRepository implements SavedSignatureRepository {
+  _FakeSignatureRepository({this.stored});
+
+  SavedSignature? stored;
+  bool readFails = false;
+  bool failSave = false;
+  bool failClear = false;
+  int saves = 0;
+  int clears = 0;
+
+  @override
+  Future<SavedSignatureLookup> lookup() async {
+    if (readFails) return const SavedSignatureLookup.unavailable();
+    final SavedSignature? current = stored;
+    return current == null
+        ? const SavedSignatureLookup.none()
+        : SavedSignatureLookup.found(current);
+  }
+
+  @override
+  Future<SavedSignature?> mine() async => (await lookup()).signature;
+
+  @override
+  Future<SavedSignature> save(String signature) async {
+    saves += 1;
+    if (failSave) throw StateError('offline');
+    final SavedSignature next = SavedSignature(value: signature);
+    stored = next;
+    return next;
+  }
+
+  @override
+  Future<void> clear() async {
+    clears += 1;
+    if (failClear) throw StateError('offline');
+    stored = null;
+  }
+}
 
 final class _Pumped {
   const _Pumped({required this.auth, required this.container});
@@ -55,6 +102,13 @@ Future<_Pumped> _pumpSignedIn(
   Stream<int>? pendingSyncStream,
   int unread = 0,
   String appVersion = '2.0.0',
+  AsyncValue<int> drafts = const AsyncData<int>(0),
+  SavedSignature? savedSignature,
+  _FakeSignatureRepository? signatureRepository,
+  Set<ModuleKey> modules = const <ModuleKey>{
+    ModuleKey.inspect,
+    ModuleKey.checklists,
+  },
 }) async {
   final FakeAuthRepository auth = FakeAuthRepository();
   final FakeProfileRepository profiles = FakeProfileRepository();
@@ -99,6 +153,16 @@ Future<_Pumped> _pumpSignedIn(
         AsyncData<int>(unread),
       ),
       currentAppVersionProvider.overrideWithValue(appVersion),
+      profileDraftCountProvider.overrideWith(
+        (Ref ref) async => switch (drafts) {
+          AsyncData<int>(:final int value) => value,
+          _ => throw StateError('drafts unreadable'),
+        },
+      ),
+      savedSignatureRepositoryProvider.overrideWithValue(
+        signatureRepository ?? _FakeSignatureRepository(stored: savedSignature),
+      ),
+      allowedModulesProvider.overrideWithValue(modules),
     ],
   );
   addTearDown(container.dispose);
@@ -153,7 +217,8 @@ void main() {
       expect(find.text('Workspace'), findsOneWidget);
       expect(find.text('Language & display'), findsOneWidget);
       expect(find.text('App language'), findsOneWidget);
-      expect(find.text('English'), findsOneWidget);
+      // App language AND checklist content language both start in English.
+      expect(find.text('English'), findsNWidgets(2));
       expect(find.text('Theme'), findsOneWidget);
       expect(find.text('Light'), findsOneWidget);
       expect(find.text('Offline & data'), findsOneWidget);
@@ -505,4 +570,264 @@ void main() {
       expect(find.byKey(ProfileScreenKeys.appVersionRow), findsNothing);
     },
   );
+
+  testWidgets(
+    'mock-parity rows: verified badge, drafts, roles and access, checklist '
+    'language and the saved signature, all from real sources',
+    (WidgetTester tester) async {
+      await _pumpSignedIn(
+        tester,
+        drafts: const AsyncData<int>(2),
+        savedSignature: SavedSignature(
+          value: 'data:image/png;base64,AAAA',
+          updatedAt: DateTime(2026, 8, 12),
+        ),
+      );
+
+      expect(find.byKey(ProfileScreenKeys.verifiedBadge), findsOneWidget);
+      expect(find.text('Verified account'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(ProfileScreenKeys.draftsTile),
+          matching: find.text('2'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Manager · 2 modules'), findsOneWidget);
+      expect(find.text('Checklist content language'), findsOneWidget);
+      expect(find.text('Independent from app language'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.byKey(ProfileScreenKeys.offlineDraftsRow),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('Captured · updated 12 Aug'), findsOneWidget);
+      expect(find.text('2 stored on this device'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'no saved signature says so, and unreadable drafts render a dash',
+    (WidgetTester tester) async {
+      await _pumpSignedIn(
+        tester,
+        drafts: AsyncError<int>(StateError('x'), StackTrace.empty),
+      );
+
+      expect(
+        find.descendant(
+          of: find.byKey(ProfileScreenKeys.draftsTile),
+          matching: find.text('-'),
+        ),
+        findsOneWidget,
+      );
+      await tester.scrollUntilVisible(
+        find.byKey(ProfileScreenKeys.signatureRow),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('Not saved'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  group('saved signature', () {
+    Future<void> openSheet(WidgetTester tester) async {
+      await tester.scrollUntilVisible(
+        find.byKey(ProfileScreenKeys.signatureRow),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.ensureVisible(find.byKey(ProfileScreenKeys.signatureRow));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(ProfileScreenKeys.signatureRow));
+      await tester.pumpAndSettle();
+      expect(find.byKey(ProfileScreenKeys.signatureSheet), findsOneWidget);
+    }
+
+    testWidgets(
+      'an unreadable signature says "Could not check", never "Not saved", '
+      'and offers Try again instead of hiding Remove silently',
+      (WidgetTester tester) async {
+        final _FakeSignatureRepository repo = _FakeSignatureRepository(
+          stored: const SavedSignature(value: 'data:image/png;base64,AAAA'),
+        )..readFails = true;
+        await _pumpSignedIn(tester, signatureRepository: repo);
+        await tester.scrollUntilVisible(
+          find.byKey(ProfileScreenKeys.signatureRow),
+          300,
+          scrollable: find.byType(Scrollable).first,
+        );
+        expect(
+          find.descendant(
+            of: find.byKey(ProfileScreenKeys.signatureRow),
+            matching: find.text('Could not check'),
+          ),
+          findsOneWidget,
+        );
+        expect(find.text('Not saved'), findsNothing);
+
+        await openSheet(tester);
+        expect(
+          find.descendant(
+            of: find.byKey(ProfileScreenKeys.signaturePaper),
+            matching: find.text('Could not check'),
+          ),
+          findsOneWidget,
+        );
+        expect(find.byKey(ProfileScreenKeys.signatureRemove), findsNothing);
+        expect(find.byKey(ProfileScreenKeys.signatureRetry), findsOneWidget);
+
+        // Signal returns: Try again re-reads and Remove appears.
+        repo.readFails = false;
+        await tester.tap(find.byKey(ProfileScreenKeys.signatureRetry));
+        await tester.pumpAndSettle();
+        expect(find.byKey(ProfileScreenKeys.signatureRemove), findsOneWidget);
+        expect(find.byKey(ProfileScreenKeys.signatureRetry), findsNothing);
+      },
+    );
+
+    testWidgets('cancel leaves drawing mode without saving', (
+      WidgetTester tester,
+    ) async {
+      final _FakeSignatureRepository repo = _FakeSignatureRepository();
+      await _pumpSignedIn(tester, signatureRepository: repo);
+      await openSheet(tester);
+
+      await tester.tap(find.byKey(ProfileScreenKeys.signatureRedraw));
+      await tester.pumpAndSettle();
+      expect(find.byKey(ProfileScreenKeys.signatureSave), findsOneWidget);
+
+      await tester.tap(find.byKey(ProfileScreenKeys.signatureCancel));
+      await tester.pumpAndSettle();
+      expect(find.byKey(ProfileScreenKeys.signatureSave), findsNothing);
+      expect(find.byKey(ProfileScreenKeys.signatureRedraw), findsOneWidget);
+      expect(repo.saves, 0);
+    });
+
+    Future<void> drawAMark(WidgetTester tester) async {
+      await tester.runAsync(() async {
+        await tester.drag(find.byType(Signature), const Offset(80, 12));
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+      });
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('saving a drawn mark stores it and leaves drawing mode', (
+      WidgetTester tester,
+    ) async {
+      final _FakeSignatureRepository repo = _FakeSignatureRepository();
+      await _pumpSignedIn(tester, signatureRepository: repo);
+      await openSheet(tester);
+      await tester.tap(find.byKey(ProfileScreenKeys.signatureRedraw));
+      await tester.pumpAndSettle();
+      await drawAMark(tester);
+
+      await tester.tap(find.byKey(ProfileScreenKeys.signatureSave));
+      await tester.pumpAndSettle();
+
+      expect(repo.saves, 1);
+      expect(repo.stored, isNotNull);
+      expect(find.byKey(ProfileScreenKeys.signatureSave), findsNothing);
+      expect(find.byKey(ProfileScreenKeys.signatureRemove), findsOneWidget);
+      expect(find.byKey(ProfileScreenKeys.signatureError), findsNothing);
+    });
+
+    testWidgets('a failed save says so and keeps the drawing open', (
+      WidgetTester tester,
+    ) async {
+      final _FakeSignatureRepository repo = _FakeSignatureRepository()
+        ..failSave = true;
+      await _pumpSignedIn(tester, signatureRepository: repo);
+      await openSheet(tester);
+      await tester.tap(find.byKey(ProfileScreenKeys.signatureRedraw));
+      await tester.pumpAndSettle();
+      await drawAMark(tester);
+
+      await tester.tap(find.byKey(ProfileScreenKeys.signatureSave));
+      await tester.pumpAndSettle();
+
+      expect(repo.saves, 1);
+      expect(
+        find.text(
+          'Could not update your signature. Check your connection and try '
+          'again.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.byKey(ProfileScreenKeys.signatureSave), findsOneWidget);
+    });
+
+    testWidgets('removing asks first, then clears the saved signature', (
+      WidgetTester tester,
+    ) async {
+      final _FakeSignatureRepository repo = _FakeSignatureRepository(
+        stored: const SavedSignature(value: 'data:image/png;base64,AAAA'),
+      );
+      await _pumpSignedIn(tester, signatureRepository: repo);
+      await openSheet(tester);
+
+      await tester.tap(find.byKey(ProfileScreenKeys.signatureRemove));
+      await tester.pumpAndSettle();
+      expect(find.text('Remove your saved signature?'), findsOneWidget);
+      await tester.tap(find.text('Remove saved signature').last);
+      await tester.pumpAndSettle();
+
+      expect(repo.clears, 1);
+      expect(find.byKey(ProfileScreenKeys.signatureRemove), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byKey(ProfileScreenKeys.signaturePaper),
+          matching: find.text('Not saved'),
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('a failed remove shows the remove error, not the save one', (
+      WidgetTester tester,
+    ) async {
+      final _FakeSignatureRepository repo = _FakeSignatureRepository(
+        stored: const SavedSignature(value: 'data:image/png;base64,AAAA'),
+      )..failClear = true;
+      await _pumpSignedIn(tester, signatureRepository: repo);
+      await openSheet(tester);
+
+      await tester.tap(find.byKey(ProfileScreenKeys.signatureRemove));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Remove saved signature').last);
+      await tester.pumpAndSettle();
+
+      expect(repo.clears, 1);
+      expect(
+        find.text(
+          'Could not remove your signature. Check your connection and try '
+          'again.',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('Could not update your signature'),
+        findsNothing,
+      );
+      expect(find.byKey(ProfileScreenKeys.signatureRemove), findsOneWidget);
+    });
+  });
+
+  testWidgets('checklist content language is chosen independently', (
+    WidgetTester tester,
+  ) async {
+    final _Pumped p = await _pumpSignedIn(tester);
+    await tester.ensureVisible(
+      find.byKey(ProfileScreenKeys.checklistLanguageRow),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(ProfileScreenKeys.checklistLanguageRow));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('profile.checklistLanguage.hi')));
+    await tester.pumpAndSettle();
+    expect(p.container.read(checklistContentLanguageProvider), 'hi');
+    expect(p.container.read(localeProvider)?.languageCode, isNot('hi'));
+  });
 }

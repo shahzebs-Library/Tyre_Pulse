@@ -68,6 +68,8 @@ final class TyreRecordsListState {
     this.query = const TyreRecordsQuery(),
     this.searchInput = '',
     this.availableSites = const <String>[],
+    this.totalCount,
+    this.loadedAt,
   });
 
   final TyreRecordsListPhase phase;
@@ -108,6 +110,16 @@ final class TyreRecordsListState {
   /// (`elevated && sites.length > 0`).
   final List<String> availableSites;
 
+  /// The exact number of rows the ACTIVE query matches, or null while it is
+  /// unknown (not yet read, or the count read failed). Never a guess.
+  final int? totalCount;
+
+  /// When the first page of the active query last loaded successfully, on
+  /// this device's clock. Null until then, and cleared again the moment the
+  /// query changes or its first page fails - a "Loaded 09:14" line must
+  /// never sit above rows (or an error) belonging to a different query.
+  final DateTime? loadedAt;
+
   /// A real, measured zero: the current query resolved and matched nothing.
   /// Distinct from [phase] being [TyreRecordsListPhase.failed], where
   /// nothing was measured at all.
@@ -130,6 +142,10 @@ final class TyreRecordsListState {
     TyreRecordsQuery? query,
     String? searchInput,
     List<String>? availableSites,
+    int? totalCount,
+    bool clearTotalCount = false,
+    DateTime? loadedAt,
+    bool clearLoadedAt = false,
   }) {
     return TyreRecordsListState(
       phase: phase ?? this.phase,
@@ -142,6 +158,8 @@ final class TyreRecordsListState {
       query: query ?? this.query,
       searchInput: searchInput ?? this.searchInput,
       availableSites: availableSites ?? this.availableSites,
+      totalCount: clearTotalCount ? null : (totalCount ?? this.totalCount),
+      loadedAt: clearLoadedAt ? null : (loadedAt ?? this.loadedAt),
     );
   }
 

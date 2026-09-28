@@ -10492,6 +10492,1698 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Overdue {elapsed}'**
   String accTlOverdueBy(String elapsed);
+
+  /// Tyre records header: exact number of tyres matching the current tab and filters
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No tyres} =1{1 tyre} other{{count} tyres}}'**
+  String tyreMockRecordsCount(int count);
+
+  /// Tyre records status tab and filter value: every status
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get tyreMockTabAll;
+
+  /// Tyre records tab: tyres currently fitted to a vehicle (status Active)
+  ///
+  /// In en, this message translates to:
+  /// **'Installed'**
+  String get tyreMockTabInstalled;
+
+  /// Tyre records tab: tyres taken off a vehicle
+  ///
+  /// In en, this message translates to:
+  /// **'Removed'**
+  String get tyreMockTabRemoved;
+
+  /// Tyre records tab: scrapped tyres
+  ///
+  /// In en, this message translates to:
+  /// **'Scrapped'**
+  String get tyreMockTabScrapped;
+
+  /// Tyre records status line for the Installed tab
+  ///
+  /// In en, this message translates to:
+  /// **'Showing installed tyres'**
+  String get tyreMockShowingInstalled;
+
+  /// Tyre records status line for the Removed tab
+  ///
+  /// In en, this message translates to:
+  /// **'Showing removed tyres'**
+  String get tyreMockShowingRemoved;
+
+  /// Tyre records status line for the Scrapped tab
+  ///
+  /// In en, this message translates to:
+  /// **'Showing scrapped tyres'**
+  String get tyreMockShowingScrapped;
+
+  /// Tyre records status line for the All tab
+  ///
+  /// In en, this message translates to:
+  /// **'Showing all tyres'**
+  String get tyreMockShowingAll;
+
+  /// When the tyre records list last loaded, on this device clock
+  ///
+  /// In en, this message translates to:
+  /// **'Loaded {time}'**
+  String tyreMockLoadedAt(String time);
+
+  /// Tooltip for the tyre records sort menu
+  ///
+  /// In en, this message translates to:
+  /// **'Sort'**
+  String get tyreMockSortTooltip;
+
+  /// Sort tyre records by most recent fitment date first
+  ///
+  /// In en, this message translates to:
+  /// **'Newest fitted'**
+  String get tyreMockSortNewest;
+
+  /// Sort tyre records by oldest fitment date first
+  ///
+  /// In en, this message translates to:
+  /// **'Oldest fitted'**
+  String get tyreMockSortOldest;
+
+  /// Tyre records filter pill showing the chosen site
+  ///
+  /// In en, this message translates to:
+  /// **'Site: {value}'**
+  String tyreMockSitePill(String value);
+
+  /// Tyre records filter pill showing the chosen risk level
+  ///
+  /// In en, this message translates to:
+  /// **'Risk: {value}'**
+  String tyreMockRiskPill(String value);
+
+  /// Tyre record card metric: fitment date
+  ///
+  /// In en, this message translates to:
+  /// **'Fitted'**
+  String get tyreMockMetricFitted;
+
+  /// Tyre record card metric: removal date
+  ///
+  /// In en, this message translates to:
+  /// **'Removed'**
+  String get tyreMockMetricRemoved;
+
+  /// Tyre record card metric: last recorded tread depth
+  ///
+  /// In en, this message translates to:
+  /// **'Tread'**
+  String get tyreMockMetricTread;
+
+  /// Tyre record card metric: distance the tyre has run
+  ///
+  /// In en, this message translates to:
+  /// **'Km run'**
+  String get tyreMockMetricKmRun;
+
+  /// A distance in kilometres
+  ///
+  /// In en, this message translates to:
+  /// **'{value} km'**
+  String tyreMockKmValue(String value);
+
+  /// A machine hour meter reading
+  ///
+  /// In en, this message translates to:
+  /// **'{value} h'**
+  String tyreMockHoursValue(String value);
+
+  /// Button: scan or search a tyre serial number
+  ///
+  /// In en, this message translates to:
+  /// **'Scan tyre serial'**
+  String get tyreMockScanSerial;
+
+  /// Title of the tyre capture step of an inspection
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre inspection'**
+  String get tyreMockInspectionTitle;
+
+  /// Label above the tyre inspection progress bar
+  ///
+  /// In en, this message translates to:
+  /// **'Inspection progress'**
+  String get tyreMockInspectionProgress;
+
+  /// Share of tyre positions checked on this inspection
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% complete'**
+  String tyreMockProgressComplete(int percent);
+
+  /// Label for the odometer or hour meter reading entered on this inspection
+  ///
+  /// In en, this message translates to:
+  /// **'Machine meter'**
+  String get tyreMockMachineMeter;
+
+  /// Tyre inspection panel: go to the previous tyre position
+  ///
+  /// In en, this message translates to:
+  /// **'Previous tyre'**
+  String get tyreMockPreviousTyre;
+
+  /// Tyre inspection panel: go to the next tyre position
+  ///
+  /// In en, this message translates to:
+  /// **'Next tyre'**
+  String get tyreMockNextTyre;
+
+  /// Fleet list class tab: road vehicles
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicles'**
+  String get fleetMockClassVehicles;
+
+  /// Fleet list class tab: mobile plant
+  ///
+  /// In en, this message translates to:
+  /// **'Plant and equipment'**
+  String get fleetMockClassPlant;
+
+  /// Fleet list class tab: stationary equipment
+  ///
+  /// In en, this message translates to:
+  /// **'Stationary'**
+  String get fleetMockClassStationary;
+
+  /// Fleet list header count of active assets
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No active assets} =1{1 active asset} other{{count} active assets}}'**
+  String fleetMockActiveAssets(int count);
+
+  /// Fleet list scope line when no site filter
+  ///
+  /// In en, this message translates to:
+  /// **'All authorized sites'**
+  String get fleetMockScopeAllSites;
+
+  /// Fleet list scope line when no country is active
+  ///
+  /// In en, this message translates to:
+  /// **'All countries'**
+  String get fleetMockScopeAllCountries;
+
+  /// Fleet list bottom action
+  ///
+  /// In en, this message translates to:
+  /// **'Scan asset QR'**
+  String get fleetMockScanAssetQr;
+
+  /// Vehicle 360 tab
+  ///
+  /// In en, this message translates to:
+  /// **'Timeline'**
+  String get fleetMockTabTimeline;
+
+  /// Vehicle 360 tab
+  ///
+  /// In en, this message translates to:
+  /// **'Costs'**
+  String get fleetMockTabCosts;
+
+  /// Period option
+  ///
+  /// In en, this message translates to:
+  /// **'This year to date'**
+  String get fleetMockPeriodYtd;
+
+  /// Period option
+  ///
+  /// In en, this message translates to:
+  /// **'Last 12 months'**
+  String get fleetMockPeriod12m;
+
+  /// Period option
+  ///
+  /// In en, this message translates to:
+  /// **'Last 90 days'**
+  String get fleetMockPeriod90d;
+
+  /// Period option
+  ///
+  /// In en, this message translates to:
+  /// **'Last 30 days'**
+  String get fleetMockPeriod30d;
+
+  /// Timeline filter
+  ///
+  /// In en, this message translates to:
+  /// **'All events'**
+  String get fleetMockTimelineAll;
+
+  /// Timeline filter
+  ///
+  /// In en, this message translates to:
+  /// **'Work orders'**
+  String get fleetMockTimelineWorkOrders;
+
+  /// Timeline filter
+  ///
+  /// In en, this message translates to:
+  /// **'Inspections'**
+  String get fleetMockTimelineInspections;
+
+  /// Timeline filter
+  ///
+  /// In en, this message translates to:
+  /// **'Washes'**
+  String get fleetMockTimelineWashes;
+
+  /// Timeline filter
+  ///
+  /// In en, this message translates to:
+  /// **'Tyres'**
+  String get fleetMockTimelineTyres;
+
+  /// Timeline filter
+  ///
+  /// In en, this message translates to:
+  /// **'Accidents'**
+  String get fleetMockTimelineAccidents;
+
+  /// Timeline event title
+  ///
+  /// In en, this message translates to:
+  /// **'Job card opened'**
+  String get fleetMockEventWorkOrder;
+
+  /// Timeline event title
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre inspection'**
+  String get fleetMockEventInspection;
+
+  /// Timeline event title
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle wash'**
+  String get fleetMockEventWash;
+
+  /// Timeline event title
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre fitted'**
+  String get fleetMockEventTyreFitted;
+
+  /// Timeline event title
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre removed'**
+  String get fleetMockEventTyreRemoved;
+
+  /// Timeline event title
+  ///
+  /// In en, this message translates to:
+  /// **'Accident reported'**
+  String get fleetMockEventAccident;
+
+  /// Timeline wash photo count
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 photo} other{{count} photos}}'**
+  String fleetMockEventPhotos(int count);
+
+  /// Timeline empty title
+  ///
+  /// In en, this message translates to:
+  /// **'No history in this period'**
+  String get fleetMockTimelineEmptyTitle;
+
+  /// Timeline empty body
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing was recorded for this asset in the selected period.'**
+  String get fleetMockTimelineEmptyBody;
+
+  /// Timeline partial failure notice
+  ///
+  /// In en, this message translates to:
+  /// **'Some history could not be loaded. The list may be incomplete.'**
+  String get fleetMockTimelinePartial;
+
+  /// Vehicle 360 costs card title
+  ///
+  /// In en, this message translates to:
+  /// **'Financial snapshot'**
+  String get fleetMockSnapshotTitle;
+
+  /// Link to the financial report
+  ///
+  /// In en, this message translates to:
+  /// **'Open full financial report'**
+  String get fleetMockOpenFinReport;
+
+  /// Financial report screen title
+  ///
+  /// In en, this message translates to:
+  /// **'Financial report'**
+  String get fleetMockFinReportTitle;
+
+  /// Financial report scope line
+  ///
+  /// In en, this message translates to:
+  /// **'Single-asset report, values shown only in {currency}'**
+  String fleetMockFinScopeNote(String currency);
+
+  /// Comparison label
+  ///
+  /// In en, this message translates to:
+  /// **'vs same period {year}'**
+  String fleetMockFinVsYear(String year);
+
+  /// KPI label
+  ///
+  /// In en, this message translates to:
+  /// **'Total operating cost'**
+  String get fleetMockFinTotalOperating;
+
+  /// KPI label: cost excluding tyres
+  ///
+  /// In en, this message translates to:
+  /// **'Maintenance'**
+  String get fleetMockFinMaintenance;
+
+  /// KPI label
+  ///
+  /// In en, this message translates to:
+  /// **'Cost per km'**
+  String get fleetMockFinCostPerKm;
+
+  /// KPI label
+  ///
+  /// In en, this message translates to:
+  /// **'Cost per engine hour'**
+  String get fleetMockFinCostPerHour;
+
+  /// KPI label: breakdown hours
+  ///
+  /// In en, this message translates to:
+  /// **'Downtime'**
+  String get fleetMockFinDowntime;
+
+  /// Hours value
+  ///
+  /// In en, this message translates to:
+  /// **'{hours} hours'**
+  String fleetMockFinHours(String hours);
+
+  /// A figure with no measured basis
+  ///
+  /// In en, this message translates to:
+  /// **'Not measurable'**
+  String get fleetMockFinNotMeasurable;
+
+  /// Why cost per km is not measurable
+  ///
+  /// In en, this message translates to:
+  /// **'Needs two odometer readings in the period'**
+  String get fleetMockFinNoKmReadings;
+
+  /// No value recorded
+  ///
+  /// In en, this message translates to:
+  /// **'Not recorded'**
+  String get fleetMockFinNotRecorded;
+
+  /// No prior-year data
+  ///
+  /// In en, this message translates to:
+  /// **'No data for comparison'**
+  String get fleetMockFinNoComparison;
+
+  /// Chart title
+  ///
+  /// In en, this message translates to:
+  /// **'Cost trend'**
+  String get fleetMockFinCostTrend;
+
+  /// Chart legend
+  ///
+  /// In en, this message translates to:
+  /// **'Monthly cost ({currency})'**
+  String fleetMockFinMonthlyCost(String currency);
+
+  /// Section title
+  ///
+  /// In en, this message translates to:
+  /// **'Cost composition'**
+  String get fleetMockFinComposition;
+
+  /// Cost bucket
+  ///
+  /// In en, this message translates to:
+  /// **'Spare parts'**
+  String get fleetMockFinBucketParts;
+
+  /// Cost bucket
+  ///
+  /// In en, this message translates to:
+  /// **'Oil and lubricants'**
+  String get fleetMockFinBucketLubricants;
+
+  /// Cost bucket
+  ///
+  /// In en, this message translates to:
+  /// **'Tyres'**
+  String get fleetMockFinBucketTyres;
+
+  /// Cost bucket
+  ///
+  /// In en, this message translates to:
+  /// **'Labour'**
+  String get fleetMockFinBucketLabour;
+
+  /// Section title
+  ///
+  /// In en, this message translates to:
+  /// **'Recent cost entries'**
+  String get fleetMockFinRecentEntries;
+
+  /// Expand cost entries
+  ///
+  /// In en, this message translates to:
+  /// **'View all cost entries ({count})'**
+  String fleetMockFinViewAll(int count);
+
+  /// Collapse cost entries
+  ///
+  /// In en, this message translates to:
+  /// **'Show fewer'**
+  String get fleetMockFinShowFewer;
+
+  /// Number of grid lines in an entry
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 line} other{{count} lines}}'**
+  String fleetMockFinLines(int count);
+
+  /// Export the report as PDF
+  ///
+  /// In en, this message translates to:
+  /// **'Export report'**
+  String get fleetMockFinExport;
+
+  /// Export failure
+  ///
+  /// In en, this message translates to:
+  /// **'The report could not be exported. Try again.'**
+  String get fleetMockFinExportError;
+
+  /// Empty cost state title
+  ///
+  /// In en, this message translates to:
+  /// **'No cost recorded'**
+  String get fleetMockFinNoCostTitle;
+
+  /// Empty cost state body
+  ///
+  /// In en, this message translates to:
+  /// **'No expense lines or job card labour were recorded for this asset in the selected period.'**
+  String get fleetMockFinNoCostBody;
+
+  /// Mixed currency state title
+  ///
+  /// In en, this message translates to:
+  /// **'More than one currency'**
+  String get fleetMockFinMixedTitle;
+
+  /// Mixed currency state body
+  ///
+  /// In en, this message translates to:
+  /// **'This asset\'s cost lines use {currencies}. Totals are never added across currencies. Choose one country to see its figures.'**
+  String fleetMockFinMixedBody(String currencies);
+
+  /// Labour could not be read or no country scope
+  ///
+  /// In en, this message translates to:
+  /// **'Labour from job cards is not included.'**
+  String get fleetMockFinLabourMissing;
+
+  /// Where the report figures come from
+  ///
+  /// In en, this message translates to:
+  /// **'Parts, oil and tyres from the expense grid. Labour and downtime from job cards. No budget is recorded for this asset.'**
+  String get fleetMockFinSourceNote;
+
+  /// Meter summary label
+  ///
+  /// In en, this message translates to:
+  /// **'Meters in period'**
+  String get fleetMockFinMeters;
+
+  /// Measured km in period
+  ///
+  /// In en, this message translates to:
+  /// **'Distance'**
+  String get fleetMockFinDistance;
+
+  /// Measured engine hours in period
+  ///
+  /// In en, this message translates to:
+  /// **'Engine hours'**
+  String get fleetMockFinRunningHours;
+
+  /// Field plan site filter: no site selected
+  ///
+  /// In en, this message translates to:
+  /// **'All assigned sites'**
+  String get myWorkAllSites;
+
+  /// Checklist draft progress
+  ///
+  /// In en, this message translates to:
+  /// **'{answered}/{total} answered'**
+  String myWorkAnswered(int answered, int total);
+
+  /// Approval queues card title
+  ///
+  /// In en, this message translates to:
+  /// **'Approval queues'**
+  String get myWorkApprovalQueues;
+
+  /// Corrective action detail label
+  ///
+  /// In en, this message translates to:
+  /// **'Assigned to'**
+  String get myWorkAssignedTo;
+
+  /// Checklist approval queue tile
+  ///
+  /// In en, this message translates to:
+  /// **'General checklist approvals'**
+  String get myWorkChecklistApprovals;
+
+  /// Completed tab empty title
+  ///
+  /// In en, this message translates to:
+  /// **'No completed work yet'**
+  String get myWorkCompletedEmpty;
+
+  /// Languages a checklist carries besides English
+  ///
+  /// In en, this message translates to:
+  /// **'{languages} content available'**
+  String myWorkContentAvailable(String languages);
+
+  /// Checklist content language selector title
+  ///
+  /// In en, this message translates to:
+  /// **'Checklist content language'**
+  String get myWorkContentLanguage;
+
+  /// Field plan empty day
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing planned for this day'**
+  String get myWorkDayEmpty;
+
+  /// Draft on device indicator
+  ///
+  /// In en, this message translates to:
+  /// **'Draft saved'**
+  String get myWorkDraftSaved;
+
+  /// Due date label
+  ///
+  /// In en, this message translates to:
+  /// **'Due {date}'**
+  String myWorkDueOn(String date);
+
+  /// Due today label
+  ///
+  /// In en, this message translates to:
+  /// **'Due today'**
+  String get myWorkDueToday;
+
+  /// Empty state body
+  ///
+  /// In en, this message translates to:
+  /// **'Work assigned to you or your role appears here.'**
+  String get myWorkEmptyBody;
+
+  /// Empty state with search or filter
+  ///
+  /// In en, this message translates to:
+  /// **'No work matches this filter'**
+  String get myWorkEmptyFiltered;
+
+  /// Empty state title
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing assigned'**
+  String get myWorkEmptyTitle;
+
+  /// Field plan screen title
+  ///
+  /// In en, this message translates to:
+  /// **'Today\'s field plan'**
+  String get myWorkFieldPlanTitle;
+
+  /// Filter menu: all types
+  ///
+  /// In en, this message translates to:
+  /// **'All types'**
+  String get myWorkFilterAll;
+
+  /// Filter button tooltip
+  ///
+  /// In en, this message translates to:
+  /// **'Filter by type'**
+  String get myWorkFilterTooltip;
+
+  /// Work history link
+  ///
+  /// In en, this message translates to:
+  /// **'View my work history'**
+  String get myWorkHistory;
+
+  /// Inspection approval queue tile
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre inspection approvals'**
+  String get myWorkInspectionApprovals;
+
+  /// Work kind label
+  ///
+  /// In en, this message translates to:
+  /// **'Checklist'**
+  String get myWorkKindChecklist;
+
+  /// Work kind label
+  ///
+  /// In en, this message translates to:
+  /// **'Corrective action'**
+  String get myWorkKindCorrective;
+
+  /// Work kind label
+  ///
+  /// In en, this message translates to:
+  /// **'Checklist draft'**
+  String get myWorkKindDraft;
+
+  /// Work kind label
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre inspection'**
+  String get myWorkKindInspection;
+
+  /// Work kind label
+  ///
+  /// In en, this message translates to:
+  /// **'Work order'**
+  String get myWorkKindWorkOrder;
+
+  /// Overdue duration in days
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 day} other{{count} days}}'**
+  String myWorkLateDays(int count);
+
+  /// Overdue duration in hours
+  ///
+  /// In en, this message translates to:
+  /// **'{count} h'**
+  String myWorkLateHours(int count);
+
+  /// Overdue duration in minutes
+  ///
+  /// In en, this message translates to:
+  /// **'{count} min'**
+  String myWorkLateMinutes(int count);
+
+  /// Load error message
+  ///
+  /// In en, this message translates to:
+  /// **'My work could not be loaded right now.'**
+  String get myWorkLoadError;
+
+  /// Item without due date
+  ///
+  /// In en, this message translates to:
+  /// **'No due date'**
+  String get myWorkNoDueDate;
+
+  /// Missing value
+  ///
+  /// In en, this message translates to:
+  /// **'Not recorded'**
+  String get myWorkNotRecorded;
+
+  /// Overdue prefix
+  ///
+  /// In en, this message translates to:
+  /// **'Overdue by'**
+  String get myWorkOverdueBy;
+
+  /// Partial load banner
+  ///
+  /// In en, this message translates to:
+  /// **'Some work could not be checked: {sources}.'**
+  String myWorkPartial(String sources);
+
+  /// Priority label
+  ///
+  /// In en, this message translates to:
+  /// **'Priority'**
+  String get myWorkPriority;
+
+  /// Report issue button
+  ///
+  /// In en, this message translates to:
+  /// **'Report an issue'**
+  String get myWorkReportIssue;
+
+  /// Resume action
+  ///
+  /// In en, this message translates to:
+  /// **'Resume'**
+  String get myWorkResume;
+
+  /// Retry action
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get myWorkRetry;
+
+  /// Search field hint
+  ///
+  /// In en, this message translates to:
+  /// **'Search task, asset or site'**
+  String get myWorkSearchHint;
+
+  /// Search button tooltip
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get myWorkSearchTooltip;
+
+  /// Upcoming group label
+  ///
+  /// In en, this message translates to:
+  /// **'Coming up'**
+  String get myWorkSectionComingUp;
+
+  /// Section label
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get myWorkSectionCompleted;
+
+  /// Section label
+  ///
+  /// In en, this message translates to:
+  /// **'Due today'**
+  String get myWorkSectionDueToday;
+
+  /// Section label
+  ///
+  /// In en, this message translates to:
+  /// **'In progress'**
+  String get myWorkSectionInProgress;
+
+  /// Section label
+  ///
+  /// In en, this message translates to:
+  /// **'Overdue'**
+  String get myWorkSectionOverdue;
+
+  /// Section label
+  ///
+  /// In en, this message translates to:
+  /// **'Work orders'**
+  String get myWorkSectionWorkOrders;
+
+  /// Source name in partial banner
+  ///
+  /// In en, this message translates to:
+  /// **'approval queues'**
+  String get myWorkSourceApprovals;
+
+  /// Source name in partial banner
+  ///
+  /// In en, this message translates to:
+  /// **'checklists'**
+  String get myWorkSourceChecklists;
+
+  /// Source name in partial banner
+  ///
+  /// In en, this message translates to:
+  /// **'corrective actions'**
+  String get myWorkSourceCorrective;
+
+  /// Source name in partial banner
+  ///
+  /// In en, this message translates to:
+  /// **'drafts on this device'**
+  String get myWorkSourceDrafts;
+
+  /// Source name in partial banner
+  ///
+  /// In en, this message translates to:
+  /// **'inspection plans'**
+  String get myWorkSourcePlans;
+
+  /// Source name in partial banner
+  ///
+  /// In en, this message translates to:
+  /// **'work orders'**
+  String get myWorkSourceWorkOrders;
+
+  /// Start action
+  ///
+  /// In en, this message translates to:
+  /// **'Start'**
+  String get myWorkStart;
+
+  /// Start inspection action
+  ///
+  /// In en, this message translates to:
+  /// **'Start inspection'**
+  String get myWorkStartInspection;
+
+  /// Stat label
+  ///
+  /// In en, this message translates to:
+  /// **'Assigned'**
+  String get myWorkStatAssigned;
+
+  /// Stat label
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get myWorkStatCompleted;
+
+  /// Stat label
+  ///
+  /// In en, this message translates to:
+  /// **'Due today'**
+  String get myWorkStatDueToday;
+
+  /// Stat label
+  ///
+  /// In en, this message translates to:
+  /// **'Overdue'**
+  String get myWorkStatOverdue;
+
+  /// Stat label
+  ///
+  /// In en, this message translates to:
+  /// **'Tasks'**
+  String get myWorkStatTasks;
+
+  /// State chip
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get myWorkStateCompleted;
+
+  /// State chip
+  ///
+  /// In en, this message translates to:
+  /// **'Due today'**
+  String get myWorkStateDueToday;
+
+  /// State chip
+  ///
+  /// In en, this message translates to:
+  /// **'In progress'**
+  String get myWorkStateInProgress;
+
+  /// State chip
+  ///
+  /// In en, this message translates to:
+  /// **'Overdue'**
+  String get myWorkStateOverdue;
+
+  /// State chip
+  ///
+  /// In en, this message translates to:
+  /// **'Upcoming'**
+  String get myWorkStateUpcoming;
+
+  /// Status label
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get myWorkStatus;
+
+  /// Pending offline queue count
+  ///
+  /// In en, this message translates to:
+  /// **'{count} waiting to sync'**
+  String myWorkSyncPending(int count);
+
+  /// Tab label
+  ///
+  /// In en, this message translates to:
+  /// **'Assigned'**
+  String get myWorkTabAssigned;
+
+  /// Tab label
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get myWorkTabCompleted;
+
+  /// Tab label
+  ///
+  /// In en, this message translates to:
+  /// **'In progress'**
+  String get myWorkTabInProgress;
+
+  /// My tasks screen title
+  ///
+  /// In en, this message translates to:
+  /// **'My tasks'**
+  String get myWorkTasksTitle;
+
+  /// Tag on inspection plan rows
+  ///
+  /// In en, this message translates to:
+  /// **'Specialised tyre workflow'**
+  String get myWorkTyreWorkflowTag;
+
+  /// View action
+  ///
+  /// In en, this message translates to:
+  /// **'View'**
+  String get myWorkView;
+
+  /// Checklist hub: assignment due today.
+  ///
+  /// In en, this message translates to:
+  /// **'Due now'**
+  String get clMockDueNow;
+
+  /// Checklist hub: assignment due tomorrow.
+  ///
+  /// In en, this message translates to:
+  /// **'Due tomorrow'**
+  String get clMockDueTomorrow;
+
+  /// Checklist hub: assignment due on a later day.
+  ///
+  /// In en, this message translates to:
+  /// **'Due {date}'**
+  String clMockDueOn(String date);
+
+  /// Checklist cadence from min_interval_days = 1.
+  ///
+  /// In en, this message translates to:
+  /// **'Daily'**
+  String get clMockCadenceDaily;
+
+  /// Checklist cadence from min_interval_days = 7.
+  ///
+  /// In en, this message translates to:
+  /// **'Weekly'**
+  String get clMockCadenceWeekly;
+
+  /// Checklist cadence of about a month.
+  ///
+  /// In en, this message translates to:
+  /// **'Monthly'**
+  String get clMockCadenceMonthly;
+
+  /// Checklist cadence of any other number of days.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Every day} other{Every {count} days}}'**
+  String clMockCadenceEveryDays(int count);
+
+  /// Checklist hub row that opens the meter log for the asset.
+  ///
+  /// In en, this message translates to:
+  /// **'Odometer & hour-meter reading'**
+  String get clMockMeterRowTitle;
+
+  /// Last odometer reading date for the asset.
+  ///
+  /// In en, this message translates to:
+  /// **'Last recorded {date}'**
+  String clMockMeterLastRecorded(String date);
+
+  /// No odometer reading found for the asset.
+  ///
+  /// In en, this message translates to:
+  /// **'No reading recorded yet'**
+  String get clMockMeterNoReading;
+
+  /// Button that opens the meter log.
+  ///
+  /// In en, this message translates to:
+  /// **'Record'**
+  String get clMockMeterRecord;
+
+  /// Chip on the tyre inspection row: inspections awaiting sign-off.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending approval'**
+  String get clMockPendingApproval;
+
+  /// Checklist approval status when it is the reviewer's turn.
+  ///
+  /// In en, this message translates to:
+  /// **'Awaiting your approval'**
+  String get clMockAwaitingYourApproval;
+
+  /// Label above the signed-in reviewer name.
+  ///
+  /// In en, this message translates to:
+  /// **'Reviewer'**
+  String get clMockReviewerLabel;
+
+  /// When the checklist was submitted.
+  ///
+  /// In en, this message translates to:
+  /// **'Submitted {date}'**
+  String clMockSubmittedOn(String date);
+
+  /// Who filled in the checklist.
+  ///
+  /// In en, this message translates to:
+  /// **'Filled by {name}'**
+  String clMockFilledBy(String name);
+
+  /// The person who filled the sheet signed it.
+  ///
+  /// In en, this message translates to:
+  /// **'Operator signature captured'**
+  String get clMockOperatorSignatureCaptured;
+
+  /// The sheet carries no operator signature.
+  ///
+  /// In en, this message translates to:
+  /// **'No operator signature'**
+  String get clMockOperatorSignatureMissing;
+
+  /// Sign-off ladder: the rung waiting now.
+  ///
+  /// In en, this message translates to:
+  /// **'In progress'**
+  String get clMockRungInProgress;
+
+  /// Sign-off ladder: a rung not reached yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending'**
+  String get clMockRungPending;
+
+  /// Checklist approval outcome card title.
+  ///
+  /// In en, this message translates to:
+  /// **'Inspection outcome'**
+  String get clMockInspectionOutcome;
+
+  /// Count of passed checks.
+  ///
+  /// In en, this message translates to:
+  /// **'Pass'**
+  String get clMockPass;
+
+  /// Count of failed checks.
+  ///
+  /// In en, this message translates to:
+  /// **'Fail'**
+  String get clMockFail;
+
+  /// Count of not-applicable checks.
+  ///
+  /// In en, this message translates to:
+  /// **'N/A'**
+  String get clMockNotApplicable;
+
+  /// Shown when no field has a pass/fail meaning.
+  ///
+  /// In en, this message translates to:
+  /// **'This sheet has no pass or fail checks'**
+  String get clMockNoChecksScored;
+
+  /// Required fields answered over total.
+  ///
+  /// In en, this message translates to:
+  /// **'Required fields'**
+  String get clMockRequiredFields;
+
+  /// Photos attached count.
+  ///
+  /// In en, this message translates to:
+  /// **'Photos'**
+  String get clMockPhotos;
+
+  /// Signatures captured count.
+  ///
+  /// In en, this message translates to:
+  /// **'Signatures'**
+  String get clMockSignatures;
+
+  /// Card listing failed checks.
+  ///
+  /// In en, this message translates to:
+  /// **'Findings requiring review'**
+  String get clMockFindingsTitle;
+
+  /// Operator note on a failed check.
+  ///
+  /// In en, this message translates to:
+  /// **'Note: {note}'**
+  String clMockFindingNote(String note);
+
+  /// Photos attached to a finding or sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No photos attached} =1{1 photo attached} other{{count} photos attached}}'**
+  String clMockPhotosAttached(int count);
+
+  /// Answers that come before the first section heading.
+  ///
+  /// In en, this message translates to:
+  /// **'General'**
+  String get clMockSectionGeneral;
+
+  /// Section summary: failed checks.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 finding} other{{count} findings}}'**
+  String clMockSectionFindings(int count);
+
+  /// Section summary: checks passed.
+  ///
+  /// In en, this message translates to:
+  /// **'{passed}/{total} passed'**
+  String clMockSectionPassed(int passed, int total);
+
+  /// Section summary: every field answered.
+  ///
+  /// In en, this message translates to:
+  /// **'Complete'**
+  String get clMockSectionComplete;
+
+  /// Section summary: fields answered.
+  ///
+  /// In en, this message translates to:
+  /// **'{answered}/{total} answered'**
+  String clMockSectionAnswered(int answered, int total);
+
+  /// Opens every section.
+  ///
+  /// In en, this message translates to:
+  /// **'View all checklist answers'**
+  String get clMockViewAllAnswers;
+
+  /// Closes every section.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide checklist answers'**
+  String get clMockHideAllAnswers;
+
+  /// Decision form title.
+  ///
+  /// In en, this message translates to:
+  /// **'Reviewer action'**
+  String get clMockReviewerAction;
+
+  /// Note field on the decision form.
+  ///
+  /// In en, this message translates to:
+  /// **'Decision note'**
+  String get clMockDecisionNote;
+
+  /// Hint under the decision note.
+  ///
+  /// In en, this message translates to:
+  /// **'Required when returning for correction'**
+  String get clMockDecisionNoteHint;
+
+  /// Send the checklist back.
+  ///
+  /// In en, this message translates to:
+  /// **'Return for correction'**
+  String get clMockReturnForCorrection;
+
+  /// Approve button on a supervisor rung.
+  ///
+  /// In en, this message translates to:
+  /// **'Approve'**
+  String get clMockApprove;
+
+  /// Why Approve is disabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign and enter your name to approve'**
+  String get clMockApproveNeeds;
+
+  /// Footer under the decision buttons.
+  ///
+  /// In en, this message translates to:
+  /// **'Decision, note, signature and time are recorded.'**
+  String get clMockDecisionRecorded;
+
+  /// Shown when the saved signature pre-fills the pad.
+  ///
+  /// In en, this message translates to:
+  /// **'Your saved signature is filled in. Approving still needs your press.'**
+  String get clMockSavedSignatureApplied;
+
+  /// Approved and unlocked account.
+  ///
+  /// In en, this message translates to:
+  /// **'Verified account'**
+  String get clMockProfileVerified;
+
+  /// Profile status strip: drafts on this device.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending drafts'**
+  String get clMockPendingDrafts;
+
+  /// Profile workspace row.
+  ///
+  /// In en, this message translates to:
+  /// **'Active site'**
+  String get clMockActiveSite;
+
+  /// Profile workspace row.
+  ///
+  /// In en, this message translates to:
+  /// **'Country & currency'**
+  String get clMockCountryCurrency;
+
+  /// Profile workspace row.
+  ///
+  /// In en, this message translates to:
+  /// **'My roles & access'**
+  String get clMockRolesAccess;
+
+  /// Number of modules the user can reach.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 module} other{{count} modules}}'**
+  String clMockModuleCount(int count);
+
+  /// Profile row for the checklist content language.
+  ///
+  /// In en, this message translates to:
+  /// **'Checklist content language'**
+  String get clMockChecklistLanguage;
+
+  /// Caption under the checklist content language.
+  ///
+  /// In en, this message translates to:
+  /// **'Independent from app language'**
+  String get clMockChecklistLanguageCaption;
+
+  /// Profile section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Security & identity'**
+  String get clMockSectionSecurity;
+
+  /// Profile row and sheet title.
+  ///
+  /// In en, this message translates to:
+  /// **'My saved signature'**
+  String get clMockSavedSignature;
+
+  /// No saved signature.
+  ///
+  /// In en, this message translates to:
+  /// **'Not saved'**
+  String get clMockSignatureNotSaved;
+
+  /// Saved signature with no date.
+  ///
+  /// In en, this message translates to:
+  /// **'Captured'**
+  String get clMockSignatureCaptured;
+
+  /// Saved signature and when it was updated.
+  ///
+  /// In en, this message translates to:
+  /// **'Captured · updated {date}'**
+  String clMockSignatureCapturedOn(String date);
+
+  /// Explains what a saved signature is for.
+  ///
+  /// In en, this message translates to:
+  /// **'Approval screens fill this in for you. You still press Approve yourself.'**
+  String get clMockSignatureSheetHint;
+
+  /// Save a newly drawn signature.
+  ///
+  /// In en, this message translates to:
+  /// **'Save as my signature'**
+  String get clMockSignatureSave;
+
+  /// Delete the saved signature.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove saved signature'**
+  String get clMockSignatureRemove;
+
+  /// Confirm removal title.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove your saved signature?'**
+  String get clMockSignatureRemoveTitle;
+
+  /// Confirm removal message.
+  ///
+  /// In en, this message translates to:
+  /// **'Approvals will start with a blank signature box until you save a new one.'**
+  String get clMockSignatureRemoveMessage;
+
+  /// Signature save or remove failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update your signature. Check your connection and try again.'**
+  String get clMockSignatureSaveFailed;
+
+  /// Profile offline row.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline drafts'**
+  String get clMockOfflineDrafts;
+
+  /// Drafts kept on the device.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{None} =1{1 stored on this device} other{{count} stored on this device}}'**
+  String clMockDraftsStored(int count);
+
+  /// My work banner line when a source hit its row ceiling and may be incomplete
+  ///
+  /// In en, this message translates to:
+  /// **'Only part of your {sources} could be loaded, so some work may be missing.'**
+  String myWorkFixIncomplete(String sources);
+
+  /// Vehicle 360 financial report: title shown instead of totals when the cost read reached its row cap.
+  ///
+  /// In en, this message translates to:
+  /// **'Figures are incomplete'**
+  String get assetsFixFinIncompleteTitle;
+
+  /// Vehicle 360 costs: explains that the cost read stopped at the row cap so totals would be understated. n is the cap.
+  ///
+  /// In en, this message translates to:
+  /// **'Figures are incomplete: more than {n} entries were recorded for this asset in this window, so totals are not shown. Choose a shorter period.'**
+  String assetsFixFinIncompleteBody(int n);
+
+  /// Checklists hub meter row: the last odometer reading could not be read (offline or server error). Different from no reading recorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not check last reading'**
+  String get clFixMeterUnreadable;
+
+  /// Vehicle 360 costs: title when some cost lines carry no currency, so no currency-labelled total is shown.
+  ///
+  /// In en, this message translates to:
+  /// **'Currency not recorded'**
+  String get assetsFixFinUnlabelledTitle;
+
+  /// Vehicle 360 costs: body when n cost lines carry money but no currency.
+  ///
+  /// In en, this message translates to:
+  /// **'Cost lines without a currency in this period: {n}. Totals are not shown because their currency is unknown.'**
+  String assetsFixFinUnlabelledBody(int n);
+
+  /// Screen reader summary of the monthly cost bar chart.
+  ///
+  /// In en, this message translates to:
+  /// **'Monthly cost chart, {months} months. Highest month: {month}, {value}.'**
+  String assetsFixChartSummary(int months, String month, String value);
+
+  /// Screen reader summary of the monthly cost bar chart when every month is zero.
+  ///
+  /// In en, this message translates to:
+  /// **'Monthly cost chart, {months} months. No cost recorded.'**
+  String assetsFixChartSummaryEmpty(int months);
+
+  /// Profile saved-signature row and sheet when the saved signature could not be read (no signal or no session). Distinct from 'Not saved'.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not check'**
+  String get profileFixSignatureCouldNotCheck;
+
+  /// Error under the saved-signature sheet when removing the saved signature failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not remove your signature. Check your connection and try again.'**
+  String get profileFixSignatureRemoveFailed;
+
+  /// Damage zone sheet: area field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Area'**
+  String get designAccZoneArea;
+
+  /// Damage zone sheet: damage type section label.
+  ///
+  /// In en, this message translates to:
+  /// **'Damage type'**
+  String get designAccZoneDamageType;
+
+  /// Damage zone sheet: damage level section label.
+  ///
+  /// In en, this message translates to:
+  /// **'Level'**
+  String get designAccZoneLevel;
+
+  /// Damage zone sheet: optional note when the reporter corrects a suggestion.
+  ///
+  /// In en, this message translates to:
+  /// **'Correction note (optional)'**
+  String get designAccZoneCorrectionNote;
+
+  /// Damage zone sheet: optional note field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Note (optional)'**
+  String get designAccZoneNote;
+
+  /// Damage zone sheet: error when close-up photos fail to update.
+  ///
+  /// In en, this message translates to:
+  /// **'The close-up damage photos could not be updated.'**
+  String get designAccZonePhotoUpdateFailed;
+
+  /// Damage zone sheet: header when the marker has no number.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected area'**
+  String get designAccZoneSelectedArea;
+
+  /// Damage zone sheet: header naming the numbered marker.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected area {number}'**
+  String designAccZoneSelectedAreaNumber(int number);
+
+  /// Damage zone sheet: heading of the automatic damage suggestion. Finder is a product name.
+  ///
+  /// In en, this message translates to:
+  /// **'Finder suggestion'**
+  String get designAccZoneFinderSuggestion;
+
+  /// Damage zone sheet: confirm the suggestion.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm'**
+  String get designAccZoneConfirm;
+
+  /// Damage zone sheet: correct the suggestion.
+  ///
+  /// In en, this message translates to:
+  /// **'Correct'**
+  String get designAccZoneCorrect;
+
+  /// Damage zone sheet: suggestion state after confirming.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirmed by reporter'**
+  String get designAccZoneConfirmedByReporter;
+
+  /// Damage zone sheet: suggestion state after correcting.
+  ///
+  /// In en, this message translates to:
+  /// **'Corrected by reporter'**
+  String get designAccZoneCorrectedByReporter;
+
+  /// Damage zone sheet: close-up photos row title.
+  ///
+  /// In en, this message translates to:
+  /// **'Close-up damage photos'**
+  String get designAccZoneCloseUpPhotos;
+
+  /// Damage zone sheet: hint when photos are added later in the evidence step.
+  ///
+  /// In en, this message translates to:
+  /// **'Added from the evidence step'**
+  String get designAccZoneAddedFromEvidence;
+
+  /// Damage zone sheet: number of close-up photos attached.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} attached'**
+  String designAccZoneAttachedCount(int count);
+
+  /// Damage zone sheet: add the first close-up photo.
+  ///
+  /// In en, this message translates to:
+  /// **'Add close-up photo'**
+  String get designAccZoneAddCloseUp;
+
+  /// Damage zone sheet: add another close-up photo.
+  ///
+  /// In en, this message translates to:
+  /// **'Add another'**
+  String get designAccZoneAddAnother;
+
+  /// Damage zone sheet: save the new area and continue.
+  ///
+  /// In en, this message translates to:
+  /// **'Save area and continue'**
+  String get designAccZoneSaveAndContinue;
+
+  /// Damage zone sheet: remove the marked area.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get designAccZoneRemove;
+
+  /// Damage zone sheet: save an existing marked area.
+  ///
+  /// In en, this message translates to:
+  /// **'Save marked area'**
+  String get designAccZoneSaveMarked;
+
+  /// Accident damage type.
+  ///
+  /// In en, this message translates to:
+  /// **'Dent'**
+  String get designAccDamageTypeDent;
+
+  /// Accident damage type.
+  ///
+  /// In en, this message translates to:
+  /// **'Scratch'**
+  String get designAccDamageTypeScratch;
+
+  /// Accident damage type.
+  ///
+  /// In en, this message translates to:
+  /// **'Cracked'**
+  String get designAccDamageTypeCracked;
+
+  /// Accident damage type.
+  ///
+  /// In en, this message translates to:
+  /// **'Broken'**
+  String get designAccDamageTypeBroken;
+
+  /// Accident damage type.
+  ///
+  /// In en, this message translates to:
+  /// **'Missing'**
+  String get designAccDamageTypeMissing;
+
+  /// Accident damage type.
+  ///
+  /// In en, this message translates to:
+  /// **'Bent'**
+  String get designAccDamageTypeBent;
+
+  /// Accident damage type.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get designAccDamageTypeOther;
+
+  /// Accident report progress eyebrow, highlighted lead part.
+  ///
+  /// In en, this message translates to:
+  /// **'Step {step}'**
+  String designAccReportStepLead(int step);
+
+  /// Accident report progress eyebrow, remainder after the step number. Starts with a space.
+  ///
+  /// In en, this message translates to:
+  /// **' of {total}: {label}'**
+  String designAccReportStepTail(int total, String label);
+
+  /// Accident report step 1 label.
+  ///
+  /// In en, this message translates to:
+  /// **'Identify asset'**
+  String get designAccReportStepIdentifyAsset;
+
+  /// Accident report step 2 label.
+  ///
+  /// In en, this message translates to:
+  /// **'Incident details'**
+  String get designAccReportStepIncident;
+
+  /// Accident report step 3 label.
+  ///
+  /// In en, this message translates to:
+  /// **'People and authority'**
+  String get designAccReportStepPeople;
+
+  /// Accident report step 4 label.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark damage'**
+  String get designAccReportStepDamage;
+
+  /// Accident report step 5 label.
+  ///
+  /// In en, this message translates to:
+  /// **'Evidence'**
+  String get designAccReportStepEvidence;
+
+  /// Accident report step 6 label.
+  ///
+  /// In en, this message translates to:
+  /// **'Documents'**
+  String get designAccReportStepDocuments;
+
+  /// Accident report step 7 label.
+  ///
+  /// In en, this message translates to:
+  /// **'Review and submit'**
+  String get designAccReportStepReview;
+
+  /// Accident report progress: screen-reader state of a completed step.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get designAccReportStepDone;
+
+  /// Accident report progress: screen-reader state of the current step.
+  ///
+  /// In en, this message translates to:
+  /// **'Current step'**
+  String get designAccReportStepCurrent;
+
+  /// Accident report progress: screen-reader state of a step not reached yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Not started'**
+  String get designAccReportStepTodo;
 }
 
 class _AppLocalizationsDelegate

@@ -6068,5 +6068,1381 @@
         "type": "String"
       }
     }
+  },
+  "tyreMockRecordsCount": "{count, plural, =0{No tyres} =1{1 tyre} other{{count} tyres}}",
+  "@tyreMockRecordsCount": {
+    "description": "Tyre records header: exact number of tyres matching the current tab and filters",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "tyreMockTabAll": "All",
+  "@tyreMockTabAll": {
+    "description": "Tyre records status tab and filter value: every status"
+  },
+  "tyreMockTabInstalled": "Installed",
+  "@tyreMockTabInstalled": {
+    "description": "Tyre records tab: tyres currently fitted to a vehicle (status Active)"
+  },
+  "tyreMockTabRemoved": "Removed",
+  "@tyreMockTabRemoved": {
+    "description": "Tyre records tab: tyres taken off a vehicle"
+  },
+  "tyreMockTabScrapped": "Scrapped",
+  "@tyreMockTabScrapped": {
+    "description": "Tyre records tab: scrapped tyres"
+  },
+  "tyreMockShowingInstalled": "Showing installed tyres",
+  "@tyreMockShowingInstalled": {
+    "description": "Tyre records status line for the Installed tab"
+  },
+  "tyreMockShowingRemoved": "Showing removed tyres",
+  "@tyreMockShowingRemoved": {
+    "description": "Tyre records status line for the Removed tab"
+  },
+  "tyreMockShowingScrapped": "Showing scrapped tyres",
+  "@tyreMockShowingScrapped": {
+    "description": "Tyre records status line for the Scrapped tab"
+  },
+  "tyreMockShowingAll": "Showing all tyres",
+  "@tyreMockShowingAll": {
+    "description": "Tyre records status line for the All tab"
+  },
+  "tyreMockLoadedAt": "Loaded {time}",
+  "@tyreMockLoadedAt": {
+    "description": "When the tyre records list last loaded, on this device clock",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "tyreMockSortTooltip": "Sort",
+  "@tyreMockSortTooltip": {
+    "description": "Tooltip for the tyre records sort menu"
+  },
+  "tyreMockSortNewest": "Newest fitted",
+  "@tyreMockSortNewest": {
+    "description": "Sort tyre records by most recent fitment date first"
+  },
+  "tyreMockSortOldest": "Oldest fitted",
+  "@tyreMockSortOldest": {
+    "description": "Sort tyre records by oldest fitment date first"
+  },
+  "tyreMockSitePill": "Site: {value}",
+  "@tyreMockSitePill": {
+    "description": "Tyre records filter pill showing the chosen site",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "tyreMockRiskPill": "Risk: {value}",
+  "@tyreMockRiskPill": {
+    "description": "Tyre records filter pill showing the chosen risk level",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "tyreMockMetricFitted": "Fitted",
+  "@tyreMockMetricFitted": {
+    "description": "Tyre record card metric: fitment date"
+  },
+  "tyreMockMetricRemoved": "Removed",
+  "@tyreMockMetricRemoved": {
+    "description": "Tyre record card metric: removal date"
+  },
+  "tyreMockMetricTread": "Tread",
+  "@tyreMockMetricTread": {
+    "description": "Tyre record card metric: last recorded tread depth"
+  },
+  "tyreMockMetricKmRun": "Km run",
+  "@tyreMockMetricKmRun": {
+    "description": "Tyre record card metric: distance the tyre has run"
+  },
+  "tyreMockKmValue": "{value} km",
+  "@tyreMockKmValue": {
+    "description": "A distance in kilometres",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "tyreMockHoursValue": "{value} h",
+  "@tyreMockHoursValue": {
+    "description": "A machine hour meter reading",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "tyreMockScanSerial": "Scan tyre serial",
+  "@tyreMockScanSerial": {
+    "description": "Button: scan or search a tyre serial number"
+  },
+  "tyreMockInspectionTitle": "Tyre inspection",
+  "@tyreMockInspectionTitle": {
+    "description": "Title of the tyre capture step of an inspection"
+  },
+  "tyreMockInspectionProgress": "Inspection progress",
+  "@tyreMockInspectionProgress": {
+    "description": "Label above the tyre inspection progress bar"
+  },
+  "tyreMockProgressComplete": "{percent}% complete",
+  "@tyreMockProgressComplete": {
+    "description": "Share of tyre positions checked on this inspection",
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "tyreMockMachineMeter": "Machine meter",
+  "@tyreMockMachineMeter": {
+    "description": "Label for the odometer or hour meter reading entered on this inspection"
+  },
+  "tyreMockPreviousTyre": "Previous tyre",
+  "@tyreMockPreviousTyre": {
+    "description": "Tyre inspection panel: go to the previous tyre position"
+  },
+  "tyreMockNextTyre": "Next tyre",
+  "@tyreMockNextTyre": {
+    "description": "Tyre inspection panel: go to the next tyre position"
+  },
+  "fleetMockClassVehicles": "Vehicles",
+  "@fleetMockClassVehicles": {
+    "description": "Fleet list class tab: road vehicles"
+  },
+  "fleetMockClassPlant": "Plant and equipment",
+  "@fleetMockClassPlant": {
+    "description": "Fleet list class tab: mobile plant"
+  },
+  "fleetMockClassStationary": "Stationary",
+  "@fleetMockClassStationary": {
+    "description": "Fleet list class tab: stationary equipment"
+  },
+  "fleetMockActiveAssets": "{count, plural, =0{No active assets} =1{1 active asset} other{{count} active assets}}",
+  "@fleetMockActiveAssets": {
+    "description": "Fleet list header count of active assets",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fleetMockScopeAllSites": "All authorized sites",
+  "@fleetMockScopeAllSites": {
+    "description": "Fleet list scope line when no site filter"
+  },
+  "fleetMockScopeAllCountries": "All countries",
+  "@fleetMockScopeAllCountries": {
+    "description": "Fleet list scope line when no country is active"
+  },
+  "fleetMockScanAssetQr": "Scan asset QR",
+  "@fleetMockScanAssetQr": {
+    "description": "Fleet list bottom action"
+  },
+  "fleetMockTabTimeline": "Timeline",
+  "@fleetMockTabTimeline": {
+    "description": "Vehicle 360 tab"
+  },
+  "fleetMockTabCosts": "Costs",
+  "@fleetMockTabCosts": {
+    "description": "Vehicle 360 tab"
+  },
+  "fleetMockPeriodYtd": "This year to date",
+  "@fleetMockPeriodYtd": {
+    "description": "Period option"
+  },
+  "fleetMockPeriod12m": "Last 12 months",
+  "@fleetMockPeriod12m": {
+    "description": "Period option"
+  },
+  "fleetMockPeriod90d": "Last 90 days",
+  "@fleetMockPeriod90d": {
+    "description": "Period option"
+  },
+  "fleetMockPeriod30d": "Last 30 days",
+  "@fleetMockPeriod30d": {
+    "description": "Period option"
+  },
+  "fleetMockTimelineAll": "All events",
+  "@fleetMockTimelineAll": {
+    "description": "Timeline filter"
+  },
+  "fleetMockTimelineWorkOrders": "Work orders",
+  "@fleetMockTimelineWorkOrders": {
+    "description": "Timeline filter"
+  },
+  "fleetMockTimelineInspections": "Inspections",
+  "@fleetMockTimelineInspections": {
+    "description": "Timeline filter"
+  },
+  "fleetMockTimelineWashes": "Washes",
+  "@fleetMockTimelineWashes": {
+    "description": "Timeline filter"
+  },
+  "fleetMockTimelineTyres": "Tyres",
+  "@fleetMockTimelineTyres": {
+    "description": "Timeline filter"
+  },
+  "fleetMockTimelineAccidents": "Accidents",
+  "@fleetMockTimelineAccidents": {
+    "description": "Timeline filter"
+  },
+  "fleetMockEventWorkOrder": "Job card opened",
+  "@fleetMockEventWorkOrder": {
+    "description": "Timeline event title"
+  },
+  "fleetMockEventInspection": "Tyre inspection",
+  "@fleetMockEventInspection": {
+    "description": "Timeline event title"
+  },
+  "fleetMockEventWash": "Vehicle wash",
+  "@fleetMockEventWash": {
+    "description": "Timeline event title"
+  },
+  "fleetMockEventTyreFitted": "Tyre fitted",
+  "@fleetMockEventTyreFitted": {
+    "description": "Timeline event title"
+  },
+  "fleetMockEventTyreRemoved": "Tyre removed",
+  "@fleetMockEventTyreRemoved": {
+    "description": "Timeline event title"
+  },
+  "fleetMockEventAccident": "Accident reported",
+  "@fleetMockEventAccident": {
+    "description": "Timeline event title"
+  },
+  "fleetMockEventPhotos": "{count, plural, =1{1 photo} other{{count} photos}}",
+  "@fleetMockEventPhotos": {
+    "description": "Timeline wash photo count",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fleetMockTimelineEmptyTitle": "No history in this period",
+  "@fleetMockTimelineEmptyTitle": {
+    "description": "Timeline empty title"
+  },
+  "fleetMockTimelineEmptyBody": "Nothing was recorded for this asset in the selected period.",
+  "@fleetMockTimelineEmptyBody": {
+    "description": "Timeline empty body"
+  },
+  "fleetMockTimelinePartial": "Some history could not be loaded. The list may be incomplete.",
+  "@fleetMockTimelinePartial": {
+    "description": "Timeline partial failure notice"
+  },
+  "fleetMockSnapshotTitle": "Financial snapshot",
+  "@fleetMockSnapshotTitle": {
+    "description": "Vehicle 360 costs card title"
+  },
+  "fleetMockOpenFinReport": "Open full financial report",
+  "@fleetMockOpenFinReport": {
+    "description": "Link to the financial report"
+  },
+  "fleetMockFinReportTitle": "Financial report",
+  "@fleetMockFinReportTitle": {
+    "description": "Financial report screen title"
+  },
+  "fleetMockFinScopeNote": "Single-asset report, values shown only in {currency}",
+  "@fleetMockFinScopeNote": {
+    "description": "Financial report scope line",
+    "placeholders": {
+      "currency": {
+        "type": "String"
+      }
+    }
+  },
+  "fleetMockFinVsYear": "vs same period {year}",
+  "@fleetMockFinVsYear": {
+    "description": "Comparison label",
+    "placeholders": {
+      "year": {
+        "type": "String"
+      }
+    }
+  },
+  "fleetMockFinTotalOperating": "Total operating cost",
+  "@fleetMockFinTotalOperating": {
+    "description": "KPI label"
+  },
+  "fleetMockFinMaintenance": "Maintenance",
+  "@fleetMockFinMaintenance": {
+    "description": "KPI label: cost excluding tyres"
+  },
+  "fleetMockFinCostPerKm": "Cost per km",
+  "@fleetMockFinCostPerKm": {
+    "description": "KPI label"
+  },
+  "fleetMockFinCostPerHour": "Cost per engine hour",
+  "@fleetMockFinCostPerHour": {
+    "description": "KPI label"
+  },
+  "fleetMockFinDowntime": "Downtime",
+  "@fleetMockFinDowntime": {
+    "description": "KPI label: breakdown hours"
+  },
+  "fleetMockFinHours": "{hours} hours",
+  "@fleetMockFinHours": {
+    "description": "Hours value",
+    "placeholders": {
+      "hours": {
+        "type": "String"
+      }
+    }
+  },
+  "fleetMockFinNotMeasurable": "Not measurable",
+  "@fleetMockFinNotMeasurable": {
+    "description": "A figure with no measured basis"
+  },
+  "fleetMockFinNoKmReadings": "Needs two odometer readings in the period",
+  "@fleetMockFinNoKmReadings": {
+    "description": "Why cost per km is not measurable"
+  },
+  "fleetMockFinNotRecorded": "Not recorded",
+  "@fleetMockFinNotRecorded": {
+    "description": "No value recorded"
+  },
+  "fleetMockFinNoComparison": "No data for comparison",
+  "@fleetMockFinNoComparison": {
+    "description": "No prior-year data"
+  },
+  "fleetMockFinCostTrend": "Cost trend",
+  "@fleetMockFinCostTrend": {
+    "description": "Chart title"
+  },
+  "fleetMockFinMonthlyCost": "Monthly cost ({currency})",
+  "@fleetMockFinMonthlyCost": {
+    "description": "Chart legend",
+    "placeholders": {
+      "currency": {
+        "type": "String"
+      }
+    }
+  },
+  "fleetMockFinComposition": "Cost composition",
+  "@fleetMockFinComposition": {
+    "description": "Section title"
+  },
+  "fleetMockFinBucketParts": "Spare parts",
+  "@fleetMockFinBucketParts": {
+    "description": "Cost bucket"
+  },
+  "fleetMockFinBucketLubricants": "Oil and lubricants",
+  "@fleetMockFinBucketLubricants": {
+    "description": "Cost bucket"
+  },
+  "fleetMockFinBucketTyres": "Tyres",
+  "@fleetMockFinBucketTyres": {
+    "description": "Cost bucket"
+  },
+  "fleetMockFinBucketLabour": "Labour",
+  "@fleetMockFinBucketLabour": {
+    "description": "Cost bucket"
+  },
+  "fleetMockFinRecentEntries": "Recent cost entries",
+  "@fleetMockFinRecentEntries": {
+    "description": "Section title"
+  },
+  "fleetMockFinViewAll": "View all cost entries ({count})",
+  "@fleetMockFinViewAll": {
+    "description": "Expand cost entries",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fleetMockFinShowFewer": "Show fewer",
+  "@fleetMockFinShowFewer": {
+    "description": "Collapse cost entries"
+  },
+  "fleetMockFinLines": "{count, plural, =1{1 line} other{{count} lines}}",
+  "@fleetMockFinLines": {
+    "description": "Number of grid lines in an entry",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fleetMockFinExport": "Export report",
+  "@fleetMockFinExport": {
+    "description": "Export the report as PDF"
+  },
+  "fleetMockFinExportError": "The report could not be exported. Try again.",
+  "@fleetMockFinExportError": {
+    "description": "Export failure"
+  },
+  "fleetMockFinNoCostTitle": "No cost recorded",
+  "@fleetMockFinNoCostTitle": {
+    "description": "Empty cost state title"
+  },
+  "fleetMockFinNoCostBody": "No expense lines or job card labour were recorded for this asset in the selected period.",
+  "@fleetMockFinNoCostBody": {
+    "description": "Empty cost state body"
+  },
+  "fleetMockFinMixedTitle": "More than one currency",
+  "@fleetMockFinMixedTitle": {
+    "description": "Mixed currency state title"
+  },
+  "fleetMockFinMixedBody": "This asset's cost lines use {currencies}. Totals are never added across currencies. Choose one country to see its figures.",
+  "@fleetMockFinMixedBody": {
+    "description": "Mixed currency state body",
+    "placeholders": {
+      "currencies": {
+        "type": "String"
+      }
+    }
+  },
+  "fleetMockFinLabourMissing": "Labour from job cards is not included.",
+  "@fleetMockFinLabourMissing": {
+    "description": "Labour could not be read or no country scope"
+  },
+  "fleetMockFinSourceNote": "Parts, oil and tyres from the expense grid. Labour and downtime from job cards. No budget is recorded for this asset.",
+  "@fleetMockFinSourceNote": {
+    "description": "Where the report figures come from"
+  },
+  "fleetMockFinMeters": "Meters in period",
+  "@fleetMockFinMeters": {
+    "description": "Meter summary label"
+  },
+  "fleetMockFinDistance": "Distance",
+  "@fleetMockFinDistance": {
+    "description": "Measured km in period"
+  },
+  "fleetMockFinRunningHours": "Engine hours",
+  "@fleetMockFinRunningHours": {
+    "description": "Measured engine hours in period"
+  },
+  "myWorkAllSites": "All assigned sites",
+  "@myWorkAllSites": {
+    "description": "Field plan site filter: no site selected"
+  },
+  "myWorkAnswered": "{answered}/{total} answered",
+  "@myWorkAnswered": {
+    "description": "Checklist draft progress",
+    "placeholders": {
+      "answered": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "myWorkApprovalQueues": "Approval queues",
+  "@myWorkApprovalQueues": {
+    "description": "Approval queues card title"
+  },
+  "myWorkAssignedTo": "Assigned to",
+  "@myWorkAssignedTo": {
+    "description": "Corrective action detail label"
+  },
+  "myWorkChecklistApprovals": "General checklist approvals",
+  "@myWorkChecklistApprovals": {
+    "description": "Checklist approval queue tile"
+  },
+  "myWorkCompletedEmpty": "No completed work yet",
+  "@myWorkCompletedEmpty": {
+    "description": "Completed tab empty title"
+  },
+  "myWorkContentAvailable": "{languages} content available",
+  "@myWorkContentAvailable": {
+    "description": "Languages a checklist carries besides English",
+    "placeholders": {
+      "languages": {
+        "type": "String"
+      }
+    }
+  },
+  "myWorkContentLanguage": "Checklist content language",
+  "@myWorkContentLanguage": {
+    "description": "Checklist content language selector title"
+  },
+  "myWorkDayEmpty": "Nothing planned for this day",
+  "@myWorkDayEmpty": {
+    "description": "Field plan empty day"
+  },
+  "myWorkDraftSaved": "Draft saved",
+  "@myWorkDraftSaved": {
+    "description": "Draft on device indicator"
+  },
+  "myWorkDueOn": "Due {date}",
+  "@myWorkDueOn": {
+    "description": "Due date label",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "myWorkDueToday": "Due today",
+  "@myWorkDueToday": {
+    "description": "Due today label"
+  },
+  "myWorkEmptyBody": "Work assigned to you or your role appears here.",
+  "@myWorkEmptyBody": {
+    "description": "Empty state body"
+  },
+  "myWorkEmptyFiltered": "No work matches this filter",
+  "@myWorkEmptyFiltered": {
+    "description": "Empty state with search or filter"
+  },
+  "myWorkEmptyTitle": "Nothing assigned",
+  "@myWorkEmptyTitle": {
+    "description": "Empty state title"
+  },
+  "myWorkFieldPlanTitle": "Today's field plan",
+  "@myWorkFieldPlanTitle": {
+    "description": "Field plan screen title"
+  },
+  "myWorkFilterAll": "All types",
+  "@myWorkFilterAll": {
+    "description": "Filter menu: all types"
+  },
+  "myWorkFilterTooltip": "Filter by type",
+  "@myWorkFilterTooltip": {
+    "description": "Filter button tooltip"
+  },
+  "myWorkHistory": "View my work history",
+  "@myWorkHistory": {
+    "description": "Work history link"
+  },
+  "myWorkInspectionApprovals": "Tyre inspection approvals",
+  "@myWorkInspectionApprovals": {
+    "description": "Inspection approval queue tile"
+  },
+  "myWorkKindChecklist": "Checklist",
+  "@myWorkKindChecklist": {
+    "description": "Work kind label"
+  },
+  "myWorkKindCorrective": "Corrective action",
+  "@myWorkKindCorrective": {
+    "description": "Work kind label"
+  },
+  "myWorkKindDraft": "Checklist draft",
+  "@myWorkKindDraft": {
+    "description": "Work kind label"
+  },
+  "myWorkKindInspection": "Tyre inspection",
+  "@myWorkKindInspection": {
+    "description": "Work kind label"
+  },
+  "myWorkKindWorkOrder": "Work order",
+  "@myWorkKindWorkOrder": {
+    "description": "Work kind label"
+  },
+  "myWorkLateDays": "{count, plural, =1{1 day} other{{count} days}}",
+  "@myWorkLateDays": {
+    "description": "Overdue duration in days",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "myWorkLateHours": "{count} h",
+  "@myWorkLateHours": {
+    "description": "Overdue duration in hours",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "myWorkLateMinutes": "{count} min",
+  "@myWorkLateMinutes": {
+    "description": "Overdue duration in minutes",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "myWorkLoadError": "My work could not be loaded right now.",
+  "@myWorkLoadError": {
+    "description": "Load error message"
+  },
+  "myWorkNoDueDate": "No due date",
+  "@myWorkNoDueDate": {
+    "description": "Item without due date"
+  },
+  "myWorkNotRecorded": "Not recorded",
+  "@myWorkNotRecorded": {
+    "description": "Missing value"
+  },
+  "myWorkOverdueBy": "Overdue by",
+  "@myWorkOverdueBy": {
+    "description": "Overdue prefix"
+  },
+  "myWorkPartial": "Some work could not be checked: {sources}.",
+  "@myWorkPartial": {
+    "description": "Partial load banner",
+    "placeholders": {
+      "sources": {
+        "type": "String"
+      }
+    }
+  },
+  "myWorkPriority": "Priority",
+  "@myWorkPriority": {
+    "description": "Priority label"
+  },
+  "myWorkReportIssue": "Report an issue",
+  "@myWorkReportIssue": {
+    "description": "Report issue button"
+  },
+  "myWorkResume": "Resume",
+  "@myWorkResume": {
+    "description": "Resume action"
+  },
+  "myWorkRetry": "Retry",
+  "@myWorkRetry": {
+    "description": "Retry action"
+  },
+  "myWorkSearchHint": "Search task, asset or site",
+  "@myWorkSearchHint": {
+    "description": "Search field hint"
+  },
+  "myWorkSearchTooltip": "Search",
+  "@myWorkSearchTooltip": {
+    "description": "Search button tooltip"
+  },
+  "myWorkSectionComingUp": "Coming up",
+  "@myWorkSectionComingUp": {
+    "description": "Upcoming group label"
+  },
+  "myWorkSectionCompleted": "Completed",
+  "@myWorkSectionCompleted": {
+    "description": "Section label"
+  },
+  "myWorkSectionDueToday": "Due today",
+  "@myWorkSectionDueToday": {
+    "description": "Section label"
+  },
+  "myWorkSectionInProgress": "In progress",
+  "@myWorkSectionInProgress": {
+    "description": "Section label"
+  },
+  "myWorkSectionOverdue": "Overdue",
+  "@myWorkSectionOverdue": {
+    "description": "Section label"
+  },
+  "myWorkSectionWorkOrders": "Work orders",
+  "@myWorkSectionWorkOrders": {
+    "description": "Section label"
+  },
+  "myWorkSourceApprovals": "approval queues",
+  "@myWorkSourceApprovals": {
+    "description": "Source name in partial banner"
+  },
+  "myWorkSourceChecklists": "checklists",
+  "@myWorkSourceChecklists": {
+    "description": "Source name in partial banner"
+  },
+  "myWorkSourceCorrective": "corrective actions",
+  "@myWorkSourceCorrective": {
+    "description": "Source name in partial banner"
+  },
+  "myWorkSourceDrafts": "drafts on this device",
+  "@myWorkSourceDrafts": {
+    "description": "Source name in partial banner"
+  },
+  "myWorkSourcePlans": "inspection plans",
+  "@myWorkSourcePlans": {
+    "description": "Source name in partial banner"
+  },
+  "myWorkSourceWorkOrders": "work orders",
+  "@myWorkSourceWorkOrders": {
+    "description": "Source name in partial banner"
+  },
+  "myWorkStart": "Start",
+  "@myWorkStart": {
+    "description": "Start action"
+  },
+  "myWorkStartInspection": "Start inspection",
+  "@myWorkStartInspection": {
+    "description": "Start inspection action"
+  },
+  "myWorkStatAssigned": "Assigned",
+  "@myWorkStatAssigned": {
+    "description": "Stat label"
+  },
+  "myWorkStatCompleted": "Completed",
+  "@myWorkStatCompleted": {
+    "description": "Stat label"
+  },
+  "myWorkStatDueToday": "Due today",
+  "@myWorkStatDueToday": {
+    "description": "Stat label"
+  },
+  "myWorkStatOverdue": "Overdue",
+  "@myWorkStatOverdue": {
+    "description": "Stat label"
+  },
+  "myWorkStatTasks": "Tasks",
+  "@myWorkStatTasks": {
+    "description": "Stat label"
+  },
+  "myWorkStateCompleted": "Completed",
+  "@myWorkStateCompleted": {
+    "description": "State chip"
+  },
+  "myWorkStateDueToday": "Due today",
+  "@myWorkStateDueToday": {
+    "description": "State chip"
+  },
+  "myWorkStateInProgress": "In progress",
+  "@myWorkStateInProgress": {
+    "description": "State chip"
+  },
+  "myWorkStateOverdue": "Overdue",
+  "@myWorkStateOverdue": {
+    "description": "State chip"
+  },
+  "myWorkStateUpcoming": "Upcoming",
+  "@myWorkStateUpcoming": {
+    "description": "State chip"
+  },
+  "myWorkStatus": "Status",
+  "@myWorkStatus": {
+    "description": "Status label"
+  },
+  "myWorkSyncPending": "{count} waiting to sync",
+  "@myWorkSyncPending": {
+    "description": "Pending offline queue count",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "myWorkTabAssigned": "Assigned",
+  "@myWorkTabAssigned": {
+    "description": "Tab label"
+  },
+  "myWorkTabCompleted": "Completed",
+  "@myWorkTabCompleted": {
+    "description": "Tab label"
+  },
+  "myWorkTabInProgress": "In progress",
+  "@myWorkTabInProgress": {
+    "description": "Tab label"
+  },
+  "myWorkTasksTitle": "My tasks",
+  "@myWorkTasksTitle": {
+    "description": "My tasks screen title"
+  },
+  "myWorkTyreWorkflowTag": "Specialised tyre workflow",
+  "@myWorkTyreWorkflowTag": {
+    "description": "Tag on inspection plan rows"
+  },
+  "myWorkView": "View",
+  "@myWorkView": {
+    "description": "View action"
+  },
+  "clMockDueNow": "Due now",
+  "@clMockDueNow": {
+    "description": "Checklist hub: assignment due today."
+  },
+  "clMockDueTomorrow": "Due tomorrow",
+  "@clMockDueTomorrow": {
+    "description": "Checklist hub: assignment due tomorrow."
+  },
+  "clMockDueOn": "Due {date}",
+  "@clMockDueOn": {
+    "description": "Checklist hub: assignment due on a later day.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "clMockCadenceDaily": "Daily",
+  "@clMockCadenceDaily": {
+    "description": "Checklist cadence from min_interval_days = 1."
+  },
+  "clMockCadenceWeekly": "Weekly",
+  "@clMockCadenceWeekly": {
+    "description": "Checklist cadence from min_interval_days = 7."
+  },
+  "clMockCadenceMonthly": "Monthly",
+  "@clMockCadenceMonthly": {
+    "description": "Checklist cadence of about a month."
+  },
+  "clMockCadenceEveryDays": "{count, plural, =1{Every day} other{Every {count} days}}",
+  "@clMockCadenceEveryDays": {
+    "description": "Checklist cadence of any other number of days.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "clMockMeterRowTitle": "Odometer & hour-meter reading",
+  "@clMockMeterRowTitle": {
+    "description": "Checklist hub row that opens the meter log for the asset."
+  },
+  "clMockMeterLastRecorded": "Last recorded {date}",
+  "@clMockMeterLastRecorded": {
+    "description": "Last odometer reading date for the asset.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "clMockMeterNoReading": "No reading recorded yet",
+  "@clMockMeterNoReading": {
+    "description": "No odometer reading found for the asset."
+  },
+  "clMockMeterRecord": "Record",
+  "@clMockMeterRecord": {
+    "description": "Button that opens the meter log."
+  },
+  "clMockPendingApproval": "Pending approval",
+  "@clMockPendingApproval": {
+    "description": "Chip on the tyre inspection row: inspections awaiting sign-off."
+  },
+  "clMockAwaitingYourApproval": "Awaiting your approval",
+  "@clMockAwaitingYourApproval": {
+    "description": "Checklist approval status when it is the reviewer's turn."
+  },
+  "clMockReviewerLabel": "Reviewer",
+  "@clMockReviewerLabel": {
+    "description": "Label above the signed-in reviewer name."
+  },
+  "clMockSubmittedOn": "Submitted {date}",
+  "@clMockSubmittedOn": {
+    "description": "When the checklist was submitted.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "clMockFilledBy": "Filled by {name}",
+  "@clMockFilledBy": {
+    "description": "Who filled in the checklist.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "clMockOperatorSignatureCaptured": "Operator signature captured",
+  "@clMockOperatorSignatureCaptured": {
+    "description": "The person who filled the sheet signed it."
+  },
+  "clMockOperatorSignatureMissing": "No operator signature",
+  "@clMockOperatorSignatureMissing": {
+    "description": "The sheet carries no operator signature."
+  },
+  "clMockRungInProgress": "In progress",
+  "@clMockRungInProgress": {
+    "description": "Sign-off ladder: the rung waiting now."
+  },
+  "clMockRungPending": "Pending",
+  "@clMockRungPending": {
+    "description": "Sign-off ladder: a rung not reached yet."
+  },
+  "clMockInspectionOutcome": "Inspection outcome",
+  "@clMockInspectionOutcome": {
+    "description": "Checklist approval outcome card title."
+  },
+  "clMockPass": "Pass",
+  "@clMockPass": {
+    "description": "Count of passed checks."
+  },
+  "clMockFail": "Fail",
+  "@clMockFail": {
+    "description": "Count of failed checks."
+  },
+  "clMockNotApplicable": "N/A",
+  "@clMockNotApplicable": {
+    "description": "Count of not-applicable checks."
+  },
+  "clMockNoChecksScored": "This sheet has no pass or fail checks",
+  "@clMockNoChecksScored": {
+    "description": "Shown when no field has a pass/fail meaning."
+  },
+  "clMockRequiredFields": "Required fields",
+  "@clMockRequiredFields": {
+    "description": "Required fields answered over total."
+  },
+  "clMockPhotos": "Photos",
+  "@clMockPhotos": {
+    "description": "Photos attached count."
+  },
+  "clMockSignatures": "Signatures",
+  "@clMockSignatures": {
+    "description": "Signatures captured count."
+  },
+  "clMockFindingsTitle": "Findings requiring review",
+  "@clMockFindingsTitle": {
+    "description": "Card listing failed checks."
+  },
+  "clMockFindingNote": "Note: {note}",
+  "@clMockFindingNote": {
+    "description": "Operator note on a failed check.",
+    "placeholders": {
+      "note": {
+        "type": "String"
+      }
+    }
+  },
+  "clMockPhotosAttached": "{count, plural, =0{No photos attached} =1{1 photo attached} other{{count} photos attached}}",
+  "@clMockPhotosAttached": {
+    "description": "Photos attached to a finding or sheet.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "clMockSectionGeneral": "General",
+  "@clMockSectionGeneral": {
+    "description": "Answers that come before the first section heading."
+  },
+  "clMockSectionFindings": "{count, plural, =1{1 finding} other{{count} findings}}",
+  "@clMockSectionFindings": {
+    "description": "Section summary: failed checks.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "clMockSectionPassed": "{passed}/{total} passed",
+  "@clMockSectionPassed": {
+    "description": "Section summary: checks passed.",
+    "placeholders": {
+      "passed": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "clMockSectionComplete": "Complete",
+  "@clMockSectionComplete": {
+    "description": "Section summary: every field answered."
+  },
+  "clMockSectionAnswered": "{answered}/{total} answered",
+  "@clMockSectionAnswered": {
+    "description": "Section summary: fields answered.",
+    "placeholders": {
+      "answered": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "clMockViewAllAnswers": "View all checklist answers",
+  "@clMockViewAllAnswers": {
+    "description": "Opens every section."
+  },
+  "clMockHideAllAnswers": "Hide checklist answers",
+  "@clMockHideAllAnswers": {
+    "description": "Closes every section."
+  },
+  "clMockReviewerAction": "Reviewer action",
+  "@clMockReviewerAction": {
+    "description": "Decision form title."
+  },
+  "clMockDecisionNote": "Decision note",
+  "@clMockDecisionNote": {
+    "description": "Note field on the decision form."
+  },
+  "clMockDecisionNoteHint": "Required when returning for correction",
+  "@clMockDecisionNoteHint": {
+    "description": "Hint under the decision note."
+  },
+  "clMockReturnForCorrection": "Return for correction",
+  "@clMockReturnForCorrection": {
+    "description": "Send the checklist back."
+  },
+  "clMockApprove": "Approve",
+  "@clMockApprove": {
+    "description": "Approve button on a supervisor rung."
+  },
+  "clMockApproveNeeds": "Sign and enter your name to approve",
+  "@clMockApproveNeeds": {
+    "description": "Why Approve is disabled."
+  },
+  "clMockDecisionRecorded": "Decision, note, signature and time are recorded.",
+  "@clMockDecisionRecorded": {
+    "description": "Footer under the decision buttons."
+  },
+  "clMockSavedSignatureApplied": "Your saved signature is filled in. Approving still needs your press.",
+  "@clMockSavedSignatureApplied": {
+    "description": "Shown when the saved signature pre-fills the pad."
+  },
+  "clMockProfileVerified": "Verified account",
+  "@clMockProfileVerified": {
+    "description": "Approved and unlocked account."
+  },
+  "clMockPendingDrafts": "Pending drafts",
+  "@clMockPendingDrafts": {
+    "description": "Profile status strip: drafts on this device."
+  },
+  "clMockActiveSite": "Active site",
+  "@clMockActiveSite": {
+    "description": "Profile workspace row."
+  },
+  "clMockCountryCurrency": "Country & currency",
+  "@clMockCountryCurrency": {
+    "description": "Profile workspace row."
+  },
+  "clMockRolesAccess": "My roles & access",
+  "@clMockRolesAccess": {
+    "description": "Profile workspace row."
+  },
+  "clMockModuleCount": "{count, plural, =1{1 module} other{{count} modules}}",
+  "@clMockModuleCount": {
+    "description": "Number of modules the user can reach.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "clMockChecklistLanguage": "Checklist content language",
+  "@clMockChecklistLanguage": {
+    "description": "Profile row for the checklist content language."
+  },
+  "clMockChecklistLanguageCaption": "Independent from app language",
+  "@clMockChecklistLanguageCaption": {
+    "description": "Caption under the checklist content language."
+  },
+  "clMockSectionSecurity": "Security & identity",
+  "@clMockSectionSecurity": {
+    "description": "Profile section title."
+  },
+  "clMockSavedSignature": "My saved signature",
+  "@clMockSavedSignature": {
+    "description": "Profile row and sheet title."
+  },
+  "clMockSignatureNotSaved": "Not saved",
+  "@clMockSignatureNotSaved": {
+    "description": "No saved signature."
+  },
+  "clMockSignatureCaptured": "Captured",
+  "@clMockSignatureCaptured": {
+    "description": "Saved signature with no date."
+  },
+  "clMockSignatureCapturedOn": "Captured · updated {date}",
+  "@clMockSignatureCapturedOn": {
+    "description": "Saved signature and when it was updated.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "clMockSignatureSheetHint": "Approval screens fill this in for you. You still press Approve yourself.",
+  "@clMockSignatureSheetHint": {
+    "description": "Explains what a saved signature is for."
+  },
+  "clMockSignatureSave": "Save as my signature",
+  "@clMockSignatureSave": {
+    "description": "Save a newly drawn signature."
+  },
+  "clMockSignatureRemove": "Remove saved signature",
+  "@clMockSignatureRemove": {
+    "description": "Delete the saved signature."
+  },
+  "clMockSignatureRemoveTitle": "Remove your saved signature?",
+  "@clMockSignatureRemoveTitle": {
+    "description": "Confirm removal title."
+  },
+  "clMockSignatureRemoveMessage": "Approvals will start with a blank signature box until you save a new one.",
+  "@clMockSignatureRemoveMessage": {
+    "description": "Confirm removal message."
+  },
+  "clMockSignatureSaveFailed": "Could not update your signature. Check your connection and try again.",
+  "@clMockSignatureSaveFailed": {
+    "description": "Signature save or remove failed."
+  },
+  "clMockOfflineDrafts": "Offline drafts",
+  "@clMockOfflineDrafts": {
+    "description": "Profile offline row."
+  },
+  "clMockDraftsStored": "{count, plural, =0{None} =1{1 stored on this device} other{{count} stored on this device}}",
+  "@clMockDraftsStored": {
+    "description": "Drafts kept on the device.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "myWorkFixIncomplete": "Only part of your {sources} could be loaded, so some work may be missing.",
+  "@myWorkFixIncomplete": {
+    "description": "My work banner line when a source hit its row ceiling and may be incomplete",
+    "placeholders": {
+      "sources": {
+        "type": "String"
+      }
+    }
+  },
+  "assetsFixFinIncompleteTitle": "Figures are incomplete",
+  "@assetsFixFinIncompleteTitle": {
+    "description": "Vehicle 360 financial report: title shown instead of totals when the cost read reached its row cap."
+  },
+  "assetsFixFinIncompleteBody": "Figures are incomplete: more than {n} entries were recorded for this asset in this window, so totals are not shown. Choose a shorter period.",
+  "@assetsFixFinIncompleteBody": {
+    "description": "Vehicle 360 costs: explains that the cost read stopped at the row cap so totals would be understated. n is the cap.",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "clFixMeterUnreadable": "Could not check last reading",
+  "@clFixMeterUnreadable": {
+    "description": "Checklists hub meter row: the last odometer reading could not be read (offline or server error). Different from no reading recorded."
+  },
+  "assetsFixFinUnlabelledTitle": "Currency not recorded",
+  "@assetsFixFinUnlabelledTitle": {
+    "description": "Vehicle 360 costs: title when some cost lines carry no currency, so no currency-labelled total is shown."
+  },
+  "assetsFixFinUnlabelledBody": "Cost lines without a currency in this period: {n}. Totals are not shown because their currency is unknown.",
+  "@assetsFixFinUnlabelledBody": {
+    "description": "Vehicle 360 costs: body when n cost lines carry money but no currency.",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "assetsFixChartSummary": "Monthly cost chart, {months} months. Highest month: {month}, {value}.",
+  "@assetsFixChartSummary": {
+    "description": "Screen reader summary of the monthly cost bar chart.",
+    "placeholders": {
+      "months": {
+        "type": "int"
+      },
+      "month": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "assetsFixChartSummaryEmpty": "Monthly cost chart, {months} months. No cost recorded.",
+  "@assetsFixChartSummaryEmpty": {
+    "description": "Screen reader summary of the monthly cost bar chart when every month is zero.",
+    "placeholders": {
+      "months": {
+        "type": "int"
+      }
+    }
+  },
+  "profileFixSignatureCouldNotCheck": "Could not check",
+  "@profileFixSignatureCouldNotCheck": {
+    "description": "Profile saved-signature row and sheet when the saved signature could not be read (no signal or no session). Distinct from 'Not saved'."
+  },
+  "profileFixSignatureRemoveFailed": "Could not remove your signature. Check your connection and try again.",
+  "@profileFixSignatureRemoveFailed": {
+    "description": "Error under the saved-signature sheet when removing the saved signature failed."
+  },
+  "designAccZoneArea": "Area",
+  "@designAccZoneArea": {
+    "description": "Damage zone sheet: area field label."
+  },
+  "designAccZoneDamageType": "Damage type",
+  "@designAccZoneDamageType": {
+    "description": "Damage zone sheet: damage type section label."
+  },
+  "designAccZoneLevel": "Level",
+  "@designAccZoneLevel": {
+    "description": "Damage zone sheet: damage level section label."
+  },
+  "designAccZoneCorrectionNote": "Correction note (optional)",
+  "@designAccZoneCorrectionNote": {
+    "description": "Damage zone sheet: optional note when the reporter corrects a suggestion."
+  },
+  "designAccZoneNote": "Note (optional)",
+  "@designAccZoneNote": {
+    "description": "Damage zone sheet: optional note field label."
+  },
+  "designAccZonePhotoUpdateFailed": "The close-up damage photos could not be updated.",
+  "@designAccZonePhotoUpdateFailed": {
+    "description": "Damage zone sheet: error when close-up photos fail to update."
+  },
+  "designAccZoneSelectedArea": "Selected area",
+  "@designAccZoneSelectedArea": {
+    "description": "Damage zone sheet: header when the marker has no number."
+  },
+  "designAccZoneSelectedAreaNumber": "Selected area {number}",
+  "@designAccZoneSelectedAreaNumber": {
+    "description": "Damage zone sheet: header naming the numbered marker.",
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "designAccZoneFinderSuggestion": "Finder suggestion",
+  "@designAccZoneFinderSuggestion": {
+    "description": "Damage zone sheet: heading of the automatic damage suggestion. Finder is a product name."
+  },
+  "designAccZoneConfirm": "Confirm",
+  "@designAccZoneConfirm": {
+    "description": "Damage zone sheet: confirm the suggestion."
+  },
+  "designAccZoneCorrect": "Correct",
+  "@designAccZoneCorrect": {
+    "description": "Damage zone sheet: correct the suggestion."
+  },
+  "designAccZoneConfirmedByReporter": "Confirmed by reporter",
+  "@designAccZoneConfirmedByReporter": {
+    "description": "Damage zone sheet: suggestion state after confirming."
+  },
+  "designAccZoneCorrectedByReporter": "Corrected by reporter",
+  "@designAccZoneCorrectedByReporter": {
+    "description": "Damage zone sheet: suggestion state after correcting."
+  },
+  "designAccZoneCloseUpPhotos": "Close-up damage photos",
+  "@designAccZoneCloseUpPhotos": {
+    "description": "Damage zone sheet: close-up photos row title."
+  },
+  "designAccZoneAddedFromEvidence": "Added from the evidence step",
+  "@designAccZoneAddedFromEvidence": {
+    "description": "Damage zone sheet: hint when photos are added later in the evidence step."
+  },
+  "designAccZoneAttachedCount": "{count} attached",
+  "@designAccZoneAttachedCount": {
+    "description": "Damage zone sheet: number of close-up photos attached.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "designAccZoneAddCloseUp": "Add close-up photo",
+  "@designAccZoneAddCloseUp": {
+    "description": "Damage zone sheet: add the first close-up photo."
+  },
+  "designAccZoneAddAnother": "Add another",
+  "@designAccZoneAddAnother": {
+    "description": "Damage zone sheet: add another close-up photo."
+  },
+  "designAccZoneSaveAndContinue": "Save area and continue",
+  "@designAccZoneSaveAndContinue": {
+    "description": "Damage zone sheet: save the new area and continue."
+  },
+  "designAccZoneRemove": "Remove",
+  "@designAccZoneRemove": {
+    "description": "Damage zone sheet: remove the marked area."
+  },
+  "designAccZoneSaveMarked": "Save marked area",
+  "@designAccZoneSaveMarked": {
+    "description": "Damage zone sheet: save an existing marked area."
+  },
+  "designAccDamageTypeDent": "Dent",
+  "@designAccDamageTypeDent": {
+    "description": "Accident damage type."
+  },
+  "designAccDamageTypeScratch": "Scratch",
+  "@designAccDamageTypeScratch": {
+    "description": "Accident damage type."
+  },
+  "designAccDamageTypeCracked": "Cracked",
+  "@designAccDamageTypeCracked": {
+    "description": "Accident damage type."
+  },
+  "designAccDamageTypeBroken": "Broken",
+  "@designAccDamageTypeBroken": {
+    "description": "Accident damage type."
+  },
+  "designAccDamageTypeMissing": "Missing",
+  "@designAccDamageTypeMissing": {
+    "description": "Accident damage type."
+  },
+  "designAccDamageTypeBent": "Bent",
+  "@designAccDamageTypeBent": {
+    "description": "Accident damage type."
+  },
+  "designAccDamageTypeOther": "Other",
+  "@designAccDamageTypeOther": {
+    "description": "Accident damage type."
+  },
+  "designAccReportStepLead": "Step {step}",
+  "@designAccReportStepLead": {
+    "description": "Accident report progress eyebrow, highlighted lead part.",
+    "placeholders": {
+      "step": {
+        "type": "int"
+      }
+    }
+  },
+  "designAccReportStepTail": " of {total}: {label}",
+  "@designAccReportStepTail": {
+    "description": "Accident report progress eyebrow, remainder after the step number. Starts with a space.",
+    "placeholders": {
+      "total": {
+        "type": "int"
+      },
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "designAccReportStepIdentifyAsset": "Identify asset",
+  "@designAccReportStepIdentifyAsset": {
+    "description": "Accident report step 1 label."
+  },
+  "designAccReportStepIncident": "Incident details",
+  "@designAccReportStepIncident": {
+    "description": "Accident report step 2 label."
+  },
+  "designAccReportStepPeople": "People and authority",
+  "@designAccReportStepPeople": {
+    "description": "Accident report step 3 label."
+  },
+  "designAccReportStepDamage": "Mark damage",
+  "@designAccReportStepDamage": {
+    "description": "Accident report step 4 label."
+  },
+  "designAccReportStepEvidence": "Evidence",
+  "@designAccReportStepEvidence": {
+    "description": "Accident report step 5 label."
+  },
+  "designAccReportStepDocuments": "Documents",
+  "@designAccReportStepDocuments": {
+    "description": "Accident report step 6 label."
+  },
+  "designAccReportStepReview": "Review and submit",
+  "@designAccReportStepReview": {
+    "description": "Accident report step 7 label."
+  },
+  "designAccReportStepDone": "Completed",
+  "@designAccReportStepDone": {
+    "description": "Accident report progress: screen-reader state of a completed step."
+  },
+  "designAccReportStepCurrent": "Current step",
+  "@designAccReportStepCurrent": {
+    "description": "Accident report progress: screen-reader state of the current step."
+  },
+  "designAccReportStepTodo": "Not started",
+  "@designAccReportStepTodo": {
+    "description": "Accident report progress: screen-reader state of a step not reached yet."
   }
 }

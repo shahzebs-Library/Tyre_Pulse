@@ -37,6 +37,11 @@ final class TyreRecord {
     this.description,
     this.remarks,
     this.country,
+    this.status,
+    this.size,
+    this.totalKm,
+    this.removalDate,
+    this.treadDepth,
   });
 
   /// Decodes one row from the columns the repository selects.
@@ -71,6 +76,11 @@ final class TyreRecord {
       description: _stringOrNull(row['description']),
       remarks: _stringOrNull(row['remarks']),
       country: _stringOrNull(row['country']),
+      status: _stringOrNull(row['status']),
+      size: _stringOrNull(row['size']),
+      totalKm: _numOrNull(row['total_km']),
+      removalDate: _stringOrNull(row['removal_date']),
+      treadDepth: _numOrNull(row['tread_depth']),
     );
   }
 
@@ -119,9 +129,35 @@ final class TyreRecord {
   final String? remarks;
   final String? country;
 
+  /// The lifecycle status exactly as stored: `Active` (on a vehicle),
+  /// `Removed` or `Scrapped` today. Fleet data, never translated.
+  final String? status;
+
+  /// The tyre size, for example `315/80R22.5`.
+  final String? size;
+
+  /// The recorded life of this tyre in km, when the import carried it.
+  final num? totalKm;
+
+  /// Raw `removal_date` text, never re-parsed (see [issueDate]).
+  final String? removalDate;
+
+  /// The last recorded tread depth in mm. Rarely populated; null when not
+  /// recorded, never zero.
+  final num? treadDepth;
+
   /// The best available position label: the canonical code, else the legacy
   /// free-text column, else null when neither was recorded.
   String? get bestPosition => tyrePosition ?? position;
+
+  /// The distance this tyre ran: the measured meter difference when both
+  /// meters are recorded, else the imported `total_km`, else null.
+  num? get kmRun {
+    final num? measured = tyreLifeKm;
+    if (measured != null) return measured;
+    final num? total = totalKm;
+    return total != null && total > 0 ? total : null;
+  }
 
   /// The distance run, when both meters were recorded and removal is
   /// genuinely after fitment. Mirrors the production screen's own guard
@@ -174,7 +210,12 @@ final class TyreRecord {
           other.kmAtRemoval == kmAtRemoval &&
           other.description == description &&
           other.remarks == remarks &&
-          other.country == country;
+          other.country == country &&
+          other.status == status &&
+          other.size == size &&
+          other.totalKm == totalKm &&
+          other.removalDate == removalDate &&
+          other.treadDepth == treadDepth;
 
   @override
   int get hashCode => Object.hash(
@@ -191,7 +232,16 @@ final class TyreRecord {
         costPerTyre,
         kmAtFitment,
         kmAtRemoval,
-        Object.hash(description, remarks, country),
+        Object.hash(
+          description,
+          remarks,
+          country,
+          status,
+          size,
+          totalKm,
+          removalDate,
+          treadDepth,
+        ),
       );
 
   @override

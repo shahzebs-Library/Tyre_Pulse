@@ -38,19 +38,110 @@ import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/permissions/module_registry.dart';
 import 'package:tyre_pulse/core/permissions/permission_providers.dart';
+import 'package:tyre_pulse/features/assets/data/asset_insights_repository.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
+import 'package:tyre_pulse/features/assets/domain/asset_financials.dart';
+import 'package:tyre_pulse/features/assets/domain/asset_timeline.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
+import 'package:tyre_pulse/features/assets/presentation/asset_insights_providers.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_detail_screen.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
+import 'package:tyre_pulse/features/assets/presentation/widgets/vehicle_360_panels.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_draft_summary.dart';
 
 const String _assetNo = 'TM514';
+
+/// A real-shaped fake of the Vehicle 360 reads: one inspection today and one
+/// grid line today, so the Timeline and Costs tabs render loaded content.
+class _FakeInsightsSource implements AssetInsightsSource {
+  _FakeInsightsSource({this.truncated = false});
+
+  static String get _today => AssetCostPeriod.isoDay(DateTime.now());
+
+  /// Simulates the grid read stopping at its row cap.
+  final bool truncated;
+
+  /// Every timeline source actually queried, in order.
+  final List<AssetTimelineFilter> queried = <AssetTimelineFilter>[];
+
+  @override
+  Future<PagedRows<Map<String, dynamic>>> costLines(
+    AssetScope scope, {
+    required String fromIso,
+    required String toIso,
+  }) async =>
+      PagedRows<Map<String, dynamic>>(
+        truncated: truncated,
+        rows: <Map<String, dynamic>>[
+          <String, dynamic>{
+            'id': 'l1',
+            'event_date': _today,
+            'currency': 'SAR',
+            'spare_cost': 1200,
+            'oil_cost': 0,
+            'tyre_cost': 0,
+            'work_order_no': 'GCKR/JC/0001',
+            'item_description': 'Filter',
+          },
+        ],
+      );
+
+  @override
+  Future<PagedRows<Map<String, dynamic>>> jobCards(
+    AssetScope scope, {
+    required String fromIso,
+    required String toIso,
+  }) async =>
+      const PagedRows<Map<String, dynamic>>(
+        rows: <Map<String, dynamic>>[],
+        truncated: false,
+      );
+
+  @override
+  Future<List<Map<String, dynamic>>> meterReadings(
+    AssetScope scope, {
+    required bool engineHours,
+    required String fromIso,
+    required String toIso,
+  }) async =>
+      const <Map<String, dynamic>>[];
+
+  @override
+  Future<List<Map<String, dynamic>>> timelineRows(
+    AssetScope scope,
+    AssetTimelineFilter source, {
+    required String fromIso,
+  }) async {
+    queried.add(source);
+    return switch (source) {
+      AssetTimelineFilter.inspections => <Map<String, dynamic>>[
+          <String, dynamic>{
+            'id': 'i1',
+            'inspection_date': _today,
+            'inspector': 'A. Rahman',
+            'approval_status': 'approved',
+          },
+        ],
+      AssetTimelineFilter.accidents => <Map<String, dynamic>>[
+          <String, dynamic>{
+            'id': 'acc1',
+            'incident_date': _today,
+            'reference_no': 'ACC-2026-0001',
+            'status': 'reported',
+          },
+        ],
+      _ => const <Map<String, dynamic>>[],
+    };
+  }
+}
 
 Future<void> _pump(
   WidgetTester tester,
   List<Override> overrides, {
   String assetNo = _assetNo,
   InspectionDraftSummary? draft,
+  bool canAccidents = true,
+  _FakeInsightsSource? source,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -59,6 +150,15 @@ Future<void> _pump(
             .overrideWith((Ref ref) => true),
         canAccessModuleProvider(ModuleKey.workorders)
             .overrideWith((Ref ref) => true),
+        canAccessModuleProvider(ModuleKey.accidents)
+            .overrideWith((Ref ref) => canAccidents),
+        canAccessModuleProvider(ModuleKey.washing)
+            .overrideWith((Ref ref) => true),
+        canAccessModuleProvider(ModuleKey.vehicles)
+            .overrideWith((Ref ref) => true),
+        assetInsightsSourceProvider.overrideWith(
+          (Ref ref) => source ?? _FakeInsightsSource(),
+        ),
         // No on-device draft unless a test says otherwise: the real provider
         // would reach the local database, which a widget test has not got.
         vehicleInspectionDraftProvider(assetNo)
@@ -230,6 +330,11 @@ void main() {
         find.byKey(VehicleDetailScreenKeys.reportIssue),
         findsOneWidget,
       );
+      // With inspection allowed, the work order lives in the overflow menu
+      // so the bar carries one primary action.
+      await tester.tap(find.byKey(VehicleDetailScreenKeys.moreActions));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
       expect(
         find.byKey(VehicleDetailScreenKeys.createWorkOrder),
         findsOneWidget,
@@ -270,31 +375,36 @@ void main() {
       expect(find.text('88,421 km'), findsWidgets);
       expect(find.byKey(VehicleDetailScreenKeys.overviewTab), findsOneWidget);
       expect(find.byKey(VehicleDetailScreenKeys.tyresTab), findsOneWidget);
-      expect(find.byKey(VehicleDetailScreenKeys.historyTab), findsOneWidget);
+      expect(find.byKey(VehicleDetailScreenKeys.timelineTab), findsOneWidget);
+      expect(find.byKey(VehicleDetailScreenKeys.costsTab), findsOneWidget);
       expect(find.byKey(VehicleDetailScreenKeys.tyreMap), findsOneWidget);
       expect(
         find.byKey(VehicleDetailScreenKeys.reportIssue),
         findsOneWidget,
       );
-      expect(
-        find.byKey(VehicleDetailScreenKeys.createWorkOrder),
-        findsOneWidget,
-      );
+      expect(find.byKey(VehicleDetailScreenKeys.inspectNow), findsOneWidget);
+      expect(find.byKey(VehicleDetailScreenKeys.moreActions), findsOneWidget);
       expect(
         tester.getTopLeft(find.byKey(VehicleDetailScreenKeys.overviewTab)).dy,
-        // The single hero card (class pill, large code, site, large class
-        // artwork, Inspect now) now sits above the facts, so the tabs
-        // start lower - still well inside the first 852pt phone screen.
+        // The single informational hero card (class pill, large code,
+        // site, large class artwork) sits above the facts; the tabs still
+        // start well inside the first 852pt phone screen.
         inInclusiveRange(300, 520),
       );
       await expectLater(
         find.byType(VehicleDetailScreen),
         matchesGoldenFile('goldens/asset_overview_light.png'),
       );
-      await tester.tap(find.byKey(VehicleDetailScreenKeys.historyTab));
+      await tester.tap(find.byKey(VehicleDetailScreenKeys.timelineTab));
       await tester.pumpAndSettle();
       expect(find.byKey(VehicleDetailScreenKeys.tyreMap), findsNothing);
-      expect(find.text('Unavailable'), findsOneWidget);
+      expect(find.byKey(Vehicle360Keys.timeline), findsOneWidget);
+      expect(find.text('Tyre inspection'), findsOneWidget);
+
+      await tester.tap(find.byKey(VehicleDetailScreenKeys.costsTab));
+      await tester.pumpAndSettle();
+      expect(find.byKey(Vehicle360Keys.costs), findsOneWidget);
+      expect(find.text('No cost recorded'), findsNothing);
 
       await tester.tap(find.byKey(VehicleDetailScreenKeys.tyresTab));
       await tester.pump(const Duration(milliseconds: 200));
@@ -346,10 +456,106 @@ void main() {
       expect(find.byKey(VehicleDetailScreenKeys.inspectNow), findsOneWidget);
       expect(find.text('Inspect now'), findsOneWidget);
       expect(find.byKey(VehicleDetailScreenKeys.reportIssue), findsOneWidget);
+      await tester.tap(find.byKey(VehicleDetailScreenKeys.moreActions));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
       expect(
         find.byKey(VehicleDetailScreenKeys.createWorkOrder),
         findsOneWidget,
       );
+    },
+  );
+
+  testWidgets(
+    'the sticky action bar carries Inspect now as its one primary action; '
+    'the hero stays informational',
+    (WidgetTester tester) async {
+      const VehicleAsset asset = VehicleAsset(
+        id: 'v1',
+        assetNo: _assetNo,
+        vehicleType: 'TR-MIXER',
+      );
+      await _pump(tester, <Override>[
+        _resolved(const VehicleDetailLoaded(asset)),
+        _canStartInspection(true),
+      ]);
+      await _pumpLoadedFrame(tester);
+
+      final Finder bar = find.byKey(VehicleDetailScreenKeys.actionBar);
+      expect(bar, findsOneWidget);
+      expect(
+        find.descendant(
+          of: bar,
+          matching: find.byKey(VehicleDetailScreenKeys.inspectNow),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(VehicleDetailScreenKeys.hero),
+          matching: find.byKey(VehicleDetailScreenKeys.inspectNow),
+        ),
+        findsNothing,
+      );
+      final TpButton primary = tester.widget<TpButton>(
+        find.byKey(VehicleDetailScreenKeys.inspectNow),
+      );
+      expect(primary.variant, TpButtonVariant.primary);
+      final TpButton report = tester.widget<TpButton>(
+        find.byKey(VehicleDetailScreenKeys.reportIssue),
+      );
+      expect(report.variant, TpButtonVariant.secondary);
+      // The work order is not a second bar button competing with it.
+      expect(find.byKey(VehicleDetailScreenKeys.createWorkOrder), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'without inspection the work order is the bar primary and there is no '
+    'overflow menu',
+    (WidgetTester tester) async {
+      const VehicleAsset asset = VehicleAsset(id: 'v1', assetNo: _assetNo);
+      await _pump(tester, <Override>[
+        _resolved(const VehicleDetailLoaded(asset)),
+        _canStartInspection(false),
+      ]);
+      await _pumpLoadedFrame(tester);
+
+      expect(find.byKey(VehicleDetailScreenKeys.moreActions), findsNothing);
+      final TpButton workOrder = tester.widget<TpButton>(
+        find.byKey(VehicleDetailScreenKeys.createWorkOrder),
+      );
+      expect(workOrder.variant, TpButtonVariant.primary);
+    },
+  );
+
+  testWidgets(
+    'the scrolling content ends above the action bar at 2x text, so the '
+    'last field is never hidden behind it',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(360, 780);
+      tester.view.devicePixelRatio = 1;
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      const VehicleAsset asset = VehicleAsset(
+        id: 'v1',
+        assetNo: _assetNo,
+        vehicleType: 'TR-MIXER',
+      );
+      await _pump(tester, <Override>[
+        _resolved(const VehicleDetailLoaded(asset)),
+        _canStartInspection(true),
+      ]);
+      await _pumpLoadedFrame(tester);
+
+      final Rect list = tester.getRect(find.byType(ListView).first);
+      final Rect bar = tester.getRect(
+        find.byKey(VehicleDetailScreenKeys.actionBar),
+      );
+      expect(list.bottom, lessThanOrEqualTo(bar.top + 0.5));
+      expect(tester.takeException(), isNull);
     },
   );
 
@@ -630,6 +836,94 @@ void main() {
       expect(find.byKey(TpStateKeys.backendUnavailable), findsNothing);
     },
   );
+
+  group('Vehicle 360 timeline access', () {
+    Future<void> openTab(WidgetTester tester, Key tab) async {
+      await tester.ensureVisible(find.byKey(tab));
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.tap(find.byKey(tab));
+      await tester.pumpAndSettle();
+    }
+
+    const VehicleAsset asset = VehicleAsset(
+      id: 'v1',
+      assetNo: _assetNo,
+      vehicleType: 'TR-MIXER',
+    );
+
+    testWidgets(
+      'a person without Accidents never has accident rows read, and the '
+      'Accidents filter is not offered',
+      (WidgetTester tester) async {
+        final _FakeInsightsSource source = _FakeInsightsSource();
+        await _pump(
+          tester,
+          <Override>[
+            _resolved(const VehicleDetailLoaded(asset)),
+            _canStartInspection(true),
+          ],
+          canAccidents: false,
+          source: source,
+        );
+        await _pumpLoadedFrame(tester);
+        await openTab(tester, VehicleDetailScreenKeys.timelineTab);
+
+        expect(source.queried, isNot(contains(AssetTimelineFilter.accidents)));
+        expect(source.queried, contains(AssetTimelineFilter.inspections));
+        expect(find.text('Accident reported'), findsNothing);
+        expect(find.textContaining('ACC-2026-0001'), findsNothing);
+
+        await tester.tap(find.byKey(Vehicle360Keys.timelineFilter));
+        await tester.pumpAndSettle();
+        expect(find.text('Accidents'), findsNothing);
+        expect(find.text('Inspections'), findsWidgets);
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'a person with Accidents gets the accident source read and offered',
+      (WidgetTester tester) async {
+        final _FakeInsightsSource source = _FakeInsightsSource();
+        await _pump(
+          tester,
+          <Override>[
+            _resolved(const VehicleDetailLoaded(asset)),
+            _canStartInspection(true),
+          ],
+          source: source,
+        );
+        await _pumpLoadedFrame(tester);
+        await openTab(tester, VehicleDetailScreenKeys.timelineTab);
+
+        expect(source.queried, contains(AssetTimelineFilter.accidents));
+        await tester.tap(find.byKey(Vehicle360Keys.timelineFilter));
+        await tester.pumpAndSettle();
+        expect(find.text('Accidents'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'a capped cost read shows that figures are incomplete instead of '
+      'totals on the Costs snapshot',
+      (WidgetTester tester) async {
+        await _pump(
+          tester,
+          <Override>[
+            _resolved(const VehicleDetailLoaded(asset)),
+            _canStartInspection(true),
+          ],
+          source: _FakeInsightsSource(truncated: true),
+        );
+        await _pumpLoadedFrame(tester);
+        await openTab(tester, VehicleDetailScreenKeys.costsTab);
+
+        expect(find.byKey(Vehicle360Keys.costsIncomplete), findsOneWidget);
+        expect(find.textContaining('more than 5000 entries'), findsOneWidget);
+        expect(find.textContaining('SAR'), findsNothing);
+      },
+    );
+  });
 
   testWidgets(
     'the outer TpModuleGuard renders TpPermissionDeniedState when the '

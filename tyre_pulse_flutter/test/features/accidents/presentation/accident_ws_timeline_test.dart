@@ -222,12 +222,49 @@ void main() {
     expect(find.text('by Recorded reporter'), findsOneWidget);
     expect(find.text('GPS 24.71000, 46.67000'), findsOneWidget);
     expect(find.text('Verified 1/2'), findsOneWidget);
-    expect(find.text('Sent'), findsOneWidget);
+    // "Sent" once on the feed row and once in the delivery-log preview.
+    expect(find.text('Sent'), findsNWidgets(2));
     expect(find.textContaining('Delivered'), findsNothing);
 
+    // The delivery-log preview under the feed collapses, and "View all"
+    // opens the full log on the Notifications tab.
+    final Finder preview =
+        find.byKey(const Key('accident.timeline.logPreview'));
+    expect(preview, findsOneWidget);
+    expect(
+      find.byKey(const Key('accident.timeline.manageRecipientsCard')),
+      findsOneWidget,
+    );
+    await tester.ensureVisible(
+      find.byKey(const Key('accident.timeline.logPreview.toggle')),
+    );
+    await tester.tap(
+      find.byKey(const Key('accident.timeline.logPreview.toggle')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Sent'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const Key('accident.timeline.logPreview.toggle')),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const Key('accident.timeline.logPreview.viewAll')),
+    );
+    await tester.tap(
+      find.byKey(const Key('accident.timeline.logPreview.viewAll')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Trigger'), findsOneWidget);
+    await tester.tap(find.text('Timeline'));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(
+      find.byKey(const Key('accident.timeline.filter.emails')),
+    );
     await tester.tap(find.byKey(const Key('accident.timeline.filter.emails')));
     await tester.pumpAndSettle();
-    expect(find.text('Claim package sent'), findsOneWidget);
+    // The emails row, plus the same trigger in the delivery-log preview.
+    expect(find.text('Claim package sent'), findsNWidgets(2));
     expect(find.text('Accident reported'), findsNothing);
   });
 

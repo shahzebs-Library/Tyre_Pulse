@@ -46,6 +46,9 @@ import 'package:tyre_pulse/features/tyres/domain/tyre_fitment.dart';
 /// Stable finders for the responsive root step of the inspection wizard.
 @visibleForTesting
 abstract final class NewInspectionScreenKeys {
+  /// The pinned primary action on the tyre map step: "Edit details" while
+  /// wheels are still outstanding, "Save & Next" once every wheel is done.
+  static const Key tyresPrimaryAction = Key('inspection.tyres.primary_action');
   static const Key headerHero = Key('inspection.header.hero');
   static const Key resumeSection = Key('inspection.header.resume');
   static const Key vehicleSection = Key('inspection.header.vehicle');
@@ -69,6 +72,13 @@ abstract final class NewInspectionScreenKeys {
   static const Key tyreSelectedCard = Key('inspection.tyres.selected_card');
   static const Key tyreEvidenceRow = Key('inspection.tyres.evidence_row');
   static const Key tyreDraftChip = Key('inspection.tyres.draft_chip');
+
+  /// The worst condition recorded so far, shown in the app bar once any
+  /// wheel has a reading (the Draft chip shows until then).
+  static const Key tyreOverallStatus = Key('inspection.tyres.overall_status');
+
+  /// The machine meter row inside the selected-tyre panel.
+  static const Key tyreMeterRow = Key('inspection.tyres.meter_row');
 
   static Key resumeVehicleClass(String assetNo) =>
       ValueKey<String>('inspection.resume.$assetNo.vehicle_class');
@@ -545,9 +555,7 @@ class _ResumeDraftRow extends StatelessWidget {
             ),
           ),
           Icon(
-            TpDirection.isRtl(context)
-                ? Icons.chevron_left
-                : Icons.chevron_right,
+            Icons.chevron_right,
             color: palette.textMuted,
           ),
         ],
@@ -1434,9 +1442,7 @@ class _VehicleChip extends StatelessWidget {
                         const SizedBox(height: TpSpace.sm),
                       ],
                       Icon(
-                        TpDirection.isRtl(context)
-                            ? Icons.chevron_left_rounded
-                            : Icons.chevron_right_rounded,
+                        Icons.chevron_right_rounded,
                         color: palette.textSecondary,
                       ),
                     ],
@@ -1514,23 +1520,37 @@ class _TyresStepState extends ConsumerState<_TyresStep> {
       backgroundColor: palette.surface,
       backFallback: TpBackFallbacks.forRoute(const NewInspectionRoute()),
       appBar: TpAppBar(
-        title: l10n.inspectionDetailTitle,
+        title: l10n.tyreMockInspectionTitle,
+        subtitle: <String>[
+          if (state.selectedAssetNo.trim().isNotEmpty)
+            state.selectedAssetNo.trim(),
+          if (state.selectedSite.trim().isNotEmpty) state.selectedSite.trim(),
+        ].join(' · '),
         onBack: () => controller.backToHeader(),
         actions: <Widget>[
           Padding(
             padding: const EdgeInsetsDirectional.only(end: TpSpace.lg),
             child: Center(
-              child: _InspectionDraftChip(
-                label: l10n.inspectionDraftLabel,
-              ),
+              child: _overallStatus(state) == null
+                  ? _InspectionDraftChip(label: l10n.inspectionDraftLabel)
+                  : TpStatusChip(
+                      key: NewInspectionScreenKeys.tyreOverallStatus,
+                      status: _overallStatus(state)!,
+                      label: _overallStatusLabel(l10n, _overallStatus(state)!),
+                      icon: _overallStatus(state) == TpStatus.ok
+                          ? Icons.check_circle_rounded
+                          : Icons.error_rounded,
+                    ),
             ),
           ),
         ],
       ),
-      bottomNavigationBar: _InspectionTyresActionBar(
-        label: l10n.inspectionSaveAndNext,
-        enabled: state.canAdvanceToReview,
-        onPressed: controller.advanceToReview,
+      bottomNavigationBar: _tyresActionBar(
+        context,
+        ref,
+        l10n,
+        state,
+        selectedPosition,
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
@@ -1612,11 +1632,44 @@ class _TyresStepState extends ConsumerState<_TyresStep> {
               onSelect: (String position) =>
                   setState(() => _selectedPosition = position),
               onEdit: () => _openEditor(context, ref, selectedPosition),
+              // While wheels are outstanding the pinned bar IS "Edit details"
+              // for this tyre, so the card does not repeat it: one primary
+              // action on screen at a time.
+              showEditButton: state.canAdvanceToReview,
+              odometerKm: state.odometerInput.value,
+              hourMeter: state.hourMeterInput.value,
             ),
         ],
       ),
     );
   }
+
+  /// The worst condition recorded on this inspection so far, or null when no
+  /// wheel has a reading yet. Critical beats attention beats good.
+  TpStatus? _overallStatus(InspectionWizardState state) {
+    TpStatus? worst;
+    int rank(TpStatus status) => switch (status) {
+          TpStatus.critical => 3,
+          TpStatus.warning => 2,
+          TpStatus.ok => 1,
+          _ => 0,
+        };
+    for (final TyrePositionReading reading in state.tyreConditions.values) {
+      if (!reading.isTouched) continue;
+      final TpStatus status =
+          tyreConditionStatus(normaliseCondition(reading.condition));
+      if (rank(status) == 0) continue;
+      if (worst == null || rank(status) > rank(worst)) worst = status;
+    }
+    return worst;
+  }
+
+  String _overallStatusLabel(AppLocalizations l10n, TpStatus status) =>
+      switch (status) {
+        TpStatus.critical => l10n.statusCritical,
+        TpStatus.warning => l10n.statusWarning,
+        _ => l10n.tyreConditionGood,
+      };
 
   /// The wheel [delta] steps away from [position] in layout order, wrapping
   /// at either end. `null` when there is no other wheel to move to.
@@ -1641,6 +1694,45 @@ class _TyresStepState extends ConsumerState<_TyresStep> {
       if (state.tyreConditions[position]?.isTouched != true) return position;
     }
     return null;
+  }
+
+  /// The pinned bar never sits disabled while the inspector works. Until
+  /// every wheel is recorded it opens the editor for the selected tyre (or
+  /// the next outstanding one); once the inspection can advance it becomes
+  /// "Save & Next".
+  Widget _tyresActionBar(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l10n,
+    InspectionWizardState state,
+    String? selectedPosition,
+  ) {
+    if (state.canAdvanceToReview) {
+      return _InspectionTyresActionBar(
+        label: l10n.inspectionSaveAndNext,
+        onPressed: ref
+            .read(inspectionWizardControllerProvider.notifier)
+            .advanceToReview,
+      );
+    }
+    final String? target = selectedPosition ?? _nextOutstanding(state);
+    if (target == null) {
+      // No wheel to act on and nothing to advance: honest disabled state.
+      return _InspectionTyresActionBar(
+        label: l10n.inspectionSaveAndNext,
+        onPressed: null,
+      );
+    }
+    return _InspectionTyresActionBar(
+      label: l10n.tyreDetailEditDetailsButton,
+      icon: Icons.edit_outlined,
+      onPressed: () {
+        if (selectedPosition == null) {
+          setState(() => _selectedPosition = target);
+        }
+        _openEditor(context, ref, target);
+      },
+    );
   }
 
   String? _resolvedSelection(InspectionWizardState state) {
@@ -1814,7 +1906,7 @@ class _TyreInspectionContextCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
                           Text(
-                            l10n.inspectionStepOfTotal(2, 4),
+                            l10n.tyreMockInspectionProgress,
                             style: Theme.of(context)
                                 .textTheme
                                 .titleSmall
@@ -1844,7 +1936,9 @@ class _TyreInspectionContextCard extends StatelessWidget {
                               ),
                         ),
                         Text(
-                          l10n.inspectionResumeProgress(checked, total),
+                          l10n.tyreMockProgressComplete(
+                            total == 0 ? 0 : (checked * 100 / total).round(),
+                          ),
                           key: NewInspectionScreenKeys.tyreWorkflowProgress,
                           style:
                               Theme.of(context).textTheme.labelSmall?.copyWith(
@@ -2087,7 +2181,18 @@ class _SelectedInspectionTyreCard extends StatelessWidget {
     required this.nextPosition,
     required this.onSelect,
     required this.onEdit,
+    this.showEditButton = true,
+    this.odometerKm,
+    this.hourMeter,
   });
+
+  /// False while the pinned action bar already offers "Edit details".
+  final bool showEditButton;
+
+  /// The odometer and hour meter entered on this inspection's header, or
+  /// null when not entered.
+  final double? odometerKm;
+  final double? hourMeter;
 
   final String position;
   final String vehicleType;
@@ -2178,13 +2283,32 @@ class _SelectedInspectionTyreCard extends StatelessWidget {
                         Row(
                           children: <Widget>[
                             Flexible(
-                              child: TpIdentifierText(
-                                canonicalCode,
-                                maxLines: 1,
+                              child: Text.rich(
+                                TextSpan(
+                                  children: <InlineSpan>[
+                                    TextSpan(text: '$description ('),
+                                    WidgetSpan(
+                                      alignment: PlaceholderAlignment.baseline,
+                                      baseline: TextBaseline.alphabetic,
+                                      child: TpIdentifierText(
+                                        canonicalCode,
+                                        maxLines: 1,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                      ),
+                                    ),
+                                    const TextSpan(text: ')'),
+                                  ],
+                                ),
+                                maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: Theme.of(context)
                                     .textTheme
-                                    .titleLarge
+                                    .titleMedium
                                     ?.copyWith(fontWeight: FontWeight.w900),
                               ),
                             ),
@@ -2321,12 +2445,17 @@ class _SelectedInspectionTyreCard extends StatelessWidget {
                   ],
                 ),
               ),
+              if (odometerKm != null || hourMeter != null) ...<Widget>[
+                const SizedBox(height: TpSpace.sm),
+                _MeterRow(odometerKm: odometerKm, hourMeter: hourMeter),
+              ],
               const SizedBox(height: TpSpace.sm),
               Row(
                 children: <Widget>[
                   Expanded(
                     child: _PanelNavButton(
                       key: const Key('inspection.tyres.previous_tyre'),
+                      caption: l10n.tyreMockPreviousTyre,
                       icon: Icons.chevron_left_rounded,
                       leading: true,
                       code: previousPosition == null
@@ -2370,6 +2499,7 @@ class _SelectedInspectionTyreCard extends StatelessWidget {
                   Expanded(
                     child: _PanelNavButton(
                       key: const Key('inspection.tyres.next_tyre'),
+                      caption: l10n.tyreMockNextTyre,
                       icon: Icons.chevron_right_rounded,
                       leading: false,
                       code: nextPosition == null
@@ -2386,18 +2516,20 @@ class _SelectedInspectionTyreCard extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: TpSpace.md),
-              _Raised(
-                radius: TpRadius.md,
-                tint: palette.primary,
-                strength: 0.8,
-                child: TpButton.primary(
-                  label: l10n.tyreDetailEditDetailsButton,
-                  icon: Icons.edit_outlined,
-                  isFullWidth: true,
-                  onPressed: onEdit,
+              if (showEditButton) ...<Widget>[
+                const SizedBox(height: TpSpace.md),
+                _Raised(
+                  radius: TpRadius.md,
+                  tint: palette.primary,
+                  strength: 0.8,
+                  child: TpButton.primary(
+                    label: l10n.tyreDetailEditDetailsButton,
+                    icon: Icons.edit_outlined,
+                    isFullWidth: true,
+                    onPressed: onEdit,
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ),
@@ -2668,8 +2800,69 @@ class _PanelActionTile extends StatelessWidget {
   }
 }
 
+/// The machine meter entered on this inspection, like the mock's
+/// "Machine meter 8,742 h" strip. Shown only when a reading was entered.
+class _MeterRow extends StatelessWidget {
+  const _MeterRow({required this.odometerKm, required this.hourMeter});
+
+  final double? odometerKm;
+  final double? hourMeter;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    final TextTheme text = Theme.of(context).textTheme;
+    final List<String> values = <String>[
+      if (odometerKm != null)
+        l10n.tyreMockKmValue(_formatMeasurement(odometerKm!)),
+      if (hourMeter != null)
+        l10n.tyreMockHoursValue(_formatMeasurement(hourMeter!)),
+    ];
+    return DecoratedBox(
+      key: NewInspectionScreenKeys.tyreMeterRow,
+      decoration: BoxDecoration(
+        color: palette.surfaceAlt,
+        borderRadius: BorderRadius.circular(TpRadius.md),
+        border: Border.all(color: palette.border),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: TpSpace.md,
+          vertical: TpSpace.sm,
+        ),
+        child: Row(
+          children: <Widget>[
+            Icon(
+              Icons.speed_outlined,
+              size: TpSizing.iconMd,
+              color: palette.textSecondary,
+            ),
+            const SizedBox(width: TpSpace.sm),
+            Text(
+              l10n.tyreMockMachineMeter,
+              style: text.labelMedium?.copyWith(color: palette.textSecondary),
+            ),
+            const SizedBox(width: TpSpace.md),
+            Expanded(
+              child: Text(
+                values.join(' · '),
+                textDirection: TextDirection.ltr,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: text.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _PanelNavButton extends StatelessWidget {
   const _PanelNavButton({
+    required this.caption,
     required this.icon,
     required this.leading,
     required this.code,
@@ -2677,6 +2870,9 @@ class _PanelNavButton extends StatelessWidget {
     required this.onTap,
     super.key,
   });
+
+  /// "Previous tyre" / "Next tyre", drawn above the position code.
+  final String caption;
 
   final IconData icon;
 
@@ -2696,14 +2892,29 @@ class _PanelNavButton extends StatelessWidget {
       color: enabled ? palette.textSecondary : palette.textMuted,
     );
     final Widget label = Flexible(
-      child: TpIdentifierText(
-        code ?? '-',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: enabled ? palette.text : palette.textMuted,
-              fontWeight: FontWeight.w700,
-            ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment:
+            leading ? CrossAxisAlignment.start : CrossAxisAlignment.end,
+        children: <Widget>[
+          Text(
+            caption,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: palette.textSecondary,
+                ),
+          ),
+          TpIdentifierText(
+            code ?? '-',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: enabled ? palette.text : palette.textMuted,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+        ],
       ),
     );
     return Semantics(
@@ -2894,13 +3105,15 @@ IconData _vehicleClassIcon(String resolvedClass) {
 class _InspectionTyresActionBar extends StatelessWidget {
   const _InspectionTyresActionBar({
     required this.label,
-    required this.enabled,
     required this.onPressed,
+    this.icon,
   });
 
   final String label;
-  final bool enabled;
-  final VoidCallback onPressed;
+  final IconData? icon;
+
+  /// Null only when there is genuinely nothing to act on.
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -2920,9 +3133,11 @@ class _InspectionTyresActionBar extends StatelessWidget {
             TpSpace.sm,
           ),
           child: TpButton.primary(
+            key: NewInspectionScreenKeys.tyresPrimaryAction,
             label: label,
+            icon: icon,
             isFullWidth: true,
-            onPressed: enabled ? onPressed : null,
+            onPressed: onPressed,
           ),
         ),
       ),

@@ -7,6 +7,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart' show DateFormat;
 import 'package:tyre_pulse/app/localization/tp_direction.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
@@ -25,7 +26,12 @@ import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.d
 import 'package:tyre_pulse/features/checklists/checklists_providers.dart';
 import 'package:tyre_pulse/features/checklists/data/checklist_draft_repository.dart';
 import 'package:tyre_pulse/features/checklists/data/checklist_remote_models.dart';
+import 'package:tyre_pulse/features/checklists/domain/checklist_due.dart';
 import 'package:tyre_pulse/features/checklists/domain/checklist_i18n.dart';
+import 'package:tyre_pulse/features/checklists/presentation/checklist_history_screen.dart';
+import 'package:tyre_pulse/features/home/domain/home_work.dart';
+import 'package:tyre_pulse/features/home/home_providers.dart';
+import 'package:tyre_pulse/features/meter_logs/data/meter_reading.dart';
 import 'package:tyre_pulse/features/scanning/presentation/asset_camera_scanner_dialog.dart';
 
 abstract final class ChecklistsHomeScreenKeys {
@@ -44,6 +50,14 @@ abstract final class ChecklistsHomeScreenKeys {
     'checklists.tyre-inspection',
   );
   static const Key history = ValueKey<String>('checklists.history');
+  static const Key masterDataVerified = ValueKey<String>(
+    'checklists.master-data-verified',
+  );
+  static const Key meterReading = ValueKey<String>('checklists.meter-reading');
+  static const Key meterRecord = ValueKey<String>('checklists.meter-record');
+  static const Key pendingApprovals = ValueKey<String>(
+    'checklists.pending-approvals',
+  );
 }
 
 class ChecklistsHomeScreen extends ConsumerStatefulWidget {
@@ -177,8 +191,33 @@ class _ChecklistsHomeScreenState extends ConsumerState<ChecklistsHomeScreen> {
     );
   }
 
-  void _openHistory() {
-    GoRouter.of(context).push(const ChecklistHistoryRoute().location);
+  void _openHistory({String? assetNo}) {
+    if (assetNo == null || assetNo.trim().isEmpty) {
+      GoRouter.of(context).push(const ChecklistHistoryRoute().location);
+      return;
+    }
+    // Same history screen, opened already filtered to this asset. The route
+    // carries no parameters, so it is pushed directly (as the vehicle card
+    // already does for the vehicle detail screen).
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) =>
+            ChecklistHistoryScreen(initialSearch: assetNo.trim()),
+      ),
+    );
+  }
+
+  void _openMeterLog(String assetNo) {
+    GoRouter.of(context).push(
+      MeterLogRoute(
+        assetNo: AssetNo(assetNo),
+        siteName: _siteForAsset(assetNo),
+      ).location,
+    );
+  }
+
+  void _openInspectionApprovals() {
+    GoRouter.of(context).push(const InspectionApprovalsRoute().location);
   }
 
   void _openTyreInspection({String? assetNo}) {
@@ -308,6 +347,9 @@ class _ChecklistsHomeScreenState extends ConsumerState<ChecklistsHomeScreen> {
       ref.invalidate(vehicleDetailProvider(selectedAssetNo));
     }
     ref.invalidate(checklistPendingSyncCountProvider);
+    if (selectedAssetNo != null) {
+      ref.invalidate(lastChecklistOdometerProvider(selectedAssetNo));
+    }
     await _load();
   }
 
@@ -329,6 +371,22 @@ class _ChecklistsHomeScreenState extends ConsumerState<ChecklistsHomeScreen> {
         ref.watch(canAccessModuleProvider(ModuleKey.inspect));
     final bool canOpenVehicles = workspace != null &&
         ref.watch(canAccessModuleProvider(ModuleKey.vehicles));
+    final bool canLogMeter = workspace != null &&
+        ref.watch(canAccessModuleProvider(ModuleKey.meter));
+    // Pending tyre-inspection sign-offs only for someone the server would
+    // actually let sign (V606) - the same gate Home uses.
+    final bool canSignInspections = workspace != null &&
+        ref.watch(canAccessModuleProvider(ModuleKey.approvals)) &&
+        ref.watch(homeCanSignInspectionApprovalsProvider);
+    final int? pendingInspectionApprovals = canInspect && canSignInspections
+        ? ref
+            .watch(homePendingInspectionApprovalsProvider)
+            .whenOrNull(data: (HomePendingApprovals value) => value.count)
+        : null;
+    final AsyncValue<LastOdometerReading?>? lastOdometer =
+        canLogMeter && selectedAssetNo != null
+            ? ref.watch(lastChecklistOdometerProvider(selectedAssetNo))
+            : null;
 
     return TpScaffold(
       backFallback: TpRoutePaths.home,
@@ -339,6 +397,8 @@ class _ChecklistsHomeScreenState extends ConsumerState<ChecklistsHomeScreen> {
         canScan: canScan,
         canInspect: canInspect,
         canOpenVehicles: canOpenVehicles,
+        lastOdometer: lastOdometer,
+        pendingInspectionApprovals: pendingInspectionApprovals,
       ),
     );
   }
@@ -350,6 +410,8 @@ class _ChecklistsHomeScreenState extends ConsumerState<ChecklistsHomeScreen> {
     required bool canScan,
     required bool canInspect,
     required bool canOpenVehicles,
+    required AsyncValue<LastOdometerReading?>? lastOdometer,
+    required int? pendingInspectionApprovals,
   }) {
     if (_loading) return const TpLoadingState();
 
@@ -371,6 +433,9 @@ class _ChecklistsHomeScreenState extends ConsumerState<ChecklistsHomeScreen> {
     VehicleAsset? selectedVehicleAsset;
     Widget? selectedVehicleState;
     bool selectedVehicleIsLive = selectedAssetNo == null;
+    // True only when the asset was read live from the fleet register
+    // (`vehicle_fleet`), never for a cached copy.
+    bool selectedVehicleVerified = false;
     selectedVehicle?.when(
       loading: () {
         selectedVehicleState = const LinearProgressIndicator();
@@ -394,6 +459,7 @@ class _ChecklistsHomeScreenState extends ConsumerState<ChecklistsHomeScreen> {
           case VehicleDetailLoaded(asset: final VehicleAsset asset):
             selectedVehicleAsset = asset;
             selectedVehicleIsLive = true;
+            selectedVehicleVerified = true;
             break;
           case VehicleDetailFromCache(
               asset: final VehicleAsset asset,
@@ -503,6 +569,7 @@ class _ChecklistsHomeScreenState extends ConsumerState<ChecklistsHomeScreen> {
               assetNo: selectedAssetNo,
               vehicle: selectedVehicleAsset,
               fallbackSite: _siteForAsset(selectedAssetNo)?.value,
+              verified: selectedVehicleVerified,
               onTap:
                   canOpenVehicles ? () => _openVehicle(selectedAssetNo) : null,
             ),
@@ -547,7 +614,8 @@ class _ChecklistsHomeScreenState extends ConsumerState<ChecklistsHomeScreen> {
               ),
             ),
           if (selectedDrafts.isNotEmpty ||
-              selectedAssignments.isNotEmpty) ...<Widget>[
+              selectedAssignments.isNotEmpty ||
+              lastOdometer != null) ...<Widget>[
             _SectionHeader(
               label: selectedAssetNo == null
                   ? l10n.checklistsAssignmentsSection
@@ -557,8 +625,16 @@ class _ChecklistsHomeScreenState extends ConsumerState<ChecklistsHomeScreen> {
               key: ChecklistsHomeScreenKeys.requiredForAsset,
               drafts: selectedDrafts,
               assignments: selectedAssignments,
+              templates: _templates,
+              now: DateTime.now(),
               onDraftTap: _resumeDraft,
               onAssignmentTap: _openAssignment,
+              meterRow: lastOdometer == null || selectedAssetNo == null
+                  ? null
+                  : _MeterReadingRow(
+                      reading: lastOdometer,
+                      onRecord: () => _openMeterLog(selectedAssetNo),
+                    ),
             ),
             const SizedBox(height: TpSpace.lg),
           ],
@@ -590,6 +666,12 @@ class _ChecklistsHomeScreenState extends ConsumerState<ChecklistsHomeScreen> {
               icon: Icons.tire_repair_outlined,
               title: l10n.checklistsTyreInspectionTitle,
               subtitle: l10n.checklistsTyreInspectionSubtitle,
+              trailing: (pendingInspectionApprovals ?? 0) > 0
+                  ? _PendingApprovalChip(
+                      count: pendingInspectionApprovals!,
+                      onTap: _openInspectionApprovals,
+                    )
+                  : null,
               onTap: () => _openTyreInspection(assetNo: selectedAssetNo),
             ),
             const SizedBox(height: TpSpace.sm),
@@ -597,8 +679,10 @@ class _ChecklistsHomeScreenState extends ConsumerState<ChecklistsHomeScreen> {
           _ChecklistHubLink(
             key: ChecklistsHomeScreenKeys.history,
             icon: Icons.description_outlined,
-            title: l10n.checklistsHistoryAction,
-            onTap: _openHistory,
+            title: selectedAssetNo == null
+                ? l10n.checklistsHistoryAction
+                : l10n.checklistsAssetHistoryTitle(selectedAssetNo),
+            onTap: () => _openHistory(assetNo: selectedAssetNo),
           ),
         ],
       ),
@@ -850,12 +934,16 @@ class _SelectedChecklistAssetCard extends StatelessWidget {
     required this.vehicle,
     required this.fallbackSite,
     required this.onTap,
+    this.verified = false,
   });
 
   final String assetNo;
   final VehicleAsset? vehicle;
   final String? fallbackSite;
   final VoidCallback? onTap;
+
+  /// The asset was read live from the fleet register (`vehicle_fleet`).
+  final bool verified;
 
   @override
   Widget build(BuildContext context) {
@@ -929,14 +1017,41 @@ class _SelectedChecklistAssetCard extends StatelessWidget {
                       const SizedBox(height: TpSpace.xs),
                       _AssetFact(icon: Icons.speed_outlined, value: km),
                     ],
+                    if (verified) ...<Widget>[
+                      const SizedBox(height: TpSpace.xs),
+                      Row(
+                        key: ChecklistsHomeScreenKeys.masterDataVerified,
+                        children: <Widget>[
+                          Icon(
+                            Icons.verified_user_outlined,
+                            size: TpSizing.iconMd,
+                            color: palette.ok.base,
+                          ),
+                          const SizedBox(width: TpSpace.xs),
+                          Expanded(
+                            child: Text(
+                              AppLocalizations.of(context)
+                                  .checklistsMasterDataVerified,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
+                                    color: palette.ok.base,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
               if (onTap != null)
                 Icon(
-                  Directionality.of(context) == TextDirection.rtl
-                      ? Icons.chevron_left_rounded
-                      : Icons.chevron_right_rounded,
+                  Icons.chevron_right_rounded,
                   color: _checklistNavy(palette),
                 ),
             ],
@@ -1045,11 +1160,16 @@ class _ChecklistLanguageOption extends StatelessWidget {
           constraints: const BoxConstraints(minHeight: 52),
           decoration: BoxDecoration(
             color: selected ? accent.withValues(alpha: 0.06) : null,
-            border: BorderDirectional(
-              start: showDivider
-                  ? BorderSide(color: palette.border)
-                  : BorderSide.none,
-            ),
+            // The selected option is marked by a 1.5px accent outline, not
+            // only a faint tint: a 6% tint alone fails non-text contrast.
+            border: selected
+                ? Border.all(color: accent, width: 1.5)
+                : BorderDirectional(
+                    start: showDivider
+                        ? BorderSide(color: palette.border)
+                        : BorderSide.none,
+                  ),
+            borderRadius: selected ? BorderRadius.circular(TpRadius.md) : null,
           ),
           alignment: Alignment.center,
           padding: const EdgeInsets.symmetric(horizontal: TpSpace.xs),
@@ -1114,42 +1234,75 @@ class _RequiredChecklistCard extends StatelessWidget {
   const _RequiredChecklistCard({
     required this.drafts,
     required this.assignments,
+    required this.templates,
+    required this.now,
     required this.onDraftTap,
     required this.onAssignmentTap,
+    this.meterRow,
     super.key,
   });
 
   final List<ChecklistDraftHeader> drafts;
   final List<ChecklistAssignmentRecord> assignments;
+  final List<ChecklistTemplateRecord> templates;
+  final DateTime now;
   final ValueChanged<ChecklistDraftHeader> onDraftTap;
   final ValueChanged<ChecklistAssignmentRecord> onAssignmentTap;
+  final Widget? meterRow;
+
+  ChecklistTemplateRecord? _templateFor(String? id) {
+    if (id == null) return null;
+    for (final ChecklistTemplateRecord t in templates) {
+      if (t.template.id == id) return t;
+    }
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
+    final String locale = Localizations.localeOf(context).toLanguageTag();
+    // Overdue and due-today first, then by due day; undated last. Keeps the
+    // one thing to do now at the top, as the approved mock shows.
+    final List<(ChecklistAssignmentRecord, ChecklistDue)> ordered =
+        <(ChecklistAssignmentRecord, ChecklistDue)>[
+      for (final ChecklistAssignmentRecord a in assignments)
+        (
+          a,
+          classifyChecklistDue(dueDate: a.dueDate, status: a.status, now: now),
+        ),
+    ]..sort((a, b) => _dueRank(a.$2).compareTo(_dueRank(b.$2)));
+
     final List<Widget> rows = <Widget>[
       for (final ChecklistDraftHeader draft in drafts)
         _RequiredChecklistRow(
           icon: Icons.fact_check_outlined,
           title: draft.templateName,
           subtitle: l10n.checklistResumeProgress(draft.filled, draft.total),
-          status: '${draft.filled}/${draft.total}',
           actionLabel: l10n.checklistResumeAction,
+          prominentAction: true,
           onTap: () => onDraftTap(draft),
         ),
-      for (final ChecklistAssignmentRecord assignment in assignments)
+      for (final (ChecklistAssignmentRecord a, ChecklistDue due) in ordered)
         _RequiredChecklistRow(
-          icon: _assignmentIcon(assignment),
-          title: assignment.templateName ?? '',
-          subtitle: <String?>[assignment.site, assignment.dueDate]
-              .whereType<String>()
-              .where((String value) => value.isNotEmpty)
-              .join('  •  '),
-          status: _assignmentStatusLabel(l10n, assignment.status),
-          urgent: assignment.status?.trim().toLowerCase() == 'overdue',
+          icon: _assignmentIcon(a),
+          title: a.templateName ?? '',
+          subtitle: _assignmentSubtitle(
+            l10n,
+            cadence: cadenceFor(_templateFor(a.templateId)?.minIntervalDays),
+            minIntervalDays: _templateFor(a.templateId)?.minIntervalDays,
+            site: a.site,
+          ),
+          status: _dueLabel(l10n, due, locale) ??
+              _assignmentStatusLabel(l10n, a.status),
+          statusTone: _dueTone(due),
+          showClock: due.kind != ChecklistDueKind.none &&
+              due.kind != ChecklistDueKind.unparsed,
           actionLabel: l10n.checklistStartAction,
-          onTap: () => onAssignmentTap(assignment),
+          prominentAction: due.isActionableNow,
+          onTap: () => onAssignmentTap(a),
         ),
+      if (meterRow != null) meterRow!,
     ];
 
     return TpCard(
@@ -1159,12 +1312,65 @@ class _RequiredChecklistCard extends StatelessWidget {
           for (int index = 0; index < rows.length; index += 1) ...<Widget>[
             rows[index],
             if (index < rows.length - 1)
-              Divider(height: 1, color: TpPalette.of(context).border),
+              Divider(
+                height: 1,
+                indent: TpSpace.lg,
+                endIndent: TpSpace.lg,
+                color: TpPalette.of(context).border,
+              ),
           ],
         ],
       ),
     );
   }
+}
+
+int _dueRank(ChecklistDue due) => switch (due.kind) {
+      ChecklistDueKind.overdue => 0,
+      ChecklistDueKind.today => 1,
+      ChecklistDueKind.tomorrow => 2,
+      ChecklistDueKind.later => 3,
+      ChecklistDueKind.unparsed => 4,
+      ChecklistDueKind.none => 5,
+    };
+
+String? _dueLabel(AppLocalizations l10n, ChecklistDue due, String locale) {
+  return switch (due.kind) {
+    ChecklistDueKind.overdue => l10n.homeOverdueMetric,
+    ChecklistDueKind.today => l10n.clMockDueNow,
+    ChecklistDueKind.tomorrow => l10n.clMockDueTomorrow,
+    ChecklistDueKind.later =>
+      l10n.clMockDueOn(DateFormat('d MMM', locale).format(due.date!)),
+    ChecklistDueKind.unparsed => due.raw,
+    ChecklistDueKind.none => null,
+  };
+}
+
+TpStatus _dueTone(ChecklistDue due) => switch (due.kind) {
+      ChecklistDueKind.overdue => TpStatus.critical,
+      ChecklistDueKind.today || ChecklistDueKind.tomorrow => TpStatus.warning,
+      _ => TpStatus.neutral,
+    };
+
+String _assignmentSubtitle(
+  AppLocalizations l10n, {
+  required ChecklistCadence cadence,
+  required int? minIntervalDays,
+  required String? site,
+}) {
+  final String? cadenceLabel = switch (cadence) {
+    ChecklistCadence.daily => l10n.clMockCadenceDaily,
+    ChecklistCadence.weekly => l10n.clMockCadenceWeekly,
+    ChecklistCadence.monthly => l10n.clMockCadenceMonthly,
+    ChecklistCadence.everyNDays => l10n.clMockCadenceEveryDays(
+        minIntervalDays ?? 0,
+      ),
+    ChecklistCadence.none => null,
+  };
+  return <String?>[cadenceLabel, site]
+      .whereType<String>()
+      .where((String value) => value.trim().isNotEmpty)
+      .join('  •  ');
 }
 
 String? _assignmentStatusLabel(AppLocalizations l10n, String? rawStatus) {
@@ -1188,120 +1394,342 @@ IconData _assignmentIcon(ChecklistAssignmentRecord assignment) {
   return Icons.fact_check_outlined;
 }
 
+class _RowIcon extends StatelessWidget {
+  const _RowIcon({required this.icon});
+
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: palette.primarySoft,
+        shape: BoxShape.circle,
+      ),
+      alignment: Alignment.center,
+      child: Icon(icon, color: _checklistNavy(palette), size: 24),
+    );
+  }
+}
+
+class _RowTexts extends StatelessWidget {
+  const _RowTexts({required this.title, required this.subtitle});
+
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          title,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                color: _checklistNavy(palette),
+                fontWeight: FontWeight.w800,
+              ),
+        ),
+        if (subtitle.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 2),
+          Text(
+            subtitle,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall
+                ?.copyWith(color: palette.textSecondary),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
 class _RequiredChecklistRow extends StatelessWidget {
   const _RequiredChecklistRow({
     required this.icon,
     required this.title,
     required this.subtitle,
-    required this.status,
     required this.actionLabel,
     required this.onTap,
-    this.urgent = false,
+    this.status,
+    this.statusTone = TpStatus.neutral,
+    this.showClock = false,
+    this.prominentAction = false,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
   final String? status;
+  final TpStatus statusTone;
+  final bool showClock;
   final String actionLabel;
+
+  /// A filled button (the thing to do now) instead of a quiet chevron.
+  final bool prominentAction;
   final VoidCallback onTap;
-  final bool urgent;
 
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
     final Color accent = _checklistAccent(palette);
-    final Color statusColor = urgent ? palette.warning.base : palette.textMuted;
+    final Color statusColor = statusTone == TpStatus.neutral
+        ? palette.textMuted
+        : palette.forStatus(statusTone).base;
+    final Widget statusWidget = status == null || status!.isEmpty
+        ? const SizedBox.shrink()
+        : Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              if (showClock) ...<Widget>[
+                Icon(Icons.schedule_rounded, size: 18, color: statusColor),
+                const SizedBox(width: 4),
+              ],
+              Flexible(
+                child: Text(
+                  status!,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: statusColor,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ),
+            ],
+          );
+    return Semantics(
+      button: true,
+      label: '$title. ${status ?? ''}',
+      excludeSemantics: false,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(TpSpace.lg),
+          child: LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              final Widget action = prominentAction
+                  ? FilledButton(
+                      onPressed: onTap,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: accent,
+                        foregroundColor: palette.onPrimary,
+                        minimumSize: const Size(64, 44),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: TpSpace.md,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(TpRadius.md),
+                        ),
+                      ),
+                      child: Text(actionLabel),
+                    )
+                  : Icon(
+                      Icons.chevron_right_rounded,
+                      color: accent,
+                      semanticLabel: actionLabel,
+                    );
+              // Narrow or large-text: status and action move under the
+              // title rather than squeezing it to nothing.
+              final bool stacked =
+                  constraints.maxWidth < (prominentAction ? 340 : 280) ||
+                      MediaQuery.textScalerOf(context).scale(1) > 1.15;
+              if (stacked) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    Row(
+                      children: <Widget>[
+                        _RowIcon(icon: icon),
+                        const SizedBox(width: TpSpace.md),
+                        Expanded(
+                          child: _RowTexts(title: title, subtitle: subtitle),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: TpSpace.sm),
+                    Padding(
+                      padding: const EdgeInsetsDirectional.only(start: 56),
+                      child: Row(
+                        children: <Widget>[
+                          Expanded(child: statusWidget),
+                          const SizedBox(width: TpSpace.sm),
+                          action,
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              }
+              return Row(
+                children: <Widget>[
+                  _RowIcon(icon: icon),
+                  const SizedBox(width: TpSpace.md),
+                  Expanded(child: _RowTexts(title: title, subtitle: subtitle)),
+                  const SizedBox(width: TpSpace.sm),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 104),
+                    child: statusWidget,
+                  ),
+                  const SizedBox(width: TpSpace.sm),
+                  action,
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// "Odometer & hour-meter reading" - the last odometer date actually
+/// recorded in `odometer_logs` for this asset, and a Record action into the
+/// meter log. Loading shows a quiet line; a read that failed says it could
+/// not check, which is a different fact from "no reading recorded yet".
+class _MeterReadingRow extends StatelessWidget {
+  const _MeterReadingRow({required this.reading, required this.onRecord});
+
+  final AsyncValue<LastOdometerReading?> reading;
+  final VoidCallback onRecord;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    final String locale = Localizations.localeOf(context).toLanguageTag();
+    // Riverpod retries a failed read, which can surface as "loading" while
+    // it still carries the error: a failure is reported as a failure either
+    // way, never as a spinner and never as "no reading".
+    final String subtitle = reading.hasError && !reading.hasValue
+        ? l10n.clFixMeterUnreadable
+        : reading.when(
+            loading: () => l10n.stateLoading,
+            error: (Object error, StackTrace stackTrace) =>
+                l10n.clFixMeterUnreadable,
+            data: (LastOdometerReading? value) {
+              final DateTime? at = value?.readingDate == null
+                  ? null
+                  : DateTime.tryParse(value!.readingDate!);
+              return at == null
+                  ? l10n.clMockMeterNoReading
+                  : l10n.clMockMeterLastRecorded(
+                      DateFormat('d MMM', locale).format(at),
+                    );
+            },
+          );
     return InkWell(
-      onTap: onTap,
+      key: ChecklistsHomeScreenKeys.meterReading,
+      onTap: onRecord,
       child: Padding(
         padding: const EdgeInsets.all(TpSpace.lg),
         child: Row(
           children: <Widget>[
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: palette.primarySoft,
-                shape: BoxShape.circle,
-              ),
-              alignment: Alignment.center,
-              child: Icon(icon, color: _checklistNavy(palette), size: 24),
-            ),
+            const _RowIcon(icon: Icons.speed_outlined),
             const SizedBox(width: TpSpace.md),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: _checklistNavy(palette),
-                          fontWeight: FontWeight.w800,
-                        ),
-                  ),
-                  if (subtitle.isNotEmpty) ...<Widget>[
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(color: palette.textSecondary),
-                    ),
-                  ],
-                ],
+              child: _RowTexts(
+                title: l10n.clMockMeterRowTitle,
+                subtitle: subtitle,
               ),
             ),
             const SizedBox(width: TpSpace.sm),
-            SizedBox(
-              width: 92,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: <Widget>[
-                  if (status != null && status!.isNotEmpty)
-                    Text(
-                      status!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                            color: statusColor,
-                            fontWeight: FontWeight.w700,
-                          ),
-                    ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: <Widget>[
-                      Flexible(
-                        child: Text(
-                          actionLabel,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style:
-                              Theme.of(context).textTheme.labelLarge?.copyWith(
-                                    color: accent,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                        ),
-                      ),
-                      const SizedBox(width: TpSpace.xs),
-                      Icon(
-                        Directionality.of(context) == TextDirection.rtl
-                            ? Icons.chevron_left_rounded
-                            : Icons.chevron_right_rounded,
-                        color: accent,
-                        size: 22,
-                      ),
-                    ],
-                  ),
-                ],
+            OutlinedButton(
+              key: ChecklistsHomeScreenKeys.meterRecord,
+              onPressed: onRecord,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _checklistAccent(palette),
+                side: BorderSide(color: _checklistAccent(palette), width: 1.5),
+                minimumSize: const Size(64, 44),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(TpRadius.md),
+                ),
               ),
+              child: Text(l10n.clMockMeterRecord),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// "Pending approval N" on the tyre-inspection row, opening the inspection
+/// approvals queue. Shown only to a person who can actually sign.
+class _PendingApprovalChip extends StatelessWidget {
+  const _PendingApprovalChip({required this.count, required this.onTap});
+
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpStatusColors colors =
+        TpPalette.of(context).forStatus(TpStatus.warning);
+    final String label = AppLocalizations.of(context).clMockPendingApproval;
+    return Semantics(
+      button: true,
+      label: '$label $count',
+      excludeSemantics: true,
+      child: InkWell(
+        key: ChecklistsHomeScreenKeys.pendingApprovals,
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(TpRadius.pill),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 36),
+          padding: const EdgeInsetsDirectional.fromSTEB(
+            TpSpace.sm,
+            4,
+            4,
+            4,
+          ),
+          decoration: BoxDecoration(
+            color: colors.soft,
+            borderRadius: BorderRadius.circular(TpRadius.pill),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: colors.onSoft,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ),
+              const SizedBox(width: TpSpace.xs),
+              Container(
+                constraints: const BoxConstraints(minWidth: 24),
+                height: 24,
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                decoration: BoxDecoration(
+                  color: colors.base,
+                  borderRadius: BorderRadius.circular(TpRadius.pill),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  count > 99 ? '99+' : '$count',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: colors.onBase,
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1315,6 +1743,7 @@ class _ChecklistHubLink extends StatelessWidget {
     required this.onTap,
     this.subtitle,
     this.badge,
+    this.trailing,
     this.expanded = false,
     super.key,
   });
@@ -1323,6 +1752,9 @@ class _ChecklistHubLink extends StatelessWidget {
   final String title;
   final String? subtitle;
   final String? badge;
+
+  /// An extra action beside the chevron (the pending-approval chip).
+  final Widget? trailing;
   final bool expanded;
   final VoidCallback onTap;
 
@@ -1383,13 +1815,15 @@ class _ChecklistHubLink extends StatelessWidget {
               const SizedBox(width: TpSpace.sm),
               _CountChip(label: badge!, status: TpStatus.info),
             ],
+            if (trailing != null) ...<Widget>[
+              const SizedBox(width: TpSpace.sm),
+              Flexible(child: trailing!),
+            ],
             const SizedBox(width: TpSpace.xs),
             Icon(
               expanded
                   ? Icons.expand_less_rounded
-                  : Directionality.of(context) == TextDirection.rtl
-                      ? Icons.chevron_left_rounded
-                      : Icons.chevron_right_rounded,
+                  : Icons.chevron_right_rounded,
               color: accent,
             ),
           ],
@@ -1653,9 +2087,7 @@ class _ChecklistRowLayout extends StatelessWidget {
             ),
             const SizedBox(width: TpSpace.xs),
             Icon(
-              Directionality.of(context) == TextDirection.rtl
-                  ? Icons.arrow_back_rounded
-                  : Icons.arrow_forward_rounded,
+              Icons.arrow_forward_rounded,
               color: actionColor,
               size: TpSizing.iconSm,
             ),

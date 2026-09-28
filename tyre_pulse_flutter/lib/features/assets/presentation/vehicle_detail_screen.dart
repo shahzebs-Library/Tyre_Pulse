@@ -66,6 +66,7 @@ import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
+import 'package:tyre_pulse/features/assets/presentation/widgets/vehicle_360_panels.dart';
 import 'package:tyre_pulse/features/assets/presentation/widgets/vehicle_multiview_board.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_draft_summary.dart';
 import 'package:tyre_pulse/features/report_issue/presentation/report_issue_copy.dart';
@@ -185,7 +186,8 @@ class _VehicleDetailBody extends ConsumerWidget {
 abstract final class VehicleDetailScreenKeys {
   static const Key overviewTab = Key('vehicle_detail.tab.overview');
   static const Key tyresTab = Key('vehicle_detail.tab.tyres');
-  static const Key historyTab = Key('vehicle_detail.tab.history');
+  static const Key timelineTab = Key('vehicle_detail.tab.timeline');
+  static const Key costsTab = Key('vehicle_detail.tab.costs');
   static const Key tyreMap = Key('vehicle_detail.tyre_map');
   static const Key tyreMapNotRecorded =
       Key('vehicle_detail.tyre_map.not_recorded');
@@ -197,9 +199,11 @@ abstract final class VehicleDetailScreenKeys {
   static const Key heroPhoto = Key('vehicle_detail.hero_photo');
   static const Key inspectNow = Key('vehicle_detail.inspect_now');
   static const Key draftReadiness = Key('vehicle_detail.draft_readiness');
+  static const Key actionBar = Key('vehicle_detail.action_bar');
+  static const Key moreActions = Key('vehicle_detail.more_actions');
 }
 
-enum _AssetDetailTab { overview, tyres, history }
+enum _AssetDetailTab { overview, tyres, timeline, costs }
 
 /// The approved asset overview keeps the high-value identity, two compact
 /// facts, tabs, vehicle-specific tyre map and primary action in the first
@@ -275,15 +279,19 @@ class _DetailViewState extends ConsumerState<_DetailView> {
       builder: (BuildContext context, BoxConstraints constraints) {
         final double horizontalPadding =
             constraints.maxWidth >= 720 ? TpSpace.xxl : TpSpace.lg;
-        return Stack(
+        // A Column, not a Stack over a guessed bottom padding: the action
+        // bar lays out at its own height (which grows with the reader's
+        // text size), and the scrolling content ends exactly above it, so
+        // the last field is never hidden behind the bar.
+        return Column(
           children: <Widget>[
-            Positioned.fill(
+            Expanded(
               child: ListView(
                 padding: EdgeInsets.fromLTRB(
                   horizontalPadding,
                   TpSpace.md,
                   horizontalPadding,
-                  assetCode == null ? TpSpace.xxxl : 92,
+                  assetCode == null ? TpSpace.xxxl : TpSpace.lg,
                 ),
                 children: <Widget>[
                   Center(
@@ -298,9 +306,6 @@ class _DetailViewState extends ConsumerState<_DetailView> {
                             status: displayStatus,
                             draft: draft,
                             l10n: l10n,
-                            onInspect: canInspect && assetCode != null
-                                ? () => _startInspection(context, assetCode)
-                                : null,
                           ),
                           const SizedBox(height: TpSpace.md),
                           _AssetMetricGrid(metrics: metrics),
@@ -309,7 +314,8 @@ class _DetailViewState extends ConsumerState<_DetailView> {
                             selected: _selectedTab,
                             overviewLabel: l10n.tyreDetailSectionOverview,
                             tyresLabel: l10n.globalSearchSectionTyres,
-                            historyLabel: l10n.tabHistory,
+                            timelineLabel: l10n.fleetMockTabTimeline,
+                            costsLabel: l10n.fleetMockTabCosts,
                             onSelect: (_AssetDetailTab tab) =>
                                 setState(() => _selectedTab = tab),
                           ),
@@ -328,9 +334,13 @@ class _DetailViewState extends ConsumerState<_DetailView> {
                                   asset: asset,
                                   l10n: l10n,
                                 ),
-                              _AssetDetailTab.history => _HistoryPanel(
-                                  key: const ValueKey<String>('history'),
-                                  l10n: l10n,
+                              _AssetDetailTab.timeline => AssetTimelinePanel(
+                                  key: const ValueKey<String>('timeline'),
+                                  asset: asset,
+                                ),
+                              _AssetDetailTab.costs => AssetCostSnapshotPanel(
+                                  key: const ValueKey<String>('costs'),
+                                  asset: asset,
                                 ),
                             },
                           ),
@@ -342,26 +352,27 @@ class _DetailViewState extends ConsumerState<_DetailView> {
               ),
             ),
             if (assetCode != null)
-              Align(
-                alignment: Alignment.bottomCenter,
-                child: _StickyAssetActions(
-                  reportLabel: ReportIssueCopy.of(context)('title'),
-                  workOrderLabel: l10n.workOrderNewTitle,
-                  // One primary action per view (TpButtonVariant.primary's
-                  // own rule): when "Start inspection" is offered in the
-                  // hero, the work-order action steps down to secondary.
-                  workOrderIsPrimary: !canInspect,
-                  onReportIssue:
-                      canReportIssue ? () => _reportIssue(context) : null,
-                  onCreateWorkOrder: canCreateWorkOrder
-                      ? () => unawaited(
-                            showCreateWorkOrderSheet(
-                              context,
-                              initialAssetNo: assetCode,
-                            ),
-                          )
-                      : null,
-                ),
+              _StickyAssetActions(
+                reportLabel: ReportIssueCopy.of(context)('title'),
+                workOrderLabel: l10n.workOrderNewTitle,
+                inspectLabel: l10n.vehiclesInspectNow,
+                // The hero stays informational; the one primary action
+                // on this view lives here. When inspecting is allowed it
+                // is "Inspect now" and the work order moves into the
+                // overflow menu; otherwise the work order is primary.
+                onInspect: canInspect
+                    ? () => _startInspection(context, assetCode)
+                    : null,
+                onReportIssue:
+                    canReportIssue ? () => _reportIssue(context) : null,
+                onCreateWorkOrder: canCreateWorkOrder
+                    ? () => unawaited(
+                          showCreateWorkOrderSheet(
+                            context,
+                            initialAssetNo: assetCode,
+                          ),
+                        )
+                    : null,
               ),
           ],
         );
@@ -460,7 +471,6 @@ class _AssetHeroCard extends StatelessWidget {
     required this.status,
     required this.draft,
     required this.l10n,
-    required this.onInspect,
   });
 
   final VehicleAsset asset;
@@ -468,10 +478,6 @@ class _AssetHeroCard extends StatelessWidget {
   final String? status;
   final InspectionDraftSummary? draft;
   final AppLocalizations l10n;
-
-  /// Null when the user may not inspect (or the row has no asset code) -
-  /// the action is then not offered at all rather than shown disabled.
-  final VoidCallback? onInspect;
 
   @override
   Widget build(BuildContext context) {
@@ -591,18 +597,6 @@ class _AssetHeroCard extends StatelessWidget {
                   ),
                 ],
               ),
-              if (onInspect != null) ...<Widget>[
-                const SizedBox(height: TpSpace.lg),
-                _PrimaryLift(
-                  child: TpButton.primary(
-                    key: VehicleDetailScreenKeys.inspectNow,
-                    label: l10n.vehiclesInspectNow,
-                    icon: Icons.fact_check_outlined,
-                    isFullWidth: true,
-                    onPressed: onInspect,
-                  ),
-                ),
-              ],
             ],
           );
         },
@@ -919,14 +913,16 @@ class _AssetTabs extends StatelessWidget {
     required this.selected,
     required this.overviewLabel,
     required this.tyresLabel,
-    required this.historyLabel,
+    required this.timelineLabel,
+    required this.costsLabel,
     required this.onSelect,
   });
 
   final _AssetDetailTab selected;
   final String overviewLabel;
   final String tyresLabel;
-  final String historyLabel;
+  final String timelineLabel;
+  final String costsLabel;
   final ValueChanged<_AssetDetailTab> onSelect;
 
   @override
@@ -951,10 +947,16 @@ class _AssetTabs extends StatelessWidget {
             onTap: () => onSelect(_AssetDetailTab.tyres),
           ),
           _AssetTabButton(
-            key: VehicleDetailScreenKeys.historyTab,
-            label: historyLabel,
-            selected: selected == _AssetDetailTab.history,
-            onTap: () => onSelect(_AssetDetailTab.history),
+            key: VehicleDetailScreenKeys.timelineTab,
+            label: timelineLabel,
+            selected: selected == _AssetDetailTab.timeline,
+            onTap: () => onSelect(_AssetDetailTab.timeline),
+          ),
+          _AssetTabButton(
+            key: VehicleDetailScreenKeys.costsTab,
+            label: costsLabel,
+            selected: selected == _AssetDetailTab.costs,
+            onTap: () => onSelect(_AssetDetailTab.costs),
           ),
         ],
       ),
@@ -1036,19 +1038,6 @@ class _OverviewPanel extends StatelessWidget {
         _SectionHeading(label: l10n.inspectionConditionLabel),
         const SizedBox(height: TpSpace.sm),
         _AssetTyreMap(asset: asset),
-        const SizedBox(height: TpSpace.md),
-        _SectionHeading(label: l10n.tabHistory),
-        const SizedBox(height: TpSpace.sm),
-        TpCard(
-          padding: const EdgeInsets.all(TpSpace.md),
-          child: Row(
-            children: <Widget>[
-              Icon(Icons.history_rounded, color: palette.textMuted),
-              const SizedBox(width: TpSpace.sm),
-              Text(l10n.valueUnavailable),
-            ],
-          ),
-        ),
         const SizedBox(height: TpSpace.lg),
         _SectionHeading(label: l10n.tyreDetailSectionOverview),
         const SizedBox(height: TpSpace.sm),
@@ -1087,27 +1076,6 @@ class _TyresPanel extends StatelessWidget {
         const SizedBox(height: TpSpace.sm),
         _AssetTyreMap(asset: asset),
       ],
-    );
-  }
-}
-
-class _HistoryPanel extends StatelessWidget {
-  const _HistoryPanel({required this.l10n, super.key});
-
-  final AppLocalizations l10n;
-
-  @override
-  Widget build(BuildContext context) {
-    final TpPalette palette = TpPalette.of(context);
-    return TpCard(
-      padding: const EdgeInsets.all(TpSpace.lg),
-      child: Row(
-        children: <Widget>[
-          Icon(Icons.history_rounded, color: palette.textMuted),
-          const SizedBox(width: TpSpace.sm),
-          Text(l10n.valueUnavailable),
-        ],
-      ),
     );
   }
 }
@@ -1203,21 +1171,85 @@ class _StickyAssetActions extends StatelessWidget {
   const _StickyAssetActions({
     required this.reportLabel,
     required this.workOrderLabel,
+    required this.inspectLabel,
+    required this.onInspect,
     required this.onReportIssue,
     required this.onCreateWorkOrder,
-    this.workOrderIsPrimary = true,
   });
 
   final String reportLabel;
-  final bool workOrderIsPrimary;
   final String workOrderLabel;
+  final String inspectLabel;
+
+  /// Null when the user may not inspect: the action is then not offered at
+  /// all, and the work order takes the primary slot.
+  final VoidCallback? onInspect;
   final VoidCallback? onReportIssue;
   final VoidCallback? onCreateWorkOrder;
 
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
+    final VoidCallback? inspect = onInspect;
+    final VoidCallback? createWorkOrder = onCreateWorkOrder;
+    final Widget report = TpButton.secondary(
+      key: VehicleDetailScreenKeys.reportIssue,
+      label: reportLabel,
+      icon: Icons.warning_amber_rounded,
+      onPressed: onReportIssue,
+    );
+    final List<Widget> children = inspect != null
+        ? <Widget>[
+            Expanded(child: report),
+            const SizedBox(width: TpSpace.md),
+            Expanded(
+              child: _PrimaryLift(
+                child: TpButton.primary(
+                  key: VehicleDetailScreenKeys.inspectNow,
+                  label: inspectLabel,
+                  icon: Icons.fact_check_outlined,
+                  isFullWidth: true,
+                  onPressed: inspect,
+                ),
+              ),
+            ),
+            if (createWorkOrder != null) ...<Widget>[
+              const SizedBox(width: TpSpace.xs),
+              PopupMenuButton<int>(
+                key: VehicleDetailScreenKeys.moreActions,
+                tooltip: MaterialLocalizations.of(context).moreButtonTooltip,
+                icon: const Icon(Icons.more_vert_rounded),
+                onSelected: (_) => createWorkOrder(),
+                itemBuilder: (BuildContext context) => <PopupMenuEntry<int>>[
+                  PopupMenuItem<int>(
+                    key: VehicleDetailScreenKeys.createWorkOrder,
+                    value: 0,
+                    child: Row(
+                      children: <Widget>[
+                        const Icon(Icons.add_box_outlined),
+                        const SizedBox(width: TpSpace.md),
+                        Flexible(child: Text(workOrderLabel)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ]
+        : <Widget>[
+            Expanded(child: report),
+            const SizedBox(width: TpSpace.md),
+            Expanded(
+              child: TpButton.primary(
+                key: VehicleDetailScreenKeys.createWorkOrder,
+                label: workOrderLabel,
+                icon: Icons.add_box_outlined,
+                onPressed: createWorkOrder,
+              ),
+            ),
+          ];
     return Container(
+      key: VehicleDetailScreenKeys.actionBar,
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(
         TpSpace.lg,
@@ -1237,30 +1269,7 @@ class _StickyAssetActions extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: TpButton.secondary(
-              key: VehicleDetailScreenKeys.reportIssue,
-              label: reportLabel,
-              icon: Icons.warning_amber_rounded,
-              onPressed: onReportIssue,
-            ),
-          ),
-          const SizedBox(width: TpSpace.md),
-          Expanded(
-            child: TpButton(
-              key: VehicleDetailScreenKeys.createWorkOrder,
-              label: workOrderLabel,
-              icon: Icons.add_box_outlined,
-              variant: workOrderIsPrimary
-                  ? TpButtonVariant.primary
-                  : TpButtonVariant.secondary,
-              onPressed: onCreateWorkOrder,
-            ),
-          ),
-        ],
-      ),
+      child: Row(children: children),
     );
   }
 }
@@ -1331,7 +1340,8 @@ BoxShadow _softLift(TpPalette palette) => BoxShadow(
       spreadRadius: -6,
     );
 
-/// A soft brand-green glow under the one primary action on this screen.
+/// A soft brand-green glow under the one primary action on this screen
+/// (the sticky bar's "Inspect now").
 class _PrimaryLift extends StatelessWidget {
   const _PrimaryLift({required this.child});
 

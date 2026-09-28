@@ -98,10 +98,12 @@ class _TpSearchFieldState extends State<TpSearchField> {
           horizontal: TpSpace.lg,
           vertical: TpSpace.md,
         ),
+        // controlBorder: the field's outline must reach 3:1 (WCAG 1.4.11);
+        // borderStrong is 1.6:1 on white and read as no field at all.
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(TpRadius.md),
           borderSide: BorderSide(
-            color: palette.borderStrong,
+            color: palette.controlBorder,
             width: TpBorderWidth.hairline,
           ),
         ),

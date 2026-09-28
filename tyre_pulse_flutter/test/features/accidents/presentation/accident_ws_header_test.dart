@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
+import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_sla_repository.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_models.dart';
@@ -56,8 +57,37 @@ Future<void> _pump(
   await tester.pumpAndSettle();
 }
 
-String _line(WidgetTester tester, String key) =>
-    tester.widget<Text>(find.byKey(Key(key))).data ?? '';
+/// Line 1 is a rich text; line 2 is a wrap of icon + text segments. Both
+/// are read back as the sentence a reader (and screen reader) gets.
+String _line(WidgetTester tester, String key) {
+  final Finder finder = find.byKey(Key(key));
+  final Widget widget = tester.widget(finder);
+  if (widget is Text) {
+    return widget.data ?? widget.textSpan?.toPlainText() ?? '';
+  }
+  return tester
+      .widgetList<Text>(
+        find.descendant(of: finder, matching: find.byType(Text)),
+      )
+      .map((Text t) => t.data ?? '')
+      .join(' · ');
+}
+
+/// The colour the SLA segment (the last segment of line 2) is drawn in.
+Color? _slaColor(WidgetTester tester) => tester
+    .widgetList<Text>(
+      find.descendant(
+        of: find.byKey(const Key('accident.ws.header.line2')),
+        matching: find.byType(Text),
+      ),
+    )
+    .last
+    .style
+    ?.color;
+
+TpPalette _palette(WidgetTester tester) => TpPalette.of(
+      tester.element(find.byKey(const Key('accident.ws.header.line2'))),
+    );
 
 void main() {
   testWidgets('running SLA prints received, held-with and remaining time',
@@ -82,6 +112,21 @@ void main() {
     expect(
       _line(tester, 'accident.ws.header.line2'),
       'Received 14:35 · With Fleet 42m · SLA 1h 18m remaining',
+    );
+    // A running SLA is the warning tone; the words stay, colour is extra.
+    expect(_slaColor(tester), _palette(tester).warning.onSoft);
+    // The workstream name is drawn in the primary colour.
+    final Text line1 =
+        tester.widget<Text>(find.byKey(const Key('accident.ws.header.line1')));
+    final List<InlineSpan> spans =
+        (line1.textSpan! as TextSpan).children!.cast<InlineSpan>();
+    expect(
+      spans
+          .whereType<TextSpan>()
+          .firstWhere((s) => s.text == 'Fleet validation')
+          .style
+          ?.color,
+      _palette(tester).primary,
     );
     expect(tester.takeException(), isNull);
   });
@@ -130,6 +175,7 @@ void main() {
       _line(tester, 'accident.ws.header.line2'),
       'Received 14:35 · With Fleet 42m · SLA overdue by 30m',
     );
+    expect(_slaColor(tester), _palette(tester).critical.base);
   });
 
   testWidgets('a missing SLA table reads as not provisioned, not as no SLA',
@@ -144,5 +190,64 @@ void main() {
       'SLA tracking not provisioned yet',
     );
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a met SLA is the ok tone and a breached one critical',
+      (WidgetTester tester) async {
+    await _pump(
+      tester,
+      read: (_) async => <Map<String, dynamic>>[
+        <String, dynamic>{
+          'workstream_key': 'fleet_validation',
+          'start_at': _start.toIso8601String(),
+          'state': 'met',
+        },
+        <String, dynamic>{
+          'workstream_key': 'insurance',
+          'start_at': _start.toIso8601String(),
+          'state': 'breached',
+        },
+      ],
+    );
+    expect(_line(tester, 'accident.ws.header.line2'), contains('SLA met'));
+    expect(_slaColor(tester), _palette(tester).ok.onSoft);
+
+    await _pump(
+      tester,
+      read: (_) async => <Map<String, dynamic>>[
+        <String, dynamic>{
+          'workstream_key': 'insurance',
+          'start_at': _start.toIso8601String(),
+          'state': 'breached',
+        },
+      ],
+      workstreamKey: 'insurance',
+    );
+    expect(_slaColor(tester), _palette(tester).critical.base);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('line 2 is announced as one sentence',
+      (WidgetTester tester) async {
+    final SemanticsHandle handle = tester.ensureSemantics();
+    await _pump(
+      tester,
+      read: (_) async => <Map<String, dynamic>>[
+        <String, dynamic>{
+          'workstream_key': 'fleet_validation',
+          'team': 'Fleet',
+          'start_at': _start.toIso8601String(),
+          'due_at': _now.add(const Duration(minutes: 5)).toIso8601String(),
+          'state': 'running',
+        },
+      ],
+    );
+    expect(
+      find.bySemanticsLabel(
+        'Received 14:35 · With Fleet 42m · SLA 5m remaining',
+      ),
+      findsOneWidget,
+    );
+    handle.dispose();
   });
 }

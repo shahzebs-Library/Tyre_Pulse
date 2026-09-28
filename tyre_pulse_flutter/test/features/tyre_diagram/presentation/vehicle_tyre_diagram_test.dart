@@ -21,6 +21,7 @@ Future<void> _pump(
   WidgetTester tester,
   Widget diagram, {
   Locale locale = const Locale('en'),
+  TextScaler textScaler = TextScaler.noScaling,
 }) {
   return tester.pumpWidget(
     MaterialApp(
@@ -29,6 +30,10 @@ Future<void> _pump(
       locale: locale,
       supportedLocales: TpLocalizations.supportedLocales,
       localizationsDelegates: TpLocalizations.delegates,
+      builder: (BuildContext context, Widget? child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+        child: child!,
+      ),
       home: Scaffold(
         body: Center(child: SingleChildScrollView(child: diagram)),
       ),
@@ -504,6 +509,53 @@ void main() {
   );
 
   testWidgets(
+    'capture position codes grow with the text scale and are never clipped',
+    (WidgetTester tester) async {
+      final DiagramLayout layout = kTyreDiagramLayouts['Concrete pump']!;
+      final VehicleTyreDiagram diagram = VehicleTyreDiagram(
+        vehicleType: 'Concrete pump',
+        positions: layout.tyres.map((TyreSlot tyre) => tyre.id).toList(),
+        tyreData: const <String, Map<String, Object?>>{},
+        width: 366,
+        compact: true,
+        captureMode: true,
+      );
+      Finder identifier(String value) => find.byWidgetPredicate(
+            (Widget widget) =>
+                widget is TpIdentifierText && widget.value == value,
+          );
+
+      await _pump(tester, diagram);
+      final double baseHeight = tester.getRect(identifier('LHF1')).height;
+
+      // 1.3x: a short code has room across the card, so it simply grows
+      // instead of staying pinned to a fixed 10px size in a 12dp box.
+      await _pump(tester, diagram, textScaler: const TextScaler.linear(1.3));
+      expect(tester.takeException(), isNull);
+      expect(
+        tester.getRect(identifier('LHF1')).height,
+        greaterThan(baseHeight * 1.2),
+      );
+
+      // 2x: the row around every code grows with it, so no code is cut off
+      // vertically (a long code narrows to the card width, never clipped).
+      await _pump(tester, diagram, textScaler: const TextScaler.linear(2));
+      expect(tester.takeException(), isNull);
+      for (final String value in <String>['LHF1', 'LHR1-O', 'RHR1-I']) {
+        final Finder label = identifier(value);
+        final Rect text = tester.getRect(label);
+        final Rect row = tester.getRect(
+          find.ancestor(of: label, matching: find.byType(SizedBox)).first,
+        );
+        expect(row.top, lessThanOrEqualTo(text.top + 0.01));
+        expect(row.bottom, greaterThanOrEqualTo(text.bottom - 0.01));
+        expect(row.left, lessThanOrEqualTo(text.left + 0.01));
+        expect(row.right, greaterThanOrEqualTo(text.right - 0.01));
+      }
+    },
+  );
+
+  testWidgets(
     'capture cards show pressure and tread only when recorded, never a '
     'placeholder value',
     (WidgetTester tester) async {
@@ -542,7 +594,13 @@ void main() {
       expect(find.text('0 psi'), findsOneWidget);
       expect(find.textContaining(' mm'), findsOneWidget);
       expect(find.text('Worn'), findsOneWidget);
-      expect(find.text('Not recorded'), findsOneWidget);
+      // The unrecorded card carries the mock's call to action; the honest
+      // status stays in what a screen reader announces.
+      expect(find.text('Add details'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel(RegExp('RHR1.*Not recorded')),
+        findsOneWidget,
+      );
       expect(tester.takeException(), isNull);
     },
   );

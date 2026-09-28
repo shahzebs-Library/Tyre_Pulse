@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart' show DateFormat;
-import 'package:tyre_pulse/app/localization/tp_direction.dart';
 import 'package:tyre_pulse/app/router/notification_routing.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
@@ -224,7 +223,6 @@ class _NotificationCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
     final TpRoute? destination = notificationDestination(row.target);
-    final bool isRtl = TpDirection.isRtl(context);
     return Semantics(
       container: true,
       button: true,
@@ -314,9 +312,7 @@ class _NotificationCard extends StatelessWidget {
             if (destination != null) ...<Widget>[
               const SizedBox(width: TpSpace.xs),
               Icon(
-                isRtl
-                    ? Icons.chevron_left_rounded
-                    : Icons.chevron_right_rounded,
+                Icons.chevron_right_rounded,
                 color: palette.textMuted,
               ),
             ],

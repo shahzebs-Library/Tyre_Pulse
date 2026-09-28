@@ -229,7 +229,10 @@ void main() {
         rows.table(SupabaseTables.accidentDamageAssessments).single;
     expect(row.containsKey('safe_to_move'), isFalse);
     expect(row['assessment_status'], 'draft');
-    expect(find.textContaining('pending migration'), findsOneWidget);
+    expect(
+      find.textContaining('could not be stored on the server'),
+      findsOneWidget,
+    );
     expect(find.textContaining('safe_to_move'), findsOneWidget);
   });
 }

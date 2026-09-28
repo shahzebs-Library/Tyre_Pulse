@@ -698,7 +698,6 @@ class _DamageMappingWorkspaceState extends State<_DamageMappingWorkspace> {
           map: _map,
           vehicle: vehicle,
           readOnly: true,
-          onPointTap: (_) {},
         ),
         const SizedBox(height: TpSpace.md),
         Text(

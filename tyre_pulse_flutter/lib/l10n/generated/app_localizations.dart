@@ -7989,6 +7989,2509 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Create an account'**
   String get loginCreateAccount;
+
+  /// Error title.
+  ///
+  /// In en, this message translates to:
+  /// **'The assessment could not be loaded'**
+  String get accAssessmentLoadFailed;
+
+  /// Section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Safety and mobility'**
+  String get accSafetyAndMobility;
+
+  /// Yes/no question.
+  ///
+  /// In en, this message translates to:
+  /// **'Safe to move'**
+  String get accSafeToMove;
+
+  /// Yes/no question.
+  ///
+  /// In en, this message translates to:
+  /// **'Recovery / tow required'**
+  String get accRecoveryTowRequired;
+
+  /// Yes/no question.
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle off road (VOR)'**
+  String get accVehicleOffRoad;
+
+  /// Section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Damage assessment'**
+  String get accDamageAssessment;
+
+  /// Number of damage areas.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 area} other{{count} areas}}'**
+  String accDamageAreaCount(int count);
+
+  /// Empty state.
+  ///
+  /// In en, this message translates to:
+  /// **'No damage areas have been marked on this case yet.'**
+  String get accNoDamageAreas;
+
+  /// Section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Labour and parts estimate'**
+  String get accLabourAndPartsEstimate;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Labour hours'**
+  String get accLabourHours;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Labour estimate'**
+  String get accLabourEstimate;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Parts estimate'**
+  String get accPartsEstimate;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Total preliminary estimate'**
+  String get accTotalPreliminaryEstimate;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Parts available'**
+  String get accPartsAvailable;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Special order'**
+  String get accSpecialOrder;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Parts availability'**
+  String get accPartsAvailability;
+
+  /// Section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Repair route recommendation'**
+  String get accRepairRouteRecommendation;
+
+  /// Checkbox label.
+  ///
+  /// In en, this message translates to:
+  /// **'Total loss possible'**
+  String get accTotalLossPossible;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected workshop'**
+  String get accSelectedWorkshop;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'City'**
+  String get accCity;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Expected duration (days)'**
+  String get accExpectedDurationDays;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Quotation status'**
+  String get accQuotationStatus;
+
+  /// Section title with count.
+  ///
+  /// In en, this message translates to:
+  /// **'Required attachments ({count})'**
+  String accRequiredAttachments(int count);
+
+  /// Warning.
+  ///
+  /// In en, this message translates to:
+  /// **'Attach vendor quotation to enable submission to External Workshop.'**
+  String get accAttachVendorQuotation;
+
+  /// Section title.
+  ///
+  /// In en, this message translates to:
+  /// **'After submit notify'**
+  String get accAfterSubmitNotify;
+
+  /// Button.
+  ///
+  /// In en, this message translates to:
+  /// **'Save assessment'**
+  String get accSaveAssessment;
+
+  /// Button label after submit.
+  ///
+  /// In en, this message translates to:
+  /// **'Assessment submitted'**
+  String get accAssessmentSubmitted;
+
+  /// Button.
+  ///
+  /// In en, this message translates to:
+  /// **'Submit assessment and route'**
+  String get accSubmitAssessment;
+
+  /// Hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Submission needs the vendor quotation for an external route.'**
+  String get accSubmissionNeedsQuotation;
+
+  /// Appended when the server rejected optional columns.
+  ///
+  /// In en, this message translates to:
+  /// **'These fields could not be stored on the server: {fields}.'**
+  String accFieldsNotStored(String fields);
+
+  /// Snackbar.
+  ///
+  /// In en, this message translates to:
+  /// **'Assessment submitted and routed to {route}.'**
+  String accAssessmentRouted(String route);
+
+  /// Snackbar.
+  ///
+  /// In en, this message translates to:
+  /// **'Assessment saved.'**
+  String get accAssessmentSaved;
+
+  /// Snackbar.
+  ///
+  /// In en, this message translates to:
+  /// **'{document} attached.'**
+  String accDocumentAttached(String document);
+
+  /// Odometer label.
+  ///
+  /// In en, this message translates to:
+  /// **'KM'**
+  String get accKm;
+
+  /// Odometer value.
+  ///
+  /// In en, this message translates to:
+  /// **'{km} km'**
+  String accKmValue(String km);
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Plate'**
+  String get accPlate;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Site · location'**
+  String get accSiteLocation;
+
+  /// Button to open the damage map.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{View damage map · 1 area} other{View damage map · {count} areas}}'**
+  String accViewDamageMap(int count);
+
+  /// Damage row action line.
+  ///
+  /// In en, this message translates to:
+  /// **'Action: not yet assessed'**
+  String get accActionNotAssessed;
+
+  /// Damage row action line.
+  ///
+  /// In en, this message translates to:
+  /// **'Action: {value}'**
+  String accActionValue(String value);
+
+  /// Chip on the recommended route.
+  ///
+  /// In en, this message translates to:
+  /// **'Recommended'**
+  String get accRecommended;
+
+  /// Tooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload {document}'**
+  String accUploadNamedDocument(String document);
+
+  /// Error title on the insurance claim workspace.
+  ///
+  /// In en, this message translates to:
+  /// **'The claim could not be loaded'**
+  String get accClaimLoadFailed;
+
+  /// Banner when the repair route is external.
+  ///
+  /// In en, this message translates to:
+  /// **'External repair assessment'**
+  String get accClaimExternalRepairBanner;
+
+  /// Section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Claim document package'**
+  String get accClaimDocumentPackage;
+
+  /// Warning under the document package.
+  ///
+  /// In en, this message translates to:
+  /// **'Claim registration unlocks when all required documents are complete.'**
+  String get accClaimRegistrationLocked;
+
+  /// Button/tooltip to request a missing document.
+  ///
+  /// In en, this message translates to:
+  /// **'Request {document}'**
+  String accRequestDocument(String document);
+
+  /// Button.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload document'**
+  String get accUploadDocument;
+
+  /// Section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Claim registration'**
+  String get accClaimRegistration;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Insurer'**
+  String get accInsurer;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Policy no.'**
+  String get accPolicyNo;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Claim number'**
+  String get accClaimNumber;
+
+  /// Claim number placeholder before registration.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-generated after registration'**
+  String get accClaimNumberAuto;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Liability'**
+  String get accLiability;
+
+  /// Field label for our liability percentage.
+  ///
+  /// In en, this message translates to:
+  /// **'GCC liability %'**
+  String get accGccLiabilityPct;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Claim amount'**
+  String get accClaimAmount;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Deductible'**
+  String get accDeductible;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Net claimable'**
+  String get accNetClaimable;
+
+  /// Button label after registration.
+  ///
+  /// In en, this message translates to:
+  /// **'Claim registered with insurer'**
+  String get accClaimRegistered;
+
+  /// Button and dialog title.
+  ///
+  /// In en, this message translates to:
+  /// **'Register claim with insurer'**
+  String get accRegisterClaim;
+
+  /// Hint under a disabled register button.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable once all required documents are complete.'**
+  String get accClaimEnableWhenComplete;
+
+  /// Section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment and recovery'**
+  String get accPaymentAndRecovery;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Approved amount'**
+  String get accApprovedAmount;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Recovered amount'**
+  String get accRecoveredAmount;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Outstanding'**
+  String get accOutstanding;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Recovery source'**
+  String get accRecoverySource;
+
+  /// Input hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Insurer, third party, driver'**
+  String get accRecoverySourceHint;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Last updated'**
+  String get accLastUpdated;
+
+  /// Button.
+  ///
+  /// In en, this message translates to:
+  /// **'Save recovery'**
+  String get accSaveRecovery;
+
+  /// Button.
+  ///
+  /// In en, this message translates to:
+  /// **'Update recovery amount'**
+  String get accUpdateRecovery;
+
+  /// Hint under a disabled recovery button.
+  ///
+  /// In en, this message translates to:
+  /// **'Register the claim first.'**
+  String get accRegisterClaimFirst;
+
+  /// Info note.
+  ///
+  /// In en, this message translates to:
+  /// **'Recovery amounts remain editable after operational case closure. Every adjustment is timestamped and audited.'**
+  String get accRecoveryEditableNote;
+
+  /// Section title.
+  ///
+  /// In en, this message translates to:
+  /// **'After registration notify'**
+  String get accAfterRegistrationNotify;
+
+  /// Note under notify chips.
+  ///
+  /// In en, this message translates to:
+  /// **'Notification includes the claim number, document status, claim amount and next action.'**
+  String get accClaimNotificationIncludes;
+
+  /// Button.
+  ///
+  /// In en, this message translates to:
+  /// **'Save claim draft'**
+  String get accSaveClaimDraft;
+
+  /// Button.
+  ///
+  /// In en, this message translates to:
+  /// **'Complete documents'**
+  String get accCompleteDocuments;
+
+  /// Footer line.
+  ///
+  /// In en, this message translates to:
+  /// **'{owner} is monitoring SLA and missing documents.'**
+  String accCommandCenterMonitoring(String owner);
+
+  /// Role name with the command center suffix.
+  ///
+  /// In en, this message translates to:
+  /// **'{role} (Command Center)'**
+  String accCommandCenterRole(String role);
+
+  /// Snackbar.
+  ///
+  /// In en, this message translates to:
+  /// **'Claim draft saved on this device. Nothing was sent.'**
+  String get accClaimDraftSaved;
+
+  /// Snackbar.
+  ///
+  /// In en, this message translates to:
+  /// **'Request for {document} logged on the case.'**
+  String accDocumentRequestLogged(String document);
+
+  /// Sheet title when uploading a document.
+  ///
+  /// In en, this message translates to:
+  /// **'Which document is this?'**
+  String get accWhichDocument;
+
+  /// Snackbar.
+  ///
+  /// In en, this message translates to:
+  /// **'{document} uploaded to the claim package.'**
+  String accDocumentUploaded(String document);
+
+  /// Validation snackbar.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the insurer, policy number and claim amount first.'**
+  String get accClaimRegisterMissing;
+
+  /// Confirmation dialog body.
+  ///
+  /// In en, this message translates to:
+  /// **'Claim {claimNo} for {insurer} under policy {policyNo} will be registered on the case. This cannot be undone from the app.'**
+  String accRegisterClaimConfirm(
+      String claimNo, String insurer, String policyNo);
+
+  /// Confirm button.
+  ///
+  /// In en, this message translates to:
+  /// **'Register'**
+  String get accRegister;
+
+  /// Snackbar.
+  ///
+  /// In en, this message translates to:
+  /// **'Claim {claimNo} registered with the insurer.'**
+  String accClaimRegisteredSnack(String claimNo);
+
+  /// Validation snackbar.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the recovered amount and its source.'**
+  String get accRecoveryMissing;
+
+  /// Snackbar.
+  ///
+  /// In en, this message translates to:
+  /// **'Recovery recorded.'**
+  String get accRecoveryRecorded;
+
+  /// Marks an optional document.
+  ///
+  /// In en, this message translates to:
+  /// **'{label} (Optional)'**
+  String accOptionalSuffix(String label);
+
+  /// Note under the locked fleet-master fields.
+  ///
+  /// In en, this message translates to:
+  /// **'These details are sourced from fleet master and cannot be edited here. If any detail is incorrect, please update it in the fleet system.'**
+  String get accIntakeFleetMasterLockNote;
+
+  /// Help under the incident site question.
+  ///
+  /// In en, this message translates to:
+  /// **'Select the site/location of this incident. This may be different from the asset\'s home site.'**
+  String get accIntakeIncidentSiteHelp;
+
+  /// Fleet master field.
+  ///
+  /// In en, this message translates to:
+  /// **'Asset no'**
+  String get accIntakeAssetNo;
+
+  /// Fleet master field.
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle type'**
+  String get accIntakeVehicleType;
+
+  /// Fleet master field.
+  ///
+  /// In en, this message translates to:
+  /// **'Make / model'**
+  String get accIntakeMakeModel;
+
+  /// Fleet master field.
+  ///
+  /// In en, this message translates to:
+  /// **'Site (home)'**
+  String get accIntakeHomeSite;
+
+  /// Fleet master field.
+  ///
+  /// In en, this message translates to:
+  /// **'Country'**
+  String get accIntakeCountry;
+
+  /// Fleet master field.
+  ///
+  /// In en, this message translates to:
+  /// **'Current meter'**
+  String get accIntakeCurrentMeter;
+
+  /// Fleet master field.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get accIntakeStatus;
+
+  /// Card title.
+  ///
+  /// In en, this message translates to:
+  /// **'Asset loaded from fleet master'**
+  String get accIntakeAssetLoaded;
+
+  /// Card title.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-filled from fleet master'**
+  String get accIntakeAutoFilled;
+
+  /// Section question.
+  ///
+  /// In en, this message translates to:
+  /// **'Where did the incident occur?'**
+  String get accIntakeWhereOccurred;
+
+  /// Field hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Site or location name'**
+  String get accIntakeSiteHint;
+
+  /// Site chip for the asset's home site.
+  ///
+  /// In en, this message translates to:
+  /// **'{site} (home)'**
+  String accIntakeHomeSiteChip(String site);
+
+  /// Evidence progress.
+  ///
+  /// In en, this message translates to:
+  /// **'{done} of {total} required photos'**
+  String accIntakeRequiredPhotos(int done, int total);
+
+  /// Evidence chip.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} missing'**
+  String accIntakeMissingCount(int count);
+
+  /// Evidence state.
+  ///
+  /// In en, this message translates to:
+  /// **'Attached on this device'**
+  String get accIntakeAttachedOnDevice;
+
+  /// Evidence row subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{category} · Required'**
+  String accIntakeRequiredCategory(String category);
+
+  /// Tooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove photo'**
+  String get accIntakeRemovePhoto;
+
+  /// Section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Supporting documents'**
+  String get accIntakeSupportingDocuments;
+
+  /// Section help.
+  ///
+  /// In en, this message translates to:
+  /// **'Attach what is available now. Route and country rules may require more during case review.'**
+  String get accIntakeSupportingDocumentsHelp;
+
+  /// Document state.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional at intake'**
+  String get accIntakeOptionalAtIntake;
+
+  /// Tooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove attachment'**
+  String get accIntakeRemoveAttachment;
+
+  /// Tooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Attach document photo'**
+  String get accIntakeAttachDocumentPhoto;
+
+  /// Affirmative answer to a yes/no accident fact.
+  ///
+  /// In en, this message translates to:
+  /// **'Yes'**
+  String get accYes;
+
+  /// Negative answer to a yes/no accident fact.
+  ///
+  /// In en, this message translates to:
+  /// **'No'**
+  String get accNo;
+
+  /// Title of the shared accident case summary PDF.
+  ///
+  /// In en, this message translates to:
+  /// **'Accident case summary'**
+  String get accCaseSummaryTitle;
+
+  /// PDF header line with the generation date and time.
+  ///
+  /// In en, this message translates to:
+  /// **'Generated {date}'**
+  String accCaseSummaryGenerated(String date);
+
+  /// Section title for the workstream table in the case PDF.
+  ///
+  /// In en, this message translates to:
+  /// **'Case workstreams'**
+  String get accCaseSummaryWorkstreams;
+
+  /// Table column header.
+  ///
+  /// In en, this message translates to:
+  /// **'Workstream'**
+  String get accCaseSummaryWorkstreamColumn;
+
+  /// Table column header.
+  ///
+  /// In en, this message translates to:
+  /// **'Team'**
+  String get accCaseSummaryTeamColumn;
+
+  /// Table column header.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get accCaseSummaryStatusColumn;
+
+  /// Table column header.
+  ///
+  /// In en, this message translates to:
+  /// **'Progress'**
+  String get accCaseSummaryProgressColumn;
+
+  /// Label for the server-recorded overall completion.
+  ///
+  /// In en, this message translates to:
+  /// **'Overall completion'**
+  String get accCaseSummaryOverallCompletion;
+
+  /// Label for the evidence photo count.
+  ///
+  /// In en, this message translates to:
+  /// **'Evidence photos'**
+  String get accCaseSummaryEvidencePhotos;
+
+  /// Button that renders and shares the case summary PDF.
+  ///
+  /// In en, this message translates to:
+  /// **'Share case summary PDF'**
+  String get accCaseSummaryShare;
+
+  /// Shown when building or sharing the PDF failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The case summary could not be shared. Try again.'**
+  String get accCaseSummaryShareFailed;
+
+  /// Shown when no Arabic-script font was available offline.
+  ///
+  /// In en, this message translates to:
+  /// **'The Arabic font could not be loaded, so the summary was shared in English.'**
+  String get accCaseSummarySharedInEnglish;
+
+  /// Draft restore failure.
+  ///
+  /// In en, this message translates to:
+  /// **'The saved report draft could not be restored. Your existing saved data was not overwritten.'**
+  String get accReportDraftRestoreFailed;
+
+  /// Shown when the workspace context is not ready.
+  ///
+  /// In en, this message translates to:
+  /// **'Your workspace is still loading. Try again.'**
+  String get accWorkspaceLoading;
+
+  /// Draft save failure.
+  ///
+  /// In en, this message translates to:
+  /// **'This device could not save the draft. Nothing previously saved was overwritten. Try again.'**
+  String get accReportDraftSaveFailed;
+
+  /// Snackbar after returning from the scanner.
+  ///
+  /// In en, this message translates to:
+  /// **'Use the scanned asset number to select the matching fleet record.'**
+  String get accReportUseScannedAsset;
+
+  /// Photo source sheet title.
+  ///
+  /// In en, this message translates to:
+  /// **'Add close-up photo'**
+  String get accReportAddCloseUpPhoto;
+
+  /// Button.
+  ///
+  /// In en, this message translates to:
+  /// **'Take photo'**
+  String get accReportTakePhoto;
+
+  /// Button.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose from gallery'**
+  String get accReportChooseGallery;
+
+  /// Snackbar after submit.
+  ///
+  /// In en, this message translates to:
+  /// **'Report saved to the offline queue.'**
+  String get accReportQueued;
+
+  /// Snackbar after submit with dropped fields.
+  ///
+  /// In en, this message translates to:
+  /// **'Report queued. Some unsupported optional fields were kept in the intake notes.'**
+  String get accReportQueuedWithNotes;
+
+  /// Step subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Select the fleet asset involved in this incident.'**
+  String get accReportStepAssetSubtitle;
+
+  /// Step subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Record when, where and what happened.'**
+  String get accReportStepIncidentSubtitle;
+
+  /// Step subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Record only the people, safety, Najm and third-party facts needed at the scene.'**
+  String get accReportStepPeopleSubtitle;
+
+  /// Step subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add one scene overview and one close-up for each marked damage area. Supporting documents are optional at intake.'**
+  String get accReportStepEvidenceSubtitle;
+
+  /// Step subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add available supporting documents. Optional at intake.'**
+  String get accReportStepDocumentsSubtitle;
+
+  /// Step subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Check the exact report and send it to Fleet validation. Optional documents never block this submission.'**
+  String get accReportStepReviewSubtitle;
+
+  /// Button.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan QR / barcode'**
+  String get accReportScanCode;
+
+  /// Asset search match count.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 matching asset} other{{count} matching assets}}'**
+  String accReportMatchingAssets(int count);
+
+  /// Empty search result.
+  ///
+  /// In en, this message translates to:
+  /// **'No matching fleet asset'**
+  String get accReportNoMatchingAsset;
+
+  /// Truncated search note.
+  ///
+  /// In en, this message translates to:
+  /// **'Showing the first {shown} of {total} matches. {hidden} more results, refine your search.'**
+  String accReportMatchOverflow(int shown, int total, int hidden);
+
+  /// Offline fleet chip.
+  ///
+  /// In en, this message translates to:
+  /// **'Showing saved fleet data'**
+  String get accReportSavedFleetData;
+
+  /// Button.
+  ///
+  /// In en, this message translates to:
+  /// **'Change asset'**
+  String get accReportChangeAsset;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Asset number (manual fallback)'**
+  String get accReportManualAsset;
+
+  /// Field hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Use only when a fleet match is unavailable'**
+  String get accReportManualAssetHint;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Meter at incident'**
+  String get accReportMeterAtIncident;
+
+  /// Field hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Odometer or hour-meter reading'**
+  String get accReportMeterHint;
+
+  /// Field hint with the fleet odometer.
+  ///
+  /// In en, this message translates to:
+  /// **'Fleet master: {km} km'**
+  String accReportMeterFleetMaster(String km);
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Road / exact location'**
+  String get accReportRoadLocation;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Incident date'**
+  String get accReportIncidentDate;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Incident time'**
+  String get accReportIncidentTime;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Incident site'**
+  String get accReportIncidentSite;
+
+  /// Field helper.
+  ///
+  /// In en, this message translates to:
+  /// **'Editable incident site; independent of the locked fleet home site.'**
+  String get accReportIncidentSiteHelper;
+
+  /// Field hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Gate, road, project area or GPS description'**
+  String get accReportRoadLocationHint;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Event type'**
+  String get accReportEventType;
+
+  /// Dropdown hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Select event type'**
+  String get accReportSelectEventType;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Initial severity'**
+  String get accReportInitialSeverity;
+
+  /// Severity option.
+  ///
+  /// In en, this message translates to:
+  /// **'Minor'**
+  String get accSeverityMinor;
+
+  /// Severity option.
+  ///
+  /// In en, this message translates to:
+  /// **'Moderate'**
+  String get accSeverityModerate;
+
+  /// Severity option.
+  ///
+  /// In en, this message translates to:
+  /// **'Major / severe'**
+  String get accSeverityMajorSevere;
+
+  /// Severity option.
+  ///
+  /// In en, this message translates to:
+  /// **'Fatal'**
+  String get accSeverityFatal;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'What happened?'**
+  String get accReportWhatHappened;
+
+  /// Field hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Describe the sequence of events and immediate conditions'**
+  String get accReportWhatHappenedHint;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Driver name'**
+  String get accReportDriverName;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Driver employee / licence ID'**
+  String get accReportDriverId;
+
+  /// Yes/no question.
+  ///
+  /// In en, this message translates to:
+  /// **'Were passengers involved?'**
+  String get accReportPassengersInvolved;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Passenger count'**
+  String get accReportPassengerCount;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Passenger details'**
+  String get accReportPassengerDetails;
+
+  /// Yes/no question.
+  ///
+  /// In en, this message translates to:
+  /// **'Were there injuries?'**
+  String get accReportInjuries;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Injury count'**
+  String get accReportInjuryCount;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Injury details'**
+  String get accReportInjuryDetails;
+
+  /// Yes/no question.
+  ///
+  /// In en, this message translates to:
+  /// **'Were emergency services contacted?'**
+  String get accReportEmergencyServices;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Emergency response details'**
+  String get accReportEmergencyDetails;
+
+  /// Yes/no question.
+  ///
+  /// In en, this message translates to:
+  /// **'Is the vehicle movable?'**
+  String get accReportVehicleMovable;
+
+  /// Yes/no question.
+  ///
+  /// In en, this message translates to:
+  /// **'Is recovery / towing required?'**
+  String get accReportRecoveryRequired;
+
+  /// Yes/no question.
+  ///
+  /// In en, this message translates to:
+  /// **'Is the vehicle safe to operate?'**
+  String get accReportSafeToOperate;
+
+  /// Yes/no question.
+  ///
+  /// In en, this message translates to:
+  /// **'Was a third party involved?'**
+  String get accReportThirdPartyInvolved;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Third-party name'**
+  String get accReportThirdPartyName;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Third-party vehicle'**
+  String get accReportThirdPartyVehicle;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Third-party plate'**
+  String get accReportThirdPartyPlate;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Third-party contact'**
+  String get accReportThirdPartyContact;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Third-party insurer'**
+  String get accReportThirdPartyInsurer;
+
+  /// Yes/no question.
+  ///
+  /// In en, this message translates to:
+  /// **'Is a third-party invoice available?'**
+  String get accReportThirdPartyInvoice;
+
+  /// Field helper.
+  ///
+  /// In en, this message translates to:
+  /// **'This is optional. If available, record only the invoice number; the Insurance team can request the file later.'**
+  String get accReportThirdPartyInvoiceHelper;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Third-party invoice number'**
+  String get accReportThirdPartyInvoiceNumber;
+
+  /// Yes/no question.
+  ///
+  /// In en, this message translates to:
+  /// **'Was a Najm case opened?'**
+  String get accReportNajmOpened;
+
+  /// Field helper.
+  ///
+  /// In en, this message translates to:
+  /// **'Record only when Najm applies to this incident.'**
+  String get accReportNajmHelper;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Najm reference'**
+  String get accReportNajmReference;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Witness details'**
+  String get accReportWitnessDetails;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Immediate action taken'**
+  String get accReportImmediateAction;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Additional notes'**
+  String get accReportAdditionalNotes;
+
+  /// Review card title.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready to submit'**
+  String get accReportReadyToSubmit;
+
+  /// Review card title.
+  ///
+  /// In en, this message translates to:
+  /// **'Missing before submission'**
+  String get accReportMissingBeforeSubmit;
+
+  /// Review chip.
+  ///
+  /// In en, this message translates to:
+  /// **'Complete'**
+  String get accReportComplete;
+
+  /// Blank value read-out.
+  ///
+  /// In en, this message translates to:
+  /// **'Not recorded'**
+  String get accNotRecorded;
+
+  /// Unanswered yes/no question.
+  ///
+  /// In en, this message translates to:
+  /// **'Not answered'**
+  String get accNotAnswered;
+
+  /// Review row label.
+  ///
+  /// In en, this message translates to:
+  /// **'Asset'**
+  String get accReportReviewAsset;
+
+  /// Review row label.
+  ///
+  /// In en, this message translates to:
+  /// **'Incident'**
+  String get accReportReviewIncident;
+
+  /// Review row label.
+  ///
+  /// In en, this message translates to:
+  /// **'Date and time'**
+  String get accReportReviewDateTime;
+
+  /// Review row label.
+  ///
+  /// In en, this message translates to:
+  /// **'Site / location'**
+  String get accReportReviewSiteLocation;
+
+  /// Review row label.
+  ///
+  /// In en, this message translates to:
+  /// **'What happened'**
+  String get accReportReviewWhatHappened;
+
+  /// Review row label.
+  ///
+  /// In en, this message translates to:
+  /// **'People'**
+  String get accReportReviewPeople;
+
+  /// Review row value.
+  ///
+  /// In en, this message translates to:
+  /// **'Driver {driver} · Injuries {injuries}'**
+  String accReportReviewPeopleValue(String driver, String injuries);
+
+  /// Review row label.
+  ///
+  /// In en, this message translates to:
+  /// **'Damage marks'**
+  String get accReportReviewDamageMarks;
+
+  /// Review row label.
+  ///
+  /// In en, this message translates to:
+  /// **'Focused photos'**
+  String get accReportReviewFocusedPhotos;
+
+  /// Review row value.
+  ///
+  /// In en, this message translates to:
+  /// **'{done} of {total}'**
+  String accReportReviewPhotosValue(int done, int total);
+
+  /// Review row label.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional documents'**
+  String get accReportReviewOptionalDocuments;
+
+  /// Review row value.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} attached'**
+  String accReportReviewAttachedValue(int count);
+
+  /// Review note.
+  ///
+  /// In en, this message translates to:
+  /// **'Recipients, route and initial SLA are resolved by the configured accident workflow when this queued report syncs.'**
+  String get accReportWorkflowResolvesOnSync;
+
+  /// Draft status.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft auto-saves on device'**
+  String get accReportDraftAutoSaves;
+
+  /// Draft status.
+  ///
+  /// In en, this message translates to:
+  /// **'Unsaved changes'**
+  String get accReportDraftUnsaved;
+
+  /// Draft status.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving draft…'**
+  String get accReportDraftSaving;
+
+  /// Draft status.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft saved on device'**
+  String get accReportDraftSaved;
+
+  /// Draft status with time.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft saved on device · {time}'**
+  String accReportDraftSavedAt(String time);
+
+  /// Draft status.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft save failed'**
+  String get accReportDraftSaveFailedShort;
+
+  /// Draft status.
+  ///
+  /// In en, this message translates to:
+  /// **'Restoring saved draft…'**
+  String get accReportDraftRestoring;
+
+  /// Button.
+  ///
+  /// In en, this message translates to:
+  /// **'Save and exit'**
+  String get accReportSaveAndExit;
+
+  /// Button.
+  ///
+  /// In en, this message translates to:
+  /// **'Back'**
+  String get accReportBack;
+
+  /// Button.
+  ///
+  /// In en, this message translates to:
+  /// **'Submit accident'**
+  String get accReportSubmit;
+
+  /// Button.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue to incident details'**
+  String get accReportContinueToIncident;
+
+  /// Button.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue to evidence'**
+  String get accReportContinueToEvidence;
+
+  /// Button.
+  ///
+  /// In en, this message translates to:
+  /// **'Save & Continue'**
+  String get accReportSaveAndContinue;
+
+  /// Vehicle picker result line.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 fleet result · search asset, fleet, plate, type, make, model or site} other{{count} fleet results · search asset, fleet, plate, type, make, model or site}}'**
+  String accReportFleetResults(int count);
+
+  /// Accident type.
+  ///
+  /// In en, this message translates to:
+  /// **'Collision'**
+  String get accTypeCollision;
+
+  /// Accident type.
+  ///
+  /// In en, this message translates to:
+  /// **'Rollover'**
+  String get accTypeRollover;
+
+  /// Accident type.
+  ///
+  /// In en, this message translates to:
+  /// **'Rear-end'**
+  String get accTypeRearEnd;
+
+  /// Accident type.
+  ///
+  /// In en, this message translates to:
+  /// **'Side-swipe'**
+  String get accTypeSideSwipe;
+
+  /// Accident type.
+  ///
+  /// In en, this message translates to:
+  /// **'Reversing'**
+  String get accTypeReversing;
+
+  /// Accident type.
+  ///
+  /// In en, this message translates to:
+  /// **'Fire'**
+  String get accTypeFire;
+
+  /// Accident type.
+  ///
+  /// In en, this message translates to:
+  /// **'Vandalism'**
+  String get accTypeVandalism;
+
+  /// Accident type.
+  ///
+  /// In en, this message translates to:
+  /// **'Weather'**
+  String get accTypeWeather;
+
+  /// Accident type.
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre failure'**
+  String get accTypeTyreFailure;
+
+  /// Accident type.
+  ///
+  /// In en, this message translates to:
+  /// **'Mechanical'**
+  String get accTypeMechanical;
+
+  /// Accident type.
+  ///
+  /// In en, this message translates to:
+  /// **'Near miss'**
+  String get accTypeNearMiss;
+
+  /// Accident type.
+  ///
+  /// In en, this message translates to:
+  /// **'Property damage'**
+  String get accTypePropertyDamage;
+
+  /// Accident type.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get accTypeOther;
+
+  /// Read-out for an accident field nobody has recorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Not set'**
+  String get accNotSet;
+
+  /// Error when an evidence file type is not supported.
+  ///
+  /// In en, this message translates to:
+  /// **'That file is not supported.'**
+  String get accErrorFileUnsupported;
+
+  /// Error when a value failed validation.
+  ///
+  /// In en, this message translates to:
+  /// **'Check the values and try again.'**
+  String get accErrorCheckValues;
+
+  /// Generic accident action failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong. Please try again.'**
+  String get accErrorGeneric;
+
+  /// Notify chip for a role that is only informed.
+  ///
+  /// In en, this message translates to:
+  /// **'{role} (for visibility)'**
+  String accNotifyForVisibility(String role);
+
+  /// Evidence source option: camera.
+  ///
+  /// In en, this message translates to:
+  /// **'Take a photo'**
+  String get accTakePhoto;
+
+  /// Evidence source option: device file.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a file from the device'**
+  String get accChooseDeviceFile;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Dispatch & Handover'**
+  String get accDhDispatchHandover;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Repair route'**
+  String get accDhRepairRoute;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Dispatch status'**
+  String get accDhDispatchStatus;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Transit elapsed'**
+  String get accDhTransitElapsed;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Vendor repair SLA'**
+  String get accDhVendorRepairSla;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'SLA unavailable'**
+  String get accDhSlaUnavailable;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Vendor SLA starts only after signed vehicle acceptance.'**
+  String get accDhVendorSlaStartsOnlyAfterSigned;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'The SLA clock starts when the workshop signs vehicle acceptance.'**
+  String get accDhTheSlaClockStartsWhenThe;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get accDhRetry;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Dispatch legs are not provisioned on this database yet. Dispatch details, handover condition and the workshop receipt cannot be recorded until the migration is applied.'**
+  String get accDhDispatchLegsAreNotProvisionedOn;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Vendor contact fields are not provisioned yet; only the workshop name is stored.'**
+  String get accDhVendorContactFieldsAreNotProvisioned;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'After acceptance, vendor can add inspection details, quotation, parts, schedule and progress in its own workspace. PO is created only after quotation review and approval.'**
+  String get accDhAfterAcceptanceVendorCanAddInspection;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Open case timeline'**
+  String get accDhOpenCaseTimeline;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Open workshop assessment'**
+  String get accDhOpenWorkshopAssessment;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Not started'**
+  String get accDhNotStarted;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Met'**
+  String get accDhMet;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Breached'**
+  String get accDhBreached;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Paused'**
+  String get accDhPaused;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Running'**
+  String get accDhRunning;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get accDhCancelled;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Started, no SLA target'**
+  String get accDhStartedNoSlaTarget;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Destination and vendor'**
+  String get accDhDestinationAndVendor;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Workshop name'**
+  String get accDhWorkshopName;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'City'**
+  String get accDhCity;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Vendor contact name'**
+  String get accDhVendorContactName;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Phone'**
+  String get accDhPhone;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Email'**
+  String get accDhEmail;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Workshop registration / tax no.'**
+  String get accDhWorkshopRegistrationTaxNo;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Assigned vendor inspector'**
+  String get accDhAssignedVendorInspector;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Unassigned'**
+  String get accDhUnassigned;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Edit vendor details'**
+  String get accDhEditVendorDetails;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Contact workshop'**
+  String get accDhContactWorkshop;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get accDhCancel;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Save vendor'**
+  String get accDhSaveVendor;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Dispatch details'**
+  String get accDhDispatchDetails;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Sent by'**
+  String get accDhSentBy;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Departure'**
+  String get accDhDeparture;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Carrier'**
+  String get accDhCarrier;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Driver'**
+  String get accDhDriver;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Recovery vehicle'**
+  String get accDhRecoveryVehicle;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Origin'**
+  String get accDhOrigin;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Destination'**
+  String get accDhDestination;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Estimated arrival'**
+  String get accDhEstimatedArrival;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Live status'**
+  String get accDhLiveStatus;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Record dispatch'**
+  String get accDhRecordDispatch;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Odometer (km)'**
+  String get accDhOdometerKm;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Engine hours'**
+  String get accDhEngineHours;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Fuel %'**
+  String get accDhFuel;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Keys'**
+  String get accDhKeys;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Documents sent (one per line)'**
+  String get accDhDocumentsSentOnePerLine;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Accessories / checklist (one per line)'**
+  String get accDhAccessoriesChecklistOnePerLine;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Outgoing damage photos'**
+  String get accDhOutgoingDamagePhotos;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Outgoing condition signed by'**
+  String get accDhOutgoingConditionSignedBy;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Outgoing signature'**
+  String get accDhOutgoingSignature;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Save dispatch'**
+  String get accDhSaveDispatch;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle handover condition'**
+  String get accDhVehicleHandoverCondition;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Odometer'**
+  String get accDhOdometer;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Fuel'**
+  String get accDhFuel2;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Documents sent'**
+  String get accDhDocumentsSent;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'documents'**
+  String get accDhDocuments;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Accessories / checklist'**
+  String get accDhAccessoriesChecklist;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'items'**
+  String get accDhItems;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'photos'**
+  String get accDhPhotos;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Workshop receipt'**
+  String get accDhWorkshopReceipt;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Completed by vendor'**
+  String get accDhCompletedByVendor;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Arrived'**
+  String get accDhArrived;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Received by'**
+  String get accDhReceivedBy;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Incoming odometer'**
+  String get accDhIncomingOdometer;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Incoming engine hours'**
+  String get accDhIncomingEngineHours;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Incoming fuel'**
+  String get accDhIncomingFuel;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Condition matches dispatch'**
+  String get accDhConditionMatchesDispatch;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Yes'**
+  String get accDhYes;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'No'**
+  String get accDhNo;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Additional damage / remarks'**
+  String get accDhAdditionalDamageRemarks;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Receiving photos'**
+  String get accDhReceivingPhotos;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Custody accepted'**
+  String get accDhCustodyAccepted;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Vendor receiver signature'**
+  String get accDhVendorReceiverSignature;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Sender / driver signature'**
+  String get accDhSenderDriverSignature;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Completed by vendor'**
+  String get accDhCompletedByVendor2;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'No dispatch leg is recorded yet. Record the dispatch first; the receipt is signed against it.'**
+  String get accDhNoDispatchLegIsRecordedYet;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Arrived date / time *'**
+  String get accDhArrivedDateTime;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Received by (name) *'**
+  String get accDhReceivedByName;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Designation *'**
+  String get accDhDesignation;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Incoming odometer (km)'**
+  String get accDhIncomingOdometerKm;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Incoming fuel %'**
+  String get accDhIncomingFuel2;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Upload receiving photos *'**
+  String get accDhUploadReceivingPhotos;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Upload signed handover paper *'**
+  String get accDhUploadSignedHandoverPaper;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Vendor receiver signature *'**
+  String get accDhVendorReceiverSignature2;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Sender / driver signature (captured)'**
+  String get accDhSenderDriverSignatureCaptured;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'I accept custody of this vehicle'**
+  String get accDhIAcceptCustodyOfThisVehicle;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Sign and accept vehicle'**
+  String get accDhSignAndAcceptVehicle;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Complete all required fields to enable'**
+  String get accDhCompleteAllRequiredFieldsToEnable;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Missing'**
+  String get accDhMissing;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Arrived date / time'**
+  String get accDhArrivedDateTime2;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Designation'**
+  String get accDhDesignation2;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Signed handover paper'**
+  String get accDhSignedHandoverPaper;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Vendor receiver signature'**
+  String get accDhVendorReceiverSignature3;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Custody checkbox'**
+  String get accDhCustodyCheckbox;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Complete'**
+  String get accDhComplete;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get accDhNext;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Pending'**
+  String get accDhPending;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Dispatched'**
+  String get accDhDispatched;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Arrived'**
+  String get accDhArrived2;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Signed acceptance'**
+  String get accDhSignedAcceptance;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Vendor assessment / quotation starts'**
+  String get accDhVendorAssessmentQuotationStarts;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Pick'**
+  String get accDhPick;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Use now'**
+  String get accDhUseNow;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'attached'**
+  String get accDhAttached;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Camera'**
+  String get accDhCamera;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Gallery'**
+  String get accDhGallery;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Add timeline note'**
+  String get accTlAddTimelineNote;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Note'**
+  String get accTlNote;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Save note'**
+  String get accTlSaveNote;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Notify participants'**
+  String get accTlNotifyParticipants;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'This logs the notification on the case ledger. Delivery to people is done by the server notification engine.'**
+  String get accTlThisLogsTheNotificationOnThe;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Subject'**
+  String get accTlSubject;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Message'**
+  String get accTlMessage;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Log notification'**
+  String get accTlLogNotification;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Manage recipient groups'**
+  String get accTlManageRecipientGroups;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Recipients are set by Admin per event and role. The groups below are the roles each event reaches; membership comes from user profiles.'**
+  String get accTlRecipientsAreSetByAdminPer;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Visibility'**
+  String get accTlVisibility;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Time'**
+  String get accTlTime;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'By'**
+  String get accTlBy;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'To'**
+  String get accTlTo;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get accTlStatus;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Elapsed'**
+  String get accTlElapsed;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Case timeline & notifications'**
+  String get accTlCaseTimelineNotifications;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get accTlOpen;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Current owner'**
+  String get accTlCurrentOwner;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Next SLA'**
+  String get accTlNextSla;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Due in'**
+  String get accTlDueIn;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Add timeline note'**
+  String get accTlAddTimelineNote2;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Notify participants'**
+  String get accTlNotifyParticipants2;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'not provisioned yet on this database'**
+  String get accTlNotProvisionedYetOnThisDatabase;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'could not be read; the feed omits it'**
+  String get accTlCouldNotBeReadTheFeed;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Communications'**
+  String get accTlCommunications;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Evidence'**
+  String get accTlEvidence;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'SLA clocks'**
+  String get accTlSlaClocks;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Dispatch leg'**
+  String get accTlDispatchLeg;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'GPS fix'**
+  String get accTlGpsFix;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Timeline'**
+  String get accTlTimeline;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications'**
+  String get accTlNotifications;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Participants'**
+  String get accTlParticipants;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get accTlAll;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Actions'**
+  String get accTlActions;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Documents'**
+  String get accTlDocuments;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'SLA'**
+  String get accTlSla;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Emails'**
+  String get accTlEmails;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get accTlCompleted;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'In transit'**
+  String get accTlInTransit;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'No recorded events for this filter.'**
+  String get accTlNoRecordedEventsForThisFilter;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Notification delivery log'**
+  String get accTlNotificationDeliveryLog;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'No notifications recorded for this case.'**
+  String get accTlNoNotificationsRecordedForThisCase;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Trigger'**
+  String get accTlTrigger;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Recipients'**
+  String get accTlRecipients;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Channel'**
+  String get accTlChannel;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Show status'**
+  String get accTlShowStatus;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'View all notifications'**
+  String get accTlViewAllNotifications;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Manage recipient groups'**
+  String get accTlManageRecipientGroups2;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Recipients are set by Admin per event and role.'**
+  String get accTlRecipientsAreSetByAdminPer2;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Participants and ownership'**
+  String get accTlParticipantsAndOwnership;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'by'**
+  String get accTlBy2;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'to'**
+  String get accTlTo2;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'SLA met'**
+  String get accTlSlaMet;
+
+  /// Dispatch workspace save failure.
+  ///
+  /// In en, this message translates to:
+  /// **'The change could not be saved. Try again.'**
+  String get accDhChangeNotSaved;
+
+  /// Dispatch workspace contact failure.
+  ///
+  /// In en, this message translates to:
+  /// **'The workshop contact could not be opened on this device.'**
+  String get accDhContactOpenFailed;
+
+  /// Validation.
+  ///
+  /// In en, this message translates to:
+  /// **'Record the departure time first.'**
+  String get accDhRecordDepartureFirst;
+
+  /// Timeline load failure.
+  ///
+  /// In en, this message translates to:
+  /// **'The timeline could not be loaded. Try again.'**
+  String get accTlLoadFailed;
+
+  /// SLA overdue read-out.
+  ///
+  /// In en, this message translates to:
+  /// **'Overdue {elapsed}'**
+  String accTlOverdueBy(String elapsed);
 }
 
 class _AppLocalizationsDelegate

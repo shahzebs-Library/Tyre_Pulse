@@ -4219,5 +4219,1854 @@
   "loginCreateAccount": "Create an account",
   "@loginCreateAccount": {
     "description": "Login access-help dialog: opens the self-registration screen (the account is created pending administrator approval)."
+  },
+  "accAssessmentLoadFailed": "The assessment could not be loaded",
+  "@accAssessmentLoadFailed": {
+    "description": "Error title."
+  },
+  "accSafetyAndMobility": "Safety and mobility",
+  "@accSafetyAndMobility": {
+    "description": "Section title."
+  },
+  "accSafeToMove": "Safe to move",
+  "@accSafeToMove": {
+    "description": "Yes/no question."
+  },
+  "accRecoveryTowRequired": "Recovery / tow required",
+  "@accRecoveryTowRequired": {
+    "description": "Yes/no question."
+  },
+  "accVehicleOffRoad": "Vehicle off road (VOR)",
+  "@accVehicleOffRoad": {
+    "description": "Yes/no question."
+  },
+  "accDamageAssessment": "Damage assessment",
+  "@accDamageAssessment": {
+    "description": "Section title."
+  },
+  "accDamageAreaCount": "{count, plural, =1{1 area} other{{count} areas}}",
+  "@accDamageAreaCount": {
+    "description": "Number of damage areas.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "accNoDamageAreas": "No damage areas have been marked on this case yet.",
+  "@accNoDamageAreas": {
+    "description": "Empty state."
+  },
+  "accLabourAndPartsEstimate": "Labour and parts estimate",
+  "@accLabourAndPartsEstimate": {
+    "description": "Section title."
+  },
+  "accLabourHours": "Labour hours",
+  "@accLabourHours": {
+    "description": "Field label."
+  },
+  "accLabourEstimate": "Labour estimate",
+  "@accLabourEstimate": {
+    "description": "Field label."
+  },
+  "accPartsEstimate": "Parts estimate",
+  "@accPartsEstimate": {
+    "description": "Field label."
+  },
+  "accTotalPreliminaryEstimate": "Total preliminary estimate",
+  "@accTotalPreliminaryEstimate": {
+    "description": "Field label."
+  },
+  "accPartsAvailable": "Parts available",
+  "@accPartsAvailable": {
+    "description": "Field label."
+  },
+  "accSpecialOrder": "Special order",
+  "@accSpecialOrder": {
+    "description": "Field label."
+  },
+  "accPartsAvailability": "Parts availability",
+  "@accPartsAvailability": {
+    "description": "Field label."
+  },
+  "accRepairRouteRecommendation": "Repair route recommendation",
+  "@accRepairRouteRecommendation": {
+    "description": "Section title."
+  },
+  "accTotalLossPossible": "Total loss possible",
+  "@accTotalLossPossible": {
+    "description": "Checkbox label."
+  },
+  "accSelectedWorkshop": "Selected workshop",
+  "@accSelectedWorkshop": {
+    "description": "Field label."
+  },
+  "accCity": "City",
+  "@accCity": {
+    "description": "Field label."
+  },
+  "accExpectedDurationDays": "Expected duration (days)",
+  "@accExpectedDurationDays": {
+    "description": "Field label."
+  },
+  "accQuotationStatus": "Quotation status",
+  "@accQuotationStatus": {
+    "description": "Field label."
+  },
+  "accRequiredAttachments": "Required attachments ({count})",
+  "@accRequiredAttachments": {
+    "description": "Section title with count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "accAttachVendorQuotation": "Attach vendor quotation to enable submission to External Workshop.",
+  "@accAttachVendorQuotation": {
+    "description": "Warning."
+  },
+  "accAfterSubmitNotify": "After submit notify",
+  "@accAfterSubmitNotify": {
+    "description": "Section title."
+  },
+  "accSaveAssessment": "Save assessment",
+  "@accSaveAssessment": {
+    "description": "Button."
+  },
+  "accAssessmentSubmitted": "Assessment submitted",
+  "@accAssessmentSubmitted": {
+    "description": "Button label after submit."
+  },
+  "accSubmitAssessment": "Submit assessment and route",
+  "@accSubmitAssessment": {
+    "description": "Button."
+  },
+  "accSubmissionNeedsQuotation": "Submission needs the vendor quotation for an external route.",
+  "@accSubmissionNeedsQuotation": {
+    "description": "Hint."
+  },
+  "accFieldsNotStored": "These fields could not be stored on the server: {fields}.",
+  "@accFieldsNotStored": {
+    "description": "Appended when the server rejected optional columns.",
+    "placeholders": {
+      "fields": {
+        "type": "String"
+      }
+    }
+  },
+  "accAssessmentRouted": "Assessment submitted and routed to {route}.",
+  "@accAssessmentRouted": {
+    "description": "Snackbar.",
+    "placeholders": {
+      "route": {
+        "type": "String"
+      }
+    }
+  },
+  "accAssessmentSaved": "Assessment saved.",
+  "@accAssessmentSaved": {
+    "description": "Snackbar."
+  },
+  "accDocumentAttached": "{document} attached.",
+  "@accDocumentAttached": {
+    "description": "Snackbar.",
+    "placeholders": {
+      "document": {
+        "type": "String"
+      }
+    }
+  },
+  "accKm": "KM",
+  "@accKm": {
+    "description": "Odometer label."
+  },
+  "accKmValue": "{km} km",
+  "@accKmValue": {
+    "description": "Odometer value.",
+    "placeholders": {
+      "km": {
+        "type": "String"
+      }
+    }
+  },
+  "accPlate": "Plate",
+  "@accPlate": {
+    "description": "Field label."
+  },
+  "accSiteLocation": "Site · location",
+  "@accSiteLocation": {
+    "description": "Field label."
+  },
+  "accViewDamageMap": "{count, plural, =1{View damage map · 1 area} other{View damage map · {count} areas}}",
+  "@accViewDamageMap": {
+    "description": "Button to open the damage map.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "accActionNotAssessed": "Action: not yet assessed",
+  "@accActionNotAssessed": {
+    "description": "Damage row action line."
+  },
+  "accActionValue": "Action: {value}",
+  "@accActionValue": {
+    "description": "Damage row action line.",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "accRecommended": "Recommended",
+  "@accRecommended": {
+    "description": "Chip on the recommended route."
+  },
+  "accUploadNamedDocument": "Upload {document}",
+  "@accUploadNamedDocument": {
+    "description": "Tooltip.",
+    "placeholders": {
+      "document": {
+        "type": "String"
+      }
+    }
+  },
+  "accClaimLoadFailed": "The claim could not be loaded",
+  "@accClaimLoadFailed": {
+    "description": "Error title on the insurance claim workspace."
+  },
+  "accClaimExternalRepairBanner": "External repair assessment",
+  "@accClaimExternalRepairBanner": {
+    "description": "Banner when the repair route is external."
+  },
+  "accClaimDocumentPackage": "Claim document package",
+  "@accClaimDocumentPackage": {
+    "description": "Section title."
+  },
+  "accClaimRegistrationLocked": "Claim registration unlocks when all required documents are complete.",
+  "@accClaimRegistrationLocked": {
+    "description": "Warning under the document package."
+  },
+  "accRequestDocument": "Request {document}",
+  "@accRequestDocument": {
+    "description": "Button/tooltip to request a missing document.",
+    "placeholders": {
+      "document": {
+        "type": "String"
+      }
+    }
+  },
+  "accUploadDocument": "Upload document",
+  "@accUploadDocument": {
+    "description": "Button."
+  },
+  "accClaimRegistration": "Claim registration",
+  "@accClaimRegistration": {
+    "description": "Section title."
+  },
+  "accInsurer": "Insurer",
+  "@accInsurer": {
+    "description": "Field label."
+  },
+  "accPolicyNo": "Policy no.",
+  "@accPolicyNo": {
+    "description": "Field label."
+  },
+  "accClaimNumber": "Claim number",
+  "@accClaimNumber": {
+    "description": "Field label."
+  },
+  "accClaimNumberAuto": "Auto-generated after registration",
+  "@accClaimNumberAuto": {
+    "description": "Claim number placeholder before registration."
+  },
+  "accLiability": "Liability",
+  "@accLiability": {
+    "description": "Field label."
+  },
+  "accGccLiabilityPct": "GCC liability %",
+  "@accGccLiabilityPct": {
+    "description": "Field label for our liability percentage."
+  },
+  "accClaimAmount": "Claim amount",
+  "@accClaimAmount": {
+    "description": "Field label."
+  },
+  "accDeductible": "Deductible",
+  "@accDeductible": {
+    "description": "Field label."
+  },
+  "accNetClaimable": "Net claimable",
+  "@accNetClaimable": {
+    "description": "Field label."
+  },
+  "accClaimRegistered": "Claim registered with insurer",
+  "@accClaimRegistered": {
+    "description": "Button label after registration."
+  },
+  "accRegisterClaim": "Register claim with insurer",
+  "@accRegisterClaim": {
+    "description": "Button and dialog title."
+  },
+  "accClaimEnableWhenComplete": "Enable once all required documents are complete.",
+  "@accClaimEnableWhenComplete": {
+    "description": "Hint under a disabled register button."
+  },
+  "accPaymentAndRecovery": "Payment and recovery",
+  "@accPaymentAndRecovery": {
+    "description": "Section title."
+  },
+  "accApprovedAmount": "Approved amount",
+  "@accApprovedAmount": {
+    "description": "Field label."
+  },
+  "accRecoveredAmount": "Recovered amount",
+  "@accRecoveredAmount": {
+    "description": "Field label."
+  },
+  "accOutstanding": "Outstanding",
+  "@accOutstanding": {
+    "description": "Field label."
+  },
+  "accRecoverySource": "Recovery source",
+  "@accRecoverySource": {
+    "description": "Field label."
+  },
+  "accRecoverySourceHint": "Insurer, third party, driver",
+  "@accRecoverySourceHint": {
+    "description": "Input hint."
+  },
+  "accLastUpdated": "Last updated",
+  "@accLastUpdated": {
+    "description": "Field label."
+  },
+  "accSaveRecovery": "Save recovery",
+  "@accSaveRecovery": {
+    "description": "Button."
+  },
+  "accUpdateRecovery": "Update recovery amount",
+  "@accUpdateRecovery": {
+    "description": "Button."
+  },
+  "accRegisterClaimFirst": "Register the claim first.",
+  "@accRegisterClaimFirst": {
+    "description": "Hint under a disabled recovery button."
+  },
+  "accRecoveryEditableNote": "Recovery amounts remain editable after operational case closure. Every adjustment is timestamped and audited.",
+  "@accRecoveryEditableNote": {
+    "description": "Info note."
+  },
+  "accAfterRegistrationNotify": "After registration notify",
+  "@accAfterRegistrationNotify": {
+    "description": "Section title."
+  },
+  "accClaimNotificationIncludes": "Notification includes the claim number, document status, claim amount and next action.",
+  "@accClaimNotificationIncludes": {
+    "description": "Note under notify chips."
+  },
+  "accSaveClaimDraft": "Save claim draft",
+  "@accSaveClaimDraft": {
+    "description": "Button."
+  },
+  "accCompleteDocuments": "Complete documents",
+  "@accCompleteDocuments": {
+    "description": "Button."
+  },
+  "accCommandCenterMonitoring": "{owner} is monitoring SLA and missing documents.",
+  "@accCommandCenterMonitoring": {
+    "description": "Footer line.",
+    "placeholders": {
+      "owner": {
+        "type": "String"
+      }
+    }
+  },
+  "accCommandCenterRole": "{role} (Command Center)",
+  "@accCommandCenterRole": {
+    "description": "Role name with the command center suffix.",
+    "placeholders": {
+      "role": {
+        "type": "String"
+      }
+    }
+  },
+  "accClaimDraftSaved": "Claim draft saved on this device. Nothing was sent.",
+  "@accClaimDraftSaved": {
+    "description": "Snackbar."
+  },
+  "accDocumentRequestLogged": "Request for {document} logged on the case.",
+  "@accDocumentRequestLogged": {
+    "description": "Snackbar.",
+    "placeholders": {
+      "document": {
+        "type": "String"
+      }
+    }
+  },
+  "accWhichDocument": "Which document is this?",
+  "@accWhichDocument": {
+    "description": "Sheet title when uploading a document."
+  },
+  "accDocumentUploaded": "{document} uploaded to the claim package.",
+  "@accDocumentUploaded": {
+    "description": "Snackbar.",
+    "placeholders": {
+      "document": {
+        "type": "String"
+      }
+    }
+  },
+  "accClaimRegisterMissing": "Enter the insurer, policy number and claim amount first.",
+  "@accClaimRegisterMissing": {
+    "description": "Validation snackbar."
+  },
+  "accRegisterClaimConfirm": "Claim {claimNo} for {insurer} under policy {policyNo} will be registered on the case. This cannot be undone from the app.",
+  "@accRegisterClaimConfirm": {
+    "description": "Confirmation dialog body.",
+    "placeholders": {
+      "claimNo": {
+        "type": "String"
+      },
+      "insurer": {
+        "type": "String"
+      },
+      "policyNo": {
+        "type": "String"
+      }
+    }
+  },
+  "accRegister": "Register",
+  "@accRegister": {
+    "description": "Confirm button."
+  },
+  "accClaimRegisteredSnack": "Claim {claimNo} registered with the insurer.",
+  "@accClaimRegisteredSnack": {
+    "description": "Snackbar.",
+    "placeholders": {
+      "claimNo": {
+        "type": "String"
+      }
+    }
+  },
+  "accRecoveryMissing": "Enter the recovered amount and its source.",
+  "@accRecoveryMissing": {
+    "description": "Validation snackbar."
+  },
+  "accRecoveryRecorded": "Recovery recorded.",
+  "@accRecoveryRecorded": {
+    "description": "Snackbar."
+  },
+  "accOptionalSuffix": "{label} (Optional)",
+  "@accOptionalSuffix": {
+    "description": "Marks an optional document.",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "accIntakeFleetMasterLockNote": "These details are sourced from fleet master and cannot be edited here. If any detail is incorrect, please update it in the fleet system.",
+  "@accIntakeFleetMasterLockNote": {
+    "description": "Note under the locked fleet-master fields."
+  },
+  "accIntakeIncidentSiteHelp": "Select the site/location of this incident. This may be different from the asset's home site.",
+  "@accIntakeIncidentSiteHelp": {
+    "description": "Help under the incident site question."
+  },
+  "accIntakeAssetNo": "Asset no",
+  "@accIntakeAssetNo": {
+    "description": "Fleet master field."
+  },
+  "accIntakeVehicleType": "Vehicle type",
+  "@accIntakeVehicleType": {
+    "description": "Fleet master field."
+  },
+  "accIntakeMakeModel": "Make / model",
+  "@accIntakeMakeModel": {
+    "description": "Fleet master field."
+  },
+  "accIntakeHomeSite": "Site (home)",
+  "@accIntakeHomeSite": {
+    "description": "Fleet master field."
+  },
+  "accIntakeCountry": "Country",
+  "@accIntakeCountry": {
+    "description": "Fleet master field."
+  },
+  "accIntakeCurrentMeter": "Current meter",
+  "@accIntakeCurrentMeter": {
+    "description": "Fleet master field."
+  },
+  "accIntakeStatus": "Status",
+  "@accIntakeStatus": {
+    "description": "Fleet master field."
+  },
+  "accIntakeAssetLoaded": "Asset loaded from fleet master",
+  "@accIntakeAssetLoaded": {
+    "description": "Card title."
+  },
+  "accIntakeAutoFilled": "Auto-filled from fleet master",
+  "@accIntakeAutoFilled": {
+    "description": "Card title."
+  },
+  "accIntakeWhereOccurred": "Where did the incident occur?",
+  "@accIntakeWhereOccurred": {
+    "description": "Section question."
+  },
+  "accIntakeSiteHint": "Site or location name",
+  "@accIntakeSiteHint": {
+    "description": "Field hint."
+  },
+  "accIntakeHomeSiteChip": "{site} (home)",
+  "@accIntakeHomeSiteChip": {
+    "description": "Site chip for the asset's home site.",
+    "placeholders": {
+      "site": {
+        "type": "String"
+      }
+    }
+  },
+  "accIntakeRequiredPhotos": "{done} of {total} required photos",
+  "@accIntakeRequiredPhotos": {
+    "description": "Evidence progress.",
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "accIntakeMissingCount": "{count} missing",
+  "@accIntakeMissingCount": {
+    "description": "Evidence chip.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "accIntakeAttachedOnDevice": "Attached on this device",
+  "@accIntakeAttachedOnDevice": {
+    "description": "Evidence state."
+  },
+  "accIntakeRequiredCategory": "{category} · Required",
+  "@accIntakeRequiredCategory": {
+    "description": "Evidence row subtitle.",
+    "placeholders": {
+      "category": {
+        "type": "String"
+      }
+    }
+  },
+  "accIntakeRemovePhoto": "Remove photo",
+  "@accIntakeRemovePhoto": {
+    "description": "Tooltip."
+  },
+  "accIntakeSupportingDocuments": "Supporting documents",
+  "@accIntakeSupportingDocuments": {
+    "description": "Section title."
+  },
+  "accIntakeSupportingDocumentsHelp": "Attach what is available now. Route and country rules may require more during case review.",
+  "@accIntakeSupportingDocumentsHelp": {
+    "description": "Section help."
+  },
+  "accIntakeOptionalAtIntake": "Optional at intake",
+  "@accIntakeOptionalAtIntake": {
+    "description": "Document state."
+  },
+  "accIntakeRemoveAttachment": "Remove attachment",
+  "@accIntakeRemoveAttachment": {
+    "description": "Tooltip."
+  },
+  "accIntakeAttachDocumentPhoto": "Attach document photo",
+  "@accIntakeAttachDocumentPhoto": {
+    "description": "Tooltip."
+  },
+  "accYes": "Yes",
+  "@accYes": {
+    "description": "Affirmative answer to a yes/no accident fact."
+  },
+  "accNo": "No",
+  "@accNo": {
+    "description": "Negative answer to a yes/no accident fact."
+  },
+  "accCaseSummaryTitle": "Accident case summary",
+  "@accCaseSummaryTitle": {
+    "description": "Title of the shared accident case summary PDF."
+  },
+  "accCaseSummaryGenerated": "Generated {date}",
+  "@accCaseSummaryGenerated": {
+    "description": "PDF header line with the generation date and time.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "accCaseSummaryWorkstreams": "Case workstreams",
+  "@accCaseSummaryWorkstreams": {
+    "description": "Section title for the workstream table in the case PDF."
+  },
+  "accCaseSummaryWorkstreamColumn": "Workstream",
+  "@accCaseSummaryWorkstreamColumn": {
+    "description": "Table column header."
+  },
+  "accCaseSummaryTeamColumn": "Team",
+  "@accCaseSummaryTeamColumn": {
+    "description": "Table column header."
+  },
+  "accCaseSummaryStatusColumn": "Status",
+  "@accCaseSummaryStatusColumn": {
+    "description": "Table column header."
+  },
+  "accCaseSummaryProgressColumn": "Progress",
+  "@accCaseSummaryProgressColumn": {
+    "description": "Table column header."
+  },
+  "accCaseSummaryOverallCompletion": "Overall completion",
+  "@accCaseSummaryOverallCompletion": {
+    "description": "Label for the server-recorded overall completion."
+  },
+  "accCaseSummaryEvidencePhotos": "Evidence photos",
+  "@accCaseSummaryEvidencePhotos": {
+    "description": "Label for the evidence photo count."
+  },
+  "accCaseSummaryShare": "Share case summary PDF",
+  "@accCaseSummaryShare": {
+    "description": "Button that renders and shares the case summary PDF."
+  },
+  "accCaseSummaryShareFailed": "The case summary could not be shared. Try again.",
+  "@accCaseSummaryShareFailed": {
+    "description": "Shown when building or sharing the PDF failed."
+  },
+  "accCaseSummarySharedInEnglish": "The Arabic font could not be loaded, so the summary was shared in English.",
+  "@accCaseSummarySharedInEnglish": {
+    "description": "Shown when no Arabic-script font was available offline."
+  },
+  "accReportDraftRestoreFailed": "The saved report draft could not be restored. Your existing saved data was not overwritten.",
+  "@accReportDraftRestoreFailed": {
+    "description": "Draft restore failure."
+  },
+  "accWorkspaceLoading": "Your workspace is still loading. Try again.",
+  "@accWorkspaceLoading": {
+    "description": "Shown when the workspace context is not ready."
+  },
+  "accReportDraftSaveFailed": "This device could not save the draft. Nothing previously saved was overwritten. Try again.",
+  "@accReportDraftSaveFailed": {
+    "description": "Draft save failure."
+  },
+  "accReportUseScannedAsset": "Use the scanned asset number to select the matching fleet record.",
+  "@accReportUseScannedAsset": {
+    "description": "Snackbar after returning from the scanner."
+  },
+  "accReportAddCloseUpPhoto": "Add close-up photo",
+  "@accReportAddCloseUpPhoto": {
+    "description": "Photo source sheet title."
+  },
+  "accReportTakePhoto": "Take photo",
+  "@accReportTakePhoto": {
+    "description": "Button."
+  },
+  "accReportChooseGallery": "Choose from gallery",
+  "@accReportChooseGallery": {
+    "description": "Button."
+  },
+  "accReportQueued": "Report saved to the offline queue.",
+  "@accReportQueued": {
+    "description": "Snackbar after submit."
+  },
+  "accReportQueuedWithNotes": "Report queued. Some unsupported optional fields were kept in the intake notes.",
+  "@accReportQueuedWithNotes": {
+    "description": "Snackbar after submit with dropped fields."
+  },
+  "accReportStepAssetSubtitle": "Select the fleet asset involved in this incident.",
+  "@accReportStepAssetSubtitle": {
+    "description": "Step subtitle."
+  },
+  "accReportStepIncidentSubtitle": "Record when, where and what happened.",
+  "@accReportStepIncidentSubtitle": {
+    "description": "Step subtitle."
+  },
+  "accReportStepPeopleSubtitle": "Record only the people, safety, Najm and third-party facts needed at the scene.",
+  "@accReportStepPeopleSubtitle": {
+    "description": "Step subtitle."
+  },
+  "accReportStepEvidenceSubtitle": "Add one scene overview and one close-up for each marked damage area. Supporting documents are optional at intake.",
+  "@accReportStepEvidenceSubtitle": {
+    "description": "Step subtitle."
+  },
+  "accReportStepDocumentsSubtitle": "Add available supporting documents. Optional at intake.",
+  "@accReportStepDocumentsSubtitle": {
+    "description": "Step subtitle."
+  },
+  "accReportStepReviewSubtitle": "Check the exact report and send it to Fleet validation. Optional documents never block this submission.",
+  "@accReportStepReviewSubtitle": {
+    "description": "Step subtitle."
+  },
+  "accReportScanCode": "Scan QR / barcode",
+  "@accReportScanCode": {
+    "description": "Button."
+  },
+  "accReportMatchingAssets": "{count, plural, =1{1 matching asset} other{{count} matching assets}}",
+  "@accReportMatchingAssets": {
+    "description": "Asset search match count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "accReportNoMatchingAsset": "No matching fleet asset",
+  "@accReportNoMatchingAsset": {
+    "description": "Empty search result."
+  },
+  "accReportMatchOverflow": "Showing the first {shown} of {total} matches. {hidden} more results, refine your search.",
+  "@accReportMatchOverflow": {
+    "description": "Truncated search note.",
+    "placeholders": {
+      "shown": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      },
+      "hidden": {
+        "type": "int"
+      }
+    }
+  },
+  "accReportSavedFleetData": "Showing saved fleet data",
+  "@accReportSavedFleetData": {
+    "description": "Offline fleet chip."
+  },
+  "accReportChangeAsset": "Change asset",
+  "@accReportChangeAsset": {
+    "description": "Button."
+  },
+  "accReportManualAsset": "Asset number (manual fallback)",
+  "@accReportManualAsset": {
+    "description": "Field label."
+  },
+  "accReportManualAssetHint": "Use only when a fleet match is unavailable",
+  "@accReportManualAssetHint": {
+    "description": "Field hint."
+  },
+  "accReportMeterAtIncident": "Meter at incident",
+  "@accReportMeterAtIncident": {
+    "description": "Field label."
+  },
+  "accReportMeterHint": "Odometer or hour-meter reading",
+  "@accReportMeterHint": {
+    "description": "Field hint."
+  },
+  "accReportMeterFleetMaster": "Fleet master: {km} km",
+  "@accReportMeterFleetMaster": {
+    "description": "Field hint with the fleet odometer.",
+    "placeholders": {
+      "km": {
+        "type": "String"
+      }
+    }
+  },
+  "accReportRoadLocation": "Road / exact location",
+  "@accReportRoadLocation": {
+    "description": "Field label."
+  },
+  "accReportIncidentDate": "Incident date",
+  "@accReportIncidentDate": {
+    "description": "Field label."
+  },
+  "accReportIncidentTime": "Incident time",
+  "@accReportIncidentTime": {
+    "description": "Field label."
+  },
+  "accReportIncidentSite": "Incident site",
+  "@accReportIncidentSite": {
+    "description": "Field label."
+  },
+  "accReportIncidentSiteHelper": "Editable incident site; independent of the locked fleet home site.",
+  "@accReportIncidentSiteHelper": {
+    "description": "Field helper."
+  },
+  "accReportRoadLocationHint": "Gate, road, project area or GPS description",
+  "@accReportRoadLocationHint": {
+    "description": "Field hint."
+  },
+  "accReportEventType": "Event type",
+  "@accReportEventType": {
+    "description": "Field label."
+  },
+  "accReportSelectEventType": "Select event type",
+  "@accReportSelectEventType": {
+    "description": "Dropdown hint."
+  },
+  "accReportInitialSeverity": "Initial severity",
+  "@accReportInitialSeverity": {
+    "description": "Field label."
+  },
+  "accSeverityMinor": "Minor",
+  "@accSeverityMinor": {
+    "description": "Severity option."
+  },
+  "accSeverityModerate": "Moderate",
+  "@accSeverityModerate": {
+    "description": "Severity option."
+  },
+  "accSeverityMajorSevere": "Major / severe",
+  "@accSeverityMajorSevere": {
+    "description": "Severity option."
+  },
+  "accSeverityFatal": "Fatal",
+  "@accSeverityFatal": {
+    "description": "Severity option."
+  },
+  "accReportWhatHappened": "What happened?",
+  "@accReportWhatHappened": {
+    "description": "Field label."
+  },
+  "accReportWhatHappenedHint": "Describe the sequence of events and immediate conditions",
+  "@accReportWhatHappenedHint": {
+    "description": "Field hint."
+  },
+  "accReportDriverName": "Driver name",
+  "@accReportDriverName": {
+    "description": "Field label."
+  },
+  "accReportDriverId": "Driver employee / licence ID",
+  "@accReportDriverId": {
+    "description": "Field label."
+  },
+  "accReportPassengersInvolved": "Were passengers involved?",
+  "@accReportPassengersInvolved": {
+    "description": "Yes/no question."
+  },
+  "accReportPassengerCount": "Passenger count",
+  "@accReportPassengerCount": {
+    "description": "Field label."
+  },
+  "accReportPassengerDetails": "Passenger details",
+  "@accReportPassengerDetails": {
+    "description": "Field label."
+  },
+  "accReportInjuries": "Were there injuries?",
+  "@accReportInjuries": {
+    "description": "Yes/no question."
+  },
+  "accReportInjuryCount": "Injury count",
+  "@accReportInjuryCount": {
+    "description": "Field label."
+  },
+  "accReportInjuryDetails": "Injury details",
+  "@accReportInjuryDetails": {
+    "description": "Field label."
+  },
+  "accReportEmergencyServices": "Were emergency services contacted?",
+  "@accReportEmergencyServices": {
+    "description": "Yes/no question."
+  },
+  "accReportEmergencyDetails": "Emergency response details",
+  "@accReportEmergencyDetails": {
+    "description": "Field label."
+  },
+  "accReportVehicleMovable": "Is the vehicle movable?",
+  "@accReportVehicleMovable": {
+    "description": "Yes/no question."
+  },
+  "accReportRecoveryRequired": "Is recovery / towing required?",
+  "@accReportRecoveryRequired": {
+    "description": "Yes/no question."
+  },
+  "accReportSafeToOperate": "Is the vehicle safe to operate?",
+  "@accReportSafeToOperate": {
+    "description": "Yes/no question."
+  },
+  "accReportThirdPartyInvolved": "Was a third party involved?",
+  "@accReportThirdPartyInvolved": {
+    "description": "Yes/no question."
+  },
+  "accReportThirdPartyName": "Third-party name",
+  "@accReportThirdPartyName": {
+    "description": "Field label."
+  },
+  "accReportThirdPartyVehicle": "Third-party vehicle",
+  "@accReportThirdPartyVehicle": {
+    "description": "Field label."
+  },
+  "accReportThirdPartyPlate": "Third-party plate",
+  "@accReportThirdPartyPlate": {
+    "description": "Field label."
+  },
+  "accReportThirdPartyContact": "Third-party contact",
+  "@accReportThirdPartyContact": {
+    "description": "Field label."
+  },
+  "accReportThirdPartyInsurer": "Third-party insurer",
+  "@accReportThirdPartyInsurer": {
+    "description": "Field label."
+  },
+  "accReportThirdPartyInvoice": "Is a third-party invoice available?",
+  "@accReportThirdPartyInvoice": {
+    "description": "Yes/no question."
+  },
+  "accReportThirdPartyInvoiceHelper": "This is optional. If available, record only the invoice number; the Insurance team can request the file later.",
+  "@accReportThirdPartyInvoiceHelper": {
+    "description": "Field helper."
+  },
+  "accReportThirdPartyInvoiceNumber": "Third-party invoice number",
+  "@accReportThirdPartyInvoiceNumber": {
+    "description": "Field label."
+  },
+  "accReportNajmOpened": "Was a Najm case opened?",
+  "@accReportNajmOpened": {
+    "description": "Yes/no question."
+  },
+  "accReportNajmHelper": "Record only when Najm applies to this incident.",
+  "@accReportNajmHelper": {
+    "description": "Field helper."
+  },
+  "accReportNajmReference": "Najm reference",
+  "@accReportNajmReference": {
+    "description": "Field label."
+  },
+  "accReportWitnessDetails": "Witness details",
+  "@accReportWitnessDetails": {
+    "description": "Field label."
+  },
+  "accReportImmediateAction": "Immediate action taken",
+  "@accReportImmediateAction": {
+    "description": "Field label."
+  },
+  "accReportAdditionalNotes": "Additional notes",
+  "@accReportAdditionalNotes": {
+    "description": "Field label."
+  },
+  "accReportReadyToSubmit": "Ready to submit",
+  "@accReportReadyToSubmit": {
+    "description": "Review card title."
+  },
+  "accReportMissingBeforeSubmit": "Missing before submission",
+  "@accReportMissingBeforeSubmit": {
+    "description": "Review card title."
+  },
+  "accReportComplete": "Complete",
+  "@accReportComplete": {
+    "description": "Review chip."
+  },
+  "accNotRecorded": "Not recorded",
+  "@accNotRecorded": {
+    "description": "Blank value read-out."
+  },
+  "accNotAnswered": "Not answered",
+  "@accNotAnswered": {
+    "description": "Unanswered yes/no question."
+  },
+  "accReportReviewAsset": "Asset",
+  "@accReportReviewAsset": {
+    "description": "Review row label."
+  },
+  "accReportReviewIncident": "Incident",
+  "@accReportReviewIncident": {
+    "description": "Review row label."
+  },
+  "accReportReviewDateTime": "Date and time",
+  "@accReportReviewDateTime": {
+    "description": "Review row label."
+  },
+  "accReportReviewSiteLocation": "Site / location",
+  "@accReportReviewSiteLocation": {
+    "description": "Review row label."
+  },
+  "accReportReviewWhatHappened": "What happened",
+  "@accReportReviewWhatHappened": {
+    "description": "Review row label."
+  },
+  "accReportReviewPeople": "People",
+  "@accReportReviewPeople": {
+    "description": "Review row label."
+  },
+  "accReportReviewPeopleValue": "Driver {driver} · Injuries {injuries}",
+  "@accReportReviewPeopleValue": {
+    "description": "Review row value.",
+    "placeholders": {
+      "driver": {
+        "type": "String"
+      },
+      "injuries": {
+        "type": "String"
+      }
+    }
+  },
+  "accReportReviewDamageMarks": "Damage marks",
+  "@accReportReviewDamageMarks": {
+    "description": "Review row label."
+  },
+  "accReportReviewFocusedPhotos": "Focused photos",
+  "@accReportReviewFocusedPhotos": {
+    "description": "Review row label."
+  },
+  "accReportReviewPhotosValue": "{done} of {total}",
+  "@accReportReviewPhotosValue": {
+    "description": "Review row value.",
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "accReportReviewOptionalDocuments": "Optional documents",
+  "@accReportReviewOptionalDocuments": {
+    "description": "Review row label."
+  },
+  "accReportReviewAttachedValue": "{count} attached",
+  "@accReportReviewAttachedValue": {
+    "description": "Review row value.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "accReportWorkflowResolvesOnSync": "Recipients, route and initial SLA are resolved by the configured accident workflow when this queued report syncs.",
+  "@accReportWorkflowResolvesOnSync": {
+    "description": "Review note."
+  },
+  "accReportDraftAutoSaves": "Draft auto-saves on device",
+  "@accReportDraftAutoSaves": {
+    "description": "Draft status."
+  },
+  "accReportDraftUnsaved": "Unsaved changes",
+  "@accReportDraftUnsaved": {
+    "description": "Draft status."
+  },
+  "accReportDraftSaving": "Saving draft…",
+  "@accReportDraftSaving": {
+    "description": "Draft status."
+  },
+  "accReportDraftSaved": "Draft saved on device",
+  "@accReportDraftSaved": {
+    "description": "Draft status."
+  },
+  "accReportDraftSavedAt": "Draft saved on device · {time}",
+  "@accReportDraftSavedAt": {
+    "description": "Draft status with time.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "accReportDraftSaveFailedShort": "Draft save failed",
+  "@accReportDraftSaveFailedShort": {
+    "description": "Draft status."
+  },
+  "accReportDraftRestoring": "Restoring saved draft…",
+  "@accReportDraftRestoring": {
+    "description": "Draft status."
+  },
+  "accReportSaveAndExit": "Save and exit",
+  "@accReportSaveAndExit": {
+    "description": "Button."
+  },
+  "accReportBack": "Back",
+  "@accReportBack": {
+    "description": "Button."
+  },
+  "accReportSubmit": "Submit accident",
+  "@accReportSubmit": {
+    "description": "Button."
+  },
+  "accReportContinueToIncident": "Continue to incident details",
+  "@accReportContinueToIncident": {
+    "description": "Button."
+  },
+  "accReportContinueToEvidence": "Continue to evidence",
+  "@accReportContinueToEvidence": {
+    "description": "Button."
+  },
+  "accReportSaveAndContinue": "Save & Continue",
+  "@accReportSaveAndContinue": {
+    "description": "Button."
+  },
+  "accReportFleetResults": "{count, plural, =1{1 fleet result · search asset, fleet, plate, type, make, model or site} other{{count} fleet results · search asset, fleet, plate, type, make, model or site}}",
+  "@accReportFleetResults": {
+    "description": "Vehicle picker result line.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "accTypeCollision": "Collision",
+  "@accTypeCollision": {
+    "description": "Accident type."
+  },
+  "accTypeRollover": "Rollover",
+  "@accTypeRollover": {
+    "description": "Accident type."
+  },
+  "accTypeRearEnd": "Rear-end",
+  "@accTypeRearEnd": {
+    "description": "Accident type."
+  },
+  "accTypeSideSwipe": "Side-swipe",
+  "@accTypeSideSwipe": {
+    "description": "Accident type."
+  },
+  "accTypeReversing": "Reversing",
+  "@accTypeReversing": {
+    "description": "Accident type."
+  },
+  "accTypeFire": "Fire",
+  "@accTypeFire": {
+    "description": "Accident type."
+  },
+  "accTypeVandalism": "Vandalism",
+  "@accTypeVandalism": {
+    "description": "Accident type."
+  },
+  "accTypeWeather": "Weather",
+  "@accTypeWeather": {
+    "description": "Accident type."
+  },
+  "accTypeTyreFailure": "Tyre failure",
+  "@accTypeTyreFailure": {
+    "description": "Accident type."
+  },
+  "accTypeMechanical": "Mechanical",
+  "@accTypeMechanical": {
+    "description": "Accident type."
+  },
+  "accTypeNearMiss": "Near miss",
+  "@accTypeNearMiss": {
+    "description": "Accident type."
+  },
+  "accTypePropertyDamage": "Property damage",
+  "@accTypePropertyDamage": {
+    "description": "Accident type."
+  },
+  "accTypeOther": "Other",
+  "@accTypeOther": {
+    "description": "Accident type."
+  },
+  "accNotSet": "Not set",
+  "@accNotSet": {
+    "description": "Read-out for an accident field nobody has recorded."
+  },
+  "accErrorFileUnsupported": "That file is not supported.",
+  "@accErrorFileUnsupported": {
+    "description": "Error when an evidence file type is not supported."
+  },
+  "accErrorCheckValues": "Check the values and try again.",
+  "@accErrorCheckValues": {
+    "description": "Error when a value failed validation."
+  },
+  "accErrorGeneric": "Something went wrong. Please try again.",
+  "@accErrorGeneric": {
+    "description": "Generic accident action failure."
+  },
+  "accNotifyForVisibility": "{role} (for visibility)",
+  "@accNotifyForVisibility": {
+    "description": "Notify chip for a role that is only informed.",
+    "placeholders": {
+      "role": {
+        "type": "String"
+      }
+    }
+  },
+  "accTakePhoto": "Take a photo",
+  "@accTakePhoto": {
+    "description": "Evidence source option: camera."
+  },
+  "accChooseDeviceFile": "Choose a file from the device",
+  "@accChooseDeviceFile": {
+    "description": "Evidence source option: device file."
+  },
+  "accDhDispatchHandover": "Dispatch & Handover",
+  "@accDhDispatchHandover": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhRepairRoute": "Repair route",
+  "@accDhRepairRoute": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhDispatchStatus": "Dispatch status",
+  "@accDhDispatchStatus": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhTransitElapsed": "Transit elapsed",
+  "@accDhTransitElapsed": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhVendorRepairSla": "Vendor repair SLA",
+  "@accDhVendorRepairSla": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhSlaUnavailable": "SLA unavailable",
+  "@accDhSlaUnavailable": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhVendorSlaStartsOnlyAfterSigned": "Vendor SLA starts only after signed vehicle acceptance.",
+  "@accDhVendorSlaStartsOnlyAfterSigned": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhTheSlaClockStartsWhenThe": "The SLA clock starts when the workshop signs vehicle acceptance.",
+  "@accDhTheSlaClockStartsWhenThe": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhRetry": "Retry",
+  "@accDhRetry": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhDispatchLegsAreNotProvisionedOn": "Dispatch legs are not provisioned on this database yet. Dispatch details, handover condition and the workshop receipt cannot be recorded until the migration is applied.",
+  "@accDhDispatchLegsAreNotProvisionedOn": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhVendorContactFieldsAreNotProvisioned": "Vendor contact fields are not provisioned yet; only the workshop name is stored.",
+  "@accDhVendorContactFieldsAreNotProvisioned": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhAfterAcceptanceVendorCanAddInspection": "After acceptance, vendor can add inspection details, quotation, parts, schedule and progress in its own workspace. PO is created only after quotation review and approval.",
+  "@accDhAfterAcceptanceVendorCanAddInspection": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhOpenCaseTimeline": "Open case timeline",
+  "@accDhOpenCaseTimeline": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhOpenWorkshopAssessment": "Open workshop assessment",
+  "@accDhOpenWorkshopAssessment": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhNotStarted": "Not started",
+  "@accDhNotStarted": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhMet": "Met",
+  "@accDhMet": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhBreached": "Breached",
+  "@accDhBreached": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhPaused": "Paused",
+  "@accDhPaused": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhRunning": "Running",
+  "@accDhRunning": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhCancelled": "Cancelled",
+  "@accDhCancelled": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhStartedNoSlaTarget": "Started, no SLA target",
+  "@accDhStartedNoSlaTarget": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhDestinationAndVendor": "Destination and vendor",
+  "@accDhDestinationAndVendor": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhWorkshopName": "Workshop name",
+  "@accDhWorkshopName": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhCity": "City",
+  "@accDhCity": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhVendorContactName": "Vendor contact name",
+  "@accDhVendorContactName": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhPhone": "Phone",
+  "@accDhPhone": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhEmail": "Email",
+  "@accDhEmail": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhWorkshopRegistrationTaxNo": "Workshop registration / tax no.",
+  "@accDhWorkshopRegistrationTaxNo": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhAssignedVendorInspector": "Assigned vendor inspector",
+  "@accDhAssignedVendorInspector": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhUnassigned": "Unassigned",
+  "@accDhUnassigned": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhEditVendorDetails": "Edit vendor details",
+  "@accDhEditVendorDetails": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhContactWorkshop": "Contact workshop",
+  "@accDhContactWorkshop": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhCancel": "Cancel",
+  "@accDhCancel": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhSaveVendor": "Save vendor",
+  "@accDhSaveVendor": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhDispatchDetails": "Dispatch details",
+  "@accDhDispatchDetails": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhSentBy": "Sent by",
+  "@accDhSentBy": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhDeparture": "Departure",
+  "@accDhDeparture": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhCarrier": "Carrier",
+  "@accDhCarrier": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhDriver": "Driver",
+  "@accDhDriver": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhRecoveryVehicle": "Recovery vehicle",
+  "@accDhRecoveryVehicle": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhOrigin": "Origin",
+  "@accDhOrigin": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhDestination": "Destination",
+  "@accDhDestination": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhEstimatedArrival": "Estimated arrival",
+  "@accDhEstimatedArrival": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhLiveStatus": "Live status",
+  "@accDhLiveStatus": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhRecordDispatch": "Record dispatch",
+  "@accDhRecordDispatch": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhOdometerKm": "Odometer (km)",
+  "@accDhOdometerKm": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhEngineHours": "Engine hours",
+  "@accDhEngineHours": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhFuel": "Fuel %",
+  "@accDhFuel": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhKeys": "Keys",
+  "@accDhKeys": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhDocumentsSentOnePerLine": "Documents sent (one per line)",
+  "@accDhDocumentsSentOnePerLine": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhAccessoriesChecklistOnePerLine": "Accessories / checklist (one per line)",
+  "@accDhAccessoriesChecklistOnePerLine": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhOutgoingDamagePhotos": "Outgoing damage photos",
+  "@accDhOutgoingDamagePhotos": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhOutgoingConditionSignedBy": "Outgoing condition signed by",
+  "@accDhOutgoingConditionSignedBy": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhOutgoingSignature": "Outgoing signature",
+  "@accDhOutgoingSignature": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhSaveDispatch": "Save dispatch",
+  "@accDhSaveDispatch": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhVehicleHandoverCondition": "Vehicle handover condition",
+  "@accDhVehicleHandoverCondition": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhOdometer": "Odometer",
+  "@accDhOdometer": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhFuel2": "Fuel",
+  "@accDhFuel2": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhDocumentsSent": "Documents sent",
+  "@accDhDocumentsSent": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhDocuments": "documents",
+  "@accDhDocuments": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhAccessoriesChecklist": "Accessories / checklist",
+  "@accDhAccessoriesChecklist": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhItems": "items",
+  "@accDhItems": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhPhotos": "photos",
+  "@accDhPhotos": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhWorkshopReceipt": "Workshop receipt",
+  "@accDhWorkshopReceipt": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhCompletedByVendor": "Completed by vendor",
+  "@accDhCompletedByVendor": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhArrived": "Arrived",
+  "@accDhArrived": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhReceivedBy": "Received by",
+  "@accDhReceivedBy": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhIncomingOdometer": "Incoming odometer",
+  "@accDhIncomingOdometer": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhIncomingEngineHours": "Incoming engine hours",
+  "@accDhIncomingEngineHours": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhIncomingFuel": "Incoming fuel",
+  "@accDhIncomingFuel": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhConditionMatchesDispatch": "Condition matches dispatch",
+  "@accDhConditionMatchesDispatch": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhYes": "Yes",
+  "@accDhYes": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhNo": "No",
+  "@accDhNo": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhAdditionalDamageRemarks": "Additional damage / remarks",
+  "@accDhAdditionalDamageRemarks": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhReceivingPhotos": "Receiving photos",
+  "@accDhReceivingPhotos": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhCustodyAccepted": "Custody accepted",
+  "@accDhCustodyAccepted": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhVendorReceiverSignature": "Vendor receiver signature",
+  "@accDhVendorReceiverSignature": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhSenderDriverSignature": "Sender / driver signature",
+  "@accDhSenderDriverSignature": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhCompletedByVendor2": "Completed by vendor",
+  "@accDhCompletedByVendor2": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhNoDispatchLegIsRecordedYet": "No dispatch leg is recorded yet. Record the dispatch first; the receipt is signed against it.",
+  "@accDhNoDispatchLegIsRecordedYet": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhArrivedDateTime": "Arrived date / time *",
+  "@accDhArrivedDateTime": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhReceivedByName": "Received by (name) *",
+  "@accDhReceivedByName": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhDesignation": "Designation *",
+  "@accDhDesignation": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhIncomingOdometerKm": "Incoming odometer (km)",
+  "@accDhIncomingOdometerKm": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhIncomingFuel2": "Incoming fuel %",
+  "@accDhIncomingFuel2": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhUploadReceivingPhotos": "Upload receiving photos *",
+  "@accDhUploadReceivingPhotos": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhUploadSignedHandoverPaper": "Upload signed handover paper *",
+  "@accDhUploadSignedHandoverPaper": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhVendorReceiverSignature2": "Vendor receiver signature *",
+  "@accDhVendorReceiverSignature2": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhSenderDriverSignatureCaptured": "Sender / driver signature (captured)",
+  "@accDhSenderDriverSignatureCaptured": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhIAcceptCustodyOfThisVehicle": "I accept custody of this vehicle",
+  "@accDhIAcceptCustodyOfThisVehicle": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhSignAndAcceptVehicle": "Sign and accept vehicle",
+  "@accDhSignAndAcceptVehicle": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhCompleteAllRequiredFieldsToEnable": "Complete all required fields to enable",
+  "@accDhCompleteAllRequiredFieldsToEnable": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhMissing": "Missing",
+  "@accDhMissing": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhArrivedDateTime2": "Arrived date / time",
+  "@accDhArrivedDateTime2": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhDesignation2": "Designation",
+  "@accDhDesignation2": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhSignedHandoverPaper": "Signed handover paper",
+  "@accDhSignedHandoverPaper": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhVendorReceiverSignature3": "Vendor receiver signature",
+  "@accDhVendorReceiverSignature3": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhCustodyCheckbox": "Custody checkbox",
+  "@accDhCustodyCheckbox": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhComplete": "Complete",
+  "@accDhComplete": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhNext": "Next",
+  "@accDhNext": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhPending": "Pending",
+  "@accDhPending": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhDispatched": "Dispatched",
+  "@accDhDispatched": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhArrived2": "Arrived",
+  "@accDhArrived2": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhSignedAcceptance": "Signed acceptance",
+  "@accDhSignedAcceptance": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhVendorAssessmentQuotationStarts": "Vendor assessment / quotation starts",
+  "@accDhVendorAssessmentQuotationStarts": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhPick": "Pick",
+  "@accDhPick": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhUseNow": "Use now",
+  "@accDhUseNow": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhAttached": "attached",
+  "@accDhAttached": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhCamera": "Camera",
+  "@accDhCamera": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accDhGallery": "Gallery",
+  "@accDhGallery": {
+    "description": "Accident workspace copy (accident_ws_dispatch_handover.dart)."
+  },
+  "accTlAddTimelineNote": "Add timeline note",
+  "@accTlAddTimelineNote": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlNote": "Note",
+  "@accTlNote": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlSaveNote": "Save note",
+  "@accTlSaveNote": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlNotifyParticipants": "Notify participants",
+  "@accTlNotifyParticipants": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlThisLogsTheNotificationOnThe": "This logs the notification on the case ledger. Delivery to people is done by the server notification engine.",
+  "@accTlThisLogsTheNotificationOnThe": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlSubject": "Subject",
+  "@accTlSubject": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlMessage": "Message",
+  "@accTlMessage": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlLogNotification": "Log notification",
+  "@accTlLogNotification": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlManageRecipientGroups": "Manage recipient groups",
+  "@accTlManageRecipientGroups": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlRecipientsAreSetByAdminPer": "Recipients are set by Admin per event and role. The groups below are the roles each event reaches; membership comes from user profiles.",
+  "@accTlRecipientsAreSetByAdminPer": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlVisibility": "Visibility",
+  "@accTlVisibility": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlTime": "Time",
+  "@accTlTime": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlBy": "By",
+  "@accTlBy": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlTo": "To",
+  "@accTlTo": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlStatus": "Status",
+  "@accTlStatus": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlElapsed": "Elapsed",
+  "@accTlElapsed": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlCaseTimelineNotifications": "Case timeline & notifications",
+  "@accTlCaseTimelineNotifications": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlOpen": "Open",
+  "@accTlOpen": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlCurrentOwner": "Current owner",
+  "@accTlCurrentOwner": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlNextSla": "Next SLA",
+  "@accTlNextSla": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlDueIn": "Due in",
+  "@accTlDueIn": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlAddTimelineNote2": "Add timeline note",
+  "@accTlAddTimelineNote2": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlNotifyParticipants2": "Notify participants",
+  "@accTlNotifyParticipants2": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlNotProvisionedYetOnThisDatabase": "not provisioned yet on this database",
+  "@accTlNotProvisionedYetOnThisDatabase": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlCouldNotBeReadTheFeed": "could not be read; the feed omits it",
+  "@accTlCouldNotBeReadTheFeed": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlCommunications": "Communications",
+  "@accTlCommunications": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlEvidence": "Evidence",
+  "@accTlEvidence": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlSlaClocks": "SLA clocks",
+  "@accTlSlaClocks": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlDispatchLeg": "Dispatch leg",
+  "@accTlDispatchLeg": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlGpsFix": "GPS fix",
+  "@accTlGpsFix": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlTimeline": "Timeline",
+  "@accTlTimeline": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlNotifications": "Notifications",
+  "@accTlNotifications": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlParticipants": "Participants",
+  "@accTlParticipants": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlAll": "All",
+  "@accTlAll": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlActions": "Actions",
+  "@accTlActions": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlDocuments": "Documents",
+  "@accTlDocuments": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlSla": "SLA",
+  "@accTlSla": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlEmails": "Emails",
+  "@accTlEmails": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlCompleted": "Completed",
+  "@accTlCompleted": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlInTransit": "In transit",
+  "@accTlInTransit": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlNoRecordedEventsForThisFilter": "No recorded events for this filter.",
+  "@accTlNoRecordedEventsForThisFilter": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlNotificationDeliveryLog": "Notification delivery log",
+  "@accTlNotificationDeliveryLog": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlNoNotificationsRecordedForThisCase": "No notifications recorded for this case.",
+  "@accTlNoNotificationsRecordedForThisCase": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlTrigger": "Trigger",
+  "@accTlTrigger": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlRecipients": "Recipients",
+  "@accTlRecipients": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlChannel": "Channel",
+  "@accTlChannel": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlShowStatus": "Show status",
+  "@accTlShowStatus": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlViewAllNotifications": "View all notifications",
+  "@accTlViewAllNotifications": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlManageRecipientGroups2": "Manage recipient groups",
+  "@accTlManageRecipientGroups2": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlRecipientsAreSetByAdminPer2": "Recipients are set by Admin per event and role.",
+  "@accTlRecipientsAreSetByAdminPer2": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlParticipantsAndOwnership": "Participants and ownership",
+  "@accTlParticipantsAndOwnership": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlBy2": "by",
+  "@accTlBy2": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlTo2": "to",
+  "@accTlTo2": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accTlSlaMet": "SLA met",
+  "@accTlSlaMet": {
+    "description": "Accident workspace copy (accident_ws_timeline.dart)."
+  },
+  "accDhChangeNotSaved": "The change could not be saved. Try again.",
+  "@accDhChangeNotSaved": {
+    "description": "Dispatch workspace save failure."
+  },
+  "accDhContactOpenFailed": "The workshop contact could not be opened on this device.",
+  "@accDhContactOpenFailed": {
+    "description": "Dispatch workspace contact failure."
+  },
+  "accDhRecordDepartureFirst": "Record the departure time first.",
+  "@accDhRecordDepartureFirst": {
+    "description": "Validation."
+  },
+  "accTlLoadFailed": "The timeline could not be loaded. Try again.",
+  "@accTlLoadFailed": {
+    "description": "Timeline load failure."
+  },
+  "accTlOverdueBy": "Overdue {elapsed}",
+  "@accTlOverdueBy": {
+    "description": "SLA overdue read-out.",
+    "placeholders": {
+      "elapsed": {
+        "type": "String"
+      }
+    }
   }
 }

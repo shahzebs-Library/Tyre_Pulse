@@ -237,8 +237,8 @@ void main() {
     expect(find.text('Step 1 of 7: Identify asset'), findsOneWidget);
     expect(find.text('2 matching assets'), findsOneWidget);
     expect(find.text('Where did the incident occur?'), findsOneWidget);
-    expect(find.text(accidentIncidentSiteHelp), findsOneWidget);
-    expect(find.text(accidentFleetMasterLockNote), findsOneWidget);
+    expect(find.text(_siteHelp), findsOneWidget);
+    expect(find.text(_lockNote), findsOneWidget);
 
     final Finder siteField = find.descendant(
       of: find.byKey(AccidentReportIntakeKeys.incidentSite),
@@ -269,3 +269,11 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 }
+
+/// The English ARB copy of the intake notes (tests run in `en`).
+const String _lockNote =
+    'These details are sourced from fleet master and cannot be edited here. '
+    'If any detail is incorrect, please update it in the fleet system.';
+const String _siteHelp =
+    'Select the site/location of this incident. This may be different from '
+    "the asset's home site.";

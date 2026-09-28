@@ -4531,4 +4531,1412 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get loginCreateAccount => 'إنشاء حساب';
+
+  @override
+  String get accAssessmentLoadFailed => 'تعذر تحميل التقييم';
+
+  @override
+  String get accSafetyAndMobility => 'السلامة والقدرة على الحركة';
+
+  @override
+  String get accSafeToMove => 'آمن للتحريك';
+
+  @override
+  String get accRecoveryTowRequired => 'يلزم السحب / الإنقاذ';
+
+  @override
+  String get accVehicleOffRoad => 'المركبة خارج الخدمة (VOR)';
+
+  @override
+  String get accDamageAssessment => 'تقييم الضرر';
+
+  @override
+  String accDamageAreaCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count منطقة',
+      many: '$count منطقة',
+      few: '$count مناطق',
+      two: 'منطقتان',
+      one: 'منطقة واحدة',
+      zero: 'لا مناطق',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get accNoDamageAreas => 'لم تُحدَّد أي مناطق ضرر في هذه الحالة بعد.';
+
+  @override
+  String get accLabourAndPartsEstimate => 'تقدير العمالة وقطع الغيار';
+
+  @override
+  String get accLabourHours => 'ساعات العمل';
+
+  @override
+  String get accLabourEstimate => 'تقدير العمالة';
+
+  @override
+  String get accPartsEstimate => 'تقدير قطع الغيار';
+
+  @override
+  String get accTotalPreliminaryEstimate => 'إجمالي التقدير المبدئي';
+
+  @override
+  String get accPartsAvailable => 'قطع متوفرة';
+
+  @override
+  String get accSpecialOrder => 'طلب خاص';
+
+  @override
+  String get accPartsAvailability => 'توفر قطع الغيار';
+
+  @override
+  String get accRepairRouteRecommendation => 'التوصية بمسار الإصلاح';
+
+  @override
+  String get accTotalLossPossible => 'خسارة كلية محتملة';
+
+  @override
+  String get accSelectedWorkshop => 'الورشة المختارة';
+
+  @override
+  String get accCity => 'المدينة';
+
+  @override
+  String get accExpectedDurationDays => 'المدة المتوقعة (بالأيام)';
+
+  @override
+  String get accQuotationStatus => 'حالة عرض السعر';
+
+  @override
+  String accRequiredAttachments(int count) {
+    return 'المرفقات المطلوبة ($count)';
+  }
+
+  @override
+  String get accAttachVendorQuotation =>
+      'أرفق عرض سعر المورد لتفعيل الإرسال إلى الورشة الخارجية.';
+
+  @override
+  String get accAfterSubmitNotify => 'الإشعار بعد الإرسال';
+
+  @override
+  String get accSaveAssessment => 'حفظ التقييم';
+
+  @override
+  String get accAssessmentSubmitted => 'تم إرسال التقييم';
+
+  @override
+  String get accSubmitAssessment => 'إرسال التقييم وتوجيهه';
+
+  @override
+  String get accSubmissionNeedsQuotation =>
+      'يتطلب الإرسال عرض سعر المورد للمسار الخارجي.';
+
+  @override
+  String accFieldsNotStored(String fields) {
+    return 'تعذر حفظ هذه الحقول على الخادم: $fields.';
+  }
+
+  @override
+  String accAssessmentRouted(String route) {
+    return 'تم إرسال التقييم وتوجيهه إلى $route.';
+  }
+
+  @override
+  String get accAssessmentSaved => 'تم حفظ التقييم.';
+
+  @override
+  String accDocumentAttached(String document) {
+    return 'تم إرفاق $document.';
+  }
+
+  @override
+  String get accKm => 'كم';
+
+  @override
+  String accKmValue(String km) {
+    return '$km كم';
+  }
+
+  @override
+  String get accPlate => 'اللوحة';
+
+  @override
+  String get accSiteLocation => 'الموقع · المكان';
+
+  @override
+  String accViewDamageMap(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'عرض خريطة الضرر · $count منطقة',
+      many: 'عرض خريطة الضرر · $count منطقة',
+      few: 'عرض خريطة الضرر · $count مناطق',
+      two: 'عرض خريطة الضرر · منطقتان',
+      one: 'عرض خريطة الضرر · منطقة واحدة',
+      zero: 'عرض خريطة الضرر · لا مناطق',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get accActionNotAssessed => 'الإجراء: لم يُقيَّم بعد';
+
+  @override
+  String accActionValue(String value) {
+    return 'الإجراء: $value';
+  }
+
+  @override
+  String get accRecommended => 'موصى به';
+
+  @override
+  String accUploadNamedDocument(String document) {
+    return 'رفع $document';
+  }
+
+  @override
+  String get accClaimLoadFailed => 'تعذر تحميل المطالبة';
+
+  @override
+  String get accClaimExternalRepairBanner => 'تقييم إصلاح خارجي';
+
+  @override
+  String get accClaimDocumentPackage => 'حزمة مستندات المطالبة';
+
+  @override
+  String get accClaimRegistrationLocked =>
+      'يتاح تسجيل المطالبة عند اكتمال جميع المستندات المطلوبة.';
+
+  @override
+  String accRequestDocument(String document) {
+    return 'طلب $document';
+  }
+
+  @override
+  String get accUploadDocument => 'رفع مستند';
+
+  @override
+  String get accClaimRegistration => 'تسجيل المطالبة';
+
+  @override
+  String get accInsurer => 'شركة التأمين';
+
+  @override
+  String get accPolicyNo => 'رقم الوثيقة';
+
+  @override
+  String get accClaimNumber => 'رقم المطالبة';
+
+  @override
+  String get accClaimNumberAuto => 'يُنشأ تلقائيًا بعد التسجيل';
+
+  @override
+  String get accLiability => 'المسؤولية';
+
+  @override
+  String get accGccLiabilityPct => 'نسبة مسؤولية GCC %';
+
+  @override
+  String get accClaimAmount => 'مبلغ المطالبة';
+
+  @override
+  String get accDeductible => 'مبلغ التحمل';
+
+  @override
+  String get accNetClaimable => 'صافي المبلغ المطالب به';
+
+  @override
+  String get accClaimRegistered => 'تم تسجيل المطالبة لدى شركة التأمين';
+
+  @override
+  String get accRegisterClaim => 'تسجيل المطالبة لدى شركة التأمين';
+
+  @override
+  String get accClaimEnableWhenComplete =>
+      'يُفعّل بعد اكتمال جميع المستندات المطلوبة.';
+
+  @override
+  String get accPaymentAndRecovery => 'الدفع والاسترداد';
+
+  @override
+  String get accApprovedAmount => 'المبلغ المعتمد';
+
+  @override
+  String get accRecoveredAmount => 'المبلغ المسترد';
+
+  @override
+  String get accOutstanding => 'المتبقي';
+
+  @override
+  String get accRecoverySource => 'مصدر الاسترداد';
+
+  @override
+  String get accRecoverySourceHint => 'شركة التأمين، طرف ثالث، السائق';
+
+  @override
+  String get accLastUpdated => 'آخر تحديث';
+
+  @override
+  String get accSaveRecovery => 'حفظ الاسترداد';
+
+  @override
+  String get accUpdateRecovery => 'تحديث مبلغ الاسترداد';
+
+  @override
+  String get accRegisterClaimFirst => 'سجّل المطالبة أولًا.';
+
+  @override
+  String get accRecoveryEditableNote =>
+      'تبقى مبالغ الاسترداد قابلة للتعديل بعد الإغلاق التشغيلي للحالة. كل تعديل مؤرخ ومدقق.';
+
+  @override
+  String get accAfterRegistrationNotify => 'الإشعار بعد التسجيل';
+
+  @override
+  String get accClaimNotificationIncludes =>
+      'يتضمن الإشعار رقم المطالبة وحالة المستندات ومبلغ المطالبة والإجراء التالي.';
+
+  @override
+  String get accSaveClaimDraft => 'حفظ مسودة المطالبة';
+
+  @override
+  String get accCompleteDocuments => 'إكمال المستندات';
+
+  @override
+  String accCommandCenterMonitoring(String owner) {
+    return '$owner يتابع مهلة الخدمة والمستندات الناقصة.';
+  }
+
+  @override
+  String accCommandCenterRole(String role) {
+    return '$role (مركز القيادة)';
+  }
+
+  @override
+  String get accClaimDraftSaved =>
+      'تم حفظ مسودة المطالبة على هذا الجهاز. لم يُرسل أي شيء.';
+
+  @override
+  String accDocumentRequestLogged(String document) {
+    return 'تم تسجيل طلب $document في الحالة.';
+  }
+
+  @override
+  String get accWhichDocument => 'ما هذا المستند؟';
+
+  @override
+  String accDocumentUploaded(String document) {
+    return 'تم رفع $document إلى حزمة المطالبة.';
+  }
+
+  @override
+  String get accClaimRegisterMissing =>
+      'أدخل شركة التأمين ورقم الوثيقة ومبلغ المطالبة أولًا.';
+
+  @override
+  String accRegisterClaimConfirm(
+      String claimNo, String insurer, String policyNo) {
+    return 'سيتم تسجيل المطالبة $claimNo لدى $insurer بموجب الوثيقة $policyNo في الحالة. لا يمكن التراجع عن ذلك من التطبيق.';
+  }
+
+  @override
+  String get accRegister => 'تسجيل';
+
+  @override
+  String accClaimRegisteredSnack(String claimNo) {
+    return 'تم تسجيل المطالبة $claimNo لدى شركة التأمين.';
+  }
+
+  @override
+  String get accRecoveryMissing => 'أدخل المبلغ المسترد ومصدره.';
+
+  @override
+  String get accRecoveryRecorded => 'تم تسجيل الاسترداد.';
+
+  @override
+  String accOptionalSuffix(String label) {
+    return '$label (اختياري)';
+  }
+
+  @override
+  String get accIntakeFleetMasterLockNote =>
+      'هذه التفاصيل مأخوذة من سجل الأسطول ولا يمكن تعديلها هنا. إذا كانت أي تفاصيل غير صحيحة، يرجى تحديثها في نظام الأسطول.';
+
+  @override
+  String get accIntakeIncidentSiteHelp =>
+      'اختر موقع هذا الحادث. قد يختلف عن الموقع الأساسي للأصل.';
+
+  @override
+  String get accIntakeAssetNo => 'رقم الأصل';
+
+  @override
+  String get accIntakeVehicleType => 'نوع المركبة';
+
+  @override
+  String get accIntakeMakeModel => 'الصانع / الطراز';
+
+  @override
+  String get accIntakeHomeSite => 'الموقع (الأساسي)';
+
+  @override
+  String get accIntakeCountry => 'الدولة';
+
+  @override
+  String get accIntakeCurrentMeter => 'القراءة الحالية للعداد';
+
+  @override
+  String get accIntakeStatus => 'الحالة';
+
+  @override
+  String get accIntakeAssetLoaded => 'تم تحميل الأصل من سجل الأسطول';
+
+  @override
+  String get accIntakeAutoFilled => 'مُعبأ تلقائيًا من سجل الأسطول';
+
+  @override
+  String get accIntakeWhereOccurred => 'أين وقع الحادث؟';
+
+  @override
+  String get accIntakeSiteHint => 'اسم الموقع أو المكان';
+
+  @override
+  String accIntakeHomeSiteChip(String site) {
+    return '$site (الأساسي)';
+  }
+
+  @override
+  String accIntakeRequiredPhotos(int done, int total) {
+    return '$done من $total صور مطلوبة';
+  }
+
+  @override
+  String accIntakeMissingCount(int count) {
+    return '$count ناقصة';
+  }
+
+  @override
+  String get accIntakeAttachedOnDevice => 'مرفق على هذا الجهاز';
+
+  @override
+  String accIntakeRequiredCategory(String category) {
+    return '$category · مطلوب';
+  }
+
+  @override
+  String get accIntakeRemovePhoto => 'إزالة الصورة';
+
+  @override
+  String get accIntakeSupportingDocuments => 'المستندات الداعمة';
+
+  @override
+  String get accIntakeSupportingDocumentsHelp =>
+      'أرفق المتاح الآن. قد تتطلب قواعد المسار والدولة المزيد أثناء مراجعة الحالة.';
+
+  @override
+  String get accIntakeOptionalAtIntake => 'اختياري عند الإدخال';
+
+  @override
+  String get accIntakeRemoveAttachment => 'إزالة المرفق';
+
+  @override
+  String get accIntakeAttachDocumentPhoto => 'إرفاق صورة المستند';
+
+  @override
+  String get accYes => 'نعم';
+
+  @override
+  String get accNo => 'لا';
+
+  @override
+  String get accCaseSummaryTitle => 'ملخص حالة الحادث';
+
+  @override
+  String accCaseSummaryGenerated(String date) {
+    return 'تم الإنشاء في $date';
+  }
+
+  @override
+  String get accCaseSummaryWorkstreams => 'مسارات عمل الحالة';
+
+  @override
+  String get accCaseSummaryWorkstreamColumn => 'مسار العمل';
+
+  @override
+  String get accCaseSummaryTeamColumn => 'الفريق';
+
+  @override
+  String get accCaseSummaryStatusColumn => 'الحالة';
+
+  @override
+  String get accCaseSummaryProgressColumn => 'التقدم';
+
+  @override
+  String get accCaseSummaryOverallCompletion => 'نسبة الإنجاز الإجمالية';
+
+  @override
+  String get accCaseSummaryEvidencePhotos => 'صور الأدلة';
+
+  @override
+  String get accCaseSummaryShare => 'مشاركة ملخص الحالة PDF';
+
+  @override
+  String get accCaseSummaryShareFailed =>
+      'تعذرت مشاركة ملخص الحالة. حاول مرة أخرى.';
+
+  @override
+  String get accCaseSummarySharedInEnglish =>
+      'تعذر تحميل الخط العربي، لذلك تمت مشاركة الملخص باللغة الإنجليزية.';
+
+  @override
+  String get accReportDraftRestoreFailed =>
+      'تعذر استعادة مسودة التقرير المحفوظة. لم يتم استبدال بياناتك المحفوظة.';
+
+  @override
+  String get accWorkspaceLoading =>
+      'مساحة العمل لا تزال قيد التحميل. حاول مرة أخرى.';
+
+  @override
+  String get accReportDraftSaveFailed =>
+      'تعذر على هذا الجهاز حفظ المسودة. لم يتم استبدال أي بيانات محفوظة سابقًا. حاول مرة أخرى.';
+
+  @override
+  String get accReportUseScannedAsset =>
+      'استخدم رقم الأصل الممسوح لاختيار سجل الأسطول المطابق.';
+
+  @override
+  String get accReportAddCloseUpPhoto => 'إضافة صورة مقربة';
+
+  @override
+  String get accReportTakePhoto => 'التقاط صورة';
+
+  @override
+  String get accReportChooseGallery => 'اختيار من المعرض';
+
+  @override
+  String get accReportQueued => 'تم حفظ التقرير في قائمة الانتظار دون اتصال.';
+
+  @override
+  String get accReportQueuedWithNotes =>
+      'تمت إضافة التقرير إلى قائمة الانتظار. حُفظت بعض الحقول الاختيارية غير المدعومة في ملاحظات الإدخال.';
+
+  @override
+  String get accReportStepAssetSubtitle =>
+      'اختر أصل الأسطول المتورط في هذا الحادث.';
+
+  @override
+  String get accReportStepIncidentSubtitle => 'سجّل متى وأين وماذا حدث.';
+
+  @override
+  String get accReportStepPeopleSubtitle =>
+      'سجّل فقط الحقائق اللازمة في موقع الحادث عن الأشخاص والسلامة ونجم والطرف الثالث.';
+
+  @override
+  String get accReportStepEvidenceSubtitle =>
+      'أضف صورة عامة للموقع وصورة مقربة لكل منطقة ضرر محددة. المستندات الداعمة اختيارية عند الإدخال.';
+
+  @override
+  String get accReportStepDocumentsSubtitle =>
+      'أضف المستندات الداعمة المتاحة. اختيارية عند الإدخال.';
+
+  @override
+  String get accReportStepReviewSubtitle =>
+      'راجع التقرير بدقة وأرسله إلى تحقق الأسطول. المستندات الاختيارية لا تمنع هذا الإرسال أبدًا.';
+
+  @override
+  String get accReportScanCode => 'مسح رمز QR / الباركود';
+
+  @override
+  String accReportMatchingAssets(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count أصل مطابق',
+      many: '$count أصلًا مطابقًا',
+      few: '$count أصول مطابقة',
+      two: 'أصلان مطابقان',
+      one: 'أصل واحد مطابق',
+      zero: 'لا توجد أصول مطابقة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get accReportNoMatchingAsset => 'لا يوجد أصل مطابق في الأسطول';
+
+  @override
+  String accReportMatchOverflow(int shown, int total, int hidden) {
+    return 'عرض أول $shown من أصل $total نتيجة. توجد $hidden نتائج أخرى، حسّن البحث.';
+  }
+
+  @override
+  String get accReportSavedFleetData => 'عرض بيانات الأسطول المحفوظة';
+
+  @override
+  String get accReportChangeAsset => 'تغيير الأصل';
+
+  @override
+  String get accReportManualAsset => 'رقم الأصل (إدخال يدوي احتياطي)';
+
+  @override
+  String get accReportManualAssetHint =>
+      'استخدمه فقط عند تعذر المطابقة مع الأسطول';
+
+  @override
+  String get accReportMeterAtIncident => 'قراءة العداد عند الحادث';
+
+  @override
+  String get accReportMeterHint => 'قراءة عداد المسافة أو الساعات';
+
+  @override
+  String accReportMeterFleetMaster(String km) {
+    return 'سجل الأسطول: $km كم';
+  }
+
+  @override
+  String get accReportRoadLocation => 'الطريق / الموقع الدقيق';
+
+  @override
+  String get accReportIncidentDate => 'تاريخ الحادث';
+
+  @override
+  String get accReportIncidentTime => 'وقت الحادث';
+
+  @override
+  String get accReportIncidentSite => 'موقع الحادث';
+
+  @override
+  String get accReportIncidentSiteHelper =>
+      'موقع الحادث قابل للتعديل ومستقل عن الموقع الأساسي المثبت للأسطول.';
+
+  @override
+  String get accReportRoadLocationHint =>
+      'البوابة أو الطريق أو منطقة المشروع أو وصف GPS';
+
+  @override
+  String get accReportEventType => 'نوع الحدث';
+
+  @override
+  String get accReportSelectEventType => 'اختر نوع الحدث';
+
+  @override
+  String get accReportInitialSeverity => 'الشدة الأولية';
+
+  @override
+  String get accSeverityMinor => 'بسيط';
+
+  @override
+  String get accSeverityModerate => 'متوسط';
+
+  @override
+  String get accSeverityMajorSevere => 'كبير / شديد';
+
+  @override
+  String get accSeverityFatal => 'مميت';
+
+  @override
+  String get accReportWhatHappened => 'ماذا حدث؟';
+
+  @override
+  String get accReportWhatHappenedHint => 'صف تسلسل الأحداث والظروف المباشرة';
+
+  @override
+  String get accReportDriverName => 'اسم السائق';
+
+  @override
+  String get accReportDriverId => 'الرقم الوظيفي / رقم رخصة السائق';
+
+  @override
+  String get accReportPassengersInvolved => 'هل كان هناك ركاب؟';
+
+  @override
+  String get accReportPassengerCount => 'عدد الركاب';
+
+  @override
+  String get accReportPassengerDetails => 'تفاصيل الركاب';
+
+  @override
+  String get accReportInjuries => 'هل كانت هناك إصابات؟';
+
+  @override
+  String get accReportInjuryCount => 'عدد الإصابات';
+
+  @override
+  String get accReportInjuryDetails => 'تفاصيل الإصابات';
+
+  @override
+  String get accReportEmergencyServices => 'هل تم الاتصال بخدمات الطوارئ؟';
+
+  @override
+  String get accReportEmergencyDetails => 'تفاصيل الاستجابة للطوارئ';
+
+  @override
+  String get accReportVehicleMovable => 'هل يمكن تحريك المركبة؟';
+
+  @override
+  String get accReportRecoveryRequired => 'هل يلزم السحب / الإنقاذ؟';
+
+  @override
+  String get accReportSafeToOperate => 'هل المركبة آمنة للتشغيل؟';
+
+  @override
+  String get accReportThirdPartyInvolved => 'هل كان هناك طرف ثالث؟';
+
+  @override
+  String get accReportThirdPartyName => 'اسم الطرف الثالث';
+
+  @override
+  String get accReportThirdPartyVehicle => 'مركبة الطرف الثالث';
+
+  @override
+  String get accReportThirdPartyPlate => 'لوحة الطرف الثالث';
+
+  @override
+  String get accReportThirdPartyContact => 'جهة اتصال الطرف الثالث';
+
+  @override
+  String get accReportThirdPartyInsurer => 'شركة تأمين الطرف الثالث';
+
+  @override
+  String get accReportThirdPartyInvoice => 'هل تتوفر فاتورة الطرف الثالث؟';
+
+  @override
+  String get accReportThirdPartyInvoiceHelper =>
+      'هذا اختياري. إن توفرت، سجّل رقم الفاتورة فقط؛ ويمكن لفريق التأمين طلب الملف لاحقًا.';
+
+  @override
+  String get accReportThirdPartyInvoiceNumber => 'رقم فاتورة الطرف الثالث';
+
+  @override
+  String get accReportNajmOpened => 'هل تم فتح بلاغ نجم؟';
+
+  @override
+  String get accReportNajmHelper => 'سجّل فقط عندما ينطبق نجم على هذا الحادث.';
+
+  @override
+  String get accReportNajmReference => 'مرجع نجم';
+
+  @override
+  String get accReportWitnessDetails => 'تفاصيل الشهود';
+
+  @override
+  String get accReportImmediateAction => 'الإجراء الفوري المتخذ';
+
+  @override
+  String get accReportAdditionalNotes => 'ملاحظات إضافية';
+
+  @override
+  String get accReportReadyToSubmit => 'جاهز للإرسال';
+
+  @override
+  String get accReportMissingBeforeSubmit => 'ناقص قبل الإرسال';
+
+  @override
+  String get accReportComplete => 'مكتمل';
+
+  @override
+  String get accNotRecorded => 'غير مسجل';
+
+  @override
+  String get accNotAnswered => 'لم تتم الإجابة';
+
+  @override
+  String get accReportReviewAsset => 'الأصل';
+
+  @override
+  String get accReportReviewIncident => 'الحادث';
+
+  @override
+  String get accReportReviewDateTime => 'التاريخ والوقت';
+
+  @override
+  String get accReportReviewSiteLocation => 'الموقع / المكان';
+
+  @override
+  String get accReportReviewWhatHappened => 'ماذا حدث';
+
+  @override
+  String get accReportReviewPeople => 'الأشخاص';
+
+  @override
+  String accReportReviewPeopleValue(String driver, String injuries) {
+    return 'السائق $driver · الإصابات $injuries';
+  }
+
+  @override
+  String get accReportReviewDamageMarks => 'علامات الضرر';
+
+  @override
+  String get accReportReviewFocusedPhotos => 'الصور المركزة';
+
+  @override
+  String accReportReviewPhotosValue(int done, int total) {
+    return '$done من $total';
+  }
+
+  @override
+  String get accReportReviewOptionalDocuments => 'المستندات الاختيارية';
+
+  @override
+  String accReportReviewAttachedValue(int count) {
+    return '$count مرفق';
+  }
+
+  @override
+  String get accReportWorkflowResolvesOnSync =>
+      'يحدد سير عمل الحوادث المهيأ المستلمين والمسار والمهلة الأولية عند مزامنة هذا التقرير.';
+
+  @override
+  String get accReportDraftAutoSaves => 'تُحفظ المسودة تلقائيًا على الجهاز';
+
+  @override
+  String get accReportDraftUnsaved => 'تغييرات غير محفوظة';
+
+  @override
+  String get accReportDraftSaving => 'جارٍ حفظ المسودة…';
+
+  @override
+  String get accReportDraftSaved => 'تم حفظ المسودة على الجهاز';
+
+  @override
+  String accReportDraftSavedAt(String time) {
+    return 'تم حفظ المسودة على الجهاز · $time';
+  }
+
+  @override
+  String get accReportDraftSaveFailedShort => 'فشل حفظ المسودة';
+
+  @override
+  String get accReportDraftRestoring => 'جارٍ استعادة المسودة المحفوظة…';
+
+  @override
+  String get accReportSaveAndExit => 'حفظ وخروج';
+
+  @override
+  String get accReportBack => 'رجوع';
+
+  @override
+  String get accReportSubmit => 'إرسال الحادث';
+
+  @override
+  String get accReportContinueToIncident => 'المتابعة إلى تفاصيل الحادث';
+
+  @override
+  String get accReportContinueToEvidence => 'المتابعة إلى الأدلة';
+
+  @override
+  String get accReportSaveAndContinue => 'حفظ ومتابعة';
+
+  @override
+  String accReportFleetResults(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count نتيجة في الأسطول · ابحث بالأصل أو الأسطول أو اللوحة أو النوع أو الصانع أو الطراز أو الموقع',
+      many:
+          '$count نتيجة في الأسطول · ابحث بالأصل أو الأسطول أو اللوحة أو النوع أو الصانع أو الطراز أو الموقع',
+      few:
+          '$count نتائج في الأسطول · ابحث بالأصل أو الأسطول أو اللوحة أو النوع أو الصانع أو الطراز أو الموقع',
+      two:
+          'نتيجتان في الأسطول · ابحث بالأصل أو الأسطول أو اللوحة أو النوع أو الصانع أو الطراز أو الموقع',
+      one:
+          'نتيجة واحدة في الأسطول · ابحث بالأصل أو الأسطول أو اللوحة أو النوع أو الصانع أو الطراز أو الموقع',
+      zero:
+          'لا نتائج في الأسطول · ابحث بالأصل أو الأسطول أو اللوحة أو النوع أو الصانع أو الطراز أو الموقع',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get accTypeCollision => 'تصادم';
+
+  @override
+  String get accTypeRollover => 'انقلاب';
+
+  @override
+  String get accTypeRearEnd => 'اصطدام خلفي';
+
+  @override
+  String get accTypeSideSwipe => 'احتكاك جانبي';
+
+  @override
+  String get accTypeReversing => 'أثناء الرجوع للخلف';
+
+  @override
+  String get accTypeFire => 'حريق';
+
+  @override
+  String get accTypeVandalism => 'تخريب متعمد';
+
+  @override
+  String get accTypeWeather => 'الطقس';
+
+  @override
+  String get accTypeTyreFailure => 'عطل الإطار';
+
+  @override
+  String get accTypeMechanical => 'ميكانيكي';
+
+  @override
+  String get accTypeNearMiss => 'حادث وشيك';
+
+  @override
+  String get accTypePropertyDamage => 'أضرار بالممتلكات';
+
+  @override
+  String get accTypeOther => 'أخرى';
+
+  @override
+  String get accNotSet => 'غير محدد';
+
+  @override
+  String get accErrorFileUnsupported => 'هذا الملف غير مدعوم.';
+
+  @override
+  String get accErrorCheckValues => 'تحقق من القيم وحاول مرة أخرى.';
+
+  @override
+  String get accErrorGeneric => 'حدث خطأ ما. يرجى المحاولة مرة أخرى.';
+
+  @override
+  String accNotifyForVisibility(String role) {
+    return '$role (للاطلاع)';
+  }
+
+  @override
+  String get accTakePhoto => 'التقاط صورة';
+
+  @override
+  String get accChooseDeviceFile => 'اختيار ملف من الجهاز';
+
+  @override
+  String get accDhDispatchHandover => 'الإرسال والتسليم';
+
+  @override
+  String get accDhRepairRoute => 'مسار الإصلاح';
+
+  @override
+  String get accDhDispatchStatus => 'حالة الإرسال';
+
+  @override
+  String get accDhTransitElapsed => 'مدة النقل';
+
+  @override
+  String get accDhVendorRepairSla => 'مهلة إصلاح المورد';
+
+  @override
+  String get accDhSlaUnavailable => 'المهلة غير متاحة';
+
+  @override
+  String get accDhVendorSlaStartsOnlyAfterSigned =>
+      'تبدأ مهلة المورد فقط بعد الاستلام الموقع للمركبة.';
+
+  @override
+  String get accDhTheSlaClockStartsWhenThe =>
+      'يبدأ عداد المهلة عندما توقع الورشة على استلام المركبة.';
+
+  @override
+  String get accDhRetry => 'إعادة المحاولة';
+
+  @override
+  String get accDhDispatchLegsAreNotProvisionedOn =>
+      'سجلات الإرسال غير مفعلة في قاعدة البيانات بعد. لا يمكن تسجيل التفاصيل حتى يتم تطبيق الترحيل.';
+
+  @override
+  String get accDhVendorContactFieldsAreNotProvisioned =>
+      'حقول اتصال المورد غير مفعلة بعد؛ يتم حفظ اسم الورشة فقط.';
+
+  @override
+  String get accDhAfterAcceptanceVendorCanAddInspection =>
+      'بعد الاستلام يمكن للمورد إضافة تفاصيل الفحص وعرض السعر والقطع والجدول والتقدم في مساحته الخاصة. يُنشأ أمر الشراء فقط بعد مراجعة عرض السعر واعتماده.';
+
+  @override
+  String get accDhOpenCaseTimeline => 'فتح سجل القضية';
+
+  @override
+  String get accDhOpenWorkshopAssessment => 'فتح تقييم الورشة';
+
+  @override
+  String get accDhNotStarted => 'لم تبدأ';
+
+  @override
+  String get accDhMet => 'تم الالتزام';
+
+  @override
+  String get accDhBreached => 'تم تجاوزها';
+
+  @override
+  String get accDhPaused => 'متوقفة';
+
+  @override
+  String get accDhRunning => 'جارية';
+
+  @override
+  String get accDhCancelled => 'ملغاة';
+
+  @override
+  String get accDhStartedNoSlaTarget => 'بدأت، بلا هدف مهلة';
+
+  @override
+  String get accDhDestinationAndVendor => 'الوجهة والمورد';
+
+  @override
+  String get accDhWorkshopName => 'اسم الورشة';
+
+  @override
+  String get accDhCity => 'المدينة';
+
+  @override
+  String get accDhVendorContactName => 'اسم جهة الاتصال';
+
+  @override
+  String get accDhPhone => 'الهاتف';
+
+  @override
+  String get accDhEmail => 'البريد الإلكتروني';
+
+  @override
+  String get accDhWorkshopRegistrationTaxNo => 'رقم تسجيل الورشة / الضريبة';
+
+  @override
+  String get accDhAssignedVendorInspector => 'مفتش المورد المعين';
+
+  @override
+  String get accDhUnassigned => 'غير معين';
+
+  @override
+  String get accDhEditVendorDetails => 'تعديل بيانات المورد';
+
+  @override
+  String get accDhContactWorkshop => 'الاتصال بالورشة';
+
+  @override
+  String get accDhCancel => 'إلغاء';
+
+  @override
+  String get accDhSaveVendor => 'حفظ المورد';
+
+  @override
+  String get accDhDispatchDetails => 'تفاصيل الإرسال';
+
+  @override
+  String get accDhSentBy => 'أرسل بواسطة';
+
+  @override
+  String get accDhDeparture => 'المغادرة';
+
+  @override
+  String get accDhCarrier => 'الناقل';
+
+  @override
+  String get accDhDriver => 'السائق';
+
+  @override
+  String get accDhRecoveryVehicle => 'مركبة النقل';
+
+  @override
+  String get accDhOrigin => 'نقطة الانطلاق';
+
+  @override
+  String get accDhDestination => 'الوجهة';
+
+  @override
+  String get accDhEstimatedArrival => 'الوصول المتوقع';
+
+  @override
+  String get accDhLiveStatus => 'الحالة الحية';
+
+  @override
+  String get accDhRecordDispatch => 'تسجيل الإرسال';
+
+  @override
+  String get accDhOdometerKm => 'عداد المسافة (كم)';
+
+  @override
+  String get accDhEngineHours => 'ساعات المحرك';
+
+  @override
+  String get accDhFuel => 'الوقود %';
+
+  @override
+  String get accDhKeys => 'المفاتيح';
+
+  @override
+  String get accDhDocumentsSentOnePerLine =>
+      'المستندات المرسلة (كل مستند في سطر)';
+
+  @override
+  String get accDhAccessoriesChecklistOnePerLine =>
+      'الملحقات / قائمة التحقق (كل عنصر في سطر)';
+
+  @override
+  String get accDhOutgoingDamagePhotos => 'صور الأضرار عند التسليم';
+
+  @override
+  String get accDhOutgoingConditionSignedBy => 'موقع حالة التسليم';
+
+  @override
+  String get accDhOutgoingSignature => 'توقيع التسليم';
+
+  @override
+  String get accDhSaveDispatch => 'حفظ الإرسال';
+
+  @override
+  String get accDhVehicleHandoverCondition => 'حالة تسليم المركبة';
+
+  @override
+  String get accDhOdometer => 'عداد المسافة';
+
+  @override
+  String get accDhFuel2 => 'الوقود';
+
+  @override
+  String get accDhDocumentsSent => 'المستندات المرسلة';
+
+  @override
+  String get accDhDocuments => 'مستندات';
+
+  @override
+  String get accDhAccessoriesChecklist => 'الملحقات / قائمة التحقق';
+
+  @override
+  String get accDhItems => 'عناصر';
+
+  @override
+  String get accDhPhotos => 'صور';
+
+  @override
+  String get accDhWorkshopReceipt => 'استلام الورشة';
+
+  @override
+  String get accDhCompletedByVendor => 'أكملها المورد';
+
+  @override
+  String get accDhArrived => 'الوصول';
+
+  @override
+  String get accDhReceivedBy => 'المستلم';
+
+  @override
+  String get accDhIncomingOdometer => 'عداد المسافة عند الوصول';
+
+  @override
+  String get accDhIncomingEngineHours => 'ساعات المحرك عند الوصول';
+
+  @override
+  String get accDhIncomingFuel => 'الوقود عند الوصول';
+
+  @override
+  String get accDhConditionMatchesDispatch => 'الحالة تطابق التسليم';
+
+  @override
+  String get accDhYes => 'نعم';
+
+  @override
+  String get accDhNo => 'لا';
+
+  @override
+  String get accDhAdditionalDamageRemarks => 'أضرار إضافية / ملاحظات';
+
+  @override
+  String get accDhReceivingPhotos => 'صور الاستلام';
+
+  @override
+  String get accDhCustodyAccepted => 'تم قبول العهدة';
+
+  @override
+  String get accDhVendorReceiverSignature => 'توقيع مستلم المورد';
+
+  @override
+  String get accDhSenderDriverSignature => 'توقيع المرسل / السائق';
+
+  @override
+  String get accDhCompletedByVendor2 => 'يكملها المورد';
+
+  @override
+  String get accDhNoDispatchLegIsRecordedYet =>
+      'لم يُسجل إرسال بعد. سجّل الإرسال أولاً؛ يُوقع الاستلام عليه.';
+
+  @override
+  String get accDhArrivedDateTime => 'تاريخ / وقت الوصول *';
+
+  @override
+  String get accDhReceivedByName => 'المستلم (الاسم) *';
+
+  @override
+  String get accDhDesignation => 'الوظيفة *';
+
+  @override
+  String get accDhIncomingOdometerKm => 'عداد المسافة عند الوصول';
+
+  @override
+  String get accDhIncomingFuel2 => 'الوقود عند الوصول %';
+
+  @override
+  String get accDhUploadReceivingPhotos => 'رفع صور الاستلام *';
+
+  @override
+  String get accDhUploadSignedHandoverPaper => 'رفع ورقة التسليم الموقعة *';
+
+  @override
+  String get accDhVendorReceiverSignature2 => 'توقيع مستلم المورد *';
+
+  @override
+  String get accDhSenderDriverSignatureCaptured =>
+      'توقيع المرسل / السائق (مسجل)';
+
+  @override
+  String get accDhIAcceptCustodyOfThisVehicle => 'أقبل عهدة هذه المركبة';
+
+  @override
+  String get accDhSignAndAcceptVehicle => 'التوقيع واستلام المركبة';
+
+  @override
+  String get accDhCompleteAllRequiredFieldsToEnable =>
+      'أكمل جميع الحقول المطلوبة للتفعيل';
+
+  @override
+  String get accDhMissing => 'الناقص';
+
+  @override
+  String get accDhArrivedDateTime2 => 'وقت الوصول';
+
+  @override
+  String get accDhDesignation2 => 'الوظيفة';
+
+  @override
+  String get accDhSignedHandoverPaper => 'ورقة التسليم';
+
+  @override
+  String get accDhVendorReceiverSignature3 => 'توقيع المستلم';
+
+  @override
+  String get accDhCustodyCheckbox => 'مربع قبول العهدة';
+
+  @override
+  String get accDhComplete => 'مكتمل';
+
+  @override
+  String get accDhNext => 'التالي';
+
+  @override
+  String get accDhPending => 'قيد الانتظار';
+
+  @override
+  String get accDhDispatched => 'تم الإرسال';
+
+  @override
+  String get accDhArrived2 => 'وصلت';
+
+  @override
+  String get accDhSignedAcceptance => 'الاستلام الموقع';
+
+  @override
+  String get accDhVendorAssessmentQuotationStarts =>
+      'يبدأ تقييم المورد / عرض السعر';
+
+  @override
+  String get accDhPick => 'اختيار';
+
+  @override
+  String get accDhUseNow => 'الآن';
+
+  @override
+  String get accDhAttached => 'مرفقة';
+
+  @override
+  String get accDhCamera => 'الكاميرا';
+
+  @override
+  String get accDhGallery => 'المعرض';
+
+  @override
+  String get accTlAddTimelineNote => 'إضافة ملاحظة';
+
+  @override
+  String get accTlNote => 'الملاحظة';
+
+  @override
+  String get accTlSaveNote => 'حفظ الملاحظة';
+
+  @override
+  String get accTlNotifyParticipants => 'إشعار المشاركين';
+
+  @override
+  String get accTlThisLogsTheNotificationOnThe =>
+      'يسجل هذا الإشعار في سجل القضية. التسليم للأشخاص يتم عبر محرك إشعارات الخادم.';
+
+  @override
+  String get accTlSubject => 'الموضوع';
+
+  @override
+  String get accTlMessage => 'الرسالة';
+
+  @override
+  String get accTlLogNotification => 'تسجيل الإشعار';
+
+  @override
+  String get accTlManageRecipientGroups => 'إدارة مجموعات المستلمين';
+
+  @override
+  String get accTlRecipientsAreSetByAdminPer =>
+      'يحدد المسؤول المستلمين لكل حدث ودور. المجموعات أدناه هي الأدوار التي يصل إليها كل حدث؛ العضوية من ملفات المستخدمين.';
+
+  @override
+  String get accTlVisibility => 'اطلاع';
+
+  @override
+  String get accTlTime => 'الوقت';
+
+  @override
+  String get accTlBy => 'بواسطة';
+
+  @override
+  String get accTlTo => 'إلى';
+
+  @override
+  String get accTlStatus => 'الحالة';
+
+  @override
+  String get accTlElapsed => 'المدة';
+
+  @override
+  String get accTlCaseTimelineNotifications => 'سجل القضية والإشعارات';
+
+  @override
+  String get accTlOpen => 'مفتوحة';
+
+  @override
+  String get accTlCurrentOwner => 'المسؤول الحالي';
+
+  @override
+  String get accTlNextSla => 'المهلة التالية';
+
+  @override
+  String get accTlDueIn => 'متبقي للموعد';
+
+  @override
+  String get accTlAddTimelineNote2 => 'إضافة ملاحظة للسجل';
+
+  @override
+  String get accTlNotifyParticipants2 => 'إشعار المشاركين';
+
+  @override
+  String get accTlNotProvisionedYetOnThisDatabase =>
+      'غير مفعل بعد في قاعدة البيانات';
+
+  @override
+  String get accTlCouldNotBeReadTheFeed => 'تعذرت قراءته؛ السجل لا يتضمنه';
+
+  @override
+  String get accTlCommunications => 'المراسلات';
+
+  @override
+  String get accTlEvidence => 'الأدلة';
+
+  @override
+  String get accTlSlaClocks => 'مهل الخدمة';
+
+  @override
+  String get accTlDispatchLeg => 'الإرسال';
+
+  @override
+  String get accTlGpsFix => 'موقع GPS';
+
+  @override
+  String get accTlTimeline => 'السجل الزمني';
+
+  @override
+  String get accTlNotifications => 'الإشعارات';
+
+  @override
+  String get accTlParticipants => 'المشاركون';
+
+  @override
+  String get accTlAll => 'الكل';
+
+  @override
+  String get accTlActions => 'الإجراءات';
+
+  @override
+  String get accTlDocuments => 'المستندات';
+
+  @override
+  String get accTlSla => 'المهل';
+
+  @override
+  String get accTlEmails => 'البريد';
+
+  @override
+  String get accTlCompleted => 'مكتمل';
+
+  @override
+  String get accTlInTransit => 'قيد النقل';
+
+  @override
+  String get accTlNoRecordedEventsForThisFilter =>
+      'لا توجد أحداث مسجلة لهذا المرشح.';
+
+  @override
+  String get accTlNotificationDeliveryLog => 'سجل تسليم الإشعارات';
+
+  @override
+  String get accTlNoNotificationsRecordedForThisCase =>
+      'لا توجد إشعارات مسجلة لهذه القضية.';
+
+  @override
+  String get accTlTrigger => 'المحفز';
+
+  @override
+  String get accTlRecipients => 'المستلمون';
+
+  @override
+  String get accTlChannel => 'القناة';
+
+  @override
+  String get accTlShowStatus => 'عرض الحالة';
+
+  @override
+  String get accTlViewAllNotifications => 'عرض جميع الإشعارات';
+
+  @override
+  String get accTlManageRecipientGroups2 => 'إدارة مجموعات المستلمين';
+
+  @override
+  String get accTlRecipientsAreSetByAdminPer2 =>
+      'يحدد المسؤول المستلمين لكل حدث ودور.';
+
+  @override
+  String get accTlParticipantsAndOwnership => 'المشاركون والمسؤولية';
+
+  @override
+  String get accTlBy2 => 'بواسطة';
+
+  @override
+  String get accTlTo2 => 'إلى';
+
+  @override
+  String get accTlSlaMet => 'تم الالتزام بالمهلة';
+
+  @override
+  String get accDhChangeNotSaved => 'تعذر حفظ التغيير. حاول مرة أخرى.';
+
+  @override
+  String get accDhContactOpenFailed =>
+      'تعذر فتح جهة اتصال الورشة على هذا الجهاز.';
+
+  @override
+  String get accDhRecordDepartureFirst => 'سجل وقت المغادرة أولاً.';
+
+  @override
+  String get accTlLoadFailed => 'تعذر تحميل السجل. حاول مرة أخرى.';
+
+  @override
+  String accTlOverdueBy(String elapsed) {
+    return 'متأخر $elapsed';
+  }
 }

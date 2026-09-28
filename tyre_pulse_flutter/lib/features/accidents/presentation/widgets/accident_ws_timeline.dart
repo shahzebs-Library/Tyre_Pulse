@@ -131,11 +131,7 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
   String _errorText(Object error) {
     if (error is SupabaseFailure) return error.error.message;
     if (error is ArgumentError) return error.message.toString();
-    return WsKitCopy(context).t(
-      'The timeline could not be loaded. Try again.',
-      'تعذر تحميل السجل. حاول مرة أخرى.',
-      'ٹائم لائن لوڈ نہیں ہو سکی۔ دوبارہ کوشش کریں۔',
-    );
+    return WsKitCopy(context).l10n.accTlLoadFailed;
   }
 
   WorkspaceContext? get _workspace => ref.read(workspaceContextProvider);
@@ -157,7 +153,7 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
     final WsKitCopy c = WsKitCopy(context);
     final bool? confirmed = await TpBottomSheet.show<bool>(
       context: context,
-      title: c.t('Add timeline note', 'إضافة ملاحظة', 'ٹائم لائن نوٹ'),
+      title: c.l10n.accTlAddTimelineNote,
       builder: (BuildContext sheet) => SingleChildScrollView(
         padding: const EdgeInsets.all(TpSpace.lg),
         child: Column(
@@ -165,7 +161,7 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
             TpInput(
-              label: c.t('Note', 'الملاحظة', 'نوٹ'),
+              label: c.l10n.accTlNote,
               controller: controller,
               maxLines: 4,
               isRequired: true,
@@ -173,7 +169,7 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
             ),
             const SizedBox(height: TpSpace.md),
             TpButton.primary(
-              label: c.t('Save note', 'حفظ الملاحظة', 'نوٹ محفوظ کریں'),
+              label: c.l10n.accTlSaveNote,
               onPressed: () => Navigator.of(sheet).pop(true),
             ),
           ],
@@ -200,7 +196,7 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
     final Set<String> groups = <String>{};
     final bool? confirmed = await TpBottomSheet.show<bool>(
       context: context,
-      title: c.t('Notify participants', 'إشعار المشاركين', 'شرکاء کو اطلاع'),
+      title: c.l10n.accTlNotifyParticipants,
       builder: (BuildContext sheet) => StatefulBuilder(
         builder: (BuildContext context, StateSetter setSheet) =>
             SingleChildScrollView(
@@ -211,14 +207,7 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
             children: <Widget>[
               AccidentMockNotice(
                 tone: TpStatus.info,
-                text: c.t(
-                  'This logs the notification on the case ledger. Delivery '
-                      'to people is done by the server notification engine.',
-                  'يسجل هذا الإشعار في سجل القضية. التسليم للأشخاص يتم عبر '
-                      'محرك إشعارات الخادم.',
-                  'یہ اطلاع کیس لیجر میں درج ہوتی ہے۔ افراد تک ترسیل سرور '
-                      'کا نوٹیفکیشن انجن کرتا ہے۔',
-                ),
+                text: c.l10n.accTlThisLogsTheNotificationOnThe,
               ),
               const SizedBox(height: TpSpace.md),
               for (final NotifyRole role in notifyRoles)
@@ -236,19 +225,19 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
                   subtitle: Text(role.roles.join(', ')),
                 ),
               TpInput(
-                label: c.t('Subject', 'الموضوع', 'موضوع'),
+                label: c.l10n.accTlSubject,
                 controller: subject,
                 isRequired: true,
               ),
               const SizedBox(height: TpSpace.sm),
               TpInput(
-                label: c.t('Message', 'الرسالة', 'پیغام'),
+                label: c.l10n.accTlMessage,
                 controller: body,
                 maxLines: 4,
               ),
               const SizedBox(height: TpSpace.md),
               TpButton.primary(
-                label: c.t('Log notification', 'تسجيل الإشعار', 'اطلاع درج'),
+                label: c.l10n.accTlLogNotification,
                 onPressed: () => Navigator.of(sheet).pop(true),
               ),
             ],
@@ -276,11 +265,7 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
     final WsKitCopy c = WsKitCopy(context);
     await TpBottomSheet.show<void>(
       context: context,
-      title: c.t(
-        'Manage recipient groups',
-        'إدارة مجموعات المستلمين',
-        'وصول کنندگان کے گروپس',
-      ),
+      title: c.l10n.accTlManageRecipientGroups,
       builder: (BuildContext sheet) => SingleChildScrollView(
         padding: const EdgeInsets.all(TpSpace.lg),
         child: Column(
@@ -288,17 +273,7 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
             Text(
-              c.t(
-                'Recipients are set by Admin per event and role. The groups '
-                    'below are the roles each event reaches; membership comes '
-                    'from user profiles.',
-                'يحدد المسؤول المستلمين لكل حدث ودور. المجموعات أدناه هي '
-                    'الأدوار التي يصل إليها كل حدث؛ العضوية من ملفات '
-                    'المستخدمين.',
-                'وصول کنندگان ایڈمن ہر ایونٹ اور کردار کے لیے مقرر کرتا ہے۔ '
-                    'نیچے دیے گئے گروپ وہ کردار ہیں جن تک ہر ایونٹ پہنچتا '
-                    'ہے؛ رکنیت صارف پروفائلز سے آتی ہے۔',
-              ),
+              c.l10n.accTlRecipientsAreSetByAdminPer,
             ),
             const SizedBox(height: TpSpace.md),
             for (final NotifyRole role in notifyRoles)
@@ -307,9 +282,8 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
                 leading: const Icon(Icons.groups_outlined),
                 title: Text(role.label),
                 subtitle: Text(role.roles.join(', ')),
-                trailing: role.visibilityOnly
-                    ? Text(c.t('Visibility', 'اطلاع', 'صرف دیکھنا'))
-                    : null,
+                trailing:
+                    role.visibilityOnly ? Text(c.l10n.accTlVisibility) : null,
               ),
           ],
         ),
@@ -330,18 +304,15 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
           children: <Widget>[
             AccidentMockFacts(
               items: <(String, String?)>[
+                (c.l10n.accTlTime, accidentMockDateTime(context, entry.at)),
+                (c.l10n.accTlBy, entry.actor),
+                (c.l10n.accTlTo, entry.audience),
                 (
-                  c.t('Time', 'الوقت', 'وقت'),
-                  accidentMockDateTime(context, entry.at)
-                ),
-                (c.t('By', 'بواسطة', 'از'), entry.actor),
-                (c.t('To', 'إلى', 'کو'), entry.audience),
-                (
-                  c.t('Status', 'الحالة', 'حالت'),
+                  c.l10n.accTlStatus,
                   entry.status == null ? null : _statusLabel(c, entry.status!)
                 ),
                 (
-                  c.t('Elapsed', 'المدة', 'گزرا وقت'),
+                  c.l10n.accTlElapsed,
                   entry.elapsed == null ? null : formatElapsed(entry.elapsed!)
                 ),
               ],
@@ -389,11 +360,7 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
         ),
         const SizedBox(height: TpSpace.md),
         AccidentMockTitle(
-          c.t(
-            'Case timeline & notifications',
-            'سجل القضية والإشعارات',
-            'کیس کی ٹائم لائن اور اطلاعات',
-          ),
+          c.l10n.accTlCaseTimelineNotifications,
         ),
         TpIdentifierText('${record.reference} · ${record.assetNo}'),
         const SizedBox(height: TpSpace.sm),
@@ -403,23 +370,25 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
           children: <Widget>[
             AccidentMockChip(
               key: const Key('accident.timeline.open'),
-              label: c.t('Open', 'مفتوحة', 'کھلا'),
+              label: c.l10n.accTlOpen,
               value: age == null ? c.notSet : formatElapsed(age),
               tone: TpStatus.info,
             ),
             AccidentMockChip(
-              label: c.t('Current owner', 'المسؤول الحالي', 'موجودہ ذمہ دار'),
+              label: c.l10n.accTlCurrentOwner,
               value: c.value(currentOwner(widget.snapshot)),
             ),
             AccidentMockChip(
-              label: c.t('Next SLA', 'المهلة التالية', 'اگلی مقررہ مدت'),
+              label: c.l10n.accTlNextSla,
               value: c.value(next?.name ?? next?.slaKey),
               tone: next == null ? TpStatus.neutral : TpStatus.info,
             ),
             AccidentMockChip(
               key: const Key('accident.timeline.dueIn'),
-              label: c.t('Due in', 'متبقي للموعد', 'مقررہ وقت میں باقی'),
-              value: c.value(dueIn),
+              label: c.l10n.accTlDueIn,
+              value: dueIn != null && dueIn.startsWith('Overdue ')
+                  ? c.l10n.accTlOverdueBy(dueIn.substring('Overdue '.length))
+                  : c.value(dueIn),
               tone: dueIn == null
                   ? TpStatus.neutral
                   : dueIn.startsWith('Overdue')
@@ -451,7 +420,7 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
           ),
           const SizedBox(height: TpSpace.sm),
           TpButton.secondary(
-            label: c.t('Retry', 'إعادة المحاولة', 'دوبارہ کوشش کریں'),
+            label: c.l10n.accDhRetry,
             onPressed: _load,
           ),
         ] else if (data != null) ...<Widget>[
@@ -469,22 +438,14 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
           AccidentMockActions(
             actions: <(String, IconData, VoidCallback?)>[
               (
-                c.t(
-                  'Add timeline note',
-                  'إضافة ملاحظة للسجل',
-                  'ٹائم لائن میں نوٹ شامل کریں',
-                ),
+                c.l10n.accTlAddTimelineNote2,
                 Icons.edit_outlined,
                 _busy || _ledgerMissing(data)
                     ? null
                     : () => unawaited(_addNote())
               ),
               (
-                c.t(
-                  'Notify participants',
-                  'إشعار المشاركين',
-                  'شرکاء کو اطلاع دیں',
-                ),
+                c.l10n.accTlNotifyParticipants2,
                 Icons.campaign_outlined,
                 _busy || _ledgerMissing(data)
                     ? null
@@ -507,11 +468,7 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
         AccidentMockNotice(
           tone: TpStatus.info,
           text: '${_ledgerLabel(c, ledger)}: '
-              '${c.t(
-            'not provisioned yet on this database',
-            'غير مفعل بعد في قاعدة البيانات',
-            'اس ڈیٹا بیس میں ابھی فراہم نہیں',
-          )}',
+              '${c.l10n.accTlNotProvisionedYetOnThisDatabase}',
         ),
       );
       notes.add(const SizedBox(height: TpSpace.sm));
@@ -520,11 +477,7 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
       notes.add(
         AccidentMockNotice(
           text: '${_ledgerLabel(c, ledger)}: '
-              '${c.t(
-            'could not be read; the feed omits it',
-            'تعذرت قراءته؛ السجل لا يتضمنه',
-            'پڑھا نہیں جا سکا؛ فیڈ میں شامل نہیں',
-          )}',
+              '${c.l10n.accTlCouldNotBeReadTheFeed}',
         ),
       );
       notes.add(const SizedBox(height: TpSpace.sm));
@@ -533,33 +486,32 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
   }
 
   String _ledgerLabel(WsKitCopy c, String ledger) => switch (ledger) {
-        TimelineLedger.communications =>
-          c.t('Communications', 'المراسلات', 'مواصلات'),
-        TimelineLedger.evidence => c.t('Evidence', 'الأدلة', 'ثبوت'),
-        TimelineLedger.sla => c.t('SLA clocks', 'مهل الخدمة', 'مقررہ مدتیں'),
-        TimelineLedger.dispatch => c.t('Dispatch leg', 'الإرسال', 'روانگی'),
-        TimelineLedger.gps => c.t('GPS fix', 'موقع GPS', 'GPS مقام'),
+        TimelineLedger.communications => c.l10n.accTlCommunications,
+        TimelineLedger.evidence => c.l10n.accTlEvidence,
+        TimelineLedger.sla => c.l10n.accTlSlaClocks,
+        TimelineLedger.dispatch => c.l10n.accTlDispatchLeg,
+        TimelineLedger.gps => c.l10n.accTlGpsFix,
         _ => ledger,
       };
 
   String _tabLabel(WsKitCopy c, String tab) => switch (tab) {
-        'Timeline' => c.t('Timeline', 'السجل الزمني', 'ٹائم لائن'),
-        'Notifications' => c.t('Notifications', 'الإشعارات', 'اطلاعات'),
-        _ => c.t('Participants', 'المشاركون', 'شرکاء'),
+        'Timeline' => c.l10n.accTlTimeline,
+        'Notifications' => c.l10n.accTlNotifications,
+        _ => c.l10n.accTlParticipants,
       };
 
   String _filterLabel(WsKitCopy c, String filter) => switch (filter) {
-        'all' => c.t('All', 'الكل', 'سب'),
-        'actions' => c.t('Actions', 'الإجراءات', 'کارروائیاں'),
-        'documents' => c.t('Documents', 'المستندات', 'دستاویزات'),
-        'sla' => c.t('SLA', 'المهل', 'مدت'),
-        _ => c.t('Emails', 'البريد', 'ای میلز'),
+        'all' => c.l10n.accTlAll,
+        'actions' => c.l10n.accTlActions,
+        'documents' => c.l10n.accTlDocuments,
+        'sla' => c.l10n.accTlSla,
+        _ => c.l10n.accTlEmails,
       };
 
   String _statusLabel(WsKitCopy c, TimelineStatus status) => switch (status) {
-        TimelineStatus.completed => c.t('Completed', 'مكتمل', 'مکمل'),
-        TimelineStatus.inTransit => c.t('In transit', 'قيد النقل', 'راستے میں'),
-        TimelineStatus.pending => c.t('Pending', 'قيد الانتظار', 'زیر التوا'),
+        TimelineStatus.completed => c.l10n.accTlCompleted,
+        TimelineStatus.inTransit => c.l10n.accTlInTransit,
+        TimelineStatus.pending => c.l10n.accDhPending,
       };
 
   // ── Timeline tab ──────────────────────────────────────────────────────
@@ -587,11 +539,7 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
         AccidentMockPanel(
           child: rows.isEmpty
               ? Text(
-                  c.t(
-                    'No recorded events for this filter.',
-                    'لا توجد أحداث مسجلة لهذا المرشح.',
-                    'اس فلٹر کے لیے کوئی درج شدہ واقعہ نہیں۔',
-                  ),
+                  c.l10n.accTlNoRecordedEventsForThisFilter,
                 )
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -628,18 +576,10 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
       children: <Widget>[
         AccidentMockSection(
           icon: Icons.mail_outline,
-          title: c.t(
-            'Notification delivery log',
-            'سجل تسليم الإشعارات',
-            'اطلاعات کی ترسیل کا ریکارڈ',
-          ),
+          title: c.l10n.accTlNotificationDeliveryLog,
           child: rows.isEmpty
               ? Text(
-                  c.t(
-                    'No notifications recorded for this case.',
-                    'لا توجد إشعارات مسجلة لهذه القضية.',
-                    'اس کیس کے لیے کوئی اطلاع درج نہیں۔',
-                  ),
+                  c.l10n.accTlNoNotificationsRecordedForThisCase,
                 )
               : SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
@@ -649,30 +589,30 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
                     columns: <DataColumn>[
                       DataColumn(
                         label: Text(
-                          c.t('Trigger', 'المحفز', 'محرک'),
+                          c.l10n.accTlTrigger,
                           style: head,
                         ),
                       ),
                       DataColumn(
                         label: Text(
-                          c.t('Recipients', 'المستلمون', 'وصول کنندگان'),
+                          c.l10n.accTlRecipients,
                           style: head,
                         ),
                       ),
                       DataColumn(
                         label: Text(
-                          c.t('Channel', 'القناة', 'چینل'),
+                          c.l10n.accTlChannel,
                           style: head,
                         ),
                       ),
                       DataColumn(
                         label: Text(
-                          c.t('Status', 'الحالة', 'حالت'),
+                          c.l10n.accTlStatus,
                           style: head,
                         ),
                       ),
                       DataColumn(
-                        label: Text(c.t('Time', 'الوقت', 'وقت'), style: head),
+                        label: Text(c.l10n.accTlTime, style: head),
                       ),
                       const DataColumn(label: SizedBox.shrink()),
                     ],
@@ -720,11 +660,7 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
                                   PopupMenuItem<String>(
                                     value: 'copy',
                                     child: Text(
-                                      c.t(
-                                        'Show status',
-                                        'عرض الحالة',
-                                        'حالت دکھائیں',
-                                      ),
+                                      c.l10n.accTlShowStatus,
                                     ),
                                   ),
                                 ],
@@ -742,11 +678,7 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
           onPressed: () => context.push(const NotificationsRoute().location),
           icon: const Icon(Icons.notifications_none),
           label: Text(
-            c.t(
-              'View all notifications',
-              'عرض جميع الإشعارات',
-              'تمام اطلاعات دیکھیں',
-            ),
+            c.l10n.accTlViewAllNotifications,
           ),
         ),
         const SizedBox(height: TpSpace.sm),
@@ -755,19 +687,11 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
           onPressed: isAdmin ? () => unawaited(_manageRecipients()) : null,
           icon: const Icon(Icons.groups_outlined),
           label: Text(
-            c.t(
-              'Manage recipient groups',
-              'إدارة مجموعات المستلمين',
-              'وصول کنندگان کے گروپس سنبھالیں',
-            ),
+            c.l10n.accTlManageRecipientGroups2,
           ),
         ),
         Text(
-          c.t(
-            'Recipients are set by Admin per event and role.',
-            'يحدد المسؤول المستلمين لكل حدث ودور.',
-            'وصول کنندگان ایڈمن ہر ایونٹ اور کردار کے لیے مقرر کرتا ہے۔',
-          ),
+          c.l10n.accTlRecipientsAreSetByAdminPer2,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: TpPalette.of(context).textMuted,
               ),
@@ -780,11 +704,7 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
 
   Widget _participantsTab(WsKitCopy c) => AccidentMockSection(
         icon: Icons.people_outline,
-        title: c.t(
-          'Participants and ownership',
-          'المشاركون والمسؤولية',
-          'شرکاء اور ذمہ داری',
-        ),
+        title: c.l10n.accTlParticipantsAndOwnership,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
@@ -866,9 +786,9 @@ class _TimelineRow extends StatelessWidget {
                     style: const TextStyle(fontWeight: FontWeight.w800),
                   ),
                   if (entry.actor != null)
-                    Text('${c.t('by', 'بواسطة', 'از')} ${entry.actor}'),
+                    Text('${c.l10n.accTlBy2} ${entry.actor}'),
                   if (entry.audience != null)
-                    Text('${c.t('to', 'إلى', 'کو')} ${entry.audience}'),
+                    Text('${c.l10n.accTlTo2} ${entry.audience}'),
                   for (final String detail in entry.details)
                     Text(
                       detail,
@@ -903,11 +823,7 @@ class _TimelineRow extends StatelessWidget {
                       if (entry.slaMet)
                         TpStatusChip(
                           status: TpStatus.ok,
-                          label: c.t(
-                            'SLA met',
-                            'تم الالتزام بالمهلة',
-                            'مدت پوری',
-                          ),
+                          label: c.l10n.accTlSlaMet,
                           icon: Icons.verified_outlined,
                           isCompact: true,
                         ),

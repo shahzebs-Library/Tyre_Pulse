@@ -6,6 +6,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' show DateFormat, NumberFormat;
 import 'package:tyre_pulse/app/localization/tp_direction.dart';
+import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
@@ -16,13 +17,15 @@ import 'package:tyre_pulse/features/accidents/domain/accident_case_vocab.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_claim_package.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_models.dart';
 
-const String accidentWsNotSet = 'Not set';
+/// The localized "Not set" read-out for a field nobody has recorded.
+String accidentWsNotSet(BuildContext context) =>
+    AppLocalizations.of(context).accNotSet;
 
 /// Money in the case country's currency. The currency code comes from the
 /// workspace (server `country_currency`), never from a default; with no
 /// code the number stands alone rather than wearing a guessed label.
 String accidentWsMoney(BuildContext context, num? value, String? currency) {
-  if (value == null || !value.isFinite) return accidentWsNotSet;
+  if (value == null || !value.isFinite) return accidentWsNotSet(context);
   final String locale = Localizations.localeOf(context).toLanguageTag();
   final String number = NumberFormat('#,##0.00', locale).format(value);
   final String code = currency?.trim() ?? '';
@@ -31,27 +34,30 @@ String accidentWsMoney(BuildContext context, num? value, String? currency) {
 }
 
 String accidentWsDateTime(BuildContext context, DateTime? value) {
-  if (value == null) return accidentWsNotSet;
+  if (value == null) return accidentWsNotSet(context);
   final String locale = Localizations.localeOf(context).toLanguageTag();
   return '${DateFormat('d MMM y', locale).format(value)} '
       '${DateFormat.Hm(locale).format(value)}';
 }
 
-String accidentWsText(String? value) {
+String accidentWsText(BuildContext context, String? value) {
   final String text = value?.trim() ?? '';
-  return text.isEmpty ? accidentWsNotSet : text;
+  return text.isEmpty ? accidentWsNotSet(context) : text;
 }
 
 /// A safe sentence for a failed action. Never the driver message.
-String accidentWsErrorText(Object error) => switch (error) {
-      final SupabaseFailure failure => failure.error.message,
-      final AppError appError => appError.message,
-      final UnsupportedError unsupported =>
-        unsupported.message ?? 'That file is not supported.',
-      final ArgumentError argument =>
-        argument.message?.toString() ?? 'Check the values and try again.',
-      _ => 'Something went wrong. Please try again.',
-    };
+String accidentWsErrorText(BuildContext context, Object error) {
+  final AppLocalizations l10n = AppLocalizations.of(context);
+  return switch (error) {
+    final SupabaseFailure failure => failure.error.message,
+    final AppError appError => appError.message,
+    final UnsupportedError unsupported =>
+      unsupported.message ?? l10n.accErrorFileUnsupported,
+    final ArgumentError argument =>
+      argument.message?.toString() ?? l10n.accErrorCheckValues,
+    _ => l10n.accErrorGeneric,
+  };
+}
 
 /// The owner role a notify chip resolves to from the case workstreams.
 String? accidentWsOwnerRole(AccidentCaseSnapshot snapshot, String roleKey) {
@@ -290,10 +296,12 @@ class AccidentWsNotifyChips extends StatelessWidget {
   final AccidentCaseSnapshot snapshot;
   final List<String> keys;
 
-  String _chipLabel(NotifyRole role) {
+  String _chipLabel(BuildContext context, NotifyRole role) {
     final String text =
         notifyChipText(role, accidentWsOwnerRole(snapshot, role.key));
-    return role.visibilityOnly ? '$text (for visibility)' : text;
+    return role.visibilityOnly
+        ? AppLocalizations.of(context).accNotifyForVisibility(text)
+        : text;
   }
 
   @override
@@ -308,7 +316,7 @@ class AccidentWsNotifyChips extends StatelessWidget {
                 icon: role.visibilityOnly
                     ? Icons.visibility_outlined
                     : Icons.notifications_active_outlined,
-                label: _chipLabel(role),
+                label: _chipLabel(context, role),
                 isCompact: true,
               ),
         ],
@@ -337,12 +345,12 @@ Future<AccidentPhotoSource?> pickAccidentEvidenceSource(
             ),
             ListTile(
               leading: const Icon(Icons.photo_camera_outlined),
-              title: const Text('Take a photo'),
+              title: Text(AppLocalizations.of(sheet).accTakePhoto),
               onTap: () => Navigator.of(sheet).pop(AccidentPhotoSource.camera),
             ),
             ListTile(
               leading: const Icon(Icons.folder_open_outlined),
-              title: const Text('Choose a file from the device'),
+              title: Text(AppLocalizations.of(sheet).accChooseDeviceFile),
               onTap: () => Navigator.of(sheet).pop(AccidentPhotoSource.gallery),
             ),
             const SizedBox(height: TpSpace.sm),
@@ -370,6 +378,7 @@ class AccidentWsYesNo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final bool? v = value;
     final TpStatusColors colors = v == null
         ? palette.forStatus(TpStatus.unknown)
@@ -387,10 +396,10 @@ class AccidentWsYesNo extends StatelessWidget {
         if (onChanged == null)
           Text(
             v == null
-                ? accidentWsNotSet
+                ? accidentWsNotSet(context)
                 : v
-                    ? 'Yes'
-                    : 'No',
+                    ? l10n.accYes
+                    : l10n.accNo,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.w800,
                   color: colors.onSoft,
@@ -398,9 +407,9 @@ class AccidentWsYesNo extends StatelessWidget {
           )
         else if (v != null)
           TpSegmented<bool>(
-            options: const <TpSegmentedOption<bool>>[
-              TpSegmentedOption<bool>(value: true, label: 'Yes'),
-              TpSegmentedOption<bool>(value: false, label: 'No'),
+            options: <TpSegmentedOption<bool>>[
+              TpSegmentedOption<bool>(value: true, label: l10n.accYes),
+              TpSegmentedOption<bool>(value: false, label: l10n.accNo),
             ],
             value: v,
             onChanged: onChanged,
@@ -412,13 +421,13 @@ class AccidentWsYesNo extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
               TpButton.secondary(
-                label: 'Yes',
+                label: l10n.accYes,
                 isCompact: true,
                 onPressed: () => onChanged!(true),
               ),
               const SizedBox(width: TpSpace.xs),
               TpButton.secondary(
-                label: 'No',
+                label: l10n.accNo,
                 isCompact: true,
                 onPressed: () => onChanged!(false),
               ),

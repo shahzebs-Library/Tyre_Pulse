@@ -18,7 +18,7 @@ class VehicleDamageDiagram extends StatelessWidget {
   const VehicleDamageDiagram({
     required this.view,
     required this.map,
-    required this.onPointTap,
+    this.onPointTap,
     this.vehicle,
     this.readOnly = false,
     this.selectedZoneId,
@@ -31,7 +31,11 @@ class VehicleDamageDiagram extends StatelessWidget {
 
   final AccidentDamageView view;
   final AccidentDamageMap map;
-  final ValueChanged<AccidentDamagePoint> onPointTap;
+
+  /// Called with the tapped point. Null (or [readOnly]) makes the diagram a
+  /// pure read-out: no tap handler is attached at all, so nothing looks
+  /// tappable that does nothing.
+  final ValueChanged<AccidentDamagePoint>? onPointTap;
   final VehicleAsset? vehicle;
   final bool readOnly;
   final String? selectedZoneId;
@@ -73,14 +77,14 @@ class VehicleDamageDiagram extends StatelessWidget {
               borderRadius: BorderRadius.circular(15),
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTapUp: readOnly
+                onTapUp: readOnly || onPointTap == null
                     ? null
                     : (TapUpDetails details) {
                         final Offset sourcePoint = framing.viewportToSource(
                           details.localPosition,
                           Size(constraints.maxWidth, constraints.maxHeight),
                         );
-                        onPointTap(
+                        onPointTap?.call(
                           AccidentDamagePoint(
                             view: view,
                             normalizedX: sourcePoint.dx,

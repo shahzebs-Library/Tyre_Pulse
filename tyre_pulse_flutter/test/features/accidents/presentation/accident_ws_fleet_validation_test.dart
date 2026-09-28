@@ -163,6 +163,13 @@ void main() {
     expect(find.text('No injuries'), findsOneWidget);
     expect(find.text('Third party involved'), findsOneWidget);
     expect(find.text('View complete incident report'), findsOneWidget);
+    expect(find.text('Share case summary PDF'), findsOneWidget);
+    expect(
+      _button(tester, 'accident.fleet.shareSummaryPdf').onPressed,
+      isNotNull,
+      reason: 'the case summary PDF is a real action, not a note',
+    );
+    expect(find.textContaining('not available in this app'), findsNothing);
 
     expect(find.text('Fleet validation checklist'), findsOneWidget);
     expect(

@@ -4526,4 +4526,1399 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get loginCreateAccount => 'Create an account';
+
+  @override
+  String get accAssessmentLoadFailed => 'The assessment could not be loaded';
+
+  @override
+  String get accSafetyAndMobility => 'Safety and mobility';
+
+  @override
+  String get accSafeToMove => 'Safe to move';
+
+  @override
+  String get accRecoveryTowRequired => 'Recovery / tow required';
+
+  @override
+  String get accVehicleOffRoad => 'Vehicle off road (VOR)';
+
+  @override
+  String get accDamageAssessment => 'Damage assessment';
+
+  @override
+  String accDamageAreaCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count areas',
+      one: '1 area',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get accNoDamageAreas =>
+      'No damage areas have been marked on this case yet.';
+
+  @override
+  String get accLabourAndPartsEstimate => 'Labour and parts estimate';
+
+  @override
+  String get accLabourHours => 'Labour hours';
+
+  @override
+  String get accLabourEstimate => 'Labour estimate';
+
+  @override
+  String get accPartsEstimate => 'Parts estimate';
+
+  @override
+  String get accTotalPreliminaryEstimate => 'Total preliminary estimate';
+
+  @override
+  String get accPartsAvailable => 'Parts available';
+
+  @override
+  String get accSpecialOrder => 'Special order';
+
+  @override
+  String get accPartsAvailability => 'Parts availability';
+
+  @override
+  String get accRepairRouteRecommendation => 'Repair route recommendation';
+
+  @override
+  String get accTotalLossPossible => 'Total loss possible';
+
+  @override
+  String get accSelectedWorkshop => 'Selected workshop';
+
+  @override
+  String get accCity => 'City';
+
+  @override
+  String get accExpectedDurationDays => 'Expected duration (days)';
+
+  @override
+  String get accQuotationStatus => 'Quotation status';
+
+  @override
+  String accRequiredAttachments(int count) {
+    return 'Required attachments ($count)';
+  }
+
+  @override
+  String get accAttachVendorQuotation =>
+      'Attach vendor quotation to enable submission to External Workshop.';
+
+  @override
+  String get accAfterSubmitNotify => 'After submit notify';
+
+  @override
+  String get accSaveAssessment => 'Save assessment';
+
+  @override
+  String get accAssessmentSubmitted => 'Assessment submitted';
+
+  @override
+  String get accSubmitAssessment => 'Submit assessment and route';
+
+  @override
+  String get accSubmissionNeedsQuotation =>
+      'Submission needs the vendor quotation for an external route.';
+
+  @override
+  String accFieldsNotStored(String fields) {
+    return 'These fields could not be stored on the server: $fields.';
+  }
+
+  @override
+  String accAssessmentRouted(String route) {
+    return 'Assessment submitted and routed to $route.';
+  }
+
+  @override
+  String get accAssessmentSaved => 'Assessment saved.';
+
+  @override
+  String accDocumentAttached(String document) {
+    return '$document attached.';
+  }
+
+  @override
+  String get accKm => 'KM';
+
+  @override
+  String accKmValue(String km) {
+    return '$km km';
+  }
+
+  @override
+  String get accPlate => 'Plate';
+
+  @override
+  String get accSiteLocation => 'Site · location';
+
+  @override
+  String accViewDamageMap(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'View damage map · $count areas',
+      one: 'View damage map · 1 area',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get accActionNotAssessed => 'Action: not yet assessed';
+
+  @override
+  String accActionValue(String value) {
+    return 'Action: $value';
+  }
+
+  @override
+  String get accRecommended => 'Recommended';
+
+  @override
+  String accUploadNamedDocument(String document) {
+    return 'Upload $document';
+  }
+
+  @override
+  String get accClaimLoadFailed => 'The claim could not be loaded';
+
+  @override
+  String get accClaimExternalRepairBanner => 'External repair assessment';
+
+  @override
+  String get accClaimDocumentPackage => 'Claim document package';
+
+  @override
+  String get accClaimRegistrationLocked =>
+      'Claim registration unlocks when all required documents are complete.';
+
+  @override
+  String accRequestDocument(String document) {
+    return 'Request $document';
+  }
+
+  @override
+  String get accUploadDocument => 'Upload document';
+
+  @override
+  String get accClaimRegistration => 'Claim registration';
+
+  @override
+  String get accInsurer => 'Insurer';
+
+  @override
+  String get accPolicyNo => 'Policy no.';
+
+  @override
+  String get accClaimNumber => 'Claim number';
+
+  @override
+  String get accClaimNumberAuto => 'Auto-generated after registration';
+
+  @override
+  String get accLiability => 'Liability';
+
+  @override
+  String get accGccLiabilityPct => 'GCC liability %';
+
+  @override
+  String get accClaimAmount => 'Claim amount';
+
+  @override
+  String get accDeductible => 'Deductible';
+
+  @override
+  String get accNetClaimable => 'Net claimable';
+
+  @override
+  String get accClaimRegistered => 'Claim registered with insurer';
+
+  @override
+  String get accRegisterClaim => 'Register claim with insurer';
+
+  @override
+  String get accClaimEnableWhenComplete =>
+      'Enable once all required documents are complete.';
+
+  @override
+  String get accPaymentAndRecovery => 'Payment and recovery';
+
+  @override
+  String get accApprovedAmount => 'Approved amount';
+
+  @override
+  String get accRecoveredAmount => 'Recovered amount';
+
+  @override
+  String get accOutstanding => 'Outstanding';
+
+  @override
+  String get accRecoverySource => 'Recovery source';
+
+  @override
+  String get accRecoverySourceHint => 'Insurer, third party, driver';
+
+  @override
+  String get accLastUpdated => 'Last updated';
+
+  @override
+  String get accSaveRecovery => 'Save recovery';
+
+  @override
+  String get accUpdateRecovery => 'Update recovery amount';
+
+  @override
+  String get accRegisterClaimFirst => 'Register the claim first.';
+
+  @override
+  String get accRecoveryEditableNote =>
+      'Recovery amounts remain editable after operational case closure. Every adjustment is timestamped and audited.';
+
+  @override
+  String get accAfterRegistrationNotify => 'After registration notify';
+
+  @override
+  String get accClaimNotificationIncludes =>
+      'Notification includes the claim number, document status, claim amount and next action.';
+
+  @override
+  String get accSaveClaimDraft => 'Save claim draft';
+
+  @override
+  String get accCompleteDocuments => 'Complete documents';
+
+  @override
+  String accCommandCenterMonitoring(String owner) {
+    return '$owner is monitoring SLA and missing documents.';
+  }
+
+  @override
+  String accCommandCenterRole(String role) {
+    return '$role (Command Center)';
+  }
+
+  @override
+  String get accClaimDraftSaved =>
+      'Claim draft saved on this device. Nothing was sent.';
+
+  @override
+  String accDocumentRequestLogged(String document) {
+    return 'Request for $document logged on the case.';
+  }
+
+  @override
+  String get accWhichDocument => 'Which document is this?';
+
+  @override
+  String accDocumentUploaded(String document) {
+    return '$document uploaded to the claim package.';
+  }
+
+  @override
+  String get accClaimRegisterMissing =>
+      'Enter the insurer, policy number and claim amount first.';
+
+  @override
+  String accRegisterClaimConfirm(
+      String claimNo, String insurer, String policyNo) {
+    return 'Claim $claimNo for $insurer under policy $policyNo will be registered on the case. This cannot be undone from the app.';
+  }
+
+  @override
+  String get accRegister => 'Register';
+
+  @override
+  String accClaimRegisteredSnack(String claimNo) {
+    return 'Claim $claimNo registered with the insurer.';
+  }
+
+  @override
+  String get accRecoveryMissing => 'Enter the recovered amount and its source.';
+
+  @override
+  String get accRecoveryRecorded => 'Recovery recorded.';
+
+  @override
+  String accOptionalSuffix(String label) {
+    return '$label (Optional)';
+  }
+
+  @override
+  String get accIntakeFleetMasterLockNote =>
+      'These details are sourced from fleet master and cannot be edited here. If any detail is incorrect, please update it in the fleet system.';
+
+  @override
+  String get accIntakeIncidentSiteHelp =>
+      'Select the site/location of this incident. This may be different from the asset\'s home site.';
+
+  @override
+  String get accIntakeAssetNo => 'Asset no';
+
+  @override
+  String get accIntakeVehicleType => 'Vehicle type';
+
+  @override
+  String get accIntakeMakeModel => 'Make / model';
+
+  @override
+  String get accIntakeHomeSite => 'Site (home)';
+
+  @override
+  String get accIntakeCountry => 'Country';
+
+  @override
+  String get accIntakeCurrentMeter => 'Current meter';
+
+  @override
+  String get accIntakeStatus => 'Status';
+
+  @override
+  String get accIntakeAssetLoaded => 'Asset loaded from fleet master';
+
+  @override
+  String get accIntakeAutoFilled => 'Auto-filled from fleet master';
+
+  @override
+  String get accIntakeWhereOccurred => 'Where did the incident occur?';
+
+  @override
+  String get accIntakeSiteHint => 'Site or location name';
+
+  @override
+  String accIntakeHomeSiteChip(String site) {
+    return '$site (home)';
+  }
+
+  @override
+  String accIntakeRequiredPhotos(int done, int total) {
+    return '$done of $total required photos';
+  }
+
+  @override
+  String accIntakeMissingCount(int count) {
+    return '$count missing';
+  }
+
+  @override
+  String get accIntakeAttachedOnDevice => 'Attached on this device';
+
+  @override
+  String accIntakeRequiredCategory(String category) {
+    return '$category · Required';
+  }
+
+  @override
+  String get accIntakeRemovePhoto => 'Remove photo';
+
+  @override
+  String get accIntakeSupportingDocuments => 'Supporting documents';
+
+  @override
+  String get accIntakeSupportingDocumentsHelp =>
+      'Attach what is available now. Route and country rules may require more during case review.';
+
+  @override
+  String get accIntakeOptionalAtIntake => 'Optional at intake';
+
+  @override
+  String get accIntakeRemoveAttachment => 'Remove attachment';
+
+  @override
+  String get accIntakeAttachDocumentPhoto => 'Attach document photo';
+
+  @override
+  String get accYes => 'Yes';
+
+  @override
+  String get accNo => 'No';
+
+  @override
+  String get accCaseSummaryTitle => 'Accident case summary';
+
+  @override
+  String accCaseSummaryGenerated(String date) {
+    return 'Generated $date';
+  }
+
+  @override
+  String get accCaseSummaryWorkstreams => 'Case workstreams';
+
+  @override
+  String get accCaseSummaryWorkstreamColumn => 'Workstream';
+
+  @override
+  String get accCaseSummaryTeamColumn => 'Team';
+
+  @override
+  String get accCaseSummaryStatusColumn => 'Status';
+
+  @override
+  String get accCaseSummaryProgressColumn => 'Progress';
+
+  @override
+  String get accCaseSummaryOverallCompletion => 'Overall completion';
+
+  @override
+  String get accCaseSummaryEvidencePhotos => 'Evidence photos';
+
+  @override
+  String get accCaseSummaryShare => 'Share case summary PDF';
+
+  @override
+  String get accCaseSummaryShareFailed =>
+      'The case summary could not be shared. Try again.';
+
+  @override
+  String get accCaseSummarySharedInEnglish =>
+      'The Arabic font could not be loaded, so the summary was shared in English.';
+
+  @override
+  String get accReportDraftRestoreFailed =>
+      'The saved report draft could not be restored. Your existing saved data was not overwritten.';
+
+  @override
+  String get accWorkspaceLoading =>
+      'Your workspace is still loading. Try again.';
+
+  @override
+  String get accReportDraftSaveFailed =>
+      'This device could not save the draft. Nothing previously saved was overwritten. Try again.';
+
+  @override
+  String get accReportUseScannedAsset =>
+      'Use the scanned asset number to select the matching fleet record.';
+
+  @override
+  String get accReportAddCloseUpPhoto => 'Add close-up photo';
+
+  @override
+  String get accReportTakePhoto => 'Take photo';
+
+  @override
+  String get accReportChooseGallery => 'Choose from gallery';
+
+  @override
+  String get accReportQueued => 'Report saved to the offline queue.';
+
+  @override
+  String get accReportQueuedWithNotes =>
+      'Report queued. Some unsupported optional fields were kept in the intake notes.';
+
+  @override
+  String get accReportStepAssetSubtitle =>
+      'Select the fleet asset involved in this incident.';
+
+  @override
+  String get accReportStepIncidentSubtitle =>
+      'Record when, where and what happened.';
+
+  @override
+  String get accReportStepPeopleSubtitle =>
+      'Record only the people, safety, Najm and third-party facts needed at the scene.';
+
+  @override
+  String get accReportStepEvidenceSubtitle =>
+      'Add one scene overview and one close-up for each marked damage area. Supporting documents are optional at intake.';
+
+  @override
+  String get accReportStepDocumentsSubtitle =>
+      'Add available supporting documents. Optional at intake.';
+
+  @override
+  String get accReportStepReviewSubtitle =>
+      'Check the exact report and send it to Fleet validation. Optional documents never block this submission.';
+
+  @override
+  String get accReportScanCode => 'Scan QR / barcode';
+
+  @override
+  String accReportMatchingAssets(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count matching assets',
+      one: '1 matching asset',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get accReportNoMatchingAsset => 'No matching fleet asset';
+
+  @override
+  String accReportMatchOverflow(int shown, int total, int hidden) {
+    return 'Showing the first $shown of $total matches. $hidden more results, refine your search.';
+  }
+
+  @override
+  String get accReportSavedFleetData => 'Showing saved fleet data';
+
+  @override
+  String get accReportChangeAsset => 'Change asset';
+
+  @override
+  String get accReportManualAsset => 'Asset number (manual fallback)';
+
+  @override
+  String get accReportManualAssetHint =>
+      'Use only when a fleet match is unavailable';
+
+  @override
+  String get accReportMeterAtIncident => 'Meter at incident';
+
+  @override
+  String get accReportMeterHint => 'Odometer or hour-meter reading';
+
+  @override
+  String accReportMeterFleetMaster(String km) {
+    return 'Fleet master: $km km';
+  }
+
+  @override
+  String get accReportRoadLocation => 'Road / exact location';
+
+  @override
+  String get accReportIncidentDate => 'Incident date';
+
+  @override
+  String get accReportIncidentTime => 'Incident time';
+
+  @override
+  String get accReportIncidentSite => 'Incident site';
+
+  @override
+  String get accReportIncidentSiteHelper =>
+      'Editable incident site; independent of the locked fleet home site.';
+
+  @override
+  String get accReportRoadLocationHint =>
+      'Gate, road, project area or GPS description';
+
+  @override
+  String get accReportEventType => 'Event type';
+
+  @override
+  String get accReportSelectEventType => 'Select event type';
+
+  @override
+  String get accReportInitialSeverity => 'Initial severity';
+
+  @override
+  String get accSeverityMinor => 'Minor';
+
+  @override
+  String get accSeverityModerate => 'Moderate';
+
+  @override
+  String get accSeverityMajorSevere => 'Major / severe';
+
+  @override
+  String get accSeverityFatal => 'Fatal';
+
+  @override
+  String get accReportWhatHappened => 'What happened?';
+
+  @override
+  String get accReportWhatHappenedHint =>
+      'Describe the sequence of events and immediate conditions';
+
+  @override
+  String get accReportDriverName => 'Driver name';
+
+  @override
+  String get accReportDriverId => 'Driver employee / licence ID';
+
+  @override
+  String get accReportPassengersInvolved => 'Were passengers involved?';
+
+  @override
+  String get accReportPassengerCount => 'Passenger count';
+
+  @override
+  String get accReportPassengerDetails => 'Passenger details';
+
+  @override
+  String get accReportInjuries => 'Were there injuries?';
+
+  @override
+  String get accReportInjuryCount => 'Injury count';
+
+  @override
+  String get accReportInjuryDetails => 'Injury details';
+
+  @override
+  String get accReportEmergencyServices => 'Were emergency services contacted?';
+
+  @override
+  String get accReportEmergencyDetails => 'Emergency response details';
+
+  @override
+  String get accReportVehicleMovable => 'Is the vehicle movable?';
+
+  @override
+  String get accReportRecoveryRequired => 'Is recovery / towing required?';
+
+  @override
+  String get accReportSafeToOperate => 'Is the vehicle safe to operate?';
+
+  @override
+  String get accReportThirdPartyInvolved => 'Was a third party involved?';
+
+  @override
+  String get accReportThirdPartyName => 'Third-party name';
+
+  @override
+  String get accReportThirdPartyVehicle => 'Third-party vehicle';
+
+  @override
+  String get accReportThirdPartyPlate => 'Third-party plate';
+
+  @override
+  String get accReportThirdPartyContact => 'Third-party contact';
+
+  @override
+  String get accReportThirdPartyInsurer => 'Third-party insurer';
+
+  @override
+  String get accReportThirdPartyInvoice =>
+      'Is a third-party invoice available?';
+
+  @override
+  String get accReportThirdPartyInvoiceHelper =>
+      'This is optional. If available, record only the invoice number; the Insurance team can request the file later.';
+
+  @override
+  String get accReportThirdPartyInvoiceNumber => 'Third-party invoice number';
+
+  @override
+  String get accReportNajmOpened => 'Was a Najm case opened?';
+
+  @override
+  String get accReportNajmHelper =>
+      'Record only when Najm applies to this incident.';
+
+  @override
+  String get accReportNajmReference => 'Najm reference';
+
+  @override
+  String get accReportWitnessDetails => 'Witness details';
+
+  @override
+  String get accReportImmediateAction => 'Immediate action taken';
+
+  @override
+  String get accReportAdditionalNotes => 'Additional notes';
+
+  @override
+  String get accReportReadyToSubmit => 'Ready to submit';
+
+  @override
+  String get accReportMissingBeforeSubmit => 'Missing before submission';
+
+  @override
+  String get accReportComplete => 'Complete';
+
+  @override
+  String get accNotRecorded => 'Not recorded';
+
+  @override
+  String get accNotAnswered => 'Not answered';
+
+  @override
+  String get accReportReviewAsset => 'Asset';
+
+  @override
+  String get accReportReviewIncident => 'Incident';
+
+  @override
+  String get accReportReviewDateTime => 'Date and time';
+
+  @override
+  String get accReportReviewSiteLocation => 'Site / location';
+
+  @override
+  String get accReportReviewWhatHappened => 'What happened';
+
+  @override
+  String get accReportReviewPeople => 'People';
+
+  @override
+  String accReportReviewPeopleValue(String driver, String injuries) {
+    return 'Driver $driver · Injuries $injuries';
+  }
+
+  @override
+  String get accReportReviewDamageMarks => 'Damage marks';
+
+  @override
+  String get accReportReviewFocusedPhotos => 'Focused photos';
+
+  @override
+  String accReportReviewPhotosValue(int done, int total) {
+    return '$done of $total';
+  }
+
+  @override
+  String get accReportReviewOptionalDocuments => 'Optional documents';
+
+  @override
+  String accReportReviewAttachedValue(int count) {
+    return '$count attached';
+  }
+
+  @override
+  String get accReportWorkflowResolvesOnSync =>
+      'Recipients, route and initial SLA are resolved by the configured accident workflow when this queued report syncs.';
+
+  @override
+  String get accReportDraftAutoSaves => 'Draft auto-saves on device';
+
+  @override
+  String get accReportDraftUnsaved => 'Unsaved changes';
+
+  @override
+  String get accReportDraftSaving => 'Saving draft…';
+
+  @override
+  String get accReportDraftSaved => 'Draft saved on device';
+
+  @override
+  String accReportDraftSavedAt(String time) {
+    return 'Draft saved on device · $time';
+  }
+
+  @override
+  String get accReportDraftSaveFailedShort => 'Draft save failed';
+
+  @override
+  String get accReportDraftRestoring => 'Restoring saved draft…';
+
+  @override
+  String get accReportSaveAndExit => 'Save and exit';
+
+  @override
+  String get accReportBack => 'Back';
+
+  @override
+  String get accReportSubmit => 'Submit accident';
+
+  @override
+  String get accReportContinueToIncident => 'Continue to incident details';
+
+  @override
+  String get accReportContinueToEvidence => 'Continue to evidence';
+
+  @override
+  String get accReportSaveAndContinue => 'Save & Continue';
+
+  @override
+  String accReportFleetResults(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count fleet results · search asset, fleet, plate, type, make, model or site',
+      one:
+          '1 fleet result · search asset, fleet, plate, type, make, model or site',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get accTypeCollision => 'Collision';
+
+  @override
+  String get accTypeRollover => 'Rollover';
+
+  @override
+  String get accTypeRearEnd => 'Rear-end';
+
+  @override
+  String get accTypeSideSwipe => 'Side-swipe';
+
+  @override
+  String get accTypeReversing => 'Reversing';
+
+  @override
+  String get accTypeFire => 'Fire';
+
+  @override
+  String get accTypeVandalism => 'Vandalism';
+
+  @override
+  String get accTypeWeather => 'Weather';
+
+  @override
+  String get accTypeTyreFailure => 'Tyre failure';
+
+  @override
+  String get accTypeMechanical => 'Mechanical';
+
+  @override
+  String get accTypeNearMiss => 'Near miss';
+
+  @override
+  String get accTypePropertyDamage => 'Property damage';
+
+  @override
+  String get accTypeOther => 'Other';
+
+  @override
+  String get accNotSet => 'Not set';
+
+  @override
+  String get accErrorFileUnsupported => 'That file is not supported.';
+
+  @override
+  String get accErrorCheckValues => 'Check the values and try again.';
+
+  @override
+  String get accErrorGeneric => 'Something went wrong. Please try again.';
+
+  @override
+  String accNotifyForVisibility(String role) {
+    return '$role (for visibility)';
+  }
+
+  @override
+  String get accTakePhoto => 'Take a photo';
+
+  @override
+  String get accChooseDeviceFile => 'Choose a file from the device';
+
+  @override
+  String get accDhDispatchHandover => 'Dispatch & Handover';
+
+  @override
+  String get accDhRepairRoute => 'Repair route';
+
+  @override
+  String get accDhDispatchStatus => 'Dispatch status';
+
+  @override
+  String get accDhTransitElapsed => 'Transit elapsed';
+
+  @override
+  String get accDhVendorRepairSla => 'Vendor repair SLA';
+
+  @override
+  String get accDhSlaUnavailable => 'SLA unavailable';
+
+  @override
+  String get accDhVendorSlaStartsOnlyAfterSigned =>
+      'Vendor SLA starts only after signed vehicle acceptance.';
+
+  @override
+  String get accDhTheSlaClockStartsWhenThe =>
+      'The SLA clock starts when the workshop signs vehicle acceptance.';
+
+  @override
+  String get accDhRetry => 'Retry';
+
+  @override
+  String get accDhDispatchLegsAreNotProvisionedOn =>
+      'Dispatch legs are not provisioned on this database yet. Dispatch details, handover condition and the workshop receipt cannot be recorded until the migration is applied.';
+
+  @override
+  String get accDhVendorContactFieldsAreNotProvisioned =>
+      'Vendor contact fields are not provisioned yet; only the workshop name is stored.';
+
+  @override
+  String get accDhAfterAcceptanceVendorCanAddInspection =>
+      'After acceptance, vendor can add inspection details, quotation, parts, schedule and progress in its own workspace. PO is created only after quotation review and approval.';
+
+  @override
+  String get accDhOpenCaseTimeline => 'Open case timeline';
+
+  @override
+  String get accDhOpenWorkshopAssessment => 'Open workshop assessment';
+
+  @override
+  String get accDhNotStarted => 'Not started';
+
+  @override
+  String get accDhMet => 'Met';
+
+  @override
+  String get accDhBreached => 'Breached';
+
+  @override
+  String get accDhPaused => 'Paused';
+
+  @override
+  String get accDhRunning => 'Running';
+
+  @override
+  String get accDhCancelled => 'Cancelled';
+
+  @override
+  String get accDhStartedNoSlaTarget => 'Started, no SLA target';
+
+  @override
+  String get accDhDestinationAndVendor => 'Destination and vendor';
+
+  @override
+  String get accDhWorkshopName => 'Workshop name';
+
+  @override
+  String get accDhCity => 'City';
+
+  @override
+  String get accDhVendorContactName => 'Vendor contact name';
+
+  @override
+  String get accDhPhone => 'Phone';
+
+  @override
+  String get accDhEmail => 'Email';
+
+  @override
+  String get accDhWorkshopRegistrationTaxNo =>
+      'Workshop registration / tax no.';
+
+  @override
+  String get accDhAssignedVendorInspector => 'Assigned vendor inspector';
+
+  @override
+  String get accDhUnassigned => 'Unassigned';
+
+  @override
+  String get accDhEditVendorDetails => 'Edit vendor details';
+
+  @override
+  String get accDhContactWorkshop => 'Contact workshop';
+
+  @override
+  String get accDhCancel => 'Cancel';
+
+  @override
+  String get accDhSaveVendor => 'Save vendor';
+
+  @override
+  String get accDhDispatchDetails => 'Dispatch details';
+
+  @override
+  String get accDhSentBy => 'Sent by';
+
+  @override
+  String get accDhDeparture => 'Departure';
+
+  @override
+  String get accDhCarrier => 'Carrier';
+
+  @override
+  String get accDhDriver => 'Driver';
+
+  @override
+  String get accDhRecoveryVehicle => 'Recovery vehicle';
+
+  @override
+  String get accDhOrigin => 'Origin';
+
+  @override
+  String get accDhDestination => 'Destination';
+
+  @override
+  String get accDhEstimatedArrival => 'Estimated arrival';
+
+  @override
+  String get accDhLiveStatus => 'Live status';
+
+  @override
+  String get accDhRecordDispatch => 'Record dispatch';
+
+  @override
+  String get accDhOdometerKm => 'Odometer (km)';
+
+  @override
+  String get accDhEngineHours => 'Engine hours';
+
+  @override
+  String get accDhFuel => 'Fuel %';
+
+  @override
+  String get accDhKeys => 'Keys';
+
+  @override
+  String get accDhDocumentsSentOnePerLine => 'Documents sent (one per line)';
+
+  @override
+  String get accDhAccessoriesChecklistOnePerLine =>
+      'Accessories / checklist (one per line)';
+
+  @override
+  String get accDhOutgoingDamagePhotos => 'Outgoing damage photos';
+
+  @override
+  String get accDhOutgoingConditionSignedBy => 'Outgoing condition signed by';
+
+  @override
+  String get accDhOutgoingSignature => 'Outgoing signature';
+
+  @override
+  String get accDhSaveDispatch => 'Save dispatch';
+
+  @override
+  String get accDhVehicleHandoverCondition => 'Vehicle handover condition';
+
+  @override
+  String get accDhOdometer => 'Odometer';
+
+  @override
+  String get accDhFuel2 => 'Fuel';
+
+  @override
+  String get accDhDocumentsSent => 'Documents sent';
+
+  @override
+  String get accDhDocuments => 'documents';
+
+  @override
+  String get accDhAccessoriesChecklist => 'Accessories / checklist';
+
+  @override
+  String get accDhItems => 'items';
+
+  @override
+  String get accDhPhotos => 'photos';
+
+  @override
+  String get accDhWorkshopReceipt => 'Workshop receipt';
+
+  @override
+  String get accDhCompletedByVendor => 'Completed by vendor';
+
+  @override
+  String get accDhArrived => 'Arrived';
+
+  @override
+  String get accDhReceivedBy => 'Received by';
+
+  @override
+  String get accDhIncomingOdometer => 'Incoming odometer';
+
+  @override
+  String get accDhIncomingEngineHours => 'Incoming engine hours';
+
+  @override
+  String get accDhIncomingFuel => 'Incoming fuel';
+
+  @override
+  String get accDhConditionMatchesDispatch => 'Condition matches dispatch';
+
+  @override
+  String get accDhYes => 'Yes';
+
+  @override
+  String get accDhNo => 'No';
+
+  @override
+  String get accDhAdditionalDamageRemarks => 'Additional damage / remarks';
+
+  @override
+  String get accDhReceivingPhotos => 'Receiving photos';
+
+  @override
+  String get accDhCustodyAccepted => 'Custody accepted';
+
+  @override
+  String get accDhVendorReceiverSignature => 'Vendor receiver signature';
+
+  @override
+  String get accDhSenderDriverSignature => 'Sender / driver signature';
+
+  @override
+  String get accDhCompletedByVendor2 => 'Completed by vendor';
+
+  @override
+  String get accDhNoDispatchLegIsRecordedYet =>
+      'No dispatch leg is recorded yet. Record the dispatch first; the receipt is signed against it.';
+
+  @override
+  String get accDhArrivedDateTime => 'Arrived date / time *';
+
+  @override
+  String get accDhReceivedByName => 'Received by (name) *';
+
+  @override
+  String get accDhDesignation => 'Designation *';
+
+  @override
+  String get accDhIncomingOdometerKm => 'Incoming odometer (km)';
+
+  @override
+  String get accDhIncomingFuel2 => 'Incoming fuel %';
+
+  @override
+  String get accDhUploadReceivingPhotos => 'Upload receiving photos *';
+
+  @override
+  String get accDhUploadSignedHandoverPaper => 'Upload signed handover paper *';
+
+  @override
+  String get accDhVendorReceiverSignature2 => 'Vendor receiver signature *';
+
+  @override
+  String get accDhSenderDriverSignatureCaptured =>
+      'Sender / driver signature (captured)';
+
+  @override
+  String get accDhIAcceptCustodyOfThisVehicle =>
+      'I accept custody of this vehicle';
+
+  @override
+  String get accDhSignAndAcceptVehicle => 'Sign and accept vehicle';
+
+  @override
+  String get accDhCompleteAllRequiredFieldsToEnable =>
+      'Complete all required fields to enable';
+
+  @override
+  String get accDhMissing => 'Missing';
+
+  @override
+  String get accDhArrivedDateTime2 => 'Arrived date / time';
+
+  @override
+  String get accDhDesignation2 => 'Designation';
+
+  @override
+  String get accDhSignedHandoverPaper => 'Signed handover paper';
+
+  @override
+  String get accDhVendorReceiverSignature3 => 'Vendor receiver signature';
+
+  @override
+  String get accDhCustodyCheckbox => 'Custody checkbox';
+
+  @override
+  String get accDhComplete => 'Complete';
+
+  @override
+  String get accDhNext => 'Next';
+
+  @override
+  String get accDhPending => 'Pending';
+
+  @override
+  String get accDhDispatched => 'Dispatched';
+
+  @override
+  String get accDhArrived2 => 'Arrived';
+
+  @override
+  String get accDhSignedAcceptance => 'Signed acceptance';
+
+  @override
+  String get accDhVendorAssessmentQuotationStarts =>
+      'Vendor assessment / quotation starts';
+
+  @override
+  String get accDhPick => 'Pick';
+
+  @override
+  String get accDhUseNow => 'Use now';
+
+  @override
+  String get accDhAttached => 'attached';
+
+  @override
+  String get accDhCamera => 'Camera';
+
+  @override
+  String get accDhGallery => 'Gallery';
+
+  @override
+  String get accTlAddTimelineNote => 'Add timeline note';
+
+  @override
+  String get accTlNote => 'Note';
+
+  @override
+  String get accTlSaveNote => 'Save note';
+
+  @override
+  String get accTlNotifyParticipants => 'Notify participants';
+
+  @override
+  String get accTlThisLogsTheNotificationOnThe =>
+      'This logs the notification on the case ledger. Delivery to people is done by the server notification engine.';
+
+  @override
+  String get accTlSubject => 'Subject';
+
+  @override
+  String get accTlMessage => 'Message';
+
+  @override
+  String get accTlLogNotification => 'Log notification';
+
+  @override
+  String get accTlManageRecipientGroups => 'Manage recipient groups';
+
+  @override
+  String get accTlRecipientsAreSetByAdminPer =>
+      'Recipients are set by Admin per event and role. The groups below are the roles each event reaches; membership comes from user profiles.';
+
+  @override
+  String get accTlVisibility => 'Visibility';
+
+  @override
+  String get accTlTime => 'Time';
+
+  @override
+  String get accTlBy => 'By';
+
+  @override
+  String get accTlTo => 'To';
+
+  @override
+  String get accTlStatus => 'Status';
+
+  @override
+  String get accTlElapsed => 'Elapsed';
+
+  @override
+  String get accTlCaseTimelineNotifications => 'Case timeline & notifications';
+
+  @override
+  String get accTlOpen => 'Open';
+
+  @override
+  String get accTlCurrentOwner => 'Current owner';
+
+  @override
+  String get accTlNextSla => 'Next SLA';
+
+  @override
+  String get accTlDueIn => 'Due in';
+
+  @override
+  String get accTlAddTimelineNote2 => 'Add timeline note';
+
+  @override
+  String get accTlNotifyParticipants2 => 'Notify participants';
+
+  @override
+  String get accTlNotProvisionedYetOnThisDatabase =>
+      'not provisioned yet on this database';
+
+  @override
+  String get accTlCouldNotBeReadTheFeed =>
+      'could not be read; the feed omits it';
+
+  @override
+  String get accTlCommunications => 'Communications';
+
+  @override
+  String get accTlEvidence => 'Evidence';
+
+  @override
+  String get accTlSlaClocks => 'SLA clocks';
+
+  @override
+  String get accTlDispatchLeg => 'Dispatch leg';
+
+  @override
+  String get accTlGpsFix => 'GPS fix';
+
+  @override
+  String get accTlTimeline => 'Timeline';
+
+  @override
+  String get accTlNotifications => 'Notifications';
+
+  @override
+  String get accTlParticipants => 'Participants';
+
+  @override
+  String get accTlAll => 'All';
+
+  @override
+  String get accTlActions => 'Actions';
+
+  @override
+  String get accTlDocuments => 'Documents';
+
+  @override
+  String get accTlSla => 'SLA';
+
+  @override
+  String get accTlEmails => 'Emails';
+
+  @override
+  String get accTlCompleted => 'Completed';
+
+  @override
+  String get accTlInTransit => 'In transit';
+
+  @override
+  String get accTlNoRecordedEventsForThisFilter =>
+      'No recorded events for this filter.';
+
+  @override
+  String get accTlNotificationDeliveryLog => 'Notification delivery log';
+
+  @override
+  String get accTlNoNotificationsRecordedForThisCase =>
+      'No notifications recorded for this case.';
+
+  @override
+  String get accTlTrigger => 'Trigger';
+
+  @override
+  String get accTlRecipients => 'Recipients';
+
+  @override
+  String get accTlChannel => 'Channel';
+
+  @override
+  String get accTlShowStatus => 'Show status';
+
+  @override
+  String get accTlViewAllNotifications => 'View all notifications';
+
+  @override
+  String get accTlManageRecipientGroups2 => 'Manage recipient groups';
+
+  @override
+  String get accTlRecipientsAreSetByAdminPer2 =>
+      'Recipients are set by Admin per event and role.';
+
+  @override
+  String get accTlParticipantsAndOwnership => 'Participants and ownership';
+
+  @override
+  String get accTlBy2 => 'by';
+
+  @override
+  String get accTlTo2 => 'to';
+
+  @override
+  String get accTlSlaMet => 'SLA met';
+
+  @override
+  String get accDhChangeNotSaved => 'The change could not be saved. Try again.';
+
+  @override
+  String get accDhContactOpenFailed =>
+      'The workshop contact could not be opened on this device.';
+
+  @override
+  String get accDhRecordDepartureFirst => 'Record the departure time first.';
+
+  @override
+  String get accTlLoadFailed => 'The timeline could not be loaded. Try again.';
+
+  @override
+  String accTlOverdueBy(String elapsed) {
+    return 'Overdue $elapsed';
+  }
 }

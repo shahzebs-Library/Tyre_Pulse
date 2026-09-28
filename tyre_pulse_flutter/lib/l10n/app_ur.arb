@@ -1592,5 +1592,667 @@
   "registerErrTaken": "یہ صارف نام یا ملازم آئی ڈی پہلے سے استعمال میں ہے۔ کوئی اور منتخب کریں۔",
   "registerErrOffline": "کنکشن نہیں ہے۔ آپ کا اکاؤنٹ نہیں بنا۔ سگنل آنے پر دوبارہ کوشش کریں۔",
   "registerErrFailed": "آپ کا اکاؤنٹ نہیں بن سکا۔ دوبارہ کوشش کریں۔",
-  "loginCreateAccount": "اکاؤنٹ بنائیں"
+  "loginCreateAccount": "اکاؤنٹ بنائیں",
+  "accAssessmentLoadFailed": "جائزہ لوڈ نہیں ہو سکا",
+  "accSafetyAndMobility": "حفاظت اور نقل و حرکت",
+  "accSafeToMove": "منتقل کرنا محفوظ ہے",
+  "accRecoveryTowRequired": "ریکوری / ٹوئنگ درکار",
+  "accVehicleOffRoad": "گاڑی سڑک سے باہر (VOR)",
+  "accDamageAssessment": "نقصان کا جائزہ",
+  "accDamageAreaCount": "{count, plural, =1{1 حصہ} other{{count} حصے}}",
+  "@accDamageAreaCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "accNoDamageAreas": "اس کیس پر ابھی تک نقصان کا کوئی حصہ نشان زد نہیں کیا گیا۔",
+  "accLabourAndPartsEstimate": "مزدوری اور پرزوں کا تخمینہ",
+  "accLabourHours": "مزدوری کے گھنٹے",
+  "accLabourEstimate": "مزدوری کا تخمینہ",
+  "accPartsEstimate": "پرزوں کا تخمینہ",
+  "accTotalPreliminaryEstimate": "کل ابتدائی تخمینہ",
+  "accPartsAvailable": "دستیاب پرزے",
+  "accSpecialOrder": "خصوصی آرڈر",
+  "accPartsAvailability": "پرزوں کی دستیابی",
+  "accRepairRouteRecommendation": "مرمت کے راستے کی سفارش",
+  "accTotalLossPossible": "مکمل نقصان ممکن",
+  "accSelectedWorkshop": "منتخب ورکشاپ",
+  "accCity": "شہر",
+  "accExpectedDurationDays": "متوقع مدت (دن)",
+  "accQuotationStatus": "کوٹیشن کی حالت",
+  "accRequiredAttachments": "لازمی منسلکات ({count})",
+  "@accRequiredAttachments": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "accAttachVendorQuotation": "بیرونی ورکشاپ کو بھیجنے کے لیے وینڈر کی کوٹیشن منسلک کریں۔",
+  "accAfterSubmitNotify": "جمع کرانے کے بعد اطلاع",
+  "accSaveAssessment": "جائزہ محفوظ کریں",
+  "accAssessmentSubmitted": "جائزہ جمع ہو گیا",
+  "accSubmitAssessment": "جائزہ جمع کریں اور آگے بھیجیں",
+  "accSubmissionNeedsQuotation": "بیرونی راستے کے لیے جمع کرانے میں وینڈر کی کوٹیشن درکار ہے۔",
+  "accFieldsNotStored": "یہ فیلڈز سرور پر محفوظ نہیں ہو سکیں: {fields}۔",
+  "@accFieldsNotStored": {
+    "placeholders": {
+      "fields": {
+        "type": "String"
+      }
+    }
+  },
+  "accAssessmentRouted": "جائزہ جمع ہو کر {route} کو بھیج دیا گیا۔",
+  "@accAssessmentRouted": {
+    "placeholders": {
+      "route": {
+        "type": "String"
+      }
+    }
+  },
+  "accAssessmentSaved": "جائزہ محفوظ ہو گیا۔",
+  "accDocumentAttached": "{document} منسلک ہو گئی۔",
+  "@accDocumentAttached": {
+    "placeholders": {
+      "document": {
+        "type": "String"
+      }
+    }
+  },
+  "accKm": "کلومیٹر",
+  "accKmValue": "{km} کلومیٹر",
+  "@accKmValue": {
+    "placeholders": {
+      "km": {
+        "type": "String"
+      }
+    }
+  },
+  "accPlate": "نمبر پلیٹ",
+  "accSiteLocation": "سائٹ · مقام",
+  "accViewDamageMap": "{count, plural, =1{نقصان کا نقشہ دیکھیں · 1 حصہ} other{نقصان کا نقشہ دیکھیں · {count} حصے}}",
+  "@accViewDamageMap": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "accActionNotAssessed": "کارروائی: ابھی جائزہ نہیں لیا گیا",
+  "accActionValue": "کارروائی: {value}",
+  "@accActionValue": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "accRecommended": "تجویز کردہ",
+  "accUploadNamedDocument": "{document} اپ لوڈ کریں",
+  "@accUploadNamedDocument": {
+    "placeholders": {
+      "document": {
+        "type": "String"
+      }
+    }
+  },
+  "accClaimLoadFailed": "دعویٰ لوڈ نہیں ہو سکا",
+  "accClaimExternalRepairBanner": "بیرونی مرمت کا جائزہ",
+  "accClaimDocumentPackage": "دعوے کی دستاویزات کا پیکج",
+  "accClaimRegistrationLocked": "تمام لازمی دستاویزات مکمل ہونے پر دعوے کا اندراج کھل جائے گا۔",
+  "accRequestDocument": "{document} کی درخواست کریں",
+  "@accRequestDocument": {
+    "placeholders": {
+      "document": {
+        "type": "String"
+      }
+    }
+  },
+  "accUploadDocument": "دستاویز اپ لوڈ کریں",
+  "accClaimRegistration": "دعوے کا اندراج",
+  "accInsurer": "بیمہ کمپنی",
+  "accPolicyNo": "پالیسی نمبر",
+  "accClaimNumber": "دعویٰ نمبر",
+  "accClaimNumberAuto": "اندراج کے بعد خودکار طور پر بنے گا",
+  "accLiability": "ذمہ داری",
+  "accGccLiabilityPct": "GCC کی ذمہ داری %",
+  "accClaimAmount": "دعوے کی رقم",
+  "accDeductible": "کٹوتی",
+  "accNetClaimable": "قابل دعویٰ خالص رقم",
+  "accClaimRegistered": "دعویٰ بیمہ کمپنی کے پاس درج ہو گیا",
+  "accRegisterClaim": "بیمہ کمپنی کے پاس دعویٰ درج کریں",
+  "accClaimEnableWhenComplete": "تمام لازمی دستاویزات مکمل ہونے پر فعال ہوگا۔",
+  "accPaymentAndRecovery": "ادائیگی اور وصولی",
+  "accApprovedAmount": "منظور شدہ رقم",
+  "accRecoveredAmount": "وصول شدہ رقم",
+  "accOutstanding": "بقایا",
+  "accRecoverySource": "وصولی کا ذریعہ",
+  "accRecoverySourceHint": "بیمہ کمپنی، تیسرا فریق، ڈرائیور",
+  "accLastUpdated": "آخری تازہ کاری",
+  "accSaveRecovery": "وصولی محفوظ کریں",
+  "accUpdateRecovery": "وصولی کی رقم اپ ڈیٹ کریں",
+  "accRegisterClaimFirst": "پہلے دعویٰ درج کریں۔",
+  "accRecoveryEditableNote": "کیس کی آپریشنل بندش کے بعد بھی وصولی کی رقوم قابل ترمیم رہتی ہیں۔ ہر ترمیم کا وقت درج اور آڈٹ ہوتا ہے۔",
+  "accAfterRegistrationNotify": "اندراج کے بعد اطلاع",
+  "accClaimNotificationIncludes": "اطلاع میں دعویٰ نمبر، دستاویزات کی حالت، دعوے کی رقم اور اگلا قدم شامل ہے۔",
+  "accSaveClaimDraft": "دعوے کا مسودہ محفوظ کریں",
+  "accCompleteDocuments": "دستاویزات مکمل کریں",
+  "accCommandCenterMonitoring": "{owner} مقررہ مدت اور نامکمل دستاویزات کی نگرانی کر رہا ہے۔",
+  "@accCommandCenterMonitoring": {
+    "placeholders": {
+      "owner": {
+        "type": "String"
+      }
+    }
+  },
+  "accCommandCenterRole": "{role} (کمانڈ سینٹر)",
+  "@accCommandCenterRole": {
+    "placeholders": {
+      "role": {
+        "type": "String"
+      }
+    }
+  },
+  "accClaimDraftSaved": "دعوے کا مسودہ اس ڈیوائس پر محفوظ ہو گیا۔ کچھ بھیجا نہیں گیا۔",
+  "accDocumentRequestLogged": "{document} کی درخواست کیس میں درج ہو گئی۔",
+  "@accDocumentRequestLogged": {
+    "placeholders": {
+      "document": {
+        "type": "String"
+      }
+    }
+  },
+  "accWhichDocument": "یہ کون سی دستاویز ہے؟",
+  "accDocumentUploaded": "{document} دعوے کے پیکج میں اپ لوڈ ہو گئی۔",
+  "@accDocumentUploaded": {
+    "placeholders": {
+      "document": {
+        "type": "String"
+      }
+    }
+  },
+  "accClaimRegisterMissing": "پہلے بیمہ کمپنی، پالیسی نمبر اور دعوے کی رقم درج کریں۔",
+  "accRegisterClaimConfirm": "پالیسی {policyNo} کے تحت {insurer} کے لیے دعویٰ {claimNo} کیس میں درج ہو جائے گا۔ ایپ سے اسے واپس نہیں لیا جا سکتا۔",
+  "@accRegisterClaimConfirm": {
+    "placeholders": {
+      "claimNo": {
+        "type": "String"
+      },
+      "insurer": {
+        "type": "String"
+      },
+      "policyNo": {
+        "type": "String"
+      }
+    }
+  },
+  "accRegister": "درج کریں",
+  "accClaimRegisteredSnack": "دعویٰ {claimNo} بیمہ کمپنی کے پاس درج ہو گیا۔",
+  "@accClaimRegisteredSnack": {
+    "placeholders": {
+      "claimNo": {
+        "type": "String"
+      }
+    }
+  },
+  "accRecoveryMissing": "وصول شدہ رقم اور اس کا ذریعہ درج کریں۔",
+  "accRecoveryRecorded": "وصولی درج ہو گئی۔",
+  "accOptionalSuffix": "{label} (اختیاری)",
+  "@accOptionalSuffix": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "accIntakeFleetMasterLockNote": "یہ تفصیلات فلیٹ ریکارڈ سے لی گئی ہیں اور یہاں تبدیل نہیں ہو سکتیں۔ اگر کوئی تفصیل غلط ہو تو براہ کرم فلیٹ سسٹم میں اسے اپ ڈیٹ کریں۔",
+  "accIntakeIncidentSiteHelp": "اس واقعے کی سائٹ / مقام منتخب کریں۔ یہ اثاثے کی بنیادی سائٹ سے مختلف ہو سکتی ہے۔",
+  "accIntakeAssetNo": "اثاثہ نمبر",
+  "accIntakeVehicleType": "گاڑی کی قسم",
+  "accIntakeMakeModel": "میک / ماڈل",
+  "accIntakeHomeSite": "سائٹ (بنیادی)",
+  "accIntakeCountry": "ملک",
+  "accIntakeCurrentMeter": "موجودہ میٹر",
+  "accIntakeStatus": "حالت",
+  "accIntakeAssetLoaded": "اثاثہ فلیٹ ریکارڈ سے لوڈ ہو گیا",
+  "accIntakeAutoFilled": "فلیٹ ریکارڈ سے خودکار طور پر بھرا گیا",
+  "accIntakeWhereOccurred": "واقعہ کہاں پیش آیا؟",
+  "accIntakeSiteHint": "سائٹ یا مقام کا نام",
+  "accIntakeHomeSiteChip": "{site} (بنیادی)",
+  "@accIntakeHomeSiteChip": {
+    "placeholders": {
+      "site": {
+        "type": "String"
+      }
+    }
+  },
+  "accIntakeRequiredPhotos": "{total} میں سے {done} لازمی تصاویر",
+  "@accIntakeRequiredPhotos": {
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "accIntakeMissingCount": "{count} باقی",
+  "@accIntakeMissingCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "accIntakeAttachedOnDevice": "اس ڈیوائس پر منسلک",
+  "accIntakeRequiredCategory": "{category} · لازمی",
+  "@accIntakeRequiredCategory": {
+    "placeholders": {
+      "category": {
+        "type": "String"
+      }
+    }
+  },
+  "accIntakeRemovePhoto": "تصویر ہٹائیں",
+  "accIntakeSupportingDocuments": "معاون دستاویزات",
+  "accIntakeSupportingDocumentsHelp": "جو ابھی دستیاب ہے منسلک کریں۔ کیس کے جائزے کے دوران راستے اور ملک کے اصول مزید کا تقاضا کر سکتے ہیں۔",
+  "accIntakeOptionalAtIntake": "اندراج کے وقت اختیاری",
+  "accIntakeRemoveAttachment": "منسلکہ ہٹائیں",
+  "accIntakeAttachDocumentPhoto": "دستاویز کی تصویر منسلک کریں",
+  "accYes": "ہاں",
+  "accNo": "نہیں",
+  "accCaseSummaryTitle": "حادثے کے کیس کا خلاصہ",
+  "accCaseSummaryGenerated": "تیار کردہ {date}",
+  "@accCaseSummaryGenerated": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "accCaseSummaryWorkstreams": "کیس کے ورک اسٹریمز",
+  "accCaseSummaryWorkstreamColumn": "ورک اسٹریم",
+  "accCaseSummaryTeamColumn": "ٹیم",
+  "accCaseSummaryStatusColumn": "حالت",
+  "accCaseSummaryProgressColumn": "پیش رفت",
+  "accCaseSummaryOverallCompletion": "مجموعی تکمیل",
+  "accCaseSummaryEvidencePhotos": "ثبوت کی تصاویر",
+  "accCaseSummaryShare": "کیس کا خلاصہ PDF شیئر کریں",
+  "accCaseSummaryShareFailed": "کیس کا خلاصہ شیئر نہیں ہو سکا۔ دوبارہ کوشش کریں۔",
+  "accCaseSummarySharedInEnglish": "عربی فونٹ لوڈ نہیں ہو سکا، اس لیے خلاصہ انگریزی میں شیئر کیا گیا۔",
+  "accReportDraftRestoreFailed": "محفوظ رپورٹ کا مسودہ بحال نہیں ہو سکا۔ آپ کا محفوظ ڈیٹا تبدیل نہیں ہوا۔",
+  "accWorkspaceLoading": "آپ کا ورک اسپیس ابھی لوڈ ہو رہا ہے۔ دوبارہ کوشش کریں۔",
+  "accReportDraftSaveFailed": "یہ ڈیوائس مسودہ محفوظ نہیں کر سکی۔ پہلے سے محفوظ کچھ بھی تبدیل نہیں ہوا۔ دوبارہ کوشش کریں۔",
+  "accReportUseScannedAsset": "مطابقت رکھنے والا فلیٹ ریکارڈ منتخب کرنے کے لیے اسکین شدہ اثاثہ نمبر استعمال کریں۔",
+  "accReportAddCloseUpPhoto": "قریبی تصویر شامل کریں",
+  "accReportTakePhoto": "تصویر لیں",
+  "accReportChooseGallery": "گیلری سے منتخب کریں",
+  "accReportQueued": "رپورٹ آف لائن قطار میں محفوظ ہو گئی۔",
+  "accReportQueuedWithNotes": "رپورٹ قطار میں شامل ہو گئی۔ کچھ غیر معاون اختیاری فیلڈز اندراج کے نوٹس میں رکھی گئیں۔",
+  "accReportStepAssetSubtitle": "اس واقعے میں شامل فلیٹ اثاثہ منتخب کریں۔",
+  "accReportStepIncidentSubtitle": "درج کریں کب، کہاں اور کیا ہوا۔",
+  "accReportStepPeopleSubtitle": "موقع پر درکار صرف افراد، حفاظت، نجم اور تیسرے فریق سے متعلق حقائق درج کریں۔",
+  "accReportStepEvidenceSubtitle": "ہر نشان زدہ نقصان والے حصے کے لیے ایک منظر کی تصویر اور ایک قریبی تصویر شامل کریں۔ معاون دستاویزات اندراج کے وقت اختیاری ہیں۔",
+  "accReportStepDocumentsSubtitle": "دستیاب معاون دستاویزات شامل کریں۔ اندراج کے وقت اختیاری۔",
+  "accReportStepReviewSubtitle": "رپورٹ کو اچھی طرح چیک کریں اور فلیٹ تصدیق کو بھیجیں۔ اختیاری دستاویزات اس جمع کرانے کو کبھی نہیں روکتیں۔",
+  "accReportScanCode": "QR / بارکوڈ اسکین کریں",
+  "accReportMatchingAssets": "{count, plural, =1{1 مطابق اثاثہ} other{{count} مطابق اثاثے}}",
+  "@accReportMatchingAssets": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "accReportNoMatchingAsset": "کوئی مطابق فلیٹ اثاثہ نہیں",
+  "accReportMatchOverflow": "{total} میں سے پہلے {shown} نتائج دکھائے جا رہے ہیں۔ مزید {hidden} نتائج ہیں، اپنی تلاش بہتر کریں۔",
+  "@accReportMatchOverflow": {
+    "placeholders": {
+      "shown": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      },
+      "hidden": {
+        "type": "int"
+      }
+    }
+  },
+  "accReportSavedFleetData": "محفوظ فلیٹ ڈیٹا دکھایا جا رہا ہے",
+  "accReportChangeAsset": "اثاثہ تبدیل کریں",
+  "accReportManualAsset": "اثاثہ نمبر (دستی متبادل)",
+  "accReportManualAssetHint": "صرف اس وقت استعمال کریں جب فلیٹ میں مطابقت دستیاب نہ ہو",
+  "accReportMeterAtIncident": "واقعے کے وقت میٹر",
+  "accReportMeterHint": "اوڈومیٹر یا گھنٹہ میٹر کی ریڈنگ",
+  "accReportMeterFleetMaster": "فلیٹ ریکارڈ: {km} کلومیٹر",
+  "@accReportMeterFleetMaster": {
+    "placeholders": {
+      "km": {
+        "type": "String"
+      }
+    }
+  },
+  "accReportRoadLocation": "سڑک / درست مقام",
+  "accReportIncidentDate": "واقعے کی تاریخ",
+  "accReportIncidentTime": "واقعے کا وقت",
+  "accReportIncidentSite": "واقعے کی سائٹ",
+  "accReportIncidentSiteHelper": "قابل ترمیم واقعے کی سائٹ؛ فلیٹ کی مقفل بنیادی سائٹ سے الگ۔",
+  "accReportRoadLocationHint": "گیٹ، سڑک، پروجیکٹ کا علاقہ یا GPS کی تفصیل",
+  "accReportEventType": "واقعے کی قسم",
+  "accReportSelectEventType": "واقعے کی قسم منتخب کریں",
+  "accReportInitialSeverity": "ابتدائی شدت",
+  "accSeverityMinor": "معمولی",
+  "accSeverityModerate": "درمیانہ",
+  "accSeverityMajorSevere": "بڑا / شدید",
+  "accSeverityFatal": "جان لیوا",
+  "accReportWhatHappened": "کیا ہوا؟",
+  "accReportWhatHappenedHint": "واقعات کی ترتیب اور فوری حالات بیان کریں",
+  "accReportDriverName": "ڈرائیور کا نام",
+  "accReportDriverId": "ڈرائیور کا ملازمت / لائسنس نمبر",
+  "accReportPassengersInvolved": "کیا مسافر شامل تھے؟",
+  "accReportPassengerCount": "مسافروں کی تعداد",
+  "accReportPassengerDetails": "مسافروں کی تفصیلات",
+  "accReportInjuries": "کیا کوئی زخمی ہوا؟",
+  "accReportInjuryCount": "زخمیوں کی تعداد",
+  "accReportInjuryDetails": "چوٹوں کی تفصیلات",
+  "accReportEmergencyServices": "کیا ہنگامی خدمات سے رابطہ کیا گیا؟",
+  "accReportEmergencyDetails": "ہنگامی ردعمل کی تفصیلات",
+  "accReportVehicleMovable": "کیا گاڑی حرکت کر سکتی ہے؟",
+  "accReportRecoveryRequired": "کیا ریکوری / ٹوئنگ درکار ہے؟",
+  "accReportSafeToOperate": "کیا گاڑی چلانے کے لیے محفوظ ہے؟",
+  "accReportThirdPartyInvolved": "کیا کوئی تیسرا فریق شامل تھا؟",
+  "accReportThirdPartyName": "تیسرے فریق کا نام",
+  "accReportThirdPartyVehicle": "تیسرے فریق کی گاڑی",
+  "accReportThirdPartyPlate": "تیسرے فریق کی نمبر پلیٹ",
+  "accReportThirdPartyContact": "تیسرے فریق کا رابطہ",
+  "accReportThirdPartyInsurer": "تیسرے فریق کی بیمہ کمپنی",
+  "accReportThirdPartyInvoice": "کیا تیسرے فریق کی رسید دستیاب ہے؟",
+  "accReportThirdPartyInvoiceHelper": "یہ اختیاری ہے۔ اگر دستیاب ہو تو صرف رسید نمبر درج کریں؛ انشورنس ٹیم بعد میں فائل منگوا سکتی ہے۔",
+  "accReportThirdPartyInvoiceNumber": "تیسرے فریق کی رسید کا نمبر",
+  "accReportNajmOpened": "کیا نجم کیس کھولا گیا؟",
+  "accReportNajmHelper": "صرف اس وقت درج کریں جب اس واقعے پر نجم لاگو ہو۔",
+  "accReportNajmReference": "نجم حوالہ",
+  "accReportWitnessDetails": "گواہوں کی تفصیلات",
+  "accReportImmediateAction": "فوری طور پر کی گئی کارروائی",
+  "accReportAdditionalNotes": "اضافی نوٹس",
+  "accReportReadyToSubmit": "جمع کرانے کے لیے تیار",
+  "accReportMissingBeforeSubmit": "جمع کرانے سے پہلے کمی",
+  "accReportComplete": "مکمل",
+  "accNotRecorded": "درج نہیں",
+  "accNotAnswered": "جواب نہیں دیا گیا",
+  "accReportReviewAsset": "اثاثہ",
+  "accReportReviewIncident": "واقعہ",
+  "accReportReviewDateTime": "تاریخ اور وقت",
+  "accReportReviewSiteLocation": "سائٹ / مقام",
+  "accReportReviewWhatHappened": "کیا ہوا",
+  "accReportReviewPeople": "افراد",
+  "accReportReviewPeopleValue": "ڈرائیور {driver} · چوٹیں {injuries}",
+  "@accReportReviewPeopleValue": {
+    "placeholders": {
+      "driver": {
+        "type": "String"
+      },
+      "injuries": {
+        "type": "String"
+      }
+    }
+  },
+  "accReportReviewDamageMarks": "نقصان کے نشانات",
+  "accReportReviewFocusedPhotos": "مخصوص تصاویر",
+  "accReportReviewPhotosValue": "{total} میں سے {done}",
+  "@accReportReviewPhotosValue": {
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "accReportReviewOptionalDocuments": "اختیاری دستاویزات",
+  "accReportReviewAttachedValue": "{count} منسلک",
+  "@accReportReviewAttachedValue": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "accReportWorkflowResolvesOnSync": "جب یہ قطار میں موجود رپورٹ مطابقت پائے گی تو ترتیب شدہ حادثہ ورک فلو وصول کنندگان، راستہ اور ابتدائی مقررہ مدت طے کرے گا۔",
+  "accReportDraftAutoSaves": "مسودہ ڈیوائس پر خودکار محفوظ ہوتا ہے",
+  "accReportDraftUnsaved": "غیر محفوظ تبدیلیاں",
+  "accReportDraftSaving": "مسودہ محفوظ ہو رہا ہے…",
+  "accReportDraftSaved": "مسودہ ڈیوائس پر محفوظ ہو گیا",
+  "accReportDraftSavedAt": "مسودہ ڈیوائس پر محفوظ ہو گیا · {time}",
+  "@accReportDraftSavedAt": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "accReportDraftSaveFailedShort": "مسودہ محفوظ نہیں ہو سکا",
+  "accReportDraftRestoring": "محفوظ مسودہ بحال ہو رہا ہے…",
+  "accReportSaveAndExit": "محفوظ کریں اور باہر نکلیں",
+  "accReportBack": "واپس",
+  "accReportSubmit": "حادثہ جمع کریں",
+  "accReportContinueToIncident": "واقعے کی تفصیلات پر جائیں",
+  "accReportContinueToEvidence": "ثبوت پر جائیں",
+  "accReportSaveAndContinue": "محفوظ کریں اور جاری رکھیں",
+  "accReportFleetResults": "{count, plural, =1{1 فلیٹ نتیجہ · اثاثہ، فلیٹ، پلیٹ، قسم، میک، ماڈل یا سائٹ سے تلاش کریں} other{{count} فلیٹ نتائج · اثاثہ، فلیٹ، پلیٹ، قسم، میک، ماڈل یا سائٹ سے تلاش کریں}}",
+  "@accReportFleetResults": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "accTypeCollision": "تصادم",
+  "accTypeRollover": "الٹ جانا",
+  "accTypeRearEnd": "پیچھے سے ٹکر",
+  "accTypeSideSwipe": "پہلو سے رگڑ",
+  "accTypeReversing": "ریورس کرتے ہوئے",
+  "accTypeFire": "آگ",
+  "accTypeVandalism": "توڑ پھوڑ",
+  "accTypeWeather": "موسم",
+  "accTypeTyreFailure": "ٹائر کی خرابی",
+  "accTypeMechanical": "مکینیکل",
+  "accTypeNearMiss": "بال بال بچاؤ",
+  "accTypePropertyDamage": "املاک کو نقصان",
+  "accTypeOther": "دیگر",
+  "accNotSet": "مقرر نہیں",
+  "accErrorFileUnsupported": "یہ فائل قابل قبول نہیں۔",
+  "accErrorCheckValues": "اقدار چیک کریں اور دوبارہ کوشش کریں۔",
+  "accErrorGeneric": "کچھ غلط ہو گیا۔ براہ کرم دوبارہ کوشش کریں۔",
+  "accNotifyForVisibility": "{role} (صرف اطلاع کے لیے)",
+  "@accNotifyForVisibility": {
+    "placeholders": {
+      "role": {
+        "type": "String"
+      }
+    }
+  },
+  "accTakePhoto": "تصویر لیں",
+  "accChooseDeviceFile": "ڈیوائس سے فائل منتخب کریں",
+  "accDhDispatchHandover": "روانگی اور حوالگی",
+  "accDhRepairRoute": "مرمت کا راستہ",
+  "accDhDispatchStatus": "روانگی کی حالت",
+  "accDhTransitElapsed": "سفر کا گزرا وقت",
+  "accDhVendorRepairSla": "وینڈر مرمت کی مدت",
+  "accDhSlaUnavailable": "مدت دستیاب نہیں",
+  "accDhVendorSlaStartsOnlyAfterSigned": "وینڈر کی مدت صرف دستخط شدہ وصولی کے بعد شروع ہوتی ہے۔",
+  "accDhTheSlaClockStartsWhenThe": "مدت کا وقت تب شروع ہوتا ہے جب ورکشاپ گاڑی کی وصولی پر دستخط کرے۔",
+  "accDhRetry": "دوبارہ کوشش کریں",
+  "accDhDispatchLegsAreNotProvisionedOn": "روانگی کے ریکارڈ اس ڈیٹا بیس میں ابھی فراہم نہیں کیے گئے۔ مائیگریشن لاگو ہونے تک تفصیلات درج نہیں ہو سکتیں۔",
+  "accDhVendorContactFieldsAreNotProvisioned": "وینڈر رابطہ فیلڈز ابھی فراہم نہیں؛ صرف ورکشاپ کا نام محفوظ ہوتا ہے۔",
+  "accDhAfterAcceptanceVendorCanAddInspection": "قبولیت کے بعد وینڈر اپنے ورک اسپیس میں معائنہ، کوٹیشن، پرزے، شیڈول اور پیش رفت شامل کر سکتا ہے۔ PO صرف کوٹیشن کے جائزے اور منظوری کے بعد بنتا ہے۔",
+  "accDhOpenCaseTimeline": "کیس ٹائم لائن کھولیں",
+  "accDhOpenWorkshopAssessment": "ورکشاپ تشخیص کھولیں",
+  "accDhNotStarted": "شروع نہیں ہوئی",
+  "accDhMet": "پوری ہوئی",
+  "accDhBreached": "خلاف ورزی",
+  "accDhPaused": "موقوف",
+  "accDhRunning": "جاری",
+  "accDhCancelled": "منسوخ",
+  "accDhStartedNoSlaTarget": "شروع، کوئی ہدف نہیں",
+  "accDhDestinationAndVendor": "منزل اور وینڈر",
+  "accDhWorkshopName": "ورکشاپ کا نام",
+  "accDhCity": "شہر",
+  "accDhVendorContactName": "رابطہ کا نام",
+  "accDhPhone": "فون",
+  "accDhEmail": "ای میل",
+  "accDhWorkshopRegistrationTaxNo": "ورکشاپ رجسٹریشن / ٹیکس نمبر",
+  "accDhAssignedVendorInspector": "مقررہ وینڈر معائنہ کار",
+  "accDhUnassigned": "غیر مقرر",
+  "accDhEditVendorDetails": "وینڈر کی تفصیلات بدلیں",
+  "accDhContactWorkshop": "ورکشاپ سے رابطہ",
+  "accDhCancel": "منسوخ",
+  "accDhSaveVendor": "وینڈر محفوظ کریں",
+  "accDhDispatchDetails": "روانگی کی تفصیلات",
+  "accDhSentBy": "روانہ کرنے والا",
+  "accDhDeparture": "روانگی",
+  "accDhCarrier": "ٹرانسپورٹر",
+  "accDhDriver": "ڈرائیور",
+  "accDhRecoveryVehicle": "ریکوری گاڑی",
+  "accDhOrigin": "روانگی کی جگہ",
+  "accDhDestination": "منزل",
+  "accDhEstimatedArrival": "متوقع آمد",
+  "accDhLiveStatus": "موجودہ حالت",
+  "accDhRecordDispatch": "روانگی درج کریں",
+  "accDhOdometerKm": "اوڈومیٹر (کلومیٹر)",
+  "accDhEngineHours": "انجن کے گھنٹے",
+  "accDhFuel": "ایندھن %",
+  "accDhKeys": "چابیاں",
+  "accDhDocumentsSentOnePerLine": "ارسال کردہ دستاویزات (ہر سطر میں ایک)",
+  "accDhAccessoriesChecklistOnePerLine": "لوازمات / چیک لسٹ (ہر سطر میں ایک)",
+  "accDhOutgoingDamagePhotos": "روانگی کے نقصان کی تصاویر",
+  "accDhOutgoingConditionSignedBy": "روانگی کی حالت پر دستخط کنندہ",
+  "accDhOutgoingSignature": "روانگی کے دستخط",
+  "accDhSaveDispatch": "روانگی محفوظ کریں",
+  "accDhVehicleHandoverCondition": "حوالگی کے وقت گاڑی کی حالت",
+  "accDhOdometer": "اوڈومیٹر",
+  "accDhFuel2": "ایندھن",
+  "accDhDocumentsSent": "ارسال کردہ دستاویزات",
+  "accDhDocuments": "دستاویزات",
+  "accDhAccessoriesChecklist": "لوازمات / چیک لسٹ",
+  "accDhItems": "اشیاء",
+  "accDhPhotos": "تصاویر",
+  "accDhWorkshopReceipt": "ورکشاپ کی وصولی",
+  "accDhCompletedByVendor": "وینڈر نے مکمل کیا",
+  "accDhArrived": "آمد",
+  "accDhReceivedBy": "وصول کنندہ",
+  "accDhIncomingOdometer": "آمد کا اوڈومیٹر",
+  "accDhIncomingEngineHours": "آمد کے انجن گھنٹے",
+  "accDhIncomingFuel": "آمد کا ایندھن",
+  "accDhConditionMatchesDispatch": "حالت روانگی سے مطابقت رکھتی ہے",
+  "accDhYes": "ہاں",
+  "accDhNo": "نہیں",
+  "accDhAdditionalDamageRemarks": "اضافی نقصان / تبصرے",
+  "accDhReceivingPhotos": "وصولی کی تصاویر",
+  "accDhCustodyAccepted": "تحویل قبول",
+  "accDhVendorReceiverSignature": "وینڈر وصول کنندہ کے دستخط",
+  "accDhSenderDriverSignature": "بھیجنے والے / ڈرائیور کے دستخط",
+  "accDhCompletedByVendor2": "وینڈر مکمل کرے گا",
+  "accDhNoDispatchLegIsRecordedYet": "ابھی کوئی روانگی درج نہیں۔ پہلے روانگی درج کریں؛ وصولی اسی پر دستخط ہوتی ہے۔",
+  "accDhArrivedDateTime": "آمد کی تاریخ / وقت *",
+  "accDhReceivedByName": "وصول کنندہ (نام) *",
+  "accDhDesignation": "عہدہ *",
+  "accDhIncomingOdometerKm": "آمد کا اوڈومیٹر",
+  "accDhIncomingFuel2": "آمد کا ایندھن %",
+  "accDhUploadReceivingPhotos": "وصولی کی تصاویر اپ لوڈ کریں *",
+  "accDhUploadSignedHandoverPaper": "دستخط شدہ حوالگی کاغذ اپ لوڈ کریں *",
+  "accDhVendorReceiverSignature2": "وینڈر وصول کنندہ کے دستخط *",
+  "accDhSenderDriverSignatureCaptured": "بھیجنے والے / ڈرائیور کے دستخط (ریکارڈ شدہ)",
+  "accDhIAcceptCustodyOfThisVehicle": "میں اس گاڑی کی تحویل قبول کرتا ہوں",
+  "accDhSignAndAcceptVehicle": "دستخط کرکے گاڑی قبول کریں",
+  "accDhCompleteAllRequiredFieldsToEnable": "فعال کرنے کے لیے تمام مطلوبہ فیلڈز مکمل کریں",
+  "accDhMissing": "باقی",
+  "accDhArrivedDateTime2": "آمد کا وقت",
+  "accDhDesignation2": "عہدہ",
+  "accDhSignedHandoverPaper": "حوالگی کاغذ",
+  "accDhVendorReceiverSignature3": "وصول کنندہ دستخط",
+  "accDhCustodyCheckbox": "تحویل کا خانہ",
+  "accDhComplete": "مکمل",
+  "accDhNext": "اگلا",
+  "accDhPending": "زیر التوا",
+  "accDhDispatched": "روانہ",
+  "accDhArrived2": "پہنچ گئی",
+  "accDhSignedAcceptance": "دستخط شدہ قبولیت",
+  "accDhVendorAssessmentQuotationStarts": "وینڈر تشخیص / کوٹیشن شروع",
+  "accDhPick": "منتخب کریں",
+  "accDhUseNow": "ابھی",
+  "accDhAttached": "منسلک",
+  "accDhCamera": "کیمرہ",
+  "accDhGallery": "گیلری",
+  "accTlAddTimelineNote": "ٹائم لائن نوٹ",
+  "accTlNote": "نوٹ",
+  "accTlSaveNote": "نوٹ محفوظ کریں",
+  "accTlNotifyParticipants": "شرکاء کو اطلاع",
+  "accTlThisLogsTheNotificationOnThe": "یہ اطلاع کیس لیجر میں درج ہوتی ہے۔ افراد تک ترسیل سرور کا نوٹیفکیشن انجن کرتا ہے۔",
+  "accTlSubject": "موضوع",
+  "accTlMessage": "پیغام",
+  "accTlLogNotification": "اطلاع درج",
+  "accTlManageRecipientGroups": "وصول کنندگان کے گروپس",
+  "accTlRecipientsAreSetByAdminPer": "وصول کنندگان ایڈمن ہر ایونٹ اور کردار کے لیے مقرر کرتا ہے۔ نیچے دیے گئے گروپ وہ کردار ہیں جن تک ہر ایونٹ پہنچتا ہے؛ رکنیت صارف پروفائلز سے آتی ہے۔",
+  "accTlVisibility": "صرف دیکھنا",
+  "accTlTime": "وقت",
+  "accTlBy": "از",
+  "accTlTo": "کو",
+  "accTlStatus": "حالت",
+  "accTlElapsed": "گزرا وقت",
+  "accTlCaseTimelineNotifications": "کیس کی ٹائم لائن اور اطلاعات",
+  "accTlOpen": "کھلا",
+  "accTlCurrentOwner": "موجودہ ذمہ دار",
+  "accTlNextSla": "اگلی مقررہ مدت",
+  "accTlDueIn": "مقررہ وقت میں باقی",
+  "accTlAddTimelineNote2": "ٹائم لائن میں نوٹ شامل کریں",
+  "accTlNotifyParticipants2": "شرکاء کو اطلاع دیں",
+  "accTlNotProvisionedYetOnThisDatabase": "اس ڈیٹا بیس میں ابھی فراہم نہیں",
+  "accTlCouldNotBeReadTheFeed": "پڑھا نہیں جا سکا؛ فیڈ میں شامل نہیں",
+  "accTlCommunications": "مواصلات",
+  "accTlEvidence": "ثبوت",
+  "accTlSlaClocks": "مقررہ مدتیں",
+  "accTlDispatchLeg": "روانگی",
+  "accTlGpsFix": "GPS مقام",
+  "accTlTimeline": "ٹائم لائن",
+  "accTlNotifications": "اطلاعات",
+  "accTlParticipants": "شرکاء",
+  "accTlAll": "سب",
+  "accTlActions": "کارروائیاں",
+  "accTlDocuments": "دستاویزات",
+  "accTlSla": "مدت",
+  "accTlEmails": "ای میلز",
+  "accTlCompleted": "مکمل",
+  "accTlInTransit": "راستے میں",
+  "accTlNoRecordedEventsForThisFilter": "اس فلٹر کے لیے کوئی درج شدہ واقعہ نہیں۔",
+  "accTlNotificationDeliveryLog": "اطلاعات کی ترسیل کا ریکارڈ",
+  "accTlNoNotificationsRecordedForThisCase": "اس کیس کے لیے کوئی اطلاع درج نہیں۔",
+  "accTlTrigger": "محرک",
+  "accTlRecipients": "وصول کنندگان",
+  "accTlChannel": "چینل",
+  "accTlShowStatus": "حالت دکھائیں",
+  "accTlViewAllNotifications": "تمام اطلاعات دیکھیں",
+  "accTlManageRecipientGroups2": "وصول کنندگان کے گروپس سنبھالیں",
+  "accTlRecipientsAreSetByAdminPer2": "وصول کنندگان ایڈمن ہر ایونٹ اور کردار کے لیے مقرر کرتا ہے۔",
+  "accTlParticipantsAndOwnership": "شرکاء اور ذمہ داری",
+  "accTlBy2": "از",
+  "accTlTo2": "کو",
+  "accTlSlaMet": "مدت پوری",
+  "accDhChangeNotSaved": "تبدیلی محفوظ نہیں ہو سکی۔ دوبارہ کوشش کریں۔",
+  "accDhContactOpenFailed": "اس ڈیوائس پر ورکشاپ رابطہ نہیں کھل سکا۔",
+  "accDhRecordDepartureFirst": "پہلے روانگی کا وقت درج کریں۔",
+  "accTlLoadFailed": "ٹائم لائن لوڈ نہیں ہو سکی۔ دوبارہ کوشش کریں۔",
+  "accTlOverdueBy": "تاخیر {elapsed}",
+  "@accTlOverdueBy": {
+    "placeholders": {
+      "elapsed": {
+        "type": "String"
+      }
+    }
+  }
 }

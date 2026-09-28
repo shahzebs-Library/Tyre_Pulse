@@ -20,7 +20,8 @@ import 'package:tyre_pulse/features/accidents/data/accident_claim_package_reposi
     show evidenceFromRow, insertTolerant;
 import 'package:tyre_pulse/features/accidents/domain/accident_claim_package.dart';
 
-/// Parity columns on `accident_damage_assessments` (unapplied migration).
+/// Parity columns on `accident_damage_assessments` (migration
+/// 20260916130000, applied live; the tolerant write stays as a safety net).
 const Set<String> assessmentParityColumns = <String>{
   'safe_to_move',
   'recovery_required',
@@ -30,7 +31,8 @@ const Set<String> assessmentParityColumns = <String>{
   'route_reason',
 };
 
-/// Parity columns on `accident_repair_orders` (unapplied migration).
+/// Parity columns on `accident_repair_orders` (migration 20260916130000,
+/// applied live; the tolerant write stays as a safety net).
 const Set<String> repairOrderParityColumns = <String>{
   'vendor_city',
   'expected_duration_days',

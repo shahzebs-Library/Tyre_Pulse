@@ -10,6 +10,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tyre_pulse/app/localization/tp_direction.dart';
+import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
@@ -117,9 +118,9 @@ class _State extends ConsumerState<AccidentWorkshopAssessmentMockWorkspace> {
       error: (Object error, StackTrace _) => TpStateView(
         icon: Icons.cloud_off_outlined,
         tone: TpStatus.critical,
-        title: 'The assessment could not be loaded',
-        message: accidentWsErrorText(error),
-        primaryActionLabel: 'Retry',
+        title: AppLocalizations.of(context).accAssessmentLoadFailed,
+        message: accidentWsErrorText(context, error),
+        primaryActionLabel: AppLocalizations.of(context).actionRetry,
         onPrimaryAction: () =>
             ref.invalidate(accidentAssessmentBundleProvider(_record.id)),
       ),
@@ -131,6 +132,7 @@ class _State extends ConsumerState<AccidentWorkshopAssessmentMockWorkspace> {
   }
 
   Widget _body(BuildContext context, AccidentAssessmentBundle bundle) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final TpPalette palette = TpPalette.of(context);
     final TextTheme text = Theme.of(context).textTheme;
     final String? currency = ref.watch(activeCurrencyProvider);
@@ -176,11 +178,11 @@ class _State extends ConsumerState<AccidentWorkshopAssessmentMockWorkspace> {
         // 1 Safety and mobility
         AccidentWsSection(
           number: 1,
-          title: 'Safety and mobility',
+          title: l10n.accSafetyAndMobility,
           children: <Widget>[
             AccidentWsYesNo(
               key: const Key('accident.ws.assessment.safeToMove'),
-              label: 'Safe to move',
+              label: l10n.accSafeToMove,
               value: _safeToMove,
               riskWhen: false,
               onChanged: submitted
@@ -189,7 +191,7 @@ class _State extends ConsumerState<AccidentWorkshopAssessmentMockWorkspace> {
             ),
             const SizedBox(height: TpSpace.sm),
             AccidentWsYesNo(
-              label: 'Recovery / tow required',
+              label: l10n.accRecoveryTowRequired,
               value: _recoveryRequired,
               riskWhen: true,
               onChanged: submitted
@@ -198,7 +200,7 @@ class _State extends ConsumerState<AccidentWorkshopAssessmentMockWorkspace> {
             ),
             const SizedBox(height: TpSpace.sm),
             AccidentWsYesNo(
-              label: 'Vehicle off road (VOR)',
+              label: l10n.accVehicleOffRoad,
               value: _vor,
               riskWhen: true,
               onChanged:
@@ -211,15 +213,15 @@ class _State extends ConsumerState<AccidentWorkshopAssessmentMockWorkspace> {
         // 2 Damage assessment
         AccidentWsSection(
           number: 2,
-          title: 'Damage assessment',
+          title: l10n.accDamageAssessment,
           trailing: Text(
-            '${rows.length} ${rows.length == 1 ? 'area' : 'areas'}',
+            l10n.accDamageAreaCount(rows.length),
             style: text.labelMedium?.copyWith(fontWeight: FontWeight.w800),
           ),
           children: <Widget>[
             if (rows.isEmpty)
               Text(
-                'No damage areas have been marked on this case yet.',
+                l10n.accNoDamageAreas,
                 style: text.bodyMedium?.copyWith(color: palette.textSecondary),
               ),
             for (int i = 0; i < rows.length; i++) ...<Widget>[
@@ -233,17 +235,17 @@ class _State extends ConsumerState<AccidentWorkshopAssessmentMockWorkspace> {
         // 3 Labour and parts estimate
         AccidentWsSection(
           number: 3,
-          title: 'Labour and parts estimate',
+          title: l10n.accLabourAndPartsEstimate,
           children: <Widget>[
             _NumberInput(
-              label: 'Labour hours',
+              label: l10n.accLabourHours,
               controller: _labourHours,
               enabled: !submitted,
               onChanged: () => setState(() {}),
             ),
             const SizedBox(height: TpSpace.sm),
             _NumberInput(
-              label: 'Labour estimate',
+              label: l10n.accLabourEstimate,
               controller: _labourCost,
               enabled: !submitted,
               onChanged: () => setState(() {}),
@@ -251,14 +253,14 @@ class _State extends ConsumerState<AccidentWorkshopAssessmentMockWorkspace> {
             ),
             const SizedBox(height: TpSpace.sm),
             _NumberInput(
-              label: 'Parts estimate',
+              label: l10n.accPartsEstimate,
               controller: _partsCost,
               enabled: !submitted,
               onChanged: () => setState(() {}),
               helper: accidentWsMoney(context, partsCost, currency),
             ),
             AccidentWsFact(
-              label: 'Total preliminary estimate',
+              label: l10n.accTotalPreliminaryEstimate,
               value: accidentWsMoney(
                 context,
                 preliminaryTotal(labourCost: labourCost, partsCost: partsCost),
@@ -270,7 +272,7 @@ class _State extends ConsumerState<AccidentWorkshopAssessmentMockWorkspace> {
               children: <Widget>[
                 Expanded(
                   child: _NumberInput(
-                    label: 'Parts available',
+                    label: l10n.accPartsAvailable,
                     controller: _partsAvailable,
                     enabled: !submitted,
                     integer: true,
@@ -280,7 +282,7 @@ class _State extends ConsumerState<AccidentWorkshopAssessmentMockWorkspace> {
                 const SizedBox(width: TpSpace.sm),
                 Expanded(
                   child: _NumberInput(
-                    label: 'Special order',
+                    label: l10n.accSpecialOrder,
                     controller: _partsSpecial,
                     enabled: !submitted,
                     integer: true,
@@ -290,7 +292,7 @@ class _State extends ConsumerState<AccidentWorkshopAssessmentMockWorkspace> {
               ],
             ),
             AccidentWsFact(
-              label: 'Parts availability',
+              label: l10n.accPartsAvailability,
               value: partsAvailabilityLabel(
                 available: int.tryParse(_partsAvailable.text.trim()),
                 specialOrder: int.tryParse(_partsSpecial.text.trim()),
@@ -303,7 +305,7 @@ class _State extends ConsumerState<AccidentWorkshopAssessmentMockWorkspace> {
         // 4 Repair route recommendation
         AccidentWsSection(
           number: 4,
-          title: 'Repair route recommendation',
+          title: l10n.accRepairRouteRecommendation,
           children: <Widget>[
             for (final VocabItem tile in repairRouteTiles) ...<Widget>[
               _RouteTile(
@@ -324,22 +326,22 @@ class _State extends ConsumerState<AccidentWorkshopAssessmentMockWorkspace> {
               onChanged: submitted
                   ? null
                   : (bool? v) => setState(() => _totalLoss = v ?? false),
-              title: const Text('Total loss possible'),
+              title: Text(l10n.accTotalLossPossible),
             ),
             TpInput(
-              label: 'Selected workshop',
+              label: l10n.accSelectedWorkshop,
               controller: _workshopName,
               enabled: !submitted,
             ),
             const SizedBox(height: TpSpace.sm),
             TpInput(
-              label: 'City',
+              label: l10n.accCity,
               controller: _vendorCity,
               enabled: !submitted,
             ),
             const SizedBox(height: TpSpace.sm),
             _NumberInput(
-              label: 'Expected duration (days)',
+              label: l10n.accExpectedDurationDays,
               controller: _duration,
               enabled: !submitted,
               integer: true,
@@ -347,9 +349,9 @@ class _State extends ConsumerState<AccidentWorkshopAssessmentMockWorkspace> {
             ),
             const SizedBox(height: TpSpace.sm),
             TpDropdown<String>(
-              label: 'Quotation status',
+              label: l10n.accQuotationStatus,
               value: _quotationStatus,
-              hint: accidentWsNotSet,
+              hint: accidentWsNotSet(context),
               items: <TpDropdownItem<String>>[
                 for (final VocabItem q in quotationStates)
                   TpDropdownItem<String>(value: q.key, label: q.label),
@@ -359,7 +361,7 @@ class _State extends ConsumerState<AccidentWorkshopAssessmentMockWorkspace> {
                   : (String? v) => setState(() => _quotationStatus = v),
             ),
             AccidentWsFact(
-              label: 'Quotation status',
+              label: l10n.accQuotationStatus,
               value: quotationStatusLabel(_quotationStatus),
             ),
           ],
@@ -368,7 +370,7 @@ class _State extends ConsumerState<AccidentWorkshopAssessmentMockWorkspace> {
 
         // Required attachments
         AccidentWsSection(
-          title: 'Required attachments (${attachments.length})',
+          title: l10n.accRequiredAttachments(attachments.length),
           children: <Widget>[
             for (final AssessmentAttachmentStatus a in attachments)
               _AttachmentRow(
@@ -381,9 +383,8 @@ class _State extends ConsumerState<AccidentWorkshopAssessmentMockWorkspace> {
                   submitGatingAttachment,
                 )) ...<Widget>[
               const SizedBox(height: TpSpace.sm),
-              const AccidentWsWarning(
-                message: 'Attach vendor quotation to enable submission to '
-                    'External Workshop.',
+              AccidentWsWarning(
+                message: l10n.accAttachVendorQuotation,
               ),
             ],
           ],
@@ -392,7 +393,7 @@ class _State extends ConsumerState<AccidentWorkshopAssessmentMockWorkspace> {
 
         // After submit notify
         AccidentWsSection(
-          title: 'After submit notify',
+          title: l10n.accAfterSubmitNotify,
           children: <Widget>[
             AccidentWsNotifyChips(
               snapshot: widget.snapshot,
@@ -411,7 +412,7 @@ class _State extends ConsumerState<AccidentWorkshopAssessmentMockWorkspace> {
             Expanded(
               child: TpButton.secondary(
                 key: const Key('accident.ws.assessment.save'),
-                label: 'Save assessment',
+                label: l10n.accSaveAssessment,
                 icon: Icons.save_outlined,
                 isBusy: _busy,
                 onPressed: _busy || submitted ? null : () => _save(bundle),
@@ -422,8 +423,8 @@ class _State extends ConsumerState<AccidentWorkshopAssessmentMockWorkspace> {
               child: TpButton.primary(
                 key: const Key('accident.ws.assessment.submit'),
                 label: submitted
-                    ? 'Assessment submitted'
-                    : 'Submit assessment and route',
+                    ? l10n.accAssessmentSubmitted
+                    : l10n.accSubmitAssessment,
                 icon: Icons.send_outlined,
                 isBusy: _busy,
                 onPressed: _busy || submitted || !submittable
@@ -437,7 +438,7 @@ class _State extends ConsumerState<AccidentWorkshopAssessmentMockWorkspace> {
           Padding(
             padding: const EdgeInsets.only(top: TpSpace.xs),
             child: Text(
-              'Submission needs the vendor quotation for an external route.',
+              l10n.accSubmissionNeedsQuotation,
               style: text.bodySmall?.copyWith(color: palette.textSecondary),
             ),
           ),
@@ -475,6 +476,7 @@ class _State extends ConsumerState<AccidentWorkshopAssessmentMockWorkspace> {
           rows: rows,
           totalLossPossible: _totalLoss ?? false,
         );
+    final AppLocalizations l10n = AppLocalizations.of(context);
     setState(() => _busy = true);
     try {
       final AccidentAssessmentSaveResult result =
@@ -490,24 +492,25 @@ class _State extends ConsumerState<AccidentWorkshopAssessmentMockWorkspace> {
               );
       _seededFromId = null;
       ref.invalidate(accidentAssessmentBundleProvider(_record.id));
+      // Only when the server actually rejected optional columns; the parity
+      // migration is live, so this is a safety net rather than a promise.
       final String dropped = result.droppedFields.isEmpty
           ? ''
-          : ' Not stored yet (pending migration): '
-              '${result.droppedFields.join(', ')}.';
+          : ' ${l10n.accFieldsNotStored(result.droppedFields.join(', '))}';
       _snack(
         submit
-            ? 'Assessment submitted and routed to '
-                '${repairRouteLabel(route)}.$dropped'
-            : 'Assessment saved.$dropped',
+            ? '${l10n.accAssessmentRouted(repairRouteLabel(route))}$dropped'
+            : '${l10n.accAssessmentSaved}$dropped',
       );
     } on Object catch (error) {
-      _snack(accidentWsErrorText(error));
+      if (mounted) _snack(accidentWsErrorText(context, error));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
   Future<void> _upload(VocabItem doc) async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final AccidentPhotoSource? source =
         await pickAccidentEvidenceSource(context, doc.label);
     if (source == null || !mounted) return;
@@ -527,10 +530,10 @@ class _State extends ConsumerState<AccidentWorkshopAssessmentMockWorkspace> {
               site: _record.site,
             );
         ref.invalidate(accidentAssessmentBundleProvider(_record.id));
-        _snack('${doc.label} attached.');
+        _snack(l10n.accDocumentAttached(doc.label));
       }
     } on Object catch (error) {
-      _snack(accidentWsErrorText(error));
+      if (mounted) _snack(accidentWsErrorText(context, error));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -556,6 +559,7 @@ class _VehicleCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final TpPalette palette = TpPalette.of(context);
     final TextTheme text = Theme.of(context).textTheme;
     final bool rtl = TpDirection.isRtl(context);
@@ -624,7 +628,7 @@ class _VehicleCard extends ConsumerWidget {
                   children: <Widget>[
                     Text(
                       makeModel.isEmpty
-                          ? accidentWsText(record.vehicleType)
+                          ? accidentWsText(context, record.vehicleType)
                           : makeModel,
                       style: text.titleMedium
                           ?.copyWith(fontWeight: FontWeight.w800),
@@ -641,28 +645,27 @@ class _VehicleCard extends ConsumerWidget {
           ),
           const SizedBox(height: TpSpace.sm),
           AccidentWsFact(
-            label: 'KM',
+            label: l10n.accKm,
             value: vehicle.currentKm == null
-                ? accidentWsNotSet
-                : ltr('${vehicle.currentKm} km'),
+                ? accidentWsNotSet(context)
+                : ltr(l10n.accKmValue('${vehicle.currentKm}')),
           ),
           AccidentWsFact(
-            label: 'Plate',
+            label: l10n.accPlate,
             value: (vehicle.registrationNo ?? record.plateNumber ?? '')
                     .trim()
                     .isEmpty
-                ? accidentWsNotSet
+                ? accidentWsNotSet(context)
                 : ltr((vehicle.registrationNo ?? record.plateNumber)!.trim()),
           ),
           AccidentWsFact(
-            label: 'Site · location',
-            value: siteLine.isEmpty ? accidentWsNotSet : siteLine,
+            label: l10n.accSiteLocation,
+            value: siteLine.isEmpty ? accidentWsNotSet(context) : siteLine,
           ),
           const SizedBox(height: TpSpace.xs),
           TpButton.secondary(
             key: const Key('accident.ws.assessment.viewDamageMap'),
-            label: 'View damage map · $areaCount '
-                '${areaCount == 1 ? 'area' : 'areas'}',
+            label: l10n.accViewDamageMap(areaCount),
             icon: Icons.map_outlined,
             isFullWidth: true,
             onPressed: onViewDamageMap,
@@ -713,7 +716,7 @@ class _DamageRow extends StatelessWidget {
                   const SizedBox(width: TpSpace.xs),
                   Expanded(
                     child: Text(
-                      detail.isEmpty ? accidentWsNotSet : detail,
+                      detail.isEmpty ? accidentWsNotSet(context) : detail,
                       style: text.bodySmall
                           ?.copyWith(color: palette.textSecondary),
                     ),
@@ -724,8 +727,9 @@ class _DamageRow extends StatelessWidget {
                 row.actionLabel.isNotEmpty
                     ? row.actionLabel
                     : row.source == DamageRowSource.phone
-                        ? 'Action: not yet assessed'
-                        : 'Action: $accidentWsNotSet',
+                        ? AppLocalizations.of(context).accActionNotAssessed
+                        : AppLocalizations.of(context)
+                            .accActionValue(accidentWsNotSet(context)),
                 style: text.bodySmall,
               ),
             ],
@@ -844,9 +848,9 @@ class _RouteTile extends StatelessWidget {
             ),
           ),
           if (recommended)
-            const TpStatusChip(
+            TpStatusChip(
               status: TpStatus.ok,
-              label: 'Recommended',
+              label: AppLocalizations.of(context).accRecommended,
               isCompact: true,
             ),
         ],
@@ -893,7 +897,8 @@ class _AttachmentRow extends StatelessWidget {
             isCompact: true,
           ),
           IconButton(
-            tooltip: 'Upload ${status.doc.label}',
+            tooltip: AppLocalizations.of(context)
+                .accUploadNamedDocument(status.doc.label),
             onPressed: onUpload,
             icon: const Icon(Icons.upload_file_outlined),
           ),

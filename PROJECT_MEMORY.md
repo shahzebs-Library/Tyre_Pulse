@@ -76,6 +76,19 @@ batching stops them being started at all.
 
 ---
 
+# ⚑ SESSION 2026-09-28 (part 14) — HOME = COMMAND CENTER (owner's light + dark mockups). No migration.
+- `/` now renders `src/pages/CommandCenter.jsx` -> `src/components/commandCenter/CommandCenter.jsx` (+ `commandCenter.css`,
+  dark default, `html.light .cc` overrides). Nav label "Command Center" (en+ar). The OLD Dashboard is kept, lazy-mounted
+  behind a "Detailed analytics" disclosure (mountFetchCost tests still import it). Do NOT build a second home.
+- Pure engine `src/lib/commandCenter.js` (fleetStats/tyreHealth/actionBuckets/maintenanceDue/utilizationByMonth, null = N/A)
+  + per-card loaders `src/lib/api/commandCenter.js` (each card loads/fails/retries alone). Reuses getTyreRunningLife,
+  listActionItems, loadPmDashboard, listAssetUtilization, loadGovernedCost, approvalsQueue. Tests commandCenter.test.js.
+- Honest choices vs mockup: spend under All countries lists per-country totals (never blended); spend legend = Tyres/Spare/Oil
+  (real buckets); compliance tiles N/A when unreadable; map is a static Natural Earth path (`worldLand.js`) framed to the
+  countries operated in. Hero art = crops of the owner's mockups (`public/dashboard/hero-*.webp`), truck grille emblems blurred.
+
+---
+
 # ⚑ SESSION 2026-09-28 (part 13) — MARKETING SITE REBUILT TO THE OWNER'S PMV MOCKUPS (yellow/black). No migration.
 Branch `claude/marketing-pmv-redesign`. marketing/ only; the app is untouched.
 - **Brand on the marketing site is now signal yellow `#FFC629` on asphalt `#161616`** (owner's mockups). This REVERSES the

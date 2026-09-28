@@ -29,6 +29,8 @@ import 'package:tyre_pulse/features/checklists/data/checklist_photo_capture.dart
 import 'package:tyre_pulse/features/checklists/data/checklist_remote_repository.dart';
 import 'package:tyre_pulse/features/checklists/data/checklist_submission_repository.dart';
 import 'package:tyre_pulse/features/checklists/domain/checklist_i18n.dart';
+import 'package:tyre_pulse/features/meter_logs/data/meter_reading.dart';
+import 'package:tyre_pulse/features/meter_logs/meter_logs_providers.dart';
 
 /// The checklist-content language selected on the asset hub. This is separate
 /// from the app locale: an English app can still show an Arabic, Hindi or Urdu
@@ -107,3 +109,14 @@ final Provider<ChecklistHistoryRepository> checklistHistoryRepositoryProvider =
 /// every real device, matching `inspectionPhotoCaptureProvider`'s own note.
 final Provider<ChecklistPhotoCapture> checklistPhotoCaptureProvider =
     Provider<ChecklistPhotoCapture>((ref) => ChecklistPhotoCapture());
+
+/// The latest recorded odometer reading for one asset, for the hub's
+/// "Odometer & hour-meter reading" row. Reuses the meter-log feature's own
+/// best-effort read ([MeterLogRepository.getLastOdometer] never throws and
+/// returns null when there is no reading OR it could not be read), so the
+/// hub never renders a date it did not read.
+final lastChecklistOdometerProvider =
+    FutureProvider.autoDispose.family<LastOdometerReading?, String>(
+  (ref, assetNo) =>
+      ref.watch(meterLogRepositoryProvider).getLastOdometer(assetNo),
+);

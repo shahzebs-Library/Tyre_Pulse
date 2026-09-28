@@ -85,6 +85,26 @@
 /// `finally` whether the run succeeded or not), not a last SUCCESSFUL sync.
 /// "Help & support" and "Privacy & audit" have no route in `routes.dart`, so
 /// they are absent rather than dead rows.
+///
+/// # Mock-parity pass (Profile.png, batch 2)
+///
+/// Added, each backed by real data: "Verified account" (an approved,
+/// unlocked `profiles` row), "Pending drafts" / "Offline drafts" (drafts with
+/// real content in the local draft store - `profileDraftCountProvider`),
+/// "Country & currency" (the scope plus the server-resolved workspace
+/// currency, omitted when null), "My roles & access" (role and the number of
+/// modules the access resolver actually grants), "Checklist content
+/// language" (the checklist hub's own content-language selection, separate
+/// from the app language), and "My saved signature" (V601 `user_signatures`:
+/// view, draw a new one, or remove - online only).
+///
+/// Still absent, with the reason: the email line (many accounts carry a
+/// synthetic login address, which would read as a real mailbox), Edit
+/// profile / My activity (no screen or route), the three notification
+/// toggles (`notification_preferences` exists but nothing honours it, so a
+/// switch would do nothing), device biometrics and change password (no
+/// implementation in this app), storage used (no measurement), "Last sync"
+/// and "Assigned tasks" (see above), the settings gear (no settings route).
 library;
 
 import 'dart:async';
@@ -92,6 +112,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart' show DateFormat;
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
@@ -101,11 +122,18 @@ import 'package:tyre_pulse/core/auth/auth_controller.dart';
 import 'package:tyre_pulse/core/auth/auth_dependency_providers.dart';
 import 'package:tyre_pulse/core/auth/auth_state.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/core/permissions/permission_providers.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
+import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
+import 'package:tyre_pulse/features/approvals/presentation/widgets/approval_signature_preview.dart';
+import 'package:tyre_pulse/features/approvals/presentation/widgets/checklist_approval_signature_pad.dart';
 import 'package:tyre_pulse/features/auth/presentation/login_security_copy.dart';
+import 'package:tyre_pulse/features/checklists/checklists_providers.dart';
+import 'package:tyre_pulse/features/checklists/domain/checklist_i18n.dart';
 import 'package:tyre_pulse/features/driver_workspace/presentation/driver_workspace_panel.dart';
 import 'package:tyre_pulse/features/notifications/notifications_providers.dart';
 import 'package:tyre_pulse/features/notifications/presentation/notifications_copy.dart';
+import 'package:tyre_pulse/features/profile/data/saved_signature_repository.dart';
 import 'package:tyre_pulse/features/profile/profile_providers.dart';
 
 /// Stable finders for Profile's responsive visual regions.
@@ -122,6 +150,14 @@ abstract final class ProfileScreenKeys {
   static const Key appVersionRow = Key('profile.appVersion');
   static const Key signOut = Key('profile.signOut');
   static const Key unsyncedFooter = Key('profile.unsyncedFooter');
+  static const Key verifiedBadge = Key('profile.verified');
+  static const Key draftsTile = Key('profile.drafts');
+  static const Key checklistLanguageRow = Key('profile.checklistLanguage');
+  static const Key rolesRow = Key('profile.roles');
+  static const Key countryRow = Key('profile.country');
+  static const Key siteRow = Key('profile.site');
+  static const Key signatureRow = Key('profile.signature');
+  static const Key offlineDraftsRow = Key('profile.offlineDrafts');
 }
 
 /// The three languages the app ships (en/ar/ur ARB catalogs). Names are the
@@ -274,6 +310,44 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     ref.read(themeModeProvider.notifier).setMode(chosen);
   }
 
+  Future<void> _chooseChecklistLanguage(String active) async {
+    final String? chosen = await showModalBottomSheet<String>(
+      context: context,
+      useSafeArea: true,
+      builder: (BuildContext sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            for (final ChecklistLang lang in kChecklistLangs)
+              ListTile(
+                key: Key('profile.checklistLanguage.${lang.code}'),
+                leading: const Icon(Icons.article_outlined),
+                title: Text(lang.native),
+                trailing: lang.code == active
+                    ? Icon(
+                        Icons.check_rounded,
+                        color: TpPalette.of(sheetContext).primary,
+                      )
+                    : null,
+                onTap: () => Navigator.of(sheetContext).pop(lang.code),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (chosen == null || !mounted) return;
+    ref.read(checklistContentLanguageProvider.notifier).select(chosen);
+  }
+
+  Future<void> _openSavedSignature() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      builder: (BuildContext sheetContext) => const _SavedSignatureSheet(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final AuthState authState = ref.watch(authControllerProvider);
@@ -327,6 +401,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final ThemeMode activeTheme = ref.watch(themeModeProvider);
     final String? version =
         _visibleVersion(ref.watch(currentAppVersionProvider));
+    final AsyncValue<int> drafts = ref.watch(profileDraftCountProvider);
+    final String checklistLanguage =
+        ref.watch(checklistContentLanguageProvider);
+    final AsyncValue<SavedSignature?> savedSignature =
+        ref.watch(mySavedSignatureProvider);
+    final String? currency = ref.watch(workspaceContextProvider)?.currency;
+    final int moduleCount = ref.watch(allowedModulesProvider).length;
 
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
@@ -352,6 +433,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     const DriverWorkspaceEntry(),
                     const SizedBox(height: TpSpace.md),
                     _ProfileStatusStrip(
+                      drafts: drafts,
                       pendingSync: pendingSync,
                       unread: unread,
                       profileStale: authState.profileStale,
@@ -363,11 +445,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         activeLocale: activeLocale,
                         activeTheme: activeTheme,
                         pendingSync: pendingSync,
+                        drafts: drafts,
                         version: version,
+                        currency: currency,
+                        moduleCount: moduleCount,
+                        checklistLanguage: checklistLanguage,
+                        savedSignature: savedSignature,
                         onChooseLanguage: () =>
                             unawaited(_chooseLanguage(activeLocale)),
                         onChooseTheme: () =>
                             unawaited(_chooseTheme(activeTheme)),
+                        onChooseChecklistLanguage: () => unawaited(
+                          _chooseChecklistLanguage(checklistLanguage),
+                        ),
+                        onOpenSignature: () => unawaited(_openSavedSignature()),
                       ),
                       account: _AccountBlock(
                         isSigningOut: _isSigningOut,
@@ -517,6 +608,30 @@ class _IdentityHeader extends StatelessWidget {
                   icon: Icons.location_on_outlined,
                   value: location,
                 ),
+                if (profile.isApproved && !profile.isLocked) ...<Widget>[
+                  const SizedBox(height: TpSpace.xs),
+                  Row(
+                    key: ProfileScreenKeys.verifiedBadge,
+                    children: <Widget>[
+                      Icon(
+                        Icons.verified_user_outlined,
+                        size: 16,
+                        color: palette.ok.base,
+                      ),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          l10n.clMockProfileVerified,
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: palette.ok.base,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
                 if (profile.isSuperAdmin) ...<Widget>[
                   const SizedBox(height: TpSpace.sm),
                   _IdentityBadge(
@@ -644,11 +759,13 @@ String _countText(AsyncValue<int> value) {
 /// offline marker. No invented task count or "last sync" clock.
 class _ProfileStatusStrip extends StatelessWidget {
   const _ProfileStatusStrip({
+    required this.drafts,
     required this.pendingSync,
     required this.unread,
     required this.profileStale,
   });
 
+  final AsyncValue<int> drafts;
   final AsyncValue<int> pendingSync;
   final AsyncValue<int> unread;
   final bool profileStale;
@@ -669,6 +786,18 @@ class _ProfileStatusStrip extends StatelessWidget {
       child: IntrinsicHeight(
         child: Row(
           children: <Widget>[
+            Expanded(
+              child: _ProfileStatusItem(
+                key: ProfileScreenKeys.draftsTile,
+                icon: Icons.description_outlined,
+                value: _countText(drafts),
+                label: l10n.clMockPendingDrafts,
+                tone: (drafts.asData?.value ?? 0) > 0
+                    ? palette.warning
+                    : palette.info,
+              ),
+            ),
+            VerticalDivider(width: 1, thickness: 1, color: palette.border),
             Expanded(
               child: _ProfileStatusItem(
                 icon: Icons.cloud_upload_outlined,
@@ -714,6 +843,7 @@ class _ProfileStatusItem extends StatelessWidget {
     required this.label,
     required this.value,
     required this.tone,
+    super.key,
   });
 
   final IconData icon;
@@ -812,18 +942,35 @@ class _SettingsColumn extends StatelessWidget {
     required this.activeLocale,
     required this.activeTheme,
     required this.pendingSync,
+    required this.drafts,
     required this.version,
+    required this.currency,
+    required this.moduleCount,
+    required this.checklistLanguage,
+    required this.savedSignature,
     required this.onChooseLanguage,
     required this.onChooseTheme,
+    required this.onChooseChecklistLanguage,
+    required this.onOpenSignature,
   });
 
   final WorkspaceProfile profile;
   final Locale activeLocale;
   final ThemeMode activeTheme;
   final AsyncValue<int> pendingSync;
+  final AsyncValue<int> drafts;
   final String? version;
+
+  /// The server-resolved currency of the active workspace, or null (never
+  /// defaulted - see `workspace_context.dart`).
+  final String? currency;
+  final int moduleCount;
+  final String checklistLanguage;
+  final AsyncValue<SavedSignature?> savedSignature;
   final VoidCallback onChooseLanguage;
   final VoidCallback onChooseTheme;
+  final VoidCallback onChooseChecklistLanguage;
+  final VoidCallback onOpenSignature;
 
   @override
   Widget build(BuildContext context) {
@@ -832,6 +979,21 @@ class _SettingsColumn extends StatelessWidget {
     final LoginSecurityCopy loginCopy = LoginSecurityCopy.of(context);
     final String countries = _countryScopeLabel(profile, l10n);
     final int? pending = pendingSync.asData?.value;
+    final int? draftCount = drafts.asData?.value;
+    final String locale = Localizations.localeOf(context).toLanguageTag();
+    final String signatureValue = savedSignature.when(
+      loading: () => l10n.stateLoading,
+      error: (Object e, StackTrace st) => l10n.valueUnavailable,
+      data: (SavedSignature? value) {
+        if (value == null) return l10n.clMockSignatureNotSaved;
+        final DateTime? at = value.updatedAt?.toLocal();
+        return at == null
+            ? l10n.clMockSignatureCaptured
+            : l10n.clMockSignatureCapturedOn(
+                DateFormat('d MMM', locale).format(at),
+              );
+      },
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -841,22 +1003,28 @@ class _SettingsColumn extends StatelessWidget {
           title: l10n.profileSectionWorkspace,
           rows: <Widget>[
             _SettingsRow(
-              icon: Icons.work_outline_rounded,
-              tone: palette.info,
-              label: l10n.profileRoleLabel,
-              value: profile.role.displayName,
-            ),
-            _SettingsRow(
-              icon: Icons.public_outlined,
-              tone: palette.ok,
-              label: l10n.vehiclesFieldCountry,
-              value: countries,
-            ),
-            _SettingsRow(
+              key: ProfileScreenKeys.siteRow,
               icon: Icons.location_city_outlined,
               tone: palette.warning,
-              label: l10n.vehiclesFieldSite,
+              label: l10n.clMockActiveSite,
               value: _siteScopeLabel(profile, l10n),
+            ),
+            _SettingsRow(
+              key: ProfileScreenKeys.countryRow,
+              icon: Icons.public_outlined,
+              tone: palette.ok,
+              label: l10n.clMockCountryCurrency,
+              value: currency == null || currency!.trim().isEmpty
+                  ? countries
+                  : '$countries · ${currency!.trim()}',
+            ),
+            _SettingsRow(
+              key: ProfileScreenKeys.rolesRow,
+              icon: Icons.groups_outlined,
+              tone: palette.info,
+              label: l10n.clMockRolesAccess,
+              value: '${profile.role.displayName} · '
+                  '${l10n.clMockModuleCount(moduleCount)}',
             ),
           ],
         ),
@@ -873,12 +1041,35 @@ class _SettingsColumn extends StatelessWidget {
               onTap: onChooseLanguage,
             ),
             _SettingsRow(
+              key: ProfileScreenKeys.checklistLanguageRow,
+              icon: Icons.article_outlined,
+              tone: palette.info,
+              label: l10n.clMockChecklistLanguage,
+              value: langMeta(checklistLanguage).native,
+              caption: l10n.clMockChecklistLanguageCaption,
+              onTap: onChooseChecklistLanguage,
+            ),
+            _SettingsRow(
               key: ProfileScreenKeys.themeRow,
               icon: Icons.contrast_rounded,
               tone: palette.info,
               label: l10n.profileThemeLabel,
               value: _themeLabel(activeTheme, l10n),
               onTap: onChooseTheme,
+            ),
+          ],
+        ),
+        const SizedBox(height: TpSpace.lg),
+        _SettingsSection(
+          title: l10n.clMockSectionSecurity,
+          rows: <Widget>[
+            _SettingsRow(
+              key: ProfileScreenKeys.signatureRow,
+              icon: Icons.draw_outlined,
+              tone: palette.ok,
+              label: l10n.clMockSavedSignature,
+              value: signatureValue,
+              onTap: onOpenSignature,
             ),
           ],
         ),
@@ -906,6 +1097,20 @@ class _SettingsColumn extends StatelessWidget {
                       ? palette.ok.base
                       : palette.warning.base,
             ),
+            _SettingsRow(
+              key: ProfileScreenKeys.offlineDraftsRow,
+              icon: Icons.description_outlined,
+              tone: (draftCount ?? 0) > 0 ? palette.warning : palette.neutral,
+              label: l10n.clMockOfflineDrafts,
+              value: draftCount == null
+                  ? l10n.valueUnavailable
+                  : l10n.clMockDraftsStored(draftCount),
+              valueColor: draftCount == null
+                  ? palette.textMuted
+                  : draftCount > 0
+                      ? palette.warning.base
+                      : null,
+            ),
           ],
         ),
         if (version != null) ...<Widget>[
@@ -922,6 +1127,181 @@ class _SettingsColumn extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// View, replace or remove the person's own saved signature (V601).
+///
+/// A write is an explicit, ONLINE action (see the repository's library
+/// comment): failures are said out loud, never swallowed. Removing asks
+/// first. Nothing here signs anything - the saved mark is only ever
+/// pre-filled into an approval pad the reviewer still has to press.
+class _SavedSignatureSheet extends ConsumerStatefulWidget {
+  const _SavedSignatureSheet();
+
+  @override
+  ConsumerState<_SavedSignatureSheet> createState() =>
+      _SavedSignatureSheetState();
+}
+
+class _SavedSignatureSheetState extends ConsumerState<_SavedSignatureSheet> {
+  bool _drawing = false;
+  bool _busy = false;
+  String? _drawn;
+  String? _error;
+
+  Future<void> _save() async {
+    final String? value = _drawn;
+    if (value == null || _busy) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await ref.read(savedSignatureRepositoryProvider).save(value);
+      ref.invalidate(mySavedSignatureProvider);
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _drawing = false;
+        _drawn = null;
+      });
+    } on Object {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = AppLocalizations.of(context).clMockSignatureSaveFailed;
+      });
+    }
+  }
+
+  Future<void> _remove() async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final bool confirmed = await TpDialog.confirm(
+      context: context,
+      title: l10n.clMockSignatureRemoveTitle,
+      message: l10n.clMockSignatureRemoveMessage,
+      cancelLabel: l10n.actionCancel,
+      confirmLabel: l10n.clMockSignatureRemove,
+      isDestructive: true,
+    );
+    if (!confirmed || !mounted) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await ref.read(savedSignatureRepositoryProvider).clear();
+      ref.invalidate(mySavedSignatureProvider);
+      if (!mounted) return;
+      setState(() => _busy = false);
+    } on Object {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = l10n.clMockSignatureSaveFailed;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    final AsyncValue<SavedSignature?> saved =
+        ref.watch(mySavedSignatureProvider);
+    final SavedSignature? current = saved.asData?.value;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        TpSpace.lg,
+        TpSpace.lg,
+        TpSpace.lg,
+        TpSpace.lg + MediaQuery.viewInsetsOf(context).bottom,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Text(
+            l10n.clMockSavedSignature,
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: TpSpace.xs),
+          Text(
+            l10n.clMockSignatureSheetHint,
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall
+                ?.copyWith(color: palette.textSecondary),
+          ),
+          const SizedBox(height: TpSpace.md),
+          if (_drawing)
+            ChecklistApprovalSignaturePad(
+              onChanged: (ChecklistApprovalSignatureCapture? capture) =>
+                  setState(() => _drawn = capture?.dataUrl),
+            )
+          else if (saved.isLoading)
+            const SizedBox(height: 140, child: TpLoadingState())
+          else
+            Container(
+              height: 140,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(TpRadius.md),
+                border: Border.all(color: palette.border),
+              ),
+              alignment: Alignment.center,
+              child: current == null
+                  ? Text(
+                      l10n.clMockSignatureNotSaved,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(color: Colors.black54),
+                    )
+                  : ApprovalSignaturePreview(
+                      value: current.value,
+                      fallback: Text(l10n.checklistApprovalSignatureSavedLabel),
+                    ),
+            ),
+          if (_error != null) ...<Widget>[
+            const SizedBox(height: TpSpace.sm),
+            Text(
+              _error!,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: palette.critical.base),
+            ),
+          ],
+          const SizedBox(height: TpSpace.md),
+          if (_drawing)
+            TpButton.primary(
+              label: l10n.clMockSignatureSave,
+              icon: Icons.save_outlined,
+              isBusy: _busy,
+              onPressed: _drawn == null || _busy ? null : _save,
+            )
+          else ...<Widget>[
+            TpButton.primary(
+              label: l10n.checklistApprovalSignatureRedraw,
+              icon: Icons.edit_outlined,
+              onPressed: _busy ? null : () => setState(() => _drawing = true),
+            ),
+            if (current != null) ...<Widget>[
+              const SizedBox(height: TpSpace.sm),
+              TpButton.danger(
+                label: l10n.clMockSignatureRemove,
+                icon: Icons.delete_outline_rounded,
+                isBusy: _busy,
+                onPressed: _busy ? null : _remove,
+              ),
+            ],
+          ],
+        ],
+      ),
     );
   }
 }
@@ -1019,6 +1399,7 @@ class _SettingsRow extends StatelessWidget {
     required this.label,
     this.value,
     this.valueColor,
+    this.caption,
     this.onTap,
     super.key,
   });
@@ -1027,6 +1408,9 @@ class _SettingsRow extends StatelessWidget {
   final TpStatusColors tone;
   final String label;
   final String? value;
+
+  /// A second, quieter line under [value].
+  final String? caption;
   final Color? valueColor;
   final VoidCallback? onTap;
 
@@ -1069,13 +1453,27 @@ class _SettingsRow extends StatelessWidget {
               const SizedBox(width: TpSpace.md),
               Expanded(
                 flex: 3,
-                child: Text(
-                  value!,
-                  textAlign: TextAlign.end,
-                  style: text.bodyMedium?.copyWith(
-                    color: valueColor ?? palette.textSecondary,
-                    fontWeight: FontWeight.w600,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Text(
+                      value!,
+                      textAlign: TextAlign.end,
+                      style: text.bodyMedium?.copyWith(
+                        color: valueColor ?? palette.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (caption != null)
+                      Text(
+                        caption!,
+                        textAlign: TextAlign.end,
+                        style: text.labelSmall?.copyWith(
+                          color: palette.textMuted,
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ],

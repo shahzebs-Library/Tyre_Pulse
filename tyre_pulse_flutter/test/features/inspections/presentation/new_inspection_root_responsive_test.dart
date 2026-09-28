@@ -168,7 +168,14 @@ void main() {
               find.byKey(NewInspectionScreenKeys.tyreWorkflowProgress),
             )
             .data,
-        '0 of 12 checked',
+        '0% complete',
+      );
+      // Nothing recorded yet: the app bar still says Draft, never a
+      // condition nobody measured.
+      expect(find.byKey(NewInspectionScreenKeys.tyreDraftChip), findsOneWidget);
+      expect(
+        find.byKey(NewInspectionScreenKeys.tyreOverallStatus),
+        findsNothing,
       );
       expect(
         tester
@@ -188,6 +195,53 @@ void main() {
       expect(find.textContaining('tyres recorded'), findsNothing);
     },
   );
+
+  testWidgets(
+      'selected panel shows the machine meter entered on this inspection '
+      'and a Good overall status', (WidgetTester tester) async {
+    await _pumpScreen(
+      tester,
+      size: const Size(390, 1600),
+      initialState: InspectionWizardState(
+        step: InspectionWizardStep.tyres,
+        selectedAssetNo: 'TM749',
+        selectedVehicleType: '',
+        selectedSite: 'Site A',
+        hourMeterText: '8742',
+        positions: _tmPositions,
+        tyreConditions: <String, TyrePositionReading>{
+          for (final String position in _tmPositions)
+            position: position == 'F1L'
+                ? const TyrePositionReading(
+                    position: 'F1L',
+                    pressurePsi: 110,
+                    condition: TyreReadingCondition.good,
+                    checked: true,
+                  )
+                : TyrePositionReading.seed(position),
+        },
+      ),
+    );
+
+    final TpStatusChip overall = tester.widget<TpStatusChip>(
+      find.byKey(NewInspectionScreenKeys.tyreOverallStatus),
+    );
+    expect(overall.status, TpStatus.ok);
+    expect(overall.label, 'Good');
+    final Finder meter = find.byKey(NewInspectionScreenKeys.tyreMeterRow);
+    expect(meter, findsOneWidget);
+    expect(
+      find.descendant(of: meter, matching: find.text('Machine meter')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: meter, matching: find.textContaining('8742 h')),
+      findsOneWidget,
+    );
+    expect(find.text('Previous tyre'), findsOneWidget);
+    expect(find.text('Next tyre'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('one checked TM749 tyre is In progress, not a result', (
     WidgetTester tester,
@@ -218,7 +272,8 @@ void main() {
     );
     expect(status.status, TpStatus.info);
     expect(status.label, 'In progress');
-    expect(find.text('1 of 12 checked'), findsOneWidget);
+    expect(find.text('8% complete'), findsOneWidget);
+    expect(find.text('1 / 12'), findsOneWidget);
     expect(
       tester
           .widget<Text>(
@@ -260,13 +315,22 @@ void main() {
         ),
       );
 
-      expect(find.text('Inspection'), findsOneWidget);
-      expect(find.byKey(NewInspectionScreenKeys.tyreDraftChip), findsOneWidget);
+      expect(find.text('Tyre inspection'), findsOneWidget);
+      expect(find.text('TM749 · Site A'), findsOneWidget);
+      // A damaged wheel makes the whole inspection read Critical at the top.
+      final TpStatusChip overall = tester.widget<TpStatusChip>(
+        find.byKey(NewInspectionScreenKeys.tyreOverallStatus),
+      );
+      expect(overall.status, TpStatus.critical);
+      expect(overall.label, 'Critical');
+      expect(find.byKey(NewInspectionScreenKeys.tyreDraftChip), findsNothing);
       expect(find.text('12-Tyre Configuration'), findsOneWidget);
-      expect(find.text('Step 2 of 4'), findsOneWidget);
+      expect(find.text('Inspection progress'), findsOneWidget);
       expect(find.text('Good'), findsWidgets);
       expect(find.text('Attention'), findsOneWidget);
-      expect(find.text('Critical'), findsOneWidget);
+      expect(find.text('Critical'), findsNWidgets(2));
+      // No meter was entered on this inspection: no meter strip is invented.
+      expect(find.byKey(NewInspectionScreenKeys.tyreMeterRow), findsNothing);
       // Legend and every unrecorded wheel card use the same honest wording.
       expect(find.text('Not recorded'), findsWidgets);
       expect(
@@ -452,7 +516,7 @@ void main() {
     );
     expect(status.status, TpStatus.ok);
     expect(status.label, 'Ready for review');
-    expect(find.text('12 of 12 checked'), findsOneWidget);
+    expect(find.text('100% complete'), findsOneWidget);
     expect(
       find.text(
         'All tyre positions are checked. Review and sign is ready.',

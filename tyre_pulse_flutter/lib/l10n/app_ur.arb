@@ -2254,5 +2254,505 @@
         "type": "String"
       }
     }
+  },
+  "tyreMockRecordsCount": "{count, plural, =0{کوئی ٹائر نہیں} =1{1 ٹائر} other{{count} ٹائر}}",
+  "@tyreMockRecordsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "tyreMockTabAll": "سب",
+  "tyreMockTabInstalled": "نصب شدہ",
+  "tyreMockTabRemoved": "اتارے گئے",
+  "tyreMockTabScrapped": "اسکریپ شدہ",
+  "tyreMockShowingInstalled": "نصب شدہ ٹائر دکھائے جا رہے ہیں",
+  "tyreMockShowingRemoved": "اتارے گئے ٹائر دکھائے جا رہے ہیں",
+  "tyreMockShowingScrapped": "اسکریپ شدہ ٹائر دکھائے جا رہے ہیں",
+  "tyreMockShowingAll": "تمام ٹائر دکھائے جا رہے ہیں",
+  "tyreMockLoadedAt": "لوڈ ہوا {time}",
+  "@tyreMockLoadedAt": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "tyreMockSortTooltip": "ترتیب",
+  "tyreMockSortNewest": "تازہ ترین نصب",
+  "tyreMockSortOldest": "قدیم ترین نصب",
+  "tyreMockSitePill": "سائٹ: {value}",
+  "@tyreMockSitePill": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "tyreMockRiskPill": "خطرہ: {value}",
+  "@tyreMockRiskPill": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "tyreMockMetricFitted": "نصب کی تاریخ",
+  "tyreMockMetricRemoved": "اتارنے کی تاریخ",
+  "tyreMockMetricTread": "ٹریڈ",
+  "tyreMockMetricKmRun": "طے شدہ کلومیٹر",
+  "tyreMockKmValue": "{value} کلومیٹر",
+  "@tyreMockKmValue": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "tyreMockHoursValue": "{value} گھنٹے",
+  "@tyreMockHoursValue": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "tyreMockScanSerial": "ٹائر سیریل اسکین کریں",
+  "tyreMockInspectionTitle": "ٹائر معائنہ",
+  "tyreMockInspectionProgress": "معائنے کی پیش رفت",
+  "tyreMockProgressComplete": "{percent}% مکمل",
+  "@tyreMockProgressComplete": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "tyreMockMachineMeter": "مشین میٹر",
+  "tyreMockPreviousTyre": "پچھلا ٹائر",
+  "tyreMockNextTyre": "اگلا ٹائر",
+  "fleetMockClassVehicles": "گاڑیاں",
+  "fleetMockClassPlant": "پلانٹ اور آلات",
+  "fleetMockClassStationary": "اسٹیشنری",
+  "fleetMockActiveAssets": "{count, plural, =0{کوئی فعال اثاثہ نہیں} =1{1 فعال اثاثہ} other{{count} فعال اثاثے}}",
+  "@fleetMockActiveAssets": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fleetMockScopeAllSites": "تمام مجاز سائٹس",
+  "fleetMockScopeAllCountries": "تمام ممالک",
+  "fleetMockScanAssetQr": "اثاثے کا QR اسکین کریں",
+  "fleetMockTabTimeline": "ٹائم لائن",
+  "fleetMockTabCosts": "اخراجات",
+  "fleetMockPeriodYtd": "اس سال اب تک",
+  "fleetMockPeriod12m": "پچھلے 12 ماہ",
+  "fleetMockPeriod90d": "پچھلے 90 دن",
+  "fleetMockPeriod30d": "پچھلے 30 دن",
+  "fleetMockTimelineAll": "تمام واقعات",
+  "fleetMockTimelineWorkOrders": "ورک آرڈرز",
+  "fleetMockTimelineInspections": "معائنے",
+  "fleetMockTimelineWashes": "دھلائی",
+  "fleetMockTimelineTyres": "ٹائر",
+  "fleetMockTimelineAccidents": "حادثات",
+  "fleetMockEventWorkOrder": "جاب کارڈ کھولا گیا",
+  "fleetMockEventInspection": "ٹائر معائنہ",
+  "fleetMockEventWash": "گاڑی کی دھلائی",
+  "fleetMockEventTyreFitted": "ٹائر لگایا گیا",
+  "fleetMockEventTyreRemoved": "ٹائر اتارا گیا",
+  "fleetMockEventAccident": "حادثے کی اطلاع دی گئی",
+  "fleetMockEventPhotos": "{count, plural, =1{1 تصویر} other{{count} تصاویر}}",
+  "@fleetMockEventPhotos": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fleetMockTimelineEmptyTitle": "اس مدت میں کوئی ریکارڈ نہیں",
+  "fleetMockTimelineEmptyBody": "منتخب مدت میں اس اثاثے کے لیے کچھ ریکارڈ نہیں ہوا۔",
+  "fleetMockTimelinePartial": "کچھ ریکارڈ لوڈ نہیں ہو سکا۔ فہرست نامکمل ہو سکتی ہے۔",
+  "fleetMockSnapshotTitle": "مالی خلاصہ",
+  "fleetMockOpenFinReport": "مکمل مالی رپورٹ کھولیں",
+  "fleetMockFinReportTitle": "مالی رپورٹ",
+  "fleetMockFinScopeNote": "ایک اثاثے کی رپورٹ، قدریں صرف {currency} میں",
+  "@fleetMockFinScopeNote": {
+    "placeholders": {
+      "currency": {
+        "type": "String"
+      }
+    }
+  },
+  "fleetMockFinVsYear": "{year} کی اسی مدت کے مقابلے میں",
+  "@fleetMockFinVsYear": {
+    "placeholders": {
+      "year": {
+        "type": "String"
+      }
+    }
+  },
+  "fleetMockFinTotalOperating": "کل آپریٹنگ لاگت",
+  "fleetMockFinMaintenance": "دیکھ بھال",
+  "fleetMockFinCostPerKm": "فی کلومیٹر لاگت",
+  "fleetMockFinCostPerHour": "فی انجن گھنٹہ لاگت",
+  "fleetMockFinDowntime": "ڈاؤن ٹائم",
+  "fleetMockFinHours": "{hours} گھنٹے",
+  "@fleetMockFinHours": {
+    "placeholders": {
+      "hours": {
+        "type": "String"
+      }
+    }
+  },
+  "fleetMockFinNotMeasurable": "قابل پیمائش نہیں",
+  "fleetMockFinNoKmReadings": "مدت میں اوڈومیٹر کی دو ریڈنگز درکار ہیں",
+  "fleetMockFinNotRecorded": "درج نہیں",
+  "fleetMockFinNoComparison": "موازنے کے لیے ڈیٹا نہیں",
+  "fleetMockFinCostTrend": "لاگت کا رجحان",
+  "fleetMockFinMonthlyCost": "ماہانہ لاگت ({currency})",
+  "@fleetMockFinMonthlyCost": {
+    "placeholders": {
+      "currency": {
+        "type": "String"
+      }
+    }
+  },
+  "fleetMockFinComposition": "لاگت کی تقسیم",
+  "fleetMockFinBucketParts": "اسپیئر پارٹس",
+  "fleetMockFinBucketLubricants": "تیل اور چکنائی",
+  "fleetMockFinBucketTyres": "ٹائر",
+  "fleetMockFinBucketLabour": "مزدوری",
+  "fleetMockFinRecentEntries": "حالیہ لاگت کے اندراجات",
+  "fleetMockFinViewAll": "تمام لاگت کے اندراجات دیکھیں ({count})",
+  "@fleetMockFinViewAll": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fleetMockFinShowFewer": "کم دکھائیں",
+  "fleetMockFinLines": "{count, plural, =1{1 لائن} other{{count} لائنیں}}",
+  "@fleetMockFinLines": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fleetMockFinExport": "رپورٹ ایکسپورٹ کریں",
+  "fleetMockFinExportError": "رپورٹ ایکسپورٹ نہیں ہو سکی۔ دوبارہ کوشش کریں۔",
+  "fleetMockFinNoCostTitle": "کوئی لاگت درج نہیں",
+  "fleetMockFinNoCostBody": "منتخب مدت میں اس اثاثے کے لیے کوئی اخراجات یا مزدوری درج نہیں ہوئی۔",
+  "fleetMockFinMixedTitle": "ایک سے زیادہ کرنسی",
+  "fleetMockFinMixedBody": "اس اثاثے کی لاگت کی لائنیں {currencies} استعمال کرتی ہیں۔ مختلف کرنسیوں کو کبھی جمع نہیں کیا جاتا۔ اعداد دیکھنے کے لیے ایک ملک منتخب کریں۔",
+  "@fleetMockFinMixedBody": {
+    "placeholders": {
+      "currencies": {
+        "type": "String"
+      }
+    }
+  },
+  "fleetMockFinLabourMissing": "جاب کارڈز کی مزدوری شامل نہیں ہے۔",
+  "fleetMockFinSourceNote": "پارٹس، تیل اور ٹائر اخراجات کے ریکارڈ سے۔ مزدوری اور ڈاؤن ٹائم جاب کارڈز سے۔ اس اثاثے کا کوئی بجٹ درج نہیں۔",
+  "fleetMockFinMeters": "مدت میں میٹر",
+  "fleetMockFinDistance": "فاصلہ",
+  "fleetMockFinRunningHours": "انجن گھنٹے",
+  "myWorkAllSites": "تمام تفویض شدہ سائٹس",
+  "myWorkAnswered": "{answered}/{total} جواب دیے گئے",
+  "@myWorkAnswered": {
+    "placeholders": {
+      "answered": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "myWorkApprovalQueues": "منظوری کی قطاریں",
+  "myWorkAssignedTo": "تفویض کردہ",
+  "myWorkChecklistApprovals": "عمومی چیک لسٹ منظوریاں",
+  "myWorkCompletedEmpty": "ابھی کوئی مکمل کام نہیں",
+  "myWorkContentAvailable": "{languages} مواد دستیاب ہے",
+  "@myWorkContentAvailable": {
+    "placeholders": {
+      "languages": {
+        "type": "String"
+      }
+    }
+  },
+  "myWorkContentLanguage": "چیک لسٹ مواد کی زبان",
+  "myWorkDayEmpty": "اس دن کے لیے کچھ منصوبہ بند نہیں",
+  "myWorkDraftSaved": "مسودہ محفوظ ہے",
+  "myWorkDueOn": "واجب الادا {date}",
+  "@myWorkDueOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "myWorkDueToday": "آج واجب",
+  "myWorkEmptyBody": "آپ یا آپ کے کردار کو تفویض کردہ کام یہاں ظاہر ہوتا ہے۔",
+  "myWorkEmptyFiltered": "اس فلٹر سے کوئی کام میل نہیں کھاتا",
+  "myWorkEmptyTitle": "کچھ تفویض نہیں",
+  "myWorkFieldPlanTitle": "آج کا فیلڈ پلان",
+  "myWorkFilterAll": "تمام اقسام",
+  "myWorkFilterTooltip": "قسم کے لحاظ سے فلٹر",
+  "myWorkHistory": "میرے کام کی تاریخ دیکھیں",
+  "myWorkInspectionApprovals": "ٹائر معائنہ منظوریاں",
+  "myWorkKindChecklist": "چیک لسٹ",
+  "myWorkKindCorrective": "اصلاحی کارروائی",
+  "myWorkKindDraft": "چیک لسٹ مسودہ",
+  "myWorkKindInspection": "ٹائر معائنہ",
+  "myWorkKindWorkOrder": "ورک آرڈر",
+  "myWorkLateDays": "{count, plural, =1{1 دن} other{{count} دن}}",
+  "@myWorkLateDays": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "myWorkLateHours": "{count} گھنٹے",
+  "@myWorkLateHours": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "myWorkLateMinutes": "{count} منٹ",
+  "@myWorkLateMinutes": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "myWorkLoadError": "میرا کام ابھی لوڈ نہیں ہو سکا۔",
+  "myWorkNoDueDate": "کوئی مقررہ تاریخ نہیں",
+  "myWorkNotRecorded": "درج نہیں",
+  "myWorkOverdueBy": "تاخیر",
+  "myWorkPartial": "کچھ کام چیک نہیں ہو سکا: {sources}۔",
+  "@myWorkPartial": {
+    "placeholders": {
+      "sources": {
+        "type": "String"
+      }
+    }
+  },
+  "myWorkPriority": "ترجیح",
+  "myWorkReportIssue": "مسئلہ رپورٹ کریں",
+  "myWorkResume": "دوبارہ شروع کریں",
+  "myWorkRetry": "دوبارہ کوشش کریں",
+  "myWorkSearchHint": "کام، اثاثہ یا سائٹ تلاش کریں",
+  "myWorkSearchTooltip": "تلاش",
+  "myWorkSectionComingUp": "آنے والا",
+  "myWorkSectionCompleted": "مکمل",
+  "myWorkSectionDueToday": "آج واجب",
+  "myWorkSectionInProgress": "جاری",
+  "myWorkSectionOverdue": "تاخیر شدہ",
+  "myWorkSectionWorkOrders": "ورک آرڈرز",
+  "myWorkSourceApprovals": "منظوری کی قطاریں",
+  "myWorkSourceChecklists": "چیک لسٹیں",
+  "myWorkSourceCorrective": "اصلاحی کارروائیاں",
+  "myWorkSourceDrafts": "اس ڈیوائس پر مسودے",
+  "myWorkSourcePlans": "معائنہ منصوبے",
+  "myWorkSourceWorkOrders": "ورک آرڈرز",
+  "myWorkStart": "شروع کریں",
+  "myWorkStartInspection": "معائنہ شروع کریں",
+  "myWorkStatAssigned": "تفویض شدہ",
+  "myWorkStatCompleted": "مکمل",
+  "myWorkStatDueToday": "آج واجب",
+  "myWorkStatOverdue": "تاخیر شدہ",
+  "myWorkStatTasks": "کام",
+  "myWorkStateCompleted": "مکمل",
+  "myWorkStateDueToday": "آج واجب",
+  "myWorkStateInProgress": "جاری",
+  "myWorkStateOverdue": "تاخیر شدہ",
+  "myWorkStateUpcoming": "آنے والا",
+  "myWorkStatus": "حیثیت",
+  "myWorkSyncPending": "{count} مطابقت کے منتظر",
+  "@myWorkSyncPending": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "myWorkTabAssigned": "تفویض شدہ",
+  "myWorkTabCompleted": "مکمل",
+  "myWorkTabInProgress": "جاری",
+  "myWorkTasksTitle": "میرے کام",
+  "myWorkTyreWorkflowTag": "خصوصی ٹائر ورک فلو",
+  "myWorkView": "دیکھیں",
+  "clMockDueNow": "ابھی واجب",
+  "clMockDueTomorrow": "کل واجب",
+  "clMockDueOn": "واجب {date}",
+  "@clMockDueOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "clMockCadenceDaily": "روزانہ",
+  "clMockCadenceWeekly": "ہفتہ وار",
+  "clMockCadenceMonthly": "ماہانہ",
+  "clMockCadenceEveryDays": "{count, plural, =1{ہر روز} other{ہر {count} دن}}",
+  "@clMockCadenceEveryDays": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "clMockMeterRowTitle": "اوڈومیٹر اور آور میٹر ریڈنگ",
+  "clMockMeterLastRecorded": "آخری اندراج {date}",
+  "@clMockMeterLastRecorded": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "clMockMeterNoReading": "ابھی کوئی ریڈنگ درج نہیں",
+  "clMockMeterRecord": "درج کریں",
+  "clMockPendingApproval": "منظوری زیر التوا",
+  "clMockAwaitingYourApproval": "آپ کی منظوری کا انتظار",
+  "clMockReviewerLabel": "جائزہ کار",
+  "clMockSubmittedOn": "جمع کرایا گیا {date}",
+  "@clMockSubmittedOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "clMockFilledBy": "{name} نے پُر کیا",
+  "@clMockFilledBy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "clMockOperatorSignatureCaptured": "آپریٹر کے دستخط محفوظ ہیں",
+  "clMockOperatorSignatureMissing": "آپریٹر کے دستخط نہیں",
+  "clMockRungInProgress": "جاری ہے",
+  "clMockRungPending": "زیر التوا",
+  "clMockInspectionOutcome": "معائنے کا نتیجہ",
+  "clMockPass": "درست",
+  "clMockFail": "ناکام",
+  "clMockNotApplicable": "لاگو نہیں",
+  "clMockNoChecksScored": "اس شیٹ میں درست یا ناکام جانچ نہیں ہے",
+  "clMockRequiredFields": "لازمی خانے",
+  "clMockPhotos": "تصاویر",
+  "clMockSignatures": "دستخط",
+  "clMockFindingsTitle": "جائزے کے متقاضی نتائج",
+  "clMockFindingNote": "نوٹ: {note}",
+  "@clMockFindingNote": {
+    "placeholders": {
+      "note": {
+        "type": "String"
+      }
+    }
+  },
+  "clMockPhotosAttached": "{count, plural, =0{کوئی تصویر منسلک نہیں} =1{1 تصویر منسلک} other{{count} تصاویر منسلک}}",
+  "@clMockPhotosAttached": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "clMockSectionGeneral": "عمومی",
+  "clMockSectionFindings": "{count, plural, =1{1 نتیجہ} other{{count} نتائج}}",
+  "@clMockSectionFindings": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "clMockSectionPassed": "{passed}/{total} درست",
+  "@clMockSectionPassed": {
+    "placeholders": {
+      "passed": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "clMockSectionComplete": "مکمل",
+  "clMockSectionAnswered": "{answered}/{total} جواب دیے گئے",
+  "@clMockSectionAnswered": {
+    "placeholders": {
+      "answered": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "clMockViewAllAnswers": "چیک لسٹ کے تمام جوابات دیکھیں",
+  "clMockHideAllAnswers": "چیک لسٹ کے جوابات چھپائیں",
+  "clMockReviewerAction": "جائزہ کار کی کارروائی",
+  "clMockDecisionNote": "فیصلے کا نوٹ",
+  "clMockDecisionNoteHint": "درستی کے لیے واپس بھیجتے وقت لازمی",
+  "clMockReturnForCorrection": "درستی کے لیے واپس کریں",
+  "clMockApprove": "منظور کریں",
+  "clMockApproveNeeds": "منظوری کے لیے دستخط کریں اور اپنا نام درج کریں",
+  "clMockDecisionRecorded": "فیصلہ، نوٹ، دستخط اور وقت محفوظ کیے جاتے ہیں۔",
+  "clMockSavedSignatureApplied": "آپ کے محفوظ دستخط شامل کر دیے گئے ہیں۔ منظوری کے لیے پھر بھی آپ کو بٹن دبانا ہوگا۔",
+  "clMockProfileVerified": "تصدیق شدہ اکاؤنٹ",
+  "clMockPendingDrafts": "زیر التوا مسودے",
+  "clMockActiveSite": "فعال سائٹ",
+  "clMockCountryCurrency": "ملک اور کرنسی",
+  "clMockRolesAccess": "میرے کردار اور رسائی",
+  "clMockModuleCount": "{count, plural, =1{1 ماڈیول} other{{count} ماڈیولز}}",
+  "@clMockModuleCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "clMockChecklistLanguage": "چیک لسٹ مواد کی زبان",
+  "clMockChecklistLanguageCaption": "ایپ کی زبان سے الگ",
+  "clMockSectionSecurity": "سیکیورٹی اور شناخت",
+  "clMockSavedSignature": "میرے محفوظ دستخط",
+  "clMockSignatureNotSaved": "محفوظ نہیں",
+  "clMockSignatureCaptured": "محفوظ شدہ",
+  "clMockSignatureCapturedOn": "محفوظ · تازہ کاری {date}",
+  "@clMockSignatureCapturedOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "clMockSignatureSheetHint": "منظوری کی اسکرینیں یہ آپ کے لیے بھر دیتی ہیں۔ منظور آپ خود ہی دباتے ہیں۔",
+  "clMockSignatureSave": "بطور میرے دستخط محفوظ کریں",
+  "clMockSignatureRemove": "محفوظ دستخط ہٹائیں",
+  "clMockSignatureRemoveTitle": "کیا آپ اپنے محفوظ دستخط ہٹانا چاہتے ہیں؟",
+  "clMockSignatureRemoveMessage": "نئے دستخط محفوظ کرنے تک منظوریاں خالی دستخط خانے سے شروع ہوں گی۔",
+  "clMockSignatureSaveFailed": "آپ کے دستخط اپ ڈیٹ نہیں ہو سکے۔ کنکشن چیک کریں اور دوبارہ کوشش کریں۔",
+  "clMockOfflineDrafts": "آف لائن مسودے",
+  "clMockDraftsStored": "{count, plural, =0{کوئی نہیں} =1{1 اس ڈیوائس پر محفوظ} other{{count} اس ڈیوائس پر محفوظ}}",
+  "@clMockDraftsStored": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   }
 }

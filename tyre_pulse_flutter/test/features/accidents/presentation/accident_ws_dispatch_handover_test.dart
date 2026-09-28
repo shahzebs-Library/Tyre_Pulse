@@ -257,12 +257,20 @@ void main() {
     expect(find.text('Not set'), findsWidgets);
 
     // Stepper.
-    expect(find.text('Dispatched'), findsOneWidget);
+    // Horizontal 1..4 stepper, numbered as on the mock.
+    for (final String key in <String>[
+      'dispatched',
+      'arrived',
+      'signed_acceptance',
+    ]) {
+      expect(find.byKey(Key('accident.dispatch.step.$key')), findsOneWidget);
+    }
+    expect(find.text('1. Dispatched'), findsOneWidget);
     expect(find.text('Complete'), findsOneWidget);
     expect(find.text('Next'), findsOneWidget);
     expect(find.text('Pending'), findsNWidgets(2));
     expect(
-      find.text('Vendor assessment / quotation starts'),
+      find.text('4. Vendor assessment / quotation starts'),
       findsOneWidget,
     );
 

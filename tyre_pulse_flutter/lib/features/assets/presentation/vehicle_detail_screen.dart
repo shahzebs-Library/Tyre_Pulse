@@ -66,6 +66,7 @@ import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
+import 'package:tyre_pulse/features/assets/presentation/widgets/vehicle_360_panels.dart';
 import 'package:tyre_pulse/features/assets/presentation/widgets/vehicle_multiview_board.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_draft_summary.dart';
 import 'package:tyre_pulse/features/report_issue/presentation/report_issue_copy.dart';
@@ -185,7 +186,8 @@ class _VehicleDetailBody extends ConsumerWidget {
 abstract final class VehicleDetailScreenKeys {
   static const Key overviewTab = Key('vehicle_detail.tab.overview');
   static const Key tyresTab = Key('vehicle_detail.tab.tyres');
-  static const Key historyTab = Key('vehicle_detail.tab.history');
+  static const Key timelineTab = Key('vehicle_detail.tab.timeline');
+  static const Key costsTab = Key('vehicle_detail.tab.costs');
   static const Key tyreMap = Key('vehicle_detail.tyre_map');
   static const Key tyreMapNotRecorded =
       Key('vehicle_detail.tyre_map.not_recorded');
@@ -199,7 +201,7 @@ abstract final class VehicleDetailScreenKeys {
   static const Key draftReadiness = Key('vehicle_detail.draft_readiness');
 }
 
-enum _AssetDetailTab { overview, tyres, history }
+enum _AssetDetailTab { overview, tyres, timeline, costs }
 
 /// The approved asset overview keeps the high-value identity, two compact
 /// facts, tabs, vehicle-specific tyre map and primary action in the first
@@ -309,7 +311,8 @@ class _DetailViewState extends ConsumerState<_DetailView> {
                             selected: _selectedTab,
                             overviewLabel: l10n.tyreDetailSectionOverview,
                             tyresLabel: l10n.globalSearchSectionTyres,
-                            historyLabel: l10n.tabHistory,
+                            timelineLabel: l10n.fleetMockTabTimeline,
+                            costsLabel: l10n.fleetMockTabCosts,
                             onSelect: (_AssetDetailTab tab) =>
                                 setState(() => _selectedTab = tab),
                           ),
@@ -328,9 +331,13 @@ class _DetailViewState extends ConsumerState<_DetailView> {
                                   asset: asset,
                                   l10n: l10n,
                                 ),
-                              _AssetDetailTab.history => _HistoryPanel(
-                                  key: const ValueKey<String>('history'),
-                                  l10n: l10n,
+                              _AssetDetailTab.timeline => AssetTimelinePanel(
+                                  key: const ValueKey<String>('timeline'),
+                                  asset: asset,
+                                ),
+                              _AssetDetailTab.costs => AssetCostSnapshotPanel(
+                                  key: const ValueKey<String>('costs'),
+                                  asset: asset,
                                 ),
                             },
                           ),
@@ -919,14 +926,16 @@ class _AssetTabs extends StatelessWidget {
     required this.selected,
     required this.overviewLabel,
     required this.tyresLabel,
-    required this.historyLabel,
+    required this.timelineLabel,
+    required this.costsLabel,
     required this.onSelect,
   });
 
   final _AssetDetailTab selected;
   final String overviewLabel;
   final String tyresLabel;
-  final String historyLabel;
+  final String timelineLabel;
+  final String costsLabel;
   final ValueChanged<_AssetDetailTab> onSelect;
 
   @override
@@ -951,10 +960,16 @@ class _AssetTabs extends StatelessWidget {
             onTap: () => onSelect(_AssetDetailTab.tyres),
           ),
           _AssetTabButton(
-            key: VehicleDetailScreenKeys.historyTab,
-            label: historyLabel,
-            selected: selected == _AssetDetailTab.history,
-            onTap: () => onSelect(_AssetDetailTab.history),
+            key: VehicleDetailScreenKeys.timelineTab,
+            label: timelineLabel,
+            selected: selected == _AssetDetailTab.timeline,
+            onTap: () => onSelect(_AssetDetailTab.timeline),
+          ),
+          _AssetTabButton(
+            key: VehicleDetailScreenKeys.costsTab,
+            label: costsLabel,
+            selected: selected == _AssetDetailTab.costs,
+            onTap: () => onSelect(_AssetDetailTab.costs),
           ),
         ],
       ),
@@ -1036,19 +1051,6 @@ class _OverviewPanel extends StatelessWidget {
         _SectionHeading(label: l10n.inspectionConditionLabel),
         const SizedBox(height: TpSpace.sm),
         _AssetTyreMap(asset: asset),
-        const SizedBox(height: TpSpace.md),
-        _SectionHeading(label: l10n.tabHistory),
-        const SizedBox(height: TpSpace.sm),
-        TpCard(
-          padding: const EdgeInsets.all(TpSpace.md),
-          child: Row(
-            children: <Widget>[
-              Icon(Icons.history_rounded, color: palette.textMuted),
-              const SizedBox(width: TpSpace.sm),
-              Text(l10n.valueUnavailable),
-            ],
-          ),
-        ),
         const SizedBox(height: TpSpace.lg),
         _SectionHeading(label: l10n.tyreDetailSectionOverview),
         const SizedBox(height: TpSpace.sm),
@@ -1087,27 +1089,6 @@ class _TyresPanel extends StatelessWidget {
         const SizedBox(height: TpSpace.sm),
         _AssetTyreMap(asset: asset),
       ],
-    );
-  }
-}
-
-class _HistoryPanel extends StatelessWidget {
-  const _HistoryPanel({required this.l10n, super.key});
-
-  final AppLocalizations l10n;
-
-  @override
-  Widget build(BuildContext context) {
-    final TpPalette palette = TpPalette.of(context);
-    return TpCard(
-      padding: const EdgeInsets.all(TpSpace.lg),
-      child: Row(
-        children: <Widget>[
-          Icon(Icons.history_rounded, color: palette.textMuted),
-          const SizedBox(width: TpSpace.sm),
-          Text(l10n.valueUnavailable),
-        ],
-      ),
     );
   }
 }

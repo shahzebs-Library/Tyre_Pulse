@@ -50,6 +50,9 @@ TyreRecord buildTyreRecord({
   String? description,
   String? remarks,
   String? country,
+  String? status,
+  String? size,
+  num? totalKm,
 }) {
   return TyreRecord(
     id: id,
@@ -68,6 +71,9 @@ TyreRecord buildTyreRecord({
     description: description,
     remarks: remarks,
     country: country,
+    status: status,
+    size: size,
+    totalKm: totalKm,
   );
 }
 
@@ -149,6 +155,22 @@ final class FakeTyreRecordsRepository implements TyreRecordsRepository {
     // empty page proves the list is exhausted (see
     // TyreRecordsPage.hasMore's own doc comment).
     return TyreRecordsPage(items: items, hasMore: items.length == pageSize);
+  }
+
+  /// What [fetchCount] resolves to. Defaults to the dataset size; set to
+  /// null to model an unreadable count.
+  int? countResult = -1;
+
+  /// Every query [fetchCount] was asked for, in call order.
+  final List<TyreRecordsQuery> fetchCountCalls = <TyreRecordsQuery>[];
+
+  @override
+  Future<int?> fetchCount({
+    TyreRecordsQuery query = const TyreRecordsQuery(),
+  }) async {
+    fetchCountCalls.add(query);
+    final int? result = countResult;
+    return result == -1 ? _dataset.length : result;
   }
 
   @override

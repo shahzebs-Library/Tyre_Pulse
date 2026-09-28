@@ -35,6 +35,7 @@ import 'package:tyre_pulse/app/theme/tp_theme.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
+import 'package:tyre_pulse/features/assets/domain/fleet_class_groups.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicles_list_screen.dart';
@@ -45,6 +46,16 @@ Future<void> _pump(
   String? initialSearchTerm,
   bool dark = false,
 }) async {
+  // A tall default surface: the list now carries the mock's group tabs,
+  // scope line and bottom scan bar, so the default 600pt test surface
+  // leaves room for only one card. Tests that pin a phone size set their
+  // own view size before calling this helper.
+  if (tester.view.physicalSize == const Size(2400, 1800)) {
+    tester.view.physicalSize = const Size(800, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+  }
   await tester.pumpWidget(
     ProviderScope(
       overrides: <Override>[override],
@@ -473,6 +484,18 @@ void main() {
       expect(find.byKey(VehiclesListScreenKeys.search), findsOneWidget);
       expect(find.byKey(VehiclesListScreenKeys.scanner), findsOneWidget);
       expect(find.text('All (5)'), findsOneWidget);
+      // The mock places group tabs, a scope line and the bottom scan bar
+      // around the list, so three dense rows sit above the fold and the
+      // rest are one scroll away.
+      expect(
+        find.byKey(VehiclesListScreenKeys.asset('loader')),
+        findsOneWidget,
+      );
+      await tester.scrollUntilVisible(
+        find.byKey(VehiclesListScreenKeys.asset('generator')),
+        200,
+        scrollable: find.byType(Scrollable).last,
+      );
       expect(
         find.byKey(VehiclesListScreenKeys.asset('generator')),
         findsOneWidget,
@@ -485,15 +508,52 @@ void main() {
       expect(all.selectedColor, TpPalette.dark.primary);
 
       final RenderBox card = tester.renderObject<RenderBox>(
-        find.byKey(VehiclesListScreenKeys.asset('mixer')),
+        find.byKey(VehiclesListScreenKeys.asset('generator')),
       );
       expect(card.size.height, 124);
 
       final BuildContext cardContext =
-          tester.element(find.byKey(VehiclesListScreenKeys.asset('mixer')));
+          tester.element(find.byKey(VehiclesListScreenKeys.asset('generator')));
       expect(Theme.of(cardContext).brightness, Brightness.dark);
       expect(TpPalette.of(cardContext).surface, TpPalette.dark.surface);
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets(
+      'the Stationary tab narrows to stationary classes, the header counts '
+      'active assets and the scope line names the sites', (
+    WidgetTester tester,
+  ) async {
+    await _pump(
+      tester,
+      _resolved(
+        const VehicleFleetListLoaded(
+          assets: <VehicleAsset>[
+            VehicleAsset(id: 'v1', assetNo: 'TM514', status: 'Active'),
+            VehicleAsset(id: 'v2', assetNo: 'GN101', status: 'Active'),
+            VehicleAsset(id: 'v3', assetNo: 'BN004', status: 'Inactive'),
+          ],
+          truncated: false,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('2 active assets'), findsOneWidget);
+    expect(find.text('All countries · All authorized sites'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(VehiclesListScreenKeys.groupTab(FleetClassGroup.stationary)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(VehiclesListScreenKeys.asset('v1')), findsNothing);
+    expect(find.byKey(VehiclesListScreenKeys.asset('v2')), findsOneWidget);
+    // An unmapped class is never guessed into a group.
+    expect(find.byKey(VehiclesListScreenKeys.asset('v3')), findsNothing);
+
+    await tester.tap(find.byKey(VehiclesListScreenKeys.groupTab(null)));
+    await tester.pumpAndSettle();
+    expect(find.byKey(VehiclesListScreenKeys.asset('v3')), findsOneWidget);
+    expect(find.byKey(VehiclesListScreenKeys.scanner), findsOneWidget);
+  });
 }

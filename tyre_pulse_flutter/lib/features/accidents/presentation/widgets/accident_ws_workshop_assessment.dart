@@ -307,18 +307,34 @@ class _State extends ConsumerState<AccidentWorkshopAssessmentMockWorkspace> {
           number: 4,
           title: l10n.accRepairRouteRecommendation,
           children: <Widget>[
-            for (final VocabItem tile in repairRouteTiles) ...<Widget>[
-              _RouteTile(
-                tile: tile,
-                selected: route == tile.key,
-                recommended: recommended == tile.key,
-                onTap:
-                    submitted ? null : () => setState(() => _route = tile.key),
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  for (int i = 0; i < repairRouteTiles.length; i++) ...<Widget>[
+                    if (i > 0) const SizedBox(width: TpSpace.sm),
+                    Expanded(
+                      child: _RouteTile(
+                        tile: repairRouteTiles[i],
+                        selected: route == repairRouteTiles[i].key,
+                        recommended: recommended == repairRouteTiles[i].key,
+                        onTap: submitted
+                            ? null
+                            : () => setState(
+                                  () => _route = repairRouteTiles[i].key,
+                                ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
-              const SizedBox(height: TpSpace.xs),
-            ],
-            const SizedBox(height: TpSpace.xs),
-            Text(reason, style: text.bodySmall),
+            ),
+            const SizedBox(height: TpSpace.sm),
+            Text(
+              reason,
+              textAlign: TextAlign.center,
+              style: text.bodySmall?.copyWith(color: palette.textSecondary),
+            ),
             const SizedBox(height: TpSpace.sm),
             CheckboxListTile(
               contentPadding: EdgeInsets.zero,
@@ -332,12 +348,14 @@ class _State extends ConsumerState<AccidentWorkshopAssessmentMockWorkspace> {
               label: l10n.accSelectedWorkshop,
               controller: _workshopName,
               enabled: !submitted,
+              onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: TpSpace.sm),
             TpInput(
               label: l10n.accCity,
               controller: _vendorCity,
               enabled: !submitted,
+              onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: TpSpace.sm),
             _NumberInput(
@@ -360,9 +378,12 @@ class _State extends ConsumerState<AccidentWorkshopAssessmentMockWorkspace> {
                   ? null
                   : (String? v) => setState(() => _quotationStatus = v),
             ),
-            AccidentWsFact(
-              label: l10n.accQuotationStatus,
-              value: quotationStatusLabel(_quotationStatus),
+            const SizedBox(height: TpSpace.sm),
+            _VendorSummary(
+              workshop: _workshopName.text,
+              city: _vendorCity.text,
+              durationDays: int.tryParse(_duration.text.trim()),
+              quotationStatus: quotationStatusLabel(_quotationStatus),
             ),
           ],
         ),
@@ -425,7 +446,9 @@ class _State extends ConsumerState<AccidentWorkshopAssessmentMockWorkspace> {
                 label: submitted
                     ? l10n.accAssessmentSubmitted
                     : l10n.accSubmitAssessment,
-                icon: Icons.send_outlined,
+                icon: !submitted && !submittable
+                    ? Icons.lock_outline
+                    : Icons.send_outlined,
                 isBusy: _busy,
                 onPressed: _busy || submitted || !submittable
                     ? null
@@ -821,38 +844,156 @@ class _RouteTile extends StatelessWidget {
   final bool recommended;
   final VoidCallback? onTap;
 
+  static IconData _icon(String key) => switch (key) {
+        'internal' => Icons.build_outlined,
+        'external' => Icons.apartment_outlined,
+        _ => Icons.local_shipping_outlined,
+      };
+
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
-    return TpCard(
-      key: Key('accident.ws.assessment.route.${tile.key}'),
-      onTap: onTap,
-      padding: const EdgeInsets.all(TpSpace.md),
-      borderColor: selected ? palette.primary : null,
-      background: selected ? palette.primarySoft : null,
-      child: Row(
-        children: <Widget>[
-          Icon(
-            selected
-                ? Icons.radio_button_checked_rounded
-                : Icons.radio_button_off_rounded,
-            color: selected ? palette.primary : palette.textMuted,
-          ),
-          const SizedBox(width: TpSpace.sm),
-          Expanded(
-            child: Text(
-              tile.label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
+    return Semantics(
+      selected: selected,
+      button: true,
+      child: TpCard(
+        key: Key('accident.ws.assessment.route.${tile.key}'),
+        onTap: onTap,
+        padding: const EdgeInsets.all(TpSpace.sm),
+        borderColor: selected ? palette.primary : null,
+        background: selected ? palette.primarySoft : null,
+        child: Stack(
+          children: <Widget>[
+            Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  const SizedBox(height: TpSpace.sm),
+                  Icon(_icon(tile.key), color: palette.primary, size: 28),
+                  const SizedBox(height: TpSpace.xs),
+                  Text(
+                    tile.label,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: palette.text,
+                        ),
                   ),
+                  if (recommended) ...<Widget>[
+                    const SizedBox(height: TpSpace.xs),
+                    TpStatusChip(
+                      status: TpStatus.ok,
+                      label: AppLocalizations.of(context).accRecommended,
+                      isCompact: true,
+                    ),
+                  ],
+                ],
+              ),
             ),
+            if (selected)
+              PositionedDirectional(
+                top: 0,
+                end: 0,
+                child: Icon(
+                  Icons.check_circle_rounded,
+                  color: palette.primary,
+                  size: TpSizing.iconMd,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The chosen vendor as one strip: workshop and city, expected duration,
+/// quotation status. Blank values print "Not set", never a guess.
+class _VendorSummary extends StatelessWidget {
+  const _VendorSummary({
+    required this.workshop,
+    required this.city,
+    required this.durationDays,
+    required this.quotationStatus,
+  });
+
+  final String workshop;
+  final String city;
+  final int? durationDays;
+  final String quotationStatus;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    final TextTheme text = Theme.of(context).textTheme;
+    final String notSet = accidentWsNotSet(context);
+    Widget cell(String label, String value, {Color? color}) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(label, style: text.labelSmall),
+            Text(
+              value,
+              style: text.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: color,
+              ),
+            ),
+          ],
+        );
+    return Container(
+      key: const Key('accident.ws.assessment.vendorSummary'),
+      padding: const EdgeInsets.all(TpSpace.md),
+      decoration: BoxDecoration(
+        color: palette.surfaceAlt,
+        border: Border.all(color: palette.border),
+        borderRadius: BorderRadius.circular(TpRadius.md),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Icon(Icons.place_outlined, color: palette.primary),
+              const SizedBox(width: TpSpace.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      workshop.trim().isEmpty ? notSet : workshop.trim(),
+                      style: text.bodyMedium
+                          ?.copyWith(fontWeight: FontWeight.w800),
+                    ),
+                    Text(
+                      city.trim().isEmpty ? notSet : city.trim(),
+                      style: text.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          if (recommended)
-            TpStatusChip(
-              status: TpStatus.ok,
-              label: AppLocalizations.of(context).accRecommended,
-              isCompact: true,
-            ),
+          const SizedBox(height: TpSpace.sm),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: cell(
+                  l10n.accExpectedDurationDays,
+                  durationDays == null ? notSet : '$durationDays',
+                ),
+              ),
+              const SizedBox(width: TpSpace.sm),
+              Expanded(
+                child: cell(
+                  l10n.accQuotationStatus,
+                  quotationStatus,
+                  color: palette.primary,
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );

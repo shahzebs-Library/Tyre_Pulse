@@ -19,7 +19,12 @@ import 'package:tyre_pulse/features/checklists/data/checklist_history_row.dart';
 import 'package:tyre_pulse/features/checklists/domain/checklist_history_view.dart';
 
 class ChecklistHistoryScreen extends ConsumerStatefulWidget {
-  const ChecklistHistoryScreen({super.key});
+  const ChecklistHistoryScreen({this.initialSearch, super.key});
+
+  /// Pre-fills the search box - the checklist hub opens the per-asset history
+  /// with the asset number already typed. The operator can
+  /// clear it to see everything.
+  final String? initialSearch;
 
   @override
   ConsumerState<ChecklistHistoryScreen> createState() =>
@@ -38,11 +43,20 @@ class _ChecklistHistoryScreenState
   );
   String _search = '';
   ChecklistHistoryState? _stateFilter;
+  late final TextEditingController _searchController;
 
   @override
   void initState() {
     super.initState();
+    _search = widget.initialSearch?.trim() ?? '';
+    _searchController = TextEditingController(text: _search);
     unawaited(_load());
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -151,6 +165,7 @@ class _ChecklistHistoryScreenState
               ),
             ),
           TpSearchField(
+            controller: _searchController,
             hint: l10n.checklistHistorySearchHint,
             onChanged: (String v) => setState(() => _search = v),
           ),

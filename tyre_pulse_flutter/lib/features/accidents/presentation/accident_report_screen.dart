@@ -91,6 +91,10 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
   AccidentIntakePage _currentStep = AccidentIntakePage.identifyAsset;
   String _assetQuery = '';
 
+  /// The fleet search box. Deliberately NOT a draft field: a search term is
+  /// not part of the report, so typing it never marks the draft dirty.
+  final TextEditingController _assetSearch = TextEditingController();
+
   /// True once the reporter has typed or chosen the incident site. A fleet
   /// home site then never overwrites it (see [incidentSiteAfterAssetChange]).
   bool _incidentSiteEdited = false;
@@ -149,6 +153,7 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
   void dispose() {
     _saveDebounce?.cancel();
     _pageScrollController.dispose();
+    _assetSearch.dispose();
     for (final TextEditingController controller in _ownedControllers) {
       controller.dispose();
     }
@@ -904,10 +909,22 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
             const SizedBox(height: TpSpace.sm),
             TextFormField(
               key: const ValueKey<String>('accident.report.assetSearch'),
-              initialValue: _assetQuery,
+              controller: _assetSearch,
               decoration: InputDecoration(
                 hintText: copy('assetSearch'),
                 prefixIcon: const Icon(Icons.search),
+                suffixIcon: _assetQuery.isEmpty
+                    ? null
+                    : IconButton(
+                        key: AccidentReportIntakeKeys.clearAssetSearch,
+                        tooltip: MaterialLocalizations.of(context)
+                            .clearButtonTooltip,
+                        icon: const Icon(Icons.close_rounded),
+                        onPressed: () {
+                          _assetSearch.clear();
+                          setState(() => _assetQuery = '');
+                        },
+                      ),
               ),
               onChanged: (String value) => setState(() => _assetQuery = value),
             ),
@@ -944,15 +961,19 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
-            const SizedBox(height: TpSpace.sm),
-            TpButton.secondary(
-              label: _selectedVehicle == null
-                  ? copy('selectAsset')
-                  : copy('changeAsset'),
-              icon: Icons.search,
-              onPressed: assets.isEmpty ? null : () => _pickVehicle(assets),
-              isFullWidth: true,
-            ),
+            // Once an asset is loaded the fleet-master card below carries the
+            // single "Change asset" action (mock M1); a second change button
+            // here would offer the same thing twice.
+            if (_selectedVehicle == null) ...<Widget>[
+              const SizedBox(height: TpSpace.sm),
+              TpButton.secondary(
+                key: AccidentReportIntakeKeys.browseFleet,
+                label: copy('selectAsset'),
+                icon: Icons.search,
+                onPressed: assets.isEmpty ? null : () => _pickVehicle(assets),
+                isFullWidth: true,
+              ),
+            ],
           ],
         ),
         if (outcome is VehicleFleetListFromCache) ...<Widget>[

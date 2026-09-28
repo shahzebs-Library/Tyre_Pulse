@@ -38,13 +38,77 @@ import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/permissions/module_registry.dart';
 import 'package:tyre_pulse/core/permissions/permission_providers.dart';
+import 'package:tyre_pulse/features/assets/data/asset_insights_repository.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
+import 'package:tyre_pulse/features/assets/domain/asset_financials.dart';
+import 'package:tyre_pulse/features/assets/domain/asset_timeline.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
+import 'package:tyre_pulse/features/assets/presentation/asset_insights_providers.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_detail_screen.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
+import 'package:tyre_pulse/features/assets/presentation/widgets/vehicle_360_panels.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_draft_summary.dart';
 
 const String _assetNo = 'TM514';
+
+/// A real-shaped fake of the Vehicle 360 reads: one inspection today and one
+/// grid line today, so the Timeline and Costs tabs render loaded content.
+class _FakeInsightsSource implements AssetInsightsSource {
+  static String get _today => AssetCostPeriod.isoDay(DateTime.now());
+
+  @override
+  Future<List<Map<String, dynamic>>> costLines(
+    AssetScope scope, {
+    required String fromIso,
+    required String toIso,
+  }) async =>
+      <Map<String, dynamic>>[
+        <String, dynamic>{
+          'id': 'l1',
+          'event_date': _today,
+          'currency': 'SAR',
+          'spare_cost': 1200,
+          'oil_cost': 0,
+          'tyre_cost': 0,
+          'work_order_no': 'GCKR/JC/0001',
+          'item_description': 'Filter',
+        },
+      ];
+
+  @override
+  Future<List<Map<String, dynamic>>> jobCards(
+    AssetScope scope, {
+    required String fromIso,
+    required String toIso,
+  }) async =>
+      const <Map<String, dynamic>>[];
+
+  @override
+  Future<List<Map<String, dynamic>>> meterReadings(
+    AssetScope scope, {
+    required bool engineHours,
+    required String fromIso,
+    required String toIso,
+  }) async =>
+      const <Map<String, dynamic>>[];
+
+  @override
+  Future<List<Map<String, dynamic>>> timelineRows(
+    AssetScope scope,
+    AssetTimelineFilter source, {
+    required String fromIso,
+  }) async =>
+      source == AssetTimelineFilter.inspections
+          ? <Map<String, dynamic>>[
+              <String, dynamic>{
+                'id': 'i1',
+                'inspection_date': _today,
+                'inspector': 'A. Rahman',
+                'approval_status': 'approved',
+              },
+            ]
+          : const <Map<String, dynamic>>[];
+}
 
 Future<void> _pump(
   WidgetTester tester,
@@ -59,6 +123,11 @@ Future<void> _pump(
             .overrideWith((Ref ref) => true),
         canAccessModuleProvider(ModuleKey.workorders)
             .overrideWith((Ref ref) => true),
+        canAccessModuleProvider(ModuleKey.accidents)
+            .overrideWith((Ref ref) => true),
+        assetInsightsSourceProvider.overrideWith(
+          (Ref ref) => _FakeInsightsSource(),
+        ),
         // No on-device draft unless a test says otherwise: the real provider
         // would reach the local database, which a widget test has not got.
         vehicleInspectionDraftProvider(assetNo)
@@ -270,7 +339,8 @@ void main() {
       expect(find.text('88,421 km'), findsWidgets);
       expect(find.byKey(VehicleDetailScreenKeys.overviewTab), findsOneWidget);
       expect(find.byKey(VehicleDetailScreenKeys.tyresTab), findsOneWidget);
-      expect(find.byKey(VehicleDetailScreenKeys.historyTab), findsOneWidget);
+      expect(find.byKey(VehicleDetailScreenKeys.timelineTab), findsOneWidget);
+      expect(find.byKey(VehicleDetailScreenKeys.costsTab), findsOneWidget);
       expect(find.byKey(VehicleDetailScreenKeys.tyreMap), findsOneWidget);
       expect(
         find.byKey(VehicleDetailScreenKeys.reportIssue),
@@ -291,10 +361,16 @@ void main() {
         find.byType(VehicleDetailScreen),
         matchesGoldenFile('goldens/asset_overview_light.png'),
       );
-      await tester.tap(find.byKey(VehicleDetailScreenKeys.historyTab));
+      await tester.tap(find.byKey(VehicleDetailScreenKeys.timelineTab));
       await tester.pumpAndSettle();
       expect(find.byKey(VehicleDetailScreenKeys.tyreMap), findsNothing);
-      expect(find.text('Unavailable'), findsOneWidget);
+      expect(find.byKey(Vehicle360Keys.timeline), findsOneWidget);
+      expect(find.text('Tyre inspection'), findsOneWidget);
+
+      await tester.tap(find.byKey(VehicleDetailScreenKeys.costsTab));
+      await tester.pumpAndSettle();
+      expect(find.byKey(Vehicle360Keys.costs), findsOneWidget);
+      expect(find.text('No cost recorded'), findsNothing);
 
       await tester.tap(find.byKey(VehicleDetailScreenKeys.tyresTab));
       await tester.pump(const Duration(milliseconds: 200));

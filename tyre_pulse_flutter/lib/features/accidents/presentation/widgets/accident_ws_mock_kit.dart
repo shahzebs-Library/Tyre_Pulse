@@ -237,11 +237,15 @@ class AccidentMockChip extends StatelessWidget {
     required this.label,
     required this.value,
     this.tone = TpStatus.neutral,
+    this.icon,
     super.key,
   });
   final String label;
   final String value;
   final TpStatus tone;
+
+  /// Optional leading glyph, as on the mock's header strip.
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
@@ -257,17 +261,28 @@ class AccidentMockChip extends StatelessWidget {
         border: Border.all(color: colors.base),
         borderRadius: BorderRadius.circular(TpRadius.md),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Text(label, style: Theme.of(context).textTheme.labelSmall),
-          Text(
-            value,
-            style: Theme.of(context)
-                .textTheme
-                .bodyMedium
-                ?.copyWith(fontWeight: FontWeight.w800, color: colors.onSoft),
+          if (icon != null) ...<Widget>[
+            Icon(icon, size: TpSizing.iconMd, color: colors.base),
+            const SizedBox(width: TpSpace.sm),
+          ],
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(label, style: Theme.of(context).textTheme.labelSmall),
+                Text(
+                  value,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: colors.onSoft,
+                      ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -276,21 +291,53 @@ class AccidentMockChip extends StatelessWidget {
 }
 
 class AccidentMockActions extends StatelessWidget {
-  const AccidentMockActions({required this.actions, super.key});
+  const AccidentMockActions({
+    required this.actions,
+    this.emphasiseLast = false,
+    super.key,
+  });
   final List<(String, IconData, VoidCallback?)> actions;
+
+  /// The mock's footer pairs an outlined action with one filled primary
+  /// action on the end; set this to draw the last action filled.
+  final bool emphasiseLast;
+
   @override
-  Widget build(BuildContext context) => Wrap(
-        spacing: TpSpace.sm,
-        runSpacing: TpSpace.sm,
+  Widget build(BuildContext context) {
+    Widget button(int i) {
+      final (String, IconData, VoidCallback?) action = actions[i];
+      if (emphasiseLast && i == actions.length - 1) {
+        return FilledButton.icon(
+          onPressed: action.$3,
+          icon: Icon(action.$2),
+          label: Text(action.$1),
+        );
+      }
+      return OutlinedButton.icon(
+        onPressed: action.$3,
+        icon: Icon(action.$2),
+        label: Text(action.$1),
+      );
+    }
+
+    if (emphasiseLast) {
+      return Row(
         children: <Widget>[
-          for (final (String, IconData, VoidCallback?) action in actions)
-            OutlinedButton.icon(
-              onPressed: action.$3,
-              icon: Icon(action.$2),
-              label: Text(action.$1),
-            ),
+          for (int i = 0; i < actions.length; i++) ...<Widget>[
+            if (i > 0) const SizedBox(width: TpSpace.sm),
+            Expanded(child: button(i)),
+          ],
         ],
       );
+    }
+    return Wrap(
+      spacing: TpSpace.sm,
+      runSpacing: TpSpace.sm,
+      children: <Widget>[
+        for (int i = 0; i < actions.length; i++) button(i),
+      ],
+    );
+  }
 }
 
 /// Bulleted list with a "N items" count, for documents sent / accessories.

@@ -72,6 +72,37 @@ void main() {
     expect(find.text('Where did the incident occur?'), findsOneWidget);
   });
 
+  testWidgets('search clears in one tap; a loaded asset has one change action',
+      (WidgetTester tester) async {
+    await _pumpReport(
+      tester,
+      store: _MemorySecureStore(),
+      reports: _FakeReportRepository(),
+    );
+    expect(find.byKey(AccidentReportIntakeKeys.clearAssetSearch), findsNothing);
+    expect(find.byKey(AccidentReportIntakeKeys.browseFleet), findsOneWidget);
+    final Finder search =
+        find.byKey(const ValueKey<String>('accident.report.assetSearch'));
+    await tester.enterText(search, 'NO-MATCH');
+    await tester.pump();
+    expect(find.text('No matching fleet asset'), findsOneWidget);
+    await tester.tap(find.byKey(AccidentReportIntakeKeys.clearAssetSearch));
+    await tester.pump();
+    expect(find.text('No matching fleet asset'), findsNothing);
+    expect(find.byKey(AccidentReportIntakeKeys.clearAssetSearch), findsNothing);
+
+    await tester.enterText(search, 'CP3012');
+    await tester.pump();
+    final Finder result = find.widgetWithText(ListTile, 'CP3012');
+    await tester.ensureVisible(result);
+    await tester.tap(result);
+    await tester.pumpAndSettle();
+    // The fleet-master card owns "Change asset"; the browse button is gone.
+    expect(find.byKey(AccidentReportIntakeKeys.browseFleet), findsNothing);
+    expect(find.byKey(AccidentReportIntakeKeys.assetMaster), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   for (final bool failSave in <bool>[false, true]) {
     testWidgets('Save and exit preserves draft; failure=$failSave',
         (WidgetTester tester) async {

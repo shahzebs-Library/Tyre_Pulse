@@ -81,6 +81,10 @@ abstract final class AccidentReportIntakeKeys {
       ValueKey<String>('accident.report.assetMaster');
   static const ValueKey<String> matchCount =
       ValueKey<String>('accident.report.matchCount');
+  static const ValueKey<String> clearAssetSearch =
+      ValueKey<String>('accident.report.assetSearch.clear');
+  static const ValueKey<String> browseFleet =
+      ValueKey<String>('accident.report.browseFleet');
   static const ValueKey<String> matchOverflow =
       ValueKey<String>('accident.report.matchOverflow');
   static ValueKey<String> matchRow(String assetId) =>

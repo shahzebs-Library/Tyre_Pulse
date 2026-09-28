@@ -47,6 +47,8 @@ library;
 
 import 'package:tyre_pulse/features/approvals/domain/checklist_approval.dart'
     show ApprovalTemplateLike;
+import 'package:tyre_pulse/features/approvals/domain/checklist_review_outcome.dart'
+    show ReviewOptionSet, decodeReviewOptionSets;
 import 'package:tyre_pulse/features/checklists/domain/checklist_field.dart'
     show ChecklistField;
 
@@ -108,6 +110,7 @@ final class ChecklistApprovalTemplateInfo {
     this.requireSignature = false,
     this.fields = const <ChecklistField>[],
     this.legendBlocking = const <String>[],
+    this.optionSets = const <String, ReviewOptionSet>{},
   });
 
   final String id;
@@ -131,6 +134,11 @@ final class ChecklistApprovalTemplateInfo {
 
   /// The template's blocking marks (`option_sets.legend.blocking`) - a mark
   /// that stops the sheet being CLOSED until the item is corrected.
+  /// Every shared option set, reduced to mark tones and blocking lists -
+  /// read only to EXPLAIN the answers (pass / fail / N/A) to the reviewer,
+  /// never to gate the close. See `checklist_review_outcome.dart`.
+  final Map<String, ReviewOptionSet> optionSets;
+
   final List<String> legendBlocking;
 
   /// Every answer whose value is a blocking mark - a flat, field-blind scan
@@ -190,6 +198,7 @@ final class ChecklistApprovalTemplateInfo {
       requireSignature: row['require_signature'] == true,
       fields: _decodeFields(row['fields']),
       legendBlocking: _decodeLegendBlocking(row['option_sets']),
+      optionSets: decodeReviewOptionSets(row['option_sets']),
     );
   }
 

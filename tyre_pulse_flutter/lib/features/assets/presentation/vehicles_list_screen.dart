@@ -38,7 +38,9 @@ import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
+import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
+import 'package:tyre_pulse/features/assets/domain/fleet_class_groups.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_detail_screen.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
@@ -71,6 +73,10 @@ abstract final class VehiclesListScreenKeys {
   static const Key scanner = Key('vehicles.scanner');
   static const Key filter = Key('vehicles.filter');
   static const Key classFilters = Key('vehicles.class_filters');
+  static const Key groupTabs = Key('vehicles.group_tabs');
+  static const Key scope = Key('vehicles.scope');
+  static Key groupTab(FleetClassGroup? group) =>
+      Key('vehicles.group_tab.${group?.name ?? 'all'}');
   static Key asset(String id) => Key('vehicles.asset.$id');
 }
 
@@ -83,6 +89,10 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
   String? _vehicleTypeFilter;
   String? _siteFilter;
   String? _statusFilter;
+
+  /// The browse group tab. Null is All. Like the vehicle-type chips, it is a
+  /// BROWSE filter: a typed search looks across the whole register.
+  FleetClassGroup? _group;
 
   @override
   void initState() {
@@ -229,6 +239,10 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
       vehicleTypeFilter: _vehicleTypeFilter,
       searchTerm: _searchTerm,
     ).where((VehicleAsset asset) {
+      final bool matchesGroup = _group == null ||
+          _searchTerm.trim().isNotEmpty ||
+          fleetClassGroupOf(asset.assetNo) == _group;
+      if (!matchesGroup) return false;
       final bool matchesSite = _siteFilter == null ||
           asset.site?.trim().toLowerCase() == _siteFilter!.toLowerCase();
       final bool matchesStatus = _statusFilter == null ||
@@ -291,7 +305,9 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  l10n.vehiclesCount(assets.length),
+                  _hasAnyStatus(assets)
+                      ? l10n.fleetMockActiveAssets(_activeCount(assets))
+                      : l10n.vehiclesCount(assets.length),
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         color: TpPalette.of(context).textSecondary,
                         fontWeight: FontWeight.w500,
@@ -321,16 +337,13 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
                   ),
                 ),
               ),
-              const SizedBox(width: TpSpace.sm),
-              KeyedSubtree(
-                key: VehiclesListScreenKeys.scanner,
-                child: _SquareScannerButton(
-                  tooltip: l10n.scannerTitle,
-                  onTap: () => context.push(const ScannerRoute().location),
-                ),
-              ),
             ],
           ),
+        ),
+        _GroupTabs(
+          key: VehiclesListScreenKeys.groupTabs,
+          selected: _group,
+          onSelect: (FleetClassGroup? g) => setState(() => _group = g),
         ),
         const SizedBox(height: TpSpace.sm),
         _VehicleTypeChipsRow(
@@ -377,6 +390,11 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
             ],
           ),
         ),
+        _ScopeLine(
+          key: VehiclesListScreenKeys.scope,
+          country: ref.watch(activeCountryProvider),
+          site: _siteFilter,
+        ),
         Expanded(
           child: filtered.isEmpty
               ? TpEmptyState(
@@ -408,9 +426,24 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
                   },
                 ),
         ),
+        _ScanBar(
+          key: VehiclesListScreenKeys.scanner,
+          label: l10n.fleetMockScanAssetQr,
+          onTap: () => context.push(const ScannerRoute().location),
+        ),
       ],
     );
   }
+
+  static bool _hasAnyStatus(List<VehicleAsset> assets) => assets.any(
+        (VehicleAsset a) => a.status?.trim().isNotEmpty == true,
+      );
+
+  /// `vehicle_fleet.status` Active: "is this machine on the current fleet"
+  /// (V508). Operational state lives in `ops_status` and is not counted.
+  static int _activeCount(List<VehicleAsset> assets) => assets
+      .where((VehicleAsset a) => a.status?.trim().toLowerCase() == 'active')
+      .length;
 
   static AppError _unexpectedError(AppLocalizations l10n) => AppError(
         kind: AppErrorKind.unknown,
@@ -430,36 +463,141 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
   }
 }
 
-class _SquareScannerButton extends StatelessWidget {
-  const _SquareScannerButton({
-    required this.tooltip,
-    required this.onTap,
-  });
+class _ScanBar extends StatelessWidget {
+  const _ScanBar({required this.label, required this.onTap, super.key});
 
-  final String tooltip;
+  final String label;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
-    return Semantics(
-      button: true,
-      label: tooltip,
-      child: Material(
-        color: palette.surfaceAlt,
-        borderRadius: BorderRadius.circular(TpRadius.md),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(TpRadius.md),
-          child: SizedBox.square(
-            dimension: TpSizing.controlHeight,
-            child: Icon(
-              Icons.qr_code_scanner_rounded,
-              color: palette.text,
-              size: TpSizing.iconLg,
-            ),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: palette.surface,
+        border: Border(top: BorderSide(color: palette.border)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            TpSpace.lg,
+            TpSpace.sm,
+            TpSpace.lg,
+            TpSpace.sm,
+          ),
+          child: TpButton(
+            label: label,
+            icon: Icons.qr_code_scanner_rounded,
+            variant: TpButtonVariant.secondary,
+            isFullWidth: true,
+            onPressed: onTap,
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// All / Vehicles / Plant and equipment / Stationary, underline tabs.
+class _GroupTabs extends StatelessWidget {
+  const _GroupTabs({required this.selected, required this.onSelect, super.key});
+
+  final FleetClassGroup? selected;
+  final ValueChanged<FleetClassGroup?> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    final List<(FleetClassGroup?, String)> tabs = <(FleetClassGroup?, String)>[
+      (null, l10n.vehiclesAllFilter),
+      (FleetClassGroup.vehicles, l10n.fleetMockClassVehicles),
+      (FleetClassGroup.plant, l10n.fleetMockClassPlant),
+      (FleetClassGroup.stationary, l10n.fleetMockClassStationary),
+    ];
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: TpSpace.lg),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: palette.border)),
+      ),
+      height: TpSizing.minTouchTarget,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: <Widget>[
+          for (final (FleetClassGroup? group, String label) in tabs)
+            InkWell(
+              key: VehiclesListScreenKeys.groupTab(group),
+              onTap: () => onSelect(group),
+              child: Container(
+                alignment: Alignment.center,
+                padding: const EdgeInsets.symmetric(horizontal: TpSpace.md),
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color:
+                          selected == group ? palette.text : Colors.transparent,
+                      width: 3,
+                    ),
+                  ),
+                ),
+                child: Text(
+                  label,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: selected == group
+                            ? palette.text
+                            : palette.textSecondary,
+                        fontWeight: selected == group
+                            ? FontWeight.w800
+                            : FontWeight.w500,
+                      ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// "KSA · All authorized sites": what the list is scoped to.
+class _ScopeLine extends StatelessWidget {
+  const _ScopeLine({required this.country, required this.site, super.key});
+
+  final String? country;
+  final String? site;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    final String c = country?.trim().isNotEmpty == true
+        ? country!.trim()
+        : l10n.fleetMockScopeAllCountries;
+    final String s = site ?? l10n.fleetMockScopeAllSites;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        TpSpace.lg,
+        0,
+        TpSpace.lg,
+        TpSpace.sm,
+      ),
+      child: Row(
+        children: <Widget>[
+          Icon(Icons.public_rounded, size: 18, color: palette.textSecondary),
+          const SizedBox(width: TpSpace.xs),
+          Expanded(
+            child: Text(
+              '$c · $s',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context)
+                  .textTheme
+                  .labelMedium
+                  ?.copyWith(color: palette.textSecondary),
+            ),
+          ),
+        ],
       ),
     );
   }

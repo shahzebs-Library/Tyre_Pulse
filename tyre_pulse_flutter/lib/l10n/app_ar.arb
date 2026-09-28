@@ -2254,5 +2254,505 @@
         "type": "String"
       }
     }
+  },
+  "tyreMockRecordsCount": "{count, plural, =0{لا توجد إطارات} =1{إطار واحد} =2{إطاران} few{{count} إطارات} many{{count} إطارًا} other{{count} إطار}}",
+  "@tyreMockRecordsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "tyreMockTabAll": "الكل",
+  "tyreMockTabInstalled": "مركّب",
+  "tyreMockTabRemoved": "مُزال",
+  "tyreMockTabScrapped": "مُتلف",
+  "tyreMockShowingInstalled": "عرض الإطارات المركّبة",
+  "tyreMockShowingRemoved": "عرض الإطارات المُزالة",
+  "tyreMockShowingScrapped": "عرض الإطارات المُتلفة",
+  "tyreMockShowingAll": "عرض جميع الإطارات",
+  "tyreMockLoadedAt": "تم التحميل {time}",
+  "@tyreMockLoadedAt": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "tyreMockSortTooltip": "ترتيب",
+  "tyreMockSortNewest": "الأحدث تركيبًا",
+  "tyreMockSortOldest": "الأقدم تركيبًا",
+  "tyreMockSitePill": "الموقع: {value}",
+  "@tyreMockSitePill": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "tyreMockRiskPill": "المخاطر: {value}",
+  "@tyreMockRiskPill": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "tyreMockMetricFitted": "تاريخ التركيب",
+  "tyreMockMetricRemoved": "تاريخ الإزالة",
+  "tyreMockMetricTread": "عمق النقشة",
+  "tyreMockMetricKmRun": "الكيلومترات المقطوعة",
+  "tyreMockKmValue": "{value} كم",
+  "@tyreMockKmValue": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "tyreMockHoursValue": "{value} ساعة",
+  "@tyreMockHoursValue": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "tyreMockScanSerial": "مسح الرقم التسلسلي للإطار",
+  "tyreMockInspectionTitle": "فحص الإطارات",
+  "tyreMockInspectionProgress": "تقدم الفحص",
+  "tyreMockProgressComplete": "مكتمل بنسبة {percent}%",
+  "@tyreMockProgressComplete": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "tyreMockMachineMeter": "عداد الآلة",
+  "tyreMockPreviousTyre": "الإطار السابق",
+  "tyreMockNextTyre": "الإطار التالي",
+  "fleetMockClassVehicles": "المركبات",
+  "fleetMockClassPlant": "المعدات والآلات",
+  "fleetMockClassStationary": "ثابتة",
+  "fleetMockActiveAssets": "{count, plural, =0{لا توجد أصول نشطة} =1{أصل نشط واحد} other{{count} أصول نشطة}}",
+  "@fleetMockActiveAssets": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fleetMockScopeAllSites": "جميع المواقع المصرح بها",
+  "fleetMockScopeAllCountries": "جميع الدول",
+  "fleetMockScanAssetQr": "مسح رمز الأصل",
+  "fleetMockTabTimeline": "السجل الزمني",
+  "fleetMockTabCosts": "التكاليف",
+  "fleetMockPeriodYtd": "منذ بداية العام",
+  "fleetMockPeriod12m": "آخر 12 شهرًا",
+  "fleetMockPeriod90d": "آخر 90 يومًا",
+  "fleetMockPeriod30d": "آخر 30 يومًا",
+  "fleetMockTimelineAll": "جميع الأحداث",
+  "fleetMockTimelineWorkOrders": "أوامر العمل",
+  "fleetMockTimelineInspections": "الفحوصات",
+  "fleetMockTimelineWashes": "الغسيل",
+  "fleetMockTimelineTyres": "الإطارات",
+  "fleetMockTimelineAccidents": "الحوادث",
+  "fleetMockEventWorkOrder": "تم فتح بطاقة عمل",
+  "fleetMockEventInspection": "فحص الإطارات",
+  "fleetMockEventWash": "غسيل المركبة",
+  "fleetMockEventTyreFitted": "تم تركيب إطار",
+  "fleetMockEventTyreRemoved": "تمت إزالة إطار",
+  "fleetMockEventAccident": "تم الإبلاغ عن حادث",
+  "fleetMockEventPhotos": "{count, plural, =1{صورة واحدة} other{{count} صور}}",
+  "@fleetMockEventPhotos": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fleetMockTimelineEmptyTitle": "لا يوجد سجل في هذه الفترة",
+  "fleetMockTimelineEmptyBody": "لم يتم تسجيل أي شيء لهذا الأصل في الفترة المحددة.",
+  "fleetMockTimelinePartial": "تعذر تحميل جزء من السجل. قد تكون القائمة غير مكتملة.",
+  "fleetMockSnapshotTitle": "ملخص مالي",
+  "fleetMockOpenFinReport": "فتح التقرير المالي الكامل",
+  "fleetMockFinReportTitle": "التقرير المالي",
+  "fleetMockFinScopeNote": "تقرير لأصل واحد، القيم معروضة بعملة {currency} فقط",
+  "@fleetMockFinScopeNote": {
+    "placeholders": {
+      "currency": {
+        "type": "String"
+      }
+    }
+  },
+  "fleetMockFinVsYear": "مقارنة بنفس الفترة من {year}",
+  "@fleetMockFinVsYear": {
+    "placeholders": {
+      "year": {
+        "type": "String"
+      }
+    }
+  },
+  "fleetMockFinTotalOperating": "إجمالي تكلفة التشغيل",
+  "fleetMockFinMaintenance": "الصيانة",
+  "fleetMockFinCostPerKm": "التكلفة لكل كم",
+  "fleetMockFinCostPerHour": "التكلفة لكل ساعة تشغيل",
+  "fleetMockFinDowntime": "فترة التوقف",
+  "fleetMockFinHours": "{hours} ساعة",
+  "@fleetMockFinHours": {
+    "placeholders": {
+      "hours": {
+        "type": "String"
+      }
+    }
+  },
+  "fleetMockFinNotMeasurable": "غير قابل للقياس",
+  "fleetMockFinNoKmReadings": "يتطلب قراءتين للعداد في الفترة",
+  "fleetMockFinNotRecorded": "غير مسجل",
+  "fleetMockFinNoComparison": "لا توجد بيانات للمقارنة",
+  "fleetMockFinCostTrend": "اتجاه التكلفة",
+  "fleetMockFinMonthlyCost": "التكلفة الشهرية ({currency})",
+  "@fleetMockFinMonthlyCost": {
+    "placeholders": {
+      "currency": {
+        "type": "String"
+      }
+    }
+  },
+  "fleetMockFinComposition": "تركيبة التكلفة",
+  "fleetMockFinBucketParts": "قطع الغيار",
+  "fleetMockFinBucketLubricants": "الزيوت ومواد التشحيم",
+  "fleetMockFinBucketTyres": "الإطارات",
+  "fleetMockFinBucketLabour": "العمالة",
+  "fleetMockFinRecentEntries": "أحدث قيود التكلفة",
+  "fleetMockFinViewAll": "عرض جميع قيود التكلفة ({count})",
+  "@fleetMockFinViewAll": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fleetMockFinShowFewer": "عرض أقل",
+  "fleetMockFinLines": "{count, plural, =1{بند واحد} other{{count} بنود}}",
+  "@fleetMockFinLines": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fleetMockFinExport": "تصدير التقرير",
+  "fleetMockFinExportError": "تعذر تصدير التقرير. حاول مرة أخرى.",
+  "fleetMockFinNoCostTitle": "لا توجد تكاليف مسجلة",
+  "fleetMockFinNoCostBody": "لم يتم تسجيل أي بنود مصروفات أو عمالة لهذا الأصل في الفترة المحددة.",
+  "fleetMockFinMixedTitle": "أكثر من عملة",
+  "fleetMockFinMixedBody": "تستخدم بنود تكلفة هذا الأصل العملات {currencies}. لا تُجمع المبالغ عبر عملات مختلفة. اختر دولة واحدة لعرض أرقامها.",
+  "@fleetMockFinMixedBody": {
+    "placeholders": {
+      "currencies": {
+        "type": "String"
+      }
+    }
+  },
+  "fleetMockFinLabourMissing": "لم يتم تضمين العمالة من بطاقات العمل.",
+  "fleetMockFinSourceNote": "قطع الغيار والزيوت والإطارات من سجل المصروفات. العمالة وفترة التوقف من بطاقات العمل. لا توجد ميزانية مسجلة لهذا الأصل.",
+  "fleetMockFinMeters": "العدادات خلال الفترة",
+  "fleetMockFinDistance": "المسافة",
+  "fleetMockFinRunningHours": "ساعات التشغيل",
+  "myWorkAllSites": "كل المواقع المخصصة",
+  "myWorkAnswered": "تمت الإجابة على {answered}/{total}",
+  "@myWorkAnswered": {
+    "placeholders": {
+      "answered": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "myWorkApprovalQueues": "قوائم الاعتماد",
+  "myWorkAssignedTo": "مسند إلى",
+  "myWorkChecklistApprovals": "اعتمادات قوائم الفحص العامة",
+  "myWorkCompletedEmpty": "لا يوجد عمل مكتمل بعد",
+  "myWorkContentAvailable": "المحتوى متوفر بـ {languages}",
+  "@myWorkContentAvailable": {
+    "placeholders": {
+      "languages": {
+        "type": "String"
+      }
+    }
+  },
+  "myWorkContentLanguage": "لغة محتوى قائمة الفحص",
+  "myWorkDayEmpty": "لا يوجد شيء مخطط لهذا اليوم",
+  "myWorkDraftSaved": "تم حفظ المسودة",
+  "myWorkDueOn": "مستحق في {date}",
+  "@myWorkDueOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "myWorkDueToday": "مستحق اليوم",
+  "myWorkEmptyBody": "يظهر هنا العمل المسند إليك أو إلى دورك.",
+  "myWorkEmptyFiltered": "لا يوجد عمل يطابق هذا الفلتر",
+  "myWorkEmptyTitle": "لا يوجد شيء مسند",
+  "myWorkFieldPlanTitle": "خطة العمل الميداني لليوم",
+  "myWorkFilterAll": "كل الأنواع",
+  "myWorkFilterTooltip": "التصفية حسب النوع",
+  "myWorkHistory": "عرض سجل عملي",
+  "myWorkInspectionApprovals": "اعتمادات فحص الإطارات",
+  "myWorkKindChecklist": "قائمة فحص",
+  "myWorkKindCorrective": "إجراء تصحيحي",
+  "myWorkKindDraft": "مسودة قائمة فحص",
+  "myWorkKindInspection": "فحص الإطارات",
+  "myWorkKindWorkOrder": "أمر عمل",
+  "myWorkLateDays": "{count, plural, =1{يوم واحد} =2{يومان} few{{count} أيام} other{{count} يومًا}}",
+  "@myWorkLateDays": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "myWorkLateHours": "{count} س",
+  "@myWorkLateHours": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "myWorkLateMinutes": "{count} د",
+  "@myWorkLateMinutes": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "myWorkLoadError": "تعذر تحميل عملي الآن.",
+  "myWorkNoDueDate": "لا يوجد تاريخ استحقاق",
+  "myWorkNotRecorded": "غير مسجل",
+  "myWorkOverdueBy": "متأخر بمقدار",
+  "myWorkPartial": "تعذر التحقق من بعض العمل: {sources}.",
+  "@myWorkPartial": {
+    "placeholders": {
+      "sources": {
+        "type": "String"
+      }
+    }
+  },
+  "myWorkPriority": "الأولوية",
+  "myWorkReportIssue": "الإبلاغ عن مشكلة",
+  "myWorkResume": "استئناف",
+  "myWorkRetry": "إعادة المحاولة",
+  "myWorkSearchHint": "ابحث عن مهمة أو أصل أو موقع",
+  "myWorkSearchTooltip": "بحث",
+  "myWorkSectionComingUp": "القادم",
+  "myWorkSectionCompleted": "مكتمل",
+  "myWorkSectionDueToday": "مستحق اليوم",
+  "myWorkSectionInProgress": "قيد التنفيذ",
+  "myWorkSectionOverdue": "متأخر",
+  "myWorkSectionWorkOrders": "أوامر العمل",
+  "myWorkSourceApprovals": "قوائم الاعتماد",
+  "myWorkSourceChecklists": "قوائم الفحص",
+  "myWorkSourceCorrective": "الإجراءات التصحيحية",
+  "myWorkSourceDrafts": "المسودات على هذا الجهاز",
+  "myWorkSourcePlans": "خطط الفحص",
+  "myWorkSourceWorkOrders": "أوامر العمل",
+  "myWorkStart": "ابدأ",
+  "myWorkStartInspection": "بدء الفحص",
+  "myWorkStatAssigned": "مسند",
+  "myWorkStatCompleted": "مكتمل",
+  "myWorkStatDueToday": "مستحق اليوم",
+  "myWorkStatOverdue": "متأخر",
+  "myWorkStatTasks": "المهام",
+  "myWorkStateCompleted": "مكتمل",
+  "myWorkStateDueToday": "مستحق اليوم",
+  "myWorkStateInProgress": "قيد التنفيذ",
+  "myWorkStateOverdue": "متأخر",
+  "myWorkStateUpcoming": "قادم",
+  "myWorkStatus": "الحالة",
+  "myWorkSyncPending": "{count} بانتظار المزامنة",
+  "@myWorkSyncPending": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "myWorkTabAssigned": "مسند",
+  "myWorkTabCompleted": "مكتمل",
+  "myWorkTabInProgress": "قيد التنفيذ",
+  "myWorkTasksTitle": "مهامي",
+  "myWorkTyreWorkflowTag": "سير عمل متخصص للإطارات",
+  "myWorkView": "عرض",
+  "clMockDueNow": "مستحق الآن",
+  "clMockDueTomorrow": "مستحق غدًا",
+  "clMockDueOn": "مستحق في {date}",
+  "@clMockDueOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "clMockCadenceDaily": "يومي",
+  "clMockCadenceWeekly": "أسبوعي",
+  "clMockCadenceMonthly": "شهري",
+  "clMockCadenceEveryDays": "{count, plural, =1{كل يوم} other{كل {count} يوم}}",
+  "@clMockCadenceEveryDays": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "clMockMeterRowTitle": "قراءة العداد وساعات التشغيل",
+  "clMockMeterLastRecorded": "آخر تسجيل {date}",
+  "@clMockMeterLastRecorded": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "clMockMeterNoReading": "لم تُسجل أي قراءة بعد",
+  "clMockMeterRecord": "تسجيل",
+  "clMockPendingApproval": "بانتظار الموافقة",
+  "clMockAwaitingYourApproval": "بانتظار موافقتك",
+  "clMockReviewerLabel": "المراجع",
+  "clMockSubmittedOn": "أُرسلت {date}",
+  "@clMockSubmittedOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "clMockFilledBy": "عبّأها {name}",
+  "@clMockFilledBy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "clMockOperatorSignatureCaptured": "تم التقاط توقيع المشغل",
+  "clMockOperatorSignatureMissing": "لا يوجد توقيع للمشغل",
+  "clMockRungInProgress": "قيد التنفيذ",
+  "clMockRungPending": "معلّق",
+  "clMockInspectionOutcome": "نتيجة الفحص",
+  "clMockPass": "ناجح",
+  "clMockFail": "فشل",
+  "clMockNotApplicable": "غير منطبق",
+  "clMockNoChecksScored": "لا تحتوي هذه الورقة على بنود نجاح أو فشل",
+  "clMockRequiredFields": "الحقول المطلوبة",
+  "clMockPhotos": "الصور",
+  "clMockSignatures": "التواقيع",
+  "clMockFindingsTitle": "ملاحظات تحتاج إلى مراجعة",
+  "clMockFindingNote": "ملاحظة: {note}",
+  "@clMockFindingNote": {
+    "placeholders": {
+      "note": {
+        "type": "String"
+      }
+    }
+  },
+  "clMockPhotosAttached": "{count, plural, =0{لا توجد صور مرفقة} =1{صورة واحدة مرفقة} other{{count} صور مرفقة}}",
+  "@clMockPhotosAttached": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "clMockSectionGeneral": "عام",
+  "clMockSectionFindings": "{count, plural, =1{ملاحظة واحدة} other{{count} ملاحظات}}",
+  "@clMockSectionFindings": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "clMockSectionPassed": "{passed}/{total} ناجح",
+  "@clMockSectionPassed": {
+    "placeholders": {
+      "passed": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "clMockSectionComplete": "مكتمل",
+  "clMockSectionAnswered": "{answered}/{total} مُجاب",
+  "@clMockSectionAnswered": {
+    "placeholders": {
+      "answered": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "clMockViewAllAnswers": "عرض كل إجابات القائمة",
+  "clMockHideAllAnswers": "إخفاء إجابات القائمة",
+  "clMockReviewerAction": "إجراء المراجع",
+  "clMockDecisionNote": "ملاحظة القرار",
+  "clMockDecisionNoteHint": "مطلوبة عند الإرجاع للتصحيح",
+  "clMockReturnForCorrection": "إرجاع للتصحيح",
+  "clMockApprove": "موافقة",
+  "clMockApproveNeeds": "وقّع وأدخل اسمك للموافقة",
+  "clMockDecisionRecorded": "يُسجل القرار والملاحظة والتوقيع والوقت.",
+  "clMockSavedSignatureApplied": "تم إدراج توقيعك المحفوظ. ما زالت الموافقة تتطلب ضغطتك.",
+  "clMockProfileVerified": "حساب موثّق",
+  "clMockPendingDrafts": "مسودات معلّقة",
+  "clMockActiveSite": "الموقع النشط",
+  "clMockCountryCurrency": "الدولة والعملة",
+  "clMockRolesAccess": "أدواري وصلاحياتي",
+  "clMockModuleCount": "{count, plural, =1{وحدة واحدة} other{{count} وحدات}}",
+  "@clMockModuleCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "clMockChecklistLanguage": "لغة محتوى القوائم",
+  "clMockChecklistLanguageCaption": "مستقلة عن لغة التطبيق",
+  "clMockSectionSecurity": "الأمان والهوية",
+  "clMockSavedSignature": "توقيعي المحفوظ",
+  "clMockSignatureNotSaved": "غير محفوظ",
+  "clMockSignatureCaptured": "محفوظ",
+  "clMockSignatureCapturedOn": "محفوظ · حُدّث {date}",
+  "@clMockSignatureCapturedOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "clMockSignatureSheetHint": "تملأ شاشات الموافقة هذا نيابةً عنك، وتبقى أنت من يضغط على موافقة.",
+  "clMockSignatureSave": "حفظ كتوقيعي",
+  "clMockSignatureRemove": "إزالة التوقيع المحفوظ",
+  "clMockSignatureRemoveTitle": "هل تريد إزالة توقيعك المحفوظ؟",
+  "clMockSignatureRemoveMessage": "ستبدأ الموافقات بمربع توقيع فارغ حتى تحفظ توقيعًا جديدًا.",
+  "clMockSignatureSaveFailed": "تعذّر تحديث توقيعك. تحقق من اتصالك وحاول مرة أخرى.",
+  "clMockOfflineDrafts": "المسودات دون اتصال",
+  "clMockDraftsStored": "{count, plural, =0{لا يوجد} =1{مسودة واحدة محفوظة على هذا الجهاز} other{{count} محفوظة على هذا الجهاز}}",
+  "@clMockDraftsStored": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   }
 }

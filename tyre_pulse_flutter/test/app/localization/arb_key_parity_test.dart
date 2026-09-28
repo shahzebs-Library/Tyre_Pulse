@@ -513,10 +513,14 @@ void main() {
     // + 1 = 1315: loginCreateAccount, the access-help link to self-registration.
     // 1315 + 417 = 1732. Accidents: report intake, insurance claim, workshop
     // assessment, dispatch/handover and timeline copy moved into ARB (acc*).
-    test('en, ar and ur each carry exactly 1732 translatable keys today', () {
-      expect(_translatableKeys(en).length, 1732);
-      expect(_translatableKeys(ar).length, 1732);
-      expect(_translatableKeys(ur).length, 1732);
+    // 1732 + 28 + 66 + 71 + 67 = 1964. Mock-parity pass: tyre records and the
+    // inspection header (tyreMock*), fleet list, Vehicle 360 and the per-asset
+    // financial report (fleetMock*), My tasks / field plan (myWork*), and the
+    // checklists home, checklist approval review and profile (clMock*).
+    test('en, ar and ur each carry exactly 1964 translatable keys today', () {
+      expect(_translatableKeys(en).length, 1964);
+      expect(_translatableKeys(ar).length, 1964);
+      expect(_translatableKeys(ur).length, 1964);
     });
   });
 

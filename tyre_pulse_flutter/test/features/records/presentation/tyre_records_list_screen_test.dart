@@ -25,6 +25,7 @@ import 'package:tyre_pulse/core/permissions/permission_providers.dart';
 import 'package:tyre_pulse/core/permissions/roles.dart';
 import 'package:tyre_pulse/features/records/domain/models/tyre_record.dart';
 import 'package:tyre_pulse/features/records/domain/models/tyre_records_page.dart';
+import 'package:tyre_pulse/features/records/domain/models/tyre_records_query.dart';
 import 'package:tyre_pulse/features/records/presentation/tyre_detail_sheet.dart';
 import 'package:tyre_pulse/features/records/presentation/tyre_records_list_screen.dart';
 import 'package:tyre_pulse/features/records/records_providers.dart';
@@ -241,6 +242,79 @@ void main() {
         ),
         findsOneWidget,
       );
+    });
+  });
+
+  group('mock parity', () {
+    testWidgets(
+        'opens on Installed, states the exact count, and a tab switch '
+        're-queries by the stored status', (WidgetTester tester) async {
+      final FakeTyreRecordsRepository repo = FakeTyreRecordsRepository(
+        dataset: <TyreRecord>[
+          buildTyreRecord(
+            id: '1',
+            assetNo: 'PUMP014',
+            serialNo: 'BRG2488421',
+            brand: 'Bridgestone',
+            status: kTyreStatusInstalled,
+            tyrePosition: 'LHR5O',
+            issueDate: '2026-03-01',
+            kmAtFitment: 12000,
+            totalKm: 41250,
+          ),
+        ],
+      );
+      await _pump(tester, access: _admin, repo: repo);
+      await tester.pumpAndSettle();
+
+      expect(repo.fetchPageCalls.first.query.status, kTyreStatusInstalled);
+      expect(find.text('1 tyre'), findsOneWidget);
+      expect(find.byKey(TyreRecordsListKeys.statusTabs), findsOneWidget);
+      expect(find.textContaining('Showing installed tyres'), findsOneWidget);
+      // Real values or a dash, never an invented tread or pressure.
+      expect(find.text('2026-03-01'), findsOneWidget);
+      expect(find.text('12,000 km'), findsOneWidget);
+      expect(find.text('41,250 km'), findsOneWidget);
+      expect(find.textContaining('LHR5O'), findsOneWidget);
+      expect(find.textContaining('PSI'), findsNothing);
+      expect(find.byKey(TyreRecordsListKeys.scanBar), findsOneWidget);
+      expect(find.text('Add tyre record'), findsNothing);
+
+      await tester.tap(find.text('Scrapped'));
+      await tester.pumpAndSettle();
+      expect(repo.fetchPageCalls.last.query.status, kTyreStatusScrapped);
+      expect(repo.fetchCountCalls.last.status, kTyreStatusScrapped);
+
+      await tester.tap(find.text('All'));
+      await tester.pumpAndSettle();
+      expect(repo.fetchPageCalls.last.query.status, isNull);
+    });
+
+    testWidgets('an unreadable count leaves the header without a number', (
+      WidgetTester tester,
+    ) async {
+      final FakeTyreRecordsRepository repo = FakeTyreRecordsRepository(
+        dataset: <TyreRecord>[buildTyreRecord(id: '1')],
+      )..countResult = null;
+      await _pump(tester, access: _admin, repo: repo);
+      await tester.pumpAndSettle();
+      expect(find.text('1 tyre'), findsNothing);
+      expect(find.text('1 tyre record shown'), findsOneWidget);
+    });
+
+    testWidgets('the sort menu re-queries oldest fitted first', (
+      WidgetTester tester,
+    ) async {
+      final FakeTyreRecordsRepository repo = FakeTyreRecordsRepository(
+        dataset: <TyreRecord>[buildTyreRecord(id: '1')],
+      );
+      await _pump(tester, access: _admin, repo: repo);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(TyreRecordsListKeys.sortButton));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Oldest fitted').last);
+      await tester.pumpAndSettle();
+      expect(repo.fetchPageCalls.last.query.sort, TyreRecordsSort.oldestFitted);
     });
   });
 }

@@ -29,8 +29,12 @@ import 'package:tyre_pulse/core/auth/auth_profile_repository.dart';
 import 'package:tyre_pulse/core/auth/auth_repository.dart';
 import 'package:tyre_pulse/core/auth/auth_state.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/core/permissions/module_registry.dart';
+import 'package:tyre_pulse/core/permissions/permission_providers.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
+import 'package:tyre_pulse/features/checklists/checklists_providers.dart';
 import 'package:tyre_pulse/features/notifications/notifications_providers.dart';
+import 'package:tyre_pulse/features/profile/data/saved_signature_repository.dart';
 import 'package:tyre_pulse/features/profile/presentation/profile_screen.dart';
 import 'package:tyre_pulse/features/profile/profile_providers.dart';
 
@@ -55,6 +59,12 @@ Future<_Pumped> _pumpSignedIn(
   Stream<int>? pendingSyncStream,
   int unread = 0,
   String appVersion = '2.0.0',
+  AsyncValue<int> drafts = const AsyncData<int>(0),
+  SavedSignature? savedSignature,
+  Set<ModuleKey> modules = const <ModuleKey>{
+    ModuleKey.inspect,
+    ModuleKey.checklists,
+  },
 }) async {
   final FakeAuthRepository auth = FakeAuthRepository();
   final FakeProfileRepository profiles = FakeProfileRepository();
@@ -99,6 +109,14 @@ Future<_Pumped> _pumpSignedIn(
         AsyncData<int>(unread),
       ),
       currentAppVersionProvider.overrideWithValue(appVersion),
+      profileDraftCountProvider.overrideWith(
+        (Ref ref) async => switch (drafts) {
+          AsyncData<int>(:final int value) => value,
+          _ => throw StateError('drafts unreadable'),
+        },
+      ),
+      mySavedSignatureProvider.overrideWith((Ref ref) async => savedSignature),
+      allowedModulesProvider.overrideWithValue(modules),
     ],
   );
   addTearDown(container.dispose);
@@ -153,7 +171,8 @@ void main() {
       expect(find.text('Workspace'), findsOneWidget);
       expect(find.text('Language & display'), findsOneWidget);
       expect(find.text('App language'), findsOneWidget);
-      expect(find.text('English'), findsOneWidget);
+      // App language AND checklist content language both start in English.
+      expect(find.text('English'), findsNWidgets(2));
       expect(find.text('Theme'), findsOneWidget);
       expect(find.text('Light'), findsOneWidget);
       expect(find.text('Offline & data'), findsOneWidget);
@@ -505,4 +524,81 @@ void main() {
       expect(find.byKey(ProfileScreenKeys.appVersionRow), findsNothing);
     },
   );
+
+  testWidgets(
+    'mock-parity rows: verified badge, drafts, roles and access, checklist '
+    'language and the saved signature, all from real sources',
+    (WidgetTester tester) async {
+      await _pumpSignedIn(
+        tester,
+        drafts: const AsyncData<int>(2),
+        savedSignature: SavedSignature(
+          value: 'data:image/png;base64,AAAA',
+          updatedAt: DateTime(2026, 8, 12),
+        ),
+      );
+
+      expect(find.byKey(ProfileScreenKeys.verifiedBadge), findsOneWidget);
+      expect(find.text('Verified account'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(ProfileScreenKeys.draftsTile),
+          matching: find.text('2'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Manager · 2 modules'), findsOneWidget);
+      expect(find.text('Checklist content language'), findsOneWidget);
+      expect(find.text('Independent from app language'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.byKey(ProfileScreenKeys.offlineDraftsRow),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('Captured · updated 12 Aug'), findsOneWidget);
+      expect(find.text('2 stored on this device'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'no saved signature says so, and unreadable drafts render a dash',
+    (WidgetTester tester) async {
+      await _pumpSignedIn(
+        tester,
+        drafts: AsyncError<int>(StateError('x'), StackTrace.empty),
+      );
+
+      expect(
+        find.descendant(
+          of: find.byKey(ProfileScreenKeys.draftsTile),
+          matching: find.text('-'),
+        ),
+        findsOneWidget,
+      );
+      await tester.scrollUntilVisible(
+        find.byKey(ProfileScreenKeys.signatureRow),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('Not saved'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('checklist content language is chosen independently', (
+    WidgetTester tester,
+  ) async {
+    final _Pumped p = await _pumpSignedIn(tester);
+    await tester.ensureVisible(
+      find.byKey(ProfileScreenKeys.checklistLanguageRow),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(ProfileScreenKeys.checklistLanguageRow));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('profile.checklistLanguage.hi')));
+    await tester.pumpAndSettle();
+    expect(p.container.read(checklistContentLanguageProvider), 'hi');
+    expect(p.container.read(localeProvider)?.languageCode, isNot('hi'));
+  });
 }

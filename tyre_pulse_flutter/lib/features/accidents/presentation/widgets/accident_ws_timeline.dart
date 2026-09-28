@@ -12,6 +12,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart' show DateFormat;
 import 'package:tyre_pulse/app/localization/tp_direction.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
@@ -54,6 +55,7 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
   String? _actionError;
   int _tab = 0;
   String _filter = 'all';
+  bool _logExpanded = true;
   Timer? _ticker;
   late DateTime _now;
   // Sheet controllers live with the workspace, not the sheet call: a bottom
@@ -372,16 +374,19 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
               key: const Key('accident.timeline.open'),
               label: c.l10n.accTlOpen,
               value: age == null ? c.notSet : formatElapsed(age),
-              tone: TpStatus.info,
+              tone: TpStatus.ok,
+              icon: Icons.schedule_outlined,
             ),
             AccidentMockChip(
               label: c.l10n.accTlCurrentOwner,
               value: c.value(currentOwner(widget.snapshot)),
+              icon: Icons.person_outline,
             ),
             AccidentMockChip(
               label: c.l10n.accTlNextSla,
               value: c.value(next?.name ?? next?.slaKey),
-              tone: next == null ? TpStatus.neutral : TpStatus.info,
+              tone: next == null ? TpStatus.neutral : TpStatus.warning,
+              icon: Icons.access_time,
             ),
             AccidentMockChip(
               key: const Key('accident.timeline.dueIn'),
@@ -394,6 +399,7 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
                   : dueIn.startsWith('Overdue')
                       ? TpStatus.critical
                       : TpStatus.warning,
+              icon: Icons.timer_outlined,
             ),
           ],
         ),
@@ -430,12 +436,13 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
             const SizedBox(height: TpSpace.md),
           ],
           switch (_tab) {
-            0 => _timelineTab(c, data),
+            0 => _timelineTab(c, data, isAdmin),
             1 => _notificationsTab(c, data, isAdmin),
             _ => _participantsTab(c),
           },
           const SizedBox(height: TpSpace.md),
           AccidentMockActions(
+            emphasiseLast: true,
             actions: <(String, IconData, VoidCallback?)>[
               (
                 c.l10n.accTlAddTimelineNote2,
@@ -516,9 +523,10 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
 
   // ── Timeline tab ──────────────────────────────────────────────────────
 
-  Widget _timelineTab(WsKitCopy c, AccidentTimelineData data) {
+  Widget _timelineTab(WsKitCopy c, AccidentTimelineData data, bool isAdmin) {
     final List<TimelineEntry> rows =
         filterTimeline(buildTimelineFeed(_input(data)), _filter);
+    final List<DeliveryLogRow> log = buildDeliveryLog(_input(data));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
@@ -529,6 +537,10 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
             for (final String filter in timelineFilters)
               ChoiceChip(
                 key: Key('accident.timeline.filter.$filter'),
+                showCheckmark: false,
+                avatar: filter == 'all'
+                    ? null
+                    : Icon(_filterIcon(filter), size: TpSizing.iconSm),
                 label: Text(_filterLabel(c, filter)),
                 selected: _filter == filter,
                 onSelected: (_) => setState(() => _filter = filter),
@@ -544,20 +556,74 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
-                    for (final TimelineEntry entry in rows)
+                    for (int i = 0; i < rows.length; i++)
                       _TimelineRow(
-                        entry: entry,
-                        statusLabel: entry.status == null
+                        entry: rows[i],
+                        isFirst: i == 0,
+                        isLast: i == rows.length - 1,
+                        statusLabel: rows[i].status == null
                             ? null
-                            : _statusLabel(c, entry.status!),
-                        onTap: () => unawaited(_showEntry(entry)),
+                            : _statusLabel(c, rows[i].status!),
+                        onTap: () => unawaited(_showEntry(rows[i])),
                       ),
                   ],
                 ),
         ),
+        const SizedBox(height: TpSpace.md),
+        _DeliveryLogPreview(
+          rows: log,
+          expanded: _logExpanded,
+          onToggle: () => setState(() => _logExpanded = !_logExpanded),
+          onViewAll: () => setState(() => _tab = 1),
+        ),
+        const SizedBox(height: TpSpace.md),
+        TpCard(
+          key: const Key('accident.timeline.manageRecipientsCard'),
+          onTap: isAdmin ? () => unawaited(_manageRecipients()) : null,
+          padding: const EdgeInsets.all(TpSpace.md),
+          child: Row(
+            children: <Widget>[
+              Icon(
+                Icons.settings_outlined,
+                color: TpPalette.of(context).primary,
+              ),
+              const SizedBox(width: TpSpace.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      c.l10n.accTlManageRecipientGroups2,
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    Text(
+                      c.l10n.accTlRecipientsAreSetByAdminPer2,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              if (isAdmin)
+                Icon(
+                  TpDirection.isRtl(context)
+                      ? Icons.chevron_left
+                      : Icons.chevron_right,
+                  color: TpPalette.of(context).textMuted,
+                ),
+            ],
+          ),
+        ),
       ],
     );
   }
+
+  IconData _filterIcon(String filter) => switch (filter) {
+        'actions' => Icons.bolt_outlined,
+        'documents' => Icons.description_outlined,
+        'sla' => Icons.shield_outlined,
+        'emails' => Icons.mail_outline,
+        _ => Icons.list,
+      };
 
   // ── Notifications tab ─────────────────────────────────────────────────
 
@@ -733,113 +799,326 @@ class _TimelineRow extends StatelessWidget {
     required this.entry,
     required this.statusLabel,
     required this.onTap,
+    this.isFirst = false,
+    this.isLast = false,
   });
   final TimelineEntry entry;
   final String? statusLabel;
   final VoidCallback onTap;
+  final bool isFirst;
+  final bool isLast;
 
   @override
   Widget build(BuildContext context) {
     final WsKitCopy c = WsKitCopy(context);
     final TpPalette palette = TpPalette.of(context);
+    final TextTheme text = Theme.of(context).textTheme;
+    final String locale = Localizations.localeOf(context).toLanguageTag();
+    final DateTime local = entry.at.toLocal();
+    // Mock colours: done = green, on the road = blue, waiting = orange.
     final TpStatus tone = switch (entry.status) {
       TimelineStatus.completed => TpStatus.ok,
-      TimelineStatus.inTransit => TpStatus.warning,
-      TimelineStatus.pending => TpStatus.info,
+      TimelineStatus.inTransit => TpStatus.info,
+      TimelineStatus.pending => TpStatus.warning,
       null => TpStatus.neutral,
     };
+    final TpStatusColors colors = palette.forStatus(tone);
     final IconData icon = switch (entry.category) {
       TimelineCategory.actions => Icons.history,
       TimelineCategory.documents => Icons.description_outlined,
       TimelineCategory.sla => Icons.timer_outlined,
       TimelineCategory.emails => Icons.mail_outline,
     };
+    final IconData dot = switch (entry.status) {
+      TimelineStatus.completed => Icons.check_circle,
+      TimelineStatus.inTransit => Icons.radio_button_checked,
+      TimelineStatus.pending => Icons.radio_button_checked,
+      null => Icons.circle_outlined,
+    };
+    final Color rail = palette.border;
     return InkWell(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: TpSpace.md),
-        decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: palette.border)),
-        ),
+      child: IntrinsicHeight(
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: palette.primarySoft,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, color: palette.primary, size: 20),
-            ),
-            const SizedBox(width: TpSpace.sm),
-            Expanded(
+            // Rail: a status dot on a vertical line joining the entries.
+            SizedBox(
+              width: 22,
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text(
-                    accidentMockDateTime(context, entry.at),
-                    style: Theme.of(context).textTheme.labelSmall,
+                  SizedBox(
+                    height: TpSpace.md,
+                    child: isFirst
+                        ? null
+                        : VerticalDivider(width: 2, thickness: 2, color: rail),
                   ),
-                  Text(
-                    entry.title,
-                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  Icon(
+                    dot,
+                    size: 18,
+                    color:
+                        entry.status == null ? palette.textMuted : colors.base,
                   ),
-                  if (entry.actor != null)
-                    Text('${c.l10n.accTlBy2} ${entry.actor}'),
-                  if (entry.audience != null)
-                    Text('${c.l10n.accTlTo2} ${entry.audience}'),
-                  for (final String detail in entry.details)
-                    Text(
-                      detail,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  for (final String warning in entry.warnings)
-                    Text(
-                      warning,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: palette.forStatus(TpStatus.warning).onSoft,
-                            fontWeight: FontWeight.w700,
-                          ),
-                    ),
-                  const SizedBox(height: TpSpace.xs),
-                  Wrap(
-                    spacing: TpSpace.xs,
-                    runSpacing: TpSpace.xs,
-                    children: <Widget>[
-                      if (statusLabel != null)
-                        TpStatusChip(
-                          status: tone,
-                          label: statusLabel,
-                          isCompact: true,
-                        ),
-                      if (entry.elapsed != null)
-                        TpStatusChip(
-                          status: TpStatus.neutral,
-                          label: formatElapsed(entry.elapsed!),
-                          icon: Icons.schedule_outlined,
-                          isCompact: true,
-                        ),
-                      if (entry.slaMet)
-                        TpStatusChip(
-                          status: TpStatus.ok,
-                          label: c.l10n.accTlSlaMet,
-                          icon: Icons.verified_outlined,
-                          isCompact: true,
-                        ),
-                    ],
+                  Expanded(
+                    child: isLast
+                        ? const SizedBox.shrink()
+                        : VerticalDivider(width: 2, thickness: 2, color: rail),
                   ),
                 ],
               ),
             ),
-            Icon(
-              TpDirection.isRtl(context)
-                  ? Icons.chevron_left
-                  : Icons.chevron_right,
-              color: palette.textMuted,
+            const SizedBox(width: TpSpace.sm),
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: TpSpace.md),
+                decoration: BoxDecoration(
+                  border: isLast
+                      ? null
+                      : Border(bottom: BorderSide(color: palette.border)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    SizedBox(
+                      width: 52,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            DateFormat('d MMM', locale).format(local),
+                            style: text.labelMedium
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          Text(
+                            DateFormat.Hm(locale).format(local),
+                            style: text.labelSmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: entry.status == TimelineStatus.pending
+                            ? colors.soft
+                            : palette.primarySoft,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        icon,
+                        color: entry.status == TimelineStatus.pending
+                            ? colors.base
+                            : palette.primary,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: TpSpace.sm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            entry.title,
+                            style: const TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                          if (entry.actor != null)
+                            Text('${c.l10n.accTlBy2} ${entry.actor}'),
+                          if (entry.audience != null)
+                            Text('${c.l10n.accTlTo2} ${entry.audience}'),
+                          for (final String detail in entry.details)
+                            Text(detail, style: text.bodySmall),
+                          for (final String warning in entry.warnings)
+                            Row(
+                              children: <Widget>[
+                                Icon(
+                                  Icons.warning_amber_rounded,
+                                  size: TpSizing.iconSm,
+                                  color:
+                                      palette.forStatus(TpStatus.warning).base,
+                                ),
+                                const SizedBox(width: TpSpace.xs),
+                                Flexible(
+                                  child: Text(
+                                    warning,
+                                    style: text.bodySmall?.copyWith(
+                                      color: palette
+                                          .forStatus(TpStatus.warning)
+                                          .onSoft,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          const SizedBox(height: TpSpace.xs),
+                          Wrap(
+                            spacing: TpSpace.xs,
+                            runSpacing: TpSpace.xs,
+                            children: <Widget>[
+                              if (statusLabel != null)
+                                TpStatusChip(
+                                  status: tone,
+                                  label: statusLabel,
+                                  isCompact: true,
+                                ),
+                              if (entry.elapsed != null)
+                                TpStatusChip(
+                                  status: TpStatus.neutral,
+                                  label: formatElapsed(entry.elapsed!),
+                                  icon: Icons.schedule_outlined,
+                                  isCompact: true,
+                                ),
+                              if (entry.slaMet)
+                                TpStatusChip(
+                                  status: TpStatus.ok,
+                                  label: c.l10n.accTlSlaMet,
+                                  icon: Icons.verified_outlined,
+                                  isCompact: true,
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      TpDirection.isRtl(context)
+                          ? Icons.chevron_left
+                          : Icons.chevron_right,
+                      color: palette.textMuted,
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// The collapsible "Notification delivery log" card under the timeline:
+/// the newest three logged notifications, with "View all" opening the
+/// Notifications tab (the full table). Rows come from [buildDeliveryLog],
+/// so a status is only ever what the communications ledger recorded.
+class _DeliveryLogPreview extends StatelessWidget {
+  const _DeliveryLogPreview({
+    required this.rows,
+    required this.expanded,
+    required this.onToggle,
+    required this.onViewAll,
+  });
+  final List<DeliveryLogRow> rows;
+  final bool expanded;
+  final VoidCallback onToggle;
+  final VoidCallback onViewAll;
+
+  static const int _previewCount = 3;
+
+  @override
+  Widget build(BuildContext context) {
+    final WsKitCopy c = WsKitCopy(context);
+    final TpPalette palette = TpPalette.of(context);
+    final TextTheme text = Theme.of(context).textTheme;
+    final List<DeliveryLogRow> shown = rows.take(_previewCount).toList();
+    return TpCard(
+      key: const Key('accident.timeline.logPreview'),
+      padding: const EdgeInsets.all(TpSpace.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          InkWell(
+            key: const Key('accident.timeline.logPreview.toggle'),
+            onTap: onToggle,
+            child: Row(
+              children: <Widget>[
+                Icon(Icons.mail_outline, color: palette.primary),
+                const SizedBox(width: TpSpace.sm),
+                Expanded(
+                  child: Text(
+                    c.l10n.accTlNotificationDeliveryLog,
+                    style:
+                        text.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+                  ),
+                ),
+                Icon(
+                  expanded
+                      ? Icons.keyboard_arrow_up_rounded
+                      : Icons.keyboard_arrow_down_rounded,
+                  color: palette.textMuted,
+                ),
+              ],
+            ),
+          ),
+          if (expanded) ...<Widget>[
+            const SizedBox(height: TpSpace.sm),
+            if (shown.isEmpty)
+              Text(
+                c.l10n.accTlNoNotificationsRecordedForThisCase,
+                style: text.bodySmall,
+              ),
+            for (final DeliveryLogRow row in shown)
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: TpSpace.sm),
+                decoration: BoxDecoration(
+                  border: Border(top: BorderSide(color: palette.border)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            row.trigger,
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          Text(
+                            <String>[
+                              if (row.recipients.isEmpty)
+                                c.notSet
+                              else if (row.recipientCount > 1)
+                                '${row.recipients} · ${row.recipientCount}'
+                              else
+                                row.recipients,
+                              row.channel,
+                            ].join(' · '),
+                            style: text.bodySmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: TpSpace.sm),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: <Widget>[
+                        Text(
+                          row.status,
+                          style: text.bodySmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: palette.primary,
+                          ),
+                        ),
+                        Text(
+                          row.at == null
+                              ? c.notSet
+                              : accidentMockDateTime(context, row.at!),
+                          style: text.labelSmall,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            const SizedBox(height: TpSpace.sm),
+            OutlinedButton(
+              key: const Key('accident.timeline.logPreview.viewAll'),
+              onPressed: onViewAll,
+              child: Text(c.l10n.accTlViewAllNotifications),
+            ),
+          ],
+        ],
       ),
     );
   }

@@ -5921,4 +5921,851 @@ class AppLocalizationsEn extends AppLocalizations {
   String accTlOverdueBy(String elapsed) {
     return 'Overdue $elapsed';
   }
+
+  @override
+  String tyreMockRecordsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count tyres',
+      one: '1 tyre',
+      zero: 'No tyres',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get tyreMockTabAll => 'All';
+
+  @override
+  String get tyreMockTabInstalled => 'Installed';
+
+  @override
+  String get tyreMockTabRemoved => 'Removed';
+
+  @override
+  String get tyreMockTabScrapped => 'Scrapped';
+
+  @override
+  String get tyreMockShowingInstalled => 'Showing installed tyres';
+
+  @override
+  String get tyreMockShowingRemoved => 'Showing removed tyres';
+
+  @override
+  String get tyreMockShowingScrapped => 'Showing scrapped tyres';
+
+  @override
+  String get tyreMockShowingAll => 'Showing all tyres';
+
+  @override
+  String tyreMockLoadedAt(String time) {
+    return 'Loaded $time';
+  }
+
+  @override
+  String get tyreMockSortTooltip => 'Sort';
+
+  @override
+  String get tyreMockSortNewest => 'Newest fitted';
+
+  @override
+  String get tyreMockSortOldest => 'Oldest fitted';
+
+  @override
+  String tyreMockSitePill(String value) {
+    return 'Site: $value';
+  }
+
+  @override
+  String tyreMockRiskPill(String value) {
+    return 'Risk: $value';
+  }
+
+  @override
+  String get tyreMockMetricFitted => 'Fitted';
+
+  @override
+  String get tyreMockMetricRemoved => 'Removed';
+
+  @override
+  String get tyreMockMetricTread => 'Tread';
+
+  @override
+  String get tyreMockMetricKmRun => 'Km run';
+
+  @override
+  String tyreMockKmValue(String value) {
+    return '$value km';
+  }
+
+  @override
+  String tyreMockHoursValue(String value) {
+    return '$value h';
+  }
+
+  @override
+  String get tyreMockScanSerial => 'Scan tyre serial';
+
+  @override
+  String get tyreMockInspectionTitle => 'Tyre inspection';
+
+  @override
+  String get tyreMockInspectionProgress => 'Inspection progress';
+
+  @override
+  String tyreMockProgressComplete(int percent) {
+    return '$percent% complete';
+  }
+
+  @override
+  String get tyreMockMachineMeter => 'Machine meter';
+
+  @override
+  String get tyreMockPreviousTyre => 'Previous tyre';
+
+  @override
+  String get tyreMockNextTyre => 'Next tyre';
+
+  @override
+  String get fleetMockClassVehicles => 'Vehicles';
+
+  @override
+  String get fleetMockClassPlant => 'Plant and equipment';
+
+  @override
+  String get fleetMockClassStationary => 'Stationary';
+
+  @override
+  String fleetMockActiveAssets(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count active assets',
+      one: '1 active asset',
+      zero: 'No active assets',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fleetMockScopeAllSites => 'All authorized sites';
+
+  @override
+  String get fleetMockScopeAllCountries => 'All countries';
+
+  @override
+  String get fleetMockScanAssetQr => 'Scan asset QR';
+
+  @override
+  String get fleetMockTabTimeline => 'Timeline';
+
+  @override
+  String get fleetMockTabCosts => 'Costs';
+
+  @override
+  String get fleetMockPeriodYtd => 'This year to date';
+
+  @override
+  String get fleetMockPeriod12m => 'Last 12 months';
+
+  @override
+  String get fleetMockPeriod90d => 'Last 90 days';
+
+  @override
+  String get fleetMockPeriod30d => 'Last 30 days';
+
+  @override
+  String get fleetMockTimelineAll => 'All events';
+
+  @override
+  String get fleetMockTimelineWorkOrders => 'Work orders';
+
+  @override
+  String get fleetMockTimelineInspections => 'Inspections';
+
+  @override
+  String get fleetMockTimelineWashes => 'Washes';
+
+  @override
+  String get fleetMockTimelineTyres => 'Tyres';
+
+  @override
+  String get fleetMockTimelineAccidents => 'Accidents';
+
+  @override
+  String get fleetMockEventWorkOrder => 'Job card opened';
+
+  @override
+  String get fleetMockEventInspection => 'Tyre inspection';
+
+  @override
+  String get fleetMockEventWash => 'Vehicle wash';
+
+  @override
+  String get fleetMockEventTyreFitted => 'Tyre fitted';
+
+  @override
+  String get fleetMockEventTyreRemoved => 'Tyre removed';
+
+  @override
+  String get fleetMockEventAccident => 'Accident reported';
+
+  @override
+  String fleetMockEventPhotos(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count photos',
+      one: '1 photo',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fleetMockTimelineEmptyTitle => 'No history in this period';
+
+  @override
+  String get fleetMockTimelineEmptyBody =>
+      'Nothing was recorded for this asset in the selected period.';
+
+  @override
+  String get fleetMockTimelinePartial =>
+      'Some history could not be loaded. The list may be incomplete.';
+
+  @override
+  String get fleetMockSnapshotTitle => 'Financial snapshot';
+
+  @override
+  String get fleetMockOpenFinReport => 'Open full financial report';
+
+  @override
+  String get fleetMockFinReportTitle => 'Financial report';
+
+  @override
+  String fleetMockFinScopeNote(String currency) {
+    return 'Single-asset report, values shown only in $currency';
+  }
+
+  @override
+  String fleetMockFinVsYear(String year) {
+    return 'vs same period $year';
+  }
+
+  @override
+  String get fleetMockFinTotalOperating => 'Total operating cost';
+
+  @override
+  String get fleetMockFinMaintenance => 'Maintenance';
+
+  @override
+  String get fleetMockFinCostPerKm => 'Cost per km';
+
+  @override
+  String get fleetMockFinCostPerHour => 'Cost per engine hour';
+
+  @override
+  String get fleetMockFinDowntime => 'Downtime';
+
+  @override
+  String fleetMockFinHours(String hours) {
+    return '$hours hours';
+  }
+
+  @override
+  String get fleetMockFinNotMeasurable => 'Not measurable';
+
+  @override
+  String get fleetMockFinNoKmReadings =>
+      'Needs two odometer readings in the period';
+
+  @override
+  String get fleetMockFinNotRecorded => 'Not recorded';
+
+  @override
+  String get fleetMockFinNoComparison => 'No data for comparison';
+
+  @override
+  String get fleetMockFinCostTrend => 'Cost trend';
+
+  @override
+  String fleetMockFinMonthlyCost(String currency) {
+    return 'Monthly cost ($currency)';
+  }
+
+  @override
+  String get fleetMockFinComposition => 'Cost composition';
+
+  @override
+  String get fleetMockFinBucketParts => 'Spare parts';
+
+  @override
+  String get fleetMockFinBucketLubricants => 'Oil and lubricants';
+
+  @override
+  String get fleetMockFinBucketTyres => 'Tyres';
+
+  @override
+  String get fleetMockFinBucketLabour => 'Labour';
+
+  @override
+  String get fleetMockFinRecentEntries => 'Recent cost entries';
+
+  @override
+  String fleetMockFinViewAll(int count) {
+    return 'View all cost entries ($count)';
+  }
+
+  @override
+  String get fleetMockFinShowFewer => 'Show fewer';
+
+  @override
+  String fleetMockFinLines(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count lines',
+      one: '1 line',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fleetMockFinExport => 'Export report';
+
+  @override
+  String get fleetMockFinExportError =>
+      'The report could not be exported. Try again.';
+
+  @override
+  String get fleetMockFinNoCostTitle => 'No cost recorded';
+
+  @override
+  String get fleetMockFinNoCostBody =>
+      'No expense lines or job card labour were recorded for this asset in the selected period.';
+
+  @override
+  String get fleetMockFinMixedTitle => 'More than one currency';
+
+  @override
+  String fleetMockFinMixedBody(String currencies) {
+    return 'This asset\'s cost lines use $currencies. Totals are never added across currencies. Choose one country to see its figures.';
+  }
+
+  @override
+  String get fleetMockFinLabourMissing =>
+      'Labour from job cards is not included.';
+
+  @override
+  String get fleetMockFinSourceNote =>
+      'Parts, oil and tyres from the expense grid. Labour and downtime from job cards. No budget is recorded for this asset.';
+
+  @override
+  String get fleetMockFinMeters => 'Meters in period';
+
+  @override
+  String get fleetMockFinDistance => 'Distance';
+
+  @override
+  String get fleetMockFinRunningHours => 'Engine hours';
+
+  @override
+  String get myWorkAllSites => 'All assigned sites';
+
+  @override
+  String myWorkAnswered(int answered, int total) {
+    return '$answered/$total answered';
+  }
+
+  @override
+  String get myWorkApprovalQueues => 'Approval queues';
+
+  @override
+  String get myWorkAssignedTo => 'Assigned to';
+
+  @override
+  String get myWorkChecklistApprovals => 'General checklist approvals';
+
+  @override
+  String get myWorkCompletedEmpty => 'No completed work yet';
+
+  @override
+  String myWorkContentAvailable(String languages) {
+    return '$languages content available';
+  }
+
+  @override
+  String get myWorkContentLanguage => 'Checklist content language';
+
+  @override
+  String get myWorkDayEmpty => 'Nothing planned for this day';
+
+  @override
+  String get myWorkDraftSaved => 'Draft saved';
+
+  @override
+  String myWorkDueOn(String date) {
+    return 'Due $date';
+  }
+
+  @override
+  String get myWorkDueToday => 'Due today';
+
+  @override
+  String get myWorkEmptyBody =>
+      'Work assigned to you or your role appears here.';
+
+  @override
+  String get myWorkEmptyFiltered => 'No work matches this filter';
+
+  @override
+  String get myWorkEmptyTitle => 'Nothing assigned';
+
+  @override
+  String get myWorkFieldPlanTitle => 'Today\'s field plan';
+
+  @override
+  String get myWorkFilterAll => 'All types';
+
+  @override
+  String get myWorkFilterTooltip => 'Filter by type';
+
+  @override
+  String get myWorkHistory => 'View my work history';
+
+  @override
+  String get myWorkInspectionApprovals => 'Tyre inspection approvals';
+
+  @override
+  String get myWorkKindChecklist => 'Checklist';
+
+  @override
+  String get myWorkKindCorrective => 'Corrective action';
+
+  @override
+  String get myWorkKindDraft => 'Checklist draft';
+
+  @override
+  String get myWorkKindInspection => 'Tyre inspection';
+
+  @override
+  String get myWorkKindWorkOrder => 'Work order';
+
+  @override
+  String myWorkLateDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count days',
+      one: '1 day',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String myWorkLateHours(int count) {
+    return '$count h';
+  }
+
+  @override
+  String myWorkLateMinutes(int count) {
+    return '$count min';
+  }
+
+  @override
+  String get myWorkLoadError => 'My work could not be loaded right now.';
+
+  @override
+  String get myWorkNoDueDate => 'No due date';
+
+  @override
+  String get myWorkNotRecorded => 'Not recorded';
+
+  @override
+  String get myWorkOverdueBy => 'Overdue by';
+
+  @override
+  String myWorkPartial(String sources) {
+    return 'Some work could not be checked: $sources.';
+  }
+
+  @override
+  String get myWorkPriority => 'Priority';
+
+  @override
+  String get myWorkReportIssue => 'Report an issue';
+
+  @override
+  String get myWorkResume => 'Resume';
+
+  @override
+  String get myWorkRetry => 'Retry';
+
+  @override
+  String get myWorkSearchHint => 'Search task, asset or site';
+
+  @override
+  String get myWorkSearchTooltip => 'Search';
+
+  @override
+  String get myWorkSectionComingUp => 'Coming up';
+
+  @override
+  String get myWorkSectionCompleted => 'Completed';
+
+  @override
+  String get myWorkSectionDueToday => 'Due today';
+
+  @override
+  String get myWorkSectionInProgress => 'In progress';
+
+  @override
+  String get myWorkSectionOverdue => 'Overdue';
+
+  @override
+  String get myWorkSectionWorkOrders => 'Work orders';
+
+  @override
+  String get myWorkSourceApprovals => 'approval queues';
+
+  @override
+  String get myWorkSourceChecklists => 'checklists';
+
+  @override
+  String get myWorkSourceCorrective => 'corrective actions';
+
+  @override
+  String get myWorkSourceDrafts => 'drafts on this device';
+
+  @override
+  String get myWorkSourcePlans => 'inspection plans';
+
+  @override
+  String get myWorkSourceWorkOrders => 'work orders';
+
+  @override
+  String get myWorkStart => 'Start';
+
+  @override
+  String get myWorkStartInspection => 'Start inspection';
+
+  @override
+  String get myWorkStatAssigned => 'Assigned';
+
+  @override
+  String get myWorkStatCompleted => 'Completed';
+
+  @override
+  String get myWorkStatDueToday => 'Due today';
+
+  @override
+  String get myWorkStatOverdue => 'Overdue';
+
+  @override
+  String get myWorkStatTasks => 'Tasks';
+
+  @override
+  String get myWorkStateCompleted => 'Completed';
+
+  @override
+  String get myWorkStateDueToday => 'Due today';
+
+  @override
+  String get myWorkStateInProgress => 'In progress';
+
+  @override
+  String get myWorkStateOverdue => 'Overdue';
+
+  @override
+  String get myWorkStateUpcoming => 'Upcoming';
+
+  @override
+  String get myWorkStatus => 'Status';
+
+  @override
+  String myWorkSyncPending(int count) {
+    return '$count waiting to sync';
+  }
+
+  @override
+  String get myWorkTabAssigned => 'Assigned';
+
+  @override
+  String get myWorkTabCompleted => 'Completed';
+
+  @override
+  String get myWorkTabInProgress => 'In progress';
+
+  @override
+  String get myWorkTasksTitle => 'My tasks';
+
+  @override
+  String get myWorkTyreWorkflowTag => 'Specialised tyre workflow';
+
+  @override
+  String get myWorkView => 'View';
+
+  @override
+  String get clMockDueNow => 'Due now';
+
+  @override
+  String get clMockDueTomorrow => 'Due tomorrow';
+
+  @override
+  String clMockDueOn(String date) {
+    return 'Due $date';
+  }
+
+  @override
+  String get clMockCadenceDaily => 'Daily';
+
+  @override
+  String get clMockCadenceWeekly => 'Weekly';
+
+  @override
+  String get clMockCadenceMonthly => 'Monthly';
+
+  @override
+  String clMockCadenceEveryDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Every $count days',
+      one: 'Every day',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get clMockMeterRowTitle => 'Odometer & hour-meter reading';
+
+  @override
+  String clMockMeterLastRecorded(String date) {
+    return 'Last recorded $date';
+  }
+
+  @override
+  String get clMockMeterNoReading => 'No reading recorded yet';
+
+  @override
+  String get clMockMeterRecord => 'Record';
+
+  @override
+  String get clMockPendingApproval => 'Pending approval';
+
+  @override
+  String get clMockAwaitingYourApproval => 'Awaiting your approval';
+
+  @override
+  String get clMockReviewerLabel => 'Reviewer';
+
+  @override
+  String clMockSubmittedOn(String date) {
+    return 'Submitted $date';
+  }
+
+  @override
+  String clMockFilledBy(String name) {
+    return 'Filled by $name';
+  }
+
+  @override
+  String get clMockOperatorSignatureCaptured => 'Operator signature captured';
+
+  @override
+  String get clMockOperatorSignatureMissing => 'No operator signature';
+
+  @override
+  String get clMockRungInProgress => 'In progress';
+
+  @override
+  String get clMockRungPending => 'Pending';
+
+  @override
+  String get clMockInspectionOutcome => 'Inspection outcome';
+
+  @override
+  String get clMockPass => 'Pass';
+
+  @override
+  String get clMockFail => 'Fail';
+
+  @override
+  String get clMockNotApplicable => 'N/A';
+
+  @override
+  String get clMockNoChecksScored => 'This sheet has no pass or fail checks';
+
+  @override
+  String get clMockRequiredFields => 'Required fields';
+
+  @override
+  String get clMockPhotos => 'Photos';
+
+  @override
+  String get clMockSignatures => 'Signatures';
+
+  @override
+  String get clMockFindingsTitle => 'Findings requiring review';
+
+  @override
+  String clMockFindingNote(String note) {
+    return 'Note: $note';
+  }
+
+  @override
+  String clMockPhotosAttached(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count photos attached',
+      one: '1 photo attached',
+      zero: 'No photos attached',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get clMockSectionGeneral => 'General';
+
+  @override
+  String clMockSectionFindings(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count findings',
+      one: '1 finding',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String clMockSectionPassed(int passed, int total) {
+    return '$passed/$total passed';
+  }
+
+  @override
+  String get clMockSectionComplete => 'Complete';
+
+  @override
+  String clMockSectionAnswered(int answered, int total) {
+    return '$answered/$total answered';
+  }
+
+  @override
+  String get clMockViewAllAnswers => 'View all checklist answers';
+
+  @override
+  String get clMockHideAllAnswers => 'Hide checklist answers';
+
+  @override
+  String get clMockReviewerAction => 'Reviewer action';
+
+  @override
+  String get clMockDecisionNote => 'Decision note';
+
+  @override
+  String get clMockDecisionNoteHint => 'Required when returning for correction';
+
+  @override
+  String get clMockReturnForCorrection => 'Return for correction';
+
+  @override
+  String get clMockApprove => 'Approve';
+
+  @override
+  String get clMockApproveNeeds => 'Sign and enter your name to approve';
+
+  @override
+  String get clMockDecisionRecorded =>
+      'Decision, note, signature and time are recorded.';
+
+  @override
+  String get clMockSavedSignatureApplied =>
+      'Your saved signature is filled in. Approving still needs your press.';
+
+  @override
+  String get clMockProfileVerified => 'Verified account';
+
+  @override
+  String get clMockPendingDrafts => 'Pending drafts';
+
+  @override
+  String get clMockActiveSite => 'Active site';
+
+  @override
+  String get clMockCountryCurrency => 'Country & currency';
+
+  @override
+  String get clMockRolesAccess => 'My roles & access';
+
+  @override
+  String clMockModuleCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count modules',
+      one: '1 module',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get clMockChecklistLanguage => 'Checklist content language';
+
+  @override
+  String get clMockChecklistLanguageCaption => 'Independent from app language';
+
+  @override
+  String get clMockSectionSecurity => 'Security & identity';
+
+  @override
+  String get clMockSavedSignature => 'My saved signature';
+
+  @override
+  String get clMockSignatureNotSaved => 'Not saved';
+
+  @override
+  String get clMockSignatureCaptured => 'Captured';
+
+  @override
+  String clMockSignatureCapturedOn(String date) {
+    return 'Captured · updated $date';
+  }
+
+  @override
+  String get clMockSignatureSheetHint =>
+      'Approval screens fill this in for you. You still press Approve yourself.';
+
+  @override
+  String get clMockSignatureSave => 'Save as my signature';
+
+  @override
+  String get clMockSignatureRemove => 'Remove saved signature';
+
+  @override
+  String get clMockSignatureRemoveTitle => 'Remove your saved signature?';
+
+  @override
+  String get clMockSignatureRemoveMessage =>
+      'Approvals will start with a blank signature box until you save a new one.';
+
+  @override
+  String get clMockSignatureSaveFailed =>
+      'Could not update your signature. Check your connection and try again.';
+
+  @override
+  String get clMockOfflineDrafts => 'Offline drafts';
+
+  @override
+  String clMockDraftsStored(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count stored on this device',
+      one: '1 stored on this device',
+      zero: 'None',
+    );
+    return '$_temp0';
+  }
 }

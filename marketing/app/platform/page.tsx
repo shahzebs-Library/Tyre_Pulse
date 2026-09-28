@@ -8,13 +8,14 @@ import { PageTop } from "@/components/PageTop";
 import { CtaBand } from "@/components/CtaBand";
 import { AssetsWindow } from "@/components/mock/Screens";
 import { JsonLd, alternatesFor, pageBreadcrumb } from "../schema";
+import { OG_IMAGES } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Platform",
+  title: "PMV management platform",
   description:
-    "A complete PMV management platform: fleet and assets, maintenance and workshop, inspections and safety, tyres, accidents, stores, fuel, costs, approvals and integrations in one connected system.",
+    "PMV management platform: fleet and assets, maintenance, inspections, tyres, accidents, stores, fuel, costs and approvals in one connected system.",
   alternates: alternatesFor("/platform"),
-  openGraph: { title: "Platform | Tyre Pulse", description: "All your assets, teams and data in one connected system.", url: "/platform", type: "website" },
+  openGraph: { images: OG_IMAGES, title: "Platform | Tyre Pulse", description: "All your assets, teams and data in one connected system.", url: "/platform", type: "website" },
 };
 
 const SIDE = [

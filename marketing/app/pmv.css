@@ -382,3 +382,5 @@ img.ph { height: auto; aspect-ratio: 4 / 3; }
 .people-art img.art { width: 72%; right: auto; border-radius: 6px; }
 .people-art .phone { right: 0; top: 10px; width: 200px; }
 @media (max-width: 720px) { .people-art img.art { width: 100%; } .people-art .phone { display: none; } }
+.wa-float { position: fixed; right: 18px; bottom: 18px; z-index: 60; width: 56px; height: 56px; border-radius: 50%; background: #1f8f4e; display: grid; place-items: center; box-shadow: 0 10px 24px rgba(0,0,0,.25); }
+.wa-float:hover { background: #17753f; }

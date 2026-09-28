@@ -6,13 +6,14 @@ import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
 import { Photo } from "@/components/art/Photos";
 import { alternatesFor } from "../schema";
+import { OG_IMAGES } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: { absolute: "تاير بالس | إدارة الإطارات والأسطول والورش" },
   description:
     "منصة تاير بالس تربط دورة حياة الإطارات وصيانة الأسطول وإدارة الورش والفحوصات والموافقات والتقارير التنفيذية في نظام واحد.",
   alternates: alternatesFor("/ar"),
-  openGraph: {
+  openGraph: { images: OG_IMAGES,
     title: "تاير بالس | عجلات أذكى. أسطول أقوى.",
     description: "تحكم في كل إطار وافهم كل تكلفة من منصة واحدة.",
     url: "/ar",

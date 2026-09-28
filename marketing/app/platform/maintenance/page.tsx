@@ -6,12 +6,13 @@ import { CtaBand } from "@/components/CtaBand";
 import { PartsLabour, TechAllocation, WorkOrderDetails, WorkOrdersTable } from "@/components/mock/Screens";
 import { Photo } from "@/components/art/Photos";
 import { JsonLd, alternatesFor, pageBreadcrumb } from "../../schema";
+import { OG_IMAGES } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Maintenance and workshop",
   description: "Plan, schedule and manage all maintenance: work orders, preventive maintenance, job cards, technician allocation, service history and parts and labour.",
   alternates: alternatesFor("/platform/maintenance"),
-  openGraph: { title: "Maintenance and workshop | Tyre Pulse", description: "Keep your workshop, teams and spare parts in sync.", url: "/platform/maintenance", type: "website" },
+  openGraph: { images: OG_IMAGES, title: "Maintenance and workshop | Tyre Pulse", description: "Keep your workshop, teams and spare parts in sync.", url: "/platform/maintenance", type: "website" },
 };
 
 export default function MaintenancePage() {

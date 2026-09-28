@@ -80,6 +80,7 @@ function contactForm(fetch) {
     } };
     if (name === 'react/jsx-runtime') return { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) };
     if (name === '@/components/PageFrame') return { PageFrame: 'main' };
+    if (name === '@/lib/site') return { WHATSAPP_URL: null };
     throw new Error(`Unexpected dependency: ${name}`);
   };
   class FormDataStub { entries() { return Object.entries(input); } }

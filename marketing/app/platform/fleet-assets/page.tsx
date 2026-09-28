@@ -6,12 +6,13 @@ import { CtaBand } from "@/components/CtaBand";
 import { AssetHistoryTable, AssetRecord, AssetStats, SampleTag } from "@/components/mock/Screens";
 import { Photo } from "@/components/art/Photos";
 import { JsonLd, alternatesFor, pageBreadcrumb } from "../../schema";
+import { OG_IMAGES } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Fleet and asset management",
   description: "Keep complete records for all your plant, machinery and vehicles: meter readings, utilisation, service history, documents, costs and lifecycle in one place.",
   alternates: alternatesFor("/platform/fleet-assets"),
-  openGraph: { title: "Fleet and asset management | Tyre Pulse", description: "One record per asset, shared by every team.", url: "/platform/fleet-assets", type: "website" },
+  openGraph: { images: OG_IMAGES, title: "Fleet and asset management | Tyre Pulse", description: "One record per asset, shared by every team.", url: "/platform/fleet-assets", type: "website" },
 };
 
 export default function FleetPage() {

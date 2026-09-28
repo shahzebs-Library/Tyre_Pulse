@@ -3,13 +3,14 @@ import { Building2, Bus, Factory, HardHat, Truck, Wrench } from "lucide-react";
 import { PageFrame } from "@/components/PageFrame";
 import { JsonLd, alternatesFor, pageBreadcrumb } from "../schema";
 import { CTA } from "@/components/CTA";
+import { OG_IMAGES } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Industries",
   description:
-    "Tyre Pulse for construction fleets, transport and logistics, ready-mix concrete, heavy equipment rental, workshop networks, and government and enterprise fleets.",
+    "Tyre Pulse for construction, transport and logistics, ready-mix concrete, equipment rental, workshop networks, and government and enterprise fleets.",
   alternates: alternatesFor("/industries"),
-  openGraph: {
+  openGraph: { images: OG_IMAGES,
     title: "Industries | Tyre Pulse",
     description: "One core platform, configured to the locations, asset types, approvals, KPIs and reports each business model needs.",
     url: "/industries",

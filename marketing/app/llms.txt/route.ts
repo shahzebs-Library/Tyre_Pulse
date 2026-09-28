@@ -13,14 +13,18 @@ const iosNote = HAS_IOS_APP
 
 const body = `# Tyre Pulse
 
-> Tyre Pulse is a commercial tyre, fleet, inspection and workshop intelligence platform. It connects tyre lifecycle, fleet maintenance, workshop control, field inspections, approvals and executive reporting in one system for multi-site and multi-country operations. Tagline: Smarter Wheels. Stronger Fleet.
+> Tyre Pulse is a PMV (plant, machinery and vehicles) operations platform. It connects asset records, preventive maintenance, workshop job cards, field inspections, tyre lifecycle, stores and procurement, costs, approvals and reporting in one system for multi-site and multi-country operations.
 
 Tyre Pulse is used by construction fleets, transport and logistics operators, ready-mix concrete plants, heavy equipment rental companies, workshop networks, and government and enterprise fleets. ${PLATFORM_SENTENCE}
 
 ## Pages
 
-- [Home](${SITE_URL}/): What Tyre Pulse does, the six core capability areas, and how field work flows through to executive reporting.
-- [Platform](${SITE_URL}/platform): The platform overview and module pages (fleet and assets, maintenance and workshop, inspections and safety, inventory and reporting), covering tyre and fleet lifecycle, maintenance and workshop, digital inspections, inventory and procurement, approvals and organization, reports and executive intelligence, access and tenant control, and AI and automation.
+- [Home](${SITE_URL}/): What Tyre Pulse does for PMV operations and how a field issue flows from inspection to approval, repair and a closed job.
+- [Platform](${SITE_URL}/platform): Overview of every module: fleet and assets, maintenance and workshop, inspections and safety, tyre lifecycle, accidents and insurance, stores and procurement, fuel, costs and reporting, approvals, integrations.
+- [Fleet and asset management](${SITE_URL}/platform/fleet-assets): Asset records, meter readings and utilisation, service history, documents with expiry reminders, lifecycle from acquisition to disposal.
+- [Maintenance and workshop](${SITE_URL}/platform/maintenance): Work orders, preventive maintenance by hours, kilometres or date, job cards, technician allocation, parts and labour.
+- [Field inspections and safety](${SITE_URL}/platform/inspections): Configurable checklists on the phone, photos and defects, meter readings, actions and work orders, offline mode, digital signatures.
+- [Inventory, procurement and reporting](${SITE_URL}/platform/inventory): Stock by site with reorder levels, purchase requests with approval, suppliers, fleet cost and availability reporting.
 - [Industries](${SITE_URL}/industries): How the platform is configured for construction, transport and logistics, ready-mix concrete, heavy equipment rental, workshop networks, and government and enterprise fleets.
 - [Pricing](${SITE_URL}/pricing): Four plan tiers, Solo, Team, Professional and Enterprise. Pricing is quoted on request and is based on fleet size, users, modules, countries and integration requirements. No public price list is published.
 - [Security](${SITE_URL}/security): Tenant separation, role and location control, privileged access, data protection, auditability and safe integrations.

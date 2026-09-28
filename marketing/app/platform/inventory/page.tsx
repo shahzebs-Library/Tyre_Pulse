@@ -4,12 +4,13 @@ import { PageTop, SubNav } from "@/components/PageTop";
 import { CtaBand } from "@/components/CtaBand";
 import { FleetCostPanel, InventoryTable, PurchaseRequest } from "@/components/mock/Screens";
 import { JsonLd, alternatesFor, pageBreadcrumb } from "../../schema";
+import { OG_IMAGES } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Inventory, procurement and reporting",
   description: "Control inventory, manage purchase requests and suppliers, and get clear visibility of costs, availability and performance across your fleet.",
   alternates: alternatesFor("/platform/inventory"),
-  openGraph: { title: "Inventory, procurement and reporting | Tyre Pulse", description: "Control costs. Keep your fleet moving.", url: "/platform/inventory", type: "website" },
+  openGraph: { images: OG_IMAGES, title: "Inventory, procurement and reporting | Tyre Pulse", description: "Control costs. Keep your fleet moving.", url: "/platform/inventory", type: "website" },
 };
 
 export default function InventoryPage() {

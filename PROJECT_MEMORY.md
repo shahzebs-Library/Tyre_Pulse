@@ -91,6 +91,14 @@ Branch `claude/marketing-pmv-redesign`. marketing/ only; the app is untouched.
   Owner then supplied 3 site photos (technician at a generator x2, engineer with tablet on a Dubai rooftop): a THIRD
   company's logo ("VoiceQuote") was on the vests and was removed by OpenCV inpaint; a baked-in comments panel with
   people's names was cropped off photo 1. RULE: check every supplied photo for other brands' logos before publishing.
+- **SEO/AI/WhatsApp pass:** every page has og:image (`public/og-image.jpg`, 1200x630, via `OG_IMAGES` in lib/site.ts;
+  a page-level `openGraph` REPLACES the layout's, so every page must list `images: OG_IMAGES` or its WhatsApp preview
+  has no picture), descriptions <=160 chars, yellow `app/icon.png` + apple-icon, schema logo `brand/logo-pmv.png`,
+  PMV wording in schema + llms.txt/llms-full.txt (new pages listed). robots.txt already allows GPTBot/ClaudeBot/etc.
+  **WhatsApp:** `WHATSAPP_NUMBER` (lib/site.ts, env `NEXT_PUBLIC_WHATSAPP_NUMBER`) is NULL until the owner gives the real
+  number; then a floating wa.me button, a contact-page link and a schema ContactPoint appear. Never invent a number.
+  **CAVEAT:** SITE_URL defaults to www.tyrepulse.app, which still serves the APP, so og:image/canonical/sitemap URLs
+  resolve to the app host until the domain moves or NEXT_PUBLIC_SITE_URL is set on tyre-pulse-eezl.
   Product screens stay HTML in `components/mock/Screens.tsx` over `lib/sample.ts`, each tagged "Sample data".
 - three.js hero (Hero3D/HeroScene) + three/@react-three/framer-motion deps REMOVED; /ar uses the loader SVG.
 - Verified: build + lint (0 errors) + 8 tests; no horizontal overflow at 320/390/768/1024 on all 11 pages; menus close

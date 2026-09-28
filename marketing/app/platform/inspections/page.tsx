@@ -7,12 +7,13 @@ import { CtaBand } from "@/components/CtaBand";
 import { ConditionCard, DefectCard, MeterCard, OfflineInspectionPhone, SignOffCard } from "@/components/mock/Screens";
 import { Photo } from "@/components/art/Photos";
 import { JsonLd, alternatesFor, pageBreadcrumb } from "../../schema";
+import { OG_IMAGES } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Field inspections and safety",
   description: "Digitise inspections on the phone: configurable checklists, photos and defects, meter readings, actions and work orders, offline mode and digital signatures.",
   alternates: alternatesFor("/platform/inspections"),
-  openGraph: { title: "Field inspections and safety | Tyre Pulse", description: "Inspect anything, anywhere, even offline.", url: "/platform/inspections", type: "website" },
+  openGraph: { images: OG_IMAGES, title: "Field inspections and safety | Tyre Pulse", description: "Inspect anything, anywhere, even offline.", url: "/platform/inspections", type: "website" },
 };
 
 export default function InspectionsPage() {

@@ -14,13 +14,14 @@ import {
   OpsOverview, PartsCard,
 } from "@/components/mock/Screens";
 import { alternatesFor } from "./schema";
+import { OG_IMAGES } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: { absolute: "Tyre Pulse | Complete control of your PMV operations" },
   description:
-    "Connect plant, machinery and vehicle assets with your workshop, field teams and stores in one operational workspace. Work orders, inspections, tyres, parts, costs and approvals.",
+    "Connect plant, machinery and vehicles with your workshop, field teams and stores. Work orders, inspections, tyres, parts, costs and approvals in one place.",
   alternates: alternatesFor("/"),
-  openGraph: {
+  openGraph: { images: OG_IMAGES,
     title: "Tyre Pulse | Complete control of your PMV operations",
     description: "Assets, workshop, field teams and stores in one operational workspace.",
     url: "/",

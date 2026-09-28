@@ -3,13 +3,14 @@ import Link from "next/link";
 import { CheckCircle2 } from "lucide-react";
 import { PageFrame } from "@/components/PageFrame";
 import { JsonLd, alternatesFor, pageBreadcrumb } from "../schema";
+import { OG_IMAGES } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Pricing",
   description:
-    "Tyre Pulse plans for solo fleet owners, teams, professional operators and enterprises. Pricing is quoted on request, based on fleet size, users, modules, countries and integrations.",
+    "Tyre Pulse plans for solo owners, teams, professional operators and enterprises. Quoted on request by fleet size, users, modules, countries and integrations.",
   alternates: alternatesFor("/pricing"),
-  openGraph: {
+  openGraph: { images: OG_IMAGES,
     title: "Pricing | Tyre Pulse",
     description: "Start with the control you need and expand when you are ready. Pricing is quoted per operation, never a published one-size-fits-all figure.",
     url: "/pricing",

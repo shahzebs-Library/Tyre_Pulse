@@ -163,6 +163,12 @@ abstract final class SupabaseTables {
   /// scan did not surface it.
   static const String engineHoursLogs = 'engine_hours_logs';
 
+  /// Request For Repair (RFR). Created by V608 (`repair_requests`,
+  /// `next_rfr_no`, `convert_repair_request_to_job_card`) and verified live on
+  /// 2026-09-28. The Kotlin rebuild declared this name before the table
+  /// existed, which is why it used to sit in [knownFabrications].
+  static const String repairRequests = 'repair_requests';
+
   /// Every verified table name, for a drift test.
   ///
   /// A repository that needs a name not in this set is describing an object
@@ -210,6 +216,7 @@ abstract final class SupabaseTables {
     accidentRepairOrders,
     accidentCaseCommunications,
     engineHoursLogs,
+    repairRequests,
   };
 
   /// Names that were declared by the Kotlin rebuild and DO NOT EXIST.
@@ -224,7 +231,6 @@ abstract final class SupabaseTables {
     'lookup_reasons',
     'tyre_history',
     'workshop_events',
-    'repair_requests',
   };
 }
 
@@ -248,6 +254,11 @@ abstract final class SupabaseRpcs {
   /// Clears the caller's OWN counter. AUTHENTICATED only. That asymmetry is
   /// what makes the lockout real: someone who cannot sign in cannot reset it.
   static const String resetLoginAttempts = 'reset_login_attempts';
+
+  /// Anon-safe public subset of `system_config` (never secrets). Read before
+  /// sign-in for presentation such as the administrator-chosen login artwork
+  /// (`mobile_login_hero`).
+  static const String getPublicConfig = 'get_public_config';
 
   /// Asked AFTER a password sign-in succeeds: does this user's organisation
   /// require SSO (`sso_connections.enforce_sso`)? Returns jsonb

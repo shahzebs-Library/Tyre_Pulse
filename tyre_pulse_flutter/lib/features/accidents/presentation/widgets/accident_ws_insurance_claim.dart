@@ -9,6 +9,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
@@ -101,9 +102,9 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
       error: (Object error, StackTrace _) => TpStateView(
         icon: Icons.cloud_off_outlined,
         tone: TpStatus.critical,
-        title: 'The claim could not be loaded',
-        message: accidentWsErrorText(error),
-        primaryActionLabel: 'Retry',
+        title: AppLocalizations.of(context).accClaimLoadFailed,
+        message: accidentWsErrorText(context, error),
+        primaryActionLabel: AppLocalizations.of(context).actionRetry,
         onPrimaryAction: () =>
             ref.invalidate(accidentClaimPackageProvider(_record.id)),
       ),
@@ -112,6 +113,7 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
   }
 
   Widget _body(BuildContext context, AccidentClaimPackage package) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final String? currency = ref.watch(activeCurrencyProvider);
     final ClaimPackageStatus docs =
         ClaimPackageStatus.fromEvidence(package.evidence);
@@ -137,12 +139,12 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
         .where((AccidentWorkstream w) => w.key == 'insurance')
         .firstOrNull;
     final String liability = package.liabilityType == null
-        ? accidentWsText(_record.liableParty)
+        ? accidentWsText(context, _record.liableParty)
         : faultTiles
                 .where((FaultTile t) => t.key == package.liabilityType)
                 .firstOrNull
                 ?.label ??
-            accidentWsText(package.liabilityType);
+            accidentWsText(context, package.liabilityType);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -153,10 +155,10 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
         ),
         const SizedBox(height: TpSpace.md),
         if (package.repairRoute == 'external') ...<Widget>[
-          const AccidentWsWarning(
-            key: Key('accident.ws.insurance.banner'),
+          AccidentWsWarning(
+            key: const Key('accident.ws.insurance.banner'),
             tone: TpStatus.info,
-            message: 'External repair assessment',
+            message: l10n.accClaimExternalRepairBanner,
           ),
           const SizedBox(height: TpSpace.md),
         ],
@@ -167,7 +169,7 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
           key: _packageKey,
           child: AccidentWsSection(
             number: 1,
-            title: 'Claim document package',
+            title: l10n.accClaimDocumentPackage,
             trailing: Text(
               docs.progressLabel,
               key: const Key('accident.ws.insurance.package.progress'),
@@ -185,9 +187,8 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
                 ),
               const SizedBox(height: TpSpace.sm),
               if (!docs.isComplete)
-                const AccidentWsWarning(
-                  message: 'Claim registration unlocks when all required '
-                      'documents are complete.',
+                AccidentWsWarning(
+                  message: l10n.accClaimRegistrationLocked,
                 ),
               const SizedBox(height: TpSpace.sm),
               Wrap(
@@ -196,13 +197,15 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
                 children: <Widget>[
                   for (final ClaimDocumentStatus row in docs.missingRequired)
                     TpButton.secondary(
-                      label: 'Request ${row.doc.label.toLowerCase()}',
+                      label: l10n.accRequestDocument(
+                        row.doc.label.toLowerCase(),
+                      ),
                       icon: Icons.forward_to_inbox_outlined,
                       isCompact: true,
                       onPressed: _busy ? null : () => _request(row),
                     ),
                   TpButton.secondary(
-                    label: 'Upload document',
+                    label: l10n.accUploadDocument,
                     icon: Icons.upload_file_outlined,
                     isCompact: true,
                     onPressed: _busy ? null : () => _upload(docs),
@@ -217,53 +220,64 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
         // 2 Claim registration
         AccidentWsSection(
           number: 2,
-          title: 'Claim registration',
+          title: l10n.accClaimRegistration,
           children: <Widget>[
             if (registered) ...<Widget>[
               AccidentWsFact(
-                label: 'Insurer',
-                value: accidentWsText(claim.insurer ?? _record.insurer),
+                label: l10n.accInsurer,
+                value:
+                    accidentWsText(context, claim.insurer ?? _record.insurer),
               ),
               AccidentWsFact(
-                label: 'Policy no.',
-                value: accidentWsText(claim.policyNo ?? _record.policyNo),
+                label: l10n.accPolicyNo,
+                value: accidentWsText(
+                  context,
+                  claim.policyNo ?? _record.policyNo,
+                ),
               ),
             ] else ...<Widget>[
-              TpInput(label: 'Insurer', controller: _insurer, isRequired: true),
+              TpInput(
+                label: l10n.accInsurer,
+                controller: _insurer,
+                isRequired: true,
+              ),
               const SizedBox(height: TpSpace.sm),
               TpInput(
-                label: 'Policy no.',
+                label: l10n.accPolicyNo,
                 controller: _policyNo,
                 isRequired: true,
               ),
               const SizedBox(height: TpSpace.sm),
             ],
             AccidentWsFact(
-              label: 'Claim number',
+              label: l10n.accClaimNumber,
               value: registered
-                  ? accidentWsText(claim.claimNo ?? _record.insuranceClaimNo)
-                  : 'Auto-generated after registration',
+                  ? accidentWsText(
+                      context,
+                      claim.claimNo ?? _record.insuranceClaimNo,
+                    )
+                  : l10n.accClaimNumberAuto,
             ),
-            AccidentWsFact(label: 'Liability', value: liability),
+            AccidentWsFact(label: l10n.accLiability, value: liability),
             AccidentWsFact(
-              label: 'GCC liability %',
+              label: l10n.accGccLiabilityPct,
               value: package.ourLiabilityPct == null
-                  ? accidentWsNotSet
+                  ? accidentWsNotSet(context)
                   : '${package.ourLiabilityPct}%',
             ),
             if (registered) ...<Widget>[
               AccidentWsFact(
-                label: 'Claim amount',
+                label: l10n.accClaimAmount,
                 value: accidentWsMoney(context, claimAmount, currency),
               ),
               AccidentWsFact(
-                label: 'Deductible',
+                label: l10n.accDeductible,
                 value: accidentWsMoney(context, deductible, currency),
               ),
             ] else ...<Widget>[
               const SizedBox(height: TpSpace.sm),
               TpInput(
-                label: 'Claim amount',
+                label: l10n.accClaimAmount,
                 controller: _claimAmount,
                 isRequired: true,
                 keyboardType:
@@ -272,7 +286,7 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
               ),
               const SizedBox(height: TpSpace.sm),
               TpInput(
-                label: 'Deductible',
+                label: l10n.accDeductible,
                 controller: _deductible,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
@@ -281,7 +295,7 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
               const SizedBox(height: TpSpace.sm),
             ],
             AccidentWsFact(
-              label: 'Net claimable',
+              label: l10n.accNetClaimable,
               value: accidentWsMoney(
                 context,
                 netClaimable(claimAmount, deductible),
@@ -292,9 +306,8 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
             const SizedBox(height: TpSpace.sm),
             TpButton.primary(
               key: const Key('accident.ws.insurance.register'),
-              label: registered
-                  ? 'Claim registered with insurer'
-                  : 'Register claim with insurer',
+              label:
+                  registered ? l10n.accClaimRegistered : l10n.accRegisterClaim,
               icon: Icons.verified_outlined,
               isFullWidth: true,
               isBusy: _busy,
@@ -305,7 +318,7 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
               Padding(
                 padding: const EdgeInsets.only(top: TpSpace.xs),
                 child: Text(
-                  'Enable once all required documents are complete.',
+                  l10n.accClaimEnableWhenComplete,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: TpPalette.of(context).textSecondary,
                       ),
@@ -318,7 +331,7 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
         // 3 Payment and recovery
         AccidentWsSection(
           number: 3,
-          title: 'Payment and recovery',
+          title: l10n.accPaymentAndRecovery,
           trailing: TpStatusChip(
             status: registered ? TpStatus.info : TpStatus.unknown,
             label: claimStatusLabel(
@@ -329,15 +342,15 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
           ),
           children: <Widget>[
             AccidentWsFact(
-              label: 'Approved amount',
+              label: l10n.accApprovedAmount,
               value: accidentWsMoney(context, approved, currency),
             ),
             AccidentWsFact(
-              label: 'Recovered amount',
+              label: l10n.accRecoveredAmount,
               value: accidentWsMoney(context, recovered, currency),
             ),
             AccidentWsFact(
-              label: 'Outstanding',
+              label: l10n.accOutstanding,
               value: accidentWsMoney(
                 context,
                 outstandingAmount(approved, recovered),
@@ -346,13 +359,14 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
               emphasis: true,
             ),
             AccidentWsFact(
-              label: 'Recovery source',
+              label: l10n.accRecoverySource,
               value: accidentWsText(
+                context,
                 lastRecovery?.source ?? _record.recoveryStatus,
               ),
             ),
             AccidentWsFact(
-              label: 'Last updated',
+              label: l10n.accLastUpdated,
               value: accidentWsDateTime(
                 context,
                 lastRecovery?.recoveredAt ?? stream?.updatedAt,
@@ -361,7 +375,7 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
             const SizedBox(height: TpSpace.sm),
             if (_recoveryOpen) ...<Widget>[
               TpInput(
-                label: 'Recovered amount',
+                label: l10n.accRecoveredAmount,
                 controller: _recoveryAmount,
                 isRequired: true,
                 keyboardType:
@@ -369,17 +383,17 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
               ),
               const SizedBox(height: TpSpace.sm),
               TpInput(
-                label: 'Recovery source',
+                label: l10n.accRecoverySource,
                 controller: _recoverySource,
                 isRequired: true,
-                hint: 'Insurer, third party, driver',
+                hint: l10n.accRecoverySourceHint,
               ),
               const SizedBox(height: TpSpace.sm),
               Row(
                 children: <Widget>[
                   Expanded(
                     child: TpButton.secondary(
-                      label: 'Cancel',
+                      label: l10n.actionCancel,
                       onPressed: _busy
                           ? null
                           : () => setState(() => _recoveryOpen = false),
@@ -388,7 +402,7 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
                   const SizedBox(width: TpSpace.sm),
                   Expanded(
                     child: TpButton.primary(
-                      label: 'Save recovery',
+                      label: l10n.accSaveRecovery,
                       isBusy: _busy,
                       onPressed: _busy || claim == null
                           ? null
@@ -400,7 +414,7 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
             ] else
               TpButton.secondary(
                 key: const Key('accident.ws.insurance.updateRecovery'),
-                label: 'Update recovery amount',
+                label: l10n.accUpdateRecovery,
                 icon: Icons.edit_outlined,
                 isFullWidth: true,
                 onPressed: registered && !_busy
@@ -411,17 +425,16 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
               Padding(
                 padding: const EdgeInsets.only(top: TpSpace.xs),
                 child: Text(
-                  'Register the claim first.',
+                  l10n.accRegisterClaimFirst,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: TpPalette.of(context).textSecondary,
                       ),
                 ),
               ),
             const SizedBox(height: TpSpace.sm),
-            const AccidentWsWarning(
+            AccidentWsWarning(
               tone: TpStatus.info,
-              message: 'Recovery amounts remain editable after operational '
-                  'case closure. Every adjustment is timestamped and audited.',
+              message: l10n.accRecoveryEditableNote,
             ),
           ],
         ),
@@ -430,7 +443,7 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
         // 4 After registration notify
         AccidentWsSection(
           number: 4,
-          title: 'After registration notify',
+          title: l10n.accAfterRegistrationNotify,
           children: <Widget>[
             AccidentWsNotifyChips(
               snapshot: widget.snapshot,
@@ -443,8 +456,7 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
             ),
             const SizedBox(height: TpSpace.sm),
             Text(
-              'Notification includes the claim number, document status, '
-              'claim amount and next action.',
+              l10n.accClaimNotificationIncludes,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: TpPalette.of(context).textSecondary,
                   ),
@@ -457,7 +469,7 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
             Expanded(
               child: TpButton.secondary(
                 key: const Key('accident.ws.insurance.saveDraft'),
-                label: 'Save claim draft',
+                label: l10n.accSaveClaimDraft,
                 icon: Icons.save_outlined,
                 onPressed: registered || _busy ? null : _saveDraft,
               ),
@@ -466,7 +478,7 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
             Expanded(
               child: TpButton.primary(
                 key: const Key('accident.ws.insurance.completeDocuments'),
-                label: 'Complete documents',
+                label: l10n.accCompleteDocuments,
                 icon: Icons.checklist_rounded,
                 onPressed: docs.isComplete ? null : _scrollToPackage,
               ),
@@ -484,8 +496,7 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
             const SizedBox(width: TpSpace.xs),
             Expanded(
               child: Text(
-                '${_commandCenterLabel()} is monitoring SLA and missing '
-                'documents.',
+                l10n.accCommandCenterMonitoring(_commandCenterLabel(l10n)),
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: TpPalette.of(context).textSecondary,
                     ),
@@ -497,12 +508,12 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
     );
   }
 
-  String _commandCenterLabel() {
+  String _commandCenterLabel(AppLocalizations l10n) {
     final NotifyRole role =
         notifyRoles.firstWhere((NotifyRole r) => r.key == 'command_center');
     return role.roles.isEmpty
         ? role.label
-        : '${role.roles.first} (Command Center)';
+        : l10n.accCommandCenterRole(role.roles.first);
   }
 
   void _scrollToPackage() {
@@ -522,7 +533,7 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
       'claim_amount': _claimAmount.text,
       'deductible': _deductible.text,
     };
-    _snack('Claim draft saved on this device. Nothing was sent.');
+    _snack(AppLocalizations.of(context).accClaimDraftSaved);
   }
 
   Future<void> _run(Future<void> Function() action) async {
@@ -531,27 +542,31 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
       await action();
       ref.invalidate(accidentClaimPackageProvider(_record.id));
     } on Object catch (error) {
-      _snack(accidentWsErrorText(error));
+      if (mounted) _snack(accidentWsErrorText(context, error));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
-  Future<void> _request(ClaimDocumentStatus row) => _run(() async {
-        final String toParty =
-            row.doc.key == 'workshop_assessment_pdf' ? 'workshop' : 'fleet';
-        await ref.read(accidentClaimPackageRepositoryProvider).requestDocument(
-              accidentId: _record.id,
-              requirementKey: row.doc.key,
-              documentLabel: row.doc.label,
-              toParty: toParty,
-              country: ref.read(workspaceContextProvider)?.activeCountry,
-              site: _record.site,
-            );
-        _snack('Request for ${row.doc.label} logged on the case.');
-      });
+  Future<void> _request(ClaimDocumentStatus row) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    return _run(() async {
+      final String toParty =
+          row.doc.key == 'workshop_assessment_pdf' ? 'workshop' : 'fleet';
+      await ref.read(accidentClaimPackageRepositoryProvider).requestDocument(
+            accidentId: _record.id,
+            requirementKey: row.doc.key,
+            documentLabel: row.doc.label,
+            toParty: toParty,
+            country: ref.read(workspaceContextProvider)?.activeCountry,
+            site: _record.site,
+          );
+      _snack(l10n.accDocumentRequestLogged(row.doc.label));
+    });
+  }
 
   Future<void> _upload(ClaimPackageStatus docs) async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final VocabItem? doc = await showModalBottomSheet<VocabItem>(
       context: context,
       builder: (BuildContext sheet) => SafeArea(
@@ -561,7 +576,7 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
             Padding(
               padding: const EdgeInsets.all(TpSpace.md),
               child: Text(
-                'Which document is this?',
+                l10n.accWhichDocument,
                 style: Theme.of(sheet).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w800,
                     ),
@@ -600,11 +615,12 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
             country: ref.read(workspaceContextProvider)?.activeCountry,
             site: _record.site,
           );
-      _snack('${doc.label} uploaded to the claim package.');
+      _snack(l10n.accDocumentUploaded(doc.label));
     });
   }
 
   Future<void> _register(BuildContext context) async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final num? amount = num.tryParse(_claimAmount.text.trim());
     final num? deductible = _deductible.text.trim().isEmpty
         ? null
@@ -612,7 +628,7 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
     if (_insurer.text.trim().isEmpty ||
         _policyNo.text.trim().isEmpty ||
         amount == null) {
-      _snack('Enter the insurer, policy number and claim amount first.');
+      _snack(l10n.accClaimRegisterMissing);
       return;
     }
     final String claimNo = _claimNo.text.trim().isEmpty
@@ -621,20 +637,22 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
     final bool? ok = await showDialog<bool>(
       context: context,
       builder: (BuildContext dialog) => AlertDialog(
-        title: const Text('Register claim with insurer'),
+        title: Text(l10n.accRegisterClaim),
         content: Text(
-          'Claim $claimNo for ${_insurer.text.trim()} under policy '
-          '${_policyNo.text.trim()} will be registered on the case. '
-          'This cannot be undone from the app.',
+          l10n.accRegisterClaimConfirm(
+            claimNo,
+            _insurer.text.trim(),
+            _policyNo.text.trim(),
+          ),
         ),
         actions: <Widget>[
           TextButton(
             onPressed: () => Navigator.of(dialog).pop(false),
-            child: const Text('Cancel'),
+            child: Text(l10n.actionCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.of(dialog).pop(true),
-            child: const Text('Register'),
+            child: Text(l10n.accRegister),
           ),
         ],
       ),
@@ -650,14 +668,15 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
             deductible: deductible,
           );
       _claimDrafts.remove(_record.id);
-      _snack('Claim $claimNo registered with the insurer.');
+      _snack(l10n.accClaimRegisteredSnack(claimNo));
     });
   }
 
   Future<void> _saveRecovery(AccidentClaim claim) async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final num? amount = num.tryParse(_recoveryAmount.text.trim());
     if (amount == null || _recoverySource.text.trim().isEmpty) {
-      _snack('Enter the recovered amount and its source.');
+      _snack(l10n.accRecoveryMissing);
       return;
     }
     await _run(() async {
@@ -671,7 +690,7 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
       _recoveryAmount.clear();
       _recoverySource.clear();
       if (mounted) setState(() => _recoveryOpen = false);
-      _snack('Recovery recorded.');
+      _snack(l10n.accRecoveryRecorded);
     });
   }
 
@@ -712,7 +731,10 @@ class _DocumentRow extends StatelessWidget {
           const SizedBox(width: TpSpace.sm),
           Expanded(
             child: Text(
-              row.doc.required ? row.doc.label : '${row.doc.label} (Optional)',
+              row.doc.required
+                  ? row.doc.label
+                  : AppLocalizations.of(context)
+                      .accOptionalSuffix(row.doc.label),
             ),
           ),
           TpStatusChip(
@@ -726,7 +748,8 @@ class _DocumentRow extends StatelessWidget {
           ),
           if (onRequest != null)
             IconButton(
-              tooltip: 'Request ${row.doc.label}',
+              tooltip: AppLocalizations.of(context)
+                  .accRequestDocument(row.doc.label),
               onPressed: onRequest,
               icon: const Icon(Icons.forward_to_inbox_outlined),
             ),

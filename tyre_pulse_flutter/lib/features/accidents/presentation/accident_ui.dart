@@ -29,6 +29,11 @@ TpStatus accidentTone(String? token) {
   final String value = token?.trim().toLowerCase() ?? '';
   if (value.contains('fatal') ||
       value.contains('severe') ||
+      // The Minor / Moderate / Major ladder: `major` and the legacy
+      // `total loss` fold onto the same critical tone as `severe`.
+      value == 'major' ||
+      value.contains('total loss') ||
+      value.contains('total_loss') ||
       value.contains('reject') ||
       value.contains('overdue')) {
     return TpStatus.critical;
@@ -66,83 +71,6 @@ String formatAccidentIncidentDate(
   final String date = DateFormat('d MMM y', locale).format(parsed);
   if (!includeTime) return date;
   return '$date • ${DateFormat.Hm(locale).format(parsed)}';
-}
-
-class AccidentHero extends StatelessWidget {
-  const AccidentHero({
-    required this.eyebrow,
-    required this.title,
-    required this.message,
-    required this.icon,
-    this.trailing,
-    super.key,
-  });
-  final String eyebrow;
-  final String title;
-  final String message;
-  final IconData icon;
-  final Widget? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    final TpPalette palette = TpPalette.of(context);
-    return Semantics(
-      container: true,
-      header: true,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: palette.info.soft,
-          borderRadius: BorderRadius.circular(TpRadius.xl),
-          border: Border.all(color: palette.info.base),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(TpSpace.xl),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  color: palette.info.base,
-                  borderRadius: BorderRadius.circular(TpRadius.md),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(TpSpace.md),
-                  child: Icon(icon, color: palette.info.onBase),
-                ),
-              ),
-              const SizedBox(width: TpSpace.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      eyebrow.toUpperCase(),
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: palette.info.onSoft,
-                            letterSpacing: 1.2,
-                            fontWeight: FontWeight.w800,
-                          ),
-                    ),
-                    const SizedBox(height: TpSpace.xs),
-                    Text(title, style: Theme.of(context).textTheme.titleLarge),
-                    const SizedBox(height: TpSpace.xs),
-                    Text(
-                      message,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                  ],
-                ),
-              ),
-              if (trailing != null) ...<Widget>[
-                const SizedBox(width: TpSpace.sm),
-                trailing!,
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class AccidentSection extends StatelessWidget {

@@ -67,6 +67,7 @@ import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
 import 'package:tyre_pulse/features/assets/presentation/widgets/vehicle_multiview_board.dart';
+import 'package:tyre_pulse/features/inspections/domain/inspection_draft_summary.dart';
 import 'package:tyre_pulse/features/report_issue/presentation/report_issue_copy.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_diagram_layouts.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/vehicle_tyre_diagram.dart';
@@ -102,6 +103,9 @@ class _VehicleDetailBody extends ConsumerWidget {
     );
 
     return TpScaffold(
+      // A softly tinted canvas so the white hero, metric and detail cards
+      // carry the mock's depth.
+      backgroundColor: TpPalette.of(context).surfaceAlt,
       appBar: TpAppBar(
         title: l10n.vehiclesDetailSubtitle,
         onBack: () => Navigator.of(context).maybePop(),
@@ -183,10 +187,16 @@ abstract final class VehicleDetailScreenKeys {
   static const Key tyresTab = Key('vehicle_detail.tab.tyres');
   static const Key historyTab = Key('vehicle_detail.tab.history');
   static const Key tyreMap = Key('vehicle_detail.tyre_map');
+  static const Key tyreMapNotRecorded =
+      Key('vehicle_detail.tyre_map.not_recorded');
   static const Key details = Key('vehicle_detail.details');
   static const Key reportIssue = Key('vehicle_detail.report_issue');
   static const Key createWorkOrder = Key('vehicle_detail.create_work_order');
   static const Key multiViewBoard = Key('vehicle_detail.multi_view_board');
+  static const Key hero = Key('vehicle_detail.hero');
+  static const Key heroPhoto = Key('vehicle_detail.hero_photo');
+  static const Key inspectNow = Key('vehicle_detail.inspect_now');
+  static const Key draftReadiness = Key('vehicle_detail.draft_readiness');
 }
 
 enum _AssetDetailTab { overview, tyres, history }
@@ -213,8 +223,6 @@ class _DetailViewState extends ConsumerState<_DetailView> {
 
   @override
   Widget build(BuildContext context) {
-    final TpPalette palette = TpPalette.of(context);
-    final TextTheme text = Theme.of(context).textTheme;
     final String? photo = vehiclePhotoAsset(asset);
     final String? assetCode = _present(asset.assetNo);
     final String? displayStatus =
@@ -225,18 +233,39 @@ class _DetailViewState extends ConsumerState<_DetailView> {
     final bool canCreateWorkOrder = ref.watch(
       canAccessModuleProvider(ModuleKey.workorders),
     );
+    // The same module gate every other "start an inspection" entry point
+    // uses (Home, Checklists, PM). Without it the action is not offered at
+    // all - a button that would only be refused by the route guard is a
+    // control that does nothing (AGENTS.md rule 7).
+    final bool canInspect = ref.watch(
+      canAccessModuleProvider(ModuleKey.inspect),
+    );
+    // A readiness ring is shown ONLY for a real, on-device draft of this
+    // asset. Someone who cannot inspect cannot own one, so the draft store
+    // is not even read for them. Loading and a failed local read both
+    // render no ring: the ring is a supplementary resume hint, and its
+    // absence claims nothing, whereas a guessed 0% would.
+    final InspectionDraftSummary? draft = canInspect && assetCode != null
+        ? switch (ref.watch(vehicleInspectionDraftProvider(assetCode))) {
+            AsyncData<InspectionDraftSummary?>(:final value) => value,
+            _ => null,
+          }
+        : null;
     final List<(String, String?)> fields = _assetFields();
-    final List<({String label, String value})> metrics = <({
+    final List<({IconData icon, String label, String value})> metrics = <({
+      IconData icon,
       String label,
       String value,
     })>[
       (
+        icon: Icons.speed_rounded,
         label: l10n.vehiclesFieldCurrentKm,
         value: asset.currentKm == null
             ? l10n.valueNotMeasured
             : '${formatVehicleOdometer(asset.currentKm!)} km',
       ),
       (
+        icon: Icons.tag_rounded,
         label: l10n.vehiclesFieldFleetNo,
         value: _present(asset.fleetNumber) ?? l10n.valueNotMeasured,
       ),
@@ -263,84 +292,15 @@ class _DetailViewState extends ConsumerState<_DetailView> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: <Widget>[
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: <Widget>[
-                              Container(
-                                width: 146,
-                                height: 104,
-                                clipBehavior: Clip.antiAlias,
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(
-                                  color: palette.surfaceAlt,
-                                  borderRadius:
-                                      BorderRadius.circular(TpRadius.lg),
-                                ),
-                                child: photo == null
-                                    ? Icon(
-                                        vehicleFallbackIcon(asset),
-                                        size: 58,
-                                        color: palette.primary,
-                                      )
-                                    : Image.asset(
-                                        photo,
-                                        width: 136,
-                                        height: 94,
-                                        fit: BoxFit.contain,
-                                        filterQuality: FilterQuality.high,
-                                        semanticLabel: asset.displayIdentity,
-                                      ),
-                              ),
-                              const SizedBox(width: TpSpace.lg),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: <Widget>[
-                                    TpIdentifierText(
-                                      asset.displayIdentity ??
-                                          l10n.vehiclesUnknownAsset,
-                                      style: text.headlineSmall,
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Row(
-                                      children: <Widget>[
-                                        if (_present(asset.vehicleType) != null)
-                                          Flexible(
-                                            child: Text(
-                                              asset.vehicleType!.trim(),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: text.bodyMedium,
-                                            ),
-                                          ),
-                                        if (_present(asset.vehicleType) !=
-                                                null &&
-                                            _present(asset.status) != null)
-                                          const SizedBox(width: TpSpace.sm),
-                                        if (displayStatus != null)
-                                          TpStatusChip(
-                                            status: vehicleStatusTone(
-                                              displayStatus,
-                                            ),
-                                            label: displayStatus,
-                                            isCompact: true,
-                                          ),
-                                      ],
-                                    ),
-                                    if (_present(asset.site) !=
-                                        null) ...<Widget>[
-                                      const SizedBox(height: TpSpace.xs),
-                                      Text(
-                                        asset.site!.trim(),
-                                        style: text.labelMedium?.copyWith(
-                                          color: palette.textSecondary,
-                                        ),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ),
-                            ],
+                          _AssetHeroCard(
+                            asset: asset,
+                            photo: photo,
+                            status: displayStatus,
+                            draft: draft,
+                            l10n: l10n,
+                            onInspect: canInspect && assetCode != null
+                                ? () => _startInspection(context, assetCode)
+                                : null,
                           ),
                           const SizedBox(height: TpSpace.md),
                           _AssetMetricGrid(metrics: metrics),
@@ -387,6 +347,10 @@ class _DetailViewState extends ConsumerState<_DetailView> {
                 child: _StickyAssetActions(
                   reportLabel: ReportIssueCopy.of(context)('title'),
                   workOrderLabel: l10n.workOrderNewTitle,
+                  // One primary action per view (TpButtonVariant.primary's
+                  // own rule): when "Start inspection" is offered in the
+                  // hero, the work-order action steps down to secondary.
+                  workOrderIsPrimary: !canInspect,
                   onReportIssue:
                       canReportIssue ? () => _reportIssue(context) : null,
                   onCreateWorkOrder: canCreateWorkOrder
@@ -436,6 +400,22 @@ class _DetailViewState extends ConsumerState<_DetailView> {
           (l10n.vehiclesFieldOperationalStatus, asset.opsStatus),
       ];
 
+  /// Opens the inspection capture form already pointed at THIS asset.
+  ///
+  /// `context.go`, the same navigation Home and serial search use for
+  /// [NewInspectionRoute]: the form lives on the Inspect branch, and the
+  /// wizard keys its draft by user + asset, so an existing draft for this
+  /// asset resumes rather than starting over.
+  void _startInspection(BuildContext context, String assetCode) {
+    final String? site = _present(asset.site);
+    context.go(
+      NewInspectionRoute(
+        assetNo: AssetNo(assetCode),
+        siteName: site == null ? null : SiteName(site),
+      ).location,
+    );
+  }
+
   void _reportIssue(BuildContext context) {
     final String? code = asset.assetNo;
     if (code == null || code.trim().isEmpty) return;
@@ -464,10 +444,400 @@ class _DetailViewState extends ConsumerState<_DetailView> {
   }
 }
 
+/// The single identity card at the top of the asset screen, composed after
+/// the owner-approved asset mock: class pill, a large asset code, make and
+/// model, site, and a large class illustration on the trailing side.
+///
+/// Every value here is a real `vehicle_fleet` field. The mock's "Online"
+/// badge and its Good/Attention tyre rollup have no source on this screen
+/// and are deliberately NOT drawn; the real operational status chip takes
+/// the badge's place instead. The readiness ring appears only when [draft]
+/// is a genuine on-device inspection draft of this asset.
+class _AssetHeroCard extends StatelessWidget {
+  const _AssetHeroCard({
+    required this.asset,
+    required this.photo,
+    required this.status,
+    required this.draft,
+    required this.l10n,
+    required this.onInspect,
+  });
+
+  final VehicleAsset asset;
+  final String? photo;
+  final String? status;
+  final InspectionDraftSummary? draft;
+  final AppLocalizations l10n;
+
+  /// Null when the user may not inspect (or the row has no asset code) -
+  /// the action is then not offered at all rather than shown disabled.
+  final VoidCallback? onInspect;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final TextTheme text = Theme.of(context).textTheme;
+    final String? vehicleType = _clean(asset.vehicleType);
+    final String? makeModel = _joinDot(<String?>[asset.make, asset.model]);
+    final String? site = _clean(asset.site);
+    final InspectionDraftSummary? liveDraft = draft;
+
+    return Container(
+      key: VehicleDetailScreenKeys.hero,
+      padding: const EdgeInsets.all(TpSpace.lg),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(TpRadius.xl),
+        border: Border.all(color: palette.border),
+        gradient: LinearGradient(
+          begin: AlignmentDirectional.topStart,
+          end: AlignmentDirectional.bottomEnd,
+          colors: <Color>[palette.surface, palette.surface, palette.surfaceAlt],
+          stops: const <double>[0, 0.45, 1],
+        ),
+        boxShadow: <BoxShadow>[_softLift(palette)],
+      ),
+      child: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          final double proportional = constraints.maxWidth * 0.5;
+          final double photoWidth = proportional < 120
+              ? 120
+              : (proportional > 300 ? 300 : proportional);
+          final double photoHeight = photoWidth * 0.9;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        if (vehicleType != null || status != null)
+                          Wrap(
+                            spacing: TpSpace.sm,
+                            runSpacing: TpSpace.xs,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: <Widget>[
+                              if (vehicleType != null)
+                                _ClassPill(label: vehicleType),
+                              if (status != null)
+                                TpStatusChip(
+                                  status: vehicleStatusTone(status),
+                                  label: status,
+                                  isCompact: true,
+                                ),
+                            ],
+                          ),
+                        const SizedBox(height: TpSpace.md),
+                        TpIdentifierText(
+                          asset.displayIdentity ?? l10n.vehiclesUnknownAsset,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.headlineMedium?.copyWith(
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -0.5,
+                            color: palette.text,
+                          ),
+                        ),
+                        if (makeModel != null) ...<Widget>[
+                          const SizedBox(height: TpSpace.xs),
+                          Text(
+                            makeModel,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: text.bodyMedium?.copyWith(
+                              color: palette.textSecondary,
+                            ),
+                          ),
+                        ],
+                        if (site != null) ...<Widget>[
+                          const SizedBox(height: TpSpace.sm),
+                          Row(
+                            children: <Widget>[
+                              Icon(
+                                Icons.location_on_outlined,
+                                size: TpSizing.iconSm,
+                                color: palette.textSecondary,
+                              ),
+                              const SizedBox(width: TpSpace.xs),
+                              Flexible(
+                                child: Text(
+                                  site,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: text.labelMedium?.copyWith(
+                                    color: palette.textSecondary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                        if (liveDraft != null &&
+                            liveDraft.total > 0) ...<Widget>[
+                          const SizedBox(height: TpSpace.lg),
+                          _DraftReadiness(draft: liveDraft, l10n: l10n),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: TpSpace.md),
+                  _HeroPhoto(
+                    asset: asset,
+                    photo: photo,
+                    width: photoWidth,
+                    height: photoHeight,
+                  ),
+                ],
+              ),
+              if (onInspect != null) ...<Widget>[
+                const SizedBox(height: TpSpace.lg),
+                _PrimaryLift(
+                  child: TpButton.primary(
+                    key: VehicleDetailScreenKeys.inspectNow,
+                    label: l10n.vehiclesInspectNow,
+                    icon: Icons.fact_check_outlined,
+                    isFullWidth: true,
+                    onPressed: onInspect,
+                  ),
+                ),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  static String? _clean(String? value) {
+    final String trimmed = value?.trim() ?? '';
+    return trimmed.isEmpty ? null : trimmed;
+  }
+
+  static String? _joinDot(List<String?> parts) {
+    final List<String> present = <String>[
+      for (final String? part in parts)
+        if (_clean(part) != null) _clean(part)!,
+    ];
+    return present.isEmpty ? null : present.join(' \u00B7 ');
+  }
+}
+
+/// The vehicle class, in the mock's soft tinted pill.
+class _ClassPill extends StatelessWidget {
+  const _ClassPill({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpStatusColors tone = TpPalette.of(context).info;
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: TpSpace.md,
+        vertical: TpSpace.xs,
+      ),
+      decoration: BoxDecoration(
+        color: tone.soft,
+        borderRadius: BorderRadius.circular(TpRadius.pill),
+        border: Border.all(color: tone.base.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(
+            Icons.local_shipping_outlined,
+            size: TpSizing.iconSm,
+            color: tone.onSoft,
+          ),
+          const SizedBox(width: TpSpace.xs),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: tone.onSoft,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The class illustration from [vehiclePhotoAsset], or - for a class with
+/// no verified artwork, including tyreless plant - the honest generic icon.
+class _HeroPhoto extends StatelessWidget {
+  const _HeroPhoto({
+    required this.asset,
+    required this.photo,
+    required this.width,
+    required this.height,
+  });
+
+  final VehicleAsset asset;
+  final String? photo;
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final String? image = photo;
+    final TpStatusColors glow = palette.info;
+    // A soft sky wash behind the illustration, so the vehicle sits on the
+    // card the way the mock's hero photograph does rather than floating on
+    // flat white.
+    return Container(
+      key: VehicleDetailScreenKeys.heroPhoto,
+      width: width,
+      height: height,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(TpRadius.lg),
+        gradient: RadialGradient(
+          center: const Alignment(0, -0.15),
+          radius: 0.85,
+          colors: <Color>[
+            glow.soft,
+            glow.soft.withValues(alpha: 0.35),
+            palette.surface.withValues(alpha: 0),
+          ],
+          stops: const <double>[0, 0.6, 1],
+        ),
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: <Widget>[
+          if (image == null)
+            Container(
+              width: height * 0.62,
+              height: height * 0.62,
+              decoration: BoxDecoration(
+                color: palette.primarySoft,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                vehicleFallbackIcon(asset),
+                size: height * 0.36,
+                color: palette.primary,
+              ),
+            )
+          else
+            Image.asset(
+              image,
+              width: width,
+              height: height,
+              fit: BoxFit.contain,
+              filterQuality: FilterQuality.high,
+              semanticLabel: asset.displayIdentity,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Progress of the signed-in user's own unfinished draft for this asset:
+/// the wizard's recorded `filled` of `total` positions, never re-derived.
+class _DraftReadiness extends StatelessWidget {
+  const _DraftReadiness({required this.draft, required this.l10n});
+
+  final InspectionDraftSummary draft;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final TextTheme text = Theme.of(context).textTheme;
+    final int total = draft.total;
+    final int filled =
+        draft.filled < 0 ? 0 : (draft.filled > total ? total : draft.filled);
+    final double ratio = total == 0 ? 0 : filled / total;
+    final int percent = (ratio * 100).round();
+    final String progress = l10n.inspectionResumeProgress(filled, total);
+    return Semantics(
+      key: VehicleDetailScreenKeys.draftReadiness,
+      container: true,
+      label: '${l10n.inspectionDraftLabel}, $progress',
+      child: ExcludeSemantics(
+        child: Row(
+          children: <Widget>[
+            SizedBox(
+              width: 68,
+              height: 68,
+              child: Stack(
+                alignment: Alignment.center,
+                children: <Widget>[
+                  SizedBox.expand(
+                    child: CircularProgressIndicator(
+                      value: ratio,
+                      strokeWidth: 7,
+                      strokeCap: StrokeCap.round,
+                      backgroundColor: palette.primarySoft,
+                      color: palette.forStatus(TpStatus.ok).base,
+                    ),
+                  ),
+                  Text(
+                    '$percent%',
+                    style: text.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: palette.text,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: TpSpace.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: TpSpace.sm,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: palette.info.soft,
+                      borderRadius: BorderRadius.circular(TpRadius.sm),
+                    ),
+                    child: Text(
+                      l10n.inspectionDraftLabel,
+                      style: text.labelSmall?.copyWith(
+                        color: palette.info.onSoft,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: TpSpace.xs),
+                  Text(
+                    progress,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: text.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: palette.primary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _AssetMetricGrid extends StatelessWidget {
   const _AssetMetricGrid({required this.metrics});
 
-  final List<({String label, String value})> metrics;
+  final List<({IconData icon, String label, String value})> metrics;
 
   @override
   Widget build(BuildContext context) {
@@ -485,25 +855,58 @@ class _AssetMetricGrid extends StatelessWidget {
 class _AssetMetricCard extends StatelessWidget {
   const _AssetMetricCard({required this.metric});
 
-  final ({String label, String value}) metric;
+  final ({IconData icon, String label, String value}) metric;
 
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
     final TextTheme text = Theme.of(context).textTheme;
-    return TpCard(
-      background: palette.surfaceAlt,
+    return Container(
       padding: const EdgeInsets.all(TpSpace.md),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      decoration: BoxDecoration(
+        color: palette.surface,
+        borderRadius: BorderRadius.circular(TpRadius.lg),
+        border: Border.all(color: palette.border),
+        boxShadow: <BoxShadow>[_softLift(palette)],
+      ),
+      child: Row(
         children: <Widget>[
-          Text(metric.label, maxLines: 1, style: text.labelSmall),
-          const SizedBox(height: TpSpace.sm),
-          Text(
-            metric.value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: text.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: palette.primarySoft,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              metric.icon,
+              size: TpSizing.iconSm,
+              color: palette.primary,
+            ),
+          ),
+          const SizedBox(width: TpSpace.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  metric.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: text.labelSmall?.copyWith(color: palette.textMuted),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  metric.value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: text.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: palette.text,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -584,14 +987,15 @@ class _AssetTabButton extends StatelessWidget {
             border: Border(
               bottom: BorderSide(
                 color: selected ? palette.primary : Colors.transparent,
-                width: 2,
+                width: 3,
               ),
             ),
           ),
           child: Text(
             label,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: selected ? palette.primary : palette.textSecondary,
+                  color: selected ? palette.primary : palette.textMuted,
+                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
                 ),
           ),
         ),
@@ -717,16 +1121,42 @@ class _AssetTyreMap extends StatelessWidget {
   Widget build(BuildContext context) {
     final String vehicleType = asset.vehicleType?.trim() ?? '';
     final List<String> positions = diagramPositions(vehicleType, asset.assetNo);
-    return KeyedSubtree(
-      key: VehicleDetailScreenKeys.tyreMap,
-      child: VehicleTyreDiagram(
-        vehicleType: vehicleType,
-        assetNo: asset.assetNo,
-        positions: positions,
-        tyreData: const <String, Map<String, Object?>>{},
-        width: 150,
-        compact: true,
-      ),
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    // This map is drawn from the layout alone - the asset screen carries no
+    // tyre readings - so every wheel is honestly "not recorded", which the
+    // design system paints in its distinct [TpStatus.unknown] tone (the same
+    // tone the inspection capture legend uses for "Not recorded"). The
+    // diagram's compact legend lists only Good / Monitor / Critical, so
+    // without this key every wheel would be an unexplained colour that reads
+    // as an alert. The key states what the colour means instead of repainting
+    // unmeasured wheels to look like a result.
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        KeyedSubtree(
+          key: VehicleDetailScreenKeys.tyreMap,
+          child: VehicleTyreDiagram(
+            vehicleType: vehicleType,
+            assetNo: asset.assetNo,
+            positions: positions,
+            tyreData: const <String, Map<String, Object?>>{},
+            width: 150,
+            compact: true,
+          ),
+        ),
+        if (positions.isNotEmpty) ...<Widget>[
+          const SizedBox(height: TpSpace.sm),
+          Center(
+            child: TpStatusChip(
+              key: VehicleDetailScreenKeys.tyreMapNotRecorded,
+              status: TpStatus.unknown,
+              label: l10n.tyreDiagramListNotRecorded,
+              isCompact: true,
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -738,12 +1168,33 @@ class _SectionHeading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      label.toUpperCase(),
-      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: TpPalette.of(context).text,
-            fontWeight: FontWeight.w800,
+    final TpPalette palette = TpPalette.of(context);
+    // The mock's bold sentence-case section title, led by a short green
+    // accent bar.
+    return Semantics(
+      header: true,
+      child: Row(
+        children: <Widget>[
+          Container(
+            width: 4,
+            height: 16,
+            decoration: BoxDecoration(
+              color: palette.primary,
+              borderRadius: BorderRadius.circular(TpRadius.pill),
+            ),
           ),
+          const SizedBox(width: TpSpace.sm),
+          Expanded(
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: palette.text,
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -754,9 +1205,11 @@ class _StickyAssetActions extends StatelessWidget {
     required this.workOrderLabel,
     required this.onReportIssue,
     required this.onCreateWorkOrder,
+    this.workOrderIsPrimary = true,
   });
 
   final String reportLabel;
+  final bool workOrderIsPrimary;
   final String workOrderLabel;
   final VoidCallback? onReportIssue;
   final VoidCallback? onCreateWorkOrder;
@@ -775,6 +1228,14 @@ class _StickyAssetActions extends StatelessWidget {
       decoration: BoxDecoration(
         color: palette.surface,
         border: Border(top: BorderSide(color: palette.border)),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: _shadowTint(palette),
+            offset: const Offset(0, -4),
+            blurRadius: 12,
+            spreadRadius: -4,
+          ),
+        ],
       ),
       child: Row(
         children: <Widget>[
@@ -788,10 +1249,13 @@ class _StickyAssetActions extends StatelessWidget {
           ),
           const SizedBox(width: TpSpace.md),
           Expanded(
-            child: TpButton.primary(
+            child: TpButton(
               key: VehicleDetailScreenKeys.createWorkOrder,
               label: workOrderLabel,
               icon: Icons.add_box_outlined,
+              variant: workOrderIsPrimary
+                  ? TpButtonVariant.primary
+                  : TpButtonVariant.secondary,
               onPressed: onCreateWorkOrder,
             ),
           ),
@@ -849,6 +1313,48 @@ class _FieldRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The shadow tint this screen uses: a faint navy lift on the light theme,
+/// a plain dark drop on the dark theme (a light-ink shadow would glow).
+Color _shadowTint(TpPalette palette) => palette.brightness == Brightness.dark
+    ? Colors.black.withValues(alpha: 0.45)
+    : palette.text.withValues(alpha: 0.07);
+
+/// The quiet card lift shared by the hero and the metric cards.
+BoxShadow _softLift(TpPalette palette) => BoxShadow(
+      color: _shadowTint(palette),
+      offset: const Offset(0, 4),
+      blurRadius: 14,
+      spreadRadius: -6,
+    );
+
+/// A soft brand-green glow under the one primary action on this screen.
+class _PrimaryLift extends StatelessWidget {
+  const _PrimaryLift({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(TpRadius.md),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: palette.primary.withValues(
+              alpha: palette.brightness == Brightness.dark ? 0.35 : 0.3,
+            ),
+            offset: const Offset(0, 6),
+            blurRadius: 16,
+            spreadRadius: -4,
+          ),
+        ],
+      ),
+      child: child,
     );
   }
 }

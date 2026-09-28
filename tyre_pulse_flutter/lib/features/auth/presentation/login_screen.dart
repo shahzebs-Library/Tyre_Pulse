@@ -4,6 +4,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
@@ -15,7 +16,9 @@ import 'package:tyre_pulse/core/auth/auth_dependency_providers.dart';
 import 'package:tyre_pulse/core/auth/sign_in_outcome.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/security/device_biometric_authenticator.dart';
+import 'package:tyre_pulse/features/auth/domain/login_artwork.dart';
 import 'package:tyre_pulse/features/auth/domain/login_country.dart';
+import 'package:tyre_pulse/features/auth/presentation/login_artwork_provider.dart';
 import 'package:tyre_pulse/features/auth/presentation/login_country_preference_provider.dart';
 import 'package:tyre_pulse/features/auth/presentation/login_security_copy.dart';
 import 'package:tyre_pulse/features/auth/presentation/widgets/login_country_hero.dart';
@@ -29,22 +32,38 @@ abstract final class LoginBannerKeys {
 @visibleForTesting
 abstract final class LoginActionKeys {
   static const Key biometric = Key('login.biometric');
+  static const Key passwordToggle = Key('login.password_toggle');
   static const Key forgotPassword = Key('login.forgot_password');
   static const Key accessHelp = Key('login.access_help');
+  static const Key createAccount = Key('login.create_account');
 }
 
 @immutable
 class _LanguageOption {
-  const _LanguageOption({required this.locale, required this.label});
+  const _LanguageOption({
+    required this.locale,
+    required this.shortLabel,
+    required this.name,
+  });
 
   final Locale locale;
-  final String label;
+
+  /// What the segmented pill shows (mocks 01-03: EN / العربية / اردو).
+  final String shortLabel;
+
+  /// What a screen reader announces. Each language is named in itself, the
+  /// universal convention for a language picker, so these are not l10n keys.
+  final String name;
 }
 
 const List<_LanguageOption> _kLanguageOptions = <_LanguageOption>[
-  _LanguageOption(locale: Locale('en'), label: 'English'),
-  _LanguageOption(locale: Locale('ar'), label: 'العربية'),
-  _LanguageOption(locale: Locale('ur'), label: 'اردو'),
+  _LanguageOption(locale: Locale('en'), shortLabel: 'EN', name: 'English'),
+  _LanguageOption(
+    locale: Locale('ar'),
+    shortLabel: 'العربية',
+    name: 'العربية',
+  ),
+  _LanguageOption(locale: Locale('ur'), shortLabel: 'اردو', name: 'اردو'),
 ];
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -181,7 +200,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
-  Future<void> _showLoginHelp(String message) {
+  Future<void> _showLoginHelp(String message, {bool offerRegister = false}) {
     final LoginSecurityCopy copy = LoginSecurityCopy.of(context);
     return showDialog<void>(
       context: context,
@@ -189,6 +208,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         title: Text(copy.helpTitle),
         content: Text(message),
         actions: <Widget>[
+          // New staff can request an account themselves; it is created as a
+          // pending account an administrator approves. The register screen
+          // itself says so when the administrator has closed registration.
+          if (offerRegister)
+            TextButton(
+              key: LoginActionKeys.createAccount,
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                context.go(const RegisterRoute().location);
+              },
+              child:
+                  Text(AppLocalizations.of(dialogContext).loginCreateAccount),
+            ),
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
             child: Text(AppLocalizations.of(dialogContext).actionClose),
@@ -299,19 +331,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 left: 0,
                 right: 0,
                 top: 0,
-                height: 354,
+                height: _kCompactHeroHeight,
                 child: _ExactLoginHero(
                   key: const Key('login.brand.panel'),
                   country: selectedCountry,
+                  artwork: ref
+                      .watch(loginArtworkProvider)
+                      .forCountry(selectedCountry),
                 ),
               ),
               Positioned(
                 left: 0,
                 right: 0,
-                top: 328,
-                height: 516 + feedbackExtra,
+                top: _kCompactFormTop,
+                height: 844 - _kCompactFormTop + feedbackExtra,
                 child: _ExactLoginForm(
                   key: const Key('login.form.card'),
+                  curvedTop: true,
                   countryControlKey: const Key('login.country.change'),
                   activeLocale: activeLocale,
                   country: selectedCountry,
@@ -336,7 +372,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     _showLoginHelp(LoginSecurityCopy.of(context).forgotHelp),
                   ),
                   onAccessHelp: () => unawaited(
-                    _showLoginHelp(LoginSecurityCopy.of(context).accessHelp),
+                    _showLoginHelp(
+                      LoginSecurityCopy.of(context).accessHelp,
+                      offerRegister: true,
+                    ),
                   ),
                   onBiometric: _authenticateWithBiometrics,
                   onSubmit: _submit,
@@ -372,6 +411,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 child: LoginCountryHero(
                   key: const Key('login.brand.panel'),
                   country: selectedCountry,
+                  artwork: ref
+                      .watch(loginArtworkProvider)
+                      .forCountry(selectedCountry),
                   compact: false,
                   onChangeCountry: () =>
                       unawaited(_chooseCountry(selectedCountry)),
@@ -384,7 +426,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   height: 620,
                   child: _ExactLoginForm(
                     key: const Key('login.form.card'),
-                    countryControlKey: const Key('login.country.form_change'),
+                    curvedTop: false,
+                    // The wide hero already carries the country control.
+                    countryControlKey: null,
                     activeLocale: activeLocale,
                     country: selectedCountry,
                     identifierController: _identifierController,
@@ -408,7 +452,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       _showLoginHelp(LoginSecurityCopy.of(context).forgotHelp),
                     ),
                     onAccessHelp: () => unawaited(
-                      _showLoginHelp(LoginSecurityCopy.of(context).accessHelp),
+                      _showLoginHelp(
+                        LoginSecurityCopy.of(context).accessHelp,
+                        offerRegister: true,
+                      ),
                     ),
                     onBiometric: _authenticateWithBiometrics,
                     onSubmit: _submit,
@@ -423,22 +470,61 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 }
 
-String _countryHeroAsset(LoginCountry country) => switch (country) {
-      LoginCountry.saudiArabia => 'assets/login/figma_city_background.png',
-      LoginCountry.unitedArabEmirates =>
-        'assets/login/united_arab_emirates_pmv_hero.webp',
-      LoginCountry.egypt => 'assets/login/egypt_hero.png',
-    };
+/// The brand gold used by the mock family for the hero rule, the form's
+/// curved rim and the country footer rules.
+const Color _kLoginGold = Color(0xFFD29A45);
+
+/// The highlight end of the gold rim and rules.
+const Color _kLoginGoldLight = Color(0xFFF1CB85);
+
+/// Height of the compact hero. It runs [_kFormEdgeDip] past the form's top so
+/// the lowest point of the form's curved edge still sits over artwork, never
+/// over the scaffold background (mocks 01-03 give the artwork the whole upper
+/// half of the phone).
+const double _kCompactHeroHeight = 424;
+
+/// Top of the compact form, and how far its curved edge dips at the physical
+/// left. `_kCompactFormTop + _kFormEdgeDip == _kCompactHeroHeight`.
+const double _kCompactFormTop = 344;
+const double _kFormEdgeDip = 80;
+
+/// The artwork itself is chosen per country by an administrator (Console ->
+/// Mobile App -> Login pictures) and resolved by [loginArtworkProvider];
+/// each [LoginArtwork] carries its own asset and compact anchor.
+
+/// Brightness 1.1x, a touch of contrast and saturation; alpha untouched.
+const List<double> _kHeroLift = <double>[
+  1.16, 0.02, 0.02, 0, 4, //
+  0.02, 1.16, 0.02, 0, 4, //
+  0.02, 0.02, 1.16, 0, 6, //
+  0, 0, 0, 1, 0, //
+];
+
+const List<Shadow> _kHeroTextShadow = <Shadow>[
+  Shadow(color: Color(0x99000000), blurRadius: 10, offset: Offset(0, 1)),
+];
+
+/// The night navy the artwork is composed on, used behind the image while it
+/// decodes and for the legibility scrim behind the brand lockup.
+const Color _kHeroNight = Color(0xFF030A29);
 
 class _ExactLoginHero extends StatelessWidget {
-  const _ExactLoginHero({required this.country, super.key});
+  const _ExactLoginHero({
+    required this.country,
+    required this.artwork,
+    super.key,
+  });
 
   final LoginCountry country;
+
+  /// The administrator-chosen picture for [country].
+  final LoginArtwork artwork;
 
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final String asset = _countryHeroAsset(country);
+    final String asset = artwork.assetPath;
+    final TextTheme text = Theme.of(context).textTheme;
 
     return Semantics(
       key: const Key('login.country.hero'),
@@ -448,139 +534,130 @@ class _ExactLoginHero extends StatelessWidget {
         localizedLoginCountryName(l10n, country),
       ),
       child: ColoredBox(
-        color: country == LoginCountry.unitedArabEmirates
-            ? Colors.white
-            : const Color(0xFF030A29),
+        color: _kHeroNight,
         child: Stack(
           fit: StackFit.expand,
           children: <Widget>[
-            Image.asset(
-              asset,
-              key: ValueKey<String>(asset),
-              fit: BoxFit.cover,
-              alignment: Alignment.topCenter,
-              excludeFromSemantics: true,
-              filterQuality: FilterQuality.high,
-            ),
-            if (country == LoginCountry.saudiArabia)
-              Positioned(
-                left: 4,
-                top: 175,
-                width: 236,
-                height: 152,
-                child: Image.asset(
-                  'assets/login/figma_pump_truck.png',
-                  fit: BoxFit.contain,
-                  excludeFromSemantics: true,
-                  filterQuality: FilterQuality.high,
-                ),
-              ),
-            if (country != LoginCountry.unitedArabEmirates)
-              const Positioned(
-                left: 0,
-                top: 0,
-                width: 300,
-                height: 176,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                      colors: <Color>[
-                        Color(0xFF030A29),
-                        Color(0xFF030A29),
-                        Color(0x00030A29),
-                      ],
-                      stops: <double>[0, 0.55, 1],
-                    ),
-                  ),
-                ),
-              ),
-            Positioned(
-              left: country == LoginCountry.unitedArabEmirates ? 18 : 24,
-              top: country == LoginCountry.unitedArabEmirates ? 15 : 44,
-              width: country == LoginCountry.unitedArabEmirates ? 44 : 58,
-              height: country == LoginCountry.unitedArabEmirates ? 24 : 30,
+            // A gentle lift in exposure and contrast so the night artwork
+            // reads as lit landmarks rather than a dark photo on a phone
+            // screen outdoors.
+            ColorFiltered(
+              colorFilter: const ColorFilter.matrix(_kHeroLift),
               child: Image.asset(
-                'assets/login/figma_brand_pulse.png',
-                fit: BoxFit.contain,
+                asset,
+                key: ValueKey<String>(asset),
+                fit: BoxFit.cover,
+                alignment: artwork.compactAlignment,
                 excludeFromSemantics: true,
+                filterQuality: FilterQuality.high,
               ),
             ),
+            // A soft wash from the physical top-left only, so the lockup reads
+            // on any sky while the landmark and machine keep full brightness.
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: Alignment(-1.1, -1.05),
+                  radius: 1.15,
+                  colors: <Color>[
+                    Color(0xD9030A29),
+                    Color(0x80030A29),
+                    Color(0x00030A29),
+                  ],
+                  stops: <double>[0, 0.45, 1],
+                ),
+              ),
+            ),
+            // The faint geometric lattice of the mocks, fading out long
+            // before it reaches the landmark.
+            const Positioned(
+              left: 0,
+              top: 0,
+              width: 240,
+              height: 220,
+              child: ExcludeSemantics(
+                child: CustomPaint(painter: _LatticePainter()),
+              ),
+            ),
+            // Physically anchored top-left in every language: the artwork is
+            // not mirrored in RTL, so the copy stays over the open sky and
+            // never over the landmark. The brand lockup is a logo and stays
+            // left-to-right; the localized title keeps its own direction.
             Positioned(
-              left: country == LoginCountry.unitedArabEmirates ? 61 : 84,
-              top: country == LoginCountry.unitedArabEmirates ? 12 : 34,
-              width: country == LoginCountry.unitedArabEmirates ? 104 : 126,
-              child: Semantics(
-                key: const Key('login.brand.title'),
-                container: true,
-                header: true,
-                label: l10n.appTitle,
-                child: ExcludeSemantics(
-                  child: Text(
-                    'TYRE\nPULSE',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: country == LoginCountry.unitedArabEmirates
-                              ? const Color(0xFF092B72)
-                              : Colors.white,
-                          fontSize: country == LoginCountry.unitedArabEmirates
-                              ? 21
-                              : 24,
-                          height: 0.98,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.2,
+              left: 24,
+              top: 56,
+              right: 72,
+              child: _LoginEntrance(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  textDirection: TextDirection.ltr,
+                  children: <Widget>[
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      textDirection: TextDirection.ltr,
+                      children: <Widget>[
+                        Image.asset(
+                          'assets/login/figma_brand_pulse.png',
+                          width: 66,
+                          height: 34,
+                          fit: BoxFit.contain,
+                          excludeFromSemantics: true,
                         ),
-                  ),
-                ),
-              ),
-            ),
-            if (country != LoginCountry.unitedArabEmirates)
-              const Positioned(
-                left: 24,
-                top: 116,
-                width: 28,
-                height: 2,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Color(0xFFDB8F2E),
-                    borderRadius: BorderRadius.all(Radius.circular(1)),
-                  ),
-                ),
-              ),
-            Positioned(
-              left: country == LoginCountry.unitedArabEmirates ? 19 : 24,
-              top: country == LoginCountry.unitedArabEmirates ? 80 : 130,
-              right: country == LoginCountry.unitedArabEmirates ? 196 : 24,
-              child: Text(
-                l10n.loginOperationsTitle,
-                maxLines: 2,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: country == LoginCountry.unitedArabEmirates
-                          ? const Color(0xFF092B72)
-                          : Colors.white,
-                      fontSize:
-                          country == LoginCountry.unitedArabEmirates ? 20 : 18,
-                      height: 1.2,
-                      fontWeight: FontWeight.w500,
+                        const SizedBox(width: 6),
+                        Semantics(
+                          key: const Key('login.brand.title'),
+                          container: true,
+                          header: true,
+                          label: l10n.appTitle,
+                          child: ExcludeSemantics(
+                            child: Text(
+                              'TYRE\nPULSE',
+                              textDirection: TextDirection.ltr,
+                              style: text.titleLarge?.copyWith(
+                                color: Colors.white,
+                                fontSize: 27,
+                                height: 0.94,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.6,
+                                shadows: _kHeroTextShadow,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-              ),
-            ),
-            if (country == LoginCountry.unitedArabEmirates)
-              Positioned(
-                left: 19,
-                top: 137,
-                width: 170,
-                child: Text(
-                  l10n.loginTagline,
-                  maxLines: 3,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: const Color(0xFF193C7A),
-                        fontSize: 12,
-                        height: 1.45,
-                        fontWeight: FontWeight.w500,
+                    const SizedBox(height: 22),
+                    const SizedBox(
+                      width: 34,
+                      height: 3,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: <Color>[_kLoginGoldLight, _kLoginGold],
+                          ),
+                          borderRadius: BorderRadius.all(Radius.circular(2)),
+                        ),
                       ),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      l10n.loginHeroTitle,
+                      textAlign: TextAlign.left,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.titleLarge?.copyWith(
+                        color: Colors.white,
+                        fontSize: 20,
+                        height: 1.2,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.1,
+                        shadows: _kHeroTextShadow,
+                      ),
+                    ),
+                  ],
                 ),
               ),
+            ),
           ],
         ),
       ),
@@ -588,8 +665,170 @@ class _ExactLoginHero extends StatelessWidget {
   }
 }
 
+/// Paints the thin eight-point star lattice from the mocks' top-left corner,
+/// fading radially so it never competes with the artwork.
+class _LatticePainter extends CustomPainter {
+  const _LatticePainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Rect bounds = Offset.zero & size;
+    canvas.saveLayer(bounds, Paint());
+    final Paint line = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.8
+      ..color = const Color(0x383D6BC4);
+    const double cell = 38;
+    for (double y = -cell / 2; y < size.height + cell; y += cell) {
+      for (double x = -cell / 2; x < size.width + cell; x += cell) {
+        final Offset c = Offset(x, y);
+        const double r = cell * 0.36;
+        canvas
+          ..drawRect(
+            Rect.fromCenter(center: c, width: r * 2, height: r * 2),
+            line,
+          )
+          ..save()
+          ..translate(c.dx, c.dy)
+          ..rotate(0.785398)
+          ..drawRect(
+            Rect.fromCenter(center: Offset.zero, width: r * 2, height: r * 2),
+            line,
+          )
+          ..restore();
+      }
+    }
+    canvas
+      ..drawRect(
+        bounds,
+        Paint()
+          ..blendMode = BlendMode.dstIn
+          ..shader = const RadialGradient(
+            center: Alignment.topLeft,
+            radius: 1.1,
+            colors: <Color>[Color(0xFFFFFFFF), Color(0x00FFFFFF)],
+          ).createShader(bounds),
+      )
+      ..restore();
+  }
+
+  @override
+  bool shouldRepaint(_LatticePainter oldDelegate) => false;
+}
+
+/// A short fade-and-rise for the first frame of the screen. It is skipped
+/// entirely when the platform asks for reduced motion, and never hides its
+/// child from assistive technology while it runs.
+class _LoginEntrance extends StatelessWidget {
+  const _LoginEntrance({required this.child, this.delay = 0});
+
+  final Widget child;
+
+  /// Fraction of the run spent waiting before this piece moves, so the hero
+  /// copy and the form settle in sequence rather than all at once.
+  final double delay;
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) return child;
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 560),
+      curve: Interval(delay, 1, curve: Curves.easeOutCubic),
+      builder: (BuildContext context, double t, Widget? child) => Opacity(
+        opacity: t,
+        alwaysIncludeSemantics: true,
+        child: Transform.translate(
+          offset: Offset(0, (1 - t) * 14),
+          child: child,
+        ),
+      ),
+      child: child,
+    );
+  }
+}
+
+/// The compact form's top edge: a curve that dips at the physical left and
+/// rises to the right, finished with a thin gold rim (mocks 01-03).
+///
+/// The curve is deliberately physical rather than directional: it follows the
+/// landmark artwork above it, which is not mirrored in RTL either.
+@immutable
+class _LoginFormEdge extends ShapeBorder {
+  const _LoginFormEdge({required this.dip, required this.rimColor});
+
+  final double dip;
+  final Color rimColor;
+
+  static const double _rimWidth = 2.5;
+
+  Path _edge(Rect rect) => Path()
+    ..moveTo(rect.left, rect.top + dip)
+    ..cubicTo(
+      rect.left + rect.width * 0.3,
+      rect.top,
+      rect.left + rect.width * 0.6,
+      rect.top,
+      rect.right,
+      rect.top,
+    );
+
+  @override
+  EdgeInsetsGeometry get dimensions => EdgeInsets.zero;
+
+  @override
+  Path getOuterPath(Rect rect, {TextDirection? textDirection}) => _edge(rect)
+    ..lineTo(rect.right, rect.bottom)
+    ..lineTo(rect.left, rect.bottom)
+    ..close();
+
+  @override
+  Path getInnerPath(Rect rect, {TextDirection? textDirection}) =>
+      getOuterPath(rect, textDirection: textDirection);
+
+  @override
+  void paint(Canvas canvas, Rect rect, {TextDirection? textDirection}) {
+    final Path edge = _edge(rect);
+    // A warm glow first, then the rim itself brightening towards the physical
+    // right where the curve flattens out under the landmark.
+    canvas
+      ..drawPath(
+        edge,
+        Paint()
+          ..color = rimColor.withValues(alpha: 0.35)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = _rimWidth * 3
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3)
+          ..isAntiAlias = true,
+      )
+      ..drawPath(
+        edge,
+        Paint()
+          ..shader = LinearGradient(
+            colors: <Color>[rimColor, _kLoginGoldLight, rimColor],
+            stops: const <double>[0, 0.62, 1],
+          ).createShader(rect)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = _rimWidth
+          ..isAntiAlias = true,
+      );
+  }
+
+  @override
+  ShapeBorder scale(double t) =>
+      _LoginFormEdge(dip: dip * t, rimColor: rimColor);
+
+  @override
+  bool operator ==(Object other) =>
+      other is _LoginFormEdge && other.dip == dip && other.rimColor == rimColor;
+
+  @override
+  int get hashCode => Object.hash(dip, rimColor);
+}
+
 class _ExactLoginForm extends StatelessWidget {
   const _ExactLoginForm({
+    required this.curvedTop,
     required this.countryControlKey,
     required this.activeLocale,
     required this.country,
@@ -613,7 +852,13 @@ class _ExactLoginForm extends StatelessWidget {
     super.key,
   });
 
-  final Key countryControlKey;
+  /// Compact phones draw the mock's curved, gold-rimmed top edge over the
+  /// hero. The wide split layout keeps a plain rounded card beside its hero.
+  final bool curvedTop;
+
+  /// Key of the country footer control, or null when the country control
+  /// lives elsewhere (the wide hero owns it, so the form does not repeat it).
+  final Key? countryControlKey;
   final Locale activeLocale;
   final LoginCountry country;
   final TextEditingController identifierController;
@@ -642,10 +887,15 @@ class _ExactLoginForm extends StatelessWidget {
     final bool hasFeedback = errorMessage != null || lockoutMinutes != null;
     final double feedbackOffset = hasFeedback ? 82 : 0;
     final bool busy = isSubmitting || isBiometricChecking;
+    final Key? footerKey = countryControlKey;
 
     return Material(
       color: palette.surface,
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(48)),
+      shape: curvedTop
+          ? const _LoginFormEdge(dip: _kFormEdgeDip, rimColor: _kLoginGold)
+          : const RoundedRectangleBorder(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(48)),
+            ),
       clipBehavior: Clip.antiAlias,
       child: AutofillGroup(
         child: LayoutBuilder(
@@ -653,203 +903,255 @@ class _ExactLoginForm extends StatelessWidget {
             final double fieldWidth =
                 (constraints.maxWidth - 56).clamp(240, 480).toDouble();
             final double left = (constraints.maxWidth - fieldWidth) / 2;
-            return Stack(
-              children: <Widget>[
-                Positioned(
-                  left: left,
-                  top: 17,
-                  width: fieldWidth,
-                  height: 48,
-                  child: _LanguageToggle(
-                    active: activeLocale,
-                    onSelect: onSelectLocale,
-                  ),
-                ),
-                Positioned(
-                  left: left,
-                  top: 72,
-                  width: fieldWidth,
-                  child: Semantics(
-                    header: true,
-                    child: Text(
-                      l10n.loginWelcomeTitle,
-                      style:
-                          Theme.of(context).textTheme.headlineMedium?.copyWith(
-                                color: palette.text,
-                                fontSize: 28,
-                                height: 1.14,
-                                fontWeight: FontWeight.w800,
-                              ),
+            final double toggleWidth = fieldWidth < 232 ? fieldWidth : 232.0;
+            final double toggleLeft = (constraints.maxWidth - toggleWidth) / 2;
+            return _LoginEntrance(
+              delay: 0.12,
+              child: Stack(
+                children: <Widget>[
+                  Positioned(
+                    left: toggleLeft,
+                    top: 28,
+                    width: toggleWidth,
+                    height: 52,
+                    child: _LanguageToggle(
+                      active: activeLocale,
+                      onSelect: onSelectLocale,
                     ),
                   ),
-                ),
-                Positioned(
-                  left: left,
-                  top: 108,
-                  width: fieldWidth,
-                  child: Text(
-                    l10n.loginWelcomeSubtitle,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: palette.textMuted,
-                          fontSize: 13,
-                          height: 1.25,
-                        ),
-                  ),
-                ),
-                Positioned(
-                  left: left,
-                  top: 140,
-                  width: fieldWidth,
-                  child: _FieldLabel(l10n.loginIdentifierLabel),
-                ),
-                Positioned(
-                  left: left,
-                  top: 159,
-                  width: fieldWidth,
-                  height: 48,
-                  child: _ExactTextField(
-                    controller: identifierController,
-                    enabled: !busy,
-                    hint: l10n.loginIdentifierPlaceholder,
-                    prefixAsset: 'assets/login/figma_user.png',
-                    keyboardType: TextInputType.emailAddress,
-                    textInputAction: TextInputAction.next,
-                    autofillHints: const <String>[
-                      AutofillHints.username,
-                      AutofillHints.email,
-                    ],
-                    onChanged: onIdentifierChanged,
-                  ),
-                ),
-                Positioned(
-                  left: left,
-                  top: 216,
-                  width: fieldWidth,
-                  child: _FieldLabel(l10n.loginPasswordLabel),
-                ),
-                Positioned(
-                  left: left,
-                  top: 235,
-                  width: fieldWidth,
-                  height: 48,
-                  child: _ExactTextField(
-                    controller: passwordController,
-                    enabled: !busy,
-                    hint: l10n.loginPasswordPlaceholder,
-                    prefixAsset: 'assets/login/figma_lock.png',
-                    obscureText: obscurePassword,
-                    textInputAction: TextInputAction.done,
-                    autofillHints: const <String>[AutofillHints.password],
-                    onChanged: onPasswordChanged,
-                    onSubmitted: (String _) => unawaited(onSubmit()),
-                    suffix: IconButton(
-                      icon: obscurePassword
-                          ? Image.asset(
-                              'assets/login/figma_password_visibility.png',
-                              width: 24,
-                              height: 24,
-                            )
-                          : const Icon(Icons.visibility_off_outlined),
-                      tooltip: obscurePassword
-                          ? l10n.loginShowPassword
-                          : l10n.loginHidePassword,
-                      onPressed: busy ? null : onTogglePassword,
-                    ),
-                  ),
-                ),
-                if (hasFeedback)
                   Positioned(
                     left: left,
-                    right: left,
-                    top: 292,
-                    child: lockoutMinutes != null
-                        ? _LoginBanner(
-                            key: LoginBannerKeys.locked,
-                            icon: Icons.lock_outline,
-                            tone: TpStatus.warning,
-                            message: l10n.loginErrorLocked(lockoutMinutes!),
-                          )
-                        : _LoginBanner(
-                            key: LoginBannerKeys.error,
-                            icon: Icons.error_outline,
-                            tone: TpStatus.critical,
-                            message: errorMessage!,
+                    top: 90,
+                    width: fieldWidth,
+                    child: Semantics(
+                      header: true,
+                      child: Text(
+                        l10n.loginWelcomeTitle,
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineMedium
+                            ?.copyWith(
+                              color: palette.text,
+                              fontSize: 30,
+                              height: 1.1,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.3,
+                            ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: left,
+                    top: 127,
+                    width: fieldWidth,
+                    child: Text(
+                      l10n.loginSignInSubtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: palette.textMuted,
+                            fontSize: 14,
+                            height: 1.25,
                           ),
+                    ),
                   ),
-                Positioned(
-                  left: left,
-                  top: 272 + feedbackOffset,
-                  width: fieldWidth,
-                  height: TpSizing.minTouchTarget,
-                  child: _LoginSecurityLine(
-                    controlKey: countryControlKey,
-                    country: country,
-                    copy: copy,
-                    onTap: onChangeCountry,
+                  Positioned(
+                    left: left,
+                    top: 158,
+                    width: fieldWidth,
+                    child: _FieldLabel(l10n.loginIdentifierLabel),
                   ),
-                ),
-                Positioned(
-                  left: left,
-                  top: 320 + feedbackOffset,
-                  width: fieldWidth,
-                  height: 52,
-                  child: TpButton.primary(
-                    key: const Key('login.submit'),
-                    label: l10n.actionSignIn,
-                    icon: Icons.arrow_forward,
-                    isFullWidth: true,
-                    isBusy: isSubmitting,
-                    onPressed: busy ? null : () => unawaited(onSubmit()),
+                  Positioned(
+                    left: left,
+                    top: 177,
+                    width: fieldWidth,
+                    height: 48,
+                    child: _ExactTextField(
+                      controller: identifierController,
+                      enabled: !busy,
+                      hint: l10n.loginIdentifierPlaceholder,
+                      prefixAsset: 'assets/login/figma_user.png',
+                      keyboardType: TextInputType.emailAddress,
+                      textInputAction: TextInputAction.next,
+                      autofillHints: const <String>[
+                        AutofillHints.username,
+                        AutofillHints.email,
+                      ],
+                      onChanged: onIdentifierChanged,
+                    ),
                   ),
-                ),
-                Positioned(
-                  left: left,
-                  top: 374 + feedbackOffset,
-                  width: fieldWidth,
-                  height: 48,
-                  child: _LoginHelpLinks(
-                    copy: copy,
-                    onForgotPassword: onForgotPassword,
-                    onAccessHelp: onAccessHelp,
+                  Positioned(
+                    left: left,
+                    top: 234,
+                    width: fieldWidth,
+                    child: _FieldLabel(l10n.loginPasswordLabel),
                   ),
-                ),
-                Positioned(
-                  left: left,
-                  top: 423 + feedbackOffset,
-                  width: fieldWidth,
-                  height: 16,
-                  child: _LoginAlternativeDivider(label: copy.or),
-                ),
-                Positioned(
-                  left: left + (fieldWidth * 0.19),
-                  top: 438 + feedbackOffset,
-                  width: fieldWidth * 0.62,
-                  height: 48,
-                  child: TpButton.secondary(
-                    key: LoginActionKeys.biometric,
-                    label: copy.biometric,
-                    icon: Icons.fingerprint,
-                    isFullWidth: true,
-                    isBusy: isBiometricChecking,
-                    onPressed: busy ? null : () => unawaited(onBiometric()),
+                  Positioned(
+                    left: left,
+                    top: 253,
+                    width: fieldWidth,
+                    height: 48,
+                    child: _ExactTextField(
+                      controller: passwordController,
+                      enabled: !busy,
+                      hint: l10n.loginPasswordPlaceholder,
+                      prefixAsset: 'assets/login/figma_lock.png',
+                      obscureText: obscurePassword,
+                      textInputAction: TextInputAction.done,
+                      autofillHints: const <String>[AutofillHints.password],
+                      onChanged: onPasswordChanged,
+                      onSubmitted: (String _) => unawaited(onSubmit()),
+                      suffix: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          SizedBox(
+                            width: 1,
+                            height: 28,
+                            child: ColoredBox(color: palette.border),
+                          ),
+                          IconButton(
+                            key: LoginActionKeys.passwordToggle,
+                            icon: obscurePassword
+                                ? Image.asset(
+                                    'assets/login/figma_password_visibility.png',
+                                    width: 24,
+                                    height: 24,
+                                  )
+                                : const Icon(Icons.visibility_off_outlined),
+                            tooltip: obscurePassword
+                                ? l10n.loginShowPassword
+                                : l10n.loginHidePassword,
+                            onPressed: busy ? null : onTogglePassword,
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
-                Positioned(
-                  left: left,
-                  top: 488 + feedbackOffset,
-                  width: fieldWidth,
-                  height: 26,
-                  child: _LoginSecurityFooter(
-                    copy: copy,
-                    appVersion: appVersion,
+                  if (hasFeedback)
+                    Positioned(
+                      left: left,
+                      right: left,
+                      top: 310,
+                      child: lockoutMinutes != null
+                          ? _LoginBanner(
+                              key: LoginBannerKeys.locked,
+                              icon: Icons.lock_outline,
+                              tone: TpStatus.warning,
+                              message: l10n.loginErrorLocked(lockoutMinutes!),
+                            )
+                          : _LoginBanner(
+                              key: LoginBannerKeys.error,
+                              icon: Icons.error_outline,
+                              tone: TpStatus.critical,
+                              message: errorMessage!,
+                            ),
+                    ),
+                  Positioned(
+                    left: left,
+                    top: 316 + feedbackOffset,
+                    width: fieldWidth,
+                    height: 52,
+                    child: _SignInButtonDepth(
+                      enabled: !busy,
+                      child: TpButton.primary(
+                        key: const Key('login.submit'),
+                        label: l10n.actionSignIn,
+                        isFullWidth: true,
+                        isBusy: isSubmitting,
+                        onPressed: busy ? null : () => unawaited(onSubmit()),
+                      ),
+                    ),
                   ),
-                ),
-              ],
+                  Positioned(
+                    left: left,
+                    top: 370 + feedbackOffset,
+                    width: fieldWidth,
+                    height: 48,
+                    child: _LoginQuietActions(
+                      copy: copy,
+                      isBiometricChecking: isBiometricChecking,
+                      onForgotPassword: onForgotPassword,
+                      onAccessHelp: onAccessHelp,
+                      onBiometric: busy ? null : () => unawaited(onBiometric()),
+                    ),
+                  ),
+                  if (footerKey != null)
+                    Positioned(
+                      left: left,
+                      top: 420 + feedbackOffset,
+                      width: fieldWidth,
+                      height: 52,
+                      child: _CountryFooter(
+                        controlKey: footerKey,
+                        country: country,
+                        onTap: onChangeCountry,
+                      ),
+                    ),
+                  if (appVersion != null)
+                    Positioned(
+                      left: left,
+                      top: 474 + feedbackOffset,
+                      width: fieldWidth,
+                      height: 18,
+                      child: Text(
+                        copy.version(appVersion!),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: palette.textMuted,
+                              fontSize: 10,
+                            ),
+                      ),
+                    ),
+                ],
+              ),
             );
           },
         ),
+      ),
+    );
+  }
+}
+
+/// Lifts the primary action off the page with a soft green glow, so the one
+/// thing to do on this screen reads first (mocks 01-03), and gives its label
+/// the mock's larger, bolder weight. The glow drops away while disabled.
+class _SignInButtonDepth extends StatelessWidget {
+  const _SignInButtonDepth({required this.enabled, required this.child});
+
+  final bool enabled;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(TpRadius.md),
+        boxShadow: enabled
+            ? <BoxShadow>[
+                BoxShadow(
+                  color: palette.primary.withValues(alpha: 0.3),
+                  blurRadius: 16,
+                  spreadRadius: -4,
+                  offset: const Offset(0, 8),
+                ),
+              ]
+            : const <BoxShadow>[],
+      ),
+      child: Theme(
+        data: theme.copyWith(
+          textTheme: theme.textTheme.copyWith(
+            labelLarge: theme.textTheme.labelLarge?.copyWith(
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.3,
+            ),
+          ),
+        ),
+        child: child,
       ),
     );
   }
@@ -873,7 +1175,7 @@ class _FieldLabel extends StatelessWidget {
       );
 }
 
-class _ExactTextField extends StatelessWidget {
+class _ExactTextField extends StatefulWidget {
   const _ExactTextField({
     required this.controller,
     required this.enabled,
@@ -901,43 +1203,94 @@ class _ExactTextField extends StatelessWidget {
   final Widget? suffix;
 
   @override
+  State<_ExactTextField> createState() => _ExactTextFieldState();
+}
+
+/// Tracks focus only so the field's own icon and divider can pick up the
+/// focus colour together with the border, the way the mocks show an active
+/// field.
+class _ExactTextFieldState extends State<_ExactTextField> {
+  final FocusNode _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(_onFocusChange);
+  }
+
+  void _onFocusChange() => setState(() {});
+
+  @override
+  void dispose() {
+    _focus
+      ..removeListener(_onFocusChange)
+      ..dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
+    final bool focused = _focus.hasFocus;
     final OutlineInputBorder border = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(9),
+      borderRadius: BorderRadius.circular(10),
       borderSide: BorderSide(color: palette.border),
     );
     return TextField(
-      controller: controller,
-      enabled: enabled,
-      keyboardType: keyboardType,
-      textInputAction: textInputAction,
-      autofillHints: autofillHints,
-      obscureText: obscureText,
-      onChanged: onChanged,
-      onSubmitted: onSubmitted,
+      controller: widget.controller,
+      focusNode: _focus,
+      enabled: widget.enabled,
+      keyboardType: widget.keyboardType,
+      textInputAction: widget.textInputAction,
+      autofillHints: widget.autofillHints,
+      obscureText: widget.obscureText,
+      onChanged: widget.onChanged,
+      onSubmitted: widget.onSubmitted,
+      cursorColor: palette.focus,
       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             color: palette.text,
             fontSize: 15,
+            fontWeight: FontWeight.w500,
           ),
       decoration: InputDecoration(
-        hintText: hint,
+        hintText: widget.hint,
         hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: palette.textMuted,
+              color: palette.textMuted.withValues(alpha: 0.8),
               fontSize: 14,
             ),
         filled: true,
-        fillColor: palette.surface,
+        fillColor: focused ? palette.surface : palette.surfaceAlt,
         contentPadding: const EdgeInsets.symmetric(vertical: 12),
-        prefixIcon: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Image.asset(prefixAsset, width: 24, height: 24),
+        prefixIcon: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Image.asset(
+                widget.prefixAsset,
+                width: 22,
+                height: 22,
+                color: focused ? palette.focus : null,
+                excludeFromSemantics: true,
+              ),
+            ),
+            SizedBox(
+              width: 1,
+              height: 24,
+              child: ColoredBox(
+                color: focused
+                    ? palette.focus.withValues(alpha: 0.5)
+                    : palette.border,
+              ),
+            ),
+            const SizedBox(width: 12),
+          ],
         ),
         prefixIconConstraints: const BoxConstraints(
           minWidth: 48,
           minHeight: 48,
         ),
-        suffixIcon: suffix,
+        suffixIcon: widget.suffix,
         suffixIconConstraints: const BoxConstraints(
           minWidth: TpSizing.minTouchTarget,
           minHeight: TpSizing.minTouchTarget,
@@ -952,6 +1305,9 @@ class _ExactTextField extends StatelessWidget {
   }
 }
 
+/// One segmented pill (mocks 01-03): short labels, thin dividers between
+/// unselected neighbours, and the active language filled in the form's navy
+/// ink. Each segment announces the full language name and its selected state.
 class _LanguageToggle extends StatelessWidget {
   const _LanguageToggle({required this.active, required this.onSelect});
 
@@ -960,90 +1316,99 @@ class _LanguageToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final int selectedIndex = _kLanguageOptions.indexWhere(
+      (_LanguageOption option) =>
+          option.locale.languageCode == active.languageCode,
+    );
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: TpPalette.of(context).surface,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: TpPalette.of(context).border),
+        color: palette.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: palette.border),
       ),
-      child: Row(
-        children: <Widget>[
-          for (final _LanguageOption option in _kLanguageOptions)
-            Expanded(
-              child: MergeSemantics(
-                child: Semantics(
-                  selected: active.languageCode == option.locale.languageCode,
-                  child: TpButton(
-                    key: Key(
-                      'login.language.${option.locale.languageCode}',
+      child: Padding(
+        padding: const EdgeInsets.all(1),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            for (int index = 0;
+                index < _kLanguageOptions.length;
+                index++) ...<Widget>[
+              if (index > 0)
+                Center(
+                  child: SizedBox(
+                    width: 1,
+                    height: 20,
+                    child: ColoredBox(
+                      color:
+                          index - 1 == selectedIndex || index == selectedIndex
+                              ? Colors.transparent
+                              : palette.border,
                     ),
-                    label: option.label,
-                    isCompact: true,
-                    isFullWidth: true,
-                    variant: active.languageCode == option.locale.languageCode
-                        ? TpButtonVariant.primary
-                        : TpButtonVariant.secondary,
-                    onPressed: () => onSelect(option.locale),
                   ),
                 ),
+              Expanded(
+                child: _LanguageSegment(
+                  option: _kLanguageOptions[index],
+                  selected: index == selectedIndex,
+                  onTap: () => onSelect(_kLanguageOptions[index].locale),
+                ),
               ),
-            ),
-        ],
+            ],
+          ],
+        ),
       ),
     );
   }
 }
 
-class _LoginSecurityLine extends StatelessWidget {
-  const _LoginSecurityLine({
-    required this.controlKey,
-    required this.country,
-    required this.copy,
+class _LanguageSegment extends StatelessWidget {
+  const _LanguageSegment({
+    required this.option,
+    required this.selected,
     required this.onTap,
   });
 
-  final Key controlKey;
-  final LoginCountry country;
-  final LoginSecurityCopy copy;
+  final _LanguageOption option;
+  final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final AppLocalizations l10n = AppLocalizations.of(context);
-    final String countryName = switch (country) {
-      LoginCountry.unitedArabEmirates => 'UAE',
-      _ => localizedLoginCountryName(l10n, country),
-    };
     final TpPalette palette = TpPalette.of(context);
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        key: controlKey,
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Align(
-          alignment: const Alignment(0, 0.25),
-          child: Row(
-            children: <Widget>[
-              Icon(
-                Icons.shield_outlined,
-                size: 22,
-                color: palette.primary,
+    final BorderRadius radius = BorderRadius.circular(10);
+    return Semantics(
+      key: Key('login.language.${option.locale.languageCode}'),
+      container: true,
+      button: true,
+      inMutuallyExclusiveGroup: true,
+      selected: selected,
+      label: option.name,
+      excludeSemantics: true,
+      onTap: onTap,
+      child: Material(
+        color: selected ? palette.text : Colors.transparent,
+        elevation: selected ? 2 : 0,
+        shadowColor: palette.text,
+        borderRadius: radius,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: radius,
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: TpSpace.xs),
+              child: Text(
+                option.shortLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: selected ? palette.surface : palette.text,
+                      fontSize: 14,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  copy.secureWorkspace(countryName),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: palette.textSecondary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -1051,28 +1416,39 @@ class _LoginSecurityLine extends StatelessWidget {
   }
 }
 
-class _LoginHelpLinks extends StatelessWidget {
-  const _LoginHelpLinks({
+/// Forgot-password, device biometrics and access help, kept reachable but
+/// visually quiet: the mocks show none of them, yet each is a working path
+/// (administrator help dialogs, and the platform biometric bridge).
+class _LoginQuietActions extends StatelessWidget {
+  const _LoginQuietActions({
     required this.copy,
+    required this.isBiometricChecking,
     required this.onForgotPassword,
     required this.onAccessHelp,
+    required this.onBiometric,
   });
 
   final LoginSecurityCopy copy;
+  final bool isBiometricChecking;
   final VoidCallback onForgotPassword;
   final VoidCallback onAccessHelp;
+  final VoidCallback? onBiometric;
 
   @override
   Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
     final ButtonStyle style = TextButton.styleFrom(
-      padding: EdgeInsets.zero,
+      foregroundColor: palette.textSecondary,
+      padding: const EdgeInsets.symmetric(horizontal: TpSpace.xs),
       minimumSize: const Size(48, 48),
-      textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+      textStyle: Theme.of(context).textTheme.labelMedium?.copyWith(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
     );
     return Row(
       children: <Widget>[
         Expanded(
-          flex: 4,
           child: Align(
             alignment: AlignmentDirectional.centerStart,
             child: TextButton(
@@ -1083,8 +1459,30 @@ class _LoginHelpLinks extends StatelessWidget {
             ),
           ),
         ),
+        IconButton(
+          key: LoginActionKeys.biometric,
+          tooltip: copy.biometric,
+          style: IconButton.styleFrom(
+            backgroundColor: palette.primarySoft,
+            foregroundColor: palette.primary,
+            disabledBackgroundColor: palette.surfaceAlt,
+            side: BorderSide(color: palette.primary.withValues(alpha: 0.25)),
+          ),
+          onPressed: onBiometric,
+          icon: isBiometricChecking
+              ? SizedBox(
+                  width: TpSizing.iconSm,
+                  height: TpSizing.iconSm,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      palette.primary,
+                    ),
+                  ),
+                )
+              : const Icon(Icons.fingerprint),
+        ),
         Expanded(
-          flex: 7,
           child: Align(
             alignment: AlignmentDirectional.centerEnd,
             child: TextButton(
@@ -1104,71 +1502,89 @@ class _LoginHelpLinks extends StatelessWidget {
   }
 }
 
-class _LoginAlternativeDivider extends StatelessWidget {
-  const _LoginAlternativeDivider({required this.label});
+/// The mock's footer - gold rule, location pin, gold rule, full country name -
+/// kept as the functional 48dp country control (design-qa: the static footer
+/// is intentionally the country selector).
+class _CountryFooter extends StatelessWidget {
+  const _CountryFooter({
+    required this.controlKey,
+    required this.country,
+    required this.onTap,
+  });
 
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final TpPalette palette = TpPalette.of(context);
-    return Row(
-      children: <Widget>[
-        Expanded(child: Divider(color: palette.border, height: 1)),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Text(
-            label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: palette.textMuted,
-                  fontSize: 11,
-                ),
-          ),
-        ),
-        Expanded(child: Divider(color: palette.border, height: 1)),
-      ],
-    );
-  }
-}
-
-class _LoginSecurityFooter extends StatelessWidget {
-  const _LoginSecurityFooter({required this.copy, required this.appVersion});
-
-  final LoginSecurityCopy copy;
-  final String? appVersion;
+  final Key controlKey;
+  final LoginCountry country;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final TpPalette palette = TpPalette.of(context);
-    return Row(
-      children: <Widget>[
-        Icon(Icons.shield_outlined, size: 17, color: palette.primary),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Text(
-            '${copy.authorized} · ${copy.audited}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: palette.textSecondary,
-                  fontSize: 10,
+    final String countryName = localizedLoginCountryName(l10n, country);
+    Widget rule({required bool leading}) => Flexible(
+          child: SizedBox(
+            width: 92,
+            height: 1.5,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: AlignmentDirectional.centerStart,
+                  end: AlignmentDirectional.centerEnd,
+                  colors: leading
+                      ? const <Color>[Color(0x00D29A45), _kLoginGold]
+                      : const <Color>[_kLoginGold, Color(0x00D29A45)],
                 ),
+              ),
+            ),
+          ),
+        );
+    return Semantics(
+      container: true,
+      button: true,
+      label: l10n.loginSelectedCountrySemantics(countryName),
+      hint: l10n.loginChangeCountryAction,
+      excludeSemantics: true,
+      onTap: onTap,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          key: controlKey,
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  rule(leading: true),
+                  const SizedBox(width: TpSpace.md),
+                  Image.asset(
+                    'assets/login/figma_location.png',
+                    width: 22,
+                    height: 22,
+                    excludeFromSemantics: true,
+                  ),
+                  const SizedBox(width: TpSpace.md),
+                  rule(leading: false),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                countryName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: palette.text,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.2,
+                    ),
+              ),
+            ],
           ),
         ),
-        if (appVersion != null) ...<Widget>[
-          const SizedBox(width: 8),
-          Text(
-            copy.version(appVersion!),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: palette.textSecondary,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500,
-                ),
-          ),
-        ],
-      ],
+      ),
     );
   }
 }

@@ -10,9 +10,20 @@ import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 /// in every shipped ARB (English, Arabic and Urdu), so RTL copy never falls
 /// back to a hard-coded presentation string.
 final class AccidentCopy {
-  factory AccidentCopy.of(BuildContext context) {
-    final String catalog = AppLocalizations.of(context).accidentCopyCatalog;
-    final String language = Localizations.localeOf(context).languageCode;
+  factory AccidentCopy.of(BuildContext context) =>
+      AccidentCopy.forLocalizations(
+        AppLocalizations.of(context),
+        Localizations.localeOf(context).languageCode,
+      );
+
+  /// The same catalog for an explicit localization, used when a document is
+  /// rendered in a language other than the screen's (the case summary PDF
+  /// falls back to English when no Arabic-script font can be loaded).
+  factory AccidentCopy.forLocalizations(
+    AppLocalizations l10n,
+    String language,
+  ) {
+    final String catalog = l10n.accidentCopyCatalog;
     return AccidentCopy._(<String, String>{
       for (final String entry in catalog.split('~'))
         if (entry.indexOf('=') > 0)

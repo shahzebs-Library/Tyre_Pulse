@@ -1,10 +1,11 @@
 /// Online reads and writes for the M2 "Dispatch & Handover" workspace.
 ///
-/// Three objects: the `accident_dispatches` leg (AUTHORED, NOT APPLIED
-/// migration - every read catches a schema mismatch and reports "not
-/// provisioned" instead of pretending the leg is empty), the vendor block on
+/// Three objects: the `accident_dispatches` leg (migration 20260916130000,
+/// applied live and verified against information_schema on 2026-09-28; every
+/// read still catches a schema mismatch and reports "not provisioned" only
+/// when the query actually fails, never unconditionally), the vendor block on
 /// `accident_repair_orders` (base columns live since V417, contact columns
-/// from the same unapplied migration), and the legacy
+/// from the same migration, also live), and the legacy
 /// `accident_handover_inspections` row that the old flow still reads, which
 /// is written alongside every custody acceptance so the two never disagree.
 ///

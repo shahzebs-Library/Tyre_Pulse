@@ -8,6 +8,7 @@ import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/management/data/management_repository.dart';
 import 'package:tyre_pulse/features/management/domain/management_models.dart';
 import 'package:tyre_pulse/features/management/management_providers.dart';
+import 'package:tyre_pulse/features/management/presentation/management_copy.dart';
 import 'package:tyre_pulse/features/management/presentation/management_screens.dart';
 
 void main() {
@@ -93,6 +94,86 @@ void main() {
       find.byType(TeamScreen),
       matchesGoldenFile('goldens/team_compact_en.png'),
     );
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('overview is distinct from analytics: site rollup, no filter',
+      (WidgetTester tester) async {
+    final _ManagementRepository repository = _ManagementRepository();
+    await _pump(
+      tester,
+      const OverviewScreen(route: OverviewRoute()),
+      repository,
+    );
+    // Per-site rollup: 12 of 18 tyres = 67%, 6 of 18 = 33%.
+    expect(find.byKey(const Key('overview.site.Qiddiya')), findsOneWidget);
+    expect(find.textContaining('67% of fleet tyres'), findsOneWidget);
+    expect(find.textContaining('33% of fleet tyres'), findsOneWidget);
+    // (2 critical + 4 high) of 18 = 33%.
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('overview.atRisk')),
+        matching: find.text('33%'),
+      ),
+      findsOneWidget,
+    );
+    // Analytics-only controls and distributions are not on the overview.
+    expect(find.byType(ChoiceChip), findsNothing);
+    expect(find.text('Top brands'), findsNothing);
+
+    await _pump(
+      tester,
+      const AnalyticsScreen(route: AnalyticsRoute()),
+      repository,
+    );
+    expect(find.byType(ChoiceChip), findsWidgets);
+  });
+
+  testWidgets('report share action is offered once a report is on screen',
+      (WidgetTester tester) async {
+    await _pump(
+      tester,
+      const ReportsScreen(route: ReportsRoute()),
+      _ManagementRepository(),
+    );
+    final IconButton share = tester.widget<IconButton>(
+      find.byKey(const Key('reports.share')),
+    );
+    expect(share.onPressed, isNotNull);
+  });
+
+  test('report PDF carries only the authoritative values on screen', () async {
+    final AppLocalizations en =
+        await AppLocalizations.delegate.load(const Locale('en'));
+    final ExecutiveSnapshot snapshot = await _ManagementRepository().report(
+      from: DateTime(2026, 8),
+      to: DateTime(2026, 8, 31),
+    );
+    final List<int> bytes = await buildManagementReportPdf(
+      snapshot,
+      ManagementCopy.fromL10n(en),
+      en,
+      30,
+      'SAR',
+    ).save();
+    expect(bytes, isNotEmpty);
+    expect(String.fromCharCodes(bytes.take(5)), '%PDF-');
+  });
+
+  testWidgets('tapping a team member opens their loaded details',
+      (WidgetTester tester) async {
+    await _pump(
+      tester,
+      const TeamScreen(route: TeamRoute()),
+      _ManagementRepository(),
+    );
+    await tester.tap(find.byKey(const Key('team.member.vinay')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('team.detail.vinay')), findsOneWidget);
+    expect(find.text('Role'), findsOneWidget);
+    expect(find.text('Workshop Engineer'), findsOneWidget);
+    // No phone or email on file: no dead call/email buttons, honest text.
+    expect(find.text('Call'), findsNothing);
+    expect(find.text('Not recorded'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 }

@@ -2845,7 +2845,7 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get pmCopyCatalog =>
-      'title=دیکھ بھال کنٹرول سینٹر~subtitle=آج کے دیکھ بھال کے کام کو کنٹرول کریں~createWorkOrder=ورک آرڈر بنائیں~pmDue=پی ایم واجب~priorityQueue=ترجیحی کاموں کی قطار~viewAll=سب دیکھیں~allWorkOrders=تمام ورک آرڈرز دیکھیں~quickAccess=فوری رسائی~workOrders=ورک آرڈرز~workOrdersHint=بنائیں اور منظم کریں~pmSchedule=پی ایم شیڈول~pmScheduleHint=پی ایم کی منصوبہ بندی اور پیروی~inspections=معائنے~inspectionsHint=جانچیں اور رپورٹ کریں~parts=پرزے~partsHint=اسٹاک اور درخواستیں~tyres=ٹائر~tyresHint=ریکارڈ، گردش اور تبدیلی~overdue=تاخیر شدہ~dueSoon=جلد واجب~active=فعال منصوبے~due=اب واجب~all=تمام منصوبے~empty=دیکھ بھال کا کوئی منصوبہ نہیں~emptyDue=اگلے 14 دنوں میں کوئی احتیاطی دیکھ بھال واجب نہیں۔~emptyAll=کوئی فعال احتیاطی دیکھ بھال منصوبہ دستیاب نہیں۔~plan=دیکھ بھال منصوبہ~daysOverdue=دن تاخیر~daysLeft=دن باقی~noDate=واجب تاریخ نہیں~record=سروس ریکارڈ کریں~meter=میٹر ریڈنگ~performedBy=کام کرنے والا~workshop=ورکشاپ~partsCost=پرزوں کی قیمت~labourCost=مزدوری کی قیمت~findings=مشاہدات~completed=مکمل~partial=جزوی مکمل~deferred=ملتوی~failed=ناکام~save=سروس محفوظ کریں~invalidNumber=درست عددی قدریں درج کریں۔~loadFailed=دیکھ بھال منصوبے لوڈ نہیں ہو سکے۔~saveFailed=سروس ریکارڈ محفوظ نہیں ہو سکا۔ دوبارہ کوشش کریں۔';
+      'title=دیکھ بھال کنٹرول سینٹر~subtitle=آج کے دیکھ بھال کے کام کو کنٹرول کریں~createWorkOrder=ورک آرڈر بنائیں~pmDue=پی ایم واجب~priorityQueue=ترجیحی کاموں کی قطار~viewAll=سب دیکھیں~allWorkOrders=تمام ورک آرڈرز دیکھیں~quickAccess=فوری رسائی~workOrders=ورک آرڈرز~workOrdersHint=بنائیں اور منظم کریں~pmSchedule=پی ایم شیڈول~pmScheduleHint=پی ایم کی منصوبہ بندی اور پیروی~inspections=معائنے~inspectionsHint=جانچیں اور رپورٹ کریں~parts=پرزے~partsHint=اسٹاک اور درخواستیں~tyres=ٹائر~tyresHint=ریکارڈ، گردش اور تبدیلی~overdue=تاخیر شدہ~dueSoon=جلد واجب~active=فعال منصوبے~due=اب واجب~all=تمام منصوبے~empty=دیکھ بھال کا کوئی منصوبہ نہیں~emptyDue=اگلے 14 دنوں میں کوئی احتیاطی دیکھ بھال واجب نہیں۔~emptyAll=کوئی فعال احتیاطی دیکھ بھال منصوبہ دستیاب نہیں۔~plan=دیکھ بھال منصوبہ~daysOverdue=دن تاخیر~daysLeft=دن باقی~noDate=واجب تاریخ نہیں~record=سروس ریکارڈ کریں~meter=میٹر ریڈنگ~performedBy=کام کرنے والا~workshop=ورکشاپ~partsCost=پرزوں کی قیمت~labourCost=مزدوری کی قیمت~findings=مشاہدات~completed=مکمل~partial=جزوی مکمل~deferred=ملتوی~failed=ناکام~save=سروس محفوظ کریں~invalidNumber=درست عددی قدریں درج کریں۔~loadFailed=دیکھ بھال منصوبے لوڈ نہیں ہو سکے۔~saveFailed=سروس ریکارڈ محفوظ نہیں ہو سکا۔ دوبارہ کوشش کریں۔~openBreakdowns=کھلی خرابیاں~activeWorkOrders=فعال ورک آرڈرز~breakdown=خرابی~workOrder=ورک آرڈر~dueToday=آج واجب~since=سے~opened=کھولا گیا~queueEmpty=کسی چیز پر توجہ درکار نہیں~woLoadFailed=کھلے ورک آرڈرز لوڈ نہیں ہو سکے۔~retry=دوبارہ کوشش کریں~countFailed=یہ تعداد لوڈ نہیں ہو سکی۔ دوبارہ کوشش کے لیے ٹیپ کریں۔';
 
   @override
   String get stockCountCopyCatalog =>
@@ -2969,4 +2969,2972 @@ class AppLocalizationsUr extends AppLocalizations {
   @override
   String get workshopCopyCatalog =>
       'title=میرے کام~onDuty=ڈیوٹی پر~offDuty=ڈیوٹی سے باہر~checkIn=حاضری لگائیں~checkOut=چھٹی لگائیں~checkInHint=کام درج کرنے سے پہلے اپنی شفٹ کی حاضری لگائیں۔~myJobs=میرے کام~emptyTitle=کوئی کھلا کام نہیں~emptyMessage=اس وقت آپ کو کوئی کھلا کام تفویض نہیں ہے۔~loadError=آپ کے کام ابھی لوڈ نہیں ہو سکے۔~selectJobTitle=کام منتخب کریں~selectJobMsg=پہلے اپنا ایک کام منتخب کریں۔~checkInFirstTitle=پہلے حاضری لگائیں~selectTaskTitle=مرحلہ منتخب کریں~selectTaskMsg=پہلے وہ مرحلہ منتخب کریں جس پر آپ کام کر رہے ہیں۔~tasks=مراحل~confirmTitle=مرحلہ مکمل کریں؟~confirmMsg=یہ مرحلے کو مکمل درج کر کے معائنے کے لیے بھیج دے گا۔~cancel=منسوخ~noteHint=نوٹ شامل کریں (اختیاری)~record=درج کریں~queued=اس ڈیوائس پر محفوظ ہے۔ یہ خود بخود ہم آہنگ ہو جائے گا۔~saveFailed=سرگرمی اس ڈیوائس پر محفوظ نہیں ہو سکی۔ دوبارہ کوشش کریں۔~todayTitle=آج میری کارکردگی~productive=پیداواری~blocked=رکا ہوا~unassigned=غیر تفویض~breakTime=وقفہ~completed=مکمل مراحل~due=مقررہ~ok=ٹھیک ہے~a_start_job=کام شروع کریں~a_pause_job=کام روکیں~a_resume_job=کام دوبارہ شروع کریں~a_complete_task=مرحلہ مکمل کریں~a_request_parts=پرزے طلب کریں~a_request_assistance=مدد طلب کریں~a_waiting_approval=منظوری کا انتظار~a_waiting_vehicle=گاڑی کا انتظار~a_waiting_tools=اوزار کا انتظار~a_start_break=وقفہ شروع کریں~a_end_break=وقفہ ختم کریں~a_report_problem=مسئلہ رپورٹ کریں~s_working=کام جاری~s_available=دستیاب~s_waiting_parts=پرزوں کا انتظار~s_waiting_approval=منظوری کا انتظار~s_waiting_tools=اوزار کا انتظار~s_waiting_vehicle=گاڑی کا انتظار~s_on_break=وقفے پر~s_training=تربیت~s_awaiting_inspection=معائنے کا انتظار~s_off_duty=ڈیوٹی سے باہر~s_absent=غیر حاضر~photoLabel=تصویر (اختیاری)~takePhoto=کیمرہ~pickPhoto=گیلری~removePhoto=تصویر ہٹائیں~photoLimit=زیادہ سے زیادہ 3 تصاویر~photoNotAttached=درج ہو گیا۔ کنکشن کے بغیر تصویر منسلک نہیں ہو سکی۔';
+
+  @override
+  String get homeTodaysWork => 'آج کا کام';
+
+  @override
+  String get homeAwaitingSignatureTag => 'دستخط کا انتظار';
+
+  @override
+  String get homeResumeInspection => 'معائنہ دوبارہ شروع کریں';
+
+  @override
+  String get homeTyreIssueNeedsAttention => 'ٹائر کا مسئلہ توجہ کا متقاضی ہے';
+
+  @override
+  String get profileSectionWorkspace => 'ورک اسپیس';
+
+  @override
+  String get profileEmployeeIdLabel => 'ملازم آئی ڈی';
+
+  @override
+  String get profileLanguageLabel => 'ایپ کی زبان';
+
+  @override
+  String get profileSectionDisplay => 'زبان اور ڈسپلے';
+
+  @override
+  String get profileThemeLabel => 'تھیم';
+
+  @override
+  String get profileThemeLight => 'ہلکا';
+
+  @override
+  String get profileThemeDark => 'گہرا';
+
+  @override
+  String get profileThemeSystem => 'سسٹم کے مطابق';
+
+  @override
+  String get profileSectionOffline => 'آف لائن اور ڈیٹا';
+
+  @override
+  String get profileUnsyncedFooter =>
+      'غیر ہم آہنگ مسودے اس ڈیوائس پر محفوظ رہتے ہیں';
+
+  @override
+  String get loginHeroTitle => 'مکمل PMV آپریشنز';
+
+  @override
+  String get loginSignInSubtitle => 'اپنے تفویض کردہ آپریشنز میں سائن ان کریں';
+
+  @override
+  String get vehiclesInspectNow => 'ابھی معائنہ کریں';
+
+  @override
+  String get inspectionPreviousTyre => 'پچھلا';
+
+  @override
+  String get inspectionNextTyre => 'اگلا';
+
+  @override
+  String get inspectionProgressTitle => 'معائنے کی پیش رفت';
+
+  @override
+  String inspectionPercentComplete(int percent) {
+    return '$percent% مکمل';
+  }
+
+  @override
+  String inspectionAxleNumber(int number) {
+    return 'ایکسل $number';
+  }
+
+  @override
+  String get inspectionTyresLabel => 'ٹائر';
+
+  @override
+  String get inspectionScanAssetButton => 'اثاثہ اسکین کریں';
+
+  @override
+  String get inspectionSelectedAssetTitle => 'منتخب اثاثہ';
+
+  @override
+  String get profileSyncUnknownFooter =>
+      'زیر التواء ہم آہنگی کی جانچ نہیں ہو سکی۔ ممکن ہے اس ڈیوائس پر غیر ہم آہنگ کام موجود ہو';
+
+  @override
+  String get homeRecentInspectionsTitle => 'آپ کے حالیہ معائنے';
+
+  @override
+  String get homeAssetNotChecked => 'جانچ نہیں ہوئی';
+
+  @override
+  String get homeNothingForRoleTitle => 'آپ کے کردار کے لیے جانچنے کو کچھ نہیں';
+
+  @override
+  String get tyreActionRotateSubtitle =>
+      'درج کریں کہ یہ ٹائر دوسری جگہ منتقل کیا گیا';
+
+  @override
+  String get tyreActionRotateFromLabel => 'موجودہ جگہ';
+
+  @override
+  String get tyreActionRotateToLabel => 'نئی جگہ';
+
+  @override
+  String get tyreActionRotateToHint => 'مثال کے طور پر RHF1';
+
+  @override
+  String get tyreActionRotateNotesLabel => 'نوٹس (اختیاری)';
+
+  @override
+  String get tyreActionRotateNotesHint =>
+      'کوئی بھی بات جو اگلے فٹر کو معلوم ہونی چاہیے';
+
+  @override
+  String get tyreActionRotateOnlineNote =>
+      'کنکشن درکار ہے۔ روٹیشن براہ راست سرور پر محفوظ ہوتی ہے۔';
+
+  @override
+  String get tyreActionRotateSubmit => 'روٹیشن درج کریں';
+
+  @override
+  String get tyreActionRotateToRequiredTitle => 'نئی جگہ درکار ہے';
+
+  @override
+  String get tyreActionRotateToRequiredMessage =>
+      'وہ جگہ درج کریں جہاں یہ ٹائر منتقل کیا گیا۔';
+
+  @override
+  String get tyreActionRotateSamePositionMessage =>
+      'نئی جگہ موجودہ جگہ سے مختلف ہونی چاہیے۔';
+
+  @override
+  String get tyreActionRotateSavedTitle => 'روٹیشن درج ہو گئی';
+
+  @override
+  String get tyreActionRotateSavedMessage =>
+      'روٹیشن اس ٹائر کی سروس ہسٹری میں محفوظ ہو گئی ہے۔ اس سے ٹائر رجسٹر میں دکھائی گئی جگہ تبدیل نہیں ہوتی۔';
+
+  @override
+  String get tyreActionRotateFailedTitle => 'روٹیشن محفوظ نہیں ہوئی';
+
+  @override
+  String get tyreActionRotateOfflineMessage =>
+      'کنکشن نہیں ہے۔ روٹیشن صرف آن لائن محفوظ ہوتی ہے، اس لیے یہ درج نہیں ہوئی۔ کنکشن ملنے پر دوبارہ کوشش کریں۔';
+
+  @override
+  String get tyreActionRotateFailedMessage =>
+      'روٹیشن محفوظ نہیں ہو سکی۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String driverWsTerm(String term) {
+    String _temp0 = intl.Intl.selectLogic(
+      term,
+      {
+        'create_driver': 'تصدیق شدہ ڈرائیور شامل کریں',
+        'link_account': 'لاگ ان اکاؤنٹ منسلک کریں',
+        'assign_team': 'ٹیم اور گاڑی تفویض کریں',
+        'create_fine': 'ٹریفک جرمانہ درج کریں',
+        'link_record': 'کام کا ریکارڈ منسلک کریں',
+        'respond_fine': 'جائزہ لیں اور دستخط کریں',
+        'review_fine': 'جواب یا ادائیگی کا جائزہ',
+        'correct_fine': 'جرمانہ درست کریں',
+        'reassign_fine': 'جرمانہ دوبارہ تفویض کریں',
+        'direct_payment': 'میں براہ راست ادائیگی کروں گا',
+        'already_paid': 'پہلے ہی ادا کر دیا ہے',
+        'dispute': 'اعتراض یا غلط تفویض',
+        'company_recovery': 'کمپنی کی ادائیگی یا وصولی کی درخواست',
+        'instalments': 'قسطوں کی درخواست',
+        'approve': 'درخواست منظور کریں',
+        'return': 'ڈرائیور کو واپس بھیجیں',
+        'payment': 'تصدیق شدہ ادائیگی درج کریں',
+        'cancel': 'جرمانہ منسوخ کریں',
+        'reopen': 'دوبارہ کھولیں',
+        'open': 'کھلا',
+        'settled': 'ادا شدہ',
+        'cancelled': 'منسوخ',
+        'awaiting_response': 'جواب کا انتظار',
+        'submitted': 'جواب جمع ہو گیا',
+        'returned': 'ڈرائیور کو واپس',
+        'approved': 'منظور شدہ',
+        'driver_documents': 'ڈرائیور کے دستاویزات',
+        'driver_training': 'ڈرائیور کی تربیت',
+        'driver_coaching': 'ڈرائیور کی رہنمائی',
+        'driver_safety_events': 'ڈرائیور کے حفاظتی واقعات',
+        'driver_expenses': 'ڈرائیور کے اخراجات',
+        'tyre_records': 'ٹائر کے ریکارڈ',
+        'accidents': 'حادثات',
+        'wo_tasks': 'ورک آرڈر کے کام',
+        'checklist_submissions': 'جمع شدہ چیک لسٹیں',
+        'odometer_logs': 'اوڈومیٹر ریڈنگز',
+        'wash_records': 'دھلائی کے ریکارڈ',
+        'other': '',
+      },
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String driverWsRecordField(String field) {
+    String _temp0 = intl.Intl.selectLogic(
+      field,
+      {
+        'country': 'ملک',
+        'site': 'مقام',
+        'asset_no': 'اثاثہ نمبر',
+        'driver_name': 'ڈرائیور کا نام',
+        'title': 'عنوان',
+        'doc_type': 'دستاویز کی قسم',
+        'doc_number': 'دستاویز نمبر',
+        'expiry_date': 'میعاد ختم ہونے کی تاریخ',
+        'course_name': 'کورس کا نام',
+        'result': 'نتیجہ',
+        'completed_date': 'تکمیل کی تاریخ',
+        'coaching_status': 'رہنمائی کی حالت',
+        'period': 'مدت',
+        'event_type': 'واقعے کی قسم',
+        'severity': 'شدت',
+        'event_at': 'واقعے کا وقت',
+        'category': 'زمرہ',
+        'amount': 'رقم',
+        'currency': 'کرنسی',
+        'expense_date': 'خرچ کی تاریخ',
+        'status': 'حالت',
+        'incident_date': 'واقعے کی تاریخ',
+        'accident_type': 'حادثے کی قسم',
+        'due_date': 'آخری تاریخ',
+        'created_at': 'بنانے کی تاریخ',
+        'reading_date': 'ریڈنگ کی تاریخ',
+        'odometer_km': 'اوڈومیٹر (کلومیٹر)',
+        'wash_date': 'دھلائی کی تاریخ',
+        'template_name': 'چیک لسٹ کا نام',
+        'approval_status': 'منظوری کی حالت',
+        'brand': 'برانڈ',
+        'serial_no': 'سیریل نمبر',
+        'issue_date': 'اجراء کی تاریخ',
+        'qty': 'مقدار',
+        'cost_per_tyre': 'فی ٹائر لاگت',
+        'other': '',
+      },
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String driverWsEvidenceKind(String kind) {
+    String _temp0 = intl.Intl.selectLogic(
+      kind,
+      {
+        'payment': 'ادائیگی کی رسید',
+        'supporting': 'معاون تصویر',
+        'notice': 'سرکاری نوٹس',
+        'other': '',
+      },
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get driverWsTitle => 'ڈرائیور کا کام';
+
+  @override
+  String get driverWsEntrySubtitle =>
+      'میرے جرمانے، ٹیم کی ذمہ داریاں اور تصدیق شدہ کام';
+
+  @override
+  String get driverWsLoadError =>
+      'کام کی جگہ دستیاب نہیں۔ رابطہ، اکاؤنٹ کا ربط اور اجازت چیک کریں، پھر تازہ کریں۔';
+
+  @override
+  String get driverWsRefresh => 'تازہ کریں';
+
+  @override
+  String get driverWsSignInRequired => 'اپنا کام دیکھنے کے لیے سائن ان کریں۔';
+
+  @override
+  String get driverWsOfflineNotice =>
+      'آف لائن محفوظ منظر۔ جواب یا جائزے سے پہلے رابطہ بحال کرکے تازہ کریں۔';
+
+  @override
+  String get driverWsTruncatedNotice =>
+      'یہ منظر نامکمل ہے کیونکہ ریکارڈ کی حد پوری ہو گئی۔ ایکسپورٹ بند ہے۔';
+
+  @override
+  String get driverWsSearchDrivers => 'ڈرائیور تلاش کریں';
+
+  @override
+  String get driverWsNoDrivers =>
+      'کوئی منسلک ڈرائیور یا تفویض شدہ ٹیم موجود نہیں۔ مجاز منیجر سے اکاؤنٹ اور ذمہ داری کی تصدیق کروائیں۔';
+
+  @override
+  String get driverWsSharePdf => 'جرمانوں کی PDF تفصیل شیئر کریں';
+
+  @override
+  String get driverWsReportShareError =>
+      'رپورٹ شیئر نہیں ہو سکی۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get driverWsTrafficFines => 'ٹریفک جرمانے';
+
+  @override
+  String get driverWsNoFines => 'کوئی جرمانہ درج نہیں ہے۔';
+
+  @override
+  String get driverWsAssignmentHistory => 'ٹیم اور گاڑی کی ذمہ داریوں کی تاریخ';
+
+  @override
+  String get driverWsNoAssignment => 'کوئی ذمہ داری درج نہیں ہے۔';
+
+  @override
+  String get driverWsAssignmentCurrent => 'موجودہ';
+
+  @override
+  String get driverWsAssignmentPrevious => 'سابقہ';
+
+  @override
+  String get driverWsNoVehicle => 'کوئی گاڑی نہیں';
+
+  @override
+  String get driverWsNotAssigned => 'تفویض نہیں';
+
+  @override
+  String get driverWsPresent => 'اب تک';
+
+  @override
+  String get driverWsAssignedWork => 'تفویض شدہ کام';
+
+  @override
+  String get driverWsNotSupplied => 'فراہم نہیں کیا گیا';
+
+  @override
+  String get driverWsVerifiedRecords => 'تصدیق شدہ کام اور ڈرائیور کے ریکارڈ';
+
+  @override
+  String get driverWsUnmatchedNotice =>
+      'پرانے غیر منسلک ریکارڈ یہاں ظاہر ہونے سے پہلے شناخت کی تصدیق چاہتے ہیں۔';
+
+  @override
+  String get driverWsRecordUnavailable => 'ریکارڈ اب دستیاب نہیں';
+
+  @override
+  String get driverWsActivityHistory => 'سرگرمی کی تاریخ';
+
+  @override
+  String get driverWsRecordedUser => 'درج شدہ صارف';
+
+  @override
+  String get driverWsPhotoError =>
+      'تصویر منسلک نہیں ہو سکی۔ آپ کی مقامی تصویر حذف نہیں ہوئی۔';
+
+  @override
+  String get driverWsAcknowledgeRespond => 'وصولی تسلیم کریں اور جواب دیں';
+
+  @override
+  String get driverWsReviewPayment => 'جائزہ لیں یا ادائیگی درج کریں';
+
+  @override
+  String get driverWsEvidenceOpenError => 'ثبوت نہیں کھل سکا۔';
+
+  @override
+  String get driverWsAttachReceipt => 'رسید کی تصویر منسلک کریں';
+
+  @override
+  String get driverWsAttachSupporting => 'معاون تصویر منسلک کریں';
+
+  @override
+  String get driverWsAttachNotice => 'سرکاری نوٹس کی تصویر منسلک کریں';
+
+  @override
+  String get driverWsSignatureUnavailable => 'دستخط دستیاب نہیں۔';
+
+  @override
+  String get driverWsViewSignature => 'دستخط شدہ رسید دیکھیں';
+
+  @override
+  String get driverWsSignatureDisplayError => 'دستخط دکھایا نہیں جا سکا۔';
+
+  @override
+  String get driverWsReceiptStatement =>
+      'میں اس نوٹس کی وصولی اور جائزے کی تصدیق کرتا ہوں اور اوپر دیا گیا جواب جمع کرتا ہوں۔ وصولی ذمہ داری قبول کرنے کا اقرار نہیں ہے۔ ادائیگی یا وصولی کی درخواست خودکار ادائیگی یا تنخواہ کی کٹوتی کی اجازت نہیں دیتی۔';
+
+  @override
+  String get driverWsDraftReadError =>
+      'محفوظ مسودہ پڑھا نہیں جا سکا۔ کچھ بھی تبدیل نہیں ہوا۔';
+
+  @override
+  String get driverWsSubmitError =>
+      'جمع نہیں ہو سکا۔ لازمی خانے اور رابطہ چیک کریں۔ نوٹس بدل گیا ہو تو تازہ کریں۔';
+
+  @override
+  String get driverWsConnectionRequired =>
+      'جمع کرنے کے لیے رابطہ ضروری ہے تاکہ موجودہ نوٹس اور آپ کی اجازت کی جانچ ہو۔';
+
+  @override
+  String get driverWsDraftSaved => 'مسودہ محفوظ ہو گیا۔ ابھی جمع نہیں ہوا۔';
+
+  @override
+  String get driverWsDraftSaveError => 'مسودہ محفوظ نہیں ہو سکا۔';
+
+  @override
+  String get driverWsSaveDraft => 'اس آلے پر مسودہ محفوظ کریں';
+
+  @override
+  String get driverWsReviewDisclaimer =>
+      'منظوری جائزہ شدہ انتظام درج کرتی ہے۔ یہ ادائیگی یا تنخواہ سے کٹوتی نہیں کرتی۔ صرف تصدیق شدہ ادائیگیاں درج کریں۔';
+
+  @override
+  String get driverWsSaving => 'محفوظ ہو رہا ہے...';
+
+  @override
+  String get driverWsSubmit => 'جمع کریں';
+
+  @override
+  String get driverWsErrResolution => 'حل کا انتخاب کریں۔';
+
+  @override
+  String get driverWsErrExplanation =>
+      'اپنی درخواست کی وضاحت کریں، مجوزہ انتظام سمیت۔';
+
+  @override
+  String get driverWsErrPaymentReference => 'اپنی ادائیگی کا حوالہ درج کریں۔';
+
+  @override
+  String get driverWsErrProposedDate =>
+      'اپنی مجوزہ ادائیگی کی تاریخ منتخب کریں۔';
+
+  @override
+  String get driverWsErrSignature =>
+      'جمع کرنے سے پہلے بیان کا جائزہ لیں اور دستخط کریں۔';
+
+  @override
+  String get driverWsOptionsError => 'اختیارات دستیاب نہیں۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get driverWsSearch => 'تلاش';
+
+  @override
+  String get driverWsClearSelection => 'کوئی نہیں یا انتخاب ختم کریں';
+
+  @override
+  String get driverWsPreviousOptions => 'پچھلے اختیارات';
+
+  @override
+  String get driverWsMoreOptions => 'مزید اختیارات';
+
+  @override
+  String get driverWsFieldEmployeeId => 'ملازم نمبر';
+
+  @override
+  String get driverWsFieldDriverName => 'ڈرائیور کا نام';
+
+  @override
+  String get driverWsFieldCountry => 'ملک';
+
+  @override
+  String get driverWsFieldSite => 'مقام';
+
+  @override
+  String get driverWsFieldLoginAccount =>
+      'لاگ ان اکاؤنٹ (کوئی نہیں سے ربط ختم ہوگا)';
+
+  @override
+  String get driverWsFieldIdentityReason => 'شناخت کی تصدیق یا وجہ';
+
+  @override
+  String get driverWsFieldSupervisor => 'نگران';
+
+  @override
+  String get driverWsFieldManager => 'منیجر';
+
+  @override
+  String get driverWsFieldVehicle => 'گاڑی';
+
+  @override
+  String get driverWsFieldAssignmentReason => 'تفویض کی وجہ';
+
+  @override
+  String get driverWsFieldAuthority => 'جاری کرنے والا ادارہ';
+
+  @override
+  String get driverWsFieldNoticeReference => 'نوٹس کا حوالہ';
+
+  @override
+  String get driverWsFieldIncidentAt =>
+      'واقعے کی تاریخ اور وقت (YYYY-MM-DDTHH:mm)';
+
+  @override
+  String get driverWsFieldDueDate => 'آخری تاریخ (YYYY-MM-DD)';
+
+  @override
+  String get driverWsFieldAmount => 'جرمانے کی رقم';
+
+  @override
+  String get driverWsFieldCurrency => 'کرنسی کوڈ';
+
+  @override
+  String get driverWsFieldNoticeDetails => 'نوٹس کی تفصیلات';
+
+  @override
+  String get driverWsFieldAssignmentEvidence =>
+      'ڈرائیور کی ذمہ داری کی تصدیق کا ثبوت';
+
+  @override
+  String get driverWsFieldRecordType => 'ریکارڈ کی قسم';
+
+  @override
+  String get driverWsFieldExistingRecord => 'موجودہ ریکارڈ';
+
+  @override
+  String get driverWsFieldIdentityMethod =>
+      'ڈرائیور کی شناخت کیسے تصدیق کی گئی';
+
+  @override
+  String get driverWsFieldResolution => 'مطلوبہ حل';
+
+  @override
+  String get driverWsFieldExplanation => 'وضاحت یا مجوزہ انتظام';
+
+  @override
+  String get driverWsFieldPaymentReference =>
+      'ادائیگی کا حوالہ (اگر ادا ہو چکا ہے)';
+
+  @override
+  String get driverWsFieldProposedDate => 'مجوزہ ادائیگی کی تاریخ (YYYY-MM-DD)';
+
+  @override
+  String get driverWsFieldDecision => 'فیصلہ';
+
+  @override
+  String get driverWsFieldReviewReason => 'جائزے کی وجہ یا منظور شدہ انتظام';
+
+  @override
+  String get driverWsFieldVerifiedReference => 'تصدیق شدہ ادائیگی کا حوالہ';
+
+  @override
+  String get driverWsFieldVerifiedAmount => 'تصدیق شدہ ادائیگی کی رقم';
+
+  @override
+  String get driverWsPdfColNotice => 'نوٹس';
+
+  @override
+  String get driverWsPdfColCurrency => 'کرنسی';
+
+  @override
+  String get driverWsPdfColAmount => 'رقم';
+
+  @override
+  String get driverWsPdfColPaid => 'ادا شدہ';
+
+  @override
+  String get driverWsPdfColStatus => 'حالت';
+
+  @override
+  String get driverWsPdfColResponse => 'جواب';
+
+  @override
+  String driverWsDriverSubtitle(String site, String open, String awaiting) {
+    return '$site · $open کھلے جرمانے · $awaiting جواب کے منتظر';
+  }
+
+  @override
+  String driverWsOutstanding(String amount, String currency) {
+    return 'واجب الادا: $amount $currency';
+  }
+
+  @override
+  String driverWsSupervisorLine(String name) {
+    return 'نگران: $name';
+  }
+
+  @override
+  String driverWsManagerLine(String name) {
+    return 'منیجر: $name';
+  }
+
+  @override
+  String driverWsAssignmentPeriod(String start, String end) {
+    return '$start سے $end تک';
+  }
+
+  @override
+  String driverWsAssignmentLine(String reason) {
+    return 'تفویض: $reason';
+  }
+
+  @override
+  String driverWsDueLine(String due, String paid) {
+    return 'آخری تاریخ: $due · ادا شدہ: $paid';
+  }
+
+  @override
+  String driverWsPdfTitle(String name) {
+    return 'ڈرائیور کا گوشوارہ: $name';
+  }
+
+  @override
+  String driverWsPdfEmployeeId(String id) {
+    return 'ملازم نمبر: $id';
+  }
+
+  @override
+  String get vehicleClassTransitMixer => 'ٹرانزٹ مکسر';
+
+  @override
+  String get vehicleClassConcretePump => 'کنکریٹ پمپ';
+
+  @override
+  String get vehicleClassLinePump => 'ٹرک پر نصب لائن پمپ';
+
+  @override
+  String get vehicleClassStaffBus => 'اسٹاف بس';
+
+  @override
+  String get vehicleClassStaffVan => 'اسٹاف وین';
+
+  @override
+  String get vehicleClassDoubleCabPickup => 'ڈبل کیبن پک اپ';
+
+  @override
+  String get vehicleClassWheelLoader => 'وہیل لوڈر';
+
+  @override
+  String get vehicleClassSkidSteerLoader => 'اسکڈ اسٹیئر لوڈر';
+
+  @override
+  String get vehicleClassTowablePump => 'کھینچا جانے والا کنکریٹ پمپ';
+
+  @override
+  String get vehicleClassStationaryPump => 'ساکن کنکریٹ پمپ';
+
+  @override
+  String get vehicleClassGenerator => 'بند جنریٹر';
+
+  @override
+  String get vehicleClassChiller => 'صنعتی چلر';
+
+  @override
+  String get vehicleClassWaterChiller => 'صنعتی واٹر چلر';
+
+  @override
+  String get vehicleClassBatchingPlant => 'کنکریٹ بیچنگ پلانٹ';
+
+  @override
+  String get vehicleClassPlacingBoom => 'آزاد کھڑا پلیسنگ بوم';
+
+  @override
+  String vehicleClassConcretePumpAxles(int axles) {
+    return 'کنکریٹ پمپ · $axles ایکسل';
+  }
+
+  @override
+  String vehicleClassLinePumpAxles(int axles) {
+    return 'ٹرک پر نصب لائن پمپ · $axles ایکسل';
+  }
+
+  @override
+  String get scannerCameraStartFailedTitle => 'کیمرا شروع نہیں ہو سکا';
+
+  @override
+  String get scannerCameraStartFailedMessage =>
+      'ہو سکتا ہے کوئی اور ایپ اسے استعمال کر رہی ہو یا یہ اچانک رک گیا ہو۔ دوبارہ کوشش کریں یا نیچے کوڈ لکھیں۔';
+
+  @override
+  String get managementOverviewSiteRollup => 'مقامات ایک نظر میں';
+
+  @override
+  String get managementOverviewSiteRollupEmpty =>
+      'اس مدت میں کسی مقام پر ٹائر درج نہیں ہوئے۔';
+
+  @override
+  String get managementOverviewAtRiskShare => 'زیادہ یا انتہائی خطرے والے ٹائر';
+
+  @override
+  String get managementReportsShare => 'رپورٹ PDF شیئر کریں';
+
+  @override
+  String get managementReportsShareError =>
+      'رپورٹ شیئر نہیں ہو سکی۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get managementReportsPdfMetric => 'پیمانہ';
+
+  @override
+  String get managementReportsPdfValue => 'قدر';
+
+  @override
+  String get managementReportsPdfShare => 'حصہ';
+
+  @override
+  String get managementTeamRole => 'کردار';
+
+  @override
+  String get managementTeamUsername => 'صارف نام';
+
+  @override
+  String get managementTeamSite => 'مقام';
+
+  @override
+  String get managementTeamCountry => 'ملک';
+
+  @override
+  String get managementTeamPhone => 'فون';
+
+  @override
+  String get managementTeamEmail => 'ای میل';
+
+  @override
+  String get managementTeamStatus => 'حالت';
+
+  @override
+  String get managementTeamApproved => 'منظور شدہ';
+
+  @override
+  String get managementTeamLastLogin => 'آخری سائن ان';
+
+  @override
+  String get managementTeamNotRecorded => 'درج نہیں';
+
+  @override
+  String get managementTeamCall => 'کال کریں';
+
+  @override
+  String get managementTeamSendEmail => 'ای میل بھیجیں';
+
+  @override
+  String get managementTeamActionError => 'یہ عمل اس آلے پر دستیاب نہیں۔';
+
+  @override
+  String managementOverviewSiteTyres(String count) {
+    return '$count ٹائر';
+  }
+
+  @override
+  String managementOverviewSiteShare(String percent) {
+    return 'بیڑے کے ٹائروں کا $percent%';
+  }
+
+  @override
+  String managementReportsPdfPeriod(int days) {
+    return 'مدت: آخری $days دن';
+  }
+
+  @override
+  String managementReportsPdfCurrency(String code) {
+    return 'کرنسی: $code';
+  }
+
+  @override
+  String get adminHubTitle => 'ایڈمن کنسول';
+
+  @override
+  String get adminHubSubtitle => 'صارفین، رسائی، منظوریاں اور سائٹس';
+
+  @override
+  String get adminHubPendingApprovals => 'زیر التوا منظوریاں';
+
+  @override
+  String get adminHubPendingSignups => 'زیر التوا رجسٹریشن';
+
+  @override
+  String get adminHubLockedUsers => 'مقفل صارفین';
+
+  @override
+  String get adminHubCountUnavailable => 'لوڈ نہیں ہو سکا';
+
+  @override
+  String get adminHubSectionManage => 'انتظام';
+
+  @override
+  String get adminHubSectionMore => 'رپورٹس اور ٹیم';
+
+  @override
+  String get adminHubUsersTitle => 'صارفین';
+
+  @override
+  String get adminHubUsersSubtitle => 'منظوری، مقفل کرنا اور کردار بدلنا';
+
+  @override
+  String get adminHubAccessTitle => 'موبائل رسائی';
+
+  @override
+  String get adminHubAccessSubtitle =>
+      'ہر فرد کے لیے ایپ ماڈیول کی اجازت یا ممانعت';
+
+  @override
+  String get adminHubApprovalsTitle => 'منظوریاں';
+
+  @override
+  String get adminHubApprovalsSubtitle => 'دستخط کی منتظر معائنے اور چیک لسٹیں';
+
+  @override
+  String get adminHubSitesTitle => 'سائٹس';
+
+  @override
+  String get adminHubSitesSubtitle => 'علاقے اور فعال حیثیت';
+
+  @override
+  String get adminHubAiTitle => 'فلیٹ اے آئی چیٹ';
+
+  @override
+  String get adminHubAiSubtitle => 'فلیٹ مینجمنٹ کے بارے میں سوال پوچھیں';
+
+  @override
+  String get adminHubOpenModule => 'یہ ماڈیول کھولیں';
+
+  @override
+  String get adminModuleInspect => 'نیا معائنہ';
+
+  @override
+  String get adminModuleScan => 'اسکین';
+
+  @override
+  String get adminModuleSerial => 'سیریل تلاش';
+
+  @override
+  String get adminModuleTyreChange => 'ٹائر کی تبدیلی';
+
+  @override
+  String get adminModuleChecklists => 'چیک لسٹیں';
+
+  @override
+  String get adminModuleMeter => 'میٹر لاگ';
+
+  @override
+  String get adminModuleWashing => 'گاڑیوں کی دھلائی';
+
+  @override
+  String get adminModuleReportIssue => 'مسئلے کی اطلاع';
+
+  @override
+  String get adminModuleRepairRequest => 'مرمت کی درخواست';
+
+  @override
+  String get adminModuleRecords => 'ٹائر ریکارڈز';
+
+  @override
+  String get adminModuleVehicles => 'گاڑیاں';
+
+  @override
+  String get adminModuleHistory => 'تاریخچہ';
+
+  @override
+  String get adminModuleAlerts => 'الرٹس';
+
+  @override
+  String get adminModuleCalendar => 'کیلنڈر';
+
+  @override
+  String get adminModuleAccidents => 'حادثات';
+
+  @override
+  String get adminModuleReportAccident => 'حادثہ درج کریں';
+
+  @override
+  String get adminModuleWorkorders => 'ورک آرڈرز';
+
+  @override
+  String get adminModuleRca => 'بنیادی وجہ';
+
+  @override
+  String get adminModuleTasks => 'کام';
+
+  @override
+  String get adminModuleStock => 'اسٹاک گنتی';
+
+  @override
+  String get adminModulePm => 'واجب الادا دیکھ بھال';
+
+  @override
+  String get adminModuleWorkshop => 'میرے کام';
+
+  @override
+  String get adminModuleOverview => 'جائزہ';
+
+  @override
+  String get adminModuleReports => 'رپورٹس';
+
+  @override
+  String get adminModuleAnalytics => 'تجزیات';
+
+  @override
+  String get adminModuleStockManage => 'اسٹاک مینجمنٹ';
+
+  @override
+  String get adminModuleAi => 'فلیٹ اے آئی';
+
+  @override
+  String get adminModuleTeam => 'ٹیم';
+
+  @override
+  String get adminModuleApprovals => 'منظوریاں';
+
+  @override
+  String get adminModuleAdmin => 'ایڈمن کنسول';
+
+  @override
+  String get adminModuleUsers => 'صارفین کا انتظام';
+
+  @override
+  String get adminUsersTitle => 'صارفین';
+
+  @override
+  String adminUsersCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count صارفین',
+      one: '1 صارف',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get adminUsersSearchHint => 'نام، یوزر نیم یا ملازم نمبر سے تلاش کریں';
+
+  @override
+  String get adminUsersFilterAll => 'سب';
+
+  @override
+  String get adminUsersStatusPending => 'زیر التوا';
+
+  @override
+  String get adminUsersStatusActive => 'فعال';
+
+  @override
+  String get adminUsersStatusLocked => 'مقفل';
+
+  @override
+  String get adminUsersAllRoles => 'تمام کردار';
+
+  @override
+  String get adminUsersEmptyTitle => 'کوئی صارف نہیں ملا';
+
+  @override
+  String get adminUsersEmptyMessage => 'کوئی اور تلاش یا فلٹر آزمائیں۔';
+
+  @override
+  String get adminUsersLoadFailed => 'صارفین لوڈ نہیں ہو سکے۔';
+
+  @override
+  String get adminUsersReadOnlyNote =>
+      'صرف سپر ایڈمن صارفین میں تبدیلی کر سکتا ہے۔ آپ فہرست دیکھ سکتے ہیں۔';
+
+  @override
+  String get adminUsersSelfNote =>
+      'یہ آپ کا اپنا اکاؤنٹ ہے۔ آپ اسے مقفل یا اس کا کردار تبدیل نہیں کر سکتے۔';
+
+  @override
+  String get adminUsersNoName => 'بے نام صارف';
+
+  @override
+  String get adminUsersNoRole => 'کوئی کردار تفویض نہیں';
+
+  @override
+  String get adminUsersSuperAdminBadge => 'سپر ایڈمن';
+
+  @override
+  String get adminUsersFieldRole => 'کردار';
+
+  @override
+  String get adminUsersFieldUsername => 'یوزر نیم';
+
+  @override
+  String get adminUsersFieldEmployeeId => 'ملازم نمبر';
+
+  @override
+  String get adminUsersFieldEmail => 'ای میل';
+
+  @override
+  String get adminUsersFieldSite => 'سائٹ';
+
+  @override
+  String get adminUsersFieldCountry => 'ملک';
+
+  @override
+  String get adminUsersFieldJoined => 'شمولیت';
+
+  @override
+  String get adminUsersFieldPendingReason => 'رجسٹریشن نوٹ';
+
+  @override
+  String get adminUsersActionApprove => 'منظور کریں';
+
+  @override
+  String get adminUsersActionLock => 'مقفل کریں';
+
+  @override
+  String get adminUsersActionUnlock => 'غیر مقفل کریں';
+
+  @override
+  String get adminUsersActionDeactivate => 'غیر فعال کریں';
+
+  @override
+  String get adminUsersActionSetRole => 'کردار تبدیل کریں';
+
+  @override
+  String get adminUsersConfirmApproveTitle => 'اس صارف کو منظور کریں؟';
+
+  @override
+  String adminUsersConfirmApproveMessage(String name) {
+    return '$name سائن ان کر کے ایپ استعمال کر سکے گا۔';
+  }
+
+  @override
+  String get adminUsersConfirmLockTitle => 'اس صارف کو مقفل کریں؟';
+
+  @override
+  String adminUsersConfirmLockMessage(String name) {
+    return '$name غیر مقفل ہونے تک سائن ان نہیں کر سکے گا۔';
+  }
+
+  @override
+  String get adminUsersConfirmUnlockTitle => 'اس صارف کو غیر مقفل کریں؟';
+
+  @override
+  String adminUsersConfirmUnlockMessage(String name) {
+    return '$name دوبارہ سائن ان کر سکے گا۔';
+  }
+
+  @override
+  String get adminUsersDeactivateTitle => 'اس صارف کو غیر فعال کریں';
+
+  @override
+  String adminUsersDeactivateMessage(String name) {
+    return '$name کی رسائی ختم ہو جائے گی اور اکاؤنٹ مقفل ہو گا۔ وجہ لازمی ہے۔';
+  }
+
+  @override
+  String get adminUsersSetRoleTitle => 'کردار تبدیل کریں';
+
+  @override
+  String adminUsersSetRoleMessage(String name) {
+    return '$name کے لیے نیا کردار منتخب کریں۔ وجہ لازمی ہے۔';
+  }
+
+  @override
+  String get adminUsersReasonLabel => 'وجہ';
+
+  @override
+  String get adminUsersReasonRequired => 'وجہ درج کریں۔';
+
+  @override
+  String get adminUsersRoleRequired => 'کردار منتخب کریں۔';
+
+  @override
+  String get adminUsersActionDone => 'محفوظ ہو گیا۔';
+
+  @override
+  String get adminUsersActionFailed => 'تبدیلی محفوظ نہیں ہو سکی۔';
+
+  @override
+  String get adminAccessTitle => 'موبائل رسائی';
+
+  @override
+  String get adminAccessPickUser => 'کسی فرد کو منتخب کریں';
+
+  @override
+  String get adminAccessChangeUser => 'فرد تبدیل کریں';
+
+  @override
+  String get adminAccessIntro =>
+      'تبدیلیاں صرف اس فرد کی موبائل ایپ پر لاگو ہوتی ہیں۔ ڈیفالٹ ان کے کردار کے مطابق ہے۔';
+
+  @override
+  String get adminAccessDefault => 'ڈیفالٹ';
+
+  @override
+  String get adminAccessAllow => 'اجازت';
+
+  @override
+  String get adminAccessDeny => 'ممانعت';
+
+  @override
+  String get adminAccessRoleDefaultAllowed => 'کردار کا ڈیفالٹ: اجازت ہے';
+
+  @override
+  String get adminAccessRoleDefaultDenied => 'کردار کا ڈیفالٹ: اجازت نہیں';
+
+  @override
+  String get adminAccessRoleDefaultAdminOnly => 'ڈیفالٹ طور پر صرف ایڈمن';
+
+  @override
+  String get adminAccessAdminNote =>
+      'ایڈمن اور سپر ایڈمن کی مکمل رسائی ہمیشہ برقرار رہتی ہے۔';
+
+  @override
+  String get adminAccessReadOnlyNote => 'صرف سپر ایڈمن رسائی تبدیل کر سکتا ہے۔';
+
+  @override
+  String get adminAccessLoadFailed => 'اس فرد کی رسائی لوڈ نہیں ہو سکی۔';
+
+  @override
+  String get adminAccessSaveFailed => 'رسائی اپ ڈیٹ نہیں ہو سکی۔';
+
+  @override
+  String get adminAccessSaved => 'رسائی اپ ڈیٹ ہو گئی۔';
+
+  @override
+  String get adminAccessGroupField => 'فیلڈ';
+
+  @override
+  String get adminAccessGroupFleet => 'فلیٹ';
+
+  @override
+  String get adminAccessGroupMaintenance => 'دیکھ بھال';
+
+  @override
+  String get adminAccessGroupManagement => 'انتظامیہ';
+
+  @override
+  String get adminAccessGroupAdmin => 'ایڈمن';
+
+  @override
+  String get adminApprovalsTabInspections => 'معائنے';
+
+  @override
+  String get adminApprovalsTabChecklists => 'چیک لسٹیں';
+
+  @override
+  String get adminSitesTitle => 'سائٹس';
+
+  @override
+  String adminSitesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count سائٹس',
+      one: '1 سائٹ',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get adminSitesSearchHint => 'سائٹ، علاقہ یا کوڈ تلاش کریں';
+
+  @override
+  String get adminSitesActive => 'فعال';
+
+  @override
+  String get adminSitesInactive => 'غیر فعال';
+
+  @override
+  String get adminSitesNoRegion => 'کوئی علاقہ نہیں';
+
+  @override
+  String get adminSitesEmptyTitle => 'کوئی سائٹ نہیں';
+
+  @override
+  String get adminSitesEmptyMessage =>
+      'آپ کی تنظیم کے لیے ابھی کوئی سائٹ درج نہیں ہے۔';
+
+  @override
+  String get adminSitesLoadFailed => 'سائٹس لوڈ نہیں ہو سکیں۔';
+
+  @override
+  String get adminSitesReadOnlyNote =>
+      'صرف ایڈمن یا مینیجر سائٹس میں ترمیم کر سکتا ہے۔';
+
+  @override
+  String get adminSitesEditTitle => 'سائٹ میں ترمیم';
+
+  @override
+  String get adminSitesRegionLabel => 'علاقہ';
+
+  @override
+  String get adminSitesActiveLabel => 'فعال سائٹ';
+
+  @override
+  String get adminSitesSave => 'محفوظ کریں';
+
+  @override
+  String get adminSitesSaved => 'سائٹ اپ ڈیٹ ہو گئی۔';
+
+  @override
+  String get adminSitesSaveFailed => 'سائٹ اپ ڈیٹ نہیں ہو سکی۔';
+
+  @override
+  String get adminAiTitle => 'فلیٹ اے آئی چیٹ';
+
+  @override
+  String get adminAiSubtitle =>
+      'جوابات اے آئی سروس سے آتے ہیں۔ اہم اعداد ایپ میں چیک کریں۔';
+
+  @override
+  String get adminAiHint => 'فلیٹ مینجمنٹ کے بارے میں پوچھیں';
+
+  @override
+  String get adminAiSend => 'بھیجیں';
+
+  @override
+  String get adminAiClear => 'چیٹ صاف کریں';
+
+  @override
+  String get adminAiEmptyTitle => 'سوال پوچھیں';
+
+  @override
+  String get adminAiEmptyMessage =>
+      'مثلاً، فی کلومیٹر ٹائر کی لاگت کیسے کم کی جائے۔';
+
+  @override
+  String get adminAiThinking => 'سوچ رہا ہے';
+
+  @override
+  String get adminAiYou => 'آپ';
+
+  @override
+  String get adminAiAssistant => 'فلیٹ اے آئی';
+
+  @override
+  String get adminAiErrorDisabled =>
+      'اے آئی خصوصیات آپ کے ایڈمن نے بند کر رکھی ہیں۔';
+
+  @override
+  String get adminAiErrorBudget => 'ماہانہ اے آئی بجٹ پورا ہو چکا ہے۔';
+
+  @override
+  String get adminAiErrorRateLimit =>
+      'بہت زیادہ درخواستیں۔ تھوڑی دیر انتظار کر کے دوبارہ کوشش کریں۔';
+
+  @override
+  String get adminAiErrorEmpty => 'اے آئی سروس نے کوئی جواب نہیں دیا۔';
+
+  @override
+  String get adminAiErrorUnavailable =>
+      'اے آئی سروس ابھی دستیاب نہیں۔ کچھ دیر بعد کوشش کریں۔';
+
+  @override
+  String get extrasFleetAiTitle => 'فلیٹ اے آئی';
+
+  @override
+  String get extrasFleetAiSubtitle => 'آپ کے فلیٹ کے تازہ ڈیٹا سے جوابات';
+
+  @override
+  String get extrasFleetAiSnapshotLoading => 'فلیٹ کا تازہ ڈیٹا پڑھا جا رہا ہے';
+
+  @override
+  String get extrasFleetAiNoData =>
+      'فلیٹ کا تازہ ڈیٹا نہیں پڑھا جا سکا، اس لیے معاون ابھی آپ کے ریکارڈ سے جواب نہیں دے سکتا۔';
+
+  @override
+  String extrasFleetAiGroundedOn(int n) {
+    return 'فلیٹ کی 5 تازہ گنتیوں میں سے $n کی بنیاد پر';
+  }
+
+  @override
+  String get extrasFleetAiEmptyTitle => 'اپنے فلیٹ کے بارے میں پوچھیں';
+
+  @override
+  String get extrasFleetAiEmptyMessage =>
+      'معاون صرف آپ کے فلیٹ کی تازہ گنتیوں سے جواب دیتا ہے اور بتائے گا جب کوئی چیز یہاں دستیاب نہ ہو۔';
+
+  @override
+  String get extrasFleetAiSuggestedTitle => 'یہ پوچھ کر دیکھیں';
+
+  @override
+  String get extrasFleetAiSuggestOverview => 'مجھے فلیٹ کی صحت کا جائزہ دیں';
+
+  @override
+  String get extrasFleetAiSuggestRisk =>
+      'کتنے ٹائر شدید یا زیادہ خطرے میں ہیں؟';
+
+  @override
+  String get extrasFleetAiSuggestActions =>
+      'سب سے پہلے کس چیز پر توجہ دینی چاہیے؟';
+
+  @override
+  String get extrasFleetAiSuggestAccidents =>
+      'پچھلے 30 دنوں میں کتنے حادثات رپورٹ ہوئے؟';
+
+  @override
+  String get extrasFleetAiInputHint => 'اپنے فلیٹ کے بارے میں سوال پوچھیں';
+
+  @override
+  String get extrasFleetAiSend => 'بھیجیں';
+
+  @override
+  String get extrasFleetAiThinking => 'سوچا جا رہا ہے';
+
+  @override
+  String get extrasFleetAiClear => 'گفتگو صاف کریں';
+
+  @override
+  String get extrasFleetAiDisclaimer =>
+      'اے آئی کے جوابات غلط ہو سکتے ہیں۔ کوئی قدم اٹھانے سے پہلے اہم اعداد ایپ میں چیک کریں۔';
+
+  @override
+  String get extrasFleetAiYou => 'آپ';
+
+  @override
+  String get extrasFleetAiErrDisabled =>
+      'آپ کے منتظم نے اے آئی کی سہولیات بند کر دی ہیں۔';
+
+  @override
+  String get extrasFleetAiErrBudget =>
+      'اے آئی کا ماہانہ بجٹ ختم ہو گیا ہے۔ اپنے منتظم سے رابطہ کریں۔';
+
+  @override
+  String get extrasFleetAiErrRateLimited =>
+      'مختصر وقت میں بہت زیادہ سوالات۔ تھوڑا انتظار کر کے دوبارہ کوشش کریں۔';
+
+  @override
+  String get extrasFleetAiErrOffline =>
+      'کنکشن نہیں ہے۔ آپ کا سوال نہیں بھیجا گیا۔';
+
+  @override
+  String get extrasFleetAiErrUnavailable =>
+      'معاون اس وقت دستیاب نہیں ہے۔ تھوڑی دیر بعد دوبارہ کوشش کریں۔';
+
+  @override
+  String get repairReqCatEngine => 'انجن';
+
+  @override
+  String get repairReqCatTransmission => 'ٹرانسمیشن';
+
+  @override
+  String get repairReqCatBrakes => 'بریکیں';
+
+  @override
+  String get repairReqCatTyres => 'ٹائر';
+
+  @override
+  String get repairReqCatHydraulics => 'ہائیڈرولکس';
+
+  @override
+  String get repairReqCatElectrical => 'برقی نظام';
+
+  @override
+  String get repairReqCatBody => 'باڈی';
+
+  @override
+  String get repairReqCatDrumMixer => 'ڈرم / مکسر';
+
+  @override
+  String get repairReqCatPump => 'پمپ';
+
+  @override
+  String get repairReqCatAirSystem => 'ایئر سسٹم';
+
+  @override
+  String get repairReqCatCooling => 'کولنگ';
+
+  @override
+  String get repairReqCatOther => 'دیگر';
+
+  @override
+  String get repairReqTitle => 'مرمت کی درخواست';
+
+  @override
+  String get repairReqSubtitle => 'ورکشاپ کو خرابی کی اطلاع دیں';
+
+  @override
+  String get repairReqMachine => 'مشین';
+
+  @override
+  String get repairReqChooseAsset => 'مشین منتخب کریں';
+
+  @override
+  String get repairReqSelect => 'منتخب کریں';
+
+  @override
+  String get repairReqChange => 'تبدیل کریں';
+
+  @override
+  String repairReqPlate(String plate) {
+    return 'پلیٹ $plate';
+  }
+
+  @override
+  String get repairReqErrAsset => 'وہ مشین منتخب کریں جس میں خرابی ہے۔';
+
+  @override
+  String get repairReqSite => 'سائٹ';
+
+  @override
+  String get repairReqSiteHint => 'مشین کی رجسٹرڈ سائٹ سے بھرا جاتا ہے';
+
+  @override
+  String get repairReqCategory => 'کیا خرابی ہے';
+
+  @override
+  String get repairReqDescription => 'خرابی بیان کریں';
+
+  @override
+  String get repairReqDescriptionHint => 'کیا ہوا، آپ کیا دیکھ یا سن رہے ہیں';
+
+  @override
+  String get repairReqErrDescription => 'بھیجنے سے پہلے خرابی بیان کریں۔';
+
+  @override
+  String get repairReqPriority => 'ترجیح';
+
+  @override
+  String get repairReqOdometer => 'اوڈومیٹر (کلومیٹر)';
+
+  @override
+  String get repairReqEngineHours => 'انجن کے گھنٹے';
+
+  @override
+  String get repairReqOptional => 'اختیاری';
+
+  @override
+  String get repairReqErrMeter =>
+      'صفر یا اس سے زیادہ عدد درج کریں، یا خالی چھوڑ دیں۔';
+
+  @override
+  String get repairReqOnlineNote =>
+      'یہ درخواست براہ راست ورکشاپ کو بھیجی جاتی ہے اور اس کے لیے کنکشن ضروری ہے۔ آر ایف آر نمبر دفتر جاری کرتا ہے۔';
+
+  @override
+  String get repairReqSubmit => 'مرمت کی درخواست بھیجیں';
+
+  @override
+  String get repairReqErrNoProfile =>
+      'آپ کی پروفائل ابھی لوڈ نہیں ہوئی۔ کچھ دیر بعد دوبارہ کوشش کریں۔';
+
+  @override
+  String get repairReqErrOffline =>
+      'کنکشن نہیں ہے۔ کچھ نہیں بھیجا گیا۔ آپ کی معلومات محفوظ ہیں، سگنل آنے پر دوبارہ بھیجیں۔';
+
+  @override
+  String get repairReqErrPermission =>
+      'آپ کے اکاؤنٹ کو مرمت کی درخواست دینے کی اجازت نہیں ہے۔ اپنے منتظم سے رابطہ کریں۔';
+
+  @override
+  String get repairReqErrFailed =>
+      'درخواست نہیں بھیجی جا سکی۔ آپ کی معلومات محفوظ ہیں، دوبارہ کوشش کریں۔';
+
+  @override
+  String get repairReqSentTitle => 'مرمت کی درخواست بھیج دی گئی';
+
+  @override
+  String repairReqSentWithNumber(String rfr) {
+    return 'ورکشاپ کو یہ $rfr کے طور پر موصول ہو گئی ہے۔';
+  }
+
+  @override
+  String get repairReqSentNoNumber =>
+      'ورکشاپ کو یہ موصول ہو گئی ہے۔ دفتر آر ایف آر نمبر جاری کرے گا۔';
+
+  @override
+  String get repairReqAnother => 'ایک اور درخواست';
+
+  @override
+  String get repairReqDone => 'مکمل';
+
+  @override
+  String get repairReqSearchHint => 'اثاثہ، پلیٹ، قسم یا سائٹ سے تلاش کریں';
+
+  @override
+  String get repairReqNoAssets =>
+      'آپ کے دائرہ کار میں کوئی مشین رجسٹرڈ نہیں ہے۔';
+
+  @override
+  String get repairReqNoMatch => 'اس تلاش سے کوئی مشین نہیں ملی۔';
+
+  @override
+  String repairReqRefineSearch(int n) {
+    return '$n مشینیں ملیں۔ فہرست محدود کرنے کے لیے مزید لکھیں۔';
+  }
+
+  @override
+  String get repairReqCachedList =>
+      'آف لائن: اس ڈیوائس پر محفوظ فلیٹ دکھایا جا رہا ہے۔';
+
+  @override
+  String get registerTitle => 'اکاؤنٹ بنائیں';
+
+  @override
+  String get registerChecking => 'دیکھا جا رہا ہے کہ رجسٹریشن کھلی ہے یا نہیں';
+
+  @override
+  String get registerUnreachableTitle => 'سرور تک رسائی نہیں ہو سکی';
+
+  @override
+  String get registerUnreachableMessage =>
+      'رجسٹریشن کے لیے کنکشن ضروری ہے۔ سگنل چیک کر کے دوبارہ کوشش کریں۔';
+
+  @override
+  String get registerClosedTitle => 'رجسٹریشن بند ہے';
+
+  @override
+  String get registerClosedMessage =>
+      'اکاؤنٹ آپ کا منتظم بناتا ہے۔ دعوت کے لیے اپنے منتظم سے رابطہ کریں۔';
+
+  @override
+  String get registerBackToSignIn => 'سائن ان پر واپس جائیں';
+
+  @override
+  String get registerDoneTitle => 'اکاؤنٹ بن گیا';
+
+  @override
+  String get registerDoneMessage =>
+      'آپ کا اکاؤنٹ منظوری کا منتظر ہے۔ منتظم آپ کا کردار اور سائٹ مقرر کرے گا، پھر آپ سائن ان کر سکیں گے۔';
+
+  @override
+  String get registerIntro =>
+      'اپنے صارف نام اور ملازم آئی ڈی سے اکاؤنٹ کی درخواست دیں۔ منتظم اسے منظور کر کے آپ کا کردار اور سائٹ مقرر کرتا ہے۔';
+
+  @override
+  String get registerFullName => 'پورا نام';
+
+  @override
+  String get registerOptional => 'اختیاری';
+
+  @override
+  String get registerUsername => 'صارف نام';
+
+  @override
+  String get registerUsernameHelp =>
+      'کم از کم 3 حروف: حروف، اعداد، نقطہ، انڈر اسکور یا ہائفن';
+
+  @override
+  String get registerEmployeeId => 'ملازم آئی ڈی';
+
+  @override
+  String get registerPassword => 'پاس ورڈ';
+
+  @override
+  String registerPasswordHelp(int n) {
+    return 'کم از کم $n حروف';
+  }
+
+  @override
+  String get registerConfirm => 'پاس ورڈ کی تصدیق';
+
+  @override
+  String get registerShowPassword => 'پاس ورڈ دکھائیں';
+
+  @override
+  String get registerHidePassword => 'پاس ورڈ چھپائیں';
+
+  @override
+  String get registerApprovalNote =>
+      'یہاں آپ کردار یا سائٹ منتخب نہیں کر سکتے۔ نئے اکاؤنٹ منتظم کی منظوری تک زیر التوا رہتے ہیں۔';
+
+  @override
+  String get registerSubmit => 'اکاؤنٹ کی درخواست کریں';
+
+  @override
+  String get registerHaveAccount => 'پہلے سے اکاؤنٹ ہے؟ سائن ان کریں';
+
+  @override
+  String get registerErrUsernameShort =>
+      'کم از کم 3 حروف کا صارف نام درج کریں۔';
+
+  @override
+  String get registerErrUsernameChars =>
+      'صرف حروف، اعداد، نقطہ، انڈر اسکور یا ہائفن استعمال کریں۔';
+
+  @override
+  String get registerErrEmployeeId => 'اپنی ملازم آئی ڈی درج کریں۔';
+
+  @override
+  String registerErrPasswordShort(int n) {
+    return 'پاس ورڈ کم از کم $n حروف کا ہونا چاہیے۔';
+  }
+
+  @override
+  String get registerErrMismatch => 'پاس ورڈ ایک جیسے نہیں ہیں۔';
+
+  @override
+  String get registerErrTaken =>
+      'یہ صارف نام یا ملازم آئی ڈی پہلے سے استعمال میں ہے۔ کوئی اور منتخب کریں۔';
+
+  @override
+  String get registerErrOffline =>
+      'کنکشن نہیں ہے۔ آپ کا اکاؤنٹ نہیں بنا۔ سگنل آنے پر دوبارہ کوشش کریں۔';
+
+  @override
+  String get registerErrFailed => 'آپ کا اکاؤنٹ نہیں بن سکا۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get loginCreateAccount => 'اکاؤنٹ بنائیں';
+
+  @override
+  String get accAssessmentLoadFailed => 'جائزہ لوڈ نہیں ہو سکا';
+
+  @override
+  String get accSafetyAndMobility => 'حفاظت اور نقل و حرکت';
+
+  @override
+  String get accSafeToMove => 'منتقل کرنا محفوظ ہے';
+
+  @override
+  String get accRecoveryTowRequired => 'ریکوری / ٹوئنگ درکار';
+
+  @override
+  String get accVehicleOffRoad => 'گاڑی سڑک سے باہر (VOR)';
+
+  @override
+  String get accDamageAssessment => 'نقصان کا جائزہ';
+
+  @override
+  String accDamageAreaCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count حصے',
+      one: '1 حصہ',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get accNoDamageAreas =>
+      'اس کیس پر ابھی تک نقصان کا کوئی حصہ نشان زد نہیں کیا گیا۔';
+
+  @override
+  String get accLabourAndPartsEstimate => 'مزدوری اور پرزوں کا تخمینہ';
+
+  @override
+  String get accLabourHours => 'مزدوری کے گھنٹے';
+
+  @override
+  String get accLabourEstimate => 'مزدوری کا تخمینہ';
+
+  @override
+  String get accPartsEstimate => 'پرزوں کا تخمینہ';
+
+  @override
+  String get accTotalPreliminaryEstimate => 'کل ابتدائی تخمینہ';
+
+  @override
+  String get accPartsAvailable => 'دستیاب پرزے';
+
+  @override
+  String get accSpecialOrder => 'خصوصی آرڈر';
+
+  @override
+  String get accPartsAvailability => 'پرزوں کی دستیابی';
+
+  @override
+  String get accRepairRouteRecommendation => 'مرمت کے راستے کی سفارش';
+
+  @override
+  String get accTotalLossPossible => 'مکمل نقصان ممکن';
+
+  @override
+  String get accSelectedWorkshop => 'منتخب ورکشاپ';
+
+  @override
+  String get accCity => 'شہر';
+
+  @override
+  String get accExpectedDurationDays => 'متوقع مدت (دن)';
+
+  @override
+  String get accQuotationStatus => 'کوٹیشن کی حالت';
+
+  @override
+  String accRequiredAttachments(int count) {
+    return 'لازمی منسلکات ($count)';
+  }
+
+  @override
+  String get accAttachVendorQuotation =>
+      'بیرونی ورکشاپ کو بھیجنے کے لیے وینڈر کی کوٹیشن منسلک کریں۔';
+
+  @override
+  String get accAfterSubmitNotify => 'جمع کرانے کے بعد اطلاع';
+
+  @override
+  String get accSaveAssessment => 'جائزہ محفوظ کریں';
+
+  @override
+  String get accAssessmentSubmitted => 'جائزہ جمع ہو گیا';
+
+  @override
+  String get accSubmitAssessment => 'جائزہ جمع کریں اور آگے بھیجیں';
+
+  @override
+  String get accSubmissionNeedsQuotation =>
+      'بیرونی راستے کے لیے جمع کرانے میں وینڈر کی کوٹیشن درکار ہے۔';
+
+  @override
+  String accFieldsNotStored(String fields) {
+    return 'یہ فیلڈز سرور پر محفوظ نہیں ہو سکیں: $fields۔';
+  }
+
+  @override
+  String accAssessmentRouted(String route) {
+    return 'جائزہ جمع ہو کر $route کو بھیج دیا گیا۔';
+  }
+
+  @override
+  String get accAssessmentSaved => 'جائزہ محفوظ ہو گیا۔';
+
+  @override
+  String accDocumentAttached(String document) {
+    return '$document منسلک ہو گئی۔';
+  }
+
+  @override
+  String get accKm => 'کلومیٹر';
+
+  @override
+  String accKmValue(String km) {
+    return '$km کلومیٹر';
+  }
+
+  @override
+  String get accPlate => 'نمبر پلیٹ';
+
+  @override
+  String get accSiteLocation => 'سائٹ · مقام';
+
+  @override
+  String accViewDamageMap(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'نقصان کا نقشہ دیکھیں · $count حصے',
+      one: 'نقصان کا نقشہ دیکھیں · 1 حصہ',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get accActionNotAssessed => 'کارروائی: ابھی جائزہ نہیں لیا گیا';
+
+  @override
+  String accActionValue(String value) {
+    return 'کارروائی: $value';
+  }
+
+  @override
+  String get accRecommended => 'تجویز کردہ';
+
+  @override
+  String accUploadNamedDocument(String document) {
+    return '$document اپ لوڈ کریں';
+  }
+
+  @override
+  String get accClaimLoadFailed => 'دعویٰ لوڈ نہیں ہو سکا';
+
+  @override
+  String get accClaimExternalRepairBanner => 'بیرونی مرمت کا جائزہ';
+
+  @override
+  String get accClaimDocumentPackage => 'دعوے کی دستاویزات کا پیکج';
+
+  @override
+  String get accClaimRegistrationLocked =>
+      'تمام لازمی دستاویزات مکمل ہونے پر دعوے کا اندراج کھل جائے گا۔';
+
+  @override
+  String accRequestDocument(String document) {
+    return '$document کی درخواست کریں';
+  }
+
+  @override
+  String get accUploadDocument => 'دستاویز اپ لوڈ کریں';
+
+  @override
+  String get accClaimRegistration => 'دعوے کا اندراج';
+
+  @override
+  String get accInsurer => 'بیمہ کمپنی';
+
+  @override
+  String get accPolicyNo => 'پالیسی نمبر';
+
+  @override
+  String get accClaimNumber => 'دعویٰ نمبر';
+
+  @override
+  String get accClaimNumberAuto => 'اندراج کے بعد خودکار طور پر بنے گا';
+
+  @override
+  String get accLiability => 'ذمہ داری';
+
+  @override
+  String get accGccLiabilityPct => 'GCC کی ذمہ داری %';
+
+  @override
+  String get accClaimAmount => 'دعوے کی رقم';
+
+  @override
+  String get accDeductible => 'کٹوتی';
+
+  @override
+  String get accNetClaimable => 'قابل دعویٰ خالص رقم';
+
+  @override
+  String get accClaimRegistered => 'دعویٰ بیمہ کمپنی کے پاس درج ہو گیا';
+
+  @override
+  String get accRegisterClaim => 'بیمہ کمپنی کے پاس دعویٰ درج کریں';
+
+  @override
+  String get accClaimEnableWhenComplete =>
+      'تمام لازمی دستاویزات مکمل ہونے پر فعال ہوگا۔';
+
+  @override
+  String get accPaymentAndRecovery => 'ادائیگی اور وصولی';
+
+  @override
+  String get accApprovedAmount => 'منظور شدہ رقم';
+
+  @override
+  String get accRecoveredAmount => 'وصول شدہ رقم';
+
+  @override
+  String get accOutstanding => 'بقایا';
+
+  @override
+  String get accRecoverySource => 'وصولی کا ذریعہ';
+
+  @override
+  String get accRecoverySourceHint => 'بیمہ کمپنی، تیسرا فریق، ڈرائیور';
+
+  @override
+  String get accLastUpdated => 'آخری تازہ کاری';
+
+  @override
+  String get accSaveRecovery => 'وصولی محفوظ کریں';
+
+  @override
+  String get accUpdateRecovery => 'وصولی کی رقم اپ ڈیٹ کریں';
+
+  @override
+  String get accRegisterClaimFirst => 'پہلے دعویٰ درج کریں۔';
+
+  @override
+  String get accRecoveryEditableNote =>
+      'کیس کی آپریشنل بندش کے بعد بھی وصولی کی رقوم قابل ترمیم رہتی ہیں۔ ہر ترمیم کا وقت درج اور آڈٹ ہوتا ہے۔';
+
+  @override
+  String get accAfterRegistrationNotify => 'اندراج کے بعد اطلاع';
+
+  @override
+  String get accClaimNotificationIncludes =>
+      'اطلاع میں دعویٰ نمبر، دستاویزات کی حالت، دعوے کی رقم اور اگلا قدم شامل ہے۔';
+
+  @override
+  String get accSaveClaimDraft => 'دعوے کا مسودہ محفوظ کریں';
+
+  @override
+  String get accCompleteDocuments => 'دستاویزات مکمل کریں';
+
+  @override
+  String accCommandCenterMonitoring(String owner) {
+    return '$owner مقررہ مدت اور نامکمل دستاویزات کی نگرانی کر رہا ہے۔';
+  }
+
+  @override
+  String accCommandCenterRole(String role) {
+    return '$role (کمانڈ سینٹر)';
+  }
+
+  @override
+  String get accClaimDraftSaved =>
+      'دعوے کا مسودہ اس ڈیوائس پر محفوظ ہو گیا۔ کچھ بھیجا نہیں گیا۔';
+
+  @override
+  String accDocumentRequestLogged(String document) {
+    return '$document کی درخواست کیس میں درج ہو گئی۔';
+  }
+
+  @override
+  String get accWhichDocument => 'یہ کون سی دستاویز ہے؟';
+
+  @override
+  String accDocumentUploaded(String document) {
+    return '$document دعوے کے پیکج میں اپ لوڈ ہو گئی۔';
+  }
+
+  @override
+  String get accClaimRegisterMissing =>
+      'پہلے بیمہ کمپنی، پالیسی نمبر اور دعوے کی رقم درج کریں۔';
+
+  @override
+  String accRegisterClaimConfirm(
+      String claimNo, String insurer, String policyNo) {
+    return 'پالیسی $policyNo کے تحت $insurer کے لیے دعویٰ $claimNo کیس میں درج ہو جائے گا۔ ایپ سے اسے واپس نہیں لیا جا سکتا۔';
+  }
+
+  @override
+  String get accRegister => 'درج کریں';
+
+  @override
+  String accClaimRegisteredSnack(String claimNo) {
+    return 'دعویٰ $claimNo بیمہ کمپنی کے پاس درج ہو گیا۔';
+  }
+
+  @override
+  String get accRecoveryMissing => 'وصول شدہ رقم اور اس کا ذریعہ درج کریں۔';
+
+  @override
+  String get accRecoveryRecorded => 'وصولی درج ہو گئی۔';
+
+  @override
+  String accOptionalSuffix(String label) {
+    return '$label (اختیاری)';
+  }
+
+  @override
+  String get accIntakeFleetMasterLockNote =>
+      'یہ تفصیلات فلیٹ ریکارڈ سے لی گئی ہیں اور یہاں تبدیل نہیں ہو سکتیں۔ اگر کوئی تفصیل غلط ہو تو براہ کرم فلیٹ سسٹم میں اسے اپ ڈیٹ کریں۔';
+
+  @override
+  String get accIntakeIncidentSiteHelp =>
+      'اس واقعے کی سائٹ / مقام منتخب کریں۔ یہ اثاثے کی بنیادی سائٹ سے مختلف ہو سکتی ہے۔';
+
+  @override
+  String get accIntakeAssetNo => 'اثاثہ نمبر';
+
+  @override
+  String get accIntakeVehicleType => 'گاڑی کی قسم';
+
+  @override
+  String get accIntakeMakeModel => 'میک / ماڈل';
+
+  @override
+  String get accIntakeHomeSite => 'سائٹ (بنیادی)';
+
+  @override
+  String get accIntakeCountry => 'ملک';
+
+  @override
+  String get accIntakeCurrentMeter => 'موجودہ میٹر';
+
+  @override
+  String get accIntakeStatus => 'حالت';
+
+  @override
+  String get accIntakeAssetLoaded => 'اثاثہ فلیٹ ریکارڈ سے لوڈ ہو گیا';
+
+  @override
+  String get accIntakeAutoFilled => 'فلیٹ ریکارڈ سے خودکار طور پر بھرا گیا';
+
+  @override
+  String get accIntakeWhereOccurred => 'واقعہ کہاں پیش آیا؟';
+
+  @override
+  String get accIntakeSiteHint => 'سائٹ یا مقام کا نام';
+
+  @override
+  String accIntakeHomeSiteChip(String site) {
+    return '$site (بنیادی)';
+  }
+
+  @override
+  String accIntakeRequiredPhotos(int done, int total) {
+    return '$total میں سے $done لازمی تصاویر';
+  }
+
+  @override
+  String accIntakeMissingCount(int count) {
+    return '$count باقی';
+  }
+
+  @override
+  String get accIntakeAttachedOnDevice => 'اس ڈیوائس پر منسلک';
+
+  @override
+  String accIntakeRequiredCategory(String category) {
+    return '$category · لازمی';
+  }
+
+  @override
+  String get accIntakeRemovePhoto => 'تصویر ہٹائیں';
+
+  @override
+  String get accIntakeSupportingDocuments => 'معاون دستاویزات';
+
+  @override
+  String get accIntakeSupportingDocumentsHelp =>
+      'جو ابھی دستیاب ہے منسلک کریں۔ کیس کے جائزے کے دوران راستے اور ملک کے اصول مزید کا تقاضا کر سکتے ہیں۔';
+
+  @override
+  String get accIntakeOptionalAtIntake => 'اندراج کے وقت اختیاری';
+
+  @override
+  String get accIntakeRemoveAttachment => 'منسلکہ ہٹائیں';
+
+  @override
+  String get accIntakeAttachDocumentPhoto => 'دستاویز کی تصویر منسلک کریں';
+
+  @override
+  String get accYes => 'ہاں';
+
+  @override
+  String get accNo => 'نہیں';
+
+  @override
+  String get accCaseSummaryTitle => 'حادثے کے کیس کا خلاصہ';
+
+  @override
+  String accCaseSummaryGenerated(String date) {
+    return 'تیار کردہ $date';
+  }
+
+  @override
+  String get accCaseSummaryWorkstreams => 'کیس کے ورک اسٹریمز';
+
+  @override
+  String get accCaseSummaryWorkstreamColumn => 'ورک اسٹریم';
+
+  @override
+  String get accCaseSummaryTeamColumn => 'ٹیم';
+
+  @override
+  String get accCaseSummaryStatusColumn => 'حالت';
+
+  @override
+  String get accCaseSummaryProgressColumn => 'پیش رفت';
+
+  @override
+  String get accCaseSummaryOverallCompletion => 'مجموعی تکمیل';
+
+  @override
+  String get accCaseSummaryEvidencePhotos => 'ثبوت کی تصاویر';
+
+  @override
+  String get accCaseSummaryShare => 'کیس کا خلاصہ PDF شیئر کریں';
+
+  @override
+  String get accCaseSummaryShareFailed =>
+      'کیس کا خلاصہ شیئر نہیں ہو سکا۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get accCaseSummarySharedInEnglish =>
+      'عربی فونٹ لوڈ نہیں ہو سکا، اس لیے خلاصہ انگریزی میں شیئر کیا گیا۔';
+
+  @override
+  String get accReportDraftRestoreFailed =>
+      'محفوظ رپورٹ کا مسودہ بحال نہیں ہو سکا۔ آپ کا محفوظ ڈیٹا تبدیل نہیں ہوا۔';
+
+  @override
+  String get accWorkspaceLoading =>
+      'آپ کا ورک اسپیس ابھی لوڈ ہو رہا ہے۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get accReportDraftSaveFailed =>
+      'یہ ڈیوائس مسودہ محفوظ نہیں کر سکی۔ پہلے سے محفوظ کچھ بھی تبدیل نہیں ہوا۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get accReportUseScannedAsset =>
+      'مطابقت رکھنے والا فلیٹ ریکارڈ منتخب کرنے کے لیے اسکین شدہ اثاثہ نمبر استعمال کریں۔';
+
+  @override
+  String get accReportAddCloseUpPhoto => 'قریبی تصویر شامل کریں';
+
+  @override
+  String get accReportTakePhoto => 'تصویر لیں';
+
+  @override
+  String get accReportChooseGallery => 'گیلری سے منتخب کریں';
+
+  @override
+  String get accReportQueued => 'رپورٹ آف لائن قطار میں محفوظ ہو گئی۔';
+
+  @override
+  String get accReportQueuedWithNotes =>
+      'رپورٹ قطار میں شامل ہو گئی۔ کچھ غیر معاون اختیاری فیلڈز اندراج کے نوٹس میں رکھی گئیں۔';
+
+  @override
+  String get accReportStepAssetSubtitle =>
+      'اس واقعے میں شامل فلیٹ اثاثہ منتخب کریں۔';
+
+  @override
+  String get accReportStepIncidentSubtitle => 'درج کریں کب، کہاں اور کیا ہوا۔';
+
+  @override
+  String get accReportStepPeopleSubtitle =>
+      'موقع پر درکار صرف افراد، حفاظت، نجم اور تیسرے فریق سے متعلق حقائق درج کریں۔';
+
+  @override
+  String get accReportStepEvidenceSubtitle =>
+      'ہر نشان زدہ نقصان والے حصے کے لیے ایک منظر کی تصویر اور ایک قریبی تصویر شامل کریں۔ معاون دستاویزات اندراج کے وقت اختیاری ہیں۔';
+
+  @override
+  String get accReportStepDocumentsSubtitle =>
+      'دستیاب معاون دستاویزات شامل کریں۔ اندراج کے وقت اختیاری۔';
+
+  @override
+  String get accReportStepReviewSubtitle =>
+      'رپورٹ کو اچھی طرح چیک کریں اور فلیٹ تصدیق کو بھیجیں۔ اختیاری دستاویزات اس جمع کرانے کو کبھی نہیں روکتیں۔';
+
+  @override
+  String get accReportScanCode => 'QR / بارکوڈ اسکین کریں';
+
+  @override
+  String accReportMatchingAssets(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count مطابق اثاثے',
+      one: '1 مطابق اثاثہ',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get accReportNoMatchingAsset => 'کوئی مطابق فلیٹ اثاثہ نہیں';
+
+  @override
+  String accReportMatchOverflow(int shown, int total, int hidden) {
+    return '$total میں سے پہلے $shown نتائج دکھائے جا رہے ہیں۔ مزید $hidden نتائج ہیں، اپنی تلاش بہتر کریں۔';
+  }
+
+  @override
+  String get accReportSavedFleetData => 'محفوظ فلیٹ ڈیٹا دکھایا جا رہا ہے';
+
+  @override
+  String get accReportChangeAsset => 'اثاثہ تبدیل کریں';
+
+  @override
+  String get accReportManualAsset => 'اثاثہ نمبر (دستی متبادل)';
+
+  @override
+  String get accReportManualAssetHint =>
+      'صرف اس وقت استعمال کریں جب فلیٹ میں مطابقت دستیاب نہ ہو';
+
+  @override
+  String get accReportMeterAtIncident => 'واقعے کے وقت میٹر';
+
+  @override
+  String get accReportMeterHint => 'اوڈومیٹر یا گھنٹہ میٹر کی ریڈنگ';
+
+  @override
+  String accReportMeterFleetMaster(String km) {
+    return 'فلیٹ ریکارڈ: $km کلومیٹر';
+  }
+
+  @override
+  String get accReportRoadLocation => 'سڑک / درست مقام';
+
+  @override
+  String get accReportIncidentDate => 'واقعے کی تاریخ';
+
+  @override
+  String get accReportIncidentTime => 'واقعے کا وقت';
+
+  @override
+  String get accReportIncidentSite => 'واقعے کی سائٹ';
+
+  @override
+  String get accReportIncidentSiteHelper =>
+      'قابل ترمیم واقعے کی سائٹ؛ فلیٹ کی مقفل بنیادی سائٹ سے الگ۔';
+
+  @override
+  String get accReportRoadLocationHint =>
+      'گیٹ، سڑک، پروجیکٹ کا علاقہ یا GPS کی تفصیل';
+
+  @override
+  String get accReportEventType => 'واقعے کی قسم';
+
+  @override
+  String get accReportSelectEventType => 'واقعے کی قسم منتخب کریں';
+
+  @override
+  String get accReportInitialSeverity => 'ابتدائی شدت';
+
+  @override
+  String get accSeverityMinor => 'معمولی';
+
+  @override
+  String get accSeverityModerate => 'درمیانہ';
+
+  @override
+  String get accSeverityMajorSevere => 'بڑا / شدید';
+
+  @override
+  String get accSeverityFatal => 'جان لیوا';
+
+  @override
+  String get accReportWhatHappened => 'کیا ہوا؟';
+
+  @override
+  String get accReportWhatHappenedHint =>
+      'واقعات کی ترتیب اور فوری حالات بیان کریں';
+
+  @override
+  String get accReportDriverName => 'ڈرائیور کا نام';
+
+  @override
+  String get accReportDriverId => 'ڈرائیور کا ملازمت / لائسنس نمبر';
+
+  @override
+  String get accReportPassengersInvolved => 'کیا مسافر شامل تھے؟';
+
+  @override
+  String get accReportPassengerCount => 'مسافروں کی تعداد';
+
+  @override
+  String get accReportPassengerDetails => 'مسافروں کی تفصیلات';
+
+  @override
+  String get accReportInjuries => 'کیا کوئی زخمی ہوا؟';
+
+  @override
+  String get accReportInjuryCount => 'زخمیوں کی تعداد';
+
+  @override
+  String get accReportInjuryDetails => 'چوٹوں کی تفصیلات';
+
+  @override
+  String get accReportEmergencyServices => 'کیا ہنگامی خدمات سے رابطہ کیا گیا؟';
+
+  @override
+  String get accReportEmergencyDetails => 'ہنگامی ردعمل کی تفصیلات';
+
+  @override
+  String get accReportVehicleMovable => 'کیا گاڑی حرکت کر سکتی ہے؟';
+
+  @override
+  String get accReportRecoveryRequired => 'کیا ریکوری / ٹوئنگ درکار ہے؟';
+
+  @override
+  String get accReportSafeToOperate => 'کیا گاڑی چلانے کے لیے محفوظ ہے؟';
+
+  @override
+  String get accReportThirdPartyInvolved => 'کیا کوئی تیسرا فریق شامل تھا؟';
+
+  @override
+  String get accReportThirdPartyName => 'تیسرے فریق کا نام';
+
+  @override
+  String get accReportThirdPartyVehicle => 'تیسرے فریق کی گاڑی';
+
+  @override
+  String get accReportThirdPartyPlate => 'تیسرے فریق کی نمبر پلیٹ';
+
+  @override
+  String get accReportThirdPartyContact => 'تیسرے فریق کا رابطہ';
+
+  @override
+  String get accReportThirdPartyInsurer => 'تیسرے فریق کی بیمہ کمپنی';
+
+  @override
+  String get accReportThirdPartyInvoice => 'کیا تیسرے فریق کی رسید دستیاب ہے؟';
+
+  @override
+  String get accReportThirdPartyInvoiceHelper =>
+      'یہ اختیاری ہے۔ اگر دستیاب ہو تو صرف رسید نمبر درج کریں؛ انشورنس ٹیم بعد میں فائل منگوا سکتی ہے۔';
+
+  @override
+  String get accReportThirdPartyInvoiceNumber => 'تیسرے فریق کی رسید کا نمبر';
+
+  @override
+  String get accReportNajmOpened => 'کیا نجم کیس کھولا گیا؟';
+
+  @override
+  String get accReportNajmHelper =>
+      'صرف اس وقت درج کریں جب اس واقعے پر نجم لاگو ہو۔';
+
+  @override
+  String get accReportNajmReference => 'نجم حوالہ';
+
+  @override
+  String get accReportWitnessDetails => 'گواہوں کی تفصیلات';
+
+  @override
+  String get accReportImmediateAction => 'فوری طور پر کی گئی کارروائی';
+
+  @override
+  String get accReportAdditionalNotes => 'اضافی نوٹس';
+
+  @override
+  String get accReportReadyToSubmit => 'جمع کرانے کے لیے تیار';
+
+  @override
+  String get accReportMissingBeforeSubmit => 'جمع کرانے سے پہلے کمی';
+
+  @override
+  String get accReportComplete => 'مکمل';
+
+  @override
+  String get accNotRecorded => 'درج نہیں';
+
+  @override
+  String get accNotAnswered => 'جواب نہیں دیا گیا';
+
+  @override
+  String get accReportReviewAsset => 'اثاثہ';
+
+  @override
+  String get accReportReviewIncident => 'واقعہ';
+
+  @override
+  String get accReportReviewDateTime => 'تاریخ اور وقت';
+
+  @override
+  String get accReportReviewSiteLocation => 'سائٹ / مقام';
+
+  @override
+  String get accReportReviewWhatHappened => 'کیا ہوا';
+
+  @override
+  String get accReportReviewPeople => 'افراد';
+
+  @override
+  String accReportReviewPeopleValue(String driver, String injuries) {
+    return 'ڈرائیور $driver · چوٹیں $injuries';
+  }
+
+  @override
+  String get accReportReviewDamageMarks => 'نقصان کے نشانات';
+
+  @override
+  String get accReportReviewFocusedPhotos => 'مخصوص تصاویر';
+
+  @override
+  String accReportReviewPhotosValue(int done, int total) {
+    return '$total میں سے $done';
+  }
+
+  @override
+  String get accReportReviewOptionalDocuments => 'اختیاری دستاویزات';
+
+  @override
+  String accReportReviewAttachedValue(int count) {
+    return '$count منسلک';
+  }
+
+  @override
+  String get accReportWorkflowResolvesOnSync =>
+      'جب یہ قطار میں موجود رپورٹ مطابقت پائے گی تو ترتیب شدہ حادثہ ورک فلو وصول کنندگان، راستہ اور ابتدائی مقررہ مدت طے کرے گا۔';
+
+  @override
+  String get accReportDraftAutoSaves => 'مسودہ ڈیوائس پر خودکار محفوظ ہوتا ہے';
+
+  @override
+  String get accReportDraftUnsaved => 'غیر محفوظ تبدیلیاں';
+
+  @override
+  String get accReportDraftSaving => 'مسودہ محفوظ ہو رہا ہے…';
+
+  @override
+  String get accReportDraftSaved => 'مسودہ ڈیوائس پر محفوظ ہو گیا';
+
+  @override
+  String accReportDraftSavedAt(String time) {
+    return 'مسودہ ڈیوائس پر محفوظ ہو گیا · $time';
+  }
+
+  @override
+  String get accReportDraftSaveFailedShort => 'مسودہ محفوظ نہیں ہو سکا';
+
+  @override
+  String get accReportDraftRestoring => 'محفوظ مسودہ بحال ہو رہا ہے…';
+
+  @override
+  String get accReportSaveAndExit => 'محفوظ کریں اور باہر نکلیں';
+
+  @override
+  String get accReportBack => 'واپس';
+
+  @override
+  String get accReportSubmit => 'حادثہ جمع کریں';
+
+  @override
+  String get accReportContinueToIncident => 'واقعے کی تفصیلات پر جائیں';
+
+  @override
+  String get accReportContinueToEvidence => 'ثبوت پر جائیں';
+
+  @override
+  String get accReportSaveAndContinue => 'محفوظ کریں اور جاری رکھیں';
+
+  @override
+  String accReportFleetResults(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count فلیٹ نتائج · اثاثہ، فلیٹ، پلیٹ، قسم، میک، ماڈل یا سائٹ سے تلاش کریں',
+      one:
+          '1 فلیٹ نتیجہ · اثاثہ، فلیٹ، پلیٹ، قسم، میک، ماڈل یا سائٹ سے تلاش کریں',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get accTypeCollision => 'تصادم';
+
+  @override
+  String get accTypeRollover => 'الٹ جانا';
+
+  @override
+  String get accTypeRearEnd => 'پیچھے سے ٹکر';
+
+  @override
+  String get accTypeSideSwipe => 'پہلو سے رگڑ';
+
+  @override
+  String get accTypeReversing => 'ریورس کرتے ہوئے';
+
+  @override
+  String get accTypeFire => 'آگ';
+
+  @override
+  String get accTypeVandalism => 'توڑ پھوڑ';
+
+  @override
+  String get accTypeWeather => 'موسم';
+
+  @override
+  String get accTypeTyreFailure => 'ٹائر کی خرابی';
+
+  @override
+  String get accTypeMechanical => 'مکینیکل';
+
+  @override
+  String get accTypeNearMiss => 'بال بال بچاؤ';
+
+  @override
+  String get accTypePropertyDamage => 'املاک کو نقصان';
+
+  @override
+  String get accTypeOther => 'دیگر';
+
+  @override
+  String get accNotSet => 'مقرر نہیں';
+
+  @override
+  String get accErrorFileUnsupported => 'یہ فائل قابل قبول نہیں۔';
+
+  @override
+  String get accErrorCheckValues => 'اقدار چیک کریں اور دوبارہ کوشش کریں۔';
+
+  @override
+  String get accErrorGeneric => 'کچھ غلط ہو گیا۔ براہ کرم دوبارہ کوشش کریں۔';
+
+  @override
+  String accNotifyForVisibility(String role) {
+    return '$role (صرف اطلاع کے لیے)';
+  }
+
+  @override
+  String get accTakePhoto => 'تصویر لیں';
+
+  @override
+  String get accChooseDeviceFile => 'ڈیوائس سے فائل منتخب کریں';
+
+  @override
+  String get accDhDispatchHandover => 'روانگی اور حوالگی';
+
+  @override
+  String get accDhRepairRoute => 'مرمت کا راستہ';
+
+  @override
+  String get accDhDispatchStatus => 'روانگی کی حالت';
+
+  @override
+  String get accDhTransitElapsed => 'سفر کا گزرا وقت';
+
+  @override
+  String get accDhVendorRepairSla => 'وینڈر مرمت کی مدت';
+
+  @override
+  String get accDhSlaUnavailable => 'مدت دستیاب نہیں';
+
+  @override
+  String get accDhVendorSlaStartsOnlyAfterSigned =>
+      'وینڈر کی مدت صرف دستخط شدہ وصولی کے بعد شروع ہوتی ہے۔';
+
+  @override
+  String get accDhTheSlaClockStartsWhenThe =>
+      'مدت کا وقت تب شروع ہوتا ہے جب ورکشاپ گاڑی کی وصولی پر دستخط کرے۔';
+
+  @override
+  String get accDhRetry => 'دوبارہ کوشش کریں';
+
+  @override
+  String get accDhDispatchLegsAreNotProvisionedOn =>
+      'روانگی کے ریکارڈ اس ڈیٹا بیس میں ابھی فراہم نہیں کیے گئے۔ مائیگریشن لاگو ہونے تک تفصیلات درج نہیں ہو سکتیں۔';
+
+  @override
+  String get accDhVendorContactFieldsAreNotProvisioned =>
+      'وینڈر رابطہ فیلڈز ابھی فراہم نہیں؛ صرف ورکشاپ کا نام محفوظ ہوتا ہے۔';
+
+  @override
+  String get accDhAfterAcceptanceVendorCanAddInspection =>
+      'قبولیت کے بعد وینڈر اپنے ورک اسپیس میں معائنہ، کوٹیشن، پرزے، شیڈول اور پیش رفت شامل کر سکتا ہے۔ PO صرف کوٹیشن کے جائزے اور منظوری کے بعد بنتا ہے۔';
+
+  @override
+  String get accDhOpenCaseTimeline => 'کیس ٹائم لائن کھولیں';
+
+  @override
+  String get accDhOpenWorkshopAssessment => 'ورکشاپ تشخیص کھولیں';
+
+  @override
+  String get accDhNotStarted => 'شروع نہیں ہوئی';
+
+  @override
+  String get accDhMet => 'پوری ہوئی';
+
+  @override
+  String get accDhBreached => 'خلاف ورزی';
+
+  @override
+  String get accDhPaused => 'موقوف';
+
+  @override
+  String get accDhRunning => 'جاری';
+
+  @override
+  String get accDhCancelled => 'منسوخ';
+
+  @override
+  String get accDhStartedNoSlaTarget => 'شروع، کوئی ہدف نہیں';
+
+  @override
+  String get accDhDestinationAndVendor => 'منزل اور وینڈر';
+
+  @override
+  String get accDhWorkshopName => 'ورکشاپ کا نام';
+
+  @override
+  String get accDhCity => 'شہر';
+
+  @override
+  String get accDhVendorContactName => 'رابطہ کا نام';
+
+  @override
+  String get accDhPhone => 'فون';
+
+  @override
+  String get accDhEmail => 'ای میل';
+
+  @override
+  String get accDhWorkshopRegistrationTaxNo => 'ورکشاپ رجسٹریشن / ٹیکس نمبر';
+
+  @override
+  String get accDhAssignedVendorInspector => 'مقررہ وینڈر معائنہ کار';
+
+  @override
+  String get accDhUnassigned => 'غیر مقرر';
+
+  @override
+  String get accDhEditVendorDetails => 'وینڈر کی تفصیلات بدلیں';
+
+  @override
+  String get accDhContactWorkshop => 'ورکشاپ سے رابطہ';
+
+  @override
+  String get accDhCancel => 'منسوخ';
+
+  @override
+  String get accDhSaveVendor => 'وینڈر محفوظ کریں';
+
+  @override
+  String get accDhDispatchDetails => 'روانگی کی تفصیلات';
+
+  @override
+  String get accDhSentBy => 'روانہ کرنے والا';
+
+  @override
+  String get accDhDeparture => 'روانگی';
+
+  @override
+  String get accDhCarrier => 'ٹرانسپورٹر';
+
+  @override
+  String get accDhDriver => 'ڈرائیور';
+
+  @override
+  String get accDhRecoveryVehicle => 'ریکوری گاڑی';
+
+  @override
+  String get accDhOrigin => 'روانگی کی جگہ';
+
+  @override
+  String get accDhDestination => 'منزل';
+
+  @override
+  String get accDhEstimatedArrival => 'متوقع آمد';
+
+  @override
+  String get accDhLiveStatus => 'موجودہ حالت';
+
+  @override
+  String get accDhRecordDispatch => 'روانگی درج کریں';
+
+  @override
+  String get accDhOdometerKm => 'اوڈومیٹر (کلومیٹر)';
+
+  @override
+  String get accDhEngineHours => 'انجن کے گھنٹے';
+
+  @override
+  String get accDhFuel => 'ایندھن %';
+
+  @override
+  String get accDhKeys => 'چابیاں';
+
+  @override
+  String get accDhDocumentsSentOnePerLine =>
+      'ارسال کردہ دستاویزات (ہر سطر میں ایک)';
+
+  @override
+  String get accDhAccessoriesChecklistOnePerLine =>
+      'لوازمات / چیک لسٹ (ہر سطر میں ایک)';
+
+  @override
+  String get accDhOutgoingDamagePhotos => 'روانگی کے نقصان کی تصاویر';
+
+  @override
+  String get accDhOutgoingConditionSignedBy => 'روانگی کی حالت پر دستخط کنندہ';
+
+  @override
+  String get accDhOutgoingSignature => 'روانگی کے دستخط';
+
+  @override
+  String get accDhSaveDispatch => 'روانگی محفوظ کریں';
+
+  @override
+  String get accDhVehicleHandoverCondition => 'حوالگی کے وقت گاڑی کی حالت';
+
+  @override
+  String get accDhOdometer => 'اوڈومیٹر';
+
+  @override
+  String get accDhFuel2 => 'ایندھن';
+
+  @override
+  String get accDhDocumentsSent => 'ارسال کردہ دستاویزات';
+
+  @override
+  String get accDhDocuments => 'دستاویزات';
+
+  @override
+  String get accDhAccessoriesChecklist => 'لوازمات / چیک لسٹ';
+
+  @override
+  String get accDhItems => 'اشیاء';
+
+  @override
+  String get accDhPhotos => 'تصاویر';
+
+  @override
+  String get accDhWorkshopReceipt => 'ورکشاپ کی وصولی';
+
+  @override
+  String get accDhCompletedByVendor => 'وینڈر نے مکمل کیا';
+
+  @override
+  String get accDhArrived => 'آمد';
+
+  @override
+  String get accDhReceivedBy => 'وصول کنندہ';
+
+  @override
+  String get accDhIncomingOdometer => 'آمد کا اوڈومیٹر';
+
+  @override
+  String get accDhIncomingEngineHours => 'آمد کے انجن گھنٹے';
+
+  @override
+  String get accDhIncomingFuel => 'آمد کا ایندھن';
+
+  @override
+  String get accDhConditionMatchesDispatch => 'حالت روانگی سے مطابقت رکھتی ہے';
+
+  @override
+  String get accDhYes => 'ہاں';
+
+  @override
+  String get accDhNo => 'نہیں';
+
+  @override
+  String get accDhAdditionalDamageRemarks => 'اضافی نقصان / تبصرے';
+
+  @override
+  String get accDhReceivingPhotos => 'وصولی کی تصاویر';
+
+  @override
+  String get accDhCustodyAccepted => 'تحویل قبول';
+
+  @override
+  String get accDhVendorReceiverSignature => 'وینڈر وصول کنندہ کے دستخط';
+
+  @override
+  String get accDhSenderDriverSignature => 'بھیجنے والے / ڈرائیور کے دستخط';
+
+  @override
+  String get accDhCompletedByVendor2 => 'وینڈر مکمل کرے گا';
+
+  @override
+  String get accDhNoDispatchLegIsRecordedYet =>
+      'ابھی کوئی روانگی درج نہیں۔ پہلے روانگی درج کریں؛ وصولی اسی پر دستخط ہوتی ہے۔';
+
+  @override
+  String get accDhArrivedDateTime => 'آمد کی تاریخ / وقت *';
+
+  @override
+  String get accDhReceivedByName => 'وصول کنندہ (نام) *';
+
+  @override
+  String get accDhDesignation => 'عہدہ *';
+
+  @override
+  String get accDhIncomingOdometerKm => 'آمد کا اوڈومیٹر';
+
+  @override
+  String get accDhIncomingFuel2 => 'آمد کا ایندھن %';
+
+  @override
+  String get accDhUploadReceivingPhotos => 'وصولی کی تصاویر اپ لوڈ کریں *';
+
+  @override
+  String get accDhUploadSignedHandoverPaper =>
+      'دستخط شدہ حوالگی کاغذ اپ لوڈ کریں *';
+
+  @override
+  String get accDhVendorReceiverSignature2 => 'وینڈر وصول کنندہ کے دستخط *';
+
+  @override
+  String get accDhSenderDriverSignatureCaptured =>
+      'بھیجنے والے / ڈرائیور کے دستخط (ریکارڈ شدہ)';
+
+  @override
+  String get accDhIAcceptCustodyOfThisVehicle =>
+      'میں اس گاڑی کی تحویل قبول کرتا ہوں';
+
+  @override
+  String get accDhSignAndAcceptVehicle => 'دستخط کرکے گاڑی قبول کریں';
+
+  @override
+  String get accDhCompleteAllRequiredFieldsToEnable =>
+      'فعال کرنے کے لیے تمام مطلوبہ فیلڈز مکمل کریں';
+
+  @override
+  String get accDhMissing => 'باقی';
+
+  @override
+  String get accDhArrivedDateTime2 => 'آمد کا وقت';
+
+  @override
+  String get accDhDesignation2 => 'عہدہ';
+
+  @override
+  String get accDhSignedHandoverPaper => 'حوالگی کاغذ';
+
+  @override
+  String get accDhVendorReceiverSignature3 => 'وصول کنندہ دستخط';
+
+  @override
+  String get accDhCustodyCheckbox => 'تحویل کا خانہ';
+
+  @override
+  String get accDhComplete => 'مکمل';
+
+  @override
+  String get accDhNext => 'اگلا';
+
+  @override
+  String get accDhPending => 'زیر التوا';
+
+  @override
+  String get accDhDispatched => 'روانہ';
+
+  @override
+  String get accDhArrived2 => 'پہنچ گئی';
+
+  @override
+  String get accDhSignedAcceptance => 'دستخط شدہ قبولیت';
+
+  @override
+  String get accDhVendorAssessmentQuotationStarts =>
+      'وینڈر تشخیص / کوٹیشن شروع';
+
+  @override
+  String get accDhPick => 'منتخب کریں';
+
+  @override
+  String get accDhUseNow => 'ابھی';
+
+  @override
+  String get accDhAttached => 'منسلک';
+
+  @override
+  String get accDhCamera => 'کیمرہ';
+
+  @override
+  String get accDhGallery => 'گیلری';
+
+  @override
+  String get accTlAddTimelineNote => 'ٹائم لائن نوٹ';
+
+  @override
+  String get accTlNote => 'نوٹ';
+
+  @override
+  String get accTlSaveNote => 'نوٹ محفوظ کریں';
+
+  @override
+  String get accTlNotifyParticipants => 'شرکاء کو اطلاع';
+
+  @override
+  String get accTlThisLogsTheNotificationOnThe =>
+      'یہ اطلاع کیس لیجر میں درج ہوتی ہے۔ افراد تک ترسیل سرور کا نوٹیفکیشن انجن کرتا ہے۔';
+
+  @override
+  String get accTlSubject => 'موضوع';
+
+  @override
+  String get accTlMessage => 'پیغام';
+
+  @override
+  String get accTlLogNotification => 'اطلاع درج';
+
+  @override
+  String get accTlManageRecipientGroups => 'وصول کنندگان کے گروپس';
+
+  @override
+  String get accTlRecipientsAreSetByAdminPer =>
+      'وصول کنندگان ایڈمن ہر ایونٹ اور کردار کے لیے مقرر کرتا ہے۔ نیچے دیے گئے گروپ وہ کردار ہیں جن تک ہر ایونٹ پہنچتا ہے؛ رکنیت صارف پروفائلز سے آتی ہے۔';
+
+  @override
+  String get accTlVisibility => 'صرف دیکھنا';
+
+  @override
+  String get accTlTime => 'وقت';
+
+  @override
+  String get accTlBy => 'از';
+
+  @override
+  String get accTlTo => 'کو';
+
+  @override
+  String get accTlStatus => 'حالت';
+
+  @override
+  String get accTlElapsed => 'گزرا وقت';
+
+  @override
+  String get accTlCaseTimelineNotifications => 'کیس کی ٹائم لائن اور اطلاعات';
+
+  @override
+  String get accTlOpen => 'کھلا';
+
+  @override
+  String get accTlCurrentOwner => 'موجودہ ذمہ دار';
+
+  @override
+  String get accTlNextSla => 'اگلی مقررہ مدت';
+
+  @override
+  String get accTlDueIn => 'مقررہ وقت میں باقی';
+
+  @override
+  String get accTlAddTimelineNote2 => 'ٹائم لائن میں نوٹ شامل کریں';
+
+  @override
+  String get accTlNotifyParticipants2 => 'شرکاء کو اطلاع دیں';
+
+  @override
+  String get accTlNotProvisionedYetOnThisDatabase =>
+      'اس ڈیٹا بیس میں ابھی فراہم نہیں';
+
+  @override
+  String get accTlCouldNotBeReadTheFeed =>
+      'پڑھا نہیں جا سکا؛ فیڈ میں شامل نہیں';
+
+  @override
+  String get accTlCommunications => 'مواصلات';
+
+  @override
+  String get accTlEvidence => 'ثبوت';
+
+  @override
+  String get accTlSlaClocks => 'مقررہ مدتیں';
+
+  @override
+  String get accTlDispatchLeg => 'روانگی';
+
+  @override
+  String get accTlGpsFix => 'GPS مقام';
+
+  @override
+  String get accTlTimeline => 'ٹائم لائن';
+
+  @override
+  String get accTlNotifications => 'اطلاعات';
+
+  @override
+  String get accTlParticipants => 'شرکاء';
+
+  @override
+  String get accTlAll => 'سب';
+
+  @override
+  String get accTlActions => 'کارروائیاں';
+
+  @override
+  String get accTlDocuments => 'دستاویزات';
+
+  @override
+  String get accTlSla => 'مدت';
+
+  @override
+  String get accTlEmails => 'ای میلز';
+
+  @override
+  String get accTlCompleted => 'مکمل';
+
+  @override
+  String get accTlInTransit => 'راستے میں';
+
+  @override
+  String get accTlNoRecordedEventsForThisFilter =>
+      'اس فلٹر کے لیے کوئی درج شدہ واقعہ نہیں۔';
+
+  @override
+  String get accTlNotificationDeliveryLog => 'اطلاعات کی ترسیل کا ریکارڈ';
+
+  @override
+  String get accTlNoNotificationsRecordedForThisCase =>
+      'اس کیس کے لیے کوئی اطلاع درج نہیں۔';
+
+  @override
+  String get accTlTrigger => 'محرک';
+
+  @override
+  String get accTlRecipients => 'وصول کنندگان';
+
+  @override
+  String get accTlChannel => 'چینل';
+
+  @override
+  String get accTlShowStatus => 'حالت دکھائیں';
+
+  @override
+  String get accTlViewAllNotifications => 'تمام اطلاعات دیکھیں';
+
+  @override
+  String get accTlManageRecipientGroups2 => 'وصول کنندگان کے گروپس سنبھالیں';
+
+  @override
+  String get accTlRecipientsAreSetByAdminPer2 =>
+      'وصول کنندگان ایڈمن ہر ایونٹ اور کردار کے لیے مقرر کرتا ہے۔';
+
+  @override
+  String get accTlParticipantsAndOwnership => 'شرکاء اور ذمہ داری';
+
+  @override
+  String get accTlBy2 => 'از';
+
+  @override
+  String get accTlTo2 => 'کو';
+
+  @override
+  String get accTlSlaMet => 'مدت پوری';
+
+  @override
+  String get accDhChangeNotSaved =>
+      'تبدیلی محفوظ نہیں ہو سکی۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get accDhContactOpenFailed =>
+      'اس ڈیوائس پر ورکشاپ رابطہ نہیں کھل سکا۔';
+
+  @override
+  String get accDhRecordDepartureFirst => 'پہلے روانگی کا وقت درج کریں۔';
+
+  @override
+  String get accTlLoadFailed => 'ٹائم لائن لوڈ نہیں ہو سکی۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String accTlOverdueBy(String elapsed) {
+    return 'تاخیر $elapsed';
+  }
 }

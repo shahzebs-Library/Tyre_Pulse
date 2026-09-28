@@ -279,11 +279,6 @@ const Map<String, List<String>> _strings = <String, List<String>>{
     'عرض تقرير الحادث الكامل',
     'مکمل واقعہ رپورٹ دیکھیں',
   ],
-  'viewReportNote': <String>[
-    'Opens the incident record. A PDF export is not available in this app yet.',
-    'يفتح سجل الحادث. تصدير PDF غير متاح في هذا التطبيق بعد.',
-    'واقعے کا ریکارڈ کھولتا ہے۔ PDF برآمد ابھی اس ایپ میں دستیاب نہیں۔',
-  ],
 
   // M6 checklist
   'checklist': <String>[

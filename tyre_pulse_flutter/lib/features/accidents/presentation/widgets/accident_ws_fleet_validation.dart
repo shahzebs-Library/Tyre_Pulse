@@ -14,6 +14,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
@@ -27,6 +28,7 @@ import 'package:tyre_pulse/features/accidents/data/accident_workstream_repositor
 import 'package:tyre_pulse/features/accidents/domain/accident_case_vocab.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_damage_map.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_models.dart';
+import 'package:tyre_pulse/features/accidents/presentation/accident_case_pdf.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_copy.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_mock_copy.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_ui.dart';
@@ -84,6 +86,7 @@ class _AccidentFleetValidationMockWorkspaceState
   bool _completing = false;
   bool _savingAll = false;
   bool _notifying = false;
+  bool _sharing = false;
 
   AccidentRecord get _record => widget.snapshot.accident;
 
@@ -449,6 +452,24 @@ class _AccidentFleetValidationMockWorkspaceState
     );
   }
 
+  Future<void> _shareSummary() async {
+    if (_sharing) return;
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    setState(() => _sharing = true);
+    final AccidentCaseSummaryShareResult result =
+        await shareAccidentCaseSummaryPdf(context, widget.snapshot);
+    if (!mounted) return;
+    setState(() => _sharing = false);
+    switch (result) {
+      case AccidentCaseSummaryShareResult.shared:
+        break;
+      case AccidentCaseSummaryShareResult.sharedInEnglish:
+        _toast(l10n.accCaseSummarySharedInEnglish);
+      case AccidentCaseSummaryShareResult.failed:
+        _toast(l10n.accCaseSummaryShareFailed);
+    }
+  }
+
   // --- Build -------------------------------------------------------------
 
   @override
@@ -593,11 +614,12 @@ class _AccidentFleetValidationMockWorkspaceState
             icon: Icons.article_outlined,
             onPressed: _openIncident,
           ),
-          Text(
-            copy('viewReportNote'),
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: TpPalette.of(context).textMuted,
-                ),
+          TpButton.text(
+            key: const Key('accident.fleet.shareSummaryPdf'),
+            label: AppLocalizations.of(context).accCaseSummaryShare,
+            icon: Icons.picture_as_pdf_outlined,
+            isBusy: _sharing,
+            onPressed: _sharing ? null : _shareSummary,
           ),
         ],
       ),

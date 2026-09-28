@@ -345,6 +345,29 @@ class QueueDao extends DatabaseAccessor<AppDatabase> with _$QueueDaoMixin {
     return row.read(total) ?? 0;
   }
 
+  /// [pendingCount] as a live stream: re-emits whenever `pending_commands`
+  /// changes (an enqueue, a sync marking a row synced, a prune), so a screen
+  /// watching it never shows a count that went stale while it stayed open.
+  ///
+  /// Same definition as [pendingCount] - everything NOT `synced`, `failed`
+  /// included - and deliberately a separate query rather than a rewrite of
+  /// that method, so no existing caller changes. A read failure surfaces as a
+  /// stream error, never as 0.
+  Stream<int> watchPendingCount({String? workspaceId}) {
+    final Expression<int> total = pendingCommands.id.count();
+    final query = selectOnly(pendingCommands)..addColumns([total]);
+
+    final Expression<bool> notSynced =
+        pendingCommands.status.equals(CommandStatus.synced).not();
+    query.where(
+      workspaceId == null
+          ? notSynced
+          : notSynced & pendingCommands.workspaceId.equals(workspaceId),
+    );
+
+    return query.watchSingle().map((TypedResult row) => row.read(total) ?? 0);
+  }
+
   /// Every command still carrying work, oldest first.
   Future<List<PendingCommand>> outstandingCommands({String? workspaceId}) {
     return (select(pendingCommands)

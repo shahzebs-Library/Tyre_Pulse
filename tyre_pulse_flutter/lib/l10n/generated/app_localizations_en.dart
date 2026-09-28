@@ -2831,7 +2831,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pmCopyCatalog =>
-      'title=Maintenance Control Center~subtitle=Control today\'s maintenance workload~createWorkOrder=Create work order~pmDue=PM due~priorityQueue=Priority work queue~viewAll=View all~allWorkOrders=View all work orders~quickAccess=Quick access~workOrders=Work orders~workOrdersHint=Create & manage~pmSchedule=PM schedule~pmScheduleHint=Plan & track PM~inspections=Inspections~inspectionsHint=Check & report~parts=Parts~partsHint=Stock & requests~tyres=Tyres~tyresHint=Records, rotation & replacements~overdue=Overdue~dueSoon=Due soon~active=Active plans~due=Due now~all=All plans~empty=No maintenance plans~emptyDue=No preventive maintenance is due in the next 14 days.~emptyAll=No active preventive maintenance plans are available.~plan=Maintenance plan~daysOverdue=days overdue~daysLeft=days left~noDate=No due date~record=Record service~meter=Meter reading~performedBy=Performed by~workshop=Workshop~partsCost=Parts cost~labourCost=Labour cost~findings=Findings~completed=Completed~partial=Partially completed~deferred=Deferred~failed=Failed~save=Save service~invalidNumber=Enter valid numeric values.~loadFailed=The maintenance plans could not be loaded.~saveFailed=The service record could not be saved. Try again.';
+      'title=Maintenance Control Center~subtitle=Control today\'s maintenance workload~createWorkOrder=Create work order~pmDue=PM due~priorityQueue=Priority work queue~viewAll=View all~allWorkOrders=View all work orders~quickAccess=Quick access~workOrders=Work orders~workOrdersHint=Create & manage~pmSchedule=PM schedule~pmScheduleHint=Plan & track PM~inspections=Inspections~inspectionsHint=Check & report~parts=Parts~partsHint=Stock & requests~tyres=Tyres~tyresHint=Records, rotation & replacements~overdue=Overdue~dueSoon=Due soon~active=Active plans~due=Due now~all=All plans~empty=No maintenance plans~emptyDue=No preventive maintenance is due in the next 14 days.~emptyAll=No active preventive maintenance plans are available.~plan=Maintenance plan~daysOverdue=days overdue~daysLeft=days left~noDate=No due date~record=Record service~meter=Meter reading~performedBy=Performed by~workshop=Workshop~partsCost=Parts cost~labourCost=Labour cost~findings=Findings~completed=Completed~partial=Partially completed~deferred=Deferred~failed=Failed~save=Save service~invalidNumber=Enter valid numeric values.~loadFailed=The maintenance plans could not be loaded.~saveFailed=The service record could not be saved. Try again.~openBreakdowns=Open breakdowns~activeWorkOrders=Active work orders~breakdown=Breakdown~workOrder=Work order~dueToday=Due today~since=Since~opened=Opened~queueEmpty=Nothing needs attention~woLoadFailed=Open work orders could not be loaded.~retry=Retry~countFailed=This count could not be loaded. Tap to retry.';
 
   @override
   String get stockCountCopyCatalog =>
@@ -2955,4 +2955,2970 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get workshopCopyCatalog =>
       'title=My Jobs~onDuty=On duty~offDuty=Off duty~checkIn=Check In~checkOut=Check Out~checkInHint=Check in for your shift before recording work.~myJobs=My jobs~emptyTitle=No open jobs~emptyMessage=No open job is assigned to you right now.~loadError=Your jobs could not be loaded right now.~selectJobTitle=Select a job~selectJobMsg=Pick one of your jobs first.~checkInFirstTitle=Check in first~selectTaskTitle=Select a task~selectTaskMsg=Pick the task you are working on first.~tasks=Tasks~confirmTitle=Complete task?~confirmMsg=This records the task as complete and sends it for inspection.~cancel=Cancel~noteHint=Add a note (optional)~record=Record~queued=Saved on this device. It will sync automatically.~saveFailed=The activity could not be saved on this device. Try again.~todayTitle=My productivity today~productive=Productive~blocked=Blocked~unassigned=Unassigned~breakTime=Break~completed=Tasks completed~due=Due~ok=OK~a_start_job=Start Job~a_pause_job=Pause Job~a_resume_job=Resume Job~a_complete_task=Complete Task~a_request_parts=Request Parts~a_request_assistance=Request Assistance~a_waiting_approval=Waiting for Approval~a_waiting_vehicle=Waiting for Vehicle~a_waiting_tools=Waiting for Tools~a_start_break=Start Break~a_end_break=End Break~a_report_problem=Report Problem~s_working=Working~s_available=Available~s_waiting_parts=Waiting for Parts~s_waiting_approval=Waiting for Approval~s_waiting_tools=Waiting for Tools~s_waiting_vehicle=Waiting for Vehicle~s_on_break=On Break~s_training=Training~s_awaiting_inspection=Awaiting Inspection~s_off_duty=Off Duty~s_absent=Absent~photoLabel=Photo (optional)~takePhoto=Camera~pickPhoto=Gallery~removePhoto=Remove photo~photoLimit=Up to 3 photos~photoNotAttached=Recorded. The photo could not be attached without a connection.';
+
+  @override
+  String get homeTodaysWork => 'Today\'s work';
+
+  @override
+  String get homeAwaitingSignatureTag => 'Awaiting signature';
+
+  @override
+  String get homeResumeInspection => 'Resume inspection';
+
+  @override
+  String get homeTyreIssueNeedsAttention => 'Tyre issue needs attention';
+
+  @override
+  String get profileSectionWorkspace => 'Workspace';
+
+  @override
+  String get profileEmployeeIdLabel => 'Employee ID';
+
+  @override
+  String get profileLanguageLabel => 'App language';
+
+  @override
+  String get profileSectionDisplay => 'Language & display';
+
+  @override
+  String get profileThemeLabel => 'Theme';
+
+  @override
+  String get profileThemeLight => 'Light';
+
+  @override
+  String get profileThemeDark => 'Dark';
+
+  @override
+  String get profileThemeSystem => 'System default';
+
+  @override
+  String get profileSectionOffline => 'Offline & data';
+
+  @override
+  String get profileUnsyncedFooter =>
+      'Unsynced drafts remain safely on this device';
+
+  @override
+  String get loginHeroTitle => 'Complete PMV Operations';
+
+  @override
+  String get loginSignInSubtitle => 'Sign in to your assigned operations';
+
+  @override
+  String get vehiclesInspectNow => 'Inspect now';
+
+  @override
+  String get inspectionPreviousTyre => 'Previous';
+
+  @override
+  String get inspectionNextTyre => 'Next';
+
+  @override
+  String get inspectionProgressTitle => 'Inspection progress';
+
+  @override
+  String inspectionPercentComplete(int percent) {
+    return '$percent% complete';
+  }
+
+  @override
+  String inspectionAxleNumber(int number) {
+    return 'Axle $number';
+  }
+
+  @override
+  String get inspectionTyresLabel => 'Tyres';
+
+  @override
+  String get inspectionScanAssetButton => 'Scan asset';
+
+  @override
+  String get inspectionSelectedAssetTitle => 'Selected asset';
+
+  @override
+  String get profileSyncUnknownFooter =>
+      'Pending sync could not be checked. Unsynced work may still be on this device';
+
+  @override
+  String get homeRecentInspectionsTitle => 'Your recent inspections';
+
+  @override
+  String get homeAssetNotChecked => 'Not checked';
+
+  @override
+  String get homeNothingForRoleTitle => 'Nothing to check for your role';
+
+  @override
+  String get tyreActionRotateSubtitle =>
+      'Record that this tyre was moved to another position';
+
+  @override
+  String get tyreActionRotateFromLabel => 'Current position';
+
+  @override
+  String get tyreActionRotateToLabel => 'New position';
+
+  @override
+  String get tyreActionRotateToHint => 'For example RHF1';
+
+  @override
+  String get tyreActionRotateNotesLabel => 'Notes (optional)';
+
+  @override
+  String get tyreActionRotateNotesHint =>
+      'Anything the next fitter should know';
+
+  @override
+  String get tyreActionRotateOnlineNote =>
+      'Needs a connection. Rotations are saved straight to the server.';
+
+  @override
+  String get tyreActionRotateSubmit => 'Record rotation';
+
+  @override
+  String get tyreActionRotateToRequiredTitle => 'New position needed';
+
+  @override
+  String get tyreActionRotateToRequiredMessage =>
+      'Enter the position this tyre was moved to.';
+
+  @override
+  String get tyreActionRotateSamePositionMessage =>
+      'The new position must be different from the current one.';
+
+  @override
+  String get tyreActionRotateSavedTitle => 'Rotation recorded';
+
+  @override
+  String get tyreActionRotateSavedMessage =>
+      'The rotation is saved in this tyre\'s service history. It does not change the position shown in the tyre register.';
+
+  @override
+  String get tyreActionRotateFailedTitle => 'Rotation not saved';
+
+  @override
+  String get tyreActionRotateOfflineMessage =>
+      'No connection. Rotations are saved online only, so this one was not recorded. Try again when you are connected.';
+
+  @override
+  String get tyreActionRotateFailedMessage =>
+      'The rotation could not be saved. Try again.';
+
+  @override
+  String driverWsTerm(String term) {
+    String _temp0 = intl.Intl.selectLogic(
+      term,
+      {
+        'create_driver': 'Add verified driver',
+        'link_account': 'Link login account',
+        'assign_team': 'Assign team and vehicle',
+        'create_fine': 'Issue traffic fine',
+        'link_record': 'Link work record',
+        'respond_fine': 'Review and sign',
+        'review_fine': 'Review response / payment',
+        'correct_fine': 'Correct fine',
+        'reassign_fine': 'Reassign fine',
+        'direct_payment': 'I will pay directly',
+        'already_paid': 'Already paid',
+        'dispute': 'Dispute / incorrect assignment',
+        'company_recovery': 'Request company payment / recovery',
+        'instalments': 'Request instalments',
+        'approve': 'Approve request',
+        'return': 'Return to driver',
+        'payment': 'Record verified payment',
+        'cancel': 'Cancel fine',
+        'reopen': 'Reopen',
+        'open': 'Open',
+        'settled': 'Settled',
+        'cancelled': 'Cancelled',
+        'awaiting_response': 'Awaiting response',
+        'submitted': 'Response submitted',
+        'returned': 'Returned to driver',
+        'approved': 'Approved',
+        'driver_documents': 'Driver documents',
+        'driver_training': 'Driver training',
+        'driver_coaching': 'Driver coaching',
+        'driver_safety_events': 'Driver safety events',
+        'driver_expenses': 'Driver expenses',
+        'tyre_records': 'Tyre records',
+        'accidents': 'Accidents',
+        'wo_tasks': 'Work order tasks',
+        'checklist_submissions': 'Checklist submissions',
+        'odometer_logs': 'Odometer readings',
+        'wash_records': 'Wash records',
+        'other': '',
+      },
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String driverWsRecordField(String field) {
+    String _temp0 = intl.Intl.selectLogic(
+      field,
+      {
+        'country': 'Country',
+        'site': 'Site',
+        'asset_no': 'Asset number',
+        'driver_name': 'Driver name',
+        'title': 'Title',
+        'doc_type': 'Document type',
+        'doc_number': 'Document number',
+        'expiry_date': 'Expiry date',
+        'course_name': 'Course name',
+        'result': 'Result',
+        'completed_date': 'Completed date',
+        'coaching_status': 'Coaching status',
+        'period': 'Period',
+        'event_type': 'Event type',
+        'severity': 'Severity',
+        'event_at': 'Event time',
+        'category': 'Category',
+        'amount': 'Amount',
+        'currency': 'Currency',
+        'expense_date': 'Expense date',
+        'status': 'Status',
+        'incident_date': 'Incident date',
+        'accident_type': 'Accident type',
+        'due_date': 'Due date',
+        'created_at': 'Created at',
+        'reading_date': 'Reading date',
+        'odometer_km': 'Odometer (km)',
+        'wash_date': 'Wash date',
+        'template_name': 'Checklist name',
+        'approval_status': 'Approval status',
+        'brand': 'Brand',
+        'serial_no': 'Serial number',
+        'issue_date': 'Issue date',
+        'qty': 'Quantity',
+        'cost_per_tyre': 'Cost per tyre',
+        'other': '',
+      },
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String driverWsEvidenceKind(String kind) {
+    String _temp0 = intl.Intl.selectLogic(
+      kind,
+      {
+        'payment': 'Payment receipt',
+        'supporting': 'Supporting photo',
+        'notice': 'Official notice',
+        'other': '',
+      },
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get driverWsTitle => 'Driver workspace';
+
+  @override
+  String get driverWsEntrySubtitle =>
+      'My fines, team assignments and verified work';
+
+  @override
+  String get driverWsLoadError =>
+      'Workspace unavailable. Check connection, account linking and access, then refresh.';
+
+  @override
+  String get driverWsRefresh => 'Refresh';
+
+  @override
+  String get driverWsSignInRequired => 'Sign in to view your workspace.';
+
+  @override
+  String get driverWsOfflineNotice =>
+      'Offline cached view. Connect and refresh before responding or reviewing.';
+
+  @override
+  String get driverWsTruncatedNotice =>
+      'This view is incomplete because it reached the record limit. Export is disabled.';
+
+  @override
+  String get driverWsSearchDrivers => 'Search drivers';
+
+  @override
+  String get driverWsNoDrivers =>
+      'No linked driver or assigned team is available. Ask an authorized manager to verify your account and assignment.';
+
+  @override
+  String get driverWsSharePdf => 'Share fine statement PDF';
+
+  @override
+  String get driverWsReportShareError =>
+      'Report could not be shared. Try again.';
+
+  @override
+  String get driverWsTrafficFines => 'Traffic fines';
+
+  @override
+  String get driverWsNoFines => 'No fines recorded.';
+
+  @override
+  String get driverWsAssignmentHistory => 'Team and vehicle assignment history';
+
+  @override
+  String get driverWsNoAssignment => 'No assignment recorded.';
+
+  @override
+  String get driverWsAssignmentCurrent => 'Current';
+
+  @override
+  String get driverWsAssignmentPrevious => 'Previous';
+
+  @override
+  String get driverWsNoVehicle => 'No vehicle';
+
+  @override
+  String get driverWsNotAssigned => 'Not assigned';
+
+  @override
+  String get driverWsPresent => 'Present';
+
+  @override
+  String get driverWsAssignedWork => 'Assigned work';
+
+  @override
+  String get driverWsNotSupplied => 'Not supplied';
+
+  @override
+  String get driverWsVerifiedRecords => 'Verified work and driver records';
+
+  @override
+  String get driverWsUnmatchedNotice =>
+      'Unmatched historical records require identity review before they appear here.';
+
+  @override
+  String get driverWsRecordUnavailable => 'Record no longer available';
+
+  @override
+  String get driverWsActivityHistory => 'Activity history';
+
+  @override
+  String get driverWsRecordedUser => 'Recorded user';
+
+  @override
+  String get driverWsPhotoError =>
+      'Photo could not be attached. Your local photo has not been deleted.';
+
+  @override
+  String get driverWsAcknowledgeRespond => 'Acknowledge and respond';
+
+  @override
+  String get driverWsReviewPayment => 'Review / record payment';
+
+  @override
+  String get driverWsEvidenceOpenError => 'Evidence could not be opened.';
+
+  @override
+  String get driverWsAttachReceipt => 'Attach receipt photo';
+
+  @override
+  String get driverWsAttachSupporting => 'Attach supporting photo';
+
+  @override
+  String get driverWsAttachNotice => 'Attach official notice photo';
+
+  @override
+  String get driverWsSignatureUnavailable => 'Signature unavailable.';
+
+  @override
+  String get driverWsViewSignature => 'View signed acknowledgment';
+
+  @override
+  String get driverWsSignatureDisplayError =>
+      'Signature could not be displayed.';
+
+  @override
+  String get driverWsReceiptStatement =>
+      'I acknowledge receipt and review of this notice and submit the response shown above. Receipt does not mean admission of responsibility. A payment or recovery request does not authorize an automatic payment or payroll deduction.';
+
+  @override
+  String get driverWsDraftReadError =>
+      'Saved draft could not be read. Nothing has been overwritten.';
+
+  @override
+  String get driverWsSubmitError =>
+      'Could not submit. Check the required fields and connection. Refresh if the notice changed.';
+
+  @override
+  String get driverWsConnectionRequired =>
+      'Submission requires a connection so the current notice and your access can be checked.';
+
+  @override
+  String get driverWsDraftSaved => 'Draft saved. It has not been submitted.';
+
+  @override
+  String get driverWsDraftSaveError => 'Draft could not be saved.';
+
+  @override
+  String get driverWsSaveDraft => 'Save draft on this device';
+
+  @override
+  String get driverWsReviewDisclaimer =>
+      'Approval records the reviewed arrangement. It does not execute payment or payroll deduction. Record only verified payments.';
+
+  @override
+  String get driverWsSaving => 'Saving...';
+
+  @override
+  String get driverWsSubmit => 'Submit';
+
+  @override
+  String get driverWsErrResolution => 'Choose a resolution.';
+
+  @override
+  String get driverWsErrExplanation =>
+      'Explain your request, including the proposed arrangement.';
+
+  @override
+  String get driverWsErrPaymentReference => 'Enter your payment reference.';
+
+  @override
+  String get driverWsErrProposedDate => 'Choose your proposed payment date.';
+
+  @override
+  String get driverWsErrSignature =>
+      'Review the statement and sign before submitting.';
+
+  @override
+  String get driverWsOptionsError => 'Options unavailable. Try again.';
+
+  @override
+  String get driverWsSearch => 'Search';
+
+  @override
+  String get driverWsClearSelection => 'None / clear selection';
+
+  @override
+  String get driverWsPreviousOptions => 'Previous options';
+
+  @override
+  String get driverWsMoreOptions => 'More options';
+
+  @override
+  String get driverWsFieldEmployeeId => 'Employee ID';
+
+  @override
+  String get driverWsFieldDriverName => 'Driver name';
+
+  @override
+  String get driverWsFieldCountry => 'Country';
+
+  @override
+  String get driverWsFieldSite => 'Site';
+
+  @override
+  String get driverWsFieldLoginAccount => 'Login account (none removes link)';
+
+  @override
+  String get driverWsFieldIdentityReason => 'Identity verification / reason';
+
+  @override
+  String get driverWsFieldSupervisor => 'Supervisor';
+
+  @override
+  String get driverWsFieldManager => 'Manager';
+
+  @override
+  String get driverWsFieldVehicle => 'Vehicle';
+
+  @override
+  String get driverWsFieldAssignmentReason => 'Assignment reason';
+
+  @override
+  String get driverWsFieldAuthority => 'Issuing authority';
+
+  @override
+  String get driverWsFieldNoticeReference => 'Notice reference';
+
+  @override
+  String get driverWsFieldIncidentAt =>
+      'Incident date and time (YYYY-MM-DDTHH:mm)';
+
+  @override
+  String get driverWsFieldDueDate => 'Due date (YYYY-MM-DD)';
+
+  @override
+  String get driverWsFieldAmount => 'Fine amount';
+
+  @override
+  String get driverWsFieldCurrency => 'Currency code';
+
+  @override
+  String get driverWsFieldNoticeDetails => 'Notice details';
+
+  @override
+  String get driverWsFieldAssignmentEvidence =>
+      'Evidence confirming driver assignment';
+
+  @override
+  String get driverWsFieldRecordType => 'Record type';
+
+  @override
+  String get driverWsFieldExistingRecord => 'Existing record';
+
+  @override
+  String get driverWsFieldIdentityMethod => 'How driver identity was verified';
+
+  @override
+  String get driverWsFieldResolution => 'Preferred resolution';
+
+  @override
+  String get driverWsFieldExplanation => 'Explanation / proposed arrangement';
+
+  @override
+  String get driverWsFieldPaymentReference => 'Payment reference (if paid)';
+
+  @override
+  String get driverWsFieldProposedDate => 'Proposed payment date (YYYY-MM-DD)';
+
+  @override
+  String get driverWsFieldDecision => 'Decision';
+
+  @override
+  String get driverWsFieldReviewReason =>
+      'Review reason / approved arrangement';
+
+  @override
+  String get driverWsFieldVerifiedReference => 'Verified payment reference';
+
+  @override
+  String get driverWsFieldVerifiedAmount => 'Verified payment amount';
+
+  @override
+  String get driverWsPdfColNotice => 'Notice';
+
+  @override
+  String get driverWsPdfColCurrency => 'Currency';
+
+  @override
+  String get driverWsPdfColAmount => 'Amount';
+
+  @override
+  String get driverWsPdfColPaid => 'Paid';
+
+  @override
+  String get driverWsPdfColStatus => 'Status';
+
+  @override
+  String get driverWsPdfColResponse => 'Response';
+
+  @override
+  String driverWsDriverSubtitle(String site, String open, String awaiting) {
+    return '$site · $open open fines · $awaiting awaiting response';
+  }
+
+  @override
+  String driverWsOutstanding(String amount, String currency) {
+    return 'Outstanding: $amount $currency';
+  }
+
+  @override
+  String driverWsSupervisorLine(String name) {
+    return 'Supervisor: $name';
+  }
+
+  @override
+  String driverWsManagerLine(String name) {
+    return 'Manager: $name';
+  }
+
+  @override
+  String driverWsAssignmentPeriod(String start, String end) {
+    return '$start to $end';
+  }
+
+  @override
+  String driverWsAssignmentLine(String reason) {
+    return 'Assignment: $reason';
+  }
+
+  @override
+  String driverWsDueLine(String due, String paid) {
+    return 'Due: $due · Paid: $paid';
+  }
+
+  @override
+  String driverWsPdfTitle(String name) {
+    return 'Driver statement: $name';
+  }
+
+  @override
+  String driverWsPdfEmployeeId(String id) {
+    return 'Employee ID: $id';
+  }
+
+  @override
+  String get vehicleClassTransitMixer => 'Transit mixer';
+
+  @override
+  String get vehicleClassConcretePump => 'Concrete pump';
+
+  @override
+  String get vehicleClassLinePump => 'Truck-mounted line pump';
+
+  @override
+  String get vehicleClassStaffBus => 'Staff bus';
+
+  @override
+  String get vehicleClassStaffVan => 'Staff van';
+
+  @override
+  String get vehicleClassDoubleCabPickup => 'Double-cab pickup';
+
+  @override
+  String get vehicleClassWheelLoader => 'Wheel loader';
+
+  @override
+  String get vehicleClassSkidSteerLoader => 'Skid-steer loader';
+
+  @override
+  String get vehicleClassTowablePump => 'Towable concrete pump';
+
+  @override
+  String get vehicleClassStationaryPump => 'Stationary concrete pump';
+
+  @override
+  String get vehicleClassGenerator => 'Enclosed generator';
+
+  @override
+  String get vehicleClassChiller => 'Industrial chiller';
+
+  @override
+  String get vehicleClassWaterChiller => 'Industrial water chiller';
+
+  @override
+  String get vehicleClassBatchingPlant => 'Concrete batching plant';
+
+  @override
+  String get vehicleClassPlacingBoom => 'Freestanding placing boom';
+
+  @override
+  String vehicleClassConcretePumpAxles(int axles) {
+    return 'Concrete pump · $axles axle';
+  }
+
+  @override
+  String vehicleClassLinePumpAxles(int axles) {
+    return 'Truck-mounted line pump · $axles axle';
+  }
+
+  @override
+  String get scannerCameraStartFailedTitle => 'The camera could not start';
+
+  @override
+  String get scannerCameraStartFailedMessage =>
+      'Another app may be using it, or it stopped unexpectedly. Try again, or type the code below.';
+
+  @override
+  String get managementOverviewSiteRollup => 'Sites at a glance';
+
+  @override
+  String get managementOverviewSiteRollupEmpty =>
+      'No site has recorded tyres in this period.';
+
+  @override
+  String get managementOverviewAtRiskShare => 'Tyres at high or critical risk';
+
+  @override
+  String get managementReportsShare => 'Share report PDF';
+
+  @override
+  String get managementReportsShareError =>
+      'The report could not be shared. Try again.';
+
+  @override
+  String get managementReportsPdfMetric => 'Metric';
+
+  @override
+  String get managementReportsPdfValue => 'Value';
+
+  @override
+  String get managementReportsPdfShare => 'Share';
+
+  @override
+  String get managementTeamRole => 'Role';
+
+  @override
+  String get managementTeamUsername => 'Username';
+
+  @override
+  String get managementTeamSite => 'Site';
+
+  @override
+  String get managementTeamCountry => 'Country';
+
+  @override
+  String get managementTeamPhone => 'Phone';
+
+  @override
+  String get managementTeamEmail => 'Email';
+
+  @override
+  String get managementTeamStatus => 'Status';
+
+  @override
+  String get managementTeamApproved => 'Approved';
+
+  @override
+  String get managementTeamLastLogin => 'Last sign-in';
+
+  @override
+  String get managementTeamNotRecorded => 'Not recorded';
+
+  @override
+  String get managementTeamCall => 'Call';
+
+  @override
+  String get managementTeamSendEmail => 'Send email';
+
+  @override
+  String get managementTeamActionError =>
+      'This action is not available on this device.';
+
+  @override
+  String managementOverviewSiteTyres(String count) {
+    return '$count tyres';
+  }
+
+  @override
+  String managementOverviewSiteShare(String percent) {
+    return '$percent% of fleet tyres';
+  }
+
+  @override
+  String managementReportsPdfPeriod(int days) {
+    return 'Period: last $days days';
+  }
+
+  @override
+  String managementReportsPdfCurrency(String code) {
+    return 'Currency: $code';
+  }
+
+  @override
+  String get adminHubTitle => 'Admin console';
+
+  @override
+  String get adminHubSubtitle => 'Users, access, approvals and sites';
+
+  @override
+  String get adminHubPendingApprovals => 'Pending approvals';
+
+  @override
+  String get adminHubPendingSignups => 'Pending sign-ups';
+
+  @override
+  String get adminHubLockedUsers => 'Locked users';
+
+  @override
+  String get adminHubCountUnavailable => 'Could not load';
+
+  @override
+  String get adminHubSectionManage => 'Manage';
+
+  @override
+  String get adminHubSectionMore => 'Reports and team';
+
+  @override
+  String get adminHubUsersTitle => 'Users';
+
+  @override
+  String get adminHubUsersSubtitle => 'Approve, lock and change roles';
+
+  @override
+  String get adminHubAccessTitle => 'Mobile access';
+
+  @override
+  String get adminHubAccessSubtitle => 'Allow or deny app modules per person';
+
+  @override
+  String get adminHubApprovalsTitle => 'Approvals';
+
+  @override
+  String get adminHubApprovalsSubtitle =>
+      'Inspections and checklists waiting for sign-off';
+
+  @override
+  String get adminHubSitesTitle => 'Sites';
+
+  @override
+  String get adminHubSitesSubtitle => 'Regions and active status';
+
+  @override
+  String get adminHubAiTitle => 'Fleet AI chat';
+
+  @override
+  String get adminHubAiSubtitle => 'Ask questions about fleet management';
+
+  @override
+  String get adminHubOpenModule => 'Open this module';
+
+  @override
+  String get adminModuleInspect => 'New Inspection';
+
+  @override
+  String get adminModuleScan => 'Scan';
+
+  @override
+  String get adminModuleSerial => 'Serial Search';
+
+  @override
+  String get adminModuleTyreChange => 'Tyre Change';
+
+  @override
+  String get adminModuleChecklists => 'Checklists';
+
+  @override
+  String get adminModuleMeter => 'Meter Log';
+
+  @override
+  String get adminModuleWashing => 'Vehicle Washing';
+
+  @override
+  String get adminModuleReportIssue => 'Report Issue';
+
+  @override
+  String get adminModuleRepairRequest => 'Repair Request';
+
+  @override
+  String get adminModuleRecords => 'Tyre Records';
+
+  @override
+  String get adminModuleVehicles => 'Vehicles';
+
+  @override
+  String get adminModuleHistory => 'History';
+
+  @override
+  String get adminModuleAlerts => 'Alerts';
+
+  @override
+  String get adminModuleCalendar => 'Calendar';
+
+  @override
+  String get adminModuleAccidents => 'Accidents';
+
+  @override
+  String get adminModuleReportAccident => 'File Accident';
+
+  @override
+  String get adminModuleWorkorders => 'Work Orders';
+
+  @override
+  String get adminModuleRca => 'Root Cause';
+
+  @override
+  String get adminModuleTasks => 'Tasks';
+
+  @override
+  String get adminModuleStock => 'Stock Count';
+
+  @override
+  String get adminModulePm => 'Maintenance Due';
+
+  @override
+  String get adminModuleWorkshop => 'My Jobs';
+
+  @override
+  String get adminModuleOverview => 'Overview';
+
+  @override
+  String get adminModuleReports => 'Reports';
+
+  @override
+  String get adminModuleAnalytics => 'Analytics';
+
+  @override
+  String get adminModuleStockManage => 'Stock Management';
+
+  @override
+  String get adminModuleAi => 'Fleet AI';
+
+  @override
+  String get adminModuleTeam => 'Team';
+
+  @override
+  String get adminModuleApprovals => 'Approvals';
+
+  @override
+  String get adminModuleAdmin => 'Admin Console';
+
+  @override
+  String get adminModuleUsers => 'User Management';
+
+  @override
+  String get adminUsersTitle => 'Users';
+
+  @override
+  String adminUsersCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count users',
+      one: '1 user',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get adminUsersSearchHint => 'Search name, username or employee ID';
+
+  @override
+  String get adminUsersFilterAll => 'All';
+
+  @override
+  String get adminUsersStatusPending => 'Pending';
+
+  @override
+  String get adminUsersStatusActive => 'Active';
+
+  @override
+  String get adminUsersStatusLocked => 'Locked';
+
+  @override
+  String get adminUsersAllRoles => 'All roles';
+
+  @override
+  String get adminUsersEmptyTitle => 'No users match';
+
+  @override
+  String get adminUsersEmptyMessage => 'Try another search or filter.';
+
+  @override
+  String get adminUsersLoadFailed => 'Could not load users.';
+
+  @override
+  String get adminUsersReadOnlyNote =>
+      'Only a super admin can change users. You can view the list.';
+
+  @override
+  String get adminUsersSelfNote =>
+      'This is your own account. You cannot lock it or change its role.';
+
+  @override
+  String get adminUsersNoName => 'Unnamed user';
+
+  @override
+  String get adminUsersNoRole => 'No role assigned';
+
+  @override
+  String get adminUsersSuperAdminBadge => 'Super admin';
+
+  @override
+  String get adminUsersFieldRole => 'Role';
+
+  @override
+  String get adminUsersFieldUsername => 'Username';
+
+  @override
+  String get adminUsersFieldEmployeeId => 'Employee ID';
+
+  @override
+  String get adminUsersFieldEmail => 'Email';
+
+  @override
+  String get adminUsersFieldSite => 'Site';
+
+  @override
+  String get adminUsersFieldCountry => 'Country';
+
+  @override
+  String get adminUsersFieldJoined => 'Joined';
+
+  @override
+  String get adminUsersFieldPendingReason => 'Sign-up note';
+
+  @override
+  String get adminUsersActionApprove => 'Approve';
+
+  @override
+  String get adminUsersActionLock => 'Lock';
+
+  @override
+  String get adminUsersActionUnlock => 'Unlock';
+
+  @override
+  String get adminUsersActionDeactivate => 'Deactivate';
+
+  @override
+  String get adminUsersActionSetRole => 'Change role';
+
+  @override
+  String get adminUsersConfirmApproveTitle => 'Approve this user?';
+
+  @override
+  String adminUsersConfirmApproveMessage(String name) {
+    return '$name will be able to sign in and use the app.';
+  }
+
+  @override
+  String get adminUsersConfirmLockTitle => 'Lock this user?';
+
+  @override
+  String adminUsersConfirmLockMessage(String name) {
+    return '$name will not be able to sign in until unlocked.';
+  }
+
+  @override
+  String get adminUsersConfirmUnlockTitle => 'Unlock this user?';
+
+  @override
+  String adminUsersConfirmUnlockMessage(String name) {
+    return '$name will be able to sign in again.';
+  }
+
+  @override
+  String get adminUsersDeactivateTitle => 'Deactivate this user';
+
+  @override
+  String adminUsersDeactivateMessage(String name) {
+    return '$name will lose access and be locked. A reason is required.';
+  }
+
+  @override
+  String get adminUsersSetRoleTitle => 'Change role';
+
+  @override
+  String adminUsersSetRoleMessage(String name) {
+    return 'Choose the new role for $name. A reason is required.';
+  }
+
+  @override
+  String get adminUsersReasonLabel => 'Reason';
+
+  @override
+  String get adminUsersReasonRequired => 'Enter a reason.';
+
+  @override
+  String get adminUsersRoleRequired => 'Choose a role.';
+
+  @override
+  String get adminUsersActionDone => 'Saved.';
+
+  @override
+  String get adminUsersActionFailed => 'Could not save the change.';
+
+  @override
+  String get adminAccessTitle => 'Mobile access';
+
+  @override
+  String get adminAccessPickUser => 'Choose a person';
+
+  @override
+  String get adminAccessChangeUser => 'Change person';
+
+  @override
+  String get adminAccessIntro =>
+      'Overrides apply to this person\'s mobile app only. Default follows their role.';
+
+  @override
+  String get adminAccessDefault => 'Default';
+
+  @override
+  String get adminAccessAllow => 'Allow';
+
+  @override
+  String get adminAccessDeny => 'Deny';
+
+  @override
+  String get adminAccessRoleDefaultAllowed => 'Role default: allowed';
+
+  @override
+  String get adminAccessRoleDefaultDenied => 'Role default: not allowed';
+
+  @override
+  String get adminAccessRoleDefaultAdminOnly => 'Admins only by default';
+
+  @override
+  String get adminAccessAdminNote =>
+      'Admins and super admins always keep full access.';
+
+  @override
+  String get adminAccessReadOnlyNote => 'Only a super admin can change access.';
+
+  @override
+  String get adminAccessLoadFailed => 'Could not load this person\'s access.';
+
+  @override
+  String get adminAccessSaveFailed => 'Could not update access.';
+
+  @override
+  String get adminAccessSaved => 'Access updated.';
+
+  @override
+  String get adminAccessGroupField => 'Field';
+
+  @override
+  String get adminAccessGroupFleet => 'Fleet';
+
+  @override
+  String get adminAccessGroupMaintenance => 'Maintenance';
+
+  @override
+  String get adminAccessGroupManagement => 'Management';
+
+  @override
+  String get adminAccessGroupAdmin => 'Admin';
+
+  @override
+  String get adminApprovalsTabInspections => 'Inspections';
+
+  @override
+  String get adminApprovalsTabChecklists => 'Checklists';
+
+  @override
+  String get adminSitesTitle => 'Sites';
+
+  @override
+  String adminSitesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count sites',
+      one: '1 site',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get adminSitesSearchHint => 'Search site, region or code';
+
+  @override
+  String get adminSitesActive => 'Active';
+
+  @override
+  String get adminSitesInactive => 'Inactive';
+
+  @override
+  String get adminSitesNoRegion => 'No region';
+
+  @override
+  String get adminSitesEmptyTitle => 'No sites';
+
+  @override
+  String get adminSitesEmptyMessage =>
+      'No sites are registered for your organisation yet.';
+
+  @override
+  String get adminSitesLoadFailed => 'Could not load sites.';
+
+  @override
+  String get adminSitesReadOnlyNote =>
+      'Only an Admin or Manager can edit sites.';
+
+  @override
+  String get adminSitesEditTitle => 'Edit site';
+
+  @override
+  String get adminSitesRegionLabel => 'Region';
+
+  @override
+  String get adminSitesActiveLabel => 'Active site';
+
+  @override
+  String get adminSitesSave => 'Save';
+
+  @override
+  String get adminSitesSaved => 'Site updated.';
+
+  @override
+  String get adminSitesSaveFailed => 'Could not update the site.';
+
+  @override
+  String get adminAiTitle => 'Fleet AI chat';
+
+  @override
+  String get adminAiSubtitle =>
+      'Answers come from the AI service. Check important figures in the app.';
+
+  @override
+  String get adminAiHint => 'Ask about fleet management';
+
+  @override
+  String get adminAiSend => 'Send';
+
+  @override
+  String get adminAiClear => 'Clear chat';
+
+  @override
+  String get adminAiEmptyTitle => 'Ask a question';
+
+  @override
+  String get adminAiEmptyMessage =>
+      'For example, how to reduce tyre cost per kilometre.';
+
+  @override
+  String get adminAiThinking => 'Thinking';
+
+  @override
+  String get adminAiYou => 'You';
+
+  @override
+  String get adminAiAssistant => 'Fleet AI';
+
+  @override
+  String get adminAiErrorDisabled =>
+      'AI features are turned off by your administrator.';
+
+  @override
+  String get adminAiErrorBudget => 'The monthly AI budget has been reached.';
+
+  @override
+  String get adminAiErrorRateLimit =>
+      'Too many requests. Wait a moment and try again.';
+
+  @override
+  String get adminAiErrorEmpty => 'The AI service returned no answer.';
+
+  @override
+  String get adminAiErrorUnavailable =>
+      'The AI service is unavailable right now. Try again shortly.';
+
+  @override
+  String get extrasFleetAiTitle => 'Fleet AI';
+
+  @override
+  String get extrasFleetAiSubtitle => 'Answers from your live fleet data';
+
+  @override
+  String get extrasFleetAiSnapshotLoading => 'Reading live fleet data';
+
+  @override
+  String get extrasFleetAiNoData =>
+      'Live fleet data could not be read, so the assistant cannot answer from your records right now.';
+
+  @override
+  String extrasFleetAiGroundedOn(int n) {
+    return 'Based on $n of 5 live fleet counts';
+  }
+
+  @override
+  String get extrasFleetAiEmptyTitle => 'Ask about your fleet';
+
+  @override
+  String get extrasFleetAiEmptyMessage =>
+      'The assistant answers only from live counts of your fleet. It will say when something is not available here.';
+
+  @override
+  String get extrasFleetAiSuggestedTitle => 'Try asking';
+
+  @override
+  String get extrasFleetAiSuggestOverview => 'Give me a fleet health overview';
+
+  @override
+  String get extrasFleetAiSuggestRisk =>
+      'How many tyres are at critical or high risk?';
+
+  @override
+  String get extrasFleetAiSuggestActions => 'What needs my attention first?';
+
+  @override
+  String get extrasFleetAiSuggestAccidents =>
+      'How many accidents were reported in the last 30 days?';
+
+  @override
+  String get extrasFleetAiInputHint => 'Ask a question about your fleet';
+
+  @override
+  String get extrasFleetAiSend => 'Send';
+
+  @override
+  String get extrasFleetAiThinking => 'Thinking';
+
+  @override
+  String get extrasFleetAiClear => 'Clear conversation';
+
+  @override
+  String get extrasFleetAiDisclaimer =>
+      'AI answers can be wrong. Check important figures in the app before acting.';
+
+  @override
+  String get extrasFleetAiYou => 'You';
+
+  @override
+  String get extrasFleetAiErrDisabled =>
+      'AI features are switched off by your administrator.';
+
+  @override
+  String get extrasFleetAiErrBudget =>
+      'The monthly AI budget has been reached. Contact your administrator.';
+
+  @override
+  String get extrasFleetAiErrRateLimited =>
+      'Too many questions in a short time. Wait a moment and try again.';
+
+  @override
+  String get extrasFleetAiErrOffline =>
+      'No connection. Your question was not sent.';
+
+  @override
+  String get extrasFleetAiErrUnavailable =>
+      'The assistant is unavailable right now. Try again shortly.';
+
+  @override
+  String get repairReqCatEngine => 'Engine';
+
+  @override
+  String get repairReqCatTransmission => 'Transmission';
+
+  @override
+  String get repairReqCatBrakes => 'Brakes';
+
+  @override
+  String get repairReqCatTyres => 'Tyres';
+
+  @override
+  String get repairReqCatHydraulics => 'Hydraulics';
+
+  @override
+  String get repairReqCatElectrical => 'Electrical';
+
+  @override
+  String get repairReqCatBody => 'Body';
+
+  @override
+  String get repairReqCatDrumMixer => 'Drum / Mixer';
+
+  @override
+  String get repairReqCatPump => 'Pump';
+
+  @override
+  String get repairReqCatAirSystem => 'Air system';
+
+  @override
+  String get repairReqCatCooling => 'Cooling';
+
+  @override
+  String get repairReqCatOther => 'Other';
+
+  @override
+  String get repairReqTitle => 'Repair request';
+
+  @override
+  String get repairReqSubtitle => 'Report a fault to the workshop';
+
+  @override
+  String get repairReqMachine => 'Machine';
+
+  @override
+  String get repairReqChooseAsset => 'Choose the machine';
+
+  @override
+  String get repairReqSelect => 'Select';
+
+  @override
+  String get repairReqChange => 'Change';
+
+  @override
+  String repairReqPlate(String plate) {
+    return 'Plate $plate';
+  }
+
+  @override
+  String get repairReqErrAsset => 'Choose the machine that has the fault.';
+
+  @override
+  String get repairReqSite => 'Site';
+
+  @override
+  String get repairReqSiteHint => 'Filled from the machine\'s registered site';
+
+  @override
+  String get repairReqCategory => 'What is wrong';
+
+  @override
+  String get repairReqDescription => 'Describe the fault';
+
+  @override
+  String get repairReqDescriptionHint => 'What happened, what you see or hear';
+
+  @override
+  String get repairReqErrDescription => 'Describe the fault before sending.';
+
+  @override
+  String get repairReqPriority => 'Priority';
+
+  @override
+  String get repairReqOdometer => 'Odometer (km)';
+
+  @override
+  String get repairReqEngineHours => 'Engine hours';
+
+  @override
+  String get repairReqOptional => 'Optional';
+
+  @override
+  String get repairReqErrMeter =>
+      'Enter a number of zero or more, or leave it blank.';
+
+  @override
+  String get repairReqOnlineNote =>
+      'This request is sent straight to the workshop and needs a connection. The office issues the RFR number.';
+
+  @override
+  String get repairReqSubmit => 'Send repair request';
+
+  @override
+  String get repairReqErrNoProfile =>
+      'Your profile is not loaded yet. Try again in a moment.';
+
+  @override
+  String get repairReqErrOffline =>
+      'No connection. Nothing was sent. Your entries are kept, send again when you have signal.';
+
+  @override
+  String get repairReqErrPermission =>
+      'Your account is not allowed to raise repair requests. Contact your administrator.';
+
+  @override
+  String get repairReqErrFailed =>
+      'The request could not be sent. Your entries are kept, try again.';
+
+  @override
+  String get repairReqSentTitle => 'Repair request sent';
+
+  @override
+  String repairReqSentWithNumber(String rfr) {
+    return 'The workshop has it as $rfr.';
+  }
+
+  @override
+  String get repairReqSentNoNumber =>
+      'The workshop has it. The office will issue the RFR number.';
+
+  @override
+  String get repairReqAnother => 'Raise another';
+
+  @override
+  String get repairReqDone => 'Done';
+
+  @override
+  String get repairReqSearchHint => 'Search by asset, plate, type or site';
+
+  @override
+  String get repairReqNoAssets => 'No machines are registered for your scope.';
+
+  @override
+  String get repairReqNoMatch => 'No machine matches that search.';
+
+  @override
+  String repairReqRefineSearch(int n) {
+    return '$n machines match. Type more to narrow the list.';
+  }
+
+  @override
+  String get repairReqCachedList =>
+      'Offline: showing the fleet saved on this device.';
+
+  @override
+  String get registerTitle => 'Create account';
+
+  @override
+  String get registerChecking => 'Checking whether registration is open';
+
+  @override
+  String get registerUnreachableTitle => 'Cannot reach the server';
+
+  @override
+  String get registerUnreachableMessage =>
+      'Registration needs a connection. Check your signal and try again.';
+
+  @override
+  String get registerClosedTitle => 'Registration is closed';
+
+  @override
+  String get registerClosedMessage =>
+      'Accounts are created by your administrator. Contact your administrator to be invited.';
+
+  @override
+  String get registerBackToSignIn => 'Back to sign in';
+
+  @override
+  String get registerDoneTitle => 'Account created';
+
+  @override
+  String get registerDoneMessage =>
+      'Your account is waiting for approval. Your administrator will assign your role and site, then you can sign in.';
+
+  @override
+  String get registerIntro =>
+      'Request an account with your username and employee ID. An administrator approves it and sets your role and site.';
+
+  @override
+  String get registerFullName => 'Full name';
+
+  @override
+  String get registerOptional => 'Optional';
+
+  @override
+  String get registerUsername => 'Username';
+
+  @override
+  String get registerUsernameHelp =>
+      'At least 3 characters: letters, numbers, dot, underscore or hyphen';
+
+  @override
+  String get registerEmployeeId => 'Employee ID';
+
+  @override
+  String get registerPassword => 'Password';
+
+  @override
+  String registerPasswordHelp(int n) {
+    return 'At least $n characters';
+  }
+
+  @override
+  String get registerConfirm => 'Confirm password';
+
+  @override
+  String get registerShowPassword => 'Show password';
+
+  @override
+  String get registerHidePassword => 'Hide password';
+
+  @override
+  String get registerApprovalNote =>
+      'You cannot choose a role or site here. New accounts start pending until an administrator approves them.';
+
+  @override
+  String get registerSubmit => 'Request account';
+
+  @override
+  String get registerHaveAccount => 'Already have an account? Sign in';
+
+  @override
+  String get registerErrUsernameShort =>
+      'Enter a username of at least 3 characters.';
+
+  @override
+  String get registerErrUsernameChars =>
+      'Use only letters, numbers, dot, underscore or hyphen.';
+
+  @override
+  String get registerErrEmployeeId => 'Enter your employee ID.';
+
+  @override
+  String registerErrPasswordShort(int n) {
+    return 'The password needs at least $n characters.';
+  }
+
+  @override
+  String get registerErrMismatch => 'The passwords do not match.';
+
+  @override
+  String get registerErrTaken =>
+      'That username or employee ID is already taken. Choose another.';
+
+  @override
+  String get registerErrOffline =>
+      'No connection. Your account was not created. Try again when you have signal.';
+
+  @override
+  String get registerErrFailed =>
+      'Your account could not be created. Try again.';
+
+  @override
+  String get loginCreateAccount => 'Create an account';
+
+  @override
+  String get accAssessmentLoadFailed => 'The assessment could not be loaded';
+
+  @override
+  String get accSafetyAndMobility => 'Safety and mobility';
+
+  @override
+  String get accSafeToMove => 'Safe to move';
+
+  @override
+  String get accRecoveryTowRequired => 'Recovery / tow required';
+
+  @override
+  String get accVehicleOffRoad => 'Vehicle off road (VOR)';
+
+  @override
+  String get accDamageAssessment => 'Damage assessment';
+
+  @override
+  String accDamageAreaCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count areas',
+      one: '1 area',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get accNoDamageAreas =>
+      'No damage areas have been marked on this case yet.';
+
+  @override
+  String get accLabourAndPartsEstimate => 'Labour and parts estimate';
+
+  @override
+  String get accLabourHours => 'Labour hours';
+
+  @override
+  String get accLabourEstimate => 'Labour estimate';
+
+  @override
+  String get accPartsEstimate => 'Parts estimate';
+
+  @override
+  String get accTotalPreliminaryEstimate => 'Total preliminary estimate';
+
+  @override
+  String get accPartsAvailable => 'Parts available';
+
+  @override
+  String get accSpecialOrder => 'Special order';
+
+  @override
+  String get accPartsAvailability => 'Parts availability';
+
+  @override
+  String get accRepairRouteRecommendation => 'Repair route recommendation';
+
+  @override
+  String get accTotalLossPossible => 'Total loss possible';
+
+  @override
+  String get accSelectedWorkshop => 'Selected workshop';
+
+  @override
+  String get accCity => 'City';
+
+  @override
+  String get accExpectedDurationDays => 'Expected duration (days)';
+
+  @override
+  String get accQuotationStatus => 'Quotation status';
+
+  @override
+  String accRequiredAttachments(int count) {
+    return 'Required attachments ($count)';
+  }
+
+  @override
+  String get accAttachVendorQuotation =>
+      'Attach vendor quotation to enable submission to External Workshop.';
+
+  @override
+  String get accAfterSubmitNotify => 'After submit notify';
+
+  @override
+  String get accSaveAssessment => 'Save assessment';
+
+  @override
+  String get accAssessmentSubmitted => 'Assessment submitted';
+
+  @override
+  String get accSubmitAssessment => 'Submit assessment and route';
+
+  @override
+  String get accSubmissionNeedsQuotation =>
+      'Submission needs the vendor quotation for an external route.';
+
+  @override
+  String accFieldsNotStored(String fields) {
+    return 'These fields could not be stored on the server: $fields.';
+  }
+
+  @override
+  String accAssessmentRouted(String route) {
+    return 'Assessment submitted and routed to $route.';
+  }
+
+  @override
+  String get accAssessmentSaved => 'Assessment saved.';
+
+  @override
+  String accDocumentAttached(String document) {
+    return '$document attached.';
+  }
+
+  @override
+  String get accKm => 'KM';
+
+  @override
+  String accKmValue(String km) {
+    return '$km km';
+  }
+
+  @override
+  String get accPlate => 'Plate';
+
+  @override
+  String get accSiteLocation => 'Site · location';
+
+  @override
+  String accViewDamageMap(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'View damage map · $count areas',
+      one: 'View damage map · 1 area',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get accActionNotAssessed => 'Action: not yet assessed';
+
+  @override
+  String accActionValue(String value) {
+    return 'Action: $value';
+  }
+
+  @override
+  String get accRecommended => 'Recommended';
+
+  @override
+  String accUploadNamedDocument(String document) {
+    return 'Upload $document';
+  }
+
+  @override
+  String get accClaimLoadFailed => 'The claim could not be loaded';
+
+  @override
+  String get accClaimExternalRepairBanner => 'External repair assessment';
+
+  @override
+  String get accClaimDocumentPackage => 'Claim document package';
+
+  @override
+  String get accClaimRegistrationLocked =>
+      'Claim registration unlocks when all required documents are complete.';
+
+  @override
+  String accRequestDocument(String document) {
+    return 'Request $document';
+  }
+
+  @override
+  String get accUploadDocument => 'Upload document';
+
+  @override
+  String get accClaimRegistration => 'Claim registration';
+
+  @override
+  String get accInsurer => 'Insurer';
+
+  @override
+  String get accPolicyNo => 'Policy no.';
+
+  @override
+  String get accClaimNumber => 'Claim number';
+
+  @override
+  String get accClaimNumberAuto => 'Auto-generated after registration';
+
+  @override
+  String get accLiability => 'Liability';
+
+  @override
+  String get accGccLiabilityPct => 'GCC liability %';
+
+  @override
+  String get accClaimAmount => 'Claim amount';
+
+  @override
+  String get accDeductible => 'Deductible';
+
+  @override
+  String get accNetClaimable => 'Net claimable';
+
+  @override
+  String get accClaimRegistered => 'Claim registered with insurer';
+
+  @override
+  String get accRegisterClaim => 'Register claim with insurer';
+
+  @override
+  String get accClaimEnableWhenComplete =>
+      'Enable once all required documents are complete.';
+
+  @override
+  String get accPaymentAndRecovery => 'Payment and recovery';
+
+  @override
+  String get accApprovedAmount => 'Approved amount';
+
+  @override
+  String get accRecoveredAmount => 'Recovered amount';
+
+  @override
+  String get accOutstanding => 'Outstanding';
+
+  @override
+  String get accRecoverySource => 'Recovery source';
+
+  @override
+  String get accRecoverySourceHint => 'Insurer, third party, driver';
+
+  @override
+  String get accLastUpdated => 'Last updated';
+
+  @override
+  String get accSaveRecovery => 'Save recovery';
+
+  @override
+  String get accUpdateRecovery => 'Update recovery amount';
+
+  @override
+  String get accRegisterClaimFirst => 'Register the claim first.';
+
+  @override
+  String get accRecoveryEditableNote =>
+      'Recovery amounts remain editable after operational case closure. Every adjustment is timestamped and audited.';
+
+  @override
+  String get accAfterRegistrationNotify => 'After registration notify';
+
+  @override
+  String get accClaimNotificationIncludes =>
+      'Notification includes the claim number, document status, claim amount and next action.';
+
+  @override
+  String get accSaveClaimDraft => 'Save claim draft';
+
+  @override
+  String get accCompleteDocuments => 'Complete documents';
+
+  @override
+  String accCommandCenterMonitoring(String owner) {
+    return '$owner is monitoring SLA and missing documents.';
+  }
+
+  @override
+  String accCommandCenterRole(String role) {
+    return '$role (Command Center)';
+  }
+
+  @override
+  String get accClaimDraftSaved =>
+      'Claim draft saved on this device. Nothing was sent.';
+
+  @override
+  String accDocumentRequestLogged(String document) {
+    return 'Request for $document logged on the case.';
+  }
+
+  @override
+  String get accWhichDocument => 'Which document is this?';
+
+  @override
+  String accDocumentUploaded(String document) {
+    return '$document uploaded to the claim package.';
+  }
+
+  @override
+  String get accClaimRegisterMissing =>
+      'Enter the insurer, policy number and claim amount first.';
+
+  @override
+  String accRegisterClaimConfirm(
+      String claimNo, String insurer, String policyNo) {
+    return 'Claim $claimNo for $insurer under policy $policyNo will be registered on the case. This cannot be undone from the app.';
+  }
+
+  @override
+  String get accRegister => 'Register';
+
+  @override
+  String accClaimRegisteredSnack(String claimNo) {
+    return 'Claim $claimNo registered with the insurer.';
+  }
+
+  @override
+  String get accRecoveryMissing => 'Enter the recovered amount and its source.';
+
+  @override
+  String get accRecoveryRecorded => 'Recovery recorded.';
+
+  @override
+  String accOptionalSuffix(String label) {
+    return '$label (Optional)';
+  }
+
+  @override
+  String get accIntakeFleetMasterLockNote =>
+      'These details are sourced from fleet master and cannot be edited here. If any detail is incorrect, please update it in the fleet system.';
+
+  @override
+  String get accIntakeIncidentSiteHelp =>
+      'Select the site/location of this incident. This may be different from the asset\'s home site.';
+
+  @override
+  String get accIntakeAssetNo => 'Asset no';
+
+  @override
+  String get accIntakeVehicleType => 'Vehicle type';
+
+  @override
+  String get accIntakeMakeModel => 'Make / model';
+
+  @override
+  String get accIntakeHomeSite => 'Site (home)';
+
+  @override
+  String get accIntakeCountry => 'Country';
+
+  @override
+  String get accIntakeCurrentMeter => 'Current meter';
+
+  @override
+  String get accIntakeStatus => 'Status';
+
+  @override
+  String get accIntakeAssetLoaded => 'Asset loaded from fleet master';
+
+  @override
+  String get accIntakeAutoFilled => 'Auto-filled from fleet master';
+
+  @override
+  String get accIntakeWhereOccurred => 'Where did the incident occur?';
+
+  @override
+  String get accIntakeSiteHint => 'Site or location name';
+
+  @override
+  String accIntakeHomeSiteChip(String site) {
+    return '$site (home)';
+  }
+
+  @override
+  String accIntakeRequiredPhotos(int done, int total) {
+    return '$done of $total required photos';
+  }
+
+  @override
+  String accIntakeMissingCount(int count) {
+    return '$count missing';
+  }
+
+  @override
+  String get accIntakeAttachedOnDevice => 'Attached on this device';
+
+  @override
+  String accIntakeRequiredCategory(String category) {
+    return '$category · Required';
+  }
+
+  @override
+  String get accIntakeRemovePhoto => 'Remove photo';
+
+  @override
+  String get accIntakeSupportingDocuments => 'Supporting documents';
+
+  @override
+  String get accIntakeSupportingDocumentsHelp =>
+      'Attach what is available now. Route and country rules may require more during case review.';
+
+  @override
+  String get accIntakeOptionalAtIntake => 'Optional at intake';
+
+  @override
+  String get accIntakeRemoveAttachment => 'Remove attachment';
+
+  @override
+  String get accIntakeAttachDocumentPhoto => 'Attach document photo';
+
+  @override
+  String get accYes => 'Yes';
+
+  @override
+  String get accNo => 'No';
+
+  @override
+  String get accCaseSummaryTitle => 'Accident case summary';
+
+  @override
+  String accCaseSummaryGenerated(String date) {
+    return 'Generated $date';
+  }
+
+  @override
+  String get accCaseSummaryWorkstreams => 'Case workstreams';
+
+  @override
+  String get accCaseSummaryWorkstreamColumn => 'Workstream';
+
+  @override
+  String get accCaseSummaryTeamColumn => 'Team';
+
+  @override
+  String get accCaseSummaryStatusColumn => 'Status';
+
+  @override
+  String get accCaseSummaryProgressColumn => 'Progress';
+
+  @override
+  String get accCaseSummaryOverallCompletion => 'Overall completion';
+
+  @override
+  String get accCaseSummaryEvidencePhotos => 'Evidence photos';
+
+  @override
+  String get accCaseSummaryShare => 'Share case summary PDF';
+
+  @override
+  String get accCaseSummaryShareFailed =>
+      'The case summary could not be shared. Try again.';
+
+  @override
+  String get accCaseSummarySharedInEnglish =>
+      'The Arabic font could not be loaded, so the summary was shared in English.';
+
+  @override
+  String get accReportDraftRestoreFailed =>
+      'The saved report draft could not be restored. Your existing saved data was not overwritten.';
+
+  @override
+  String get accWorkspaceLoading =>
+      'Your workspace is still loading. Try again.';
+
+  @override
+  String get accReportDraftSaveFailed =>
+      'This device could not save the draft. Nothing previously saved was overwritten. Try again.';
+
+  @override
+  String get accReportUseScannedAsset =>
+      'Use the scanned asset number to select the matching fleet record.';
+
+  @override
+  String get accReportAddCloseUpPhoto => 'Add close-up photo';
+
+  @override
+  String get accReportTakePhoto => 'Take photo';
+
+  @override
+  String get accReportChooseGallery => 'Choose from gallery';
+
+  @override
+  String get accReportQueued => 'Report saved to the offline queue.';
+
+  @override
+  String get accReportQueuedWithNotes =>
+      'Report queued. Some unsupported optional fields were kept in the intake notes.';
+
+  @override
+  String get accReportStepAssetSubtitle =>
+      'Select the fleet asset involved in this incident.';
+
+  @override
+  String get accReportStepIncidentSubtitle =>
+      'Record when, where and what happened.';
+
+  @override
+  String get accReportStepPeopleSubtitle =>
+      'Record only the people, safety, Najm and third-party facts needed at the scene.';
+
+  @override
+  String get accReportStepEvidenceSubtitle =>
+      'Add one scene overview and one close-up for each marked damage area. Supporting documents are optional at intake.';
+
+  @override
+  String get accReportStepDocumentsSubtitle =>
+      'Add available supporting documents. Optional at intake.';
+
+  @override
+  String get accReportStepReviewSubtitle =>
+      'Check the exact report and send it to Fleet validation. Optional documents never block this submission.';
+
+  @override
+  String get accReportScanCode => 'Scan QR / barcode';
+
+  @override
+  String accReportMatchingAssets(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count matching assets',
+      one: '1 matching asset',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get accReportNoMatchingAsset => 'No matching fleet asset';
+
+  @override
+  String accReportMatchOverflow(int shown, int total, int hidden) {
+    return 'Showing the first $shown of $total matches. $hidden more results, refine your search.';
+  }
+
+  @override
+  String get accReportSavedFleetData => 'Showing saved fleet data';
+
+  @override
+  String get accReportChangeAsset => 'Change asset';
+
+  @override
+  String get accReportManualAsset => 'Asset number (manual fallback)';
+
+  @override
+  String get accReportManualAssetHint =>
+      'Use only when a fleet match is unavailable';
+
+  @override
+  String get accReportMeterAtIncident => 'Meter at incident';
+
+  @override
+  String get accReportMeterHint => 'Odometer or hour-meter reading';
+
+  @override
+  String accReportMeterFleetMaster(String km) {
+    return 'Fleet master: $km km';
+  }
+
+  @override
+  String get accReportRoadLocation => 'Road / exact location';
+
+  @override
+  String get accReportIncidentDate => 'Incident date';
+
+  @override
+  String get accReportIncidentTime => 'Incident time';
+
+  @override
+  String get accReportIncidentSite => 'Incident site';
+
+  @override
+  String get accReportIncidentSiteHelper =>
+      'Editable incident site; independent of the locked fleet home site.';
+
+  @override
+  String get accReportRoadLocationHint =>
+      'Gate, road, project area or GPS description';
+
+  @override
+  String get accReportEventType => 'Event type';
+
+  @override
+  String get accReportSelectEventType => 'Select event type';
+
+  @override
+  String get accReportInitialSeverity => 'Initial severity';
+
+  @override
+  String get accSeverityMinor => 'Minor';
+
+  @override
+  String get accSeverityModerate => 'Moderate';
+
+  @override
+  String get accSeverityMajorSevere => 'Major / severe';
+
+  @override
+  String get accSeverityFatal => 'Fatal';
+
+  @override
+  String get accReportWhatHappened => 'What happened?';
+
+  @override
+  String get accReportWhatHappenedHint =>
+      'Describe the sequence of events and immediate conditions';
+
+  @override
+  String get accReportDriverName => 'Driver name';
+
+  @override
+  String get accReportDriverId => 'Driver employee / licence ID';
+
+  @override
+  String get accReportPassengersInvolved => 'Were passengers involved?';
+
+  @override
+  String get accReportPassengerCount => 'Passenger count';
+
+  @override
+  String get accReportPassengerDetails => 'Passenger details';
+
+  @override
+  String get accReportInjuries => 'Were there injuries?';
+
+  @override
+  String get accReportInjuryCount => 'Injury count';
+
+  @override
+  String get accReportInjuryDetails => 'Injury details';
+
+  @override
+  String get accReportEmergencyServices => 'Were emergency services contacted?';
+
+  @override
+  String get accReportEmergencyDetails => 'Emergency response details';
+
+  @override
+  String get accReportVehicleMovable => 'Is the vehicle movable?';
+
+  @override
+  String get accReportRecoveryRequired => 'Is recovery / towing required?';
+
+  @override
+  String get accReportSafeToOperate => 'Is the vehicle safe to operate?';
+
+  @override
+  String get accReportThirdPartyInvolved => 'Was a third party involved?';
+
+  @override
+  String get accReportThirdPartyName => 'Third-party name';
+
+  @override
+  String get accReportThirdPartyVehicle => 'Third-party vehicle';
+
+  @override
+  String get accReportThirdPartyPlate => 'Third-party plate';
+
+  @override
+  String get accReportThirdPartyContact => 'Third-party contact';
+
+  @override
+  String get accReportThirdPartyInsurer => 'Third-party insurer';
+
+  @override
+  String get accReportThirdPartyInvoice =>
+      'Is a third-party invoice available?';
+
+  @override
+  String get accReportThirdPartyInvoiceHelper =>
+      'This is optional. If available, record only the invoice number; the Insurance team can request the file later.';
+
+  @override
+  String get accReportThirdPartyInvoiceNumber => 'Third-party invoice number';
+
+  @override
+  String get accReportNajmOpened => 'Was a Najm case opened?';
+
+  @override
+  String get accReportNajmHelper =>
+      'Record only when Najm applies to this incident.';
+
+  @override
+  String get accReportNajmReference => 'Najm reference';
+
+  @override
+  String get accReportWitnessDetails => 'Witness details';
+
+  @override
+  String get accReportImmediateAction => 'Immediate action taken';
+
+  @override
+  String get accReportAdditionalNotes => 'Additional notes';
+
+  @override
+  String get accReportReadyToSubmit => 'Ready to submit';
+
+  @override
+  String get accReportMissingBeforeSubmit => 'Missing before submission';
+
+  @override
+  String get accReportComplete => 'Complete';
+
+  @override
+  String get accNotRecorded => 'Not recorded';
+
+  @override
+  String get accNotAnswered => 'Not answered';
+
+  @override
+  String get accReportReviewAsset => 'Asset';
+
+  @override
+  String get accReportReviewIncident => 'Incident';
+
+  @override
+  String get accReportReviewDateTime => 'Date and time';
+
+  @override
+  String get accReportReviewSiteLocation => 'Site / location';
+
+  @override
+  String get accReportReviewWhatHappened => 'What happened';
+
+  @override
+  String get accReportReviewPeople => 'People';
+
+  @override
+  String accReportReviewPeopleValue(String driver, String injuries) {
+    return 'Driver $driver · Injuries $injuries';
+  }
+
+  @override
+  String get accReportReviewDamageMarks => 'Damage marks';
+
+  @override
+  String get accReportReviewFocusedPhotos => 'Focused photos';
+
+  @override
+  String accReportReviewPhotosValue(int done, int total) {
+    return '$done of $total';
+  }
+
+  @override
+  String get accReportReviewOptionalDocuments => 'Optional documents';
+
+  @override
+  String accReportReviewAttachedValue(int count) {
+    return '$count attached';
+  }
+
+  @override
+  String get accReportWorkflowResolvesOnSync =>
+      'Recipients, route and initial SLA are resolved by the configured accident workflow when this queued report syncs.';
+
+  @override
+  String get accReportDraftAutoSaves => 'Draft auto-saves on device';
+
+  @override
+  String get accReportDraftUnsaved => 'Unsaved changes';
+
+  @override
+  String get accReportDraftSaving => 'Saving draft…';
+
+  @override
+  String get accReportDraftSaved => 'Draft saved on device';
+
+  @override
+  String accReportDraftSavedAt(String time) {
+    return 'Draft saved on device · $time';
+  }
+
+  @override
+  String get accReportDraftSaveFailedShort => 'Draft save failed';
+
+  @override
+  String get accReportDraftRestoring => 'Restoring saved draft…';
+
+  @override
+  String get accReportSaveAndExit => 'Save and exit';
+
+  @override
+  String get accReportBack => 'Back';
+
+  @override
+  String get accReportSubmit => 'Submit accident';
+
+  @override
+  String get accReportContinueToIncident => 'Continue to incident details';
+
+  @override
+  String get accReportContinueToEvidence => 'Continue to evidence';
+
+  @override
+  String get accReportSaveAndContinue => 'Save & Continue';
+
+  @override
+  String accReportFleetResults(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count fleet results · search asset, fleet, plate, type, make, model or site',
+      one:
+          '1 fleet result · search asset, fleet, plate, type, make, model or site',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get accTypeCollision => 'Collision';
+
+  @override
+  String get accTypeRollover => 'Rollover';
+
+  @override
+  String get accTypeRearEnd => 'Rear-end';
+
+  @override
+  String get accTypeSideSwipe => 'Side-swipe';
+
+  @override
+  String get accTypeReversing => 'Reversing';
+
+  @override
+  String get accTypeFire => 'Fire';
+
+  @override
+  String get accTypeVandalism => 'Vandalism';
+
+  @override
+  String get accTypeWeather => 'Weather';
+
+  @override
+  String get accTypeTyreFailure => 'Tyre failure';
+
+  @override
+  String get accTypeMechanical => 'Mechanical';
+
+  @override
+  String get accTypeNearMiss => 'Near miss';
+
+  @override
+  String get accTypePropertyDamage => 'Property damage';
+
+  @override
+  String get accTypeOther => 'Other';
+
+  @override
+  String get accNotSet => 'Not set';
+
+  @override
+  String get accErrorFileUnsupported => 'That file is not supported.';
+
+  @override
+  String get accErrorCheckValues => 'Check the values and try again.';
+
+  @override
+  String get accErrorGeneric => 'Something went wrong. Please try again.';
+
+  @override
+  String accNotifyForVisibility(String role) {
+    return '$role (for visibility)';
+  }
+
+  @override
+  String get accTakePhoto => 'Take a photo';
+
+  @override
+  String get accChooseDeviceFile => 'Choose a file from the device';
+
+  @override
+  String get accDhDispatchHandover => 'Dispatch & Handover';
+
+  @override
+  String get accDhRepairRoute => 'Repair route';
+
+  @override
+  String get accDhDispatchStatus => 'Dispatch status';
+
+  @override
+  String get accDhTransitElapsed => 'Transit elapsed';
+
+  @override
+  String get accDhVendorRepairSla => 'Vendor repair SLA';
+
+  @override
+  String get accDhSlaUnavailable => 'SLA unavailable';
+
+  @override
+  String get accDhVendorSlaStartsOnlyAfterSigned =>
+      'Vendor SLA starts only after signed vehicle acceptance.';
+
+  @override
+  String get accDhTheSlaClockStartsWhenThe =>
+      'The SLA clock starts when the workshop signs vehicle acceptance.';
+
+  @override
+  String get accDhRetry => 'Retry';
+
+  @override
+  String get accDhDispatchLegsAreNotProvisionedOn =>
+      'Dispatch legs are not provisioned on this database yet. Dispatch details, handover condition and the workshop receipt cannot be recorded until the migration is applied.';
+
+  @override
+  String get accDhVendorContactFieldsAreNotProvisioned =>
+      'Vendor contact fields are not provisioned yet; only the workshop name is stored.';
+
+  @override
+  String get accDhAfterAcceptanceVendorCanAddInspection =>
+      'After acceptance, vendor can add inspection details, quotation, parts, schedule and progress in its own workspace. PO is created only after quotation review and approval.';
+
+  @override
+  String get accDhOpenCaseTimeline => 'Open case timeline';
+
+  @override
+  String get accDhOpenWorkshopAssessment => 'Open workshop assessment';
+
+  @override
+  String get accDhNotStarted => 'Not started';
+
+  @override
+  String get accDhMet => 'Met';
+
+  @override
+  String get accDhBreached => 'Breached';
+
+  @override
+  String get accDhPaused => 'Paused';
+
+  @override
+  String get accDhRunning => 'Running';
+
+  @override
+  String get accDhCancelled => 'Cancelled';
+
+  @override
+  String get accDhStartedNoSlaTarget => 'Started, no SLA target';
+
+  @override
+  String get accDhDestinationAndVendor => 'Destination and vendor';
+
+  @override
+  String get accDhWorkshopName => 'Workshop name';
+
+  @override
+  String get accDhCity => 'City';
+
+  @override
+  String get accDhVendorContactName => 'Vendor contact name';
+
+  @override
+  String get accDhPhone => 'Phone';
+
+  @override
+  String get accDhEmail => 'Email';
+
+  @override
+  String get accDhWorkshopRegistrationTaxNo =>
+      'Workshop registration / tax no.';
+
+  @override
+  String get accDhAssignedVendorInspector => 'Assigned vendor inspector';
+
+  @override
+  String get accDhUnassigned => 'Unassigned';
+
+  @override
+  String get accDhEditVendorDetails => 'Edit vendor details';
+
+  @override
+  String get accDhContactWorkshop => 'Contact workshop';
+
+  @override
+  String get accDhCancel => 'Cancel';
+
+  @override
+  String get accDhSaveVendor => 'Save vendor';
+
+  @override
+  String get accDhDispatchDetails => 'Dispatch details';
+
+  @override
+  String get accDhSentBy => 'Sent by';
+
+  @override
+  String get accDhDeparture => 'Departure';
+
+  @override
+  String get accDhCarrier => 'Carrier';
+
+  @override
+  String get accDhDriver => 'Driver';
+
+  @override
+  String get accDhRecoveryVehicle => 'Recovery vehicle';
+
+  @override
+  String get accDhOrigin => 'Origin';
+
+  @override
+  String get accDhDestination => 'Destination';
+
+  @override
+  String get accDhEstimatedArrival => 'Estimated arrival';
+
+  @override
+  String get accDhLiveStatus => 'Live status';
+
+  @override
+  String get accDhRecordDispatch => 'Record dispatch';
+
+  @override
+  String get accDhOdometerKm => 'Odometer (km)';
+
+  @override
+  String get accDhEngineHours => 'Engine hours';
+
+  @override
+  String get accDhFuel => 'Fuel %';
+
+  @override
+  String get accDhKeys => 'Keys';
+
+  @override
+  String get accDhDocumentsSentOnePerLine => 'Documents sent (one per line)';
+
+  @override
+  String get accDhAccessoriesChecklistOnePerLine =>
+      'Accessories / checklist (one per line)';
+
+  @override
+  String get accDhOutgoingDamagePhotos => 'Outgoing damage photos';
+
+  @override
+  String get accDhOutgoingConditionSignedBy => 'Outgoing condition signed by';
+
+  @override
+  String get accDhOutgoingSignature => 'Outgoing signature';
+
+  @override
+  String get accDhSaveDispatch => 'Save dispatch';
+
+  @override
+  String get accDhVehicleHandoverCondition => 'Vehicle handover condition';
+
+  @override
+  String get accDhOdometer => 'Odometer';
+
+  @override
+  String get accDhFuel2 => 'Fuel';
+
+  @override
+  String get accDhDocumentsSent => 'Documents sent';
+
+  @override
+  String get accDhDocuments => 'documents';
+
+  @override
+  String get accDhAccessoriesChecklist => 'Accessories / checklist';
+
+  @override
+  String get accDhItems => 'items';
+
+  @override
+  String get accDhPhotos => 'photos';
+
+  @override
+  String get accDhWorkshopReceipt => 'Workshop receipt';
+
+  @override
+  String get accDhCompletedByVendor => 'Completed by vendor';
+
+  @override
+  String get accDhArrived => 'Arrived';
+
+  @override
+  String get accDhReceivedBy => 'Received by';
+
+  @override
+  String get accDhIncomingOdometer => 'Incoming odometer';
+
+  @override
+  String get accDhIncomingEngineHours => 'Incoming engine hours';
+
+  @override
+  String get accDhIncomingFuel => 'Incoming fuel';
+
+  @override
+  String get accDhConditionMatchesDispatch => 'Condition matches dispatch';
+
+  @override
+  String get accDhYes => 'Yes';
+
+  @override
+  String get accDhNo => 'No';
+
+  @override
+  String get accDhAdditionalDamageRemarks => 'Additional damage / remarks';
+
+  @override
+  String get accDhReceivingPhotos => 'Receiving photos';
+
+  @override
+  String get accDhCustodyAccepted => 'Custody accepted';
+
+  @override
+  String get accDhVendorReceiverSignature => 'Vendor receiver signature';
+
+  @override
+  String get accDhSenderDriverSignature => 'Sender / driver signature';
+
+  @override
+  String get accDhCompletedByVendor2 => 'Completed by vendor';
+
+  @override
+  String get accDhNoDispatchLegIsRecordedYet =>
+      'No dispatch leg is recorded yet. Record the dispatch first; the receipt is signed against it.';
+
+  @override
+  String get accDhArrivedDateTime => 'Arrived date / time *';
+
+  @override
+  String get accDhReceivedByName => 'Received by (name) *';
+
+  @override
+  String get accDhDesignation => 'Designation *';
+
+  @override
+  String get accDhIncomingOdometerKm => 'Incoming odometer (km)';
+
+  @override
+  String get accDhIncomingFuel2 => 'Incoming fuel %';
+
+  @override
+  String get accDhUploadReceivingPhotos => 'Upload receiving photos *';
+
+  @override
+  String get accDhUploadSignedHandoverPaper => 'Upload signed handover paper *';
+
+  @override
+  String get accDhVendorReceiverSignature2 => 'Vendor receiver signature *';
+
+  @override
+  String get accDhSenderDriverSignatureCaptured =>
+      'Sender / driver signature (captured)';
+
+  @override
+  String get accDhIAcceptCustodyOfThisVehicle =>
+      'I accept custody of this vehicle';
+
+  @override
+  String get accDhSignAndAcceptVehicle => 'Sign and accept vehicle';
+
+  @override
+  String get accDhCompleteAllRequiredFieldsToEnable =>
+      'Complete all required fields to enable';
+
+  @override
+  String get accDhMissing => 'Missing';
+
+  @override
+  String get accDhArrivedDateTime2 => 'Arrived date / time';
+
+  @override
+  String get accDhDesignation2 => 'Designation';
+
+  @override
+  String get accDhSignedHandoverPaper => 'Signed handover paper';
+
+  @override
+  String get accDhVendorReceiverSignature3 => 'Vendor receiver signature';
+
+  @override
+  String get accDhCustodyCheckbox => 'Custody checkbox';
+
+  @override
+  String get accDhComplete => 'Complete';
+
+  @override
+  String get accDhNext => 'Next';
+
+  @override
+  String get accDhPending => 'Pending';
+
+  @override
+  String get accDhDispatched => 'Dispatched';
+
+  @override
+  String get accDhArrived2 => 'Arrived';
+
+  @override
+  String get accDhSignedAcceptance => 'Signed acceptance';
+
+  @override
+  String get accDhVendorAssessmentQuotationStarts =>
+      'Vendor assessment / quotation starts';
+
+  @override
+  String get accDhPick => 'Pick';
+
+  @override
+  String get accDhUseNow => 'Use now';
+
+  @override
+  String get accDhAttached => 'attached';
+
+  @override
+  String get accDhCamera => 'Camera';
+
+  @override
+  String get accDhGallery => 'Gallery';
+
+  @override
+  String get accTlAddTimelineNote => 'Add timeline note';
+
+  @override
+  String get accTlNote => 'Note';
+
+  @override
+  String get accTlSaveNote => 'Save note';
+
+  @override
+  String get accTlNotifyParticipants => 'Notify participants';
+
+  @override
+  String get accTlThisLogsTheNotificationOnThe =>
+      'This logs the notification on the case ledger. Delivery to people is done by the server notification engine.';
+
+  @override
+  String get accTlSubject => 'Subject';
+
+  @override
+  String get accTlMessage => 'Message';
+
+  @override
+  String get accTlLogNotification => 'Log notification';
+
+  @override
+  String get accTlManageRecipientGroups => 'Manage recipient groups';
+
+  @override
+  String get accTlRecipientsAreSetByAdminPer =>
+      'Recipients are set by Admin per event and role. The groups below are the roles each event reaches; membership comes from user profiles.';
+
+  @override
+  String get accTlVisibility => 'Visibility';
+
+  @override
+  String get accTlTime => 'Time';
+
+  @override
+  String get accTlBy => 'By';
+
+  @override
+  String get accTlTo => 'To';
+
+  @override
+  String get accTlStatus => 'Status';
+
+  @override
+  String get accTlElapsed => 'Elapsed';
+
+  @override
+  String get accTlCaseTimelineNotifications => 'Case timeline & notifications';
+
+  @override
+  String get accTlOpen => 'Open';
+
+  @override
+  String get accTlCurrentOwner => 'Current owner';
+
+  @override
+  String get accTlNextSla => 'Next SLA';
+
+  @override
+  String get accTlDueIn => 'Due in';
+
+  @override
+  String get accTlAddTimelineNote2 => 'Add timeline note';
+
+  @override
+  String get accTlNotifyParticipants2 => 'Notify participants';
+
+  @override
+  String get accTlNotProvisionedYetOnThisDatabase =>
+      'not provisioned yet on this database';
+
+  @override
+  String get accTlCouldNotBeReadTheFeed =>
+      'could not be read; the feed omits it';
+
+  @override
+  String get accTlCommunications => 'Communications';
+
+  @override
+  String get accTlEvidence => 'Evidence';
+
+  @override
+  String get accTlSlaClocks => 'SLA clocks';
+
+  @override
+  String get accTlDispatchLeg => 'Dispatch leg';
+
+  @override
+  String get accTlGpsFix => 'GPS fix';
+
+  @override
+  String get accTlTimeline => 'Timeline';
+
+  @override
+  String get accTlNotifications => 'Notifications';
+
+  @override
+  String get accTlParticipants => 'Participants';
+
+  @override
+  String get accTlAll => 'All';
+
+  @override
+  String get accTlActions => 'Actions';
+
+  @override
+  String get accTlDocuments => 'Documents';
+
+  @override
+  String get accTlSla => 'SLA';
+
+  @override
+  String get accTlEmails => 'Emails';
+
+  @override
+  String get accTlCompleted => 'Completed';
+
+  @override
+  String get accTlInTransit => 'In transit';
+
+  @override
+  String get accTlNoRecordedEventsForThisFilter =>
+      'No recorded events for this filter.';
+
+  @override
+  String get accTlNotificationDeliveryLog => 'Notification delivery log';
+
+  @override
+  String get accTlNoNotificationsRecordedForThisCase =>
+      'No notifications recorded for this case.';
+
+  @override
+  String get accTlTrigger => 'Trigger';
+
+  @override
+  String get accTlRecipients => 'Recipients';
+
+  @override
+  String get accTlChannel => 'Channel';
+
+  @override
+  String get accTlShowStatus => 'Show status';
+
+  @override
+  String get accTlViewAllNotifications => 'View all notifications';
+
+  @override
+  String get accTlManageRecipientGroups2 => 'Manage recipient groups';
+
+  @override
+  String get accTlRecipientsAreSetByAdminPer2 =>
+      'Recipients are set by Admin per event and role.';
+
+  @override
+  String get accTlParticipantsAndOwnership => 'Participants and ownership';
+
+  @override
+  String get accTlBy2 => 'by';
+
+  @override
+  String get accTlTo2 => 'to';
+
+  @override
+  String get accTlSlaMet => 'SLA met';
+
+  @override
+  String get accDhChangeNotSaved => 'The change could not be saved. Try again.';
+
+  @override
+  String get accDhContactOpenFailed =>
+      'The workshop contact could not be opened on this device.';
+
+  @override
+  String get accDhRecordDepartureFirst => 'Record the departure time first.';
+
+  @override
+  String get accTlLoadFailed => 'The timeline could not be loaded. Try again.';
+
+  @override
+  String accTlOverdueBy(String elapsed) {
+    return 'Overdue $elapsed';
+  }
 }

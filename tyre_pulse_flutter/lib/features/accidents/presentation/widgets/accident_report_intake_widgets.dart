@@ -3,6 +3,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:tyre_pulse/app/localization/tp_direction.dart';
+import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
@@ -16,14 +17,12 @@ import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.d
 typedef AccidentIntakePage = AccidentReportStep;
 
 /// The exact fleet-master note printed under the locked fields (M7).
-const String accidentFleetMasterLockNote =
-    'These details are sourced from fleet master and cannot be edited here. '
-    'If any detail is incorrect, please update it in the fleet system.';
+String accidentFleetMasterLockNote(BuildContext context) =>
+    AppLocalizations.of(context).accIntakeFleetMasterLockNote;
 
 /// The sub-text under "Where did the incident occur?" (M7).
-const String accidentIncidentSiteHelp =
-    'Select the site/location of this incident. This may be different from '
-    "the asset's home site.";
+String accidentIncidentSiteHelp(BuildContext context) =>
+    AppLocalizations.of(context).accIntakeIncidentSiteHelp;
 
 /// Wide capture canvas for the image-led intake pages.
 class AccidentIntakeCanvas extends StatelessWidget {
@@ -404,10 +403,11 @@ class AccidentFleetMasterCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final String? photo = vehiclePhotoAsset(asset);
     final String meter = asset.currentKm == null
         ? unavailableLabel
-        : '${formatVehicleOdometer(asset.currentKm!)} km';
+        : l10n.accKmValue(formatVehicleOdometer(asset.currentKm!));
     final String makeModel = <String?>[asset.make, asset.model]
         .whereType<String>()
         .map((String value) => value.trim())
@@ -417,14 +417,14 @@ class AccidentFleetMasterCard extends StatelessWidget {
     final String assetNo =
         _shown(asset.assetNo ?? asset.fleetNumber, unavailableLabel);
     final List<(String, String)> cardRows = <(String, String)>[
-      ('Asset no', assetNo),
-      ('Vehicle type', _shown(asset.vehicleType, unavailableLabel)),
-      ('Plate', _shown(asset.registrationNo, unavailableLabel)),
-      ('Make / model', _shown(makeModel, unavailableLabel)),
-      ('Site (home)', _shown(asset.site, unavailableLabel)),
-      ('Country', _shown(asset.country, unavailableLabel)),
-      ('Current meter', meter),
-      ('Status', _shown(asset.status, unavailableLabel)),
+      (l10n.accIntakeAssetNo, assetNo),
+      (l10n.accIntakeVehicleType, _shown(asset.vehicleType, unavailableLabel)),
+      (l10n.accPlate, _shown(asset.registrationNo, unavailableLabel)),
+      (l10n.accIntakeMakeModel, _shown(makeModel, unavailableLabel)),
+      (l10n.accIntakeHomeSite, _shown(asset.site, unavailableLabel)),
+      (l10n.accIntakeCountry, _shown(asset.country, unavailableLabel)),
+      (l10n.accIntakeCurrentMeter, meter),
+      (l10n.accIntakeStatus, _shown(asset.status, unavailableLabel)),
     ];
     return Column(
       key: AccidentReportIntakeKeys.assetMaster,
@@ -436,7 +436,7 @@ class AccidentFleetMasterCard extends StatelessWidget {
             const SizedBox(width: TpSpace.sm),
             Expanded(
               child: Text(
-                'Asset loaded from fleet master',
+                l10n.accIntakeAssetLoaded,
                 style: Theme.of(context).textTheme.titleSmall,
               ),
             ),
@@ -525,7 +525,7 @@ class AccidentFleetMasterCard extends StatelessWidget {
             const SizedBox(width: TpSpace.xs),
             Expanded(
               child: Text(
-                'Auto-filled from fleet master',
+                l10n.accIntakeAutoFilled,
                 style: Theme.of(context).textTheme.titleSmall,
               ),
             ),
@@ -537,30 +537,33 @@ class AccidentFleetMasterCard extends StatelessWidget {
             final bool compact = constraints.maxWidth < 560;
             final List<Widget> values = <Widget>[
               ReadOnlyAssetValue(
-                label: 'Asset no',
+                label: l10n.accIntakeAssetNo,
                 value: assetNo,
                 identifier: true,
               ),
               ReadOnlyAssetValue(
-                label: 'Plate',
+                label: l10n.accPlate,
                 value: _shown(asset.registrationNo, unavailableLabel),
                 identifier: true,
               ),
               ReadOnlyAssetValue(
-                label: 'Make / model',
+                label: l10n.accIntakeMakeModel,
                 value: _shown(makeModel, unavailableLabel),
               ),
               ReadOnlyAssetValue(
-                label: 'Vehicle type',
+                label: l10n.accIntakeVehicleType,
                 value: _shown(asset.vehicleType, unavailableLabel),
               ),
               ReadOnlyAssetValue(
-                label: 'Site (home)',
+                label: l10n.accIntakeHomeSite,
                 value: _shown(asset.site, unavailableLabel),
               ),
-              ReadOnlyAssetValue(label: 'Current meter', value: meter),
               ReadOnlyAssetValue(
-                label: 'Status',
+                label: l10n.accIntakeCurrentMeter,
+                value: meter,
+              ),
+              ReadOnlyAssetValue(
+                label: l10n.accIntakeStatus,
                 value: _shown(asset.status, unavailableLabel),
               ),
             ];
@@ -598,7 +601,7 @@ class AccidentFleetMasterCard extends StatelessWidget {
         ),
         const SizedBox(height: TpSpace.xs),
         Text(
-          accidentFleetMasterLockNote,
+          accidentFleetMasterLockNote(context),
           key: AccidentReportIntakeKeys.lockNote,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: palette.textSecondary,
@@ -703,27 +706,28 @@ class AccidentIncidentSiteSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final String current = controller.text.trim();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         Text(
-          'Where did the incident occur?',
+          l10n.accIntakeWhereOccurred,
           style: Theme.of(context).textTheme.titleMedium,
         ),
         const SizedBox(height: TpSpace.xs),
         Text(
-          accidentIncidentSiteHelp,
+          accidentIncidentSiteHelp(context),
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: TpSpace.sm),
         TpInput(
           key: AccidentReportIntakeKeys.incidentSite,
-          label: 'Incident site',
+          label: l10n.accReportIncidentSite,
           controller: controller,
           isRequired: true,
           prefixIcon: Icons.location_on_outlined,
-          hint: 'Site or location name',
+          hint: l10n.accIntakeSiteHint,
         ),
         if (knownSites.isNotEmpty) ...<Widget>[
           const SizedBox(height: TpSpace.sm),
@@ -735,7 +739,9 @@ class AccidentIncidentSiteSelector extends StatelessWidget {
                 ChoiceChip(
                   key: AccidentReportIntakeKeys.siteChip(site),
                   label: Text(
-                    site == homeSite?.trim() ? '$site (home)' : site,
+                    site == homeSite?.trim()
+                        ? l10n.accIntakeHomeSiteChip(site)
+                        : site,
                   ),
                   selected: site == current,
                   onSelected: (bool selected) {
@@ -789,15 +795,15 @@ class AccidentYesNoField extends StatelessWidget {
           TpSegmented<bool?>(
             value: value,
             expanded: true,
-            options: const <TpSegmentedOption<bool?>>[
+            options: <TpSegmentedOption<bool?>>[
               TpSegmentedOption<bool?>(
                 value: true,
-                label: 'Yes',
+                label: AppLocalizations.of(context).accYes,
                 icon: Icons.check_rounded,
               ),
               TpSegmentedOption<bool?>(
                 value: false,
-                label: 'No',
+                label: AppLocalizations.of(context).accNo,
                 icon: Icons.close_rounded,
               ),
             ],
@@ -836,6 +842,7 @@ class AccidentEvidenceChecklist extends StatelessWidget {
         )
         .length;
     final int total = requirements.length;
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final TpPalette palette = TpPalette.of(context);
     final bool done = complete == total;
     return Column(
@@ -845,13 +852,15 @@ class AccidentEvidenceChecklist extends StatelessWidget {
           children: <Widget>[
             Expanded(
               child: Text(
-                '$complete of $total required photos',
+                l10n.accIntakeRequiredPhotos(complete, total),
                 style: Theme.of(context).textTheme.titleSmall,
               ),
             ),
             TpStatusChip(
               status: done ? TpStatus.ok : TpStatus.warning,
-              label: done ? 'Complete' : '${total - complete} missing',
+              label: done
+                  ? l10n.accReportComplete
+                  : l10n.accIntakeMissingCount(total - complete),
               icon: done ? Icons.check_circle_outline : Icons.warning_amber,
               isCompact: true,
             ),
@@ -948,8 +957,9 @@ class _EvidenceRequirementTile extends StatelessWidget {
                 ),
                 Text(
                   attached
-                      ? 'Attached on this device'
-                      : '${requirement.category} · Required',
+                      ? AppLocalizations.of(context).accIntakeAttachedOnDevice
+                      : AppLocalizations.of(context)
+                          .accIntakeRequiredCategory(requirement.category),
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: attached
                             ? palette.ok.onSoft
@@ -961,18 +971,18 @@ class _EvidenceRequirementTile extends StatelessWidget {
           ),
           if (attached)
             IconButton(
-              tooltip: 'Remove photo',
+              tooltip: AppLocalizations.of(context).accIntakeRemovePhoto,
               onPressed: busy ? null : onRemove,
               icon: const Icon(Icons.delete_outline),
             )
           else ...<Widget>[
             IconButton(
-              tooltip: 'Choose from gallery',
+              tooltip: AppLocalizations.of(context).accReportChooseGallery,
               onPressed: busy ? null : onGallery,
               icon: const Icon(Icons.photo_outlined),
             ),
             IconButton(
-              tooltip: 'Take photo',
+              tooltip: AppLocalizations.of(context).accReportTakePhoto,
               onPressed: busy ? null : onCamera,
               icon: const Icon(Icons.camera_alt_outlined),
             ),
@@ -1002,13 +1012,12 @@ class AccidentOptionalDocumentList extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           Text(
-            'Supporting documents',
+            AppLocalizations.of(context).accIntakeSupportingDocuments,
             style: Theme.of(context).textTheme.titleSmall,
           ),
           const SizedBox(height: TpSpace.xs),
           Text(
-            'Attach what is available now. Route and country rules may require '
-            'more during case review.',
+            AppLocalizations.of(context).accIntakeSupportingDocumentsHelp,
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: TpSpace.sm),
@@ -1025,8 +1034,8 @@ class AccidentOptionalDocumentList extends StatelessWidget {
               title: Text(item.label),
               subtitle: Text(
                 paths[item.key]?.trim().isNotEmpty == true
-                    ? 'Attached on this device'
-                    : 'Optional at intake',
+                    ? AppLocalizations.of(context).accIntakeAttachedOnDevice
+                    : AppLocalizations.of(context).accIntakeOptionalAtIntake,
               ),
               trailing: busyKey == item.key
                   ? const SizedBox.square(
@@ -1035,12 +1044,14 @@ class AccidentOptionalDocumentList extends StatelessWidget {
                     )
                   : paths[item.key]?.trim().isNotEmpty == true
                       ? IconButton(
-                          tooltip: 'Remove attachment',
+                          tooltip: AppLocalizations.of(context)
+                              .accIntakeRemoveAttachment,
                           onPressed: () => onRemove(item),
                           icon: const Icon(Icons.close),
                         )
                       : IconButton(
-                          tooltip: 'Attach document photo',
+                          tooltip: AppLocalizations.of(context)
+                              .accIntakeAttachDocumentPhoto,
                           onPressed: () => onAdd(item),
                           icon: const Icon(Icons.attach_file),
                         ),

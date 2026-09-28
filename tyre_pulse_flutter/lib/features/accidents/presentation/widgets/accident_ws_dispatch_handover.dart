@@ -192,11 +192,7 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
     if (error is SupabaseFailure) return error.error.message;
     if (error is ArgumentError) return error.message.toString();
     if (error is FormatException) return error.message;
-    return WsKitCopy(context).t(
-      'The change could not be saved. Try again.',
-      'تعذر حفظ التغيير. حاول مرة أخرى.',
-      'تبدیلی محفوظ نہیں ہو سکی۔ دوبارہ کوشش کریں۔',
-    );
+    return WsKitCopy(context).l10n.accDhChangeNotSaved;
   }
 
   WorkspaceContext? get _workspace => ref.read(workspaceContextProvider);
@@ -244,11 +240,7 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
     final bool ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!ok && mounted) {
       setState(
-        () => _actionError = WsKitCopy(context).t(
-          'The workshop contact could not be opened on this device.',
-          'تعذر فتح جهة اتصال الورشة على هذا الجهاز.',
-          'اس ڈیوائس پر ورکشاپ رابطہ نہیں کھل سکا۔',
-        ),
+        () => _actionError = WsKitCopy(context).l10n.accDhContactOpenFailed,
       );
     }
   }
@@ -266,11 +258,7 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
         final DateTime? departure = _dDeparture;
         if (departure == null) {
           throw ArgumentError(
-            WsKitCopy(context).t(
-              'Record the departure time first.',
-              'سجل وقت المغادرة أولاً.',
-              'پہلے روانگی کا وقت درج کریں۔',
-            ),
+            WsKitCopy(context).l10n.accDhRecordDepartureFirst,
           );
         }
         await ref.read(accidentDispatchRepositoryProvider).recordDispatch(
@@ -385,11 +373,7 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
         ),
         const SizedBox(height: TpSpace.md),
         AccidentMockTitle(
-          c.t(
-            'Dispatch & Handover',
-            'الإرسال والتسليم',
-            'روانگی اور حوالگی',
-          ),
+          c.l10n.accDhDispatchHandover,
         ),
         const SizedBox(height: TpSpace.sm),
         Wrap(
@@ -397,12 +381,12 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
           runSpacing: TpSpace.sm,
           children: <Widget>[
             AccidentMockChip(
-              label: c.t('Repair route', 'مسار الإصلاح', 'مرمت کا راستہ'),
+              label: c.l10n.accDhRepairRoute,
               value: route,
               tone: TpStatus.info,
             ),
             AccidentMockChip(
-              label: c.t('Dispatch status', 'حالة الإرسال', 'روانگی کی حالت'),
+              label: c.l10n.accDhDispatchStatus,
               value: dispatchStatus,
               tone: d == null
                   ? TpStatus.neutral
@@ -414,24 +398,16 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
             ),
             AccidentMockChip(
               key: const Key('accident.dispatch.transit'),
-              label: c.t('Transit elapsed', 'مدة النقل', 'سفر کا گزرا وقت'),
+              label: c.l10n.accDhTransitElapsed,
               value: transit == null ? c.notSet : formatElapsed(transit),
               tone:
                   transitTimerRunning(d) ? TpStatus.warning : TpStatus.neutral,
             ),
             AccidentMockChip(
               key: const Key('accident.dispatch.vendorSla'),
-              label: c.t(
-                'Vendor repair SLA',
-                'مهلة إصلاح المورد',
-                'وینڈر مرمت کی مدت',
-              ),
+              label: c.l10n.accDhVendorRepairSla,
               value: bundle?.slaReadFailed == true && d?.custodyAccepted == true
-                  ? c.t(
-                      'SLA unavailable',
-                      'المهلة غير متاحة',
-                      'مدت دستیاب نہیں',
-                    )
+                  ? c.l10n.accDhSlaUnavailable
                   : _slaLabel(c, sla),
               tone: switch (sla.tone) {
                 VendorSlaTone.ok => TpStatus.ok,
@@ -445,17 +421,8 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
         ),
         const SizedBox(height: TpSpace.md),
         AccidentMockNotice(
-          title: c.t(
-            'Vendor SLA starts only after signed vehicle acceptance.',
-            'تبدأ مهلة المورد فقط بعد الاستلام الموقع للمركبة.',
-            'وینڈر کی مدت صرف دستخط شدہ وصولی کے بعد شروع ہوتی ہے۔',
-          ),
-          text: c.t(
-            'The SLA clock starts when the workshop signs vehicle acceptance.',
-            'يبدأ عداد المهلة عندما توقع الورشة على استلام المركبة.',
-            'مدت کا وقت تب شروع ہوتا ہے جب ورکشاپ گاڑی کی وصولی پر '
-                'دستخط کرے۔',
-          ),
+          title: c.l10n.accDhVendorSlaStartsOnlyAfterSigned,
+          text: c.l10n.accDhTheSlaClockStartsWhenThe,
         ),
         if (_loading) ...<Widget>[
           const SizedBox(height: TpSpace.md),
@@ -468,7 +435,7 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
           ),
           const SizedBox(height: TpSpace.sm),
           TpButton.secondary(
-            label: c.t('Retry', 'إعادة المحاولة', 'دوبارہ کوشش کریں'),
+            label: c.l10n.accDhRetry,
             onPressed: _load,
           ),
         ] else ...<Widget>[
@@ -476,28 +443,14 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
             const SizedBox(height: TpSpace.md),
             AccidentMockNotice(
               tone: TpStatus.info,
-              text: c.t(
-                'Dispatch legs are not provisioned on this database yet. '
-                    'Dispatch details, handover condition and the workshop '
-                    'receipt cannot be recorded until the migration is applied.',
-                'سجلات الإرسال غير مفعلة في قاعدة البيانات بعد. لا يمكن '
-                    'تسجيل التفاصيل حتى يتم تطبيق الترحيل.',
-                'روانگی کے ریکارڈ اس ڈیٹا بیس میں ابھی فراہم نہیں کیے '
-                    'گئے۔ مائیگریشن لاگو ہونے تک تفصیلات درج نہیں ہو سکتیں۔',
-              ),
+              text: c.l10n.accDhDispatchLegsAreNotProvisionedOn,
             ),
           ],
           if (bundle != null && !bundle.vendorFieldsProvisioned) ...<Widget>[
             const SizedBox(height: TpSpace.md),
             AccidentMockNotice(
               tone: TpStatus.info,
-              text: c.t(
-                'Vendor contact fields are not provisioned yet; only the '
-                    'workshop name is stored.',
-                'حقول اتصال المورد غير مفعلة بعد؛ يتم حفظ اسم الورشة فقط.',
-                'وینڈر رابطہ فیلڈز ابھی فراہم نہیں؛ صرف ورکشاپ کا نام '
-                    'محفوظ ہوتا ہے۔',
-              ),
+              text: c.l10n.accDhVendorContactFieldsAreNotProvisioned,
             ),
           ],
           if (_actionError != null) ...<Widget>[
@@ -517,36 +470,18 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
           const SizedBox(height: TpSpace.md),
           AccidentMockNotice(
             tone: TpStatus.info,
-            text: c.t(
-              'After acceptance, vendor can add inspection details, '
-                  'quotation, parts, schedule and progress in its own workspace. '
-                  'PO is created only after quotation review and approval.',
-              'بعد الاستلام يمكن للمورد إضافة تفاصيل الفحص وعرض السعر '
-                  'والقطع والجدول والتقدم في مساحته الخاصة. يُنشأ أمر '
-                  'الشراء فقط بعد مراجعة عرض السعر واعتماده.',
-              'قبولیت کے بعد وینڈر اپنے ورک اسپیس میں معائنہ، کوٹیشن، '
-                  'پرزے، شیڈول اور پیش رفت شامل کر سکتا ہے۔ PO صرف کوٹیشن '
-                  'کے جائزے اور منظوری کے بعد بنتا ہے۔',
-            ),
+            text: c.l10n.accDhAfterAcceptanceVendorCanAddInspection,
           ),
           const SizedBox(height: TpSpace.sm),
           AccidentMockActions(
             actions: <(String, IconData, VoidCallback?)>[
               (
-                c.t(
-                  'Open case timeline',
-                  'فتح سجل القضية',
-                  'کیس ٹائم لائن کھولیں',
-                ),
+                c.l10n.accDhOpenCaseTimeline,
                 Icons.timeline_outlined,
                 () => widget.onNavigate('timeline')
               ),
               (
-                c.t(
-                  'Open workshop assessment',
-                  'فتح تقييم الورشة',
-                  'ورکشاپ تشخیص کھولیں',
-                ),
+                c.l10n.accDhOpenWorkshopAssessment,
                 Icons.handyman_outlined,
                 () => widget.onNavigate('assessment')
               ),
@@ -567,17 +502,13 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
   }
 
   String _slaLabel(WsKitCopy c, VendorSlaChip chip) => switch (chip.label) {
-        'Not started' => c.t('Not started', 'لم تبدأ', 'شروع نہیں ہوئی'),
-        'Met' => c.t('Met', 'تم الالتزام', 'پوری ہوئی'),
-        'Breached' => c.t('Breached', 'تم تجاوزها', 'خلاف ورزی'),
-        'Paused' => c.t('Paused', 'متوقفة', 'موقوف'),
-        'Running' => c.t('Running', 'جارية', 'جاری'),
-        'Cancelled' => c.t('Cancelled', 'ملغاة', 'منسوخ'),
-        'Started, no SLA target' => c.t(
-            'Started, no SLA target',
-            'بدأت، بلا هدف مهلة',
-            'شروع، کوئی ہدف نہیں',
-          ),
+        'Not started' => c.l10n.accDhNotStarted,
+        'Met' => c.l10n.accDhMet,
+        'Breached' => c.l10n.accDhBreached,
+        'Paused' => c.l10n.accDhPaused,
+        'Running' => c.l10n.accDhRunning,
+        'Cancelled' => c.l10n.accDhCancelled,
+        'Started, no SLA target' => c.l10n.accDhStartedNoSlaTarget,
         _ => chip.label,
       };
 
@@ -594,7 +525,7 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
         (v?.contactEmail?.trim().isNotEmpty ?? false);
     return AccidentMockSection(
       number: 1,
-      title: c.t('Destination and vendor', 'الوجهة والمورد', 'منزل اور وینڈر'),
+      title: c.l10n.accDhDestinationAndVendor,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
@@ -603,31 +534,17 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
           else ...<Widget>[
             AccidentMockFacts(
               items: <(String, String?)>[
-                (c.t('Workshop name', 'اسم الورشة', 'ورکشاپ کا نام'), name),
-                (c.t('City', 'المدينة', 'شہر'), v?.vendorCity),
+                (c.l10n.accDhWorkshopName, name),
+                (c.l10n.accDhCity, v?.vendorCity),
+                (c.l10n.accDhVendorContactName, v?.contactName),
+                (c.l10n.accDhPhone, v?.contactPhone),
+                (c.l10n.accDhEmail, v?.contactEmail),
+                (c.l10n.accDhWorkshopRegistrationTaxNo, v?.registrationNo),
                 (
-                  c.t('Vendor contact name', 'اسم جهة الاتصال', 'رابطہ کا نام'),
-                  v?.contactName
-                ),
-                (c.t('Phone', 'الهاتف', 'فون'), v?.contactPhone),
-                (c.t('Email', 'البريد الإلكتروني', 'ای میل'), v?.contactEmail),
-                (
-                  c.t(
-                    'Workshop registration / tax no.',
-                    'رقم تسجيل الورشة / الضريبة',
-                    'ورکشاپ رجسٹریشن / ٹیکس نمبر',
-                  ),
-                  v?.registrationNo
-                ),
-                (
-                  c.t(
-                    'Assigned vendor inspector',
-                    'مفتش المورد المعين',
-                    'مقررہ وینڈر معائنہ کار',
-                  ),
+                  c.l10n.accDhAssignedVendorInspector,
                   v?.inspectorName?.trim().isNotEmpty == true
                       ? v!.inspectorName
-                      : c.t('Unassigned', 'غير معين', 'غیر مقرر')
+                      : c.l10n.accDhUnassigned
                 ),
               ],
             ),
@@ -635,16 +552,12 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
             AccidentMockActions(
               actions: <(String, IconData, VoidCallback?)>[
                 (
-                  c.t(
-                    'Edit vendor details',
-                    'تعديل بيانات المورد',
-                    'وینڈر کی تفصیلات بدلیں',
-                  ),
+                  c.l10n.accDhEditVendorDetails,
                   Icons.edit_outlined,
                   _busy ? null : _startVendorEdit
                 ),
                 (
-                  c.t('Contact workshop', 'الاتصال بالورشة', 'ورکشاپ سے رابطہ'),
+                  c.l10n.accDhContactWorkshop,
                   Icons.call_outlined,
                   canContact && !_busy ? _contactWorkshop : null
                 ),
@@ -660,52 +573,40 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           TpInput(
-            label: c.t('Workshop name', 'اسم الورشة', 'ورکشاپ کا نام'),
+            label: c.l10n.accDhWorkshopName,
             controller: _vName,
             isRequired: true,
           ),
           const SizedBox(height: TpSpace.sm),
           TpInput(
-            label: c.t('City', 'المدينة', 'شہر'),
+            label: c.l10n.accDhCity,
             controller: _vCity,
           ),
           const SizedBox(height: TpSpace.sm),
           TpInput(
-            label: c.t(
-              'Vendor contact name',
-              'اسم جهة الاتصال',
-              'رابطہ کا نام',
-            ),
+            label: c.l10n.accDhVendorContactName,
             controller: _vContact,
           ),
           const SizedBox(height: TpSpace.sm),
           TpInput(
-            label: c.t('Phone', 'الهاتف', 'فون'),
+            label: c.l10n.accDhPhone,
             controller: _vPhone,
             keyboardType: TextInputType.phone,
           ),
           const SizedBox(height: TpSpace.sm),
           TpInput(
-            label: c.t('Email', 'البريد الإلكتروني', 'ای میل'),
+            label: c.l10n.accDhEmail,
             controller: _vEmail,
             keyboardType: TextInputType.emailAddress,
           ),
           const SizedBox(height: TpSpace.sm),
           TpInput(
-            label: c.t(
-              'Workshop registration / tax no.',
-              'رقم تسجيل الورشة / الضريبة',
-              'ورکشاپ رجسٹریشن / ٹیکس نمبر',
-            ),
+            label: c.l10n.accDhWorkshopRegistrationTaxNo,
             controller: _vReg,
           ),
           const SizedBox(height: TpSpace.sm),
           TpInput(
-            label: c.t(
-              'Assigned vendor inspector',
-              'مفتش المورد المعين',
-              'مقررہ وینڈر معائنہ کار',
-            ),
+            label: c.l10n.accDhAssignedVendorInspector,
             controller: _vInspector,
           ),
           const SizedBox(height: TpSpace.md),
@@ -713,7 +614,7 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
             children: <Widget>[
               Expanded(
                 child: TpButton.secondary(
-                  label: c.t('Cancel', 'إلغاء', 'منسوخ'),
+                  label: c.l10n.accDhCancel,
                   onPressed: _busy
                       ? null
                       : () => setState(() => _editingVendor = false),
@@ -722,7 +623,7 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
               const SizedBox(width: TpSpace.sm),
               Expanded(
                 child: TpButton.primary(
-                  label: c.t('Save vendor', 'حفظ المورد', 'وینڈر محفوظ کریں'),
+                  label: c.l10n.accDhSaveVendor,
                   isBusy: _busy,
                   onPressed: _busy ? null : _saveVendor,
                 ),
@@ -744,7 +645,7 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
         d == null && (bundle?.dispatchesProvisioned ?? false) && !_busy;
     return AccidentMockSection(
       number: 2,
-      title: c.t('Dispatch details', 'تفاصيل الإرسال', 'روانگی کی تفصیلات'),
+      title: c.l10n.accDhDispatchDetails,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
@@ -753,29 +654,20 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
           else ...<Widget>[
             AccidentMockFacts(
               items: <(String, String?)>[
+                (c.l10n.accDhSentBy, d?.sentByName),
                 (
-                  c.t('Sent by', 'أرسل بواسطة', 'روانہ کرنے والا'),
-                  d?.sentByName
-                ),
-                (
-                  c.t('Departure', 'المغادرة', 'روانگی'),
+                  c.l10n.accDhDeparture,
                   d?.departureAt == null
                       ? null
                       : accidentMockDateTime(context, d!.departureAt!)
                 ),
-                (c.t('Carrier', 'الناقل', 'ٹرانسپورٹر'), d?.carrier),
-                (c.t('Driver', 'السائق', 'ڈرائیور'), d?.driverName),
+                (c.l10n.accDhCarrier, d?.carrier),
+                (c.l10n.accDhDriver, d?.driverName),
+                (c.l10n.accDhRecoveryVehicle, d?.recoveryVehicle),
+                (c.l10n.accDhOrigin, d?.origin),
+                (c.l10n.accDhDestination, d?.destination ?? v?.displayName),
                 (
-                  c.t('Recovery vehicle', 'مركبة النقل', 'ریکوری گاڑی'),
-                  d?.recoveryVehicle
-                ),
-                (c.t('Origin', 'نقطة الانطلاق', 'روانگی کی جگہ'), d?.origin),
-                (
-                  c.t('Destination', 'الوجهة', 'منزل'),
-                  d?.destination ?? v?.displayName
-                ),
-                (
-                  c.t('Estimated arrival', 'الوصول المتوقع', 'متوقع آمد'),
+                  c.l10n.accDhEstimatedArrival,
                   d?.etaAt == null
                       ? null
                       : accidentMockDateTime(context, d!.etaAt!)
@@ -786,7 +678,7 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
             Row(
               children: <Widget>[
                 Text(
-                  c.t('Live status', 'الحالة الحية', 'موجودہ حالت'),
+                  c.l10n.accDhLiveStatus,
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(width: TpSpace.sm),
@@ -812,7 +704,7 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
               AccidentMockActions(
                 actions: <(String, IconData, VoidCallback?)>[
                   (
-                    c.t('Record dispatch', 'تسجيل الإرسال', 'روانگی درج کریں'),
+                    c.l10n.accDhRecordDispatch,
                     Icons.local_shipping_outlined,
                     canRecord ? _startDispatch : null
                   ),
@@ -830,7 +722,7 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
         children: <Widget>[
           _timeRow(
             c,
-            label: c.t('Departure', 'المغادرة', 'روانگی'),
+            label: c.l10n.accDhDeparture,
             value: _dDeparture,
             onPick: () async {
               final DateTime? picked = await _pickDateTime(_dDeparture);
@@ -839,34 +731,34 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
             onNow: () => setState(() => _dDeparture = _clock()),
           ),
           TpInput(
-            label: c.t('Destination', 'الوجهة', 'منزل'),
+            label: c.l10n.accDhDestination,
             controller: _dDestination,
             isRequired: true,
           ),
           const SizedBox(height: TpSpace.sm),
           TpInput(
-            label: c.t('Carrier', 'الناقل', 'ٹرانسپورٹر'),
+            label: c.l10n.accDhCarrier,
             controller: _dCarrier,
           ),
           const SizedBox(height: TpSpace.sm),
           TpInput(
-            label: c.t('Driver', 'السائق', 'ڈرائیور'),
+            label: c.l10n.accDhDriver,
             controller: _dDriver,
           ),
           const SizedBox(height: TpSpace.sm),
           TpInput(
-            label: c.t('Recovery vehicle', 'مركبة النقل', 'ریکوری گاڑی'),
+            label: c.l10n.accDhRecoveryVehicle,
             controller: _dRecovery,
           ),
           const SizedBox(height: TpSpace.sm),
           TpInput(
-            label: c.t('Origin', 'نقطة الانطلاق', 'روانگی کی جگہ'),
+            label: c.l10n.accDhOrigin,
             controller: _dOrigin,
           ),
           const SizedBox(height: TpSpace.sm),
           _timeRow(
             c,
-            label: c.t('Estimated arrival', 'الوصول المتوقع', 'متوقع آمد'),
+            label: c.l10n.accDhEstimatedArrival,
             value: _dEta,
             onPick: () async {
               final DateTime? picked = await _pickDateTime(_dEta);
@@ -874,60 +766,44 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
             },
           ),
           TpInput(
-            label: c.t(
-              'Odometer (km)',
-              'عداد المسافة (كم)',
-              'اوڈومیٹر (کلومیٹر)',
-            ),
+            label: c.l10n.accDhOdometerKm,
             controller: _dOdo,
             keyboardType: TextInputType.number,
           ),
           const SizedBox(height: TpSpace.sm),
           TpInput(
-            label: c.t('Engine hours', 'ساعات المحرك', 'انجن کے گھنٹے'),
+            label: c.l10n.accDhEngineHours,
             controller: _dHours,
             keyboardType: TextInputType.number,
           ),
           const SizedBox(height: TpSpace.sm),
           TpInput(
-            label: c.t('Fuel %', 'الوقود %', 'ایندھن %'),
+            label: c.l10n.accDhFuel,
             controller: _dFuel,
             keyboardType: TextInputType.number,
           ),
           const SizedBox(height: TpSpace.sm),
           TpInput(
-            label: c.t('Keys', 'المفاتيح', 'چابیاں'),
+            label: c.l10n.accDhKeys,
             controller: _dKeys,
             keyboardType: TextInputType.number,
           ),
           const SizedBox(height: TpSpace.sm),
           TpInput(
-            label: c.t(
-              'Documents sent (one per line)',
-              'المستندات المرسلة (كل مستند في سطر)',
-              'ارسال کردہ دستاویزات (ہر سطر میں ایک)',
-            ),
+            label: c.l10n.accDhDocumentsSentOnePerLine,
             controller: _dDocs,
             maxLines: 3,
           ),
           const SizedBox(height: TpSpace.sm),
           TpInput(
-            label: c.t(
-              'Accessories / checklist (one per line)',
-              'الملحقات / قائمة التحقق (كل عنصر في سطر)',
-              'لوازمات / چیک لسٹ (ہر سطر میں ایک)',
-            ),
+            label: c.l10n.accDhAccessoriesChecklistOnePerLine,
             controller: _dAccessories,
             maxLines: 3,
           ),
           const SizedBox(height: TpSpace.sm),
           _photoRow(
             c,
-            label: c.t(
-              'Outgoing damage photos',
-              'صور الأضرار عند التسليم',
-              'روانگی کے نقصان کی تصاویر',
-            ),
+            label: c.l10n.accDhOutgoingDamagePhotos,
             count: _dPhotos.length,
             onAdd: (AccidentPhotoSource source) async {
               final String? path = await _capture('out', source);
@@ -936,16 +812,12 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
           ),
           const SizedBox(height: TpSpace.sm),
           TpInput(
-            label: c.t(
-              'Outgoing condition signed by',
-              'موقع حالة التسليم',
-              'روانگی کی حالت پر دستخط کنندہ',
-            ),
+            label: c.l10n.accDhOutgoingConditionSignedBy,
             controller: _dSignedBy,
           ),
           const SizedBox(height: TpSpace.sm),
           Text(
-            c.t('Outgoing signature', 'توقيع التسليم', 'روانگی کے دستخط'),
+            c.l10n.accDhOutgoingSignature,
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: TpSpace.xs),
@@ -959,7 +831,7 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
             children: <Widget>[
               Expanded(
                 child: TpButton.secondary(
-                  label: c.t('Cancel', 'إلغاء', 'منسوخ'),
+                  label: c.l10n.accDhCancel,
                   onPressed: _busy
                       ? null
                       : () => setState(() => _recordingDispatch = false),
@@ -968,11 +840,7 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
               const SizedBox(width: TpSpace.sm),
               Expanded(
                 child: TpButton.primary(
-                  label: c.t(
-                    'Save dispatch',
-                    'حفظ الإرسال',
-                    'روانگی محفوظ کریں',
-                  ),
+                  label: c.l10n.accDhSaveDispatch,
                   isBusy: _busy,
                   onPressed: _busy ? null : _saveDispatch,
                 ),
@@ -987,68 +855,45 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
   Widget _conditionSection(WsKitCopy c, AccidentDispatch? d) =>
       AccidentMockSection(
         number: 3,
-        title: c.t(
-          'Vehicle handover condition',
-          'حالة تسليم المركبة',
-          'حوالگی کے وقت گاڑی کی حالت',
-        ),
+        title: c.l10n.accDhVehicleHandoverCondition,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
             AccidentMockFacts(
               items: <(String, String?)>[
                 (
-                  c.t('Odometer', 'عداد المسافة', 'اوڈومیٹر'),
+                  c.l10n.accDhOdometer,
                   d?.outOdometerKm == null ? null : '${d!.outOdometerKm} km'
                 ),
+                (c.l10n.accDhEngineHours, d?.outEngineHours?.toString()),
                 (
-                  c.t('Engine hours', 'ساعات المحرك', 'انجن کے گھنٹے'),
-                  d?.outEngineHours?.toString()
-                ),
-                (
-                  c.t('Fuel', 'الوقود', 'ایندھن'),
+                  c.l10n.accDhFuel2,
                   d?.outFuelPct == null ? null : '${d!.outFuelPct}%'
                 ),
-                (c.t('Keys', 'المفاتيح', 'چابیاں'), d?.keysCount?.toString()),
+                (c.l10n.accDhKeys, d?.keysCount?.toString()),
               ],
             ),
             AccidentMockCountedList(
-              label: c.t(
-                'Documents sent',
-                'المستندات المرسلة',
-                'ارسال کردہ دستاویزات',
-              ),
+              label: c.l10n.accDhDocumentsSent,
               items: d?.documentsSent ?? const <String>[],
-              unit: c.t('documents', 'مستندات', 'دستاویزات'),
+              unit: c.l10n.accDhDocuments,
             ),
             AccidentMockCountedList(
-              label: c.t(
-                'Accessories / checklist',
-                'الملحقات / قائمة التحقق',
-                'لوازمات / چیک لسٹ',
-              ),
+              label: c.l10n.accDhAccessoriesChecklist,
               items: d?.accessories ?? const <String>[],
-              unit: c.t('items', 'عناصر', 'اشیاء'),
+              unit: c.l10n.accDhItems,
             ),
             AccidentMockFacts(
               items: <(String, String?)>[
                 (
-                  c.t(
-                    'Outgoing damage photos',
-                    'صور الأضرار عند التسليم',
-                    'روانگی کے نقصان کی تصاویر',
-                  ),
+                  c.l10n.accDhOutgoingDamagePhotos,
                   d == null || d.outgoingPhotos.isEmpty
                       ? null
                       : '${d.outgoingPhotos.length} '
-                          '${c.t('photos', 'صور', 'تصاویر')}'
+                          '${c.l10n.accDhPhotos}'
                 ),
                 (
-                  c.t(
-                    'Outgoing condition signed by',
-                    'موقع حالة التسليم',
-                    'روانگی کی حالت پر دستخط کنندہ',
-                  ),
+                  c.l10n.accDhOutgoingConditionSignedBy,
                   d?.outgoingSignedBy == null
                       ? null
                       : <String>[
@@ -1077,80 +922,57 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
     if (d != null && d.custodyAccepted) {
       return AccidentMockSection(
         number: 4,
-        title: c.t('Workshop receipt', 'استلام الورشة', 'ورکشاپ کی وصولی'),
-        subtitle: c.t(
-          'Completed by vendor',
-          'أكملها المورد',
-          'وینڈر نے مکمل کیا',
-        ),
+        title: c.l10n.accDhWorkshopReceipt,
+        subtitle: c.l10n.accDhCompletedByVendor,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
             AccidentMockFacts(
               items: <(String, String?)>[
                 (
-                  c.t('Arrived', 'الوصول', 'آمد'),
+                  c.l10n.accDhArrived,
                   d.arrivedAt == null
                       ? null
                       : accidentMockDateTime(context, d.arrivedAt!)
                 ),
                 (
-                  c.t('Received by', 'المستلم', 'وصول کنندہ'),
+                  c.l10n.accDhReceivedBy,
                   <String?>[d.receivedByName, d.receivedByDesignation]
                       .whereType<String>()
                       .join(' · ')
                 ),
                 (
-                  c.t(
-                    'Incoming odometer',
-                    'عداد المسافة عند الوصول',
-                    'آمد کا اوڈومیٹر',
-                  ),
+                  c.l10n.accDhIncomingOdometer,
                   d.inOdometerKm == null ? null : '${d.inOdometerKm} km'
                 ),
+                (c.l10n.accDhIncomingEngineHours, d.inEngineHours?.toString()),
                 (
-                  c.t(
-                    'Incoming engine hours',
-                    'ساعات المحرك عند الوصول',
-                    'آمد کے انجن گھنٹے',
-                  ),
-                  d.inEngineHours?.toString()
-                ),
-                (
-                  c.t('Incoming fuel', 'الوقود عند الوصول', 'آمد کا ایندھن'),
+                  c.l10n.accDhIncomingFuel,
                   d.inFuelPct == null ? null : '${d.inFuelPct}%'
                 ),
                 (
-                  c.t(
-                    'Condition matches dispatch',
-                    'الحالة تطابق التسليم',
-                    'حالت روانگی سے مطابقت رکھتی ہے',
-                  ),
+                  c.l10n.accDhConditionMatchesDispatch,
                   d.conditionMatches == null
                       ? null
                       : d.conditionMatches!
-                          ? c.t('Yes', 'نعم', 'ہاں')
-                          : c.t('No', 'لا', 'نہیں')
+                          ? c.l10n.accDhYes
+                          : c.l10n.accDhNo
                 ),
                 (
-                  c.t(
-                    'Additional damage / remarks',
-                    'أضرار إضافية / ملاحظات',
-                    'اضافی نقصان / تبصرے',
-                  ),
+                  c.l10n.accDhAdditionalDamageRemarks,
                   d.additionalDamageRemarks
                 ),
                 (
-                  c.t('Receiving photos', 'صور الاستلام', 'وصولی کی تصاویر'),
+                  c.l10n.accDhReceivingPhotos,
                   d.receivingPhotos.isEmpty
                       ? null
                       : '${d.receivingPhotos.length} '
-                          '${c.t('photos', 'صور', 'تصاویر')}'
+                          '${c.l10n.accDhPhotos}'
                 ),
                 (
-                  c.t('Custody accepted', 'تم قبول العهدة', 'تحویل قبول'),
+                  c.l10n.accDhCustodyAccepted,
                   d.acceptedAt == null
-                      ? c.t('Yes', 'نعم', 'ہاں')
+                      ? c.l10n.accDhYes
                       : accidentMockDateTime(context, d.acceptedAt!)
                 ),
               ],
@@ -1158,11 +980,7 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
             if (d.receiverSignature != null) ...<Widget>[
               const SizedBox(height: TpSpace.sm),
               Text(
-                c.t(
-                  'Vendor receiver signature',
-                  'توقيع مستلم المورد',
-                  'وینڈر وصول کنندہ کے دستخط',
-                ),
+                c.l10n.accDhVendorReceiverSignature,
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               _StoredImage(reference: d.receiverSignature!, height: 120),
@@ -1170,11 +988,7 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
             if (d.senderSignature != null) ...<Widget>[
               const SizedBox(height: TpSpace.sm),
               Text(
-                c.t(
-                  'Sender / driver signature',
-                  'توقيع المرسل / السائق',
-                  'بھیجنے والے / ڈرائیور کے دستخط',
-                ),
+                c.l10n.accDhSenderDriverSignature,
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               _StoredImage(reference: d.senderSignature!, height: 120),
@@ -1192,34 +1006,19 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
     final bool enabled = canSignAndAccept(draft, dispatch: d) && !_busy;
     return AccidentMockSection(
       number: 4,
-      title: c.t('Workshop receipt', 'استلام الورشة', 'ورکشاپ کی وصولی'),
-      subtitle: c.t(
-        'Completed by vendor',
-        'يكملها المورد',
-        'وینڈر مکمل کرے گا',
-      ),
+      title: c.l10n.accDhWorkshopReceipt,
+      subtitle: c.l10n.accDhCompletedByVendor2,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           if (d == null)
             AccidentMockNotice(
               tone: TpStatus.info,
-              text: c.t(
-                'No dispatch leg is recorded yet. Record the dispatch first; '
-                    'the receipt is signed against it.',
-                'لم يُسجل إرسال بعد. سجّل الإرسال أولاً؛ يُوقع الاستلام '
-                    'عليه.',
-                'ابھی کوئی روانگی درج نہیں۔ پہلے روانگی درج کریں؛ وصولی اسی '
-                    'پر دستخط ہوتی ہے۔',
-              ),
+              text: c.l10n.accDhNoDispatchLegIsRecordedYet,
             ),
           _timeRow(
             c,
-            label: c.t(
-              'Arrived date / time *',
-              'تاريخ / وقت الوصول *',
-              'آمد کی تاریخ / وقت *',
-            ),
+            label: c.l10n.accDhArrivedDateTime,
             value: _receipt.arrivedAt,
             onPick: () async {
               final DateTime? picked = await _pickDateTime(_receipt.arrivedAt);
@@ -1234,57 +1033,37 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
             ),
           ),
           TpInput(
-            label: c.t(
-              'Received by (name) *',
-              'المستلم (الاسم) *',
-              'وصول کنندہ (نام) *',
-            ),
+            label: c.l10n.accDhReceivedByName,
             controller: _rName,
             onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: TpSpace.sm),
           TpInput(
-            label: c.t('Designation *', 'الوظيفة *', 'عہدہ *'),
+            label: c.l10n.accDhDesignation,
             controller: _rDesignation,
             onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: TpSpace.sm),
           TpInput(
-            label: c.t(
-              'Incoming odometer (km)',
-              'عداد المسافة عند الوصول',
-              'آمد کا اوڈومیٹر',
-            ),
+            label: c.l10n.accDhIncomingOdometerKm,
             controller: _rOdo,
             keyboardType: TextInputType.number,
           ),
           const SizedBox(height: TpSpace.sm),
           TpInput(
-            label: c.t(
-              'Incoming engine hours',
-              'ساعات المحرك عند الوصول',
-              'آمد کے انجن گھنٹے',
-            ),
+            label: c.l10n.accDhIncomingEngineHours,
             controller: _rHours,
             keyboardType: TextInputType.number,
           ),
           const SizedBox(height: TpSpace.sm),
           TpInput(
-            label: c.t(
-              'Incoming fuel %',
-              'الوقود عند الوصول %',
-              'آمد کا ایندھن %',
-            ),
+            label: c.l10n.accDhIncomingFuel2,
             controller: _rFuel,
             keyboardType: TextInputType.number,
           ),
           const SizedBox(height: TpSpace.md),
           Text(
-            c.t(
-              'Condition matches dispatch',
-              'الحالة تطابق التسليم',
-              'حالت روانگی سے مطابقت رکھتی ہے',
-            ),
+            c.l10n.accDhConditionMatchesDispatch,
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: TpSpace.xs),
@@ -1297,11 +1076,11 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
             options: <TpSegmentedOption<int>>[
               TpSegmentedOption<int>(
                 value: 1,
-                label: c.t('Yes', 'نعم', 'ہاں'),
+                label: c.l10n.accDhYes,
               ),
               TpSegmentedOption<int>(
                 value: 0,
-                label: c.t('No', 'لا', 'نہیں'),
+                label: c.l10n.accDhNo,
               ),
             ],
             onChanged: (int value) => setState(
@@ -1310,22 +1089,14 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
           ),
           const SizedBox(height: TpSpace.sm),
           TpInput(
-            label: c.t(
-              'Additional damage / remarks',
-              'أضرار إضافية / ملاحظات',
-              'اضافی نقصان / تبصرے',
-            ),
+            label: c.l10n.accDhAdditionalDamageRemarks,
             controller: _rRemarks,
             maxLines: 3,
           ),
           const SizedBox(height: TpSpace.sm),
           _photoRow(
             c,
-            label: c.t(
-              'Upload receiving photos *',
-              'رفع صور الاستلام *',
-              'وصولی کی تصاویر اپ لوڈ کریں *',
-            ),
+            label: c.l10n.accDhUploadReceivingPhotos,
             count: _receipt.receivingPhotos.length,
             onAdd: (AccidentPhotoSource source) async {
               final String? path = await _capture('receipt', source);
@@ -1344,11 +1115,7 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
           const SizedBox(height: TpSpace.sm),
           _photoRow(
             c,
-            label: c.t(
-              'Upload signed handover paper *',
-              'رفع ورقة التسليم الموقعة *',
-              'دستخط شدہ حوالگی کاغذ اپ لوڈ کریں *',
-            ),
+            label: c.l10n.accDhUploadSignedHandoverPaper,
             count: _receipt.handoverPaperRef == null ? 0 : 1,
             onAdd: (AccidentPhotoSource source) async {
               final String? path = await _capture('paper', source);
@@ -1361,11 +1128,7 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
           ),
           const SizedBox(height: TpSpace.md),
           Text(
-            c.t(
-              'Vendor receiver signature *',
-              'توقيع مستلم المورد *',
-              'وینڈر وصول کنندہ کے دستخط *',
-            ),
+            c.l10n.accDhVendorReceiverSignature2,
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: TpSpace.xs),
@@ -1380,11 +1143,7 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
           ),
           const SizedBox(height: TpSpace.md),
           Text(
-            c.t(
-              'Sender / driver signature (captured)',
-              'توقيع المرسل / السائق (مسجل)',
-              'بھیجنے والے / ڈرائیور کے دستخط (ریکارڈ شدہ)',
-            ),
+            c.l10n.accDhSenderDriverSignatureCaptured,
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: TpSpace.xs),
@@ -1408,11 +1167,7 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
                           _receipt.copyWith(custodyAccepted: value ?? false),
                     ),
             title: Text(
-              c.t(
-                'I accept custody of this vehicle',
-                'أقبل عهدة هذه المركبة',
-                'میں اس گاڑی کی تحویل قبول کرتا ہوں',
-              ),
+              c.l10n.accDhIAcceptCustodyOfThisVehicle,
             ),
           ),
           FilledButton.icon(
@@ -1420,21 +1175,13 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
             onPressed: enabled ? _acceptVehicle : null,
             icon: const Icon(Icons.lock_outline),
             label: Text(
-              c.t(
-                'Sign and accept vehicle',
-                'التوقيع واستلام المركبة',
-                'دستخط کرکے گاڑی قبول کریں',
-              ),
+              c.l10n.accDhSignAndAcceptVehicle,
             ),
           ),
           if (!enabled) ...<Widget>[
             const SizedBox(height: TpSpace.xs),
             Text(
-              c.t(
-                'Complete all required fields to enable',
-                'أكمل جميع الحقول المطلوبة للتفعيل',
-                'فعال کرنے کے لیے تمام مطلوبہ فیلڈز مکمل کریں',
-              ),
+              c.l10n.accDhCompleteAllRequiredFieldsToEnable,
               key: const Key('accident.receipt.gateHint'),
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: TpPalette.of(context).textMuted,
@@ -1442,7 +1189,7 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
             ),
             if (missing.isNotEmpty)
               Text(
-                '${c.t('Missing', 'الناقص', 'باقی')}: '
+                '${c.l10n.accDhMissing}: '
                 '${missing.map((String k) => _fieldLabel(c, k)).join(', ')}',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
@@ -1453,17 +1200,13 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
   }
 
   String _fieldLabel(WsKitCopy c, String key) => switch (key) {
-        'arrived_at' => c.t('Arrived date / time', 'وقت الوصول', 'آمد کا وقت'),
-        'received_by_name' => c.t('Received by', 'المستلم', 'وصول کنندہ'),
-        'received_by_designation' => c.t('Designation', 'الوظيفة', 'عہدہ'),
-        'receiving_photos' =>
-          c.t('Receiving photos', 'صور الاستلام', 'وصولی کی تصاویر'),
-        'handover_paper_ref' =>
-          c.t('Signed handover paper', 'ورقة التسليم', 'حوالگی کاغذ'),
-        'receiver_signature' =>
-          c.t('Vendor receiver signature', 'توقيع المستلم', 'وصول کنندہ دستخط'),
-        'custody_accepted' =>
-          c.t('Custody checkbox', 'مربع قبول العهدة', 'تحویل کا خانہ'),
+        'arrived_at' => c.l10n.accDhArrivedDateTime2,
+        'received_by_name' => c.l10n.accDhReceivedBy,
+        'received_by_designation' => c.l10n.accDhDesignation2,
+        'receiving_photos' => c.l10n.accDhReceivingPhotos,
+        'handover_paper_ref' => c.l10n.accDhSignedHandoverPaper,
+        'receiver_signature' => c.l10n.accDhVendorReceiverSignature3,
+        'custody_accepted' => c.l10n.accDhCustodyCheckbox,
         _ => key,
       };
 
@@ -1486,11 +1229,9 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
                   DispatchStepState.pending => TpStatus.neutral,
                 };
                 final String label = switch (state) {
-                  DispatchStepState.complete =>
-                    c.t('Complete', 'مكتمل', 'مکمل'),
-                  DispatchStepState.next => c.t('Next', 'التالي', 'اگلا'),
-                  DispatchStepState.pending =>
-                    c.t('Pending', 'قيد الانتظار', 'زیر التوا'),
+                  DispatchStepState.complete => c.l10n.accDhComplete,
+                  DispatchStepState.next => c.l10n.accDhNext,
+                  DispatchStepState.pending => c.l10n.accDhPending,
                 };
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: TpSpace.xs),
@@ -1540,15 +1281,10 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
   }
 
   String _stepLabel(WsKitCopy c, String key) => switch (key) {
-        'dispatched' => c.t('Dispatched', 'تم الإرسال', 'روانہ'),
-        'arrived' => c.t('Arrived', 'وصلت', 'پہنچ گئی'),
-        'signed_acceptance' =>
-          c.t('Signed acceptance', 'الاستلام الموقع', 'دستخط شدہ قبولیت'),
-        _ => c.t(
-            'Vendor assessment / quotation starts',
-            'يبدأ تقييم المورد / عرض السعر',
-            'وینڈر تشخیص / کوٹیشن شروع',
-          ),
+        'dispatched' => c.l10n.accDhDispatched,
+        'arrived' => c.l10n.accDhArrived2,
+        'signed_acceptance' => c.l10n.accDhSignedAcceptance,
+        _ => c.l10n.accDhVendorAssessmentQuotationStarts,
       };
 
   // ── small form rows ───────────────────────────────────────────────────
@@ -1581,13 +1317,13 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
                 OutlinedButton.icon(
                   onPressed: _busy ? null : () => unawaited(onPick()),
                   icon: const Icon(Icons.event_outlined),
-                  label: Text(c.t('Pick', 'اختيار', 'منتخب کریں')),
+                  label: Text(c.l10n.accDhPick),
                 ),
                 if (onNow != null)
                   OutlinedButton.icon(
                     onPressed: _busy ? null : onNow,
                     icon: const Icon(Icons.schedule_outlined),
-                    label: Text(c.t('Use now', 'الآن', 'ابھی')),
+                    label: Text(c.l10n.accDhUseNow),
                   ),
               ],
             ),
@@ -1612,9 +1348,7 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
             crossAxisAlignment: WrapCrossAlignment.center,
             children: <Widget>[
               Text(
-                count == 0
-                    ? c.notSet
-                    : '$count ${c.t('attached', 'مرفقة', 'منسلک')}',
+                count == 0 ? c.notSet : '$count ${c.l10n.accDhAttached}',
                 style: const TextStyle(fontWeight: FontWeight.w700),
               ),
               OutlinedButton.icon(
@@ -1622,14 +1356,14 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
                     ? null
                     : () => unawaited(onAdd(AccidentPhotoSource.camera)),
                 icon: const Icon(Icons.photo_camera_outlined),
-                label: Text(c.t('Camera', 'الكاميرا', 'کیمرہ')),
+                label: Text(c.l10n.accDhCamera),
               ),
               OutlinedButton.icon(
                 onPressed: _busy
                     ? null
                     : () => unawaited(onAdd(AccidentPhotoSource.gallery)),
                 icon: const Icon(Icons.photo_library_outlined),
-                label: Text(c.t('Gallery', 'المعرض', 'گیلری')),
+                label: Text(c.l10n.accDhGallery),
               ),
             ],
           ),

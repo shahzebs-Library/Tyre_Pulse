@@ -267,7 +267,8 @@ void main() {
       expect(find.text('Good'), findsWidgets);
       expect(find.text('Attention'), findsOneWidget);
       expect(find.text('Critical'), findsOneWidget);
-      expect(find.text('Add details'), findsOneWidget);
+      // Legend and every unrecorded wheel card use the same honest wording.
+      expect(find.text('Not recorded'), findsWidgets);
       expect(
         find.byKey(const Key('tyre.diagram.figma_capture_stage')),
         findsOneWidget,
@@ -277,8 +278,25 @@ void main() {
         find.byKey(NewInspectionScreenKeys.tyreSelectedCard),
         findsOneWidget,
       );
-      expect(find.text('118 PSI'), findsOneWidget);
-      expect(find.text('7.5 mm'), findsOneWidget);
+      Finder inSelectedCard(Finder finder) => find.descendant(
+            of: find.byKey(NewInspectionScreenKeys.tyreSelectedCard),
+            matching: finder,
+          );
+      // The recorded values appear once on the wheel's own card and once
+      // in the selected-tyre panel - and nowhere else.
+      expect(find.text('118 psi'), findsNWidgets(2));
+      expect(find.text('7.5 mm'), findsNWidgets(2));
+      expect(inSelectedCard(find.text('118 psi')), findsOneWidget);
+      expect(inSelectedCard(find.text('7.5 mm')), findsOneWidget);
+      expect(inSelectedCard(find.text('Damaged')), findsWidgets);
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(const Key('inspection.tyres.position_counter')),
+            )
+            .data,
+        '1 / 12',
+      );
       await expectLater(
         find.byType(NewInspectionScreen),
         matchesGoldenFile('goldens/inspection_tyres_selected.png'),
@@ -295,6 +313,76 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Save & Next'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'selected panel walks the layout with previous and next, wrapping, and '
+    'never shows a value that was not recorded',
+    (WidgetTester tester) async {
+      await _pumpScreen(
+        tester,
+        size: const Size(390, 1400),
+        initialState: InspectionWizardState(
+          step: InspectionWizardStep.tyres,
+          selectedAssetNo: 'TM749',
+          selectedVehicleType: '',
+          selectedSite: 'Site A',
+          positions: _tmPositions,
+          tyreConditions: <String, TyrePositionReading>{
+            for (final String position in _tmPositions)
+              position: position == 'F1L'
+                  ? const TyrePositionReading(
+                      position: 'F1L',
+                      pressurePsi: 110,
+                      checked: true,
+                    )
+                  : TyrePositionReading.seed(position),
+          },
+        ),
+      );
+
+      Finder inSelectedCard(Finder finder) => find.descendant(
+            of: find.byKey(NewInspectionScreenKeys.tyreSelectedCard),
+            matching: finder,
+          );
+      String counter() => tester
+          .widget<Text>(
+            find.byKey(const Key('inspection.tyres.position_counter')),
+          )
+          .data!;
+      Iterable<String> panelIdentifiers() => tester
+          .widgetList<TpIdentifierText>(
+            inSelectedCard(find.byType(TpIdentifierText)),
+          )
+          .map((TpIdentifierText text) => text.value);
+
+      // F1L: pressure recorded, tread not - tread reads '-', never a number.
+      expect(counter(), '1 / 12');
+      expect(inSelectedCard(find.text('110 psi')), findsOneWidget);
+      expect(inSelectedCard(find.textContaining(' mm')), findsNothing);
+      expect(inSelectedCard(find.text('-')), findsWidgets);
+
+      final Finder next = find.byKey(const Key('inspection.tyres.next_tyre'));
+      await tester.ensureVisible(next);
+      await tester.tap(next);
+      await tester.pump();
+      expect(counter(), '2 / 12');
+      expect(panelIdentifiers(), contains('RHF1'));
+      // The next wheel is untouched: no pressure at all.
+      expect(inSelectedCard(find.textContaining(' psi')), findsNothing);
+
+      final Finder previous = find.byKey(
+        const Key('inspection.tyres.previous_tyre'),
+      );
+      await tester.tap(previous);
+      await tester.pump();
+      expect(counter(), '1 / 12');
+      // From the first wheel, previous wraps round to the last one.
+      await tester.tap(previous);
+      await tester.pump();
+      expect(counter(), '12 / 12');
       expect(tester.takeException(), isNull);
     },
   );
@@ -380,7 +468,15 @@ void main() {
   testWidgets('compact root step stacks meter inputs without clipping', (
     WidgetTester tester,
   ) async {
-    await _pumpScreen(tester);
+    await _pumpScreen(
+      tester,
+      size: const Size(320, 1400),
+      initialState: const InspectionWizardState(
+        selectedAssetNo: 'TM749',
+        selectedVehicleType: '',
+        selectedSite: 'Site A',
+      ),
+    );
 
     expect(find.byKey(NewInspectionScreenKeys.headerHero), findsOneWidget);
     expect(find.byKey(NewInspectionScreenKeys.vehicleSection), findsOneWidget);
@@ -400,7 +496,16 @@ void main() {
   testWidgets('Arabic root step keeps responsive sections in RTL', (
     WidgetTester tester,
   ) async {
-    await _pumpScreen(tester, locale: const Locale('ar'));
+    await _pumpScreen(
+      tester,
+      locale: const Locale('ar'),
+      size: const Size(360, 1400),
+      initialState: const InspectionWizardState(
+        selectedAssetNo: 'TM749',
+        selectedVehicleType: '',
+        selectedSite: 'Site A',
+      ),
+    );
 
     final Finder hero = find.byKey(NewInspectionScreenKeys.headerHero);
     final Directionality directionality = tester.widget<Directionality>(

@@ -48,7 +48,7 @@ class InspectionRecord {
       status: row['status'] as String? ?? '',
       notes: row['notes'] as String?,
       findings: row['findings'] as String?,
-      odometerKm: (row['odometer_km'] as num?)?.toInt(),
+      odometerKm: row['odometer_km'] as num?,
       hourMeter: (row['hour_meter'] as num?)?.toDouble(),
       inspectorSignature: row['inspector_signature'] as String?,
       approvalStatus: row['approval_status'] as String?,
@@ -104,7 +104,9 @@ class InspectionRecord {
   final Map<String, Map<String, Object?>> tyreConditions;
   final String? notes;
   final String? findings;
-  final int? odometerKm;
+
+  /// `numeric(12,1)` - a decimal reading is kept, never truncated.
+  final num? odometerKm;
   final double? hourMeter;
   final String? inspectorSignature;
   final String? approvalStatus;

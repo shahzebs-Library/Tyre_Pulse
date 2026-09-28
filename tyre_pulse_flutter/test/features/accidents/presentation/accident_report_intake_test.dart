@@ -166,7 +166,7 @@ void main() {
       'assets/vehicle_photos/concrete_pump.png',
     );
     expect(find.text('Site (home)'), findsNWidgets(2));
-    expect(find.text(accidentFleetMasterLockNote), findsOneWidget);
+    expect(find.text(_lockNote), findsOneWidget);
     expect(find.text('Assigned driver'), findsNothing);
     await tester.tap(find.text('Change asset'));
     expect(changed, isTrue);
@@ -214,7 +214,7 @@ void main() {
     expect(find.text('Status'), findsNWidgets(2));
     expect(find.text('Make / model'), findsNWidgets(2));
     expect(find.text('Country'), findsOneWidget);
-    expect(find.text(accidentFleetMasterLockNote), findsOneWidget);
+    expect(find.text(_lockNote), findsOneWidget);
 
     await tester.pump(const Duration(milliseconds: 800));
     await tester.pumpAndSettle();
@@ -379,3 +379,8 @@ final class _MemorySecureStore extends SecureKeyValueStore {
     values.remove(key);
   }
 }
+
+/// The English ARB copy of the fleet-master lock note (tests run in `en`).
+const String _lockNote =
+    'These details are sourced from fleet master and cannot be edited here. '
+    'If any detail is incorrect, please update it in the fleet system.';

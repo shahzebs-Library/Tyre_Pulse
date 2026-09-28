@@ -9,8 +9,13 @@
 /// must equal the count of ENABLED rows, exactly, or an honestly-disabled
 /// row would have picked up a live tap surface by accident. Scoped to the
 /// list body rather than the whole tree because [TpAppBar]'s own back
-/// button is itself an `InkWell` and is not one of the seven action rows
-/// this test is counting.
+/// button is itself an `InkWell` and is not one of the action rows this
+/// test is counting.
+///
+/// Remove tyre, Send to retread and Mark as spare have no real server
+/// path for a field user and are therefore not rendered at all (see the
+/// screen's library comment); Rotate tyre records a real
+/// `tyre_service_events` row through an overridden repository here.
 library;
 
 import 'package:flutter/material.dart';
@@ -22,14 +27,34 @@ import 'package:tyre_pulse/app/theme/tp_theme.dart';
 import 'package:tyre_pulse/core/database/app_database.dart';
 import 'package:tyre_pulse/core/database/app_database_provider.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/permissions/access_resolver.dart';
 import 'package:tyre_pulse/core/permissions/roles.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/core/workspace/workspace_scope.dart';
+import 'package:tyre_pulse/features/tyre_diagram/data/tyre_service_event_repository.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_take_action_screen.dart';
+import 'package:tyre_pulse/features/tyre_diagram/tyre_diagram_providers.dart';
 
 import '../../../core/database/database_test_support.dart';
+
+/// Captures every rotation instead of reaching Supabase; can be told to
+/// fail with a given [AppError].
+final class _FakeServiceEvents implements TyreServiceEventRepository {
+  final List<RecordTyreRotationInput> rotations = <RecordTyreRotationInput>[];
+  AppError? failWith;
+
+  @override
+  Future<void> recordRotation({
+    required WorkspaceContext workspace,
+    required RecordTyreRotationInput input,
+  }) async {
+    final AppError? error = failWith;
+    if (error != null) throw error;
+    rotations.add(input);
+  }
+}
 
 const UserRole _testRole = UserRole.known(RoleId.tyreMan);
 const AccessState _testAccess = AccessState(role: _testRole);
@@ -52,7 +77,11 @@ WorkspaceContext _workspace() {
 /// feature - out of this file's package boundary, same reasoning
 /// `scanner_screen_test.dart`'s own library comment gives). It echoes back
 /// the query parameters it was pushed with so a test can assert on them.
-GoRouter _testRouter({VoidCallback? onAdjustReading}) {
+GoRouter _testRouter({
+  VoidCallback? onAdjustReading,
+  String? assetNo = 'TM514',
+  String? tyreSerial = 'YMA55312',
+}) {
   return GoRouter(
     initialLocation: '/take-action',
     routes: <RouteBase>[
@@ -61,9 +90,9 @@ GoRouter _testRouter({VoidCallback? onAdjustReading}) {
         builder: (BuildContext context, GoRouterState state) =>
             TyreTakeActionScreen(
           positionCode: 'LHF1',
-          assetNo: 'TM514',
+          assetNo: assetNo,
           siteName: 'NHC',
-          tyreSerial: 'YMA55312',
+          tyreSerial: tyreSerial,
           onAdjustReading: onAdjustReading,
         ),
       ),
@@ -87,6 +116,9 @@ final Finder _actionListInkWells = find.descendant(
 Future<AppDatabase> _pumpTakeAction(
   WidgetTester tester, {
   VoidCallback? onAdjustReading,
+  _FakeServiceEvents? serviceEvents,
+  String? assetNo = 'TM514',
+  String? tyreSerial = 'YMA55312',
 }) async {
   // Seven rows plus an app bar do not all fit the default 800x600 test
   // surface, and `ListView` is a sliver - unlike the `Column`+
@@ -106,11 +138,18 @@ Future<AppDatabase> _pumpTakeAction(
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
         workspaceContextProvider.overrideWithValue(_workspace()),
+        tyreServiceEventRepositoryProvider.overrideWithValue(
+          serviceEvents ?? _FakeServiceEvents(),
+        ),
       ],
       child: MaterialApp.router(
         debugShowCheckedModeBanner: false,
         theme: TpTheme.light,
-        routerConfig: _testRouter(onAdjustReading: onAdjustReading),
+        routerConfig: _testRouter(
+          onAdjustReading: onAdjustReading,
+          assetNo: assetNo,
+          tyreSerial: tyreSerial,
+        ),
         supportedLocales: TpLocalizations.supportedLocales,
         localizationsDelegates: TpLocalizations.delegates,
       ),
@@ -122,36 +161,133 @@ Future<AppDatabase> _pumpTakeAction(
 
 void main() {
   testWidgets(
-      'all seven action rows render with their reference-design '
-      'titles', (WidgetTester tester) async {
+      'the four backed action rows render, and the three with no real '
+      'server path are not shown at all', (WidgetTester tester) async {
     await _pumpTakeAction(tester);
 
     expect(find.text('Replace tyre'), findsOneWidget);
     expect(find.text('Repair (Puncture / Damage)'), findsOneWidget);
     expect(find.text('Adjust reading'), findsOneWidget);
     expect(find.text('Rotate tyre'), findsOneWidget);
-    expect(find.text('Remove tyre'), findsOneWidget);
-    expect(find.text('Send to retread'), findsOneWidget);
-    expect(find.text('Mark as spare'), findsOneWidget);
+    expect(find.text('Remove tyre'), findsNothing);
+    expect(find.text('Send to retread'), findsNothing);
+    expect(find.text('Mark as spare'), findsNothing);
+    expect(find.text('Not available in this build yet'), findsNothing);
   });
 
   testWidgets(
-      'with no onAdjustReading, exactly the two rows this codebase can '
-      'actually perform are live - Replace tyre and Report defect', (
+      'with no onAdjustReading, Replace, Report defect and Rotate are '
+      'live and Adjust reading is honestly disabled', (
     WidgetTester tester,
   ) async {
     await _pumpTakeAction(tester);
 
-    // Rotate / Remove / Send to retread / Mark as spare, plus Adjust
-    // reading with nothing wired to it: five rows, every one carrying the
-    // same "not available" caption and none of them tappable.
-    expect(find.text('Not available in this build yet'), findsNWidgets(4));
     expect(
       find.text('Only available while filling in this inspection'),
       findsOneWidget,
     );
+    expect(_actionListInkWells, findsNWidgets(3));
+    expect(find.byIcon(Icons.chevron_right), findsNWidgets(3));
+  });
+
+  testWidgets(
+      'Rotate tyre is hidden when the screen knows neither a serial nor '
+      'an asset, because such an event could not be recorded', (
+    WidgetTester tester,
+  ) async {
+    await _pumpTakeAction(tester, assetNo: null, tyreSerial: null);
+
+    expect(find.text('Rotate tyre'), findsNothing);
     expect(_actionListInkWells, findsNWidgets(2));
-    expect(find.byIcon(Icons.chevron_right), findsNWidgets(2));
+  });
+
+  testWidgets(
+      'Rotate tyre records one rotation with the current position, the '
+      'chosen destination and the caller context', (
+    WidgetTester tester,
+  ) async {
+    final _FakeServiceEvents events = _FakeServiceEvents();
+    await _pumpTakeAction(tester, serviceEvents: events);
+
+    await tester.tap(find.text('Rotate tyre'));
+    await tester.pumpAndSettle();
+
+    final Finder toField = find.descendant(
+      of: find.widgetWithText(TpInput, 'New position'),
+      matching: find.byType(EditableText),
+    );
+    await tester.enterText(toField, 'RHF1');
+    await tester.tap(find.text('Record rotation'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Rotation recorded'), findsOneWidget);
+    expect(events.rotations, hasLength(1));
+    final RecordTyreRotationInput input = events.rotations.single;
+    expect(input.fromPosition, 'LHF1');
+    expect(input.toPosition, 'RHF1');
+    expect(input.assetNo, 'TM514');
+    expect(input.tyreSerial, 'YMA55312');
+    expect(input.site, 'NHC');
+
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('Rotate tyre refuses a blank or unchanged destination', (
+    WidgetTester tester,
+  ) async {
+    final _FakeServiceEvents events = _FakeServiceEvents();
+    await _pumpTakeAction(tester, serviceEvents: events);
+
+    await tester.tap(find.text('Rotate tyre'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Record rotation'));
+    await tester.pumpAndSettle();
+    expect(find.text('New position needed'), findsOneWidget);
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+
+    final Finder toField = find.descendant(
+      of: find.widgetWithText(TpInput, 'New position'),
+      matching: find.byType(EditableText),
+    );
+    await tester.enterText(toField, 'lhf1');
+    await tester.tap(find.text('Record rotation'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('The new position must be different from the current one.'),
+      findsOneWidget,
+    );
+    expect(events.rotations, isEmpty);
+  });
+
+  testWidgets('a rotation that fails offline says honestly it was NOT saved', (
+    WidgetTester tester,
+  ) async {
+    final _FakeServiceEvents events = _FakeServiceEvents()
+      ..failWith = const AppError.network();
+    await _pumpTakeAction(tester, serviceEvents: events);
+
+    await tester.tap(find.text('Rotate tyre'));
+    await tester.pumpAndSettle();
+    final Finder toField = find.descendant(
+      of: find.widgetWithText(TpInput, 'New position'),
+      matching: find.byType(EditableText),
+    );
+    await tester.enterText(toField, 'RHF1');
+    await tester.tap(find.text('Record rotation'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Rotation not saved'), findsOneWidget);
+    expect(
+      find.textContaining('Rotations are saved online only'),
+      findsOneWidget,
+    );
+    expect(events.rotations, isEmpty);
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
   });
 
   testWidgets(
@@ -167,7 +303,7 @@ void main() {
       find.text('Update pressure, tread depth or condition'),
       findsOneWidget,
     );
-    expect(_actionListInkWells, findsNWidgets(3));
+    expect(_actionListInkWells, findsNWidgets(4));
 
     await tester.tap(
       find.ancestor(

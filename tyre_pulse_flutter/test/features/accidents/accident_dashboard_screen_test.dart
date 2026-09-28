@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
+import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/features/accidents/accidents_providers.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_repository.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_models.dart';
@@ -23,6 +24,18 @@ const AccidentRecord _rearEnd = AccidentRecord(
   reporterName: 'Ahmed K.',
 );
 
+const AccidentRecord _legacyClosed = AccidentRecord(
+  id: 'acc-legacy',
+  referenceNo: 'ACC-2025-0010',
+  assetNo: 'Loader 12',
+  site: 'NHC',
+  incidentDate: '2025-02-01',
+  accidentType: 'collision',
+  severity: 'minor',
+  status: 'reported',
+  closureLevel: 'legacy_closed',
+);
+
 const AccidentRecord _rollover = AccidentRecord(
   id: 'acc-rollover',
   referenceNo: 'ACC-2026-0183',
@@ -35,9 +48,15 @@ const AccidentRecord _rollover = AccidentRecord(
 );
 
 final class _DashboardRepository implements AccidentRepository {
-  _DashboardRepository({this.hasMoreOnFirstPage = false});
+  _DashboardRepository({
+    this.hasMoreOnFirstPage = false,
+    this.failSecondPageOnce = false,
+    this.firstPage = const <AccidentRecord>[_rearEnd, _rollover],
+  });
 
   final bool hasMoreOnFirstPage;
+  bool failSecondPageOnce;
+  final List<AccidentRecord> firstPage;
   int listCalls = 0;
   final List<int> offsets = <int>[];
 
@@ -50,10 +69,15 @@ final class _DashboardRepository implements AccidentRepository {
   }) async {
     listCalls++;
     offsets.add(offset);
+    if (offset > 0 && failSecondPageOnce) {
+      failSecondPageOnce = false;
+      throw const AppError(
+        kind: AppErrorKind.network,
+        message: 'Page two could not load',
+      );
+    }
     return AccidentListPage(
-      items: offset == 0
-          ? const <AccidentRecord>[_rearEnd, _rollover]
-          : const <AccidentRecord>[],
+      items: offset == 0 ? firstPage : const <AccidentRecord>[],
       hasMore: hasMoreOnFirstPage && offset == 0,
     );
   }
@@ -73,12 +97,12 @@ final class _DashboardRepository implements AccidentRepository {
 Future<(GoRouter, _DashboardRepository)> _pumpDashboard(
   WidgetTester tester, {
   bool hasMoreOnFirstPage = false,
+  _DashboardRepository? repository,
 }) async {
   await tester.binding.setSurfaceSize(const Size(390, 844));
   addTearDown(() => tester.binding.setSurfaceSize(null));
-  final _DashboardRepository repository = _DashboardRepository(
-    hasMoreOnFirstPage: hasMoreOnFirstPage,
-  );
+  final _DashboardRepository repo = repository ??
+      _DashboardRepository(hasMoreOnFirstPage: hasMoreOnFirstPage);
   final GoRouter router = GoRouter(
     initialLocation: TpRoutePaths.accidentDashboard,
     routes: <RouteBase>[
@@ -105,7 +129,7 @@ Future<(GoRouter, _DashboardRepository)> _pumpDashboard(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        accidentRepositoryProvider.overrideWithValue(repository),
+        accidentRepositoryProvider.overrideWithValue(repo),
       ],
       child: MaterialApp.router(
         debugShowCheckedModeBanner: false,
@@ -118,7 +142,7 @@ Future<(GoRouter, _DashboardRepository)> _pumpDashboard(
     ),
   );
   await tester.pumpAndSettle();
-  return (router, repository);
+  return (router, repo);
 }
 
 void main() {
@@ -129,6 +153,13 @@ void main() {
 
     expect(find.text('Accident command centre'), findsOneWidget);
     expect(find.text('Every case, one accountable trail'), findsOneWidget);
+    expect(
+      find.byKey(AccidentDashboardScreenKeys.reportAction),
+      findsOneWidget,
+    );
+    // Row content is the register's own columns, uppercase status tag first.
+    expect(find.text('UNDER REVIEW'), findsOneWidget);
+    expect(find.text('ACC-2026-0182 • Diriyah'), findsOneWidget);
     expect(find.byKey(AccidentDashboardScreenKeys.search), findsOneWidget);
     expect(find.byKey(AccidentDashboardScreenKeys.allCases), findsOneWidget);
     expect(
@@ -173,17 +204,21 @@ void main() {
     final (GoRouter router, _DashboardRepository repository) =
         await _pumpDashboard(tester);
 
-    tester
-        .widget<IconButton>(
-          find.byKey(AccidentDashboardScreenKeys.reportAction),
-        )
-        .onPressed!();
+    // The mock family carries ONE full-width primary action (no floating
+    // button). A compact app-bar icon also stays, so reporting an accident
+    // is still one tap away once the list has scrolled. Both reach the real
+    // report route.
+    expect(find.text('Report accident'), findsOneWidget);
+    expect(find.byType(FloatingActionButton), findsNothing);
+    await tester.tap(find.byKey(AccidentDashboardScreenKeys.reportAction));
     await tester.pumpAndSettle();
     expect(find.text('report destination'), findsOneWidget);
 
     router.go(TpRoutePaths.accidentDashboard);
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(AccidentDashboardScreenKeys.reportFab));
+    await tester.tap(
+      find.byKey(AccidentDashboardScreenKeys.reportAppBarAction),
+    );
     await tester.pumpAndSettle();
     expect(find.text('report destination'), findsOneWidget);
 
@@ -251,5 +286,89 @@ void main() {
     expect(repository.offsets, <int>[0, 2]);
     expect(find.text('Load more cases'), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a severe case reads Major, never the raw token', (
+    WidgetTester tester,
+  ) async {
+    await _pumpDashboard(tester);
+
+    final Finder rollover =
+        find.byKey(AccidentDashboardScreenKeys.card(_rollover.id));
+    expect(
+      find.descendant(of: rollover, matching: find.text('MAJOR')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: rollover, matching: find.text('SEVERE')),
+      findsNothing,
+    );
+
+    await tester.enterText(
+      find.byKey(AccidentDashboardScreenKeys.search),
+      'Major',
+    );
+    await tester.pump();
+    expect(rollover, findsOneWidget);
+    expect(
+      find.byKey(AccidentDashboardScreenKeys.card(_rearEnd.id)),
+      findsNothing,
+    );
+  });
+
+  testWidgets('a legacy_closed case is counted as closed', (
+    WidgetTester tester,
+  ) async {
+    await _pumpDashboard(
+      tester,
+      repository: _DashboardRepository(
+        firstPage: const <AccidentRecord>[_rearEnd, _legacyClosed],
+      ),
+    );
+
+    await tester.tap(find.byKey(AccidentDashboardScreenKeys.status('closed')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(AccidentDashboardScreenKeys.card(_legacyClosed.id)),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(AccidentDashboardScreenKeys.card(_rearEnd.id)),
+      findsNothing,
+    );
+
+    await tester.tap(find.byKey(AccidentDashboardScreenKeys.status('open')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(AccidentDashboardScreenKeys.card(_legacyClosed.id)),
+      findsNothing,
+    );
+  });
+
+  testWidgets('a later page that loads clears the load-more error', (
+    WidgetTester tester,
+  ) async {
+    final _DashboardRepository repository = _DashboardRepository(
+      hasMoreOnFirstPage: true,
+      failSecondPageOnce: true,
+    );
+    await _pumpDashboard(tester, repository: repository);
+
+    Future<void> tapLoadMore() async {
+      await tester.scrollUntilVisible(
+        find.text('Load more cases'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Load more cases'));
+      await tester.pumpAndSettle();
+    }
+
+    await tapLoadMore();
+    expect(find.text('Page two could not load'), findsOneWidget);
+
+    await tapLoadMore();
+    expect(repository.offsets, <int>[0, 2, 2]);
+    expect(find.text('Page two could not load'), findsNothing);
   });
 }

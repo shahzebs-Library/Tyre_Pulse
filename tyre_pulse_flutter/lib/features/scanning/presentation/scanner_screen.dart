@@ -151,12 +151,30 @@ class _LiveCameraScanner extends ConsumerStatefulWidget {
 }
 
 class _LiveCameraScannerState extends ConsumerState<_LiveCameraScanner> {
-  late final MobileScannerController _controller = MobileScannerController(
-    detectionSpeed: DetectionSpeed.noDuplicates,
-    autoZoom: true,
-  );
+  MobileScannerController _controller = _newController();
+
+  /// Bumped on every restart so [MobileScanner] is rebuilt against the fresh
+  /// controller instead of keeping the failed one's error state.
+  int _attempt = 0;
 
   bool _submitted = false;
+
+  static MobileScannerController _newController() => MobileScannerController(
+        detectionSpeed: DetectionSpeed.noDuplicates,
+        autoZoom: true,
+      );
+
+  /// Retry after a camera start failure: throw the failed controller away
+  /// and start a new one. A permission denial is never retried here; it has
+  /// its own state and needs the user to change a system setting.
+  void _restart() {
+    final MobileScannerController failed = _controller;
+    setState(() {
+      _controller = _newController();
+      _attempt++;
+    });
+    unawaited(failed.dispose());
+  }
 
   @override
   void dispose() {
@@ -179,18 +197,104 @@ class _LiveCameraScannerState extends ConsumerState<_LiveCameraScanner> {
       borderRadius: BorderRadius.circular(TpRadius.lg),
       child: SizedBox(
         height: 240,
-        child: MobileScanner(
-          key: ScannerScreenKeys.cameraPreview,
-          controller: _controller,
-          onDetect: _onDetect,
-          errorBuilder: (BuildContext context, MobileScannerException error) {
-            if (error.errorCode == MobileScannerErrorCode.permissionDenied) {
-              return TpPermissionDeniedState(
-                reason: l10n.scannerCameraPermissionDeniedReason,
-              );
-            }
-            return const _CameraUnavailableNotice();
-          },
+        child: KeyedSubtree(
+          key: ValueKey<int>(_attempt),
+          child: MobileScanner(
+            key: ScannerScreenKeys.cameraPreview,
+            controller: _controller,
+            onDetect: _onDetect,
+            errorBuilder: (
+              BuildContext context,
+              MobileScannerException error,
+            ) =>
+                switch (scannerCameraFailureOf(error.errorCode)) {
+              ScannerCameraFailure.permissionDenied => TpPermissionDeniedState(
+                  reason: l10n.scannerCameraPermissionDeniedReason,
+                ),
+              ScannerCameraFailure.unsupported =>
+                const _CameraUnavailableNotice(),
+              ScannerCameraFailure.couldNotStart =>
+                CameraStartFailedNotice(onRetry: _restart),
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Why the live camera is not showing a preview.
+enum ScannerCameraFailure {
+  /// The user declined camera access. Needs a system setting change.
+  permissionDenied,
+
+  /// This device or platform has no camera scanning support at all.
+  unsupported,
+
+  /// The camera exists and access was granted, but it failed to start
+  /// (in use by another app, a controller error, a generic fault). Retrying
+  /// can succeed, so this state offers Retry.
+  couldNotStart,
+}
+
+/// Maps a [MobileScannerErrorCode] to what the screen should say. Only an
+/// explicit "unsupported" is described as "not available in this build":
+/// every other failure is a camera that could not start, which a retry can
+/// fix, and saying the build lacks scanning would be false.
+ScannerCameraFailure scannerCameraFailureOf(MobileScannerErrorCode code) =>
+    switch (code) {
+      MobileScannerErrorCode.permissionDenied =>
+        ScannerCameraFailure.permissionDenied,
+      MobileScannerErrorCode.unsupported => ScannerCameraFailure.unsupported,
+      _ => ScannerCameraFailure.couldNotStart,
+    };
+
+/// The camera could not start for a reason other than permission. Offers
+/// Retry (a fresh controller); the manual entry below keeps working.
+class CameraStartFailedNotice extends StatelessWidget {
+  const CameraStartFailedNotice({required this.onRetry, super.key});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final TextTheme text = Theme.of(context).textTheme;
+    final AppLocalizations l10n = AppLocalizations.of(context);
+
+    return TpCard(
+      key: ScannerScreenKeys.cameraStartFailed,
+      isDashed: true,
+      padding: const EdgeInsets.all(TpSpace.lg),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: <Widget>[
+            Icon(
+              Icons.no_photography_outlined,
+              size: TpSizing.iconState,
+              color: palette.warning.base,
+            ),
+            const SizedBox(height: TpSpace.md),
+            Text(
+              l10n.scannerCameraStartFailedTitle,
+              style: text.titleMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: TpSpace.xs),
+            Text(
+              l10n.scannerCameraStartFailedMessage,
+              style: text.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: TpSpace.md),
+            TpButton.secondary(
+              label: l10n.actionRetry,
+              icon: Icons.refresh,
+              onPressed: onRetry,
+            ),
+          ],
         ),
       ),
     );
@@ -481,6 +585,8 @@ String? _joinNonBlank(List<String?> parts) {
 abstract final class ScannerScreenKeys {
   static const ValueKey<String> cameraPreview =
       ValueKey<String>('scanner.cameraPreview');
+  static const ValueKey<String> cameraStartFailed =
+      ValueKey<String>('scanner.cameraStartFailed');
 }
 
 /// Returns the first non-blank decoded value in a camera capture.

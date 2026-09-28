@@ -880,7 +880,7 @@
   "notificationInboxCopyCatalog": "title=الإشعارات~markAll=تعيين الكل كمقروء~fallbackTitle=إشعار~emptyTitle=اطلعت على كل المستجدات~emptyBody=ستظهر هنا المهام والموافقات والتحديثات التشغيلية.~loadFailed=تعذر تحميل الإشعارات. اسحب للأسفل لإعادة المحاولة.~markFailed=تعذر تعيين هذا الإشعار كمقروء.~markAllFailed=تعذر تعيين جميع الإشعارات كمقروءة.~justNow=الآن~minutesAgo=قبل %count% د~hoursAgo=قبل %count% س~daysAgo=قبل %count% ي",
   "reportIssueCopyCatalog": "title=الإبلاغ عن مشكلة~problem=ما الخطأ؟~problemHint=صف المشكلة باختصار~priority=الأولوية~low=منخفضة~medium=متوسطة~high=عالية~critical=حرجة~site=الموقع~siteHint=مكان اكتشاف المشكلة~asset=المعدة~assetHint=رقم المعدة~due=الاستحقاق خلال~noDate=بدون تاريخ~threeDays=3 أيام~oneWeek=أسبوع~twoWeeks=أسبوعان~details=الوصف~detailsHint=أضف الأعراض والموقع الدقيق وأي إجراء فوري~photos=الأدلة~optional=(اختياري)~addPhoto=إضافة صورة~camera=الكاميرا~gallery=من المعرض~photoFailed=تعذرت إضافة الصورة.~submit=إرسال المشكلة~titleRequired=أدخل وصف الخطأ قبل الحفظ.~workspaceUnavailable=لا تزال مساحة العمل قيد التحميل. حاول بعد قليل.~savedTitle=تم حفظ المشكلة~savedBody=أضيفت المشكلة إلى عملي وستتم مزامنتها تلقائياً.~stay=البقاء هنا~viewTasks=عرض عملي~saveFailed=تعذر حفظ المشكلة. حاول مرة أخرى.~category=فئة المشكلة~mechanical=ميكانيكية~electrical=كهربائية~hydraulic=هيدروليك~tyre=إطار~body=الهيكل~washing=غسيل~safety=سلامة~other=أخرى~operation=هل يمكن تشغيل المعدة بأمان؟~yes=نعم~restricted=مقيد~no=لا~restriction=قيود التشغيل~saveDraft=حفظ المسودة~draftSaved=تم حفظ المسودة~createWorkOrder=إنشاء أمر عمل بعد مراجعة المشرف~notifyTeam=سيتم إخطار مشرف الأسطول وفريق الورشة",
   "rcaCopyCatalog": "title=تحليل السبب الجذري~records=سجلات~newRecord=تحليل جديد~none=لا توجد سجلات تحليل~noneBody=ستظهر هنا سجلات تحليل السبب الجذري المكتملة.~unknown=معدة غير معروفة~asset=المعدة~serial=الرقم التسلسلي للإطار~brand=العلامة التجارية~site=الموقع~km=الكيلومترات عند العطل~factors=العوامل المساهمة~rootCause=السبب الجذري~photos=صور الأدلة~photo=صورة~addPhoto=إضافة صورة~camera=الكاميرا~gallery=المعرض~photoFailed=تعذرت إضافة الصورة.~save=حفظ التحليل~missingCause=أدخل السبب الجذري قبل الحفظ.~invalidKm=أدخل قراءة كيلومترات صحيحة.~loadFailed=تعذر تحميل سجلات التحليل.~saveFailed=تعذر حفظ التحليل. حاول مرة أخرى.",
-  "pmCopyCatalog": "title=مركز التحكم بالصيانة~subtitle=تحكم في عبء أعمال الصيانة اليوم~createWorkOrder=إنشاء أمر عمل~pmDue=الصيانة الوقائية المستحقة~priorityQueue=قائمة الأعمال ذات الأولوية~viewAll=عرض الكل~allWorkOrders=عرض جميع أوامر العمل~quickAccess=وصول سريع~workOrders=أوامر العمل~workOrdersHint=إنشاء وإدارة~pmSchedule=جدول الصيانة~pmScheduleHint=تخطيط ومتابعة الصيانة~inspections=الفحوصات~inspectionsHint=فحص وإبلاغ~parts=قطع الغيار~partsHint=المخزون والطلبات~tyres=الإطارات~tyresHint=السجلات والتدوير والاستبدال~overdue=متأخرة~dueSoon=مستحقة قريباً~active=الخطط النشطة~due=المستحقة الآن~all=كل الخطط~empty=لا توجد خطط صيانة~emptyDue=لا توجد صيانة وقائية مستحقة خلال 14 يوماً القادمة.~emptyAll=لا توجد خطط صيانة وقائية نشطة.~plan=خطة الصيانة~daysOverdue=يوم تأخير~daysLeft=يوم متبقٍ~noDate=لا يوجد تاريخ استحقاق~record=تسجيل الخدمة~meter=قراءة العداد~performedBy=نفذها~workshop=الورشة~partsCost=تكلفة القطع~labourCost=تكلفة العمالة~findings=الملاحظات~completed=مكتملة~partial=مكتملة جزئياً~deferred=مؤجلة~failed=غير مكتملة~save=حفظ الخدمة~invalidNumber=أدخل قيماً رقمية صحيحة.~loadFailed=تعذر تحميل خطط الصيانة.~saveFailed=تعذر حفظ سجل الخدمة. حاول مرة أخرى.",
+  "pmCopyCatalog": "title=مركز التحكم بالصيانة~subtitle=تحكم في عبء أعمال الصيانة اليوم~createWorkOrder=إنشاء أمر عمل~pmDue=الصيانة الوقائية المستحقة~priorityQueue=قائمة الأعمال ذات الأولوية~viewAll=عرض الكل~allWorkOrders=عرض جميع أوامر العمل~quickAccess=وصول سريع~workOrders=أوامر العمل~workOrdersHint=إنشاء وإدارة~pmSchedule=جدول الصيانة~pmScheduleHint=تخطيط ومتابعة الصيانة~inspections=الفحوصات~inspectionsHint=فحص وإبلاغ~parts=قطع الغيار~partsHint=المخزون والطلبات~tyres=الإطارات~tyresHint=السجلات والتدوير والاستبدال~overdue=متأخرة~dueSoon=مستحقة قريباً~active=الخطط النشطة~due=المستحقة الآن~all=كل الخطط~empty=لا توجد خطط صيانة~emptyDue=لا توجد صيانة وقائية مستحقة خلال 14 يوماً القادمة.~emptyAll=لا توجد خطط صيانة وقائية نشطة.~plan=خطة الصيانة~daysOverdue=يوم تأخير~daysLeft=يوم متبقٍ~noDate=لا يوجد تاريخ استحقاق~record=تسجيل الخدمة~meter=قراءة العداد~performedBy=نفذها~workshop=الورشة~partsCost=تكلفة القطع~labourCost=تكلفة العمالة~findings=الملاحظات~completed=مكتملة~partial=مكتملة جزئياً~deferred=مؤجلة~failed=غير مكتملة~save=حفظ الخدمة~invalidNumber=أدخل قيماً رقمية صحيحة.~loadFailed=تعذر تحميل خطط الصيانة.~saveFailed=تعذر حفظ سجل الخدمة. حاول مرة أخرى.~openBreakdowns=الأعطال المفتوحة~activeWorkOrders=أوامر العمل النشطة~breakdown=عطل~workOrder=أمر عمل~dueToday=مستحق اليوم~since=منذ~opened=فُتح~queueEmpty=لا يوجد ما يحتاج إلى متابعة~woLoadFailed=تعذر تحميل أوامر العمل المفتوحة.~retry=إعادة المحاولة~countFailed=تعذر تحميل هذا العدد. اضغط لإعادة المحاولة.",
   "stockCountCopyCatalog": "title=جرد المخزون~items=الأصناف~reorder=تحتاج طلباً~notToday=لم تجرد~search=بحث بالوصف أو الموقع~all=الكل~low=مخزون منخفض~stale=لم يجرد اليوم~empty=لا توجد أصناف~emptyBody=لا توجد سجلات مخزون تطابق المرشحات.~count=جرد~stockItem=صنف مخزون~physicalCount=الكمية الفعلية~reason=السبب (اختياري)~cancel=إلغاء~save=حفظ الجرد~invalid=أدخل كمية صفر أو أكثر.~offlineSaved=حفظ الجرد دون اتصال ووضع في قائمة المزامنة.~saveFailed=تعذر حفظ جرد المخزون.~loadFailed=تعذر تحميل سجلات المخزون.~Critical=حرج~Low=منخفض~OK=جيد~onHand=متوفر",
   "calendarCopyCatalog": "title=خطة العمل الميدانية اليوم~scheduled=مجدولة~overdue=متأخرة~today=مستحقة اليوم~week=هذا الأسبوع~later=لاحقاً~inspection=فحص~maintenance=صيانة~task=إجراء تصحيحي~empty=لا توجد أعمال مجدولة~emptyBody=ستظهر هنا الفحوصات والصيانة والإجراءات التصحيحية القادمة.~loadFailed=تعذر تحميل الجدول.",
   "managementCopyCatalog": "overviewTitle=نظرة عامة على الأسطول~analyticsTitle=تحليلات الأسطول~reportsTitle=التقرير المالي~reportsSubtitle=ملخص مباشر للتكلفة والأداء~teamTitle=الفريق~last=آخر~days=يوم~days30=30 يوماً~days90=90 يوماً~year1=سنة~allSites=كل المواقع~tyres=الإطارات~vehicles=المركبات~critical=حرجة~openActions=إجراءات مفتوحة~highRisk=مخاطر عالية~inspections30=الفحوصات (30 يوم)~tyreSpend=تكلفة الإطارات~risk=توزيع المخاطر~sites=أعلى المواقع~brands=أعلى العلامات~analyticsFailed=تعذر تحميل التحليلات.~reportsFailed=تعذر تحميل بيانات التقرير.~reportUnavailable=التقرير المباشر غير متاح~reportUnavailableBody=لقطة الخادم الموثوقة غير متاحة. لم يتم اختلاق أي أرقام.~retry=إعادة المحاولة~generated=تم الإنشاء~costPerformance=التكلفة والأداء~fleet=الأسطول~tyre_spend=تكلفة الإطارات~accidents=الحوادث~open_accidents=الحوادث المفتوحة~claims_claimed=المطالبات المقدمة~claims_recovered=المطالبات المستردة~inspections=الفحوصات~work_orders_open=أوامر العمل المفتوحة~tyre_cost=تكلفة الإطارات~maintenance_cost=تكلفة الصيانة~total_cost=إجمالي التكلفة~km=الكيلومترات~engine_hours=ساعات التشغيل~m3=الإنتاج م3~cost_per_km=التكلفة لكل كم~cost_per_hour=التكلفة لكل ساعة~cost_per_m3=التكلفة لكل م3~tyre_cpk=تكلفة الإطار لكل كم~severity=شدة الحوادث~accidents_by_site=الحوادث حسب الموقع~tyres_by_site=الإطارات حسب الموقع~claim_status=حالة المطالبة~members=أعضاء~manage=إدارة الفريق~active=نشط~pending=قيد الانتظار~teamSearch=بحث بالاسم أو الدور أو الموقع~noMembers=لا يوجد أعضاء~trySearch=جرّب بحثاً آخر.~teamFailed=تعذر تحميل دليل الفريق.",
@@ -918,5 +918,1341 @@
   "washAllEntries": "كل الإدخالات",
   "washSavedOnDevice": "تم الحفظ على هذا الجهاز. حالة الرفع متاحة في المزامنة.",
   "washHistoryLimit": "السجل كبير جدًا لتحميله بالكامل. استخدم تقرير الويب.",
-  "workshopCopyCatalog": "title=مهامي~onDuty=في المناوبة~offDuty=خارج المناوبة~checkIn=تسجيل الحضور~checkOut=تسجيل الانصراف~checkInHint=سجّل حضورك للمناوبة قبل تسجيل العمل.~myJobs=مهامي~emptyTitle=لا توجد مهام مفتوحة~emptyMessage=لا توجد مهمة مفتوحة مسندة إليك حاليًا.~loadError=تعذر تحميل مهامك الآن.~selectJobTitle=اختر مهمة~selectJobMsg=اختر إحدى مهامك أولًا.~checkInFirstTitle=سجّل الحضور أولًا~selectTaskTitle=اختر خطوة~selectTaskMsg=اختر الخطوة التي تعمل عليها أولًا.~tasks=الخطوات~confirmTitle=إكمال الخطوة؟~confirmMsg=سيتم تسجيل الخطوة كمكتملة وإرسالها للفحص.~cancel=إلغاء~noteHint=أضف ملاحظة (اختياري)~record=تسجيل~queued=تم الحفظ على هذا الجهاز. ستتم المزامنة تلقائيًا.~saveFailed=تعذر حفظ النشاط على هذا الجهاز. حاول مرة أخرى.~todayTitle=إنتاجيتي اليوم~productive=منتج~blocked=متوقف~unassigned=غير مسند~breakTime=استراحة~completed=الخطوات المكتملة~due=الاستحقاق~ok=حسنًا~a_start_job=بدء العمل~a_pause_job=إيقاف مؤقت~a_resume_job=استئناف العمل~a_complete_task=إكمال الخطوة~a_request_parts=طلب قطع غيار~a_request_assistance=طلب مساعدة~a_waiting_approval=بانتظار الموافقة~a_waiting_vehicle=بانتظار المركبة~a_waiting_tools=بانتظار الأدوات~a_start_break=بدء الاستراحة~a_end_break=إنهاء الاستراحة~a_report_problem=الإبلاغ عن مشكلة~s_working=يعمل~s_available=متاح~s_waiting_parts=بانتظار القطع~s_waiting_approval=بانتظار الموافقة~s_waiting_tools=بانتظار الأدوات~s_waiting_vehicle=بانتظار المركبة~s_on_break=في استراحة~s_training=تدريب~s_awaiting_inspection=بانتظار الفحص~s_off_duty=خارج المناوبة~s_absent=غائب~photoLabel=صورة (اختياري)~takePhoto=الكاميرا~pickPhoto=المعرض~removePhoto=إزالة الصورة~photoLimit=حتى 3 صور~photoNotAttached=تم التسجيل. تعذّر إرفاق الصورة بدون اتصال."
+  "workshopCopyCatalog": "title=مهامي~onDuty=في المناوبة~offDuty=خارج المناوبة~checkIn=تسجيل الحضور~checkOut=تسجيل الانصراف~checkInHint=سجّل حضورك للمناوبة قبل تسجيل العمل.~myJobs=مهامي~emptyTitle=لا توجد مهام مفتوحة~emptyMessage=لا توجد مهمة مفتوحة مسندة إليك حاليًا.~loadError=تعذر تحميل مهامك الآن.~selectJobTitle=اختر مهمة~selectJobMsg=اختر إحدى مهامك أولًا.~checkInFirstTitle=سجّل الحضور أولًا~selectTaskTitle=اختر خطوة~selectTaskMsg=اختر الخطوة التي تعمل عليها أولًا.~tasks=الخطوات~confirmTitle=إكمال الخطوة؟~confirmMsg=سيتم تسجيل الخطوة كمكتملة وإرسالها للفحص.~cancel=إلغاء~noteHint=أضف ملاحظة (اختياري)~record=تسجيل~queued=تم الحفظ على هذا الجهاز. ستتم المزامنة تلقائيًا.~saveFailed=تعذر حفظ النشاط على هذا الجهاز. حاول مرة أخرى.~todayTitle=إنتاجيتي اليوم~productive=منتج~blocked=متوقف~unassigned=غير مسند~breakTime=استراحة~completed=الخطوات المكتملة~due=الاستحقاق~ok=حسنًا~a_start_job=بدء العمل~a_pause_job=إيقاف مؤقت~a_resume_job=استئناف العمل~a_complete_task=إكمال الخطوة~a_request_parts=طلب قطع غيار~a_request_assistance=طلب مساعدة~a_waiting_approval=بانتظار الموافقة~a_waiting_vehicle=بانتظار المركبة~a_waiting_tools=بانتظار الأدوات~a_start_break=بدء الاستراحة~a_end_break=إنهاء الاستراحة~a_report_problem=الإبلاغ عن مشكلة~s_working=يعمل~s_available=متاح~s_waiting_parts=بانتظار القطع~s_waiting_approval=بانتظار الموافقة~s_waiting_tools=بانتظار الأدوات~s_waiting_vehicle=بانتظار المركبة~s_on_break=في استراحة~s_training=تدريب~s_awaiting_inspection=بانتظار الفحص~s_off_duty=خارج المناوبة~s_absent=غائب~photoLabel=صورة (اختياري)~takePhoto=الكاميرا~pickPhoto=المعرض~removePhoto=إزالة الصورة~photoLimit=حتى 3 صور~photoNotAttached=تم التسجيل. تعذّر إرفاق الصورة بدون اتصال.",
+  "homeTodaysWork": "عمل اليوم",
+  "homeAwaitingSignatureTag": "بانتظار التوقيع",
+  "homeResumeInspection": "استئناف الفحص",
+  "homeTyreIssueNeedsAttention": "مشكلة في الإطار تحتاج إلى متابعة",
+  "profileSectionWorkspace": "مساحة العمل",
+  "profileEmployeeIdLabel": "الرقم الوظيفي",
+  "profileLanguageLabel": "لغة التطبيق",
+  "profileSectionDisplay": "اللغة والعرض",
+  "profileThemeLabel": "المظهر",
+  "profileThemeLight": "فاتح",
+  "profileThemeDark": "داكن",
+  "profileThemeSystem": "إعداد النظام",
+  "profileSectionOffline": "العمل دون اتصال والبيانات",
+  "profileUnsyncedFooter": "تبقى المسودات غير المتزامنة محفوظة بأمان على هذا الجهاز",
+  "loginHeroTitle": "عمليات PMV متكاملة",
+  "loginSignInSubtitle": "سجّل الدخول إلى العمليات المسندة إليك",
+  "vehiclesInspectNow": "افحص الآن",
+  "inspectionPreviousTyre": "السابق",
+  "inspectionNextTyre": "التالي",
+  "inspectionProgressTitle": "تقدم الفحص",
+  "inspectionPercentComplete": "مكتمل بنسبة {percent}%",
+  "inspectionAxleNumber": "المحور {number}",
+  "inspectionTyresLabel": "الإطارات",
+  "inspectionScanAssetButton": "مسح الأصل",
+  "inspectionSelectedAssetTitle": "الأصل المحدد",
+  "profileSyncUnknownFooter": "تعذّر التحقق من المزامنة المعلقة. قد يكون هناك عمل غير متزامن على هذا الجهاز",
+  "homeRecentInspectionsTitle": "فحوصاتك الأخيرة",
+  "homeAssetNotChecked": "لم يُفحص",
+  "homeNothingForRoleTitle": "لا يوجد ما يلزم فحصه لدورك",
+  "tyreActionRotateSubtitle": "سجّل نقل هذا الإطار إلى موضع آخر",
+  "tyreActionRotateFromLabel": "الموضع الحالي",
+  "tyreActionRotateToLabel": "الموضع الجديد",
+  "tyreActionRotateToHint": "مثال: RHF1",
+  "tyreActionRotateNotesLabel": "ملاحظات (اختياري)",
+  "tyreActionRotateNotesHint": "أي شيء يجب أن يعرفه الفني التالي",
+  "tyreActionRotateOnlineNote": "يتطلب اتصالاً بالإنترنت. تُحفظ عمليات التدوير مباشرة على الخادم.",
+  "tyreActionRotateSubmit": "تسجيل التدوير",
+  "tyreActionRotateToRequiredTitle": "الموضع الجديد مطلوب",
+  "tyreActionRotateToRequiredMessage": "أدخل الموضع الذي نُقل إليه هذا الإطار.",
+  "tyreActionRotateSamePositionMessage": "يجب أن يختلف الموضع الجديد عن الموضع الحالي.",
+  "tyreActionRotateSavedTitle": "تم تسجيل التدوير",
+  "tyreActionRotateSavedMessage": "تم حفظ التدوير في سجل خدمة هذا الإطار. ولا يغيّر الموضع الظاهر في سجل الإطارات.",
+  "tyreActionRotateFailedTitle": "لم يتم حفظ التدوير",
+  "tyreActionRotateOfflineMessage": "لا يوجد اتصال. تُحفظ عمليات التدوير عبر الإنترنت فقط، لذلك لم يُسجَّل هذا التدوير. حاول مرة أخرى عند الاتصال.",
+  "tyreActionRotateFailedMessage": "تعذّر حفظ التدوير. حاول مرة أخرى.",
+  "driverWsTerm": "{term, select, create_driver{إضافة سائق موثّق} link_account{ربط حساب الدخول} assign_team{تعيين الفريق والمركبة} create_fine{تسجيل مخالفة مرورية} link_record{ربط سجل عمل} respond_fine{مراجعة وتوقيع} review_fine{مراجعة الرد أو السداد} correct_fine{تصحيح المخالفة} reassign_fine{إعادة إسناد المخالفة} direct_payment{سأسدد مباشرة} already_paid{تم السداد بالفعل} dispute{اعتراض أو إسناد غير صحيح} company_recovery{طلب سداد الشركة أو الاسترداد} instalments{طلب التقسيط} approve{اعتماد الطلب} return{إعادة للسائق} payment{تسجيل سداد متحقق منه} cancel{إلغاء المخالفة} reopen{إعادة فتح} open{مفتوحة} settled{مسددة} cancelled{ملغاة} awaiting_response{بانتظار الرد} submitted{تم إرسال الرد} returned{أعيدت للسائق} approved{معتمدة} driver_documents{مستندات السائق} driver_training{تدريب السائق} driver_coaching{توجيه السائق} driver_safety_events{أحداث سلامة السائق} driver_expenses{مصروفات السائق} tyre_records{سجلات الإطارات} accidents{الحوادث} wo_tasks{مهام أوامر العمل} checklist_submissions{قوائم الفحص المرسلة} odometer_logs{قراءات عداد المسافات} wash_records{سجلات الغسيل} other{}}",
+  "@driverWsTerm": {
+    "placeholders": {
+      "term": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsRecordField": "{field, select, country{الدولة} site{الموقع} asset_no{رقم الأصل} driver_name{اسم السائق} title{العنوان} doc_type{نوع المستند} doc_number{رقم المستند} expiry_date{تاريخ الانتهاء} course_name{اسم الدورة} result{النتيجة} completed_date{تاريخ الإكمال} coaching_status{حالة التوجيه} period{الفترة} event_type{نوع الحدث} severity{الخطورة} event_at{وقت الحدث} category{الفئة} amount{المبلغ} currency{العملة} expense_date{تاريخ المصروف} status{الحالة} incident_date{تاريخ الحادث} accident_type{نوع الحادث} due_date{تاريخ الاستحقاق} created_at{تاريخ الإنشاء} reading_date{تاريخ القراءة} odometer_km{عداد المسافات (كم)} wash_date{تاريخ الغسيل} template_name{اسم قائمة الفحص} approval_status{حالة الاعتماد} brand{العلامة التجارية} serial_no{الرقم التسلسلي} issue_date{تاريخ الإصدار} qty{الكمية} cost_per_tyre{التكلفة لكل إطار} other{}}",
+  "@driverWsRecordField": {
+    "placeholders": {
+      "field": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsEvidenceKind": "{kind, select, payment{إيصال السداد} supporting{صورة داعمة} notice{المخالفة الرسمية} other{}}",
+  "@driverWsEvidenceKind": {
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsTitle": "مساحة عمل السائق",
+  "driverWsEntrySubtitle": "مخالفاتي وتكليفات الفريق والعمل المرتبط بي",
+  "driverWsLoadError": "مساحة العمل غير متاحة. تحقق من الاتصال وربط الحساب والصلاحيات ثم حدّث.",
+  "driverWsRefresh": "تحديث",
+  "driverWsSignInRequired": "سجّل الدخول لعرض مساحة عملك.",
+  "driverWsOfflineNotice": "عرض محفوظ دون اتصال. اتصل وحدّث قبل الرد أو المراجعة.",
+  "driverWsTruncatedNotice": "هذا العرض غير مكتمل لأنه بلغ الحد الأقصى للسجلات. التصدير معطّل.",
+  "driverWsSearchDrivers": "البحث عن السائقين",
+  "driverWsNoDrivers": "لا يوجد سائق مرتبط أو فريق مكلّف. اطلب من مدير مخوّل التحقق من حسابك وتكليفك.",
+  "driverWsSharePdf": "مشاركة كشف المخالفات PDF",
+  "driverWsReportShareError": "تعذّرت مشاركة التقرير. حاول مرة أخرى.",
+  "driverWsTrafficFines": "المخالفات المرورية",
+  "driverWsNoFines": "لا توجد مخالفات مسجلة.",
+  "driverWsAssignmentHistory": "سجل تكليفات الفريق والمركبة",
+  "driverWsNoAssignment": "لا يوجد تكليف مسجل.",
+  "driverWsAssignmentCurrent": "حالي",
+  "driverWsAssignmentPrevious": "سابق",
+  "driverWsNoVehicle": "بدون مركبة",
+  "driverWsNotAssigned": "غير معيّن",
+  "driverWsPresent": "حتى الآن",
+  "driverWsAssignedWork": "العمل المكلّف به",
+  "driverWsNotSupplied": "غير مُدخل",
+  "driverWsVerifiedRecords": "سجلات العمل والسائق الموثّقة",
+  "driverWsUnmatchedNotice": "تتطلب السجلات السابقة غير المرتبطة التحقق من الهوية قبل عرضها هنا.",
+  "driverWsRecordUnavailable": "السجل لم يعد متاحاً",
+  "driverWsActivityHistory": "سجل النشاط",
+  "driverWsRecordedUser": "مستخدم مسجّل",
+  "driverWsPhotoError": "تعذّر إرفاق الصورة. لم تُحذف صورتك المحلية.",
+  "driverWsAcknowledgeRespond": "الإقرار بالاستلام والرد",
+  "driverWsReviewPayment": "مراجعة أو تسجيل سداد",
+  "driverWsEvidenceOpenError": "تعذّر فتح الدليل.",
+  "driverWsAttachReceipt": "إرفاق صورة إيصال",
+  "driverWsAttachSupporting": "إرفاق صورة داعمة",
+  "driverWsAttachNotice": "إرفاق صورة المخالفة الرسمية",
+  "driverWsSignatureUnavailable": "التوقيع غير متاح.",
+  "driverWsViewSignature": "عرض الإقرار الموقّع",
+  "driverWsSignatureDisplayError": "تعذّر عرض التوقيع.",
+  "driverWsReceiptStatement": "أقر باستلام هذه المخالفة ومراجعتها وأقدم الرد الموضح أعلاه. الاستلام لا يعني الإقرار بالمسؤولية. طلب السداد أو الاسترداد لا يجيز سداداً تلقائياً أو خصماً من الراتب.",
+  "driverWsDraftReadError": "تعذّرت قراءة المسودة المحفوظة. لم يُستبدل أي شيء.",
+  "driverWsSubmitError": "تعذّر الإرسال. تحقق من الحقول المطلوبة والاتصال، وحدّث إذا تغيّرت المخالفة.",
+  "driverWsConnectionRequired": "يتطلب الإرسال اتصالاً للتحقق من آخر نسخة للمخالفة وصلاحياتك.",
+  "driverWsDraftSaved": "تم حفظ المسودة ولم تُرسل بعد.",
+  "driverWsDraftSaveError": "تعذّر حفظ المسودة.",
+  "driverWsSaveDraft": "حفظ مسودة على هذا الجهاز",
+  "driverWsReviewDisclaimer": "يسجّل الاعتماد الترتيب الذي تمت مراجعته ولا ينفّذ سداداً أو خصماً من الراتب. سجّل الدفعات المتحقق منها فقط.",
+  "driverWsSaving": "جارٍ الحفظ...",
+  "driverWsSubmit": "إرسال",
+  "driverWsErrResolution": "اختر طريقة المعالجة.",
+  "driverWsErrExplanation": "وضّح طلبك بما في ذلك الترتيب المقترح.",
+  "driverWsErrPaymentReference": "أدخل مرجع السداد.",
+  "driverWsErrProposedDate": "اختر تاريخ السداد المقترح.",
+  "driverWsErrSignature": "راجع الإقرار ووقّع قبل الإرسال.",
+  "driverWsOptionsError": "الخيارات غير متاحة. حاول مرة أخرى.",
+  "driverWsSearch": "بحث",
+  "driverWsClearSelection": "بدون أو مسح الاختيار",
+  "driverWsPreviousOptions": "الخيارات السابقة",
+  "driverWsMoreOptions": "مزيد من الخيارات",
+  "driverWsFieldEmployeeId": "الرقم الوظيفي",
+  "driverWsFieldDriverName": "اسم السائق",
+  "driverWsFieldCountry": "الدولة",
+  "driverWsFieldSite": "الموقع",
+  "driverWsFieldLoginAccount": "حساب الدخول (بدون يلغي الربط)",
+  "driverWsFieldIdentityReason": "التحقق من الهوية أو السبب",
+  "driverWsFieldSupervisor": "المشرف",
+  "driverWsFieldManager": "المدير",
+  "driverWsFieldVehicle": "المركبة",
+  "driverWsFieldAssignmentReason": "سبب التكليف",
+  "driverWsFieldAuthority": "الجهة المُصدرة",
+  "driverWsFieldNoticeReference": "رقم المخالفة",
+  "driverWsFieldIncidentAt": "تاريخ ووقت المخالفة (YYYY-MM-DDTHH:mm)",
+  "driverWsFieldDueDate": "تاريخ الاستحقاق (YYYY-MM-DD)",
+  "driverWsFieldAmount": "قيمة المخالفة",
+  "driverWsFieldCurrency": "رمز العملة",
+  "driverWsFieldNoticeDetails": "تفاصيل المخالفة",
+  "driverWsFieldAssignmentEvidence": "دليل إسناد المخالفة للسائق",
+  "driverWsFieldRecordType": "نوع السجل",
+  "driverWsFieldExistingRecord": "السجل الموجود",
+  "driverWsFieldIdentityMethod": "كيفية التحقق من هوية السائق",
+  "driverWsFieldResolution": "طريقة المعالجة المطلوبة",
+  "driverWsFieldExplanation": "التوضيح أو الترتيب المقترح",
+  "driverWsFieldPaymentReference": "مرجع السداد إن تم",
+  "driverWsFieldProposedDate": "تاريخ السداد المقترح (YYYY-MM-DD)",
+  "driverWsFieldDecision": "القرار",
+  "driverWsFieldReviewReason": "سبب المراجعة أو الترتيب المعتمد",
+  "driverWsFieldVerifiedReference": "مرجع السداد المتحقق منه",
+  "driverWsFieldVerifiedAmount": "قيمة السداد المتحقق منها",
+  "driverWsPdfColNotice": "المخالفة",
+  "driverWsPdfColCurrency": "العملة",
+  "driverWsPdfColAmount": "المبلغ",
+  "driverWsPdfColPaid": "المدفوع",
+  "driverWsPdfColStatus": "الحالة",
+  "driverWsPdfColResponse": "الرد",
+  "driverWsDriverSubtitle": "{site} · {open} مخالفات مفتوحة · {awaiting} بانتظار الرد",
+  "@driverWsDriverSubtitle": {
+    "placeholders": {
+      "site": {
+        "type": "String"
+      },
+      "open": {
+        "type": "String"
+      },
+      "awaiting": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsOutstanding": "المستحق: {amount} {currency}",
+  "@driverWsOutstanding": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "currency": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsSupervisorLine": "المشرف: {name}",
+  "@driverWsSupervisorLine": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsManagerLine": "المدير: {name}",
+  "@driverWsManagerLine": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsAssignmentPeriod": "من {start} إلى {end}",
+  "@driverWsAssignmentPeriod": {
+    "placeholders": {
+      "start": {
+        "type": "String"
+      },
+      "end": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsAssignmentLine": "الإسناد: {reason}",
+  "@driverWsAssignmentLine": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsDueLine": "الاستحقاق: {due} · المدفوع: {paid}",
+  "@driverWsDueLine": {
+    "placeholders": {
+      "due": {
+        "type": "String"
+      },
+      "paid": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsPdfTitle": "كشف السائق: {name}",
+  "@driverWsPdfTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "driverWsPdfEmployeeId": "الرقم الوظيفي: {id}",
+  "@driverWsPdfEmployeeId": {
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "vehicleClassTransitMixer": "خلاطة خرسانة متنقلة",
+  "vehicleClassConcretePump": "مضخة خرسانة",
+  "vehicleClassLinePump": "مضخة خط محمولة على شاحنة",
+  "vehicleClassStaffBus": "حافلة موظفين",
+  "vehicleClassStaffVan": "فان موظفين",
+  "vehicleClassDoubleCabPickup": "بيك أب بكابينة مزدوجة",
+  "vehicleClassWheelLoader": "لودر بعجلات",
+  "vehicleClassSkidSteerLoader": "لودر انزلاقي التوجيه",
+  "vehicleClassTowablePump": "مضخة خرسانة قابلة للقطر",
+  "vehicleClassStationaryPump": "مضخة خرسانة ثابتة",
+  "vehicleClassGenerator": "مولد مغلق",
+  "vehicleClassChiller": "مبرد صناعي",
+  "vehicleClassWaterChiller": "مبرد مياه صناعي",
+  "vehicleClassBatchingPlant": "محطة خلط الخرسانة",
+  "vehicleClassPlacingBoom": "ذراع صب خرسانة قائم بذاته",
+  "vehicleClassConcretePumpAxles": "مضخة خرسانة · {axles} محاور",
+  "@vehicleClassConcretePumpAxles": {
+    "placeholders": {
+      "axles": {
+        "type": "int"
+      }
+    }
+  },
+  "vehicleClassLinePumpAxles": "مضخة خط محمولة على شاحنة · {axles} محاور",
+  "@vehicleClassLinePumpAxles": {
+    "placeholders": {
+      "axles": {
+        "type": "int"
+      }
+    }
+  },
+  "scannerCameraStartFailedTitle": "تعذّر تشغيل الكاميرا",
+  "scannerCameraStartFailedMessage": "قد يكون تطبيق آخر يستخدمها أو توقفت بشكل غير متوقع. حاول مرة أخرى أو اكتب الرمز أدناه.",
+  "managementOverviewSiteRollup": "المواقع في لمحة",
+  "managementOverviewSiteRollupEmpty": "لم يسجل أي موقع إطارات في هذه الفترة.",
+  "managementOverviewAtRiskShare": "الإطارات ذات الخطورة العالية أو الحرجة",
+  "managementReportsShare": "مشاركة التقرير PDF",
+  "managementReportsShareError": "تعذّرت مشاركة التقرير. حاول مرة أخرى.",
+  "managementReportsPdfMetric": "المؤشر",
+  "managementReportsPdfValue": "القيمة",
+  "managementReportsPdfShare": "النسبة",
+  "managementTeamRole": "الدور",
+  "managementTeamUsername": "اسم المستخدم",
+  "managementTeamSite": "الموقع",
+  "managementTeamCountry": "الدولة",
+  "managementTeamPhone": "الهاتف",
+  "managementTeamEmail": "البريد الإلكتروني",
+  "managementTeamStatus": "الحالة",
+  "managementTeamApproved": "معتمد",
+  "managementTeamLastLogin": "آخر تسجيل دخول",
+  "managementTeamNotRecorded": "غير مسجل",
+  "managementTeamCall": "اتصال",
+  "managementTeamSendEmail": "إرسال بريد",
+  "managementTeamActionError": "هذا الإجراء غير متاح على هذا الجهاز.",
+  "managementOverviewSiteTyres": "{count} إطارات",
+  "@managementOverviewSiteTyres": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "managementOverviewSiteShare": "{percent}% من إطارات الأسطول",
+  "@managementOverviewSiteShare": {
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "managementReportsPdfPeriod": "الفترة: آخر {days} يوماً",
+  "@managementReportsPdfPeriod": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "managementReportsPdfCurrency": "العملة: {code}",
+  "@managementReportsPdfCurrency": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "adminHubTitle": "لوحة الإدارة",
+  "adminHubSubtitle": "المستخدمون والصلاحيات والموافقات والمواقع",
+  "adminHubPendingApprovals": "موافقات معلقة",
+  "adminHubPendingSignups": "تسجيلات معلقة",
+  "adminHubLockedUsers": "مستخدمون مقفلون",
+  "adminHubCountUnavailable": "تعذر التحميل",
+  "adminHubSectionManage": "الإدارة",
+  "adminHubSectionMore": "التقارير والفريق",
+  "adminHubUsersTitle": "المستخدمون",
+  "adminHubUsersSubtitle": "الموافقة والقفل وتغيير الأدوار",
+  "adminHubAccessTitle": "صلاحيات التطبيق",
+  "adminHubAccessSubtitle": "السماح بوحدات التطبيق أو منعها لكل شخص",
+  "adminHubApprovalsTitle": "الموافقات",
+  "adminHubApprovalsSubtitle": "فحوصات وقوائم تحقق بانتظار التوقيع",
+  "adminHubSitesTitle": "المواقع",
+  "adminHubSitesSubtitle": "المناطق وحالة التفعيل",
+  "adminHubAiTitle": "محادثة الذكاء الاصطناعي للأسطول",
+  "adminHubAiSubtitle": "اطرح أسئلة حول إدارة الأسطول",
+  "adminHubOpenModule": "فتح هذه الوحدة",
+  "adminModuleInspect": "فحص جديد",
+  "adminModuleScan": "مسح",
+  "adminModuleSerial": "البحث بالرقم التسلسلي",
+  "adminModuleTyreChange": "تغيير الإطار",
+  "adminModuleChecklists": "قوائم التحقق",
+  "adminModuleMeter": "سجل العداد",
+  "adminModuleWashing": "غسيل المركبات",
+  "adminModuleReportIssue": "الإبلاغ عن مشكلة",
+  "adminModuleRepairRequest": "طلب إصلاح",
+  "adminModuleRecords": "سجلات الإطارات",
+  "adminModuleVehicles": "المركبات",
+  "adminModuleHistory": "السجل",
+  "adminModuleAlerts": "التنبيهات",
+  "adminModuleCalendar": "التقويم",
+  "adminModuleAccidents": "الحوادث",
+  "adminModuleReportAccident": "تسجيل حادث",
+  "adminModuleWorkorders": "أوامر العمل",
+  "adminModuleRca": "السبب الجذري",
+  "adminModuleTasks": "المهام",
+  "adminModuleStock": "جرد المخزون",
+  "adminModulePm": "الصيانة المستحقة",
+  "adminModuleWorkshop": "مهامي",
+  "adminModuleOverview": "نظرة عامة",
+  "adminModuleReports": "التقارير",
+  "adminModuleAnalytics": "التحليلات",
+  "adminModuleStockManage": "إدارة المخزون",
+  "adminModuleAi": "الذكاء الاصطناعي للأسطول",
+  "adminModuleTeam": "الفريق",
+  "adminModuleApprovals": "الموافقات",
+  "adminModuleAdmin": "لوحة الإدارة",
+  "adminModuleUsers": "إدارة المستخدمين",
+  "adminUsersTitle": "المستخدمون",
+  "adminUsersCount": "{count, plural, =0{لا يوجد مستخدمون} =1{مستخدم واحد} =2{مستخدمان} few{{count} مستخدمين} many{{count} مستخدمًا} other{{count} مستخدم}}",
+  "@adminUsersCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "adminUsersSearchHint": "ابحث بالاسم أو اسم المستخدم أو الرقم الوظيفي",
+  "adminUsersFilterAll": "الكل",
+  "adminUsersStatusPending": "معلق",
+  "adminUsersStatusActive": "نشط",
+  "adminUsersStatusLocked": "مقفل",
+  "adminUsersAllRoles": "كل الأدوار",
+  "adminUsersEmptyTitle": "لا يوجد مستخدمون مطابقون",
+  "adminUsersEmptyMessage": "جرّب بحثًا أو تصفية أخرى.",
+  "adminUsersLoadFailed": "تعذر تحميل المستخدمين.",
+  "adminUsersReadOnlyNote": "لا يمكن تعديل المستخدمين إلا لمسؤول أعلى. يمكنك عرض القائمة.",
+  "adminUsersSelfNote": "هذا حسابك. لا يمكنك قفله أو تغيير دوره.",
+  "adminUsersNoName": "مستخدم بلا اسم",
+  "adminUsersNoRole": "لا يوجد دور مسند",
+  "adminUsersSuperAdminBadge": "مسؤول أعلى",
+  "adminUsersFieldRole": "الدور",
+  "adminUsersFieldUsername": "اسم المستخدم",
+  "adminUsersFieldEmployeeId": "الرقم الوظيفي",
+  "adminUsersFieldEmail": "البريد الإلكتروني",
+  "adminUsersFieldSite": "الموقع",
+  "adminUsersFieldCountry": "الدولة",
+  "adminUsersFieldJoined": "تاريخ الانضمام",
+  "adminUsersFieldPendingReason": "ملاحظة التسجيل",
+  "adminUsersActionApprove": "موافقة",
+  "adminUsersActionLock": "قفل",
+  "adminUsersActionUnlock": "إلغاء القفل",
+  "adminUsersActionDeactivate": "إلغاء التفعيل",
+  "adminUsersActionSetRole": "تغيير الدور",
+  "adminUsersConfirmApproveTitle": "الموافقة على هذا المستخدم؟",
+  "adminUsersConfirmApproveMessage": "سيتمكن {name} من تسجيل الدخول واستخدام التطبيق.",
+  "@adminUsersConfirmApproveMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "adminUsersConfirmLockTitle": "قفل هذا المستخدم؟",
+  "adminUsersConfirmLockMessage": "لن يتمكن {name} من تسجيل الدخول حتى يُلغى القفل.",
+  "@adminUsersConfirmLockMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "adminUsersConfirmUnlockTitle": "إلغاء قفل هذا المستخدم؟",
+  "adminUsersConfirmUnlockMessage": "سيتمكن {name} من تسجيل الدخول مجددًا.",
+  "@adminUsersConfirmUnlockMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "adminUsersDeactivateTitle": "إلغاء تفعيل هذا المستخدم",
+  "adminUsersDeactivateMessage": "سيفقد {name} الوصول وسيُقفل حسابه. السبب مطلوب.",
+  "@adminUsersDeactivateMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "adminUsersSetRoleTitle": "تغيير الدور",
+  "adminUsersSetRoleMessage": "اختر الدور الجديد لـ {name}. السبب مطلوب.",
+  "@adminUsersSetRoleMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "adminUsersReasonLabel": "السبب",
+  "adminUsersReasonRequired": "أدخل السبب.",
+  "adminUsersRoleRequired": "اختر دورًا.",
+  "adminUsersActionDone": "تم الحفظ.",
+  "adminUsersActionFailed": "تعذر حفظ التغيير.",
+  "adminAccessTitle": "صلاحيات التطبيق",
+  "adminAccessPickUser": "اختر شخصًا",
+  "adminAccessChangeUser": "تغيير الشخص",
+  "adminAccessIntro": "تنطبق التعديلات على تطبيق الهاتف لهذا الشخص فقط. الافتراضي يتبع دوره.",
+  "adminAccessDefault": "افتراضي",
+  "adminAccessAllow": "سماح",
+  "adminAccessDeny": "منع",
+  "adminAccessRoleDefaultAllowed": "افتراضي الدور: مسموح",
+  "adminAccessRoleDefaultDenied": "افتراضي الدور: غير مسموح",
+  "adminAccessRoleDefaultAdminOnly": "للمسؤولين فقط افتراضيًا",
+  "adminAccessAdminNote": "يحتفظ المسؤولون والمسؤولون الأعلى دائمًا بصلاحيات كاملة.",
+  "adminAccessReadOnlyNote": "لا يمكن تغيير الصلاحيات إلا لمسؤول أعلى.",
+  "adminAccessLoadFailed": "تعذر تحميل صلاحيات هذا الشخص.",
+  "adminAccessSaveFailed": "تعذر تحديث الصلاحيات.",
+  "adminAccessSaved": "تم تحديث الصلاحيات.",
+  "adminAccessGroupField": "الميدان",
+  "adminAccessGroupFleet": "الأسطول",
+  "adminAccessGroupMaintenance": "الصيانة",
+  "adminAccessGroupManagement": "الإدارة",
+  "adminAccessGroupAdmin": "المسؤول",
+  "adminApprovalsTabInspections": "الفحوصات",
+  "adminApprovalsTabChecklists": "قوائم التحقق",
+  "adminSitesTitle": "المواقع",
+  "adminSitesCount": "{count, plural, =0{لا توجد مواقع} =1{موقع واحد} =2{موقعان} few{{count} مواقع} many{{count} موقعًا} other{{count} موقع}}",
+  "@adminSitesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "adminSitesSearchHint": "ابحث بالموقع أو المنطقة أو الرمز",
+  "adminSitesActive": "نشط",
+  "adminSitesInactive": "غير نشط",
+  "adminSitesNoRegion": "بلا منطقة",
+  "adminSitesEmptyTitle": "لا توجد مواقع",
+  "adminSitesEmptyMessage": "لم تُسجل أي مواقع لمؤسستك بعد.",
+  "adminSitesLoadFailed": "تعذر تحميل المواقع.",
+  "adminSitesReadOnlyNote": "لا يمكن تعديل المواقع إلا لمسؤول أو مدير.",
+  "adminSitesEditTitle": "تعديل الموقع",
+  "adminSitesRegionLabel": "المنطقة",
+  "adminSitesActiveLabel": "موقع نشط",
+  "adminSitesSave": "حفظ",
+  "adminSitesSaved": "تم تحديث الموقع.",
+  "adminSitesSaveFailed": "تعذر تحديث الموقع.",
+  "adminAiTitle": "محادثة الذكاء الاصطناعي للأسطول",
+  "adminAiSubtitle": "الإجابات من خدمة الذكاء الاصطناعي. تحقق من الأرقام المهمة في التطبيق.",
+  "adminAiHint": "اسأل عن إدارة الأسطول",
+  "adminAiSend": "إرسال",
+  "adminAiClear": "مسح المحادثة",
+  "adminAiEmptyTitle": "اطرح سؤالًا",
+  "adminAiEmptyMessage": "مثلًا، كيف تخفض تكلفة الإطار لكل كيلومتر.",
+  "adminAiThinking": "جارٍ التفكير",
+  "adminAiYou": "أنت",
+  "adminAiAssistant": "الذكاء الاصطناعي للأسطول",
+  "adminAiErrorDisabled": "ميزات الذكاء الاصطناعي معطلة من قبل المسؤول.",
+  "adminAiErrorBudget": "تم بلوغ ميزانية الذكاء الاصطناعي الشهرية.",
+  "adminAiErrorRateLimit": "طلبات كثيرة. انتظر قليلًا ثم حاول مجددًا.",
+  "adminAiErrorEmpty": "لم تُرجع خدمة الذكاء الاصطناعي أي إجابة.",
+  "adminAiErrorUnavailable": "خدمة الذكاء الاصطناعي غير متاحة حاليًا. حاول بعد قليل.",
+  "extrasFleetAiTitle": "الذكاء الاصطناعي للأسطول",
+  "extrasFleetAiSubtitle": "إجابات من بيانات أسطولك الحية",
+  "extrasFleetAiSnapshotLoading": "جارٍ قراءة بيانات الأسطول الحية",
+  "extrasFleetAiNoData": "تعذرت قراءة بيانات الأسطول الحية، لذا لا يستطيع المساعد الإجابة من سجلاتك الآن.",
+  "extrasFleetAiGroundedOn": "استنادًا إلى {n} من 5 أرقام حية للأسطول",
+  "@extrasFleetAiGroundedOn": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "extrasFleetAiEmptyTitle": "اسأل عن أسطولك",
+  "extrasFleetAiEmptyMessage": "يجيب المساعد فقط من الأرقام الحية لأسطولك، وسيوضح عندما لا تتوفر معلومة هنا.",
+  "extrasFleetAiSuggestedTitle": "جرّب أن تسأل",
+  "extrasFleetAiSuggestOverview": "أعطني نظرة عامة على حالة الأسطول",
+  "extrasFleetAiSuggestRisk": "كم عدد الإطارات ذات الخطورة الحرجة أو العالية؟",
+  "extrasFleetAiSuggestActions": "ما الذي يحتاج إلى اهتمامي أولًا؟",
+  "extrasFleetAiSuggestAccidents": "كم عدد الحوادث المبلغ عنها في آخر 30 يومًا؟",
+  "extrasFleetAiInputHint": "اطرح سؤالًا عن أسطولك",
+  "extrasFleetAiSend": "إرسال",
+  "extrasFleetAiThinking": "جارٍ التفكير",
+  "extrasFleetAiClear": "مسح المحادثة",
+  "extrasFleetAiDisclaimer": "قد تكون إجابات الذكاء الاصطناعي خاطئة. تحقق من الأرقام المهمة في التطبيق قبل التصرف.",
+  "extrasFleetAiYou": "أنت",
+  "extrasFleetAiErrDisabled": "أوقف المسؤول ميزات الذكاء الاصطناعي.",
+  "extrasFleetAiErrBudget": "تم بلوغ ميزانية الذكاء الاصطناعي الشهرية. تواصل مع المسؤول.",
+  "extrasFleetAiErrRateLimited": "عدد كبير من الأسئلة في وقت قصير. انتظر قليلًا ثم حاول مجددًا.",
+  "extrasFleetAiErrOffline": "لا يوجد اتصال. لم يُرسل سؤالك.",
+  "extrasFleetAiErrUnavailable": "المساعد غير متاح الآن. حاول مرة أخرى بعد قليل.",
+  "repairReqCatEngine": "المحرك",
+  "repairReqCatTransmission": "ناقل الحركة",
+  "repairReqCatBrakes": "الفرامل",
+  "repairReqCatTyres": "الإطارات",
+  "repairReqCatHydraulics": "الهيدروليك",
+  "repairReqCatElectrical": "الكهرباء",
+  "repairReqCatBody": "الهيكل",
+  "repairReqCatDrumMixer": "الخلاط / الأسطوانة",
+  "repairReqCatPump": "المضخة",
+  "repairReqCatAirSystem": "نظام الهواء",
+  "repairReqCatCooling": "التبريد",
+  "repairReqCatOther": "أخرى",
+  "repairReqTitle": "طلب إصلاح",
+  "repairReqSubtitle": "أبلغ الورشة عن عطل",
+  "repairReqMachine": "المعدة",
+  "repairReqChooseAsset": "اختر المعدة",
+  "repairReqSelect": "اختيار",
+  "repairReqChange": "تغيير",
+  "repairReqPlate": "اللوحة {plate}",
+  "@repairReqPlate": {
+    "placeholders": {
+      "plate": {
+        "type": "String"
+      }
+    }
+  },
+  "repairReqErrAsset": "اختر المعدة التي بها العطل.",
+  "repairReqSite": "الموقع",
+  "repairReqSiteHint": "يُملأ من الموقع المسجل للمعدة",
+  "repairReqCategory": "نوع العطل",
+  "repairReqDescription": "صف العطل",
+  "repairReqDescriptionHint": "ما الذي حدث، وما الذي تراه أو تسمعه",
+  "repairReqErrDescription": "صف العطل قبل الإرسال.",
+  "repairReqPriority": "الأولوية",
+  "repairReqOdometer": "عداد المسافة (كم)",
+  "repairReqEngineHours": "ساعات تشغيل المحرك",
+  "repairReqOptional": "اختياري",
+  "repairReqErrMeter": "أدخل رقمًا يساوي صفرًا أو أكثر، أو اتركه فارغًا.",
+  "repairReqOnlineNote": "يُرسل هذا الطلب مباشرة إلى الورشة ويحتاج إلى اتصال. يصدر المكتب رقم طلب الإصلاح.",
+  "repairReqSubmit": "إرسال طلب الإصلاح",
+  "repairReqErrNoProfile": "لم يُحمَّل ملفك الشخصي بعد. حاول بعد لحظات.",
+  "repairReqErrOffline": "لا يوجد اتصال. لم يُرسل شيء. بياناتك محفوظة، أرسلها مجددًا عند توفر الشبكة.",
+  "repairReqErrPermission": "لا يُسمح لحسابك بتقديم طلبات الإصلاح. تواصل مع المسؤول.",
+  "repairReqErrFailed": "تعذر إرسال الطلب. بياناتك محفوظة، حاول مجددًا.",
+  "repairReqSentTitle": "تم إرسال طلب الإصلاح",
+  "repairReqSentWithNumber": "استلمته الورشة برقم {rfr}.",
+  "@repairReqSentWithNumber": {
+    "placeholders": {
+      "rfr": {
+        "type": "String"
+      }
+    }
+  },
+  "repairReqSentNoNumber": "استلمته الورشة. سيصدر المكتب رقم طلب الإصلاح.",
+  "repairReqAnother": "تقديم طلب آخر",
+  "repairReqDone": "تم",
+  "repairReqSearchHint": "ابحث برقم الأصل أو اللوحة أو النوع أو الموقع",
+  "repairReqNoAssets": "لا توجد معدات مسجلة ضمن نطاقك.",
+  "repairReqNoMatch": "لا توجد معدة مطابقة لهذا البحث.",
+  "repairReqRefineSearch": "{n} معدة مطابقة. اكتب المزيد لتضييق القائمة.",
+  "@repairReqRefineSearch": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "repairReqCachedList": "غير متصل: يتم عرض الأسطول المحفوظ على هذا الجهاز.",
+  "registerTitle": "إنشاء حساب",
+  "registerChecking": "جارٍ التحقق مما إذا كان التسجيل مفتوحًا",
+  "registerUnreachableTitle": "تعذر الوصول إلى الخادم",
+  "registerUnreachableMessage": "يتطلب التسجيل اتصالًا. تحقق من الشبكة وحاول مجددًا.",
+  "registerClosedTitle": "التسجيل مغلق",
+  "registerClosedMessage": "ينشئ المسؤول الحسابات. تواصل مع المسؤول لتتم دعوتك.",
+  "registerBackToSignIn": "العودة لتسجيل الدخول",
+  "registerDoneTitle": "تم إنشاء الحساب",
+  "registerDoneMessage": "حسابك بانتظار الموافقة. سيحدد المسؤول دورك وموقعك، ثم يمكنك تسجيل الدخول.",
+  "registerIntro": "اطلب حسابًا باسم المستخدم ورقمك الوظيفي. يوافق عليه المسؤول ويحدد دورك وموقعك.",
+  "registerFullName": "الاسم الكامل",
+  "registerOptional": "اختياري",
+  "registerUsername": "اسم المستخدم",
+  "registerUsernameHelp": "3 أحرف على الأقل: حروف أو أرقام أو نقطة أو شرطة سفلية أو شرطة",
+  "registerEmployeeId": "الرقم الوظيفي",
+  "registerPassword": "كلمة المرور",
+  "registerPasswordHelp": "{n} أحرف على الأقل",
+  "@registerPasswordHelp": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "registerConfirm": "تأكيد كلمة المرور",
+  "registerShowPassword": "إظهار كلمة المرور",
+  "registerHidePassword": "إخفاء كلمة المرور",
+  "registerApprovalNote": "لا يمكنك اختيار دور أو موقع هنا. تبدأ الحسابات الجديدة معلّقة حتى يوافق عليها المسؤول.",
+  "registerSubmit": "طلب حساب",
+  "registerHaveAccount": "لديك حساب بالفعل؟ سجّل الدخول",
+  "registerErrUsernameShort": "أدخل اسم مستخدم من 3 أحرف على الأقل.",
+  "registerErrUsernameChars": "استخدم الحروف والأرقام والنقطة والشرطة السفلية والشرطة فقط.",
+  "registerErrEmployeeId": "أدخل رقمك الوظيفي.",
+  "registerErrPasswordShort": "يجب ألا تقل كلمة المرور عن {n} أحرف.",
+  "@registerErrPasswordShort": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "registerErrMismatch": "كلمتا المرور غير متطابقتين.",
+  "registerErrTaken": "اسم المستخدم أو الرقم الوظيفي مستخدم بالفعل. اختر غيره.",
+  "registerErrOffline": "لا يوجد اتصال. لم يُنشأ حسابك. حاول مجددًا عند توفر الشبكة.",
+  "registerErrFailed": "تعذر إنشاء حسابك. حاول مجددًا.",
+  "loginCreateAccount": "إنشاء حساب",
+  "accAssessmentLoadFailed": "تعذر تحميل التقييم",
+  "accSafetyAndMobility": "السلامة والقدرة على الحركة",
+  "accSafeToMove": "آمن للتحريك",
+  "accRecoveryTowRequired": "يلزم السحب / الإنقاذ",
+  "accVehicleOffRoad": "المركبة خارج الخدمة (VOR)",
+  "accDamageAssessment": "تقييم الضرر",
+  "accDamageAreaCount": "{count, plural, zero{لا مناطق} one{منطقة واحدة} two{منطقتان} few{{count} مناطق} many{{count} منطقة} other{{count} منطقة}}",
+  "@accDamageAreaCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "accNoDamageAreas": "لم تُحدَّد أي مناطق ضرر في هذه الحالة بعد.",
+  "accLabourAndPartsEstimate": "تقدير العمالة وقطع الغيار",
+  "accLabourHours": "ساعات العمل",
+  "accLabourEstimate": "تقدير العمالة",
+  "accPartsEstimate": "تقدير قطع الغيار",
+  "accTotalPreliminaryEstimate": "إجمالي التقدير المبدئي",
+  "accPartsAvailable": "قطع متوفرة",
+  "accSpecialOrder": "طلب خاص",
+  "accPartsAvailability": "توفر قطع الغيار",
+  "accRepairRouteRecommendation": "التوصية بمسار الإصلاح",
+  "accTotalLossPossible": "خسارة كلية محتملة",
+  "accSelectedWorkshop": "الورشة المختارة",
+  "accCity": "المدينة",
+  "accExpectedDurationDays": "المدة المتوقعة (بالأيام)",
+  "accQuotationStatus": "حالة عرض السعر",
+  "accRequiredAttachments": "المرفقات المطلوبة ({count})",
+  "@accRequiredAttachments": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "accAttachVendorQuotation": "أرفق عرض سعر المورد لتفعيل الإرسال إلى الورشة الخارجية.",
+  "accAfterSubmitNotify": "الإشعار بعد الإرسال",
+  "accSaveAssessment": "حفظ التقييم",
+  "accAssessmentSubmitted": "تم إرسال التقييم",
+  "accSubmitAssessment": "إرسال التقييم وتوجيهه",
+  "accSubmissionNeedsQuotation": "يتطلب الإرسال عرض سعر المورد للمسار الخارجي.",
+  "accFieldsNotStored": "تعذر حفظ هذه الحقول على الخادم: {fields}.",
+  "@accFieldsNotStored": {
+    "placeholders": {
+      "fields": {
+        "type": "String"
+      }
+    }
+  },
+  "accAssessmentRouted": "تم إرسال التقييم وتوجيهه إلى {route}.",
+  "@accAssessmentRouted": {
+    "placeholders": {
+      "route": {
+        "type": "String"
+      }
+    }
+  },
+  "accAssessmentSaved": "تم حفظ التقييم.",
+  "accDocumentAttached": "تم إرفاق {document}.",
+  "@accDocumentAttached": {
+    "placeholders": {
+      "document": {
+        "type": "String"
+      }
+    }
+  },
+  "accKm": "كم",
+  "accKmValue": "{km} كم",
+  "@accKmValue": {
+    "placeholders": {
+      "km": {
+        "type": "String"
+      }
+    }
+  },
+  "accPlate": "اللوحة",
+  "accSiteLocation": "الموقع · المكان",
+  "accViewDamageMap": "{count, plural, zero{عرض خريطة الضرر · لا مناطق} one{عرض خريطة الضرر · منطقة واحدة} two{عرض خريطة الضرر · منطقتان} few{عرض خريطة الضرر · {count} مناطق} many{عرض خريطة الضرر · {count} منطقة} other{عرض خريطة الضرر · {count} منطقة}}",
+  "@accViewDamageMap": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "accActionNotAssessed": "الإجراء: لم يُقيَّم بعد",
+  "accActionValue": "الإجراء: {value}",
+  "@accActionValue": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "accRecommended": "موصى به",
+  "accUploadNamedDocument": "رفع {document}",
+  "@accUploadNamedDocument": {
+    "placeholders": {
+      "document": {
+        "type": "String"
+      }
+    }
+  },
+  "accClaimLoadFailed": "تعذر تحميل المطالبة",
+  "accClaimExternalRepairBanner": "تقييم إصلاح خارجي",
+  "accClaimDocumentPackage": "حزمة مستندات المطالبة",
+  "accClaimRegistrationLocked": "يتاح تسجيل المطالبة عند اكتمال جميع المستندات المطلوبة.",
+  "accRequestDocument": "طلب {document}",
+  "@accRequestDocument": {
+    "placeholders": {
+      "document": {
+        "type": "String"
+      }
+    }
+  },
+  "accUploadDocument": "رفع مستند",
+  "accClaimRegistration": "تسجيل المطالبة",
+  "accInsurer": "شركة التأمين",
+  "accPolicyNo": "رقم الوثيقة",
+  "accClaimNumber": "رقم المطالبة",
+  "accClaimNumberAuto": "يُنشأ تلقائيًا بعد التسجيل",
+  "accLiability": "المسؤولية",
+  "accGccLiabilityPct": "نسبة مسؤولية GCC %",
+  "accClaimAmount": "مبلغ المطالبة",
+  "accDeductible": "مبلغ التحمل",
+  "accNetClaimable": "صافي المبلغ المطالب به",
+  "accClaimRegistered": "تم تسجيل المطالبة لدى شركة التأمين",
+  "accRegisterClaim": "تسجيل المطالبة لدى شركة التأمين",
+  "accClaimEnableWhenComplete": "يُفعّل بعد اكتمال جميع المستندات المطلوبة.",
+  "accPaymentAndRecovery": "الدفع والاسترداد",
+  "accApprovedAmount": "المبلغ المعتمد",
+  "accRecoveredAmount": "المبلغ المسترد",
+  "accOutstanding": "المتبقي",
+  "accRecoverySource": "مصدر الاسترداد",
+  "accRecoverySourceHint": "شركة التأمين، طرف ثالث، السائق",
+  "accLastUpdated": "آخر تحديث",
+  "accSaveRecovery": "حفظ الاسترداد",
+  "accUpdateRecovery": "تحديث مبلغ الاسترداد",
+  "accRegisterClaimFirst": "سجّل المطالبة أولًا.",
+  "accRecoveryEditableNote": "تبقى مبالغ الاسترداد قابلة للتعديل بعد الإغلاق التشغيلي للحالة. كل تعديل مؤرخ ومدقق.",
+  "accAfterRegistrationNotify": "الإشعار بعد التسجيل",
+  "accClaimNotificationIncludes": "يتضمن الإشعار رقم المطالبة وحالة المستندات ومبلغ المطالبة والإجراء التالي.",
+  "accSaveClaimDraft": "حفظ مسودة المطالبة",
+  "accCompleteDocuments": "إكمال المستندات",
+  "accCommandCenterMonitoring": "{owner} يتابع مهلة الخدمة والمستندات الناقصة.",
+  "@accCommandCenterMonitoring": {
+    "placeholders": {
+      "owner": {
+        "type": "String"
+      }
+    }
+  },
+  "accCommandCenterRole": "{role} (مركز القيادة)",
+  "@accCommandCenterRole": {
+    "placeholders": {
+      "role": {
+        "type": "String"
+      }
+    }
+  },
+  "accClaimDraftSaved": "تم حفظ مسودة المطالبة على هذا الجهاز. لم يُرسل أي شيء.",
+  "accDocumentRequestLogged": "تم تسجيل طلب {document} في الحالة.",
+  "@accDocumentRequestLogged": {
+    "placeholders": {
+      "document": {
+        "type": "String"
+      }
+    }
+  },
+  "accWhichDocument": "ما هذا المستند؟",
+  "accDocumentUploaded": "تم رفع {document} إلى حزمة المطالبة.",
+  "@accDocumentUploaded": {
+    "placeholders": {
+      "document": {
+        "type": "String"
+      }
+    }
+  },
+  "accClaimRegisterMissing": "أدخل شركة التأمين ورقم الوثيقة ومبلغ المطالبة أولًا.",
+  "accRegisterClaimConfirm": "سيتم تسجيل المطالبة {claimNo} لدى {insurer} بموجب الوثيقة {policyNo} في الحالة. لا يمكن التراجع عن ذلك من التطبيق.",
+  "@accRegisterClaimConfirm": {
+    "placeholders": {
+      "claimNo": {
+        "type": "String"
+      },
+      "insurer": {
+        "type": "String"
+      },
+      "policyNo": {
+        "type": "String"
+      }
+    }
+  },
+  "accRegister": "تسجيل",
+  "accClaimRegisteredSnack": "تم تسجيل المطالبة {claimNo} لدى شركة التأمين.",
+  "@accClaimRegisteredSnack": {
+    "placeholders": {
+      "claimNo": {
+        "type": "String"
+      }
+    }
+  },
+  "accRecoveryMissing": "أدخل المبلغ المسترد ومصدره.",
+  "accRecoveryRecorded": "تم تسجيل الاسترداد.",
+  "accOptionalSuffix": "{label} (اختياري)",
+  "@accOptionalSuffix": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "accIntakeFleetMasterLockNote": "هذه التفاصيل مأخوذة من سجل الأسطول ولا يمكن تعديلها هنا. إذا كانت أي تفاصيل غير صحيحة، يرجى تحديثها في نظام الأسطول.",
+  "accIntakeIncidentSiteHelp": "اختر موقع هذا الحادث. قد يختلف عن الموقع الأساسي للأصل.",
+  "accIntakeAssetNo": "رقم الأصل",
+  "accIntakeVehicleType": "نوع المركبة",
+  "accIntakeMakeModel": "الصانع / الطراز",
+  "accIntakeHomeSite": "الموقع (الأساسي)",
+  "accIntakeCountry": "الدولة",
+  "accIntakeCurrentMeter": "القراءة الحالية للعداد",
+  "accIntakeStatus": "الحالة",
+  "accIntakeAssetLoaded": "تم تحميل الأصل من سجل الأسطول",
+  "accIntakeAutoFilled": "مُعبأ تلقائيًا من سجل الأسطول",
+  "accIntakeWhereOccurred": "أين وقع الحادث؟",
+  "accIntakeSiteHint": "اسم الموقع أو المكان",
+  "accIntakeHomeSiteChip": "{site} (الأساسي)",
+  "@accIntakeHomeSiteChip": {
+    "placeholders": {
+      "site": {
+        "type": "String"
+      }
+    }
+  },
+  "accIntakeRequiredPhotos": "{done} من {total} صور مطلوبة",
+  "@accIntakeRequiredPhotos": {
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "accIntakeMissingCount": "{count} ناقصة",
+  "@accIntakeMissingCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "accIntakeAttachedOnDevice": "مرفق على هذا الجهاز",
+  "accIntakeRequiredCategory": "{category} · مطلوب",
+  "@accIntakeRequiredCategory": {
+    "placeholders": {
+      "category": {
+        "type": "String"
+      }
+    }
+  },
+  "accIntakeRemovePhoto": "إزالة الصورة",
+  "accIntakeSupportingDocuments": "المستندات الداعمة",
+  "accIntakeSupportingDocumentsHelp": "أرفق المتاح الآن. قد تتطلب قواعد المسار والدولة المزيد أثناء مراجعة الحالة.",
+  "accIntakeOptionalAtIntake": "اختياري عند الإدخال",
+  "accIntakeRemoveAttachment": "إزالة المرفق",
+  "accIntakeAttachDocumentPhoto": "إرفاق صورة المستند",
+  "accYes": "نعم",
+  "accNo": "لا",
+  "accCaseSummaryTitle": "ملخص حالة الحادث",
+  "accCaseSummaryGenerated": "تم الإنشاء في {date}",
+  "@accCaseSummaryGenerated": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "accCaseSummaryWorkstreams": "مسارات عمل الحالة",
+  "accCaseSummaryWorkstreamColumn": "مسار العمل",
+  "accCaseSummaryTeamColumn": "الفريق",
+  "accCaseSummaryStatusColumn": "الحالة",
+  "accCaseSummaryProgressColumn": "التقدم",
+  "accCaseSummaryOverallCompletion": "نسبة الإنجاز الإجمالية",
+  "accCaseSummaryEvidencePhotos": "صور الأدلة",
+  "accCaseSummaryShare": "مشاركة ملخص الحالة PDF",
+  "accCaseSummaryShareFailed": "تعذرت مشاركة ملخص الحالة. حاول مرة أخرى.",
+  "accCaseSummarySharedInEnglish": "تعذر تحميل الخط العربي، لذلك تمت مشاركة الملخص باللغة الإنجليزية.",
+  "accReportDraftRestoreFailed": "تعذر استعادة مسودة التقرير المحفوظة. لم يتم استبدال بياناتك المحفوظة.",
+  "accWorkspaceLoading": "مساحة العمل لا تزال قيد التحميل. حاول مرة أخرى.",
+  "accReportDraftSaveFailed": "تعذر على هذا الجهاز حفظ المسودة. لم يتم استبدال أي بيانات محفوظة سابقًا. حاول مرة أخرى.",
+  "accReportUseScannedAsset": "استخدم رقم الأصل الممسوح لاختيار سجل الأسطول المطابق.",
+  "accReportAddCloseUpPhoto": "إضافة صورة مقربة",
+  "accReportTakePhoto": "التقاط صورة",
+  "accReportChooseGallery": "اختيار من المعرض",
+  "accReportQueued": "تم حفظ التقرير في قائمة الانتظار دون اتصال.",
+  "accReportQueuedWithNotes": "تمت إضافة التقرير إلى قائمة الانتظار. حُفظت بعض الحقول الاختيارية غير المدعومة في ملاحظات الإدخال.",
+  "accReportStepAssetSubtitle": "اختر أصل الأسطول المتورط في هذا الحادث.",
+  "accReportStepIncidentSubtitle": "سجّل متى وأين وماذا حدث.",
+  "accReportStepPeopleSubtitle": "سجّل فقط الحقائق اللازمة في موقع الحادث عن الأشخاص والسلامة ونجم والطرف الثالث.",
+  "accReportStepEvidenceSubtitle": "أضف صورة عامة للموقع وصورة مقربة لكل منطقة ضرر محددة. المستندات الداعمة اختيارية عند الإدخال.",
+  "accReportStepDocumentsSubtitle": "أضف المستندات الداعمة المتاحة. اختيارية عند الإدخال.",
+  "accReportStepReviewSubtitle": "راجع التقرير بدقة وأرسله إلى تحقق الأسطول. المستندات الاختيارية لا تمنع هذا الإرسال أبدًا.",
+  "accReportScanCode": "مسح رمز QR / الباركود",
+  "accReportMatchingAssets": "{count, plural, zero{لا توجد أصول مطابقة} one{أصل واحد مطابق} two{أصلان مطابقان} few{{count} أصول مطابقة} many{{count} أصلًا مطابقًا} other{{count} أصل مطابق}}",
+  "@accReportMatchingAssets": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "accReportNoMatchingAsset": "لا يوجد أصل مطابق في الأسطول",
+  "accReportMatchOverflow": "عرض أول {shown} من أصل {total} نتيجة. توجد {hidden} نتائج أخرى، حسّن البحث.",
+  "@accReportMatchOverflow": {
+    "placeholders": {
+      "shown": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      },
+      "hidden": {
+        "type": "int"
+      }
+    }
+  },
+  "accReportSavedFleetData": "عرض بيانات الأسطول المحفوظة",
+  "accReportChangeAsset": "تغيير الأصل",
+  "accReportManualAsset": "رقم الأصل (إدخال يدوي احتياطي)",
+  "accReportManualAssetHint": "استخدمه فقط عند تعذر المطابقة مع الأسطول",
+  "accReportMeterAtIncident": "قراءة العداد عند الحادث",
+  "accReportMeterHint": "قراءة عداد المسافة أو الساعات",
+  "accReportMeterFleetMaster": "سجل الأسطول: {km} كم",
+  "@accReportMeterFleetMaster": {
+    "placeholders": {
+      "km": {
+        "type": "String"
+      }
+    }
+  },
+  "accReportRoadLocation": "الطريق / الموقع الدقيق",
+  "accReportIncidentDate": "تاريخ الحادث",
+  "accReportIncidentTime": "وقت الحادث",
+  "accReportIncidentSite": "موقع الحادث",
+  "accReportIncidentSiteHelper": "موقع الحادث قابل للتعديل ومستقل عن الموقع الأساسي المثبت للأسطول.",
+  "accReportRoadLocationHint": "البوابة أو الطريق أو منطقة المشروع أو وصف GPS",
+  "accReportEventType": "نوع الحدث",
+  "accReportSelectEventType": "اختر نوع الحدث",
+  "accReportInitialSeverity": "الشدة الأولية",
+  "accSeverityMinor": "بسيط",
+  "accSeverityModerate": "متوسط",
+  "accSeverityMajorSevere": "كبير / شديد",
+  "accSeverityFatal": "مميت",
+  "accReportWhatHappened": "ماذا حدث؟",
+  "accReportWhatHappenedHint": "صف تسلسل الأحداث والظروف المباشرة",
+  "accReportDriverName": "اسم السائق",
+  "accReportDriverId": "الرقم الوظيفي / رقم رخصة السائق",
+  "accReportPassengersInvolved": "هل كان هناك ركاب؟",
+  "accReportPassengerCount": "عدد الركاب",
+  "accReportPassengerDetails": "تفاصيل الركاب",
+  "accReportInjuries": "هل كانت هناك إصابات؟",
+  "accReportInjuryCount": "عدد الإصابات",
+  "accReportInjuryDetails": "تفاصيل الإصابات",
+  "accReportEmergencyServices": "هل تم الاتصال بخدمات الطوارئ؟",
+  "accReportEmergencyDetails": "تفاصيل الاستجابة للطوارئ",
+  "accReportVehicleMovable": "هل يمكن تحريك المركبة؟",
+  "accReportRecoveryRequired": "هل يلزم السحب / الإنقاذ؟",
+  "accReportSafeToOperate": "هل المركبة آمنة للتشغيل؟",
+  "accReportThirdPartyInvolved": "هل كان هناك طرف ثالث؟",
+  "accReportThirdPartyName": "اسم الطرف الثالث",
+  "accReportThirdPartyVehicle": "مركبة الطرف الثالث",
+  "accReportThirdPartyPlate": "لوحة الطرف الثالث",
+  "accReportThirdPartyContact": "جهة اتصال الطرف الثالث",
+  "accReportThirdPartyInsurer": "شركة تأمين الطرف الثالث",
+  "accReportThirdPartyInvoice": "هل تتوفر فاتورة الطرف الثالث؟",
+  "accReportThirdPartyInvoiceHelper": "هذا اختياري. إن توفرت، سجّل رقم الفاتورة فقط؛ ويمكن لفريق التأمين طلب الملف لاحقًا.",
+  "accReportThirdPartyInvoiceNumber": "رقم فاتورة الطرف الثالث",
+  "accReportNajmOpened": "هل تم فتح بلاغ نجم؟",
+  "accReportNajmHelper": "سجّل فقط عندما ينطبق نجم على هذا الحادث.",
+  "accReportNajmReference": "مرجع نجم",
+  "accReportWitnessDetails": "تفاصيل الشهود",
+  "accReportImmediateAction": "الإجراء الفوري المتخذ",
+  "accReportAdditionalNotes": "ملاحظات إضافية",
+  "accReportReadyToSubmit": "جاهز للإرسال",
+  "accReportMissingBeforeSubmit": "ناقص قبل الإرسال",
+  "accReportComplete": "مكتمل",
+  "accNotRecorded": "غير مسجل",
+  "accNotAnswered": "لم تتم الإجابة",
+  "accReportReviewAsset": "الأصل",
+  "accReportReviewIncident": "الحادث",
+  "accReportReviewDateTime": "التاريخ والوقت",
+  "accReportReviewSiteLocation": "الموقع / المكان",
+  "accReportReviewWhatHappened": "ماذا حدث",
+  "accReportReviewPeople": "الأشخاص",
+  "accReportReviewPeopleValue": "السائق {driver} · الإصابات {injuries}",
+  "@accReportReviewPeopleValue": {
+    "placeholders": {
+      "driver": {
+        "type": "String"
+      },
+      "injuries": {
+        "type": "String"
+      }
+    }
+  },
+  "accReportReviewDamageMarks": "علامات الضرر",
+  "accReportReviewFocusedPhotos": "الصور المركزة",
+  "accReportReviewPhotosValue": "{done} من {total}",
+  "@accReportReviewPhotosValue": {
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "accReportReviewOptionalDocuments": "المستندات الاختيارية",
+  "accReportReviewAttachedValue": "{count} مرفق",
+  "@accReportReviewAttachedValue": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "accReportWorkflowResolvesOnSync": "يحدد سير عمل الحوادث المهيأ المستلمين والمسار والمهلة الأولية عند مزامنة هذا التقرير.",
+  "accReportDraftAutoSaves": "تُحفظ المسودة تلقائيًا على الجهاز",
+  "accReportDraftUnsaved": "تغييرات غير محفوظة",
+  "accReportDraftSaving": "جارٍ حفظ المسودة…",
+  "accReportDraftSaved": "تم حفظ المسودة على الجهاز",
+  "accReportDraftSavedAt": "تم حفظ المسودة على الجهاز · {time}",
+  "@accReportDraftSavedAt": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "accReportDraftSaveFailedShort": "فشل حفظ المسودة",
+  "accReportDraftRestoring": "جارٍ استعادة المسودة المحفوظة…",
+  "accReportSaveAndExit": "حفظ وخروج",
+  "accReportBack": "رجوع",
+  "accReportSubmit": "إرسال الحادث",
+  "accReportContinueToIncident": "المتابعة إلى تفاصيل الحادث",
+  "accReportContinueToEvidence": "المتابعة إلى الأدلة",
+  "accReportSaveAndContinue": "حفظ ومتابعة",
+  "accReportFleetResults": "{count, plural, zero{لا نتائج في الأسطول · ابحث بالأصل أو الأسطول أو اللوحة أو النوع أو الصانع أو الطراز أو الموقع} one{نتيجة واحدة في الأسطول · ابحث بالأصل أو الأسطول أو اللوحة أو النوع أو الصانع أو الطراز أو الموقع} two{نتيجتان في الأسطول · ابحث بالأصل أو الأسطول أو اللوحة أو النوع أو الصانع أو الطراز أو الموقع} few{{count} نتائج في الأسطول · ابحث بالأصل أو الأسطول أو اللوحة أو النوع أو الصانع أو الطراز أو الموقع} many{{count} نتيجة في الأسطول · ابحث بالأصل أو الأسطول أو اللوحة أو النوع أو الصانع أو الطراز أو الموقع} other{{count} نتيجة في الأسطول · ابحث بالأصل أو الأسطول أو اللوحة أو النوع أو الصانع أو الطراز أو الموقع}}",
+  "@accReportFleetResults": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "accTypeCollision": "تصادم",
+  "accTypeRollover": "انقلاب",
+  "accTypeRearEnd": "اصطدام خلفي",
+  "accTypeSideSwipe": "احتكاك جانبي",
+  "accTypeReversing": "أثناء الرجوع للخلف",
+  "accTypeFire": "حريق",
+  "accTypeVandalism": "تخريب متعمد",
+  "accTypeWeather": "الطقس",
+  "accTypeTyreFailure": "عطل الإطار",
+  "accTypeMechanical": "ميكانيكي",
+  "accTypeNearMiss": "حادث وشيك",
+  "accTypePropertyDamage": "أضرار بالممتلكات",
+  "accTypeOther": "أخرى",
+  "accNotSet": "غير محدد",
+  "accErrorFileUnsupported": "هذا الملف غير مدعوم.",
+  "accErrorCheckValues": "تحقق من القيم وحاول مرة أخرى.",
+  "accErrorGeneric": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
+  "accNotifyForVisibility": "{role} (للاطلاع)",
+  "@accNotifyForVisibility": {
+    "placeholders": {
+      "role": {
+        "type": "String"
+      }
+    }
+  },
+  "accTakePhoto": "التقاط صورة",
+  "accChooseDeviceFile": "اختيار ملف من الجهاز",
+  "accDhDispatchHandover": "الإرسال والتسليم",
+  "accDhRepairRoute": "مسار الإصلاح",
+  "accDhDispatchStatus": "حالة الإرسال",
+  "accDhTransitElapsed": "مدة النقل",
+  "accDhVendorRepairSla": "مهلة إصلاح المورد",
+  "accDhSlaUnavailable": "المهلة غير متاحة",
+  "accDhVendorSlaStartsOnlyAfterSigned": "تبدأ مهلة المورد فقط بعد الاستلام الموقع للمركبة.",
+  "accDhTheSlaClockStartsWhenThe": "يبدأ عداد المهلة عندما توقع الورشة على استلام المركبة.",
+  "accDhRetry": "إعادة المحاولة",
+  "accDhDispatchLegsAreNotProvisionedOn": "سجلات الإرسال غير مفعلة في قاعدة البيانات بعد. لا يمكن تسجيل التفاصيل حتى يتم تطبيق الترحيل.",
+  "accDhVendorContactFieldsAreNotProvisioned": "حقول اتصال المورد غير مفعلة بعد؛ يتم حفظ اسم الورشة فقط.",
+  "accDhAfterAcceptanceVendorCanAddInspection": "بعد الاستلام يمكن للمورد إضافة تفاصيل الفحص وعرض السعر والقطع والجدول والتقدم في مساحته الخاصة. يُنشأ أمر الشراء فقط بعد مراجعة عرض السعر واعتماده.",
+  "accDhOpenCaseTimeline": "فتح سجل القضية",
+  "accDhOpenWorkshopAssessment": "فتح تقييم الورشة",
+  "accDhNotStarted": "لم تبدأ",
+  "accDhMet": "تم الالتزام",
+  "accDhBreached": "تم تجاوزها",
+  "accDhPaused": "متوقفة",
+  "accDhRunning": "جارية",
+  "accDhCancelled": "ملغاة",
+  "accDhStartedNoSlaTarget": "بدأت، بلا هدف مهلة",
+  "accDhDestinationAndVendor": "الوجهة والمورد",
+  "accDhWorkshopName": "اسم الورشة",
+  "accDhCity": "المدينة",
+  "accDhVendorContactName": "اسم جهة الاتصال",
+  "accDhPhone": "الهاتف",
+  "accDhEmail": "البريد الإلكتروني",
+  "accDhWorkshopRegistrationTaxNo": "رقم تسجيل الورشة / الضريبة",
+  "accDhAssignedVendorInspector": "مفتش المورد المعين",
+  "accDhUnassigned": "غير معين",
+  "accDhEditVendorDetails": "تعديل بيانات المورد",
+  "accDhContactWorkshop": "الاتصال بالورشة",
+  "accDhCancel": "إلغاء",
+  "accDhSaveVendor": "حفظ المورد",
+  "accDhDispatchDetails": "تفاصيل الإرسال",
+  "accDhSentBy": "أرسل بواسطة",
+  "accDhDeparture": "المغادرة",
+  "accDhCarrier": "الناقل",
+  "accDhDriver": "السائق",
+  "accDhRecoveryVehicle": "مركبة النقل",
+  "accDhOrigin": "نقطة الانطلاق",
+  "accDhDestination": "الوجهة",
+  "accDhEstimatedArrival": "الوصول المتوقع",
+  "accDhLiveStatus": "الحالة الحية",
+  "accDhRecordDispatch": "تسجيل الإرسال",
+  "accDhOdometerKm": "عداد المسافة (كم)",
+  "accDhEngineHours": "ساعات المحرك",
+  "accDhFuel": "الوقود %",
+  "accDhKeys": "المفاتيح",
+  "accDhDocumentsSentOnePerLine": "المستندات المرسلة (كل مستند في سطر)",
+  "accDhAccessoriesChecklistOnePerLine": "الملحقات / قائمة التحقق (كل عنصر في سطر)",
+  "accDhOutgoingDamagePhotos": "صور الأضرار عند التسليم",
+  "accDhOutgoingConditionSignedBy": "موقع حالة التسليم",
+  "accDhOutgoingSignature": "توقيع التسليم",
+  "accDhSaveDispatch": "حفظ الإرسال",
+  "accDhVehicleHandoverCondition": "حالة تسليم المركبة",
+  "accDhOdometer": "عداد المسافة",
+  "accDhFuel2": "الوقود",
+  "accDhDocumentsSent": "المستندات المرسلة",
+  "accDhDocuments": "مستندات",
+  "accDhAccessoriesChecklist": "الملحقات / قائمة التحقق",
+  "accDhItems": "عناصر",
+  "accDhPhotos": "صور",
+  "accDhWorkshopReceipt": "استلام الورشة",
+  "accDhCompletedByVendor": "أكملها المورد",
+  "accDhArrived": "الوصول",
+  "accDhReceivedBy": "المستلم",
+  "accDhIncomingOdometer": "عداد المسافة عند الوصول",
+  "accDhIncomingEngineHours": "ساعات المحرك عند الوصول",
+  "accDhIncomingFuel": "الوقود عند الوصول",
+  "accDhConditionMatchesDispatch": "الحالة تطابق التسليم",
+  "accDhYes": "نعم",
+  "accDhNo": "لا",
+  "accDhAdditionalDamageRemarks": "أضرار إضافية / ملاحظات",
+  "accDhReceivingPhotos": "صور الاستلام",
+  "accDhCustodyAccepted": "تم قبول العهدة",
+  "accDhVendorReceiverSignature": "توقيع مستلم المورد",
+  "accDhSenderDriverSignature": "توقيع المرسل / السائق",
+  "accDhCompletedByVendor2": "يكملها المورد",
+  "accDhNoDispatchLegIsRecordedYet": "لم يُسجل إرسال بعد. سجّل الإرسال أولاً؛ يُوقع الاستلام عليه.",
+  "accDhArrivedDateTime": "تاريخ / وقت الوصول *",
+  "accDhReceivedByName": "المستلم (الاسم) *",
+  "accDhDesignation": "الوظيفة *",
+  "accDhIncomingOdometerKm": "عداد المسافة عند الوصول",
+  "accDhIncomingFuel2": "الوقود عند الوصول %",
+  "accDhUploadReceivingPhotos": "رفع صور الاستلام *",
+  "accDhUploadSignedHandoverPaper": "رفع ورقة التسليم الموقعة *",
+  "accDhVendorReceiverSignature2": "توقيع مستلم المورد *",
+  "accDhSenderDriverSignatureCaptured": "توقيع المرسل / السائق (مسجل)",
+  "accDhIAcceptCustodyOfThisVehicle": "أقبل عهدة هذه المركبة",
+  "accDhSignAndAcceptVehicle": "التوقيع واستلام المركبة",
+  "accDhCompleteAllRequiredFieldsToEnable": "أكمل جميع الحقول المطلوبة للتفعيل",
+  "accDhMissing": "الناقص",
+  "accDhArrivedDateTime2": "وقت الوصول",
+  "accDhDesignation2": "الوظيفة",
+  "accDhSignedHandoverPaper": "ورقة التسليم",
+  "accDhVendorReceiverSignature3": "توقيع المستلم",
+  "accDhCustodyCheckbox": "مربع قبول العهدة",
+  "accDhComplete": "مكتمل",
+  "accDhNext": "التالي",
+  "accDhPending": "قيد الانتظار",
+  "accDhDispatched": "تم الإرسال",
+  "accDhArrived2": "وصلت",
+  "accDhSignedAcceptance": "الاستلام الموقع",
+  "accDhVendorAssessmentQuotationStarts": "يبدأ تقييم المورد / عرض السعر",
+  "accDhPick": "اختيار",
+  "accDhUseNow": "الآن",
+  "accDhAttached": "مرفقة",
+  "accDhCamera": "الكاميرا",
+  "accDhGallery": "المعرض",
+  "accTlAddTimelineNote": "إضافة ملاحظة",
+  "accTlNote": "الملاحظة",
+  "accTlSaveNote": "حفظ الملاحظة",
+  "accTlNotifyParticipants": "إشعار المشاركين",
+  "accTlThisLogsTheNotificationOnThe": "يسجل هذا الإشعار في سجل القضية. التسليم للأشخاص يتم عبر محرك إشعارات الخادم.",
+  "accTlSubject": "الموضوع",
+  "accTlMessage": "الرسالة",
+  "accTlLogNotification": "تسجيل الإشعار",
+  "accTlManageRecipientGroups": "إدارة مجموعات المستلمين",
+  "accTlRecipientsAreSetByAdminPer": "يحدد المسؤول المستلمين لكل حدث ودور. المجموعات أدناه هي الأدوار التي يصل إليها كل حدث؛ العضوية من ملفات المستخدمين.",
+  "accTlVisibility": "اطلاع",
+  "accTlTime": "الوقت",
+  "accTlBy": "بواسطة",
+  "accTlTo": "إلى",
+  "accTlStatus": "الحالة",
+  "accTlElapsed": "المدة",
+  "accTlCaseTimelineNotifications": "سجل القضية والإشعارات",
+  "accTlOpen": "مفتوحة",
+  "accTlCurrentOwner": "المسؤول الحالي",
+  "accTlNextSla": "المهلة التالية",
+  "accTlDueIn": "متبقي للموعد",
+  "accTlAddTimelineNote2": "إضافة ملاحظة للسجل",
+  "accTlNotifyParticipants2": "إشعار المشاركين",
+  "accTlNotProvisionedYetOnThisDatabase": "غير مفعل بعد في قاعدة البيانات",
+  "accTlCouldNotBeReadTheFeed": "تعذرت قراءته؛ السجل لا يتضمنه",
+  "accTlCommunications": "المراسلات",
+  "accTlEvidence": "الأدلة",
+  "accTlSlaClocks": "مهل الخدمة",
+  "accTlDispatchLeg": "الإرسال",
+  "accTlGpsFix": "موقع GPS",
+  "accTlTimeline": "السجل الزمني",
+  "accTlNotifications": "الإشعارات",
+  "accTlParticipants": "المشاركون",
+  "accTlAll": "الكل",
+  "accTlActions": "الإجراءات",
+  "accTlDocuments": "المستندات",
+  "accTlSla": "المهل",
+  "accTlEmails": "البريد",
+  "accTlCompleted": "مكتمل",
+  "accTlInTransit": "قيد النقل",
+  "accTlNoRecordedEventsForThisFilter": "لا توجد أحداث مسجلة لهذا المرشح.",
+  "accTlNotificationDeliveryLog": "سجل تسليم الإشعارات",
+  "accTlNoNotificationsRecordedForThisCase": "لا توجد إشعارات مسجلة لهذه القضية.",
+  "accTlTrigger": "المحفز",
+  "accTlRecipients": "المستلمون",
+  "accTlChannel": "القناة",
+  "accTlShowStatus": "عرض الحالة",
+  "accTlViewAllNotifications": "عرض جميع الإشعارات",
+  "accTlManageRecipientGroups2": "إدارة مجموعات المستلمين",
+  "accTlRecipientsAreSetByAdminPer2": "يحدد المسؤول المستلمين لكل حدث ودور.",
+  "accTlParticipantsAndOwnership": "المشاركون والمسؤولية",
+  "accTlBy2": "بواسطة",
+  "accTlTo2": "إلى",
+  "accTlSlaMet": "تم الالتزام بالمهلة",
+  "accDhChangeNotSaved": "تعذر حفظ التغيير. حاول مرة أخرى.",
+  "accDhContactOpenFailed": "تعذر فتح جهة اتصال الورشة على هذا الجهاز.",
+  "accDhRecordDepartureFirst": "سجل وقت المغادرة أولاً.",
+  "accTlLoadFailed": "تعذر تحميل السجل. حاول مرة أخرى.",
+  "accTlOverdueBy": "متأخر {elapsed}",
+  "@accTlOverdueBy": {
+    "placeholders": {
+      "elapsed": {
+        "type": "String"
+      }
+    }
+  }
 }

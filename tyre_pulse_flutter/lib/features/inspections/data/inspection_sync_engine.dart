@@ -36,6 +36,7 @@ library;
 
 import 'dart:io';
 
+import 'package:tyre_pulse/core/database/dao/drafts_dao.dart' show DraftsDao;
 import 'package:tyre_pulse/core/database/database_constants.dart'
     show uploadConcurrency;
 import 'package:tyre_pulse/core/errors/app_error.dart';
@@ -117,22 +118,93 @@ final class InspectionSyncEngine {
   /// [InspectionSubmitOutcome.queuedWithWarning], because a submit action
   /// must never leave the inspector with nothing to show for a completed
   /// sheet.
+  ///
+  /// The draft is moved off its live `userId|ASSETNO` key onto a submitted
+  /// key (`DraftsDao.submittedInspectionDraftKey`) as part of submitting.
+  /// The queue entry is written FIRST, already pointing at the submitted
+  /// key, and the move follows; [reconcileQueuedDrafts] completes a move a
+  /// process kill interrupted. From then on a new inspection of the same
+  /// machine starts a fresh sheet instead of resuming - and later deleting -
+  /// the queued one.
   Future<InspectionSubmitResult> submitNow({
     required String draftKey,
     required InspectionPayload payload,
     required String clientUuid,
   }) async {
+    final String submittedKey = DraftsDao.isSubmittedInspectionDraftKey(
+      draftKey,
+    )
+        ? draftKey
+        : DraftsDao.submittedInspectionDraftKey(
+            draftKey: draftKey,
+            clientUuid: clientUuid,
+          );
     final QueuedInspection item = QueuedInspection(
       id: clientUuid,
-      draftKey: draftKey,
+      draftKey: submittedKey,
       payload: payload,
       createdAt: DateTime.now().toUtc(),
     );
 
     // Durable commit point FIRST - see the library comment.
     await _queue.enqueue(item);
+    if (submittedKey != draftKey) {
+      await _draftRepository.detachForSubmission(
+        fromKey: draftKey,
+        toKey: submittedKey,
+      );
+    }
 
     return _attemptDelivery(item);
+  }
+
+  /// Makes every not-yet-synced queue entry own its draft under a submitted
+  /// key. Two cases, both idempotent:
+  ///
+  /// - an entry written by an older build still points at the LIVE key
+  ///   (`userId|ASSETNO`). Its draft is moved to the submitted key and the
+  ///   entry rewritten, so reopening that machine no longer resumes the
+  ///   queued sheet and delivery no longer deletes whatever was being
+  ///   filled under the live key.
+  /// - a submission interrupted between its enqueue and its draft move: the
+  ///   move is completed from the live key the submitted key names.
+  ///
+  /// Never throws; an unreadable queue is left alone (refuse, never guess).
+  Future<void> reconcileQueuedDrafts() async {
+    final InspectionQueueReadResult read;
+    try {
+      read = await _queue.list();
+    } on Object {
+      return;
+    }
+    if (!read.isReadable) return;
+    for (final QueuedInspection item in read.items) {
+      if (item.status == InspectionQueueStatus.synced) continue;
+      try {
+        if (DraftsDao.isSubmittedInspectionDraftKey(item.draftKey)) {
+          final String? source =
+              DraftsDao.sourceOfSubmittedInspectionDraftKey(item.draftKey);
+          if (source != null) {
+            await _draftRepository.detachForSubmission(
+              fromKey: source,
+              toKey: item.draftKey,
+            );
+          }
+          continue;
+        }
+        final String submittedKey = DraftsDao.submittedInspectionDraftKey(
+          draftKey: item.draftKey,
+          clientUuid: item.id,
+        );
+        await _draftRepository.detachForSubmission(
+          fromKey: item.draftKey,
+          toKey: submittedKey,
+        );
+        await _queue.enqueue(item.copyWith(draftKey: submittedKey));
+      } on Object {
+        continue;
+      }
+    }
   }
 
   /// Retries every queue entry that has not yet synced. Intended to be
@@ -140,6 +212,7 @@ final class InspectionSyncEngine {
   /// (in case connectivity returns between the enqueue and now, on a
   /// flaky link), and when the My Inspections screen opens.
   Future<InspectionFlushSummary> flushQueue() async {
+    await reconcileQueuedDrafts();
     final InspectionQueueReadResult read = await _queue.list();
     if (!read.isReadable) {
       // Refuse rather than guess - see `InspectionQueueReadResult`'s own
@@ -179,7 +252,10 @@ final class InspectionSyncEngine {
       final Map<String, TyrePositionReading> resolved =
           await _uploadOutstandingPhotos(
         inspectionId: item.id,
-        readings: current,
+        readings: mergeDraftPhotos(
+          snapshot: item.payload.tyreConditions,
+          draft: current,
+        ),
       );
 
       final InspectionPayload resolvedPayload = item.payload.copyWith(
@@ -316,4 +392,31 @@ final class InspectionSyncEngine {
       }
     }
   }
+}
+
+/// The readings a delivery attempt sends: the queued SNAPSHOT, with only the
+/// photo fields taken from the draft.
+///
+/// The snapshot is what the inspector submitted - condition, pressure,
+/// tread, serial, `checked` AND the per-wheel notes. The draft's position
+/// rows carry no notes column, so replacing the snapshot with them (as this
+/// engine once did) silently dropped every wheel's note on the way to the
+/// server. The draft is consulted only for what it alone knows current: the
+/// local photo path each position's `DraftPhotos` row points at now. A
+/// position with a permanent [TyrePositionReading.photoUrl] keeps it.
+Map<String, TyrePositionReading> mergeDraftPhotos({
+  required Map<String, TyrePositionReading> snapshot,
+  required Map<String, TyrePositionReading> draft,
+}) {
+  final Map<String, TyrePositionReading> merged =
+      Map<String, TyrePositionReading>.of(snapshot);
+  draft.forEach((String position, TyrePositionReading fromDraft) {
+    final TyrePositionReading? base = merged[position];
+    if (base == null) return;
+    if (base.photoUrl != null) return;
+    final String? local = fromDraft.photoLocalPath;
+    if (local == null) return;
+    merged[position] = base.copyWith(photoLocalPath: local);
+  });
+  return merged;
 }

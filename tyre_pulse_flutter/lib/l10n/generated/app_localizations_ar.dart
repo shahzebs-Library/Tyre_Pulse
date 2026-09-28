@@ -2839,7 +2839,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get pmCopyCatalog =>
-      'title=مركز التحكم بالصيانة~subtitle=تحكم في عبء أعمال الصيانة اليوم~createWorkOrder=إنشاء أمر عمل~pmDue=الصيانة الوقائية المستحقة~priorityQueue=قائمة الأعمال ذات الأولوية~viewAll=عرض الكل~allWorkOrders=عرض جميع أوامر العمل~quickAccess=وصول سريع~workOrders=أوامر العمل~workOrdersHint=إنشاء وإدارة~pmSchedule=جدول الصيانة~pmScheduleHint=تخطيط ومتابعة الصيانة~inspections=الفحوصات~inspectionsHint=فحص وإبلاغ~parts=قطع الغيار~partsHint=المخزون والطلبات~tyres=الإطارات~tyresHint=السجلات والتدوير والاستبدال~overdue=متأخرة~dueSoon=مستحقة قريباً~active=الخطط النشطة~due=المستحقة الآن~all=كل الخطط~empty=لا توجد خطط صيانة~emptyDue=لا توجد صيانة وقائية مستحقة خلال 14 يوماً القادمة.~emptyAll=لا توجد خطط صيانة وقائية نشطة.~plan=خطة الصيانة~daysOverdue=يوم تأخير~daysLeft=يوم متبقٍ~noDate=لا يوجد تاريخ استحقاق~record=تسجيل الخدمة~meter=قراءة العداد~performedBy=نفذها~workshop=الورشة~partsCost=تكلفة القطع~labourCost=تكلفة العمالة~findings=الملاحظات~completed=مكتملة~partial=مكتملة جزئياً~deferred=مؤجلة~failed=غير مكتملة~save=حفظ الخدمة~invalidNumber=أدخل قيماً رقمية صحيحة.~loadFailed=تعذر تحميل خطط الصيانة.~saveFailed=تعذر حفظ سجل الخدمة. حاول مرة أخرى.';
+      'title=مركز التحكم بالصيانة~subtitle=تحكم في عبء أعمال الصيانة اليوم~createWorkOrder=إنشاء أمر عمل~pmDue=الصيانة الوقائية المستحقة~priorityQueue=قائمة الأعمال ذات الأولوية~viewAll=عرض الكل~allWorkOrders=عرض جميع أوامر العمل~quickAccess=وصول سريع~workOrders=أوامر العمل~workOrdersHint=إنشاء وإدارة~pmSchedule=جدول الصيانة~pmScheduleHint=تخطيط ومتابعة الصيانة~inspections=الفحوصات~inspectionsHint=فحص وإبلاغ~parts=قطع الغيار~partsHint=المخزون والطلبات~tyres=الإطارات~tyresHint=السجلات والتدوير والاستبدال~overdue=متأخرة~dueSoon=مستحقة قريباً~active=الخطط النشطة~due=المستحقة الآن~all=كل الخطط~empty=لا توجد خطط صيانة~emptyDue=لا توجد صيانة وقائية مستحقة خلال 14 يوماً القادمة.~emptyAll=لا توجد خطط صيانة وقائية نشطة.~plan=خطة الصيانة~daysOverdue=يوم تأخير~daysLeft=يوم متبقٍ~noDate=لا يوجد تاريخ استحقاق~record=تسجيل الخدمة~meter=قراءة العداد~performedBy=نفذها~workshop=الورشة~partsCost=تكلفة القطع~labourCost=تكلفة العمالة~findings=الملاحظات~completed=مكتملة~partial=مكتملة جزئياً~deferred=مؤجلة~failed=غير مكتملة~save=حفظ الخدمة~invalidNumber=أدخل قيماً رقمية صحيحة.~loadFailed=تعذر تحميل خطط الصيانة.~saveFailed=تعذر حفظ سجل الخدمة. حاول مرة أخرى.~openBreakdowns=الأعطال المفتوحة~activeWorkOrders=أوامر العمل النشطة~breakdown=عطل~workOrder=أمر عمل~dueToday=مستحق اليوم~since=منذ~opened=فُتح~queueEmpty=لا يوجد ما يحتاج إلى متابعة~woLoadFailed=تعذر تحميل أوامر العمل المفتوحة.~retry=إعادة المحاولة~countFailed=تعذر تحميل هذا العدد. اضغط لإعادة المحاولة.';
 
   @override
   String get stockCountCopyCatalog =>
@@ -2963,4 +2963,2980 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get workshopCopyCatalog =>
       'title=مهامي~onDuty=في المناوبة~offDuty=خارج المناوبة~checkIn=تسجيل الحضور~checkOut=تسجيل الانصراف~checkInHint=سجّل حضورك للمناوبة قبل تسجيل العمل.~myJobs=مهامي~emptyTitle=لا توجد مهام مفتوحة~emptyMessage=لا توجد مهمة مفتوحة مسندة إليك حاليًا.~loadError=تعذر تحميل مهامك الآن.~selectJobTitle=اختر مهمة~selectJobMsg=اختر إحدى مهامك أولًا.~checkInFirstTitle=سجّل الحضور أولًا~selectTaskTitle=اختر خطوة~selectTaskMsg=اختر الخطوة التي تعمل عليها أولًا.~tasks=الخطوات~confirmTitle=إكمال الخطوة؟~confirmMsg=سيتم تسجيل الخطوة كمكتملة وإرسالها للفحص.~cancel=إلغاء~noteHint=أضف ملاحظة (اختياري)~record=تسجيل~queued=تم الحفظ على هذا الجهاز. ستتم المزامنة تلقائيًا.~saveFailed=تعذر حفظ النشاط على هذا الجهاز. حاول مرة أخرى.~todayTitle=إنتاجيتي اليوم~productive=منتج~blocked=متوقف~unassigned=غير مسند~breakTime=استراحة~completed=الخطوات المكتملة~due=الاستحقاق~ok=حسنًا~a_start_job=بدء العمل~a_pause_job=إيقاف مؤقت~a_resume_job=استئناف العمل~a_complete_task=إكمال الخطوة~a_request_parts=طلب قطع غيار~a_request_assistance=طلب مساعدة~a_waiting_approval=بانتظار الموافقة~a_waiting_vehicle=بانتظار المركبة~a_waiting_tools=بانتظار الأدوات~a_start_break=بدء الاستراحة~a_end_break=إنهاء الاستراحة~a_report_problem=الإبلاغ عن مشكلة~s_working=يعمل~s_available=متاح~s_waiting_parts=بانتظار القطع~s_waiting_approval=بانتظار الموافقة~s_waiting_tools=بانتظار الأدوات~s_waiting_vehicle=بانتظار المركبة~s_on_break=في استراحة~s_training=تدريب~s_awaiting_inspection=بانتظار الفحص~s_off_duty=خارج المناوبة~s_absent=غائب~photoLabel=صورة (اختياري)~takePhoto=الكاميرا~pickPhoto=المعرض~removePhoto=إزالة الصورة~photoLimit=حتى 3 صور~photoNotAttached=تم التسجيل. تعذّر إرفاق الصورة بدون اتصال.';
+
+  @override
+  String get homeTodaysWork => 'عمل اليوم';
+
+  @override
+  String get homeAwaitingSignatureTag => 'بانتظار التوقيع';
+
+  @override
+  String get homeResumeInspection => 'استئناف الفحص';
+
+  @override
+  String get homeTyreIssueNeedsAttention => 'مشكلة في الإطار تحتاج إلى متابعة';
+
+  @override
+  String get profileSectionWorkspace => 'مساحة العمل';
+
+  @override
+  String get profileEmployeeIdLabel => 'الرقم الوظيفي';
+
+  @override
+  String get profileLanguageLabel => 'لغة التطبيق';
+
+  @override
+  String get profileSectionDisplay => 'اللغة والعرض';
+
+  @override
+  String get profileThemeLabel => 'المظهر';
+
+  @override
+  String get profileThemeLight => 'فاتح';
+
+  @override
+  String get profileThemeDark => 'داكن';
+
+  @override
+  String get profileThemeSystem => 'إعداد النظام';
+
+  @override
+  String get profileSectionOffline => 'العمل دون اتصال والبيانات';
+
+  @override
+  String get profileUnsyncedFooter =>
+      'تبقى المسودات غير المتزامنة محفوظة بأمان على هذا الجهاز';
+
+  @override
+  String get loginHeroTitle => 'عمليات PMV متكاملة';
+
+  @override
+  String get loginSignInSubtitle => 'سجّل الدخول إلى العمليات المسندة إليك';
+
+  @override
+  String get vehiclesInspectNow => 'افحص الآن';
+
+  @override
+  String get inspectionPreviousTyre => 'السابق';
+
+  @override
+  String get inspectionNextTyre => 'التالي';
+
+  @override
+  String get inspectionProgressTitle => 'تقدم الفحص';
+
+  @override
+  String inspectionPercentComplete(int percent) {
+    return 'مكتمل بنسبة $percent%';
+  }
+
+  @override
+  String inspectionAxleNumber(int number) {
+    return 'المحور $number';
+  }
+
+  @override
+  String get inspectionTyresLabel => 'الإطارات';
+
+  @override
+  String get inspectionScanAssetButton => 'مسح الأصل';
+
+  @override
+  String get inspectionSelectedAssetTitle => 'الأصل المحدد';
+
+  @override
+  String get profileSyncUnknownFooter =>
+      'تعذّر التحقق من المزامنة المعلقة. قد يكون هناك عمل غير متزامن على هذا الجهاز';
+
+  @override
+  String get homeRecentInspectionsTitle => 'فحوصاتك الأخيرة';
+
+  @override
+  String get homeAssetNotChecked => 'لم يُفحص';
+
+  @override
+  String get homeNothingForRoleTitle => 'لا يوجد ما يلزم فحصه لدورك';
+
+  @override
+  String get tyreActionRotateSubtitle => 'سجّل نقل هذا الإطار إلى موضع آخر';
+
+  @override
+  String get tyreActionRotateFromLabel => 'الموضع الحالي';
+
+  @override
+  String get tyreActionRotateToLabel => 'الموضع الجديد';
+
+  @override
+  String get tyreActionRotateToHint => 'مثال: RHF1';
+
+  @override
+  String get tyreActionRotateNotesLabel => 'ملاحظات (اختياري)';
+
+  @override
+  String get tyreActionRotateNotesHint => 'أي شيء يجب أن يعرفه الفني التالي';
+
+  @override
+  String get tyreActionRotateOnlineNote =>
+      'يتطلب اتصالاً بالإنترنت. تُحفظ عمليات التدوير مباشرة على الخادم.';
+
+  @override
+  String get tyreActionRotateSubmit => 'تسجيل التدوير';
+
+  @override
+  String get tyreActionRotateToRequiredTitle => 'الموضع الجديد مطلوب';
+
+  @override
+  String get tyreActionRotateToRequiredMessage =>
+      'أدخل الموضع الذي نُقل إليه هذا الإطار.';
+
+  @override
+  String get tyreActionRotateSamePositionMessage =>
+      'يجب أن يختلف الموضع الجديد عن الموضع الحالي.';
+
+  @override
+  String get tyreActionRotateSavedTitle => 'تم تسجيل التدوير';
+
+  @override
+  String get tyreActionRotateSavedMessage =>
+      'تم حفظ التدوير في سجل خدمة هذا الإطار. ولا يغيّر الموضع الظاهر في سجل الإطارات.';
+
+  @override
+  String get tyreActionRotateFailedTitle => 'لم يتم حفظ التدوير';
+
+  @override
+  String get tyreActionRotateOfflineMessage =>
+      'لا يوجد اتصال. تُحفظ عمليات التدوير عبر الإنترنت فقط، لذلك لم يُسجَّل هذا التدوير. حاول مرة أخرى عند الاتصال.';
+
+  @override
+  String get tyreActionRotateFailedMessage =>
+      'تعذّر حفظ التدوير. حاول مرة أخرى.';
+
+  @override
+  String driverWsTerm(String term) {
+    String _temp0 = intl.Intl.selectLogic(
+      term,
+      {
+        'create_driver': 'إضافة سائق موثّق',
+        'link_account': 'ربط حساب الدخول',
+        'assign_team': 'تعيين الفريق والمركبة',
+        'create_fine': 'تسجيل مخالفة مرورية',
+        'link_record': 'ربط سجل عمل',
+        'respond_fine': 'مراجعة وتوقيع',
+        'review_fine': 'مراجعة الرد أو السداد',
+        'correct_fine': 'تصحيح المخالفة',
+        'reassign_fine': 'إعادة إسناد المخالفة',
+        'direct_payment': 'سأسدد مباشرة',
+        'already_paid': 'تم السداد بالفعل',
+        'dispute': 'اعتراض أو إسناد غير صحيح',
+        'company_recovery': 'طلب سداد الشركة أو الاسترداد',
+        'instalments': 'طلب التقسيط',
+        'approve': 'اعتماد الطلب',
+        'return': 'إعادة للسائق',
+        'payment': 'تسجيل سداد متحقق منه',
+        'cancel': 'إلغاء المخالفة',
+        'reopen': 'إعادة فتح',
+        'open': 'مفتوحة',
+        'settled': 'مسددة',
+        'cancelled': 'ملغاة',
+        'awaiting_response': 'بانتظار الرد',
+        'submitted': 'تم إرسال الرد',
+        'returned': 'أعيدت للسائق',
+        'approved': 'معتمدة',
+        'driver_documents': 'مستندات السائق',
+        'driver_training': 'تدريب السائق',
+        'driver_coaching': 'توجيه السائق',
+        'driver_safety_events': 'أحداث سلامة السائق',
+        'driver_expenses': 'مصروفات السائق',
+        'tyre_records': 'سجلات الإطارات',
+        'accidents': 'الحوادث',
+        'wo_tasks': 'مهام أوامر العمل',
+        'checklist_submissions': 'قوائم الفحص المرسلة',
+        'odometer_logs': 'قراءات عداد المسافات',
+        'wash_records': 'سجلات الغسيل',
+        'other': '',
+      },
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String driverWsRecordField(String field) {
+    String _temp0 = intl.Intl.selectLogic(
+      field,
+      {
+        'country': 'الدولة',
+        'site': 'الموقع',
+        'asset_no': 'رقم الأصل',
+        'driver_name': 'اسم السائق',
+        'title': 'العنوان',
+        'doc_type': 'نوع المستند',
+        'doc_number': 'رقم المستند',
+        'expiry_date': 'تاريخ الانتهاء',
+        'course_name': 'اسم الدورة',
+        'result': 'النتيجة',
+        'completed_date': 'تاريخ الإكمال',
+        'coaching_status': 'حالة التوجيه',
+        'period': 'الفترة',
+        'event_type': 'نوع الحدث',
+        'severity': 'الخطورة',
+        'event_at': 'وقت الحدث',
+        'category': 'الفئة',
+        'amount': 'المبلغ',
+        'currency': 'العملة',
+        'expense_date': 'تاريخ المصروف',
+        'status': 'الحالة',
+        'incident_date': 'تاريخ الحادث',
+        'accident_type': 'نوع الحادث',
+        'due_date': 'تاريخ الاستحقاق',
+        'created_at': 'تاريخ الإنشاء',
+        'reading_date': 'تاريخ القراءة',
+        'odometer_km': 'عداد المسافات (كم)',
+        'wash_date': 'تاريخ الغسيل',
+        'template_name': 'اسم قائمة الفحص',
+        'approval_status': 'حالة الاعتماد',
+        'brand': 'العلامة التجارية',
+        'serial_no': 'الرقم التسلسلي',
+        'issue_date': 'تاريخ الإصدار',
+        'qty': 'الكمية',
+        'cost_per_tyre': 'التكلفة لكل إطار',
+        'other': '',
+      },
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String driverWsEvidenceKind(String kind) {
+    String _temp0 = intl.Intl.selectLogic(
+      kind,
+      {
+        'payment': 'إيصال السداد',
+        'supporting': 'صورة داعمة',
+        'notice': 'المخالفة الرسمية',
+        'other': '',
+      },
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get driverWsTitle => 'مساحة عمل السائق';
+
+  @override
+  String get driverWsEntrySubtitle =>
+      'مخالفاتي وتكليفات الفريق والعمل المرتبط بي';
+
+  @override
+  String get driverWsLoadError =>
+      'مساحة العمل غير متاحة. تحقق من الاتصال وربط الحساب والصلاحيات ثم حدّث.';
+
+  @override
+  String get driverWsRefresh => 'تحديث';
+
+  @override
+  String get driverWsSignInRequired => 'سجّل الدخول لعرض مساحة عملك.';
+
+  @override
+  String get driverWsOfflineNotice =>
+      'عرض محفوظ دون اتصال. اتصل وحدّث قبل الرد أو المراجعة.';
+
+  @override
+  String get driverWsTruncatedNotice =>
+      'هذا العرض غير مكتمل لأنه بلغ الحد الأقصى للسجلات. التصدير معطّل.';
+
+  @override
+  String get driverWsSearchDrivers => 'البحث عن السائقين';
+
+  @override
+  String get driverWsNoDrivers =>
+      'لا يوجد سائق مرتبط أو فريق مكلّف. اطلب من مدير مخوّل التحقق من حسابك وتكليفك.';
+
+  @override
+  String get driverWsSharePdf => 'مشاركة كشف المخالفات PDF';
+
+  @override
+  String get driverWsReportShareError =>
+      'تعذّرت مشاركة التقرير. حاول مرة أخرى.';
+
+  @override
+  String get driverWsTrafficFines => 'المخالفات المرورية';
+
+  @override
+  String get driverWsNoFines => 'لا توجد مخالفات مسجلة.';
+
+  @override
+  String get driverWsAssignmentHistory => 'سجل تكليفات الفريق والمركبة';
+
+  @override
+  String get driverWsNoAssignment => 'لا يوجد تكليف مسجل.';
+
+  @override
+  String get driverWsAssignmentCurrent => 'حالي';
+
+  @override
+  String get driverWsAssignmentPrevious => 'سابق';
+
+  @override
+  String get driverWsNoVehicle => 'بدون مركبة';
+
+  @override
+  String get driverWsNotAssigned => 'غير معيّن';
+
+  @override
+  String get driverWsPresent => 'حتى الآن';
+
+  @override
+  String get driverWsAssignedWork => 'العمل المكلّف به';
+
+  @override
+  String get driverWsNotSupplied => 'غير مُدخل';
+
+  @override
+  String get driverWsVerifiedRecords => 'سجلات العمل والسائق الموثّقة';
+
+  @override
+  String get driverWsUnmatchedNotice =>
+      'تتطلب السجلات السابقة غير المرتبطة التحقق من الهوية قبل عرضها هنا.';
+
+  @override
+  String get driverWsRecordUnavailable => 'السجل لم يعد متاحاً';
+
+  @override
+  String get driverWsActivityHistory => 'سجل النشاط';
+
+  @override
+  String get driverWsRecordedUser => 'مستخدم مسجّل';
+
+  @override
+  String get driverWsPhotoError =>
+      'تعذّر إرفاق الصورة. لم تُحذف صورتك المحلية.';
+
+  @override
+  String get driverWsAcknowledgeRespond => 'الإقرار بالاستلام والرد';
+
+  @override
+  String get driverWsReviewPayment => 'مراجعة أو تسجيل سداد';
+
+  @override
+  String get driverWsEvidenceOpenError => 'تعذّر فتح الدليل.';
+
+  @override
+  String get driverWsAttachReceipt => 'إرفاق صورة إيصال';
+
+  @override
+  String get driverWsAttachSupporting => 'إرفاق صورة داعمة';
+
+  @override
+  String get driverWsAttachNotice => 'إرفاق صورة المخالفة الرسمية';
+
+  @override
+  String get driverWsSignatureUnavailable => 'التوقيع غير متاح.';
+
+  @override
+  String get driverWsViewSignature => 'عرض الإقرار الموقّع';
+
+  @override
+  String get driverWsSignatureDisplayError => 'تعذّر عرض التوقيع.';
+
+  @override
+  String get driverWsReceiptStatement =>
+      'أقر باستلام هذه المخالفة ومراجعتها وأقدم الرد الموضح أعلاه. الاستلام لا يعني الإقرار بالمسؤولية. طلب السداد أو الاسترداد لا يجيز سداداً تلقائياً أو خصماً من الراتب.';
+
+  @override
+  String get driverWsDraftReadError =>
+      'تعذّرت قراءة المسودة المحفوظة. لم يُستبدل أي شيء.';
+
+  @override
+  String get driverWsSubmitError =>
+      'تعذّر الإرسال. تحقق من الحقول المطلوبة والاتصال، وحدّث إذا تغيّرت المخالفة.';
+
+  @override
+  String get driverWsConnectionRequired =>
+      'يتطلب الإرسال اتصالاً للتحقق من آخر نسخة للمخالفة وصلاحياتك.';
+
+  @override
+  String get driverWsDraftSaved => 'تم حفظ المسودة ولم تُرسل بعد.';
+
+  @override
+  String get driverWsDraftSaveError => 'تعذّر حفظ المسودة.';
+
+  @override
+  String get driverWsSaveDraft => 'حفظ مسودة على هذا الجهاز';
+
+  @override
+  String get driverWsReviewDisclaimer =>
+      'يسجّل الاعتماد الترتيب الذي تمت مراجعته ولا ينفّذ سداداً أو خصماً من الراتب. سجّل الدفعات المتحقق منها فقط.';
+
+  @override
+  String get driverWsSaving => 'جارٍ الحفظ...';
+
+  @override
+  String get driverWsSubmit => 'إرسال';
+
+  @override
+  String get driverWsErrResolution => 'اختر طريقة المعالجة.';
+
+  @override
+  String get driverWsErrExplanation => 'وضّح طلبك بما في ذلك الترتيب المقترح.';
+
+  @override
+  String get driverWsErrPaymentReference => 'أدخل مرجع السداد.';
+
+  @override
+  String get driverWsErrProposedDate => 'اختر تاريخ السداد المقترح.';
+
+  @override
+  String get driverWsErrSignature => 'راجع الإقرار ووقّع قبل الإرسال.';
+
+  @override
+  String get driverWsOptionsError => 'الخيارات غير متاحة. حاول مرة أخرى.';
+
+  @override
+  String get driverWsSearch => 'بحث';
+
+  @override
+  String get driverWsClearSelection => 'بدون أو مسح الاختيار';
+
+  @override
+  String get driverWsPreviousOptions => 'الخيارات السابقة';
+
+  @override
+  String get driverWsMoreOptions => 'مزيد من الخيارات';
+
+  @override
+  String get driverWsFieldEmployeeId => 'الرقم الوظيفي';
+
+  @override
+  String get driverWsFieldDriverName => 'اسم السائق';
+
+  @override
+  String get driverWsFieldCountry => 'الدولة';
+
+  @override
+  String get driverWsFieldSite => 'الموقع';
+
+  @override
+  String get driverWsFieldLoginAccount => 'حساب الدخول (بدون يلغي الربط)';
+
+  @override
+  String get driverWsFieldIdentityReason => 'التحقق من الهوية أو السبب';
+
+  @override
+  String get driverWsFieldSupervisor => 'المشرف';
+
+  @override
+  String get driverWsFieldManager => 'المدير';
+
+  @override
+  String get driverWsFieldVehicle => 'المركبة';
+
+  @override
+  String get driverWsFieldAssignmentReason => 'سبب التكليف';
+
+  @override
+  String get driverWsFieldAuthority => 'الجهة المُصدرة';
+
+  @override
+  String get driverWsFieldNoticeReference => 'رقم المخالفة';
+
+  @override
+  String get driverWsFieldIncidentAt =>
+      'تاريخ ووقت المخالفة (YYYY-MM-DDTHH:mm)';
+
+  @override
+  String get driverWsFieldDueDate => 'تاريخ الاستحقاق (YYYY-MM-DD)';
+
+  @override
+  String get driverWsFieldAmount => 'قيمة المخالفة';
+
+  @override
+  String get driverWsFieldCurrency => 'رمز العملة';
+
+  @override
+  String get driverWsFieldNoticeDetails => 'تفاصيل المخالفة';
+
+  @override
+  String get driverWsFieldAssignmentEvidence => 'دليل إسناد المخالفة للسائق';
+
+  @override
+  String get driverWsFieldRecordType => 'نوع السجل';
+
+  @override
+  String get driverWsFieldExistingRecord => 'السجل الموجود';
+
+  @override
+  String get driverWsFieldIdentityMethod => 'كيفية التحقق من هوية السائق';
+
+  @override
+  String get driverWsFieldResolution => 'طريقة المعالجة المطلوبة';
+
+  @override
+  String get driverWsFieldExplanation => 'التوضيح أو الترتيب المقترح';
+
+  @override
+  String get driverWsFieldPaymentReference => 'مرجع السداد إن تم';
+
+  @override
+  String get driverWsFieldProposedDate => 'تاريخ السداد المقترح (YYYY-MM-DD)';
+
+  @override
+  String get driverWsFieldDecision => 'القرار';
+
+  @override
+  String get driverWsFieldReviewReason => 'سبب المراجعة أو الترتيب المعتمد';
+
+  @override
+  String get driverWsFieldVerifiedReference => 'مرجع السداد المتحقق منه';
+
+  @override
+  String get driverWsFieldVerifiedAmount => 'قيمة السداد المتحقق منها';
+
+  @override
+  String get driverWsPdfColNotice => 'المخالفة';
+
+  @override
+  String get driverWsPdfColCurrency => 'العملة';
+
+  @override
+  String get driverWsPdfColAmount => 'المبلغ';
+
+  @override
+  String get driverWsPdfColPaid => 'المدفوع';
+
+  @override
+  String get driverWsPdfColStatus => 'الحالة';
+
+  @override
+  String get driverWsPdfColResponse => 'الرد';
+
+  @override
+  String driverWsDriverSubtitle(String site, String open, String awaiting) {
+    return '$site · $open مخالفات مفتوحة · $awaiting بانتظار الرد';
+  }
+
+  @override
+  String driverWsOutstanding(String amount, String currency) {
+    return 'المستحق: $amount $currency';
+  }
+
+  @override
+  String driverWsSupervisorLine(String name) {
+    return 'المشرف: $name';
+  }
+
+  @override
+  String driverWsManagerLine(String name) {
+    return 'المدير: $name';
+  }
+
+  @override
+  String driverWsAssignmentPeriod(String start, String end) {
+    return 'من $start إلى $end';
+  }
+
+  @override
+  String driverWsAssignmentLine(String reason) {
+    return 'الإسناد: $reason';
+  }
+
+  @override
+  String driverWsDueLine(String due, String paid) {
+    return 'الاستحقاق: $due · المدفوع: $paid';
+  }
+
+  @override
+  String driverWsPdfTitle(String name) {
+    return 'كشف السائق: $name';
+  }
+
+  @override
+  String driverWsPdfEmployeeId(String id) {
+    return 'الرقم الوظيفي: $id';
+  }
+
+  @override
+  String get vehicleClassTransitMixer => 'خلاطة خرسانة متنقلة';
+
+  @override
+  String get vehicleClassConcretePump => 'مضخة خرسانة';
+
+  @override
+  String get vehicleClassLinePump => 'مضخة خط محمولة على شاحنة';
+
+  @override
+  String get vehicleClassStaffBus => 'حافلة موظفين';
+
+  @override
+  String get vehicleClassStaffVan => 'فان موظفين';
+
+  @override
+  String get vehicleClassDoubleCabPickup => 'بيك أب بكابينة مزدوجة';
+
+  @override
+  String get vehicleClassWheelLoader => 'لودر بعجلات';
+
+  @override
+  String get vehicleClassSkidSteerLoader => 'لودر انزلاقي التوجيه';
+
+  @override
+  String get vehicleClassTowablePump => 'مضخة خرسانة قابلة للقطر';
+
+  @override
+  String get vehicleClassStationaryPump => 'مضخة خرسانة ثابتة';
+
+  @override
+  String get vehicleClassGenerator => 'مولد مغلق';
+
+  @override
+  String get vehicleClassChiller => 'مبرد صناعي';
+
+  @override
+  String get vehicleClassWaterChiller => 'مبرد مياه صناعي';
+
+  @override
+  String get vehicleClassBatchingPlant => 'محطة خلط الخرسانة';
+
+  @override
+  String get vehicleClassPlacingBoom => 'ذراع صب خرسانة قائم بذاته';
+
+  @override
+  String vehicleClassConcretePumpAxles(int axles) {
+    return 'مضخة خرسانة · $axles محاور';
+  }
+
+  @override
+  String vehicleClassLinePumpAxles(int axles) {
+    return 'مضخة خط محمولة على شاحنة · $axles محاور';
+  }
+
+  @override
+  String get scannerCameraStartFailedTitle => 'تعذّر تشغيل الكاميرا';
+
+  @override
+  String get scannerCameraStartFailedMessage =>
+      'قد يكون تطبيق آخر يستخدمها أو توقفت بشكل غير متوقع. حاول مرة أخرى أو اكتب الرمز أدناه.';
+
+  @override
+  String get managementOverviewSiteRollup => 'المواقع في لمحة';
+
+  @override
+  String get managementOverviewSiteRollupEmpty =>
+      'لم يسجل أي موقع إطارات في هذه الفترة.';
+
+  @override
+  String get managementOverviewAtRiskShare =>
+      'الإطارات ذات الخطورة العالية أو الحرجة';
+
+  @override
+  String get managementReportsShare => 'مشاركة التقرير PDF';
+
+  @override
+  String get managementReportsShareError =>
+      'تعذّرت مشاركة التقرير. حاول مرة أخرى.';
+
+  @override
+  String get managementReportsPdfMetric => 'المؤشر';
+
+  @override
+  String get managementReportsPdfValue => 'القيمة';
+
+  @override
+  String get managementReportsPdfShare => 'النسبة';
+
+  @override
+  String get managementTeamRole => 'الدور';
+
+  @override
+  String get managementTeamUsername => 'اسم المستخدم';
+
+  @override
+  String get managementTeamSite => 'الموقع';
+
+  @override
+  String get managementTeamCountry => 'الدولة';
+
+  @override
+  String get managementTeamPhone => 'الهاتف';
+
+  @override
+  String get managementTeamEmail => 'البريد الإلكتروني';
+
+  @override
+  String get managementTeamStatus => 'الحالة';
+
+  @override
+  String get managementTeamApproved => 'معتمد';
+
+  @override
+  String get managementTeamLastLogin => 'آخر تسجيل دخول';
+
+  @override
+  String get managementTeamNotRecorded => 'غير مسجل';
+
+  @override
+  String get managementTeamCall => 'اتصال';
+
+  @override
+  String get managementTeamSendEmail => 'إرسال بريد';
+
+  @override
+  String get managementTeamActionError =>
+      'هذا الإجراء غير متاح على هذا الجهاز.';
+
+  @override
+  String managementOverviewSiteTyres(String count) {
+    return '$count إطارات';
+  }
+
+  @override
+  String managementOverviewSiteShare(String percent) {
+    return '$percent% من إطارات الأسطول';
+  }
+
+  @override
+  String managementReportsPdfPeriod(int days) {
+    return 'الفترة: آخر $days يوماً';
+  }
+
+  @override
+  String managementReportsPdfCurrency(String code) {
+    return 'العملة: $code';
+  }
+
+  @override
+  String get adminHubTitle => 'لوحة الإدارة';
+
+  @override
+  String get adminHubSubtitle => 'المستخدمون والصلاحيات والموافقات والمواقع';
+
+  @override
+  String get adminHubPendingApprovals => 'موافقات معلقة';
+
+  @override
+  String get adminHubPendingSignups => 'تسجيلات معلقة';
+
+  @override
+  String get adminHubLockedUsers => 'مستخدمون مقفلون';
+
+  @override
+  String get adminHubCountUnavailable => 'تعذر التحميل';
+
+  @override
+  String get adminHubSectionManage => 'الإدارة';
+
+  @override
+  String get adminHubSectionMore => 'التقارير والفريق';
+
+  @override
+  String get adminHubUsersTitle => 'المستخدمون';
+
+  @override
+  String get adminHubUsersSubtitle => 'الموافقة والقفل وتغيير الأدوار';
+
+  @override
+  String get adminHubAccessTitle => 'صلاحيات التطبيق';
+
+  @override
+  String get adminHubAccessSubtitle => 'السماح بوحدات التطبيق أو منعها لكل شخص';
+
+  @override
+  String get adminHubApprovalsTitle => 'الموافقات';
+
+  @override
+  String get adminHubApprovalsSubtitle => 'فحوصات وقوائم تحقق بانتظار التوقيع';
+
+  @override
+  String get adminHubSitesTitle => 'المواقع';
+
+  @override
+  String get adminHubSitesSubtitle => 'المناطق وحالة التفعيل';
+
+  @override
+  String get adminHubAiTitle => 'محادثة الذكاء الاصطناعي للأسطول';
+
+  @override
+  String get adminHubAiSubtitle => 'اطرح أسئلة حول إدارة الأسطول';
+
+  @override
+  String get adminHubOpenModule => 'فتح هذه الوحدة';
+
+  @override
+  String get adminModuleInspect => 'فحص جديد';
+
+  @override
+  String get adminModuleScan => 'مسح';
+
+  @override
+  String get adminModuleSerial => 'البحث بالرقم التسلسلي';
+
+  @override
+  String get adminModuleTyreChange => 'تغيير الإطار';
+
+  @override
+  String get adminModuleChecklists => 'قوائم التحقق';
+
+  @override
+  String get adminModuleMeter => 'سجل العداد';
+
+  @override
+  String get adminModuleWashing => 'غسيل المركبات';
+
+  @override
+  String get adminModuleReportIssue => 'الإبلاغ عن مشكلة';
+
+  @override
+  String get adminModuleRepairRequest => 'طلب إصلاح';
+
+  @override
+  String get adminModuleRecords => 'سجلات الإطارات';
+
+  @override
+  String get adminModuleVehicles => 'المركبات';
+
+  @override
+  String get adminModuleHistory => 'السجل';
+
+  @override
+  String get adminModuleAlerts => 'التنبيهات';
+
+  @override
+  String get adminModuleCalendar => 'التقويم';
+
+  @override
+  String get adminModuleAccidents => 'الحوادث';
+
+  @override
+  String get adminModuleReportAccident => 'تسجيل حادث';
+
+  @override
+  String get adminModuleWorkorders => 'أوامر العمل';
+
+  @override
+  String get adminModuleRca => 'السبب الجذري';
+
+  @override
+  String get adminModuleTasks => 'المهام';
+
+  @override
+  String get adminModuleStock => 'جرد المخزون';
+
+  @override
+  String get adminModulePm => 'الصيانة المستحقة';
+
+  @override
+  String get adminModuleWorkshop => 'مهامي';
+
+  @override
+  String get adminModuleOverview => 'نظرة عامة';
+
+  @override
+  String get adminModuleReports => 'التقارير';
+
+  @override
+  String get adminModuleAnalytics => 'التحليلات';
+
+  @override
+  String get adminModuleStockManage => 'إدارة المخزون';
+
+  @override
+  String get adminModuleAi => 'الذكاء الاصطناعي للأسطول';
+
+  @override
+  String get adminModuleTeam => 'الفريق';
+
+  @override
+  String get adminModuleApprovals => 'الموافقات';
+
+  @override
+  String get adminModuleAdmin => 'لوحة الإدارة';
+
+  @override
+  String get adminModuleUsers => 'إدارة المستخدمين';
+
+  @override
+  String get adminUsersTitle => 'المستخدمون';
+
+  @override
+  String adminUsersCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count مستخدم',
+      many: '$count مستخدمًا',
+      few: '$count مستخدمين',
+      two: 'مستخدمان',
+      one: 'مستخدم واحد',
+      zero: 'لا يوجد مستخدمون',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get adminUsersSearchHint =>
+      'ابحث بالاسم أو اسم المستخدم أو الرقم الوظيفي';
+
+  @override
+  String get adminUsersFilterAll => 'الكل';
+
+  @override
+  String get adminUsersStatusPending => 'معلق';
+
+  @override
+  String get adminUsersStatusActive => 'نشط';
+
+  @override
+  String get adminUsersStatusLocked => 'مقفل';
+
+  @override
+  String get adminUsersAllRoles => 'كل الأدوار';
+
+  @override
+  String get adminUsersEmptyTitle => 'لا يوجد مستخدمون مطابقون';
+
+  @override
+  String get adminUsersEmptyMessage => 'جرّب بحثًا أو تصفية أخرى.';
+
+  @override
+  String get adminUsersLoadFailed => 'تعذر تحميل المستخدمين.';
+
+  @override
+  String get adminUsersReadOnlyNote =>
+      'لا يمكن تعديل المستخدمين إلا لمسؤول أعلى. يمكنك عرض القائمة.';
+
+  @override
+  String get adminUsersSelfNote => 'هذا حسابك. لا يمكنك قفله أو تغيير دوره.';
+
+  @override
+  String get adminUsersNoName => 'مستخدم بلا اسم';
+
+  @override
+  String get adminUsersNoRole => 'لا يوجد دور مسند';
+
+  @override
+  String get adminUsersSuperAdminBadge => 'مسؤول أعلى';
+
+  @override
+  String get adminUsersFieldRole => 'الدور';
+
+  @override
+  String get adminUsersFieldUsername => 'اسم المستخدم';
+
+  @override
+  String get adminUsersFieldEmployeeId => 'الرقم الوظيفي';
+
+  @override
+  String get adminUsersFieldEmail => 'البريد الإلكتروني';
+
+  @override
+  String get adminUsersFieldSite => 'الموقع';
+
+  @override
+  String get adminUsersFieldCountry => 'الدولة';
+
+  @override
+  String get adminUsersFieldJoined => 'تاريخ الانضمام';
+
+  @override
+  String get adminUsersFieldPendingReason => 'ملاحظة التسجيل';
+
+  @override
+  String get adminUsersActionApprove => 'موافقة';
+
+  @override
+  String get adminUsersActionLock => 'قفل';
+
+  @override
+  String get adminUsersActionUnlock => 'إلغاء القفل';
+
+  @override
+  String get adminUsersActionDeactivate => 'إلغاء التفعيل';
+
+  @override
+  String get adminUsersActionSetRole => 'تغيير الدور';
+
+  @override
+  String get adminUsersConfirmApproveTitle => 'الموافقة على هذا المستخدم؟';
+
+  @override
+  String adminUsersConfirmApproveMessage(String name) {
+    return 'سيتمكن $name من تسجيل الدخول واستخدام التطبيق.';
+  }
+
+  @override
+  String get adminUsersConfirmLockTitle => 'قفل هذا المستخدم؟';
+
+  @override
+  String adminUsersConfirmLockMessage(String name) {
+    return 'لن يتمكن $name من تسجيل الدخول حتى يُلغى القفل.';
+  }
+
+  @override
+  String get adminUsersConfirmUnlockTitle => 'إلغاء قفل هذا المستخدم؟';
+
+  @override
+  String adminUsersConfirmUnlockMessage(String name) {
+    return 'سيتمكن $name من تسجيل الدخول مجددًا.';
+  }
+
+  @override
+  String get adminUsersDeactivateTitle => 'إلغاء تفعيل هذا المستخدم';
+
+  @override
+  String adminUsersDeactivateMessage(String name) {
+    return 'سيفقد $name الوصول وسيُقفل حسابه. السبب مطلوب.';
+  }
+
+  @override
+  String get adminUsersSetRoleTitle => 'تغيير الدور';
+
+  @override
+  String adminUsersSetRoleMessage(String name) {
+    return 'اختر الدور الجديد لـ $name. السبب مطلوب.';
+  }
+
+  @override
+  String get adminUsersReasonLabel => 'السبب';
+
+  @override
+  String get adminUsersReasonRequired => 'أدخل السبب.';
+
+  @override
+  String get adminUsersRoleRequired => 'اختر دورًا.';
+
+  @override
+  String get adminUsersActionDone => 'تم الحفظ.';
+
+  @override
+  String get adminUsersActionFailed => 'تعذر حفظ التغيير.';
+
+  @override
+  String get adminAccessTitle => 'صلاحيات التطبيق';
+
+  @override
+  String get adminAccessPickUser => 'اختر شخصًا';
+
+  @override
+  String get adminAccessChangeUser => 'تغيير الشخص';
+
+  @override
+  String get adminAccessIntro =>
+      'تنطبق التعديلات على تطبيق الهاتف لهذا الشخص فقط. الافتراضي يتبع دوره.';
+
+  @override
+  String get adminAccessDefault => 'افتراضي';
+
+  @override
+  String get adminAccessAllow => 'سماح';
+
+  @override
+  String get adminAccessDeny => 'منع';
+
+  @override
+  String get adminAccessRoleDefaultAllowed => 'افتراضي الدور: مسموح';
+
+  @override
+  String get adminAccessRoleDefaultDenied => 'افتراضي الدور: غير مسموح';
+
+  @override
+  String get adminAccessRoleDefaultAdminOnly => 'للمسؤولين فقط افتراضيًا';
+
+  @override
+  String get adminAccessAdminNote =>
+      'يحتفظ المسؤولون والمسؤولون الأعلى دائمًا بصلاحيات كاملة.';
+
+  @override
+  String get adminAccessReadOnlyNote =>
+      'لا يمكن تغيير الصلاحيات إلا لمسؤول أعلى.';
+
+  @override
+  String get adminAccessLoadFailed => 'تعذر تحميل صلاحيات هذا الشخص.';
+
+  @override
+  String get adminAccessSaveFailed => 'تعذر تحديث الصلاحيات.';
+
+  @override
+  String get adminAccessSaved => 'تم تحديث الصلاحيات.';
+
+  @override
+  String get adminAccessGroupField => 'الميدان';
+
+  @override
+  String get adminAccessGroupFleet => 'الأسطول';
+
+  @override
+  String get adminAccessGroupMaintenance => 'الصيانة';
+
+  @override
+  String get adminAccessGroupManagement => 'الإدارة';
+
+  @override
+  String get adminAccessGroupAdmin => 'المسؤول';
+
+  @override
+  String get adminApprovalsTabInspections => 'الفحوصات';
+
+  @override
+  String get adminApprovalsTabChecklists => 'قوائم التحقق';
+
+  @override
+  String get adminSitesTitle => 'المواقع';
+
+  @override
+  String adminSitesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count موقع',
+      many: '$count موقعًا',
+      few: '$count مواقع',
+      two: 'موقعان',
+      one: 'موقع واحد',
+      zero: 'لا توجد مواقع',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get adminSitesSearchHint => 'ابحث بالموقع أو المنطقة أو الرمز';
+
+  @override
+  String get adminSitesActive => 'نشط';
+
+  @override
+  String get adminSitesInactive => 'غير نشط';
+
+  @override
+  String get adminSitesNoRegion => 'بلا منطقة';
+
+  @override
+  String get adminSitesEmptyTitle => 'لا توجد مواقع';
+
+  @override
+  String get adminSitesEmptyMessage => 'لم تُسجل أي مواقع لمؤسستك بعد.';
+
+  @override
+  String get adminSitesLoadFailed => 'تعذر تحميل المواقع.';
+
+  @override
+  String get adminSitesReadOnlyNote =>
+      'لا يمكن تعديل المواقع إلا لمسؤول أو مدير.';
+
+  @override
+  String get adminSitesEditTitle => 'تعديل الموقع';
+
+  @override
+  String get adminSitesRegionLabel => 'المنطقة';
+
+  @override
+  String get adminSitesActiveLabel => 'موقع نشط';
+
+  @override
+  String get adminSitesSave => 'حفظ';
+
+  @override
+  String get adminSitesSaved => 'تم تحديث الموقع.';
+
+  @override
+  String get adminSitesSaveFailed => 'تعذر تحديث الموقع.';
+
+  @override
+  String get adminAiTitle => 'محادثة الذكاء الاصطناعي للأسطول';
+
+  @override
+  String get adminAiSubtitle =>
+      'الإجابات من خدمة الذكاء الاصطناعي. تحقق من الأرقام المهمة في التطبيق.';
+
+  @override
+  String get adminAiHint => 'اسأل عن إدارة الأسطول';
+
+  @override
+  String get adminAiSend => 'إرسال';
+
+  @override
+  String get adminAiClear => 'مسح المحادثة';
+
+  @override
+  String get adminAiEmptyTitle => 'اطرح سؤالًا';
+
+  @override
+  String get adminAiEmptyMessage => 'مثلًا، كيف تخفض تكلفة الإطار لكل كيلومتر.';
+
+  @override
+  String get adminAiThinking => 'جارٍ التفكير';
+
+  @override
+  String get adminAiYou => 'أنت';
+
+  @override
+  String get adminAiAssistant => 'الذكاء الاصطناعي للأسطول';
+
+  @override
+  String get adminAiErrorDisabled =>
+      'ميزات الذكاء الاصطناعي معطلة من قبل المسؤول.';
+
+  @override
+  String get adminAiErrorBudget => 'تم بلوغ ميزانية الذكاء الاصطناعي الشهرية.';
+
+  @override
+  String get adminAiErrorRateLimit =>
+      'طلبات كثيرة. انتظر قليلًا ثم حاول مجددًا.';
+
+  @override
+  String get adminAiErrorEmpty => 'لم تُرجع خدمة الذكاء الاصطناعي أي إجابة.';
+
+  @override
+  String get adminAiErrorUnavailable =>
+      'خدمة الذكاء الاصطناعي غير متاحة حاليًا. حاول بعد قليل.';
+
+  @override
+  String get extrasFleetAiTitle => 'الذكاء الاصطناعي للأسطول';
+
+  @override
+  String get extrasFleetAiSubtitle => 'إجابات من بيانات أسطولك الحية';
+
+  @override
+  String get extrasFleetAiSnapshotLoading => 'جارٍ قراءة بيانات الأسطول الحية';
+
+  @override
+  String get extrasFleetAiNoData =>
+      'تعذرت قراءة بيانات الأسطول الحية، لذا لا يستطيع المساعد الإجابة من سجلاتك الآن.';
+
+  @override
+  String extrasFleetAiGroundedOn(int n) {
+    return 'استنادًا إلى $n من 5 أرقام حية للأسطول';
+  }
+
+  @override
+  String get extrasFleetAiEmptyTitle => 'اسأل عن أسطولك';
+
+  @override
+  String get extrasFleetAiEmptyMessage =>
+      'يجيب المساعد فقط من الأرقام الحية لأسطولك، وسيوضح عندما لا تتوفر معلومة هنا.';
+
+  @override
+  String get extrasFleetAiSuggestedTitle => 'جرّب أن تسأل';
+
+  @override
+  String get extrasFleetAiSuggestOverview => 'أعطني نظرة عامة على حالة الأسطول';
+
+  @override
+  String get extrasFleetAiSuggestRisk =>
+      'كم عدد الإطارات ذات الخطورة الحرجة أو العالية؟';
+
+  @override
+  String get extrasFleetAiSuggestActions => 'ما الذي يحتاج إلى اهتمامي أولًا؟';
+
+  @override
+  String get extrasFleetAiSuggestAccidents =>
+      'كم عدد الحوادث المبلغ عنها في آخر 30 يومًا؟';
+
+  @override
+  String get extrasFleetAiInputHint => 'اطرح سؤالًا عن أسطولك';
+
+  @override
+  String get extrasFleetAiSend => 'إرسال';
+
+  @override
+  String get extrasFleetAiThinking => 'جارٍ التفكير';
+
+  @override
+  String get extrasFleetAiClear => 'مسح المحادثة';
+
+  @override
+  String get extrasFleetAiDisclaimer =>
+      'قد تكون إجابات الذكاء الاصطناعي خاطئة. تحقق من الأرقام المهمة في التطبيق قبل التصرف.';
+
+  @override
+  String get extrasFleetAiYou => 'أنت';
+
+  @override
+  String get extrasFleetAiErrDisabled => 'أوقف المسؤول ميزات الذكاء الاصطناعي.';
+
+  @override
+  String get extrasFleetAiErrBudget =>
+      'تم بلوغ ميزانية الذكاء الاصطناعي الشهرية. تواصل مع المسؤول.';
+
+  @override
+  String get extrasFleetAiErrRateLimited =>
+      'عدد كبير من الأسئلة في وقت قصير. انتظر قليلًا ثم حاول مجددًا.';
+
+  @override
+  String get extrasFleetAiErrOffline => 'لا يوجد اتصال. لم يُرسل سؤالك.';
+
+  @override
+  String get extrasFleetAiErrUnavailable =>
+      'المساعد غير متاح الآن. حاول مرة أخرى بعد قليل.';
+
+  @override
+  String get repairReqCatEngine => 'المحرك';
+
+  @override
+  String get repairReqCatTransmission => 'ناقل الحركة';
+
+  @override
+  String get repairReqCatBrakes => 'الفرامل';
+
+  @override
+  String get repairReqCatTyres => 'الإطارات';
+
+  @override
+  String get repairReqCatHydraulics => 'الهيدروليك';
+
+  @override
+  String get repairReqCatElectrical => 'الكهرباء';
+
+  @override
+  String get repairReqCatBody => 'الهيكل';
+
+  @override
+  String get repairReqCatDrumMixer => 'الخلاط / الأسطوانة';
+
+  @override
+  String get repairReqCatPump => 'المضخة';
+
+  @override
+  String get repairReqCatAirSystem => 'نظام الهواء';
+
+  @override
+  String get repairReqCatCooling => 'التبريد';
+
+  @override
+  String get repairReqCatOther => 'أخرى';
+
+  @override
+  String get repairReqTitle => 'طلب إصلاح';
+
+  @override
+  String get repairReqSubtitle => 'أبلغ الورشة عن عطل';
+
+  @override
+  String get repairReqMachine => 'المعدة';
+
+  @override
+  String get repairReqChooseAsset => 'اختر المعدة';
+
+  @override
+  String get repairReqSelect => 'اختيار';
+
+  @override
+  String get repairReqChange => 'تغيير';
+
+  @override
+  String repairReqPlate(String plate) {
+    return 'اللوحة $plate';
+  }
+
+  @override
+  String get repairReqErrAsset => 'اختر المعدة التي بها العطل.';
+
+  @override
+  String get repairReqSite => 'الموقع';
+
+  @override
+  String get repairReqSiteHint => 'يُملأ من الموقع المسجل للمعدة';
+
+  @override
+  String get repairReqCategory => 'نوع العطل';
+
+  @override
+  String get repairReqDescription => 'صف العطل';
+
+  @override
+  String get repairReqDescriptionHint => 'ما الذي حدث، وما الذي تراه أو تسمعه';
+
+  @override
+  String get repairReqErrDescription => 'صف العطل قبل الإرسال.';
+
+  @override
+  String get repairReqPriority => 'الأولوية';
+
+  @override
+  String get repairReqOdometer => 'عداد المسافة (كم)';
+
+  @override
+  String get repairReqEngineHours => 'ساعات تشغيل المحرك';
+
+  @override
+  String get repairReqOptional => 'اختياري';
+
+  @override
+  String get repairReqErrMeter =>
+      'أدخل رقمًا يساوي صفرًا أو أكثر، أو اتركه فارغًا.';
+
+  @override
+  String get repairReqOnlineNote =>
+      'يُرسل هذا الطلب مباشرة إلى الورشة ويحتاج إلى اتصال. يصدر المكتب رقم طلب الإصلاح.';
+
+  @override
+  String get repairReqSubmit => 'إرسال طلب الإصلاح';
+
+  @override
+  String get repairReqErrNoProfile =>
+      'لم يُحمَّل ملفك الشخصي بعد. حاول بعد لحظات.';
+
+  @override
+  String get repairReqErrOffline =>
+      'لا يوجد اتصال. لم يُرسل شيء. بياناتك محفوظة، أرسلها مجددًا عند توفر الشبكة.';
+
+  @override
+  String get repairReqErrPermission =>
+      'لا يُسمح لحسابك بتقديم طلبات الإصلاح. تواصل مع المسؤول.';
+
+  @override
+  String get repairReqErrFailed =>
+      'تعذر إرسال الطلب. بياناتك محفوظة، حاول مجددًا.';
+
+  @override
+  String get repairReqSentTitle => 'تم إرسال طلب الإصلاح';
+
+  @override
+  String repairReqSentWithNumber(String rfr) {
+    return 'استلمته الورشة برقم $rfr.';
+  }
+
+  @override
+  String get repairReqSentNoNumber =>
+      'استلمته الورشة. سيصدر المكتب رقم طلب الإصلاح.';
+
+  @override
+  String get repairReqAnother => 'تقديم طلب آخر';
+
+  @override
+  String get repairReqDone => 'تم';
+
+  @override
+  String get repairReqSearchHint =>
+      'ابحث برقم الأصل أو اللوحة أو النوع أو الموقع';
+
+  @override
+  String get repairReqNoAssets => 'لا توجد معدات مسجلة ضمن نطاقك.';
+
+  @override
+  String get repairReqNoMatch => 'لا توجد معدة مطابقة لهذا البحث.';
+
+  @override
+  String repairReqRefineSearch(int n) {
+    return '$n معدة مطابقة. اكتب المزيد لتضييق القائمة.';
+  }
+
+  @override
+  String get repairReqCachedList =>
+      'غير متصل: يتم عرض الأسطول المحفوظ على هذا الجهاز.';
+
+  @override
+  String get registerTitle => 'إنشاء حساب';
+
+  @override
+  String get registerChecking => 'جارٍ التحقق مما إذا كان التسجيل مفتوحًا';
+
+  @override
+  String get registerUnreachableTitle => 'تعذر الوصول إلى الخادم';
+
+  @override
+  String get registerUnreachableMessage =>
+      'يتطلب التسجيل اتصالًا. تحقق من الشبكة وحاول مجددًا.';
+
+  @override
+  String get registerClosedTitle => 'التسجيل مغلق';
+
+  @override
+  String get registerClosedMessage =>
+      'ينشئ المسؤول الحسابات. تواصل مع المسؤول لتتم دعوتك.';
+
+  @override
+  String get registerBackToSignIn => 'العودة لتسجيل الدخول';
+
+  @override
+  String get registerDoneTitle => 'تم إنشاء الحساب';
+
+  @override
+  String get registerDoneMessage =>
+      'حسابك بانتظار الموافقة. سيحدد المسؤول دورك وموقعك، ثم يمكنك تسجيل الدخول.';
+
+  @override
+  String get registerIntro =>
+      'اطلب حسابًا باسم المستخدم ورقمك الوظيفي. يوافق عليه المسؤول ويحدد دورك وموقعك.';
+
+  @override
+  String get registerFullName => 'الاسم الكامل';
+
+  @override
+  String get registerOptional => 'اختياري';
+
+  @override
+  String get registerUsername => 'اسم المستخدم';
+
+  @override
+  String get registerUsernameHelp =>
+      '3 أحرف على الأقل: حروف أو أرقام أو نقطة أو شرطة سفلية أو شرطة';
+
+  @override
+  String get registerEmployeeId => 'الرقم الوظيفي';
+
+  @override
+  String get registerPassword => 'كلمة المرور';
+
+  @override
+  String registerPasswordHelp(int n) {
+    return '$n أحرف على الأقل';
+  }
+
+  @override
+  String get registerConfirm => 'تأكيد كلمة المرور';
+
+  @override
+  String get registerShowPassword => 'إظهار كلمة المرور';
+
+  @override
+  String get registerHidePassword => 'إخفاء كلمة المرور';
+
+  @override
+  String get registerApprovalNote =>
+      'لا يمكنك اختيار دور أو موقع هنا. تبدأ الحسابات الجديدة معلّقة حتى يوافق عليها المسؤول.';
+
+  @override
+  String get registerSubmit => 'طلب حساب';
+
+  @override
+  String get registerHaveAccount => 'لديك حساب بالفعل؟ سجّل الدخول';
+
+  @override
+  String get registerErrUsernameShort => 'أدخل اسم مستخدم من 3 أحرف على الأقل.';
+
+  @override
+  String get registerErrUsernameChars =>
+      'استخدم الحروف والأرقام والنقطة والشرطة السفلية والشرطة فقط.';
+
+  @override
+  String get registerErrEmployeeId => 'أدخل رقمك الوظيفي.';
+
+  @override
+  String registerErrPasswordShort(int n) {
+    return 'يجب ألا تقل كلمة المرور عن $n أحرف.';
+  }
+
+  @override
+  String get registerErrMismatch => 'كلمتا المرور غير متطابقتين.';
+
+  @override
+  String get registerErrTaken =>
+      'اسم المستخدم أو الرقم الوظيفي مستخدم بالفعل. اختر غيره.';
+
+  @override
+  String get registerErrOffline =>
+      'لا يوجد اتصال. لم يُنشأ حسابك. حاول مجددًا عند توفر الشبكة.';
+
+  @override
+  String get registerErrFailed => 'تعذر إنشاء حسابك. حاول مجددًا.';
+
+  @override
+  String get loginCreateAccount => 'إنشاء حساب';
+
+  @override
+  String get accAssessmentLoadFailed => 'تعذر تحميل التقييم';
+
+  @override
+  String get accSafetyAndMobility => 'السلامة والقدرة على الحركة';
+
+  @override
+  String get accSafeToMove => 'آمن للتحريك';
+
+  @override
+  String get accRecoveryTowRequired => 'يلزم السحب / الإنقاذ';
+
+  @override
+  String get accVehicleOffRoad => 'المركبة خارج الخدمة (VOR)';
+
+  @override
+  String get accDamageAssessment => 'تقييم الضرر';
+
+  @override
+  String accDamageAreaCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count منطقة',
+      many: '$count منطقة',
+      few: '$count مناطق',
+      two: 'منطقتان',
+      one: 'منطقة واحدة',
+      zero: 'لا مناطق',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get accNoDamageAreas => 'لم تُحدَّد أي مناطق ضرر في هذه الحالة بعد.';
+
+  @override
+  String get accLabourAndPartsEstimate => 'تقدير العمالة وقطع الغيار';
+
+  @override
+  String get accLabourHours => 'ساعات العمل';
+
+  @override
+  String get accLabourEstimate => 'تقدير العمالة';
+
+  @override
+  String get accPartsEstimate => 'تقدير قطع الغيار';
+
+  @override
+  String get accTotalPreliminaryEstimate => 'إجمالي التقدير المبدئي';
+
+  @override
+  String get accPartsAvailable => 'قطع متوفرة';
+
+  @override
+  String get accSpecialOrder => 'طلب خاص';
+
+  @override
+  String get accPartsAvailability => 'توفر قطع الغيار';
+
+  @override
+  String get accRepairRouteRecommendation => 'التوصية بمسار الإصلاح';
+
+  @override
+  String get accTotalLossPossible => 'خسارة كلية محتملة';
+
+  @override
+  String get accSelectedWorkshop => 'الورشة المختارة';
+
+  @override
+  String get accCity => 'المدينة';
+
+  @override
+  String get accExpectedDurationDays => 'المدة المتوقعة (بالأيام)';
+
+  @override
+  String get accQuotationStatus => 'حالة عرض السعر';
+
+  @override
+  String accRequiredAttachments(int count) {
+    return 'المرفقات المطلوبة ($count)';
+  }
+
+  @override
+  String get accAttachVendorQuotation =>
+      'أرفق عرض سعر المورد لتفعيل الإرسال إلى الورشة الخارجية.';
+
+  @override
+  String get accAfterSubmitNotify => 'الإشعار بعد الإرسال';
+
+  @override
+  String get accSaveAssessment => 'حفظ التقييم';
+
+  @override
+  String get accAssessmentSubmitted => 'تم إرسال التقييم';
+
+  @override
+  String get accSubmitAssessment => 'إرسال التقييم وتوجيهه';
+
+  @override
+  String get accSubmissionNeedsQuotation =>
+      'يتطلب الإرسال عرض سعر المورد للمسار الخارجي.';
+
+  @override
+  String accFieldsNotStored(String fields) {
+    return 'تعذر حفظ هذه الحقول على الخادم: $fields.';
+  }
+
+  @override
+  String accAssessmentRouted(String route) {
+    return 'تم إرسال التقييم وتوجيهه إلى $route.';
+  }
+
+  @override
+  String get accAssessmentSaved => 'تم حفظ التقييم.';
+
+  @override
+  String accDocumentAttached(String document) {
+    return 'تم إرفاق $document.';
+  }
+
+  @override
+  String get accKm => 'كم';
+
+  @override
+  String accKmValue(String km) {
+    return '$km كم';
+  }
+
+  @override
+  String get accPlate => 'اللوحة';
+
+  @override
+  String get accSiteLocation => 'الموقع · المكان';
+
+  @override
+  String accViewDamageMap(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'عرض خريطة الضرر · $count منطقة',
+      many: 'عرض خريطة الضرر · $count منطقة',
+      few: 'عرض خريطة الضرر · $count مناطق',
+      two: 'عرض خريطة الضرر · منطقتان',
+      one: 'عرض خريطة الضرر · منطقة واحدة',
+      zero: 'عرض خريطة الضرر · لا مناطق',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get accActionNotAssessed => 'الإجراء: لم يُقيَّم بعد';
+
+  @override
+  String accActionValue(String value) {
+    return 'الإجراء: $value';
+  }
+
+  @override
+  String get accRecommended => 'موصى به';
+
+  @override
+  String accUploadNamedDocument(String document) {
+    return 'رفع $document';
+  }
+
+  @override
+  String get accClaimLoadFailed => 'تعذر تحميل المطالبة';
+
+  @override
+  String get accClaimExternalRepairBanner => 'تقييم إصلاح خارجي';
+
+  @override
+  String get accClaimDocumentPackage => 'حزمة مستندات المطالبة';
+
+  @override
+  String get accClaimRegistrationLocked =>
+      'يتاح تسجيل المطالبة عند اكتمال جميع المستندات المطلوبة.';
+
+  @override
+  String accRequestDocument(String document) {
+    return 'طلب $document';
+  }
+
+  @override
+  String get accUploadDocument => 'رفع مستند';
+
+  @override
+  String get accClaimRegistration => 'تسجيل المطالبة';
+
+  @override
+  String get accInsurer => 'شركة التأمين';
+
+  @override
+  String get accPolicyNo => 'رقم الوثيقة';
+
+  @override
+  String get accClaimNumber => 'رقم المطالبة';
+
+  @override
+  String get accClaimNumberAuto => 'يُنشأ تلقائيًا بعد التسجيل';
+
+  @override
+  String get accLiability => 'المسؤولية';
+
+  @override
+  String get accGccLiabilityPct => 'نسبة مسؤولية GCC %';
+
+  @override
+  String get accClaimAmount => 'مبلغ المطالبة';
+
+  @override
+  String get accDeductible => 'مبلغ التحمل';
+
+  @override
+  String get accNetClaimable => 'صافي المبلغ المطالب به';
+
+  @override
+  String get accClaimRegistered => 'تم تسجيل المطالبة لدى شركة التأمين';
+
+  @override
+  String get accRegisterClaim => 'تسجيل المطالبة لدى شركة التأمين';
+
+  @override
+  String get accClaimEnableWhenComplete =>
+      'يُفعّل بعد اكتمال جميع المستندات المطلوبة.';
+
+  @override
+  String get accPaymentAndRecovery => 'الدفع والاسترداد';
+
+  @override
+  String get accApprovedAmount => 'المبلغ المعتمد';
+
+  @override
+  String get accRecoveredAmount => 'المبلغ المسترد';
+
+  @override
+  String get accOutstanding => 'المتبقي';
+
+  @override
+  String get accRecoverySource => 'مصدر الاسترداد';
+
+  @override
+  String get accRecoverySourceHint => 'شركة التأمين، طرف ثالث، السائق';
+
+  @override
+  String get accLastUpdated => 'آخر تحديث';
+
+  @override
+  String get accSaveRecovery => 'حفظ الاسترداد';
+
+  @override
+  String get accUpdateRecovery => 'تحديث مبلغ الاسترداد';
+
+  @override
+  String get accRegisterClaimFirst => 'سجّل المطالبة أولًا.';
+
+  @override
+  String get accRecoveryEditableNote =>
+      'تبقى مبالغ الاسترداد قابلة للتعديل بعد الإغلاق التشغيلي للحالة. كل تعديل مؤرخ ومدقق.';
+
+  @override
+  String get accAfterRegistrationNotify => 'الإشعار بعد التسجيل';
+
+  @override
+  String get accClaimNotificationIncludes =>
+      'يتضمن الإشعار رقم المطالبة وحالة المستندات ومبلغ المطالبة والإجراء التالي.';
+
+  @override
+  String get accSaveClaimDraft => 'حفظ مسودة المطالبة';
+
+  @override
+  String get accCompleteDocuments => 'إكمال المستندات';
+
+  @override
+  String accCommandCenterMonitoring(String owner) {
+    return '$owner يتابع مهلة الخدمة والمستندات الناقصة.';
+  }
+
+  @override
+  String accCommandCenterRole(String role) {
+    return '$role (مركز القيادة)';
+  }
+
+  @override
+  String get accClaimDraftSaved =>
+      'تم حفظ مسودة المطالبة على هذا الجهاز. لم يُرسل أي شيء.';
+
+  @override
+  String accDocumentRequestLogged(String document) {
+    return 'تم تسجيل طلب $document في الحالة.';
+  }
+
+  @override
+  String get accWhichDocument => 'ما هذا المستند؟';
+
+  @override
+  String accDocumentUploaded(String document) {
+    return 'تم رفع $document إلى حزمة المطالبة.';
+  }
+
+  @override
+  String get accClaimRegisterMissing =>
+      'أدخل شركة التأمين ورقم الوثيقة ومبلغ المطالبة أولًا.';
+
+  @override
+  String accRegisterClaimConfirm(
+      String claimNo, String insurer, String policyNo) {
+    return 'سيتم تسجيل المطالبة $claimNo لدى $insurer بموجب الوثيقة $policyNo في الحالة. لا يمكن التراجع عن ذلك من التطبيق.';
+  }
+
+  @override
+  String get accRegister => 'تسجيل';
+
+  @override
+  String accClaimRegisteredSnack(String claimNo) {
+    return 'تم تسجيل المطالبة $claimNo لدى شركة التأمين.';
+  }
+
+  @override
+  String get accRecoveryMissing => 'أدخل المبلغ المسترد ومصدره.';
+
+  @override
+  String get accRecoveryRecorded => 'تم تسجيل الاسترداد.';
+
+  @override
+  String accOptionalSuffix(String label) {
+    return '$label (اختياري)';
+  }
+
+  @override
+  String get accIntakeFleetMasterLockNote =>
+      'هذه التفاصيل مأخوذة من سجل الأسطول ولا يمكن تعديلها هنا. إذا كانت أي تفاصيل غير صحيحة، يرجى تحديثها في نظام الأسطول.';
+
+  @override
+  String get accIntakeIncidentSiteHelp =>
+      'اختر موقع هذا الحادث. قد يختلف عن الموقع الأساسي للأصل.';
+
+  @override
+  String get accIntakeAssetNo => 'رقم الأصل';
+
+  @override
+  String get accIntakeVehicleType => 'نوع المركبة';
+
+  @override
+  String get accIntakeMakeModel => 'الصانع / الطراز';
+
+  @override
+  String get accIntakeHomeSite => 'الموقع (الأساسي)';
+
+  @override
+  String get accIntakeCountry => 'الدولة';
+
+  @override
+  String get accIntakeCurrentMeter => 'القراءة الحالية للعداد';
+
+  @override
+  String get accIntakeStatus => 'الحالة';
+
+  @override
+  String get accIntakeAssetLoaded => 'تم تحميل الأصل من سجل الأسطول';
+
+  @override
+  String get accIntakeAutoFilled => 'مُعبأ تلقائيًا من سجل الأسطول';
+
+  @override
+  String get accIntakeWhereOccurred => 'أين وقع الحادث؟';
+
+  @override
+  String get accIntakeSiteHint => 'اسم الموقع أو المكان';
+
+  @override
+  String accIntakeHomeSiteChip(String site) {
+    return '$site (الأساسي)';
+  }
+
+  @override
+  String accIntakeRequiredPhotos(int done, int total) {
+    return '$done من $total صور مطلوبة';
+  }
+
+  @override
+  String accIntakeMissingCount(int count) {
+    return '$count ناقصة';
+  }
+
+  @override
+  String get accIntakeAttachedOnDevice => 'مرفق على هذا الجهاز';
+
+  @override
+  String accIntakeRequiredCategory(String category) {
+    return '$category · مطلوب';
+  }
+
+  @override
+  String get accIntakeRemovePhoto => 'إزالة الصورة';
+
+  @override
+  String get accIntakeSupportingDocuments => 'المستندات الداعمة';
+
+  @override
+  String get accIntakeSupportingDocumentsHelp =>
+      'أرفق المتاح الآن. قد تتطلب قواعد المسار والدولة المزيد أثناء مراجعة الحالة.';
+
+  @override
+  String get accIntakeOptionalAtIntake => 'اختياري عند الإدخال';
+
+  @override
+  String get accIntakeRemoveAttachment => 'إزالة المرفق';
+
+  @override
+  String get accIntakeAttachDocumentPhoto => 'إرفاق صورة المستند';
+
+  @override
+  String get accYes => 'نعم';
+
+  @override
+  String get accNo => 'لا';
+
+  @override
+  String get accCaseSummaryTitle => 'ملخص حالة الحادث';
+
+  @override
+  String accCaseSummaryGenerated(String date) {
+    return 'تم الإنشاء في $date';
+  }
+
+  @override
+  String get accCaseSummaryWorkstreams => 'مسارات عمل الحالة';
+
+  @override
+  String get accCaseSummaryWorkstreamColumn => 'مسار العمل';
+
+  @override
+  String get accCaseSummaryTeamColumn => 'الفريق';
+
+  @override
+  String get accCaseSummaryStatusColumn => 'الحالة';
+
+  @override
+  String get accCaseSummaryProgressColumn => 'التقدم';
+
+  @override
+  String get accCaseSummaryOverallCompletion => 'نسبة الإنجاز الإجمالية';
+
+  @override
+  String get accCaseSummaryEvidencePhotos => 'صور الأدلة';
+
+  @override
+  String get accCaseSummaryShare => 'مشاركة ملخص الحالة PDF';
+
+  @override
+  String get accCaseSummaryShareFailed =>
+      'تعذرت مشاركة ملخص الحالة. حاول مرة أخرى.';
+
+  @override
+  String get accCaseSummarySharedInEnglish =>
+      'تعذر تحميل الخط العربي، لذلك تمت مشاركة الملخص باللغة الإنجليزية.';
+
+  @override
+  String get accReportDraftRestoreFailed =>
+      'تعذر استعادة مسودة التقرير المحفوظة. لم يتم استبدال بياناتك المحفوظة.';
+
+  @override
+  String get accWorkspaceLoading =>
+      'مساحة العمل لا تزال قيد التحميل. حاول مرة أخرى.';
+
+  @override
+  String get accReportDraftSaveFailed =>
+      'تعذر على هذا الجهاز حفظ المسودة. لم يتم استبدال أي بيانات محفوظة سابقًا. حاول مرة أخرى.';
+
+  @override
+  String get accReportUseScannedAsset =>
+      'استخدم رقم الأصل الممسوح لاختيار سجل الأسطول المطابق.';
+
+  @override
+  String get accReportAddCloseUpPhoto => 'إضافة صورة مقربة';
+
+  @override
+  String get accReportTakePhoto => 'التقاط صورة';
+
+  @override
+  String get accReportChooseGallery => 'اختيار من المعرض';
+
+  @override
+  String get accReportQueued => 'تم حفظ التقرير في قائمة الانتظار دون اتصال.';
+
+  @override
+  String get accReportQueuedWithNotes =>
+      'تمت إضافة التقرير إلى قائمة الانتظار. حُفظت بعض الحقول الاختيارية غير المدعومة في ملاحظات الإدخال.';
+
+  @override
+  String get accReportStepAssetSubtitle =>
+      'اختر أصل الأسطول المتورط في هذا الحادث.';
+
+  @override
+  String get accReportStepIncidentSubtitle => 'سجّل متى وأين وماذا حدث.';
+
+  @override
+  String get accReportStepPeopleSubtitle =>
+      'سجّل فقط الحقائق اللازمة في موقع الحادث عن الأشخاص والسلامة ونجم والطرف الثالث.';
+
+  @override
+  String get accReportStepEvidenceSubtitle =>
+      'أضف صورة عامة للموقع وصورة مقربة لكل منطقة ضرر محددة. المستندات الداعمة اختيارية عند الإدخال.';
+
+  @override
+  String get accReportStepDocumentsSubtitle =>
+      'أضف المستندات الداعمة المتاحة. اختيارية عند الإدخال.';
+
+  @override
+  String get accReportStepReviewSubtitle =>
+      'راجع التقرير بدقة وأرسله إلى تحقق الأسطول. المستندات الاختيارية لا تمنع هذا الإرسال أبدًا.';
+
+  @override
+  String get accReportScanCode => 'مسح رمز QR / الباركود';
+
+  @override
+  String accReportMatchingAssets(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count أصل مطابق',
+      many: '$count أصلًا مطابقًا',
+      few: '$count أصول مطابقة',
+      two: 'أصلان مطابقان',
+      one: 'أصل واحد مطابق',
+      zero: 'لا توجد أصول مطابقة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get accReportNoMatchingAsset => 'لا يوجد أصل مطابق في الأسطول';
+
+  @override
+  String accReportMatchOverflow(int shown, int total, int hidden) {
+    return 'عرض أول $shown من أصل $total نتيجة. توجد $hidden نتائج أخرى، حسّن البحث.';
+  }
+
+  @override
+  String get accReportSavedFleetData => 'عرض بيانات الأسطول المحفوظة';
+
+  @override
+  String get accReportChangeAsset => 'تغيير الأصل';
+
+  @override
+  String get accReportManualAsset => 'رقم الأصل (إدخال يدوي احتياطي)';
+
+  @override
+  String get accReportManualAssetHint =>
+      'استخدمه فقط عند تعذر المطابقة مع الأسطول';
+
+  @override
+  String get accReportMeterAtIncident => 'قراءة العداد عند الحادث';
+
+  @override
+  String get accReportMeterHint => 'قراءة عداد المسافة أو الساعات';
+
+  @override
+  String accReportMeterFleetMaster(String km) {
+    return 'سجل الأسطول: $km كم';
+  }
+
+  @override
+  String get accReportRoadLocation => 'الطريق / الموقع الدقيق';
+
+  @override
+  String get accReportIncidentDate => 'تاريخ الحادث';
+
+  @override
+  String get accReportIncidentTime => 'وقت الحادث';
+
+  @override
+  String get accReportIncidentSite => 'موقع الحادث';
+
+  @override
+  String get accReportIncidentSiteHelper =>
+      'موقع الحادث قابل للتعديل ومستقل عن الموقع الأساسي المثبت للأسطول.';
+
+  @override
+  String get accReportRoadLocationHint =>
+      'البوابة أو الطريق أو منطقة المشروع أو وصف GPS';
+
+  @override
+  String get accReportEventType => 'نوع الحدث';
+
+  @override
+  String get accReportSelectEventType => 'اختر نوع الحدث';
+
+  @override
+  String get accReportInitialSeverity => 'الشدة الأولية';
+
+  @override
+  String get accSeverityMinor => 'بسيط';
+
+  @override
+  String get accSeverityModerate => 'متوسط';
+
+  @override
+  String get accSeverityMajorSevere => 'كبير / شديد';
+
+  @override
+  String get accSeverityFatal => 'مميت';
+
+  @override
+  String get accReportWhatHappened => 'ماذا حدث؟';
+
+  @override
+  String get accReportWhatHappenedHint => 'صف تسلسل الأحداث والظروف المباشرة';
+
+  @override
+  String get accReportDriverName => 'اسم السائق';
+
+  @override
+  String get accReportDriverId => 'الرقم الوظيفي / رقم رخصة السائق';
+
+  @override
+  String get accReportPassengersInvolved => 'هل كان هناك ركاب؟';
+
+  @override
+  String get accReportPassengerCount => 'عدد الركاب';
+
+  @override
+  String get accReportPassengerDetails => 'تفاصيل الركاب';
+
+  @override
+  String get accReportInjuries => 'هل كانت هناك إصابات؟';
+
+  @override
+  String get accReportInjuryCount => 'عدد الإصابات';
+
+  @override
+  String get accReportInjuryDetails => 'تفاصيل الإصابات';
+
+  @override
+  String get accReportEmergencyServices => 'هل تم الاتصال بخدمات الطوارئ؟';
+
+  @override
+  String get accReportEmergencyDetails => 'تفاصيل الاستجابة للطوارئ';
+
+  @override
+  String get accReportVehicleMovable => 'هل يمكن تحريك المركبة؟';
+
+  @override
+  String get accReportRecoveryRequired => 'هل يلزم السحب / الإنقاذ؟';
+
+  @override
+  String get accReportSafeToOperate => 'هل المركبة آمنة للتشغيل؟';
+
+  @override
+  String get accReportThirdPartyInvolved => 'هل كان هناك طرف ثالث؟';
+
+  @override
+  String get accReportThirdPartyName => 'اسم الطرف الثالث';
+
+  @override
+  String get accReportThirdPartyVehicle => 'مركبة الطرف الثالث';
+
+  @override
+  String get accReportThirdPartyPlate => 'لوحة الطرف الثالث';
+
+  @override
+  String get accReportThirdPartyContact => 'جهة اتصال الطرف الثالث';
+
+  @override
+  String get accReportThirdPartyInsurer => 'شركة تأمين الطرف الثالث';
+
+  @override
+  String get accReportThirdPartyInvoice => 'هل تتوفر فاتورة الطرف الثالث؟';
+
+  @override
+  String get accReportThirdPartyInvoiceHelper =>
+      'هذا اختياري. إن توفرت، سجّل رقم الفاتورة فقط؛ ويمكن لفريق التأمين طلب الملف لاحقًا.';
+
+  @override
+  String get accReportThirdPartyInvoiceNumber => 'رقم فاتورة الطرف الثالث';
+
+  @override
+  String get accReportNajmOpened => 'هل تم فتح بلاغ نجم؟';
+
+  @override
+  String get accReportNajmHelper => 'سجّل فقط عندما ينطبق نجم على هذا الحادث.';
+
+  @override
+  String get accReportNajmReference => 'مرجع نجم';
+
+  @override
+  String get accReportWitnessDetails => 'تفاصيل الشهود';
+
+  @override
+  String get accReportImmediateAction => 'الإجراء الفوري المتخذ';
+
+  @override
+  String get accReportAdditionalNotes => 'ملاحظات إضافية';
+
+  @override
+  String get accReportReadyToSubmit => 'جاهز للإرسال';
+
+  @override
+  String get accReportMissingBeforeSubmit => 'ناقص قبل الإرسال';
+
+  @override
+  String get accReportComplete => 'مكتمل';
+
+  @override
+  String get accNotRecorded => 'غير مسجل';
+
+  @override
+  String get accNotAnswered => 'لم تتم الإجابة';
+
+  @override
+  String get accReportReviewAsset => 'الأصل';
+
+  @override
+  String get accReportReviewIncident => 'الحادث';
+
+  @override
+  String get accReportReviewDateTime => 'التاريخ والوقت';
+
+  @override
+  String get accReportReviewSiteLocation => 'الموقع / المكان';
+
+  @override
+  String get accReportReviewWhatHappened => 'ماذا حدث';
+
+  @override
+  String get accReportReviewPeople => 'الأشخاص';
+
+  @override
+  String accReportReviewPeopleValue(String driver, String injuries) {
+    return 'السائق $driver · الإصابات $injuries';
+  }
+
+  @override
+  String get accReportReviewDamageMarks => 'علامات الضرر';
+
+  @override
+  String get accReportReviewFocusedPhotos => 'الصور المركزة';
+
+  @override
+  String accReportReviewPhotosValue(int done, int total) {
+    return '$done من $total';
+  }
+
+  @override
+  String get accReportReviewOptionalDocuments => 'المستندات الاختيارية';
+
+  @override
+  String accReportReviewAttachedValue(int count) {
+    return '$count مرفق';
+  }
+
+  @override
+  String get accReportWorkflowResolvesOnSync =>
+      'يحدد سير عمل الحوادث المهيأ المستلمين والمسار والمهلة الأولية عند مزامنة هذا التقرير.';
+
+  @override
+  String get accReportDraftAutoSaves => 'تُحفظ المسودة تلقائيًا على الجهاز';
+
+  @override
+  String get accReportDraftUnsaved => 'تغييرات غير محفوظة';
+
+  @override
+  String get accReportDraftSaving => 'جارٍ حفظ المسودة…';
+
+  @override
+  String get accReportDraftSaved => 'تم حفظ المسودة على الجهاز';
+
+  @override
+  String accReportDraftSavedAt(String time) {
+    return 'تم حفظ المسودة على الجهاز · $time';
+  }
+
+  @override
+  String get accReportDraftSaveFailedShort => 'فشل حفظ المسودة';
+
+  @override
+  String get accReportDraftRestoring => 'جارٍ استعادة المسودة المحفوظة…';
+
+  @override
+  String get accReportSaveAndExit => 'حفظ وخروج';
+
+  @override
+  String get accReportBack => 'رجوع';
+
+  @override
+  String get accReportSubmit => 'إرسال الحادث';
+
+  @override
+  String get accReportContinueToIncident => 'المتابعة إلى تفاصيل الحادث';
+
+  @override
+  String get accReportContinueToEvidence => 'المتابعة إلى الأدلة';
+
+  @override
+  String get accReportSaveAndContinue => 'حفظ ومتابعة';
+
+  @override
+  String accReportFleetResults(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count نتيجة في الأسطول · ابحث بالأصل أو الأسطول أو اللوحة أو النوع أو الصانع أو الطراز أو الموقع',
+      many:
+          '$count نتيجة في الأسطول · ابحث بالأصل أو الأسطول أو اللوحة أو النوع أو الصانع أو الطراز أو الموقع',
+      few:
+          '$count نتائج في الأسطول · ابحث بالأصل أو الأسطول أو اللوحة أو النوع أو الصانع أو الطراز أو الموقع',
+      two:
+          'نتيجتان في الأسطول · ابحث بالأصل أو الأسطول أو اللوحة أو النوع أو الصانع أو الطراز أو الموقع',
+      one:
+          'نتيجة واحدة في الأسطول · ابحث بالأصل أو الأسطول أو اللوحة أو النوع أو الصانع أو الطراز أو الموقع',
+      zero:
+          'لا نتائج في الأسطول · ابحث بالأصل أو الأسطول أو اللوحة أو النوع أو الصانع أو الطراز أو الموقع',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get accTypeCollision => 'تصادم';
+
+  @override
+  String get accTypeRollover => 'انقلاب';
+
+  @override
+  String get accTypeRearEnd => 'اصطدام خلفي';
+
+  @override
+  String get accTypeSideSwipe => 'احتكاك جانبي';
+
+  @override
+  String get accTypeReversing => 'أثناء الرجوع للخلف';
+
+  @override
+  String get accTypeFire => 'حريق';
+
+  @override
+  String get accTypeVandalism => 'تخريب متعمد';
+
+  @override
+  String get accTypeWeather => 'الطقس';
+
+  @override
+  String get accTypeTyreFailure => 'عطل الإطار';
+
+  @override
+  String get accTypeMechanical => 'ميكانيكي';
+
+  @override
+  String get accTypeNearMiss => 'حادث وشيك';
+
+  @override
+  String get accTypePropertyDamage => 'أضرار بالممتلكات';
+
+  @override
+  String get accTypeOther => 'أخرى';
+
+  @override
+  String get accNotSet => 'غير محدد';
+
+  @override
+  String get accErrorFileUnsupported => 'هذا الملف غير مدعوم.';
+
+  @override
+  String get accErrorCheckValues => 'تحقق من القيم وحاول مرة أخرى.';
+
+  @override
+  String get accErrorGeneric => 'حدث خطأ ما. يرجى المحاولة مرة أخرى.';
+
+  @override
+  String accNotifyForVisibility(String role) {
+    return '$role (للاطلاع)';
+  }
+
+  @override
+  String get accTakePhoto => 'التقاط صورة';
+
+  @override
+  String get accChooseDeviceFile => 'اختيار ملف من الجهاز';
+
+  @override
+  String get accDhDispatchHandover => 'الإرسال والتسليم';
+
+  @override
+  String get accDhRepairRoute => 'مسار الإصلاح';
+
+  @override
+  String get accDhDispatchStatus => 'حالة الإرسال';
+
+  @override
+  String get accDhTransitElapsed => 'مدة النقل';
+
+  @override
+  String get accDhVendorRepairSla => 'مهلة إصلاح المورد';
+
+  @override
+  String get accDhSlaUnavailable => 'المهلة غير متاحة';
+
+  @override
+  String get accDhVendorSlaStartsOnlyAfterSigned =>
+      'تبدأ مهلة المورد فقط بعد الاستلام الموقع للمركبة.';
+
+  @override
+  String get accDhTheSlaClockStartsWhenThe =>
+      'يبدأ عداد المهلة عندما توقع الورشة على استلام المركبة.';
+
+  @override
+  String get accDhRetry => 'إعادة المحاولة';
+
+  @override
+  String get accDhDispatchLegsAreNotProvisionedOn =>
+      'سجلات الإرسال غير مفعلة في قاعدة البيانات بعد. لا يمكن تسجيل التفاصيل حتى يتم تطبيق الترحيل.';
+
+  @override
+  String get accDhVendorContactFieldsAreNotProvisioned =>
+      'حقول اتصال المورد غير مفعلة بعد؛ يتم حفظ اسم الورشة فقط.';
+
+  @override
+  String get accDhAfterAcceptanceVendorCanAddInspection =>
+      'بعد الاستلام يمكن للمورد إضافة تفاصيل الفحص وعرض السعر والقطع والجدول والتقدم في مساحته الخاصة. يُنشأ أمر الشراء فقط بعد مراجعة عرض السعر واعتماده.';
+
+  @override
+  String get accDhOpenCaseTimeline => 'فتح سجل القضية';
+
+  @override
+  String get accDhOpenWorkshopAssessment => 'فتح تقييم الورشة';
+
+  @override
+  String get accDhNotStarted => 'لم تبدأ';
+
+  @override
+  String get accDhMet => 'تم الالتزام';
+
+  @override
+  String get accDhBreached => 'تم تجاوزها';
+
+  @override
+  String get accDhPaused => 'متوقفة';
+
+  @override
+  String get accDhRunning => 'جارية';
+
+  @override
+  String get accDhCancelled => 'ملغاة';
+
+  @override
+  String get accDhStartedNoSlaTarget => 'بدأت، بلا هدف مهلة';
+
+  @override
+  String get accDhDestinationAndVendor => 'الوجهة والمورد';
+
+  @override
+  String get accDhWorkshopName => 'اسم الورشة';
+
+  @override
+  String get accDhCity => 'المدينة';
+
+  @override
+  String get accDhVendorContactName => 'اسم جهة الاتصال';
+
+  @override
+  String get accDhPhone => 'الهاتف';
+
+  @override
+  String get accDhEmail => 'البريد الإلكتروني';
+
+  @override
+  String get accDhWorkshopRegistrationTaxNo => 'رقم تسجيل الورشة / الضريبة';
+
+  @override
+  String get accDhAssignedVendorInspector => 'مفتش المورد المعين';
+
+  @override
+  String get accDhUnassigned => 'غير معين';
+
+  @override
+  String get accDhEditVendorDetails => 'تعديل بيانات المورد';
+
+  @override
+  String get accDhContactWorkshop => 'الاتصال بالورشة';
+
+  @override
+  String get accDhCancel => 'إلغاء';
+
+  @override
+  String get accDhSaveVendor => 'حفظ المورد';
+
+  @override
+  String get accDhDispatchDetails => 'تفاصيل الإرسال';
+
+  @override
+  String get accDhSentBy => 'أرسل بواسطة';
+
+  @override
+  String get accDhDeparture => 'المغادرة';
+
+  @override
+  String get accDhCarrier => 'الناقل';
+
+  @override
+  String get accDhDriver => 'السائق';
+
+  @override
+  String get accDhRecoveryVehicle => 'مركبة النقل';
+
+  @override
+  String get accDhOrigin => 'نقطة الانطلاق';
+
+  @override
+  String get accDhDestination => 'الوجهة';
+
+  @override
+  String get accDhEstimatedArrival => 'الوصول المتوقع';
+
+  @override
+  String get accDhLiveStatus => 'الحالة الحية';
+
+  @override
+  String get accDhRecordDispatch => 'تسجيل الإرسال';
+
+  @override
+  String get accDhOdometerKm => 'عداد المسافة (كم)';
+
+  @override
+  String get accDhEngineHours => 'ساعات المحرك';
+
+  @override
+  String get accDhFuel => 'الوقود %';
+
+  @override
+  String get accDhKeys => 'المفاتيح';
+
+  @override
+  String get accDhDocumentsSentOnePerLine =>
+      'المستندات المرسلة (كل مستند في سطر)';
+
+  @override
+  String get accDhAccessoriesChecklistOnePerLine =>
+      'الملحقات / قائمة التحقق (كل عنصر في سطر)';
+
+  @override
+  String get accDhOutgoingDamagePhotos => 'صور الأضرار عند التسليم';
+
+  @override
+  String get accDhOutgoingConditionSignedBy => 'موقع حالة التسليم';
+
+  @override
+  String get accDhOutgoingSignature => 'توقيع التسليم';
+
+  @override
+  String get accDhSaveDispatch => 'حفظ الإرسال';
+
+  @override
+  String get accDhVehicleHandoverCondition => 'حالة تسليم المركبة';
+
+  @override
+  String get accDhOdometer => 'عداد المسافة';
+
+  @override
+  String get accDhFuel2 => 'الوقود';
+
+  @override
+  String get accDhDocumentsSent => 'المستندات المرسلة';
+
+  @override
+  String get accDhDocuments => 'مستندات';
+
+  @override
+  String get accDhAccessoriesChecklist => 'الملحقات / قائمة التحقق';
+
+  @override
+  String get accDhItems => 'عناصر';
+
+  @override
+  String get accDhPhotos => 'صور';
+
+  @override
+  String get accDhWorkshopReceipt => 'استلام الورشة';
+
+  @override
+  String get accDhCompletedByVendor => 'أكملها المورد';
+
+  @override
+  String get accDhArrived => 'الوصول';
+
+  @override
+  String get accDhReceivedBy => 'المستلم';
+
+  @override
+  String get accDhIncomingOdometer => 'عداد المسافة عند الوصول';
+
+  @override
+  String get accDhIncomingEngineHours => 'ساعات المحرك عند الوصول';
+
+  @override
+  String get accDhIncomingFuel => 'الوقود عند الوصول';
+
+  @override
+  String get accDhConditionMatchesDispatch => 'الحالة تطابق التسليم';
+
+  @override
+  String get accDhYes => 'نعم';
+
+  @override
+  String get accDhNo => 'لا';
+
+  @override
+  String get accDhAdditionalDamageRemarks => 'أضرار إضافية / ملاحظات';
+
+  @override
+  String get accDhReceivingPhotos => 'صور الاستلام';
+
+  @override
+  String get accDhCustodyAccepted => 'تم قبول العهدة';
+
+  @override
+  String get accDhVendorReceiverSignature => 'توقيع مستلم المورد';
+
+  @override
+  String get accDhSenderDriverSignature => 'توقيع المرسل / السائق';
+
+  @override
+  String get accDhCompletedByVendor2 => 'يكملها المورد';
+
+  @override
+  String get accDhNoDispatchLegIsRecordedYet =>
+      'لم يُسجل إرسال بعد. سجّل الإرسال أولاً؛ يُوقع الاستلام عليه.';
+
+  @override
+  String get accDhArrivedDateTime => 'تاريخ / وقت الوصول *';
+
+  @override
+  String get accDhReceivedByName => 'المستلم (الاسم) *';
+
+  @override
+  String get accDhDesignation => 'الوظيفة *';
+
+  @override
+  String get accDhIncomingOdometerKm => 'عداد المسافة عند الوصول';
+
+  @override
+  String get accDhIncomingFuel2 => 'الوقود عند الوصول %';
+
+  @override
+  String get accDhUploadReceivingPhotos => 'رفع صور الاستلام *';
+
+  @override
+  String get accDhUploadSignedHandoverPaper => 'رفع ورقة التسليم الموقعة *';
+
+  @override
+  String get accDhVendorReceiverSignature2 => 'توقيع مستلم المورد *';
+
+  @override
+  String get accDhSenderDriverSignatureCaptured =>
+      'توقيع المرسل / السائق (مسجل)';
+
+  @override
+  String get accDhIAcceptCustodyOfThisVehicle => 'أقبل عهدة هذه المركبة';
+
+  @override
+  String get accDhSignAndAcceptVehicle => 'التوقيع واستلام المركبة';
+
+  @override
+  String get accDhCompleteAllRequiredFieldsToEnable =>
+      'أكمل جميع الحقول المطلوبة للتفعيل';
+
+  @override
+  String get accDhMissing => 'الناقص';
+
+  @override
+  String get accDhArrivedDateTime2 => 'وقت الوصول';
+
+  @override
+  String get accDhDesignation2 => 'الوظيفة';
+
+  @override
+  String get accDhSignedHandoverPaper => 'ورقة التسليم';
+
+  @override
+  String get accDhVendorReceiverSignature3 => 'توقيع المستلم';
+
+  @override
+  String get accDhCustodyCheckbox => 'مربع قبول العهدة';
+
+  @override
+  String get accDhComplete => 'مكتمل';
+
+  @override
+  String get accDhNext => 'التالي';
+
+  @override
+  String get accDhPending => 'قيد الانتظار';
+
+  @override
+  String get accDhDispatched => 'تم الإرسال';
+
+  @override
+  String get accDhArrived2 => 'وصلت';
+
+  @override
+  String get accDhSignedAcceptance => 'الاستلام الموقع';
+
+  @override
+  String get accDhVendorAssessmentQuotationStarts =>
+      'يبدأ تقييم المورد / عرض السعر';
+
+  @override
+  String get accDhPick => 'اختيار';
+
+  @override
+  String get accDhUseNow => 'الآن';
+
+  @override
+  String get accDhAttached => 'مرفقة';
+
+  @override
+  String get accDhCamera => 'الكاميرا';
+
+  @override
+  String get accDhGallery => 'المعرض';
+
+  @override
+  String get accTlAddTimelineNote => 'إضافة ملاحظة';
+
+  @override
+  String get accTlNote => 'الملاحظة';
+
+  @override
+  String get accTlSaveNote => 'حفظ الملاحظة';
+
+  @override
+  String get accTlNotifyParticipants => 'إشعار المشاركين';
+
+  @override
+  String get accTlThisLogsTheNotificationOnThe =>
+      'يسجل هذا الإشعار في سجل القضية. التسليم للأشخاص يتم عبر محرك إشعارات الخادم.';
+
+  @override
+  String get accTlSubject => 'الموضوع';
+
+  @override
+  String get accTlMessage => 'الرسالة';
+
+  @override
+  String get accTlLogNotification => 'تسجيل الإشعار';
+
+  @override
+  String get accTlManageRecipientGroups => 'إدارة مجموعات المستلمين';
+
+  @override
+  String get accTlRecipientsAreSetByAdminPer =>
+      'يحدد المسؤول المستلمين لكل حدث ودور. المجموعات أدناه هي الأدوار التي يصل إليها كل حدث؛ العضوية من ملفات المستخدمين.';
+
+  @override
+  String get accTlVisibility => 'اطلاع';
+
+  @override
+  String get accTlTime => 'الوقت';
+
+  @override
+  String get accTlBy => 'بواسطة';
+
+  @override
+  String get accTlTo => 'إلى';
+
+  @override
+  String get accTlStatus => 'الحالة';
+
+  @override
+  String get accTlElapsed => 'المدة';
+
+  @override
+  String get accTlCaseTimelineNotifications => 'سجل القضية والإشعارات';
+
+  @override
+  String get accTlOpen => 'مفتوحة';
+
+  @override
+  String get accTlCurrentOwner => 'المسؤول الحالي';
+
+  @override
+  String get accTlNextSla => 'المهلة التالية';
+
+  @override
+  String get accTlDueIn => 'متبقي للموعد';
+
+  @override
+  String get accTlAddTimelineNote2 => 'إضافة ملاحظة للسجل';
+
+  @override
+  String get accTlNotifyParticipants2 => 'إشعار المشاركين';
+
+  @override
+  String get accTlNotProvisionedYetOnThisDatabase =>
+      'غير مفعل بعد في قاعدة البيانات';
+
+  @override
+  String get accTlCouldNotBeReadTheFeed => 'تعذرت قراءته؛ السجل لا يتضمنه';
+
+  @override
+  String get accTlCommunications => 'المراسلات';
+
+  @override
+  String get accTlEvidence => 'الأدلة';
+
+  @override
+  String get accTlSlaClocks => 'مهل الخدمة';
+
+  @override
+  String get accTlDispatchLeg => 'الإرسال';
+
+  @override
+  String get accTlGpsFix => 'موقع GPS';
+
+  @override
+  String get accTlTimeline => 'السجل الزمني';
+
+  @override
+  String get accTlNotifications => 'الإشعارات';
+
+  @override
+  String get accTlParticipants => 'المشاركون';
+
+  @override
+  String get accTlAll => 'الكل';
+
+  @override
+  String get accTlActions => 'الإجراءات';
+
+  @override
+  String get accTlDocuments => 'المستندات';
+
+  @override
+  String get accTlSla => 'المهل';
+
+  @override
+  String get accTlEmails => 'البريد';
+
+  @override
+  String get accTlCompleted => 'مكتمل';
+
+  @override
+  String get accTlInTransit => 'قيد النقل';
+
+  @override
+  String get accTlNoRecordedEventsForThisFilter =>
+      'لا توجد أحداث مسجلة لهذا المرشح.';
+
+  @override
+  String get accTlNotificationDeliveryLog => 'سجل تسليم الإشعارات';
+
+  @override
+  String get accTlNoNotificationsRecordedForThisCase =>
+      'لا توجد إشعارات مسجلة لهذه القضية.';
+
+  @override
+  String get accTlTrigger => 'المحفز';
+
+  @override
+  String get accTlRecipients => 'المستلمون';
+
+  @override
+  String get accTlChannel => 'القناة';
+
+  @override
+  String get accTlShowStatus => 'عرض الحالة';
+
+  @override
+  String get accTlViewAllNotifications => 'عرض جميع الإشعارات';
+
+  @override
+  String get accTlManageRecipientGroups2 => 'إدارة مجموعات المستلمين';
+
+  @override
+  String get accTlRecipientsAreSetByAdminPer2 =>
+      'يحدد المسؤول المستلمين لكل حدث ودور.';
+
+  @override
+  String get accTlParticipantsAndOwnership => 'المشاركون والمسؤولية';
+
+  @override
+  String get accTlBy2 => 'بواسطة';
+
+  @override
+  String get accTlTo2 => 'إلى';
+
+  @override
+  String get accTlSlaMet => 'تم الالتزام بالمهلة';
+
+  @override
+  String get accDhChangeNotSaved => 'تعذر حفظ التغيير. حاول مرة أخرى.';
+
+  @override
+  String get accDhContactOpenFailed =>
+      'تعذر فتح جهة اتصال الورشة على هذا الجهاز.';
+
+  @override
+  String get accDhRecordDepartureFirst => 'سجل وقت المغادرة أولاً.';
+
+  @override
+  String get accTlLoadFailed => 'تعذر تحميل السجل. حاول مرة أخرى.';
+
+  @override
+  String accTlOverdueBy(String elapsed) {
+    return 'متأخر $elapsed';
+  }
 }

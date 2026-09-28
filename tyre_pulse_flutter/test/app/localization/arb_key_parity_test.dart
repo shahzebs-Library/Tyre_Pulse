@@ -478,10 +478,45 @@ void main() {
     // 872 + 1 = 873. workshopCopyCatalog: the technician "My Jobs" screen
     // (ported from mobile/app/(app)/workshop.tsx), one `~`-separated catalog
     // key in the same convention as tasksCopyCatalog.
-    test('en, ar and ur each carry exactly 873 translatable keys today', () {
-      expect(_translatableKeys(en).length, 873);
-      expect(_translatableKeys(ar).length, 873);
-      expect(_translatableKeys(ur).length, 873);
+    // 873 + 23 = 896. Mock-parity copy that screens had been faking with
+    // stand-in keys: Home (homeTodaysWork, homeAwaitingSignatureTag,
+    // homeResumeInspection, homeTyreIssueNeedsAttention = 4), Profile
+    // (profileSectionWorkspace, profileEmployeeIdLabel, profileLanguageLabel,
+    // profileSectionDisplay, profileThemeLabel, profileThemeLight,
+    // profileThemeDark, profileThemeSystem, profileSectionOffline,
+    // profileUnsyncedFooter = 10), login (loginHeroTitle,
+    // loginSignInSubtitle = 2), vehicle detail (vehiclesInspectNow = 1) and
+    // the inspection tyre stepper (inspectionPreviousTyre, inspectionNextTyre,
+    // inspectionProgressTitle, inspectionPercentComplete,
+    // inspectionAxleNumber, inspectionTyresLabel = 6). 4+10+2+1+6 = 23; no
+    // existing key carried any of these meanings (no theme strings existed).
+    // 896 + 2 = 898. New Inspection asset picker: inspectionScanAssetButton
+    // ("Scan asset", replacing the borrowed scannerTitle "Scan" on the
+    // full-width scan button) and inspectionSelectedAssetTitle ("Selected
+    // asset", the heading on the selected-asset card) = 2.
+    // 898 + 1 = 899. profileSyncUnknownFooter: the line under Profile's
+    // Sign out when the offline queue count could not be read. The existing
+    // profileUnsyncedFooter ASSERTS work is queued, which is not known in that
+    // state, so an unknown count gets its own honest "may still be" wording.
+    // 899 + 3 = 902. Home: homeRecentInspectionsTitle (the "Your recent
+    // inspections" strip, mock 07's Recent assets derived from the user's own
+    // inspections), homeAssetNotChecked (a card whose inspection recorded no
+    // tyre evidence) and homeNothingForRoleTitle (no work source applies to
+    // the role, so "Nothing needs you right now" cannot be claimed) = 3.
+    // 902 + 16 = 918. Tyre Take Action: the Rotate tyre form, its validation
+    // and online-only save outcomes (tyreAction*).
+    // 918 + 148 = 1066. Driver workspace moved off its private English copy map
+    // (driverWs*), vehicle class labels (vehicleClass*), scanner camera-start
+    // failure (scannerCameraStartFailed*), Management Overview/Reports/Team.
+    // 1066 + 147 + 101 = 1314. Phone admin screens (admin*), Fleet AI, the
+    // self-registration screen and Request For Repair (extras*/register*/repairReq*).
+    // + 1 = 1315: loginCreateAccount, the access-help link to self-registration.
+    // 1315 + 417 = 1732. Accidents: report intake, insurance claim, workshop
+    // assessment, dispatch/handover and timeline copy moved into ARB (acc*).
+    test('en, ar and ur each carry exactly 1732 translatable keys today', () {
+      expect(_translatableKeys(en).length, 1732);
+      expect(_translatableKeys(ar).length, 1732);
+      expect(_translatableKeys(ur).length, 1732);
     });
   });
 

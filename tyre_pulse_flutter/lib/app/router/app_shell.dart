@@ -72,20 +72,20 @@ class TpAppShell extends ConsumerWidget {
 
     final TpPalette palette = TpPalette.of(context);
     final String activePath = GoRouterState.of(context).uri.path;
+    // Only the multi-step inspection flow owns its navigation: it carries a
+    // persistent Back/Next action row, and a second bar would duplicate
+    // controls and take the working height the capture steps need. Home no
+    // longer draws a bar of its own - the approved Home mock (07) uses this
+    // shared shell bar - so it is deliberately NOT excluded here.
     final bool hasScreenOwnedNavigation =
-        activePath == TpRoutePaths.newInspection ||
-            activePath == TpRoutePaths.home;
+        activePath == TpRoutePaths.newInspection;
 
     return Scaffold(
       backgroundColor: palette.background,
       body: navigationShell,
       bottomNavigationBar: hasScreenOwnedNavigation || layout.visible.length < 2
           // One destination is not a navigation bar, it is a decoration that
-          // costs a row of screen height on a phone held in one hand. The
-          // The approved Home dashboard owns its compact raised-centre action
-          // bar, while the multi-step inspection flow owns a persistent action
-          // instead. In both cases a second shell bar would duplicate controls
-          // and consume the exact working height the reference allocates.
+          // costs a row of screen height on a phone held in one hand.
           ? null
           : _TabBar(layout: layout, navigationShell: navigationShell),
     );

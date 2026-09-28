@@ -3,12 +3,13 @@
 /// render the owner's mock vocabulary identically instead of each carrying
 /// its own copy of "Not set".
 ///
-/// Copy is tri-lingual inline (en/ar/ur), mirroring the neighbouring
-/// role-workspace files; a blank value ALWAYS prints "Not set", never a dash.
+/// Copy comes from the ARB catalogs (en/ar/ur) through [WsKitCopy.l10n];
+/// a blank value ALWAYS prints "Not set", never a dash.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' show DateFormat;
+import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
@@ -17,14 +18,10 @@ final class WsKitCopy {
   const WsKitCopy(this.context);
   final BuildContext context;
 
-  String t(String en, String ar, String ur) =>
-      switch (Localizations.localeOf(context).languageCode) {
-        'ar' => ar,
-        'ur' => ur,
-        _ => en,
-      };
+  /// Every workspace string lives in the ARB catalogs (en/ar/ur).
+  AppLocalizations get l10n => AppLocalizations.of(context);
 
-  String get notSet => t('Not set', 'غير محدد', 'مقرر نہیں');
+  String get notSet => l10n.accNotSet;
 
   String value(Object? raw) {
     final String text = raw?.toString().trim() ?? '';

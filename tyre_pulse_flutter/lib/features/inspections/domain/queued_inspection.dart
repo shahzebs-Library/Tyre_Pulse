@@ -127,6 +127,7 @@ class QueuedInspection {
   final int attempts;
 
   QueuedInspection copyWith({
+    String? draftKey,
     InspectionPayload? payload,
     InspectionQueueStatus? status,
     DateTime? syncedAt,
@@ -137,7 +138,7 @@ class QueuedInspection {
   }) {
     return QueuedInspection(
       id: id,
-      draftKey: draftKey,
+      draftKey: draftKey ?? this.draftKey,
       payload: payload ?? this.payload,
       createdAt: createdAt,
       status: status ?? this.status,
@@ -276,7 +277,7 @@ class QueuedInspection {
       tyreConditions: conditions,
       notes: json['notes'] as String? ?? '',
       findings: json['findings'] as String?,
-      odometerKm: (json['odometerKm'] as num?)?.toInt(),
+      odometerKm: (json['odometerKm'] as num?)?.toDouble(),
       hourMeter: (json['hourMeter'] as num?)?.toDouble(),
       inspectorSignature: json['inspectorSignature'] as String?,
       approvalStatus: json['approvalStatus'] as String?,

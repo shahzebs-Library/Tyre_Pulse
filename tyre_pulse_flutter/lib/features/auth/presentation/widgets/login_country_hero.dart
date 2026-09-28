@@ -10,6 +10,7 @@ import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/features/auth/domain/login_artwork.dart';
 import 'package:tyre_pulse/features/auth/domain/login_country.dart';
 
 @visibleForTesting
@@ -25,7 +26,7 @@ abstract final class LoginCountryKeys {
 String _assetPath(LoginCountry country) => switch (country) {
       LoginCountry.saudiArabia => 'assets/login/saudi_arabia_hero.png',
       LoginCountry.unitedArabEmirates =>
-        'assets/login/united_arab_emirates_pmv_hero.webp',
+        'assets/login/united_arab_emirates_hero.png',
       LoginCountry.egypt => 'assets/login/egypt_hero.png',
     };
 
@@ -44,12 +45,16 @@ class LoginCountryHero extends StatelessWidget {
     required this.country,
     required this.compact,
     required this.onChangeCountry,
+    this.artwork,
     super.key,
   });
 
   final LoginCountry country;
   final bool compact;
   final VoidCallback onChangeCountry;
+
+  /// The administrator-chosen picture; null draws the country's landmark.
+  final LoginArtwork? artwork;
 
   @override
   Widget build(BuildContext context) {
@@ -71,8 +76,10 @@ class LoginCountryHero extends StatelessWidget {
             fit: StackFit.expand,
             children: <Widget>[
               Image.asset(
-                _assetPath(country),
-                key: ValueKey<String>(_assetPath(country)),
+                (artwork ?? LoginArtwork.defaultFor(country)).assetPath,
+                key: ValueKey<String>(
+                  (artwork ?? LoginArtwork.defaultFor(country)).assetPath,
+                ),
                 fit: BoxFit.cover,
                 alignment: const Alignment(0, 0.18),
                 excludeFromSemantics: true,

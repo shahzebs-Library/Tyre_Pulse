@@ -4,14 +4,14 @@
 /// language provider is re-exported from the localisation layer so a feature
 /// can import it from where it expects to find it.
 ///
-/// PERSISTENCE IS A STUB, DELIBERATELY AND VISIBLY.
+/// PERSISTENCE.
 ///
-/// [TpDisplaySettingsStore] is an interface with an in-memory implementation.
-/// Changing the language or the theme takes effect immediately, which is the
-/// behaviour a user can see; it does not yet survive a restart, which is the
-/// behaviour they cannot. The durable implementation belongs to whoever owns
-/// device storage, and it plugs in by overriding [displaySettingsStoreProvider]
-/// in the root `ProviderScope`.
+/// [TpDisplaySettingsStore] is an interface. The default in-memory
+/// implementation holds a choice for one run only and exists for tests; the
+/// app overrides [displaySettingsStoreProvider] in the root `ProviderScope`
+/// (`main.dart`) with `SharedPreferencesDisplaySettingsStore`
+/// (`tp_display_settings_prefs_store.dart`), so the language and theme chosen
+/// in Profile or on the login screen survive a restart.
 ///
 /// The interface is deliberately SYNCHRONOUS. Reading a preference must not be
 /// a future the first frame has to wait on, or the app opens on a flash of the
@@ -36,7 +36,7 @@ abstract interface class TpDisplaySettingsStore {
   void writeLocale(Locale? locale);
 }
 
-/// The default store. Holds the choice for this run of the app and no longer.
+/// The fallback store for tests. Holds the choice for this run and no longer.
 class InMemoryDisplaySettingsStore implements TpDisplaySettingsStore {
   ThemeMode? _themeMode;
   Locale? _locale;
@@ -54,7 +54,7 @@ class InMemoryDisplaySettingsStore implements TpDisplaySettingsStore {
   void writeLocale(Locale? locale) => _locale = locale;
 }
 
-/// Override this in the root `ProviderScope` to make preferences durable.
+/// Overridden in the root `ProviderScope` with the durable store.
 final Provider<TpDisplaySettingsStore> displaySettingsStoreProvider =
     Provider<TpDisplaySettingsStore>((ref) => InMemoryDisplaySettingsStore());
 

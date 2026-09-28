@@ -41,12 +41,12 @@ const List<_CountryCase> _countries = <_CountryCase>[
   _CountryCase(
     country: LoginCountry.saudiArabia,
     englishName: 'Saudi Arabia',
-    assetPath: 'assets/login/figma_city_background.png',
+    assetPath: 'assets/login/saudi_arabia_hero.png',
   ),
   _CountryCase(
     country: LoginCountry.unitedArabEmirates,
     englishName: 'United Arab Emirates',
-    assetPath: 'assets/login/united_arab_emirates_pmv_hero.webp',
+    assetPath: 'assets/login/united_arab_emirates_hero.png',
   ),
   _CountryCase(
     country: LoginCountry.egypt,
@@ -291,7 +291,7 @@ void main() {
       );
 
       expect(
-        _heroAsset('assets/login/figma_city_background.png'),
+        _heroAsset('assets/login/saudi_arabia_hero.png'),
         findsOneWidget,
       );
       expect(find.byKey(LoginCountryKeys.picker), findsNothing);
@@ -302,7 +302,7 @@ void main() {
 
       expect(_heroAsset('assets/login/egypt_hero.png'), findsOneWidget);
       expect(
-        _heroAsset('assets/login/figma_city_background.png'),
+        _heroAsset('assets/login/saudi_arabia_hero.png'),
         findsNothing,
       );
       expect(find.byKey(LoginCountryKeys.picker), findsNothing);
@@ -331,7 +331,7 @@ void main() {
       );
       expect(find.byKey(LoginCountryKeys.picker), findsNothing);
       expect(
-        _heroAsset('assets/login/figma_city_background.png'),
+        _heroAsset('assets/login/saudi_arabia_hero.png'),
         findsOneWidget,
       );
       expect(find.byType(TextField), findsNWidgets(2));
@@ -362,7 +362,7 @@ void main() {
       expect(repository.value, LoginCountry.egypt);
       expect(_heroAsset('assets/login/egypt_hero.png'), findsOneWidget);
       expect(
-        _heroAsset('assets/login/united_arab_emirates_pmv_hero.webp'),
+        _heroAsset('assets/login/united_arab_emirates_hero.png'),
         findsNothing,
       );
       expect(find.byType(SnackBar), findsOneWidget);

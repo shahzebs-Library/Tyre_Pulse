@@ -193,6 +193,40 @@ void main() {
     });
   });
 
+  group('P0-2: tyreless and unknown equipment', () {
+    for (final String type in <String>[
+      'GENERATOR',
+      'PLACING BOOM',
+      'STATIONARY PUMP',
+      'BT-PLANT',
+    ]) {
+      test('$type has no tyres to touch, so nothing about tyres blocks', () {
+        final List<InspectionSubmitIssue> issues = validateInspectionForSubmit(
+          _basePayload(
+            vehicleType: type,
+            assetNo: 'GN103',
+            signature: 'data:image/png;base64,abc',
+          ),
+        );
+        expect(issues, isEmpty);
+      });
+    }
+
+    test('an unknown type blocks nothing beyond "touch at least one tyre"', () {
+      final List<InspectionSubmitIssue> issues = validateInspectionForSubmit(
+        _basePayload(
+          vehicleType: 'unrecognised-type-xyz',
+          assetNo: 'ZZ999',
+          tyreConditions: const <String, TyrePositionReading>{
+            'LHF1': TyrePositionReading(position: 'LHF1', checked: true),
+          },
+          signature: 'data:image/png;base64,abc',
+        ),
+      );
+      expect(issues, isEmpty);
+    });
+  });
+
   group('touchedPositionCount', () {
     test('counts only positions with real evidence, not the seeded ones', () {
       final Map<String, TyrePositionReading> conditions =
@@ -208,8 +242,8 @@ void main() {
     });
   });
 
-  group('gps is required and carried through toRow', () {
-    test('a missing automatic location blocks submission explicitly', () {
+  group('gps never blocks, and is carried through toRow when captured', () {
+    test('P1-5: a missing location does NOT block submission', () {
       final List<InspectionSubmitIssue> issues = validateInspectionForSubmit(
         _basePayload(
           vehicleType: 'unrecognised-type-xyz',
@@ -222,7 +256,7 @@ void main() {
         ),
       );
 
-      expect(issues, <InspectionSubmitIssue>[InspectionSubmitIssue.missingGps]);
+      expect(issues, isEmpty);
     });
 
     test('toRow spreads four null gps columns when no fix was captured', () {

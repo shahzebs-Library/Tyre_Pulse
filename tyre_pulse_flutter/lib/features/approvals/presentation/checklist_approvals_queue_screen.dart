@@ -3,7 +3,7 @@
 /// Lists submissions still waiting on a signature, newest first. Since
 /// V594 there are TWO waiting states, not one: a sheet sits at `pending`
 /// until a supervisor signs it off, then at `pending_area_manager` until
-/// the area manager closes it - [ChecklistApprovalStatusChip] says which,
+/// the area manager closes it - each row's uppercase status tag says which,
 /// and the "Needs me" filter narrows the list to rows THIS reviewer can
 /// act on right now, via `checklist_approval.dart`'s [canDecide].
 ///
@@ -21,7 +21,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:tyre_pulse/app/localization/tp_direction.dart';
+import 'package:intl/intl.dart' show DateFormat;
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/back_navigation.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
@@ -38,6 +38,7 @@ import 'package:tyre_pulse/features/approvals/data/checklist_approval_template_i
 import 'package:tyre_pulse/features/approvals/data/queued_checklist_approval_decision.dart';
 import 'package:tyre_pulse/features/approvals/domain/checklist_approval.dart';
 import 'package:tyre_pulse/features/approvals/presentation/widgets/checklist_approval_status_chip.dart';
+import 'package:tyre_pulse/features/approvals/presentation/widgets/queue_list_kit.dart';
 
 enum _QueueFilter { all, mine }
 
@@ -185,6 +186,9 @@ class _ChecklistApprovalsQueueScreenState
 
     return TpScaffold(
       backFallback: fallback,
+      // The tinted canvas behind one grouped white card - see the
+      // inspection queue.
+      backgroundColor: TpPalette.of(context).surfaceAlt,
       appBar: TpAppBar(
         title: l10n.checklistApprovalsTitle,
         subtitle: _loading
@@ -225,12 +229,19 @@ class _ChecklistApprovalsQueueScreenState
               ),
             ),
           if (_items.isNotEmpty)
-            Padding(
+            Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: TpPalette.of(context).surface,
+                border: Border(
+                  bottom: BorderSide(color: TpPalette.of(context).border),
+                ),
+              ),
               padding: const EdgeInsets.fromLTRB(
                 TpSpace.lg,
                 TpSpace.sm,
                 TpSpace.lg,
-                0,
+                TpSpace.md,
               ),
               child: _FilterRow(
                 filter: _filter,
@@ -258,24 +269,24 @@ class _ChecklistApprovalsQueueScreenState
                     ],
                   )
                 : ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(
-                      TpSpace.lg,
-                      TpSpace.md,
-                      TpSpace.lg,
-                      TpSpace.xxl,
+                    padding: const EdgeInsets.only(
+                      top: TpSpace.lg,
+                      bottom: TpSpace.xxl,
                     ),
                     itemCount: visible.length,
                     itemBuilder: (context, index) {
                       final ChecklistApprovalItem item = visible[index];
                       return _QueueRow(
                         item: item,
+                        locale: Localizations.localeOf(context).toLanguageTag(),
+                        showDivider: index < visible.length - 1,
+                        isFirst: index == 0,
                         summary: statusSummary(
                           _templateLikeFor(item),
                           item.asSubmissionLike,
                         ),
                         isMine: mine.contains(item.id),
                         fallbackTitle: l10n.checklistApprovalFallbackTitle,
-                        unavailableLabel: l10n.valueUnavailable,
                         yourTurnLabel: l10n.checklistApprovalsYourTurn,
                         onTap: () => _open(item),
                       );
@@ -320,18 +331,19 @@ class _FilterRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    return Row(
+    return Wrap(
+      spacing: TpSpace.sm,
+      runSpacing: TpSpace.sm,
       children: <Widget>[
-        ChoiceChip(
-          label: Text('${l10n.checklistApprovalsFilterAll} ($allCount)'),
+        QueueFilterChip(
+          label: '${l10n.checklistApprovalsFilterAll} ($allCount)',
           selected: filter == _QueueFilter.all,
-          onSelected: (_) => onChanged(_QueueFilter.all),
+          onSelected: () => onChanged(_QueueFilter.all),
         ),
-        const SizedBox(width: TpSpace.sm),
-        ChoiceChip(
-          label: Text('${l10n.checklistApprovalsFilterMine} ($mineCount)'),
+        QueueFilterChip(
+          label: '${l10n.checklistApprovalsFilterMine} ($mineCount)',
           selected: filter == _QueueFilter.mine,
-          onSelected: (_) => onChanged(_QueueFilter.mine),
+          onSelected: () => onChanged(_QueueFilter.mine),
         ),
       ],
     );
@@ -434,147 +446,72 @@ class _BlockedDecisionsPanel extends StatelessWidget {
 class _QueueRow extends StatelessWidget {
   const _QueueRow({
     required this.item,
+    required this.locale,
+    required this.showDivider,
+    required this.isFirst,
     required this.summary,
     required this.isMine,
     required this.fallbackTitle,
-    required this.unavailableLabel,
     required this.yourTurnLabel,
     required this.onTap,
   });
 
   final ChecklistApprovalItem item;
+  final String locale;
+  final bool showDivider;
+  final bool isFirst;
   final ApprovalStatusSummary summary;
   final bool isMine;
   final String fallbackTitle;
-  final String unavailableLabel;
   final String yourTurnLabel;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final TpPalette palette = TpPalette.of(context);
-    final bool isRtl = TpDirection.isRtl(context);
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpStatus status = checklistApprovalStatusTone(summary);
     final String heading = (item.title?.trim().isNotEmpty ?? false)
         ? item.title!.trim()
         : (item.templateName?.trim().isNotEmpty ?? false)
             ? item.templateName!.trim()
             : fallbackTitle;
-    final String when = _formatDate(item.submittedAt) ?? unavailableLabel;
+    final String place = <String?>[item.site, item.assetNo]
+        .where((String? v) => v != null && v.trim().isNotEmpty)
+        .map((String? v) => v!.trim())
+        .join(' - ');
 
-    return TpCard(
+    return QueueListRow(
+      icon: Icons.shield_outlined,
+      status: status,
+      title: heading,
+      titleMaxLines: 2,
+      time: _formatDate(item.submittedAt, locale),
+      tags: <Widget>[
+        QueueStatusTag(
+          label: checklistApprovalStatusLabel(l10n, summary),
+          status: status,
+        ),
+        if (isMine) QueueStatusTag(label: yourTurnLabel, status: TpStatus.ok),
+      ],
+      details: <String>[
+        <String>[
+          if (item.documentNo != null && item.documentNo!.trim().isNotEmpty)
+            item.documentNo!.trim(),
+          if (place.isNotEmpty) place,
+        ].join(' • '),
+      ],
+      showDivider: showDivider,
+      isFirst: isFirst,
       onTap: onTap,
-      margin: const EdgeInsets.only(bottom: TpSpace.sm),
-      child: Row(
-        children: <Widget>[
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: palette.forStatus(TpStatus.warning).soft,
-              shape: BoxShape.circle,
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(TpSpace.sm),
-              child: Icon(
-                Icons.shield_outlined,
-                size: TpSizing.iconMd,
-                color: palette.forStatus(TpStatus.warning).onSoft,
-              ),
-            ),
-          ),
-          const SizedBox(width: TpSpace.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Text(
-                  heading,
-                  style: Theme.of(context).textTheme.titleSmall,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (item.documentNo != null)
-                  _MetaRow(icon: Icons.sell_outlined, text: item.documentNo!),
-                if (item.site != null || item.assetNo != null)
-                  _MetaRow(
-                    icon: Icons.place_outlined,
-                    text: <String?>[
-                      item.site,
-                      item.assetNo,
-                    ].where((v) => v != null && v.isNotEmpty).join(' - '),
-                  ),
-                _MetaRow(icon: Icons.event_outlined, text: when),
-                Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Wrap(
-                    spacing: TpSpace.xs,
-                    children: <Widget>[
-                      ChecklistApprovalStatusChip(
-                        summary: summary,
-                        isCompact: true,
-                      ),
-                      if (isMine)
-                        TpStatusChip(
-                          status: TpStatus.ok,
-                          label: yourTurnLabel,
-                          isCompact: true,
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: TpSpace.xs),
-          Icon(
-            isRtl ? Icons.chevron_left : Icons.chevron_right,
-            color: palette.textMuted,
-          ),
-        ],
-      ),
     );
   }
 
-  static String? _formatDate(String? iso) {
+  /// A short localised date, or `null` when the submission time is missing
+  /// or unparseable - the slot is then left empty rather than guessed.
+  static String? _formatDate(String? iso, String locale) {
     if (iso == null || iso.isEmpty) return null;
     final DateTime? parsed = DateTime.tryParse(iso);
     if (parsed == null) return null;
-    final DateTime local = parsed.toLocal();
-    final String y = local.year.toString().padLeft(4, '0');
-    final String m = local.month.toString().padLeft(2, '0');
-    final String d = local.day.toString().padLeft(2, '0');
-    return '$y-$m-$d';
-  }
-}
-
-class _MetaRow extends StatelessWidget {
-  const _MetaRow({required this.icon, required this.text});
-
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final TpPalette palette = TpPalette.of(context);
-    final TextStyle? style = Theme.of(context)
-        .textTheme
-        .bodySmall
-        ?.copyWith(color: palette.textMuted);
-    return Padding(
-      padding: const EdgeInsets.only(top: 2),
-      child: Row(
-        children: <Widget>[
-          Icon(icon, size: TpSizing.iconSm, color: palette.textMuted),
-          const SizedBox(width: TpSpace.xs),
-          Flexible(
-            child: Text(
-              text,
-              style: style,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
-    );
+    return DateFormat.yMMMd(locale).format(parsed.toLocal());
   }
 }

@@ -67,6 +67,23 @@ class InspectionDraftSignature {
   final String? strokesJson;
 }
 
+/// The saved header of one draft, for restoring the wizard on resume.
+class InspectionDraftHeader {
+  const InspectionDraftHeader({
+    this.site,
+    this.vehicleType,
+    this.odometerKm,
+    this.engineHours,
+    this.findings,
+  });
+
+  final String? site;
+  final String? vehicleType;
+  final int? odometerKm;
+  final double? engineHours;
+  final String? findings;
+}
+
 /// The narrow surface the wizard needs. Abstract so a controller test can
 /// substitute an in-memory fake without a real Drift database - the same
 /// seam `TyreLookupRepository` establishes for its own feature.
@@ -89,11 +106,20 @@ abstract interface class InspectionDraftRepository {
     String? findings,
   });
 
-  /// The single write path for a tyre-position edit. ALWAYS stamps
+  /// The single write path for a tyre-position edit. Stamps
   /// `checked: true` - see [TyrePositionReading.checked]'s own doc
   /// comment for why every deliberate interaction, including confirming a
   /// default Good reading, must route through here.
-  Future<void> saveTyreReading(String draftKey, TyrePositionReading reading);
+  ///
+  /// [markChecked] is false ONLY for a value the app filled in on the
+  /// inspector's behalf (a serial pre-filled from a scan): persisting it
+  /// must not count the wheel as attended to, or the completeness gate
+  /// would pass a tyre nobody looked at.
+  Future<void> saveTyreReading(
+    String draftKey,
+    TyrePositionReading reading, {
+    bool markChecked = true,
+  });
 
   /// All positions currently recorded for [draftKey], as a map ready to
   /// hand to [tyreCompleteness] / [VehicleTyreDiagram].
@@ -155,6 +181,23 @@ abstract interface class InspectionDraftRepository {
   /// deliberately stricter than "any field is non-blank".
   Future<bool> hasContent(String draftKey);
 
+  /// The saved header for [draftKey], or null when no draft exists.
+  Future<InspectionDraftHeader?> header(String draftKey);
+
+  /// Removes [position]'s photo rows from [draftKey] and returns their local
+  /// file paths for the caller to delete.
+  Future<List<String>> removePhotos(String draftKey, String position);
+
+  /// Moves the draft at [fromKey] (header, positions, photos, signature) to
+  /// [toKey] - the submitted-draft key - so the live key is free for the
+  /// next inspection of the same machine. Idempotent; see
+  /// `DraftsDao.detachInspectionDraft`. Returns whether a draft exists at
+  /// [toKey] afterwards.
+  Future<bool> detachForSubmission({
+    required String fromKey,
+    required String toKey,
+  });
+
   /// Discards the draft header, its positions, its photos and its
   /// signature. Returns the local photo file paths whose rows were
   /// removed, so the CALLER can delete the underlying files - see the
@@ -207,7 +250,11 @@ final class DriftInspectionDraftRepository
   }
 
   @override
-  Future<void> saveTyreReading(String draftKey, TyrePositionReading reading) {
+  Future<void> saveTyreReading(
+    String draftKey,
+    TyrePositionReading reading, {
+    bool markChecked = true,
+  }) {
     return _draftsDao.saveInspectionPosition(
       draftKey: draftKey,
       position: reading.position,
@@ -216,11 +263,9 @@ final class DriftInspectionDraftRepository
       pressurePsi: reading.pressurePsi,
       treadDepthMm: reading.treadDepthMm,
       serialNo: reading.serialNumber,
-      // ALWAYS true - see the interface doc comment. A caller that wants
-      // to seed a position without marking it attended-to should not call
-      // this method at all; the seed is expressed purely in the
-      // presentation layer's initial map, never written here.
-      checked: true,
+      // True for every deliberate edit - see the interface doc comment.
+      // Only an app-filled value (scan pre-fill) passes markChecked: false.
+      checked: markChecked || reading.checked,
     );
   }
 
@@ -372,6 +417,35 @@ final class DriftInspectionDraftRepository
       ownerKey: draftKey,
       filled: header?.filled ?? 0,
     );
+  }
+
+  @override
+  Future<InspectionDraftHeader?> header(String draftKey) async {
+    final row = await _draftsDao.inspectionDraft(draftKey);
+    if (row == null) return null;
+    return InspectionDraftHeader(
+      site: row.site,
+      vehicleType: row.vehicleType,
+      odometerKm: row.odometerKm,
+      engineHours: row.engineHours,
+      findings: row.findings,
+    );
+  }
+
+  @override
+  Future<List<String>> removePhotos(String draftKey, String position) {
+    return _draftsDao.removeInspectionDraftPhotos(
+      draftKey: draftKey,
+      position: position,
+    );
+  }
+
+  @override
+  Future<bool> detachForSubmission({
+    required String fromKey,
+    required String toKey,
+  }) {
+    return _draftsDao.detachInspectionDraft(fromKey: fromKey, toKey: toKey);
   }
 
   @override

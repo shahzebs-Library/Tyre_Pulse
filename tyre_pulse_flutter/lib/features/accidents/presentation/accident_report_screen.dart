@@ -42,6 +42,8 @@ class AccidentReportScreen extends ConsumerStatefulWidget {
 enum _DraftState { ready, dirty, saving, saved, failed, restoring }
 
 class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
+  AppLocalizations get _l10n => AppLocalizations.of(context);
+
   final List<TextEditingController> _ownedControllers =
       <TextEditingController>[];
   late final TextEditingController _asset;
@@ -198,8 +200,7 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
       if (!mounted) return;
       setState(() {
         _draftState = _DraftState.failed;
-        _error = 'The saved report draft could not be restored. '
-            'Your existing saved data was not overwritten.';
+        _error = _l10n.accReportDraftRestoreFailed;
       });
     }
   }
@@ -284,7 +285,7 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
     final String? scope = _draftScope(workspace);
     if (scope == null) {
       if (surfaceError && mounted) {
-        setState(() => _error = 'Your workspace is still loading. Try again.');
+        setState(() => _error = _l10n.accWorkspaceLoading);
       }
       return false;
     }
@@ -315,8 +316,7 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
       setState(() {
         _draftState = _DraftState.failed;
         if (surfaceError) {
-          _error = 'This device could not save the draft. Nothing previously '
-              'saved was overwritten. Try again.';
+          _error = _l10n.accReportDraftSaveFailed;
         }
       });
       return false;
@@ -409,10 +409,8 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
     await context.push(const ScannerRoute().location);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Use the scanned asset number to select the matching fleet record.',
-        ),
+      SnackBar(
+        content: Text(_l10n.accReportUseScannedAsset),
       ),
     );
   }
@@ -524,12 +522,12 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
               Text(
-                'Add close-up photo',
+                AppLocalizations.of(context).accReportAddCloseUpPhoto,
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: TpSpace.md),
               TpButton.primary(
-                label: 'Take photo',
+                label: AppLocalizations.of(context).accReportTakePhoto,
                 icon: Icons.camera_alt_outlined,
                 onPressed: () =>
                     Navigator.of(context).pop(AccidentPhotoSource.camera),
@@ -537,7 +535,7 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
               ),
               const SizedBox(height: TpSpace.sm),
               TpButton.secondary(
-                label: 'Choose from gallery',
+                label: AppLocalizations.of(context).accReportChooseGallery,
                 icon: Icons.photo_library_outlined,
                 onPressed: () =>
                     Navigator.of(context).pop(AccidentPhotoSource.gallery),
@@ -694,9 +692,8 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
         SnackBar(
           content: Text(
             dropped.isEmpty
-                ? 'Report saved to the offline queue.'
-                : 'Report queued. Some unsupported optional fields were '
-                    'kept in the intake notes.',
+                ? _l10n.accReportQueued
+                : _l10n.accReportQueuedWithNotes,
           ),
         ),
       );
@@ -786,20 +783,19 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
       switch (_currentStep) {
         AccidentIntakePage.identifyAsset => AccidentIntakeCanvas(
             title: _currentStep.label,
-            subtitle: 'Select the fleet asset involved in this incident.',
+            subtitle: _l10n.accReportStepAssetSubtitle,
             icon: Icons.local_shipping_outlined,
             child: _identifyStep(fleet, assets, copy),
           ),
         AccidentIntakePage.incident => AccidentSection(
             title: _currentStep.label,
-            subtitle: 'Record when, where and what happened.',
+            subtitle: _l10n.accReportStepIncidentSubtitle,
             icon: Icons.event_note_outlined,
             child: _incidentStep(),
           ),
         AccidentIntakePage.peopleAuthority => AccidentSection(
             title: _currentStep.label,
-            subtitle: 'Record only the people, safety, Najm and third-party '
-                'facts needed at the scene.',
+            subtitle: _l10n.accReportStepPeopleSubtitle,
             icon: Icons.people_outline,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -842,8 +838,7 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
           ),
         AccidentIntakePage.evidence => AccidentSection(
             title: _currentStep.label,
-            subtitle: 'Add one scene overview and one close-up for each marked '
-                'damage area. Supporting documents are optional at intake.',
+            subtitle: _l10n.accReportStepEvidenceSubtitle,
             icon: Icons.fact_check_outlined,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -863,7 +858,7 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
           ),
         AccidentIntakePage.documents => AccidentSection(
             title: _currentStep.label,
-            subtitle: 'Add available supporting documents. Optional at intake.',
+            subtitle: _l10n.accReportStepDocumentsSubtitle,
             icon: Icons.folder_copy_outlined,
             child: AccidentOptionalDocumentList(
               paths: _evidencePaths,
@@ -875,8 +870,7 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
           ),
         AccidentIntakePage.review => AccidentSection(
             title: _currentStep.label,
-            subtitle: 'Check the exact report and send it to Fleet validation. '
-                'Optional documents never block this submission.',
+            subtitle: _l10n.accReportStepReviewSubtitle,
             icon: Icons.assignment_turned_in_outlined,
             child: _reviewStep(snapshot, evidenceRequirements),
           ),
@@ -902,7 +896,7 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
             TpButton.secondary(
-              label: 'Scan QR / barcode',
+              label: _l10n.accReportScanCode,
               icon: Icons.qr_code_scanner_rounded,
               onPressed: _openScanner,
               isFullWidth: true,
@@ -920,12 +914,12 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
             const SizedBox(height: TpSpace.sm),
             if (fleetReady)
               Text(
-                '${matches.total} matching assets',
+                _l10n.accReportMatchingAssets(matches.total),
                 key: AccidentReportIntakeKeys.matchCount,
                 style: Theme.of(context).textTheme.labelLarge,
               ),
             if (fleetReady && matches.total == 0)
-              const Text('No matching fleet asset'),
+              Text(_l10n.accReportNoMatchingAsset),
             for (final VehicleAsset asset in matches.shown) ...<Widget>[
               const SizedBox(height: TpSpace.sm),
               AccidentAssetMatchRow(
@@ -941,9 +935,11 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
             if (matches.isTruncated) ...<Widget>[
               const SizedBox(height: TpSpace.sm),
               Text(
-                'Showing the first ${matches.limit} of ${matches.total} '
-                'matches. ${matches.hiddenCount} more results, refine your '
-                'search.',
+                _l10n.accReportMatchOverflow(
+                  matches.limit,
+                  matches.total,
+                  matches.hiddenCount,
+                ),
                 key: AccidentReportIntakeKeys.matchOverflow,
                 style: Theme.of(context).textTheme.bodySmall,
               ),
@@ -961,11 +957,11 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
         ),
         if (outcome is VehicleFleetListFromCache) ...<Widget>[
           const SizedBox(height: TpSpace.sm),
-          const Align(
+          Align(
             alignment: AlignmentDirectional.centerStart,
             child: TpStatusChip(
               status: TpStatus.info,
-              label: 'Showing saved fleet data',
+              label: _l10n.accReportSavedFleetData,
               icon: Icons.offline_bolt_outlined,
               isCompact: true,
             ),
@@ -987,26 +983,27 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
           AccidentFleetMasterCard(
             asset: _selectedVehicle!,
             onChange: () => _pickVehicle(assets),
-            changeLabel: 'Change asset',
+            changeLabel: _l10n.accReportChangeAsset,
             unavailableLabel: copy('notRecorded'),
           )
         else
           TpInput(
-            label: 'Asset number (manual fallback)',
+            label: _l10n.accReportManualAsset,
             controller: _asset,
             isRequired: true,
-            hint: 'Use only when a fleet match is unavailable',
+            hint: _l10n.accReportManualAssetHint,
             prefixIcon: Icons.pin_outlined,
             textCapitalization: TextCapitalization.characters,
           ),
         const SizedBox(height: TpSpace.md),
         TpInput(
-          label: 'Meter at incident',
+          label: _l10n.accReportMeterAtIncident,
           controller: _meterAtIncident,
           hint: _selectedVehicle?.currentKm == null
-              ? 'Odometer or hour-meter reading'
-              : 'Fleet master: '
-                  '${formatVehicleOdometer(_selectedVehicle!.currentKm!)} km',
+              ? _l10n.accReportMeterHint
+              : _l10n.accReportMeterFleetMaster(
+                  formatVehicleOdometer(_selectedVehicle!.currentKm!),
+                ),
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           prefixIcon: Icons.speed_outlined,
         ),
@@ -1022,7 +1019,7 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
         ),
         const SizedBox(height: TpSpace.sm),
         TpInput(
-          label: 'Road / exact location',
+          label: _l10n.accReportRoadLocation,
           controller: _incidentLocation,
           prefixIcon: Icons.location_on_outlined,
         ),
@@ -1037,7 +1034,7 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
             children: <Widget>[
               Expanded(
                 child: _PickerField(
-                  label: 'Incident date',
+                  label: _l10n.accReportIncidentDate,
                   value: MaterialLocalizations.of(context).formatMediumDate(
                     _incidentAt,
                   ),
@@ -1048,7 +1045,7 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
               const SizedBox(width: TpSpace.sm),
               Expanded(
                 child: _PickerField(
-                  label: 'Incident time',
+                  label: _l10n.accReportIncidentTime,
                   value: MaterialLocalizations.of(context).formatTimeOfDay(
                     TimeOfDay.fromDateTime(_incidentAt),
                   ),
@@ -1060,48 +1057,47 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
           ),
           const SizedBox(height: TpSpace.md),
           TpInput(
-            label: 'Incident site',
+            label: _l10n.accReportIncidentSite,
             controller: _incidentSite,
             isRequired: true,
             prefixIcon: Icons.business_outlined,
-            helperText: 'Editable incident site; independent of the locked '
-                'fleet home site.',
+            helperText: _l10n.accReportIncidentSiteHelper,
           ),
           const SizedBox(height: TpSpace.md),
           TpInput(
-            label: 'Road / exact location',
+            label: _l10n.accReportRoadLocation,
             controller: _incidentLocation,
             prefixIcon: Icons.location_on_outlined,
-            hint: 'Gate, road, project area or GPS description',
+            hint: _l10n.accReportRoadLocationHint,
           ),
           const SizedBox(height: TpSpace.md),
           _DropdownField(
-            label: 'Event type',
+            label: _l10n.accReportEventType,
             value: _type,
-            hint: 'Select event type',
-            items: _accidentTypeOptions,
+            hint: _l10n.accReportSelectEventType,
+            items: _accidentTypeOptions(_l10n),
             onChanged: (String value) => _change(() => _type = value),
           ),
           const SizedBox(height: TpSpace.md),
           _DropdownField(
-            label: 'Initial severity',
+            label: _l10n.accReportInitialSeverity,
             value: _severity,
-            items: const <String, String>{
-              'minor': 'Minor',
-              'moderate': 'Moderate',
-              'severe': 'Major / severe',
-              'fatal': 'Fatal',
+            items: <String, String>{
+              'minor': _l10n.accSeverityMinor,
+              'moderate': _l10n.accSeverityModerate,
+              'severe': _l10n.accSeverityMajorSevere,
+              'fatal': _l10n.accSeverityFatal,
             },
             onChanged: (String value) => _change(() => _severity = value),
           ),
           const SizedBox(height: TpSpace.md),
           TpInput(
-            label: 'What happened?',
+            label: _l10n.accReportWhatHappened,
             controller: _narrative,
             isRequired: true,
             maxLines: 5,
             textCapitalization: TextCapitalization.sentences,
-            hint: 'Describe the sequence of events and immediate conditions',
+            hint: _l10n.accReportWhatHappenedHint,
           ),
         ],
       );
@@ -1110,20 +1106,20 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           TpInput(
-            label: 'Driver name',
+            label: _l10n.accReportDriverName,
             controller: _driverName,
             isRequired: true,
             prefixIcon: Icons.badge_outlined,
           ),
           const SizedBox(height: TpSpace.md),
           TpInput(
-            label: 'Driver employee / licence ID',
+            label: _l10n.accReportDriverId,
             controller: _driverId,
             prefixIcon: Icons.credit_card_outlined,
           ),
           const SizedBox(height: TpSpace.lg),
           AccidentYesNoField(
-            label: 'Were passengers involved?',
+            label: _l10n.accReportPassengersInvolved,
             value: _passengersInvolved,
             onChanged: (bool value) =>
                 _change(() => _passengersInvolved = value),
@@ -1131,7 +1127,7 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
           if (_passengersInvolved == true) ...<Widget>[
             const SizedBox(height: TpSpace.md),
             TpInput(
-              label: 'Passenger count',
+              label: _l10n.accReportPassengerCount,
               controller: _passengerCount,
               isRequired: true,
               keyboardType: TextInputType.number,
@@ -1141,21 +1137,21 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
             ),
             const SizedBox(height: TpSpace.md),
             TpInput(
-              label: 'Passenger details',
+              label: _l10n.accReportPassengerDetails,
               controller: _passengerDetails,
               maxLines: 3,
             ),
           ],
           const SizedBox(height: TpSpace.lg),
           AccidentYesNoField(
-            label: 'Were there injuries?',
+            label: _l10n.accReportInjuries,
             value: _injuries,
             onChanged: (bool value) => _change(() => _injuries = value),
           ),
           if (_injuries == true) ...<Widget>[
             const SizedBox(height: TpSpace.md),
             TpInput(
-              label: 'Injury count',
+              label: _l10n.accReportInjuryCount,
               controller: _injuryCount,
               isRequired: true,
               keyboardType: TextInputType.number,
@@ -1165,7 +1161,7 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
             ),
             const SizedBox(height: TpSpace.md),
             TpInput(
-              label: 'Injury details',
+              label: _l10n.accReportInjuryDetails,
               controller: _injuryDetails,
               isRequired: true,
               maxLines: 3,
@@ -1173,7 +1169,7 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
           ],
           const SizedBox(height: TpSpace.lg),
           AccidentYesNoField(
-            label: 'Were emergency services contacted?',
+            label: _l10n.accReportEmergencyServices,
             value: _emergencyServices,
             onChanged: (bool value) =>
                 _change(() => _emergencyServices = value),
@@ -1181,7 +1177,7 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
           if (_emergencyServices == true) ...<Widget>[
             const SizedBox(height: TpSpace.md),
             TpInput(
-              label: 'Emergency response details',
+              label: _l10n.accReportEmergencyDetails,
               controller: _emergencyDetails,
               isRequired: true,
               maxLines: 3,
@@ -1189,19 +1185,19 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
           ],
           const SizedBox(height: TpSpace.lg),
           AccidentYesNoField(
-            label: 'Is the vehicle movable?',
+            label: _l10n.accReportVehicleMovable,
             value: _vehicleMovable,
             onChanged: (bool value) => _change(() => _vehicleMovable = value),
           ),
           const SizedBox(height: TpSpace.md),
           AccidentYesNoField(
-            label: 'Is recovery / towing required?',
+            label: _l10n.accReportRecoveryRequired,
             value: _recoveryRequired,
             onChanged: (bool value) => _change(() => _recoveryRequired = value),
           ),
           const SizedBox(height: TpSpace.md),
           AccidentYesNoField(
-            label: 'Is the vehicle safe to operate?',
+            label: _l10n.accReportSafeToOperate,
             value: _safeToOperate,
             onChanged: (bool value) => _change(() => _safeToOperate = value),
           ),
@@ -1212,7 +1208,7 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           AccidentYesNoField(
-            label: 'Was a third party involved?',
+            label: _l10n.accReportThirdPartyInvolved,
             value: _thirdPartyInvolved,
             onChanged: (bool value) =>
                 _change(() => _thirdPartyInvolved = value),
@@ -1220,45 +1216,44 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
           if (_thirdPartyInvolved == true) ...<Widget>[
             const SizedBox(height: TpSpace.md),
             TpInput(
-              label: 'Third-party name',
+              label: _l10n.accReportThirdPartyName,
               controller: _thirdPartyName,
               isRequired: true,
             ),
             const SizedBox(height: TpSpace.md),
             TpInput(
-              label: 'Third-party vehicle',
+              label: _l10n.accReportThirdPartyVehicle,
               controller: _thirdPartyVehicle,
             ),
             const SizedBox(height: TpSpace.md),
             TpInput(
-              label: 'Third-party plate',
+              label: _l10n.accReportThirdPartyPlate,
               controller: _thirdPartyPlate,
             ),
             const SizedBox(height: TpSpace.md),
             TpInput(
-              label: 'Third-party contact',
+              label: _l10n.accReportThirdPartyContact,
               controller: _thirdPartyContact,
               isRequired: true,
               keyboardType: TextInputType.phone,
             ),
             const SizedBox(height: TpSpace.md),
             TpInput(
-              label: 'Third-party insurer',
+              label: _l10n.accReportThirdPartyInsurer,
               controller: _thirdPartyInsurer,
             ),
             const SizedBox(height: TpSpace.lg),
             AccidentYesNoField(
-              label: 'Is a third-party invoice available?',
+              label: _l10n.accReportThirdPartyInvoice,
               value: _thirdPartyInvoiceAvailable,
-              helper: 'This is optional. If available, record only the invoice '
-                  'number; the Insurance team can request the file later.',
+              helper: _l10n.accReportThirdPartyInvoiceHelper,
               onChanged: (bool value) =>
                   _change(() => _thirdPartyInvoiceAvailable = value),
             ),
             if (_thirdPartyInvoiceAvailable == true) ...<Widget>[
               const SizedBox(height: TpSpace.md),
               TpInput(
-                label: 'Third-party invoice number',
+                label: _l10n.accReportThirdPartyInvoiceNumber,
                 controller: _thirdPartyInvoiceNumber,
                 isRequired: true,
               ),
@@ -1266,15 +1261,15 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
           ],
           const SizedBox(height: TpSpace.lg),
           AccidentYesNoField(
-            label: 'Was a Najm case opened?',
+            label: _l10n.accReportNajmOpened,
             value: _najmNotified,
-            helper: 'Record only when Najm applies to this incident.',
+            helper: _l10n.accReportNajmHelper,
             onChanged: (bool value) => _change(() => _najmNotified = value),
           ),
           if (_najmNotified == true) ...<Widget>[
             const SizedBox(height: TpSpace.md),
             TpInput(
-              label: 'Najm reference',
+              label: _l10n.accReportNajmReference,
               controller: _najmReference,
               isRequired: true,
             ),
@@ -1302,19 +1297,19 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         TpInput(
-          label: 'Witness details',
+          label: _l10n.accReportWitnessDetails,
           controller: _witnessDetails,
           maxLines: 3,
         ),
         const SizedBox(height: TpSpace.md),
         TpInput(
-          label: 'Immediate action taken',
+          label: _l10n.accReportImmediateAction,
           controller: _immediateAction,
           maxLines: 3,
         ),
         const SizedBox(height: TpSpace.md),
         TpInput(
-          label: 'Additional notes',
+          label: _l10n.accReportAdditionalNotes,
           controller: _notes,
           maxLines: 3,
         ),
@@ -1337,14 +1332,16 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
                   Expanded(
                     child: Text(
                       missing.isEmpty
-                          ? 'Ready to submit'
-                          : 'Missing before submission',
+                          ? _l10n.accReportReadyToSubmit
+                          : _l10n.accReportMissingBeforeSubmit,
                       style: Theme.of(context).textTheme.titleSmall,
                     ),
                   ),
                   TpStatusChip(
                     status: missing.isEmpty ? TpStatus.ok : TpStatus.warning,
-                    label: missing.isEmpty ? 'Complete' : '${missing.length}',
+                    label: missing.isEmpty
+                        ? _l10n.accReportComplete
+                        : '${missing.length}',
                     isCompact: true,
                   ),
                 ],
@@ -1365,25 +1362,25 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
           child: Column(
             children: <Widget>[
               AccidentReviewRow(
-                label: 'Asset',
+                label: _l10n.accReportReviewAsset,
                 value: snapshot.effectiveAssetNo.isEmpty
-                    ? 'Not recorded'
+                    ? _l10n.accNotRecorded
                     : snapshot.effectiveAssetNo,
                 icon: Icons.local_shipping_outlined,
               ),
               AccidentReviewRow(
-                label: 'Incident',
-                value: '${_eventTypeLabel(snapshot.accidentType)} · '
-                    '${snapshot.severity}',
+                label: _l10n.accReportReviewIncident,
+                value: '${_eventTypeLabel(_l10n, snapshot.accidentType)} · '
+                    '${_severityLabel(_l10n, snapshot.severity)}',
                 icon: Icons.warning_amber_rounded,
               ),
               AccidentReviewRow(
-                label: 'Date and time',
+                label: _l10n.accReportReviewDateTime,
                 value: incidentWhen,
                 icon: Icons.event_outlined,
               ),
               AccidentReviewRow(
-                label: 'Site / location',
+                label: _l10n.accReportReviewSiteLocation,
                 value: <String>[
                   snapshot.incidentSite.trim(),
                   snapshot.incidentLocation.trim(),
@@ -1391,50 +1388,53 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
                 icon: Icons.location_on_outlined,
               ),
               AccidentReviewRow(
-                label: 'What happened',
+                label: _l10n.accReportReviewWhatHappened,
                 value: snapshot.narrative.trim().isEmpty
-                    ? 'Not recorded'
+                    ? _l10n.accNotRecorded
                     : snapshot.narrative.trim(),
                 icon: Icons.notes_outlined,
               ),
               AccidentReviewRow(
-                label: 'People',
-                value:
-                    'Driver ${snapshot.driverName.trim().isEmpty ? '—' : snapshot.driverName.trim()} · '
-                    'Injuries ${_yesNo(snapshot.injuries)}',
+                label: _l10n.accReportReviewPeople,
+                value: _l10n.accReportReviewPeopleValue(
+                  snapshot.driverName.trim().isEmpty
+                      ? _l10n.accNotRecorded
+                      : snapshot.driverName.trim(),
+                  _yesNo(_l10n, snapshot.injuries),
+                ),
                 icon: Icons.people_outline,
               ),
               AccidentReviewRow(
-                label: 'Damage marks',
+                label: _l10n.accReportReviewDamageMarks,
                 value: '${snapshot.damageMap.count}',
                 icon: Icons.car_crash_outlined,
               ),
               AccidentReviewRow(
-                label: 'Focused photos',
-                value: '$photos of ${requirements.length}',
+                label: _l10n.accReportReviewFocusedPhotos,
+                value: _l10n.accReportReviewPhotosValue(
+                  photos,
+                  requirements.length,
+                ),
                 icon: Icons.photo_library_outlined,
               ),
               AccidentReviewRow(
-                label: 'Optional documents',
-                value: '$documents attached',
+                label: _l10n.accReportReviewOptionalDocuments,
+                value: _l10n.accReportReviewAttachedValue(documents),
                 icon: Icons.description_outlined,
               ),
             ],
           ),
         ),
         const SizedBox(height: TpSpace.md),
-        const TpCard(
+        TpCard(
           isDashed: true,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Icon(Icons.schedule_send_outlined),
-              SizedBox(width: TpSpace.sm),
+              const Icon(Icons.schedule_send_outlined),
+              const SizedBox(width: TpSpace.sm),
               Expanded(
-                child: Text(
-                  'Recipients, route and initial SLA are resolved by the '
-                  'configured accident workflow when this queued report syncs.',
-                ),
+                child: Text(_l10n.accReportWorkflowResolvesOnSync),
               ),
             ],
           ),
@@ -1445,15 +1445,18 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
 
   Widget _bottomBar() {
     final String statusLabel = switch (_draftState) {
-      _DraftState.ready => 'Draft auto-saves on device',
-      _DraftState.dirty => 'Unsaved changes',
-      _DraftState.saving => 'Saving draft…',
+      _DraftState.ready => _l10n.accReportDraftAutoSaves,
+      _DraftState.dirty => _l10n.accReportDraftUnsaved,
+      _DraftState.saving => _l10n.accReportDraftSaving,
       _DraftState.saved => _draftSavedAt == null
-          ? 'Draft saved on device'
-          : 'Draft saved on device · '
-              '${MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(_draftSavedAt!))}',
-      _DraftState.failed => 'Draft save failed',
-      _DraftState.restoring => 'Restoring saved draft…',
+          ? _l10n.accReportDraftSaved
+          : _l10n.accReportDraftSavedAt(
+              MaterialLocalizations.of(context).formatTimeOfDay(
+                TimeOfDay.fromDateTime(_draftSavedAt!),
+              ),
+            ),
+      _DraftState.failed => _l10n.accReportDraftSaveFailedShort,
+      _DraftState.restoring => _l10n.accReportDraftRestoring,
     };
     final Widget draftStatus = AccidentDraftStatus(
       label: statusLabel,
@@ -1469,7 +1472,7 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
           onPressed:
               _submitting || _busyEvidenceKey != null ? null : _saveAndExit,
           icon: const Icon(Icons.save_outlined),
-          label: const Text('Save and exit'),
+          label: Text(_l10n.accReportSaveAndExit),
         ),
       ],
     );
@@ -1478,7 +1481,7 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
         if (_currentStep.index > 0) ...<Widget>[
           Expanded(
             child: TpButton.secondary(
-              label: 'Back',
+              label: _l10n.accReportBack,
               icon: Icons.arrow_back_rounded,
               onPressed: _submitting ? null : _backStep,
               isFullWidth: true,
@@ -1491,12 +1494,12 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
           child: TpButton.primary(
             key: const ValueKey<String>('accident.report.continue'),
             label: _currentStep == AccidentIntakePage.review
-                ? 'Submit accident'
+                ? _l10n.accReportSubmit
                 : _currentStep == AccidentIntakePage.identifyAsset
-                    ? 'Continue to incident details'
+                    ? _l10n.accReportContinueToIncident
                     : _currentStep == AccidentIntakePage.damage
-                        ? 'Continue to evidence'
-                        : 'Save & Continue',
+                        ? _l10n.accReportContinueToEvidence
+                        : _l10n.accReportSaveAndContinue,
             icon: _currentStep == AccidentIntakePage.review
                 ? Icons.check_circle_outline
                 : Icons.arrow_forward_rounded,
@@ -1549,21 +1552,24 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
   }
 }
 
-const Map<String, String> _accidentTypeOptions = <String, String>{
-  'collision': 'Collision',
-  'rollover': 'Rollover',
-  'rear_end': 'Rear-end',
-  'side_swipe': 'Side-swipe',
-  'reversing': 'Reversing',
-  'fire': 'Fire',
-  'vandalism': 'Vandalism',
-  'weather': 'Weather',
-  'tyre_failure': 'Tyre failure',
-  'mechanical': 'Mechanical',
-  'near_miss': 'Near miss',
-  'property_damage': 'Property damage',
-  'other': 'Other',
-};
+/// Event types the `accidents.accident_type` CHECK accepts, keyed by the
+/// stored token and labelled in the reader's language.
+Map<String, String> _accidentTypeOptions(AppLocalizations l10n) =>
+    <String, String>{
+      'collision': l10n.accTypeCollision,
+      'rollover': l10n.accTypeRollover,
+      'rear_end': l10n.accTypeRearEnd,
+      'side_swipe': l10n.accTypeSideSwipe,
+      'reversing': l10n.accTypeReversing,
+      'fire': l10n.accTypeFire,
+      'vandalism': l10n.accTypeVandalism,
+      'weather': l10n.accTypeWeather,
+      'tyre_failure': l10n.accTypeTyreFailure,
+      'mechanical': l10n.accTypeMechanical,
+      'near_miss': l10n.accTypeNearMiss,
+      'property_damage': l10n.accTypePropertyDamage,
+      'other': l10n.accTypeOther,
+    };
 
 class _PickerField extends StatelessWidget {
   const _PickerField({
@@ -1764,15 +1770,17 @@ class _VehiclePickerSheetState extends State<_VehiclePickerSheet> {
               ),
               const SizedBox(height: TpSpace.xs),
               Text(
-                '${shown.length} fleet result${shown.length == 1 ? '' : 's'} · '
-                'search asset, fleet, plate, type, make, model or site',
+                AppLocalizations.of(context)
+                    .accReportFleetResults(shown.length),
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: TpSpace.md),
               Expanded(
                 child: shown.isEmpty
-                    ? const Center(
-                        child: Text('No matching fleet asset'),
+                    ? Center(
+                        child: Text(
+                          AppLocalizations.of(context).accReportNoMatchingAsset,
+                        ),
                       )
                     : ListView.separated(
                         itemCount: shown.length,
@@ -1799,14 +1807,23 @@ class _VehiclePickerSheetState extends State<_VehiclePickerSheet> {
   }
 }
 
-String _yesNo(bool? value) => switch (value) {
-      true => 'Yes',
-      false => 'No',
-      null => 'Not answered',
+String _yesNo(AppLocalizations l10n, bool? value) => switch (value) {
+      true => l10n.accYes,
+      false => l10n.accNo,
+      null => l10n.accNotAnswered,
     };
 
-String _eventTypeLabel(String value) {
+String _eventTypeLabel(AppLocalizations l10n, String value) {
   final String token = value.trim();
-  if (token.isEmpty) return 'Not recorded';
-  return _accidentTypeOptions[token] ?? token.replaceAll('_', ' ');
+  if (token.isEmpty) return l10n.accNotRecorded;
+  return _accidentTypeOptions(l10n)[token] ?? token.replaceAll('_', ' ');
 }
+
+String _severityLabel(AppLocalizations l10n, String value) =>
+    switch (value.trim()) {
+      'minor' => l10n.accSeverityMinor,
+      'moderate' => l10n.accSeverityModerate,
+      'severe' => l10n.accSeverityMajorSevere,
+      'fatal' => l10n.accSeverityFatal,
+      final String other => other,
+    };

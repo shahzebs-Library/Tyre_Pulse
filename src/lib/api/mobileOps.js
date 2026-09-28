@@ -53,3 +53,14 @@ export async function setMobileMinVersion(v) { await upsertConfig(KEY_MIN, v) }
 
 /** Record the newest build released to Play (set after each release ships). */
 export async function setMobileLatestVersion(v) { await upsertConfig(KEY_LATEST, v) }
+
+/** The login picture each country shows on the phone (raw stored value, or null). */
+export async function getMobileLoginArt() {
+  const { data, error } = await supabase
+    .from('system_config').select('value, updated_at').eq('key', 'mobile_login_hero').maybeSingle()
+  if (error) throw new ServiceError(toUserMessage(error, 'Could not read the login pictures.'), error?.code, error)
+  return { value: data?.value ?? null, updatedAt: data?.updated_at ?? null }
+}
+
+/** Save the login picture map. Caller passes the already-serialised JSON. */
+export async function setMobileLoginArt(json) { await upsertConfig('mobile_login_hero', json) }

@@ -23,6 +23,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart' show DateFormat;
 import 'package:tyre_pulse/app/localization/tp_direction.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/back_navigation.dart';
@@ -36,6 +37,7 @@ import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/approvals/data/inspection_approval_item.dart';
 import 'package:tyre_pulse/features/approvals/domain/approval_date_grouping.dart';
 import 'package:tyre_pulse/features/approvals/inspection_approvals_providers.dart';
+import 'package:tyre_pulse/features/approvals/presentation/widgets/queue_list_kit.dart';
 
 /// Stable finders for the responsive approvals queue presentation.
 @visibleForTesting
@@ -155,6 +157,9 @@ class _InspectionApprovalsQueueScreenState
 
     return TpScaffold(
       backFallback: fallback,
+      // A softly tinted canvas so each date group reads as one white card,
+      // the depth the mock family's list sections carry.
+      backgroundColor: TpPalette.of(context).surfaceAlt,
       appBar: TpAppBar(
         title: l10n.inspectionApprovalsTitle,
         backFallback: fallback,
@@ -163,41 +168,46 @@ class _InspectionApprovalsQueueScreenState
     );
   }
 
-  Widget _body(AppLocalizations l10n) {
-    final Widget header = Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 900),
-        child: _QueueSummary(
-          tab: _tab,
-          pendingCount: _pendingCount ?? _items.length,
-          onTabChanged: _changeTab,
-          onSearchChanged: (String value) => setState(() => _query = value),
+  /// Centres [child] and caps it at the phone-first reading width so a
+  /// tablet does not stretch a compact row edge to edge.
+  static Widget _capped(Widget child) => Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 900),
+          child: child,
         ),
+      );
+
+  Widget _body(AppLocalizations l10n) {
+    final Widget header = _capped(
+      _QueueSummary(
+        tab: _tab,
+        pendingCount: _pendingCount ?? _items.length,
+        onTabChanged: _changeTab,
+        onSearchChanged: (String value) => setState(() => _query = value),
       ),
     );
 
     if (_loading) {
       return ListView(
-        padding: const EdgeInsets.fromLTRB(
-          TpSpace.lg,
-          TpSpace.lg,
-          TpSpace.lg,
-          TpSpace.xxl,
-        ),
-        children: <Widget>[header, const TpLoadingState()],
+        padding: const EdgeInsets.only(bottom: TpSpace.xxl),
+        children: <Widget>[
+          header,
+          const Padding(
+            padding: EdgeInsets.all(TpSpace.lg),
+            child: TpLoadingState(),
+          ),
+        ],
       );
     }
     if (_error != null) {
       return ListView(
-        padding: const EdgeInsets.fromLTRB(
-          TpSpace.lg,
-          TpSpace.lg,
-          TpSpace.lg,
-          TpSpace.xxl,
-        ),
+        padding: const EdgeInsets.only(bottom: TpSpace.xxl),
         children: <Widget>[
           header,
-          TpErrorState(error: _error!, onRetry: _load),
+          Padding(
+            padding: const EdgeInsets.all(TpSpace.lg),
+            child: TpErrorState(error: _error!, onRetry: _load),
+          ),
         ],
       );
     }
@@ -235,17 +245,13 @@ class _InspectionApprovalsQueueScreenState
         ...group.items,
       ],
     ];
+    final String locale = Localizations.localeOf(context).toLanguageTag();
 
     return RefreshIndicator(
       onRefresh: _refresh,
       child: ListView.builder(
         key: InspectionApprovalsQueueKeys.list,
-        padding: const EdgeInsets.fromLTRB(
-          TpSpace.lg,
-          TpSpace.lg,
-          TpSpace.lg,
-          TpSpace.xxl,
-        ),
+        padding: const EdgeInsets.only(bottom: TpSpace.xxl),
         itemCount: (rows.isEmpty ? 1 : rows.length) + 1,
         itemBuilder: (BuildContext context, int index) {
           if (index == 0) return header;
@@ -267,28 +273,25 @@ class _InspectionApprovalsQueueScreenState
           }
           final Object row = rows[index - 1];
           if (row is String) {
-            return Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 900),
-                child: _DateGroupHeading(label: row),
-              ),
-            );
+            return _capped(QueueSectionHeader(title: row));
           }
           final InspectionApprovalItem item = row as InspectionApprovalItem;
-          return Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 900),
-              child: _QueueRow(
-                item: item,
-                tab: _tab,
-                fallbackTitle: l10n.inspectionApprovalFallbackTitle,
-                inspectorFallback: l10n.inspectionInspectorUnknown,
-                pendingLabel: l10n.inspectionApprovalsPendingBadge,
-                approvedLabel: l10n.inspectionApprovalsApprovedTab,
-                returnedLabel: l10n.inspectionApprovalsReturnedTab,
-                unavailableLabel: l10n.valueUnavailable,
-                onTap: () => _open(item),
-              ),
+          final bool lastInGroup =
+              index == rows.length || rows[index] is String;
+          final bool firstInGroup = index < 2 || rows[index - 2] is String;
+          return _capped(
+            _QueueRow(
+              item: item,
+              tab: _tab,
+              locale: locale,
+              showDivider: !lastInGroup,
+              isFirst: firstInGroup,
+              fallbackTitle: l10n.inspectionApprovalFallbackTitle,
+              inspectorFallback: l10n.inspectionInspectorUnknown,
+              pendingLabel: l10n.inspectionApprovalsPendingBadge,
+              approvedLabel: l10n.inspectionApprovalsApprovedTab,
+              returnedLabel: l10n.inspectionApprovalsReturnedTab,
+              onTap: () => _open(item),
             ),
           );
         },
@@ -329,58 +332,56 @@ class _QueueSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    return TpCard(
-      key: InspectionApprovalsQueueKeys.summary,
-      margin: const EdgeInsets.only(bottom: TpSpace.lg),
-      padding: const EdgeInsets.all(TpSpace.md),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          TpSegmented<InspectionApprovalTab>(
-            expanded: true,
-            value: tab,
-            onChanged: onTabChanged,
-            options: <TpSegmentedOption<InspectionApprovalTab>>[
-              TpSegmentedOption<InspectionApprovalTab>(
-                value: InspectionApprovalTab.pending,
-                label: '${l10n.inspectionApprovalsPendingBadge} '
-                    '$pendingCount',
-              ),
-              TpSegmentedOption<InspectionApprovalTab>(
-                value: InspectionApprovalTab.approved,
-                label: l10n.inspectionApprovalsApprovedTab,
-              ),
-              TpSegmentedOption<InspectionApprovalTab>(
-                value: InspectionApprovalTab.returned,
-                label: l10n.inspectionApprovalsReturnedTab,
-              ),
-            ],
-          ),
-          const SizedBox(height: TpSpace.md),
-          TpSearchField(onChanged: onSearchChanged),
-        ],
-      ),
-    );
-  }
-}
-
-class _DateGroupHeading extends StatelessWidget {
-  const _DateGroupHeading({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(TpSpace.xs, TpSpace.md, 0, TpSpace.sm),
-      child: Text(
-        label.toUpperCase(),
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: palette.textSecondary,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.5,
+
+    QueueFilterChip chip(InspectionApprovalTab value, String label) =>
+        QueueFilterChip(
+          label: label,
+          selected: tab == value,
+          onSelected: () => onTabChanged(value),
+        );
+
+    // An open band, not a card: the search box and the three status
+    // filters (each a distinct real `approval_status`) sit on the page and
+    // a single hairline separates them from the list below.
+    return DecoratedBox(
+      key: InspectionApprovalsQueueKeys.summary,
+      decoration: BoxDecoration(
+        color: palette.surface,
+        border: Border(bottom: BorderSide(color: palette.border)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          TpSpace.lg,
+          TpSpace.md,
+          TpSpace.lg,
+          TpSpace.md,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            TpSearchField(onChanged: onSearchChanged),
+            const SizedBox(height: TpSpace.md),
+            Wrap(
+              spacing: TpSpace.sm,
+              runSpacing: TpSpace.sm,
+              children: <Widget>[
+                chip(
+                  InspectionApprovalTab.pending,
+                  '${l10n.inspectionApprovalsPendingBadge} $pendingCount',
+                ),
+                chip(
+                  InspectionApprovalTab.approved,
+                  l10n.inspectionApprovalsApprovedTab,
+                ),
+                chip(
+                  InspectionApprovalTab.returned,
+                  l10n.inspectionApprovalsReturnedTab,
+                ),
+              ],
             ),
+          ],
+        ),
       ),
     );
   }
@@ -406,113 +407,71 @@ class _QueueRow extends StatelessWidget {
   const _QueueRow({
     required this.item,
     required this.tab,
+    required this.locale,
+    required this.showDivider,
+    required this.isFirst,
     required this.fallbackTitle,
     required this.inspectorFallback,
     required this.pendingLabel,
     required this.approvedLabel,
     required this.returnedLabel,
-    required this.unavailableLabel,
     required this.onTap,
   });
 
   final InspectionApprovalItem item;
   final InspectionApprovalTab tab;
+  final String locale;
+  final bool showDivider;
+  final bool isFirst;
   final String fallbackTitle;
   final String inspectorFallback;
   final String pendingLabel;
   final String approvedLabel;
   final String returnedLabel;
-  final String unavailableLabel;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
-    final bool isRtl = TpDirection.isRtl(context);
-    final String heading = _headingFor(item, fallbackTitle);
-    final String when = _formatDate(item.createdAt) ?? unavailableLabel;
     final (TpStatus status, String label) = switch (tab) {
       InspectionApprovalTab.pending => (TpStatus.warning, pendingLabel),
       InspectionApprovalTab.approved => (TpStatus.ok, approvedLabel),
       InspectionApprovalTab.returned => (TpStatus.info, returnedLabel),
     };
+    final String inspector = item.inspector?.trim().isNotEmpty == true
+        ? item.inspector!.trim()
+        : inspectorFallback;
+    final String? site = item.site?.trim();
+    final bool signed =
+        item.inspectorSignature != null && item.inspectorSignature!.isNotEmpty;
 
-    return TpCard(
+    return QueueListRow(
       key: InspectionApprovalsQueueKeys.row(item.id),
+      titleKey: InspectionApprovalsQueueKeys.heading(item.id),
+      icon: Icons.assignment_outlined,
+      status: status,
+      title: _headingFor(item, fallbackTitle),
+      // The date already heads the group this row sits in, so the row
+      // carries only the time of day - the mock's trailing "10m ago" slot.
+      time: _formatTime(item.createdAt, locale),
+      tags: <Widget>[
+        QueueStatusTag(label: label, status: status),
+        if (signed)
+          Icon(
+            Icons.draw_outlined,
+            size: TpSizing.iconSm,
+            color: palette.forStatus(TpStatus.ok).base,
+          ),
+      ],
+      details: <String>[
+        <String>[
+          if (site != null && site.isNotEmpty) site,
+          inspector,
+        ].join(' • '),
+      ],
+      showDivider: showDivider,
+      isFirst: isFirst,
       onTap: onTap,
-      margin: const EdgeInsets.only(bottom: TpSpace.sm),
-      padding: const EdgeInsets.all(TpSpace.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  color: palette.forStatus(status).soft,
-                  shape: BoxShape.circle,
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(TpSpace.sm),
-                  child: Icon(
-                    Icons.assignment_outlined,
-                    size: TpSizing.iconMd,
-                    color: palette.forStatus(status).onSoft,
-                  ),
-                ),
-              ),
-              const SizedBox(width: TpSpace.md),
-              Expanded(
-                child: Text(
-                  heading,
-                  key: InspectionApprovalsQueueKeys.heading(item.id),
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                ),
-              ),
-              const SizedBox(width: TpSpace.sm),
-              Icon(
-                isRtl ? Icons.chevron_left : Icons.chevron_right,
-                color: palette.textMuted,
-              ),
-            ],
-          ),
-          if (item.site != null && item.site!.trim().isNotEmpty) ...<Widget>[
-            const SizedBox(height: TpSpace.md),
-            _MetaRow(icon: Icons.place_outlined, text: item.site!),
-          ],
-          const SizedBox(height: TpSpace.xs),
-          _MetaRow(
-            icon: Icons.person_outline,
-            text: item.inspector?.trim().isNotEmpty == true
-                ? item.inspector!.trim()
-                : inspectorFallback,
-          ),
-          const SizedBox(height: TpSpace.md),
-          Wrap(
-            spacing: TpSpace.sm,
-            runSpacing: TpSpace.sm,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: <Widget>[
-              _MetaPill(icon: Icons.event_outlined, text: when),
-              if (item.inspectorSignature != null &&
-                  item.inspectorSignature!.isNotEmpty)
-                Icon(
-                  Icons.draw_outlined,
-                  size: TpSizing.iconSm,
-                  color: palette.forStatus(TpStatus.ok).base,
-                ),
-              TpStatusChip(
-                status: status,
-                label: label,
-                isCompact: true,
-              ),
-            ],
-          ),
-        ],
-      ),
     );
   }
 
@@ -533,80 +492,13 @@ class _QueueRow extends StatelessWidget {
     return title.isNotEmpty ? title : fallbackTitle;
   }
 
-  static String? _formatDate(String? iso) {
+  /// Local time of day, or `null` when the timestamp is missing or
+  /// unparseable - that row already sits under the "unavailable" group, so
+  /// repeating the word in the time slot would add nothing.
+  static String? _formatTime(String? iso, String locale) {
     if (iso == null || iso.isEmpty) return null;
     final DateTime? parsed = DateTime.tryParse(iso);
     if (parsed == null) return null;
-    final DateTime local = parsed.toLocal();
-    final String y = local.year.toString().padLeft(4, '0');
-    final String m = local.month.toString().padLeft(2, '0');
-    final String d = local.day.toString().padLeft(2, '0');
-    return '$y-$m-$d';
-  }
-}
-
-class _MetaRow extends StatelessWidget {
-  const _MetaRow({required this.icon, required this.text});
-
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final TpPalette palette = TpPalette.of(context);
-    final TextStyle? style = Theme.of(context)
-        .textTheme
-        .bodySmall
-        ?.copyWith(color: palette.textMuted);
-    return Padding(
-      padding: const EdgeInsets.only(top: 2),
-      child: Row(
-        children: <Widget>[
-          Icon(icon, size: TpSizing.iconSm, color: palette.textMuted),
-          const SizedBox(width: TpSpace.xs),
-          Flexible(
-            child: Text(text, style: style),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MetaPill extends StatelessWidget {
-  const _MetaPill({required this.icon, required this.text});
-
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final TpPalette palette = TpPalette.of(context);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: palette.surfaceAlt,
-        borderRadius: BorderRadius.circular(TpRadius.pill),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: TpSpace.sm,
-          vertical: TpSpace.xs,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Icon(icon, size: TpSizing.iconSm, color: palette.textMuted),
-            const SizedBox(width: TpSpace.xs),
-            Text(
-              text,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: palette.textMuted),
-            ),
-          ],
-        ),
-      ),
-    );
+    return DateFormat.Hm(locale).format(parsed.toLocal());
   }
 }

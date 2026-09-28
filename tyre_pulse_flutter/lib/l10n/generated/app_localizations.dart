@@ -5107,7 +5107,7 @@ abstract class AppLocalizations {
   /// No description provided for @pmCopyCatalog.
   ///
   /// In en, this message translates to:
-  /// **'title=Maintenance Control Center~subtitle=Control today\'s maintenance workload~createWorkOrder=Create work order~pmDue=PM due~priorityQueue=Priority work queue~viewAll=View all~allWorkOrders=View all work orders~quickAccess=Quick access~workOrders=Work orders~workOrdersHint=Create & manage~pmSchedule=PM schedule~pmScheduleHint=Plan & track PM~inspections=Inspections~inspectionsHint=Check & report~parts=Parts~partsHint=Stock & requests~tyres=Tyres~tyresHint=Records, rotation & replacements~overdue=Overdue~dueSoon=Due soon~active=Active plans~due=Due now~all=All plans~empty=No maintenance plans~emptyDue=No preventive maintenance is due in the next 14 days.~emptyAll=No active preventive maintenance plans are available.~plan=Maintenance plan~daysOverdue=days overdue~daysLeft=days left~noDate=No due date~record=Record service~meter=Meter reading~performedBy=Performed by~workshop=Workshop~partsCost=Parts cost~labourCost=Labour cost~findings=Findings~completed=Completed~partial=Partially completed~deferred=Deferred~failed=Failed~save=Save service~invalidNumber=Enter valid numeric values.~loadFailed=The maintenance plans could not be loaded.~saveFailed=The service record could not be saved. Try again.'**
+  /// **'title=Maintenance Control Center~subtitle=Control today\'s maintenance workload~createWorkOrder=Create work order~pmDue=PM due~priorityQueue=Priority work queue~viewAll=View all~allWorkOrders=View all work orders~quickAccess=Quick access~workOrders=Work orders~workOrdersHint=Create & manage~pmSchedule=PM schedule~pmScheduleHint=Plan & track PM~inspections=Inspections~inspectionsHint=Check & report~parts=Parts~partsHint=Stock & requests~tyres=Tyres~tyresHint=Records, rotation & replacements~overdue=Overdue~dueSoon=Due soon~active=Active plans~due=Due now~all=All plans~empty=No maintenance plans~emptyDue=No preventive maintenance is due in the next 14 days.~emptyAll=No active preventive maintenance plans are available.~plan=Maintenance plan~daysOverdue=days overdue~daysLeft=days left~noDate=No due date~record=Record service~meter=Meter reading~performedBy=Performed by~workshop=Workshop~partsCost=Parts cost~labourCost=Labour cost~findings=Findings~completed=Completed~partial=Partially completed~deferred=Deferred~failed=Failed~save=Save service~invalidNumber=Enter valid numeric values.~loadFailed=The maintenance plans could not be loaded.~saveFailed=The service record could not be saved. Try again.~openBreakdowns=Open breakdowns~activeWorkOrders=Active work orders~breakdown=Breakdown~workOrder=Work order~dueToday=Due today~since=Since~opened=Opened~queueEmpty=Nothing needs attention~woLoadFailed=Open work orders could not be loaded.~retry=Retry~countFailed=This count could not be loaded. Tap to retry.'**
   String get pmCopyCatalog;
 
   /// No description provided for @stockCountCopyCatalog.
@@ -5337,6 +5337,5161 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'title=My Jobs~onDuty=On duty~offDuty=Off duty~checkIn=Check In~checkOut=Check Out~checkInHint=Check in for your shift before recording work.~myJobs=My jobs~emptyTitle=No open jobs~emptyMessage=No open job is assigned to you right now.~loadError=Your jobs could not be loaded right now.~selectJobTitle=Select a job~selectJobMsg=Pick one of your jobs first.~checkInFirstTitle=Check in first~selectTaskTitle=Select a task~selectTaskMsg=Pick the task you are working on first.~tasks=Tasks~confirmTitle=Complete task?~confirmMsg=This records the task as complete and sends it for inspection.~cancel=Cancel~noteHint=Add a note (optional)~record=Record~queued=Saved on this device. It will sync automatically.~saveFailed=The activity could not be saved on this device. Try again.~todayTitle=My productivity today~productive=Productive~blocked=Blocked~unassigned=Unassigned~breakTime=Break~completed=Tasks completed~due=Due~ok=OK~a_start_job=Start Job~a_pause_job=Pause Job~a_resume_job=Resume Job~a_complete_task=Complete Task~a_request_parts=Request Parts~a_request_assistance=Request Assistance~a_waiting_approval=Waiting for Approval~a_waiting_vehicle=Waiting for Vehicle~a_waiting_tools=Waiting for Tools~a_start_break=Start Break~a_end_break=End Break~a_report_problem=Report Problem~s_working=Working~s_available=Available~s_waiting_parts=Waiting for Parts~s_waiting_approval=Waiting for Approval~s_waiting_tools=Waiting for Tools~s_waiting_vehicle=Waiting for Vehicle~s_on_break=On Break~s_training=Training~s_awaiting_inspection=Awaiting Inspection~s_off_duty=Off Duty~s_absent=Absent~photoLabel=Photo (optional)~takePhoto=Camera~pickPhoto=Gallery~removePhoto=Remove photo~photoLimit=Up to 3 photos~photoNotAttached=Recorded. The photo could not be attached without a connection.'**
   String get workshopCopyCatalog;
+
+  /// Home section heading for the work the signed-in user has today.
+  ///
+  /// In en, this message translates to:
+  /// **'Today\'s work'**
+  String get homeTodaysWork;
+
+  /// Tag on a Home work card for an item waiting for the user's signature.
+  ///
+  /// In en, this message translates to:
+  /// **'Awaiting signature'**
+  String get homeAwaitingSignatureTag;
+
+  /// Home work card title for an inspection draft that can be resumed.
+  ///
+  /// In en, this message translates to:
+  /// **'Resume inspection'**
+  String get homeResumeInspection;
+
+  /// Home work card title when a recorded tyre issue needs follow-up.
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre issue needs attention'**
+  String get homeTyreIssueNeedsAttention;
+
+  /// Profile section header for the user's role, country and site access.
+  ///
+  /// In en, this message translates to:
+  /// **'Workspace'**
+  String get profileSectionWorkspace;
+
+  /// Label beside the employee ID on the profile identity header.
+  ///
+  /// In en, this message translates to:
+  /// **'Employee ID'**
+  String get profileEmployeeIdLabel;
+
+  /// Profile settings row label that opens the language picker.
+  ///
+  /// In en, this message translates to:
+  /// **'App language'**
+  String get profileLanguageLabel;
+
+  /// Profile section header for language and theme settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Language & display'**
+  String get profileSectionDisplay;
+
+  /// Profile settings row label that opens the theme picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Theme'**
+  String get profileThemeLabel;
+
+  /// Theme picker option: light theme.
+  ///
+  /// In en, this message translates to:
+  /// **'Light'**
+  String get profileThemeLight;
+
+  /// Theme picker option: dark theme.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark'**
+  String get profileThemeDark;
+
+  /// Theme picker option: follow the device theme.
+  ///
+  /// In en, this message translates to:
+  /// **'System default'**
+  String get profileThemeSystem;
+
+  /// Profile section header for the offline queue status.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline & data'**
+  String get profileSectionOffline;
+
+  /// Shown under Sign out while work is still queued: signing out does not delete it.
+  ///
+  /// In en, this message translates to:
+  /// **'Unsynced drafts remain safely on this device'**
+  String get profileUnsyncedFooter;
+
+  /// Login hero headline over the country artwork.
+  ///
+  /// In en, this message translates to:
+  /// **'Complete PMV Operations'**
+  String get loginHeroTitle;
+
+  /// Subtitle under the login welcome title.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to your assigned operations'**
+  String get loginSignInSubtitle;
+
+  /// Vehicle detail primary action that starts an inspection for this vehicle.
+  ///
+  /// In en, this message translates to:
+  /// **'Inspect now'**
+  String get vehiclesInspectNow;
+
+  /// Inspection tyre stepper: go to the previous tyre position.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous'**
+  String get inspectionPreviousTyre;
+
+  /// Inspection tyre stepper: go to the next tyre position.
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get inspectionNextTyre;
+
+  /// Heading of the inspection progress card.
+  ///
+  /// In en, this message translates to:
+  /// **'Inspection progress'**
+  String get inspectionProgressTitle;
+
+  /// Inspection completion percentage.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% complete'**
+  String inspectionPercentComplete(int percent);
+
+  /// Axle heading in the inspection tyre layout.
+  ///
+  /// In en, this message translates to:
+  /// **'Axle {number}'**
+  String inspectionAxleNumber(int number);
+
+  /// Label for the tyre count in the inspection progress card.
+  ///
+  /// In en, this message translates to:
+  /// **'Tyres'**
+  String get inspectionTyresLabel;
+
+  /// New Inspection asset picker: full-width button that opens the scanner to pick an asset by its code.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan asset'**
+  String get inspectionScanAssetButton;
+
+  /// New Inspection asset picker: heading on the card showing the asset chosen for this inspection.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected asset'**
+  String get inspectionSelectedAssetTitle;
+
+  /// Shown under Sign out when the offline queue count could not be read: unknown is treated as possibly unsynced work, never as all synced.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending sync could not be checked. Unsynced work may still be on this device'**
+  String get profileSyncUnknownFooter;
+
+  /// Home: heading of the strip listing the assets the signed-in user inspected most recently, each with the worst tyre condition that inspection recorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Your recent inspections'**
+  String get homeRecentInspectionsTitle;
+
+  /// Home recent-inspection card: status when that inspection recorded no tyre condition with evidence.
+  ///
+  /// In en, this message translates to:
+  /// **'Not checked'**
+  String get homeAssetNotChecked;
+
+  /// Home Today's work: shown when no work source (drafts, tyre alerts, sign-offs) applies to the signed-in role, so 'nothing needs you' cannot be claimed.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to check for your role'**
+  String get homeNothingForRoleTitle;
+
+  /// Take Action: Rotate tyre row subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Record that this tyre was moved to another position'**
+  String get tyreActionRotateSubtitle;
+
+  /// Rotate sheet: read-only current position field
+  ///
+  /// In en, this message translates to:
+  /// **'Current position'**
+  String get tyreActionRotateFromLabel;
+
+  /// Rotate sheet: destination position field
+  ///
+  /// In en, this message translates to:
+  /// **'New position'**
+  String get tyreActionRotateToLabel;
+
+  /// Rotate sheet: destination position hint
+  ///
+  /// In en, this message translates to:
+  /// **'For example RHF1'**
+  String get tyreActionRotateToHint;
+
+  /// Rotate sheet: notes field
+  ///
+  /// In en, this message translates to:
+  /// **'Notes (optional)'**
+  String get tyreActionRotateNotesLabel;
+
+  /// Rotate sheet: notes hint
+  ///
+  /// In en, this message translates to:
+  /// **'Anything the next fitter should know'**
+  String get tyreActionRotateNotesHint;
+
+  /// Rotate sheet: helper stating the write is online only
+  ///
+  /// In en, this message translates to:
+  /// **'Needs a connection. Rotations are saved straight to the server.'**
+  String get tyreActionRotateOnlineNote;
+
+  /// Rotate sheet: submit button
+  ///
+  /// In en, this message translates to:
+  /// **'Record rotation'**
+  String get tyreActionRotateSubmit;
+
+  /// Rotate sheet: validation dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'New position needed'**
+  String get tyreActionRotateToRequiredTitle;
+
+  /// Rotate sheet: destination missing
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the position this tyre was moved to.'**
+  String get tyreActionRotateToRequiredMessage;
+
+  /// Rotate sheet: destination equals current position
+  ///
+  /// In en, this message translates to:
+  /// **'The new position must be different from the current one.'**
+  String get tyreActionRotateSamePositionMessage;
+
+  /// Rotate sheet: success dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Rotation recorded'**
+  String get tyreActionRotateSavedTitle;
+
+  /// Rotate sheet: success message, states the register is not rewritten
+  ///
+  /// In en, this message translates to:
+  /// **'The rotation is saved in this tyre\'s service history. It does not change the position shown in the tyre register.'**
+  String get tyreActionRotateSavedMessage;
+
+  /// Rotate sheet: failure dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Rotation not saved'**
+  String get tyreActionRotateFailedTitle;
+
+  /// Rotate sheet: network failure, honest not-saved message
+  ///
+  /// In en, this message translates to:
+  /// **'No connection. Rotations are saved online only, so this one was not recorded. Try again when you are connected.'**
+  String get tyreActionRotateOfflineMessage;
+
+  /// Rotate sheet: generic failure message
+  ///
+  /// In en, this message translates to:
+  /// **'The rotation could not be saved. Try again.'**
+  String get tyreActionRotateFailedMessage;
+
+  /// Driver workspace: display name for a workflow action, fine resolution, review decision, fine status, response status or linked record type. Keys are the server tokens; an unknown token renders empty and the app falls back to the token itself.
+  ///
+  /// In en, this message translates to:
+  /// **'{term, select, create_driver{Add verified driver} link_account{Link login account} assign_team{Assign team and vehicle} create_fine{Issue traffic fine} link_record{Link work record} respond_fine{Review and sign} review_fine{Review response / payment} correct_fine{Correct fine} reassign_fine{Reassign fine} direct_payment{I will pay directly} already_paid{Already paid} dispute{Dispute / incorrect assignment} company_recovery{Request company payment / recovery} instalments{Request instalments} approve{Approve request} return{Return to driver} payment{Record verified payment} cancel{Cancel fine} reopen{Reopen} open{Open} settled{Settled} cancelled{Cancelled} awaiting_response{Awaiting response} submitted{Response submitted} returned{Returned to driver} approved{Approved} driver_documents{Driver documents} driver_training{Driver training} driver_coaching{Driver coaching} driver_safety_events{Driver safety events} driver_expenses{Driver expenses} tyre_records{Tyre records} accidents{Accidents} wo_tasks{Work order tasks} checklist_submissions{Checklist submissions} odometer_logs{Odometer readings} wash_records{Wash records} other{}}'**
+  String driverWsTerm(String term);
+
+  /// Driver workspace: label for a column of a linked work record. Unknown columns render empty and the app shows the column name.
+  ///
+  /// In en, this message translates to:
+  /// **'{field, select, country{Country} site{Site} asset_no{Asset number} driver_name{Driver name} title{Title} doc_type{Document type} doc_number{Document number} expiry_date{Expiry date} course_name{Course name} result{Result} completed_date{Completed date} coaching_status{Coaching status} period{Period} event_type{Event type} severity{Severity} event_at{Event time} category{Category} amount{Amount} currency{Currency} expense_date{Expense date} status{Status} incident_date{Incident date} accident_type{Accident type} due_date{Due date} created_at{Created at} reading_date{Reading date} odometer_km{Odometer (km)} wash_date{Wash date} template_name{Checklist name} approval_status{Approval status} brand{Brand} serial_no{Serial number} issue_date{Issue date} qty{Quantity} cost_per_tyre{Cost per tyre} other{}}'**
+  String driverWsRecordField(String field);
+
+  /// Driver workspace: kind of evidence attached to a fine.
+  ///
+  /// In en, this message translates to:
+  /// **'{kind, select, payment{Payment receipt} supporting{Supporting photo} notice{Official notice} other{}}'**
+  String driverWsEvidenceKind(String kind);
+
+  /// Driver workspace: title.
+  ///
+  /// In en, this message translates to:
+  /// **'Driver workspace'**
+  String get driverWsTitle;
+
+  /// Driver workspace: Profile entry subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'My fines, team assignments and verified work'**
+  String get driverWsEntrySubtitle;
+
+  /// Driver workspace: load failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Workspace unavailable. Check connection, account linking and access, then refresh.'**
+  String get driverWsLoadError;
+
+  /// Driver workspace: refresh tooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get driverWsRefresh;
+
+  /// Driver workspace: no session.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to view your workspace.'**
+  String get driverWsSignInRequired;
+
+  /// Driver workspace: offline notice.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline cached view. Connect and refresh before responding or reviewing.'**
+  String get driverWsOfflineNotice;
+
+  /// Driver workspace: truncated view notice.
+  ///
+  /// In en, this message translates to:
+  /// **'This view is incomplete because it reached the record limit. Export is disabled.'**
+  String get driverWsTruncatedNotice;
+
+  /// Driver workspace: driver search label.
+  ///
+  /// In en, this message translates to:
+  /// **'Search drivers'**
+  String get driverWsSearchDrivers;
+
+  /// Driver workspace: empty driver list.
+  ///
+  /// In en, this message translates to:
+  /// **'No linked driver or assigned team is available. Ask an authorized manager to verify your account and assignment.'**
+  String get driverWsNoDrivers;
+
+  /// Driver workspace: share statement button.
+  ///
+  /// In en, this message translates to:
+  /// **'Share fine statement PDF'**
+  String get driverWsSharePdf;
+
+  /// Driver workspace: PDF share failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Report could not be shared. Try again.'**
+  String get driverWsReportShareError;
+
+  /// Driver workspace: section heading.
+  ///
+  /// In en, this message translates to:
+  /// **'Traffic fines'**
+  String get driverWsTrafficFines;
+
+  /// Driver workspace: no fines.
+  ///
+  /// In en, this message translates to:
+  /// **'No fines recorded.'**
+  String get driverWsNoFines;
+
+  /// Driver workspace: section heading.
+  ///
+  /// In en, this message translates to:
+  /// **'Team and vehicle assignment history'**
+  String get driverWsAssignmentHistory;
+
+  /// Driver workspace: no assignments.
+  ///
+  /// In en, this message translates to:
+  /// **'No assignment recorded.'**
+  String get driverWsNoAssignment;
+
+  /// Driver workspace: current assignment tag.
+  ///
+  /// In en, this message translates to:
+  /// **'Current'**
+  String get driverWsAssignmentCurrent;
+
+  /// Driver workspace: previous assignment tag.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous'**
+  String get driverWsAssignmentPrevious;
+
+  /// Driver workspace: assignment without vehicle.
+  ///
+  /// In en, this message translates to:
+  /// **'No vehicle'**
+  String get driverWsNoVehicle;
+
+  /// Driver workspace: no supervisor or manager.
+  ///
+  /// In en, this message translates to:
+  /// **'Not assigned'**
+  String get driverWsNotAssigned;
+
+  /// Driver workspace: open-ended assignment end.
+  ///
+  /// In en, this message translates to:
+  /// **'Present'**
+  String get driverWsPresent;
+
+  /// Driver workspace: section heading.
+  ///
+  /// In en, this message translates to:
+  /// **'Assigned work'**
+  String get driverWsAssignedWork;
+
+  /// Driver workspace: missing value.
+  ///
+  /// In en, this message translates to:
+  /// **'Not supplied'**
+  String get driverWsNotSupplied;
+
+  /// Driver workspace: section heading.
+  ///
+  /// In en, this message translates to:
+  /// **'Verified work and driver records'**
+  String get driverWsVerifiedRecords;
+
+  /// Driver workspace: records notice.
+  ///
+  /// In en, this message translates to:
+  /// **'Unmatched historical records require identity review before they appear here.'**
+  String get driverWsUnmatchedNotice;
+
+  /// Driver workspace: deleted linked record.
+  ///
+  /// In en, this message translates to:
+  /// **'Record no longer available'**
+  String get driverWsRecordUnavailable;
+
+  /// Driver workspace: section heading.
+  ///
+  /// In en, this message translates to:
+  /// **'Activity history'**
+  String get driverWsActivityHistory;
+
+  /// Driver workspace: event with no actor name.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded user'**
+  String get driverWsRecordedUser;
+
+  /// Driver workspace: photo upload failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo could not be attached. Your local photo has not been deleted.'**
+  String get driverWsPhotoError;
+
+  /// Driver workspace: driver response button.
+  ///
+  /// In en, this message translates to:
+  /// **'Acknowledge and respond'**
+  String get driverWsAcknowledgeRespond;
+
+  /// Driver workspace: staff review button.
+  ///
+  /// In en, this message translates to:
+  /// **'Review / record payment'**
+  String get driverWsReviewPayment;
+
+  /// Driver workspace: evidence open failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Evidence could not be opened.'**
+  String get driverWsEvidenceOpenError;
+
+  /// Driver workspace: attach button.
+  ///
+  /// In en, this message translates to:
+  /// **'Attach receipt photo'**
+  String get driverWsAttachReceipt;
+
+  /// Driver workspace: attach button.
+  ///
+  /// In en, this message translates to:
+  /// **'Attach supporting photo'**
+  String get driverWsAttachSupporting;
+
+  /// Driver workspace: attach button.
+  ///
+  /// In en, this message translates to:
+  /// **'Attach official notice photo'**
+  String get driverWsAttachNotice;
+
+  /// Driver workspace: signature load failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Signature unavailable.'**
+  String get driverWsSignatureUnavailable;
+
+  /// Driver workspace: view signature.
+  ///
+  /// In en, this message translates to:
+  /// **'View signed acknowledgment'**
+  String get driverWsViewSignature;
+
+  /// Driver workspace: signature render failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Signature could not be displayed.'**
+  String get driverWsSignatureDisplayError;
+
+  /// Driver workspace: signed receipt statement, version receipt-v1. The wording is a recorded legal statement: do not change it without a new statement_version.
+  ///
+  /// In en, this message translates to:
+  /// **'I acknowledge receipt and review of this notice and submit the response shown above. Receipt does not mean admission of responsibility. A payment or recovery request does not authorize an automatic payment or payroll deduction.'**
+  String get driverWsReceiptStatement;
+
+  /// Driver workspace: draft read failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved draft could not be read. Nothing has been overwritten.'**
+  String get driverWsDraftReadError;
+
+  /// Driver workspace: submit failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not submit. Check the required fields and connection. Refresh if the notice changed.'**
+  String get driverWsSubmitError;
+
+  /// Driver workspace: form notice.
+  ///
+  /// In en, this message translates to:
+  /// **'Submission requires a connection so the current notice and your access can be checked.'**
+  String get driverWsConnectionRequired;
+
+  /// Driver workspace: draft saved.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft saved. It has not been submitted.'**
+  String get driverWsDraftSaved;
+
+  /// Driver workspace: draft save failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft could not be saved.'**
+  String get driverWsDraftSaveError;
+
+  /// Driver workspace: save draft button.
+  ///
+  /// In en, this message translates to:
+  /// **'Save draft on this device'**
+  String get driverWsSaveDraft;
+
+  /// Driver workspace: review disclaimer.
+  ///
+  /// In en, this message translates to:
+  /// **'Approval records the reviewed arrangement. It does not execute payment or payroll deduction. Record only verified payments.'**
+  String get driverWsReviewDisclaimer;
+
+  /// Driver workspace: submit in progress.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving...'**
+  String get driverWsSaving;
+
+  /// Driver workspace: submit button.
+  ///
+  /// In en, this message translates to:
+  /// **'Submit'**
+  String get driverWsSubmit;
+
+  /// Driver workspace: validation.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a resolution.'**
+  String get driverWsErrResolution;
+
+  /// Driver workspace: validation.
+  ///
+  /// In en, this message translates to:
+  /// **'Explain your request, including the proposed arrangement.'**
+  String get driverWsErrExplanation;
+
+  /// Driver workspace: validation.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your payment reference.'**
+  String get driverWsErrPaymentReference;
+
+  /// Driver workspace: validation.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose your proposed payment date.'**
+  String get driverWsErrProposedDate;
+
+  /// Driver workspace: validation.
+  ///
+  /// In en, this message translates to:
+  /// **'Review the statement and sign before submitting.'**
+  String get driverWsErrSignature;
+
+  /// Driver workspace: picker load failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Options unavailable. Try again.'**
+  String get driverWsOptionsError;
+
+  /// Driver workspace: picker search.
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get driverWsSearch;
+
+  /// Driver workspace: picker clear.
+  ///
+  /// In en, this message translates to:
+  /// **'None / clear selection'**
+  String get driverWsClearSelection;
+
+  /// Driver workspace: picker paging.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous options'**
+  String get driverWsPreviousOptions;
+
+  /// Driver workspace: picker paging.
+  ///
+  /// In en, this message translates to:
+  /// **'More options'**
+  String get driverWsMoreOptions;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Employee ID'**
+  String get driverWsFieldEmployeeId;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Driver name'**
+  String get driverWsFieldDriverName;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Country'**
+  String get driverWsFieldCountry;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Site'**
+  String get driverWsFieldSite;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Login account (none removes link)'**
+  String get driverWsFieldLoginAccount;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Identity verification / reason'**
+  String get driverWsFieldIdentityReason;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Supervisor'**
+  String get driverWsFieldSupervisor;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Manager'**
+  String get driverWsFieldManager;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle'**
+  String get driverWsFieldVehicle;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Assignment reason'**
+  String get driverWsFieldAssignmentReason;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Issuing authority'**
+  String get driverWsFieldAuthority;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Notice reference'**
+  String get driverWsFieldNoticeReference;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Incident date and time (YYYY-MM-DDTHH:mm)'**
+  String get driverWsFieldIncidentAt;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Due date (YYYY-MM-DD)'**
+  String get driverWsFieldDueDate;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Fine amount'**
+  String get driverWsFieldAmount;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Currency code'**
+  String get driverWsFieldCurrency;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Notice details'**
+  String get driverWsFieldNoticeDetails;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Evidence confirming driver assignment'**
+  String get driverWsFieldAssignmentEvidence;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Record type'**
+  String get driverWsFieldRecordType;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Existing record'**
+  String get driverWsFieldExistingRecord;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'How driver identity was verified'**
+  String get driverWsFieldIdentityMethod;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Preferred resolution'**
+  String get driverWsFieldResolution;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Explanation / proposed arrangement'**
+  String get driverWsFieldExplanation;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment reference (if paid)'**
+  String get driverWsFieldPaymentReference;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Proposed payment date (YYYY-MM-DD)'**
+  String get driverWsFieldProposedDate;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Decision'**
+  String get driverWsFieldDecision;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Review reason / approved arrangement'**
+  String get driverWsFieldReviewReason;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Verified payment reference'**
+  String get driverWsFieldVerifiedReference;
+
+  /// Driver workspace: form field.
+  ///
+  /// In en, this message translates to:
+  /// **'Verified payment amount'**
+  String get driverWsFieldVerifiedAmount;
+
+  /// Driver workspace: statement PDF column.
+  ///
+  /// In en, this message translates to:
+  /// **'Notice'**
+  String get driverWsPdfColNotice;
+
+  /// Driver workspace: statement PDF column.
+  ///
+  /// In en, this message translates to:
+  /// **'Currency'**
+  String get driverWsPdfColCurrency;
+
+  /// Driver workspace: statement PDF column.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount'**
+  String get driverWsPdfColAmount;
+
+  /// Driver workspace: statement PDF column.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid'**
+  String get driverWsPdfColPaid;
+
+  /// Driver workspace: statement PDF column.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get driverWsPdfColStatus;
+
+  /// Driver workspace: statement PDF column.
+  ///
+  /// In en, this message translates to:
+  /// **'Response'**
+  String get driverWsPdfColResponse;
+
+  /// Driver workspace: driver list row subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{site} · {open} open fines · {awaiting} awaiting response'**
+  String driverWsDriverSubtitle(String site, String open, String awaiting);
+
+  /// Driver workspace: outstanding balance line.
+  ///
+  /// In en, this message translates to:
+  /// **'Outstanding: {amount} {currency}'**
+  String driverWsOutstanding(String amount, String currency);
+
+  /// Driver workspace: assignment card.
+  ///
+  /// In en, this message translates to:
+  /// **'Supervisor: {name}'**
+  String driverWsSupervisorLine(String name);
+
+  /// Driver workspace: assignment card.
+  ///
+  /// In en, this message translates to:
+  /// **'Manager: {name}'**
+  String driverWsManagerLine(String name);
+
+  /// Driver workspace: assignment period.
+  ///
+  /// In en, this message translates to:
+  /// **'{start} to {end}'**
+  String driverWsAssignmentPeriod(String start, String end);
+
+  /// Driver workspace: fine assignment evidence.
+  ///
+  /// In en, this message translates to:
+  /// **'Assignment: {reason}'**
+  String driverWsAssignmentLine(String reason);
+
+  /// Driver workspace: fine due and paid line.
+  ///
+  /// In en, this message translates to:
+  /// **'Due: {due} · Paid: {paid}'**
+  String driverWsDueLine(String due, String paid);
+
+  /// Driver workspace: statement PDF heading.
+  ///
+  /// In en, this message translates to:
+  /// **'Driver statement: {name}'**
+  String driverWsPdfTitle(String name);
+
+  /// Driver workspace: statement PDF line.
+  ///
+  /// In en, this message translates to:
+  /// **'Employee ID: {id}'**
+  String driverWsPdfEmployeeId(String id);
+
+  /// Vehicle class name for a five-view reference board.
+  ///
+  /// In en, this message translates to:
+  /// **'Transit mixer'**
+  String get vehicleClassTransitMixer;
+
+  /// Vehicle class name for a five-view reference board.
+  ///
+  /// In en, this message translates to:
+  /// **'Concrete pump'**
+  String get vehicleClassConcretePump;
+
+  /// Vehicle class name for a five-view reference board.
+  ///
+  /// In en, this message translates to:
+  /// **'Truck-mounted line pump'**
+  String get vehicleClassLinePump;
+
+  /// Vehicle class name for a five-view reference board.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff bus'**
+  String get vehicleClassStaffBus;
+
+  /// Vehicle class name for a five-view reference board.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff van'**
+  String get vehicleClassStaffVan;
+
+  /// Vehicle class name for a five-view reference board.
+  ///
+  /// In en, this message translates to:
+  /// **'Double-cab pickup'**
+  String get vehicleClassDoubleCabPickup;
+
+  /// Vehicle class name for a five-view reference board.
+  ///
+  /// In en, this message translates to:
+  /// **'Wheel loader'**
+  String get vehicleClassWheelLoader;
+
+  /// Vehicle class name for a five-view reference board.
+  ///
+  /// In en, this message translates to:
+  /// **'Skid-steer loader'**
+  String get vehicleClassSkidSteerLoader;
+
+  /// Vehicle class name for a five-view reference board.
+  ///
+  /// In en, this message translates to:
+  /// **'Towable concrete pump'**
+  String get vehicleClassTowablePump;
+
+  /// Vehicle class name for a five-view reference board.
+  ///
+  /// In en, this message translates to:
+  /// **'Stationary concrete pump'**
+  String get vehicleClassStationaryPump;
+
+  /// Vehicle class name for a five-view reference board.
+  ///
+  /// In en, this message translates to:
+  /// **'Enclosed generator'**
+  String get vehicleClassGenerator;
+
+  /// Vehicle class name for a five-view reference board.
+  ///
+  /// In en, this message translates to:
+  /// **'Industrial chiller'**
+  String get vehicleClassChiller;
+
+  /// Vehicle class name for a five-view reference board.
+  ///
+  /// In en, this message translates to:
+  /// **'Industrial water chiller'**
+  String get vehicleClassWaterChiller;
+
+  /// Vehicle class name for a five-view reference board.
+  ///
+  /// In en, this message translates to:
+  /// **'Concrete batching plant'**
+  String get vehicleClassBatchingPlant;
+
+  /// Vehicle class name for a five-view reference board.
+  ///
+  /// In en, this message translates to:
+  /// **'Freestanding placing boom'**
+  String get vehicleClassPlacingBoom;
+
+  /// Vehicle class name with axle count.
+  ///
+  /// In en, this message translates to:
+  /// **'Concrete pump · {axles} axle'**
+  String vehicleClassConcretePumpAxles(int axles);
+
+  /// Vehicle class name with axle count.
+  ///
+  /// In en, this message translates to:
+  /// **'Truck-mounted line pump · {axles} axle'**
+  String vehicleClassLinePumpAxles(int axles);
+
+  /// Scanner: camera failed to start for a reason other than permission.
+  ///
+  /// In en, this message translates to:
+  /// **'The camera could not start'**
+  String get scannerCameraStartFailedTitle;
+
+  /// Scanner: camera start failure explanation.
+  ///
+  /// In en, this message translates to:
+  /// **'Another app may be using it, or it stopped unexpectedly. Try again, or type the code below.'**
+  String get scannerCameraStartFailedMessage;
+
+  /// Management overview: per-site section heading.
+  ///
+  /// In en, this message translates to:
+  /// **'Sites at a glance'**
+  String get managementOverviewSiteRollup;
+
+  /// Management overview: empty per-site rollup.
+  ///
+  /// In en, this message translates to:
+  /// **'No site has recorded tyres in this period.'**
+  String get managementOverviewSiteRollupEmpty;
+
+  /// Management overview: risk share tile.
+  ///
+  /// In en, this message translates to:
+  /// **'Tyres at high or critical risk'**
+  String get managementOverviewAtRiskShare;
+
+  /// Management reports: share action.
+  ///
+  /// In en, this message translates to:
+  /// **'Share report PDF'**
+  String get managementReportsShare;
+
+  /// Management reports: share failure.
+  ///
+  /// In en, this message translates to:
+  /// **'The report could not be shared. Try again.'**
+  String get managementReportsShareError;
+
+  /// Management reports: PDF column.
+  ///
+  /// In en, this message translates to:
+  /// **'Metric'**
+  String get managementReportsPdfMetric;
+
+  /// Management reports: PDF column.
+  ///
+  /// In en, this message translates to:
+  /// **'Value'**
+  String get managementReportsPdfValue;
+
+  /// Management reports: PDF column.
+  ///
+  /// In en, this message translates to:
+  /// **'Share'**
+  String get managementReportsPdfShare;
+
+  /// Team member detail field.
+  ///
+  /// In en, this message translates to:
+  /// **'Role'**
+  String get managementTeamRole;
+
+  /// Team member detail field.
+  ///
+  /// In en, this message translates to:
+  /// **'Username'**
+  String get managementTeamUsername;
+
+  /// Team member detail field.
+  ///
+  /// In en, this message translates to:
+  /// **'Site'**
+  String get managementTeamSite;
+
+  /// Team member detail field.
+  ///
+  /// In en, this message translates to:
+  /// **'Country'**
+  String get managementTeamCountry;
+
+  /// Team member detail field.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone'**
+  String get managementTeamPhone;
+
+  /// Team member detail field.
+  ///
+  /// In en, this message translates to:
+  /// **'Email'**
+  String get managementTeamEmail;
+
+  /// Team member detail field.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get managementTeamStatus;
+
+  /// Team member approved status.
+  ///
+  /// In en, this message translates to:
+  /// **'Approved'**
+  String get managementTeamApproved;
+
+  /// Team member detail field.
+  ///
+  /// In en, this message translates to:
+  /// **'Last sign-in'**
+  String get managementTeamLastLogin;
+
+  /// Team member missing value.
+  ///
+  /// In en, this message translates to:
+  /// **'Not recorded'**
+  String get managementTeamNotRecorded;
+
+  /// Team member call action.
+  ///
+  /// In en, this message translates to:
+  /// **'Call'**
+  String get managementTeamCall;
+
+  /// Team member email action.
+  ///
+  /// In en, this message translates to:
+  /// **'Send email'**
+  String get managementTeamSendEmail;
+
+  /// Team member call/email could not launch.
+  ///
+  /// In en, this message translates to:
+  /// **'This action is not available on this device.'**
+  String get managementTeamActionError;
+
+  /// Management overview: tyres at a site.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} tyres'**
+  String managementOverviewSiteTyres(String count);
+
+  /// Management overview: site share.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% of fleet tyres'**
+  String managementOverviewSiteShare(String percent);
+
+  /// Management reports: PDF period line.
+  ///
+  /// In en, this message translates to:
+  /// **'Period: last {days} days'**
+  String managementReportsPdfPeriod(int days);
+
+  /// Management reports: PDF currency line.
+  ///
+  /// In en, this message translates to:
+  /// **'Currency: {code}'**
+  String managementReportsPdfCurrency(String code);
+
+  /// Admin hub title
+  ///
+  /// In en, this message translates to:
+  /// **'Admin console'**
+  String get adminHubTitle;
+
+  /// Admin hub subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Users, access, approvals and sites'**
+  String get adminHubSubtitle;
+
+  /// Hub count label
+  ///
+  /// In en, this message translates to:
+  /// **'Pending approvals'**
+  String get adminHubPendingApprovals;
+
+  /// Hub count label
+  ///
+  /// In en, this message translates to:
+  /// **'Pending sign-ups'**
+  String get adminHubPendingSignups;
+
+  /// Hub count label
+  ///
+  /// In en, this message translates to:
+  /// **'Locked users'**
+  String get adminHubLockedUsers;
+
+  /// Shown when a count query failed
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load'**
+  String get adminHubCountUnavailable;
+
+  /// Hub section header
+  ///
+  /// In en, this message translates to:
+  /// **'Manage'**
+  String get adminHubSectionManage;
+
+  /// Hub section header
+  ///
+  /// In en, this message translates to:
+  /// **'Reports and team'**
+  String get adminHubSectionMore;
+
+  /// Hub tile
+  ///
+  /// In en, this message translates to:
+  /// **'Users'**
+  String get adminHubUsersTitle;
+
+  /// Hub tile subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Approve, lock and change roles'**
+  String get adminHubUsersSubtitle;
+
+  /// Hub tile
+  ///
+  /// In en, this message translates to:
+  /// **'Mobile access'**
+  String get adminHubAccessTitle;
+
+  /// Hub tile subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Allow or deny app modules per person'**
+  String get adminHubAccessSubtitle;
+
+  /// Hub tile
+  ///
+  /// In en, this message translates to:
+  /// **'Approvals'**
+  String get adminHubApprovalsTitle;
+
+  /// Hub tile subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Inspections and checklists waiting for sign-off'**
+  String get adminHubApprovalsSubtitle;
+
+  /// Hub tile
+  ///
+  /// In en, this message translates to:
+  /// **'Sites'**
+  String get adminHubSitesTitle;
+
+  /// Hub tile subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Regions and active status'**
+  String get adminHubSitesSubtitle;
+
+  /// Hub tile
+  ///
+  /// In en, this message translates to:
+  /// **'Fleet AI chat'**
+  String get adminHubAiTitle;
+
+  /// Hub tile subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Ask questions about fleet management'**
+  String get adminHubAiSubtitle;
+
+  /// Subtitle on links to other modules
+  ///
+  /// In en, this message translates to:
+  /// **'Open this module'**
+  String get adminHubOpenModule;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'New Inspection'**
+  String get adminModuleInspect;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Scan'**
+  String get adminModuleScan;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Serial Search'**
+  String get adminModuleSerial;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre Change'**
+  String get adminModuleTyreChange;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Checklists'**
+  String get adminModuleChecklists;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Meter Log'**
+  String get adminModuleMeter;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle Washing'**
+  String get adminModuleWashing;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Report Issue'**
+  String get adminModuleReportIssue;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Repair Request'**
+  String get adminModuleRepairRequest;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre Records'**
+  String get adminModuleRecords;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicles'**
+  String get adminModuleVehicles;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'History'**
+  String get adminModuleHistory;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Alerts'**
+  String get adminModuleAlerts;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Calendar'**
+  String get adminModuleCalendar;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Accidents'**
+  String get adminModuleAccidents;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'File Accident'**
+  String get adminModuleReportAccident;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Work Orders'**
+  String get adminModuleWorkorders;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Root Cause'**
+  String get adminModuleRca;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Tasks'**
+  String get adminModuleTasks;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Stock Count'**
+  String get adminModuleStock;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Maintenance Due'**
+  String get adminModulePm;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'My Jobs'**
+  String get adminModuleWorkshop;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Overview'**
+  String get adminModuleOverview;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Reports'**
+  String get adminModuleReports;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Analytics'**
+  String get adminModuleAnalytics;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Stock Management'**
+  String get adminModuleStockManage;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Fleet AI'**
+  String get adminModuleAi;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Team'**
+  String get adminModuleTeam;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Approvals'**
+  String get adminModuleApprovals;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'Admin Console'**
+  String get adminModuleAdmin;
+
+  /// Mobile module label in the admin access editor
+  ///
+  /// In en, this message translates to:
+  /// **'User Management'**
+  String get adminModuleUsers;
+
+  /// Users screen title
+  ///
+  /// In en, this message translates to:
+  /// **'Users'**
+  String get adminUsersTitle;
+
+  /// Users count
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 user} other{{count} users}}'**
+  String adminUsersCount(int count);
+
+  /// Search hint
+  ///
+  /// In en, this message translates to:
+  /// **'Search name, username or employee ID'**
+  String get adminUsersSearchHint;
+
+  /// Filter: all
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get adminUsersFilterAll;
+
+  /// User status
+  ///
+  /// In en, this message translates to:
+  /// **'Pending'**
+  String get adminUsersStatusPending;
+
+  /// User status
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get adminUsersStatusActive;
+
+  /// User status
+  ///
+  /// In en, this message translates to:
+  /// **'Locked'**
+  String get adminUsersStatusLocked;
+
+  /// Role filter: all
+  ///
+  /// In en, this message translates to:
+  /// **'All roles'**
+  String get adminUsersAllRoles;
+
+  /// Empty state title
+  ///
+  /// In en, this message translates to:
+  /// **'No users match'**
+  String get adminUsersEmptyTitle;
+
+  /// Empty state message
+  ///
+  /// In en, this message translates to:
+  /// **'Try another search or filter.'**
+  String get adminUsersEmptyMessage;
+
+  /// Load error
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load users.'**
+  String get adminUsersLoadFailed;
+
+  /// Read-only note
+  ///
+  /// In en, this message translates to:
+  /// **'Only a super admin can change users. You can view the list.'**
+  String get adminUsersReadOnlyNote;
+
+  /// Self note
+  ///
+  /// In en, this message translates to:
+  /// **'This is your own account. You cannot lock it or change its role.'**
+  String get adminUsersSelfNote;
+
+  /// Fallback when no name
+  ///
+  /// In en, this message translates to:
+  /// **'Unnamed user'**
+  String get adminUsersNoName;
+
+  /// Fallback when no role
+  ///
+  /// In en, this message translates to:
+  /// **'No role assigned'**
+  String get adminUsersNoRole;
+
+  /// Badge
+  ///
+  /// In en, this message translates to:
+  /// **'Super admin'**
+  String get adminUsersSuperAdminBadge;
+
+  /// Field label
+  ///
+  /// In en, this message translates to:
+  /// **'Role'**
+  String get adminUsersFieldRole;
+
+  /// Field label
+  ///
+  /// In en, this message translates to:
+  /// **'Username'**
+  String get adminUsersFieldUsername;
+
+  /// Field label
+  ///
+  /// In en, this message translates to:
+  /// **'Employee ID'**
+  String get adminUsersFieldEmployeeId;
+
+  /// Field label
+  ///
+  /// In en, this message translates to:
+  /// **'Email'**
+  String get adminUsersFieldEmail;
+
+  /// Field label
+  ///
+  /// In en, this message translates to:
+  /// **'Site'**
+  String get adminUsersFieldSite;
+
+  /// Field label
+  ///
+  /// In en, this message translates to:
+  /// **'Country'**
+  String get adminUsersFieldCountry;
+
+  /// Field label
+  ///
+  /// In en, this message translates to:
+  /// **'Joined'**
+  String get adminUsersFieldJoined;
+
+  /// Field label
+  ///
+  /// In en, this message translates to:
+  /// **'Sign-up note'**
+  String get adminUsersFieldPendingReason;
+
+  /// Action
+  ///
+  /// In en, this message translates to:
+  /// **'Approve'**
+  String get adminUsersActionApprove;
+
+  /// Action
+  ///
+  /// In en, this message translates to:
+  /// **'Lock'**
+  String get adminUsersActionLock;
+
+  /// Action
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock'**
+  String get adminUsersActionUnlock;
+
+  /// Action
+  ///
+  /// In en, this message translates to:
+  /// **'Deactivate'**
+  String get adminUsersActionDeactivate;
+
+  /// Action
+  ///
+  /// In en, this message translates to:
+  /// **'Change role'**
+  String get adminUsersActionSetRole;
+
+  /// Dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Approve this user?'**
+  String get adminUsersConfirmApproveTitle;
+
+  /// Dialog message
+  ///
+  /// In en, this message translates to:
+  /// **'{name} will be able to sign in and use the app.'**
+  String adminUsersConfirmApproveMessage(String name);
+
+  /// Dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Lock this user?'**
+  String get adminUsersConfirmLockTitle;
+
+  /// Dialog message
+  ///
+  /// In en, this message translates to:
+  /// **'{name} will not be able to sign in until unlocked.'**
+  String adminUsersConfirmLockMessage(String name);
+
+  /// Dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock this user?'**
+  String get adminUsersConfirmUnlockTitle;
+
+  /// Dialog message
+  ///
+  /// In en, this message translates to:
+  /// **'{name} will be able to sign in again.'**
+  String adminUsersConfirmUnlockMessage(String name);
+
+  /// Dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Deactivate this user'**
+  String get adminUsersDeactivateTitle;
+
+  /// Dialog message
+  ///
+  /// In en, this message translates to:
+  /// **'{name} will lose access and be locked. A reason is required.'**
+  String adminUsersDeactivateMessage(String name);
+
+  /// Dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Change role'**
+  String get adminUsersSetRoleTitle;
+
+  /// Dialog message
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the new role for {name}. A reason is required.'**
+  String adminUsersSetRoleMessage(String name);
+
+  /// Field label
+  ///
+  /// In en, this message translates to:
+  /// **'Reason'**
+  String get adminUsersReasonLabel;
+
+  /// Validation
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a reason.'**
+  String get adminUsersReasonRequired;
+
+  /// Validation
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a role.'**
+  String get adminUsersRoleRequired;
+
+  /// Snack after success
+  ///
+  /// In en, this message translates to:
+  /// **'Saved.'**
+  String get adminUsersActionDone;
+
+  /// Snack after failure
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save the change.'**
+  String get adminUsersActionFailed;
+
+  /// Access screen title
+  ///
+  /// In en, this message translates to:
+  /// **'Mobile access'**
+  String get adminAccessTitle;
+
+  /// Subtitle while no user selected
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a person'**
+  String get adminAccessPickUser;
+
+  /// Button
+  ///
+  /// In en, this message translates to:
+  /// **'Change person'**
+  String get adminAccessChangeUser;
+
+  /// Intro note
+  ///
+  /// In en, this message translates to:
+  /// **'Overrides apply to this person\'s mobile app only. Default follows their role.'**
+  String get adminAccessIntro;
+
+  /// Choice
+  ///
+  /// In en, this message translates to:
+  /// **'Default'**
+  String get adminAccessDefault;
+
+  /// Choice
+  ///
+  /// In en, this message translates to:
+  /// **'Allow'**
+  String get adminAccessAllow;
+
+  /// Choice
+  ///
+  /// In en, this message translates to:
+  /// **'Deny'**
+  String get adminAccessDeny;
+
+  /// Role default hint
+  ///
+  /// In en, this message translates to:
+  /// **'Role default: allowed'**
+  String get adminAccessRoleDefaultAllowed;
+
+  /// Role default hint
+  ///
+  /// In en, this message translates to:
+  /// **'Role default: not allowed'**
+  String get adminAccessRoleDefaultDenied;
+
+  /// Role default hint
+  ///
+  /// In en, this message translates to:
+  /// **'Admins only by default'**
+  String get adminAccessRoleDefaultAdminOnly;
+
+  /// Note for admin targets
+  ///
+  /// In en, this message translates to:
+  /// **'Admins and super admins always keep full access.'**
+  String get adminAccessAdminNote;
+
+  /// Read-only note
+  ///
+  /// In en, this message translates to:
+  /// **'Only a super admin can change access.'**
+  String get adminAccessReadOnlyNote;
+
+  /// Load error
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load this person\'s access.'**
+  String get adminAccessLoadFailed;
+
+  /// Save error
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update access.'**
+  String get adminAccessSaveFailed;
+
+  /// Save success
+  ///
+  /// In en, this message translates to:
+  /// **'Access updated.'**
+  String get adminAccessSaved;
+
+  /// Module group
+  ///
+  /// In en, this message translates to:
+  /// **'Field'**
+  String get adminAccessGroupField;
+
+  /// Module group
+  ///
+  /// In en, this message translates to:
+  /// **'Fleet'**
+  String get adminAccessGroupFleet;
+
+  /// Module group
+  ///
+  /// In en, this message translates to:
+  /// **'Maintenance'**
+  String get adminAccessGroupMaintenance;
+
+  /// Module group
+  ///
+  /// In en, this message translates to:
+  /// **'Management'**
+  String get adminAccessGroupManagement;
+
+  /// Module group
+  ///
+  /// In en, this message translates to:
+  /// **'Admin'**
+  String get adminAccessGroupAdmin;
+
+  /// Tab
+  ///
+  /// In en, this message translates to:
+  /// **'Inspections'**
+  String get adminApprovalsTabInspections;
+
+  /// Tab
+  ///
+  /// In en, this message translates to:
+  /// **'Checklists'**
+  String get adminApprovalsTabChecklists;
+
+  /// Sites title
+  ///
+  /// In en, this message translates to:
+  /// **'Sites'**
+  String get adminSitesTitle;
+
+  /// Sites count
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 site} other{{count} sites}}'**
+  String adminSitesCount(int count);
+
+  /// Search hint
+  ///
+  /// In en, this message translates to:
+  /// **'Search site, region or code'**
+  String get adminSitesSearchHint;
+
+  /// Site status
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get adminSitesActive;
+
+  /// Site status
+  ///
+  /// In en, this message translates to:
+  /// **'Inactive'**
+  String get adminSitesInactive;
+
+  /// Fallback when region is blank
+  ///
+  /// In en, this message translates to:
+  /// **'No region'**
+  String get adminSitesNoRegion;
+
+  /// Empty title
+  ///
+  /// In en, this message translates to:
+  /// **'No sites'**
+  String get adminSitesEmptyTitle;
+
+  /// Empty message
+  ///
+  /// In en, this message translates to:
+  /// **'No sites are registered for your organisation yet.'**
+  String get adminSitesEmptyMessage;
+
+  /// Load error
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load sites.'**
+  String get adminSitesLoadFailed;
+
+  /// Read-only note
+  ///
+  /// In en, this message translates to:
+  /// **'Only an Admin or Manager can edit sites.'**
+  String get adminSitesReadOnlyNote;
+
+  /// Sheet title
+  ///
+  /// In en, this message translates to:
+  /// **'Edit site'**
+  String get adminSitesEditTitle;
+
+  /// Field label
+  ///
+  /// In en, this message translates to:
+  /// **'Region'**
+  String get adminSitesRegionLabel;
+
+  /// Switch label
+  ///
+  /// In en, this message translates to:
+  /// **'Active site'**
+  String get adminSitesActiveLabel;
+
+  /// Button
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get adminSitesSave;
+
+  /// Success
+  ///
+  /// In en, this message translates to:
+  /// **'Site updated.'**
+  String get adminSitesSaved;
+
+  /// Error
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update the site.'**
+  String get adminSitesSaveFailed;
+
+  /// AI title
+  ///
+  /// In en, this message translates to:
+  /// **'Fleet AI chat'**
+  String get adminAiTitle;
+
+  /// AI subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Answers come from the AI service. Check important figures in the app.'**
+  String get adminAiSubtitle;
+
+  /// Input hint
+  ///
+  /// In en, this message translates to:
+  /// **'Ask about fleet management'**
+  String get adminAiHint;
+
+  /// Send button tooltip
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get adminAiSend;
+
+  /// Clear tooltip
+  ///
+  /// In en, this message translates to:
+  /// **'Clear chat'**
+  String get adminAiClear;
+
+  /// Empty title
+  ///
+  /// In en, this message translates to:
+  /// **'Ask a question'**
+  String get adminAiEmptyTitle;
+
+  /// Empty message
+  ///
+  /// In en, this message translates to:
+  /// **'For example, how to reduce tyre cost per kilometre.'**
+  String get adminAiEmptyMessage;
+
+  /// Loading label
+  ///
+  /// In en, this message translates to:
+  /// **'Thinking'**
+  String get adminAiThinking;
+
+  /// Bubble author
+  ///
+  /// In en, this message translates to:
+  /// **'You'**
+  String get adminAiYou;
+
+  /// Bubble author
+  ///
+  /// In en, this message translates to:
+  /// **'Fleet AI'**
+  String get adminAiAssistant;
+
+  /// AI error
+  ///
+  /// In en, this message translates to:
+  /// **'AI features are turned off by your administrator.'**
+  String get adminAiErrorDisabled;
+
+  /// AI error
+  ///
+  /// In en, this message translates to:
+  /// **'The monthly AI budget has been reached.'**
+  String get adminAiErrorBudget;
+
+  /// AI error
+  ///
+  /// In en, this message translates to:
+  /// **'Too many requests. Wait a moment and try again.'**
+  String get adminAiErrorRateLimit;
+
+  /// AI error
+  ///
+  /// In en, this message translates to:
+  /// **'The AI service returned no answer.'**
+  String get adminAiErrorEmpty;
+
+  /// AI error
+  ///
+  /// In en, this message translates to:
+  /// **'The AI service is unavailable right now. Try again shortly.'**
+  String get adminAiErrorUnavailable;
+
+  /// Fleet AI screen title
+  ///
+  /// In en, this message translates to:
+  /// **'Fleet AI'**
+  String get extrasFleetAiTitle;
+
+  /// Fleet AI subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Answers from your live fleet data'**
+  String get extrasFleetAiSubtitle;
+
+  /// Shown while grounding counts load
+  ///
+  /// In en, this message translates to:
+  /// **'Reading live fleet data'**
+  String get extrasFleetAiSnapshotLoading;
+
+  /// No grounding data could be read
+  ///
+  /// In en, this message translates to:
+  /// **'Live fleet data could not be read, so the assistant cannot answer from your records right now.'**
+  String get extrasFleetAiNoData;
+
+  /// How many grounding counts were read
+  ///
+  /// In en, this message translates to:
+  /// **'Based on {n} of 5 live fleet counts'**
+  String extrasFleetAiGroundedOn(int n);
+
+  /// Empty conversation title
+  ///
+  /// In en, this message translates to:
+  /// **'Ask about your fleet'**
+  String get extrasFleetAiEmptyTitle;
+
+  /// Empty conversation explanation
+  ///
+  /// In en, this message translates to:
+  /// **'The assistant answers only from live counts of your fleet. It will say when something is not available here.'**
+  String get extrasFleetAiEmptyMessage;
+
+  /// Suggested questions heading
+  ///
+  /// In en, this message translates to:
+  /// **'Try asking'**
+  String get extrasFleetAiSuggestedTitle;
+
+  /// Suggested question
+  ///
+  /// In en, this message translates to:
+  /// **'Give me a fleet health overview'**
+  String get extrasFleetAiSuggestOverview;
+
+  /// Suggested question
+  ///
+  /// In en, this message translates to:
+  /// **'How many tyres are at critical or high risk?'**
+  String get extrasFleetAiSuggestRisk;
+
+  /// Suggested question
+  ///
+  /// In en, this message translates to:
+  /// **'What needs my attention first?'**
+  String get extrasFleetAiSuggestActions;
+
+  /// Suggested question
+  ///
+  /// In en, this message translates to:
+  /// **'How many accidents were reported in the last 30 days?'**
+  String get extrasFleetAiSuggestAccidents;
+
+  /// Composer hint
+  ///
+  /// In en, this message translates to:
+  /// **'Ask a question about your fleet'**
+  String get extrasFleetAiInputHint;
+
+  /// Send button tooltip
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get extrasFleetAiSend;
+
+  /// Shown while waiting for an answer
+  ///
+  /// In en, this message translates to:
+  /// **'Thinking'**
+  String get extrasFleetAiThinking;
+
+  /// Clear conversation action
+  ///
+  /// In en, this message translates to:
+  /// **'Clear conversation'**
+  String get extrasFleetAiClear;
+
+  /// Disclaimer under composer
+  ///
+  /// In en, this message translates to:
+  /// **'AI answers can be wrong. Check important figures in the app before acting.'**
+  String get extrasFleetAiDisclaimer;
+
+  /// Semantics label for user messages
+  ///
+  /// In en, this message translates to:
+  /// **'You'**
+  String get extrasFleetAiYou;
+
+  /// chat-ai 403
+  ///
+  /// In en, this message translates to:
+  /// **'AI features are switched off by your administrator.'**
+  String get extrasFleetAiErrDisabled;
+
+  /// chat-ai 402
+  ///
+  /// In en, this message translates to:
+  /// **'The monthly AI budget has been reached. Contact your administrator.'**
+  String get extrasFleetAiErrBudget;
+
+  /// chat-ai 429
+  ///
+  /// In en, this message translates to:
+  /// **'Too many questions in a short time. Wait a moment and try again.'**
+  String get extrasFleetAiErrRateLimited;
+
+  /// Offline
+  ///
+  /// In en, this message translates to:
+  /// **'No connection. Your question was not sent.'**
+  String get extrasFleetAiErrOffline;
+
+  /// Generic AI failure
+  ///
+  /// In en, this message translates to:
+  /// **'The assistant is unavailable right now. Try again shortly.'**
+  String get extrasFleetAiErrUnavailable;
+
+  /// Repair request fault category
+  ///
+  /// In en, this message translates to:
+  /// **'Engine'**
+  String get repairReqCatEngine;
+
+  /// Repair request fault category
+  ///
+  /// In en, this message translates to:
+  /// **'Transmission'**
+  String get repairReqCatTransmission;
+
+  /// Repair request fault category
+  ///
+  /// In en, this message translates to:
+  /// **'Brakes'**
+  String get repairReqCatBrakes;
+
+  /// Repair request fault category
+  ///
+  /// In en, this message translates to:
+  /// **'Tyres'**
+  String get repairReqCatTyres;
+
+  /// Repair request fault category
+  ///
+  /// In en, this message translates to:
+  /// **'Hydraulics'**
+  String get repairReqCatHydraulics;
+
+  /// Repair request fault category
+  ///
+  /// In en, this message translates to:
+  /// **'Electrical'**
+  String get repairReqCatElectrical;
+
+  /// Repair request fault category
+  ///
+  /// In en, this message translates to:
+  /// **'Body'**
+  String get repairReqCatBody;
+
+  /// Repair request fault category
+  ///
+  /// In en, this message translates to:
+  /// **'Drum / Mixer'**
+  String get repairReqCatDrumMixer;
+
+  /// Repair request fault category
+  ///
+  /// In en, this message translates to:
+  /// **'Pump'**
+  String get repairReqCatPump;
+
+  /// Repair request fault category
+  ///
+  /// In en, this message translates to:
+  /// **'Air system'**
+  String get repairReqCatAirSystem;
+
+  /// Repair request fault category
+  ///
+  /// In en, this message translates to:
+  /// **'Cooling'**
+  String get repairReqCatCooling;
+
+  /// Repair request fault category
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get repairReqCatOther;
+
+  /// Screen title
+  ///
+  /// In en, this message translates to:
+  /// **'Repair request'**
+  String get repairReqTitle;
+
+  /// Screen subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Report a fault to the workshop'**
+  String get repairReqSubtitle;
+
+  /// Asset section label
+  ///
+  /// In en, this message translates to:
+  /// **'Machine'**
+  String get repairReqMachine;
+
+  /// Asset picker prompt
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the machine'**
+  String get repairReqChooseAsset;
+
+  /// Select asset action
+  ///
+  /// In en, this message translates to:
+  /// **'Select'**
+  String get repairReqSelect;
+
+  /// Change asset action
+  ///
+  /// In en, this message translates to:
+  /// **'Change'**
+  String get repairReqChange;
+
+  /// Plate line
+  ///
+  /// In en, this message translates to:
+  /// **'Plate {plate}'**
+  String repairReqPlate(String plate);
+
+  /// Validation
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the machine that has the fault.'**
+  String get repairReqErrAsset;
+
+  /// Site field label
+  ///
+  /// In en, this message translates to:
+  /// **'Site'**
+  String get repairReqSite;
+
+  /// Site hint
+  ///
+  /// In en, this message translates to:
+  /// **'Filled from the machine\'s registered site'**
+  String get repairReqSiteHint;
+
+  /// Fault category label
+  ///
+  /// In en, this message translates to:
+  /// **'What is wrong'**
+  String get repairReqCategory;
+
+  /// Description label
+  ///
+  /// In en, this message translates to:
+  /// **'Describe the fault'**
+  String get repairReqDescription;
+
+  /// Description hint
+  ///
+  /// In en, this message translates to:
+  /// **'What happened, what you see or hear'**
+  String get repairReqDescriptionHint;
+
+  /// Validation
+  ///
+  /// In en, this message translates to:
+  /// **'Describe the fault before sending.'**
+  String get repairReqErrDescription;
+
+  /// Priority label
+  ///
+  /// In en, this message translates to:
+  /// **'Priority'**
+  String get repairReqPriority;
+
+  /// Odometer label
+  ///
+  /// In en, this message translates to:
+  /// **'Odometer (km)'**
+  String get repairReqOdometer;
+
+  /// Engine hours label
+  ///
+  /// In en, this message translates to:
+  /// **'Engine hours'**
+  String get repairReqEngineHours;
+
+  /// Optional hint
+  ///
+  /// In en, this message translates to:
+  /// **'Optional'**
+  String get repairReqOptional;
+
+  /// Meter validation
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a number of zero or more, or leave it blank.'**
+  String get repairReqErrMeter;
+
+  /// Online-only note
+  ///
+  /// In en, this message translates to:
+  /// **'This request is sent straight to the workshop and needs a connection. The office issues the RFR number.'**
+  String get repairReqOnlineNote;
+
+  /// Submit button
+  ///
+  /// In en, this message translates to:
+  /// **'Send repair request'**
+  String get repairReqSubmit;
+
+  /// Missing workspace
+  ///
+  /// In en, this message translates to:
+  /// **'Your profile is not loaded yet. Try again in a moment.'**
+  String get repairReqErrNoProfile;
+
+  /// Offline error
+  ///
+  /// In en, this message translates to:
+  /// **'No connection. Nothing was sent. Your entries are kept, send again when you have signal.'**
+  String get repairReqErrOffline;
+
+  /// Permission error
+  ///
+  /// In en, this message translates to:
+  /// **'Your account is not allowed to raise repair requests. Contact your administrator.'**
+  String get repairReqErrPermission;
+
+  /// Generic error
+  ///
+  /// In en, this message translates to:
+  /// **'The request could not be sent. Your entries are kept, try again.'**
+  String get repairReqErrFailed;
+
+  /// Success title
+  ///
+  /// In en, this message translates to:
+  /// **'Repair request sent'**
+  String get repairReqSentTitle;
+
+  /// Success with RFR number
+  ///
+  /// In en, this message translates to:
+  /// **'The workshop has it as {rfr}.'**
+  String repairReqSentWithNumber(String rfr);
+
+  /// Success without number
+  ///
+  /// In en, this message translates to:
+  /// **'The workshop has it. The office will issue the RFR number.'**
+  String get repairReqSentNoNumber;
+
+  /// Start another
+  ///
+  /// In en, this message translates to:
+  /// **'Raise another'**
+  String get repairReqAnother;
+
+  /// Finish
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get repairReqDone;
+
+  /// Asset search hint
+  ///
+  /// In en, this message translates to:
+  /// **'Search by asset, plate, type or site'**
+  String get repairReqSearchHint;
+
+  /// Empty fleet
+  ///
+  /// In en, this message translates to:
+  /// **'No machines are registered for your scope.'**
+  String get repairReqNoAssets;
+
+  /// No search match
+  ///
+  /// In en, this message translates to:
+  /// **'No machine matches that search.'**
+  String get repairReqNoMatch;
+
+  /// Too many matches
+  ///
+  /// In en, this message translates to:
+  /// **'{n} machines match. Type more to narrow the list.'**
+  String repairReqRefineSearch(int n);
+
+  /// Cached fleet notice
+  ///
+  /// In en, this message translates to:
+  /// **'Offline: showing the fleet saved on this device.'**
+  String get repairReqCachedList;
+
+  /// Register screen title
+  ///
+  /// In en, this message translates to:
+  /// **'Create account'**
+  String get registerTitle;
+
+  /// Loading policy
+  ///
+  /// In en, this message translates to:
+  /// **'Checking whether registration is open'**
+  String get registerChecking;
+
+  /// Offline title
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot reach the server'**
+  String get registerUnreachableTitle;
+
+  /// Offline message
+  ///
+  /// In en, this message translates to:
+  /// **'Registration needs a connection. Check your signal and try again.'**
+  String get registerUnreachableMessage;
+
+  /// Closed title
+  ///
+  /// In en, this message translates to:
+  /// **'Registration is closed'**
+  String get registerClosedTitle;
+
+  /// Closed message
+  ///
+  /// In en, this message translates to:
+  /// **'Accounts are created by your administrator. Contact your administrator to be invited.'**
+  String get registerClosedMessage;
+
+  /// Back to login
+  ///
+  /// In en, this message translates to:
+  /// **'Back to sign in'**
+  String get registerBackToSignIn;
+
+  /// Success title
+  ///
+  /// In en, this message translates to:
+  /// **'Account created'**
+  String get registerDoneTitle;
+
+  /// Success message
+  ///
+  /// In en, this message translates to:
+  /// **'Your account is waiting for approval. Your administrator will assign your role and site, then you can sign in.'**
+  String get registerDoneMessage;
+
+  /// Intro
+  ///
+  /// In en, this message translates to:
+  /// **'Request an account with your username and employee ID. An administrator approves it and sets your role and site.'**
+  String get registerIntro;
+
+  /// Full name label
+  ///
+  /// In en, this message translates to:
+  /// **'Full name'**
+  String get registerFullName;
+
+  /// Optional hint
+  ///
+  /// In en, this message translates to:
+  /// **'Optional'**
+  String get registerOptional;
+
+  /// Username label
+  ///
+  /// In en, this message translates to:
+  /// **'Username'**
+  String get registerUsername;
+
+  /// Username rules
+  ///
+  /// In en, this message translates to:
+  /// **'At least 3 characters: letters, numbers, dot, underscore or hyphen'**
+  String get registerUsernameHelp;
+
+  /// Employee ID label
+  ///
+  /// In en, this message translates to:
+  /// **'Employee ID'**
+  String get registerEmployeeId;
+
+  /// Password label
+  ///
+  /// In en, this message translates to:
+  /// **'Password'**
+  String get registerPassword;
+
+  /// Password rule
+  ///
+  /// In en, this message translates to:
+  /// **'At least {n} characters'**
+  String registerPasswordHelp(int n);
+
+  /// Confirm label
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm password'**
+  String get registerConfirm;
+
+  /// Toggle
+  ///
+  /// In en, this message translates to:
+  /// **'Show password'**
+  String get registerShowPassword;
+
+  /// Toggle
+  ///
+  /// In en, this message translates to:
+  /// **'Hide password'**
+  String get registerHidePassword;
+
+  /// Approval note
+  ///
+  /// In en, this message translates to:
+  /// **'You cannot choose a role or site here. New accounts start pending until an administrator approves them.'**
+  String get registerApprovalNote;
+
+  /// Submit
+  ///
+  /// In en, this message translates to:
+  /// **'Request account'**
+  String get registerSubmit;
+
+  /// Link to login
+  ///
+  /// In en, this message translates to:
+  /// **'Already have an account? Sign in'**
+  String get registerHaveAccount;
+
+  /// Validation
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a username of at least 3 characters.'**
+  String get registerErrUsernameShort;
+
+  /// Validation
+  ///
+  /// In en, this message translates to:
+  /// **'Use only letters, numbers, dot, underscore or hyphen.'**
+  String get registerErrUsernameChars;
+
+  /// Validation
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your employee ID.'**
+  String get registerErrEmployeeId;
+
+  /// Validation
+  ///
+  /// In en, this message translates to:
+  /// **'The password needs at least {n} characters.'**
+  String registerErrPasswordShort(int n);
+
+  /// Validation
+  ///
+  /// In en, this message translates to:
+  /// **'The passwords do not match.'**
+  String get registerErrMismatch;
+
+  /// Duplicate
+  ///
+  /// In en, this message translates to:
+  /// **'That username or employee ID is already taken. Choose another.'**
+  String get registerErrTaken;
+
+  /// Offline
+  ///
+  /// In en, this message translates to:
+  /// **'No connection. Your account was not created. Try again when you have signal.'**
+  String get registerErrOffline;
+
+  /// Generic
+  ///
+  /// In en, this message translates to:
+  /// **'Your account could not be created. Try again.'**
+  String get registerErrFailed;
+
+  /// Login access-help dialog: opens the self-registration screen (the account is created pending administrator approval).
+  ///
+  /// In en, this message translates to:
+  /// **'Create an account'**
+  String get loginCreateAccount;
+
+  /// Error title.
+  ///
+  /// In en, this message translates to:
+  /// **'The assessment could not be loaded'**
+  String get accAssessmentLoadFailed;
+
+  /// Section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Safety and mobility'**
+  String get accSafetyAndMobility;
+
+  /// Yes/no question.
+  ///
+  /// In en, this message translates to:
+  /// **'Safe to move'**
+  String get accSafeToMove;
+
+  /// Yes/no question.
+  ///
+  /// In en, this message translates to:
+  /// **'Recovery / tow required'**
+  String get accRecoveryTowRequired;
+
+  /// Yes/no question.
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle off road (VOR)'**
+  String get accVehicleOffRoad;
+
+  /// Section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Damage assessment'**
+  String get accDamageAssessment;
+
+  /// Number of damage areas.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 area} other{{count} areas}}'**
+  String accDamageAreaCount(int count);
+
+  /// Empty state.
+  ///
+  /// In en, this message translates to:
+  /// **'No damage areas have been marked on this case yet.'**
+  String get accNoDamageAreas;
+
+  /// Section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Labour and parts estimate'**
+  String get accLabourAndPartsEstimate;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Labour hours'**
+  String get accLabourHours;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Labour estimate'**
+  String get accLabourEstimate;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Parts estimate'**
+  String get accPartsEstimate;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Total preliminary estimate'**
+  String get accTotalPreliminaryEstimate;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Parts available'**
+  String get accPartsAvailable;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Special order'**
+  String get accSpecialOrder;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Parts availability'**
+  String get accPartsAvailability;
+
+  /// Section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Repair route recommendation'**
+  String get accRepairRouteRecommendation;
+
+  /// Checkbox label.
+  ///
+  /// In en, this message translates to:
+  /// **'Total loss possible'**
+  String get accTotalLossPossible;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected workshop'**
+  String get accSelectedWorkshop;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'City'**
+  String get accCity;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Expected duration (days)'**
+  String get accExpectedDurationDays;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Quotation status'**
+  String get accQuotationStatus;
+
+  /// Section title with count.
+  ///
+  /// In en, this message translates to:
+  /// **'Required attachments ({count})'**
+  String accRequiredAttachments(int count);
+
+  /// Warning.
+  ///
+  /// In en, this message translates to:
+  /// **'Attach vendor quotation to enable submission to External Workshop.'**
+  String get accAttachVendorQuotation;
+
+  /// Section title.
+  ///
+  /// In en, this message translates to:
+  /// **'After submit notify'**
+  String get accAfterSubmitNotify;
+
+  /// Button.
+  ///
+  /// In en, this message translates to:
+  /// **'Save assessment'**
+  String get accSaveAssessment;
+
+  /// Button label after submit.
+  ///
+  /// In en, this message translates to:
+  /// **'Assessment submitted'**
+  String get accAssessmentSubmitted;
+
+  /// Button.
+  ///
+  /// In en, this message translates to:
+  /// **'Submit assessment and route'**
+  String get accSubmitAssessment;
+
+  /// Hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Submission needs the vendor quotation for an external route.'**
+  String get accSubmissionNeedsQuotation;
+
+  /// Appended when the server rejected optional columns.
+  ///
+  /// In en, this message translates to:
+  /// **'These fields could not be stored on the server: {fields}.'**
+  String accFieldsNotStored(String fields);
+
+  /// Snackbar.
+  ///
+  /// In en, this message translates to:
+  /// **'Assessment submitted and routed to {route}.'**
+  String accAssessmentRouted(String route);
+
+  /// Snackbar.
+  ///
+  /// In en, this message translates to:
+  /// **'Assessment saved.'**
+  String get accAssessmentSaved;
+
+  /// Snackbar.
+  ///
+  /// In en, this message translates to:
+  /// **'{document} attached.'**
+  String accDocumentAttached(String document);
+
+  /// Odometer label.
+  ///
+  /// In en, this message translates to:
+  /// **'KM'**
+  String get accKm;
+
+  /// Odometer value.
+  ///
+  /// In en, this message translates to:
+  /// **'{km} km'**
+  String accKmValue(String km);
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Plate'**
+  String get accPlate;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Site · location'**
+  String get accSiteLocation;
+
+  /// Button to open the damage map.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{View damage map · 1 area} other{View damage map · {count} areas}}'**
+  String accViewDamageMap(int count);
+
+  /// Damage row action line.
+  ///
+  /// In en, this message translates to:
+  /// **'Action: not yet assessed'**
+  String get accActionNotAssessed;
+
+  /// Damage row action line.
+  ///
+  /// In en, this message translates to:
+  /// **'Action: {value}'**
+  String accActionValue(String value);
+
+  /// Chip on the recommended route.
+  ///
+  /// In en, this message translates to:
+  /// **'Recommended'**
+  String get accRecommended;
+
+  /// Tooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload {document}'**
+  String accUploadNamedDocument(String document);
+
+  /// Error title on the insurance claim workspace.
+  ///
+  /// In en, this message translates to:
+  /// **'The claim could not be loaded'**
+  String get accClaimLoadFailed;
+
+  /// Banner when the repair route is external.
+  ///
+  /// In en, this message translates to:
+  /// **'External repair assessment'**
+  String get accClaimExternalRepairBanner;
+
+  /// Section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Claim document package'**
+  String get accClaimDocumentPackage;
+
+  /// Warning under the document package.
+  ///
+  /// In en, this message translates to:
+  /// **'Claim registration unlocks when all required documents are complete.'**
+  String get accClaimRegistrationLocked;
+
+  /// Button/tooltip to request a missing document.
+  ///
+  /// In en, this message translates to:
+  /// **'Request {document}'**
+  String accRequestDocument(String document);
+
+  /// Button.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload document'**
+  String get accUploadDocument;
+
+  /// Section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Claim registration'**
+  String get accClaimRegistration;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Insurer'**
+  String get accInsurer;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Policy no.'**
+  String get accPolicyNo;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Claim number'**
+  String get accClaimNumber;
+
+  /// Claim number placeholder before registration.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-generated after registration'**
+  String get accClaimNumberAuto;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Liability'**
+  String get accLiability;
+
+  /// Field label for our liability percentage.
+  ///
+  /// In en, this message translates to:
+  /// **'GCC liability %'**
+  String get accGccLiabilityPct;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Claim amount'**
+  String get accClaimAmount;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Deductible'**
+  String get accDeductible;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Net claimable'**
+  String get accNetClaimable;
+
+  /// Button label after registration.
+  ///
+  /// In en, this message translates to:
+  /// **'Claim registered with insurer'**
+  String get accClaimRegistered;
+
+  /// Button and dialog title.
+  ///
+  /// In en, this message translates to:
+  /// **'Register claim with insurer'**
+  String get accRegisterClaim;
+
+  /// Hint under a disabled register button.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable once all required documents are complete.'**
+  String get accClaimEnableWhenComplete;
+
+  /// Section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment and recovery'**
+  String get accPaymentAndRecovery;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Approved amount'**
+  String get accApprovedAmount;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Recovered amount'**
+  String get accRecoveredAmount;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Outstanding'**
+  String get accOutstanding;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Recovery source'**
+  String get accRecoverySource;
+
+  /// Input hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Insurer, third party, driver'**
+  String get accRecoverySourceHint;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Last updated'**
+  String get accLastUpdated;
+
+  /// Button.
+  ///
+  /// In en, this message translates to:
+  /// **'Save recovery'**
+  String get accSaveRecovery;
+
+  /// Button.
+  ///
+  /// In en, this message translates to:
+  /// **'Update recovery amount'**
+  String get accUpdateRecovery;
+
+  /// Hint under a disabled recovery button.
+  ///
+  /// In en, this message translates to:
+  /// **'Register the claim first.'**
+  String get accRegisterClaimFirst;
+
+  /// Info note.
+  ///
+  /// In en, this message translates to:
+  /// **'Recovery amounts remain editable after operational case closure. Every adjustment is timestamped and audited.'**
+  String get accRecoveryEditableNote;
+
+  /// Section title.
+  ///
+  /// In en, this message translates to:
+  /// **'After registration notify'**
+  String get accAfterRegistrationNotify;
+
+  /// Note under notify chips.
+  ///
+  /// In en, this message translates to:
+  /// **'Notification includes the claim number, document status, claim amount and next action.'**
+  String get accClaimNotificationIncludes;
+
+  /// Button.
+  ///
+  /// In en, this message translates to:
+  /// **'Save claim draft'**
+  String get accSaveClaimDraft;
+
+  /// Button.
+  ///
+  /// In en, this message translates to:
+  /// **'Complete documents'**
+  String get accCompleteDocuments;
+
+  /// Footer line.
+  ///
+  /// In en, this message translates to:
+  /// **'{owner} is monitoring SLA and missing documents.'**
+  String accCommandCenterMonitoring(String owner);
+
+  /// Role name with the command center suffix.
+  ///
+  /// In en, this message translates to:
+  /// **'{role} (Command Center)'**
+  String accCommandCenterRole(String role);
+
+  /// Snackbar.
+  ///
+  /// In en, this message translates to:
+  /// **'Claim draft saved on this device. Nothing was sent.'**
+  String get accClaimDraftSaved;
+
+  /// Snackbar.
+  ///
+  /// In en, this message translates to:
+  /// **'Request for {document} logged on the case.'**
+  String accDocumentRequestLogged(String document);
+
+  /// Sheet title when uploading a document.
+  ///
+  /// In en, this message translates to:
+  /// **'Which document is this?'**
+  String get accWhichDocument;
+
+  /// Snackbar.
+  ///
+  /// In en, this message translates to:
+  /// **'{document} uploaded to the claim package.'**
+  String accDocumentUploaded(String document);
+
+  /// Validation snackbar.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the insurer, policy number and claim amount first.'**
+  String get accClaimRegisterMissing;
+
+  /// Confirmation dialog body.
+  ///
+  /// In en, this message translates to:
+  /// **'Claim {claimNo} for {insurer} under policy {policyNo} will be registered on the case. This cannot be undone from the app.'**
+  String accRegisterClaimConfirm(
+      String claimNo, String insurer, String policyNo);
+
+  /// Confirm button.
+  ///
+  /// In en, this message translates to:
+  /// **'Register'**
+  String get accRegister;
+
+  /// Snackbar.
+  ///
+  /// In en, this message translates to:
+  /// **'Claim {claimNo} registered with the insurer.'**
+  String accClaimRegisteredSnack(String claimNo);
+
+  /// Validation snackbar.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the recovered amount and its source.'**
+  String get accRecoveryMissing;
+
+  /// Snackbar.
+  ///
+  /// In en, this message translates to:
+  /// **'Recovery recorded.'**
+  String get accRecoveryRecorded;
+
+  /// Marks an optional document.
+  ///
+  /// In en, this message translates to:
+  /// **'{label} (Optional)'**
+  String accOptionalSuffix(String label);
+
+  /// Note under the locked fleet-master fields.
+  ///
+  /// In en, this message translates to:
+  /// **'These details are sourced from fleet master and cannot be edited here. If any detail is incorrect, please update it in the fleet system.'**
+  String get accIntakeFleetMasterLockNote;
+
+  /// Help under the incident site question.
+  ///
+  /// In en, this message translates to:
+  /// **'Select the site/location of this incident. This may be different from the asset\'s home site.'**
+  String get accIntakeIncidentSiteHelp;
+
+  /// Fleet master field.
+  ///
+  /// In en, this message translates to:
+  /// **'Asset no'**
+  String get accIntakeAssetNo;
+
+  /// Fleet master field.
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle type'**
+  String get accIntakeVehicleType;
+
+  /// Fleet master field.
+  ///
+  /// In en, this message translates to:
+  /// **'Make / model'**
+  String get accIntakeMakeModel;
+
+  /// Fleet master field.
+  ///
+  /// In en, this message translates to:
+  /// **'Site (home)'**
+  String get accIntakeHomeSite;
+
+  /// Fleet master field.
+  ///
+  /// In en, this message translates to:
+  /// **'Country'**
+  String get accIntakeCountry;
+
+  /// Fleet master field.
+  ///
+  /// In en, this message translates to:
+  /// **'Current meter'**
+  String get accIntakeCurrentMeter;
+
+  /// Fleet master field.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get accIntakeStatus;
+
+  /// Card title.
+  ///
+  /// In en, this message translates to:
+  /// **'Asset loaded from fleet master'**
+  String get accIntakeAssetLoaded;
+
+  /// Card title.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-filled from fleet master'**
+  String get accIntakeAutoFilled;
+
+  /// Section question.
+  ///
+  /// In en, this message translates to:
+  /// **'Where did the incident occur?'**
+  String get accIntakeWhereOccurred;
+
+  /// Field hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Site or location name'**
+  String get accIntakeSiteHint;
+
+  /// Site chip for the asset's home site.
+  ///
+  /// In en, this message translates to:
+  /// **'{site} (home)'**
+  String accIntakeHomeSiteChip(String site);
+
+  /// Evidence progress.
+  ///
+  /// In en, this message translates to:
+  /// **'{done} of {total} required photos'**
+  String accIntakeRequiredPhotos(int done, int total);
+
+  /// Evidence chip.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} missing'**
+  String accIntakeMissingCount(int count);
+
+  /// Evidence state.
+  ///
+  /// In en, this message translates to:
+  /// **'Attached on this device'**
+  String get accIntakeAttachedOnDevice;
+
+  /// Evidence row subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{category} · Required'**
+  String accIntakeRequiredCategory(String category);
+
+  /// Tooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove photo'**
+  String get accIntakeRemovePhoto;
+
+  /// Section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Supporting documents'**
+  String get accIntakeSupportingDocuments;
+
+  /// Section help.
+  ///
+  /// In en, this message translates to:
+  /// **'Attach what is available now. Route and country rules may require more during case review.'**
+  String get accIntakeSupportingDocumentsHelp;
+
+  /// Document state.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional at intake'**
+  String get accIntakeOptionalAtIntake;
+
+  /// Tooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove attachment'**
+  String get accIntakeRemoveAttachment;
+
+  /// Tooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Attach document photo'**
+  String get accIntakeAttachDocumentPhoto;
+
+  /// Affirmative answer to a yes/no accident fact.
+  ///
+  /// In en, this message translates to:
+  /// **'Yes'**
+  String get accYes;
+
+  /// Negative answer to a yes/no accident fact.
+  ///
+  /// In en, this message translates to:
+  /// **'No'**
+  String get accNo;
+
+  /// Title of the shared accident case summary PDF.
+  ///
+  /// In en, this message translates to:
+  /// **'Accident case summary'**
+  String get accCaseSummaryTitle;
+
+  /// PDF header line with the generation date and time.
+  ///
+  /// In en, this message translates to:
+  /// **'Generated {date}'**
+  String accCaseSummaryGenerated(String date);
+
+  /// Section title for the workstream table in the case PDF.
+  ///
+  /// In en, this message translates to:
+  /// **'Case workstreams'**
+  String get accCaseSummaryWorkstreams;
+
+  /// Table column header.
+  ///
+  /// In en, this message translates to:
+  /// **'Workstream'**
+  String get accCaseSummaryWorkstreamColumn;
+
+  /// Table column header.
+  ///
+  /// In en, this message translates to:
+  /// **'Team'**
+  String get accCaseSummaryTeamColumn;
+
+  /// Table column header.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get accCaseSummaryStatusColumn;
+
+  /// Table column header.
+  ///
+  /// In en, this message translates to:
+  /// **'Progress'**
+  String get accCaseSummaryProgressColumn;
+
+  /// Label for the server-recorded overall completion.
+  ///
+  /// In en, this message translates to:
+  /// **'Overall completion'**
+  String get accCaseSummaryOverallCompletion;
+
+  /// Label for the evidence photo count.
+  ///
+  /// In en, this message translates to:
+  /// **'Evidence photos'**
+  String get accCaseSummaryEvidencePhotos;
+
+  /// Button that renders and shares the case summary PDF.
+  ///
+  /// In en, this message translates to:
+  /// **'Share case summary PDF'**
+  String get accCaseSummaryShare;
+
+  /// Shown when building or sharing the PDF failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The case summary could not be shared. Try again.'**
+  String get accCaseSummaryShareFailed;
+
+  /// Shown when no Arabic-script font was available offline.
+  ///
+  /// In en, this message translates to:
+  /// **'The Arabic font could not be loaded, so the summary was shared in English.'**
+  String get accCaseSummarySharedInEnglish;
+
+  /// Draft restore failure.
+  ///
+  /// In en, this message translates to:
+  /// **'The saved report draft could not be restored. Your existing saved data was not overwritten.'**
+  String get accReportDraftRestoreFailed;
+
+  /// Shown when the workspace context is not ready.
+  ///
+  /// In en, this message translates to:
+  /// **'Your workspace is still loading. Try again.'**
+  String get accWorkspaceLoading;
+
+  /// Draft save failure.
+  ///
+  /// In en, this message translates to:
+  /// **'This device could not save the draft. Nothing previously saved was overwritten. Try again.'**
+  String get accReportDraftSaveFailed;
+
+  /// Snackbar after returning from the scanner.
+  ///
+  /// In en, this message translates to:
+  /// **'Use the scanned asset number to select the matching fleet record.'**
+  String get accReportUseScannedAsset;
+
+  /// Photo source sheet title.
+  ///
+  /// In en, this message translates to:
+  /// **'Add close-up photo'**
+  String get accReportAddCloseUpPhoto;
+
+  /// Button.
+  ///
+  /// In en, this message translates to:
+  /// **'Take photo'**
+  String get accReportTakePhoto;
+
+  /// Button.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose from gallery'**
+  String get accReportChooseGallery;
+
+  /// Snackbar after submit.
+  ///
+  /// In en, this message translates to:
+  /// **'Report saved to the offline queue.'**
+  String get accReportQueued;
+
+  /// Snackbar after submit with dropped fields.
+  ///
+  /// In en, this message translates to:
+  /// **'Report queued. Some unsupported optional fields were kept in the intake notes.'**
+  String get accReportQueuedWithNotes;
+
+  /// Step subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Select the fleet asset involved in this incident.'**
+  String get accReportStepAssetSubtitle;
+
+  /// Step subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Record when, where and what happened.'**
+  String get accReportStepIncidentSubtitle;
+
+  /// Step subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Record only the people, safety, Najm and third-party facts needed at the scene.'**
+  String get accReportStepPeopleSubtitle;
+
+  /// Step subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add one scene overview and one close-up for each marked damage area. Supporting documents are optional at intake.'**
+  String get accReportStepEvidenceSubtitle;
+
+  /// Step subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add available supporting documents. Optional at intake.'**
+  String get accReportStepDocumentsSubtitle;
+
+  /// Step subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Check the exact report and send it to Fleet validation. Optional documents never block this submission.'**
+  String get accReportStepReviewSubtitle;
+
+  /// Button.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan QR / barcode'**
+  String get accReportScanCode;
+
+  /// Asset search match count.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 matching asset} other{{count} matching assets}}'**
+  String accReportMatchingAssets(int count);
+
+  /// Empty search result.
+  ///
+  /// In en, this message translates to:
+  /// **'No matching fleet asset'**
+  String get accReportNoMatchingAsset;
+
+  /// Truncated search note.
+  ///
+  /// In en, this message translates to:
+  /// **'Showing the first {shown} of {total} matches. {hidden} more results, refine your search.'**
+  String accReportMatchOverflow(int shown, int total, int hidden);
+
+  /// Offline fleet chip.
+  ///
+  /// In en, this message translates to:
+  /// **'Showing saved fleet data'**
+  String get accReportSavedFleetData;
+
+  /// Button.
+  ///
+  /// In en, this message translates to:
+  /// **'Change asset'**
+  String get accReportChangeAsset;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Asset number (manual fallback)'**
+  String get accReportManualAsset;
+
+  /// Field hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Use only when a fleet match is unavailable'**
+  String get accReportManualAssetHint;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Meter at incident'**
+  String get accReportMeterAtIncident;
+
+  /// Field hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Odometer or hour-meter reading'**
+  String get accReportMeterHint;
+
+  /// Field hint with the fleet odometer.
+  ///
+  /// In en, this message translates to:
+  /// **'Fleet master: {km} km'**
+  String accReportMeterFleetMaster(String km);
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Road / exact location'**
+  String get accReportRoadLocation;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Incident date'**
+  String get accReportIncidentDate;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Incident time'**
+  String get accReportIncidentTime;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Incident site'**
+  String get accReportIncidentSite;
+
+  /// Field helper.
+  ///
+  /// In en, this message translates to:
+  /// **'Editable incident site; independent of the locked fleet home site.'**
+  String get accReportIncidentSiteHelper;
+
+  /// Field hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Gate, road, project area or GPS description'**
+  String get accReportRoadLocationHint;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Event type'**
+  String get accReportEventType;
+
+  /// Dropdown hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Select event type'**
+  String get accReportSelectEventType;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Initial severity'**
+  String get accReportInitialSeverity;
+
+  /// Severity option.
+  ///
+  /// In en, this message translates to:
+  /// **'Minor'**
+  String get accSeverityMinor;
+
+  /// Severity option.
+  ///
+  /// In en, this message translates to:
+  /// **'Moderate'**
+  String get accSeverityModerate;
+
+  /// Severity option.
+  ///
+  /// In en, this message translates to:
+  /// **'Major / severe'**
+  String get accSeverityMajorSevere;
+
+  /// Severity option.
+  ///
+  /// In en, this message translates to:
+  /// **'Fatal'**
+  String get accSeverityFatal;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'What happened?'**
+  String get accReportWhatHappened;
+
+  /// Field hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Describe the sequence of events and immediate conditions'**
+  String get accReportWhatHappenedHint;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Driver name'**
+  String get accReportDriverName;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Driver employee / licence ID'**
+  String get accReportDriverId;
+
+  /// Yes/no question.
+  ///
+  /// In en, this message translates to:
+  /// **'Were passengers involved?'**
+  String get accReportPassengersInvolved;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Passenger count'**
+  String get accReportPassengerCount;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Passenger details'**
+  String get accReportPassengerDetails;
+
+  /// Yes/no question.
+  ///
+  /// In en, this message translates to:
+  /// **'Were there injuries?'**
+  String get accReportInjuries;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Injury count'**
+  String get accReportInjuryCount;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Injury details'**
+  String get accReportInjuryDetails;
+
+  /// Yes/no question.
+  ///
+  /// In en, this message translates to:
+  /// **'Were emergency services contacted?'**
+  String get accReportEmergencyServices;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Emergency response details'**
+  String get accReportEmergencyDetails;
+
+  /// Yes/no question.
+  ///
+  /// In en, this message translates to:
+  /// **'Is the vehicle movable?'**
+  String get accReportVehicleMovable;
+
+  /// Yes/no question.
+  ///
+  /// In en, this message translates to:
+  /// **'Is recovery / towing required?'**
+  String get accReportRecoveryRequired;
+
+  /// Yes/no question.
+  ///
+  /// In en, this message translates to:
+  /// **'Is the vehicle safe to operate?'**
+  String get accReportSafeToOperate;
+
+  /// Yes/no question.
+  ///
+  /// In en, this message translates to:
+  /// **'Was a third party involved?'**
+  String get accReportThirdPartyInvolved;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Third-party name'**
+  String get accReportThirdPartyName;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Third-party vehicle'**
+  String get accReportThirdPartyVehicle;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Third-party plate'**
+  String get accReportThirdPartyPlate;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Third-party contact'**
+  String get accReportThirdPartyContact;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Third-party insurer'**
+  String get accReportThirdPartyInsurer;
+
+  /// Yes/no question.
+  ///
+  /// In en, this message translates to:
+  /// **'Is a third-party invoice available?'**
+  String get accReportThirdPartyInvoice;
+
+  /// Field helper.
+  ///
+  /// In en, this message translates to:
+  /// **'This is optional. If available, record only the invoice number; the Insurance team can request the file later.'**
+  String get accReportThirdPartyInvoiceHelper;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Third-party invoice number'**
+  String get accReportThirdPartyInvoiceNumber;
+
+  /// Yes/no question.
+  ///
+  /// In en, this message translates to:
+  /// **'Was a Najm case opened?'**
+  String get accReportNajmOpened;
+
+  /// Field helper.
+  ///
+  /// In en, this message translates to:
+  /// **'Record only when Najm applies to this incident.'**
+  String get accReportNajmHelper;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Najm reference'**
+  String get accReportNajmReference;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Witness details'**
+  String get accReportWitnessDetails;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Immediate action taken'**
+  String get accReportImmediateAction;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Additional notes'**
+  String get accReportAdditionalNotes;
+
+  /// Review card title.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready to submit'**
+  String get accReportReadyToSubmit;
+
+  /// Review card title.
+  ///
+  /// In en, this message translates to:
+  /// **'Missing before submission'**
+  String get accReportMissingBeforeSubmit;
+
+  /// Review chip.
+  ///
+  /// In en, this message translates to:
+  /// **'Complete'**
+  String get accReportComplete;
+
+  /// Blank value read-out.
+  ///
+  /// In en, this message translates to:
+  /// **'Not recorded'**
+  String get accNotRecorded;
+
+  /// Unanswered yes/no question.
+  ///
+  /// In en, this message translates to:
+  /// **'Not answered'**
+  String get accNotAnswered;
+
+  /// Review row label.
+  ///
+  /// In en, this message translates to:
+  /// **'Asset'**
+  String get accReportReviewAsset;
+
+  /// Review row label.
+  ///
+  /// In en, this message translates to:
+  /// **'Incident'**
+  String get accReportReviewIncident;
+
+  /// Review row label.
+  ///
+  /// In en, this message translates to:
+  /// **'Date and time'**
+  String get accReportReviewDateTime;
+
+  /// Review row label.
+  ///
+  /// In en, this message translates to:
+  /// **'Site / location'**
+  String get accReportReviewSiteLocation;
+
+  /// Review row label.
+  ///
+  /// In en, this message translates to:
+  /// **'What happened'**
+  String get accReportReviewWhatHappened;
+
+  /// Review row label.
+  ///
+  /// In en, this message translates to:
+  /// **'People'**
+  String get accReportReviewPeople;
+
+  /// Review row value.
+  ///
+  /// In en, this message translates to:
+  /// **'Driver {driver} · Injuries {injuries}'**
+  String accReportReviewPeopleValue(String driver, String injuries);
+
+  /// Review row label.
+  ///
+  /// In en, this message translates to:
+  /// **'Damage marks'**
+  String get accReportReviewDamageMarks;
+
+  /// Review row label.
+  ///
+  /// In en, this message translates to:
+  /// **'Focused photos'**
+  String get accReportReviewFocusedPhotos;
+
+  /// Review row value.
+  ///
+  /// In en, this message translates to:
+  /// **'{done} of {total}'**
+  String accReportReviewPhotosValue(int done, int total);
+
+  /// Review row label.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional documents'**
+  String get accReportReviewOptionalDocuments;
+
+  /// Review row value.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} attached'**
+  String accReportReviewAttachedValue(int count);
+
+  /// Review note.
+  ///
+  /// In en, this message translates to:
+  /// **'Recipients, route and initial SLA are resolved by the configured accident workflow when this queued report syncs.'**
+  String get accReportWorkflowResolvesOnSync;
+
+  /// Draft status.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft auto-saves on device'**
+  String get accReportDraftAutoSaves;
+
+  /// Draft status.
+  ///
+  /// In en, this message translates to:
+  /// **'Unsaved changes'**
+  String get accReportDraftUnsaved;
+
+  /// Draft status.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving draft…'**
+  String get accReportDraftSaving;
+
+  /// Draft status.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft saved on device'**
+  String get accReportDraftSaved;
+
+  /// Draft status with time.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft saved on device · {time}'**
+  String accReportDraftSavedAt(String time);
+
+  /// Draft status.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft save failed'**
+  String get accReportDraftSaveFailedShort;
+
+  /// Draft status.
+  ///
+  /// In en, this message translates to:
+  /// **'Restoring saved draft…'**
+  String get accReportDraftRestoring;
+
+  /// Button.
+  ///
+  /// In en, this message translates to:
+  /// **'Save and exit'**
+  String get accReportSaveAndExit;
+
+  /// Button.
+  ///
+  /// In en, this message translates to:
+  /// **'Back'**
+  String get accReportBack;
+
+  /// Button.
+  ///
+  /// In en, this message translates to:
+  /// **'Submit accident'**
+  String get accReportSubmit;
+
+  /// Button.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue to incident details'**
+  String get accReportContinueToIncident;
+
+  /// Button.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue to evidence'**
+  String get accReportContinueToEvidence;
+
+  /// Button.
+  ///
+  /// In en, this message translates to:
+  /// **'Save & Continue'**
+  String get accReportSaveAndContinue;
+
+  /// Vehicle picker result line.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 fleet result · search asset, fleet, plate, type, make, model or site} other{{count} fleet results · search asset, fleet, plate, type, make, model or site}}'**
+  String accReportFleetResults(int count);
+
+  /// Accident type.
+  ///
+  /// In en, this message translates to:
+  /// **'Collision'**
+  String get accTypeCollision;
+
+  /// Accident type.
+  ///
+  /// In en, this message translates to:
+  /// **'Rollover'**
+  String get accTypeRollover;
+
+  /// Accident type.
+  ///
+  /// In en, this message translates to:
+  /// **'Rear-end'**
+  String get accTypeRearEnd;
+
+  /// Accident type.
+  ///
+  /// In en, this message translates to:
+  /// **'Side-swipe'**
+  String get accTypeSideSwipe;
+
+  /// Accident type.
+  ///
+  /// In en, this message translates to:
+  /// **'Reversing'**
+  String get accTypeReversing;
+
+  /// Accident type.
+  ///
+  /// In en, this message translates to:
+  /// **'Fire'**
+  String get accTypeFire;
+
+  /// Accident type.
+  ///
+  /// In en, this message translates to:
+  /// **'Vandalism'**
+  String get accTypeVandalism;
+
+  /// Accident type.
+  ///
+  /// In en, this message translates to:
+  /// **'Weather'**
+  String get accTypeWeather;
+
+  /// Accident type.
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre failure'**
+  String get accTypeTyreFailure;
+
+  /// Accident type.
+  ///
+  /// In en, this message translates to:
+  /// **'Mechanical'**
+  String get accTypeMechanical;
+
+  /// Accident type.
+  ///
+  /// In en, this message translates to:
+  /// **'Near miss'**
+  String get accTypeNearMiss;
+
+  /// Accident type.
+  ///
+  /// In en, this message translates to:
+  /// **'Property damage'**
+  String get accTypePropertyDamage;
+
+  /// Accident type.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get accTypeOther;
+
+  /// Read-out for an accident field nobody has recorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Not set'**
+  String get accNotSet;
+
+  /// Error when an evidence file type is not supported.
+  ///
+  /// In en, this message translates to:
+  /// **'That file is not supported.'**
+  String get accErrorFileUnsupported;
+
+  /// Error when a value failed validation.
+  ///
+  /// In en, this message translates to:
+  /// **'Check the values and try again.'**
+  String get accErrorCheckValues;
+
+  /// Generic accident action failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong. Please try again.'**
+  String get accErrorGeneric;
+
+  /// Notify chip for a role that is only informed.
+  ///
+  /// In en, this message translates to:
+  /// **'{role} (for visibility)'**
+  String accNotifyForVisibility(String role);
+
+  /// Evidence source option: camera.
+  ///
+  /// In en, this message translates to:
+  /// **'Take a photo'**
+  String get accTakePhoto;
+
+  /// Evidence source option: device file.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a file from the device'**
+  String get accChooseDeviceFile;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Dispatch & Handover'**
+  String get accDhDispatchHandover;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Repair route'**
+  String get accDhRepairRoute;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Dispatch status'**
+  String get accDhDispatchStatus;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Transit elapsed'**
+  String get accDhTransitElapsed;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Vendor repair SLA'**
+  String get accDhVendorRepairSla;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'SLA unavailable'**
+  String get accDhSlaUnavailable;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Vendor SLA starts only after signed vehicle acceptance.'**
+  String get accDhVendorSlaStartsOnlyAfterSigned;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'The SLA clock starts when the workshop signs vehicle acceptance.'**
+  String get accDhTheSlaClockStartsWhenThe;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get accDhRetry;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Dispatch legs are not provisioned on this database yet. Dispatch details, handover condition and the workshop receipt cannot be recorded until the migration is applied.'**
+  String get accDhDispatchLegsAreNotProvisionedOn;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Vendor contact fields are not provisioned yet; only the workshop name is stored.'**
+  String get accDhVendorContactFieldsAreNotProvisioned;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'After acceptance, vendor can add inspection details, quotation, parts, schedule and progress in its own workspace. PO is created only after quotation review and approval.'**
+  String get accDhAfterAcceptanceVendorCanAddInspection;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Open case timeline'**
+  String get accDhOpenCaseTimeline;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Open workshop assessment'**
+  String get accDhOpenWorkshopAssessment;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Not started'**
+  String get accDhNotStarted;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Met'**
+  String get accDhMet;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Breached'**
+  String get accDhBreached;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Paused'**
+  String get accDhPaused;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Running'**
+  String get accDhRunning;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get accDhCancelled;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Started, no SLA target'**
+  String get accDhStartedNoSlaTarget;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Destination and vendor'**
+  String get accDhDestinationAndVendor;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Workshop name'**
+  String get accDhWorkshopName;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'City'**
+  String get accDhCity;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Vendor contact name'**
+  String get accDhVendorContactName;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Phone'**
+  String get accDhPhone;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Email'**
+  String get accDhEmail;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Workshop registration / tax no.'**
+  String get accDhWorkshopRegistrationTaxNo;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Assigned vendor inspector'**
+  String get accDhAssignedVendorInspector;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Unassigned'**
+  String get accDhUnassigned;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Edit vendor details'**
+  String get accDhEditVendorDetails;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Contact workshop'**
+  String get accDhContactWorkshop;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get accDhCancel;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Save vendor'**
+  String get accDhSaveVendor;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Dispatch details'**
+  String get accDhDispatchDetails;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Sent by'**
+  String get accDhSentBy;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Departure'**
+  String get accDhDeparture;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Carrier'**
+  String get accDhCarrier;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Driver'**
+  String get accDhDriver;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Recovery vehicle'**
+  String get accDhRecoveryVehicle;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Origin'**
+  String get accDhOrigin;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Destination'**
+  String get accDhDestination;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Estimated arrival'**
+  String get accDhEstimatedArrival;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Live status'**
+  String get accDhLiveStatus;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Record dispatch'**
+  String get accDhRecordDispatch;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Odometer (km)'**
+  String get accDhOdometerKm;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Engine hours'**
+  String get accDhEngineHours;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Fuel %'**
+  String get accDhFuel;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Keys'**
+  String get accDhKeys;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Documents sent (one per line)'**
+  String get accDhDocumentsSentOnePerLine;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Accessories / checklist (one per line)'**
+  String get accDhAccessoriesChecklistOnePerLine;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Outgoing damage photos'**
+  String get accDhOutgoingDamagePhotos;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Outgoing condition signed by'**
+  String get accDhOutgoingConditionSignedBy;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Outgoing signature'**
+  String get accDhOutgoingSignature;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Save dispatch'**
+  String get accDhSaveDispatch;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle handover condition'**
+  String get accDhVehicleHandoverCondition;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Odometer'**
+  String get accDhOdometer;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Fuel'**
+  String get accDhFuel2;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Documents sent'**
+  String get accDhDocumentsSent;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'documents'**
+  String get accDhDocuments;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Accessories / checklist'**
+  String get accDhAccessoriesChecklist;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'items'**
+  String get accDhItems;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'photos'**
+  String get accDhPhotos;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Workshop receipt'**
+  String get accDhWorkshopReceipt;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Completed by vendor'**
+  String get accDhCompletedByVendor;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Arrived'**
+  String get accDhArrived;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Received by'**
+  String get accDhReceivedBy;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Incoming odometer'**
+  String get accDhIncomingOdometer;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Incoming engine hours'**
+  String get accDhIncomingEngineHours;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Incoming fuel'**
+  String get accDhIncomingFuel;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Condition matches dispatch'**
+  String get accDhConditionMatchesDispatch;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Yes'**
+  String get accDhYes;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'No'**
+  String get accDhNo;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Additional damage / remarks'**
+  String get accDhAdditionalDamageRemarks;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Receiving photos'**
+  String get accDhReceivingPhotos;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Custody accepted'**
+  String get accDhCustodyAccepted;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Vendor receiver signature'**
+  String get accDhVendorReceiverSignature;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Sender / driver signature'**
+  String get accDhSenderDriverSignature;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Completed by vendor'**
+  String get accDhCompletedByVendor2;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'No dispatch leg is recorded yet. Record the dispatch first; the receipt is signed against it.'**
+  String get accDhNoDispatchLegIsRecordedYet;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Arrived date / time *'**
+  String get accDhArrivedDateTime;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Received by (name) *'**
+  String get accDhReceivedByName;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Designation *'**
+  String get accDhDesignation;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Incoming odometer (km)'**
+  String get accDhIncomingOdometerKm;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Incoming fuel %'**
+  String get accDhIncomingFuel2;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Upload receiving photos *'**
+  String get accDhUploadReceivingPhotos;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Upload signed handover paper *'**
+  String get accDhUploadSignedHandoverPaper;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Vendor receiver signature *'**
+  String get accDhVendorReceiverSignature2;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Sender / driver signature (captured)'**
+  String get accDhSenderDriverSignatureCaptured;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'I accept custody of this vehicle'**
+  String get accDhIAcceptCustodyOfThisVehicle;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Sign and accept vehicle'**
+  String get accDhSignAndAcceptVehicle;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Complete all required fields to enable'**
+  String get accDhCompleteAllRequiredFieldsToEnable;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Missing'**
+  String get accDhMissing;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Arrived date / time'**
+  String get accDhArrivedDateTime2;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Designation'**
+  String get accDhDesignation2;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Signed handover paper'**
+  String get accDhSignedHandoverPaper;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Vendor receiver signature'**
+  String get accDhVendorReceiverSignature3;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Custody checkbox'**
+  String get accDhCustodyCheckbox;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Complete'**
+  String get accDhComplete;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get accDhNext;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Pending'**
+  String get accDhPending;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Dispatched'**
+  String get accDhDispatched;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Arrived'**
+  String get accDhArrived2;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Signed acceptance'**
+  String get accDhSignedAcceptance;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Vendor assessment / quotation starts'**
+  String get accDhVendorAssessmentQuotationStarts;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Pick'**
+  String get accDhPick;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Use now'**
+  String get accDhUseNow;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'attached'**
+  String get accDhAttached;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Camera'**
+  String get accDhCamera;
+
+  /// Accident workspace copy (accident_ws_dispatch_handover.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Gallery'**
+  String get accDhGallery;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Add timeline note'**
+  String get accTlAddTimelineNote;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Note'**
+  String get accTlNote;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Save note'**
+  String get accTlSaveNote;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Notify participants'**
+  String get accTlNotifyParticipants;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'This logs the notification on the case ledger. Delivery to people is done by the server notification engine.'**
+  String get accTlThisLogsTheNotificationOnThe;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Subject'**
+  String get accTlSubject;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Message'**
+  String get accTlMessage;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Log notification'**
+  String get accTlLogNotification;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Manage recipient groups'**
+  String get accTlManageRecipientGroups;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Recipients are set by Admin per event and role. The groups below are the roles each event reaches; membership comes from user profiles.'**
+  String get accTlRecipientsAreSetByAdminPer;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Visibility'**
+  String get accTlVisibility;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Time'**
+  String get accTlTime;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'By'**
+  String get accTlBy;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'To'**
+  String get accTlTo;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get accTlStatus;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Elapsed'**
+  String get accTlElapsed;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Case timeline & notifications'**
+  String get accTlCaseTimelineNotifications;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get accTlOpen;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Current owner'**
+  String get accTlCurrentOwner;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Next SLA'**
+  String get accTlNextSla;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Due in'**
+  String get accTlDueIn;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Add timeline note'**
+  String get accTlAddTimelineNote2;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Notify participants'**
+  String get accTlNotifyParticipants2;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'not provisioned yet on this database'**
+  String get accTlNotProvisionedYetOnThisDatabase;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'could not be read; the feed omits it'**
+  String get accTlCouldNotBeReadTheFeed;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Communications'**
+  String get accTlCommunications;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Evidence'**
+  String get accTlEvidence;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'SLA clocks'**
+  String get accTlSlaClocks;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Dispatch leg'**
+  String get accTlDispatchLeg;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'GPS fix'**
+  String get accTlGpsFix;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Timeline'**
+  String get accTlTimeline;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications'**
+  String get accTlNotifications;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Participants'**
+  String get accTlParticipants;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get accTlAll;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Actions'**
+  String get accTlActions;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Documents'**
+  String get accTlDocuments;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'SLA'**
+  String get accTlSla;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Emails'**
+  String get accTlEmails;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get accTlCompleted;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'In transit'**
+  String get accTlInTransit;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'No recorded events for this filter.'**
+  String get accTlNoRecordedEventsForThisFilter;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Notification delivery log'**
+  String get accTlNotificationDeliveryLog;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'No notifications recorded for this case.'**
+  String get accTlNoNotificationsRecordedForThisCase;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Trigger'**
+  String get accTlTrigger;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Recipients'**
+  String get accTlRecipients;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Channel'**
+  String get accTlChannel;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Show status'**
+  String get accTlShowStatus;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'View all notifications'**
+  String get accTlViewAllNotifications;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Manage recipient groups'**
+  String get accTlManageRecipientGroups2;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Recipients are set by Admin per event and role.'**
+  String get accTlRecipientsAreSetByAdminPer2;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'Participants and ownership'**
+  String get accTlParticipantsAndOwnership;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'by'**
+  String get accTlBy2;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'to'**
+  String get accTlTo2;
+
+  /// Accident workspace copy (accident_ws_timeline.dart).
+  ///
+  /// In en, this message translates to:
+  /// **'SLA met'**
+  String get accTlSlaMet;
+
+  /// Dispatch workspace save failure.
+  ///
+  /// In en, this message translates to:
+  /// **'The change could not be saved. Try again.'**
+  String get accDhChangeNotSaved;
+
+  /// Dispatch workspace contact failure.
+  ///
+  /// In en, this message translates to:
+  /// **'The workshop contact could not be opened on this device.'**
+  String get accDhContactOpenFailed;
+
+  /// Validation.
+  ///
+  /// In en, this message translates to:
+  /// **'Record the departure time first.'**
+  String get accDhRecordDepartureFirst;
+
+  /// Timeline load failure.
+  ///
+  /// In en, this message translates to:
+  /// **'The timeline could not be loaded. Try again.'**
+  String get accTlLoadFailed;
+
+  /// SLA overdue read-out.
+  ///
+  /// In en, this message translates to:
+  /// **'Overdue {elapsed}'**
+  String accTlOverdueBy(String elapsed);
 }
 
 class _AppLocalizationsDelegate

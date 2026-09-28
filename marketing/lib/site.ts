@@ -30,15 +30,14 @@ export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://www.tyrepu
 export const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || "https://www.tyrepulse.app").replace(/\/$/, "");
 
 /**
- * Sales WhatsApp number in international format, digits only (for example
- * "9665XXXXXXXX"). Null until the owner supplies the real number: while it is
- * null no WhatsApp button, link or schema entry is rendered anywhere. Setting
- * it here turns on the floating button on every page, the contact page link
- * and the WhatsApp ContactPoint in the structured data.
+ * Sales WhatsApp number in international format, digits only. Supplied by the
+ * owner 2026-09-28 (+971 56 672 6276). It drives the floating button on every
+ * page, the contact page link and the WhatsApp ContactPoint in the structured
+ * data; an empty value turns all three off.
  * Can also be set without a code change via NEXT_PUBLIC_WHATSAPP_NUMBER.
  */
 export const WHATSAPP_NUMBER: string | null =
-  (process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "").replace(/\D/g, "") || null;
+  (process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "971566726276").replace(/\D/g, "") || null;
 
 export const WHATSAPP_URL = WHATSAPP_NUMBER
   ? `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent("Hello Tyre Pulse, I would like a demo.")}`

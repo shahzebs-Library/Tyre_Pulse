@@ -95,8 +95,8 @@ Branch `claude/marketing-pmv-redesign`. marketing/ only; the app is untouched.
   a page-level `openGraph` REPLACES the layout's, so every page must list `images: OG_IMAGES` or its WhatsApp preview
   has no picture), descriptions <=160 chars, yellow `app/icon.png` + apple-icon, schema logo `brand/logo-pmv.png`,
   PMV wording in schema + llms.txt/llms-full.txt (new pages listed). robots.txt already allows GPTBot/ClaudeBot/etc.
-  **WhatsApp:** `WHATSAPP_NUMBER` (lib/site.ts, env `NEXT_PUBLIC_WHATSAPP_NUMBER`) is NULL until the owner gives the real
-  number; then a floating wa.me button, a contact-page link and a schema ContactPoint appear. Never invent a number.
+  **WhatsApp:** sales number **+971 56 672 6276** (owner, 2026-09-28) in `WHATSAPP_NUMBER` (lib/site.ts; env
+  `NEXT_PUBLIC_WHATSAPP_NUMBER` overrides): floating wa.me button on every page, contact-page link, schema ContactPoint.
   **CAVEAT:** SITE_URL defaults to www.tyrepulse.app, which still serves the APP, so og:image/canonical/sitemap URLs
   resolve to the app host until the domain moves or NEXT_PUBLIC_SITE_URL is set on tyre-pulse-eezl.
   Product screens stay HTML in `components/mock/Screens.tsx` over `lib/sample.ts`, each tagged "Sample data".

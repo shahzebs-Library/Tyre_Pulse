@@ -132,12 +132,22 @@ final class SupabaseAdminRepository
 
   @override
   Future<List<AdminUser>> listUsers() => guard<List<AdminUser>>(() async {
-        final List<Map<String, dynamic>> rows = await _client
-            .from(SupabaseTables.profiles)
-            .select(_userColumns)
-            .order('full_name')
-            .order('id')
-            .limit(1000);
+        // PostgREST caps every response at 1000 rows whatever `.limit` says,
+        // so page with `.range` until a short page. The `id` tiebreak makes
+        // the order total, so no user is dropped or repeated at a boundary.
+        const int pageSize = 1000;
+        const int ceiling = 20000;
+        final List<Map<String, dynamic>> rows = <Map<String, dynamic>>[];
+        for (int from = 0; from < ceiling; from += pageSize) {
+          final List<Map<String, dynamic>> page = await _client
+              .from(SupabaseTables.profiles)
+              .select(_userColumns)
+              .order('full_name')
+              .order('id')
+              .range(from, from + pageSize - 1);
+          rows.addAll(page);
+          if (page.length < pageSize) break;
+        }
         return rows
             .map(adminUserFromRow)
             .where((AdminUser user) => user.id.isNotEmpty)

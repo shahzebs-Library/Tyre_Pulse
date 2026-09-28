@@ -26,9 +26,10 @@
 /// `tyre_records.position`: no offline command in
 /// `lib/core/sync/command_registry.dart` updates an existing tyre record,
 /// and the `tyre_records` UPDATE policy is limited to managers. The
-/// destination position is written into [notes] AND the position column
-/// holds the position the tyre was moved FROM, so the event row is
-/// self-describing on its own.
+/// position column holds the DESTINATION, matching the web writer
+/// (`src/lib/api/tyreRecords.js` records the new position on a rotation),
+/// so the Tyre Passport's per-position history puts the tyre where it now
+/// is. The source position is kept in [notes] ("Rotated from X to Y").
 ///
 /// # Online only, and it says so
 ///
@@ -120,7 +121,7 @@ final class SupabaseTyreServiceEventRepository
     return <String, Object?>{
       'tyre_serial': _blankToNull(input.tyreSerial),
       'asset_no': _blankToNull(input.assetNo)?.toUpperCase(),
-      'position': from,
+      'position': to,
       'event_type': tyreServiceEventRotation,
       'event_date': _isoDay(input.eventDate),
       'site': _blankToNull(input.site),

@@ -162,6 +162,12 @@ final class SupabaseSelfRegistrationRepository
 /// A sign-up error message mapped to a result. The pattern matches the web,
 /// which reads a duplicate username through the synthetic email collision.
 SelfRegistrationResult classifySignUpError(String message) {
+  // Supabase Auth CAPTCHA protection refuses a sign-up with no captcha token,
+  // and the phone has no challenge to produce one. Treat it as registration
+  // being unavailable (the "ask your administrator" screen), never a retry.
+  if (RegExp('captcha', caseSensitive: false).hasMatch(message)) {
+    return SelfRegistrationResult.closed;
+  }
   final bool taken = RegExp(
     'already registered|already been registered|duplicate|already exists|'
     'database error',

@@ -57,7 +57,8 @@ void main() {
     expect(row, <String, Object?>{
       'tyre_serial': 'YMA55312',
       'asset_no': 'TM514',
-      'position': 'LHF1',
+      // The destination, as the web writer records it; the source is in notes.
+      'position': 'RHF1',
       'event_type': 'rotation',
       'event_date': '2026-09-28',
       'site': 'NHC',

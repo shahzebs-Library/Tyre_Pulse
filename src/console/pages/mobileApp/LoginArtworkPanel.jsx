@@ -53,9 +53,17 @@ export default function LoginArtworkPanel({ onSaved }) {
       const json = serializeLoginArt(draft)
       await setMobileLoginArt(json)
       setSaved(parseLoginArt(json)); setUpdatedAt(new Date().toISOString())
+      // The change is saved; the audit entry is awaited so a failed audit is
+      // reported instead of hidden behind the success message.
+      try {
+        await onSaved?.(json)
+      } catch (e) {
+        setMsgIsError(true)
+        setMsg(toUserMessage(e, 'Saved, but the change could not be recorded in the audit log.'))
+        return
+      }
       setMsgIsError(false)
       setMsg('Saved. Phones show the new pictures the next time they open the app with a connection.')
-      onSaved?.(json)
     } catch (e) {
       setMsgIsError(true); setMsg(toUserMessage(e, 'Could not save the login pictures.'))
     } finally { setSaving(false) }

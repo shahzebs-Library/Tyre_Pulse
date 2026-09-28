@@ -164,6 +164,12 @@ void main() {
         SelfRegistrationResult.taken,
       );
       expect(classifySignUpError('boom'), SelfRegistrationResult.failed);
+      // CAPTCHA protection on: the phone cannot answer it, so registration
+      // reads as unavailable rather than a failure to retry.
+      expect(
+        classifySignUpError('captcha verification process failed'),
+        SelfRegistrationResult.closed,
+      );
     });
 
     test('form validation matches the web rules', () {

@@ -220,13 +220,26 @@ class _RepairRequestScreenState extends ConsumerState<RepairRequestScreen> {
       setState(() => _error = l10n.repairReqErrNoProfile);
       return;
     }
+    // A request must carry a country: `repair_requests` RLS shows a
+    // country-less row to the whole organisation. Prefer the workspace
+    // country, then the picked machine's own country (it was read under the
+    // user's country scope), then a single-country user's only country.
     final List<String> named = workspace.countryScope.namedCountries;
+    final String? assetCountry = _asset?.country?.trim();
+    final String? country = workspace.activeCountry ??
+        ((assetCountry?.isNotEmpty ?? false) ? assetCountry : null) ??
+        (named.length == 1 ? named.first : null);
+    if (country == null) {
+      // Multi-country user in the all-countries view with a machine whose
+      // country is unknown: ask them to pick the machine from the list.
+      setState(() => _error = l10n.repairReqErrAsset);
+      return;
+    }
     final RepairRequestReporter reporter = RepairRequestReporter(
       userId: workspace.userId,
       fullName: workspace.fullName,
       employeeId: workspace.employeeId,
-      country:
-          workspace.activeCountry ?? (named.length == 1 ? named.first : null),
+      country: country,
       legacySite: workspace.legacySite,
     );
     setState(() {

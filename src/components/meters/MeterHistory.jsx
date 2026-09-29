@@ -17,7 +17,7 @@ const isEdited = (row) => !!(row.updated_at && row.created_at && row.updated_at 
  * the reading; it is now the shared dialog so it keeps its full width on a
  * phone and its focus is trapped while it is open.
  */
-function Correction({ row, onSaved, onCancel }) {
+export function Correction({ row, onSaved, onCancel }) {
   const [value, setValue] = useState(String(row.value))
   const [date, setDate] = useState(row.reading_date || '')
   const [reason, setReason] = useState('')

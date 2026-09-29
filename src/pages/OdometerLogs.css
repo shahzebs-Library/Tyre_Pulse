@@ -1,0 +1,31 @@
+/* Odometer Logs page layout on top of the shared kit (commandCenter.css). */
+.ol-page { display: flex; flex-direction: column; gap: 16px; }
+.ol-toolbar .cc-filters { align-items: flex-end; }
+.ol-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
+.ol-more { border-top: 1px solid var(--cc-inner-border); margin-top: 12px; padding-top: 12px; }
+.ol-check { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--cc-ink-2); min-height: 40px; }
+.ol-check input { accent-color: var(--cc-green); }
+.ol-note { font-size: 12.5px; color: var(--cc-ink-2); margin: 8px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.cc-card.ol-note { margin: 0; }
+.ol-count { font-size: 12px; color: var(--cc-ink-3); margin: -8px 0 0; }
+.ol-sub { display: block; font-size: 11.5px; color: var(--cc-ink-3); margin-top: 3px; }
+.ol-warn { font-size: 11.5px; color: var(--cc-amber); margin: 6px 0 0; white-space: normal; }
+.ol-err { font-size: 12px; color: var(--cc-red); margin: 6px 0 0; white-space: normal; }
+.ol-error { flex-direction: row; align-items: center; gap: 10px; color: var(--cc-red); font-size: 13px; }
+.ol-error span { flex: 1; }
+.ol-asset { all: unset; cursor: pointer; font-weight: 700; color: var(--cc-ink); text-decoration: underline dotted; text-underline-offset: 4px; }
+.ol-asset:focus-visible { outline: 2px solid var(--cc-green); outline-offset: 2px; }
+.ol-row-actions { display: inline-flex; align-items: center; gap: 6px; }
+.ol-wrap { white-space: normal; display: inline-block; min-width: 220px; }
+.ol-charts { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 16px; }
+.ol-chart { height: 200px; }
+.ol-h3 { font-size: 13px; font-weight: 700; color: var(--cc-ink); margin: 16px 0 6px; display: flex; align-items: center; gap: 6px; }
+.ol-rules { margin: 0; padding-left: 18px; font-size: 12.5px; color: var(--cc-ink-2); display: grid; gap: 4px; }
+.ol-dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin: 0; }
+.ol-dl dt { font-size: 11px; color: var(--text-muted); }
+.ol-dl dd { margin: 2px 0 0; font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.ol-photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.ol-photos img { width: 100%; height: 100px; object-fit: cover; border-radius: 8px; border: 1px solid var(--input-border); }
+.ol-sig { max-width: 320px; max-height: 140px; background: #fff; border-radius: 8px; border: 1px solid var(--input-border); padding: 6px; }
+@media (max-width: 1100px) { .ol-charts { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) { .ol-actions { margin-left: 0; } }

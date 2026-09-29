@@ -120,3 +120,10 @@ html.light .rs-form input, html.light .rs-form select, html.light .rs-form texta
   .rs-dist, .rs-facts, .rs-tread { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .rs-cal-day { min-height: 56px; }
 }
+label.rs-upload { display: block; cursor: pointer; }
+label.rs-upload:focus-within { outline: 2px solid var(--cc-blue); outline-offset: 2px; }
+.rs-files { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; font-size: 12px; color: var(--cc-ink-2); }
+.rs-files li { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.rs-files li span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rs-files li small { color: var(--cc-ink-3); }
+.rs-files a { color: var(--cc-blue); }

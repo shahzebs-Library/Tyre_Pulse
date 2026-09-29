@@ -4,7 +4,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   CalendarDays, Clock3, CheckCircle2, AlertOctagon, TrendingUp, Coins, Eye, Pencil, RefreshCw, FileSpreadsheet,
-  FileText, Search, X, Lock, ShieldCheck, Trash2, ChevronLeft, ChevronRight, ArrowRight, Sparkles, Image as ImageIcon, Settings2,
+  FileText, Search, X, Lock, ShieldCheck, Trash2, ChevronLeft, ChevronRight, ArrowRight, Sparkles, Settings2,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import * as rotations from '../lib/api/rotations'
@@ -12,6 +12,7 @@ import { listAssets } from '../lib/api/assets'
 import { listTechnicians } from '../lib/api/workshopLive'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
+import { useAuth } from '../contexts/AuthContext'
 import {
   resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme,
   exportSheetsToExcel, reportFileName, reportDateLabel,
@@ -25,6 +26,7 @@ import RotationDrawer from '../components/rotation/RotationDrawer'
 import CompliancePanels from '../components/rotation/CompliancePanels'
 import RotationPlanForm from '../components/rotation/RotationPlanForm'
 import PlanDiagram from '../components/rotation/PlanDiagram'
+import RotationAttachments from '../components/rotation/RotationAttachments'
 import { fmt, fmtDate, fmtKm, StatusBadge } from '../components/rotation/rotationUi'
 import { toUserMessage } from '../lib/safeError'
 import { loadAutoTable } from '../lib/pdfEngine'
@@ -34,7 +36,7 @@ import {
 } from '../lib/rotationScheduleAnalytics'
 import {
   enrichSchedules, filterSchedules, optionsOf, buildScheduleKpis, vehicleHistory, nextRecommendation,
-  calendarMonth, fleetHistory, treadByPosition, movesText, STATUS_TONE, VIEW_STATUSES, POSITION_OPTIONS, parsePlan,
+  calendarMonth, fleetHistory, treadByPosition, movesText, STATUS_TONE, VIEW_STATUSES, POSITION_OPTIONS, planOf, attachmentsOf,
 } from '../lib/rotationScheduleView'
 import './RotationSchedule.css'
 
@@ -55,6 +57,8 @@ function ViewStatus({ status }) {
 export default function RotationSchedule() {
   const { appSettings, activeCurrency, activeCountry } = useSettings()
   const { branding } = useTenant()
+  const { profile } = useAuth()
+  const orgId = profile?.organisation_id ?? profile?.org_id ?? null
   const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
   const moneyOk = !!activeCountry && activeCountry !== 'All'
 
@@ -83,6 +87,9 @@ export default function RotationSchedule() {
   const mapRow = useCallback((r) => ({
     id: r.id, asset: r.asset_no, site: r.site, scheduledDate: r.scheduled_date, priority: r.priority,
     notes: r.notes, currentKm: r.current_km, status: r.status, createdAt: r.created_at,
+    rotationType: r.rotation_type, fromPositions: r.from_positions || [], toPositions: r.to_positions || [],
+    technicianId: r.technician_id, technicianName: r.technician_name, attachments: r.attachments || [],
+    completedAt: r.completed_at, completedKm: r.completed_km,
   }), [])
   const fetchSchedules = useCallback(async () => {
     setSchedLoading(true); setSchedLoadError(null)
@@ -99,7 +106,9 @@ export default function RotationSchedule() {
   const fleet = useCard(() => listAssets({ country: activeCountry }), [activeCountry])
   const techs = useCard(async () => {
     const list = await listTechnicians()
-    return [...new Set((list || []).map((t) => t.full_name).filter(Boolean))].sort((a, b) => a.localeCompare(b))
+    const byName = new Map()
+    for (const t of list || []) { const name = String(t.full_name || '').trim(); if (name && !byName.has(name.toLowerCase())) byName.set(name.toLowerCase(), { id: t.id, name }) }
+    return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name))
   }, [])
 
   // ── Approval gate + UI state ──────────────────────────────────────────────
@@ -125,13 +134,13 @@ export default function RotationSchedule() {
     try {
       const { data: userData } = await supabase.auth.getUser()
       const uid = userData?.user?.id ?? null
-      await rotations.createRotations(entries.map((e) => ({
+      const created = await rotations.createRotations(entries.map((e) => ({
         asset_no: e.asset, site: e.site, scheduled_date: e.scheduledDate, priority: e.priority, status: e.status || 'Open',
-        notes: e.notes || null, current_km: e.currentKm ?? null,
+        ...(e.columns || { notes: e.notes || null }), current_km: e.currentKm ?? null,
         country: moneyOk ? activeCountry : null, created_by: uid,
       })))
       await fetchSchedules()
-      return true
+      return created.length ? created : true
     } catch (e) {
       setSchedError(toUserMessage(e, 'Failed to save schedule'))
       return false
@@ -171,13 +180,46 @@ export default function RotationSchedule() {
     }
   }, [fetchSchedules, pendingRemoveId])
 
+  // Uploads the picked files for a saved schedule and appends them to its
+  // attachments column. A failed file is reported; the schedule stays saved.
+  const uploadFiles = useCallback(async (id, kept, files) => {
+    if (!files?.length) return true
+    if (!orgId) { setSchedError('The schedule was saved, but files could not be uploaded: your company is not set on your profile.'); return false }
+    setSchedBusy(true)
+    const added = []
+    let failed = 0
+    for (const f of files) {
+      try { added.push(await rotations.uploadRotationAttachment(f, { orgId, rotationId: id })) } catch { failed++ }
+    }
+    try {
+      if (added.length) await rotations.updateRotation(id, { attachments: [...(kept || []), ...added], updated_at: new Date().toISOString() })
+      await fetchSchedules()
+    } catch (e) {
+      setSchedError(toUserMessage(e, 'The files were uploaded but could not be linked to the schedule.'))
+      return false
+    } finally {
+      setSchedBusy(false)
+    }
+    if (failed) setSchedError(`The schedule was saved, but ${failed} file${failed > 1 ? 's' : ''} could not be uploaded.`)
+    return !failed
+  }, [orgId, fetchSchedules])
+
   const saveForm = useCallback(async (entry, editingId) => {
-    const ok = editingId
-      ? await updateSchedule(editingId, { asset_no: entry.asset, site: entry.site, scheduled_date: entry.scheduledDate, priority: entry.priority, notes: entry.notes, current_km: entry.currentKm ?? null })
-      : await createSchedules([entry])
+    let id = editingId
+    let ok
+    if (editingId) {
+      ok = await updateSchedule(editingId, {
+        asset_no: entry.asset, site: entry.site, scheduled_date: entry.scheduledDate, priority: entry.priority,
+        ...entry.columns, attachments: entry.attachments || [], current_km: entry.currentKm ?? null,
+      })
+    } else {
+      ok = await createSchedules([entry])
+      id = Array.isArray(ok) ? ok[0]?.id : null
+    }
+    if (ok && id && entry.files?.length) await uploadFiles(id, entry.attachments, entry.files)
     if (ok) setFormSeed((s) => ({ nonce: s.nonce + 1 }))
-    return ok
-  }, [createSchedules, updateSchedule])
+    return !!ok
+  }, [createSchedules, updateSchedule, uploadFiles])
 
   // ── Derived ───────────────────────────────────────────────────────────────
   const analytics = useMemo(() => buildRotationAnalytics(records, interval), [records, interval])
@@ -207,6 +249,11 @@ export default function RotationSchedule() {
     }
     return [...m.values()].sort((a, b) => a.asset.localeCompare(b.asset))
   }, [fleet.data, analytics.vehicles])
+  const kmByAsset = useMemo(() => new Map(assetOptions.map((a) => [a.asset, a.currentKm])), [assetOptions])
+  const completeSchedule = useCallback((r) => {
+    const km = Number(kmByAsset.get(r.asset))
+    return updateSchedule(r.id, { status: 'Completed', completed_at: new Date().toISOString(), completed_km: Number.isFinite(km) && km > 0 ? km : null })
+  }, [kmByAsset, updateSchedule])
   const siteOptions = useMemo(() => optionsOf([...register, ...analytics.vehicles.filter((v) => v.site !== 'Unassigned'), ...(fleet.data || [])], (r) => r.site), [register, analytics.vehicles, fleet.data])
 
   const vSites = useMemo(() => ['All', ...[...new Set(analytics.vehicles.map((v) => v.site))].sort()], [analytics])
@@ -248,7 +295,7 @@ export default function RotationSchedule() {
               disabled={schedBusy}
               items={[
                 { label: 'Approval', icon: ShieldCheck, onClick: () => setDetailSchedule(r) },
-                { label: locked ? 'Locked, in approval' : 'Mark completed', icon: locked ? Lock : CheckCircle2, disabled: locked || r.viewStatus === 'Completed', onClick: () => updateSchedule(r.id, { status: 'Completed' }) },
+                { label: locked ? 'Locked, in approval' : 'Mark completed', icon: locked ? Lock : CheckCircle2, disabled: locked || r.viewStatus === 'Completed', onClick: () => completeSchedule(r) },
                 { label: 'Vehicle rotation history', icon: Clock3, disabled: !vehiclesByAsset.get(r.asset), onClick: () => setDrawerVehicle(vehiclesByAsset.get(r.asset)) },
                 { label: 'Remove', icon: Trash2, danger: true, onClick: () => setPendingRemoveId(r.id) },
               ]}
@@ -257,7 +304,7 @@ export default function RotationSchedule() {
         )
       },
     },
-  ], [isLocked, schedBusy, updateSchedule, vehiclesByAsset])
+  ], [isLocked, schedBusy, completeSchedule, vehiclesByAsset])
 
   const statusColumns = useMemo(() => [
     { key: 'asset', header: 'Asset', cell: (v) => <button type="button" className="rs-link" onClick={(e) => { e.stopPropagation(); setDrawerVehicle(v) }}>{v.asset}</button> },
@@ -286,10 +333,12 @@ export default function RotationSchedule() {
   const scheduleExportRows = (rows) => rows.map((r) => ({
     no: r.no, date: r.scheduledDate || '', asset: r.asset, type: r.vehicleType || 'N/A', site: r.site || '', brand: r.brand || 'N/A',
     from: r.plan.from.join(', ') || 'N/A', to: r.plan.to.join(', ') || 'N/A', rot: r.plan.type || 'N/A', status: r.viewStatus,
-    priority: r.priority || '', tech: r.plan.technician || 'N/A', notes: r.plan.freeNotes || '',
+    priority: r.priority || '', tech: r.plan.technician || 'N/A',
+    doneAt: r.completedAt ? fmtDate(r.completedAt) : 'N/A', doneKm: r.completedKm != null ? r.completedKm : 'N/A',
+    files: attachmentsOf(r).length, notes: r.plan.freeNotes || '',
   }))
-  const SCHED_COLS = ['no', 'date', 'asset', 'type', 'site', 'brand', 'from', 'to', 'rot', 'status', 'priority', 'tech', 'notes']
-  const SCHED_HEAD = ['Schedule No', 'Date', 'Asset', 'Vehicle Type', 'Site', 'Tyre Brand', 'Current Positions', 'New Positions', 'Rotation Type', 'Status', 'Priority', 'Technician', 'Notes']
+  const SCHED_COLS = ['no', 'date', 'asset', 'type', 'site', 'brand', 'from', 'to', 'rot', 'status', 'priority', 'tech', 'doneAt', 'doneKm', 'files', 'notes']
+  const SCHED_HEAD = ['Schedule No', 'Date', 'Asset', 'Vehicle Type', 'Site', 'Tyre Brand', 'Current Positions', 'New Positions', 'Rotation Type', 'Status', 'Priority', 'Technician', 'Completed On', 'Completed At (km)', 'Attachments', 'Notes']
 
   async function exportExcel(rowsOverride) {
     const rows = rowsOverride || shown
@@ -367,7 +416,7 @@ export default function RotationSchedule() {
     if (!selected) return []
     const detected = vehicleHistory(selVehicle).map((e) => ({ ...e, technician: null, status: 'Detected' }))
     const done = register.filter((r) => r.asset === selected.asset && r.viewStatus === 'Completed')
-      .map((r) => ({ date: r.scheduledDate, from: r.plan.from.join(', ') || null, to: r.plan.to.join(', ') || null, technician: r.plan.technician, status: 'Completed' }))
+      .map((r) => ({ date: r.completedAt || r.scheduledDate, from: r.plan.from.join(', ') || null, to: r.plan.to.join(', ') || null, technician: r.plan.technician, status: 'Completed' }))
     return [...done, ...detected].sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
   }, [selected, selVehicle, register])
   const selTread = selected ? treadByPosition(recordsByAsset.get(selected.asset) || []) : null
@@ -396,6 +445,11 @@ export default function RotationSchedule() {
               <div><dt>Schedule no.</dt><dd>{selected.no}</dd></div>
               <div><dt>Date</dt><dd>{fmtDate(selected.scheduledDate)}</dd></div>
               <div><dt>Type</dt><dd>{selected.plan.type || 'Not recorded'}</dd></div>
+            </dl>
+            <dl className="rs-dl rs-dl3">
+              <div><dt>Technician</dt><dd>{selected.plan.technician || 'Not recorded'}</dd></div>
+              <div><dt>Completed on</dt><dd>{selected.completedAt ? fmtDate(selected.completedAt) : 'N/A'}</dd></div>
+              <div><dt>Completed at</dt><dd>{selected.completedKm != null ? fmtKm(selected.completedKm) : 'N/A'}</dd></div>
             </dl>
             {selected.plan.recorded ? (
               <div className="rs-diagrams">
@@ -489,7 +543,7 @@ export default function RotationSchedule() {
                   bulkActions={(sel, clear) => (
                     <>
                       <button type="button" className="cc-btn-ghost" onClick={() => exportExcel(sel)}><FileSpreadsheet size={14} aria-hidden="true" /> Export selected ({sel.length})</button>
-                      <button type="button" className="cc-btn-ghost" disabled={schedBusy} onClick={async () => { for (const r of sel) { if (r.viewStatus !== 'Completed' && !isLocked(r.id)) await updateSchedule(r.id, { status: 'Completed' }) } clear() }}><CheckCircle2 size={14} aria-hidden="true" /> Mark completed</button>
+                      <button type="button" className="cc-btn-ghost" disabled={schedBusy} onClick={async () => { for (const r of sel) { if (r.viewStatus !== 'Completed' && !isLocked(r.id)) await completeSchedule(r) } clear() }}><CheckCircle2 size={14} aria-hidden="true" /> Mark completed</button>
                       <button type="button" className="cc-btn-ghost" onClick={clear}>Clear selection</button>
                     </>
                   )}
@@ -632,8 +686,8 @@ export default function RotationSchedule() {
                   )}
                 </CardState>
               </Card>
-              <Card title="Photos and documents">
-                <div className="cc-empty"><ImageIcon size={18} aria-hidden="true" /><br />Rotation schedules have no photo or document storage yet.</div>
+              <Card title="Photos and documents" sub={selected ? selected.no : null}>
+                <RotationAttachments row={selected} />
               </Card>
             </div>
           </div>
@@ -704,12 +758,12 @@ export default function RotationSchedule() {
                 <Lock size={12} aria-hidden="true" /> Locked, in approval. Completing this rotation is disabled until the workflow finishes.
               </div>
             )}
-            {parsePlan(detailSchedule.notes).recorded && (
-              <p className="text-xs text-[var(--text-muted)]">{movesText(parsePlan(detailSchedule.notes).from, parsePlan(detailSchedule.notes).to) || ''}</p>
+            {planOf(detailSchedule).recorded && (
+              <p className="text-xs text-[var(--text-muted)]">{movesText(planOf(detailSchedule).from, planOf(detailSchedule).to) || ''}</p>
             )}
             <button
               type="button"
-              onClick={() => updateSchedule(detailSchedule.id, { status: 'Completed' })}
+              onClick={() => completeSchedule(detailSchedule)}
               disabled={schedBusy || wfLocked || detailSchedule.status === 'Completed'}
               className="btn-primary w-full min-h-[44px] gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
               title={wfLocked ? 'Locked, in approval' : 'Mark rotation completed'}

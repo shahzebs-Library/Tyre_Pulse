@@ -77,3 +77,24 @@ describe('service layer - rotations (tyre_rotations)', () => {
     await expect(rotations.listRotations()).rejects.toMatchObject({ code: '42501' })
   })
 })
+
+describe('service layer - rotation attachments', () => {
+  const file = (name, type, size = 1024) => ({ name, type, size })
+  it('accepts JPG, PNG and PDF up to 10 MB only', () => {
+    expect(rotations.validateAttachment(file('a.jpg', 'image/jpeg'))).toBe('')
+    expect(rotations.validateAttachment(file('a.png', 'image/png'))).toBe('')
+    expect(rotations.validateAttachment(file('a.pdf', 'application/pdf'))).toBe('')
+    expect(rotations.validateAttachment(file('a.exe', 'application/pdf'))).toMatch(/JPG, PNG or PDF/)
+    expect(rotations.validateAttachment(file('a.gif', 'image/gif'))).toMatch(/JPG, PNG or PDF/)
+    expect(rotations.validateAttachment(file('a.pdf', 'application/pdf', 11 * 1024 * 1024))).toMatch(/10 MB/)
+  })
+  it('builds an org scoped path with a safe file name', () => {
+    expect(rotations.attachmentPath('org1', 'rot1', '../My photo (1).JPG', 123)).toBe('org1/rotations/rot1/123-My-photo-1-.JPG')
+  })
+  it('createRotations returns the new ids', async () => {
+    h.state.result = { data: [{ id: 'new1' }], error: null }
+    const out = await rotations.createRotations([{ asset_no: 'V-1', rotation_type: 'standard' }])
+    expect(h.state.last._calls.insert).toEqual([{ asset_no: 'V-1', rotation_type: 'standard' }])
+    expect(out).toEqual([{ id: 'new1' }])
+  })
+})

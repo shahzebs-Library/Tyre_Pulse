@@ -2,18 +2,40 @@
  * Rotation Schedule view engine (pure, no I/O). Shapes tyre_rotations rows and
  * the rotationScheduleAnalytics output into what the redesigned page shows.
  *
- * The schedule table (tyre_rotations) has NO column for rotation type,
- * positions or technician. The planner stores those facts in the notes as one
- * readable header line ("Rotation: Cross | From: FL, FR | To: RR, RL |
- * Technician: A. Name") followed by the free notes, and this module reads them
- * back. A row without that line (older rows, auto-scheduled rows) reports the
- * plan as not recorded, never a guessed pattern.
+ * Rotation type, positions and technician are real tyre_rotations columns
+ * (rotation_type, from_positions, to_positions, technician_id, technician_name).
+ * An older row may still carry the interim notes header line
+ * ("Rotation: Cross | From: FL, FR | To: RR, RL | Technician: A. Name"); parsePlan
+ * reads that as a fallback only. A row with neither reports the plan as not
+ * recorded, never a guessed pattern.
  *
  * Nothing here fabricates a figure: a value that cannot be measured is null
  * and the page renders N/A.
  */
 
-export const ROTATION_TYPES = ['Standard', 'Cross', 'Side to Side', 'Custom']
+export const ROTATION_TYPES = ['Standard', 'Cross', 'Side to Side', 'X Pattern', 'Custom']
+
+/** UI label to the tyre_rotations.rotation_type CHECK token, and back. */
+export const TYPE_TOKEN = {
+  Standard: 'standard', Cross: 'cross', 'Side to Side': 'side_to_side', 'X Pattern': 'x_pattern', Custom: 'custom',
+}
+const TOKEN_TYPE = Object.fromEntries(Object.entries(TYPE_TOKEN).map(([k, v]) => [v, k]))
+
+/** Label (or already a token) to the DB token; null when unknown or blank. */
+export function typeToToken(type) {
+  if (type == null) return null
+  const s = String(type).trim()
+  if (TYPE_TOKEN[s]) return TYPE_TOKEN[s]
+  const low = s.toLowerCase().replace(/[\s-]+/g, '_')
+  return TOKEN_TYPE[low] ? low : null
+}
+
+/** DB token (or a legacy label) to the UI label; null when unknown or blank. */
+export function tokenToType(token) {
+  if (token == null) return null
+  const low = String(token).trim().toLowerCase().replace(/[\s-]+/g, '_')
+  return TOKEN_TYPE[low] || null
+}
 export const POSITION_OPTIONS = ['FL', 'FR', 'RL', 'RR', 'Spare']
 export const POSITION_LABEL = { FL: 'Front left', FR: 'Front right', RL: 'Rear left', RR: 'Rear right', Spare: 'Spare' }
 export const VIEW_STATUSES = ['Scheduled', 'In Progress', 'Completed', 'Overdue']
@@ -21,8 +43,11 @@ export const VIEW_STATUSES = ['Scheduled', 'In Progress', 'Completed', 'Overdue'
 /** Rotation patterns: where the tyre at each position moves to. */
 export const PATTERNS = {
   Standard: { FL: 'RL', FR: 'RR', RL: 'FL', RR: 'FR' },
-  Cross: { FL: 'RR', FR: 'RL', RL: 'FR', RR: 'FL' },
+  // Forward cross: fronts go straight back, rears cross to the front.
+  Cross: { FL: 'RL', FR: 'RR', RL: 'FR', RR: 'FL' },
   'Side to Side': { FL: 'FR', FR: 'FL', RL: 'RR', RR: 'RL' },
+  // X pattern: every tyre crosses to the opposite corner.
+  'X Pattern': { FL: 'RR', FR: 'RL', RL: 'FR', RR: 'FL' },
 }
 
 const NOTE_PREFIX = 'Rotation:'
@@ -51,18 +76,7 @@ export function newPositionsFor(type, current = []) {
 const cleanList = (v) => (Array.isArray(v) ? v : String(v || '').split(','))
   .map((s) => String(s).trim()).filter(Boolean)
 
-/** Compose the notes text carrying the plan header plus free notes. */
-export function encodePlan({ type, from = [], to = [], technician, notes } = {}) {
-  const parts = [`${NOTE_PREFIX} ${type || 'Custom'}`]
-  if (from.length) parts.push(`From: ${from.join(', ')}`)
-  if (to.length) parts.push(`To: ${to.join(', ')}`)
-  if (technician && String(technician).trim()) parts.push(`Technician: ${String(technician).trim().replace(/\|/g, '/')}`)
-  const header = parts.join(' | ')
-  const free = String(notes || '').trim()
-  return free ? `${header}\n${free}` : header
-}
-
-/** Read the plan header back out of the notes. */
+/** Legacy read fallback: the interim plan header line some old notes carry. */
 export function parsePlan(notes) {
   const text = String(notes || '')
   const [first, ...rest] = text.split('\n')
@@ -74,12 +88,51 @@ export function parsePlan(notes) {
     const [k, ...v] = seg.split(':')
     const key = k.trim().toLowerCase()
     const val = v.join(':').trim()
-    if (key === 'rotation') out.type = val || null
+    if (key === 'rotation') out.type = tokenToType(val) || val || null
     else if (key === 'from') out.from = cleanList(val)
     else if (key === 'to') out.to = cleanList(val)
     else if (key === 'technician') out.technician = val || null
   }
   return out
+}
+
+/**
+ * The rotation plan of a schedule row. Reads the real columns; falls back to the
+ * legacy notes header only when the row has none of them.
+ */
+export function planOf(row = {}) {
+  const from = cleanList(row.fromPositions)
+  const to = cleanList(row.toPositions)
+  const type = tokenToType(row.rotationType)
+  const technician = row.technicianName ? String(row.technicianName).trim() || null : null
+  if (type || from.length || to.length || technician) {
+    return { recorded: from.length > 0 || to.length > 0, type, from, to, technician, freeNotes: String(row.notes || '').trim() }
+  }
+  const legacy = parsePlan(row.notes)
+  return legacy.recorded ? legacy : { ...legacy, freeNotes: String(row.notes || '').trim() }
+}
+
+/** Attachments list from the jsonb column; never throws on a malformed value. */
+export function attachmentsOf(row = {}) {
+  const list = Array.isArray(row.attachments) ? row.attachments : []
+  return list.filter((a) => a && typeof a === 'object' && typeof a.path === 'string' && a.path)
+}
+
+/**
+ * Map the form to tyre_rotations columns. Technician from the list stores the
+ * id and name; a typed name stores the name only.
+ */
+export function planColumns(form = {}, technicians = []) {
+  const name = String(form.technician || '').trim()
+  const match = name ? technicians.find((t) => String(t.name || '').trim().toLowerCase() === name.toLowerCase()) : null
+  return {
+    rotation_type: typeToToken(form.type),
+    from_positions: cleanList(form.from),
+    to_positions: cleanList(form.to),
+    technician_id: match?.id || null,
+    technician_name: name || null,
+    notes: String(form.notes || '').trim() || null,
+  }
 }
 
 /**
@@ -125,7 +178,7 @@ export function enrichSchedules(schedules = [], { fleetByAsset = new Map(), vehi
     const fleet = fleetByAsset.get(s.asset) || null
     const vehicle = vehiclesByAsset.get(s.asset) || null
     const brands = [...new Set((vehicle?.activeTyres || []).map((t) => String(t.brand || '').trim()).filter(Boolean))]
-    const plan = parsePlan(s.notes)
+    const plan = planOf(s)
     return {
       ...s,
       no: scheduleNo(s),

@@ -1,15 +1,18 @@
 /**
  * Right rail "Create rotation schedule" panel, used for create and edit.
- * Rotation type, positions and technician have no column on tyre_rotations, so
- * they are written into the notes header (see rotationScheduleView.encodePlan).
+ * Rotation type, positions, technician and attachments are written to their own
+ * tyre_rotations columns (see rotationScheduleView.planColumns).
  */
 import { useMemo, useState } from 'react'
-import { Upload, X } from 'lucide-react'
+import { Upload, X, Paperclip } from 'lucide-react'
 import { Card } from '../commandCenter/kit'
 import { PRIORITIES } from '../../lib/rotationScheduleAnalytics'
 import {
-  ROTATION_TYPES, POSITION_OPTIONS, POSITION_LABEL, newPositionsFor, encodePlan, parsePlan, validatePlan, isoDay,
+  ROTATION_TYPES, POSITION_OPTIONS, POSITION_LABEL, newPositionsFor, planOf, planColumns, attachmentsOf, validatePlan, isoDay,
 } from '../../lib/rotationScheduleView'
+import { validateAttachment, ATTACHMENT_ACCEPT } from '../../lib/api/rotations'
+
+const fmtSize = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`)
 
 function defaultDate() {
   const d = new Date(); d.setDate(d.getDate() + 7)
@@ -18,18 +21,19 @@ function defaultDate() {
 
 function initialForm(seed) {
   if (seed?.editing) {
-    const p = parsePlan(seed.editing.notes)
+    const p = planOf(seed.editing)
     return {
       asset: seed.editing.asset || '', type: p.type && ROTATION_TYPES.includes(p.type) ? p.type : 'Custom',
       from: p.from, to: p.to, scheduledDate: seed.editing.scheduledDate || defaultDate(),
       priority: seed.editing.priority || 'Medium', technician: p.technician || '', site: seed.editing.site || '', notes: p.freeNotes || '',
+      attachments: attachmentsOf(seed.editing), files: [],
     }
   }
   const v = seed?.vehicle
   return {
     asset: v?.asset || '', type: 'Standard', from: [], to: [], scheduledDate: defaultDate(),
     priority: v?.status === 'Overdue' ? 'Critical' : v?.status === 'Due Soon' ? 'High' : 'Medium',
-    technician: '', site: v?.site && v.site !== 'Unassigned' ? v.site : '', notes: '',
+    technician: '', site: v?.site && v.site !== 'Unassigned' ? v.site : '', notes: '', attachments: [], files: [],
   }
 }
 
@@ -51,6 +55,7 @@ function Chips({ value, onToggle, label, disabled }) {
 export default function RotationPlanForm({ seed, assets, sites, technicians, techError, busy, onCancel, onSave }) {
   const [form, setForm] = useState(() => initialForm(seed))
   const [error, setError] = useState('')
+  const [fileError, setFileError] = useState('')
 
   const assetByNo = useMemo(() => new Map(assets.map((a) => [a.asset, a])), [assets])
   const set = (patch) => setForm((f) => ({ ...f, ...patch }))
@@ -66,6 +71,14 @@ export default function RotationPlanForm({ seed, assets, sites, technicians, tec
   }
   const toggleTo = (p) => set({ to: form.to.includes(p) ? form.to.filter((x) => x !== p) : [...form.to, p] })
 
+  const addFiles = (list) => {
+    const picked = [...(list || [])]
+    const bad = picked.map(validateAttachment).find(Boolean)
+    setFileError(bad || '')
+    const ok = picked.filter((f) => !validateAttachment(f))
+    if (ok.length) set({ files: [...form.files, ...ok] })
+  }
+
   async function submit(e) {
     e.preventDefault()
     const msg = validatePlan(form)
@@ -77,7 +90,9 @@ export default function RotationPlanForm({ seed, assets, sites, technicians, tec
       site: form.site,
       scheduledDate: form.scheduledDate,
       priority: form.priority,
-      notes: encodePlan({ type: form.type, from: form.from, to: form.to, technician: form.technician, notes: form.notes }),
+      columns: planColumns(form, technicians),
+      attachments: form.attachments,
+      files: form.files,
       currentKm: a?.currentKm ?? seed?.editing?.currentKm ?? null,
       status: 'Open',
     }, seed?.editing?.id || null)
@@ -113,7 +128,7 @@ export default function RotationPlanForm({ seed, assets, sites, technicians, tec
         </label>
         <label><span>Technician</span>
           <input list="rs-techs" value={form.technician} placeholder="Select technician" autoComplete="off" onChange={(e) => set({ technician: e.target.value })} />
-          <datalist id="rs-techs">{technicians.map((t) => <option key={t} value={t} />)}</datalist>
+          <datalist id="rs-techs">{technicians.map((t) => <option key={t.id} value={t.name} />)}</datalist>
           {techError && <small className="rs-note">Technician list unavailable. Type a name.</small>}
         </label>
         <label><span>Site <em>*</em></span>
@@ -125,9 +140,31 @@ export default function RotationPlanForm({ seed, assets, sites, technicians, tec
         <label><span>Notes</span><textarea rows={3} value={form.notes} placeholder="Enter notes" onChange={(e) => set({ notes: e.target.value })} /></label>
         <div>
           <span className="rs-lbl">Attachments</span>
-          <div className="rs-upload" aria-disabled="true"><Upload size={16} aria-hidden="true" /><br />Attachments are not available yet: rotation schedules have no file storage.</div>
+          <label
+            className="rs-upload"
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => { e.preventDefault(); addFiles(e.dataTransfer?.files) }}
+          >
+            <Upload size={16} aria-hidden="true" /><br />
+            Drop files here or choose files. JPG, PNG or PDF, up to 10 MB each.
+            <input type="file" multiple accept={ATTACHMENT_ACCEPT} className="sr-only" onChange={(e) => { addFiles(e.target.files); e.target.value = '' }} />
+          </label>
+          {fileError && <small className="rs-err" role="alert">{fileError}</small>}
+          {(form.attachments.length > 0 || form.files.length > 0) && (
+            <ul className="rs-files">
+              {form.attachments.map((f) => (
+                <li key={f.path}><Paperclip size={12} aria-hidden="true" /> <span>{f.name}</span> <small>{fmtSize(f.size || 0)}</small>
+                  <button type="button" className="cc-icon-btn" aria-label={`Remove ${f.name}`} onClick={() => set({ attachments: form.attachments.filter((x) => x.path !== f.path) })}><X size={12} /></button>
+                </li>
+              ))}
+              {form.files.map((f, i) => (
+                <li key={`new-${i}-${f.name}`}><Paperclip size={12} aria-hidden="true" /> <span>{f.name}</span> <small>{fmtSize(f.size)}, uploads on save</small>
+                  <button type="button" className="cc-icon-btn" aria-label={`Remove ${f.name}`} onClick={() => set({ files: form.files.filter((_, j) => j !== i) })}><X size={12} /></button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
-        <p className="rs-note">Rotation type, positions and technician are kept in the schedule notes, because the schedule table has no columns for them yet.</p>
         {error && <p className="rs-err" role="alert">{error}</p>}
         <div className="rs-actions">
           <button type="button" className="cc-btn-ghost" onClick={() => (onCancel ? onCancel() : setForm(initialForm(null)))} disabled={busy}>Cancel</button>

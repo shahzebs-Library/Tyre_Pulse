@@ -1,6 +1,6 @@
-name: Flutter Release - Play Internal Testing
+name: Flutter Release - Play Closed Testing
 
-# PUBLISHES to Google Play Console Internal Testing for the app
+# PUBLISHES to Google Play Console Closed Testing (track 'alpha') for the app
 # com.shahzebrahman.tyrepulse - a SEPARATE, distinct app listing from the
 # existing production React Native app (com.shahzebrahman.tyrepulseinspector),
 # with its own throwaway signing key generated specifically for this purpose.
@@ -8,7 +8,7 @@ name: Flutter Release - Play Internal Testing
 # name, different key, different Play Console listing.
 #
 # workflow_dispatch ONLY, deliberately - this must never fire on a push or a
-# PR. Every trigger is a real, visible upload to internal testers; nobody
+# PR. Every trigger is a real, visible upload to closed testers; nobody
 # should get a new build just because someone pushed to main.
 #
 # Required repository secrets (Settings -> Secrets and variables -> Actions):
@@ -29,7 +29,7 @@ defaults:
 
 jobs:
   build_and_publish:
-    name: Build signed AAB and publish to Internal Testing
+    name: Build signed AAB and publish to Closed Testing
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -208,24 +208,25 @@ jobs:
             --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
             --dart-define=APP_ENV=staging
 
-      # OWNER RULE 2026-09-27: Flutter runs in Internal testing ONLY until the
-      # owner explicitly approves production. Never change this to alpha/beta/
-      # production; the guard below fails the run if anyone does.
-      - name: Guard - Internal testing only, never production
+      # OWNER RULE 2026-09-29: Flutter publishes straight to Closed testing
+      # (Play track id 'alpha'). Production stays the owner's call only; the
+      # guard below fails the run if the track or the package is changed.
+      - name: Guard - Closed testing only, never production
         working-directory: .
         env:
-          PLAY_TRACK: internal
+          PLAY_TRACK: alpha
           PLAY_PACKAGE: com.shahzebrahman.tyrepulse
         run: |
-          if [ "$PLAY_TRACK" != "internal" ]; then echo "::error::Flutter releases go to Internal testing only (owner rule)."; exit 1; fi
+          if [ "$PLAY_TRACK" != "alpha" ]; then echo "::error::Flutter releases go to Closed testing (alpha) only (owner rule)."; exit 1; fi
           if [ "$PLAY_PACKAGE" = "com.shahzebrahman.tyrepulseinspector" ]; then echo "::error::Never publish Flutter into the production app listing."; exit 1; fi
-          if ! grep -q '^          track: internal$' .github/workflows/flutter-release-play.yml; then echo "::error::Publish step track is not internal."; exit 1; fi
+          if ! grep -q '^          track: alpha$' .github/workflows/flutter-release-play.yml; then echo "::error::Publish step track is not alpha (Closed testing)."; exit 1; fi
+          if ! grep -q '^          packageName: com.shahzebrahman.tyrepulse$' .github/workflows/flutter-release-play.yml; then echo "::error::Publish step package is not com.shahzebrahman.tyrepulse."; exit 1; fi
 
-      - name: Publish to Play Console Internal Testing
+      - name: Publish to Play Console Closed Testing
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY_F }}
           packageName: com.shahzebrahman.tyrepulse
           releaseFiles: tyre_pulse_flutter/build/app/outputs/bundle/release/app-release.aab
-          track: internal
+          track: alpha
           status: completed

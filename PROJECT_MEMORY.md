@@ -139,8 +139,9 @@ batching stops them being started at all.
   not_approved; trigger lets ONLY Admin/Manager/Director/super set approval (42501 otherwise), stamps approver, and
   writes tyre_spec_catalog_events (append-only history, users read-only). tyre_specifications STAYS = fitment rules.
   Files for both go in private bucket tyre-photos (<org>/rotations|spec-catalog/<id>/...).
-  **IN PROGRESS (agents, uncommitted):** Rotation page -> real columns + attachments; Tyre Specs page -> catalogue as
-  primary content, fitment rules kept as a tab.
+  DONE + pushed: Rotation page saves/reads the real columns + attachments (Cross = forward cross, X Pattern = full X:
+  owner to confirm); Tyre Specs "Catalogue" tab = tyre_spec_catalog (approve/reject for elevated, history from
+  events), fitment rules kept on a "Fitment rules" tab. Files stay in storage on delete (bucket has no delete policy).
 **Flutter / Play (owner is moving Internal -> Closed testing):**
 - Checklist + all listing text: `store-assets/FLUTTER_CLOSED_TESTING.md` (owner could not find it in Play Console;
   it is a repo file; the click paths are in it).

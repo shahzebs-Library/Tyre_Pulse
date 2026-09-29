@@ -7986,5 +7986,13 @@
   "fleetListSortTyreActions": "Most tyre actions",
   "@fleetListSortTyreActions": {
     "description": "Fleet list sort option: most open tyre actions first"
+  },
+  "pushNotificationOpen": "Open",
+  "@pushNotificationOpen": {
+    "description": "Action on the in-app banner shown when a push notification arrives while the app is open"
+  },
+  "pushNotificationFallbackTitle": "New notification",
+  "@pushNotificationFallbackTitle": {
+    "description": "Banner title when a push notification arrives without a title"
   }
 }

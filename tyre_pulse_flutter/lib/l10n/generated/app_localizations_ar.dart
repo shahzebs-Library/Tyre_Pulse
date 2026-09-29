@@ -7370,4 +7370,10 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get fleetListSortTyreActions => 'الأكثر إجراءات إطارات';
+
+  @override
+  String get pushNotificationOpen => 'فتح';
+
+  @override
+  String get pushNotificationFallbackTitle => 'إشعار جديد';
 }

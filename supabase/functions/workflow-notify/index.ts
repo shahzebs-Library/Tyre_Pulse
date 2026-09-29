@@ -14,12 +14,23 @@
 // Fans one notification across three ENV-GATED channels, each independently
 // optional (unconfigured env -> silent no-op, reported under `skipped`):
 //   * Email    - Resend            (RESEND_API_KEY, FROM_EMAIL)
-//   * Push     - Expo Push API      (no key; gated on presence of push_tokens)
+//   * Push     - Expo Push API      (no key; tokens shaped ExponentPushToken[...]
+//                                     or ExpoPushToken[...] - the Expo app)
+//              - FCM HTTP v1        (FIREBASE_SERVICE_ACCOUNT = the Firebase
+//                                     service-account JSON; every OTHER token -
+//                                     the Flutter app. Missing secret -> those
+//                                     tokens are skipped with a reason and Expo
+//                                     delivery is untouched.)
 //   * WhatsApp - Twilio Messages    (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN,
 //                                     TWILIO_WHATSAPP_FROM)
 // One channel failing never blocks the others.
 //
-// Response (200): { email: n, push: n, whatsapp: n, skipped: string[] }
+// Response (200): { email: n, push: n, push_expo: n, push_fcm: n, whatsapp: n,
+//                  skipped: string[] }   (push = push_expo + push_fcm)
+//
+// user_devices has no provider column, so the provider is decided by the token
+// form alone. An FCM token FCM reports as UNREGISTERED / invalid is soft-revoked
+// in user_devices (best effort) so the fan-out stops selecting it.
 // ============================================================================
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
@@ -87,8 +98,12 @@ async function sendEmails(recipients: Recipient[], subject: string, html: string
   return sent
 }
 
+const EXPO_TOKEN_RE = /^Expo(nent)?PushToken\[/
+// An FCM registration token: long, no whitespace, not an Expo token.
+function isFcmToken(t: string): boolean { return t.length >= 32 && !/\s/.test(t) && !EXPO_TOKEN_RE.test(t) }
+
 async function sendPush(recipients: Recipient[], msg: { title: string; body: string }, instanceId: string | undefined, skipped: string[]): Promise<number> {
-  const tokens = Array.from(new Set(recipients.map(r => (r.push_token || '').trim()).filter(t => /^Expo(nent)?PushToken\[/.test(t))))
+  const tokens = Array.from(new Set(recipients.map(r => (r.push_token || '').trim()).filter(t => EXPO_TOKEN_RE.test(t))))
   if (!tokens.length) return 0
   const messages = tokens.map(to => ({ to, sound: 'default', title: msg.title, body: msg.body, data: { type: 'workflow', instance_id: instanceId || null } }))
   try {
@@ -100,6 +115,117 @@ async function sendPush(recipients: Recipient[], msg: { title: string; body: str
     tickets.forEach((t, i) => { if (t?.status === 'ok') { ok++ } else if (t?.message) { skipped.push(`push(${tokens[i]}): ${t.message}`) } })
     return tickets.length ? ok : tokens.length
   } catch (err) { skipped.push(`push: ${errMsg(err)}`); return 0 }
+}
+
+// ---------------------------------------------------------------------------
+// FCM HTTP v1 (Flutter app). OAuth2 service-account flow: an RS256 JWT signed
+// with WebCrypto is exchanged at oauth2.googleapis.com for an access token,
+// cached in module scope until shortly before it expires.
+// ---------------------------------------------------------------------------
+type ServiceAccount = { client_email: string; private_key: string; project_id: string; token_uri?: string }
+let cachedFcmToken: { token: string; expiresAt: number; key: string } | null = null
+
+function readServiceAccount(skipped: string[]): ServiceAccount | null {
+  const raw = (Deno.env.get('FIREBASE_SERVICE_ACCOUNT') || '').trim()
+  if (!raw) return null
+  try {
+    // Accept the JSON itself or a base64 of it (some dashboards mangle newlines).
+    const text = raw.startsWith('{') ? raw : new TextDecoder().decode(Uint8Array.from(atob(raw), c => c.charCodeAt(0)))
+    const sa = JSON.parse(text) as Partial<ServiceAccount>
+    if (!sa.client_email || !sa.private_key || !sa.project_id) { skipped.push('push(fcm): FIREBASE_SERVICE_ACCOUNT is missing client_email, private_key or project_id'); return null }
+    return { client_email: sa.client_email, private_key: sa.private_key.replace(/\\n/g, '\n'), project_id: sa.project_id, token_uri: sa.token_uri }
+  } catch { skipped.push('push(fcm): FIREBASE_SERVICE_ACCOUNT is not valid JSON'); return null }
+}
+
+function b64url(bytes: Uint8Array): string {
+  let bin = ''
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i])
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+function b64urlJson(value: unknown): string { return b64url(new TextEncoder().encode(JSON.stringify(value))) }
+
+async function importPrivateKey(pem: string): Promise<CryptoKey> {
+  const body = pem.replace(/-----BEGIN PRIVATE KEY-----/, '').replace(/-----END PRIVATE KEY-----/, '').replace(/\s+/g, '')
+  const der = Uint8Array.from(atob(body), c => c.charCodeAt(0))
+  return await crypto.subtle.importKey('pkcs8', der, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign'])
+}
+
+async function fcmAccessToken(sa: ServiceAccount): Promise<string> {
+  const now = Math.floor(Date.now() / 1000)
+  if (cachedFcmToken && cachedFcmToken.key === sa.client_email && cachedFcmToken.expiresAt - 60 > now) return cachedFcmToken.token
+  const tokenUri = sa.token_uri || 'https://oauth2.googleapis.com/token'
+  const unsigned = `${b64urlJson({ alg: 'RS256', typ: 'JWT' })}.${b64urlJson({
+    iss: sa.client_email, scope: 'https://www.googleapis.com/auth/firebase.messaging', aud: tokenUri, iat: now, exp: now + 3600,
+  })}`
+  const key = await importPrivateKey(sa.private_key)
+  const sig = new Uint8Array(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(unsigned)))
+  const assertion = `${unsigned}.${b64url(sig)}`
+  const form = new URLSearchParams(); form.set('grant_type', 'urn:ietf:params:oauth:grant-type:jwt-bearer'); form.set('assertion', assertion)
+  const res = await fetch(tokenUri, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: form.toString() })
+  const json = await res.json().catch(() => ({})) as { access_token?: string; expires_in?: number; error?: string; error_description?: string }
+  if (!res.ok || !json.access_token) throw new Error(`OAuth token exchange failed: ${json.error_description || json.error || `HTTP ${res.status}`}`)
+  cachedFcmToken = { token: json.access_token, expiresAt: now + (json.expires_in || 3600), key: sa.client_email }
+  return json.access_token
+}
+
+// FCM data values must be strings; empty values are omitted. The Flutter app
+// routes a tap through its ONE notification mapping using type / entity_type /
+// entity_id (lib/app/router/notification_routing.dart).
+function fcmData(p: NotifyPayload): Record<string, string> {
+  const entityType = p.entity_type || (p.channel === 'accident' ? 'accident' : '')
+  const out: Record<string, string> = {}
+  const put = (k: string, v: unknown) => { if (v !== undefined && v !== null && String(v).trim() !== '') out[k] = String(v) }
+  put('type', p.event_type); put('event_type', p.event_type); put('entity_type', entityType)
+  put('entity_id', p.entity_id); put('instance_id', p.instance_id); put('channel', p.channel)
+  return out
+}
+
+async function revokeDeadFcmToken(token: string): Promise<void> {
+  try {
+    const url = Deno.env.get('SUPABASE_URL'); const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    if (!url || !key) return
+    const admin = createClient(url, key)
+    await admin.from('user_devices').update({ revoked: true, last_seen_at: new Date().toISOString() }).eq('push_token', token)
+  } catch { /* best effort */ }
+}
+
+async function sendFcm(recipients: Recipient[], msg: { title: string; body: string }, payload: NotifyPayload, skipped: string[]): Promise<number> {
+  const tokens = Array.from(new Set(recipients.map(r => (r.push_token || '').trim()).filter(isFcmToken)))
+  if (!tokens.length) return 0
+  const sa = readServiceAccount(skipped)
+  if (!sa) {
+    if (!Deno.env.get('FIREBASE_SERVICE_ACCOUNT')) skipped.push(`push(fcm): FIREBASE_SERVICE_ACCOUNT not configured (${tokens.length} token(s) not sent)`)
+    return 0
+  }
+  let accessToken: string
+  try { accessToken = await fcmAccessToken(sa) } catch (err) { skipped.push(`push(fcm): ${errMsg(err)}`); return 0 }
+  const url = `https://fcm.googleapis.com/v1/projects/${encodeURIComponent(sa.project_id)}/messages:send`
+  const data = fcmData(payload)
+  let sent = 0
+  const sendOne = async (token: string) => {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: {
+          token,
+          notification: { title: msg.title, body: msg.body },
+          data,
+          android: { priority: 'HIGH', notification: { channel_id: 'alerts', sound: 'default' } },
+        } }),
+      })
+      if (res.ok) { sent++; return }
+      const err = await res.json().catch(() => ({})) as { error?: { status?: string; message?: string; details?: Array<{ errorCode?: string }> } }
+      const code = err.error?.details?.find(d => d.errorCode)?.errorCode || err.error?.status || `HTTP ${res.status}`
+      skipped.push(`push(fcm ${token.slice(0, 12)}...): ${code}`)
+      if (code === 'UNREGISTERED' || (res.status === 404) || (code === 'INVALID_ARGUMENT' && /registration token/i.test(err.error?.message || ''))) {
+        await revokeDeadFcmToken(token)
+      }
+    } catch (e) { skipped.push(`push(fcm ${token.slice(0, 12)}...): ${errMsg(e)}`) }
+  }
+  // Bounded concurrency: 10 requests in flight.
+  for (let i = 0; i < tokens.length; i += 10) await Promise.all(tokens.slice(i, i + 10).map(sendOne))
+  return sent
 }
 
 async function sendWhatsApp(recipients: Recipient[], msg: { title: string; body: string }, skipped: string[]): Promise<number> {
@@ -207,10 +333,12 @@ serve(async (req) => {
   // WhatsApp still go out). Fail-safe: a read error leaves push enabled.
   const pushDisabled = await pushNotificationsDisabled()
   if (pushDisabled) skipped.push('push: push_notifications disabled')
-  const [email, push, whatsapp] = await Promise.all([
+  const [email, pushExpo, pushFcm, whatsapp] = await Promise.all([
     sendEmails(recipients, emailSubject, emailHtml, skipped).catch(err => { skipped.push(`email: ${errMsg(err)}`); return 0 }),
     pushDisabled ? Promise.resolve(0) : sendPush(recipients, msg, payload.instance_id || payload.entity_id, skipped).catch(err => { skipped.push(`push: ${errMsg(err)}`); return 0 }),
+    // FCM runs independently: a missing secret or an FCM outage never touches Expo.
+    pushDisabled ? Promise.resolve(0) : sendFcm(recipients, msg, payload, skipped).catch(err => { skipped.push(`push(fcm): ${errMsg(err)}`); return 0 }),
     sendWhatsApp(recipients, msg, skipped).catch(err => { skipped.push(`whatsapp: ${errMsg(err)}`); return 0 }),
   ])
-  return jsonResponse(req, { email, push, whatsapp, skipped })
+  return jsonResponse(req, { email, push: pushExpo + pushFcm, push_expo: pushExpo, push_fcm: pushFcm, whatsapp, skipped })
 })

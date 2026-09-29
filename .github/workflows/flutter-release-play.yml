@@ -125,6 +125,10 @@ jobs:
           plugins {
               id("com.android.application")
               id("dev.flutter.flutter-gradle-plugin")
+              // Firebase Cloud Messaging: reads the COMMITTED
+              // android/app/google-services.json (declared in the committed
+              // android/settings.gradle.kts, which flutter create leaves alone).
+              id("com.google.gms.google-services")
           }
 
           val keystorePropertiesFile = rootProject.file("key.properties")
@@ -176,8 +180,21 @@ jobs:
           flutter {
               source = "../.."
           }
+
+          // Kept identical to the committed android/app/build.gradle.kts:
+          // MainActivity.kt imports androidx.biometric.
+          dependencies {
+              implementation("androidx.appcompat:appcompat:1.7.1")
+              implementation("androidx.biometric:biometric:1.1.0")
+          }
           EOF
           cat android/app/build.gradle.kts
+
+      - name: Firebase config present
+        # Push (FCM) needs the committed android/app/google-services.json;
+        # without it the google-services Gradle plugin fails the build with a
+        # less obvious message.
+        run: test -f android/app/google-services.json || { echo "::error::android/app/google-services.json is missing - push notifications need it (it is committed on purpose)."; exit 1; }
 
       - name: Resolve dependencies
         run: flutter pub get

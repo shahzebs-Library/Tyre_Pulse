@@ -7366,4 +7366,10 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get fleetListSortTyreActions => 'سب سے زیادہ ٹائر اقدامات';
+
+  @override
+  String get pushNotificationOpen => 'کھولیں';
+
+  @override
+  String get pushNotificationFallbackTitle => 'نئی اطلاع';
 }

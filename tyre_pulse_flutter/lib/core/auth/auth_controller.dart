@@ -198,6 +198,16 @@ final class AuthController extends Notifier<AuthState> {
 
     final String? outgoingUserId = state.userId;
 
+    if (outgoingUserId != null) {
+      // Server-side clean-up that needs the session (push token revoke).
+      // Bounded and best-effort: sign-out must always reach the login screen.
+      try {
+        await ref.read(beforeSignOutProvider)().timeout(beforeSignOutTimeout);
+      } on Object {
+        // Deliberately ignored - see above.
+      }
+    }
+
     try {
       await _auth.signOut();
     } on Object {

@@ -12832,6 +12832,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Most tyre actions'**
   String get fleetListSortTyreActions;
+
+  /// Action on the in-app banner shown when a push notification arrives while the app is open
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get pushNotificationOpen;
+
+  /// Banner title when a push notification arrives without a title
+  ///
+  /// In en, this message translates to:
+  /// **'New notification'**
+  String get pushNotificationFallbackTitle;
 }
 
 class _AppLocalizationsDelegate

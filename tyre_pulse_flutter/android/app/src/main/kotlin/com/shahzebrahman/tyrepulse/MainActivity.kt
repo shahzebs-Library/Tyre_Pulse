@@ -1,5 +1,9 @@
 package com.shahzebrahman.tyrepulse
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.os.Build
+import android.os.Bundle
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
@@ -9,6 +13,26 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterFragmentActivity() {
     private val channelName = "com.shahzebrahman.tyrepulse/device_security"
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        createPushChannel()
+    }
+
+    // The channel server pushes use (workflow-notify sends channel_id
+    // "alerts"; the manifest names it as FCM's default). Creating an existing
+    // channel again is a no-op, so this is safe on every launch.
+    private fun createPushChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val manager = getSystemService(NotificationManager::class.java) ?: return
+        val channel = NotificationChannel(
+            "alerts",
+            "Fleet Alerts",
+            NotificationManager.IMPORTANCE_HIGH,
+        )
+        channel.description = "Approvals, job assignments, accidents and fleet alerts"
+        manager.createNotificationChannel(channel)
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)

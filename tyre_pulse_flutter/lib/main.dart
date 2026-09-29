@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tyre_pulse/app/config/app_config.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
+import 'package:tyre_pulse/app/push/push_binding.dart';
 import 'package:tyre_pulse/app/router/app_router.dart';
 import 'package:tyre_pulse/app/router/module_access_resolver_impl.dart';
 import 'package:tyre_pulse/app/router/route_access.dart';
@@ -19,6 +20,8 @@ import 'package:tyre_pulse/core/database/app_database_provider.dart';
 import 'package:tyre_pulse/core/network/supabase_bootstrap.dart';
 import 'package:tyre_pulse/core/permissions/access_resolver.dart';
 import 'package:tyre_pulse/core/permissions/permission_providers.dart';
+import 'package:tyre_pulse/core/push/firebase_push_messaging_client.dart';
+import 'package:tyre_pulse/core/push/push_providers.dart';
 import 'package:tyre_pulse/core/storage/secure_key_value_store.dart';
 import 'package:tyre_pulse/core/storage/secure_slot_store_impl.dart';
 import 'package:tyre_pulse/core/storage/staged_secure_store.dart';
@@ -195,6 +198,16 @@ Future<void> main() async {
         secureStoreProvider.overrideWithValue(secureStore),
         telemetryReporterProvider.overrideWithValue(telemetry),
         currentAppVersionProvider.overrideWithValue(_fallbackAppVersion),
+        // Firebase Cloud Messaging (Android). Initialised lazily after sign-in
+        // by `PushCoordinator`; a failure there is reported and never fatal.
+        pushMessagingClientProvider.overrideWithValue(
+          FirebasePushMessagingClient(),
+        ),
+        // Revoke this device's push token while the session still exists, so
+        // a signed-out phone stops receiving pushes (V321 revoke_user_device).
+        beforeSignOutProvider.overrideWith(
+          (Ref ref) => ref.read(pushCoordinatorProvider).onSigningOut,
+        ),
         // `accessStateProvider`'s own doc says it "must be overridden at the
         // composition root, once the repository that loads them exists" - it
         // already does, as `AuthController` (`auth_controller.dart:403`)
@@ -388,6 +401,11 @@ class TyrePulseApp extends ConsumerWidget {
           AppLocalizations.of(context).appTitle,
       debugShowCheckedModeBanner: false,
       routerConfig: router,
+      // Below the app's ScaffoldMessenger and Localizations, above every
+      // route: push token lifecycle, notification taps and the foreground
+      // banner.
+      builder: (BuildContext context, Widget? child) =>
+          PushBinding(child: child ?? const SizedBox.shrink()),
       theme: TpTheme.light,
       darkTheme: TpTheme.dark,
       // Light unless the user chose otherwise. Spec section 53: this

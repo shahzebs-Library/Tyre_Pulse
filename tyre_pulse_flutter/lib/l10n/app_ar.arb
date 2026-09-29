@@ -3123,5 +3123,7 @@
   "fleetListFiltersActive": "{count, plural, =0{عوامل التصفية} =1{عوامل التصفية، 1 مفعل} other{عوامل التصفية، {count} مفعلة}}",
   "fleetListSortAssetNo": "رقم الأصل",
   "fleetListSortServiceDue": "الصيانة المستحقة أولا",
-  "fleetListSortTyreActions": "الأكثر إجراءات إطارات"
+  "fleetListSortTyreActions": "الأكثر إجراءات إطارات",
+  "pushNotificationOpen": "فتح",
+  "pushNotificationFallbackTitle": "إشعار جديد"
 }

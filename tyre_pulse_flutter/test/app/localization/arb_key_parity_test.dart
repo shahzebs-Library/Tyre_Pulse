@@ -553,10 +553,13 @@ void main() {
     // (fleetListFiltersTitle, fleetListFiltersActive) and the three sort
     // options (fleetListSortAssetNo, fleetListSortServiceDue,
     // fleetListSortTyreActions).
-    test('en, ar and ur each carry exactly 2122 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2122);
-      expect(_translatableKeys(ar).length, 2122);
-      expect(_translatableKeys(ur).length, 2122);
+    // 2122 + 2 = 2124. Push notifications (FCM): the foreground banner's
+    // Open action and its title when a push arrives without one
+    // (pushNotificationOpen, pushNotificationFallbackTitle).
+    test('en, ar and ur each carry exactly 2124 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2124);
+      expect(_translatableKeys(ar).length, 2124);
+      expect(_translatableKeys(ur).length, 2124);
     });
   });
 

@@ -7348,4 +7348,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get fleetListSortTyreActions => 'Most tyre actions';
+
+  @override
+  String get pushNotificationOpen => 'Open';
+
+  @override
+  String get pushNotificationFallbackTitle => 'New notification';
 }

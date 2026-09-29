@@ -61,7 +61,11 @@ key.properties
 .env
 .env.*
 !.env.example
-android/app/google-services.json
+# android/app/google-services.json is COMMITTED on purpose. The Android
+# Firebase config (project tyrepulse-32127, API key included) is not a secret:
+# it ships inside every APK and is restricted by package name + SHA in Google
+# Cloud, exactly like mobile/google-services.json for the Expo app. The Google
+# services Gradle plugin and the release workflow need it in the checkout.
 ios/Runner/GoogleService-Info.plist
 service-account*.json
 

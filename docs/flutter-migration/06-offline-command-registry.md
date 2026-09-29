@@ -191,3 +191,9 @@ mirrors the Expo write exactly (same table, columns, RPC and parameters).
 | Stock Count - quick +/- | RPC `post_stock_movement(p_stock_id, p_type adjustment_up/adjustment_down, p_qty, p_reason null, p_reference null)`; on a connectivity failure the existing `STOCK_ADJUST` command with the absolute quantity | Queued fallback (existing command) | Expo `adjustStock` in `mobile/lib/stock.ts`; section 3 explains why STOCK_ADJUST is safe |
 | Stock Count - Add stock | `stock_records` INSERT (size prefixed into `description`, `min_level`/`critical_level` only for Admin or super admin) then a best-effort `stock_movements` `Initial` row | Online only | Expo `createStockRecord`: no row exists to reconcile a queued insert against |
 | Profile - Delete my account | `account_deletion_requests` INSERT `{user_id, email, reason}` (V317) | Online only | Expo `mobile/lib/accountDeletion.ts`; records a request only, never deletes client-side |
+
+### 7.3 Push device registration (added 2026-09-29)
+
+| Module | Writes | Verdict | Why |
+|---|---|---|---|
+| Push notifications (FCM) | RPC `register_user_device` after sign-in and on every token refresh; RPC `revoke_user_device` before a user-initiated sign-out | Online only | A token only matters while the phone can receive pushes, i.e. while online. A failed registration is retried on the next sign-in or token refresh; a failed revoke is abandoned after 5 s so sign-out is never blocked (the next account to sign in on the handset re-points the row anyway). Mirrors Expo `registerPushToken`, which did not queue either |

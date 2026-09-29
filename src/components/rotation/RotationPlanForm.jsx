@@ -31,7 +31,7 @@ function initialForm(seed) {
   }
   const v = seed?.vehicle
   return {
-    asset: v?.asset || '', type: 'Standard', from: [], to: [], scheduledDate: defaultDate(),
+    asset: v?.asset || '', type: 'Front to Rear', from: [], to: [], scheduledDate: defaultDate(),
     priority: v?.status === 'Overdue' ? 'Critical' : v?.status === 'Due Soon' ? 'High' : 'Medium',
     technician: '', site: v?.site && v.site !== 'Unassigned' ? v.site : '', notes: '', attachments: [], files: [],
   }

@@ -9,7 +9,7 @@ const NOW = new Date(2026, 8, 15) // 15 Sep 2026
 
 describe('rotation type token mapping', () => {
   it('round trips every UI type through the CHECK token', () => {
-    expect(TYPE_TOKEN).toEqual({ Standard: 'standard', Cross: 'cross', 'Side to Side': 'side_to_side', 'X Pattern': 'x_pattern', Custom: 'custom' })
+    expect(TYPE_TOKEN).toEqual({ 'Front to Rear': 'standard', 'Forward Cross': 'cross', 'Rearward Cross': 'rearward_cross', 'Side to Side': 'side_to_side', 'X Pattern': 'x_pattern', Custom: 'custom' })
     for (const t of ROTATION_TYPES) expect(tokenToType(typeToToken(t))).toBe(t)
     for (const tok of Object.values(TYPE_TOKEN)) expect(typeToToken(tokenToType(tok))).toBe(tok)
   })
@@ -66,7 +66,10 @@ describe('plan columns', () => {
 
 describe('patterns', () => {
   it('maps standard, cross, side to side and x pattern; custom is left to the user', () => {
+    expect(newPositionsFor('Front to Rear', ['FL', 'RR'])).toEqual(['RL', 'FR'])
     expect(newPositionsFor('Standard', ['FL', 'RR'])).toEqual(['RL', 'FR'])
+    expect(newPositionsFor('Rearward Cross', ['FL', 'FR', 'RL', 'RR'])).toEqual(['RR', 'RL', 'FL', 'FR'])
+    expect(newPositionsFor('Forward Cross', ['FL', 'RL'])).toEqual(['RL', 'FR'])
     expect(newPositionsFor('Cross', ['FL', 'RL'])).toEqual(['RL', 'FR'])
     expect(newPositionsFor('X Pattern', ['FL'])).toEqual(['RR'])
     expect(newPositionsFor('Side to Side', ['RL'])).toEqual(['RR'])

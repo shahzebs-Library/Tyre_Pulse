@@ -13,13 +13,18 @@
  * and the page renders N/A.
  */
 
-export const ROTATION_TYPES = ['Standard', 'Cross', 'Side to Side', 'X Pattern', 'Custom']
+// Industry-standard patterns. 'Front to Rear' is stored as token 'standard' and 'Forward Cross' as 'cross'
+// (their original tokens), so older rows keep their meaning. Legacy labels 'Standard'/'Cross' still map.
+export const ROTATION_TYPES = ['Front to Rear', 'Forward Cross', 'Rearward Cross', 'Side to Side', 'X Pattern', 'Custom']
 
 /** UI label to the tyre_rotations.rotation_type CHECK token, and back. */
 export const TYPE_TOKEN = {
-  Standard: 'standard', Cross: 'cross', 'Side to Side': 'side_to_side', 'X Pattern': 'x_pattern', Custom: 'custom',
+  'Front to Rear': 'standard', 'Forward Cross': 'cross', 'Rearward Cross': 'rearward_cross',
+  'Side to Side': 'side_to_side', 'X Pattern': 'x_pattern', Custom: 'custom',
 }
 const TOKEN_TYPE = Object.fromEntries(Object.entries(TYPE_TOKEN).map(([k, v]) => [v, k]))
+/** Earlier labels, still accepted on read and write. */
+const LEGACY_LABEL = { standard: 'standard', cross: 'cross', front_to_rear: 'standard', forward_cross: 'cross' }
 
 /** Label (or already a token) to the DB token; null when unknown or blank. */
 export function typeToToken(type) {
@@ -27,14 +32,15 @@ export function typeToToken(type) {
   const s = String(type).trim()
   if (TYPE_TOKEN[s]) return TYPE_TOKEN[s]
   const low = s.toLowerCase().replace(/[\s-]+/g, '_')
-  return TOKEN_TYPE[low] ? low : null
+  if (TOKEN_TYPE[low]) return low
+  return LEGACY_LABEL[low] || null
 }
 
 /** DB token (or a legacy label) to the UI label; null when unknown or blank. */
 export function tokenToType(token) {
   if (token == null) return null
   const low = String(token).trim().toLowerCase().replace(/[\s-]+/g, '_')
-  return TOKEN_TYPE[low] || null
+  return TOKEN_TYPE[low] || TOKEN_TYPE[LEGACY_LABEL[low]] || null
 }
 export const POSITION_OPTIONS = ['FL', 'FR', 'RL', 'RR', 'Spare']
 export const POSITION_LABEL = { FL: 'Front left', FR: 'Front right', RL: 'Rear left', RR: 'Rear right', Spare: 'Spare' }
@@ -42,9 +48,12 @@ export const VIEW_STATUSES = ['Scheduled', 'In Progress', 'Completed', 'Overdue'
 
 /** Rotation patterns: where the tyre at each position moves to. */
 export const PATTERNS = {
-  Standard: { FL: 'RL', FR: 'RR', RL: 'FL', RR: 'FR' },
-  // Forward cross: fronts go straight back, rears cross to the front.
-  Cross: { FL: 'RL', FR: 'RR', RL: 'FR', RR: 'FL' },
+  // Front to rear: same side only (required for directional tyres).
+  'Front to Rear': { FL: 'RL', FR: 'RR', RL: 'FL', RR: 'FR' },
+  // Forward cross (front-wheel drive): fronts go straight back, rears cross to the front.
+  'Forward Cross': { FL: 'RL', FR: 'RR', RL: 'FR', RR: 'FL' },
+  // Rearward cross (rear-wheel drive / 4x4): rears go straight forward, fronts cross to the rear.
+  'Rearward Cross': { FL: 'RR', FR: 'RL', RL: 'FL', RR: 'FR' },
   'Side to Side': { FL: 'FR', FR: 'FL', RL: 'RR', RR: 'RL' },
   // X pattern: every tyre crosses to the opposite corner.
   'X Pattern': { FL: 'RR', FR: 'RL', RL: 'FR', RR: 'FL' },
@@ -68,7 +77,7 @@ const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate())
 
 /** New positions for a pattern; Custom (or unknown) returns null so the user picks. */
 export function newPositionsFor(type, current = []) {
-  const map = PATTERNS[type]
+  const map = PATTERNS[type] || PATTERNS[tokenToType(type)]
   if (!map) return null
   return current.map((p) => map[p] || p)
 }

@@ -81,7 +81,7 @@ describe('pages render their registers', () => {
   })
   it('Fleet Utilization lists assets', async () => {
     wrap(FleetUtilization)
-    expect(await screen.findByText('Utilization register')).toBeTruthy()
+    expect(await screen.findByText('Asset utilization details')).toBeTruthy()
     expect((await screen.findAllByText('TM1')).length).toBeGreaterThan(0)
   })
 })

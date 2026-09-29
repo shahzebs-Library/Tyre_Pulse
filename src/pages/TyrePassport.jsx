@@ -24,7 +24,7 @@ import {
 } from 'chart.js'
 import QRCode from 'qrcode'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
-import { Tabs, VehicleThumb, ViewAll } from '../components/commandCenter/kit'
+import { Tabs, VehicleThumb, ViewAll, KitTable } from '../components/commandCenter/kit'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { formatCurrency, formatDate } from '../lib/formatters'
@@ -265,18 +265,6 @@ function MoreMenu({ items }) {
           ))}
         </div>
       )}
-    </div>
-  )
-}
-
-function MiniTable({ head, rows, empty }) {
-  if (!rows.length) return <div className="cc-empty tp-small">{empty}</div>
-  return (
-    <div className="cc-table-wrap tp-mini">
-      <table className="cc-table">
-        <thead><tr>{head.map((h) => <th key={h} scope="col">{h}</th>)}</tr></thead>
-        <tbody>{rows}</tbody>
-      </table>
     </div>
   )
 }
@@ -734,44 +722,50 @@ export default function TyrePassport() {
               <section className="cc-card tp-a-insp" aria-label="Latest inspection summary">
                 <div className="cc-card-head"><h2 className="cc-card-title">Latest inspection summary</h2><ViewAll label="View all inspections" onClick={() => setTab('inspections')} /></div>
                 {insp.error ? <div className="cc-empty" role="alert">{insp.error}</div> : insp.loading ? <div className="cc-skel" style={{ height: 90 }} /> : (
-                  <MiniTable head={['Date', 'Location', 'Tread (mm)', 'Pressure (psi)', 'Condition', 'Inspector', 'Findings']}
-                    empty="No inspection has recorded a reading for this tyre."
-                    rows={inspectionRows.slice(0, 5).map((r) => (
-                      <tr key={r.id}>
-                        <td>{dateTxt(r.date)}</td><td>{r.site || NA}</td><td>{r.tread ?? NA}</td><td>{r.pressure ?? NA}</td>
-                        <td>{r.condition ? pill(CONDITION_TONE(r.condition), r.condition) : NA}</td>
-                        <td>{r.inspector || NA}</td><td><span className="tp-trunc">{r.findings || NA}</span></td>
-                      </tr>
-                    ))} />
+                  <KitTable compact empty="No inspection has recorded a reading for this tyre."
+                    getRowId={(r) => String(r.id)}
+                    rows={inspectionRows.slice(0, 5)}
+                    columns={[
+                      { key: 'date', header: 'Date', cell: (r) => dateTxt(r.date) },
+                      { key: 'site', header: 'Location', cell: (r) => r.site || NA },
+                      { key: 'tread', header: 'Tread (mm)', cell: (r) => r.tread ?? NA },
+                      { key: 'pressure', header: 'Pressure (psi)', cell: (r) => r.pressure ?? NA },
+                      { key: 'condition', header: 'Condition', cell: (r) => (r.condition ? pill(CONDITION_TONE(r.condition), r.condition) : NA) },
+                      { key: 'inspector', header: 'Inspector', cell: (r) => r.inspector || NA },
+                      { key: 'findings', header: 'Findings', cell: (r) => <span className="tp-trunc">{r.findings || NA}</span> },
+                    ]} />
                 )}
               </section>
 
               <section className="cc-card tp-a-svc" aria-label="Service and repair history">
                 <div className="cc-card-head"><h2 className="cc-card-title">Service and repair history</h2><ViewAll label="View all service history" onClick={() => setTab('service')} /></div>
-                <MiniTable head={['Date', 'Type', 'Workshop', 'Description', 'Cost', 'Performed by']}
-                  empty="No service or repair events recorded for this tyre."
-                  rows={passport.serviceEvents.slice(0, 4).map((e) => (
-                    <tr key={e.id}>
-                      <td>{dateTxt(e.date)}</td><td>{pill(EVENT_TONE(e.type), statusText(e.type))}</td>
-                      <td>{e.site || NA}</td><td><span className="tp-trunc">{e.notes || NA}</span></td>
-                      <td>{moneyFull(e.cost)}</td><td>{e.technician || NA}</td>
-                    </tr>
-                  ))} />
+                <KitTable compact empty="No service or repair events recorded for this tyre."
+                  getRowId={(e) => String(e.id)}
+                  rows={passport.serviceEvents.slice(0, 4)}
+                  columns={[
+                    { key: 'date', header: 'Date', cell: (e) => dateTxt(e.date) },
+                    { key: 'type', header: 'Type', cell: (e) => pill(EVENT_TONE(e.type), statusText(e.type)) },
+                    { key: 'site', header: 'Workshop', cell: (e) => e.site || NA },
+                    { key: 'notes', header: 'Description', cell: (e) => <span className="tp-trunc">{e.notes || NA}</span> },
+                    { key: 'cost', header: 'Cost', cell: (e) => moneyFull(e.cost) },
+                    { key: 'technician', header: 'Performed by', cell: (e) => e.technician || NA },
+                  ]} />
               </section>
 
               </div>
               <div className="tp-col">
               <section className="cc-card tp-a-move" aria-label="Fitment and movement history">
                 <div className="cc-card-head"><h2 className="cc-card-title">Fitment and movement history</h2><ViewAll onClick={() => setTab('movement')} /></div>
-                <MiniTable head={['Date', 'Asset', 'Position', 'Odometer', 'Action']}
-                  empty="No fitment history on record."
-                  rows={movement.slice(0, 5).map((m) => (
-                    <tr key={m.id}>
-                      <td>{dateTxt(m.date)}</td><td>{m.asset_no || NA}</td><td>{m.position || NA}</td>
-                      <td>{kmTxt(m.odometer)}</td>
-                      <td>{pill(m.current ? 'good' : ACTION_TONE[m.action] || 'muted', m.current ? 'In service' : m.action)}</td>
-                    </tr>
-                  ))} />
+                <KitTable compact empty="No fitment history on record."
+                  getRowId={(m) => String(m.id)}
+                  rows={movement.slice(0, 5)}
+                  columns={[
+                    { key: 'date', header: 'Date', cell: (m) => dateTxt(m.date) },
+                    { key: 'asset_no', header: 'Asset', cell: (m) => m.asset_no || NA },
+                    { key: 'position', header: 'Position', cell: (m) => m.position || NA },
+                    { key: 'odometer', header: 'Odometer', cell: (m) => kmTxt(m.odometer) },
+                    { key: 'action', header: 'Action', cell: (m) => pill(m.current ? 'good' : ACTION_TONE[m.action] || 'muted', m.current ? 'In service' : m.action) },
+                  ]} />
               </section>
 
               <section className="cc-card tp-a-war" aria-label="Warranty status">

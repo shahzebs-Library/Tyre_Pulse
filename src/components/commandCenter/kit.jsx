@@ -13,6 +13,7 @@ import {
   Truck, Bus, Construction, Factory, Container, Car,
 } from 'lucide-react'
 import { toUserMessage } from '../../lib/safeError'
+import EnterpriseTable from '../ui/EnterpriseTable'
 import { vehiclePhoto, vehicleKind } from '../../lib/vehiclePhoto'
 import './commandCenter.css'
 
@@ -231,5 +232,42 @@ export function MeterCell({ value, suffix = '', tone }) {
       <b>{Math.round(Number(value))}{suffix}</b>
       <span className="cc-meter-track"><span style={{ width: `${v}%`, background: t }} /></span>
     </span>
+  )
+}
+
+/**
+ * Kit table: the app's EnterpriseTable (sorting, paging, selection, column
+ * visibility, states) wearing the kit skin. Pages never hand-roll a <table>.
+ *
+ * columns: [{ key, header, cell?: (row) => node, sortValue?: (row) => any, align?, sortable? }]
+ * Every other EnterpriseTable prop passes straight through; the defaults turn
+ * off its own search, filters and export because kit pages provide their own.
+ */
+export function KitTable({ columns, rows, empty = 'No records found', compact = false, className = '', ...rest }) {
+  const defs = columns.map((c) => ({
+    id: c.key,
+    header: c.header,
+    accessorFn: (r) => (c.sortValue ? c.sortValue(r) : r[c.key]),
+    cell: ({ row }) => (c.cell ? c.cell(row.original) : (row.original[c.key] ?? <span className="cc-na">N/A</span>)),
+    enableSorting: c.sortable !== false,
+    meta: { align: c.align },
+  }))
+  return (
+    <EnterpriseTable
+      columns={defs}
+      data={rows}
+      emptyMessage={empty}
+      enableGlobalFilter={false}
+      enableColumnFilters={false}
+      enableExport={false}
+      enableColumnVisibility={false}
+      stickyHeader={false}
+      showPagination={!compact}
+      enableSorting={!compact}
+      initialPageSize={compact ? 1000 : 25}
+      skeletonRows={compact ? 3 : 8}
+      className={`cc-et ${compact ? 'cc-et-compact' : ''} ${className}`}
+      {...rest}
+    />
   )
 }

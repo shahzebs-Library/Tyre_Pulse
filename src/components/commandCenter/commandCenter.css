@@ -351,3 +351,17 @@ html.light .cc-thumb { background: #f4f6f8; }
 .cc-heat-y { display: flex; flex-direction: column; justify-content: center; align-items: flex-end; padding-right: 6px; color: var(--cc-ink-2); text-align: right; line-height: 1.2; }
 .cc-heat-x { text-align: center; color: var(--cc-ink-2); line-height: 1.3; padding-top: 4px; }
 .cc-donut { width: 150px; height: 150px; flex: none; }
+
+/* EnterpriseTable in the kit skin (KitTable) */
+.cc .cc-et.card { background: transparent; border: 0; box-shadow: none; border-radius: 0; margin: 0 -16px; }
+.cc .cc-et table { font-size: 12.5px; border-collapse: collapse; }
+.cc .cc-et th { text-align: left; font-weight: 600; font-size: 12px; color: var(--cc-ink-2); padding: 10px 10px; border-bottom: 1px solid var(--cc-inner-border); background: var(--cc-inner) !important; text-transform: none; letter-spacing: 0; }
+.cc .cc-et td { font-size: 12.5px; padding: 8px 10px; border-bottom: 1px solid var(--cc-inner-border); color: var(--cc-ink); vertical-align: middle; white-space: nowrap; background: transparent; }
+.cc .cc-et th:first-child, .cc .cc-et td:first-child { padding-left: 16px; }
+.cc .cc-et th:last-child, .cc .cc-et td:last-child { padding-right: 16px; }
+.cc .cc-et tbody tr:hover td { background: var(--cc-green-tint); }
+.cc .cc-et tbody tr[data-state="selected"] td, .cc .cc-et tbody tr[aria-selected="true"] td { background: var(--cc-green-tint); }
+.cc .cc-et input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--cc-green); }
+.cc .cc-et .border-t, .cc .cc-et .border-b { border-color: var(--cc-inner-border); }
+.cc .cc-et p, .cc .cc-et .text-muted { color: var(--cc-ink-3); }
+.cc .cc-et-compact th { padding-top: 8px; padding-bottom: 8px; }

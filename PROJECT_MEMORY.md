@@ -104,6 +104,9 @@ batching stops them being started at all.
   Fitment Validation (kit rebuild to mockup 18, score = real checks only; pressure bands 5%/10% are MY choice, owner to confirm;
   fixed a bug where the size audit always read empty); Gate Pass (layout overflow fixed at 390-1440); Tyre Exchange (serial-less
   rows no longer merged, blocking + warning checks, detail modal).
+- **Size Optimizer** (/tyre-size, TyreSizeAnalysis.jsx) rebuilt on the kit to the owner mockup: recommendations only within
+  same vehicle type + country, >=5% better measured CPK; runs are session-only; fuel/terrain/downtime N/A (no data);
+  application DERIVED from vehicle type; old analyses kept in the History tab (`components/sizeOptimizer/`).
 - **KitTable** now one style for all kit pages (fixed heights, numeric right-align, `numeric`/`scroll` props).
 - **OPEN:** network policy blocks supabase.co / vercel.app / manufacturer sites = no browser QA, no datasheet fetch; Director demo
   account NOT created yet (waits on network access). Catalogue rows need manager approval. Badges on side/rear/top vehicle views

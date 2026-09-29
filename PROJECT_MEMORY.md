@@ -117,7 +117,7 @@ If the session was cleared: check `git status`, finish/verify those four, commit
 - 8 real phone screenshots (1080x1920) committed in `store-assets/flutter_screenshots/` (rendered from golden-test
   fixtures with real fonts; Mercedes badge blurred on 07).
 - **The Flutter launcher icon is still the DEFAULT FLUTTER LOGO** (android mipmap ic_launcher). New icon draft
-  (white tyre ring + lime pulse, full-bleed square 512) at scratchpad `icon/play_icon_512.png`, script `icon/icon.py`;
+  (white tyre ring + lime pulse, full-bleed square 512) at `store-assets/drafts/play_icon_512.png`, script `store-assets/drafts/icon.py`;
   awaiting owner approval, then generate mipmaps/adaptive icon. Needs a build to reach phones - owner decides builds.
 - Flutter SDK was re-downloaded to scratchpad `flutter-sdk` (lost on container reset).
 

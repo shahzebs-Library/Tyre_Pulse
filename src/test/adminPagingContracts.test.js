@@ -49,7 +49,9 @@ describe('admin and configuration registers expose all rows through shared pagin
     // Both registers moved onto EnterpriseTable, which pages and sorts across
     // the WHOLE set; neither may clip rows before handing them in.
     const source = read('SiteManagement.jsx')
-    expect(source).toContain('data={filtered}')
+    // The site directory pages every filtered site through the shared kit Pager.
+    expect(source).toContain('total={filtered.length}')
+    expect(source).toContain('filtered.slice(page * pageSize, (page + 1) * pageSize)')
     expect(source).toContain('data={site.assets || []}')
     expect(source).not.toMatch(/\.slice\(0,\s*\d+\)\.map/)
   })

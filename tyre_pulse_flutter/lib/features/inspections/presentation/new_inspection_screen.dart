@@ -6,6 +6,7 @@
 library;
 
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -18,6 +19,8 @@ import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/core/permissions/module_registry.dart';
+import 'package:tyre_pulse/core/permissions/permission_providers.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
 import 'package:tyre_pulse/features/assets/domain/asset_classes.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
@@ -76,6 +79,8 @@ abstract final class NewInspectionScreenKeys {
   /// The worst condition recorded so far, shown in the app bar once any
   /// wheel has a reading (the Draft chip shows until then).
   static const Key tyreOverallStatus = Key('inspection.tyres.overall_status');
+  static const Key tyreModuleSwitch = Key('inspection.tyres.module_switch');
+  static const Key tyreModuleMachine = Key('inspection.tyres.module_machine');
 
   /// The machine meter row inside the selected-tyre panel.
   static const Key tyreMeterRow = Key('inspection.tyres.meter_row');
@@ -1515,6 +1520,25 @@ class _TyresStepState extends ConsumerState<_TyresStep> {
     final TyrePositionReading? selectedReading = selectedPosition == null
         ? null
         : state.tyreConditions[selectedPosition];
+    // The mock subtitle reads "asset · vehicle · site": the register's
+    // make and model when recorded, else the resolved vehicle class.
+    final VehicleAsset? fleetAsset = _findFleetAsset(
+      ref.watch(vehicleFleetListProvider),
+      state.selectedAssetNo,
+    );
+    final String make = fleetAsset?.make?.trim() ?? '';
+    final String model = fleetAsset?.model?.trim() ?? '';
+    // "Mitsubishi Double-Cab Pickup" when a model is recorded, "SANY Wheel
+    // loader" when only the make is, else the resolved class on its own.
+    final String vehicleLabel = <String>[
+      make,
+      if (model.isNotEmpty) model else resolvedClass.trim(),
+    ].where((String value) => value.isNotEmpty).toSet().join(' ');
+    // Plant machinery also carries a machine checklist; the mock offers a
+    // switch between the two modules. Shown only to users who can open
+    // checklists, and only for loader-class machines where the mock has it.
+    final bool showModuleSwitch = _isPlantMachine(resolvedClass) &&
+        ref.watch(canAccessModuleProvider(ModuleKey.checklists));
 
     return TpScaffold(
       backgroundColor: palette.surface,
@@ -1524,6 +1548,7 @@ class _TyresStepState extends ConsumerState<_TyresStep> {
         subtitle: <String>[
           if (state.selectedAssetNo.trim().isNotEmpty)
             state.selectedAssetNo.trim(),
+          if (vehicleLabel.isNotEmpty) vehicleLabel,
           if (state.selectedSite.trim().isNotEmpty) state.selectedSite.trim(),
         ].join(' · '),
         onBack: () => controller.backToHeader(),
@@ -1560,6 +1585,13 @@ class _TyresStepState extends ConsumerState<_TyresStep> {
           TpSpace.xxxl,
         ),
         children: <Widget>[
+          if (showModuleSwitch) ...<Widget>[
+            _InspectionModuleSwitch(
+              onMachineInspection: () =>
+                  context.go(const ChecklistsRoute().location),
+            ),
+            const SizedBox(height: TpSpace.sm),
+          ],
           _TyreInspectionContextCard(
             state: state,
             resolvedClass: resolvedClass,
@@ -2423,10 +2455,9 @@ class _SelectedInspectionTyreCard extends StatelessWidget {
                         icon: Icons.photo_camera_outlined,
                         onTap: onEdit,
                         child: reading.hasPhoto
-                            ? Icon(
-                                Icons.check_circle_rounded,
-                                color: palette.ok.base,
-                                size: TpSizing.iconMd,
+                            ? _EvidenceThumb(
+                                localPath: reading.photoLocalPath,
+                                fallbackColor: palette.ok.base,
                               )
                             : Text(
                                 l10n.inspectionAddEvidencePhoto,
@@ -2533,6 +2564,159 @@ class _SelectedInspectionTyreCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// True for the plant machines the mock shows with a tyre / machine
+/// inspection switch (wheel and skid loaders).
+bool _isPlantMachine(String resolvedClass) {
+  final String lower = resolvedClass.toLowerCase();
+  return lower.contains('loader');
+}
+
+/// "Tyre inspection | Machine inspection" strip from the wheel-loader mock.
+/// The tyre tab is this screen; the machine tab opens the checklists hub,
+/// where the machine checklist is filled. The tyre draft is already
+/// autosaved, so leaving loses nothing.
+class _InspectionModuleSwitch extends StatelessWidget {
+  const _InspectionModuleSwitch({required this.onMachineInspection});
+
+  final VoidCallback onMachineInspection;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    final TextTheme text = Theme.of(context).textTheme;
+    return _Raised(
+      strength: 0.6,
+      child: TpCard(
+        key: NewInspectionScreenKeys.tyreModuleSwitch,
+        padding: EdgeInsets.zero,
+        child: Row(
+          children: <Widget>[
+            Expanded(
+              child: Semantics(
+                selected: true,
+                button: true,
+                label: l10n.inspectionModuleTyre,
+                excludeSemantics: true,
+                child: Container(
+                  constraints: const BoxConstraints(
+                    minHeight: TpSizing.minTouchTarget,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: TpSpace.sm,
+                    vertical: TpSpace.sm,
+                  ),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(color: palette.primary, width: 3),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: <Widget>[
+                      Icon(
+                        Icons.tire_repair_rounded,
+                        size: TpSizing.iconSm,
+                        color: palette.primary,
+                      ),
+                      const SizedBox(width: TpSpace.xs),
+                      Flexible(
+                        child: Text(
+                          l10n.inspectionModuleTyre,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.labelLarge?.copyWith(
+                            color: palette.primary,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Expanded(
+              child: Semantics(
+                button: true,
+                label: l10n.inspectionModuleMachine,
+                excludeSemantics: true,
+                child: InkWell(
+                  key: NewInspectionScreenKeys.tyreModuleMachine,
+                  onTap: onMachineInspection,
+                  child: Container(
+                    constraints: const BoxConstraints(
+                      minHeight: TpSizing.minTouchTarget,
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: TpSpace.sm,
+                      vertical: TpSpace.sm,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: <Widget>[
+                        Icon(
+                          Icons.agriculture_outlined,
+                          size: TpSizing.iconSm,
+                          color: palette.textSecondary,
+                        ),
+                        const SizedBox(width: TpSpace.xs),
+                        Flexible(
+                          child: Text(
+                            l10n.inspectionModuleMachine,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: text.labelLarge?.copyWith(
+                              color: palette.textSecondary,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The captured photo, shown small like the mock's photo tile. Only the
+/// on-device file is previewed here (the uploaded copy lives in a private
+/// bucket); an unreadable file falls back to the recorded-photo tick.
+class _EvidenceThumb extends StatelessWidget {
+  const _EvidenceThumb({required this.localPath, required this.fallbackColor});
+
+  final String? localPath;
+  final Color fallbackColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget tick = Icon(
+      Icons.check_circle_rounded,
+      color: fallbackColor,
+      size: TpSizing.iconMd,
+    );
+    final String? path = localPath;
+    if (path == null || path.trim().isEmpty) return tick;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(TpRadius.sm),
+      child: Image(
+        image: FileImage(File(path)),
+        width: 56,
+        height: 40,
+        fit: BoxFit.cover,
+        excludeFromSemantics: true,
+        errorBuilder: (context, error, stack) => tick,
       ),
     );
   }

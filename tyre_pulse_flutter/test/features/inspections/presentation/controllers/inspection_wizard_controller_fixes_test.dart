@@ -331,6 +331,30 @@ void main() {
   });
 
   test(
+      'reopening the same asset after a submit, without New inspection, '
+      'starts with empty meters and notes', () async {
+    await controller().resumeOrStart(
+      assetNo: 'GN103',
+      vehicleType: 'GENERATOR',
+      site: 'NHC',
+    );
+    controller().setOdometer('12,345');
+    controller().setHourMeter('88.5');
+    controller().setHeaderNotes('Guard rail loose');
+    await controller().setSignature('<svg></svg>');
+    await controller().submit();
+    expect(state().step, InspectionWizardStep.submitted);
+
+    await controller()
+        .resumeOrStart(assetNo: 'GN103', vehicleType: 'GENERATOR');
+    expect(state().step, InspectionWizardStep.header);
+    expect(state().odometerText, '');
+    expect(state().hourMeterText, '');
+    expect(state().headerNotes, '');
+    expect(state().inspectorSignature, isNull);
+  });
+
+  test(
       'P0-3 an entry queued by an older build under the live key is '
       'detached before the wizard lists or resumes drafts', () async {
     await repo.saveHeader(

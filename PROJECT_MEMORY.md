@@ -126,9 +126,11 @@ batching stops them being started at all.
   Pattern/TT-TL/dual load/weight/images/approval status have NO column -> "Not recorded"/N/A. "Approved/Not approved"
   KPIs = fitted tyres conforming or not. Page 2,680 -> ~990 lines; 6 heavy tabs moved unchanged to
   src/components/tyreSpec/. Approval history tab is session-only (says so).
-**IN PROGRESS (agents, uncommitted):** Rotation Schedule (/rotation, hero-rotation; RotationOptimizer untouched) (src/pages/TyreExchange.jsx) Tyre Specifications
-(src/pages/TyreSpecifications.jsx, 2,680 lines: heavy tabs moved to src/components/tyreSpec/*). Mockups were only
-pasted, so both reuse hero-tyres. If cleared: git status, verify, commit by pathspec, push once.
+- Rotation Schedule /rotation: tyre_rotations has NO type/positions/technician columns (0 rows, no CHECK) -> the
+  form writes a header line into `notes` ("Rotation: X | From: .. | To: .. | Technician: ..") read back by parsePlan;
+  real columns would need a migration (owner decision). Schedule no derived ROT-<year>-<6 of id>. Wear before/after
+  N/A (tread_depth 0 rows). Money N/A under All countries (old page blended currencies). RotationOptimizer untouched.
+- Batch Exchange/Specs/Rotation done + pushed once. PR #370 UNMERGED.
 **Flutter / Play (owner is moving Internal -> Closed testing):**
 - Checklist + all listing text: `store-assets/FLUTTER_CLOSED_TESTING.md` (owner could not find it in Play Console;
   it is a repo file; the click paths are in it).

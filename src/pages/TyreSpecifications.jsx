@@ -12,12 +12,16 @@
  * policy (PDF + size inventory), Value advisor (supplier quotes) and the audit
  * trail, plus the Excel export and compliance PDF.
  *
- * Data truth: a `tyre_specifications` row is an approved fitment rule for a
- * vehicle type and position. It stores sizes, brands, load index, speed
- * symbol, ply, pressure, tread and notes. Pattern, tube type, dual load,
- * weight, images, documents and an approval state are not stored, so they read
- * "Not recorded" or N/A. "Approved for fleet" and "Not approved" count FITTED
- * tyres that conform, or do not, to a rule.
+ * Data truth: the primary register is the CATALOGUE (`tyre_spec_catalog`,
+ * src/lib/api/tyreSpecCatalog.js): one row per brand + pattern + size with its
+ * load/speed/dimension data, images and documents (private `tyre-photos`
+ * bucket) and an approval status whose history is `tyre_spec_catalog_events`.
+ * The six KPIs count catalogue rows. Only Admin/Manager/Director or a super
+ * admin can approve (server-enforced, 42501 otherwise).
+ *
+ * `tyre_specifications` stays the FITMENT RULES (vehicle type + position),
+ * edited on the "Fitment rules" tab and still driving Fleet compliance,
+ * Non-conformance, Quick setup, Fitment policy and the Value advisor.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
@@ -54,6 +58,15 @@ import {
   ComplianceTab, NonConformanceTab, QuickSetupTab, FitmentPolicyTab, ValueAdvisorTab, AuditTrailTab,
 } from '../components/tyreSpec/WorkbenchTabs'
 import SpecFormPanel from '../components/tyreSpec/SpecFormPanel'
+import CatalogFormPanel from '../components/tyreSpec/CatalogFormPanel'
+import {
+  CatalogGrid, catalogTableColumns, CatalogDetail, CatalogTreadCard, CatalogDrawingCard, CatalogDeleteModal,
+} from '../components/tyreSpec/CatalogPanels'
+import * as catalogApi from '../lib/api/tyreSpecCatalog'
+import {
+  EMPTY_CATALOG_FILTERS, filterCatalog, catalogFilterOptions, catalogFilterScope, catalogKpis,
+  catalogTypeLabel, catalogLoadLabel, catalogSpeedLabel, approvalMeta, APPROVAL_OPTIONS,
+} from '../lib/tyreSpecView'
 import {
   SpecGrid, specTableColumns, SpecDetail, TreadPatternCard, TechnicalDrawingCard,
 } from '../components/tyreSpec/SpecCatalog'
@@ -63,7 +76,7 @@ const uuidv4 = () => crypto.randomUUID()
 const SPEC_PAGE_SIZES = [6, 12, 24, 48]
 
 export default function TyreSpecifications() {
-  const { profile, user } = useAuth()
+  const { profile, user, isSuperAdmin } = useAuth()
   const { appSettings, activeCountry } = useSettings()
   const { branding } = useTenant()
   const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
@@ -71,6 +84,11 @@ export default function TyreSpecifications() {
   // Procurement is an elevated action; RLS also enforces this server-side.
   const canManageQuotes = ['Admin', 'Manager', 'Director'].includes(profile?.role)
   const country = activeCountry && activeCountry !== 'All' ? activeCountry : null
+  // Catalogue rights mirror the server: any approved user may add or edit a
+  // pending spec; only Admin/Manager/Director or a super admin may set or change
+  // the approval status (the trigger refuses anyone else with 42501).
+  const canApproveCatalog = Boolean(isSuperAdmin) || ['Admin', 'Manager', 'Director'].includes(profile?.role)
+  const canCreateCatalog = Boolean(isSuperAdmin) || (Boolean(profile?.approved) && !profile?.locked)
 
   const [activeTab, setActiveTab] = useState('specs')
   const [specs, setSpecs] = useState([])
@@ -83,6 +101,23 @@ export default function TyreSpecifications() {
   const [fleetMaster, setFleetMaster] = useState([])
   const [loadingRecords, setLoadingRecords] = useState(true)
   const [history, setHistory] = useState([])
+
+  // Tyre specification CATALOGUE (tyre_spec_catalog): the primary register.
+  const [catalog, setCatalog] = useState([])
+  const [loadingCat, setLoadingCat] = useState(true)
+  const [catError, setCatError] = useState('')
+  const [catFilters, setCatFilters] = useState(EMPTY_CATALOG_FILTERS)
+  const [catPage, setCatPage] = useState(0)
+  const [catPageSize, setCatPageSize] = useState(12)
+  const [selectedCatId, setSelectedCatId] = useState(null)
+  const [editingCat, setEditingCat] = useState(null)
+  const [catFormKey, setCatFormKey] = useState(0)
+  const [savingCat, setSavingCat] = useState(false)
+  const [catSaveError, setCatSaveError] = useState('')
+  const [statusBusy, setStatusBusy] = useState(false)
+  const [deletingCat, setDeletingCat] = useState(null)
+  const [deletingCatBusy, setDeletingCatBusy] = useState(false)
+  const [historyKey, setHistoryKey] = useState(0)
 
   // Value Advisor: supplier quotes + realized fleet performance
   const [procurementOptions, setProcurementOptions] = useState([])
@@ -154,9 +189,23 @@ export default function TyreSpecifications() {
     }
   }, [country])
 
+  const fetchCatalog = useCallback(async () => {
+    setLoadingCat(true)
+    setCatError('')
+    try {
+      setCatalog(await catalogApi.listCatalog({ country }))
+    } catch (e) {
+      setCatError(toUserMessage(e, 'Failed to load the tyre specification catalogue'))
+      setCatalog([])
+    } finally {
+      setLoadingCat(false)
+    }
+  }, [country])
+
   // ── Load data ────────────────────────────────────────────────────────────────
 
   useEffect(() => {
+    fetchCatalog()
     fetchSpecs()
     fetchLiveData()
     fetchAdvisorData()
@@ -390,6 +439,127 @@ export default function TyreSpecifications() {
     if (spec && spec.approved_brands?.length) return spec.approved_brands
     return Object.keys(BRAND_META)
   }, [specs])
+
+  // ── Catalogue CRUD ───────────────────────────────────────────────────────────
+
+  const catalogMessage = (e, fallback) => ((e?.code || e?.cause?.code) === '42501'
+    ? 'Only a manager (Admin, Manager or Director) can approve or change the status of a specification.'
+    : toUserMessage(e, fallback))
+
+  async function handleSaveCatalog(form, files = { images: [], documents: [] }) {
+    setSavingCat(true)
+    setCatSaveError('')
+    let saved = null
+    try {
+      const existing = editingCat?.id ? catalog.find(c => c.id === editingCat.id) : null
+      if (existing) {
+        const { country: _c, ...patch } = form
+        saved = await catalogApi.updateCatalogSpec(existing.id, patch)
+      } else {
+        saved = await catalogApi.createCatalogSpec({ ...form, country })
+      }
+      const upImages = []; const upDocs = []; const failed = []
+      for (const [list, out] of [[files.images || [], upImages], [files.documents || [], upDocs]]) {
+        for (const file of list) {
+          try {
+            out.push(await catalogApi.uploadCatalogFile({ orgId: saved.organisation_id, specId: saved.id, file }))
+          } catch (e) {
+            failed.push(`${file.name}: ${toUserMessage(e, 'upload failed')}`)
+          }
+        }
+      }
+      if (upImages.length || upDocs.length) {
+        saved = await catalogApi.updateCatalogSpec(saved.id, {
+          images: [...(saved.images || []), ...upImages],
+          documents: [...(saved.documents || []), ...upDocs],
+        })
+      }
+      await fetchCatalog()
+      setSelectedCatId(saved.id)
+      setHistoryKey(k => k + 1)
+      if (failed.length) {
+        setCatSaveError(`Specification saved, but some files did not upload. ${failed.join('; ')}`)
+        setEditingCat(saved)
+      } else {
+        setEditingCat(null)
+      }
+      setCatFormKey(k => k + 1)
+    } catch (e) {
+      setCatSaveError(catalogMessage(e, 'Failed to save specification'))
+      if (saved) await fetchCatalog()
+    } finally {
+      setSavingCat(false)
+    }
+  }
+
+  async function handleCatalogStatus(spec, status) {
+    setStatusBusy(true)
+    setActionError('')
+    try {
+      await catalogApi.setCatalogStatus(spec.id, status)
+      await fetchCatalog()
+      setHistoryKey(k => k + 1)
+    } catch (e) {
+      setActionError(catalogMessage(e, 'Failed to change the approval status'))
+    } finally {
+      setStatusBusy(false)
+    }
+  }
+
+  async function handleDeleteCatalog() {
+    setDeletingCatBusy(true)
+    setActionError('')
+    try {
+      await catalogApi.deleteCatalogSpec(deletingCat.id)
+      if (selectedCatId === deletingCat.id) setSelectedCatId(null)
+      await fetchCatalog()
+    } catch (e) {
+      setActionError(toUserMessage(e, 'Failed to delete specification'))
+    } finally {
+      setDeletingCatBusy(false)
+      setDeletingCat(null)
+    }
+  }
+
+  async function exportCatalogExcel() {
+    const XLSX = await import('xlsx')
+    const rows = filteredCatalog.map(c => ({
+      'Brand': c.brand,
+      'Pattern': c.pattern,
+      'Size': c.size,
+      'Tyre Type': catalogTypeLabel(c.tyre_type) || '',
+      'Load Index (single/dual)': catalogLoadLabel(c),
+      'Speed Rating': catalogSpeedLabel(c),
+      'Ply Rating': c.ply_rating || '',
+      'TT/TL': c.tube_type === 'tube' ? 'TT' : c.tube_type === 'tubeless' ? 'TL' : '',
+      'Application': c.application || '',
+      'Suitable For': (c.suitable_for || []).join(', '),
+      'Tread Depth New (mm)': c.tread_depth_new_mm ?? '',
+      'Min Tread Depth (mm)': c.tread_depth_min_mm ?? '',
+      'Overall Diameter (mm)': c.overall_diameter_mm ?? '',
+      'Section Width (mm)': c.section_width_mm ?? '',
+      'Recommended Rim': c.recommended_rim || '',
+      'Max Load Single (kg)': c.max_load_single_kg ?? '',
+      'Max Load Dual (kg)': c.max_load_dual_kg ?? '',
+      'Inflation Single (kPa)': c.inflation_single_kpa ?? '',
+      'Inflation Dual (kPa)': c.inflation_dual_kpa ?? '',
+      'Weight (kg)': c.weight_kg ?? '',
+      'Approval Status': approvalMeta(c.approval_status).label,
+      'Approved At': c.approved_at ? new Date(c.approved_at).toLocaleDateString() : '',
+      'Country': c.country || 'All countries',
+      'Description': c.description || '',
+    }))
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([{
+      'Report': 'Tyre Specification Catalogue',
+      'Specifications included': filteredCatalog.length,
+      'Specifications in catalogue': catalog.length,
+      'Filters applied': catalogScope || 'None (whole catalogue)',
+      'Scope': country || 'All countries',
+    }]), 'Report Scope')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Catalogue')
+    XLSX.writeFile(wb, 'TyrePulse_Tyre_Specification_Catalogue.xlsx')
+  }
 
   // ── CRUD operations ───────────────────────────────────────────────────────────
 
@@ -728,6 +898,34 @@ export default function TyreSpecifications() {
   const activeFilterCount = Object.values(filters).filter(Boolean).length
 
   const setFilter = (key, value) => { setFilters(f => ({ ...f, [key]: value })); setSpecPage(0) }
+
+  // Catalogue view model
+  const filteredCatalog = useMemo(() => filterCatalog(catalog, catFilters), [catalog, catFilters])
+  const catalogScope = useMemo(() => catalogFilterScope(catFilters), [catFilters])
+  const catOptions = useMemo(() => catalogFilterOptions(catalog, catFilters.brand), [catalog, catFilters.brand])
+  const catFigures = useMemo(() => catalogKpis(catalog), [catalog])
+  const safeCatPage = clampPage(catPage, filteredCatalog.length, catPageSize)
+  const catPageRows = useMemo(() => pageSlice(filteredCatalog, safeCatPage, catPageSize), [filteredCatalog, safeCatPage, catPageSize])
+  const selectedCat = useMemo(
+    () => filteredCatalog.find(c => c.id === selectedCatId) || catPageRows[0] || null,
+    [filteredCatalog, selectedCatId, catPageRows],
+  )
+  const catTableCols = useMemo(() => catalogTableColumns(), [])
+  const catActiveFilters = Object.values(catFilters).filter(Boolean).length
+  const setCatFilter = (key, value) => {
+    setCatFilters(f => ({ ...f, [key]: value, ...(key === 'brand' ? { pattern: '' } : {}) }))
+    setCatPage(0)
+  }
+  const startCatCreate = () => { setEditingCat(null); setCatSaveError(''); setCatFormKey(k => k + 1) }
+  const startCatEdit = (spec) => { setEditingCat(spec); setCatSaveError(''); setCatFormKey(k => k + 1) }
+  const startCatDuplicate = (spec) => {
+    const { id: _id, organisation_id: _o, created_at: _c, updated_at: _u, created_by: _b, approved_by: _ab,
+      approved_at: _at, images: _i, documents: _d, ...rest } = spec
+    setEditingCat({ ...rest, pattern: `${rest.pattern} (copy)`, approval_status: 'pending', approval_note: '' })
+    setCatSaveError('')
+    setCatFormKey(k => k + 1)
+  }
+  const catState = { loading: loadingCat, data: loadingCat ? null : catalog, error: catError || null, retry: fetchCatalog }
   const startCreate = () => { setEditingSpec(null); setSaveError(''); setFormKey(k => k + 1) }
   const startEdit = (spec) => { setEditingSpec(spec); setSaveError(''); setFormKey(k => k + 1) }
   const startDuplicate = (spec) => {
@@ -756,7 +954,8 @@ export default function TyreSpecifications() {
   }
 
   const TABS = [
-    { key: 'specs', label: 'Specifications', count: specs.length },
+    { key: 'specs', label: 'Catalogue', count: catalog.length },
+    { key: 'rules', label: 'Fitment rules', count: specs.length },
     { key: 'compliance', label: 'Fleet compliance' },
     { key: 'violations', label: 'Non-conformance', count: nonConformanceByAsset.length || null, countTone: 'red' },
     { key: 'defaults', label: 'Quick setup' },
@@ -781,22 +980,31 @@ export default function TyreSpecifications() {
 
       <div className="ts-toolbar">
         <div className="ts-toolbar-actions">
-          <button type="button" className="cc-btn-primary" onClick={() => { setActiveTab('specs'); startCreate() }}
-            disabled={!isAdmin} title={!isAdmin ? 'Admin access required' : undefined}>
+          <button type="button" className="cc-btn-primary" onClick={() => { setActiveTab('specs'); startCatCreate() }}
+            disabled={!canCreateCatalog} title={!canCreateCatalog ? 'An approved account is required' : undefined}>
             <Plus size={15} aria-hidden="true" /> Add specification
           </button>
-          <button type="button" className="cc-btn-ghost" onClick={exportSpecsExcel}
-            title={specLibraryScope
-              ? `Exports ${filteredSpecs.length} of ${specs.length} specifications, filtered by ${specLibraryScope}`
-              : `Exports all ${specs.length} specifications`}>
-            <FileSpreadsheet size={14} aria-hidden="true" /> Export
-          </button>
+          {activeTab === 'rules' ? (
+            <button type="button" className="cc-btn-ghost" onClick={exportSpecsExcel}
+              title={specLibraryScope
+                ? `Exports ${filteredSpecs.length} of ${specs.length} fitment rules, filtered by ${specLibraryScope}`
+                : `Exports all ${specs.length} fitment rules`}>
+              <FileSpreadsheet size={14} aria-hidden="true" /> Export rules
+            </button>
+          ) : (
+            <button type="button" className="cc-btn-ghost" onClick={exportCatalogExcel} disabled={loadingCat || !filteredCatalog.length}
+              title={catalogScope
+                ? `Exports ${filteredCatalog.length} of ${catalog.length} specifications, filtered by ${catalogScope}`
+                : `Exports all ${catalog.length} specifications`}>
+              <FileSpreadsheet size={14} aria-hidden="true" /> Export
+            </button>
+          )}
           <button type="button" className="cc-btn-ghost" onClick={exportCompliancePdf}>
             <FileText size={14} aria-hidden="true" /> PDF report
           </button>
           <button type="button" className="cc-icon-btn" aria-label="Refresh" title="Refresh"
-            onClick={() => { fetchSpecs(); fetchLiveData() }} disabled={loadingRecords || loadingSpecs}>
-            <RefreshCw size={14} className={(loadingRecords || loadingSpecs) ? 'animate-spin' : ''} />
+            onClick={() => { fetchCatalog(); fetchSpecs(); fetchLiveData() }} disabled={loadingRecords || loadingSpecs || loadingCat}>
+            <RefreshCw size={14} className={(loadingRecords || loadingSpecs || loadingCat) ? 'animate-spin' : ''} />
           </button>
         </div>
       </div>
@@ -809,14 +1017,17 @@ export default function TyreSpecifications() {
       )}
 
       <div className="cc-kpis ts-kpis">
-        <Kpi icon={ClipboardList} tone="t-green" value={figures.total} label="Total specifications" loading={loadingSpecs} />
-        <Kpi icon={Tag} tone="t-blue" value={figures.brands} label="Brands" loading={loadingSpecs} title="Distinct approved brands across all rules" />
-        <Kpi icon={Layers} tone="t-purple" display="N/A" label="Patterns" title="Tread pattern is not stored for a specification" />
-        <Kpi icon={Ruler} tone="t-orange" value={figures.sizes} label="Sizes" loading={loadingSpecs} title="Distinct approved sizes across all rules" />
-        <Kpi icon={CheckCircle2} tone="t-green" value={figures.approvedFitted} label="Approved for fleet (fitted tyres)"
-          loading={loadingRecords} title={fittedTitle} onClick={() => { setActiveTab('compliance'); setCompStatusFilter('Approved') }} />
-        <Kpi icon={AlertTriangle} tone="t-red" value={figures.notApprovedFitted} label="Not approved (fitted tyres)"
-          loading={loadingRecords} danger={figures.notApprovedFitted > 0} title={fittedTitle} onClick={() => setActiveTab('violations')} />
+        <Kpi icon={ClipboardList} tone="t-green" value={catFigures.total} label="Total specifications" loading={loadingCat}
+          display={catError ? 'N/A' : undefined} onClick={() => { setActiveTab('specs'); setCatFilters(EMPTY_CATALOG_FILTERS) }} />
+        <Kpi icon={Tag} tone="t-blue" value={catFigures.brands} label="Brands" loading={loadingCat} display={catError ? 'N/A' : undefined} />
+        <Kpi icon={Layers} tone="t-purple" value={catFigures.patterns} label="Patterns" loading={loadingCat} display={catError ? 'N/A' : undefined} title="Distinct brand and pattern combinations" />
+        <Kpi icon={Ruler} tone="t-orange" value={catFigures.sizes} label="Sizes" loading={loadingCat} display={catError ? 'N/A' : undefined} />
+        <Kpi icon={CheckCircle2} tone="t-green" value={catFigures.approved} label="Approved for fleet" loading={loadingCat}
+          display={catError ? 'N/A' : undefined} onClick={() => { setActiveTab('specs'); setCatFilter('status', 'approved') }} />
+        <Kpi icon={AlertTriangle} tone="t-red" value={catFigures.notApproved} label="Not approved" loading={loadingCat}
+          display={catError ? 'N/A' : undefined} danger={catFigures.notApproved > 0}
+          title={`${fmtInt(catFigures.pending)} more pending approval`}
+          onClick={() => { setActiveTab('specs'); setCatFilter('status', 'not_approved') }} />
       </div>
 
       <Tabs label="Tyre specification sections" value={activeTab} onChange={setActiveTab} tabs={TABS} />
@@ -825,6 +1036,138 @@ export default function TyreSpecifications() {
         <div className="ts-layout">
           <div className="ts-main">
             <Card>
+              <div className="cc-filters">
+                <label className="cc-field"><span>Brand</span>
+                  <select className="cc-select" value={catFilters.brand} onChange={e => setCatFilter('brand', e.target.value)}>
+                    <option value="">All brands</option>
+                    {catOptions.brands.map(b => <option key={b} value={b}>{b}</option>)}
+                  </select>
+                </label>
+                <label className="cc-field"><span>Pattern</span>
+                  <select className="cc-select" value={catFilters.pattern} onChange={e => setCatFilter('pattern', e.target.value)}>
+                    <option value="">All patterns</option>
+                    {catOptions.patterns.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </label>
+                <label className="cc-field"><span>Size</span>
+                  <select className="cc-select" value={catFilters.size} onChange={e => setCatFilter('size', e.target.value)}>
+                    <option value="">All sizes</option>
+                    {catOptions.sizes.map(z => <option key={z} value={z}>{z}</option>)}
+                  </select>
+                </label>
+                <label className="cc-field"><span>Tyre type</span>
+                  <select className="cc-select" value={catFilters.tyreType} onChange={e => setCatFilter('tyreType', e.target.value)}>
+                    <option value="">All tyre types</option>
+                    {TYRE_TYPES.map(t => <option key={t} value={t} disabled={!catOptions.tyreTypes.includes(t)}>{t}</option>)}
+                  </select>
+                </label>
+                <label className="cc-field"><span>Application</span>
+                  <select className="cc-select" value={catFilters.application} onChange={e => setCatFilter('application', e.target.value)}>
+                    <option value="">All applications</option>
+                    {catOptions.applications.map(v => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                </label>
+                <label className="cc-field"><span>Status</span>
+                  <select className="cc-select" value={catFilters.status} onChange={e => setCatFilter('status', e.target.value)}>
+                    <option value="">All status</option>
+                    {APPROVAL_OPTIONS.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+                  </select>
+                </label>
+                <div className="cc-search">
+                  <Search size={15} aria-hidden="true" />
+                  <input value={catFilters.search} onChange={e => setCatFilter('search', e.target.value)}
+                    placeholder="Search brand, pattern, size, application..." aria-label="Search specifications" />
+                </div>
+                <div className="ts-view" role="group" aria-label="View">
+                  <button type="button" aria-pressed={view === 'grid'} onClick={() => setView('grid')}><LayoutGrid size={14} aria-hidden="true" /> Grid view</button>
+                  <button type="button" aria-pressed={view === 'table'} onClick={() => setView('table')}><List size={14} aria-hidden="true" /> Table view</button>
+                </div>
+              </div>
+              {catActiveFilters > 0 && (
+                <p className="ts-note">
+                  Showing {fmtInt(filteredCatalog.length)} of {fmtInt(catalog.length)} specifications.{' '}
+                  <button type="button" className="cc-link cc-link-btn" onClick={() => { setCatFilters(EMPTY_CATALOG_FILTERS); setCatPage(0) }}>Clear filters</button>
+                </p>
+              )}
+            </Card>
+
+            <Card title="Specification catalogue" sub={`${fmtInt(filteredCatalog.length)} specification${filteredCatalog.length === 1 ? '' : 's'}`}>
+              <CardState
+                state={catState}
+                lines={4}
+                empty={!loadingCat && !catError && filteredCatalog.length === 0 ? (
+                  <div>
+                    {catalog.length === 0
+                      ? 'No tyre specifications are in the catalogue yet. Add the first one with the form on the right.'
+                      : 'No specifications match the current filters.'}
+                  </div>
+                ) : null}
+              >
+                {view === 'grid'
+                  ? <CatalogGrid rows={catPageRows} selectedId={selectedCat?.id} onSelect={setSelectedCatId} />
+                  : (
+                    <KitTable className="ts-table" manualPagination showPagination={false} enableSorting={false}
+                      pageIndex={0} pageSize={catPageSize} pageCount={1} totalRows={catPageRows.length}
+                      getRowId={(r) => String(r.id)} onRowClick={(r) => r && setSelectedCatId(r.id)}
+                      rows={catPageRows} columns={catTableCols} />
+                  )}
+                <Pager page={safeCatPage} pageSize={catPageSize} total={filteredCatalog.length} noun="specifications"
+                  onPage={setCatPage} onPageSize={(n) => { setCatPageSize(n); setCatPage(0) }} sizes={SPEC_PAGE_SIZES} />
+              </CardState>
+            </Card>
+
+            {selectedCat ? (
+              <CatalogDetail
+                key={selectedCat.id}
+                spec={selectedCat}
+                reloadKey={historyKey}
+                canApprove={canApproveCatalog}
+                canEdit={canCreateCatalog && (canApproveCatalog || selectedCat.approval_status === 'pending')}
+                canDelete={canApproveCatalog}
+                busy={statusBusy}
+                onEdit={startCatEdit}
+                onDuplicate={startCatDuplicate}
+                onDelete={setDeletingCat}
+                onSetStatus={handleCatalogStatus}
+              />
+            ) : (
+              <Card title="Specification details"><div className="cc-empty">{loadingCat ? 'Loading...' : 'Select a specification to see its details.'}</div></Card>
+            )}
+
+            <div className="ts-two">
+              <CatalogTreadCard spec={selectedCat} />
+              <CatalogDrawingCard spec={selectedCat} />
+            </div>
+          </div>
+
+          <aside className="ts-rail" aria-label="Specification form">
+            <CatalogFormPanel
+              key={catFormKey}
+              spec={editingCat}
+              canCreate={canCreateCatalog}
+              canApprove={canApproveCatalog}
+              saving={savingCat}
+              error={catSaveError}
+              onSave={handleSaveCatalog}
+              onCancel={() => { setEditingCat(null); setCatSaveError(''); setCatFormKey(k => k + 1) }}
+            />
+          </aside>
+        </div>
+      )}
+
+      {activeTab === 'rules' && (
+        <div className="ts-layout">
+          <div className="ts-main">
+            <Card title="Fitment rules" sub="Approved sizes and brands per vehicle type and position, checked against fitted tyres in Fleet compliance."
+              action={isAdmin ? <button type="button" className="cc-btn-ghost" onClick={startCreate}><Plus size={14} aria-hidden="true" /> New rule</button> : null}>
+              <p className="ts-note ts-section-note" title={fittedTitle}>
+                {loadingRecords ? 'Checking fitted tyres...' : (
+                  <>Fitted tyres against these rules:{' '}
+                    <button type="button" className="cc-link cc-link-btn" onClick={() => { setActiveTab('compliance'); setCompStatusFilter('Approved') }}>{fmtInt(figures.approvedFitted ?? 0)} conform</button>,{' '}
+                    <button type="button" className="cc-link cc-link-btn" onClick={() => setActiveTab('violations')}>{fmtInt(figures.notApprovedFitted ?? 0)} out of spec</button>
+                    {' '}of {fmtInt(figures.fittedTotal ?? 0)} checked.</>
+                )}
+              </p>
               <div className="cc-filters">
                 <label className="cc-field"><span>Brand</span>
                   <select className="cc-select" value={filters.brand} onChange={e => setFilter('brand', e.target.value)}>
@@ -869,11 +1212,11 @@ export default function TyreSpecifications() {
               <p className="ts-note">
                 {activeFilterCount > 0
                   ? <>Showing {fmtInt(filteredSpecs.length)} of {fmtInt(specs.length)} rules. <button type="button" className="cc-link cc-link-btn" onClick={() => { setFilters(EMPTY_FILTERS); setSpecPage(0) }}>Clear filters</button></>
-                  : 'Pattern is not stored for a specification, so there is no pattern filter. Status reflects the fitted tyres each rule covers.'}
+                  : 'A fitment rule has no pattern. Status reflects the fitted tyres each rule covers. The brand and pattern catalogue is on the Catalogue tab.'}
               </p>
             </Card>
 
-            <Card title="Specification register" sub={`${fmtInt(filteredSpecs.length)} rule${filteredSpecs.length === 1 ? '' : 's'}`}>
+            <Card title="Fitment rule register" sub={`${fmtInt(filteredSpecs.length)} rule${filteredSpecs.length === 1 ? '' : 's'}`}>
               <CardState
                 state={specsState}
                 lines={4}
@@ -914,7 +1257,7 @@ export default function TyreSpecifications() {
                 onOpenPolicy={() => setActiveTab('policy')}
               />
             ) : (
-              <Card title="Specification details"><div className="cc-empty">Select a specification to see its details.</div></Card>
+              <Card title="Fitment rule details"><div className="cc-empty">Select a fitment rule to see its details.</div></Card>
             )}
 
             <div className="ts-two">
@@ -923,7 +1266,7 @@ export default function TyreSpecifications() {
             </div>
           </div>
 
-          <aside className="ts-rail" aria-label="Specification form">
+          <aside className="ts-rail" aria-label="Fitment rule form">
             <SpecFormPanel
               key={formKey}
               spec={editingSpec}
@@ -937,7 +1280,7 @@ export default function TyreSpecifications() {
         </div>
       )}
 
-      {activeTab !== 'specs' && (
+      {activeTab !== 'specs' && activeTab !== 'rules' && (
         <div className="ts-workbench">
           {activeTab === 'compliance' && <ComplianceTab ctx={ctx} />}
           {activeTab === 'violations' && <NonConformanceTab ctx={ctx} />}
@@ -946,6 +1289,15 @@ export default function TyreSpecifications() {
           {activeTab === 'advisor' && <ValueAdvisorTab ctx={ctx} />}
           {activeTab === 'history' && <AuditTrailTab ctx={ctx} />}
         </div>
+      )}
+
+      {deletingCat && (
+        <CatalogDeleteModal
+          spec={deletingCat}
+          busy={deletingCatBusy}
+          onClose={() => setDeletingCat(null)}
+          onConfirm={handleDeleteCatalog}
+        />
       )}
 
       {deletingSpec && (

@@ -10,6 +10,9 @@
  *   - load in kg and speed in km/h from the shared ISO tables in tyreSpecCatalog;
  *   - nominal dimensions from a metric size code (width/aspect R rim);
  *   - in-service usage from the compliance rows the page already computes.
+ *
+ * The catalogue section at the end of this file models `tyre_spec_catalog`
+ * rows (brand + pattern + size products with an approval status).
  */
 import { loadIndexKg, speedIndexKmh } from './tyreSpecCatalog'
 
@@ -245,4 +248,132 @@ export function clampPage(page, total, pageSize) {
 export function pageSlice(rows = [], page = 0, pageSize = 12) {
   const p = clampPage(page, rows.length, pageSize)
   return rows.slice(p * pageSize, p * pageSize + pageSize)
+}
+
+// ── Catalogue (tyre_spec_catalog) view model ─────────────────────────────────
+// A catalogue row is a real brand + pattern + size product with its own
+// approval status. Everything below reads stored columns; nominal geometry from
+// the size code is only a fallback and is always labelled as such.
+
+export const APPROVAL_META = {
+  approved: { key: 'approved', label: 'Approved', tone: 'good' },
+  pending: { key: 'pending', label: 'Pending', tone: 'warn' },
+  not_approved: { key: 'not_approved', label: 'Not approved', tone: 'bad' },
+}
+export const APPROVAL_OPTIONS = [APPROVAL_META.approved, APPROVAL_META.pending, APPROVAL_META.not_approved]
+
+export function approvalMeta(status) {
+  return APPROVAL_META[status] || APPROVAL_META.pending
+}
+
+/** Stored tyre_type token <-> label. */
+export const CATALOG_TYPE_LABELS = { steer: 'Steer', drive: 'Drive', trailer: 'Trailer', off_road: 'Off-Road', other: 'Other' }
+export function catalogTypeLabel(t) { return CATALOG_TYPE_LABELS[t] || null }
+export function catalogTypeToken(label) {
+  const hit = Object.entries(CATALOG_TYPE_LABELS).find(([, v]) => v === label)
+  return hit ? hit[0] : null
+}
+
+const distinctFold = (vals) => {
+  const seen = new Map()
+  for (const v of vals) { const k = clean(v).toUpperCase(); if (k && !seen.has(k)) seen.set(k, clean(v)) }
+  return [...seen.values()].sort((a, b) => a.localeCompare(b))
+}
+
+/** Six headline figures over the catalogue rows. */
+export function catalogKpis(rows = []) {
+  return {
+    total: rows.length,
+    brands: distinctFold(rows.map((r) => r.brand)).length,
+    patterns: distinctFold(rows.map((r) => `${clean(r.brand)} ${clean(r.pattern)}`)).length,
+    sizes: new Set(rows.map((r) => sizeKey(r.size)).filter(Boolean)).size,
+    approved: rows.filter((r) => r.approval_status === 'approved').length,
+    pending: rows.filter((r) => (r.approval_status || 'pending') === 'pending').length,
+    notApproved: rows.filter((r) => r.approval_status === 'not_approved').length,
+  }
+}
+
+export const EMPTY_CATALOG_FILTERS = { search: '', brand: '', pattern: '', size: '', tyreType: '', application: '', status: '' }
+
+export function filterCatalog(rows = [], filters = EMPTY_CATALOG_FILTERS) {
+  const q = clean(filters.search).toLowerCase()
+  const up = (v) => clean(v).toUpperCase()
+  return rows.filter((r) => {
+    if (filters.brand && up(r.brand) !== up(filters.brand)) return false
+    if (filters.pattern && up(r.pattern) !== up(filters.pattern)) return false
+    if (filters.size && sizeKey(r.size) !== sizeKey(filters.size)) return false
+    if (filters.tyreType && catalogTypeLabel(r.tyre_type) !== filters.tyreType) return false
+    if (filters.application && up(r.application) !== up(filters.application)) return false
+    if (filters.status && (r.approval_status || 'pending') !== filters.status) return false
+    if (!q) return true
+    const hay = [r.brand, r.pattern, r.size, r.application, r.description, r.ply_rating, r.speed_rating,
+      ...(r.suitable_for || [])].map((x) => clean(x).toLowerCase())
+    return hay.some((x) => x.includes(q))
+  })
+}
+
+export function catalogFilterOptions(rows = [], brand = '') {
+  const inBrand = brand ? rows.filter((r) => clean(r.brand).toUpperCase() === clean(brand).toUpperCase()) : rows
+  return {
+    brands: distinctFold(rows.map((r) => r.brand)),
+    patterns: distinctFold(inBrand.map((r) => r.pattern)),
+    sizes: distinctFold(rows.map((r) => r.size)),
+    applications: distinctFold(rows.map((r) => r.application)),
+    tyreTypes: TYRE_TYPES.filter((t) => rows.some((r) => catalogTypeLabel(r.tyre_type) === t)),
+  }
+}
+
+export function catalogFilterScope(filters = EMPTY_CATALOG_FILTERS) {
+  const parts = []
+  if (clean(filters.search)) parts.push(`search "${clean(filters.search)}"`)
+  if (filters.brand) parts.push(`brand: ${filters.brand}`)
+  if (filters.pattern) parts.push(`pattern: ${filters.pattern}`)
+  if (filters.size) parts.push(`size: ${filters.size}`)
+  if (filters.tyreType) parts.push(`tyre type: ${filters.tyreType}`)
+  if (filters.application) parts.push(`application: ${filters.application}`)
+  if (filters.status) parts.push(`status: ${approvalMeta(filters.status).label}`)
+  return parts.join(', ')
+}
+
+/** "152/148 (3,550 / 3,150 kg)" style label; parts missing read N/A. */
+export function catalogLoadLabel(row) {
+  const s = num(row?.load_index_single); const d = num(row?.load_index_dual)
+  if (s == null && d == null) return 'N/A'
+  const idx = [s, d].filter((x) => x != null).join('/')
+  const kgs = [s, d].filter((x) => x != null).map((x) => loadIndexKg(x))
+  if (kgs.some((k) => k == null)) return idx
+  return `${idx} (${kgs.map((k) => `${k.toLocaleString('en-US')} kg`).join(' / ')})`
+}
+
+export function catalogSpeedLabel(row) {
+  const s = clean(row?.speed_rating)
+  if (!s) return 'N/A'
+  const kmh = speedIndexKmh(s)
+  return kmh != null ? `${s} (${kmh} km/h)` : s
+}
+
+/**
+ * Geometry for the technical drawing: stored measurements when present,
+ * otherwise nominal size-code arithmetic. `source` says which.
+ */
+export function catalogDimensions(row) {
+  if (!row) return null
+  const nominal = sizeDimensions(row.size)
+  const od = num(row.overall_diameter_mm); const sw = num(row.section_width_mm)
+  const rimIn = num(row.rim_in) ?? nominal?.rimInch ?? null
+  if (od && sw && rimIn) {
+    return { size: clean(row.size), overallDiameter: od, sectionWidth: sw, rimInch: rimIn, rimDiameter: Math.round(rimIn * 25.4), source: 'recorded' }
+  }
+  if (nominal) return { ...nominal, source: 'nominal' }
+  return null
+}
+
+/** Size parts for the form, from stored columns or the size code. */
+export function catalogSizeParts(row) {
+  const p = parseSize(row?.size)
+  return {
+    w: num(row?.width_mm) ?? p?.width ?? '',
+    a: num(row?.aspect_ratio) ?? p?.aspect ?? '',
+    r: num(row?.rim_in) ?? p?.rim ?? '',
+  }
 }

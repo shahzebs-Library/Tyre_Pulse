@@ -114,3 +114,54 @@ describe('card model', () => {
     expect(pageSlice([1, 2, 3, 4, 5], 9, 2)).toEqual([5])
   })
 })
+
+import {
+  catalogKpis, filterCatalog, catalogFilterOptions, catalogFilterScope, catalogLoadLabel, catalogSpeedLabel,
+  catalogDimensions, catalogSizeParts, approvalMeta, catalogTypeLabel, catalogTypeToken, EMPTY_CATALOG_FILTERS,
+} from '../lib/tyreSpecView'
+
+const cat = [
+  { id: 1, brand: 'Triangle', pattern: 'TR685', size: '315/80R22.5', tyre_type: 'drive', load_index_single: 156, load_index_dual: 150, speed_rating: 'L', application: 'Mixer', approval_status: 'approved' },
+  { id: 2, brand: 'triangle', pattern: 'TR691', size: '315/80R22.5', tyre_type: 'steer', approval_status: 'pending' },
+  { id: 3, brand: 'Double Coin', pattern: 'RR202', size: '295/80R22.5', tyre_type: 'steer', approval_status: 'not_approved',
+    overall_diameter_mm: 1046, section_width_mm: 298, rim_in: 22.5 },
+  { id: 4, brand: 'Techking', pattern: 'ETOT', size: '23.5R25', approval_status: null },
+]
+
+describe('catalogue view model', () => {
+  it('counts real catalogue rows by approval status', () => {
+    const k = catalogKpis(cat)
+    expect(k).toMatchObject({ total: 4, brands: 3, patterns: 4, sizes: 3, approved: 1, pending: 2, notApproved: 1 })
+    expect(catalogKpis([])).toMatchObject({ total: 0, approved: 0, notApproved: 0 })
+  })
+  it('filters by brand (case folded), pattern, status and search', () => {
+    expect(filterCatalog(cat, { ...EMPTY_CATALOG_FILTERS, brand: 'TRIANGLE' }).map((r) => r.id)).toEqual([1, 2])
+    expect(filterCatalog(cat, { ...EMPTY_CATALOG_FILTERS, pattern: 'rr202' }).map((r) => r.id)).toEqual([3])
+    expect(filterCatalog(cat, { ...EMPTY_CATALOG_FILTERS, status: 'pending' }).map((r) => r.id)).toEqual([2, 4])
+    expect(filterCatalog(cat, { ...EMPTY_CATALOG_FILTERS, tyreType: 'Steer' }).map((r) => r.id)).toEqual([2, 3])
+    expect(filterCatalog(cat, { ...EMPTY_CATALOG_FILTERS, search: 'mixer' }).map((r) => r.id)).toEqual([1])
+  })
+  it('narrows patterns to the chosen brand and names the scope', () => {
+    expect(catalogFilterOptions(cat, 'Triangle').patterns).toEqual(['TR685', 'TR691'])
+    expect(catalogFilterOptions(cat).brands).toEqual(['Double Coin', 'Techking', 'Triangle'])
+    expect(catalogFilterScope({ ...EMPTY_CATALOG_FILTERS, status: 'not_approved' })).toBe('status: Not approved')
+  })
+  it('labels load single/dual with kg and speed with km/h, N/A when blank', () => {
+    expect(catalogLoadLabel(cat[0])).toMatch(/^156\/150 \(4,000 kg \/ 3,350 kg\)$/)
+    expect(catalogLoadLabel(cat[1])).toBe('N/A')
+    expect(catalogSpeedLabel(cat[0])).toBe('L (120 km/h)')
+    expect(catalogSpeedLabel(cat[1])).toBe('N/A')
+  })
+  it('prefers recorded dimensions and falls back to nominal, labelled', () => {
+    expect(catalogDimensions(cat[2])).toMatchObject({ overallDiameter: 1046, sectionWidth: 298, source: 'recorded' })
+    expect(catalogDimensions(cat[0])).toMatchObject({ sectionWidth: 315, source: 'nominal' })
+    expect(catalogDimensions(cat[3])).toBeNull()
+    expect(catalogSizeParts(cat[0])).toEqual({ w: 315, a: 80, r: 22.5 })
+  })
+  it('maps approval and tyre type tokens', () => {
+    expect(approvalMeta('approved').tone).toBe('good')
+    expect(approvalMeta(null).label).toBe('Pending')
+    expect(catalogTypeLabel('off_road')).toBe('Off-Road')
+    expect(catalogTypeToken('Off-Road')).toBe('off_road')
+  })
+})

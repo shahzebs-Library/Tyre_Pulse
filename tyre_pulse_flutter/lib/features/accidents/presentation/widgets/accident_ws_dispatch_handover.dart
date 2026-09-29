@@ -869,20 +869,35 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            AccidentMockFacts(
-              items: <(String, String?)>[
+            AccidentMockMetricRow(
+              items: <(IconData, String, String?)>[
                 (
+                  Icons.speed_rounded,
                   c.l10n.accDhOdometer,
-                  d?.outOdometerKm == null ? null : '${d!.outOdometerKm} km'
+                  d?.outOdometerKm == null
+                      ? null
+                      : '${accidentMockGrouped(context, d!.outOdometerKm!)} km'
                 ),
-                (c.l10n.accDhEngineHours, d?.outEngineHours?.toString()),
                 (
+                  Icons.hourglass_bottom_rounded,
+                  c.l10n.accDhEngineHours,
+                  d?.outEngineHours == null
+                      ? null
+                      : '${accidentMockGrouped(context, d!.outEngineHours!)} h'
+                ),
+                (
+                  Icons.local_gas_station_outlined,
                   c.l10n.accDhFuel2,
                   d?.outFuelPct == null ? null : '${d!.outFuelPct}%'
                 ),
-                (c.l10n.accDhKeys, d?.keysCount?.toString()),
+                (
+                  Icons.key_outlined,
+                  c.l10n.accDhKeys,
+                  d?.keysCount?.toString()
+                ),
               ],
             ),
+            const SizedBox(height: TpSpace.sm),
             AccidentMockCountedList(
               label: c.l10n.accDhDocumentsSent,
               items: d?.documentsSent ?? const <String>[],

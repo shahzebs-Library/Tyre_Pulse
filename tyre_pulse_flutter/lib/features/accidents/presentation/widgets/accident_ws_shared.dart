@@ -283,9 +283,182 @@ class AccidentWsNotes extends StatelessWidget {
       );
 }
 
-/// The "notify" strip: one chip per role in [keys], resolved to the case's
-/// owner role when the workstream carries one. PMV Manager stays a
-/// visibility-only chip, as the mock prints.
+/// The two footer actions the mocks draw side by side (an outlined save
+/// next to the filled primary). They stay side by side while both labels
+/// fit their half; when either would be cut short with an ellipsis they
+/// stack full width instead, so an action is never only half readable.
+class AccidentWsFooterPair extends StatelessWidget {
+  const AccidentWsFooterPair({
+    required this.first,
+    required this.second,
+    required this.labels,
+    super.key,
+  });
+
+  final Widget first;
+  final Widget second;
+
+  /// The two button labels, used only to measure whether they fit.
+  final List<String> labels;
+
+  @override
+  Widget build(BuildContext context) {
+    final TextStyle style = Theme.of(context).textTheme.labelLarge ??
+        const TextStyle(fontWeight: FontWeight.w700);
+    final TextScaler scaler = MediaQuery.textScalerOf(context);
+    final TextDirection direction = Directionality.of(context);
+    double widest = 0;
+    for (final String label in labels) {
+      final TextPainter painter = TextPainter(
+        text: TextSpan(text: label, style: style),
+        textDirection: direction,
+        textScaler: scaler,
+        maxLines: 1,
+      )..layout();
+      if (painter.width > widest) widest = painter.width;
+      painter.dispose();
+    }
+    // Icon, its gap and the button's own horizontal padding.
+    final double needed =
+        widest + TpSizing.iconMd + TpSpace.sm + TpSpace.lg * 2 + 2;
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double half = (constraints.maxWidth - TpSpace.sm) / 2;
+        if (half >= needed) {
+          return Row(
+            children: <Widget>[
+              Expanded(child: first),
+              const SizedBox(width: TpSpace.sm),
+              Expanded(child: second),
+            ],
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            first,
+            const SizedBox(height: TpSpace.sm),
+            second,
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// Team label for a notify role key, shared by the claim and assessment
+/// notify cards so both print the same words.
+String accidentWsTeamLabel(AppLocalizations l10n, String key) => switch (key) {
+      'fleet' => l10n.accClaimTeamFleet,
+      'workshop' => l10n.accClaimTeamWorkshop,
+      'command_center' => l10n.accClaimTeamCommandCenter,
+      'pmv_manager' => l10n.accClaimTeamPmvManager,
+      'insurance' => l10n.accClaimTeamInsurance,
+      _ => key,
+    };
+
+/// One "after submit, notify" card as the mocks draw it: a person glyph,
+/// who is told on the first line and their team (or "For visibility")
+/// underneath. Roles, never invented names, when no person is resolved.
+class AccidentWsPersonTile extends StatelessWidget {
+  const AccidentWsPersonTile({
+    required this.who,
+    required this.team,
+    this.visibilityOnly = false,
+    this.tooltip = '',
+    super.key,
+  });
+
+  final String who;
+  final String team;
+  final bool visibilityOnly;
+  final String tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return MergeSemantics(
+      child: Tooltip(
+        message: tooltip,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border.all(color: palette.border),
+            borderRadius: BorderRadius.circular(TpRadius.md),
+          ),
+          child: ConstrainedBox(
+            constraints:
+                const BoxConstraints(minHeight: TpSizing.minTouchTarget),
+            child: Padding(
+              padding: const EdgeInsets.all(TpSpace.sm),
+              child: Row(
+                children: <Widget>[
+                  Icon(
+                    visibilityOnly
+                        ? Icons.visibility_outlined
+                        : Icons.person_outline_rounded,
+                    size: TpSizing.iconMd,
+                    color: palette.textSecondary,
+                  ),
+                  const SizedBox(width: TpSpace.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          who,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        Text(
+                          team,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(color: palette.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Two cards per row when there is room, one per row on a narrow phone.
+class AccidentWsTwoUp extends StatelessWidget {
+  const AccidentWsTwoUp({required this.children, super.key});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          final bool twoUp = constraints.maxWidth >= 340;
+          final double width = twoUp
+              ? (constraints.maxWidth - TpSpace.sm) / 2
+              : constraints.maxWidth;
+          return Wrap(
+            spacing: TpSpace.sm,
+            runSpacing: TpSpace.sm,
+            children: <Widget>[
+              for (final Widget child in children)
+                SizedBox(width: width, child: child),
+            ],
+          );
+        },
+      );
+}
+
+/// The "notify" block: one person card per role in [keys], named by the
+/// case's owner role when the workstream carries one. PMV Manager stays a
+/// visibility-only card, as the mock prints.
 class AccidentWsNotifyChips extends StatelessWidget {
   const AccidentWsNotifyChips({
     required this.snapshot,
@@ -296,31 +469,29 @@ class AccidentWsNotifyChips extends StatelessWidget {
   final AccidentCaseSnapshot snapshot;
   final List<String> keys;
 
-  String _chipLabel(BuildContext context, NotifyRole role) {
-    final String text =
-        notifyChipText(role, accidentWsOwnerRole(snapshot, role.key));
-    return role.visibilityOnly
-        ? AppLocalizations.of(context).accNotifyForVisibility(text)
-        : text;
+  String _who(NotifyRole role) {
+    final String owner = accidentWsOwnerRole(snapshot, role.key)?.trim() ?? '';
+    if (owner.isNotEmpty) return owner;
+    return role.roles.isEmpty ? role.label : role.roles.first;
   }
 
   @override
-  Widget build(BuildContext context) => Wrap(
-        spacing: TpSpace.sm,
-        runSpacing: TpSpace.xs,
-        children: <Widget>[
-          for (final NotifyRole role in notifyRoles)
-            if (keys.contains(role.key))
-              TpStatusChip(
-                status: role.visibilityOnly ? TpStatus.neutral : TpStatus.info,
-                icon: role.visibilityOnly
-                    ? Icons.visibility_outlined
-                    : Icons.notifications_active_outlined,
-                label: _chipLabel(context, role),
-                isCompact: true,
-              ),
-        ],
-      );
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    return AccidentWsTwoUp(
+      children: <Widget>[
+        for (final NotifyRole role in notifyRoles)
+          if (keys.contains(role.key))
+            AccidentWsPersonTile(
+              who: _who(role),
+              team: role.visibilityOnly
+                  ? l10n.accClaimNotifyVisibility
+                  : accidentWsTeamLabel(l10n, role.key),
+              visibilityOnly: role.visibilityOnly,
+            ),
+      ],
+    );
+  }
 }
 
 /// Camera or gallery, the two sources the existing capture helper offers.

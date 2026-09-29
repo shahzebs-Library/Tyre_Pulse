@@ -8,7 +8,7 @@
 library;
 
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart' show DateFormat;
+import 'package:intl/intl.dart' show DateFormat, NumberFormat;
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
@@ -179,6 +179,77 @@ class AccidentMockFacts extends StatelessWidget {
           );
         },
       );
+}
+
+/// A whole-number reading with the locale's grouping ("68,420"), so a
+/// meter reads like the mock instead of a raw integer.
+String accidentMockGrouped(BuildContext context, num value) =>
+    NumberFormat.decimalPattern(
+      Localizations.localeOf(context).toLanguageTag(),
+    ).format(value);
+
+/// The mock's metric strip (odometer / engine hours / fuel / keys): one
+/// tile per reading with an icon, a small label and a bold value. Four
+/// across when there is room, two by two on a narrow phone. A missing
+/// reading prints "Not set", never a zero.
+class AccidentMockMetricRow extends StatelessWidget {
+  const AccidentMockMetricRow({required this.items, super.key});
+
+  final List<(IconData, String, String?)> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final WsKitCopy c = WsKitCopy(context);
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final int columns = constraints.maxWidth >= 380 ? items.length : 2;
+        final double width =
+            (constraints.maxWidth - (columns - 1) * TpSpace.sm) / columns;
+        return Wrap(
+          spacing: TpSpace.sm,
+          runSpacing: TpSpace.sm,
+          children: <Widget>[
+            for (final (IconData, String, String?) item in items)
+              SizedBox(
+                width: width,
+                child: MergeSemantics(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Icon(
+                        item.$1,
+                        size: TpSizing.iconMd,
+                        color: palette.primary,
+                      ),
+                      const SizedBox(width: TpSpace.xs),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              item.$2,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                            Text(
+                              c.value(item.$3),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(fontWeight: FontWeight.w800),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
 }
 
 class AccidentMockNotice extends StatelessWidget {

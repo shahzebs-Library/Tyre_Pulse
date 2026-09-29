@@ -135,7 +135,7 @@ void main() {
     expect(find.text('Replace / structural review'), findsOneWidget);
     expect(find.text('Cracked · Major'), findsOneWidget);
     expect(find.text('Verified yard · Gate 2'), findsOneWidget);
-    expect(find.text('1234 ABC'), findsOneWidget);
+    expect(find.text('CP045 · KM: Not set · Plate: 1234 ABC'), findsOneWidget);
     expect(find.text('Recommended'), findsOneWidget);
     expect(find.text('$testCurrency 4,600.00'), findsOneWidget);
     expect(find.text('2 available · 1 special order'), findsOneWidget);
@@ -145,7 +145,9 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.text('Insurance Officer · Insurance'), findsOneWidget);
+    // After-submit notify renders person cards (mock M5): who, then team.
+    expect(find.text('Insurance Officer'), findsOneWidget);
+    expect(find.text('Insurance'), findsWidgets);
     final TpButton submit = tester.widget<TpButton>(
       find.byKey(const Key('accident.ws.assessment.submit')),
     );

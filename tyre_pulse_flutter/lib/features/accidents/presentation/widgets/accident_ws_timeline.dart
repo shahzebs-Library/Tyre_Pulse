@@ -537,22 +537,41 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        Wrap(
-          spacing: TpSpace.sm,
-          runSpacing: TpSpace.xs,
-          children: <Widget>[
-            for (final String filter in timelineFilters)
-              ChoiceChip(
-                key: Key('accident.timeline.filter.$filter'),
-                showCheckmark: false,
-                avatar: filter == 'all'
-                    ? null
-                    : Icon(_filterIcon(filter), size: TpSizing.iconSm),
-                label: Text(_filterLabel(c, filter)),
-                selected: _filter == filter,
-                onSelected: (_) => setState(() => _filter = filter),
-              ),
-          ],
+        // One scrollable row of filters, as the mock draws it; the
+        // selected filter is the filled navy chip.
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: <Widget>[
+              for (final String filter in timelineFilters) ...<Widget>[
+                if (filter != timelineFilters.first)
+                  const SizedBox(width: TpSpace.sm),
+                ChoiceChip(
+                  key: Key('accident.timeline.filter.$filter'),
+                  showCheckmark: false,
+                  avatar: filter == 'all'
+                      ? null
+                      : Icon(
+                          _filterIcon(filter),
+                          size: TpSizing.iconSm,
+                          color: _filter == filter
+                              ? TpPalette.of(context).textInverse
+                              : null,
+                        ),
+                  label: Text(_filterLabel(c, filter)),
+                  labelStyle: _filter == filter
+                      ? TextStyle(
+                          color: TpPalette.of(context).textInverse,
+                          fontWeight: FontWeight.w700,
+                        )
+                      : null,
+                  selectedColor: TpPalette.of(context).text,
+                  selected: _filter == filter,
+                  onSelected: (_) => setState(() => _filter = filter),
+                ),
+              ],
+            ],
+          ),
         ),
         const SizedBox(height: TpSpace.sm),
         AccidentMockPanel(

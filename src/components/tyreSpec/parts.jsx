@@ -7,16 +7,15 @@
  */
 import { useState, useRef } from 'react'
 import {
-  Trash2, X, Save, CheckCircle, AlertTriangle, AlertOctagon, HelpCircle, Tag, RefreshCw, Truck, Wrench, DollarSign, TrendingDown, Award, Gauge, Package,
+  Trash2, X, Save, CheckCircle, AlertTriangle, AlertOctagon, HelpCircle, RefreshCw, Wrench, DollarSign, TrendingDown, Award, Gauge, Package,
 } from 'lucide-react'
 import Modal from '../ui/Modal'
 import EnterpriseTable from '../ui/EnterpriseTable'
 import * as tyreSpecsApi from '../../lib/api/tyreSpecs'
 import {
-  VEHICLE_TYPES, POSITIONS, SPEED_INDICES, PLY_RATINGS, APPROVED_BRANDS, SMART_DEFAULTS, brandMeta,
+  VEHICLE_TYPES, POSITIONS, PLY_RATINGS, APPROVED_BRANDS, brandMeta,
 } from '../../lib/tyreSpecCatalog'
 import { normalizePosition } from '../../lib/tyrePositions'
-import { recommend } from '../../lib/tyreValueAdvisor'
 import { toUserMessage } from '../../lib/safeError'
 
 // ── Constants ─────────────────────────────────────────────────────────────────

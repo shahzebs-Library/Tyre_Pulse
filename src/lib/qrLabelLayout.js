@@ -208,3 +208,29 @@ export function fitLogoBox(imgW, imgH, boxW, boxH) {
 }
 
 function round2(n) { return Math.round(n * 100) / 100 }
+
+/**
+ * Split a print run into A4 sheets of `perPage` labels. The browser print and
+ * the PDF use the same grid, so a sheet printed from the browser holds exactly
+ * the labels the PDF puts on that page.
+ */
+export function chunkPages(list, perPage) {
+  const n = Math.max(1, Math.floor(Number(perPage) || 1))
+  const arr = Array.isArray(list) ? list : []
+  const out = []
+  for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n))
+  return out
+}
+
+/**
+ * QR side length (mm) for one printed label: what is left of the fixed label
+ * height after the logo band, the identifier and each detail line, never wider
+ * than the label and never below a scannable minimum.
+ */
+export function printQrSize(grid, { logo = true, lines = 0, idLines = 1 } = {}) {
+  const w = Number(grid?.w) || 0
+  const h = Number(grid?.h) || 0
+  const head = logo ? 8 : 2
+  const text = idLines * 3.6 + (Number(lines) || 0) * 2.8 + 3
+  return Math.max(10, Math.min(w - 6, h - head - text))
+}

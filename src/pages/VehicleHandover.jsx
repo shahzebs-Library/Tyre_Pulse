@@ -4,9 +4,10 @@
  * design: a 5-step handover wizard (Vehicle Details, Condition Check, Photos &
  * Notes, Signatures, Complete) with the handover register beside it.
  *
- * Runs on the `handover_reports` table (V181). Zone conditions are stored in
- * the existing `damages` jsonb (one entry per zone that is not good), so the
- * damage roll-ups keep working. The drawn signature is saved as the same SVG
+ * Runs on the `handover_reports` table (V181). Damage markers placed on the
+ * asset's own five-view picture are stored in
+ * the existing `damages` jsonb (one entry per marker; older per-side entries
+ * still read), so the damage roll-ups keep working. The drawn signature is saved as the same SVG
  * markup the field app stores. Engine hours, the driver's contact number and
  * the previous readings are context only: there is no column for them on a
  * handover, so they are shown, never saved.
@@ -30,6 +31,8 @@ import {
 import Modal from '../components/ui/Modal'
 import SignatureCapture from '../components/checklist/SignatureCapture'
 import SignatureView from '../components/checklist/SignatureView'
+import HandoverDamageMarker from '../components/handover/HandoverDamageMarker'
+import useHandoverArtwork from '../components/handover/useHandoverArtwork'
 import {
   Card, Kpi, PageHero, Donut, KitTable, Tabs, VehicleThumb, fmtInt,
 } from '../components/commandCenter/kit'
@@ -47,10 +50,12 @@ import {
   vehiclesStillOut, HANDOVER_EXPORT_COLUMNS, handoverExportRows,
 } from '../lib/vehicleHandoverAnalytics'
 import {
-  WIZARD_STEPS, ZONES, ZONE_CONDITIONS, EMPTY_WIZARD, zoneConditionMeta, zonesFromDamages,
+  WIZARD_STEPS, EMPTY_WIZARD,
   latestHandoverFor, previousReadings, validateStep, firstInvalidStep, stepState,
   buildHandoverPayload, readingDeltas, driverOptions, matchDriver, num,
 } from '../lib/vehicleHandoverView'
+import { marksFromDamages, damagesFromMarks, handoverStemFor, handoverViewsFor } from '../lib/vehicleHandoverMarks'
+import { exportHandoverPdf } from '../lib/vehicleHandoverPdf'
 import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import { safeImageSrc, safeHref } from '../lib/safeUrl'
 import { toUserMessage } from '../lib/safeError'
@@ -94,40 +99,11 @@ function ConditionPill({ rating }) {
   return <span className={`cc-pill ${CONDITION_TONE[rating]}`}>{CONDITION_LABEL[rating]}</span>
 }
 
-/** Top-down truck outline with the four zone markers laid over it. */
-function ConditionDiagram({ zones, onChange, readOnly }) {
-  return (
-    <div className="vh-diagram">
-      <svg viewBox="0 0 120 240" className="vh-truck" role="img" aria-label="Top view of the vehicle">
-        <rect x="30" y="18" width="60" height="46" rx="12" className="vh-truck-cab" />
-        <rect x="38" y="24" width="44" height="14" rx="4" className="vh-truck-glass" />
-        <rect x="26" y="70" width="68" height="152" rx="8" className="vh-truck-body" />
-        {[40, 180, 202].map((y) => (
-          <g key={y}>
-            <rect x="16" y={y} width="10" height="20" rx="3" className="vh-truck-wheel" />
-            <rect x="94" y={y} width="10" height="20" rx="3" className="vh-truck-wheel" />
-          </g>
-        ))}
-        <line x1="60" y1="80" x2="60" y2="212" className="vh-truck-line" />
-      </svg>
-      {ZONES.map((z) => {
-        const meta = zoneConditionMeta(zones[z.key]) || ZONE_CONDITIONS[0]
-        return (
-          <div key={z.key} className={`vh-zone vh-zone-${z.key}`}>
-            <span className={`vh-zone-dot ${meta.tone}`} aria-hidden="true" />
-            <div className="vh-zone-text">
-              <b>{z.label}</b>
-              {readOnly ? <span className={`vh-zone-val ${meta.tone}`}>{meta.label}</span> : (
-                <select className="vh-zone-select" aria-label={`${z.label} condition`} value={zones[z.key]} onChange={(e) => onChange(z.key, e.target.value)}>
-                  {ZONE_CONDITIONS.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
-                </select>
-              )}
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  )
+/** Read-only marked views of a saved handover (detail modal). */
+function SavedMarks({ row, country }) {
+  const { marks, stem } = useMemo(() => marksFromDamages(row?.damages), [row])
+  const art = useHandoverArtwork(row?.asset_no, stem, country)
+  return <HandoverDamageMarker stem={art.stem} views={art.views} marks={marks} compact />
 }
 
 function InfoField({ label, value }) {
@@ -212,7 +188,7 @@ export default function VehicleHandover() {
   const [signKey, setSignKey] = useState(0)
 
   const setF = (k, v) => setForm((f) => ({ ...f, [k]: v }))
-  const setZone = (zone, v) => setForm((f) => ({ ...f, zones: { ...f.zones, [zone]: v } }))
+  const setMarks = (marks) => setForm((f) => ({ ...f, marks }))
 
   const lookupAsset = useCallback(async (code) => {
     const assetNo = String(code || '').trim().toUpperCase()
@@ -246,6 +222,11 @@ export default function VehicleHandover() {
     [lastHandover, asset, hours, form.asset_no],
   )
   const deltas = readingDeltas(form, prev)
+  // The asset's own five-view picture, only once the looked-up row matches the
+  // typed asset number (never another machine's drawing).
+  const wizardAsset = asset.looked && asset.looked === form.asset_no.trim().toUpperCase() ? asset.row : null
+  const artStem = useMemo(() => handoverStemFor(wizardAsset), [wizardAsset])
+  const artViews = useMemo(() => handoverViewsFor(wizardAsset || { asset_no: form.asset_no }), [wizardAsset, form.asset_no])
 
   const startWizard = (type = 'checkout') => {
     setTab('new'); setStep(0); setForm({ ...EMPTY_WIZARD, handover_type: type })
@@ -275,7 +256,7 @@ export default function VehicleHandover() {
     if (bad >= 0) { setStep(bad); setStepErrors(validateStep(bad, form, prev)); return }
     setSaving(true); setSaveError('')
     try {
-      const payload = buildHandoverPayload(form, { country: asset.row?.country || activeCountry })
+      const payload = buildHandoverPayload({ ...form, artwork_stem: artStem }, { country: asset.row?.country || activeCountry })
       const row = await createHandoverReport(payload)
       setSaved(row || payload)
       await load()
@@ -339,6 +320,14 @@ export default function VehicleHandover() {
   const [editForm, setEditForm] = useState(EMPTY_EDIT)
   const [editSaving, setEditSaving] = useState(false)
   const [editError, setEditError] = useState('')
+  const [editMarks, setEditMarks] = useState({ marks: [], stem: null, dirty: false })
+  const editArt = useHandoverArtwork(editing?.asset_no, editMarks.stem, activeCountry)
+  const [pdfBusy, setPdfBusy] = useState(false)
+  const [pdfError, setPdfError] = useState('')
+  const downloadHandoverPdf = async (row) => {
+    setPdfBusy(true); setPdfError('')
+    try { await exportHandoverPdf(row) } catch (err) { setPdfError(toUserMessage(err, 'Could not build the handover PDF.')) } finally { setPdfBusy(false) }
+  }
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
 
@@ -350,6 +339,8 @@ export default function VehicleHandover() {
       odometer_km: r.odometer_km ?? '', fuel_level_pct: r.fuel_level_pct ?? '', condition_rating: r.condition_rating || 'good',
       cleanliness: r.cleanliness || 'clean', signature_url: r.signature_url || '', photo_url: r.photo_url || '', notes: r.notes || '',
     })
+    const saved = marksFromDamages(r.damages)
+    setEditMarks({ marks: saved.marks, stem: saved.stem, dirty: false })
     setEditError('')
   }, [])
   const setE = (k, v) => setEditForm((f) => ({ ...f, [k]: v }))
@@ -358,8 +349,15 @@ export default function VehicleHandover() {
     if (!editForm.asset_no.trim()) { setEditError('An asset number is required.'); return }
     setEditSaving(true); setEditError('')
     try {
+      const marksPatch = {}
+      if (editMarks.dirty) {
+        const damages = damagesFromMarks(editMarks.marks, { stem: editMarks.stem || editArt.stem })
+        marksPatch.damages = damages.length ? damages : null
+        marksPatch.damage_count = damages.length
+      }
       await updateHandoverReport(editing.id, {
         ...editForm,
+        ...marksPatch,
         handover_at: editForm.handover_at ? new Date(editForm.handover_at).toISOString() : null,
       })
       setEditing(null)
@@ -556,8 +554,8 @@ export default function VehicleHandover() {
                   </div>
 
                   <div className="vh-col">
-                    <Card title="Condition Overview" sub="Set each side; anything other than Good is logged as a damage.">
-                      <ConditionDiagram zones={form.zones} onChange={setZone} />
+                    <Card title="Condition Overview" sub={artStem ? 'The picture of this vehicle. Damage is marked on it in the Condition Check step.' : 'Choose the vehicle to see its picture. Damage is marked in the Condition Check step.'}>
+                      <HandoverDamageMarker stem={artStem} views={artViews} marks={form.marks} compact />
                     </Card>
                     <Card title="Odometer & Fuel">
                       <div className="vh-readings">
@@ -623,8 +621,8 @@ export default function VehicleHandover() {
                     </Card>
                   </div>
                   <div className="vh-col">
-                    <Card title="Body condition by side">
-                      <ConditionDiagram zones={form.zones} onChange={setZone} />
+                    <Card title="Mark damage on the vehicle" sub="Switch sides with the arrows or thumbnails, then click the picture where the damage is. Each marker is numbered.">
+                      <HandoverDamageMarker stem={artStem} views={artViews} marks={form.marks} onChange={setMarks} />
                     </Card>
                   </div>
                 </div>
@@ -677,11 +675,11 @@ export default function VehicleHandover() {
                     <InfoField label="Fuel level" value={num(form.fuel_level_pct) != null ? fmtFuel(form.fuel_level_pct) : null} />
                     <InfoField label="Overall condition" value={CONDITION_LABEL[form.condition_rating]} />
                     <InfoField label="Cleanliness" value={cap(form.cleanliness)} />
-                    <InfoField label="Sides not good" value={String(ZONES.filter((z) => form.zones[z.key] !== 'good').length)} />
+                    <InfoField label="Damage marks" value={String(form.marks.length)} />
                     <InfoField label="Photo" value={form.photo_url ? 'Added' : null} />
                     <InfoField label="Signature" value={form.signature ? 'Signed' : 'Not signed'} />
                   </div>
-                  <ConditionDiagram zones={form.zones} readOnly />
+                  <HandoverDamageMarker stem={artStem} views={artViews} marks={form.marks} compact />
                   {form.notes && <p className="vh-review-notes">{form.notes}</p>}
                   {saveError && <p className="vh-error" role="alert"><AlertTriangle size={14} aria-hidden="true" /> {saveError}</p>}
                 </Card>
@@ -844,8 +842,14 @@ export default function VehicleHandover() {
               <InfoField label="Cleanliness" value={viewing.cleanliness ? cap(viewing.cleanliness) : null} />
               <InfoField label="Damages" value={String(damageCount(viewing))} />
             </div>
-            <ConditionDiagram zones={zonesFromDamages(viewing.damages)} readOnly />
+            <SavedMarks row={viewing} country={activeCountry} />
             {viewing.notes && <p className="vh-review-notes">{viewing.notes}</p>}
+            <div className="vh-view-actions">
+              <button type="button" className="cc-btn-ghost" onClick={() => downloadHandoverPdf(viewing)} disabled={pdfBusy}>
+                <FileText size={14} aria-hidden="true" /> {pdfBusy ? 'Building PDF...' : 'Download handover PDF'}
+              </button>
+              {pdfError && <p className="vh-error" role="alert"><AlertTriangle size={14} aria-hidden="true" /> {pdfError}</p>}
+            </div>
             <div className="vh-view-media">
               <SignatureView value={viewing.signature_url || null} label="Driver" />
               {safeImageSrc(viewing.photo_url) && safeHref(viewing.photo_url)
@@ -897,6 +901,16 @@ export default function VehicleHandover() {
             )}
             <label className="block"><span className="label">Photo URL (optional)</span>
               <input className="input w-full" type="url" placeholder="https://" value={editForm.photo_url} maxLength={2000} onChange={(e) => setE('photo_url', e.target.value)} /></label>
+          </div>
+          <div className="cc">
+            <span className="label">Damage marked on the vehicle</span>
+            <HandoverDamageMarker
+              stem={editArt.stem}
+              views={editArt.views}
+              marks={editMarks.marks}
+              onChange={(marks) => setEditMarks((m) => ({ ...m, marks, dirty: true }))}
+              compact
+            />
           </div>
           <label className="block"><span className="label">Notes (optional)</span>
             <textarea className="input w-full min-h-[80px] resize-y" value={editForm.notes} maxLength={8000} onChange={(e) => setE('notes', e.target.value)} /></label>

@@ -15,6 +15,7 @@
  * - Time-dependent functions take an injectable `now`.
  */
 import { damageCount, summariseHandovers, toFiniteNumber } from './handoverReports'
+import { damageSummaryText } from './vehicleHandoverMarks'
 
 export const HANDOVER_TYPES = ['checkout', 'checkin']
 export const HANDOVER_TYPE_LABEL = { checkout: 'Check-out', checkin: 'Check-in' }
@@ -177,7 +178,7 @@ export const HANDOVER_EXPORT_COLUMNS = [
   ['report_no', 'Report #'], ['asset_no', 'Asset'], ['handover_type', 'Type'],
   ['from_driver', 'From driver'], ['to_driver', 'To driver'], ['handover_at', 'Handover at'],
   ['odometer_km', 'Odometer (km)'], ['fuel_level_pct', 'Fuel (%)'], ['condition_rating', 'Condition'],
-  ['damage_count', 'Damages'], ['cleanliness', 'Cleanliness'], ['notes', 'Notes'],
+  ['damage_count', 'Damages'], ['damage_marks', 'Damage marks'], ['cleanliness', 'Cleanliness'], ['notes', 'Notes'],
 ]
 
 /** Flat export rows; blanks stay blank (never a fabricated 0). */
@@ -193,6 +194,7 @@ export function handoverExportRows(rows = []) {
     fuel_level_pct: toFiniteNumber(r?.fuel_level_pct) ?? '',
     condition_rating: CONDITION_LABEL[r?.condition_rating] || r?.condition_rating || '',
     damage_count: damageCount(r),
+    damage_marks: damageSummaryText(r?.damages),
     cleanliness: r?.cleanliness || '',
     notes: r?.notes || '',
   }))

@@ -7,7 +7,7 @@
  * each comes back null when it could not be read, so the page can say "not
  * measured" instead of treating a failed read as zero.
  */
-import { supabase, applyCountry, fetchAllPages, toServiceError } from './_client'
+import { supabase, applyCountry, fetchAllPages, fetchAllRpcPages, toServiceError } from './_client'
 import { listAssetBreakdowns } from './assetBreakdowns'
 
 const MAX_ROWS = 20000
@@ -42,6 +42,28 @@ export async function loadRenewalBreakdowns({ country } = {}) {
   try {
     const res = await listAssetBreakdowns({ country })
     return res.ok ? res.rows : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Per-asset renewal signals from one server read (get_fleet_renewal_signals):
+ * repair cost per currency (last 12 months and lifetime) from the expense
+ * grid, downtime hours and job cards in the last 12 months, accident counts
+ * and the latest hour meter reading. SECURITY INVOKER, so RLS scopes it.
+ * Resolves null when it could not be read, never an empty "all clear" list.
+ * The RPC is ordered by (asset_key, country) so identity paging is total.
+ */
+export async function loadRenewalCostSignals({ country } = {}) {
+  try {
+    const { data, error } = await fetchAllRpcPages(
+      (from, to) => supabase.rpc('get_fleet_renewal_signals', { p_country: country && country !== 'All' ? country : null }).range(from, to),
+      (r) => `${r.country || ''}|${r.asset_key}`,
+      { max: MAX_ROWS },
+    )
+    if (error) return null
+    return data || []
   } catch {
     return null
   }

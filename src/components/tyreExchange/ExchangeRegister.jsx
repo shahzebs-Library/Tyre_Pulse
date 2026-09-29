@@ -14,7 +14,7 @@ function TyreCell({ tyre }) {
   return (
     <span className="tx-tyre">
       <i aria-hidden="true" className="tx-tyre-glyph" />
-      <span><b>{tyre.serial || 'Serial not recorded'}</b><small>{tyre.size || 'Size not recorded'}</small></span>
+      <span className="tx-clip"><b title={tyre.serial || undefined}>{tyre.serial || 'Serial not recorded'}</b><small>{tyre.size || 'Size not recorded'}</small></span>
     </span>
   )
 }
@@ -32,20 +32,20 @@ export default function ExchangeRegister({
       cell: (e) => (
         <span className="tx-veh">
           <VehicleThumb row={{ asset_no: e.asset, vehicle_type: e.vehicleType }} size="sm" />
-          <span><b>{e.asset || 'N/A'}</b><small>{e.vehicleType || 'Type not recorded'}</small></span>
+          <span className="tx-clip"><b title={e.asset || undefined}>{e.asset || 'N/A'}</b><small title={e.vehicleType || undefined}>{e.vehicleType || 'Type not recorded'}</small></span>
         </span>
       ),
     },
     { key: 'position', header: 'Position', cell: (e) => e.position || <span className="cc-na">N/A</span> },
     { key: 'removed', header: 'Removed tyre', sortValue: (e) => e.removed?.serial || '', cell: (e) => <TyreCell tyre={e.removed} /> },
     { key: 'installed', header: 'Installed tyre', sortValue: (e) => e.installed?.serial || '', cell: (e) => <TyreCell tyre={e.installed} /> },
-    { key: 'site', header: 'Site', cell: (e) => e.site || <span className="cc-na">N/A</span> },
+    { key: 'site', header: 'Site', cell: (e) => (e.site ? <span className="tx-cell-clip" title={e.site}>{e.site}</span> : <span className="cc-na">N/A</span>) },
     { key: 'status', header: 'Tyre status', cell: (e) => (e.status ? <span className={`cc-pill ${STATUS_TONE[e.status] || 'muted'}`}>{e.status}</span> : <span className="cc-na">N/A</span>) },
     {
       key: 'actions', header: 'Actions', sortable: false,
       cell: (e) => (
         <span className="tx-actions-cell" onClick={(ev) => ev.stopPropagation()}>
-          <button type="button" className="cc-icon-btn" aria-label={`View movement for ${e.asset} ${e.position || ''}`} onClick={() => onSelect(e.id)}><Eye size={14} /></button>
+          <button type="button" className="cc-icon-btn" aria-label={`View details for ${e.asset || 'this exchange'} ${e.position || ''}`} title="View details" onClick={() => onSelect(e.id)}><Eye size={14} /></button>
           {(e.installed?.serial || e.removed?.serial) && (
             <button type="button" className="cc-icon-btn" aria-label="Open chain of custody" title="Open chain of custody" onClick={() => onOpenCustody(e.installed?.serial || e.removed?.serial)}><ArrowLeftRight size={14} /></button>
           )}

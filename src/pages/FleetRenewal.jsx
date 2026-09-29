@@ -29,18 +29,18 @@ import {
 } from '../components/commandCenter/kit'
 import { useSettings } from '../contexts/SettingsContext'
 import {
-  listRenewalPlansEnriched, createRenewalPlan, updateRenewalPlan, deleteRenewalPlan,
+  listRenewalPlansEnriched, createRenewalPlan, updateRenewalPlan, deleteRenewalPlan, RENEWAL_CURRENCIES,
 } from '../lib/api/fleetRenewal'
-import { loadRenewalFleet, loadRenewalUtilization, loadRenewalBreakdowns } from '../lib/api/fleetRenewalSignals'
+import { loadRenewalFleet, loadRenewalUtilization, loadRenewalBreakdowns, loadRenewalCostSignals } from '../lib/api/fleetRenewalSignals'
 import {
   RENEWAL_STATUSES, RENEWAL_PRIORITIES, RENEWAL_STATUS_META, RENEWAL_PRIORITY_META,
 } from '../lib/fleetRenewal'
-import { renewalExportRows, RENEWAL_EXPORT_COLUMNS } from '../lib/fleetRenewalAnalytics'
 import {
   buildPlanningRows, sortPlanningRows, filterPlanningRows, ageDistribution, pipelineSegments,
   capexByQuarter, buildRenewalKpis, planningRules, presetCounts, remainingLifeLabel,
   planningExportRows, PLANNING_EXPORT_COLUMNS, PRIORITY_META, PRIORITY_KEYS, PLAN_STATUS_META,
-  PLANNING_LIFE_YEARS, AGING_YEARS, currencyForCountry,
+  PLANNING_LIFE_YEARS, AGING_YEARS, currencyForCountry, budgetByYear, moneyText, planYear,
+  SCORE_WEIGHTS, SCORE_PART_LABELS, SCORE_RAISE, planExportRows, PLAN_EXPORT_COLUMNS,
 } from '../lib/fleetRenewalView'
 import { formatCurrencyCompact } from '../lib/formatters'
 import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
@@ -51,13 +51,18 @@ import './FleetRenewal.css'
 const EMPTY_FORM = {
   asset_no: '', current_km: '', age_years: '', recommendation: '',
   target_replace_date: '', est_cost: '', priority: 'medium', status: 'planned',
-  site: '', notes: '', country: '',
+  site: '', notes: '', country: '', planned_year: '', currency: '',
 }
-const RULE_TEXT = `Age comes from the recorded model year (implausible years are ignored). Every asset is planned against a ${PLANNING_LIFE_YEARS}-year life, because the register records no useful life per asset. Health score = 70% age score (100 at new, 0 at ${PLANNING_LIFE_YEARS} years) + 30% reliability (0 with an open breakdown, else 100). Priority: marked Plan For Scrap or 1 year or less left = Critical; 2 years or less, or over ${AGING_YEARS} years with an open breakdown = High; 4 years or less = Medium; otherwise Low.`
+const RULE_TEXT = `Age comes from the recorded model year (implausible years are ignored). Every asset is planned against a ${PLANNING_LIFE_YEARS}-year life, because the register records no useful life per asset. Health score = 70% age score (100 at new, 0 at ${PLANNING_LIFE_YEARS} years) + 30% reliability (0 with an open breakdown, else 100). Priority: marked Plan For Scrap or 1 year or less left = Critical; 2 years or less, or over ${AGING_YEARS} years with an open breakdown = High; 4 years or less = Medium; otherwise Low. A renewal score of ${SCORE_RAISE} or more raises a Medium or Low asset to High.`
 const RULE_ICON = { scrap: AlertOctagon, past: AlertTriangle, bd: Wrench, noplan: CalendarClock, noage: Info }
 
 const money = (amount, currency) => (amount == null ? 'N/A' : formatCurrencyCompact(amount, currency || ''))
 const PRIORITY_TO_PLAN = { critical: 'high', high: 'high', medium: 'medium', low: 'low' }
+const SCORE_PART_SHORT = { age: 'Age', repair: 'Repair cost', downtime: 'Downtime', km: 'Km', hours: 'Hours', accidents: 'Accidents' }
+function scoreTitle(r) {
+  const parts = Object.entries(r.scoreParts || {}).map(([k, v]) => `${SCORE_PART_SHORT[k] || k} ${v}`)
+  return `${parts.join(', ') || 'No measurable part'}${r.scoreRaised ? '. Raised to High priority by the score.' : ''}`
+}
 
 /** Popover menu positioned against the viewport so a scrolling table never clips it. */
 function RowMenu({ label, items }) {
@@ -172,10 +177,13 @@ export default function FleetRenewal() {
   const fleetCard = useCard(() => loadRenewalFleet({ country: activeCountry }), [activeCountry])
   const utilCard = useCard(() => loadRenewalUtilization({ country: activeCountry }), [activeCountry])
   const bdCard = useCard(() => loadRenewalBreakdowns({ country: activeCountry }), [activeCountry])
+  const sigCard = useCard(() => loadRenewalCostSignals({ country: activeCountry }), [activeCountry])
 
   const allPlans = useMemo(() => plans || [], [plans])
   const plansLoading = plans === null && !planError
   const signalsLoading = utilCard.loading || bdCard.loading
+  const costLoading = sigCard.loading
+  const costUnreadable = !sigCard.loading && sigCard.data == null
 
   const rows = useMemo(() => {
     if (!fleetCard.data) return []
@@ -184,15 +192,17 @@ export default function FleetRenewal() {
       plans: allPlans,
       utilRows: utilCard.loading ? null : utilCard.data,
       breakdownRows: bdCard.loading ? null : bdCard.data,
+      signalRows: sigCard.loading ? null : sigCard.data,
       now,
     }))
-  }, [fleetCard.data, allPlans, utilCard.loading, utilCard.data, bdCard.loading, bdCard.data, now])
+  }, [fleetCard.data, allPlans, utilCard.loading, utilCard.data, bdCard.loading, bdCard.data, sigCard.loading, sigCard.data, now])
 
   const kpi = useMemo(() => buildRenewalKpis(rows, allPlans, now), [rows, allPlans, now])
   const rules = useMemo(() => planningRules(rows, now), [rows, now])
   const presets = useMemo(() => presetCounts(rows, now), [rows, now])
   const pipeline = useMemo(() => pipelineSegments(allPlans, now), [allPlans, now])
   const capex = useMemo(() => capexByQuarter(allPlans, now), [allPlans, now])
+  const budget = useMemo(() => budgetByYear(allPlans), [allPlans])
 
   // Age distribution card
   const [ageType, setAgeType] = useState('')
@@ -207,17 +217,18 @@ export default function FleetRenewal() {
   const [priority, setPriority] = useState('')
   const [status, setStatus] = useState('')
   const [preset, setPreset] = useState('')
+  const [minScore, setMinScore] = useState('')
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState(10)
   const [checked, setChecked] = useState(() => new Set())
-  const filters = { q, site, type, priority, status, preset }
-  const filtered = useMemo(() => filterPlanningRows(rows, { q, site, type, priority, status, preset }, now), [rows, q, site, type, priority, status, preset, now])
-  useEffect(() => { setPage(0) }, [q, site, type, priority, status, preset, pageSize, activeCountry])
+  const filters = { q, site, type, priority, status, preset, minScore }
+  const filtered = useMemo(() => filterPlanningRows(rows, { q, site, type, priority, status, preset, minScore }, now), [rows, q, site, type, priority, status, preset, minScore, now])
+  useEffect(() => { setPage(0) }, [q, site, type, priority, status, preset, minScore, pageSize, activeCountry])
   const pages = Math.max(1, Math.ceil(filtered.length / pageSize))
   const safePage = Math.min(page, pages - 1)
   const pageRows = filtered.slice(safePage * pageSize, safePage * pageSize + pageSize)
   const hasFilters = Object.values(filters).some(Boolean)
-  const clearFilters = () => { setQ(''); setSite(''); setType(''); setPriority(''); setStatus(''); setPreset('') }
+  const clearFilters = () => { setQ(''); setSite(''); setType(''); setPriority(''); setStatus(''); setPreset(''); setMinScore('') }
   const tableRef = useRef(null)
   const applyPreset = (key) => { setPreset((p) => (p === key ? '' : key)); tableRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }) }
 
@@ -244,8 +255,8 @@ export default function FleetRenewal() {
   }
   const doPlansExcel = async () => {
     try {
-      const ex = renewalExportRows(allPlans, now)
-      await exportToExcel(ex, RENEWAL_EXPORT_COLUMNS.map((c) => c.key), RENEWAL_EXPORT_COLUMNS.map((c) => c.header), reportFileName('Fleet Renewal Plans', scopeLabel))
+      const ex = planExportRows(allPlans)
+      await exportToExcel(ex, PLAN_EXPORT_COLUMNS.map((c) => c.key), PLAN_EXPORT_COLUMNS.map((c) => c.header), reportFileName('Fleet Renewal Plans', scopeLabel))
     } catch (e) { setActionError(toUserMessage(e, 'Could not export. Try again.')) }
   }
 
@@ -267,7 +278,8 @@ export default function FleetRenewal() {
       priority: PRIORITY_TO_PLAN[row.priority] || 'medium',
       recommendation: row.priority && row.priority !== 'unknown' ? row.recommendation : '',
       country: row.country || '',
-    } : EMPTY_FORM)
+      currency: currencyForCountry(row.country || countryScope) || '',
+    } : { ...EMPTY_FORM, currency: currencyForCountry(countryScope) || '' })
     setFormError(''); setModalOpen(true)
   }
   const openEdit = (p) => {
@@ -277,19 +289,22 @@ export default function FleetRenewal() {
       recommendation: p.recommendation || '', target_replace_date: p.target_replace_date ? String(p.target_replace_date).slice(0, 10) : '',
       est_cost: p.est_cost ?? '', priority: p.priority || 'medium', status: p.status || 'planned',
       site: p.site || '', notes: p.notes || '', country: p.country || '',
+      planned_year: p.planned_year ?? '', currency: p.currency || currencyForCountry(p.country) || '',
     })
     setFormError(''); setModalOpen(true)
   }
   const setField = (k, v) => setForm((f) => ({ ...f, [k]: v }))
-  const formCurrency = currencyForCountry(form.country || countryScope) || activeCurrency
+  const formCurrency = form.currency || currencyForCountry(form.country || countryScope) || activeCurrency
 
   const submit = useCallback(async (e) => {
     e?.preventDefault?.()
     setFormError('')
     if (!form.asset_no.trim()) { setFormError('An asset number is required.'); return }
+    const year = String(form.planned_year ?? '').trim()
+    if (year && !/^(20\d\d|2100)$/.test(year)) { setFormError('Planned year must be a year between 2000 and 2100.'); return }
     setSaving(true)
     try {
-      const payload = { ...form, country: form.country || countryScope || null }
+      const payload = { ...form, country: form.country || countryScope || null, currency: form.currency || currencyForCountry(form.country || countryScope) || null }
       if (editing) {
         const updated = await updateRenewalPlan(editing.id, payload)
         setPlans((prev) => (prev || []).map((r) => (r.id === updated.id ? { ...r, ...updated } : r)))
@@ -321,7 +336,7 @@ export default function FleetRenewal() {
   const closeForm = () => { if (!saving) setModalOpen(false) }
   const closeDelete = () => { if (!deleting) { setConfirmDelete(null); setDeleteError('') } }
 
-  const refreshAll = () => { loadPlans(); fleetCard.retry(); utilCard.retry(); bdCard.retry() }
+  const refreshAll = () => { loadPlans(); fleetCard.retry(); utilCard.retry(); bdCard.retry(); sigCard.retry() }
 
   // KPIs
   const regLoading = fleetCard.loading && !fleetCard.data
@@ -361,11 +376,20 @@ export default function FleetRenewal() {
     },
     { key: 'health', header: 'Health score', cell: (r) => (signalsLoading ? na('...') : <HealthBadge value={r.health} />) },
     { key: 'remaining', header: 'Remaining life', cell: (r) => remainingLifeLabel(r.remainingYears) },
+    { key: 'score', header: 'Renewal score', align: 'right', cell: (r) => (costLoading ? na('...') : r.score == null ? na() : <span className={`fr-health ${r.score >= SCORE_RAISE ? 'bad' : r.score >= 50 ? 'warn' : 'good'}`} title={scoreTitle(r)}>{r.score}</span>) },
+    { key: 'current_km', header: 'Km / hours', align: 'right', cell: (r) => (
+      <span title={r.lastHoursAt ? `Hour meter read ${r.lastHoursAt}` : undefined}>
+        {r.current_km == null ? na() : fmtInt(Math.round(r.current_km))}
+        <span className="fr-sub">{costLoading ? '...' : r.lastHours == null ? 'Hours N/A' : `${fmtInt(Math.round(r.lastHours))} h`}</span>
+      </span>) },
+    { key: 'repair', header: 'Repair cost 12 mo', align: 'right', cell: (r) => (costLoading ? na('...') : costUnreadable || !r.inRegister ? na() : (moneyText(r.repairCost12m) || <span title="No store issue booked to this asset in the last 12 months">None</span>)) },
+    { key: 'downtime', header: 'Downtime 12 mo', align: 'right', cell: (r) => (costLoading ? na('...') : costUnreadable || !r.inRegister ? na() : r.downtimeHours12m == null ? <span className="cc-na" title={r.jobCards12m ? `${r.jobCards12m} job cards, none with both production out and in times` : 'No job card in the last 12 months'}>N/A</span> : `${fmtInt(Math.round(r.downtimeHours12m))} h`) },
+    { key: 'accidents', header: 'Accidents', align: 'right', cell: (r) => (costLoading ? na('...') : costUnreadable || !r.inRegister ? na() : <span title={`${r.accidents12m} in the last 12 months`}>{r.accidentsAll}</span>) },
     { key: 'priority', header: 'Priority', cell: (r) => <span className={`cc-pill ${PRIORITY_META[r.priority]?.tone || 'muted'}`}>{PRIORITY_META[r.priority]?.label || 'Unknown'}</span> },
     { key: 'recommendation', header: 'Recommendation', cell: (r) => <span title={r.plan?.recommendation ? `Plan: ${r.plan.recommendation}` : undefined}>{r.recommendation}</span> },
     {
       key: 'budget', header: 'Est. budget', align: 'right',
-      cell: (r) => (!r.plan ? na('No plan') : r.budget == null ? na() : money(r.budget, r.currency)),
+      cell: (r) => (!r.plan ? na('No plan') : r.budget == null ? na() : <span title={planYear(r.plan) ? `Planned year ${planYear(r.plan)}` : 'No planned year'}>{money(r.budget, r.currency)}</span>),
     },
     {
       key: 'status', header: 'Approval status',
@@ -463,6 +487,22 @@ export default function FleetRenewal() {
             </Card>
           </div>
 
+          <Card title="Renewal Budget by Year" sub="Every renewal plan by planned year (or its target date year), one column per currency. Currencies are never added together.">
+            <CardState state={plansState}
+              empty={plans && budget.years.length === 0 ? (notProvisioned ? 'Renewal plans are not enabled yet.' : 'No renewal plans yet. Add one from the planning table.') : null}>
+              <KitTable className="fr-table" enableSorting={false} showPagination={false}
+                getRowId={(y) => String(y.year ?? 'none')} rows={budget.years}
+                columns={[
+                  { key: 'year', header: 'Planned year', cell: (y) => (y.year == null ? na('No year set') : y.year) },
+                  { key: 'plans', header: 'Plans', align: 'right', cell: (y) => fmtInt(y.plans) },
+                  ...budget.currencies.map((c) => ({ key: `open_${c}`, header: `Open (${c})`, align: 'right', cell: (y) => (y.open[c] == null ? na('None') : money(y.open[c], c)) })),
+                  ...budget.currencies.map((c) => ({ key: `done_${c}`, header: `Completed (${c})`, align: 'right', cell: (y) => (y.completed[c] == null ? na('None') : money(y.completed[c], c)) })),
+                  ...budget.currencies.map((c) => ({ key: `def_${c}`, header: `Deferred (${c})`, align: 'right', cell: (y) => (y.deferred[c] == null ? na('None') : money(y.deferred[c], c)) })),
+                  { key: 'uncosted', header: 'No cost', align: 'right', cell: (y) => (y.uncosted ? <span title="Plans with no estimated cost or currency">{fmtInt(y.uncosted)}</span> : '0') },
+                ]} />
+            </CardState>
+          </Card>
+
           <div ref={tableRef}>
             <Card
               title="Replacement Planning"
@@ -498,6 +538,12 @@ export default function FleetRenewal() {
                   <option value="none">No plan</option>
                   {RENEWAL_STATUSES.map((s) => <option key={s} value={s}>{PLAN_STATUS_META[s].label}</option>)}
                 </select>
+                <select className="cc-select" aria-label="Minimum renewal score" value={minScore} onChange={(e) => setMinScore(e.target.value)}>
+                  <option value="">Any renewal score</option>
+                  <option value="75">Score 75 or more</option>
+                  <option value="50">Score 50 or more</option>
+                  <option value="25">Score 25 or more</option>
+                </select>
                 {hasFilters && <button type="button" className="cc-btn-ghost" onClick={clearFilters}><X size={13} aria-hidden="true" /> Reset</button>}
               </div>
               {preset && (
@@ -522,6 +568,10 @@ export default function FleetRenewal() {
                   onPage={setPage} onPageSize={setPageSize} sizes={[10, 25, 50, 100]} />
               </CardState>
               {(bdCard.data === null && !bdCard.loading) && <p className="fr-foot">The breakdown register could not be read, so health scores use age alone.</p>}
+              {costUnreadable && (
+                <p className="fr-foot" role="alert">Repair cost, downtime, accidents and hour meter could not be read, so the renewal score uses age and km only. <button type="button" className="cc-btn-ghost" onClick={sigCard.retry}><RefreshCw size={12} aria-hidden="true" /> Retry</button></p>
+              )}
+              <p className="fr-foot">Renewal score (0 to 100, higher means a stronger replacement case): {Object.entries(SCORE_WEIGHTS).map(([k, w]) => `${Math.round(w * 100)}% ${SCORE_PART_LABELS[k]}`).join('; ')}. Ranks are relative to the assets in this scope; parts that cannot be measured drop out. The 10 year life is ASSUMED because the register holds no useful life per asset.</p>
             </Card>
           </div>
         </div>
@@ -618,6 +668,17 @@ export default function FleetRenewal() {
               <div>
                 <label className="label" htmlFor="frf-cost">Estimated cost ({formCurrency})</label>
                 <input id="frf-cost" type="number" className="input w-full" value={form.est_cost} onChange={(e) => setField('est_cost', e.target.value)} placeholder="e.g. 250000" />
+              </div>
+              <div>
+                <label className="label" htmlFor="frf-year">Planned year</label>
+                <input id="frf-year" type="number" min="2000" max="2100" step="1" className="input w-full" value={form.planned_year} onChange={(e) => setField('planned_year', e.target.value)} placeholder={form.target_replace_date ? String(form.target_replace_date).slice(0, 4) : 'e.g. 2027'} />
+              </div>
+              <div>
+                <label className="label" htmlFor="frf-cur">Currency</label>
+                <select id="frf-cur" className="input w-full" value={form.currency} onChange={(e) => setField('currency', e.target.value)}>
+                  <option value="">Country currency</option>
+                  {RENEWAL_CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
               </div>
             </div>
             <div>

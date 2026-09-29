@@ -31,6 +31,9 @@ import { formatCurrency, formatDate } from '../lib/formatters'
 import { getPassportBundle, searchSerials } from '../lib/api/tyrePassport'
 import { listTyreInspections } from '../lib/api/tyrePassportInspections'
 import { getAssetByNo } from '../lib/api/assets'
+import { listCatalogueForBrand } from '../lib/api/serialTracker'
+import { matchCatalogue } from '../lib/tyreImage'
+import TyreTreadImage from '../components/tyre/TyreTreadImage'
 import { buildPassport, journeyWithDays, journeySummary } from '../lib/tyrePassport'
 import {
   passportCurrency, ageMonths, healthLabel, healthCoverage, treadInfo, kmInfo, cpkSeries,
@@ -50,6 +53,16 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, C
 const NA = 'N/A'
 const kmTxt = (v) => (v == null ? NA : `${Number(v).toLocaleString('en-US')} km`)
 const dateTxt = (v) => (v ? formatDate(v) : NA)
+const assetHref = (a) => `/asset-management/${encodeURIComponent(a)}`
+const assetLink = (a) => (a
+  ? <Link to={assetHref(a)} className="tp-link tp-mono" onClick={(e) => e.stopPropagation()}>{a}</Link>
+  : <span className="cc-na">{NA}</span>)
+/** Load index (single/dual) and speed symbol from a catalogue entry. */
+const specLoad = (c) => {
+  if (!c) return NA
+  const load = [c.load_index_single, c.load_index_dual].filter((v) => v != null && v !== '').join('/')
+  return [load, c.speed_rating].filter(Boolean).join(' ') || 'Not recorded'
+}
 
 const EVENT_TONE = (t) => {
   const v = String(t || '').toLowerCase()
@@ -80,29 +93,6 @@ const TABS = [
   { key: 'documents', label: 'Documents' },
   { key: 'quality', label: 'Data quality' },
 ]
-
-/** Neutral tyre illustration. No real tyre photo exists in the app. */
-function TyreArt() {
-  const treads = Array.from({ length: 28 }, (_, i) => i * (360 / 28))
-  return (
-    <svg viewBox="0 0 200 200" className="tp-tyre-art" role="img" aria-label="Tyre illustration">
-      <circle cx="100" cy="100" r="92" fill="#1d2127" />
-      {treads.map((a) => (
-        <rect key={a} x="96" y="6" width="8" height="15" rx="2" fill="#2d333b" transform={`rotate(${a} 100 100)`} />
-      ))}
-      <circle cx="100" cy="100" r="72" fill="#262b32" />
-      <circle cx="100" cy="100" r="54" fill="#c9ced6" />
-      <circle cx="100" cy="100" r="46" fill="#aeb4be" />
-      {[0, 60, 120, 180, 240, 300].map((a) => (
-        <ellipse key={a} cx="100" cy="72" rx="7" ry="13" fill="#8a919c" transform={`rotate(${a} 100 100)`} />
-      ))}
-      <circle cx="100" cy="100" r="15" fill="#d9dde3" />
-      {[0, 72, 144, 216, 288].map((a) => (
-        <circle key={a} cx="100" cy="91" r="2.6" fill="#6b727d" transform={`rotate(${a} 100 100)`} />
-      ))}
-    </svg>
-  )
-}
 
 function SerialQr({ serial }) {
   const [src, setSrc] = useState(null)
@@ -281,6 +271,7 @@ export default function TyrePassport() {
   const [tab, setTab] = useState('overview')
   const [insp, setInsp] = useState({ rows: [], truncated: false, error: null, loading: false })
   const [asset, setAsset] = useState(null)
+  const [catalogue, setCatalogue] = useState({ rows: [], error: null, loading: false })
 
   const load = useCallback(async (sn) => {
     const request = ++loadId.current
@@ -332,6 +323,27 @@ export default function TyrePassport() {
       .catch(() => { if (live) setAsset(null) })
     return () => { live = false }
   }, [currentAssetNo, activeCountry])
+
+  // The tyre catalogue entry for this brand and size feeds the tread picture
+  // and the pattern / load / speed block. A failed read is shown as "could not
+  // check", never as "not in the catalogue".
+  const passportBrand = passport?.brand || ''
+  const catalogueKey = `${passportBrand}|${activeCountry}`
+  const [catalogueNonce, setCatalogueNonce] = useState(0)
+  useEffect(() => {
+    if (!passportBrand) { setCatalogue({ rows: [], error: null, loading: false }); return undefined }
+    let live = true
+    setCatalogue({ rows: [], error: null, loading: true })
+    listCatalogueForBrand(passportBrand, { country: activeCountry })
+      .then((rows) => { if (live) setCatalogue({ rows, error: null, loading: false }) })
+      .catch((e) => { if (live) setCatalogue({ rows: [], error: toUserMessage(e, 'The tyre catalogue could not be checked.'), loading: false }) })
+    return () => { live = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- catalogueKey covers brand + country.
+  }, [catalogueKey, catalogueNonce])
+  const catEntry = useMemo(
+    () => matchCatalogue(catalogue.rows, { brand: passport?.brand, size: passport?.size }),
+    [catalogue.rows, passport],
+  )
 
   const journeyRows = useMemo(() => journeyWithDays(passport?.journey || []), [passport])
   const journeyStats = useMemo(() => journeySummary(passport?.journey || []), [passport])
@@ -423,9 +435,6 @@ export default function TyrePassport() {
   }, [passport, cur])
 
   const pill = (tone, text) => <span className={`cc-pill ${tone}`}>{text}</span>
-  const assetLink = (a) => (a
-    ? <Link to={`/asset-management/${encodeURIComponent(a)}`} className="tp-link tp-mono">{a}</Link>
-    : <span className="cc-na">{NA}</span>)
 
   const journeyColumns = useMemo(() => [
     { accessorKey: 'asset_no', header: 'Asset', cell: ({ getValue }) => assetLink(getValue()) },
@@ -449,7 +458,7 @@ export default function TyrePassport() {
   const serviceColumns = useMemo(() => [
     { accessorKey: 'date', header: 'Date', cell: ({ getValue }) => dateTxt(getValue()) },
     { accessorKey: 'type', header: 'Type', cell: ({ getValue }) => pill(EVENT_TONE(getValue()), statusText(getValue())) },
-    { accessorKey: 'asset_no', header: 'Asset', cell: ({ getValue }) => getValue() || NA },
+    { accessorKey: 'asset_no', header: 'Asset', cell: ({ getValue }) => assetLink(getValue()) },
     { accessorKey: 'site', header: 'Site', cell: ({ getValue }) => getValue() || NA },
     { accessorKey: 'position', header: 'Position', cell: ({ getValue }) => getValue() || NA },
     { accessorKey: 'tread', header: 'Tread', meta: { align: 'right' }, cell: ({ getValue }) => (getValue() == null ? NA : `${getValue()} mm`) },
@@ -462,7 +471,7 @@ export default function TyrePassport() {
 
   const inspectionColumns = useMemo(() => [
     { accessorKey: 'date', header: 'Date', cell: ({ getValue }) => dateTxt(getValue()) },
-    { accessorKey: 'asset_no', header: 'Asset', cell: ({ getValue }) => getValue() || NA },
+    { accessorKey: 'asset_no', header: 'Asset', cell: ({ getValue }) => assetLink(getValue()) },
     { accessorKey: 'site', header: 'Location', cell: ({ getValue }) => getValue() || NA },
     { accessorKey: 'position', header: 'Position', cell: ({ getValue }) => getValue() || NA },
     { accessorKey: 'tread', header: 'Tread (mm)', meta: { align: 'right' }, cell: ({ getValue }) => (getValue() == null ? NA : getValue()) },
@@ -499,7 +508,7 @@ export default function TyrePassport() {
     { label: 'Export PDF', icon: FileDown, onClick: exportPdf, disabled: !passport },
     { label: 'Export Excel', icon: Sheet, onClick: exportExcel, disabled: !passport },
     { label: 'Refresh', icon: RefreshCw, onClick: () => load(serial), disabled: loading },
-    ...(currentAssetNo ? [{ label: `Open asset ${currentAssetNo}`, icon: Truck, onClick: () => navigate(`/asset-management/${encodeURIComponent(currentAssetNo)}`) }] : []),
+    ...(currentAssetNo ? [{ label: `Open asset ${currentAssetNo}`, icon: Truck, onClick: () => navigate(assetHref(currentAssetNo)) }] : []),
     { label: 'Open tyre records', icon: ExternalLink, onClick: () => navigate('/tyres') },
     ...(isAdmin ? [{ label: 'Open serial tracker', icon: ScanLine, onClick: () => navigate('/serial-tracker') }] : []),
     { label: 'Look up another serial', icon: Search, onClick: () => navigate('/tyre-passport') },
@@ -523,6 +532,10 @@ export default function TyrePassport() {
     ['Brand', passport.brand || NA],
     ['Size', passport.size || NA],
     ['Supplier', passport.supplier || NA],
+    ['Pattern', catEntry?.pattern || (catalogue.error ? 'Catalogue could not be checked' : 'Not in the tyre catalogue')],
+    ['Load index / speed', specLoad(catEntry)],
+    ['Ply rating', catEntry?.ply_rating || NA],
+    ['New tread depth (catalogue)', catEntry?.tread_depth_new_mm == null ? NA : `${catEntry.tread_depth_new_mm} mm`],
     ['First fitted', dateTxt(passport.firstFittedDate)],
     ['Age since first fitted', passport.ageDays == null ? NA : `${passport.ageDays.toLocaleString()} days`],
     ['Records', passport.recordCount],
@@ -595,7 +608,8 @@ export default function TyrePassport() {
           {/* Identity */}
           <section className="cc-card tp-id" aria-label="Tyre identity">
             <div className="tp-id-art">
-              <TyreArt />
+              <TyreTreadImage variant="hero" width={186} size={passport.size}
+                position={passport.currentPosition || lastPositionEvent?.position} catalogue={catEntry} />
               <SerialQr serial={passport.serial} />
             </div>
             <div className="tp-id-main">
@@ -606,7 +620,14 @@ export default function TyrePassport() {
                 <div className="tp-spec"><span>Size</span><b>{passport.size || NA}</b></div>
                 <div className="tp-spec"><span>Supplier</span><b>{passport.supplier || NA}</b></div>
                 <div className="tp-spec"><span>First fitted</span><b>{dateTxt(passport.firstFittedDate)}</b></div>
-                <div className="tp-spec" title="Pattern, load and speed index and DOT are not captured on tyre records."><span>Pattern / load / DOT</span><b className="cc-na">Not recorded</b></div>
+                <div className="tp-spec" title={catEntry ? 'From the tyre catalogue entry for this brand and size.' : 'Pattern, load and speed index are read from the tyre catalogue. The DOT date is not captured on tyre records.'}>
+                  <span>Pattern</span>
+                  {catalogue.loading ? <b className="cc-na">Checking</b>
+                    : catalogue.error ? <b className="cc-na">Could not check <button type="button" className="tp-link" onClick={() => setCatalogueNonce((n) => n + 1)}>Retry</button></b>
+                      : catEntry?.pattern ? <b>{catEntry.pattern}</b>
+                        : <b className="cc-na">{catEntry ? 'Not recorded' : 'Not in the catalogue'}</b>}
+                </div>
+                <div className="tp-spec"><span>Load / speed</span><b className={catEntry && (catEntry.load_index_single || catEntry.speed_rating) ? '' : 'cc-na'}>{specLoad(catEntry)}</b></div>
               </div>
             </div>
             <div className="tp-id-side">
@@ -618,7 +639,7 @@ export default function TyrePassport() {
               <div className="tp-veh">
                 <div className="tp-veh-cell">
                   {passport.currentAssetNo ? (
-                    <Link to={`/asset-management/${encodeURIComponent(passport.currentAssetNo)}`} className="tp-veh-link">
+                    <Link to={assetHref(passport.currentAssetNo)} className="tp-veh-link">
                       <VehicleThumb row={asset || { asset_no: passport.currentAssetNo }} size="md" />
                       <span>
                         <span className="tp-small tp-muted">Vehicle / asset</span>
@@ -759,9 +780,10 @@ export default function TyrePassport() {
                 <KitTable compact empty="No fitment history on record."
                   getRowId={(m) => String(m.id)}
                   rows={movement.slice(0, 5)}
+                  onRowClick={(m) => { if (m?.asset_no) navigate(assetHref(m.asset_no)) }}
                   columns={[
                     { key: 'date', header: 'Date', cell: (m) => dateTxt(m.date) },
-                    { key: 'asset_no', header: 'Asset', cell: (m) => m.asset_no || NA },
+                    { key: 'asset_no', header: 'Asset', cell: (m) => assetLink(m.asset_no) },
                     { key: 'position', header: 'Position', cell: (m) => m.position || NA },
                     { key: 'odometer', header: 'Odometer', cell: (m) => kmTxt(m.odometer) },
                     { key: 'action', header: 'Action', cell: (m) => pill(m.current ? 'good' : ACTION_TONE[m.action] || 'muted', m.current ? 'In service' : m.action) },
@@ -875,7 +897,8 @@ export default function TyrePassport() {
                 <p className="cc-card-sub">{journeyStats.stints} stint(s) across {passport.distinctVehicles} vehicle(s). Average {journeyStats.avgKmPerStint == null ? NA : `${journeyStats.avgKmPerStint.toLocaleString()} km`} per measured stint ({journeyStats.measuredStints} of {journeyStats.stints} have distance).</p></div></div>
               <EnterpriseTable columns={journeyColumns} data={journeyRows} getRowId={(r, i) => String(r.id ?? i)}
                 enableColumnFilters={false} searchPlaceholder="Search asset, site or reason"
-                exportFileName={`Tyre Passport ${passport.serial} journey`} emptyMessage="No stint history on record." />
+                exportFileName={`Tyre Passport ${passport.serial} journey`} emptyMessage="No stint history on record."
+                onRowClick={(r) => { if (r?.asset_no) navigate(assetHref(r.asset_no)) }} />
             </section>
           )}
 
@@ -901,7 +924,7 @@ export default function TyrePassport() {
           {tab === 'documents' && (
             <section className="cc-card" aria-label="Documents">
               <div className="cc-card-head"><h2 className="cc-card-title">Documents</h2></div>
-              <Empty icon={FileText} title="No documents are attached to this tyre." sub="Tyre records do not store invoices, photos or reports, so there is nothing to list here." />
+              <Empty icon={FileText} title="No documents are attached to this tyre." sub="No photos are stored on this tyre's records, and invoices and reports are not linked to tyre serials, so there is nothing to list here." />
             </section>
           )}
 

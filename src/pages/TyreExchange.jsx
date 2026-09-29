@@ -24,7 +24,7 @@ import {
   TrendingUp, Truck, CheckSquare, XCircle, ChevronDown, Lock,
   Wrench, CircleOff, Sparkles,
 } from 'lucide-react'
-import { PageHero, Kpi, Card, Tabs, useCard, fmtInt } from '../components/commandCenter/kit'
+import { PageHero, Kpi, Card, CardState, Tabs, useCard, fmtInt } from '../components/commandCenter/kit'
 import ExchangeRegister from '../components/tyreExchange/ExchangeRegister'
 import ExchangeInsights from '../components/tyreExchange/ExchangeInsights'
 import NewExchangePanel from '../components/tyreExchange/NewExchangePanel'
@@ -32,8 +32,9 @@ import { listServiceEvents, createServiceEvent } from '../lib/api/tyreServiceEve
 import {
   deriveExchanges, filterExchanges, exchangeOptions, exchangeKpis as exchangeViewKpis, assetChoices,
   defaultRange, registerExportRows, REGISTER_EXPORT_COLUMNS,
-  EMPTY_FILTERS as EMPTY_EXCHANGE_FILTERS, hasFilters as hasExchangeFilters,
+  EMPTY_FILTERS as EMPTY_EXCHANGE_FILTERS, hasFilters as hasExchangeFilters, isExchangeEvent,
 } from '../lib/tyreExchangeView'
+import ExchangeDetailModal from '../components/tyreExchange/ExchangeDetailModal'
 import './TyreExchange.css'
 import * as exchangeApi from '../lib/api/tyreExchange'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
@@ -494,6 +495,8 @@ export default function TyreExchange() {
   const [xFilters, setXFilters] = useState(() => ({ ...EMPTY_EXCHANGE_FILTERS, ...defaultRange() }))
   const setXFilter = (k, v) => setXFilters((f) => ({ ...f, [k]: v }))
   const [selectedId, setSelectedId] = useState(null)
+  const [detailOpen, setDetailOpen] = useState(false)
+  const openExchange = useCallback((id) => { setSelectedId(id); setDetailOpen(true) }, [])
   const exchanges = useMemo(() => deriveExchanges(records), [records])
   const xOptions = useMemo(() => exchangeOptions(exchanges), [exchanges])
   const xFiltered = useMemo(() => filterExchanges(exchanges, xFilters), [exchanges, xFilters])
@@ -506,8 +509,8 @@ export default function TyreExchange() {
 
   // Recently recorded exchange events (tyre_service_events), loaded on their own.
   const recentState = useCard(
-    () => listServiceEvents({ country: activeCountry, limit: 50 })
-      .then((rows) => (rows || []).filter((r) => ['replacement', 'rotation', 'other'].includes(r.event_type))),
+    () => listServiceEvents({ country: activeCountry, limit: 200 })
+      .then((rows) => (rows || []).filter(isExchangeEvent)),
     [activeCountry, reloadKey],
   )
   const technicians = useMemo(
@@ -683,7 +686,7 @@ export default function TyreExchange() {
       id: `to_${to}`, header: to, meta: { align: 'center' },
       cell: ({ row }) => {
         const r = row.original
-        if (r.isTotal) return <span className="text-purple-400 font-semibold">{flow.totalIn[to] || 'N/A'}</span>
+        if (r.isTotal) return <span className="text-purple-400 font-semibold">{flow.totalIn[to] || 0}</span>
         if (r.site === to) return <span className="text-[var(--text-dim)]">N/A</span>
         const v = flow.matrix[r.site]?.[to] || 0
         const band = flowIntensity(v, flow.max)
@@ -777,7 +780,7 @@ export default function TyreExchange() {
             clearFilters={() => setXFilters((f) => ({ ...EMPTY_EXCHANGE_FILTERS, from: f.from, to: f.to }))}
             filtersOn={hasExchangeFilters(xFilters)}
             state={listState}
-            onSelect={setSelectedId}
+            onSelect={openExchange}
             onExport={exportExchanges}
             onOpenCustody={(serial) => { setCustodyInput(serial); setCustodySerial(serial); setCustodySearched(true); setActiveTab('custody') }}
           />
@@ -802,13 +805,22 @@ export default function TyreExchange() {
         </aside>
       </div>
 
+      <ExchangeDetailModal
+        open={detailOpen && !!selectedExchange}
+        exchange={selectedExchange}
+        onClose={() => setDetailOpen(false)}
+        onOpenCustody={(serial) => { setDetailOpen(false); setCustodyInput(serial); setCustodySerial(serial); setCustodySearched(true); setActiveTab('custody') }}
+      />
+
       <Card
         title="Transfer analysis"
-        sub={`${fmtNum(kpis.transfers)} transfers across ${fmtNum(kpis.serials)} serials. ${fmtNum(kpis.interVehicle)} serials on 2 or more vehicles, ${fmtNum(kpis.interSite)} on 2 or more sites, ${fmtNum(kpis.retreadCount)} retread send-outs, ${fmtNum(kpis.pendingReturns)} pending returns. Average km at transfer ${kpis.avgKm == null ? 'N/A (no removal km recorded)' : fmtNum(kpis.avgKm)}.`}
+        sub={loading || loadError ? 'Transfers, retreads, chain of custody and pending returns from the tyre register.' : `${fmtNum(kpis.transfers)} transfers across ${fmtNum(kpis.serials)} serials. ${fmtNum(kpis.interVehicle)} serials on 2 or more vehicles, ${fmtNum(kpis.interSite)} on 2 or more sites, ${fmtNum(kpis.retreadCount)} retread send-outs, ${fmtNum(kpis.pendingReturns)} pending returns. Average km at transfer ${kpis.avgKm == null ? 'N/A (no removal km recorded)' : fmtNum(kpis.avgKm)}.`}
         action={exportButtons(exportTransfersExcel, exportTransfersPdf, filteredTransfers.length === 0)}
       >
       <Tabs tabs={kitTabs} value={activeTab} onChange={setActiveTab} label="Transfer analysis" variant="line" />
       <div className="tx-legacy">
+      {/* A failed or pending read must not render as "no transfers". */}
+      <CardState state={listState} lines={5}>
       {/* Tab Content */}
       <AnimatePresence mode="wait">
         <motion.div
@@ -1358,6 +1370,7 @@ export default function TyreExchange() {
           )}
         </motion.div>
       </AnimatePresence>
+      </CardState>
       </div>
       </Card>
     </div>

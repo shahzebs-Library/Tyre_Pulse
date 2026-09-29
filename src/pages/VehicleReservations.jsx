@@ -34,8 +34,9 @@ import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import {
   listVehicleReservations, createVehicleReservation,
-  updateVehicleReservation, deleteVehicleReservation,
+  updateVehicleReservation, deleteVehicleReservation, listReservationDrivers,
 } from '../lib/api/vehicleReservations'
+import ReservationDrawer from '../components/reservations/ReservationDrawer'
 import { listAssets } from '../lib/api/assets'
 import { durationHours } from '../lib/vehicleReservations'
 import {
@@ -46,6 +47,7 @@ import {
 import {
   VIEW_STATUSES, VIEW_STATUS_META, deriveStatus, viewKpis, summarySegments, buildSlots, shiftAnchor,
   layoutCalendar, clashesFor, availability, upcomingList, mapImportRow, IMPORT_TEMPLATE_HEADERS,
+  isRejected,
 } from '../lib/vehicleReservationsView'
 import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
@@ -57,8 +59,10 @@ const EMPTY_FORM = {
   reference: '', asset_no: '', requester_name: '', department: '', purpose: '',
   start_at: '', end_at: '', pickup_location: '', return_location: '',
   expected_km: '', status: 'requested', approved_by: '', notes: '',
+  project: '', cost_centre: '', driver_id: '', driver_name: '',
 }
-const NOT_RECORDED = 'The reservation register does not record a reservation type, project, driver or attachments, so those are not captured here.'
+const NOT_RECORDED = 'Vehicle type, plate and site come from the fleet register. Attachments are not stored on a reservation.'
+const ELEVATED_ROLES = ['admin', 'manager', 'director']
 const CAL_PAGE = 8
 
 function fmtDateTime(v) {
@@ -106,6 +110,7 @@ export default function VehicleReservations() {
   const { activeCountry } = useSettings()
   const auth = useAuth()
   const userId = auth?.user?.id || null
+  const elevated = !!auth?.isSuperAdmin || ELEVATED_ROLES.includes(String(auth?.profile?.role || '').toLowerCase())
   const [rows, setRows] = useState(null)
   const [error, setError] = useState('')
   const [actionError, setActionError] = useState('')
@@ -180,6 +185,13 @@ export default function VehicleReservations() {
     return m
   }, [fleet])
   const fleetOf = useCallback((asset) => fleetByAsset.get(assetKey(asset)) || null, [fleetByAsset])
+  const driversCard = useCard(() => listReservationDrivers({ country: activeCountry }), [activeCountry])
+  const drivers = useMemo(() => driversCard.data || [], [driversCard.data])
+  const driverByName = useMemo(() => {
+    const m = new Map()
+    for (const d of drivers) { const k = String(d.driver_name || '').trim().toUpperCase(); if (k && !m.has(k)) m.set(k, d) }
+    return m
+  }, [drivers])
 
   const failed = !!error || notProvisioned
   const na = rows === null
@@ -252,6 +264,8 @@ export default function VehicleReservations() {
       pickup_location: r.pickup_location || '', return_location: r.return_location || '',
       expected_km: r.expected_km ?? '', status: r.status || 'requested',
       approved_by: r.approved_by || '', notes: r.notes || '',
+      project: r.project || '', cost_centre: r.cost_centre || '',
+      driver_id: r.driver_id || '', driver_name: r.driver_name || '',
     })
     document.getElementById('vr-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [])
@@ -348,7 +362,7 @@ export default function VehicleReservations() {
     )
   }, [fleetOf, conflictIds])
   const actionsCell = useCallback((r) => (
-    <span className="vr-actions">
+    <span className="vr-actions" onClick={(e) => e.stopPropagation()}>
       <button type="button" className="cc-icon-btn" onClick={() => setDetail(r)} aria-label={`View reservation for ${r.asset_no || 'asset'}`}><Eye size={14} /></button>
       <button type="button" className="cc-icon-btn" onClick={() => openEdit(r)} aria-label={`Edit reservation for ${r.asset_no || 'asset'}`}><Pencil size={14} /></button>
       <button type="button" className="cc-icon-btn vr-danger" onClick={() => setConfirmDelete(r)} aria-label={`Delete reservation for ${r.asset_no || 'asset'}`}><Trash2 size={14} /></button>
@@ -360,14 +374,17 @@ export default function VehicleReservations() {
     { key: 'requester_name', header: 'Requester', cell: (r) => (
       <span>{r.requester_name || <span className="cc-na">N/A</span>}{r.department && <span className="cc-sub">{r.department}</span>}</span>
     ) },
+    { key: 'driver_name', header: 'Driver', cell: (r) => (
+      <span>{r.driver_name || <span className="cc-na">Not recorded</span>}{r.project && <span className="cc-sub">{r.project}</span>}</span>
+    ) },
     { key: 'status', header: 'Status', sortValue: (r) => deriveStatus(r, { now: asOf }), cell: (r) => (
-      <span><StatusPill row={r} now={asOf} /><span className="cc-sub">{RESERVATION_STATUS_LABEL[String(r.status || '').toLowerCase()] || r.status || 'N/A'}</span></span>
+      <span><StatusPill row={r} now={asOf} /><span className="cc-sub">{isRejected(r) ? 'Rejected' : (RESERVATION_STATUS_LABEL[String(r.status || '').toLowerCase()] || r.status || 'N/A')}</span></span>
     ) },
     { key: 'start_at', header: 'Pickup', sortValue: (r) => (r.start_at ? Date.parse(r.start_at) : -Infinity), cell: (r) => fmtShort(r.start_at) },
     { key: 'end_at', header: 'Return', sortValue: (r) => (r.end_at ? Date.parse(r.end_at) : -Infinity), cell: (r) => (
       <span>{fmtShort(r.end_at)}{isOverdueReturn(r, { now: asOf }) && <span className="cc-sub vr-bad">Return overdue</span>}</span>
     ) },
-    { key: 'duration', header: 'Duration', align: 'right', sortValue: (r) => durationHours(r) ?? -1, cell: (r) => fmtHours(durationHours(r)) },
+    { key: 'duration', header: 'Duration', numeric: true, sortValue: (r) => durationHours(r) ?? -1, cell: (r) => fmtHours(durationHours(r)) },
     { key: 'route', header: 'Pickup and return', sortValue: (r) => `${r.pickup_location || ''} ${r.return_location || ''}`, cell: (r) => (
       (r.pickup_location || r.return_location)
         ? <span className="cc-site"><MapPin size={12} aria-hidden="true" />{r.pickup_location || 'N/A'} to {r.return_location || 'N/A'}</span>
@@ -386,6 +403,22 @@ export default function VehicleReservations() {
     { key: 'status', header: 'Status', cell: (r) => <StatusPill row={r} now={asOf} /> },
     { key: 'actions', header: 'Actions', cell: actionsCell },
   ], [vehicleCell, actionsCell, asOf])
+
+  const pad2 = (n) => String(n).padStart(2, '0')
+  const localInput = (ms) => { const d = new Date(ms); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}` }
+  const bookSlot = (asset, slot) => {
+    resetForm('single')
+    const start = slot.start
+    const end = calMode === 'day' ? slot.end : start + 9 * 3600000 + 8 * 3600000
+    const startAt = calMode === 'day' ? start : start + 8 * 3600000
+    setForm({ ...EMPTY_FORM, asset_no: asset, start_at: localInput(startAt), end_at: localInput(end) })
+    document.getElementById('vr-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+  const pickMonth = (ym) => {
+    const [y, m] = ym.split('-').map(Number)
+    const last = new Date(y, m, 0).getDate()
+    setFromDate(`${ym}-01`); setToDate(`${ym}-${pad2(last)}`); setMoreOpen(true); setView('list')
+  }
 
   // ── Render helpers ──────────────────────────────────────────────────────────
   const listState = { loading: na && !failed, data: rows, error: failed ? 'Vehicle reservations are unavailable.' : null, retry: load }
@@ -414,12 +447,15 @@ export default function VehicleReservations() {
             const f = fleetOf(v.asset)
             return (
               <div key={v.asset} className="vr-cal-row" style={{ gridTemplateRows: `repeat(${v.laneCount}, 46px)` }}>
-                <div className="vr-cal-vcol vr-cal-vehicle" style={{ gridRow: `1 / span ${v.laneCount}` }}>
+                <button type="button" className="vr-cal-vcol vr-cal-vehicle" style={{ gridRow: `1 / span ${v.laneCount}` }}
+                  onClick={() => { setAssetFilter(v.asset); setMoreOpen(true); setView('list') }}
+                  title={`Show every booking for ${v.asset}`} aria-label={`Show every booking for ${v.asset}`}>
                   <VehicleThumb row={f || { asset_no: v.asset }} size="sm" />
                   <span><b>{v.asset}</b><small>{f?.vehicle_type || 'Type not recorded'}</small></span>
-                </div>
+                </button>
                 {grid.slots.map((s, i) => (
-                  <div key={s.start} className={`vr-cal-cell ${s.today ? 'today' : ''}`} style={{ gridColumn: i + 2, gridRow: `1 / span ${v.laneCount}` }} aria-hidden="true" />
+                  <button key={s.start} type="button" tabIndex={-1} className={`vr-cal-cell ${s.today ? 'today' : ''}`} style={{ gridColumn: i + 2, gridRow: `1 / span ${v.laneCount}` }}
+                    onClick={() => bookSlot(v.asset, s)} title={`Book ${v.asset} for ${s.label}${s.sub ? ` ${s.sub}` : ''}`} aria-label={`Book ${v.asset} for ${s.label}`} />
                 ))}
                 {v.bars.map((b) => {
                   const r = b.row
@@ -446,9 +482,9 @@ export default function VehicleReservations() {
       <div className="vr-cal-foot">
         <div className="vr-cal-legend">
           {['active', 'upcoming', 'not_started', 'overdue', 'completed'].map((k) => (
-            <span key={k}><i style={{ background: VIEW_STATUS_META[k].color }} aria-hidden="true" />{VIEW_STATUS_META[k].label}</span>
+            <button key={k} type="button" aria-pressed={viewStatus === k} onClick={() => setViewStatus((v) => (v === k ? '' : k))}><i style={{ background: VIEW_STATUS_META[k].color }} aria-hidden="true" />{VIEW_STATUS_META[k].label}</button>
           ))}
-          <span><i className="vr-clash-dot" aria-hidden="true" />Double-booked</span>
+          <button type="button" aria-pressed={conflictsOnly} onClick={() => setConflictsOnly((c) => !c)}><i className="vr-clash-dot" aria-hidden="true" />Double-booked</button>
         </div>
         {(calendar.unplaced > 0) && <span className="cc-na">{calendar.unplaced} booking{calendar.unplaced === 1 ? '' : 's'} with no start time cannot be placed on the calendar (see List view).</span>}
       </div>
@@ -476,6 +512,7 @@ export default function VehicleReservations() {
               columns={registerColumns}
               rows={view === 'mine' ? mine : filtered}
               getRowId={(r) => String(r.id)}
+              onRowClick={setDetail}
               loading={na}
               viewKey="vehicle-reservations"
               empty={view === 'mine'
@@ -619,9 +656,9 @@ export default function VehicleReservations() {
                   <li key={i}>
                     <AlertTriangle size={13} aria-hidden="true" />
                     <b>{c.a.asset_no}</b>
-                    <span>{c.a.requester_name || c.a.reference || 'Reservation'} ({fmtShort(c.a.start_at)} to {fmtShort(c.a.end_at)})</span>
+                    <button type="button" className="vr-link-btn" onClick={() => setDetail(c.a)}>{c.a.requester_name || c.a.reference || 'Reservation'} ({fmtShort(c.a.start_at)} to {fmtShort(c.a.end_at)})</button>
                     <em>overlaps</em>
-                    <span>{c.b.requester_name || c.b.reference || 'Reservation'} ({fmtShort(c.b.start_at)} to {fmtShort(c.b.end_at)})</span>
+                    <button type="button" className="vr-link-btn" onClick={() => setDetail(c.b)}>{c.b.requester_name || c.b.reference || 'Reservation'} ({fmtShort(c.b.start_at)} to {fmtShort(c.b.end_at)})</button>
                   </li>
                 ))}
               </ul>
@@ -632,7 +669,7 @@ export default function VehicleReservations() {
           <div className="vr-row2">
             <Card title="Upcoming Reservations" sub="Bookings out now or starting next, soonest first." action={<ViewAll label="View all" onClick={() => { setView('list'); document.querySelector('.vr-viewbar')?.scrollIntoView({ behavior: 'smooth' }) }} />}>
               <CardState state={listState} lines={5} empty={!na && upcoming.length === 0 ? 'No open or upcoming bookings.' : null}>
-                <KitTable compact columns={upcomingColumns} rows={upcoming} getRowId={(r) => String(r.id)} empty="No open or upcoming bookings." />
+                <KitTable compact columns={upcomingColumns} rows={upcoming} getRowId={(r) => String(r.id)} onRowClick={setDetail} empty="No open or upcoming bookings." />
               </CardState>
             </Card>
             <Card title="Reservation Summary" sub="Status read from the workflow and the clock.">
@@ -646,11 +683,11 @@ export default function VehicleReservations() {
             <Card title="Booking health" sub="Approvals, clashes and time booked.">
               <CardState state={listState} lines={4}>
                 <div className="vr-health">
-                  <div><b className={health.pendingApproval ? 'vr-warn' : ''}>{kpiVal(health.pendingApproval)}</b><span>Pending approval</span></div>
-                  <div><b className={health.conflictCount ? 'vr-bad' : ''}>{kpiVal(health.conflictCount)}</b><span>Double-booked pairs</span></div>
+                  <button type="button" onClick={() => { setStatusFilter('requested'); setMoreOpen(true); setView('list') }} title="Show reservations waiting for approval"><b className={health.pendingApproval ? 'vr-warn' : ''}>{kpiVal(health.pendingApproval)}</b><span>Pending approval</span></button>
+                  <button type="button" onClick={() => { setConflictsOnly(true); setMoreOpen(true); setView('list') }} title="Show double-booked reservations"><b className={health.conflictCount ? 'vr-bad' : ''}>{kpiVal(health.conflictCount)}</b><span>Double-booked pairs</span></button>
                   <div><b>{na ? 'N/A' : fmtHours(health.bookedHours)}</b><span>Booked time{health.avgDurationHours != null ? `, average ${fmtHours(health.avgDurationHours)}` : ''}</span></div>
                   <div><b>{na || health.cancellationRate == null ? 'N/A' : `${health.cancellationRate}%`}</b><span>Cancellation rate</span></div>
-                  <div><b>{kpiVal(health.distinctAssets)}</b><span>Vehicles booked</span></div>
+                  <button type="button" onClick={() => setView('list')} title="Open the list of bookings"><b>{kpiVal(health.distinctAssets)}</b><span>Vehicles booked</span></button>
                   <div><b>{na || health.expectedKm == null ? 'N/A' : `${fmtInt(health.expectedKm)} km`}</b><span>Expected distance</span></div>
                 </div>
               </CardState>
@@ -659,13 +696,13 @@ export default function VehicleReservations() {
               <CardState state={listState} lines={4} empty={!na && trendTotal === 0 ? 'No pickups dated in the last 12 months.' : null}>
                 <div className="vr-months" role="img" aria-label={trend.map((m) => `${m.month}: ${m.bookings} booked, ${m.cancelled} cancelled`).join('; ')}>
                   {trend.map((m) => (
-                    <div key={m.month} className="vr-month" title={`${m.month}: ${m.bookings} booked, ${m.cancelled} cancelled`}>
+                    <button type="button" key={m.month} className="vr-month" onClick={() => pickMonth(m.month)} aria-label={`Show pickups in ${m.month}: ${m.bookings} booked, ${m.cancelled} cancelled`} title={`${m.month}: ${m.bookings} booked, ${m.cancelled} cancelled. Click to filter.`}>
                       <div className="vr-month-bar">
                         <i className="c" style={{ height: `${(m.cancelled / trendMax) * 100}%` }} />
                         <i className="b" style={{ height: `${(m.bookings / trendMax) * 100}%` }} />
                       </div>
                       <span>{m.month.slice(5)}</span>
-                    </div>
+                    </button>
                   ))}
                 </div>
                 <div className="vr-cal-legend"><span><i style={{ background: 'var(--cc-green)' }} />Booked</span><span><i style={{ background: 'var(--cc-ink-3)' }} />Cancelled</span></div>
@@ -676,10 +713,12 @@ export default function VehicleReservations() {
                 <ul className="vr-demand">
                   {demand.map((d) => (
                     <li key={d.department}>
-                      <span className="vr-demand-name">{d.department}</span>
-                      <span className="cc-bar-track"><i style={{ width: `${(d.bookings / demandMax) * 100}%`, background: 'var(--cc-green)' }} /></span>
-                      <b>{d.bookings}</b>
-                      <small>{fmtHours(d.hours)}</small>
+                      <button type="button" aria-pressed={deptFilter === d.department} onClick={() => { setDeptFilter((x) => (x === d.department ? '' : d.department)); setMoreOpen(true) }} title={`Filter to ${d.department}`}>
+                        <span className="vr-demand-name">{d.department}</span>
+                        <span className="cc-bar-track"><i style={{ width: `${(d.bookings / demandMax) * 100}%`, background: 'var(--cc-green)' }} /></span>
+                        <b>{d.bookings}</b>
+                        <small>{fmtHours(d.hours)}</small>
+                      </button>
                     </li>
                   ))}
                 </ul>
@@ -700,6 +739,9 @@ export default function VehicleReservations() {
               )}
               <datalist id="vr-fleet-assets">
                 {fleet.slice(0, 3000).map((a) => <option key={a.id || a.asset_no} value={a.asset_no}>{[a.vehicle_type, a.site].filter(Boolean).join(', ')}</option>)}
+              </datalist>
+              <datalist id="vr-drivers">
+                {drivers.slice(0, 3000).map((d) => <option key={d.id} value={d.driver_name}>{[d.driver_id, d.site].filter(Boolean).join(', ')}</option>)}
               </datalist>
               <datalist id="vr-sites">
                 {[...new Set([...siteOptions, ...locOptions])].map((s) => <option key={s} value={s} />)}
@@ -751,13 +793,23 @@ export default function VehicleReservations() {
                 <label className="vr-lbl"><span>Department</span>
                   <input className="vr-input" placeholder="e.g. Operations" value={form.department} maxLength={200} onChange={(e) => set('department', e.target.value)} /></label>
               </div>
+              <div className="vr-2col">
+                <label className="vr-lbl"><span>Driver</span>
+                  <input className="vr-input" list="vr-drivers" placeholder="Pick from the driver register" value={form.driver_name} maxLength={200}
+                    onChange={(e) => { const name = e.target.value; const d = driverByName.get(name.trim().toUpperCase()); setForm((f) => ({ ...f, driver_name: name, driver_id: d?.id || '' })) }} /></label>
+                <label className="vr-lbl"><span>Project</span>
+                  <input className="vr-input" placeholder="Project or job" value={form.project} maxLength={200} onChange={(e) => set('project', e.target.value)} /></label>
+              </div>
+              {form.driver_name.trim() && !form.driver_id && !driversCard.loading && (
+                <p className="vr-hint">{driversCard.error ? 'The driver register could not be read, so the name is saved as typed.' : 'This name is not in the driver register; it is saved as typed.'}</p>
+              )}
               <label className="vr-lbl"><span>Purpose / remark</span>
                 <textarea className="vr-input" rows={2} placeholder="Enter purpose of reservation" value={form.purpose} maxLength={500} onChange={(e) => set('purpose', e.target.value)} /></label>
               <label className="vr-lbl"><span>Reference no.</span>
                 <input className="vr-input" placeholder="Optional" value={form.reference} maxLength={120} onChange={(e) => set('reference', e.target.value)} /></label>
 
               <button type="button" className="cc-link cc-link-btn vr-more-toggle" aria-expanded={showMore} onClick={() => setShowMore((s) => !s)}>
-                {showMore ? 'Fewer details' : 'More details: status, return location, distance, approval, notes'}
+                {showMore ? 'Fewer details' : 'More details: status, cost centre, return location, distance, notes'}
               </button>
               {showMore && (
                 <>
@@ -769,6 +821,8 @@ export default function VehicleReservations() {
                     <label className="vr-lbl"><span>Expected km</span>
                       <input className="vr-input" type="number" min="0" step="1" inputMode="numeric" value={form.expected_km} onChange={(e) => set('expected_km', e.target.value)} /></label>
                   </div>
+                  <label className="vr-lbl"><span>Cost centre</span>
+                    <input className="vr-input" value={form.cost_centre} maxLength={120} onChange={(e) => set('cost_centre', e.target.value)} /></label>
                   <label className="vr-lbl"><span>Return location</span>
                     <input className="vr-input" list="vr-sites" value={form.return_location} maxLength={200} onChange={(e) => set('return_location', e.target.value)} /></label>
                   <label className="vr-lbl"><span>Approved by</span>
@@ -815,30 +869,19 @@ export default function VehicleReservations() {
         </aside>
       </div>
 
-      <Modal open={!!detail} onClose={() => setDetail(null)} title={detail ? `Reservation ${detail.reference || detail.asset_no || ''}` : ''} size="md"
-        footer={detail && (
-          <>
-            <button type="button" className="btn-secondary text-sm min-h-[44px]" onClick={() => { setConfirmDelete(detail); setDetail(null) }}>Delete</button>
-            <button type="button" className="btn-primary text-sm min-h-[44px]" onClick={() => openEdit(detail)}>Edit</button>
-          </>
-        )}>
-        {detail && (
-          <dl className="vr-dl">
-            <dt>Vehicle</dt><dd>{detail.asset_no || 'N/A'}{fleetOf(detail.asset_no)?.vehicle_type ? `, ${fleetOf(detail.asset_no).vehicle_type}` : ''}</dd>
-            <dt>Status</dt><dd>{VIEW_STATUS_META[deriveStatus(detail, { now: asOf })].label} ({RESERVATION_STATUS_LABEL[String(detail.status || '').toLowerCase()] || detail.status || 'N/A'})</dd>
-            <dt>Pickup</dt><dd>{fmtDateTime(detail.start_at)}</dd>
-            <dt>Return</dt><dd>{fmtDateTime(detail.end_at)}</dd>
-            <dt>Duration</dt><dd>{fmtHours(durationHours(detail))}</dd>
-            <dt>Requester</dt><dd>{detail.requester_name || 'N/A'}{detail.department ? `, ${detail.department}` : ''}</dd>
-            <dt>Route</dt><dd>{detail.pickup_location || 'N/A'} to {detail.return_location || 'N/A'}</dd>
-            <dt>Purpose</dt><dd>{detail.purpose || 'N/A'}</dd>
-            <dt>Expected km</dt><dd>{detail.expected_km ?? 'N/A'}</dd>
-            <dt>Approved by</dt><dd>{detail.approved_by || 'N/A'}</dd>
-            <dt>Notes</dt><dd>{detail.notes || 'N/A'}</dd>
-            {conflictIds.has(detail.id) && <><dt>Clash</dt><dd className="vr-bad">Double-booked with another reservation for this vehicle</dd></>}
-          </dl>
-        )}
-      </Modal>
+      {detail && (
+        <ReservationDrawer
+          row={detail}
+          fleet={fleetOf(detail.asset_no)}
+          now={asOf}
+          elevated={elevated}
+          conflicted={conflictIds.has(detail.id)}
+          onClose={() => setDetail(null)}
+          onEdit={openEdit}
+          onDelete={(r) => { setConfirmDelete(r); setDetail(null) }}
+          onChanged={async (updated) => { if (updated) setDetail(updated); setNotice('Reservation updated.'); await load() }}
+        />
+      )}
 
       <Modal
         open={!!confirmDelete}

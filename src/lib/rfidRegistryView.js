@@ -345,3 +345,79 @@ export const TAG_EXPORT_COLUMNS = [
 export function tagExportRows(rows = []) {
   return rows.map((r) => Object.fromEntries(TAG_EXPORT_COLUMNS.map(([k]) => [k, r[k] == null ? '' : r[k]])))
 }
+
+// ── Tag history (rfid_tag_events, written by a trigger on every change) ──────
+
+export const TAG_EVENT_LABEL = {
+  registered: 'Registered', assigned: 'Assigned', reassigned: 'Reassigned', unassigned: 'Unassigned',
+  retired: 'Retired', reactivated: 'Reactivated', moved: 'Moved site', edited: 'Details edited', deleted: 'Deleted',
+}
+export const TAG_EVENT_TONE = {
+  registered: 'info', assigned: 'good', reassigned: 'good', unassigned: 'warn',
+  retired: 'muted', reactivated: 'good', moved: 'info', edited: 'muted', deleted: 'bad',
+}
+
+const blank = (v) => (v == null || String(v).trim() === '' ? null : String(v).trim())
+
+/** The thing a tag pointed at: an asset number, else a tyre serial, else null. */
+export function eventTarget(assetNo, tyreSerial) {
+  const a = blank(assetNo)
+  if (a) return { kind: 'asset', value: a }
+  const s = blank(tyreSerial)
+  return s ? { kind: 'tyre', value: s } : null
+}
+
+/** Shape trigger rows for display, newest first. Unknown actor stays null (N/A). */
+export function tagEventRows(events = []) {
+  return (events || []).map((e) => {
+    const from = eventTarget(e.from_asset_no, e.from_tyre_serial)
+    const to = eventTarget(e.to_asset_no, e.to_tyre_serial)
+    const ms = timeOf(e.created_at)
+    return {
+      id: e.id,
+      tagRowId: e.tag_row_id || null,
+      tagId: e.tag_id || null,
+      action: e.action,
+      actionLabel: TAG_EVENT_LABEL[e.action] || (e.action ? String(e.action) : 'N/A'),
+      tone: TAG_EVENT_TONE[e.action] || 'muted',
+      from: from ? from.value : null,
+      to: to ? to.value : null,
+      fromSite: blank(e.from_site),
+      toSite: blank(e.to_site),
+      fromStatus: blank(e.from_status),
+      toStatus: blank(e.to_status),
+      by: blank(e.actor_name),
+      at: e.created_at || null,
+      ms,
+    }
+  }).sort((a, b) => (b.ms ?? -1) - (a.ms ?? -1))
+}
+
+/** Filter history rows by action and a free-text search over tag, target and user. */
+export function filterTagEvents(rows = [], { action = 'all', search = '' } = {}) {
+  const q = String(search || '').trim().toLowerCase()
+  return rows.filter((r) => {
+    if (action !== 'all' && r.action !== action) return false
+    if (!q) return true
+    return [r.tagId, r.from, r.to, r.fromSite, r.toSite, r.by, r.actionLabel]
+      .some((v) => v && String(v).toLowerCase().includes(q))
+  })
+}
+
+export const TAG_EVENT_EXPORT_COLUMNS = [
+  ['at', 'Date and time'], ['tagId', 'Tag ID'], ['action', 'Action'], ['from', 'From'], ['to', 'To'],
+  ['site', 'Site'], ['status', 'Status'], ['by', 'By'],
+]
+
+export function tagEventExportRows(rows = []) {
+  return rows.map((r) => ({
+    at: r.at || 'N/A',
+    tagId: r.tagId || 'N/A',
+    action: r.actionLabel,
+    from: r.from || 'N/A',
+    to: r.to || 'N/A',
+    site: r.toSite || r.fromSite || 'N/A',
+    status: r.toStatus || r.fromStatus || 'N/A',
+    by: r.by || 'N/A',
+  }))
+}

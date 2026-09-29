@@ -85,3 +85,22 @@ describe('engineHoursView', () => {
     expect(normalizeSettings({ staleDays: -5, basisHoursPerDay: 'x' })).toMatchObject({ staleDays: 1, basisHoursPerDay: 24 })
   })
 })
+
+describe('assetHourSeries', () => {
+  it('marks drops with a reason and measures hours run from clean readings', async () => {
+    const { assetHourSeries } = await import('../lib/engineHoursView')
+    const rows = [
+      { id: 'a', asset_no: 'gn1', engine_hours: 100, reading_date: '2026-01-01' },
+      { id: 'b', asset_no: 'GN1', engine_hours: 140, reading_date: '2026-01-05' },
+      { id: 'c', asset_no: 'GN1', engine_hours: 90, reading_date: '2026-01-06' },
+      { id: 'd', asset_no: 'X9', engine_hours: 5, reading_date: '2026-01-06' },
+    ]
+    const s = assetHourSeries(rows, 'GN1')
+    expect(s.points.map((p) => p.value)).toEqual([100, 140, 90])
+    expect(s.points[2].flagged).toBe(true)
+    expect(s.points[2].reason).toMatch(/lower than the previous reading/)
+    expect(s.hoursRun).toBe(40)
+    expect(s.flaggedCount).toBe(1)
+    expect(assetHourSeries(rows, 'X9').hoursRun).toBeNull()
+  })
+})

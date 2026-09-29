@@ -233,3 +233,27 @@ describe('tyrePassport - normalizers and buildJourney', () => {
     expect(j[0].cpk).toBeCloseTo(0.05, 3)
   })
 })
+
+describe('buildPassport purchase and scrap marks', () => {
+  const rec = (o) => ({ serial_no: 'SN1', ...o })
+  it('counts a copied purchase price once across moves', () => {
+    const p = buildPassport([
+      rec({ id: 1, asset_no: 'TM1', fitment_date: '2025-01-01', removal_date: '2025-03-01', cost_per_tyre: 900, km_at_fitment: 0, km_at_removal: 1000 }),
+      rec({ id: 2, asset_no: 'TM2', fitment_date: '2025-03-02', cost_per_tyre: 900 }),
+    ])
+    expect(p.costBreakdown.purchase).toBe(900)
+    expect(p.journey[1].cost).toBeNull()
+  })
+  it('keeps a genuinely different later price', () => {
+    const p = buildPassport([
+      rec({ id: 1, fitment_date: '2025-01-01', cost_per_tyre: 900 }),
+      rec({ id: 2, fitment_date: '2025-06-01', cost_per_tyre: 300 }),
+    ])
+    expect(p.costBreakdown.purchase).toBe(1200)
+  })
+  it('treats a scrap mark as out of service', () => {
+    const p = buildPassport([rec({ id: 1, asset_no: 'TM1', fitment_date: '2025-01-01', status: 'Active' })], { statusMarks: [{ mark_type: 'scrap' }] })
+    expect(p.scrapped).toBe(true)
+    expect(p.currentAssetNo).toBeNull()
+  })
+})

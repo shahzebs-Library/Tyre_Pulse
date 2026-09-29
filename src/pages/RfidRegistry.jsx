@@ -28,7 +28,7 @@ import {
   Plus, Upload, ScanLine, Tag, CheckCircle2, CircleDashed, Copy, AlertTriangle, Radio,
   Download, List, LayoutGrid, Search, Pencil, Trash2, History, Repeat, X, RefreshCw,
   Truck, CircleDot, Construction, Container, Package, Smartphone, Keyboard, Info, Signal,
-  CheckCircle, FileSpreadsheet, FileText,
+  CheckCircle, FileSpreadsheet, FileText, Link2, Link2Off, Archive, RotateCcw,
 } from 'lucide-react'
 import Modal from '../components/ui/Modal'
 import RfidScanner from '../components/RfidScanner'
@@ -38,7 +38,10 @@ import {
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { applyCountry } from '../lib/api/_client'
-import { COLS as TAG_COLS, createTag, updateTag, deleteTag, findByTag } from '../lib/api/rfid'
+import {
+  COLS as TAG_COLS, createTag, updateTag, deleteTag, findByTag,
+  listTagEvents, assignTag, unassignTag, retireTag, reactivateTag,
+} from '../lib/api/rfid'
 import { useSettings } from '../contexts/SettingsContext'
 import { toUserMessage } from '../lib/safeError'
 import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
@@ -49,8 +52,9 @@ import {
 } from '../lib/rfidRegistryAnalytics'
 import {
   buildTagRows, summarizeTagRows, stateSegments, countByItemType, scanActivity, filterTagRows,
-  assignmentHistory, registrationsByDay, planTagImport, tagExportRows, normalizeTagId,
+  registrationsByDay, planTagImport, tagExportRows, normalizeTagId,
   TAG_EXPORT_COLUMNS, TAG_STATES, TAG_STATE_LABEL, ITEM_TYPES, ITEM_TYPE_LABEL, RFID_STATUSES,
+  tagEventRows, filterTagEvents, tagEventExportRows, TAG_EVENT_EXPORT_COLUMNS, TAG_EVENT_LABEL,
 } from '../lib/rfidRegistryView'
 import './rfidRegistry.css'
 
@@ -68,6 +72,7 @@ const TABS = [
   { key: 'duplicate', label: 'Duplicate tags' },
   { key: 'lost', label: 'Not found / lost' },
   { key: 'scans', label: 'Scan history' },
+  { key: 'changes', label: 'Tag history' },
   { key: 'imports', label: 'Import history' },
   { key: 'types', label: 'Tag types' },
   { key: 'settings', label: 'Settings' },
@@ -238,11 +243,24 @@ export default function RfidRegistry() {
     }
   }, [country])
 
+  const [tagEvents, setTagEvents] = useState({ loading: true, data: null, error: null, truncated: false })
+  const loadTagEvents = useCallback(async () => {
+    setTagEvents((s) => ({ ...s, loading: true, error: null }))
+    try {
+      const { rows, truncated } = await listTagEvents({ country })
+      setTagEvents({ loading: false, data: rows, error: null, truncated })
+    } catch (e) {
+      setTagEvents({ loading: false, data: null, error: toUserMessage(e, 'Could not load the tag history.'), truncated: false })
+    }
+  }, [country])
+  // The history is written by a database trigger, so re-read it after every tag reload.
+  useEffect(() => { if (tagsState.data) loadTagEvents() }, [tagsState.data, loadTagEvents])
+
   useEffect(() => { loadTags() }, [loadTags])
   useEffect(() => { loadEvents() }, [loadEvents])
   useEffect(() => { loadAlerts() }, [loadAlerts])
   useEffect(() => { loadReaders() }, [loadReaders])
-  const reloadAll = () => { loadTags(); loadEvents(); loadAlerts(); loadReaders() }
+  const reloadAll = () => { loadTags(); loadEvents(); loadAlerts(); loadReaders(); loadTagEvents() }
 
   // ── UI state ───────────────────────────────────────────────────────────────
   const [tab, setTab] = useState('all')
@@ -276,7 +294,9 @@ export default function RfidRegistry() {
   const filtered = useMemo(() => filterTagRows(rows, { tab: REGISTER_TABS.has(tab) ? tab : 'all', ...filters }), [rows, tab, filters])
   const pageRows = useMemo(() => filtered.slice(page * pageSize, (page + 1) * pageSize), [filtered, page, pageSize])
   const selected = useMemo(() => rows.find((r) => r.id === selectedId) || filtered[0] || null, [rows, filtered, selectedId])
-  const history = useMemo(() => assignmentHistory(rows), [rows])
+  const [changeFilter, setChangeFilter] = useState({ action: 'all', search: '' })
+  const changeRows = useMemo(() => tagEventRows(tagEvents.data || []), [tagEvents.data])
+  const changeList = useMemo(() => filterTagEvents(changeRows, changeFilter), [changeRows, changeFilter])
   const registrations = useMemo(() => registrationsByDay(rows), [rows])
   const existingIds = useMemo(() => new Set(rows.map((r) => normalizeTagId(r.tagId)).filter(Boolean)), [rows])
   const eventRows = useMemo(() => historyRows(filterHistory(eventsState.data || [], histFilter)), [eventsState.data, histFilter])
@@ -346,6 +366,43 @@ export default function RfidRegistry() {
       setActionError(toUserMessage(e, 'Could not delete the tag.'))
     } finally {
       setDeleting(false)
+    }
+  }
+
+  // Quick lifecycle actions on the selected tag. The trigger writes the history row.
+  const [assignDraft, setAssignDraft] = useState({ kind: 'asset', value: '' })
+  const [lifeBusy, setLifeBusy] = useState(false)
+  async function runLifecycle(fn, okText) {
+    setLifeBusy(true); setActionError(''); setNotice('')
+    try {
+      await fn()
+      setNotice(okText)
+      setAssignDraft({ kind: 'asset', value: '' })
+      loadTags()
+    } catch (e) {
+      setActionError(toUserMessage(e, 'Could not update the tag.'))
+    } finally {
+      setLifeBusy(false)
+    }
+  }
+  const doAssign = () => runLifecycle(
+    () => assignTag(selected.id, assignDraft.kind === 'asset' ? { assetNo: assignDraft.value } : { tyreSerial: assignDraft.value }),
+    `Tag ${selected.tagId || ''} assigned to ${assignDraft.value.trim()}.`,
+  )
+  const doUnassign = () => runLifecycle(() => unassignTag(selected.id), `Tag ${selected.tagId || ''} is now unassigned.`)
+  const doRetire = () => runLifecycle(() => retireTag(selected.id), `Tag ${selected.tagId || ''} retired.`)
+  const doReactivate = () => runLifecycle(() => reactivateTag(selected.raw), `Tag ${selected.tagId || ''} is back in use.`)
+
+  const exportChanges = async (kind) => {
+    const data = tagEventExportRows(changeList)
+    const cols = TAG_EVENT_EXPORT_COLUMNS.map(([k]) => k)
+    const headers = TAG_EVENT_EXPORT_COLUMNS.map(([, h]) => h)
+    const base = reportFileName('RFID Tag History', reportDateLabel())
+    try {
+      if (kind === 'xlsx') await exportToExcel(data, cols, headers, base)
+      else await exportToPdf(data, cols.map((k, i) => ({ key: k, header: headers[i] })), 'RFID Tag History', base, 'landscape')
+    } catch (e) {
+      setActionError(toUserMessage(e, 'Could not export. Try again.'))
     }
   }
 
@@ -718,7 +775,50 @@ export default function RfidRegistry() {
                   <dt>Record status</dt><dd>{STATUS_LABEL[selected.status] || na(selected.status)}</dd>
                   {selected.notes && <><dt>Notes</dt><dd>{selected.notes}</dd></>}
                 </dl>
-                <p className="rr-foot">Assigned date is not stored; the registration date is shown.</p>
+                <div className="rr-life">
+                  {selected.status === 'retired' ? (
+                    <div className="rr-life-row">
+                      <span className="rr-foot">This tag is retired. Bring it back to use it again.</span>
+                      <button type="button" className="cc-btn-ghost" disabled={lifeBusy} onClick={doReactivate}><RotateCcw size={14} aria-hidden="true" /> Reactivate</button>
+                    </div>
+                  ) : (
+                    <>
+                      <form className="rr-life-row" onSubmit={(e) => { e.preventDefault(); if (assignDraft.value.trim()) doAssign() }}>
+                        <select className="cc-select" aria-label="Assign to" value={assignDraft.kind} onChange={(e) => setAssignDraft((d) => ({ ...d, kind: e.target.value }))}>
+                          <option value="asset">Asset no.</option>
+                          <option value="tyre">Tyre serial</option>
+                        </select>
+                        <input className="rr-input" aria-label={assignDraft.kind === 'asset' ? 'Asset number' : 'Tyre serial'} placeholder={assignDraft.kind === 'asset' ? 'e.g. TM514' : 'Tyre serial'}
+                          value={assignDraft.value} onChange={(e) => setAssignDraft((d) => ({ ...d, value: e.target.value }))} />
+                        <button type="submit" className="cc-btn-primary" disabled={lifeBusy || !assignDraft.value.trim()}><Link2 size={14} aria-hidden="true" /> {selected.asset || selected.serial ? 'Reassign' : 'Assign'}</button>
+                      </form>
+                      <div className="rr-life-row">
+                        <button type="button" className="cc-btn-ghost" disabled={lifeBusy || !(selected.asset || selected.serial)} onClick={doUnassign}><Link2Off size={14} aria-hidden="true" /> Unassign</button>
+                        <button type="button" className="cc-btn-ghost" disabled={lifeBusy} onClick={doRetire}><Archive size={14} aria-hidden="true" /> Retire</button>
+                      </div>
+                    </>
+                  )}
+                </div>
+                <div className="rr-tag-history">
+                  <h4>History of this tag</h4>
+                  <CardState state={{ ...tagEvents, retry: loadTagEvents }}>
+                    {(() => {
+                      const mine = changeRows.filter((e) => e.tagRowId === selected.id)
+                      if (!mine.length) return <div className="cc-empty">No changes recorded for this tag yet.</div>
+                      return (
+                        <ol className="rr-timeline">
+                          {mine.filter((_, i) => i < 8).map((e) => (
+                            <li key={e.id}>
+                              <span className={`cc-pill ${e.tone}`}>{e.actionLabel}</span>
+                              <span>{e.from && e.to && e.from !== e.to ? `${e.from} to ${e.to}` : (e.to || e.from || e.toSite || '')}</span>
+                              <time>{fmtDateTime(e.at)}{e.by ? `, ${e.by}` : ''}</time>
+                            </li>
+                          ))}
+                        </ol>
+                      )
+                    })()}
+                  </CardState>
+                </div>
                 <div className="rr-detail-actions">
                   <button type="button" className="cc-btn-ghost" onClick={() => { setHistFilter({ search: selected.tagId || '', site: 'all' }); setTab('scans') }}><History size={14} aria-hidden="true" /> View History</button>
                   <button type="button" className="cc-btn-ghost" onClick={() => openForm(selected)}><Repeat size={14} aria-hidden="true" /> Reassign</button>
@@ -761,6 +861,41 @@ export default function RfidRegistry() {
           {eventsState.truncated && <p className="rr-foot">Showing the newest {fmtInt(HISTORY_MAX)} read events. Older reads are not loaded.</p>}
           <CardState state={eventsCard}>
             <KitTable columns={historyCols} rows={eventRows} getRowId={(r) => String(r.id)} empty={(eventsState.data || []).length === 0 ? 'No read events recorded yet. Readers write them here as tags pass a reading zone.' : 'No read events match these filters.'} />
+          </CardState>
+        </Card>
+      )}
+
+      {tab === 'changes' && (
+        <Card title="Tag history" sub="Every registration, assignment, unassignment and retirement, recorded by the system as it happens"
+          action={(
+            <span className="rr-actions">
+              <button type="button" className="cc-btn-ghost" disabled={!changeList.length} onClick={() => exportChanges('xlsx')}><FileSpreadsheet size={14} aria-hidden="true" /> Excel</button>
+              <button type="button" className="cc-btn-ghost" disabled={!changeList.length} onClick={() => exportChanges('pdf')}><FileText size={14} aria-hidden="true" /> PDF</button>
+            </span>
+          )}>
+          <div className="cc-filters rr-filters">
+            <label className="cc-search"><Search size={14} aria-hidden="true" /><input aria-label="Search tag history" placeholder="Search tag, asset, tyre, site, user" value={changeFilter.search} onChange={(e) => setChangeFilter((f) => ({ ...f, search: e.target.value }))} /></label>
+            <select className="cc-select" aria-label="Action" value={changeFilter.action} onChange={(e) => setChangeFilter((f) => ({ ...f, action: e.target.value }))}>
+              <option value="all">All actions</option>
+              {Object.entries(TAG_EVENT_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+            </select>
+          </div>
+          {tagEvents.truncated && <p className="rr-foot">Showing the newest 20,000 changes. Older changes are not loaded.</p>}
+          <CardState state={{ ...tagEvents, retry: loadTagEvents }}>
+            <KitTable
+              columns={[
+                { key: 'ms', header: 'Date and time', sortValue: (r) => r.ms ?? -1, cell: (r) => fmtDateTime(r.at) },
+                { key: 'tagId', header: 'Tag ID', cell: (r) => <button type="button" className="rr-id-btn" onClick={() => { if (r.tagRowId) { setSelectedId(r.tagRowId); setTab('all') } }}>{r.tagId || 'N/A'}</button> },
+                { key: 'actionLabel', header: 'Action', cell: (r) => <span className={`cc-pill ${r.tone}`}>{r.actionLabel}</span> },
+                { key: 'from', header: 'From', cell: (r) => na(r.from) },
+                { key: 'to', header: 'To', cell: (r) => na(r.to) },
+                { key: 'site', header: 'Site', cell: (r) => na(r.toSite || r.fromSite) },
+                { key: 'by', header: 'By', cell: (r) => na(r.by) },
+              ]}
+              rows={changeList}
+              getRowId={(r) => String(r.id)}
+              empty={changeRows.length ? 'No changes match these filters.' : 'No tag changes recorded yet.'}
+            />
           </CardState>
         </Card>
       )}
@@ -877,19 +1012,18 @@ export default function RfidRegistry() {
           </CardState>
         </Card>
 
-        <Card title="Tag Assignment History" action={<ViewAll label="View all" onClick={() => setTab('imports')} />}>
-          <p className="rr-foot">From each tag&apos;s registration and last change. The previous mapping is not stored.</p>
-          <CardState state={tagCard} empty={tagsState.data && history.length === 0 ? 'No tag changes recorded yet.' : null}>
+        <Card title="Tag Assignment History" action={<ViewAll label="View all" onClick={() => setTab('changes')} />}>
+          <CardState state={{ ...tagEvents, retry: loadTagEvents }} empty={tagEvents.data && changeRows.length === 0 ? 'No tag changes recorded yet.' : null}>
             <KitTable
               compact
               columns={[
                 { key: 'ms', header: 'Date', cell: (r) => fmtDay(r.ms) },
                 { key: 'tagId', header: 'Tag', cell: (r) => <span className="rr-mono">{r.tagId || 'N/A'}</span> },
-                { key: 'action', header: 'Action' },
-                { key: 'to', header: 'To', cell: (r) => na(r.to) },
+                { key: 'actionLabel', header: 'Action' },
+                { key: 'to', header: 'To', cell: (r) => na(r.to || r.from) },
               ]}
-              rows={history.filter((_, i) => i < 5)}
-              getRowId={(r) => r.key}
+              rows={changeRows.filter((_, i) => i < 5)}
+              getRowId={(r) => String(r.id)}
             />
           </CardState>
         </Card>

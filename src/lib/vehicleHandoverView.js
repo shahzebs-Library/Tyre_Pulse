@@ -7,14 +7,17 @@
  * them into what the wizard shows and what it saves.
  *
  * Storage rules (table `handover_reports`, V181):
- * - Zone conditions (front / left / rear / right) are stored in the existing
- *   `damages` jsonb as one entry per zone that is NOT good, so `damage_count`
- *   and every existing damage roll-up keep working unchanged.
+ * - Damage is captured as numbered markers on the asset's own five-view
+ *   picture (vehicleHandoverMarks.js) and stored in the existing `damages`
+ *   jsonb, one entry per marker, so `damage_count` and every existing damage
+ *   roll-up keep working unchanged. Older per-side zone entries still read.
  * - The driver chosen in the wizard is the receiving driver on a check-out
  *   (`to_driver`) and the returning driver on a check-in (`from_driver`).
  * - Contact number, engine hours and the previous readings are shown for
  *   context only; there is no column for them on a handover.
  */
+
+import { damagesFromMarks } from './vehicleHandoverMarks'
 
 export const WIZARD_STEPS = [
   { key: 'vehicle', label: 'Vehicle Details' },
@@ -57,6 +60,8 @@ export const EMPTY_WIZARD = {
   condition_rating: 'good',
   cleanliness: 'clean',
   zones: { front: 'good', left: 'good', rear: 'good', right: 'good' },
+  marks: [],
+  artwork_stem: null,
   photo_url: '',
   notes: '',
   signature: null,
@@ -175,7 +180,11 @@ export function buildHandoverPayload(form, { country = null } = {}) {
   const driver = String(form.driver_name || '').trim() || null
   const other = String(form.other_party || '').trim() || null
   const checkout = form.handover_type !== 'checkin'
-  const damages = damagesFromZones(form.zones)
+  // Numbered picture markers are the current capture; the per-side zone map is
+  // only used when no marker was placed (older drafts and callers).
+  const damages = Array.isArray(form.marks) && form.marks.length
+    ? damagesFromMarks(form.marks, { stem: form.artwork_stem })
+    : damagesFromZones(form.zones)
   return {
     asset_no: String(form.asset_no || '').trim().toUpperCase(),
     report_no: String(form.report_no || '').trim() || null,

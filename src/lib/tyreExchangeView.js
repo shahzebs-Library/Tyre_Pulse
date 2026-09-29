@@ -71,6 +71,17 @@ function tyreSnap(r) {
   }
 }
 
+/**
+ * Two records on one position are different tyres unless both carry the same
+ * serial. Two records with no serial are still two fitments (two rows), so a
+ * missing serial never hides a replacement.
+ */
+function differentTyre(a, b) {
+  const sa = serialOf(a); const sb = serialOf(b)
+  if (sa && sb) return sa !== sb
+  return a !== b
+}
+
 const byDate = (a, b) => {
   const da = dayOf(a.issue_date) || ''
   const db = dayOf(b.issue_date) || ''
@@ -106,10 +117,10 @@ export function deriveExchanges(records) {
     } else if (prevSerial && positionOf(prevSerial) && pos && positionOf(prevSerial) !== pos) {
       type = 'Interchange'
       from = { asset, position: positionOf(prevSerial), site: txt(prevSerial.site) }
-    } else if (prevAtPos && serialOf(prevAtPos) !== serial) {
+    } else if (prevAtPos && differentTyre(prevAtPos, r)) {
       type = 'Replacement'
     }
-    if (prevAtPos && serialOf(prevAtPos) !== serial) removed = tyreSnap(prevAtPos)
+    if (prevAtPos && differentTyre(prevAtPos, r)) removed = tyreSnap(prevAtPos)
     events.push({
       id: `f-${r.id ?? events.length}`,
       recordId: r.id ?? null,
@@ -295,6 +306,9 @@ export const EXCHANGE_EVENT_TYPE = { Replacement: 'replacement', Interchange: 'r
  */
 export function buildExchangePayload(form = {}, { country = null, today = iso(new Date()) } = {}) {
   const errors = []
+  const date = txt(form.date)
+  if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) errors.push('Enter a valid date.')
+  else if (date && date > today) errors.push('The exchange date cannot be in the future.')
   const type = form.type
   if (!EXCHANGE_EVENT_TYPE[type]) errors.push('Choose an exchange type.')
   const asset = up(form.asset)
@@ -306,7 +320,10 @@ export function buildExchangePayload(form = {}, { country = null, today = iso(ne
   if (type === 'Replacement' && !installed) errors.push('Enter the installed tyre serial.')
   if ((type === 'Transfer' || type === 'Interchange') && !installed && !removed) errors.push('Enter the serial of the tyre being moved.')
   if (type === 'Transfer' && !up(form.toAsset)) errors.push('Choose the vehicle the tyre moves to.')
+  if (type === 'Transfer' && up(form.toAsset) && up(form.toAsset) === asset) errors.push('A transfer must move the tyre to a different vehicle.')
   if (type === 'Interchange' && !up(form.toPosition)) errors.push('Choose the position the tyre moves to.')
+  if (type === 'Interchange' && up(form.toPosition) && up(form.toPosition) === position) errors.push('Choose a different position to move the tyre to.')
+  if (type === 'Replacement' && installed && removed && installed.toUpperCase() === removed.toUpperCase()) errors.push('The installed tyre must be a different tyre from the removed one.')
   if (errors.length) return { ok: false, errors }
   const lines = [`${type}.`]
   if (removed) lines.push(`Removed tyre ${removed}${txt(form.removedCondition) ? ` (${txt(form.removedCondition)})` : ''}.`)
@@ -354,4 +371,62 @@ export function registerExportRows(events) {
     site: e.site || 'N/A',
     status: e.status || 'N/A',
   }))
+}
+
+/** Serials in the loaded register, upper-cased, for existence checks. */
+export function registerSerials(records) {
+  const set = new Set()
+  for (const r of records || []) { const sn = serialOf(r); if (sn) set.add(sn.toUpperCase()) }
+  return set
+}
+
+/**
+ * Soft checks against the tyre register. These never block a save, because a
+ * brand new tyre is not in the register until the next tyre upload and the
+ * register on screen is scoped to one country; the user confirms instead.
+ * Returns an array of plain sentences.
+ */
+export function serialWarnings(form = {}, records = [], known = registerSerials(records)) {
+  const out = []
+  const installed = txt(form.installedSerial)
+  const removed = txt(form.removedSerial)
+  const asset = up(form.asset)
+  const position = up(form.position)
+  if (installed && form.installedKind !== 'New' && !known.has(installed.toUpperCase())) {
+    out.push(`Installed tyre ${installed} is not in the tyre register, although it is marked ${String(form.installedKind || 'used').toLowerCase()}.`)
+  }
+  if (removed && !known.has(removed.toUpperCase())) out.push(`Removed tyre ${removed} is not in the tyre register.`)
+  if (removed && asset && position) {
+    const now = currentTyreAt(records, asset, position)
+    if (now?.serial && now.serial.toUpperCase() !== removed.toUpperCase()) {
+      out.push(`The register shows ${now.serial} on ${asset} ${position}, not ${removed}.`)
+    }
+  }
+  if (installed && form.installedKind === 'New' && known.has(installed.toUpperCase())) {
+    out.push(`Installed tyre ${installed} already has records in the tyre register, so it may not be new.`)
+  }
+  return out
+}
+
+/**
+ * True for a tyre service event that records an exchange: a replacement, a
+ * rotation (interchange) or a transfer saved from this page ('other' with a
+ * note that starts with "Transfer.").
+ */
+export function isExchangeEvent(ev) {
+  const t = ev?.event_type
+  if (t === 'replacement' || t === 'rotation') return true
+  return t === 'other' && /^transfer\./i.test(String(ev?.notes || '').trim())
+}
+
+/**
+ * The from / to stops of one exchange for the movement view. A stop is null
+ * when the register has nothing on that side (fitted from stock, or taken off
+ * with no later tyre on the position).
+ */
+export function movementFlow(e) {
+  if (!e) return null
+  if (e.type === 'Removal') return { from: e.from, fromTyre: e.removed, to: null, toTyre: null }
+  if (e.type === 'Transfer' || e.type === 'Interchange') return { from: e.from, fromTyre: e.installed, to: e.to, toTyre: e.installed }
+  return { from: e.removed ? e.to : null, fromTyre: e.removed, to: e.to, toTyre: e.installed }
 }

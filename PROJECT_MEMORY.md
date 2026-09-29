@@ -86,6 +86,31 @@ batching stops them being started at all.
 
 ---
 
+# ⚑ SESSION 2026-09-29 (part 2) — 8-AGENT BATCH: 12 PAGES FIXED/REBUILT. 6 migrations APPLIED LIVE. PR #370 STILL UNMERGED.
+- **Migrations (all applied + verified by impersonation, files in supabase/migrations/):** 20260929120500 fleet_renewal_plans
+  += planned_year/currency + `get_fleet_renewal_signals(country)` (INVOKER); 121000 `rfid_tag_events` (append-only, trigger on
+  rfid_tags, no client writes); 121100 `qr_print_jobs` (codes only, no images); 122000 vehicle_reservations += project/
+  cost_centre/driver_id/approval+reject+odometer+actual times/gate_pass_id/handover_id + guard trigger (only elevated approve/
+  reject; Rejected = status cancelled + rejected_* fields) + `vehicle_reservation_events` history; 123000 tyre_spec_catalog +=
+  source_url/source_note + 29 PENDING web-seeded rows (retailer listings via WebSearch; tread/dimensions left blank); 123100
+  `get_tyre_brand_size_mix(country)`.
+- **Pages:** Vehicle History (asset view + register, month timeline over 7 sources, drawer, per-currency spend); Fleet Renewal
+  (0-100 score age30/repair25/downtime15/km10/hours10/accidents10, budget by year); QR Labels (print sheet fixed = was 230mm on
+  A4, persisted print jobs, reprint); RFID (assign/unassign/retire/reactivate + real history tab); Vehicle Handover (damage marked
+  on Flutter 5-view pictures, `public/vehicle-views/*.webp` copies with FRONT badges blurred only, handover PDF); Reservations
+  (detail drawer + actions, every dead click wired); Odometer/Engine Hours (per-asset history drawer + chart); Tyre Passport +
+  Serial Tracker (brand-free tread SVGs `src/lib/tyreImage.js` + `public/tyre-images/`, passport cost no longer double counted,
+  serial match now case-insensitive, undo scrap re-reads status); Tyre Specifications (Fleet coverage tab, `getSpecFor`);
+  Fitment Validation (kit rebuild to mockup 18, score = real checks only; pressure bands 5%/10% are MY choice, owner to confirm;
+  fixed a bug where the size audit always read empty); Gate Pass (layout overflow fixed at 390-1440); Tyre Exchange (serial-less
+  rows no longer merged, blocking + warning checks, detail modal).
+- **KitTable** now one style for all kit pages (fixed heights, numeric right-align, `numeric`/`scroll` props).
+- **OPEN:** network policy blocks supabase.co / vercel.app / manufacturer sites = no browser QA, no datasheet fetch; Director demo
+  account NOT created yet (waits on network access). Catalogue rows need manager approval. Badges on side/rear/top vehicle views
+  and the accident module PNGs not yet blurred. `listExchangeTyreRecords` has no row cap.
+
+---
+
 # ⚑ SESSION 2026-09-29 — 15+ PAGES REBUILT ON THE COMMAND CENTER KIT (owner mockups). No migration. LIVE STATUS BELOW.
 **Branch `claude/command-center-dashboard` == PR #370. OWNER RULES FOR THIS WORK (standing):**
 - **Do NOT merge PR #370 until the owner says so.** Keep ALL work on this one branch.

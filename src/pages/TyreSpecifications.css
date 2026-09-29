@@ -115,3 +115,10 @@ html.light .ts-form input, html.light .ts-form select, html.light .ts-form texta
 label.ts-upload { cursor: pointer; }
 label.ts-upload:focus-within { outline: 2px solid var(--cc-blue); outline-offset: 2px; }
 .ts-section-note { margin: 0 0 12px; }
+
+/* Fleet coverage tab */
+.ts-page .ts-cov-kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.ts-scroll-x { max-width: 100%; overflow-x: auto; }
+.ts-source { display: inline-flex; align-items: center; gap: 4px; overflow-wrap: anywhere; }
+@media (max-width: 1100px) { .ts-page .ts-cov-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .ts-page .ts-cov-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

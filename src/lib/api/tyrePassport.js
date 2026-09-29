@@ -12,7 +12,7 @@
  */
 import { supabase, applyCountry, fetchAllPages, unwrap, ServiceError } from './_client'
 import { toUserMessage } from '../safeError'
-import { sanitizeSearchTerm } from '../searchFilter'
+import { escapeLike, sanitizeSearchTerm } from '../searchFilter'
 
 const COLS =
   'id,serial_no,serial_number,tyre_serial,brand,size,supplier,asset_no,asset_number,site,' +
@@ -35,9 +35,12 @@ const RETREAD_COLS =
 export async function getPassportRecords(serial, { country } = {}) {
   const s = sanitizeSearchTerm(String(serial || '').trim())
   if (!s) return []
+  // Case-insensitive but literal: the same tyre is recorded under both cases on
+  // some rows, and an exact match showed only part of its history.
+  const e = escapeLike(s)
   const result = await fetchAllPages((from, to) => {
     const q = supabase.from('tyre_records').select(COLS)
-      .or(`serial_no.eq.${s},serial_number.eq.${s},tyre_serial.eq.${s}`)
+      .or(`serial_no.ilike.${e},serial_number.ilike.${e},tyre_serial.ilike.${e}`)
       .order('fitment_date', { ascending: true, nullsFirst: true })
       .order('id', { ascending: true })
       .range(from, to)

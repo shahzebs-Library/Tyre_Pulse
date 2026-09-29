@@ -98,7 +98,7 @@ html.light .vr-cal-head { background: #f8fafc; }
 
 /* Health tiles */
 .vr-health { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.vr-health > div { border: 1px solid var(--cc-inner-border); border-radius: 10px; padding: 9px 10px; background: var(--cc-inner); }
+.vr-health > div, .vr-health > button { border: 1px solid var(--cc-inner-border); border-radius: 10px; padding: 9px 10px; background: var(--cc-inner); }
 .vr-health b { display: block; font-size: 18px; font-weight: 700; color: var(--cc-ink); line-height: 1.1; }
 .vr-health span { display: block; font-size: 11px; color: var(--cc-ink-3); margin-top: 3px; }
 
@@ -113,7 +113,7 @@ html.light .vr-cal-head { background: #f8fafc; }
 
 /* Department demand */
 .vr-demand { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; }
-.vr-demand li { display: grid; grid-template-columns: minmax(0, 1fr) 70px 26px 46px; align-items: center; gap: 8px; font-size: 12.5px; color: var(--cc-ink); }
+.vr-demand li > button { width: 100%; background: none; border: 0; padding: 3px 4px; border-radius: 8px; cursor: pointer; font: inherit; text-align: left; display: grid; grid-template-columns: minmax(0, 1fr) 70px 26px 46px; align-items: center; gap: 8px; font-size: 12.5px; color: var(--cc-ink); }
 .vr-demand-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vr-demand b { text-align: right; }
 .vr-demand small { color: var(--cc-ink-3); text-align: right; font-size: 11px; }
@@ -178,3 +178,53 @@ textarea.vr-input { resize: vertical; }
   .vr-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .vr-rail, .vr-row2, .vr-row3 { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Clickable surfaces */
+.vr-health > button { text-align: left; cursor: pointer; font: inherit; }
+.vr-health > button:hover, .vr-demand li > button:hover, .vr-demand li > button[aria-pressed="true"] { border-color: var(--cc-green); background: var(--cc-green-tint); }
+.vr-demand li > button:focus-visible, .vr-health > button:focus-visible, .vr-month:focus-visible, .vr-cal-legend button:focus-visible, .vr-cal-vehicle:focus-visible { outline: 2px solid var(--cc-green); outline-offset: 2px; }
+.vr-month { background: none; border: 0; padding: 0; cursor: pointer; font: inherit; }
+.vr-month:hover .vr-month-bar { box-shadow: 0 0 0 2px var(--cc-green-tint); }
+.vr-cal-legend button { display: inline-flex; align-items: center; gap: 5px; background: none; border: 1px solid transparent; border-radius: 999px; padding: 2px 8px; font: inherit; color: inherit; cursor: pointer; }
+.vr-cal-legend button[aria-pressed="true"] { border-color: var(--cc-green); color: var(--cc-ink); }
+button.vr-cal-vehicle { background: transparent; border-top: 0; border-bottom: 0; border-left: 0; text-align: left; cursor: pointer; font: inherit; min-width: 0; }
+button.vr-cal-vehicle:hover { background: var(--cc-green-tint); }
+button.vr-cal-cell { background: transparent; border-top: 0; border-right: 0; border-bottom: 0; padding: 0; cursor: copy; }
+button.vr-cal-cell:hover { background: var(--cc-green-tint); }
+button.vr-cal-cell.today { background: var(--cc-green-tint); }
+.vr-link-btn { background: none; border: 0; padding: 0; font: inherit; color: var(--cc-ink-2); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.vr-link-btn:hover { color: var(--cc-ink); }
+
+/* Detail drawer */
+.vr-drawer { gap: 14px; }
+.vr-d-vehicle { display: flex; align-items: flex-start; gap: 12px; padding: 12px; border: 1px solid var(--cc-inner-border); border-radius: 12px; background: var(--cc-inner); }
+.vr-d-vehicle > div { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.vr-d-vehicle b { font-size: 15px; color: var(--cc-ink); }
+.vr-d-vehicle span { font-size: 12.5px; color: var(--cc-ink-2); }
+.vr-d-alert { display: flex; gap: 8px; align-items: flex-start; margin: 0; padding: 9px 11px; border-radius: 10px; background: var(--cc-red-tint); color: var(--cc-ink); font-size: 12.5px; }
+.vr-d-alert svg { color: var(--cc-red); flex: none; margin-top: 1px; }
+.vr-d-action { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--cc-green); border-radius: 12px; background: var(--cc-green-tint); }
+.vr-d-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 720px) { .vr-d-grid { grid-template-columns: 1fr; } }
+.vr-d-sec { border: 1px solid var(--cc-inner-border); border-radius: 12px; padding: 12px; min-width: 0; }
+.vr-d-sec h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 9px; font-size: 12.5px; font-weight: 700; color: var(--cc-ink); }
+.vr-d-sec h3 svg { color: var(--cc-green); }
+.vr-drawer .vr-dl { grid-template-columns: minmax(96px, 36%) 1fr; font-size: 12.5px; }
+.vr-drawer .vr-dl dt { color: var(--cc-ink-3); }
+.vr-drawer .vr-dl dd { color: var(--cc-ink); overflow-wrap: anywhere; }
+.vr-pre { white-space: pre-wrap; }
+.vr-d-links { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.vr-d-links li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12.5px; color: var(--cc-ink-2); padding: 7px 9px; border-radius: 9px; background: var(--cc-inner); border: 1px solid var(--cc-inner-border); }
+.vr-d-links li > :last-child { margin-left: auto; }
+.vr-linked { color: var(--cc-green); font-size: 12px; }
+.vr-d-hist { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.vr-d-hist li { display: grid; grid-template-columns: 12px 1fr; gap: 10px; }
+.vr-d-hist i { width: 10px; height: 10px; border-radius: 50%; margin-top: 4px; background: var(--cc-ink-3); }
+.vr-d-hist i.ev-approved, .vr-d-hist i.ev-returned { background: var(--cc-green); }
+.vr-d-hist i.ev-rejected { background: var(--cc-red); }
+.vr-d-hist i.ev-checked_out { background: var(--cc-blue); }
+.vr-d-hist i.ev-created { background: var(--cc-purple); }
+.vr-d-hist b { display: block; font-size: 12.5px; color: var(--cc-ink); }
+.vr-d-hist span, .vr-d-hist small { display: block; font-size: 11.5px; color: var(--cc-ink-3); }
+.vr-d-foot { flex-direction: row; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.vr-btn-danger { background: var(--cc-red); border-color: var(--cc-red); }

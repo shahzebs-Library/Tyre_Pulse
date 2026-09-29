@@ -115,3 +115,14 @@ html.light .rr-scan-input, html.light .rr-input { background: #fff; }
   .rr-hero-actions { position: static; justify-content: flex-start; margin-top: 10px; }
   .rr-health { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* Tag lifecycle actions + per-tag history */
+.cc .rr-life { display: grid; gap: 8px; margin: 12px 0 4px; }
+.cc .rr-life-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.cc .rr-life-row .rr-input { flex: 1 1 140px; min-width: 0; }
+.cc .rr-tag-history { margin-top: 12px; }
+.cc .rr-tag-history h4 { margin: 0 0 6px; font-size: 13px; font-weight: 700; color: var(--cc-ink); }
+.cc .rr-timeline { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.cc .rr-timeline li { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; align-items: center; font-size: 12.5px; min-width: 0; }
+.cc .rr-timeline li > span:nth-child(2) { overflow-wrap: anywhere; }
+.cc .rr-timeline time { grid-column: 2; color: var(--cc-ink-3); font-size: 11.5px; }

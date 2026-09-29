@@ -296,3 +296,45 @@ export function anomalyRows(rows, jumps) {
   }
   return out.sort((a, b) => String(b.reading.reading_date || '').localeCompare(String(a.reading.reading_date || '')))
 }
+
+/* ---------------------------------------------------------------- one asset */
+
+/**
+ * Everything one vehicle's history drawer shows: its kilometre and hour
+ * readings oldest first, each marked flagged (saved lower than the previous
+ * one) or a suspicious jump with the reason in words, plus the distance and
+ * hours between the first and last accepted readings. Totals are null when
+ * fewer than two readings exist, never 0.
+ */
+export function assetMeterSeries(rows, match, jumps) {
+  const jumpBy = new Map((jumps || []).map((j) => [j.key, j]))
+  const mine = (rows || []).filter(match)
+  const series = (kind) => mine
+    .filter((r) => r.kind === kind && Number.isFinite(num(r.value)))
+    .sort((a, b) => String(a.reading_date || '').localeCompare(String(b.reading_date || ''))
+      || String(a.created_at || '').localeCompare(String(b.created_at || '')))
+    .map((r) => {
+      const j = jumpBy.get(readingKey(r))
+      const unit = kind === 'hours' ? 'hours' : 'km'
+      const reason = r.flagged
+        ? (r.flag_reason || 'Saved below the last recorded reading')
+        : j ? `Up ${Math.round(j.delta).toLocaleString('en-US')} ${unit} in ${j.days} day${j.days === 1 ? '' : 's'}` : null
+      return { key: readingKey(r), row: r, date: r.reading_date || null, value: num(r.value), flagged: !!r.flagged, reviewed: !!r.reviewed, jump: !!j, reason }
+    })
+  const span = (list) => {
+    const clean = list.filter((p) => !p.flagged && !p.jump)
+    if (clean.length < 2) return null
+    const d = clean[clean.length - 1].value - clean[0].value
+    return d >= 0 ? d : null
+  }
+  const km = series('km')
+  const hours = series('hours')
+  return {
+    km, hours,
+    kmTravelled: span(km),
+    hoursRun: span(hours),
+    flaggedCount: [...km, ...hours].filter((p) => p.flagged || p.jump).length,
+    firstDate: [...km, ...hours].map((p) => p.date).filter(Boolean).sort()[0] || null,
+    lastDate: [...km, ...hours].map((p) => p.date).filter(Boolean).sort().at(-1) || null,
+  }
+}

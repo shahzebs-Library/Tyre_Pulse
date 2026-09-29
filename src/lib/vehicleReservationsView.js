@@ -309,3 +309,95 @@ export function mapImportRow(obj = {}) {
 }
 
 export const IMPORT_TEMPLATE_HEADERS = ['Asset', 'Start', 'End', 'Requester', 'Department', 'Purpose', 'Reference', 'Pickup location', 'Return location', 'Status', 'Notes']
+
+/* ── Reservation detail ─────────────────────────────────────────────────────── */
+
+/** A rejection is a cancellation that carries a manager's reason. */
+export const isRejected = (r) => !!r?.rejected_at
+
+/**
+ * The workflow actions one person may take on a reservation right now.
+ * Approve and reject are manager actions; the database enforces the same rule.
+ */
+export function workflowActions(r, { elevated = false } = {}) {
+  const s = statusOf(r)
+  const out = []
+  if (s === 'requested') {
+    if (elevated) out.push('approve', 'reject')
+  }
+  if (s === 'approved') {
+    out.push('checkout')
+    if (elevated) out.push('reject')
+  }
+  if (s === 'out') out.push('return')
+  return out
+}
+
+export const EVENT_LABEL = {
+  created: 'Created', status: 'Status changed', approved: 'Approved', rejected: 'Rejected',
+  checked_out: 'Checked out', returned: 'Returned', edited: 'Details edited',
+}
+
+const FIELD_LABEL = {
+  asset_no: 'vehicle', start_at: 'pickup time', end_at: 'return time', requester_name: 'requester',
+  department: 'department', purpose: 'purpose', project: 'project', cost_centre: 'cost centre',
+  driver_id: 'driver', driver_name: 'driver', pickup_location: 'pickup location',
+  return_location: 'return location', expected_km: 'expected km', notes: 'notes', reference: 'reference',
+  odometer_out: 'odometer out', odometer_in: 'odometer in', approved_by: 'approver',
+  gate_pass_id: 'gate pass link', handover_id: 'handover link', country: 'country', rejected_reason: 'reason',
+}
+
+/** One history line: what happened and what changed, in plain words. */
+export function describeEvent(ev = {}) {
+  const label = EVENT_LABEL[ev.event_type] || 'Updated'
+  const d = ev.detail || {}
+  const parts = []
+  if (d.reason) parts.push(`Reason: ${d.reason}`)
+  if (d.odometer_out != null) parts.push(`Odometer out ${Number(d.odometer_out).toLocaleString('en-US')} km`)
+  if (d.odometer_in != null) parts.push(`Odometer in ${Number(d.odometer_in).toLocaleString('en-US')} km`)
+  const fields = Array.isArray(d.fields) ? d.fields.map((f) => FIELD_LABEL[f]).filter(Boolean) : []
+  const uniq = [...new Set(fields)]
+  if (uniq.length) parts.push(`Changed ${uniq.join(', ')}`)
+  return { label, text: parts.join('. ') }
+}
+
+/**
+ * Trip figures from the recorded odometers and times. Anything not recorded is
+ * null, never 0: a missing reading is not a zero-kilometre trip.
+ */
+export function tripFacts(r = {}) {
+  const out = r.odometer_out == null || r.odometer_out === '' ? null : Number(r.odometer_out)
+  const inn = r.odometer_in == null || r.odometer_in === '' ? null : Number(r.odometer_in)
+  const distance = Number.isFinite(out) && Number.isFinite(inn) && inn >= out ? inn - out : null
+  const expected = r.expected_km == null || r.expected_km === '' ? null : Number(r.expected_km)
+  const variance = distance != null && Number.isFinite(expected) && expected > 0
+    ? Math.round(((distance - expected) / expected) * 100) : null
+  const late = (actual, planned) => {
+    const a = toMs(actual); const p = toMs(planned)
+    return a != null && p != null ? Math.round((a - p) / 60000) : null
+  }
+  return {
+    distance,
+    expected: Number.isFinite(expected) ? expected : null,
+    variancePct: variance,
+    pickupLateMin: late(r.actual_pickup_at, r.start_at),
+    returnLateMin: late(r.actual_return_at, r.end_at),
+  }
+}
+
+/** Minutes late (positive) or early (negative) in words. */
+export function lateText(min) {
+  if (min == null) return null
+  if (Math.abs(min) < 5) return 'on time'
+  const abs = Math.abs(min)
+  const t = abs >= 1440 ? `${Math.round((abs / 1440) * 10) / 10} d` : abs >= 60 ? `${Math.round((abs / 60) * 10) / 10} h` : `${abs} min`
+  return min > 0 ? `${t} late` : `${t} early`
+}
+
+/** Bookings of one vehicle whose windows sit in a calendar slot, for a click on an empty cell. */
+export function slotWindow(slot, calMode) {
+  const start = toMs(slot?.start)
+  if (start == null) return null
+  const end = toMs(slot?.end) ?? (start + (calMode === 'day' ? 3600000 : DAY_MS))
+  return { start, end }
+}

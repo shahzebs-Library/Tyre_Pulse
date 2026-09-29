@@ -62,6 +62,8 @@ export const EVENT_TYPES = Object.freeze([
   { key: 'policy', label: 'Policy', tone: 'purple' },
   { key: 'registration', label: 'Registration', tone: 'muted' },
   { key: 'wash', label: 'Wash', tone: 'muted' },
+  { key: 'gate', label: 'Gate pass', tone: 'muted' },
+  { key: 'handover', label: 'Handover / check-in', tone: 'info' },
   { key: 'meter', label: 'Meter reading', tone: 'muted' },
   { key: 'parts', label: 'Store issue', tone: 'warn' },
   { key: 'cost', label: 'Penalty', tone: 'warn' },
@@ -85,7 +87,11 @@ export function eventType(e) {
     case 'pm_service': return 'service'
     case 'tyre_fitment':
     case 'tyre_removal':
-    case 'tyre_mark': return 'tyre'
+    case 'tyre_mark':
+    case 'tyre_service': return 'tyre'
+    case 'gate_pass': return 'gate'
+    case 'handover':
+    case 'checkinout': return 'handover'
     case 'inspection':
     case 'checklist': return 'inspection'
     case 'breakdown': return 'breakdown'
@@ -310,12 +316,21 @@ export function periodStartMs(months, now) {
  * Undated events are kept only on the all-history period, because a period
  * filter cannot place them.
  */
-export function filterViewEvents(events, { type = 'key', months = null, search = '', now } = {}) {
+export function filterViewEvents(events, { type = 'key', types = null, months = null, from = '', to = '', search = '', now } = {}) {
   const start = periodStartMs(months, now)
+  const fromMs = from ? Date.parse(`${String(from).slice(0, 10)}T00:00:00Z`) : null
+  const toMs = to ? Date.parse(`${String(to).slice(0, 10)}T23:59:59Z`) : null
+  const typeSet = Array.isArray(types) && types.length ? new Set(types) : null
   const q = String(search || '').trim().toLowerCase()
   return (Array.isArray(events) ? events : []).filter((e) => {
     if (type === 'key' && KEY_EXCLUDED.includes(e.type)) return false
     if (type !== 'key' && type !== 'all' && e.type !== type) return false
+    if (typeSet && !typeSet.has(e.type)) return false
+    if ((fromMs !== null && Number.isFinite(fromMs)) || (toMs !== null && Number.isFinite(toMs))) {
+      if (e.undated) return false
+      if (Number.isFinite(fromMs) && fromMs !== null && e.atMs < fromMs) return false
+      if (Number.isFinite(toMs) && toMs !== null && e.atMs > toMs) return false
+    }
     if (start !== null) {
       if (e.undated) return false
       if (e.atMs < start) return false
@@ -591,4 +606,149 @@ export function historyViewExportRows(events) {
     currency: num(e.value) === null ? '' : e.currency || '',
     downtime: e.downtimeDays === null || e.downtimeDays === undefined ? '' : e.downtimeDays,
   }))
+}
+
+
+/* ------------------------------------------------------------------ *
+ * Extra sources (tyre service, gate pass, handover, check-in/out)      *
+ * ------------------------------------------------------------------ */
+
+const COUNTRY_CURRENCY = Object.freeze({ KSA: 'SAR', UAE: 'AED', Egypt: 'EGP' })
+
+function extraEvt(fields) {
+  const ms = ts(fields.at)
+  return {
+    id: fields.id, source: fields.source, group: 'operations', at: fields.at ?? null, atMs: ms,
+    day: ms === null ? null : isoDay(ms), undated: ms === null,
+    title: fields.title || '', detail: fields.detail || null,
+    value: fields.value ?? null, currency: fields.currency ?? null,
+    // Only the classified expense grid counts toward spend; these show a value, never add it.
+    countsToSpend: false, severity: fields.severity || 'info',
+    link: fields.link || null, ref: fields.ref || null, row: fields.row || null,
+    ownKm: num(fields.km),
+  }
+}
+
+const cap = (v) => { const t = text(v); return t ? t.charAt(0).toUpperCase() + t.slice(1) : null }
+
+/**
+ * Turn the extra source envelopes into timeline events in the same shape as
+ * the shared loader's events, so buildViewTimeline can merge them.
+ */
+export function extraSourceEvents(sources = {}) {
+  const rows = (k) => (sources[k] && sources[k].ok ? sources[k].rows : [])
+  const out = []
+  for (const r of rows('tyre_service')) {
+    out.push(extraEvt({
+      id: `tyre_service:${r.id}`, source: 'tyre_service', at: r.event_date,
+      title: [`Tyre ${text(r.event_type) || 'service'}`, text(r.position)].filter(Boolean).join(' at '),
+      detail: [text(r.tyre_serial) ? `Serial ${r.tyre_serial}` : null, num(r.tread_depth) != null ? `Tread ${r.tread_depth} mm` : null,
+        num(r.pressure) != null ? `Pressure ${r.pressure}` : null, text(r.technician), text(r.notes)].filter(Boolean).join(' - '),
+      value: num(r.cost), currency: num(r.cost) != null ? COUNTRY_CURRENCY[r.country] || null : null,
+      ref: text(r.tyre_serial), row: r,
+    }))
+  }
+  for (const r of rows('gate_pass')) {
+    const denied = /den|reject|block/i.test(String(r.status || ''))
+    out.push(extraEvt({
+      id: `gate_pass:${r.id}`, source: 'gate_pass', at: r.pass_date || r.cleared_at || r.created_at,
+      title: `Gate pass ${text(r.status) || 'issued'}`,
+      detail: [text(r.denial_reason), text(r.notes)].filter(Boolean).join(' - '),
+      severity: denied ? 'warn' : 'info', row: r,
+    }))
+  }
+  for (const r of rows('handover')) {
+    out.push(extraEvt({
+      id: `handover:${r.id}`, source: 'handover', at: r.handover_at,
+      title: `Handover${text(r.handover_type) ? ` (${r.handover_type})` : ''}`,
+      detail: [text(r.from_driver) || text(r.to_driver) ? `${text(r.from_driver) || 'N/A'} to ${text(r.to_driver) || 'N/A'}` : null,
+        text(r.condition_rating) ? `Condition ${r.condition_rating}` : null,
+        num(r.damage_count) ? `${r.damage_count} damage mark(s)` : null, text(r.notes)].filter(Boolean).join(' - '),
+      km: r.odometer_km, ref: text(r.report_no), severity: num(r.damage_count) ? 'warn' : 'info', row: r,
+    }))
+  }
+  for (const r of rows('checkinout')) {
+    out.push(extraEvt({
+      id: `checkinout:${r.id}`, source: 'checkinout', at: r.checked_at,
+      title: `Checked ${text(r.direction) || 'in or out'}`,
+      detail: [text(r.driver_name), text(r.fuel_level) ? `Fuel ${r.fuel_level}` : null, text(r.condition_notes)].filter(Boolean).join(' - '),
+      km: r.odometer_km, row: r,
+    }))
+  }
+  return out
+}
+
+/** Labels of extra sources that could not be read. */
+export function extraUnreadable(sources = {}, labels = {}) {
+  return Object.entries(sources).filter(([, v]) => v && v.ok === false).map(([k]) => labels[k] || k)
+}
+
+/* ------------------------------------------------------------------ *
+ * Month grouping, spend per currency, event detail                     *
+ * ------------------------------------------------------------------ */
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+
+/** Group (already sorted, latest first) events by calendar month. Undated go last. */
+export function groupByMonth(events) {
+  const groups = []
+  const byKey = new Map()
+  for (const e of Array.isArray(events) ? events : []) {
+    const key = e.undated || !e.day ? 'undated' : String(e.day).slice(0, 7)
+    let g = byKey.get(key)
+    if (!g) {
+      const [y, m] = key.split('-')
+      g = { key, label: key === 'undated' ? 'Undated' : `${MONTHS[Number(m) - 1]} ${y}`, events: [] }
+      byKey.set(key, g)
+      groups.push(g)
+    }
+    g.events.push(e)
+  }
+  const und = groups.findIndex((g) => g.key === 'undated')
+  if (und >= 0 && und !== groups.length - 1) groups.push(groups.splice(und, 1)[0])
+  return groups
+}
+
+/**
+ * Spend per currency from the classified expense grid lines in the list.
+ * Returns {} when there is none; never adds currencies together.
+ */
+export function spendByCurrency(events) {
+  const out = {}
+  for (const e of Array.isArray(events) ? events : []) {
+    if (!e.countsToSpend) continue
+    const v = num(e.value)
+    if (v === null || !e.currency) continue
+    out[e.currency] = round1((out[e.currency] || 0) + v)
+  }
+  return out
+}
+
+const HIDDEN_DETAIL = new Set(['id', 'organisation_id', 'created_by', 'updated_by', 'custom_data', 'extra_fields', 'photos', 'signature', 'signature_url', 'photo_url', 'damages', 'raw'])
+
+function labelOf(key) {
+  const t = String(key).replace(/_/g, ' ').trim()
+  return t.charAt(0).toUpperCase() + t.slice(1)
+}
+
+/**
+ * The record behind one event as label/value pairs for the detail drawer.
+ * Blank fields are left out, internal ids and binary fields are hidden.
+ */
+export function eventDetailFields(event) {
+  const row = event?.row
+  if (!row || typeof row !== 'object') return []
+  const out = []
+  for (const [k, v] of Object.entries(row)) {
+    if (HIDDEN_DETAIL.has(k) || k.endsWith('_id')) continue
+    if (v === null || v === undefined || v === '') continue
+    if (typeof v === 'object') continue
+    out.push({ key: k, label: labelOf(k), value: typeof v === 'boolean' ? (v ? 'Yes' : 'No') : String(v) })
+  }
+  return out
+}
+
+/** Latest hour meter reading from the meter history, or null. */
+export function currentHours(meters) {
+  return num(meters?.hours?.last)
 }

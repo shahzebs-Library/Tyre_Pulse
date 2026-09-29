@@ -239,19 +239,28 @@ export function MeterCell({ value, suffix = '', tone }) {
  * Kit table: the app's EnterpriseTable (sorting, paging, selection, column
  * visibility, states) wearing the kit skin. Pages never hand-roll a <table>.
  *
- * columns: [{ key, header, cell?: (row) => node, sortValue?: (row) => any, align?, sortable? }]
- * Every other EnterpriseTable prop passes straight through; the defaults turn
- * off its own search, filters and export because kit pages provide their own.
+ * columns: [{ key, header, cell?: (row) => node, sortValue?: (row) => any,
+ *             align?: 'right'|'center', numeric?: boolean, sortable? }]
+ * `numeric` right-aligns the column (header and cells) with tabular figures.
+ * `scroll` caps the body height and keeps the header pinned while it scrolls.
+ * Every other EnterpriseTable prop passes straight through (onRowClick,
+ * error/onRetry, loading, manualPagination...); the defaults turn off its own
+ * search, filters and export because kit pages provide their own.
  */
-export function KitTable({ columns, rows, empty = 'No records found', compact = false, className = '', ...rest }) {
-  const defs = columns.map((c) => ({
-    id: c.key,
-    header: c.header,
-    accessorFn: (r) => (c.sortValue ? c.sortValue(r) : r[c.key]),
-    cell: ({ row }) => (c.cell ? c.cell(row.original) : (row.original[c.key] ?? <span className="cc-na">N/A</span>)),
-    enableSorting: c.sortable !== false,
-    meta: { align: c.align },
-  }))
+export function KitTable({ columns, rows, empty = 'No records found', compact = false, scroll = false, className = '', ...rest }) {
+  const defs = columns.map((c) => {
+    const align = c.align || (c.numeric ? 'right' : undefined)
+    return {
+      id: c.key,
+      header: align && typeof c.header === 'string'
+        ? () => <span className={`cc-th-${align}`}>{c.header}</span>
+        : c.header,
+      accessorFn: (r) => (c.sortValue ? c.sortValue(r) : r[c.key]),
+      cell: ({ row }) => (c.cell ? c.cell(row.original) : (row.original[c.key] ?? <span className="cc-na">N/A</span>)),
+      enableSorting: c.sortable !== false,
+      meta: { align },
+    }
+  })
   return (
     <EnterpriseTable
       columns={defs}
@@ -261,12 +270,12 @@ export function KitTable({ columns, rows, empty = 'No records found', compact = 
       enableColumnFilters={false}
       enableExport={false}
       enableColumnVisibility={false}
-      stickyHeader={false}
+      stickyHeader={scroll}
       showPagination={!compact}
       enableSorting={!compact}
       initialPageSize={compact ? 1000 : 25}
       skeletonRows={compact ? 3 : 8}
-      className={`cc-et ${compact ? 'cc-et-compact' : ''} ${className}`}
+      className={`cc-et ${compact ? 'cc-et-compact' : ''} ${scroll ? 'cc-et-scroll' : ''} ${rest.onRowClick ? 'cc-et-clickable' : ''} ${className}`}
       {...rest}
     />
   )

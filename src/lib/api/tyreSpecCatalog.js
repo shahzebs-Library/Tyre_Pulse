@@ -15,6 +15,7 @@
  * Every read throws a sanitised ServiceError on failure, except a table that is
  * not provisioned, which degrades to [] (honest empty state).
  */
+import { brandKey, matchSpec } from '../tyreSpecView'
 import { supabase, fetchAllPages, applyCountry, toServiceError, isMissingRelation, unwrap } from './_client'
 
 export const CATALOG_COLS =
@@ -23,7 +24,7 @@ export const CATALOG_COLS =
   + 'tread_depth_new_mm, tread_depth_min_mm, overall_diameter_mm, section_width_mm, recommended_rim, '
   + 'max_load_single_kg, max_load_dual_kg, inflation_single_kpa, inflation_dual_kpa, weight_kg, '
   + 'suitable_for, images, documents, approval_status, approved_by, approved_at, approval_note, '
-  + 'created_by, created_at, updated_at'
+  + 'source_url, source_note, created_by, created_at, updated_at'
 
 export const EVENT_COLS = 'id, spec_id, action, from_status, to_status, note, actor_name, at'
 
@@ -31,7 +32,7 @@ export const APPROVAL_STATUSES = ['approved', 'pending', 'not_approved']
 export const CATALOG_TYRE_TYPES = ['steer', 'drive', 'trailer', 'off_road', 'other']
 export const TUBE_TYPES = ['tubeless', 'tube']
 
-const TEXT_FIELDS = ['brand', 'pattern', 'size', 'speed_rating', 'ply_rating', 'application', 'description', 'recommended_rim', 'approval_note', 'country']
+const TEXT_FIELDS = ['brand', 'pattern', 'size', 'speed_rating', 'ply_rating', 'application', 'description', 'recommended_rim', 'approval_note', 'country', 'source_url', 'source_note']
 const NUM_FIELDS = [
   'width_mm', 'aspect_ratio', 'rim_in', 'tread_depth_new_mm', 'tread_depth_min_mm', 'overall_diameter_mm',
   'section_width_mm', 'max_load_single_kg', 'max_load_dual_kg', 'inflation_single_kpa', 'inflation_dual_kpa', 'weight_kg',
@@ -168,3 +169,48 @@ export async function uploadCatalogFile({ orgId, specId, file }) {
 
 /** The tp-storage:// ref the shared signed-URL resolver understands. */
 export const fileRef = (entry) => (entry?.path ? `tp-storage://${FILE_BUCKET}/${entry.path}` : null)
+
+// ── Shared lookup (passport, records, value advisor, fleet coverage) ─────────
+
+/**
+ * The fleet brand + size mix (one row per country + brand + size with its tyre
+ * count), from RPC get_tyre_brand_size_mix. RLS scopes it; a country argument
+ * only narrows. Throws on failure; [] only when the RPC is not provisioned.
+ */
+export async function listFleetBrandSizeMix({ country } = {}) {
+  const { data, error } = await supabase.rpc('get_tyre_brand_size_mix', { p_country: country || null })
+  if (error) {
+    if (isMissingRelation(error)) return []
+    throw toServiceError(error, 'Could not load the fleet brand and size mix.')
+  }
+  return data || []
+}
+
+// Short-lived cache so a page that looks up many tyres reads the catalogue once.
+const SPEC_CACHE_MS = 5 * 60 * 1000
+let specCache = { at: 0, rows: null, pending: null }
+
+/** Drop the cached catalogue (call after a catalogue write). */
+export function invalidateSpecCache() { specCache = { at: 0, rows: null, pending: null } }
+
+async function cachedCatalog() {
+  if (specCache.rows && Date.now() - specCache.at < SPEC_CACHE_MS) return specCache.rows
+  if (specCache.pending) return specCache.pending
+  specCache.pending = listCatalog({})
+    .then((rows) => { specCache = { at: Date.now(), rows, pending: null }; return rows })
+    .catch((e) => { specCache.pending = null; throw e })
+  return specCache.pending
+}
+
+/**
+ * The best catalogue spec for a tyre, or null when the catalogue holds none.
+ * Brand spelling is folded (DOUBLE COIN = DOUBLECOIN), size ignores spacing.
+ * Preference: approved first, then the exact pattern, then the same country.
+ * Any page that needs a tyre's published data (tread depth, load, speed, ply,
+ * source) should call this rather than re-reading the table.
+ */
+export async function getSpecFor(brand, size, pattern, { country } = {}) {
+  if (!brandKey(brand) || !size) return null
+  const rows = await cachedCatalog()
+  return matchSpec(rows, { brand, size, pattern, country })
+}

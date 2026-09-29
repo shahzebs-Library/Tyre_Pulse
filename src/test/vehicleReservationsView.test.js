@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import * as detailHelpers from '../lib/vehicleReservationsView'
 import {
   deriveStatus, viewKpis, summarySegments, buildSlots, shiftAnchor, layoutCalendar,
   clashesFor, availability, upcomingList, mapImportRow, startOfWeek,
@@ -121,5 +122,36 @@ describe('upcomingList and import mapping', () => {
     expect(mapImportRow({ Start: '2026-09-25' }).error).toBe('No asset number')
     expect(mapImportRow({ Asset: 'TM1', Start: 'soon' }).error).toBe('Start time is not a date')
     expect(mapImportRow({ Asset: 'TM1', Start: '2026-09-25 10:00', End: '2026-09-25 09:00' }).error).toBe('End is not after start')
+  })
+})
+
+describe('reservation detail helpers', () => {
+  const m = detailHelpers
+
+  it('offers approve and reject only to managers', () => {
+    expect(m.workflowActions({ status: 'requested' }, { elevated: false })).toEqual([])
+    expect(m.workflowActions({ status: 'requested' }, { elevated: true })).toEqual(['approve', 'reject'])
+    expect(m.workflowActions({ status: 'approved' }, { elevated: false })).toEqual(['checkout'])
+    expect(m.workflowActions({ status: 'out' })).toEqual(['return'])
+    expect(m.workflowActions({ status: 'returned' }, { elevated: true })).toEqual([])
+  })
+
+  it('reads trip facts and never turns a missing reading into zero', () => {
+    const f = m.tripFacts({ odometer_out: 1000, odometer_in: 1150, expected_km: 100, start_at: '2026-01-01T08:00:00Z', actual_pickup_at: '2026-01-01T09:00:00Z' })
+    expect(f.distance).toBe(150)
+    expect(f.variancePct).toBe(50)
+    expect(f.pickupLateMin).toBe(60)
+    expect(f.returnLateMin).toBeNull()
+    expect(m.tripFacts({ odometer_out: 1000 }).distance).toBeNull()
+    expect(m.tripFacts({ odometer_out: 1000, odometer_in: 900 }).distance).toBeNull()
+  })
+
+  it('describes events in plain words', () => {
+    expect(m.describeEvent({ event_type: 'rejected', detail: { reason: 'No driver' } })).toEqual({ label: 'Rejected', text: 'Reason: No driver' })
+    expect(m.describeEvent({ event_type: 'edited', detail: { fields: ['driver_id', 'driver_name', 'purpose'] } }).text).toBe('Changed driver, purpose')
+    expect(m.lateText(2)).toBe('on time')
+    expect(m.lateText(-90)).toBe('1.5 h early')
+    expect(m.lateText(null)).toBeNull()
+    expect(m.isRejected({ rejected_at: 'x' })).toBe(true)
   })
 })

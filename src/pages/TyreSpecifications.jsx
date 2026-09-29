@@ -59,6 +59,7 @@ import {
 } from '../components/tyreSpec/WorkbenchTabs'
 import SpecFormPanel from '../components/tyreSpec/SpecFormPanel'
 import CatalogFormPanel from '../components/tyreSpec/CatalogFormPanel'
+import FleetCoverage from '../components/tyreSpec/FleetCoverage'
 import {
   CatalogGrid, catalogTableColumns, CatalogDetail, CatalogTreadCard, CatalogDrawingCard, CatalogDeleteModal,
 } from '../components/tyreSpec/CatalogPanels'
@@ -194,6 +195,7 @@ export default function TyreSpecifications() {
     setCatError('')
     try {
       setCatalog(await catalogApi.listCatalog({ country }))
+      catalogApi.invalidateSpecCache()
     } catch (e) {
       setCatError(toUserMessage(e, 'Failed to load the tyre specification catalogue'))
       setCatalog([])
@@ -548,6 +550,8 @@ export default function TyreSpecifications() {
       'Approved At': c.approved_at ? new Date(c.approved_at).toLocaleDateString() : '',
       'Country': c.country || 'All countries',
       'Description': c.description || '',
+      'Source URL': c.source_url || '',
+      'Source Note': c.source_note || '',
     }))
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([{
@@ -955,6 +959,7 @@ export default function TyreSpecifications() {
 
   const TABS = [
     { key: 'specs', label: 'Catalogue', count: catalog.length },
+    { key: 'coverage', label: 'Fleet coverage' },
     { key: 'rules', label: 'Fitment rules', count: specs.length },
     { key: 'compliance', label: 'Fleet compliance' },
     { key: 'violations', label: 'Non-conformance', count: nonConformanceByAsset.length || null, countTone: 'red' },
@@ -1153,6 +1158,11 @@ export default function TyreSpecifications() {
             />
           </aside>
         </div>
+      )}
+
+      {activeTab === 'coverage' && (
+        <FleetCoverage country={country} catalog={catalog} catalogError={catError}
+          onOpenSpec={(id) => { setActiveTab('specs'); setCatFilters(EMPTY_CATALOG_FILTERS); setSelectedCatId(id) }} />
       )}
 
       {activeTab === 'rules' && (

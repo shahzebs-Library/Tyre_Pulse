@@ -4,10 +4,11 @@
  *
  * Labels are generated on demand from the tyre register (tyre_records) and the
  * fleet register (vehicle_fleet, split into vehicles and tyreless equipment).
- * There is NO label, print or scan register in the database, so the print
- * queue and the list of batches made here live in this browser tab only, the
- * page says so, and the inventory / assignment / scan tabs are honest empty
- * states. Counts that would need a label register read N/A.
+ * Every batch made here (generated, printed, PDF, Excel, queued) is saved to
+ * qr_print_jobs (codes only, never the image), so the print history survives
+ * the tab. The print queue itself is still this tab only. There is no label
+ * assignment or scan register, so those tabs are honest empty states and
+ * counts that would need one read N/A.
  *
  * Kept from the previous page: paste or upload a list of codes (ambiguous codes
  * are never auto-selected), the size control that derives the A4 grid, serials
@@ -40,7 +41,11 @@ import {
   SIZE_TABS, QR_LEVELS, LABEL_INFO, infoLabel, toEntry, expandCopies, clampCopies, COPIES,
   addToQueue, queueLabelCount, queueToPrint, BATCH_ACTIONS, makeBatch, formatBatchTime, buildQrKpis,
   PAGE_TABS, TAB_EMPTY, normalizeDesign, saveTemplate, cleanCustomText, splitFleet,
+  toPrintJobRow, printJobTotals,
 } from '../lib/qrLabelsView'
+import { listPrintJobs, savePrintJob } from '../lib/qrLabelJobs'
+import { loadPdf } from '../lib/pdfEngine'
+import QrPrintSheet from '../components/qr/QrPrintSheet'
 import { toUserMessage } from '../lib/safeError'
 import { exportToExcel, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import { getCompanyLogo } from '../lib/api/brandLogo'
@@ -166,7 +171,6 @@ export default function QrLabels() {
   const [printEntries, setPrintEntries] = useState(null)
   const [previewQr,  setPreviewQr]  = useState(null)
   const batchSeq = useRef(0)
-  const printAreaRef = useRef(null)
   const fileRef      = useRef(null)
   const exportRef    = useRef(null)
 
@@ -192,6 +196,16 @@ export default function QrLabels() {
 
   // Headline counts: each tile reads its own register, so a failed count shows
   // N/A on its own tile instead of taking the page down.
+  // Saved print history (qr_print_jobs). A failed read shows error + Retry.
+  const savedJobs = useCard(() => listPrintJobs({ country: activeCountry }), [activeCountry])
+  // Batch numbers carry on from today's saved runs so two tabs never both print QR-...-001.
+  const todayPrefix = `QR-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-`
+  const todaysSaved = (savedJobs.data || []).reduce((m, j) => {
+    if (!String(j.batchNo || '').startsWith(todayPrefix)) return m
+    const n = Number(String(j.batchNo).slice(todayPrefix.length)) || 0
+    return Math.max(m, n)
+  }, 0)
+
   const counts = useCard(async () => {
     const [tyreRes, fleetRes] = await Promise.all([
       applyCountry(supabase.from('tyre_records').select('id', { count: 'exact', head: true }), activeCountry),
@@ -309,8 +323,16 @@ export default function QrLabels() {
   function recordBatch(action, entries, labels) {
     if (!entries.length) return
     batchSeq.current += 1
-    const b = makeBatch({ seq: batchSeq.current, type: entries[0]?.type || type, items: new Set(entries.map((e) => e.key)).size, labels: labels ?? entries.length, action, by: byName })
+    const b = makeBatch({ seq: batchSeq.current + todaysSaved, type: entries[0]?.type || type, items: new Set(entries.map((e) => e.key)).size, labels: labels ?? entries.length, action, by: byName })
     setBatches((prev) => [{ ...b, entries }, ...prev].slice(0, 50))
+    // Best-effort save: a failed save never blocks the print, it just says so.
+    savePrintJob(toPrintJobRow(b, entries, { country: activeCountry, labelSize: design.size === 'custom' ? `custom ${design.customW} mm` : design.size }))
+      .then((saved) => {
+        if (!saved) return
+        setBatches((prev) => prev.map((x) => (x.id === b.id ? { ...x, savedId: saved.id } : x)))
+        savedJobs.retry()
+      })
+      .catch(() => setNotice({ tone: 'warn', text: 'The labels were made, but this run could not be saved to the print history.' }))
   }
 
   // `items` lets the bulk intake generate exactly what it just matched without
@@ -333,6 +355,31 @@ export default function QrLabels() {
     setSessionLabels((n) => n + made.length)
     recordBatch('generated', made.map((r) => toEntry(r, type, { code: getLabel(r), qr: results[r.id], info, customText: design.customText })))
     setGenerating(false)
+  }
+
+  // Reprint a saved batch: its codes are matched against the list on screen and
+  // the QR images made again (the history stores codes, never images).
+  async function reprintSaved(batch) {
+    const want = new Set((batch.entries || []).map((e) => e.val))
+    const rows = data.filter((r) => want.has(getLabel(r)))
+    if (!rows.length) {
+      setNotice({ tone: 'warn', text: `None of these codes are in the list on screen. Switch the item type to ${itemTypeLabel(batch.type)} and try again.` })
+      setViewBatch(null)
+      return
+    }
+    setGenerating(true)
+    try {
+      const made = []
+      for (const r of rows) {
+        const code = getLabel(r)
+        try { made.push(toEntry(r, type, { code, qr: await makeQR(code, design.qrLevel), info, customText: design.customText })) } catch { /* skip one bad code */ }
+      }
+      setViewBatch(null)
+      if (made.length) handlePrint(expandCopies(made, copies))
+      if (made.length < want.size) setNotice({ tone: 'warn', text: `${want.size - made.length} of ${want.size} codes from that batch were not found in the list on screen and were left out.` })
+    } finally {
+      setGenerating(false)
+    }
   }
 
   // A new error-correction level makes every generated code stale.
@@ -435,7 +482,7 @@ export default function QrLabels() {
     if (!readyItems.length) return
     setExporting(true)
     try {
-      const { default: jsPDF } = await import('jspdf')
+      const { jsPDF } = await loadPdf()
 
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
       // The grid is DERIVED from the label size the user chose, so a Small label
@@ -707,75 +754,17 @@ export default function QrLabels() {
   const previewW = Math.min(dim, 230)
   const sizeInfo = resolveLabelSize(labelSize, design.customW)
 
-  const tabs = PAGE_TABS.map((t) => ({ ...t, count: t.key === 'prints' && batches.length ? batches.length : undefined }))
+  // History = this tab's batches (they still hold the QR images for Print again)
+  // plus every saved batch not already shown from this tab.
+  const sessionSavedIds = new Set(batches.map((b) => b.savedId).filter(Boolean))
+  const history = [...batches, ...(savedJobs.data || []).filter((j) => !sessionSavedIds.has(j.id))]
+  const totals = printJobTotals(savedJobs.data)
+  const tabs = PAGE_TABS.map((t) => ({ ...t, count: t.key === 'prints' && history.length ? history.length : undefined }))
 
   return (
     <>
-      {/* ── Print styles ─────────────────────────────────────────────────────── */}
-      <style>{`
-        @media print {
-          body > * { visibility: hidden !important; }
-          #tp-qr-print, #tp-qr-print * { visibility: visible !important; }
-          #tp-qr-print {
-            position: fixed !important;
-            top: 0 !important; left: 0 !important;
-            width: 210mm !important;
-            padding: 10mm !important;
-            background: white !important;
-            display: flex !important;
-            flex-wrap: wrap !important;
-            gap: 4mm !important;
-            align-content: flex-start !important;
-          }
-          .tp-print-label {
-            display: flex !important;
-            flex-direction: column !important;
-            align-items: center !important;
-            width: ${grid.w}mm !important;
-            border: 1.5px solid #16a34a !important;
-            border-radius: 3mm !important;
-            overflow: hidden !important;
-            break-inside: avoid !important;
-            page-break-inside: avoid !important;
-            background: white !important;
-          }
-          .tp-print-header {
-            width: 100% !important; background: white !important;
-            display: flex !important; align-items: center !important; justify-content: center !important;
-            padding: 1.5mm 0 !important; border-bottom: 0.6mm solid #16a34a !important;
-            min-height: 7mm !important;
-          }
-          .tp-print-header img { max-width: ${Math.max(20, grid.w - 14)}mm !important; max-height: 6mm !important; object-fit: contain !important; }
-          .tp-print-header span { color: #16a34a !important; font-size: 7pt !important; font-weight: bold !important; letter-spacing: 0.06em !important; font-family: Arial, sans-serif !important; }
-          .tp-print-qr { width: ${Math.max(20, grid.w - 10)}mm !important; height: ${Math.max(20, grid.w - 10)}mm !important; margin: 2mm !important; }
-          .tp-print-serial { font-family: monospace !important; font-size: 8pt !important; font-weight: bold !important; text-align: center !important; color: #000 !important; margin: 0 2mm 1mm !important; word-break: break-all !important; }
-          .tp-print-sub { font-size: 6pt !important; color: #666 !important; text-align: center !important; padding: 0 2mm 1.5mm !important; margin: 0 !important; }
-          @page { size: A4 portrait; margin: 0; }
-        }
-      `}</style>
-
-      {/* ── Print area (always rendered, off-screen until printing) ──────────── */}
-      <div
-        id="tp-qr-print"
-        ref={printAreaRef}
-        style={{ position: 'fixed', top: 0, left: '-99999px', width: '210mm', background: 'white' }}
-        aria-hidden
-      >
-        {printList.map((item, i) => (
-          <div key={`${item.key}-${i}`} className="tp-print-label">
-            {info.logo && (
-              <div className="tp-print-header">
-                {companyLogo && logoUrl
-                  ? <img src={logoUrl} alt="" crossOrigin="anonymous" />
-                  : <span>TYRE PULSE</span>}
-              </div>
-            )}
-            <img src={item.qr} alt={`QR code for ${item.val}`} className="tp-print-qr" />
-            <p className="tp-print-serial">{item.val}</p>
-            {item.lines.map((l) => <p key={l} className="tp-print-sub">{l}</p>)}
-          </div>
-        ))}
-      </div>
+      {/* ── Print sheet (portal to <body>, same A4 grid as the PDF) ─────────── */}
+      <QrPrintSheet entries={printList} grid={grid} showLogo={info.logo} logoUrl={companyLogo ? logoUrl : ''} />
 
       {/* ── Page ─────────────────────────────────────────────────────────────── */}
       <div className="cc ql-page">
@@ -806,8 +795,11 @@ export default function QrLabels() {
         )}
 
         <div className="cc-kpis">
-          <Kpi icon={QrCode} tone="t-green" display={fmtInt(kpis.generated)} label="Labels generated this session"
-            title="Counted in this browser tab. No record of generated labels is kept in the system." />
+          {totals
+            ? <Kpi icon={QrCode} tone="t-green" display={fmtInt(totals.generated)} label="Labels generated"
+                title={`From the saved print history: ${fmtInt(totals.printed)} sent to printer, ${fmtInt(totals.exported)} exported to PDF`} onClick={() => setTab('prints')} />
+            : <Kpi icon={QrCode} tone="t-green" loading={savedJobs.loading} display={fmtInt(kpis.generated)} label="Labels generated this session"
+                title="The saved print history could not be read, so this counts this browser tab only." />}
           <Kpi icon={CircleDot} tone="t-blue" loading={kpiLoading} display={kpiDisplay(kpis.tyres)} label="Tyres to label"
             title="Tyre records in the register that a label can be made for" onClick={() => chooseType('tyres')} />
           <Kpi icon={Truck} tone="t-purple" loading={kpiLoading} display={kpiDisplay(kpis.vehicles)} label="Vehicles to label"
@@ -1195,9 +1187,9 @@ export default function QrLabels() {
               </Card>
 
               {/* Recent generated labels (this session) */}
-              <Card title="Recent generated labels" sub="This session only. Not saved to the system."
-                action={batches.length > 0 && <button type="button" className="cc-link cc-link-btn" onClick={() => setTab('prints')}>View all</button>}>
-                <BatchTable batches={batches.slice(0, 6)} onView={setViewBatch} compact empty="No labels generated yet in this session." />
+              <Card title="Recent generated labels" sub="Saved print history for everyone in your company."
+                action={history.length > 0 && <button type="button" className="cc-link cc-link-btn" onClick={() => setTab('prints')}>View all</button>}>
+                <BatchTable batches={history.slice(0, 6)} state={savedJobs} onView={setViewBatch} compact empty="No labels generated yet." />
               </Card>
             </div>
 
@@ -1249,8 +1241,9 @@ export default function QrLabels() {
         )}
 
         {tab === 'prints' && (
-          <Card title="Print history" sub="Print runs and exports made on this page in this browser tab. Not saved to the system.">
-            <BatchTable batches={batches} onView={setViewBatch} empty={TAB_EMPTY.prints.body} />
+          <Card title="Print history" sub="Every label run, print and export made on this page, saved for your company. Codes only; QR images are made again when you reprint."
+            action={<button type="button" className="cc-btn-ghost" onClick={savedJobs.retry}><RefreshCw size={14} aria-hidden="true" /> Refresh</button>}>
+            <BatchTable batches={history} state={savedJobs} onView={setViewBatch} empty={TAB_EMPTY.prints.body} />
           </Card>
         )}
 
@@ -1286,7 +1279,8 @@ export default function QrLabels() {
               <ul className="ql-facts">
                 <li><b>Company logo</b><span>{logoUrl ? 'Set, loaded from your report branding.' : 'Not set. Labels use the Tyre Pulse wordmark. Set one in the console under Report Colors.'}</span></li>
                 <li><b>Your label design</b><span>Remembered in this browser on this device.</span></li>
-                <li><b>Print queue and history</b><span>Kept in this browser tab only and cleared when it closes.</span></li>
+                <li><b>Print history</b><span>Saved for your company: batch number, type, codes, who made it and when.</span></li>
+                <li><b>Print queue</b><span>Kept in this browser tab only and cleared when it closes.</span></li>
               </ul>
               <button type="button" className="cc-btn-ghost" onClick={() => { setDesign(normalizeDesign(null)); setQrImages({}) }}>
                 <RefreshCw size={14} aria-hidden="true" /> Reset design to defaults
@@ -1326,11 +1320,17 @@ export default function QrLabels() {
       {/* ── One batch ────────────────────────────────────────────────────────── */}
       <Modal open={!!viewBatch} onClose={() => setViewBatch(null)} size="md" title={viewBatch ? `Batch ${viewBatch.batchNo}` : ''}
         subtitle={viewBatch ? `${BATCH_ACTIONS[viewBatch.action]?.label || viewBatch.action}, ${formatBatchTime(viewBatch.at)}` : ''}
-        footer={viewBatch && viewBatch.entries?.some((e) => e.qr) && (
-          <button type="button" className="cc-btn-primary" onClick={() => { const list = viewBatch.entries.filter((e) => e.qr); setViewBatch(null); handlePrint(list) }}>
-            <Printer size={14} aria-hidden="true" /> Print again
-          </button>
-        )}>
+        footer={viewBatch && (viewBatch.entries?.some((e) => e.qr)
+          ? (
+            <button type="button" className="cc-btn-primary" onClick={() => { const list = viewBatch.entries.filter((e) => e.qr); setViewBatch(null); handlePrint(list) }}>
+              <Printer size={14} aria-hidden="true" /> Print again
+            </button>
+          )
+          : viewBatch.entries?.length > 0 && (
+            <button type="button" className="cc-btn-primary" disabled={generating} onClick={() => reprintSaved(viewBatch)}>
+              <Printer size={14} aria-hidden="true" /> Make QR codes and print
+            </button>
+          ))}>
         {viewBatch && (
           <ul className="ql-queue">
             {[...new Map((viewBatch.entries || []).map((e) => [e.key, e])).values()].map((e) => (
@@ -1346,7 +1346,7 @@ export default function QrLabels() {
   )
 }
 
-function BatchTable({ batches, onView, compact = false, empty }) {
+function BatchTable({ batches, onView, compact = false, empty, state }) {
   const cols = [
     { key: 'batchNo', header: 'Batch no', cell: (b) => <span className="ql-mono">{b.batchNo}</span> },
     { key: 'type', header: 'Type', cell: (b) => itemTypeLabel(b.type) },
@@ -1358,7 +1358,7 @@ function BatchTable({ batches, onView, compact = false, empty }) {
       cell: (b) => <button type="button" className="cc-icon-btn" aria-label={`View batch ${b.batchNo}`} onClick={() => onView(b)}><Eye size={14} /></button> },
   ]
   return (
-    <CardState state={{ loading: false, data: batches, error: null }} empty={batches.length ? null : empty}>
+    <CardState state={{ loading: !batches.length && !!state?.loading, data: batches, error: !batches.length ? state?.error || null : null, retry: state?.retry }} empty={batches.length ? null : empty}>
       <KitTable compact={compact} columns={cols} rows={batches} getRowId={(b) => b.id} className="ql-batches" empty={empty} />
     </CardState>
   )

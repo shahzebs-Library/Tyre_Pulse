@@ -443,3 +443,40 @@ export function thresholdExportRow(t) {
     status: THRESHOLD_STATUS[t.status]?.label || 'N/A',
   }
 }
+
+// ── One asset's history ─────────────────────────────────────────────────────
+
+/**
+ * One asset's engine-hour readings oldest first, each marked with the anomaly
+ * (drop or jump) it is the later side of and the reason in words. Hours run is
+ * the rise between the first and last readings that are not anomalies; null
+ * when fewer than two such readings exist, never 0.
+ */
+export function assetHourSeries(readings, assetNo) {
+  const key = String(assetNo || '').trim().toUpperCase()
+  const mine = (Array.isArray(readings) ? readings : [])
+    .filter((r) => String(r?.asset_no || '').trim().toUpperCase() === key && toNum(r.engine_hours) != null)
+  const byId = new Map()
+  for (const a of allAnomalies(mine)) {
+    const rid = String(a.id).startsWith('jump:') ? String(a.id).slice(5) : String(a.id)
+    const reason = a.type === 'drop'
+      ? `${a.drop == null ? 'Lower' : `${a.drop.toLocaleString('en-US')} h lower`} than the previous reading (meter reset, replacement or keying error)`
+      : `Up ${Number(a.change).toLocaleString('en-US')} h, about ${Number(a.perDay).toLocaleString('en-US')} h a day, more than a day can hold`
+    byId.set(rid, { type: a.type, reason })
+  }
+  const points = mine
+    .map((r) => {
+      const hit = byId.get(String(r.id))
+      return { key: String(r.id ?? `${dayOf(r)}:${r.engine_hours}`), row: r, date: dayOf(r) || null, value: toNum(r.engine_hours), flagged: hit?.type === 'drop', jump: hit?.type === 'jump', reason: hit?.reason || null }
+    })
+    .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')) || String(a.row.created_at || '').localeCompare(String(b.row.created_at || '')))
+  const clean = points.filter((p) => !p.flagged && !p.jump)
+  const run = clean.length >= 2 ? clean[clean.length - 1].value - clean[0].value : null
+  return {
+    points,
+    hoursRun: run != null && run >= 0 ? Math.round(run * 10) / 10 : null,
+    flaggedCount: points.length - clean.length,
+    firstDate: points[0]?.date || null,
+    lastDate: points.at(-1)?.date || null,
+  }
+}

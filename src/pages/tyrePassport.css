@@ -51,15 +51,18 @@ html.light .tp-head-dark { display: none; }
 
 /* Identity card */
 .tp-id { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(300px, 380px); gap: 20px; align-items: center; padding: 14px; }
-.tp-id-art { position: relative; width: 150px; height: 138px; border-radius: 12px; background: var(--cc-inner); border: 1px solid var(--cc-inner-border); display: grid; place-items: center; }
+.tp-id-art { position: relative; width: 210px; max-width: 100%; border-radius: 12px; background: var(--cc-inner); border: 1px solid var(--cc-inner-border); padding: 10px; display: flex; flex-direction: column; align-items: center; }
+.tp-id-art .tyre-img-hero { width: 100%; }
+.tp-id-art .tyre-img-hero figcaption { max-width: none !important; }
 html.light .tp-id-art { background: #f4f6f8; }
 .tp-tyre-art { width: 118px; height: 118px; }
-.tp-qr { position: absolute; right: -8px; bottom: -8px; width: 46px; height: 46px; border-radius: 6px; background: #fff; padding: 2px; border: 1px solid var(--cc-inner-border); box-shadow: var(--cc-shadow); }
+.tp-qr { position: absolute; right: -8px; top: -8px; width: 46px; height: 46px; border-radius: 6px; background: #fff; padding: 2px; border: 1px solid var(--cc-inner-border); box-shadow: var(--cc-shadow); }
 .tp-eyebrow { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--cc-green); background: var(--cc-green-tint); padding: 2px 7px; border-radius: 5px; }
 .tp-serial { font-size: 20px; font-weight: 800; color: var(--cc-ink); margin: 6px 0 12px; letter-spacing: -.01em; word-break: break-all; }
 .tp-specs { display: flex; flex-wrap: wrap; align-items: stretch; gap: 0; }
 .tp-brand { font-size: 16px; font-weight: 800; color: var(--cc-ink); padding: 6px 18px 6px 0; display: flex; align-items: center; }
-.tp-spec { display: flex; flex-direction: column; gap: 4px; padding: 4px 18px; border-left: 1px solid var(--cc-inner-border); min-width: 110px; }
+.tp-spec { display: flex; flex-direction: column; gap: 4px; padding: 4px 18px; border-left: 1px solid var(--cc-inner-border); min-width: 110px; max-width: 100%; }
+.tp-spec b { overflow-wrap: anywhere; }
 .tp-spec span { font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: var(--cc-ink-3); }
 .tp-spec b { font-size: 14px; color: var(--cc-ink); font-weight: 700; }
 .tp-id-side { display: flex; flex-direction: column; gap: 10px; border-left: 1px solid var(--cc-inner-border); padding-left: 18px; }
@@ -176,3 +179,5 @@ button.tp-metric:hover { border-color: var(--cc-green); }
 }
 @media (prefers-reduced-motion: reduce) { .tp-search-spin { animation: none; } }
 .tp-foot { display: flex; align-items: center; gap: 6px; margin: 0; }
+
+.tp-link-row { cursor: pointer; }

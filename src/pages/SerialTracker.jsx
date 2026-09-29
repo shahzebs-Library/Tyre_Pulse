@@ -26,7 +26,9 @@ import {
   ClipboardList, UserX, CalendarClock, Hash, CheckCircle2, Package, Wrench, Ban,
   EyeOff, Eye, ExternalLink, X, ImageOff, ArrowRight, QrCode,
 } from 'lucide-react'
-import { findSerialRecords, listSerialRegister, getSerialKpis, listSizeOptions } from '../lib/api/serialTracker'
+import { findSerialRecords, listSerialRegister, getSerialKpis, listSizeOptions, listCatalogueForBrand } from '../lib/api/serialTracker'
+import { matchCatalogue } from '../lib/tyreImage'
+import TyreTreadImage from '../components/tyre/TyreTreadImage'
 import { listFilterOptions } from '../lib/api/tyreRecords'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToPdf, exportToExcel, reportFileName } from '../lib/exportUtils'
@@ -61,20 +63,12 @@ const moneyFor = (n, country) => (n == null ? 'N/A' : formatCurrencyCompact(n, C
 const fmtKm = (n) => (n == null ? 'N/A' : `${Math.round(n).toLocaleString('en-US')} km`)
 const dateOrNA = (v) => (v ? formatDate(v) : 'N/A')
 
+const passportLink = (serial) => (serial
+  ? <Link to={`/tyre-passport/${encodeURIComponent(serial)}`} className="font-mono text-[var(--text-primary)] cc-link" onClick={(e) => e.stopPropagation()} title="Open tyre passport">{serial}</Link>
+  : <span className="cc-na">N/A</span>)
+
 const BULK_TONE = { 'Not Found': 'muted', Active: 'good', Scrapped: 'bad', Retired: 'muted' }
 const REGISTER_PAGE_SIZES = [10, 25, 50]
-
-/** Plain tyre glyph: an illustration, never presented as a photo of the tyre. */
-function TyreGlyph({ size = 30 }) {
-  return (
-    <svg className="st-tyre" width={size} height={size} viewBox="0 0 40 40" aria-hidden="true">
-      <circle cx="20" cy="20" r="18" fill="#1f2937" />
-      <circle cx="20" cy="20" r="18" fill="none" stroke="#4b5563" strokeWidth="2" strokeDasharray="3 2.4" />
-      <circle cx="20" cy="20" r="9" fill="#9ca3af" />
-      <circle cx="20" cy="20" r="3.2" fill="#374151" />
-    </svg>
-  )
-}
 
 function StatusPill({ status, scrapped }) {
   const m = statusMeta(status, { scrapped })
@@ -313,8 +307,10 @@ export default function SerialTracker() {
     setScrapErr(null)
     try {
       await unscrapTyreBySerial(lastQuery)
-      setRecords(prev => prev.map(r => (r.status === 'Scrapped' ? { ...r, status: 'Active' } : r)))
       setScrapMark(null)
+      // The server restores each record's status from before the scrap
+      // (Active, Removed ...), so read it back instead of assuming Active.
+      search(lastQuery)
     } catch (err) {
       setScrapErr(toUserMessage(err, 'Could not remove the scrap mark.'))
     } finally {
@@ -564,7 +560,7 @@ export default function SerialTracker() {
   ], [])
 
   const bulkColumns = useMemo(() => [
-    { accessorKey: 'serial', header: 'Serial No', sortingFn: sortCompare, cell: ({ getValue }) => <span className="font-mono text-[var(--text-primary)]">{getValue()}</span> },
+    { accessorKey: 'serial', header: 'Serial No', sortingFn: sortCompare, cell: ({ getValue }) => passportLink(getValue()) },
     { id: 'first_seen', accessorFn: r => blankToUndef(r.first_seen), header: 'First Seen', sortingFn: sortCompare, sortUndefined: 'last', cell: ({ getValue }) => getValue() ? formatDate(getValue()) : 'N/A' },
     { id: 'last_asset', accessorFn: r => blankToUndef(r.last_asset), header: 'Last Asset', sortingFn: sortCompare, sortUndefined: 'last', cell: ({ getValue }) => <span className="font-mono">{getValue() || 'N/A'}</span> },
     { accessorKey: 'total_records', header: 'Records', sortingFn: sortCompare, meta: { align: 'right' } },
@@ -576,7 +572,7 @@ export default function SerialTracker() {
   ], [])
 
   const scrapColumns = useMemo(() => [
-    { accessorKey: 'serial', header: 'Serial No', sortingFn: sortCompare, cell: ({ getValue }) => <span className="font-mono text-[var(--text-primary)]">{getValue()}</span> },
+    { accessorKey: 'serial', header: 'Serial No', sortingFn: sortCompare, cell: ({ getValue }) => passportLink(getValue()) },
     {
       id: 'asset_no', accessorFn: r => blankToUndef(r.asset_no), header: 'Asset', sortingFn: sortCompare, sortUndefined: 'last',
       cell: ({ row, getValue }) => (
@@ -704,6 +700,22 @@ export default function SerialTracker() {
   }
 
   const assignment = useMemo(() => currentAssignment(records), [records])
+
+  // Tyre catalogue entry for the selected tyre's brand and size: pattern, load
+  // index and the tread picture. A failed read says "could not check".
+  const selBrand = records.find((r) => r.brand)?.brand || ''
+  const selSize = records[records.length - 1]?.size || ''
+  const [catState, setCatState] = useState({ rows: [], error: null, loading: false })
+  useEffect(() => {
+    if (!selBrand) { setCatState({ rows: [], error: null, loading: false }); return undefined }
+    let live = true
+    setCatState({ rows: [], error: null, loading: true })
+    listCatalogueForBrand(selBrand, { country: activeCountry })
+      .then((rows) => { if (live) setCatState({ rows, error: null, loading: false }) })
+      .catch((e) => { if (live) setCatState({ rows: [], error: toUserMessage(e, 'The tyre catalogue could not be checked.'), loading: false }) })
+    return () => { live = false }
+  }, [selBrand, activeCountry])
+  const catEntry = useMemo(() => matchCatalogue(catState.rows, { brand: selBrand, size: selSize }), [catState.rows, selBrand, selSize])
   const usage = useMemo(() => lifeUsage(records), [records])
   const events = useMemo(() => historyEvents(records, { scrapMark }), [records, scrapMark])
   const counts = useMemo(() => eventCounts(events), [events])
@@ -723,7 +735,7 @@ export default function SerialTracker() {
   const k = kpis.data
   const registerColumns = [
     { key: 'n', header: '#', sortable: false, cell: (r) => <span className="st-muted">{regPage * regSize + regRows.indexOf(r) + 1}</span> },
-    { key: 'tyre', header: '', sortable: false, cell: () => <TyreGlyph size={28} /> },
+    { key: 'tyre', header: '', sortable: false, cell: (r) => <TyreTreadImage size={r.size} position={r.position || r.tyre_position} width={40} className="st-tyre" /> },
     {
       key: 'serial_no', header: 'Serial number', cell: (r) => {
         const s = cleanSerial(r.serial_no)
@@ -915,8 +927,8 @@ export default function SerialTracker() {
                         {(statusFilter || bulkSearch.trim()) && (
                           <p className="st-muted">
                             Showing {filteredBulkResults.length} of {bulkResults.length} results
-                            {statusFilter && <> · filtered by <b>{statusFilter}</b></>}
-                            {bulkSearch.trim() && <> · matching <b>"{bulkSearch}"</b></>}
+                            {statusFilter && <>, filtered by <b>{statusFilter}</b></>}
+                            {bulkSearch.trim() && <>, matching <b>"{bulkSearch}"</b></>}
                             <button onClick={() => { setStatusFilter(null); setBulkSearch('') }} className="cc-link cc-link-btn" style={{ marginLeft: 8 }}>Clear</button>
                           </p>
                         )}
@@ -953,8 +965,8 @@ export default function SerialTracker() {
                 <div className="st-scrap-head">
                   <p className="st-muted">
                     {scrapListLoad ? 'Loading...' : `${scrapList.length} tyre${scrapList.length !== 1 ? 's' : ''} marked as scrap`}
-                    {canUndo ? ' · edit the reason or undo a mistaken scrap'
-                      : canScrap ? ' · edit the reason' : ''}
+                    {canUndo ? '. Edit the reason or undo a mistaken scrap.'
+                      : canScrap ? '. Edit the reason.' : ''}
                   </p>
                   <div className="st-chips">
                     <label className="cc-search st-mini-search">
@@ -1092,12 +1104,15 @@ export default function SerialTracker() {
             ) : (
               <>
                 <div className="st-identity">
-                  <TyreGlyph size={84} />
+                  <TyreTreadImage variant="hero" width={150} className="st-tyre-hero"
+                    size={records[records.length - 1]?.size} position={assignment?.position || records[records.length - 1]?.position || records[records.length - 1]?.tyre_position}
+                    catalogue={catEntry} />
                   <div>
                     <StatusPill status={stats.last.status} scrapped={selectedStatusScrapped} />
                     <h3 className="st-serial-big">{lastQuery}</h3>
-                    <p className="st-muted">{[stats.brand, stats.description].filter(Boolean).join(' · ') || 'Brand not recorded'}</p>
-                    {scrapMark && <p className="st-bad">Scrapped {formatDate(scrapMark.created_at)}{scrapMark.reason ? ` · ${scrapMark.reason}` : ''}</p>}
+                    <p className="st-muted">{[stats.brand, stats.description].filter(Boolean).join(', ') || 'Brand not recorded'}</p>
+                    {scrapMark && <p className="st-bad">Scrapped {formatDate(scrapMark.created_at)}{scrapMark.reason ? `: ${scrapMark.reason}` : ''}</p>}
+                    <Link className="cc-link" to={`/tyre-passport/${encodeURIComponent(lastQuery)}`}>Open tyre passport <ArrowRight size={13} aria-hidden="true" /></Link>
                   </div>
                   <Link className="cc-icon-btn st-qr" to={`/tyre-passport/${encodeURIComponent(lastQuery)}`} aria-label="Open tyre passport"><QrCode size={16} aria-hidden="true" /></Link>
                 </div>
@@ -1111,9 +1126,12 @@ export default function SerialTracker() {
                   <Field label="Current life">{usage.totalKm == null ? null : fmtKm(usage.totalKm)}</Field>
                   <Field label="Expected life">{null}</Field>
                   <Field label="Price per tyre">{moneyFor(stats.price, stats.country)}</Field>
+                  <Field label="Pattern">{catState.loading ? 'Checking' : catState.error ? 'Could not check' : (catEntry?.pattern || (catEntry ? null : 'Not in the catalogue'))}</Field>
+                  <Field label="Load / speed">{catEntry ? ([[catEntry.load_index_single, catEntry.load_index_dual].filter((v) => v != null && v !== '').join('/'), catEntry.speed_rating].filter(Boolean).join(' ') || null) : null}</Field>
                 </dl>
                 <p className="st-muted st-note">
-                  Pattern, load index, speed rating, DOT and manufacturing date are not recorded on tyre records.
+                  {catEntry ? 'Pattern and load index come from the tyre catalogue entry for this brand and size.' : 'Pattern and load index are read from the tyre catalogue; this brand and size has no entry there.'}
+                  {' '}DOT and manufacturing date are not recorded on tyre records.
                   {' '}{stats.price == null
                     ? 'No purchase price is recorded on any record of this tyre.'
                     : `Price taken from the latest priced record (${stats.pricedRecords} of ${stats.records} records carry a price).`}

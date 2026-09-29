@@ -377,3 +377,112 @@ export function catalogSizeParts(row) {
     r: num(row?.rim_in) ?? p?.rim ?? '',
   }
 }
+
+// ── Shared catalogue lookup + fleet coverage ───────────────────────────────────
+
+/**
+ * Brand key that folds spelling: case, spaces and punctuation are ignored, so
+ * "DOUBLE COIN", "Doublecoin" and "Double-Coin" all read as one brand. A brand
+ * the fleet misspells differently (ERICLE for ERACLE) is NOT merged: that is a
+ * different string and guessing would attach the wrong published data.
+ */
+export function brandKey(brand) {
+  return clean(brand).toUpperCase().replace(/[^A-Z0-9]/g, '')
+}
+
+const patternKey = (p) => clean(p).toUpperCase().replace(/[^A-Z0-9]/g, '')
+const APPROVAL_RANK = { approved: 0, pending: 1, not_approved: 2 }
+
+/**
+ * Pick the best catalogue row for a tyre. Rows must match brand and size; then
+ * approved beats pending beats rejected, an exact pattern beats any other, the
+ * tyre's own country beats a row for everywhere, which beats another country.
+ * A row for ANOTHER country is still offered (published data does not change
+ * across a border) but only when nothing closer exists. Null when none match.
+ */
+export function matchSpec(rows = [], { brand, size, pattern, country } = {}) {
+  const b = brandKey(brand); const s = sizeKey(size); const p = patternKey(pattern)
+  if (!b || !s) return null
+  const cands = (rows || []).filter((r) => brandKey(r.brand) === b && sizeKey(r.size) === s)
+  if (!cands.length) return null
+  const countryRank = (r) => (country && r.country === country ? 0 : !r.country ? 1 : 2)
+  const score = (r) => [
+    APPROVAL_RANK[r.approval_status] ?? 3,
+    p && patternKey(r.pattern) === p ? 0 : 1,
+    countryRank(r),
+  ]
+  return [...cands].sort((x, y) => {
+    const a = score(x); const c = score(y)
+    for (let i = 0; i < a.length; i += 1) if (a[i] !== c[i]) return a[i] - c[i]
+    return clean(x.pattern).localeCompare(clean(y.pattern))
+  })[0]
+}
+
+export const COVERAGE_META = {
+  approved: { key: 'approved', label: 'Approved spec', tone: 'good' },
+  pending: { key: 'pending', label: 'Spec awaiting approval', tone: 'warn' },
+  rejected: { key: 'rejected', label: 'Only rejected specs', tone: 'bad' },
+  none: { key: 'none', label: 'No spec in catalogue', tone: 'bad' },
+}
+
+/**
+ * Join the fleet brand + size mix to the catalogue. One row per country +
+ * brand + size the fleet runs, with the tyre count, the catalogue specs that
+ * describe it and a coverage status. Catalogue rows for the same country or
+ * for all countries count; another country's row does not cover this one.
+ */
+export function coverageRows(mix = [], catalog = []) {
+  const byKey = new Map()
+  for (const c of catalog || []) {
+    const k = `${brandKey(c.brand)}|${sizeKey(c.size)}`
+    if (!byKey.has(k)) byKey.set(k, [])
+    byKey.get(k).push(c)
+  }
+  return (mix || []).map((m) => {
+    const all = byKey.get(`${brandKey(m.brand)}|${sizeKey(m.size)}`) || []
+    const specs = all.filter((c) => !c.country || !m.country || c.country === m.country)
+    const approved = specs.filter((c) => c.approval_status === 'approved')
+    const pending = specs.filter((c) => c.approval_status === 'pending')
+    const status = approved.length ? 'approved' : pending.length ? 'pending' : specs.length ? 'rejected' : 'none'
+    return {
+      id: `${m.country || ''}|${brandKey(m.brand)}|${sizeKey(m.size)}`,
+      country: m.country || null,
+      brand: clean(m.brand),
+      size: sizeKey(m.size),
+      tyres: Number(m.tyres) || 0,
+      active: m.active == null ? null : Number(m.active),
+      lastFitted: m.last_fitted || null,
+      specs,
+      patterns: [...new Set(specs.map((c) => clean(c.pattern)).filter(Boolean))],
+      status,
+    }
+  })
+}
+
+/** Headline figures for the coverage view. Share is by tyre count, null when 0. */
+export function coverageKpis(rows = []) {
+  const tyres = rows.reduce((a, r) => a + r.tyres, 0)
+  const tyresApproved = rows.filter((r) => r.status === 'approved').reduce((a, r) => a + r.tyres, 0)
+  const count = (s) => rows.filter((r) => r.status === s).length
+  return {
+    combos: rows.length,
+    tyres,
+    approved: count('approved'),
+    pending: count('pending'),
+    rejected: count('rejected'),
+    none: count('none'),
+    tyreSharePct: tyres ? (tyresApproved / tyres) * 100 : null,
+  }
+}
+
+export const EMPTY_COVERAGE_FILTERS = { search: '', country: '', status: '' }
+
+export function filterCoverage(rows = [], f = EMPTY_COVERAGE_FILTERS) {
+  const q = clean(f.search).toLowerCase()
+  return rows.filter((r) => {
+    if (f.country && r.country !== f.country) return false
+    if (f.status && r.status !== f.status) return false
+    if (q && !`${r.brand} ${r.size} ${r.patterns.join(' ')} ${r.country || ''}`.toLowerCase().includes(q)) return false
+    return true
+  })
+}

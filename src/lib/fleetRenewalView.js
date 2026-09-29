@@ -143,8 +143,9 @@ function planFor(index, asset) {
  * One planning row per current asset, plus a row for any plan whose asset is
  * not in the register (so every plan stays reachable for edit and delete).
  */
-export function buildPlanningRows({ fleet = [], plans = [], utilRows = null, breakdownRows = null, now = new Date() } = {}) {
+export function buildPlanningRows({ fleet = [], plans = [], utilRows = null, breakdownRows = null, signalRows = null, now = new Date() } = {}) {
   const utilMap = utilRows == null ? null : latestUtilByAsset(utilRows)
+  const sigIndex = indexSignals(signalRows)
   const bdMap = openBreakdownsByAsset(breakdownRows)
   const index = indexPlans(plans)
   const used = new Set()
@@ -158,6 +159,7 @@ export function buildPlanningRows({ fleet = [], plans = [], utilRows = null, bre
     const plan = planFor(index, a)
     if (plan) used.add(plan.id)
     const util = utilMap?.get(k)?.v
+    const sig = signalFor(sigIndex, a)
     rows.push({
       id: a.id || `${a.country}|${k}`,
       asset_no: a.asset_no,
@@ -177,8 +179,9 @@ export function buildPlanningRows({ fleet = [], plans = [], utilRows = null, bre
       plan,
       planStatus: plan?.status || 'none',
       budget: num(plan?.est_cost),
-      currency: currencyForCountry(plan?.country || a.country),
+      currency: planCurrency(plan) || currencyForCountry(a.country),
       inRegister: true,
+      ...signalFields(sig, sigIndex),
     })
   }
   for (const p of plans || []) {
@@ -204,11 +207,12 @@ export function buildPlanningRows({ fleet = [], plans = [], utilRows = null, bre
       plan: p,
       planStatus: p.status || 'planned',
       budget: num(p.est_cost),
-      currency: currencyForCountry(p.country),
+      currency: planCurrency(p),
       inRegister: false,
+      ...signalFields(null, sigIndex),
     })
   }
-  return rows
+  return scoreRows(rows)
 }
 
 export function sortPlanningRows(rows = []) {
@@ -236,13 +240,15 @@ export const PRESETS = [
   { key: 'high', label: 'High priority', sub: 'Critical and high priority assets', test: (r) => r.priority === 'critical' || r.priority === 'high' },
   { key: 'next12', label: 'Next 12 months', sub: 'Open plans targeted within a year', test: (r, now) => isPlanDueWithin12m(r.plan, now) },
   { key: 'noplan', label: 'No plan yet', sub: 'Critical or high assets without a plan', test: (r) => (r.priority === 'critical' || r.priority === 'high') && !r.plan },
+  { key: 'score', label: 'High renewal score', sub: 'Score 75 or more', test: (r) => r.score != null && r.score >= 75 },
+  { key: 'accidents', label: 'Accident history', sub: 'At least one recorded accident', test: (r) => (r.accidentsAll || 0) > 0 },
 ]
 
 export function presetCounts(rows = [], now = new Date()) {
   return PRESETS.map((p) => ({ key: p.key, label: p.label, sub: p.sub, count: rows.filter((r) => p.test(r, now)).length }))
 }
 
-export function filterPlanningRows(rows = [], { q = '', site = '', type = '', priority = '', status = '', preset = '' } = {}, now = new Date()) {
+export function filterPlanningRows(rows = [], { q = '', site = '', type = '', priority = '', status = '', preset = '', minScore = null } = {}, now = new Date()) {
   const needle = String(q).trim().toLowerCase()
   const pre = PRESETS.find((p) => p.key === preset)
   return rows.filter((r) => {
@@ -251,6 +257,7 @@ export function filterPlanningRows(rows = [], { q = '', site = '', type = '', pr
     if (priority && r.priority !== priority) return false
     if (status && r.planStatus !== status) return false
     if (pre && !pre.test(r, now)) return false
+    if (minScore != null && minScore !== '' && (r.score == null || r.score < Number(minScore))) return false
     if (needle) {
       const hay = [r.asset_no, r.fleet_no, r.make, r.model, r.vehicle_type, r.site].filter(Boolean).join(' ').toLowerCase()
       if (!hay.includes(needle)) return false
@@ -328,7 +335,7 @@ export function capexByQuarter(plans = [], now = new Date()) {
     if (!Number.isFinite(t)) continue
     const d = new Date(t)
     const hit = quarters.find((x) => x.year === d.getFullYear() && x.q === Math.floor(d.getMonth() / 3) + 1)
-    if (hit) hit.items.push({ amount: p.est_cost, currency: currencyForCountry(p.country) })
+    if (hit) hit.items.push({ amount: p.est_cost, currency: planCurrency(p) })
   }
   const all = sumMoney(quarters.flatMap((x) => x.items))
   return {
@@ -346,7 +353,7 @@ export function buildRenewalKpis(rows = [], plans = [], now = new Date()) {
   const reg = rows.filter((r) => r.inRegister)
   const aged = reg.filter((r) => r.age != null)
   const capex = sumMoney((plans || []).filter((p) => isPlanDueWithin12m(p, now))
-    .map((p) => ({ amount: p.est_cost, currency: currencyForCountry(p.country) })))
+    .map((p) => ({ amount: p.est_cost, currency: planCurrency(p) })))
   return {
     assets: reg.length,
     withAge: aged.length,
@@ -391,10 +398,17 @@ export const PLANNING_EXPORT_COLUMNS = [
   { key: 'health', header: 'Health score' },
   { key: 'remaining', header: 'Remaining life' },
   { key: 'priority', header: 'Priority' },
+  { key: 'score', header: 'Renewal score' },
+  { key: 'current_km', header: 'Current km' },
+  { key: 'hours', header: 'Hour meter' },
+  { key: 'repair12m', header: 'Repair cost 12 months' },
+  { key: 'downtime12m', header: 'Downtime hours 12 months' },
+  { key: 'accidents', header: 'Accidents (all time)' },
   { key: 'recommendation', header: 'Recommendation' },
   { key: 'budget', header: 'Est. budget' },
   { key: 'currency', header: 'Currency' },
   { key: 'target', header: 'Target date' },
+  { key: 'planned_year', header: 'Planned year' },
   { key: 'status', header: 'Plan status' },
 ]
 
@@ -411,10 +425,219 @@ export function planningExportRows(rows = []) {
     health: r.health ?? '',
     remaining: r.remainingYears == null ? '' : remainingLifeLabel(r.remainingYears),
     priority: PRIORITY_META[r.priority]?.label || '',
+    score: r.score ?? '',
+    current_km: r.current_km ?? '',
+    hours: r.lastHours ?? '',
+    repair12m: moneyText(r.repairCost12m),
+    downtime12m: r.downtimeHours12m ?? '',
+    accidents: r.accidentsAll ?? '',
     recommendation: r.recommendation || '',
     budget: r.budget ?? '',
     currency: r.budget == null ? '' : (r.currency || ''),
     target: r.plan?.target_replace_date ? String(r.plan.target_replace_date).slice(0, 10) : '',
+    planned_year: planYear(r.plan) ?? '',
     status: r.plan ? (PLAN_STATUS_META[r.planStatus]?.label || r.planStatus) : 'No plan',
   }))
+}
+
+
+/* ------------------------------------------------------------------ *
+ * Renewal signals and score                                            *
+ * ------------------------------------------------------------------ */
+
+/** Currency of a plan: the stored one, else the country's. Never guessed beyond that. */
+export function planCurrency(plan) {
+  if (!plan) return null
+  const c = String(plan.currency || '').trim().toUpperCase()
+  return c || currencyForCountry(plan.country)
+}
+
+/** Planned year of a plan: the stored one, else the year of the target date. */
+export function planYear(plan) {
+  if (!plan) return null
+  const y = num(plan.planned_year)
+  if (y != null && Number.isInteger(y)) return y
+  const t = plan.target_replace_date ? Date.parse(String(plan.target_replace_date).slice(0, 10)) : NaN
+  return Number.isFinite(t) ? new Date(t).getFullYear() : null
+}
+
+/**
+ * Signals index. null (unreadable) stays null so every derived figure reads
+ * "not measured", never zero.
+ */
+export function indexSignals(rows) {
+  if (rows == null) return null
+  const byCountry = new Map()
+  const byAsset = new Map()
+  for (const r of rows) {
+    const k = assetKey(r?.asset_key)
+    if (!k) continue
+    byCountry.set(`${r.country || ''}|${k}`, r)
+    if (!byAsset.has(k)) byAsset.set(k, r)
+  }
+  return { byCountry, byAsset }
+}
+
+function signalFor(index, asset) {
+  if (!index) return null
+  const k = assetKey(asset?.asset_no)
+  return index.byCountry.get(`${asset?.country || ''}|${k}`) || (asset?.country ? null : index.byAsset.get(k)) || null
+}
+
+function moneyMap(v) {
+  if (!v || typeof v !== 'object') return {}
+  const out = {}
+  for (const [c, a] of Object.entries(v)) { const n = num(a); if (n != null) out[c] = n }
+  return out
+}
+
+/** "SAR 1,200 + AED 300" style text, one figure per currency, never summed. */
+export function moneyText(map) {
+  if (map == null) return ''
+  const e = Object.entries(map).filter(([, a]) => num(a) != null)
+  if (!e.length) return ''
+  return e.map(([c, a]) => `${c} ${Math.round(a).toLocaleString('en-US')}`).join(' + ')
+}
+
+function signalFields(sig, index) {
+  if (index == null) {
+    return { signalsRead: false, repairCost12m: null, repairCostAll: null, downtimeHours12m: null, jobCards12m: null, accidentsAll: null, accidents12m: null, lastHours: null, lastHoursAt: null }
+  }
+  return {
+    signalsRead: true,
+    repairCost12m: moneyMap(sig?.repair_cost_12m),
+    repairCostAll: moneyMap(sig?.repair_cost_all),
+    // No job card with a measurable out/in time is "not measurable", not zero.
+    downtimeHours12m: num(sig?.downtime_hours_12m),
+    jobCards12m: sig ? (num(sig.job_cards_12m) ?? 0) : 0,
+    accidentsAll: sig ? (num(sig.accidents_all) ?? 0) : 0,
+    accidents12m: sig ? (num(sig.accidents_12m) ?? 0) : 0,
+    lastHours: num(sig?.last_hours),
+    lastHoursAt: sig?.last_hours_at || null,
+  }
+}
+
+/** Weights of each score part. Parts that cannot be measured drop out and the rest re-normalise. */
+export const SCORE_WEIGHTS = Object.freeze({ age: 0.3, repair: 0.25, downtime: 0.15, km: 0.1, hours: 0.1, accidents: 0.1 })
+export const SCORE_PART_LABELS = Object.freeze({
+  age: 'Age (ASSUMED 10 year planning life)',
+  repair: 'Repair cost last 12 months, rank within the same currency',
+  downtime: 'Downtime last 12 months, rank within this fleet',
+  km: 'Current km, rank within this fleet',
+  hours: 'Hour meter, rank within this fleet',
+  accidents: 'Accidents last 12 months (50 points each, capped at 100)',
+})
+/** Score at which a medium or low priority asset is raised to high. */
+export const SCORE_RAISE = 75
+
+/** Percentile rank 0..100 of v inside a sorted numeric list (ties share the lower rank). */
+export function percentileRank(sorted, v) {
+  if (v == null || !sorted.length) return null
+  if (sorted.length === 1) return 50
+  let lo = 0
+  while (lo < sorted.length && sorted[lo] < v) lo++
+  return Math.round((lo / (sorted.length - 1)) * 100)
+}
+
+/**
+ * Renewal score 0..100 (higher = stronger replacement candidate). Ranks are
+ * relative to the assets loaded in this scope, and repair cost is only ranked
+ * against assets billed in the same currency.
+ */
+export function scoreRows(rows = []) {
+  const reg = rows.filter((r) => r.inRegister)
+  const sorted = (f) => reg.map(f).filter((v) => v != null && v > 0).sort((a, b) => a - b)
+  const kmS = sorted((r) => r.current_km)
+  const hrS = sorted((r) => r.lastHours)
+  const dtS = sorted((r) => r.downtimeHours12m)
+  const costS = new Map()
+  for (const r of reg) for (const [c, a] of Object.entries(r.repairCost12m || {})) {
+    if (a > 0) { if (!costS.has(c)) costS.set(c, []); costS.get(c).push(a) }
+  }
+  for (const list of costS.values()) list.sort((a, b) => a - b)
+
+  return rows.map((r) => {
+    if (!r.inRegister) return { ...r, score: null, scoreParts: {} }
+    const parts = {}
+    if (r.age != null) parts.age = Math.max(0, Math.min(100, Math.round((r.age / PLANNING_LIFE_YEARS) * 100)))
+    if (r.signalsRead) {
+      const costEntries = Object.entries(r.repairCost12m || {}).filter(([, a]) => a > 0)
+      if (costEntries.length) {
+        parts.repair = Math.max(...costEntries.map(([c, a]) => percentileRank(costS.get(c) || [], a)))
+      } else parts.repair = 0
+      if (r.downtimeHours12m != null) parts.downtime = r.downtimeHours12m > 0 ? percentileRank(dtS, r.downtimeHours12m) : 0
+      parts.accidents = Math.min(100, (r.accidents12m || 0) * 50)
+      if (r.lastHours != null && r.lastHours > 0) parts.hours = percentileRank(hrS, r.lastHours)
+    }
+    if (r.current_km != null && r.current_km > 0) parts.km = percentileRank(kmS, r.current_km)
+    let wsum = 0
+    let acc = 0
+    for (const [k, v] of Object.entries(parts)) { if (v == null) continue; wsum += SCORE_WEIGHTS[k]; acc += SCORE_WEIGHTS[k] * v }
+    const score = wsum > 0 ? Math.round(acc / wsum) : null
+    let priority = r.priority
+    let raised = false
+    if (score != null && score >= SCORE_RAISE && (priority === 'medium' || priority === 'low')) { priority = 'high'; raised = true }
+    return { ...r, score, scoreParts: parts, priority, scoreRaised: raised,
+      recommendation: raised ? `${PRIORITY_META.high.rec} (high renewal score)` : r.recommendation }
+  })
+}
+
+/**
+ * Renewal budget by planned year, one figure per currency, never blended.
+ * Deferred plans are shown apart from open (planned or approved) ones.
+ */
+export function budgetByYear(plans = []) {
+  const years = new Map()
+  for (const p of plans || []) {
+    const y = planYear(p)
+    const key = y == null ? 'none' : String(y)
+    if (!years.has(key)) years.set(key, { year: y, plans: 0, uncosted: 0, open: {}, completed: {}, deferred: {} })
+    const e = years.get(key)
+    e.plans += 1
+    const a = num(p.est_cost)
+    const c = planCurrency(p)
+    if (a == null || !c) { e.uncosted += 1; continue }
+    const bucket = p.status === 'completed' ? e.completed : p.status === 'deferred' ? e.deferred : e.open
+    bucket[c] = (bucket[c] || 0) + a
+  }
+  const list = [...years.values()].sort((a, b) => (a.year == null) - (b.year == null) || (a.year ?? 0) - (b.year ?? 0))
+  const currencies = [...new Set(list.flatMap((e) => [...Object.keys(e.open), ...Object.keys(e.completed), ...Object.keys(e.deferred)]))].sort()
+  return { years: list, currencies }
+}
+
+export const PLAN_EXPORT_COLUMNS = [
+  { key: 'asset_no', header: 'Asset' },
+  { key: 'country', header: 'Country' },
+  { key: 'site', header: 'Site' },
+  { key: 'status', header: 'Status' },
+  { key: 'priority', header: 'Priority' },
+  { key: 'planned_year', header: 'Planned year' },
+  { key: 'target', header: 'Target replace date' },
+  { key: 'est_cost', header: 'Estimated cost' },
+  { key: 'currency', header: 'Currency' },
+  { key: 'current_km', header: 'Km at plan' },
+  { key: 'age_years', header: 'Age at plan (years)' },
+  { key: 'recommendation', header: 'Recommended action' },
+  { key: 'notes', header: 'Notes' },
+]
+
+/** One export row per renewal plan, oldest planned year first. Cost stays in its own currency. */
+export function planExportRows(plans = []) {
+  return [...(plans || [])]
+    .sort((a, b) => (planYear(a) ?? 9999) - (planYear(b) ?? 9999) || String(a.asset_no).localeCompare(String(b.asset_no)))
+    .map((p) => ({
+      asset_no: p.asset_no || '',
+      country: p.country || '',
+      site: p.site || '',
+      status: PLAN_STATUS_META[p.status]?.label || p.status || '',
+      priority: p.priority || '',
+      planned_year: planYear(p) ?? '',
+      target: p.target_replace_date ? String(p.target_replace_date).slice(0, 10) : '',
+      est_cost: num(p.est_cost) ?? '',
+      currency: num(p.est_cost) == null ? '' : (planCurrency(p) || ''),
+      current_km: num(p.current_km) ?? '',
+      age_years: num(p.age_years) ?? '',
+      recommendation: p.recommendation || '',
+      notes: p.notes || '',
+    }))
 }

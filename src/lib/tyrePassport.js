@@ -322,7 +322,19 @@ export function buildPassport(records, aux = {}) {
 
   const serial = serialOfRecord(sorted.find((r) => serialOfRecord(r)) || sorted[0])
 
+  // One physical tyre is bought once. When a moved tyre gets a new record per
+  // fitment, the import copies the same purchase price onto every row; summing
+  // those copies counted the purchase two or three times. A price is counted
+  // on the first priced record, and again only when a later record carries a
+  // DIFFERENT price (a retread or a replacement booked under the same serial).
+  let lastPrice = null
   const events = sorted.map((r) => {
+    const rawPrice = num(r.cost_per_tyre)
+    let price = null
+    if (rawPrice != null) {
+      price = lastPrice != null && rawPrice === lastPrice ? null : rawPrice
+      lastPrice = rawPrice
+    }
     const kmFit = num(r.km_at_fitment)
     const kmRem = num(r.km_at_removal)
     const kmStint = kmRem != null && kmFit != null ? Math.max(0, kmRem - kmFit) : null
@@ -339,7 +351,8 @@ export function buildPassport(records, aux = {}) {
       km_at_fitment: kmFit,
       km_at_removal: kmRem,
       hrs: num(r.total_hrs),
-      cost: num(r.cost_per_tyre),
+      cost: price,
+      priceCopied: rawPrice != null && price == null,
       pressure: num(r.pressure_reading),
       reason: r.reason_for_removal || r.removal_reason || null,
       status: r.status || null,
@@ -358,7 +371,9 @@ export function buildPassport(records, aux = {}) {
   // followed by a re-fitment to another vehicle is a move, not an end of life.
   const lastRow = events[events.length - 1] || {}
   const latestStatus = String(firstNonEmpty([...sorted].reverse(), 'status') || '')
+  const marks = statusMarksRaw.map((m) => String(m?.mark_type || '').toLowerCase())
   const removed = Boolean(lastRow.removal_date) || /scrap|remov|write.?off/i.test(latestStatus)
+    || marks.some((m) => m === 'scrap' || m === 'written_off')
 
   // Normalised auxiliary sources.
   const serviceEvents = serviceEventsRaw.map(normalizeServiceEvent)

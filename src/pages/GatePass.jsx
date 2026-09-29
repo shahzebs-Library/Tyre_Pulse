@@ -82,12 +82,23 @@ function StatusPill({ status }) {
 function TypePill({ pass }) {
   return direction(pass) === 'inward' ? <span className="cc-pill good">Inward</span> : <span className="cc-pill info">Outward</span>
 }
+function vehicleLine(f) {
+  if (!f) return 'Not in the fleet register'
+  return [f.make, f.model || f.vehicle_type].filter(Boolean).join(' ') || f.vehicle_type || 'Class not recorded'
+}
+
+/** A table cell value that stays on one line and shows the full text on hover. */
+function Clip({ value }) {
+  if (!value) return NA
+  return <span className="gp-cell-clip" title={value}>{value}</span>
+}
+
 function Person({ name, id, large }) {
   if (!name && !id) return NA
   return (
     <span className="gp-person">
       <span className={`gp-avatar ${large ? 'lg' : ''}`} aria-hidden="true">{initials(name)}</span>
-      <span><b>{name || 'Name not recorded'}</b>{id && <small>ID: {id}</small>}</span>
+      <span className="gp-clip"><b title={name || undefined}>{name || 'Name not recorded'}</b>{id && <small title={`ID: ${id}`}>ID: {id}</small>}</span>
     </span>
   )
 }
@@ -490,11 +501,11 @@ export default function GatePass() {
         return (
           <span className="gp-veh">
             <VehicleThumb row={f || { asset_no: row.original.asset_no }} size="sm" />
-            <span>
+            <span className="gp-clip">
               {row.original.asset_no
-                ? <Link to={`/asset-management/${encodeURIComponent(row.original.asset_no)}`} onClick={(e) => e.stopPropagation()} className="gp-link"><b>{row.original.asset_no}</b></Link>
+                ? <Link to={`/asset-management/${encodeURIComponent(row.original.asset_no)}`} onClick={(e) => e.stopPropagation()} className="gp-link" title={row.original.asset_no}><b>{row.original.asset_no}</b></Link>
                 : <b>N/A</b>}
-              <small>{f ? [f.make, f.model || f.vehicle_type].filter(Boolean).join(' ') || f.vehicle_type || 'Class not recorded' : 'Not in the fleet register'}</small>
+              <small title={vehicleLine(f)}>{vehicleLine(f)}</small>
             </span>
           </span>
         )
@@ -504,8 +515,8 @@ export default function GatePass() {
       id: 'driver', header: 'Driver / operator', accessorFn: (p) => p.custom_data?.driver_name || undefined, sortingFn: valueSort, sortUndefined: 'last', size: 170,
       cell: ({ row }) => <Person name={row.original.custom_data?.driver_name} id={row.original.custom_data?.driver_id} />,
     },
-    { id: 'site', header: 'Site', accessorFn: (p) => p.site || undefined, sortingFn: valueSort, sortUndefined: 'last', size: 120, cell: ({ getValue }) => getValue() || NA },
-    { id: 'purpose', header: 'Purpose', accessorFn: (p) => p.custom_data?.purpose || undefined, sortingFn: valueSort, sortUndefined: 'last', size: 140, cell: ({ getValue }) => getValue() || NA },
+    { id: 'site', header: 'Site', accessorFn: (p) => p.site || undefined, sortingFn: valueSort, sortUndefined: 'last', size: 120, cell: ({ getValue }) => <Clip value={getValue()} /> },
+    { id: 'purpose', header: 'Purpose', accessorFn: (p) => p.custom_data?.purpose || undefined, sortingFn: valueSort, sortUndefined: 'last', size: 140, cell: ({ getValue }) => <Clip value={getValue()} /> },
     {
       id: 'status', header: 'Status', accessorFn: (p) => VIEW_STATUS_META[viewStatus(p, now)].label, sortingFn: valueSort, size: 120,
       cell: ({ row }) => <StatusPill status={viewStatus(row.original, now)} />,
@@ -635,11 +646,11 @@ export default function GatePass() {
                 {selected && (
                   <>
                     <div className="gp-detail-head">
-                      <div><span className="cc-card-sub">Gate pass no.</span><br /><b>{passRef(selected)}</b></div>
-                      <span style={{ display: 'flex', gap: 6 }}><TypePill pass={selected} /><StatusPill status={selStatus} /></span>
+                      <div className="gp-clip"><span className="cc-card-sub">Gate pass no.</span><br /><b>{passRef(selected)}</b></div>
+                      <span className="gp-pills"><TypePill pass={selected} /><StatusPill status={selStatus} /></span>
                     </div>
                     <dl className="gp-details">
-                      <div className="gp-wide" style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+                      <div className="gp-wide gp-who">
                         <div><dt>Vehicle / asset</dt><dd className="gp-veh"><VehicleThumb row={selFleet || { asset_no: selected.asset_no }} size="md" /><span><b>{selected.asset_no || 'N/A'}</b><small>{selFleet ? [selFleet.make, selFleet.model, selFleet.vehicle_type].filter(Boolean).join(' ') : 'Not in the fleet register'}</small></span></dd></div>
                         <div><dt>Driver / operator</dt><dd><Person name={selC.driver_name} id={selC.driver_id} large /></dd></div>
                       </div>
@@ -687,7 +698,7 @@ export default function GatePass() {
                           <i aria-hidden="true">{s.state === 'done' && <CheckCircle2 size={11} color="#fff" />}</i>
                           <b>{s.label}</b>
                           <span>{s.state === 'done' ? fmtStamp(s.at) : (s.note || 'Not reached')}</span>
-                          {s.state === 'done' && s.by && <span>{s.by}</span>}
+                          {s.state === 'done' && s.by && <span className="gp-by" title={s.by}>{s.by}</span>}
                         </li>
                       ))}
                     </ol>
@@ -703,7 +714,7 @@ export default function GatePass() {
                 <ul className="cc-list">
                   {bySite.map((s) => (
                     <li key={s.site} className="cc-row">
-                      <div className="cc-row-main"><div className="cc-row-title">{s.site}</div><div className="cc-row-meta">{s.cleared} cleared, {s.denied} denied{s.other ? `, ${s.other} other` : ''}</div></div>
+                      <div className="cc-row-main"><div className="cc-row-title" title={s.site}>{s.site}</div><div className="cc-row-meta">{s.cleared} cleared, {s.denied} denied{s.other ? `, ${s.other} other` : ''}</div></div>
                     </li>
                   ))}
                 </ul>
@@ -719,7 +730,7 @@ export default function GatePass() {
                         <span style={{ width: `${(h.cleared / hourMax) * 100}%`, background: 'var(--cc-green)' }} />
                         <span style={{ width: `${(h.denied / hourMax) * 100}%`, background: 'var(--cc-red)' }} />
                       </span>
-                      <span className="gp-n">{h.cleared} cleared, {h.denied} denied</span>
+                      <span className="gp-n" title={`${h.cleared} cleared, ${h.denied} denied`}><b>{h.cleared}</b> cleared, <b>{h.denied}</b> denied</span>
                     </li>
                   ))}
                 </ul>
@@ -729,7 +740,7 @@ export default function GatePass() {
               <CardState state={{ loading: rowsLoading, data: rows, error: rowsError, retry: () => loadRows() }} empty={!reasons.top.length && !reasons.unstated ? 'No exits were denied in this period.' : null}>
                 <ul className="cc-list">
                   {reasons.top.map((r) => (
-                    <li key={r.reason} className="cc-row"><div className="cc-row-main"><div className="cc-row-title">{r.reason}</div></div><b>{r.count}</b></li>
+                    <li key={r.reason} className="cc-row"><div className="cc-row-main"><div className="cc-row-title" title={r.reason}>{r.reason}</div></div><b>{r.count}</b></li>
                   ))}
                   {reasons.unstated > 0 && <li className="cc-row"><div className="cc-row-main"><div className="cc-row-meta">No reason given</div></div><b>{reasons.unstated}</b></li>}
                 </ul>
@@ -774,7 +785,7 @@ export default function GatePass() {
                     {PURPOSES.map((p) => <option key={p} value={p}>{p}</option>)}
                   </select>
                 </label>
-                <div className="gp-row2">
+                <div className="gp-row2 gp-when">
                   <label><span>Expected in time</span><input type="datetime-local" value={form.expectedIn} onChange={(e) => setForm((f) => ({ ...f, expectedIn: e.target.value }))} /></label>
                   <label><span>Expected out time</span><input type="datetime-local" value={form.expectedOut} onChange={(e) => setForm((f) => ({ ...f, expectedOut: e.target.value }))} /></label>
                 </div>
@@ -905,7 +916,7 @@ export default function GatePass() {
                 {[...new Set([...PURPOSES, editForm.purpose].filter(Boolean))].map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
             </label>
-            <div className="gp-row2">
+            <div className="gp-row2 gp-when">
               <label><span>Expected in time</span><input type="datetime-local" value={editForm.expectedIn} onChange={(e) => setEditForm((f) => ({ ...f, expectedIn: e.target.value }))} /></label>
               <label><span>Expected out time</span><input type="datetime-local" value={editForm.expectedOut} onChange={(e) => setEditForm((f) => ({ ...f, expectedOut: e.target.value }))} /></label>
             </div>

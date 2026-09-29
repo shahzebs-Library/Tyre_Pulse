@@ -96,3 +96,7 @@
   .st-mini-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .st-hero-actions { position: static; }
 }
+.st-tyre-hero { flex: none; width: 150px; }
+.st-identity { flex-wrap: wrap; }
+.st-identity > div { min-width: 0; }
+.st-serial-big { overflow-wrap: anywhere; }

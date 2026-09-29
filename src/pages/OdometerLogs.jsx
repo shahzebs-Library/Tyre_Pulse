@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import Modal from '../components/ui/Modal'
+import SideDrawer from '../components/ui/SideDrawer'
 import MeterHistory, { Correction } from '../components/meters/MeterHistory'
 import {
   Card, Kpi, PageHero, Tabs, Donut, KitTable, VehicleThumb, fmtInt, fmtPct,
@@ -38,7 +39,7 @@ import {
 } from '../lib/odometerLogsAnalytics'
 import {
   DEFAULT_VIEW_SETTINGS, normalizeViewSettings, findJumps, readingStatus, STATUS_META, approvalQueue,
-  missingReadings, viewKpis, distanceSeries, sourceDistribution, sourceGroupLabel, readingExportRows,
+  missingReadings, viewKpis, assetMeterSeries, distanceSeries, sourceDistribution, sourceGroupLabel, readingExportRows,
   anomalyRows, readingKey,
 } from '../lib/odometerLogsView'
 import { resolveStorageUrls } from '../lib/storageRefs'
@@ -90,6 +91,7 @@ function MeterWorkspace({ country }) {
   const [selection, setSelection] = useState({})
   const [editing, setEditing] = useState(null)
   const [viewing, setViewing] = useState(null)
+  const [assetView, setAssetView] = useState(null)
   const activeFilterCount = Object.entries(filters).filter(([key, value]) => !['search', 'assetId', 'site', 'from', 'to'].includes(key) && Boolean(value)).length
   useEffect(() => {
     try { sessionStorage.setItem(`meter-filters:${country}`, JSON.stringify(filters)) } catch { /* Storage is optional. */ }
@@ -143,6 +145,10 @@ function MeterWorkspace({ country }) {
     return findJumps(history, settings).filter(j => inView.has(j.key))
   }, [history, filteredHistory, settings])
   const jumpKeys = useMemo(() => new Set(jumps.map(j => j.key)), [jumps])
+  const allJumps = useMemo(() => (assetView ? findJumps(history, settings) : []), [assetView, history, settings])
+  const assetSeries = useMemo(() => (assetView
+    ? assetMeterSeries(history, r => (r.vehicleId ? r.vehicleId === assetView.id : meterKey(r) === meterKey(assetView)), allJumps)
+    : null), [assetView, history, allJumps])
   const missing = useMemo(() => missingReadings(filteredVehicles, today, settings), [filteredVehicles, today, settings])
   const queue = useMemo(() => approvalQueue(filteredHistory), [filteredHistory])
   const anomalies = useMemo(() => anomalyRows(filteredHistory, jumps), [filteredHistory, jumps])
@@ -257,7 +263,7 @@ function MeterWorkspace({ country }) {
           return <div className="cc-vehicle min-w-[200px]">
             <VehicleThumb row={v} size="sm" />
             <div>
-              <button type="button" className="ol-asset" onClick={() => showHistory(v)}>{v.asset_no}</button>
+              <button type="button" className="ol-asset" onClick={() => setAssetView(v)} title="Open this vehicle's reading history">{v.asset_no}</button>
               <div className="ol-sub">{v.registration_no || v.fleet_number || 'No registration'} | {v.vehicle_type || 'Type not recorded'}</div>
               <div className="ol-sub">{mode === 'both' ? 'Kilometres + hours' : mode === 'km' ? 'Kilometres' : mode === 'hours' ? 'Engine hours' : 'Vehicle meter type not established'}</div>
             </div>
@@ -289,7 +295,7 @@ function MeterWorkspace({ country }) {
           const saving = status?.saving
           return <div className="min-w-[140px]">
             <button type="button" className="cc-btn-primary w-full justify-center min-h-[44px]" aria-label={`Save ${v.asset_no}`} disabled={!canSave || saving || !meterMode(v) || v.duplicate || (draft.km === '' && draft.hours === '')} onClick={() => save(v)}>{saving ? 'Saving...' : 'Save'}</button>
-            <button type="button" className="cc-btn-ghost w-full justify-center mt-2 min-h-[40px]" onClick={() => showHistory(v)}>Readings</button>
+            <button type="button" className="cc-btn-ghost w-full justify-center mt-2 min-h-[40px]" onClick={() => setAssetView(v)}>History and chart</button>
             {v.duplicate && <p className="ol-warn">Duplicate fleet identity; saving disabled.</p>}
             {status?.message && <p role={status.error ? 'alert' : 'status'} className={status.error ? 'ol-err' : 'ol-sub mt-2'}>{status.message}</p>}
           </div>
@@ -413,24 +419,24 @@ function MeterWorkspace({ country }) {
     </Card>}
 
     {ready && tab === 'missing' && <Card title="Missing readings" sub={`Vehicles that use a meter and have no dated reading in the last ${settings.missingDays} days, or never had one. Change the window in Settings.`}>
-      <KitTable rows={missing} getRowId={m => String(m.vehicle.id)} empty="Every vehicle in view has a recent reading."
+      <KitTable rows={missing} getRowId={m => String(m.vehicle.id)} empty="Every vehicle in view has a recent reading." onRowClick={m => setAssetView(m.vehicle)}
         columns={[
           { key: 'vehicle', header: 'Fleet no', sortValue: m => m.vehicle.asset_no, cell: m => <div className="cc-vehicle"><VehicleThumb row={m.vehicle} size="sm" /><div><span className="cc-strong">{m.vehicle.asset_no}</span><span className="cc-sub">{m.vehicle.registration_no || m.vehicle.fleet_number || 'No registration'}</span></div></div> },
           { key: 'make', header: 'Make / model', sortValue: m => makeModel(m.vehicle), cell: m => makeModel(m.vehicle) || <span className="cc-na">Not recorded</span> },
           { key: 'site', header: 'Location', sortValue: m => m.vehicle.site, cell: m => <div>{m.vehicle.site || 'Site not recorded'}<span className="cc-sub">{m.vehicle.region || 'Region not recorded'}</span></div> },
           { key: 'meters', header: 'Meters', sortable: false, cell: m => meterMode(m.vehicle) === 'both' ? 'Kilometres + hours' : meterMode(m.vehicle) === 'km' ? 'Kilometres' : 'Engine hours' },
           { key: 'lastDate', header: 'Last reading', sortValue: m => m.lastDate || '', cell: m => m.lastDate ? readingDate(m.lastDate) : <span className="cc-pill bad">Never recorded</span> },
-          { key: 'daysSince', header: 'Days since', align: 'right', sortValue: m => m.daysSince ?? Infinity, cell: m => m.daysSince == null ? <span className="cc-na">N/A</span> : fmtInt(m.daysSince) },
-          { key: 'act', header: '', sortable: false, cell: m => <button type="button" className="cc-btn" disabled={!canSave} onClick={() => addReadingFor(m.vehicle)}>Add reading</button> },
+          { key: 'daysSince', header: 'Days since', numeric: true, sortValue: m => m.daysSince ?? Infinity, cell: m => m.daysSince == null ? <span className="cc-na">N/A</span> : fmtInt(m.daysSince) },
+          { key: 'act', header: '', sortable: false, cell: m => <button type="button" className="cc-btn" disabled={!canSave} onClick={e => { e.stopPropagation(); addReadingFor(m.vehicle) }}>Add reading</button> },
         ]} />
     </Card>}
 
     {ready && tab === 'anomalies' && <Card title="Anomalies" sub={`Readings lower than the previous one (flagged by the server when saved) and suspicious jumps: kilometres up at least ${fmtInt(settings.jumpMinKm)} km and more than ${fmtInt(settings.maxKmPerDay)} km a day, or engine hours up more than ${settings.maxHoursPerDay} hours a day.`}>
-      <KitTable rows={anomalies} getRowId={a => a.key} empty="No anomalies in the readings in view."
+      <KitTable rows={anomalies} getRowId={a => a.key} empty="No anomalies in the readings in view." onRowClick={a => setViewing(a.reading)}
         columns={[
           { key: 'date', header: 'Reading date', sortValue: a => a.reading.reading_date || '', cell: a => readingDate(a.reading.reading_date) },
           { key: 'asset', header: 'Fleet no', sortValue: a => a.reading.asset_no, cell: a => <div><span className="cc-strong">{a.reading.asset_no}</span><span className="cc-sub">{a.reading.site || 'Site not recorded'}</span></div> },
-          { key: 'value', header: 'Reading', align: 'right', sortValue: a => Number(a.reading.value), cell: a => `${Number(a.reading.value).toLocaleString()} ${a.reading.kind}` },
+          { key: 'value', header: 'Reading', numeric: true, sortValue: a => Number(a.reading.value), cell: a => `${Number(a.reading.value).toLocaleString()} ${a.reading.kind}` },
           { key: 'type', header: 'Anomaly', sortValue: a => a.label, cell: a => <span className={`cc-pill ${a.type === 'jump' ? 'bad' : 'warn'}`}>{a.label}</span> },
           { key: 'detail', header: 'Detail', sortable: false, cell: a => <span className="ol-wrap">{a.detail}</span> },
           { key: 'status', header: 'Status', sortValue: a => readingStatus(a.reading, jumpKeys), cell: a => <StatusPill row={a.reading} jumpKeys={jumpKeys} /> },
@@ -464,6 +470,11 @@ function MeterWorkspace({ country }) {
 
     {editingRow && <Correction row={editingRow} onCancel={() => setEditing(null)} onSaved={(result, kind) => { corrected(result, kind); setEditing(null) }} />}
     {viewing && <ReadingDetail row={viewing} jumpKeys={jumpKeys} onClose={() => setViewing(null)} />}
+    {assetView && assetSeries && <AssetHistoryDrawer vehicle={assetView} series={assetSeries} canSave={canSave}
+      onClose={() => setAssetView(null)}
+      onAdd={() => { addReadingFor(assetView); setAssetView(null) }}
+      onFilter={() => { showHistory(assetView); setAssetView(null) }}
+      onView={r => setViewing(r)} />}
   </div>
 }
 
@@ -474,17 +485,17 @@ function StatusPill({ row, jumpKeys }) {
 
 function ReadingsTable({ rows, jumpKeys, action, onView, selection, onSelection, resetKey, empty }) {
   const selectable = Boolean(onSelection)
-  return <KitTable rows={rows} getRowId={readingKey} empty={empty} resetPageKey={resetKey}
+  return <KitTable rows={rows} getRowId={readingKey} empty={empty} resetPageKey={resetKey} onRowClick={onView}
     enableRowSelection={selectable} rowSelection={selectable ? selection : undefined} onRowSelectionChange={selectable ? onSelection : undefined}
     columns={[
       { key: 'reading_date', header: 'Date & time', sortValue: r => `${r.reading_date || ''}|${r.created_at || ''}`, cell: r => <div>{readingDate(r.reading_date)}<span className="cc-sub">{receivedTime(r.created_at, r.country)}</span></div> },
       { key: 'asset_no', header: 'Fleet no', sortValue: r => r.asset_no, cell: r => <div className="cc-vehicle"><VehicleThumb row={r} size="sm" /><div><span className="cc-strong">{r.asset_no}</span><span className="cc-sub">{r.registration_no || 'Registration not recorded'}</span></div></div> },
       { key: 'make', header: 'Make / model', sortValue: makeModel, cell: r => makeModel(r) || <span className="cc-na">Not recorded</span> },
-      { key: 'km', header: 'Odometer (km)', align: 'right', sortValue: r => (r.kind === 'km' ? Number(r.value) : undefined), cell: r => r.kind === 'km' ? <span className="cc-strong">{`${Number(r.value).toLocaleString()} km`}</span> : <span className="cc-na">N/A</span> },
-      { key: 'hours', header: 'Engine hours', align: 'right', sortValue: r => (r.kind === 'hours' ? Number(r.value) : undefined), cell: r => r.kind === 'hours' ? <span className="cc-strong">{`${Number(r.value).toLocaleString()} hours`}</span> : <span className="cc-na">N/A</span> },
+      { key: 'km', header: 'Odometer (km)', numeric: true, sortValue: r => (r.kind === 'km' ? Number(r.value) : undefined), cell: r => r.kind === 'km' ? <span className="cc-strong">{`${Number(r.value).toLocaleString()} km`}</span> : <span className="cc-na">N/A</span> },
+      { key: 'hours', header: 'Engine hours', numeric: true, sortValue: r => (r.kind === 'hours' ? Number(r.value) : undefined), cell: r => r.kind === 'hours' ? <span className="cc-strong">{`${Number(r.value).toLocaleString()} hours`}</span> : <span className="cc-na">N/A</span> },
       { key: 'site', header: 'Location', sortValue: r => r.site, cell: r => <div>{r.site || 'Site not recorded'}<span className="cc-sub">{r.region || 'Region not recorded'}</span></div> },
       { key: 'source', header: 'Source', sortValue: r => sourceGroupLabel(r.source), cell: r => <div>{sourceGroupLabel(r.source)}<span className="cc-sub">{meterSource(r.source)}</span></div> },
-      { key: 'status', header: 'Status', sortValue: r => readingStatus(r, jumpKeys), cell: r => <StatusPill row={r} jumpKeys={jumpKeys} /> },
+      { key: 'status', header: 'Status', sortValue: r => readingStatus(r, jumpKeys), cell: r => <div><StatusPill row={r} jumpKeys={jumpKeys} />{r.flagged && <span className="cc-sub ol-reason">{r.flag_reason || 'Saved below the last recorded reading'}</span>}</div> },
       { key: 'actions', header: '', sortable: false, cell: r => <div className="ol-row-actions"><button type="button" className="cc-icon-btn" aria-label={`View ${r.asset_no} reading`} onClick={e => { e.stopPropagation(); onView(r) }}><Eye size={15} aria-hidden="true" /></button>{action(r)}</div> },
     ]} />
 }
@@ -576,4 +587,79 @@ function SettingsCard({ settings, onChange, canSave, canCorrect, canReview }) {
       <li>Review flagged readings: {canReview ? 'Yes' : 'No'}</li>
     </ul>
   </Card>
+}
+
+/** Line chart of one meter over time; flagged and jump readings are drawn red with their reason. */
+function SeriesChart({ points, unit }) {
+  const W = 560; const H = 180; const pad = { l: 56, r: 12, t: 12, b: 26 }
+  const ok = points.filter(p => p.date)
+  if (ok.length < 2) return <div className="cc-empty">{ok.length ? 'Only one dated reading, so there is no line to draw yet.' : `No dated ${unit} readings.`}</div>
+  const t = ok.map(p => Date.parse(`${String(p.date).slice(0, 10)}T00:00:00Z`))
+  const t0 = Math.min(...t); const t1 = Math.max(...t)
+  const vals = ok.map(p => p.value)
+  const lo = Math.min(...vals); const hi = Math.max(...vals)
+  const span = hi - lo || 1
+  const x = ms => pad.l + (t1 === t0 ? 0 : ((ms - t0) / (t1 - t0)) * (W - pad.l - pad.r))
+  const y = v => pad.t + (1 - (v - lo) / span) * (H - pad.t - pad.b)
+  const clean = ok.map((p, i) => ({ p, i })).filter(({ p }) => !p.flagged && !p.jump)
+  const d = clean.map(({ p, i }, k) => `${k ? 'L' : 'M'}${x(t[i])},${y(p.value)}`).join(' ')
+  const fmtD = ms => new Date(ms).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' })
+  return <div className="cc-chart ol-series">
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={`${unit} readings from ${fmtD(t0)} to ${fmtD(t1)}, ${ok.filter(p => p.flagged || p.jump).length} flagged`}>
+      {[0, 0.5, 1].map(f => <g key={f}><line x1={pad.l} x2={W - pad.r} y1={y(lo + span * f)} y2={y(lo + span * f)} stroke="var(--cc-track)" /><text className="cc-axis" x={pad.l - 6} y={y(lo + span * f)} dy="0.35em" textAnchor="end">{fmtInt(Math.round(lo + span * f))}</text></g>)}
+      <path d={d} fill="none" stroke="#16a34a" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+      {ok.map((p, i) => <circle key={p.key} cx={x(t[i])} cy={y(p.value)} r={p.flagged || p.jump ? 5 : 3} fill={p.flagged || p.jump ? 'var(--cc-red)' : '#16a34a'} vectorEffect="non-scaling-stroke">
+        <title>{`${readingDate(p.date)}: ${p.value.toLocaleString('en-US')} ${unit}${p.reason ? `. ${p.reason}` : ''}`}</title>
+      </circle>)}
+      <text className="cc-axis" x={pad.l} y={H - 6}>{fmtD(t0)}</text>
+      <text className="cc-axis" x={W - pad.r} y={H - 6} textAnchor="end">{fmtD(t1)}</text>
+    </svg>
+  </div>
+}
+
+function AssetHistoryDrawer({ vehicle, series, canSave, onClose, onAdd, onFilter, onView }) {
+  const rows = [...series.km, ...series.hours].sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
+  const flagged = rows.filter(p => p.flagged || p.jump)
+  return <SideDrawer open onClose={onClose} size="lg" title={`${vehicle.asset_no} readings`}
+    subtitle={[vehicle.registration_no || vehicle.fleet_number, vehicle.vehicle_type, vehicle.site].filter(Boolean).join(' | ') || undefined}
+    footer={<div className="cc ol-drawer-foot">
+      <button type="button" className="cc-btn-ghost" onClick={onFilter}>Show in All readings</button>
+      <button type="button" className="cc-btn-primary" disabled={!canSave} onClick={onAdd}><Plus size={14} aria-hidden="true" />Add reading</button>
+    </div>}>
+    <div className="cc ol-drawer">
+      <div className="ol-drawer-head">
+        <VehicleThumb row={vehicle} size="lg" />
+        <dl className="ol-dl">
+          <div><dt>Kilometres now</dt><dd>{vehicle.km == null ? 'Not recorded' : `${fmtInt(vehicle.km)} km`}</dd></div>
+          <div><dt>Engine hours now</dt><dd>{vehicle.engineHours == null ? 'Not recorded' : `${fmtInt(vehicle.engineHours)} hours`}</dd></div>
+          <div><dt>Distance in history</dt><dd>{series.kmTravelled == null ? 'N/A' : `${fmtInt(series.kmTravelled)} km`}</dd></div>
+          <div><dt>Hours in history</dt><dd>{series.hoursRun == null ? 'N/A' : `${fmtInt(series.hoursRun)} hours`}</dd></div>
+          <div><dt>Readings</dt><dd>{fmtInt(rows.length)}{series.firstDate ? `, ${readingDate(series.firstDate)} to ${readingDate(series.lastDate)}` : ''}</dd></div>
+          <div><dt>Flagged</dt><dd className={flagged.length ? 'ol-bad' : ''}>{fmtInt(flagged.length)}</dd></div>
+        </dl>
+      </div>
+      {flagged.length > 0 && <div className="ol-flags" role="note">
+        <b><AlertTriangle size={14} aria-hidden="true" /> Flagged readings</b>
+        <ul>{flagged.slice(0, 8).map(p => <li key={p.key}>{readingDate(p.date)}: {p.value.toLocaleString('en-US')} {p.row.kind}. {p.reason}{p.reviewed ? ' (reviewed by Admin)' : ''}</li>)}</ul>
+        {flagged.length > 8 && <p className="ol-sub">{flagged.length - 8} more in the table below.</p>}
+      </div>}
+      {series.km.length > 0 && <Card title="Kilometres over time" sub="Green line joins accepted readings; red points are flagged.">
+        <SeriesChart points={series.km} unit="km" />
+      </Card>}
+      {series.hours.length > 0 && <Card title="Engine hours over time" sub="Green line joins accepted readings; red points are flagged.">
+        <SeriesChart points={series.hours} unit="hours" />
+      </Card>}
+      <Card title="All readings for this vehicle">
+        <KitTable compact scroll rows={rows} getRowId={p => p.key} onRowClick={p => onView(p.row)} empty="No readings recorded for this vehicle."
+          columns={[
+            { key: 'date', header: 'Reading date', cell: p => readingDate(p.date) },
+            { key: 'value', header: 'Reading', numeric: true, cell: p => `${p.value.toLocaleString('en-US')} ${p.row.kind}` },
+            { key: 'source', header: 'Source', cell: p => meterSource(p.row.source) },
+            { key: 'status', header: 'Status', cell: p => p.flagged || p.jump
+              ? <div><span className={`cc-pill ${p.flagged && !p.reviewed ? 'warn' : p.jump ? 'bad' : 'info'}`}>{p.flagged ? (p.reviewed ? 'Reviewed' : 'Flagged') : 'Suspicious jump'}</span><span className="cc-sub ol-reason">{p.reason}</span></div>
+              : <span className="cc-pill good">Accepted</span> },
+          ]} />
+      </Card>
+    </div>
+  </SideDrawer>
 }

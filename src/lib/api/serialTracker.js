@@ -77,3 +77,23 @@ export async function listSizeOptions(country) {
   for (const r of res.data || []) { const v = String(r.size || '').trim(); if (v) set.add(r.size) }
   return [...set].sort((a, b) => String(a).localeCompare(String(b)))
 }
+
+/* ── Tyre catalogue lookup (for the tread picture and the spec block) ───────
+ * tyre_spec_catalog rows for one brand. The caller matches the size with
+ * matchCatalogue() in src/lib/tyreImage.js, which folds case and spacing, so
+ * '315/80 R 22.5' and '315/80R22.5' find the same entry. A failed read throws
+ * so the page can say the catalogue could not be checked, which is different
+ * from "not in the catalogue".
+ */
+const CATALOGUE_COLS = 'id,country,brand,pattern,size,tyre_type,application,suitable_for,load_index_single,' +
+  'load_index_dual,speed_rating,ply_rating,tube_type,tread_depth_new_mm,approval_status'
+
+export async function listCatalogueForBrand(brand, { country } = {}) {
+  const b = String(brand || '').trim()
+  if (!b) return []
+  const q = supabase.from('tyre_spec_catalog').select(CATALOGUE_COLS)
+    .ilike('brand', escapeLike(b)).order('id', { ascending: true }).limit(500)
+  const { data, error } = await applyCountry(q, country)
+  if (error) throw toServiceError(error, 'Could not check the tyre catalogue.')
+  return data || []
+}

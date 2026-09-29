@@ -72,3 +72,19 @@
   .eh-page .eh-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .eh-page .eh-hero-actions { position: static; margin-top: 8px; justify-content: flex-start; }
 }
+
+/* Per-asset history drawer */
+.eh-drawer { gap: 14px; }
+.eh-drawer .cc-card { padding: 14px 16px; }
+.eh-drawer-head { display: flex; gap: 14px; align-items: flex-start; }
+.eh-dl { flex: 1; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 0; }
+.eh-dl dt { font-size: 11px; color: var(--cc-ink-3); }
+.eh-dl dd { margin: 2px 0 0; font-size: 13px; font-weight: 600; color: var(--cc-ink); }
+.eh-flags { border-radius: 10px; padding: 10px 12px; background: var(--cc-red-tint); font-size: 12.5px; color: var(--cc-ink); }
+.eh-flags b { display: flex; align-items: center; gap: 6px; }
+.eh-flags svg { color: var(--cc-red); }
+.eh-flags ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 3px; }
+.eh-series { height: 180px; }
+.eh-reason { white-space: normal; max-width: 260px; }
+.eh-drawer-foot { flex-direction: row; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+@media (max-width: 640px) { .eh-drawer-head { flex-direction: column; } }

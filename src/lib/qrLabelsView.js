@@ -381,3 +381,62 @@ export function saveTemplate(list, name, design) {
   const rest = (Array.isArray(list) ? list : []).filter((t) => String(t.name).toLowerCase() !== n.toLowerCase())
   return [{ name: n, design: normalizeDesign(design) }, ...rest].slice(0, 12)
 }
+
+// ── Saved print history (qr_print_jobs) ───────────────────────────────────────
+
+const TYPE_TO_DB = { tyres: 'tyre', vehicles: 'vehicle', equipment: 'equipment' }
+const TYPE_FROM_DB = { tyre: 'tyres', vehicle: 'vehicles', equipment: 'equipment' }
+export const MAX_JOB_CODES = 500
+
+/**
+ * A batch made on the page as a qr_print_jobs row. Codes only (never the QR
+ * image), capped so one huge run cannot bloat the table; `items`/`labels` keep
+ * the true totals.
+ */
+export function toPrintJobRow(batch, entries = [], { country = null, labelSize = null } = {}) {
+  const types = new Set(entries.map((e) => e.type).filter(Boolean))
+  const type = types.size > 1 ? 'mixed' : (TYPE_TO_DB[[...types][0] || batch?.type] || 'custom')
+  const codes = [...new Set(entries.map((e) => String(e.val || '').trim()).filter(Boolean))].slice(0, MAX_JOB_CODES)
+  return {
+    batch_no: batch.batchNo,
+    label_type: type,
+    action: batch.action,
+    items: Number(batch.items) || 0,
+    labels: Number(batch.labels) || 0,
+    label_size: labelSize,
+    codes,
+    country: country && country !== 'All' ? country : null,
+    created_by_name: batch.by && batch.by !== 'You' ? batch.by : null,
+  }
+}
+
+/** A saved row back in the shape the batch table and viewer use. */
+export function fromPrintJobRow(row) {
+  const type = TYPE_FROM_DB[row.label_type] || row.label_type
+  const codes = Array.isArray(row.codes) ? row.codes : []
+  return {
+    id: row.id,
+    batchNo: row.batch_no,
+    type,
+    items: Number(row.items) || 0,
+    labels: Number(row.labels) || 0,
+    action: row.action,
+    by: row.created_by_name || 'N/A',
+    at: row.created_at,
+    saved: true,
+    entries: codes.map((c) => ({ key: `${type}:${c}`, val: String(c), type, lines: [], qr: null })),
+  }
+}
+
+/** Label totals over saved history (generated, printed, exported). Null when unread. */
+export function printJobTotals(rows) {
+  if (!Array.isArray(rows)) return null
+  const t = { generated: 0, printed: 0, exported: 0, jobs: rows.length }
+  for (const r of rows) {
+    const n = Number(r.labels) || 0
+    if (r.action === 'generated') t.generated += n
+    else if (r.action === 'printed') t.printed += n
+    else if (r.action === 'pdf') t.exported += n
+  }
+  return t
+}

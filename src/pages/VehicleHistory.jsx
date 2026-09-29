@@ -1,19 +1,21 @@
 /**
- * VehicleHistory (route /vehicle-history) - the complete lifecycle, service,
- * inspection and operational history of one asset, rebuilt on the shared page
- * kit to the owner's light reference design.
+ * VehicleHistory (route /vehicle-history) - one asset's complete history.
  *
- * Layout: hero and actions, an asset finder that covers the whole register,
- * then for the opened asset a header card, six KPIs and tabs (Timeline,
- * Service, Movement, Inspection, Documents, Cost, plus the tyre analysis tabs
- * and the full source-by-source history the page always had). Below sits the
- * register of assets that carry tyre history, with its misuse scoring, red
- * flags, filters and export, kept from the previous page.
+ * Two views: "Asset history" (the default) and the "Fleet tyre history
+ * register" (misuse scoring, red flags, filters and export, kept whole).
  *
- * Data: the per-asset history comes from the same loader Asset Detail uses
- * (loadAssetHistory + buildTimeline); the view blocks are shaped by the pure
- * engine src/lib/vehicleHistoryView.js. Money is shown in the currency each
- * record carries and never blended. Anything unmeasurable reads N/A.
+ * Asset history: country-scoped asset finder, an asset header (photo via
+ * vehiclePhoto, make, model, site, status, current km and hours), KPIs
+ * (downtime, store issue spend per currency, tyre changes, incidents), then a
+ * unified timeline across job cards, tyre fitments and tyre service events,
+ * inspections, accidents, breakdowns, meter logs, washes, gate passes,
+ * handovers, check-ins and expense-grid lines. Filters: event type chips,
+ * period or From/To dates, and search. The timeline is grouped by month and
+ * every event opens a detail drawer. Exports Excel and PDF of the filtered view.
+ *
+ * Data: loadAssetHistory (shared with Asset Detail) plus loadAssetExtraSources
+ * for the four sources it does not read. Money stays in its own currency and
+ * only expense-grid lines count as spend. Anything unmeasurable reads N/A.
  */
 import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
@@ -31,8 +33,10 @@ import { Bar, Doughnut, Line } from 'react-chartjs-2'
 import {
   Search, AlertTriangle, X, FileText, Car, TrendingUp, History, Eye, CalendarPlus,
   Download, FileSpreadsheet, Gauge, CalendarDays, Wrench, CircleDot, ShieldAlert, Clock,
-  MapPin, User, Activity, RefreshCw, ArrowRight, ChevronDown,
+  MapPin, User, Activity, RefreshCw, ArrowRight, ChevronDown, Wallet, ListTree,
 } from 'lucide-react'
+import SideDrawer from '../components/ui/SideDrawer'
+import { loadAssetExtraSources, EXTRA_SOURCES } from '../lib/api/vehicleHistoryExtra'
 import VehicleTyreDiagram from '../components/VehicleTyreDiagram'
 import DateField from '../components/ui/DateField'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -49,6 +53,7 @@ import {
   EVENT_TYPES, PERIODS, COST_CATEGORIES, buildViewTimeline, filterViewEvents, typeCounts,
   tabEvents, documentRows, chartMonths, costByMonth, costCurrencies, downtimeByMonth,
   historyKpis, assetHeader, historyViewExportRows, HISTORY_VIEW_EXPORT_COLUMNS,
+  extraSourceEvents, extraUnreadable, groupByMonth, spendByCurrency, eventDetailFields, currentHours,
 } from '../lib/vehicleHistoryView'
 import {
   Card, CardState, Kpi, PageHero, Tabs, VehicleThumb, KitTable, fmtInt, useCard,
@@ -360,6 +365,8 @@ export default function VehicleHistory() {
 
   // Bump to re-run the loader (Retry).
   const [reloadKey, setReloadKey] = useState(0)
+  // Page views: one asset's history, or the fleet register of tyre history.
+  const [view, setView] = useState('asset')
 
   // ── Load data ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -481,6 +488,7 @@ export default function VehicleHistory() {
     const known = vehicleRows.find(r => canonAssetNo(r.assetNo) === code)
     if (known) { setSelected(known.assetNo); setDirectAsset(null) }
     else { setDirectAsset(assetNo); setSelected(null) }
+    setView('asset')
   }
   const closeAsset = () => { setSelected(null); setDirectAsset(null) }
 
@@ -493,9 +501,19 @@ export default function VehicleHistory() {
         imgDark="/dashboard/hero-history-dark.webp"
       />
 
-      <AssetOpener country={activeCountry} activeAsset={activeAsset} onOpen={openAsset} />
+      <div className="cc-card vh-viewbar">
+        <Tabs
+          tabs={[
+            { key: 'asset', label: activeAsset ? `Asset history: ${activeAsset}` : 'Asset history' },
+            { key: 'register', label: 'Fleet tyre history register', count: loading ? undefined : vehicleRows.length },
+          ]}
+          value={view} onChange={setView} label="Vehicle history views" variant="line"
+        />
+      </div>
 
-      {activeAsset ? (
+      {view === 'asset' && <AssetOpener country={activeCountry} activeAsset={activeAsset} onOpen={openAsset} />}
+
+      {view !== 'asset' ? null : activeAsset ? (
         <AssetHistoryView
           key={`${activeAsset}|${activeCountry}`}
           assetNo={activeAsset}
@@ -513,13 +531,19 @@ export default function VehicleHistory() {
           onClose={closeAsset}
         />
       ) : (
-        <Card title="No asset open" sub="Search the register above, or pick an asset from the table below.">
-          <div className="cc-empty">Open an asset to see its timeline, service, movement, inspection, document and cost history.</div>
+        <Card title="No asset open" sub="Search the register above, or pick an asset from the fleet tyre history register.">
+          <div className="cc-empty">
+            Open an asset to see its full history: job cards, tyre fitments and service, inspections, accidents and breakdowns,
+            meter readings, washes, gate passes, handovers and store issue cost, month by month.
+            <div style={{ marginTop: 12 }}>
+              <button type="button" className="cc-btn-ghost" onClick={() => setView('register')}><ListTree size={14} aria-hidden="true" /> Browse the register</button>
+            </div>
+          </div>
         </Card>
       )}
 
       {/* Register of assets that carry tyre history */}
-      <Card
+      {view === 'register' && <Card
         title={t('vehiclehistory.header.title')}
         sub="Assets that carry tyre records, scored for misuse and red flags. Select a row to open its history."
       >
@@ -596,14 +620,14 @@ export default function VehicleHistory() {
           emptyMessage={t('vehiclehistory.table.noMatch')}
           searchPlaceholder="Search this table"
           onRowClick={row => {
-            if (selected === row.assetNo) { setSelected(null) } else { setSelected(row.assetNo); setDirectAsset(null) }
+            setSelected(row.assetNo); setDirectAsset(null); setView('asset')
             if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
           }}
           viewKey="vehicle-history"
           exportFileName={`Vehicle History ${new Date().toISOString().slice(0, 10)}`}
           reportMeta={{ title: 'Vehicle History', currency: activeCurrency, dateRange: rangeActive ? `${fromDate || 'start'} to ${toDate || 'today'}` : undefined }}
         />
-      </Card>
+      </Card>}
     </div>
   )
 }
@@ -618,12 +642,20 @@ function AssetHistoryView({
 }) {
   const { t } = useLanguage()
   const [tab, setTab] = useState('timeline')
-  const [typeFilter, setTypeFilter] = useState('key')
+  const [types, setTypes] = useState([])        // empty = key events
+  const [showAllTypes, setShowAllTypes] = useState(false)
   const [period, setPeriod] = useState('24')
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
   const [q, setQ] = useState('')
-  const [shown, setShown] = useState(30)
+  const [shown, setShown] = useState(60)
   const [costCur, setCostCur] = useState(null)
   const [exportOpen, setExportOpen] = useState(false)
+  const [openEvent, setOpenEvent] = useState(null)
+
+  // Sources the shared loader does not read: tyre service events, gate passes,
+  // handover reports and check-ins. Each fails on its own.
+  const extra = useCard(() => loadAssetExtraSources(assetNo, { country }), [assetNo, country])
 
   const data = history.data
   // Snapshot of "now" per load, so every figure on screen agrees on the date.
@@ -638,31 +670,44 @@ function AssetHistoryView({
     const hf = data.fleet
     const reg = registerRow && (!hf || !registerRow.country || registerRow.country === hf.country) ? registerRow : null
     const fleet = hf ? { ...(reg || {}), ...hf } : reg
-    const timeline = buildTimeline(src, { now, country })
+    const base = buildTimeline(src, { now, country })
+    const extraEvents = extra.data ? extraSourceEvents(extra.data) : []
+    const timeline = { ...base, events: [...(base.events || []), ...extraEvents] }
     const meters = meterHistory(rowsOf('odometer'), rowsOf('engine_hours'))
     const downtime = downtimeEpisodes(rowsOf('job_card'), rowsOf('breakdown'), { now })
     const events = buildViewTimeline({ timeline, fleet, meters, downtime, now })
+    const extraLabels = Object.fromEntries(EXTRA_SOURCES.map((s) => [s.key, s.label]))
     return {
       fleet, timeline, meters, downtime, events,
       kpis: historyKpis({ fleet, events, meters, downtime, now }),
       header: assetHeader(fleet, events),
+      hours: currentHours(meters),
+      spend: spendByCurrency(events),
+      spendReadable: !(base.unreadable || []).some((u) => /store|expense|parts/i.test(u)),
       currencies: costCurrencies(events),
-      unreadable: timeline.unreadable,
-      truncated: data.truncated || [],
+      unreadable: [...(base.unreadable || []), ...(extra.data ? extraUnreadable(extra.data, extraLabels) : [])],
+      truncated: [...(data.truncated || []), ...(extra.data ? Object.entries(extra.data).filter(([, v]) => v.truncated).map(([k]) => extraLabels[k]) : [])],
       crossCountry: data.crossCountry,
     }
-  }, [data, registerRow, now, country])
+  }, [data, extra.data, registerRow, now, country])
 
-  const months = PERIODS.find(p => p.key === period)?.months ?? null
+  // A date range beats the period preset; the preset applies only with no dates.
+  const months = from || to ? null : (PERIODS.find(p => p.key === period)?.months ?? null)
+  const typeMode = types.length ? 'all' : (showAllTypes ? 'all' : 'key')
   const filtered = useMemo(
-    () => (model ? filterViewEvents(model.events, { type: typeFilter, months, search: q, now }) : []),
-    [model, typeFilter, months, q, now],
+    () => (model ? filterViewEvents(model.events, { type: typeMode, types, months, from, to, search: q, now }) : []),
+    [model, typeMode, types, months, from, to, q, now],
   )
+  const groups = useMemo(() => groupByMonth(filtered.slice(0, shown)), [filtered, shown])
   const counts = useMemo(() => (model ? typeCounts(model.events) : {}), [model])
   const axis = useMemo(() => (model ? chartMonths(months, model.events, now) : []), [model, months, now])
   const cur = costCur && model?.currencies.includes(costCur) ? costCur : (model?.currencies[0] || null)
   const cost = useMemo(() => (model ? costByMonth(model.events, { currency: cur, months: axis }) : null), [model, cur, axis])
   const down = useMemo(() => (model ? downtimeByMonth(model.downtime.episodes, { months: axis }) : null), [model, axis])
+  const filteredSpend = useMemo(() => spendByCurrency(filtered), [filtered])
+  const filtersOn = types.length > 0 || showAllTypes || from || to || q || period !== '24'
+  const resetFilters = () => { setTypes([]); setShowAllTypes(false); setFrom(''); setTo(''); setQ(''); setPeriod('24'); setShown(60) }
+  const toggleType = (key) => { setTypes(prev => (prev.includes(key) ? prev.filter(x => x !== key) : [...prev, key])); setShown(60) }
 
   const tabs = [
     ...HISTORY_TABS.map(x => ({ ...x, count: x.key === 'timeline' || x.key === 'documents' ? undefined : tabEvents(filtered, x.key).length })),
@@ -680,16 +725,20 @@ function AssetHistoryView({
     const { exportToExcel, exportToPdf, reportFileName } = await loadExportUtils()
     const rows = historyViewExportRows(filtered)
     const name = reportFileName('Vehicle History', assetNo)
+    const range = from || to ? `${from || 'start'} to ${to || 'today'}` : (PERIODS.find(p => p.key === period)?.label || '')
     if (kind === 'xlsx') {
       await exportToExcel(rows, HISTORY_VIEW_EXPORT_COLUMNS.map(c => c.key), HISTORY_VIEW_EXPORT_COLUMNS.map(c => c.header), name)
     } else {
-      await exportToPdf(rows, HISTORY_VIEW_EXPORT_COLUMNS, `Vehicle history: ${assetNo}`, name)
+      await exportToPdf(rows, HISTORY_VIEW_EXPORT_COLUMNS, `Vehicle history: ${assetNo} (${range})`, name, 'landscape')
     }
   }
 
   const h = model?.header
   const k = model?.kpis
   const statusTone = /inactive|retired|dispos/i.test(h?.status || '') ? 'muted' : 'good'
+  const loadingAll = history.loading
+  const spendEntries = Object.entries(model?.spend || {})
+  const spendDisplay = !model ? undefined : !model.spendReadable ? 'N/A' : spendEntries.length ? spendEntries.map(([c, v]) => fmtMoney(v, c)).join(' + ') : 'None'
 
   return (
     <>
@@ -721,9 +770,10 @@ function AssetHistoryView({
           <p className="vh-sub">{h?.category || 'Category not recorded'}{country && country !== 'All' ? ` | ${country}` : ''}</p>
         </div>
         <div className="vh-facts">
-          <Fact label="Make / Model" value={[h?.make, h?.model].filter(Boolean).join(' ') || null} />
-          <Fact label="Year" value={h?.year ? String(h.year) : null} />
           <Fact label="Site" icon={MapPin} value={h?.site} />
+          <Fact label="Current km" icon={Gauge} value={k?.totalKm == null ? null : fmtKm(k.totalKm)} sub={k?.kmBasis} />
+          <Fact label="Current hours" icon={Clock} value={model?.hours == null ? null : fmtHrs(model.hours)} sub={model?.hours == null ? 'No hour meter log' : 'Latest hour meter log'} />
+          <Fact label="Year" value={h?.year ? String(h.year) : null} sub={k?.activeYears != null ? `${k.activeYears} years active` : null} />
           {h?.operator && <Fact label="Operator" icon={User} value={h.operator} />}
           <Fact label="Current status" value={h?.opsStatus ? <span className="cc-pill info">{h.opsStatus}</span> : null} />
           <Fact label="Utilization" icon={Activity} value={h?.utilizationPct != null ? `${Math.round(h.utilizationPct)}%` : null}
@@ -740,6 +790,13 @@ function AssetHistoryView({
           <button type="button" className="cc-btn-ghost" onClick={history.retry}><RefreshCw size={13} aria-hidden="true" /> Retry</button>
         </div>
       )}
+      {extra.error && (
+        <div className="cc-card vh-banner" role="alert">
+          <AlertTriangle size={16} aria-hidden="true" />
+          <span>Tyre service, gate pass, handover and check-in records could not be read.</span>
+          <button type="button" className="cc-btn-ghost" onClick={extra.retry}><RefreshCw size={13} aria-hidden="true" /> Retry</button>
+        </div>
+      )}
       {model?.crossCountry && (
         <p className="vh-note">This asset code also exists in another country. It is usually a different machine, so only the {country && country !== 'All' ? country : 'matching'} record is shown.</p>
       )}
@@ -752,61 +809,83 @@ function AssetHistoryView({
 
       {/* KPIs */}
       <div className="cc-kpis">
-        <Kpi icon={Gauge} tone="t-green" loading={history.loading} display={fmtKm(k?.totalKm)} label="Total kilometres" title={k?.kmBasis} />
-        <Kpi icon={CalendarDays} tone="t-green" loading={history.loading} display={k?.activeYears == null ? 'N/A' : `${k.activeYears} years`} label="Active years" title={k?.yearsBasis} />
-        <Kpi icon={Wrench} tone="t-amber" loading={history.loading} value={k?.maintenanceEvents} label="Maintenance events" title="Job cards and preventive maintenance services" />
-        <Kpi icon={CircleDot} tone="t-green" loading={history.loading} value={k?.tyreChanges} label="Tyre changes" title="Tyre fitments recorded against this asset" />
-        <Kpi icon={ShieldAlert} tone="t-red" loading={history.loading} value={k?.incidents} label="Incidents"
+        <Kpi icon={Clock} tone="t-red" loading={loadingAll} display={fmtDays(k?.downtimeDays)} label="Downtime days" title={k?.downtimeBasis} />
+        <Kpi icon={Wallet} tone="t-green" loading={loadingAll} display={spendDisplay} label="Store issue spend"
+          title={model && !model.spendReadable ? 'The expense grid could not be read, so spend is not shown.' : 'Classified expense grid lines booked to this asset, one figure per currency, all history. Job card and tyre amounts are shown on their own events and never added again.'} />
+        <Kpi icon={CircleDot} tone="t-green" loading={loadingAll} value={k?.tyreChanges} label="Tyre changes" title="Tyre fitments recorded against this asset" />
+        <Kpi icon={ShieldAlert} tone="t-red" loading={loadingAll} value={k?.incidents} label="Incidents"
           title={k ? `${k.accidents} accidents, ${k.breakdowns} breakdowns` : undefined} />
-        <Kpi icon={Clock} tone="t-red" loading={history.loading} display={fmtDays(k?.downtimeDays)} label="Downtime days" title={k?.downtimeBasis} />
+        <Kpi icon={Wrench} tone="t-amber" loading={loadingAll} value={k?.maintenanceEvents} label="Maintenance events" title="Job cards and preventive maintenance services" />
+        <Kpi icon={History} tone="t-blue" loading={loadingAll} value={model?.events.length} label="Events on record" title="Every dated and undated event from all sources" />
       </div>
 
       {/* Tabs and filters */}
       <div className="cc-card vh-tabbar">
-        <Tabs tabs={tabs} value={tab} onChange={(key) => { setTab(key); setShown(30) }} label="History views" variant="line" />
+        <Tabs tabs={tabs} value={tab} onChange={(key) => { setTab(key); setShown(60) }} label="History views" variant="line" />
         {HISTORY_TABS.some(x => x.key === tab) && tab !== 'documents' && (
-          <div className="cc-filters vh-tab-filters">
-            <select className="cc-select" aria-label="Event type" value={typeFilter} onChange={e => { setTypeFilter(e.target.value); setShown(30) }}>
-              <option value="key">Key events</option>
-              <option value="all">All event types</option>
-              {EVENT_TYPES.filter(x => counts[x.key]).map(x => <option key={x.key} value={x.key}>{x.label} ({counts[x.key]})</option>)}
-            </select>
-            <select className="cc-select" aria-label="Period" value={period} onChange={e => { setPeriod(e.target.value); setShown(30) }}>
-              {PERIODS.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
-            </select>
-            <div className="cc-search">
-              <Search size={15} aria-hidden="true" />
-              <input aria-label="Search events" placeholder="Search events, notes..." value={q} onChange={e => { setQ(e.target.value); setShown(30) }} />
+          <>
+            <div className="cc-filters vh-tab-filters">
+              <div className="cc-search">
+                <Search size={15} aria-hidden="true" />
+                <input aria-label="Search events" placeholder="Search events, notes, references..." value={q} onChange={e => { setQ(e.target.value); setShown(60) }} />
+              </div>
+              <select className="cc-select" aria-label="Period" value={period} disabled={Boolean(from || to)}
+                title={from || to ? 'The date range below is in use' : undefined}
+                onChange={e => { setPeriod(e.target.value); setShown(60) }}>
+                {PERIODS.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
+              </select>
+              <DateField className="text-sm w-40" value={from} onChange={v => { setFrom(v); setShown(60) }} placeholder="From date" ariaLabel="From date" />
+              <DateField className="text-sm w-40" value={to} onChange={v => { setTo(v); setShown(60) }} placeholder="To date" ariaLabel="To date" min={from || undefined} />
+              {filtersOn && <button type="button" className="cc-btn-ghost" onClick={resetFilters}><X size={13} aria-hidden="true" /> Reset</button>}
             </div>
-          </div>
+            <div className="vh-chips" role="group" aria-label="Event types">
+              <button type="button" className="vh-chip" aria-pressed={!types.length && !showAllTypes} onClick={() => { setTypes([]); setShowAllTypes(false) }}>Key events</button>
+              <button type="button" className="vh-chip" aria-pressed={!types.length && showAllTypes} onClick={() => { setTypes([]); setShowAllTypes(true) }}>Everything</button>
+              {EVENT_TYPES.filter(x => counts[x.key]).map(x => (
+                <button key={x.key} type="button" className="vh-chip" aria-pressed={types.includes(x.key)} onClick={() => toggleType(x.key)}>
+                  <span className="vh-chip-dot" style={{ background: TONE_DOT[x.tone] || TONE_DOT.muted }} aria-hidden="true" />
+                  {x.label} <span className="cc-count">{counts[x.key]}</span>
+                </button>
+              ))}
+            </div>
+          </>
         )}
       </div>
 
       {tab === 'timeline' && (
         <div className="vh-grid">
-          <Card title="Timeline" sub="Chronological history of all events for this vehicle." className="vh-tl-card"
-            action={<span className="cc-pill good">Latest first</span>}>
+          <Card title="Timeline" sub="Every event for this vehicle, grouped by month, latest first. Select an event for its full record." className="vh-tl-card"
+            action={<span className="cc-pill good">{fmtInt(filtered.length)} events</span>}>
             <CardState state={history} lines={8} empty={model && !filtered.length ? 'No events match these filters.' : null}>
-              {model && (
-                <ol className="vh-tl">
-                  {filtered.slice(0, shown).map(e => <TimelineItem key={e.id} e={e} />)}
-                </ol>
-              )}
+              {model && groups.map(g => (
+                <section key={g.key} className="vh-month" aria-label={g.label}>
+                  <h3 className="vh-month-h">{g.label} <span className="cc-count">{g.events.length}</span></h3>
+                  <ol className="vh-tl">
+                    {g.events.map(e => <TimelineItem key={e.id} e={e} onOpen={setOpenEvent} />)}
+                  </ol>
+                </section>
+              ))}
               {filtered.length > shown && (
-                <button type="button" className="cc-btn vh-more" onClick={() => setShown(s => s + 30)}>
+                <button type="button" className="cc-btn vh-more" onClick={() => setShown(s => s + 60)}>
                   Show more ({fmtInt(filtered.length - shown)} left)
                 </button>
               )}
             </CardState>
           </Card>
           <div className="vh-side">
-            <CostChartCard state={history} cost={cost} currencies={model?.currencies || []} cur={cur} onCur={setCostCur} />
-            <DowntimeCard state={history} down={down} />
-            <Card title="Recent history summary" sub="The latest events in the current filter.">
-              <CardState state={history} lines={5} empty={model && !filtered.length ? 'No events match these filters.' : null}>
-                <EventTable rows={filtered.slice(0, 8)} compact />
+            <Card title="In this view" sub="Totals for the events matching the filters.">
+              <CardState state={history} lines={3}>
+                <dl className="vh-dl">
+                  <div><dt>Events</dt><dd>{fmtInt(filtered.length)}</dd></div>
+                  <div><dt>Store issue spend</dt><dd>{Object.keys(filteredSpend).length ? Object.entries(filteredSpend).map(([c, v]) => fmtMoney(v, c)).join(' + ') : <span className="cc-na">None</span>}</dd></div>
+                  <div><dt>Downtime on job cards</dt><dd>{fmtDays(sumDays(filtered))}</dd></div>
+                  <div><dt>Tyre events</dt><dd>{fmtInt(filtered.filter(e => e.type === 'tyre').length)}</dd></div>
+                  <div><dt>Incidents</dt><dd>{fmtInt(filtered.filter(e => e.type === 'accident' || e.type === 'breakdown').length)}</dd></div>
+                </dl>
               </CardState>
             </Card>
+            <CostChartCard state={history} cost={cost} currencies={model?.currencies || []} cur={cur} onCur={setCostCur} />
+            <DowntimeCard state={history} down={down} />
           </div>
         </div>
       )}
@@ -819,7 +898,7 @@ function AssetHistoryView({
             : tab === 'service' ? 'Job cards, preventive maintenance services and washes.' : 'Inspections and checklist sheets.'}
         >
           <CardState state={history} lines={6}>
-            <EventTable rows={tabEvents(filtered, tab)} empty={`No ${tab} events match these filters.`} />
+            <EventTable rows={tabEvents(filtered, tab)} empty={`No ${tab} events match these filters.`} onOpen={setOpenEvent} />
           </CardState>
         </Card>
       )}
@@ -838,7 +917,7 @@ function AssetHistoryView({
           <CostChartCard state={history} cost={cost} currencies={model?.currencies || []} cur={cur} onCur={setCostCur} />
           <Card title="Cost lines" sub="Store issues from the classified expense grid, and repair delay penalties. Job card and tyre amounts are shown on their own events and never added again here.">
             <CardState state={history} lines={6}>
-              <EventTable rows={tabEvents(filterViewEvents(model?.events || [], { type: 'all', months, search: q, now }), 'cost')} empty="No cost lines in this period." />
+              <EventTable rows={tabEvents(filterViewEvents(model?.events || [], { type: 'all', months, from, to, search: q, now }), 'cost')} empty="No cost lines in this period." onOpen={setOpenEvent} />
             </CardState>
           </Card>
         </div>
@@ -882,7 +961,49 @@ function AssetHistoryView({
           <AssetFullHistory assetNo={assetNo} country={country} />
         </Card>
       )}
+
+      <EventDrawer event={openEvent} onClose={() => setOpenEvent(null)} />
     </>
+  )
+}
+
+function sumDays(events) {
+  let s = 0
+  let any = false
+  for (const e of events) if (e.downtimeDays != null) { s += e.downtimeDays; any = true }
+  return any ? Math.round(s * 10) / 10 : null
+}
+
+function EventDrawer({ event, onClose }) {
+  const fields = event ? eventDetailFields(event) : []
+  return (
+    <SideDrawer open={Boolean(event)} onClose={onClose} title={event?.title || 'Event'}
+      subtitle={event ? `${event.typeLabel} | ${event.undated ? 'Undated' : event.day}` : undefined} size="md">
+      {event && (
+        <div className="vh-drawer">
+          <dl className="vh-dl">
+            <div><dt>Date</dt><dd>{event.undated ? 'Undated' : event.day}</dd></div>
+            <div><dt>Event type</dt><dd><TypePill event={event} /></dd></div>
+            {event.detail && <div><dt>Detail</dt><dd>{event.detail}</dd></div>}
+            <div><dt>Site</dt><dd>{event.site || <span className="cc-na">N/A</span>}</dd></div>
+            <div><dt>Odometer</dt><dd>{event.km == null ? <span className="cc-na">N/A</span> : `${event.kmOwn ? '' : 'About '}${fmtKm(event.km)}`}</dd></div>
+            <div><dt>Hour meter</dt><dd>{event.hours == null ? <span className="cc-na">N/A</span> : `${event.hoursOwn ? '' : 'About '}${fmtHrs(event.hours)}`}</dd></div>
+            <div><dt>Amount</dt><dd>{event.value == null || !event.currency ? <span className="cc-na">N/A</span> : `${fmtMoney(Number(event.value), event.currency)}${event.countsToSpend ? '' : ' (shown, not added to spend)'}`}</dd></div>
+            <div><dt>Downtime</dt><dd>{fmtDays(event.downtimeDays)}</dd></div>
+            {event.ref && <div><dt>Reference</dt><dd>{event.ref}</dd></div>}
+          </dl>
+          {fields.length > 0 && (
+            <>
+              <h4 className="vh-drawer-h">Source record</h4>
+              <dl className="vh-dl">
+                {fields.map(f => <div key={f.key}><dt>{f.label}</dt><dd>{f.value}</dd></div>)}
+              </dl>
+            </>
+          )}
+          {event.link && <Link className="cc-btn-primary vh-drawer-link" to={event.link}>Open the record <ArrowRight size={13} aria-hidden="true" /></Link>}
+        </div>
+      )}
+    </SideDrawer>
   )
 }
 
@@ -904,7 +1025,7 @@ function MeterLine({ value, own, fmt, label }) {
   return <span title={own ? `${label} on this record` : `Latest ${label.toLowerCase()} logged on or before this date`}>{own ? '' : '~'}{fmt(value)}</span>
 }
 
-function TimelineItem({ e }) {
+function TimelineItem({ e, onOpen }) {
   const body = (
     <>
       <span className="vh-tl-dot" style={{ background: TONE_DOT[e.tone] || TONE_DOT.muted }} aria-hidden="true" />
@@ -922,12 +1043,12 @@ function TimelineItem({ e }) {
   )
   return (
     <li className="vh-tl-item">
-      {e.link ? <Link to={e.link} className="vh-tl-row">{body}</Link> : <div className="vh-tl-row">{body}</div>}
+      <button type="button" className="vh-tl-row" onClick={() => onOpen?.(e)} aria-label={`Open ${e.title}`}>{body}</button>
     </li>
   )
 }
 
-function EventTable({ rows, compact = false, empty = 'No events' }) {
+function EventTable({ rows, compact = false, empty = 'No events', onOpen }) {
   const columns = [
     { key: 'day', header: 'Date', sortValue: r => r.atMs ?? 0, cell: r => (r.undated ? 'Undated' : r.day) },
     { key: 'type', header: 'Event type', sortValue: r => r.typeLabel, cell: r => <TypePill event={r} /> },
@@ -942,7 +1063,7 @@ function EventTable({ rows, compact = false, empty = 'No events' }) {
     { key: 'link', header: 'Actions', sortable: false,
       cell: r => (r.link ? <Link className="cc-link" to={r.link} aria-label={`Open ${r.title}`}>Open <ArrowRight size={12} aria-hidden="true" /></Link> : <span className="cc-na">N/A</span>) },
   ]
-  return <KitTable columns={columns} rows={rows} compact={compact} empty={empty} getRowId={r => r.id} />
+  return <KitTable columns={columns} rows={rows} compact={compact} empty={empty} getRowId={r => r.id} onRowClick={onOpen} />
 }
 
 function DocumentTable({ rows }) {

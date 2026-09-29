@@ -1,76 +1,60 @@
 /**
- * FitmentValidation (route /fitment-validation): the single home for fitment
- * assurance. Four tabs:
+ * FitmentValidation (route /fitment-validation), rebuilt on the Command Center
+ * kit. The single home for fitment assurance, four tabs:
  *
- *   - Validate         Single-tyre fitment ENGINE (ported from tyre_saas
- *                      fitment_engine.py). Resolve a tyre by serial and target
- *                      asset, run the org's fitment rule (lifecycle, size,
- *                      tread), and either Simulate (preview) or Validate
- *                      (persist to the fitment_validations ledger). Checks that
- *                      need data absent from this dataset (age, retread, dual
- *                      pairing) are surfaced honestly, never fabricated.
- *   - Fleet size audit Every asset's fitted tyre size against its spec.
- *   - Rules            CRUD for the org's fitment policy (fitment_rules, V208).
- *   - History          The recent validation ledger.
+ *   - Validate          Pre-installation check of one tyre on one asset. Every
+ *                       check reads real records (tyre_records, vehicle_fleet,
+ *                       tyre_specifications fitment specs, tyre_spec_catalog,
+ *                       fitment_rules). A check with no source data shows
+ *                       "Not checked" and is left out of the score. Preview
+ *                       runs the checks; Validate fitment also saves to the
+ *                       fitment_validations ledger.
+ *   - Fleet Size Audit  Every asset's fitted tyre sizes against its spec size.
+ *   - Rules             CRUD for fitment_rules (V208) with on/off toggles.
+ *   - History           The recent validation ledger.
  *
- * A page-level KPI strip spans all four tabs. Classification and the
- * validation engine live in src/lib/fitmentValidation.js; audit filtering,
- * ledger and rule summaries and export shapes live in the pure
- * src/lib/fitmentValidationAnalytics.js; Supabase I/O lives in
- * src/lib/api/fitmentValidation.js. The provisioning probe keeps its
- * fail-open contract (`isFitmentProvisioned().catch(() => true)`): an
- * unreadable probe never claims the engine is missing. A failed rules or
- * ledger read renders an error with Retry, never "no rules".
+ * Pure logic: src/lib/fitmentValidation.js (engine), fitmentValidationAnalytics.js
+ * (audit/history/rule summaries, export shapes) and fitmentValidationView.js
+ * (checks, score, audit status, categories). I/O: src/lib/api/fitmentValidation.js.
+ * A failed read renders an error with Retry, never an empty list or 0.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
-  Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement,
-  Tooltip, Legend,
-} from 'chart.js'
-import { Doughnut, Bar } from 'react-chartjs-2'
-import {
-  ShieldCheck, AlertTriangle, CheckCircle2, XCircle, HelpCircle, Search, X,
-  FileSpreadsheet, FileText, Info, FlaskConical, Plus, Pencil, Trash2,
-  History, ListChecks, Play, ScanLine, Gauge, RotateCcw, Percent,
+  ShieldCheck, CheckCircle2, AlertTriangle, HelpCircle, Percent, ListChecks,
+  RefreshCw, Download, Plus, Search, FileSpreadsheet, FileText, Pencil, Trash2,
+  X, Eye,
 } from 'lucide-react'
-import PageHeader from '../components/ui/PageHeader'
-import Card, { CardHeader } from '../components/ui/Card'
+import {
+  Card, CardState, Kpi, KitTable, PageHero, Tabs, VehicleThumb, fmtInt,
+} from '../components/commandCenter/kit'
 import Modal from '../components/ui/Modal'
-import StatTile from '../components/ui/StatTile'
-import { Skeleton } from '../components/ui/Skeleton'
-import EnterpriseTable from '../components/ui/EnterpriseTable'
+import FitmentRuleModals from '../components/fitment/FitmentRuleModals'
+import FitmentResultCard from '../components/fitment/FitmentResultCard'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   loadFitmentData, listRules, createRule, updateRule, deleteRule,
   listValidations, createValidation, findTyreBySerial, findVehicleByAsset,
-  isFitmentProvisioned,
+  isFitmentProvisioned, listFitmentSpecs, listSpecCatalog, listActiveBySerial,
+  setRuleActive,
 } from '../lib/api/fitmentValidation'
+import { summarizeFitments, validateFitment, matchRules } from '../lib/fitmentValidation'
 import {
-  summarizeFitments, FITMENT_BAND_META, validateFitment, matchRules,
-  FITMENT_UNAVAILABLE_CHECKS, FITMENT_UNAVAILABLE_NOTE,
-} from '../lib/fitmentValidation'
-import {
-  vehicleLabel, auditSiteOptions, filterAuditRows, mismatchBySite, auditSummary,
-  auditExportRows, historyRows, filterHistory, historySummary, rulesSummary, filterRules,
+  vehicleLabel, auditSummary, auditExportRows, historyRows, filterHistory,
+  historySummary, rulesSummary, filterRules,
 } from '../lib/fitmentValidationAnalytics'
+import {
+  AXLE_ROLES, AUDIT_STATUS, SEVERITY_OPTIONS, auditStatus, filterAudit,
+  distinctValues, complianceByCategory, fleetFootprint, buildFitmentChecks,
+  scoreChecks, checksToLedger, duplicateFitments, catalogFor, catalogLoadSpeed,
+  specsForVehicle, specForPosition, ruleScope, ruleEnforces,
+} from '../lib/fitmentValidationView'
 import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
-
-ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
+import './FitmentValidation.css'
 
 const HISTORY_LIMIT = 100
-const GRID = 'rgba(148,163,184,0.14)'
-const FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-1'
-// Semantic result colours: red = wrong size, green = correct, slate = no data.
-// They carry meaning, so they deliberately do not follow the report palette.
-const SEMANTIC = { mismatch: '#ef4444', match: '#22c55e', unknown: '#64748b' }
-
-const BAND_STYLES = {
-  mismatch: 'bg-red-500/15 text-red-400 border border-red-500/30',
-  match: 'bg-green-500/15 text-green-500 border border-green-500/30',
-  unknown: 'bg-[var(--input-bg)] text-[var(--text-muted)] border border-[var(--input-border)]',
-}
-const BAND_ICON = { mismatch: XCircle, match: CheckCircle2, unknown: HelpCircle }
+const NA = <span className="cc-na">N/A</span>
 
 const EMPTY_RULE = {
   rule_name: '', applies_to_vehicle_types: '', applies_to_axle_roles: '',
@@ -78,74 +62,60 @@ const EMPTY_RULE = {
   allow_retread: true, max_retread_count: '2', require_matching_pair: true,
   max_tread_delta_dual_mm: '2', is_active: true, notes: '',
 }
+const EMPTY_V = { asset_no: '', tyre_serial: '', catalog_id: '', axle_role: '', position_code: '', load_speed: '', pressure: '' }
 
 const csv = (v) => (Array.isArray(v) ? v.join(', ') : '')
+const up = (v) => String(v ?? '').trim().toUpperCase()
 
-function chartTextColor() {
-  if (typeof document === 'undefined') return '#9ca3af'
-  return getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim() || '#9ca3af'
-}
-
-function ErrorBanner({ title, message, onRetry }) {
-  return (
-    <Card tone="crit" role="alert">
-      <div className="flex flex-wrap items-start gap-[var(--space-3)]">
-        <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
-        <div className="flex-1 min-w-[12rem]">
-          <p className="text-red-300 font-medium">{title}</p>
-          <p className="text-[var(--text-muted)] text-sm mt-1">{message}</p>
-        </div>
-        {onRetry && (
-          <button type="button" onClick={onRetry} className={`btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] ${FOCUS}`}>
-            <RotateCcw size={14} aria-hidden="true" /> Retry
-          </button>
-        )}
-      </div>
-    </Card>
-  )
-}
-
-function SearchBox({ id, label, value, onChange, placeholder }) {
-  return (
-    <div className="relative flex-1 min-w-[12rem]">
-      <label htmlFor={id} className="sr-only">{label}</label>
-      <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
-      <input id={id} className={`input pl-9 w-full min-h-[44px] ${FOCUS}`} placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} />
-    </div>
-  )
-}
+const TABS = [
+  { key: 'validate', label: 'Validate' },
+  { key: 'audit', label: 'Fleet Size Audit' },
+  { key: 'rules', label: 'Rules' },
+  { key: 'history', label: 'History' },
+]
 
 export default function FitmentValidation() {
+  const navigate = useNavigate()
   const { activeCountry } = useSettings()
   const countryParam = activeCountry && activeCountry !== 'All' ? activeCountry : null
 
   const [tab, setTab] = useState('validate')
+  const [banner, setBanner] = useState('')
 
-  // Fleet size audit
-  const [data, setData] = useState(null) // { vehicles, tyres }
+  // Fleet + fitted tyres
+  const [data, setData] = useState(null)
   const [error, setError] = useState('')
-  const [refreshing, setRefreshing] = useState(false)
-  const [updatedAt, setUpdatedAt] = useState(null)
-  const [bandFilter, setBandFilter] = useState('all')
-  const [siteFilter, setSiteFilter] = useState('')
-  const [search, setSearch] = useState('')
-
-  // Engine: rules + provisioning
+  const [loading, setLoading] = useState(true)
+  // Specs and catalogue
+  const [specs, setSpecs] = useState(null)
+  const [catalog, setCatalog] = useState(null)
+  const [refError, setRefError] = useState('')
+  // Rules + provisioning
   const [rules, setRules] = useState(null)
   const [rulesError, setRulesError] = useState('')
   const [notProvisioned, setNotProvisioned] = useState(false)
   const [ruleSearch, setRuleSearch] = useState('')
   const [ruleState, setRuleState] = useState('')
-
-  // Validate tab
-  const [vForm, setVForm] = useState({ tyre_serial: '', asset_no: '', position_code: '' })
+  const [togglingId, setTogglingId] = useState(null)
+  // Ledger
+  const [validations, setValidations] = useState(null)
+  const [validationsError, setValidationsError] = useState('')
+  const [historyResult, setHistoryResult] = useState('')
+  const [historySearch, setHistorySearch] = useState('')
+  // Audit filters
+  const [aSite, setASite] = useState('')
+  const [aType, setAType] = useState('')
+  const [aSeverity, setASeverity] = useState('')
+  const [aSearch, setASearch] = useState('')
+  const [viewRow, setViewRow] = useState(null)
+  // Validate form
+  const [vForm, setVForm] = useState(EMPTY_V)
   const [vResult, setVResult] = useState(null)
-  const [vContext, setVContext] = useState(null) // { tyre, vehicle, rule }
+  const [vContext, setVContext] = useState(null)
   const [vError, setVError] = useState('')
   const [vSimulating, setVSimulating] = useState(false)
   const [vSaving, setVSaving] = useState(false)
-
-  // Rules tab (CRUD)
+  // Rule CRUD
   const [showRuleModal, setShowRuleModal] = useState(false)
   const [editingRule, setEditingRule] = useState(null)
   const [ruleForm, setRuleForm] = useState(EMPTY_RULE)
@@ -155,12 +125,6 @@ export default function FitmentValidation() {
   const [deletingRule, setDeletingRule] = useState(false)
   const [deleteError, setDeleteError] = useState('')
 
-  // History tab
-  const [validations, setValidations] = useState(null)
-  const [validationsError, setValidationsError] = useState('')
-  const [historyResult, setHistoryResult] = useState('')
-  const [historySearch, setHistorySearch] = useState('')
-
   // ── Loaders ────────────────────────────────────────────────────────────────
   const loadRules = useCallback(async () => {
     setRulesError('')
@@ -168,7 +132,7 @@ export default function FitmentValidation() {
       const rows = await listRules({ country: activeCountry })
       setRules(Array.isArray(rows) ? rows : [])
     } catch (err) {
-      setRules([])
+      setRules(null)
       setRulesError(toUserMessage(err, 'Could not load fitment rules.'))
     }
   }, [activeCountry])
@@ -179,13 +143,24 @@ export default function FitmentValidation() {
       const rows = await listValidations({ country: activeCountry, limit: HISTORY_LIMIT })
       setValidations(Array.isArray(rows) ? rows : [])
     } catch (err) {
-      setValidations([])
-      setValidationsError(toUserMessage(err, 'Could not load the validation ledger.'))
+      setValidations(null)
+      setValidationsError(toUserMessage(err, 'Could not load the validation history.'))
     }
   }, [activeCountry])
 
-  const load = useCallback(async () => {
-    setRefreshing(true); setError('')
+  const loadRefs = useCallback(async () => {
+    setRefError('')
+    try {
+      const [s, c] = await Promise.all([listFitmentSpecs({ country: activeCountry }), listSpecCatalog({ country: activeCountry })])
+      setSpecs(s); setCatalog(c)
+    } catch (err) {
+      setSpecs(null); setCatalog(null)
+      setRefError(toUserMessage(err, 'Could not load tyre specifications.'))
+    }
+  }, [activeCountry])
+
+  const loadFleet = useCallback(async () => {
+    setLoading(true); setError('')
     try {
       const [res, provisioned] = await Promise.all([
         loadFitmentData({ country: activeCountry }),
@@ -193,82 +168,60 @@ export default function FitmentValidation() {
       ])
       setData(res)
       setNotProvisioned(!provisioned)
-      setUpdatedAt(new Date())
     } catch (err) {
+      setData(null)
       setError(toUserMessage(err, 'Could not load fleet or tyre data.'))
-      setData({ vehicles: [], tyres: [] })
     } finally {
-      await Promise.all([loadRules(), loadValidations()])
-      setRefreshing(false)
+      setLoading(false)
     }
-  }, [activeCountry, loadRules, loadValidations])
+  }, [activeCountry])
 
+  const load = useCallback(() => Promise.all([loadFleet(), loadRules(), loadValidations(), loadRefs()]), [loadFleet, loadRules, loadValidations, loadRefs])
   useEffect(() => { load() }, [load])
 
-  // ── Audit derivations ──────────────────────────────────────────────────────
-  const { rows: enriched, counts } = useMemo(
-    () => summarizeFitments(data?.vehicles || [], data?.tyres || []),
-    [data],
-  )
+  // ── Derivations ────────────────────────────────────────────────────────────
+  const { rows: enriched, counts } = useMemo(() => summarizeFitments(data?.vehicles || [], data?.tyres || []), [data])
   const audit = useMemo(() => auditSummary(counts), [counts])
-  const siteOptions = useMemo(() => auditSiteOptions(enriched), [enriched])
-  const filtered = useMemo(
-    () => filterAuditRows(enriched, { band: bandFilter, site: siteFilter, search }),
-    [enriched, bandFilter, siteFilter, search],
-  )
-  const bySiteMismatch = useMemo(() => mismatchBySite(enriched, 10), [enriched])
-  const loaded = data !== null
-  const auditFailed = !!error
-  const hasAny = loaded && data.vehicles.length > 0
-
-  const hist = useMemo(() => historySummary(validations, { now: new Date(), limit: HISTORY_LIMIT }), [validations])
-  const histRows = useMemo(() => historyRows(validations), [validations])
+  const foot = useMemo(() => fleetFootprint(data?.vehicles), [data])
+  const siteOptions = useMemo(() => distinctValues(enriched, 'site'), [enriched])
+  const typeOptions = useMemo(() => distinctValues(enriched, 'vehicle_type'), [enriched])
+  const auditRows = useMemo(() => filterAudit(enriched, { site: aSite, vehicleType: aType, severity: aSeverity, search: aSearch }), [enriched, aSite, aType, aSeverity, aSearch])
+  const categories = useMemo(() => complianceByCategory(enriched, 6), [enriched])
+  const hist = useMemo(() => historySummary(validations || [], { now: new Date(), limit: HISTORY_LIMIT }), [validations])
+  const histRows = useMemo(() => historyRows(validations || []), [validations])
   const histFiltered = useMemo(() => filterHistory(histRows, { result: historyResult, search: historySearch }), [histRows, historyResult, historySearch])
-  const rs = useMemo(() => rulesSummary(rules), [rules])
-  const rulesFiltered = useMemo(() => filterRules(rules, { state: ruleState, search: ruleSearch }), [rules, ruleState, ruleSearch])
+  const rs = useMemo(() => rulesSummary(rules || []), [rules])
+  const rulesFiltered = useMemo(() => filterRules(rules || [], { state: ruleState, search: ruleSearch }), [rules, ruleState, ruleSearch])
+  const fleetState = { loading, data, error, retry: loadFleet }
 
-  const chartText = chartTextColor()
-  const donutData = {
-    labels: ['Wrong size', 'Correct size', 'No data'],
-    datasets: [{ data: [counts.mismatch, counts.match, counts.unknown], backgroundColor: [SEMANTIC.mismatch, SEMANTIC.match, SEMANTIC.unknown], borderWidth: 0 }],
-  }
-  const barData = {
-    labels: bySiteMismatch.map((r) => r.site),
-    datasets: [{ label: 'Wrong-size assets', data: bySiteMismatch.map((r) => r.count), backgroundColor: SEMANTIC.mismatch, borderRadius: 4 }],
-  }
-  const donutOpts = {
-    responsive: true, maintainAspectRatio: false, cutout: '60%',
-    plugins: { legend: { position: 'bottom', labels: { color: chartText, boxWidth: 12 } } },
-  }
-  const barOpts = {
-    responsive: true, maintainAspectRatio: false,
-    plugins: { legend: { display: false } },
-    scales: {
-      x: { ticks: { color: chartText }, grid: { color: GRID } },
-      y: { ticks: { color: chartText, precision: 0 }, grid: { color: GRID }, title: { display: true, text: 'Assets', color: chartText } },
-    },
-  }
+  // Selected asset for the Validate form (from the loaded fleet).
+  const selectedVehicle = useMemo(() => {
+    const a = up(vForm.asset_no)
+    if (!a) return null
+    return (data?.vehicles || []).find((v) => up(v.asset_no) === a) || null
+  }, [vForm.asset_no, data])
+  const vehicleSpecs = useMemo(() => specsForVehicle(specs || [], selectedVehicle?.vehicle_type), [specs, selectedVehicle])
+  const positionSpec = useMemo(() => specForPosition(vehicleSpecs.rows, vForm.axle_role), [vehicleSpecs, vForm.axle_role])
+  const chosenCatalog = useMemo(() => (catalog || []).find((c) => c.id === vForm.catalog_id) || null, [catalog, vForm.catalog_id])
 
-  // ── Exports (audit tab: every filtered row) ────────────────────────────────
+  // ── Exports (audit: every filtered row) ────────────────────────────────────
   const EXPORT_COLS = ['asset_no', 'vehicle', 'site', 'spec', 'fitted', 'mismatch', 'fittedCount', 'status']
   const EXPORT_HEADERS = ['Asset', 'Vehicle', 'Site', 'Spec size', 'Fitted size(s)', 'Result', 'Fitted tyres', 'Status']
-  const exportRows = useMemo(() => auditExportRows(filtered), [filtered])
+  const exportRows = useMemo(() => auditExportRows(auditRows), [auditRows])
   const fileBase = reportFileName('Fitment Size Audit', countryParam || '')
+  const exportExcel = async () => {
+    try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, fileBase, 'Size audit', { title: 'Fitment Size Audit' }) } catch (e) { setBanner(toUserMessage(e, 'Could not export. Try again.')) }
+  }
+  const exportPdf = async () => {
+    try { await exportToPdf(exportRows, EXPORT_COLS.map((key, i) => ({ key, header: EXPORT_HEADERS[i] })), 'Fitment Size Audit', fileBase, 'landscape') } catch (e) { setBanner(toUserMessage(e, 'Could not export. Try again.')) }
+  }
 
-  const tiles = [
-    { label: 'Assets checked', value: auditFailed ? 'N/A' : audit.total.toLocaleString(), sub: audit.coveragePct == null ? 'No fleet in scope' : `${audit.coveragePct}% checkable`, icon: ShieldCheck, tone: 'neutral' },
-    { label: 'Correct size', value: auditFailed ? 'N/A' : audit.match.toLocaleString(), icon: CheckCircle2, tone: 'accent' },
-    { label: 'Wrong size', value: auditFailed ? 'N/A' : audit.mismatch.toLocaleString(), sub: `${audit.unknown.toLocaleString()} without data`, icon: XCircle, tone: 'crit' },
-    { label: 'Size compliance', value: auditFailed || audit.compliancePct == null ? 'N/A' : `${audit.compliancePct}%`, sub: 'Of checkable assets', icon: Percent, tone: 'info' },
-    { label: 'Approval rate', value: validationsError || hist.approvalRatePct == null ? 'N/A' : `${hist.approvalRatePct}%`, sub: `${hist.total} recorded validations`, icon: History, tone: 'neutral' },
-    { label: 'Active rules', value: rulesError ? 'N/A' : String(rs.active), sub: rs.total ? `${rs.inactive} inactive` : 'Default policy in use', icon: ListChecks, tone: 'neutral' },
-  ]
-
-  const clearFilters = () => { setBandFilter('all'); setSiteFilter(''); setSearch('') }
-  const hasFilters = bandFilter !== 'all' || siteFilter || search
-
-  // ── Validate handlers ──────────────────────────────────────────────────────
+  // ── Validate ───────────────────────────────────────────────────────────────
   const setV = (k, v) => setVForm((f) => ({ ...f, [k]: v }))
+  const pickCatalog = (id) => {
+    const row = (catalog || []).find((c) => c.id === id)
+    setVForm((f) => ({ ...f, catalog_id: id, load_speed: row ? catalogLoadSpeed(row) : f.load_speed }))
+  }
 
   const runValidation = useCallback(async (persist) => {
     setVError('')
@@ -276,26 +229,38 @@ export default function FitmentValidation() {
     const asset = vForm.asset_no.trim()
     const position = vForm.position_code.trim()
     if (!serial) { setVError('Enter a tyre serial to validate.'); return }
-    persist ? setVSaving(true) : setVSimulating(true)
+    if (persist) setVSaving(true); else setVSimulating(true)
     try {
-      const [tyre, vehicle] = await Promise.all([
+      const [tyre, active, vehicle] = await Promise.all([
         findTyreBySerial(serial, { country: activeCountry }),
-        asset ? findVehicleByAsset(asset, { country: activeCountry }) : Promise.resolve(null),
+        listActiveBySerial(serial, { country: activeCountry }),
+        selectedVehicle ? Promise.resolve(selectedVehicle) : (asset ? findVehicleByAsset(asset, { country: activeCountry }) : Promise.resolve(null)),
       ])
       const rule = matchRules(rules || [], vehicle)[0]
-      const result = validateFitment(tyre, vehicle, rule)
+      const engine = validateFitment(tyre, vehicle, rule)
+      const size = chosenCatalog?.size || tyre?.size || ''
+      const loadSpeed = vForm.load_speed.trim() || catalogLoadSpeed(catalogFor(catalog || [], size, tyre?.brand)[0] || catalogFor(catalog || [], size)[0])
+      const { checks } = buildFitmentChecks({
+        tyre, tyreLooked: true, vehicle, axleRole: vForm.axle_role, size, specs: specs || [], rule,
+        loadSpeed, pressure: vForm.pressure, engine,
+        duplicates: duplicateFitments(active, { assetNo: asset, position }),
+      })
+      const score = scoreChecks(checks)
       setVContext({ tyre, vehicle, rule })
-      setVResult({ ...result, preview: !persist })
+      setVResult({ checks, score, preview: !persist })
 
       if (persist) {
         if (!tyre) { setVError(`No tyre matched serial "${serial}". Nothing was saved.`); return }
+        const ledger = checksToLedger(checks)
         await createValidation({
           tyre_serial: serial,
           asset_no: asset || null,
           position_code: position || null,
-          axle_role: null,
+          axle_role: vForm.axle_role || null,
           country: countryParam,
-          result,
+          is_valid: ledger.is_valid,
+          violations: ledger.violations,
+          warnings: ledger.warnings,
         })
         await loadValidations()
       }
@@ -304,10 +269,27 @@ export default function FitmentValidation() {
     } finally {
       setVSaving(false); setVSimulating(false)
     }
-  }, [vForm, rules, activeCountry, countryParam, loadValidations])
+  }, [vForm, rules, specs, catalog, chosenCatalog, selectedVehicle, activeCountry, countryParam, loadValidations])
 
-  // ── Rule CRUD handlers ─────────────────────────────────────────────────────
-  const openRuleCreate = () => { setEditingRule(null); setRuleForm(EMPTY_RULE); setRuleFormError(''); setShowRuleModal(true) }
+  const busy = vSimulating || vSaving
+
+  // Chips under the form, from the last result.
+  const chips = useMemo(() => {
+    if (!vResult) return []
+    const by = Object.fromEntries(vResult.checks.map((c) => [c.key, c]))
+    const out = []
+    out.push(positionSpec || vehicleSpecs.rows.length ? { tone: 'good', text: 'Specification found' } : { tone: 'muted', text: 'No specification for this vehicle' })
+    if (by.duplicate?.status === 'pass') out.push({ tone: 'good', text: 'Serial unique' })
+    else if (by.duplicate?.status === 'fail') out.push({ tone: 'bad', text: 'Serial active elsewhere' })
+    if (by.axle?.status === 'pass') out.push({ tone: 'good', text: 'Position supported' })
+    else if (by.axle?.status === 'advisory') out.push({ tone: 'warn', text: 'Position has no spec' })
+    if (by.pressure?.status === 'pass') out.push({ tone: 'good', text: 'Pressure on target' })
+    else if (by.pressure?.status === 'advisory' || by.pressure?.status === 'fail') out.push({ tone: by.pressure.status === 'fail' ? 'bad' : 'warn', text: `Pressure ${by.pressure.value}` })
+    return out
+  }, [vResult, positionSpec, vehicleSpecs])
+
+  // ── Rule CRUD ──────────────────────────────────────────────────────────────
+  const openRuleCreate = (prefill = {}) => { setEditingRule(null); setRuleForm({ ...EMPTY_RULE, ...prefill }); setRuleFormError(''); setShowRuleModal(true) }
   const openRuleEdit = useCallback((r) => {
     setEditingRule(r)
     setRuleForm({
@@ -361,533 +343,423 @@ export default function FitmentValidation() {
     }
   }, [confirmDeleteRule, loadRules])
 
-  const busy = vSimulating || vSaving
+  const toggleRule = useCallback(async (r) => {
+    setTogglingId(r.id); setBanner('')
+    try {
+      const saved = await setRuleActive(r.id, r.is_active === false)
+      setRules((list) => (list || []).map((x) => (x.id === r.id ? { ...x, ...saved } : x)))
+    } catch (err) {
+      setBanner(toUserMessage(err, 'Could not change the rule. Try again.'))
+    } finally {
+      setTogglingId(null)
+    }
+  }, [])
 
-  // ── Table columns ──────────────────────────────────────────────────────────
+  // ── Audit row actions ──────────────────────────────────────────────────────
+  const resolveRow = (r) => {
+    setVForm({ ...EMPTY_V, asset_no: r.asset_no || '' })
+    setVResult(null); setVError('')
+    setTab('validate')
+    window.scrollTo?.({ top: 0, behavior: 'smooth' })
+  }
+  const createRuleFor = (r) => openRuleCreate({
+    rule_name: `${r.vehicle_type || 'Vehicle'} approved sizes`,
+    applies_to_vehicle_types: r.vehicle_type || '',
+    approved_sizes: (r.fittedSizes || []).join(', '),
+  })
+
+  // ── Columns ────────────────────────────────────────────────────────────────
   const auditColumns = useMemo(() => [
-    { id: 'asset', header: 'Asset', accessorFn: (r) => r.asset_no || 'N/A', cell: ({ getValue }) => <span className="font-mono text-xs text-[var(--text-primary)]">{getValue()}</span> },
-    { id: 'vehicle', header: 'Vehicle', accessorFn: (r) => vehicleLabel(r) || 'N/A' },
-    { id: 'site', header: 'Site', accessorFn: (r) => r.site || 'N/A' },
-    { id: 'spec', header: 'Spec size', accessorFn: (r) => r.spec || 'N/A', cell: ({ getValue }) => <span className="font-mono text-xs">{getValue()}</span> },
     {
-      id: 'fitted', header: 'Fitted size(s)', accessorFn: (r) => r.fittedSizes.join(', '),
-      cell: ({ row }) => {
-        const r = row.original
-        return (
-          <div className="font-mono text-xs">
-            {r.fittedSizes.length ? <span className={r.band === 'mismatch' ? 'text-red-400' : 'text-[var(--text-secondary)]'}>{r.fittedSizes.join(', ')}</span> : <span className="text-[var(--text-muted)]">N/A</span>}
-            {r.band === 'mismatch' && r.mismatchSizes.length > 0 && <span className="block text-[11px] text-red-400 mt-0.5">Not spec: {r.mismatchSizes.join(', ')}</span>}
-          </div>
-        )
+      key: 'vehicle', header: 'Vehicle', sortValue: (r) => r.asset_no,
+      cell: (r) => (
+        <span className="fv-veh"><VehicleThumb row={r} size="sm" />
+          <span><b>{r.asset_no || 'N/A'}</b><small>{vehicleLabel(r) || 'N/A'}{r.site ? ` · ${r.site}` : ''}</small></span>
+        </span>
+      ),
+    },
+    { key: 'spec', header: 'Required size', cell: (r) => (r.spec ? <span className="fv-mono">{r.spec}</span> : NA) },
+    {
+      key: 'fitted', header: 'Fitted size', sortValue: (r) => r.fittedSizes.join(', '),
+      cell: (r) => (r.fittedSizes.length ? <span className={`fv-mono ${r.band === 'mismatch' ? 'fv-bad' : ''}`}>{r.fittedSizes.join(', ')}</span> : NA),
+    },
+    {
+      key: 'position', header: 'Position', sortable: false,
+      cell: (r) => {
+        if (r.band !== 'mismatch') return r.fittedCount ? `${r.fittedCount} tyres` : NA
+        const pos = r.fitted.filter((t) => !t.matches && t.sizeNorm).map((t) => t.position).filter((p) => p && p !== 'N/A')
+        return pos.length ? <span className="fv-mono">{[...new Set(pos)].slice(0, 4).join(', ')}</span> : NA
       },
     },
-    { id: 'tyres', header: 'Tyres', accessorFn: (r) => r.fittedCount || 0, meta: { align: 'right' } },
+    { key: 'vehicle_type', header: 'Vehicle type', cell: (r) => r.vehicle_type || NA },
     {
-      id: 'result', header: 'Result', accessorFn: (r) => FITMENT_BAND_META[r.band]?.label || r.band,
-      cell: ({ row }) => {
-        const Icon = BAND_ICON[row.original.band] || HelpCircle
+      key: 'status', header: 'Status', sortValue: (r) => AUDIT_STATUS[auditStatus(r)].label,
+      cell: (r) => { const m = AUDIT_STATUS[auditStatus(r)]; return <span className={`cc-pill ${m.tone}`}>{m.label}</span> },
+    },
+    {
+      key: 'action', header: 'Action', sortable: false,
+      cell: (r) => {
+        const st = auditStatus(r)
         return (
-          <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded ${BAND_STYLES[row.original.band]}`}>
-            <Icon size={12} aria-hidden="true" /> {FITMENT_BAND_META[row.original.band]?.label}
+          <span className="fv-actions">
+            <button type="button" className="fv-link" onClick={() => setViewRow(r)}>View</button>
+            {st === 'wrong_size' && <button type="button" className="fv-link" onClick={() => resolveRow(r)}>Resolve</button>}
+            {st === 'no_spec' && !notProvisioned && <button type="button" className="fv-link" onClick={() => createRuleFor(r)}>Create rule</button>}
           </span>
         )
       },
     },
-  ], [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [notProvisioned])
 
   const historyColumns = useMemo(() => [
-    {
-      id: 'result', header: 'Result', accessorFn: (h) => h.result,
-      cell: ({ row }) => (
-        <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${row.original.is_valid ? 'text-green-500' : 'text-red-400'}`}>
-          {row.original.is_valid ? <CheckCircle2 size={14} aria-hidden="true" /> : <XCircle size={14} aria-hidden="true" />}
-          {row.original.result}
-        </span>
-      ),
-    },
-    { id: 'serial', header: 'Serial', accessorFn: (h) => h.tyre_serial || 'N/A', cell: ({ getValue }) => <span className="font-mono text-xs text-[var(--text-primary)]">{getValue()}</span> },
-    { id: 'asset', header: 'Asset', accessorFn: (h) => h.asset_no || 'N/A', cell: ({ getValue }) => <span className="font-mono text-xs">{getValue()}</span> },
-    { id: 'position', header: 'Position', accessorFn: (h) => h.position_code || 'N/A' },
-    { id: 'issues', header: 'Issues', accessorFn: (h) => h.issueLabel, cell: ({ row }) => <span className={`text-xs ${row.original.violationCount ? 'text-red-400' : row.original.warningCount ? 'text-amber-500' : 'text-[var(--text-muted)]'}`}>{row.original.issueLabel}</span> },
-    { id: 'when', header: 'When', accessorFn: (h) => h.validated_at || '', cell: ({ getValue }) => <span className="text-xs text-[var(--text-muted)] whitespace-nowrap">{getValue() ? new Date(getValue()).toLocaleString() : 'N/A'}</span> },
+    { key: 'result', header: 'Result', cell: (h) => <span className={`cc-pill ${h.is_valid ? 'good' : 'bad'}`}>{h.result}</span> },
+    { key: 'tyre_serial', header: 'Serial', cell: (h) => (h.tyre_serial ? <span className="fv-mono">{h.tyre_serial}</span> : NA) },
+    { key: 'asset_no', header: 'Asset', cell: (h) => h.asset_no || NA },
+    { key: 'position_code', header: 'Position', cell: (h) => h.position_code || NA },
+    { key: 'issueLabel', header: 'Issues', cell: (h) => <span className={h.violationCount ? 'fv-bad' : h.warningCount ? 'fv-warn' : 'fv-muted'}>{h.issueLabel}</span> },
+    { key: 'validated_at', header: 'When', cell: (h) => (h.validated_at ? new Date(h.validated_at).toLocaleString() : NA) },
   ], [])
 
   const ruleColumns = useMemo(() => [
+    { key: 'rule_name', header: 'Rule', cell: (r) => <span className="fv-rule-name"><b>{r.rule_name}</b>{r.notes && <small>{r.notes}</small>}</span> },
+    { key: 'state', header: 'State', sortValue: (r) => (r.is_active !== false ? 'Active' : 'Inactive'), cell: (r) => <span className={`cc-pill ${r.is_active !== false ? 'good' : 'muted'}`}>{r.is_active !== false ? 'Active' : 'Inactive'}</span> },
+    { key: 'types', header: 'Vehicle types', sortValue: (r) => csv(r.applies_to_vehicle_types), cell: (r) => csv(r.applies_to_vehicle_types) || 'All' },
+    { key: 'axles', header: 'Axles', sortValue: (r) => csv(r.applies_to_axle_roles), cell: (r) => csv(r.applies_to_axle_roles) || 'All' },
+    { key: 'min_tread_depth_mm', header: 'Min tread (mm)', numeric: true, sortValue: (r) => (r.min_tread_depth_mm == null ? null : Number(r.min_tread_depth_mm)), cell: (r) => (r.min_tread_depth_mm ?? NA) },
+    { key: 'max_tyre_age_years', header: 'Max age (y)', numeric: true, sortValue: (r) => (r.max_tyre_age_years == null ? null : Number(r.max_tyre_age_years)), cell: (r) => (r.max_tyre_age_years ?? NA) },
+    { key: 'sizes', header: 'Approved sizes', sortValue: (r) => csv(r.approved_sizes), cell: (r) => <span className="fv-mono">{r.approved_sizes?.length ? csv(r.approved_sizes) : 'Any'}</span> },
+    { key: 'retread', header: 'Retread', sortValue: (r) => (r.allow_retread !== false ? 1 : 0), cell: (r) => (r.allow_retread !== false ? `Yes, max ${r.max_retread_count ?? 'N/A'}` : 'No') },
     {
-      id: 'name', header: 'Rule', accessorFn: (r) => r.rule_name || '',
-      cell: ({ row }) => (
-        <div className="min-w-0 max-w-[22rem]">
-          <p className="font-medium text-[var(--text-primary)]">{row.original.rule_name}</p>
-          {row.original.notes && <p className="text-xs text-[var(--text-muted)] line-clamp-2">{row.original.notes}</p>}
-        </div>
-      ),
-    },
-    {
-      id: 'state', header: 'State', accessorFn: (r) => (r.is_active !== false ? 'Active' : 'Inactive'),
-      cell: ({ getValue }) => <span className={`text-[11px] px-2 py-0.5 rounded border ${getValue() === 'Active' ? 'border-green-500/30 text-green-500' : 'border-[var(--input-border)] text-[var(--text-muted)]'}`}>{getValue()}</span>,
-    },
-    { id: 'types', header: 'Vehicle types', accessorFn: (r) => csv(r.applies_to_vehicle_types) || 'All' },
-    { id: 'axles', header: 'Axles', accessorFn: (r) => csv(r.applies_to_axle_roles) || 'All' },
-    { id: 'tread', header: 'Min tread (mm)', accessorFn: (r) => (r.min_tread_depth_mm == null ? null : Number(r.min_tread_depth_mm)), meta: { align: 'right' } },
-    { id: 'age', header: 'Max age (y)', accessorFn: (r) => (r.max_tyre_age_years == null ? null : Number(r.max_tyre_age_years)), meta: { align: 'right' } },
-    { id: 'sizes', header: 'Approved sizes', accessorFn: (r) => (r.approved_sizes?.length ? csv(r.approved_sizes) : 'Any'), cell: ({ getValue }) => <span className="font-mono text-xs line-clamp-2 max-w-[16rem] block">{getValue()}</span> },
-    { id: 'retread', header: 'Retread', accessorFn: (r) => (r.allow_retread !== false ? `Yes, max ${r.max_retread_count ?? 'N/A'}` : 'No') },
-    {
-      id: 'actions', header: '', enableSorting: false, meta: { export: false },
-      cell: ({ row }) => (
-        <div className="flex items-center justify-end gap-1">
-          <button type="button" onClick={() => openRuleEdit(row.original)} className={`inline-flex items-center justify-center min-h-[44px] min-w-[44px] rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] ${FOCUS}`} aria-label={`Edit rule ${row.original.rule_name}`}><Pencil size={14} aria-hidden="true" /></button>
-          <button type="button" onClick={() => { setDeleteError(''); setConfirmDeleteRule(row.original) }} className={`inline-flex items-center justify-center min-h-[44px] min-w-[44px] rounded hover:bg-red-500/10 text-[var(--text-muted)] hover:text-red-400 ${FOCUS}`} aria-label={`Delete rule ${row.original.rule_name}`}><Trash2 size={14} aria-hidden="true" /></button>
-        </div>
+      key: 'actions', header: '', sortable: false,
+      cell: (r) => (
+        <span className="fv-actions">
+          <button type="button" className="cc-icon-btn" onClick={() => openRuleEdit(r)} aria-label={`Edit rule ${r.rule_name}`}><Pencil size={14} /></button>
+          <button type="button" className="cc-icon-btn" onClick={() => { setDeleteError(''); setConfirmDeleteRule(r) }} aria-label={`Delete rule ${r.rule_name}`}><Trash2 size={14} /></button>
+        </span>
       ),
     },
   ], [openRuleEdit])
 
-  const TABS = [
-    { key: 'validate', label: 'Validate', icon: ShieldCheck },
-    { key: 'audit', label: 'Fleet size audit', icon: ScanLine, count: loaded && !auditFailed ? audit.mismatch : null },
-    { key: 'rules', label: 'Rules', icon: ListChecks, count: rules && !rulesError ? rs.total : null },
-    { key: 'history', label: 'History', icon: History, count: validations && !validationsError ? hist.total : null },
-  ]
+  // ── KPIs ───────────────────────────────────────────────────────────────────
+  const fleetFailed = !!error
+  const activeRuleCount = rulesError || specs == null ? null : rs.active + specs.length
+  const kpiLoading = loading && !data
+
+  const auditCard = (
+    <Card
+      title="Fleet Size Audit"
+      sub="Find wrong sizes, missing spec sizes and assets without tyre data across the fleet."
+      action={(
+        <span className="fv-tools">
+          <button type="button" className="cc-btn-ghost" onClick={exportExcel} disabled={!auditRows.length}><FileSpreadsheet size={14} aria-hidden="true" /> Excel</button>
+          <button type="button" className="cc-btn-ghost" onClick={exportPdf} disabled={!auditRows.length}><FileText size={14} aria-hidden="true" /> PDF</button>
+        </span>
+      )}
+    >
+      <div className="fv-filters">
+        <select className="cc-select" aria-label="Site" value={aSite} onChange={(e) => setASite(e.target.value)}>
+          <option value="">All sites</option>
+          {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <select className="cc-select" aria-label="Vehicle type" value={aType} onChange={(e) => setAType(e.target.value)}>
+          <option value="">All vehicle types</option>
+          {typeOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <select className="cc-select" aria-label="Severity" value={aSeverity} onChange={(e) => setASeverity(e.target.value)}>
+          <option value="">All severities</option>
+          {SEVERITY_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+        </select>
+        <div className="cc-search"><Search size={14} aria-hidden="true" /><input value={aSearch} onChange={(e) => setASearch(e.target.value)} placeholder="Search fleet no., make, model, size" aria-label="Search the fleet size audit" /></div>
+        {(aSite || aType || aSeverity || aSearch) && (
+          <button type="button" className="cc-btn-ghost" onClick={() => { setASite(''); setAType(''); setASeverity(''); setASearch('') }}><X size={14} aria-hidden="true" /> Clear</button>
+        )}
+      </div>
+      <CardState state={fleetState}>
+        <KitTable
+          columns={auditColumns}
+          rows={auditRows}
+          empty={aSite || aType || aSeverity || aSearch ? 'No assets match these filters.' : 'No vehicles in scope.'}
+        />
+      </CardState>
+    </Card>
+  )
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Fitment Validation"
-        subtitle="Validate a single tyre before it goes on, audit the whole fleet's sizes, and govern the fitment policy that drives both."
-        icon={ShieldCheck}
-        onRefresh={load}
-        refreshing={refreshing}
-        updatedAt={updatedAt}
-        actions={tab === 'audit' ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, fileBase, 'Size audit', { title: 'Fitment Size Audit' }) } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className={`btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] ${FOCUS}`} disabled={!filtered.length}>
-              <FileSpreadsheet size={14} aria-hidden="true" /> Excel
-            </button>
-            <button type="button" onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((key, i) => ({ key, header: EXPORT_HEADERS[i] })), 'Fitment Size Audit', fileBase, 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className={`btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] ${FOCUS}`} disabled={!filtered.length}>
-              <FileText size={14} aria-hidden="true" /> PDF
-            </button>
-          </div>
-        ) : tab === 'rules' ? (
-          <button type="button" onClick={openRuleCreate} className={`btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px] ${FOCUS}`} disabled={notProvisioned}>
-            <Plus size={14} aria-hidden="true" /> New rule
-          </button>
-        ) : null}
-      />
-
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-[var(--gap-grid)]">
-        {tiles.map((k, i) => (
-          !loaded
-            ? <div key={k.label} className="card !p-4 space-y-3"><Skeleton className="h-3 w-2/3" /><Skeleton className="h-7 w-1/2" /><Skeleton className="h-2.5 w-3/4" /></div>
-            : <StatTile key={k.label} index={i} {...k} />
-        ))}
+    <div className="cc fv-page">
+      <div className="fv-hero">
+        <PageHero
+          hello="Tyre Management › Fitment & Rotation › Fitment Validation"
+          title="Fitment Validation"
+          lead="Validate a tyre before it goes on, audit fleet size compliance, and govern approved fitment rules."
+          imgLight="/dashboard/hero-fitment-light.webp"
+          imgDark="/dashboard/hero-fitment-dark.webp"
+          stat={data && !fleetFailed ? { value: fmtInt(foot.vehicles), lines: ['Vehicles across', `${fmtInt(foot.sites)} sites`] } : null}
+        />
+        <div className="fv-hero-actions">
+          <button type="button" className="cc-btn-ghost" onClick={load} disabled={loading}><RefreshCw size={14} aria-hidden="true" /> Refresh</button>
+          <button type="button" className="cc-btn-ghost" onClick={exportExcel} disabled={!auditRows.length}><Download size={14} aria-hidden="true" /> Export</button>
+          <button type="button" className="cc-btn-primary" onClick={() => openRuleCreate()} disabled={notProvisioned}><Plus size={14} aria-hidden="true" /> New Rule</button>
+        </div>
       </div>
 
-      <div role="tablist" aria-label="Fitment sections" className="flex gap-1 overflow-x-auto border-b border-[var(--input-border)]">
-        {TABS.map((t) => {
-          const Icon = t.icon
-          const active = tab === t.key
-          return (
-            <button
-              key={t.key}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              onClick={() => setTab(t.key)}
-              className={`inline-flex items-center gap-1.5 min-h-[44px] px-4 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition-colors ${FOCUS} ${active ? 'border-[var(--accent)] text-[var(--text-primary)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
-            >
-              <Icon size={15} aria-hidden="true" /> {t.label}
-              {t.count != null && <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--input-bg)] text-[var(--text-secondary)] tabular-nums">{t.count}</span>}
-            </button>
-          )
-        })}
-      </div>
-
-      {error && <ErrorBanner title="Could not load fitment data." message={error} onRetry={load} />}
-
-      {notProvisioned && (tab === 'rules' || tab === 'history') && (
-        <Card tone="warn" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
-          <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" aria-hidden="true" />
-          <div>
-            <p className="text-[var(--text-primary)] font-medium">The fitment rule engine is not enabled on this database yet.</p>
-            <p className="text-[var(--text-muted)] text-sm mt-1">
-              Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V208_FITMENT_RULES.sql</span>, then reload. The Validate tab still runs against the built-in default policy.
-            </p>
-          </div>
-        </Card>
+      {banner && (
+        <div className="cc-card fv-banner" role="alert">
+          <AlertTriangle size={16} aria-hidden="true" /><div>{banner}</div>
+          <button type="button" className="cc-icon-btn" onClick={() => setBanner('')} aria-label="Dismiss message"><X size={14} /></button>
+        </div>
+      )}
+      {notProvisioned && (
+        <div className="cc-card fv-banner" role="status">
+          <AlertTriangle size={16} aria-hidden="true" /><div>The fitment rules and history tables are not installed in this database yet (migration V208), so rules and saved validations are not available.</div>
+        </div>
       )}
 
-      {/* ── VALIDATE TAB ─────────────────────────────────────────────────────── */}
+      <div className="cc-kpis">
+        <Kpi icon={ShieldCheck} tone="t-green" display={fleetFailed ? 'N/A' : undefined} value={audit.total} label="Assets Checked" loading={kpiLoading} onClick={() => { setTab('audit'); setASeverity('') }} title={audit.coveragePct == null ? 'No fleet in scope' : `${audit.coveragePct}% have enough data to check`} />
+        <Kpi icon={CheckCircle2} tone="t-green" display={fleetFailed ? 'N/A' : undefined} value={audit.match} label="Correct Size / Spec" loading={kpiLoading} onClick={() => { setTab('audit'); setASeverity('ok') }} />
+        <Kpi icon={AlertTriangle} tone="t-red" display={fleetFailed ? 'N/A' : undefined} value={audit.mismatch} label="Non-compliant" danger={audit.mismatch > 0} loading={kpiLoading} onClick={() => { setTab('audit'); setASeverity('critical') }} />
+        <Kpi icon={HelpCircle} tone="t-amber" display={fleetFailed ? 'N/A' : undefined} value={audit.unknown} label="Unclear / Missing Data" loading={kpiLoading} onClick={() => { setTab('audit'); setASeverity('data') }} title="No spec size on the vehicle or no fitted tyre recorded" />
+        <Kpi icon={Percent} tone="t-blue" display={fleetFailed || audit.compliancePct == null ? 'N/A' : `${audit.compliancePct}%`} label="Fleet Compliance Rate" loading={kpiLoading} title="Correct size as a share of assets that could be checked" />
+        <Kpi icon={ListChecks} tone="t-purple" display={activeRuleCount == null ? 'N/A' : undefined} value={activeRuleCount} label="Active Fitment Rules" onClick={() => setTab('rules')} title={activeRuleCount == null ? 'Rules could not be read' : `${rs.active} active policy rules and ${specs.length} specification rows from Tyre Specifications`} />
+      </div>
+
+      <Card className="fv-tabbar">
+        <Tabs tabs={TABS.map((t) => ({
+          ...t,
+          count: t.key === 'audit' && data && !fleetFailed ? audit.mismatch || null
+            : t.key === 'rules' && rules ? rs.total || null
+              : t.key === 'history' && validations ? hist.total || null : null,
+          countTone: t.key === 'audit' ? 'bad' : undefined,
+        }))} value={tab} onChange={setTab} label="Fitment views" />
+      </Card>
+
       {tab === 'validate' && (
-        <div className="space-y-4">
-          <Card>
-            <CardHeader icon={Gauge} title="Pre-installation check" description={rules && rules.length ? `${rs.active} active rule${rs.active === 1 ? '' : 's'} available; the best match for the target vehicle is applied.` : 'No custom rules yet, so the built-in default policy applies.'} />
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="label" htmlFor="fv-serial">Tyre serial (required)</label>
-                <input id="fv-serial" className={`input w-full min-h-[44px] ${FOCUS}`} placeholder="e.g. AA10293" value={vForm.tyre_serial} maxLength={120} onChange={(e) => setV('tyre_serial', e.target.value)} />
-              </div>
-              <div>
-                <label className="label" htmlFor="fv-asset">Target asset no. (optional)</label>
-                <input id="fv-asset" className={`input w-full min-h-[44px] ${FOCUS}`} placeholder="e.g. TM517" value={vForm.asset_no} maxLength={120} onChange={(e) => setV('asset_no', e.target.value)} />
-              </div>
-              <div>
-                <label className="label" htmlFor="fv-position">Position code (optional)</label>
-                <input id="fv-position" className={`input w-full min-h-[44px] ${FOCUS}`} placeholder="e.g. A2LO" value={vForm.position_code} maxLength={60} onChange={(e) => setV('position_code', e.target.value)} />
-              </div>
-            </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button type="button" onClick={() => runValidation(false)} className={`btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] disabled:opacity-60 ${FOCUS}`} disabled={busy}>
-                <FlaskConical size={14} aria-hidden="true" /> {vSimulating ? 'Simulating...' : 'Simulate'}
-              </button>
-              <button type="button" onClick={() => runValidation(true)} className={`btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px] disabled:opacity-60 ${FOCUS}`} disabled={busy}>
-                <Play size={14} aria-hidden="true" /> {vSaving ? 'Validating...' : 'Validate and record'}
-              </button>
-              <span className="text-xs text-[var(--text-muted)] inline-flex items-center gap-1.5 ml-auto self-center">
-                <Info size={12} aria-hidden="true" /> Simulate previews only. Validate and record writes to the ledger.
-              </span>
-            </div>
-          </Card>
-
-          {vError && (
-            <Card tone="crit" role="alert" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
-              <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
-              <p className="text-red-400 text-sm">{vError}</p>
-            </Card>
-          )}
-
-          {vResult && (
-            <Card tone={vResult.is_valid ? 'good' : 'crit'} aria-live="polite">
-              <div className="flex items-center gap-2 flex-wrap">
-                {vResult.is_valid
-                  ? <CheckCircle2 size={20} className="text-green-500" aria-hidden="true" />
-                  : <XCircle size={20} className="text-red-400" aria-hidden="true" />}
-                <span className={`text-base font-semibold ${vResult.is_valid ? 'text-green-500' : 'text-red-400'}`}>
-                  {vResult.is_valid ? 'Fitment approved' : 'Fitment rejected'}
-                </span>
-                {vResult.preview && (
-                  <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border border-[var(--input-border)] text-[var(--text-secondary)]">Preview, not saved</span>
-                )}
-                {vContext?.rule?._default && (
-                  <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border border-[var(--input-border)] text-[var(--text-muted)]">Default policy</span>
-                )}
-              </div>
-
-              <dl className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 text-sm">
-                {[
-                  ['Serial', vForm.tyre_serial, true],
-                  ['Size', vContext?.tyre?.size, true],
-                  ['Tread', vContext?.tyre?.tread_depth != null ? `${vContext.tyre.tread_depth} mm` : null],
-                  ['Status', vContext?.tyre?.status],
-                  ['Target asset', vForm.asset_no, true],
-                  ['Vehicle type', vContext?.vehicle?.vehicle_type],
-                  ['Spec size', vContext?.vehicle?.tyre_size, true],
-                  ['Rule', vContext?.rule?.rule_name],
-                ].map(([label, value, mono]) => (
-                  <div key={label}>
-                    <dt className="text-[var(--text-muted)] text-xs">{label}</dt>
-                    <dd className={`${mono ? 'font-mono' : ''} text-[var(--text-secondary)]`}>{value || 'N/A'}</dd>
-                  </div>
-                ))}
-              </dl>
-
-              {vResult.violations?.length > 0 && (
-                <div className="mt-4 space-y-2">
-                  <div className="text-xs font-semibold text-red-400 uppercase tracking-wide">Violations ({vResult.violations.length})</div>
-                  {vResult.violations.map((v, i) => (
-                    <div key={i} className="flex items-start gap-2 p-2.5 rounded border border-red-500/30">
-                      <XCircle size={16} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
-                      <div>
-                        <div className="text-sm text-[var(--text-primary)]">{v.message}</div>
-                        <span className="text-[11px] font-mono text-red-400">{v.rule}</span>
-                      </div>
+        <>
+          <div className="fv-validate">
+            <Card
+              title="Pre-installation Fitment Check"
+              sub="Validate one tyre before installation against vehicle, axle, position and policy rules."
+              action={<button type="button" className="cc-btn-primary" onClick={() => runValidation(true)} disabled={busy || notProvisioned}>{vSaving ? 'Validating...' : 'Validate Fitment'}</button>}
+            >
+              <label className="cc-field fv-asset-field">
+                <span>Asset</span>
+                <input className="fv-input" list="fv-assets" value={vForm.asset_no} onChange={(e) => setV('asset_no', e.target.value)} placeholder="Type or pick an asset number" maxLength={120} />
+                <datalist id="fv-assets">{(data?.vehicles || []).slice(0, 3000).map((v) => <option key={v.id} value={v.asset_no}>{vehicleLabel(v)}</option>)}</datalist>
+              </label>
+              <div className="fv-asset-card">
+                {selectedVehicle ? (
+                  <>
+                    <VehicleThumb row={selectedVehicle} size="md" />
+                    <div className="fv-asset-main">
+                      <b>{selectedVehicle.asset_no}{vehicleLabel(selectedVehicle) ? ` · ${vehicleLabel(selectedVehicle)}` : ''}</b>
+                      <small>{[selectedVehicle.vehicle_type, selectedVehicle.site, selectedVehicle.tyre_size ? `Spec size ${selectedVehicle.tyre_size}` : 'No spec size recorded'].filter(Boolean).join(' · ')}</small>
                     </div>
-                  ))}
-                </div>
-              )}
+                    {selectedVehicle.status && <span className={`cc-pill ${/active/i.test(selectedVehicle.status) ? 'good' : 'muted'}`}>{selectedVehicle.status}</span>}
+                  </>
+                ) : <span className="fv-muted">{vForm.asset_no ? 'Asset not found in the loaded fleet. It will be looked up when you validate.' : 'Pick an asset to see its details.'}</span>}
+              </div>
 
-              {vResult.warnings?.length > 0 && (
-                <div className="mt-4 space-y-2">
-                  <div className="text-xs font-semibold text-amber-500 uppercase tracking-wide">Warnings ({vResult.warnings.length})</div>
-                  {vResult.warnings.map((w, i) => (
-                    <div key={i} className="flex items-start gap-2 p-2.5 rounded border border-amber-500/30">
-                      <AlertTriangle size={16} className="text-amber-500 mt-0.5 shrink-0" aria-hidden="true" />
-                      <div>
-                        <div className="text-sm text-[var(--text-primary)]">{w.message}</div>
-                        <span className="text-[11px] font-mono text-amber-500">{w.rule}</span>
-                      </div>
-                    </div>
-                  ))}
+              <div className="fv-form">
+                <label className="cc-field"><span>Tyre serial / ID</span>
+                  <input className="fv-input" value={vForm.tyre_serial} onChange={(e) => setV('tyre_serial', e.target.value)} placeholder="e.g. AA10293" maxLength={120} />
+                </label>
+                <label className="cc-field"><span>Tyre specification</span>
+                  <select className="cc-select" value={vForm.catalog_id} onChange={(e) => pickCatalog(e.target.value)} disabled={!catalog}>
+                    <option value="">{catalog ? 'Use the size on the tyre record' : 'Catalogue not loaded'}</option>
+                    {(catalog || []).map((c) => <option key={c.id} value={c.id}>{[c.size, c.brand, c.pattern].filter(Boolean).join(' · ')}{c.approval_status && c.approval_status !== 'approved' ? ` (${c.approval_status.replace('_', ' ')})` : ''}</option>)}
+                  </select>
+                </label>
+                <div className="fv-pos">
+                  <label className="cc-field"><span>Axle</span>
+                    <select className="cc-select" value={vForm.axle_role} onChange={(e) => setV('axle_role', e.target.value)}>
+                      <option value="">Choose axle</option>
+                      {AXLE_ROLES.map((a) => <option key={a} value={a}>{a}</option>)}
+                    </select>
+                  </label>
+                  <label className="cc-field"><span>Position code</span>
+                    <input className="fv-input" value={vForm.position_code} onChange={(e) => setV('position_code', e.target.value)} placeholder="e.g. LHRO" maxLength={60} />
+                  </label>
                 </div>
-              )}
+                <label className="cc-field"><span>Load / speed index</span>
+                  <input className="fv-input" value={vForm.load_speed} onChange={(e) => setV('load_speed', e.target.value)} placeholder={chosenCatalog ? 'Not in the catalogue' : 'e.g. 156/150 L'} maxLength={30} />
+                </label>
+                <div className="cc-field"><span>Rim / wheel</span>
+                  <div className="fv-readonly">{chosenCatalog?.recommended_rim || 'N/A'}</div>
+                </div>
+                <label className="cc-field"><span>Current pressure (PSI){positionSpec?.recommended_pressure != null ? ` · Target ${positionSpec.recommended_pressure}` : ''}</span>
+                  <input className="fv-input" type="number" min="0" step="1" value={vForm.pressure} onChange={(e) => setV('pressure', e.target.value)} placeholder="Optional" />
+                </label>
+              </div>
 
-              {vResult.is_valid && !vResult.violations?.length && !vResult.warnings?.length && (
-                <div className="mt-4 text-green-500 text-sm flex items-center gap-2">
-                  <CheckCircle2 size={16} aria-hidden="true" /> All available checks passed. Safe to install.
-                </div>
+              {chips.length > 0 && (
+                <div className="fv-chips">{chips.map((c) => <span key={c.text} className={`cc-pill ${c.tone}`}>{c.text}</span>)}</div>
               )}
-
-              <div className="mt-4 p-3 rounded border border-[var(--input-border)]">
-                <div className="text-xs font-semibold text-[var(--text-secondary)] flex items-center gap-1.5 mb-1.5">
-                  <Info size={13} aria-hidden="true" /> Not evaluated (data unavailable)
-                </div>
-                <p className="text-xs text-[var(--text-muted)] mb-2">{FITMENT_UNAVAILABLE_NOTE}</p>
-                <ul className="flex flex-wrap gap-1.5">
-                  {FITMENT_UNAVAILABLE_CHECKS.map((c) => (
-                    <li key={c.rule} className="text-[11px] px-2 py-0.5 rounded border border-[var(--input-border)] text-[var(--text-muted)]" title={`needs ${c.needs}`}>
-                      {c.label}
-                    </li>
-                  ))}
-                </ul>
+              {refError && <p className="fv-err">{refError} <button type="button" className="fv-link" onClick={loadRefs}>Try again</button></p>}
+              {vError && <p className="fv-err" role="alert">{vError}</p>}
+              <div className="fv-form-foot">
+                <button type="button" className="cc-btn-ghost" onClick={() => runValidation(false)} disabled={busy}>{vSimulating ? 'Checking...' : 'Preview only'}</button>
+                <button type="button" className="cc-btn-ghost" onClick={() => { setVForm(EMPTY_V); setVResult(null); setVError('') }} disabled={busy}>Clear</button>
               </div>
             </Card>
-          )}
-        </div>
-      )}
-
-      {/* ── FLEET SIZE AUDIT TAB ─────────────────────────────────────────────── */}
-      {tab === 'audit' && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Card>
-              <CardHeader title="Fitment breakdown" description={audit.compliancePct != null ? `Correct-size rate of checkable assets: ${audit.compliancePct}%` : 'No checkable assets yet'} />
-              <div className="h-64" role="img" aria-label={`Fitment breakdown: ${audit.mismatch} wrong size, ${audit.match} correct size, ${audit.unknown} no data`}>
-                {!loaded ? <Skeleton className="w-full h-full" /> : hasAny ? <Doughnut data={donutData} options={donutOpts} /> : <EmptyChart empty={auditFailed ? 'Could not load this chart.' : 'No fleet assets in scope.'} />}
-              </div>
-            </Card>
-            <Card>
-              <CardHeader title="Wrong-size assets by site" description="Top 10 sites" />
-              <div className="h-64" role="img" aria-label={`Wrong-size assets by site, ${bySiteMismatch.length} sites`}>
-                {!loaded ? <Skeleton className="w-full h-full" /> : bySiteMismatch.length ? <Bar data={barData} options={barOpts} /> : <EmptyChart empty={auditFailed ? 'Could not load this chart.' : 'No wrong-size fitments found.'} />}
-              </div>
-            </Card>
+            <FitmentResultCard result={vResult} context={vContext} busy={busy} />
           </div>
 
-          <Card>
-            <CardHeader icon={ScanLine} title="Fleet size register" />
-            <div className="flex flex-wrap items-end gap-2 mb-3">
-              <SearchBox id="fv-audit-search" label="Search assets" value={search} onChange={setSearch} placeholder="Search asset, make or model, size" />
-              <label htmlFor="fv-band" className="sr-only">Result</label>
-              <select id="fv-band" className={`input min-h-[44px] ${FOCUS}`} value={bandFilter} onChange={(e) => setBandFilter(e.target.value)}>
-                <option value="all">All results</option>
-                <option value="mismatch">Wrong size</option>
-                <option value="match">Correct size</option>
-                <option value="unknown">No data</option>
-              </select>
-              <label htmlFor="fv-site" className="sr-only">Site</label>
-              <select id="fv-site" className={`input min-h-[44px] ${FOCUS}`} value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)}>
-                <option value="">All sites</option>
-                {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
-              {hasFilters && <button type="button" onClick={clearFilters} className={`btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] ${FOCUS}`}><X size={14} aria-hidden="true" /> Clear</button>}
-              <span className="text-xs text-[var(--text-muted)] ml-auto self-center" aria-live="polite">{filtered.length} of {counts.total}</span>
+          <div className="fv-lower">
+            {auditCard}
+            <div className="fv-rail">
+              <Card title="Compliance by Category" sub="Correct size share of checkable assets, by vehicle type">
+                <CardState state={fleetState} empty={data && !categories.length ? 'No asset has both a spec size and fitted tyres yet.' : null}>
+                  <div className="fv-bars">
+                    {categories.map((c) => (
+                      <div key={c.category} className="fv-bar" title={`${c.match} of ${c.checked} checkable assets`}>
+                        <span>{c.category}</span>
+                        <span className="cc-meter-track"><span style={{ width: `${c.pct}%`, background: c.pct >= 90 ? 'var(--cc-green)' : c.pct >= 70 ? 'var(--cc-amber)' : 'var(--cc-red)' }} /></span>
+                        <b>{c.pct}%</b>
+                      </div>
+                    ))}
+                  </div>
+                </CardState>
+              </Card>
+              <ActiveRules
+                rules={rules} rulesError={rulesError} onRetry={loadRules} specsCount={specs?.length}
+                onToggle={toggleRule} togglingId={togglingId} onNew={() => openRuleCreate()}
+                notProvisioned={notProvisioned} onOpenSpecs={() => navigate('/tyre-specifications')}
+              />
             </div>
-            <EnterpriseTable
-              columns={auditColumns}
-              data={filtered}
-              getRowId={(r, i) => String(r.asset_no || `row-${i}`)}
-              loading={!loaded}
-              error={auditFailed ? error : null}
-              onRetry={load}
-              enableGlobalFilter={false}
-              enableExport={false}
-              viewKey="fitment-size-audit"
-              emptyMessage={hasAny ? 'No assets match these filters.' : 'No fleet assets found for this country.'}
-              initialPageSize={25}
-            />
-          </Card>
-        </div>
+          </div>
+        </>
       )}
 
-      {/* ── RULES TAB ────────────────────────────────────────────────────────── */}
+      {tab === 'audit' && auditCard}
+
       {tab === 'rules' && (
-        <Card>
-          <CardHeader icon={ListChecks} title="Fitment policy" description="Age, retread and dual-pair fields are stored for policy completeness; size, tread and lifecycle checks are enforced." />
-          <div className="flex flex-wrap items-end gap-2 mb-3">
-            <SearchBox id="fv-rule-search" label="Search rules" value={ruleSearch} onChange={setRuleSearch} placeholder="Search name, types, sizes, notes" />
-            <label htmlFor="fv-rule-state" className="sr-only">Rule state</label>
-            <select id="fv-rule-state" className={`input min-h-[44px] ${FOCUS}`} value={ruleState} onChange={(e) => setRuleState(e.target.value)}>
-              <option value="">All rules</option>
+        <Card
+          title="Fitment Rules"
+          sub="Size, tread and tyre condition are enforced by the check. Age, retread and dual-pair fields are stored for policy completeness only."
+          action={!notProvisioned && <button type="button" className="cc-btn-primary" onClick={() => openRuleCreate()}><Plus size={14} aria-hidden="true" /> New Rule</button>}
+        >
+          <div className="fv-filters">
+            <div className="cc-search"><Search size={14} aria-hidden="true" /><input value={ruleSearch} onChange={(e) => setRuleSearch(e.target.value)} placeholder="Search name, types, sizes, notes" aria-label="Search rules" /></div>
+            <select className="cc-select" aria-label="Rule state" value={ruleState} onChange={(e) => setRuleState(e.target.value)}>
+              <option value="">All states</option>
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
             </select>
-            {(ruleSearch || ruleState) && <button type="button" onClick={() => { setRuleSearch(''); setRuleState('') }} className={`btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] ${FOCUS}`}><X size={14} aria-hidden="true" /> Clear</button>}
-            {!notProvisioned && (
-              <button type="button" onClick={openRuleCreate} className={`btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px] ${FOCUS}`}><Plus size={14} aria-hidden="true" /> New rule</button>
-            )}
+            {(ruleSearch || ruleState) && <button type="button" className="cc-btn-ghost" onClick={() => { setRuleSearch(''); setRuleState('') }}><X size={14} aria-hidden="true" /> Clear</button>}
           </div>
-          <EnterpriseTable
+          <KitTable
             columns={ruleColumns}
-            data={rulesFiltered}
+            rows={rulesFiltered}
             getRowId={(r) => String(r.id)}
-            loading={rules === null}
+            loading={rules === null && !rulesError}
             error={rulesError || null}
             onRetry={loadRules}
-            enableGlobalFilter={false}
+            enableExport
             exportFileName={reportFileName('Fitment Rules')}
             reportMeta={{ title: 'Fitment rules' }}
-            emptyMessage={
-              ruleSearch || ruleState ? 'No rules match these filters.'
-                : notProvisioned ? 'Enable the engine (apply V208) to configure rules.'
-                  : 'No fitment rules yet. The Validate tab uses a built-in default policy until you add one.'
-            }
-            initialPageSize={25}
+            empty={ruleSearch || ruleState ? 'No rules match these filters.' : notProvisioned ? 'Rules need the fitment tables (V208).' : 'No fitment rules yet. The check uses the built-in default policy and Tyre Specifications until you add one.'}
           />
         </Card>
       )}
 
-      {/* ── HISTORY TAB ──────────────────────────────────────────────────────── */}
       {tab === 'history' && (
-        <Card>
-          <CardHeader icon={History} title="Validation ledger" description={hist.capped ? `Showing the latest ${HISTORY_LIMIT} validations; older records exist but are not loaded here.` : `Latest validations (up to ${HISTORY_LIMIT}).`} />
-          {validations && !validationsError && hist.total > 0 && (
-            <dl className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 text-sm">
-              <div><dt className="text-xs text-[var(--text-muted)]">Approved</dt><dd className="font-semibold text-[var(--text-primary)] tabular-nums">{hist.approved}</dd></div>
-              <div><dt className="text-xs text-[var(--text-muted)]">Rejected</dt><dd className="font-semibold text-[var(--text-primary)] tabular-nums">{hist.rejected}</dd></div>
-              <div><dt className="text-xs text-[var(--text-muted)]">Last 7 days</dt><dd className="font-semibold text-[var(--text-primary)] tabular-nums">{hist.last7Days}</dd></div>
-              <div><dt className="text-xs text-[var(--text-muted)]">Most common violation</dt><dd className="font-mono text-xs text-[var(--text-primary)]">{hist.topViolation ? `${hist.topViolation.rule} (${hist.topViolation.count})` : 'None'}</dd></div>
+        <Card title="Validation History" sub={hist.capped ? `Showing the latest ${HISTORY_LIMIT} validations. Older records exist but are not loaded here.` : `Latest validations, up to ${HISTORY_LIMIT}.`}>
+          {validations && hist.total > 0 && (
+            <dl className="fv-facts">
+              <div><dt>Approved</dt><dd>{fmtInt(hist.approved)}</dd></div>
+              <div><dt>Rejected</dt><dd>{fmtInt(hist.rejected)}</dd></div>
+              <div><dt>Last 7 days</dt><dd>{fmtInt(hist.last7Days)}</dd></div>
+              <div><dt>Approval rate</dt><dd>{hist.approvalRatePct == null ? 'N/A' : `${hist.approvalRatePct}%`}</dd></div>
+              <div><dt>Most common issue</dt><dd>{hist.topViolation ? `${hist.topViolation.rule} (${hist.topViolation.count})` : 'None'}</dd></div>
             </dl>
           )}
-          <div className="flex flex-wrap items-end gap-2 mb-3">
-            <SearchBox id="fv-hist-search" label="Search validations" value={historySearch} onChange={setHistorySearch} placeholder="Search serial, asset or position" />
-            <label htmlFor="fv-hist-result" className="sr-only">Result</label>
-            <select id="fv-hist-result" className={`input min-h-[44px] ${FOCUS}`} value={historyResult} onChange={(e) => setHistoryResult(e.target.value)}>
+          <div className="fv-filters">
+            <div className="cc-search"><Search size={14} aria-hidden="true" /><input value={historySearch} onChange={(e) => setHistorySearch(e.target.value)} placeholder="Search serial, asset or position" aria-label="Search validations" /></div>
+            <select className="cc-select" aria-label="Result" value={historyResult} onChange={(e) => setHistoryResult(e.target.value)}>
               <option value="">All results</option>
               <option value="approved">Approved</option>
               <option value="rejected">Rejected</option>
             </select>
-            {(historySearch || historyResult) && <button type="button" onClick={() => { setHistorySearch(''); setHistoryResult('') }} className={`btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] ${FOCUS}`}><X size={14} aria-hidden="true" /> Clear</button>}
+            {(historySearch || historyResult) && <button type="button" className="cc-btn-ghost" onClick={() => { setHistorySearch(''); setHistoryResult('') }}><X size={14} aria-hidden="true" /> Clear</button>}
           </div>
-          <EnterpriseTable
+          <KitTable
             columns={historyColumns}
-            data={histFiltered}
+            rows={histFiltered}
             getRowId={(h) => String(h.id)}
-            loading={validations === null}
+            loading={validations === null && !validationsError}
             error={validationsError || null}
             onRetry={loadValidations}
-            enableGlobalFilter={false}
+            enableExport
             exportFileName={reportFileName('Fitment Validation Ledger')}
             reportMeta={{ title: 'Fitment validation ledger' }}
-            emptyMessage={
-              historySearch || historyResult ? 'No validations match these filters.'
-                : notProvisioned ? 'Enable the engine (apply V208) to record validations.'
-                  : 'No validations recorded yet. Run a check on the Validate tab.'
-            }
-            initialPageSize={25}
+            empty={historySearch || historyResult ? 'No validations match these filters.' : notProvisioned ? 'Saving validations needs the fitment tables (V208).' : 'No validations recorded yet. Run a check on the Validate tab.'}
           />
         </Card>
       )}
 
-      {/* Rule create / edit modal. The submit button stays INSIDE the form; Modal
-          caps the panel to the viewport and scrolls the body only. */}
-      {showRuleModal && (
-        <Modal
-          open
-          onClose={closeRuleModal}
-          size="lg"
-          title={editingRule ? 'Edit fitment rule' : 'New fitment rule'}
-        >
-          <form onSubmit={submitRule} className="space-y-4">
-            <div>
-              <label className="label" htmlFor="fr-name">Rule name (required)</label>
-              <input id="fr-name" className="input w-full min-h-[44px]" placeholder="e.g. Steer axle, highway tractors" value={ruleForm.rule_name} maxLength={200} onChange={(e) => setRule('rule_name', e.target.value)} />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="label" htmlFor="fr-types">Applies to vehicle types (comma-separated, blank = all)</label>
-                <input id="fr-types" className="input w-full min-h-[44px]" placeholder="e.g. tractor, rigid_truck" value={ruleForm.applies_to_vehicle_types} onChange={(e) => setRule('applies_to_vehicle_types', e.target.value)} />
-              </div>
-              <div>
-                <label className="label" htmlFor="fr-axles">Applies to axle roles (comma-separated, blank = all)</label>
-                <input id="fr-axles" className="input w-full min-h-[44px]" placeholder="e.g. steer, drive" value={ruleForm.applies_to_axle_roles} onChange={(e) => setRule('applies_to_axle_roles', e.target.value)} />
-              </div>
-            </div>
-            <div>
-              <label className="label" htmlFor="fr-sizes">Approved sizes (comma-separated, blank = any)</label>
-              <input id="fr-sizes" className="input w-full min-h-[44px]" placeholder="e.g. 315/80R22.5, 295/80R22.5" value={ruleForm.approved_sizes} onChange={(e) => setRule('approved_sizes', e.target.value)} />
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div>
-                <label className="label" htmlFor="fr-tread">Min tread (mm)</label>
-                <input id="fr-tread" className="input w-full min-h-[44px]" type="number" step="0.1" min="0" value={ruleForm.min_tread_depth_mm} onChange={(e) => setRule('min_tread_depth_mm', e.target.value)} />
-              </div>
-              <div>
-                <label className="label" htmlFor="fr-age">Max age (years)</label>
-                <input id="fr-age" className="input w-full min-h-[44px]" type="number" step="0.5" min="0" value={ruleForm.max_tyre_age_years} onChange={(e) => setRule('max_tyre_age_years', e.target.value)} />
-              </div>
-              <div>
-                <label className="label" htmlFor="fr-retreads">Max retreads</label>
-                <input id="fr-retreads" className="input w-full min-h-[44px]" type="number" step="1" min="0" value={ruleForm.max_retread_count} onChange={(e) => setRule('max_retread_count', e.target.value)} />
-              </div>
-              <div>
-                <label className="label" htmlFor="fr-dual">Max dual difference (mm)</label>
-                <input id="fr-dual" className="input w-full min-h-[44px]" type="number" step="0.1" min="0" value={ruleForm.max_tread_delta_dual_mm} onChange={(e) => setRule('max_tread_delta_dual_mm', e.target.value)} />
-              </div>
-            </div>
-            <fieldset className="flex flex-wrap gap-4">
-              <legend className="sr-only">Policy switches</legend>
-              <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer min-h-[44px]">
-                <input type="checkbox" className="accent-[var(--accent)] w-4 h-4" checked={ruleForm.allow_retread} onChange={(e) => setRule('allow_retread', e.target.checked)} /> Allow retread
-              </label>
-              <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer min-h-[44px]">
-                <input type="checkbox" className="accent-[var(--accent)] w-4 h-4" checked={ruleForm.require_matching_pair} onChange={(e) => setRule('require_matching_pair', e.target.checked)} /> Require matching pair
-              </label>
-              <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer min-h-[44px]">
-                <input type="checkbox" className="accent-[var(--accent)] w-4 h-4" checked={ruleForm.is_active} onChange={(e) => setRule('is_active', e.target.checked)} /> Active
-              </label>
-            </fieldset>
-            <div>
-              <label className="label" htmlFor="fr-notes">Notes (optional)</label>
-              <textarea id="fr-notes" className="input w-full min-h-[60px] resize-y" placeholder="e.g. GCC steer-axle policy" value={ruleForm.notes} maxLength={8000} onChange={(e) => setRule('notes', e.target.value)} />
-            </div>
-
-            <p className="text-[11px] text-[var(--text-muted)] flex items-start gap-1.5">
-              <Info size={12} className="mt-0.5 shrink-0" aria-hidden="true" />
-              Age, retread and dual-pair fields are stored for policy completeness but are not evaluated on this dataset (source data absent). Size, tread and lifecycle checks are enforced.
-            </p>
-
-            {ruleFormError && (
-              <div role="alert" className="flex items-start gap-2 text-sm text-red-400 border border-red-500/30 rounded-lg px-3 py-2">
-                <AlertTriangle size={15} className="mt-0.5 shrink-0" aria-hidden="true" /> {ruleFormError}
-              </div>
-            )}
-
-            <div className="flex items-center justify-end gap-2 pt-1">
-              <button type="button" onClick={closeRuleModal} className="btn-secondary text-sm min-h-[44px]" disabled={ruleSaving}>Cancel</button>
-              <button type="submit" className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px] disabled:opacity-60" disabled={ruleSaving}>
-                {ruleSaving ? 'Saving...' : editingRule ? 'Save changes' : 'Create rule'}
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
-
-      {confirmDeleteRule && (
-        <Modal
-          open
-          onClose={() => { if (!deletingRule) setConfirmDeleteRule(null) }}
-          size="sm"
-          title="Delete fitment rule"
-          footer={(
-            <>
-              <button type="button" onClick={() => setConfirmDeleteRule(null)} className="btn-secondary text-sm min-h-[44px]" disabled={deletingRule}>Cancel</button>
-              <button type="button" onClick={doDeleteRule} className="btn-danger text-sm inline-flex items-center gap-1.5 min-h-[44px] disabled:opacity-60" disabled={deletingRule}>
-                {deletingRule ? 'Deleting...' : 'Delete rule'}
-              </button>
-            </>
-          )}
-        >
-          <div className="flex items-start gap-3">
-            <Trash2 size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
-            <p className="text-sm text-[var(--text-secondary)]">Delete <span className="font-semibold text-[var(--text-primary)]">{confirmDeleteRule.rule_name}</span>? This cannot be undone.</p>
+      {viewRow && (
+        <Modal open onClose={() => setViewRow(null)} size="lg" title={`${viewRow.asset_no} fitted tyres`}>
+          <p className="fv-modal-sub">{[vehicleLabel(viewRow), viewRow.site, viewRow.spec ? `Spec size ${viewRow.spec}` : 'No spec size recorded'].filter(Boolean).join(' · ')}</p>
+          <KitTable
+            compact
+            columns={[
+              { key: 'position', header: 'Position' },
+              { key: 'serial', header: 'Serial', cell: (t) => <span className="fv-mono">{t.serial}</span> },
+              { key: 'size', header: 'Size', cell: (t) => (t.size ? <span className={`fv-mono ${viewRow.specNorm && !t.matches ? 'fv-bad' : ''}`}>{t.size}</span> : NA) },
+              { key: 'matches', header: 'Result', cell: (t) => (!viewRow.specNorm || !t.sizeNorm ? <span className="cc-pill muted">No data</span> : t.matches ? <span className="cc-pill good">Correct</span> : <span className="cc-pill bad">Wrong size</span>) },
+            ]}
+            rows={viewRow.fitted}
+            getRowId={(t) => String(t.id)}
+            empty="No fitted tyres recorded for this asset."
+          />
+          <div className="fv-form-foot">
+            {auditStatus(viewRow) === 'wrong_size' && <button type="button" className="cc-btn-primary" onClick={() => { const r = viewRow; setViewRow(null); resolveRow(r) }}><Eye size={14} aria-hidden="true" /> Check a replacement tyre</button>}
           </div>
-          {deleteError && <p role="alert" className="mt-3 text-sm text-red-400">{deleteError}</p>}
         </Modal>
       )}
+
+      <FitmentRuleModals
+        showRuleModal={showRuleModal} closeRuleModal={closeRuleModal} editingRule={editingRule}
+        ruleForm={ruleForm} setRule={setRule} submitRule={submitRule} ruleSaving={ruleSaving} ruleFormError={ruleFormError}
+        confirmDeleteRule={confirmDeleteRule} setConfirmDeleteRule={setConfirmDeleteRule}
+        deletingRule={deletingRule} doDeleteRule={doDeleteRule} deleteError={deleteError}
+      />
     </div>
   )
 }
 
-function EmptyChart({ empty = 'No data.' }) {
-  return <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)] text-center px-4">{empty}</div>
+function ActiveRules({ rules, rulesError, onRetry, specsCount, onToggle, togglingId, onNew, notProvisioned, onOpenSpecs }) {
+  const state = { loading: rules === null && !rulesError, data: rules, error: rulesError || null, retry: onRetry }
+  return (
+    <Card title="Active Fitment Rules" sub="Switch a rule off to stop the check from applying it">
+      <CardState state={state} empty={rules && !rules.length ? (
+        <div>
+          {notProvisioned ? 'Rules need the fitment tables (V208).' : 'No fitment rules yet. The check applies the built-in default policy.'}
+          {!notProvisioned && <><br /><button type="button" className="cc-btn" onClick={onNew}>New Rule</button></>}
+        </div>
+      ) : null}>
+        <ul className="fv-rules">
+          {(rules || []).map((r) => {
+            const on = r.is_active !== false
+            return (
+              <li key={r.id}>
+                <div>
+                  <b>{r.rule_name}</b>
+                  <small>{ruleScope(r)} · {ruleEnforces(r).slice(0, 2).join(' · ')}</small>
+                </div>
+                <button
+                  type="button" role="switch" aria-checked={on} aria-label={`${on ? 'Turn off' : 'Turn on'} ${r.rule_name}`}
+                  className={`fv-switch ${on ? 'on' : ''}`} disabled={togglingId === r.id} onClick={() => onToggle(r)}
+                ><i /></button>
+              </li>
+            )
+          })}
+        </ul>
+      </CardState>
+      {specsCount != null && (
+        <p className="fv-note">{fmtInt(specsCount)} specification rows (approved sizes, minimum load index and speed rating, target pressure by vehicle type and axle) also drive the check. <button type="button" className="fv-link" onClick={onOpenSpecs}>Open Tyre Specifications</button></p>
+      )}
+    </Card>
+  )
 }

@@ -1,11 +1,11 @@
 /**
- * Fitment Validation service — reads the two datasets the Fitment Validation
+ * Fitment Validation service: reads the two datasets the Fitment Validation
  * screen joins in the browser: fleet assets (the specified tyre size) and the
  * currently-fitted tyres (in-service `tyre_records`, i.e. `removal_date IS
  * NULL`). Country-scoped (null-safe) and fully paginated so large fleets are
  * never silently truncated. Classification lives in `src/lib/fitmentValidation.js`.
  */
-import { supabase, applyCountry, fetchAllPages, unwrap } from './_client'
+import { supabase, applyCountry, fetchAllOrThrow, unwrap } from './_client'
 
 const VEHICLE_COLS =
   'id,asset_no,make,model,vehicle_type,site,country,status,is_active,tyre_size'
@@ -20,7 +20,7 @@ const TYRE_COLS =
  * @param {{ country?:string }} [opts]
  */
 export async function listFleetForFitment({ country } = {}) {
-  return fetchAllPages((from, to) => {
+  return fetchAllOrThrow((from, to) => {
     const q = supabase
       .from('vehicle_fleet')
       .select(VEHICLE_COLS)
@@ -28,7 +28,7 @@ export async function listFleetForFitment({ country } = {}) {
       .order('id', { ascending: true })
       .range(from, to)
     return applyCountry(q, country)
-  })
+  }, { max: 20000 })
 }
 
 /**
@@ -37,7 +37,7 @@ export async function listFleetForFitment({ country } = {}) {
  * @param {{ country?:string }} [opts]
  */
 export async function listFittedTyres({ country } = {}) {
-  return fetchAllPages((from, to) => {
+  return fetchAllOrThrow((from, to) => {
     const q = supabase
       .from('tyre_records')
       .select(TYRE_COLS)
@@ -46,7 +46,7 @@ export async function listFittedTyres({ country } = {}) {
       .order('id', { ascending: true })
       .range(from, to)
     return applyCountry(q, country)
-  })
+  }, { max: 50000 })
 }
 
 /**
@@ -66,7 +66,7 @@ export async function loadFitmentData({ country } = {}) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// SINGLE-FITMENT VALIDATION ENGINE — rules + validation ledger (V208)
+// SINGLE-FITMENT VALIDATION ENGINE: rules + validation ledger (V208)
 // ════════════════════════════════════════════════════════════════════════════
 // Backs the "Validate", "Rules" and "History" tabs. RLS enforces org isolation
 // and elevated-role writes; this layer keeps explicit column lists, validates
@@ -294,4 +294,64 @@ export async function isFitmentProvisioned() {
     if (isMissingRelation(err)) return false
     throw err
   }
+}
+
+// ── Page redesign additions (Command Center kit) ─────────────────────────────
+
+const SPEC_COLS =
+  'id,vehicle_type,position,approved_sizes,approved_brands,min_load_index,' +
+  'min_speed_index,recommended_pressure,min_tread_depth,ply_rating,country'
+
+const CATALOG_COLS =
+  'id,brand,pattern,size,load_index_single,load_index_dual,speed_rating,' +
+  'ply_rating,recommended_rim,tread_depth_min_mm,approval_status,country'
+
+/** Fitment specifications (vehicle type + position rules) from Tyre Specifications. */
+export async function listFitmentSpecs({ country } = {}) {
+  const rows = await fetchAllOrThrow((from, to) => {
+    const q = supabase
+      .from('tyre_specifications')
+      .select(SPEC_COLS)
+      .order('vehicle_type', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to)
+    return applyCountry(q, country)
+  }, { max: 5000 })
+  return Array.isArray(rows) ? rows : []
+}
+
+/** Brand, pattern and size catalogue (tyre_spec_catalog). */
+export async function listSpecCatalog({ country } = {}) {
+  const rows = await fetchAllOrThrow((from, to) => {
+    const q = supabase
+      .from('tyre_spec_catalog')
+      .select(CATALOG_COLS)
+      .order('size', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to)
+    return applyCountry(q, country)
+  }, { max: 5000 })
+  return Array.isArray(rows) ? rows : []
+}
+
+/** Every ACTIVE (no removal date) tyre_records row carrying this serial. */
+export async function listActiveBySerial(serial, { country } = {}) {
+  const s = safeFilterValue(serial || '')
+  if (!s) return []
+  const q = supabase
+    .from('tyre_records')
+    .select('id,asset_no,serial_no,position,tyre_position,site,country')
+    .or(`serial_no.eq.${s},serial_number.eq.${s},tyre_serial.eq.${s}`)
+    .is('removal_date', null)
+    .order('id', { ascending: true })
+    .limit(50)
+  return unwrap(await applyCountry(q, country)) || []
+}
+
+/** Switch one fitment rule on or off (persists fitment_rules.is_active only). */
+export async function setRuleActive(id, active) {
+  if (!id) throw new Error('A rule id is required.')
+  return unwrap(
+    await supabase.from('fitment_rules').update({ is_active: Boolean(active) }).eq('id', id).select(RULE_COLS).single(),
+  )
 }

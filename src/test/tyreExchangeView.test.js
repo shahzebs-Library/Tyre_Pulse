@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   deriveExchanges, filterExchanges, exchangeKpis, typeSegments, exchangeOptions,
   summaryWindow, shiftRange, buildExchangePayload, currentTyreAt, registerExportRows, assetChoices,
+  serialWarnings, isExchangeEvent, movementFlow, registerSerials,
 } from '../lib/tyreExchangeView'
 
 const R = (o) => ({ status: 'Active', site: 'NHC', ...o })
@@ -73,5 +74,55 @@ describe('tyreExchangeView', () => {
     const rows = registerExportRows([{ type: 'Fitting', date: null }])
     expect(rows[0].removedSerial).toBe('N/A')
     expect(assetChoices(recs).map((a) => a.asset)).toEqual(['TM1', 'TM2', 'TM3'])
+  })
+
+  it('counts two unserialised fitments on one position as a replacement', () => {
+    const ev = deriveExchanges([
+      R({ id: 'x1', asset_no: 'TM9', tyre_position: 'LHF1', issue_date: '2026-01-01' }),
+      R({ id: 'x2', asset_no: 'TM9', tyre_position: 'LHF1', issue_date: '2026-02-01' }),
+    ])
+    const later = ev.find((e) => e.recordId === 'x2')
+    expect(later.type).toBe('Replacement')
+    expect(later.removed).not.toBeNull()
+  })
+
+  it('refuses a future date, a self transfer, a same slot interchange and the same tyre in and out', () => {
+    const base = { asset: 'TM1', position: 'LHF1', installedSerial: 'Z9' }
+    const today = '2026-09-29'
+    expect(buildExchangePayload({ ...base, type: 'Replacement', date: '2026-10-01' }, { today }).errors)
+      .toContain('The exchange date cannot be in the future.')
+    expect(buildExchangePayload({ ...base, type: 'Transfer', toAsset: 'tm1' }, { today }).errors)
+      .toContain('A transfer must move the tyre to a different vehicle.')
+    expect(buildExchangePayload({ ...base, type: 'Interchange', toPosition: 'lhf1' }, { today }).errors)
+      .toContain('Choose a different position to move the tyre to.')
+    expect(buildExchangePayload({ ...base, type: 'Replacement', removedSerial: 'z9' }, { today }).errors)
+      .toContain('The installed tyre must be a different tyre from the removed one.')
+    expect(buildExchangePayload({ ...base, type: 'Replacement', date: '2026-09-29' }, { today }).ok).toBe(true)
+  })
+
+  it('warns, without blocking, when serials do not match the register', () => {
+    const w = serialWarnings({ asset: 'TM1', position: 'LHF1', removedSerial: 'A1', installedSerial: 'NOPE', installedKind: 'Used' }, recs)
+    expect(w.some((x) => x.includes('NOPE'))).toBe(true)
+    expect(w.some((x) => x.includes('B2 on TM1 LHF1'))).toBe(true)
+    expect(serialWarnings({ asset: 'TM1', position: 'LHF1', removedSerial: 'B2', installedSerial: 'NEW1', installedKind: 'New' }, recs)).toEqual([])
+    expect(serialWarnings({ installedSerial: 'B2', installedKind: 'New' }, recs)[0]).toContain('may not be new')
+    expect(registerSerials(recs).has('A1')).toBe(true)
+  })
+
+  it('keeps only exchange events in the recent list', () => {
+    expect(isExchangeEvent({ event_type: 'replacement' })).toBe(true)
+    expect(isExchangeEvent({ event_type: 'rotation' })).toBe(true)
+    expect(isExchangeEvent({ event_type: 'other', notes: 'Transfer. Moved from TM1' })).toBe(true)
+    expect(isExchangeEvent({ event_type: 'other', notes: 'Valve replaced' })).toBe(false)
+    expect(isExchangeEvent({ event_type: 'inflation' })).toBe(false)
+  })
+
+  it('builds the movement flow for each type', () => {
+    expect(movementFlow(null)).toBeNull()
+    const rem = movementFlow({ type: 'Removal', from: { asset: 'TM1' }, removed: { serial: 'A' } })
+    expect(rem.to).toBeNull()
+    const fit = movementFlow({ type: 'Fitting', removed: null, to: { asset: 'TM1' }, installed: { serial: 'B' } })
+    expect(fit.from).toBeNull()
+    expect(fit.toTyre.serial).toBe('B')
   })
 })

@@ -30,7 +30,7 @@ const MORE_FIELDS = [
 const BLANK = {
   brand: '', pattern: '', tyre_type: 'steer', load_index_single: '', load_index_dual: '', speed_rating: '',
   ply_rating: '', tube_type: 'tubeless', application: '', description: '', recommended_rim: '', suitable_for: [],
-  approval_status: 'pending', approval_note: '', images: [], documents: [],
+  approval_status: 'pending', approval_note: '', images: [], documents: [], source_url: '', source_note: '',
   ...Object.fromEntries(MORE_FIELDS.map(([k]) => [k, ''])),
 }
 
@@ -183,6 +183,13 @@ export default function CatalogFormPanel({ spec, canCreate, canApprove, saving, 
 
         <label>Description
           <textarea rows={3} value={form.description} onChange={(e) => set('description', e.target.value)} placeholder="Construction, use, restrictions" />
+        </label>
+
+        <label>Source (manufacturer page or datasheet link)
+          <input type="url" value={form.source_url} onChange={(e) => set('source_url', e.target.value)} placeholder="https://" />
+        </label>
+        <label>Source note
+          <input value={form.source_note} onChange={(e) => set('source_note', e.target.value)} placeholder="Where each figure came from" />
         </label>
 
         <button type="button" className="cc-link cc-link-btn" aria-expanded={more} onClick={() => setMore((m) => !m)}>

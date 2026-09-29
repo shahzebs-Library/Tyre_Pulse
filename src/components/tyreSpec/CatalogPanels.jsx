@@ -20,6 +20,7 @@ import {
 import { listCatalogEvents, fileRef } from '../../lib/api/tyreSpecCatalog'
 import { resolveStorageUrl } from '../../lib/storageRefs'
 import { toUserMessage } from '../../lib/safeError'
+import { safeHref } from '../../lib/safeUrl'
 import Modal from '../ui/Modal'
 import { TyreGlyph } from './SpecCatalog'
 
@@ -136,6 +137,12 @@ function FileLink({ entry }) {
   )
 }
 
+function SourceLink({ url }) {
+  const href = safeHref(url)
+  if (!href) return <span className="cc-na">Not recorded</span>
+  return <a className="cc-link ts-source" href={href} target="_blank" rel="noopener noreferrer">{href}</a>
+}
+
 export function CatalogDetail({ spec, canEdit, canApprove, canDelete, busy, onEdit, onDuplicate, onDelete, onSetStatus, reloadKey }) {
   const [tab, setTab] = useState('details')
   const [events, setEvents] = useState({ loading: false, data: null, error: null })
@@ -202,6 +209,8 @@ export function CatalogDetail({ spec, canEdit, canApprove, canDelete, busy, onEd
           <Field label="Application">{val(spec.application)}</Field>
           <Field label="Suitable for">{spec.suitable_for?.length ? spec.suitable_for.join(', ') : NR}</Field>
           <Field label="Description" wide>{val(spec.description)}</Field>
+          <Field label="Source" wide><SourceLink url={spec.source_url} /></Field>
+          {spec.source_note && <Field label="Source note" wide>{spec.source_note}</Field>}
         </dl>
       )}
 

@@ -22,6 +22,7 @@ import {
   AlertTriangle, ListChecks, ExternalLink, ShieldAlert, Info, RotateCcw,
 } from 'lucide-react'
 import Modal from '../components/ui/Modal'
+import SideDrawer from '../components/ui/SideDrawer'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import {
   Card, CardState, Kpi, PageHero, Donut, Pager, MeterCell, KitTable, Tabs,
@@ -42,7 +43,7 @@ import {
 } from '../lib/engineHoursAnalytics'
 import {
   DEFAULT_SETTINGS, normalizeSettings, assetProfiles, filterProfiles,
-  utilizationSegments, dailyHoursTrend, telematicsSummary, allAnomalies,
+  utilizationSegments, dailyHoursTrend, telematicsSummary, allAnomalies, assetHourSeries,
   serviceThresholds, buildKpis, UTIL_STATUS, UTIL_STATUS_KEYS, THRESHOLD_STATUS,
   assetExportRow, ASSET_EXPORT_COLS, ASSET_EXPORT_HEADERS,
   thresholdExportRow, THRESHOLD_EXPORT_COLS, THRESHOLD_EXPORT_HEADERS,
@@ -187,6 +188,7 @@ export default function EngineHours() {
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(null)
+  const [assetView, setAssetView] = useState(null)
   const [deleting, setDeleting] = useState(false)
 
   // Readings: the page's own loader, because create / edit / delete reload it.
@@ -391,7 +393,7 @@ export default function EngineHours() {
         : p.make || p.model ? <span>{p.make || 'N/A'}<span className="cc-sub">{p.model || 'N/A'}</span></span>
           : na(fleetState.error ? 'N/A' : p.inRegister ? 'N/A' : 'Not in register')),
     },
-    { key: 'currentHours', header: 'Current Hours', align: 'right', cell: (p) => (p.currentHours == null ? na() : <span className="cc-strong">{fmtHours(p.currentHours)} h</span>) },
+    { key: 'currentHours', header: 'Current Hours', numeric: true, cell: (p) => (p.currentHours == null ? na() : <span className="cc-strong">{fmtHours(p.currentHours)} h</span>) },
     {
       key: 'last', header: 'Last Reading',
       cell: (p) => (
@@ -405,11 +407,11 @@ export default function EngineHours() {
       ),
     },
     {
-      key: 'since', header: 'Hours Since', align: 'right',
+      key: 'since', header: 'Hours Since', numeric: true,
       cell: (p) => (p.sincePrevious == null ? <span title="Needs two readings">{na()}</span>
         : <span title="Hours added since the previous reading">{fmtHours(p.sincePrevious)} h<span className="cc-sub">{p.sincePreviousDays == null ? '' : `over ${fmtInt(p.sincePreviousDays)} d`}</span></span>),
     },
-    { key: 'avg', header: 'Daily Avg Hours', align: 'right', cell: (p) => (p.avgDailyHours == null ? <span title="Needs two dated readings">{na()}</span> : `${fmtHours(p.avgDailyHours)} h`) },
+    { key: 'avg', header: 'Daily Avg Hours', numeric: true, cell: (p) => (p.avgDailyHours == null ? <span title="Needs two dated readings">{na()}</span> : `${fmtHours(p.avgDailyHours)} h`) },
     {
       key: 'util', header: 'Utilization',
       cell: (p) => <span title={`Average daily run-hours as a share of ${settings.basisHoursPerDay} h`}><MeterCell value={p.utilizationPct == null ? null : Math.min(100, p.utilizationPct)} suffix="%" tone={p.utilizationPct == null ? undefined : UTIL_STATUS[p.status].color} /></span>,
@@ -418,7 +420,7 @@ export default function EngineHours() {
     {
       key: 'actions', header: <span className="sr-only">Actions</span>, sortable: false,
       cell: (p) => (
-        <span className="eh-actions">
+        <span className="eh-actions" onClick={(e) => e.stopPropagation()}>
           <button type="button" className="cc-icon-btn" title="Log a reading" aria-label={`Log a reading for ${p.asset_no}`} disabled={missing} onClick={() => openCreate({ asset_no: p.asset_no, site: p.site || '' })}><Plus size={14} /></button>
           <button type="button" className="cc-icon-btn" title="View readings" aria-label={`View readings for ${p.asset_no}`} onClick={() => { setAssetFilter(p.asset_no); setMoreOpen(true); setTab('register') }}><ListChecks size={14} /></button>
           <Link className="cc-icon-btn" title="Open asset" aria-label={`Open asset ${p.asset_no}`} to={`/asset-management/${encodeURIComponent(p.asset_no)}`}><ExternalLink size={14} /></Link>
@@ -477,13 +479,19 @@ export default function EngineHours() {
   const thresholdColumns = [
     { key: 'name', header: 'Plan', cell: (t) => <span><span className="cc-strong">{t.name}</span><span className="cc-sub">{t.priority ? `Priority ${t.priority}` : ''}</span></span> },
     { key: 'asset_no', header: 'Asset', cell: (t) => t.asset_no || (t.asset_type ? <span>{t.asset_type}<span className="cc-sub">Asset type</span></span> : na()) },
-    { key: 'currentHours', header: 'Current Hours', align: 'right', cell: (t) => (t.currentHours == null ? na() : <span>{fmtHours(t.currentHours)} h<span className="cc-sub">{fmtDate(t.lastReadingDate)}</span></span>) },
-    { key: 'nextDueHours', header: 'Next Due', align: 'right', cell: (t) => (t.nextDueHours == null ? na() : `${fmtHours(t.nextDueHours)} h`) },
-    { key: 'interval', header: 'Interval', align: 'right', cell: (t) => (t.interval == null ? na() : `${fmtHours(t.interval)} h`) },
-    { key: 'remaining', header: 'Hours Left', align: 'right', sortValue: (t) => t.remaining ?? Infinity,
+    { key: 'currentHours', header: 'Current Hours', numeric: true, cell: (t) => (t.currentHours == null ? na() : <span>{fmtHours(t.currentHours)} h<span className="cc-sub">{fmtDate(t.lastReadingDate)}</span></span>) },
+    { key: 'nextDueHours', header: 'Next Due', numeric: true, cell: (t) => (t.nextDueHours == null ? na() : `${fmtHours(t.nextDueHours)} h`) },
+    { key: 'interval', header: 'Interval', numeric: true, cell: (t) => (t.interval == null ? na() : `${fmtHours(t.interval)} h`) },
+    { key: 'remaining', header: 'Hours Left', numeric: true, sortValue: (t) => t.remaining ?? Infinity,
       cell: (t) => (t.remaining == null ? na() : <span className={t.remaining < 0 ? 'eh-bad-text' : ''}>{t.remaining < 0 ? `${fmtHours(-t.remaining)} h over` : `${fmtHours(t.remaining)} h`}</span>) },
     { key: 'status', header: 'Status', cell: (t) => <span className={`cc-pill ${THRESHOLD_STATUS[t.status].tone}`} title={t.reason || undefined}>{THRESHOLD_STATUS[t.status].label}</span> },
   ]
+
+  const openAsset = (assetNo) => {
+    const key = String(assetNo || '').trim().toUpperCase()
+    if (!key) return
+    setAssetView(allProfiles.find((p) => String(p.asset_no || '').toUpperCase() === key) || { asset_no: String(assetNo).trim() })
+  }
 
   // KPIs ---------------------------------------------------------------------
   const readingsLoading = rows === null
@@ -671,7 +679,7 @@ export default function EngineHours() {
             </div>
           )}
           <CardState state={readingsState} empty={profiles.length ? null : (rows && rows.length === 0 ? (missing ? 'Engine hours tracking is not enabled yet.' : 'No engine-hour readings yet. Add the first reading to get started.') : 'No assets match these filters.')} lines={8}>
-            <KitTable manualPagination showPagination={false} enableSorting={false}
+            <KitTable manualPagination showPagination={false} enableSorting={false} onRowClick={(p) => setAssetView(p)}
               pageIndex={safePage} pageSize={pageSize} pageCount={pageCount} totalRows={profiles.length}
               getRowId={(p) => p.asset_no} rows={pageRows} columns={assetColumns} />
             <Pager page={safePage} pageSize={pageSize} total={profiles.length} noun="assets"
@@ -693,6 +701,7 @@ export default function EngineHours() {
             columns={logColumns}
             data={sortedReadings}
             getRowId={(r) => String(r.id)}
+            onRowClick={(r) => openAsset(r.asset_no)}
             loading={readingsLoading}
             error={loadFailed ? error : null}
             onRetry={load}
@@ -740,6 +749,7 @@ export default function EngineHours() {
             columns={anomalyColumns}
             data={anomalies}
             getRowId={(a) => String(a.type === 'drop' ? `drop:${a.id}` : a.id)}
+            onRowClick={(a) => openAsset(a.asset_no)}
             loading={readingsLoading}
             error={loadFailed ? error : null}
             onRetry={load}
@@ -868,6 +878,18 @@ export default function EngineHours() {
         </Modal>
       )}
 
+      {assetView && (
+        <AssetHoursDrawer
+          profile={assetView}
+          series={assetHourSeries(rows || [], assetView.asset_no)}
+          canAdd={!missing}
+          onClose={() => setAssetView(null)}
+          onAdd={() => { const a = assetView; setAssetView(null); openCreate({ asset_no: a.asset_no, site: a.site || '' }) }}
+          onFilter={() => { const a = assetView; setAssetView(null); setAssetFilter(a.asset_no); setMoreOpen(true); setTab('register') }}
+          onEdit={(r) => { setAssetView(null); openEdit(r) }}
+        />
+      )}
+
       {confirmDelete && (
         <Modal
           open
@@ -909,5 +931,85 @@ function BarList({ items }) {
         </div>
       ))}
     </div>
+  )
+}
+
+/** One asset's engine-hour history: line chart with flagged points and every reading. */
+function AssetHoursDrawer({ profile, series, canAdd, onClose, onAdd, onFilter, onEdit }) {
+  const pts = series.points
+  const dated = pts.filter((p) => p.date)
+  const W = 560; const H = 180; const pad = { l: 56, r: 12, t: 12, b: 26 }
+  let chart = <div className="cc-empty">{dated.length ? 'Only one dated reading, so there is no line to draw yet.' : 'No dated readings.'}</div>
+  if (dated.length >= 2) {
+    const t = dated.map((p) => Date.parse(`${p.date}T00:00:00Z`))
+    const t0 = Math.min(...t); const t1 = Math.max(...t)
+    const vals = dated.map((p) => p.value)
+    const lo = Math.min(...vals); const span = (Math.max(...vals) - lo) || 1
+    const x = (ms) => pad.l + (t1 === t0 ? 0 : ((ms - t0) / (t1 - t0)) * (W - pad.l - pad.r))
+    const y = (v) => pad.t + (1 - (v - lo) / span) * (H - pad.t - pad.b)
+    const d = dated.map((p, i) => ({ p, i })).filter(({ p }) => !p.flagged && !p.jump).map(({ p, i }, k) => `${k ? 'L' : 'M'}${x(t[i])},${y(p.value)}`).join(' ')
+    const fmtD = (ms) => new Date(ms).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' })
+    chart = (
+      <div className="cc-chart eh-series">
+        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={`Engine hours from ${fmtD(t0)} to ${fmtD(t1)}, ${series.flaggedCount} flagged`}>
+          {[0, 0.5, 1].map((f) => <g key={f}><line x1={pad.l} x2={W - pad.r} y1={y(lo + span * f)} y2={y(lo + span * f)} stroke="var(--cc-track)" /><text className="cc-axis" x={pad.l - 6} y={y(lo + span * f)} dy="0.35em" textAnchor="end">{fmtInt(Math.round(lo + span * f))}</text></g>)}
+          <path d={d} fill="none" stroke="#16a34a" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+          {dated.map((p, i) => (
+            <circle key={p.key} cx={x(t[i])} cy={y(p.value)} r={p.flagged || p.jump ? 5 : 3} fill={p.flagged || p.jump ? 'var(--cc-red)' : '#16a34a'}>
+              <title>{`${fmtDate(p.date)}: ${fmtHours(p.value)} h${p.reason ? `. ${p.reason}` : ''}`}</title>
+            </circle>
+          ))}
+          <text className="cc-axis" x={pad.l} y={H - 6}>{fmtD(t0)}</text>
+          <text className="cc-axis" x={W - pad.r} y={H - 6} textAnchor="end">{fmtD(t1)}</text>
+        </svg>
+      </div>
+    )
+  }
+  const flagged = pts.filter((p) => p.flagged || p.jump)
+  const newest = [...pts].reverse()
+  return (
+    <SideDrawer open onClose={onClose} size="lg" title={`${profile.asset_no} engine hours`}
+      subtitle={[profile.fleet_number, profile.vehicle_type, profile.site].filter(Boolean).join(' | ') || undefined}
+      footer={
+        <div className="cc eh-drawer-foot">
+          <button type="button" className="cc-btn-ghost" onClick={onFilter}>Show in Hour Readings</button>
+          <Link className="cc-btn-ghost" to={`/asset-management/${encodeURIComponent(profile.asset_no)}`}><ExternalLink size={14} aria-hidden="true" /> Open asset</Link>
+          <button type="button" className="cc-btn-primary" disabled={!canAdd} onClick={onAdd}><Plus size={14} aria-hidden="true" /> Log a reading</button>
+        </div>
+      }>
+      <div className="cc eh-drawer">
+        <div className="eh-drawer-head">
+          <VehicleThumb row={{ asset_no: profile.asset_no, make: profile.make, model: profile.model, vehicle_type: profile.vehicle_type }} size="lg" />
+          <dl className="eh-dl">
+            <div><dt>Current hours</dt><dd>{profile.currentHours == null ? 'Not recorded' : `${fmtHours(profile.currentHours)} h`}</dd></div>
+            <div><dt>Make / model</dt><dd>{[profile.make, profile.model].filter(Boolean).join(' ') || 'Not recorded'}</dd></div>
+            <div><dt>Hours in history</dt><dd>{series.hoursRun == null ? 'N/A' : `${fmtHours(series.hoursRun)} h`}</dd></div>
+            <div><dt>Daily average</dt><dd>{profile.avgDailyHours == null ? 'N/A' : `${fmtHours(profile.avgDailyHours)} h`}</dd></div>
+            <div><dt>Readings</dt><dd>{fmtInt(pts.length)}{series.firstDate ? `, ${fmtDate(series.firstDate)} to ${fmtDate(series.lastDate)}` : ''}</dd></div>
+            <div><dt>Flagged</dt><dd className={flagged.length ? 'eh-bad-text' : ''}>{fmtInt(flagged.length)}</dd></div>
+          </dl>
+        </div>
+        {flagged.length > 0 && (
+          <div className="eh-flags" role="note">
+            <b><AlertTriangle size={14} aria-hidden="true" /> Flagged readings</b>
+            <ul>{flagged.slice(-8).reverse().map((p) => <li key={p.key}>{fmtDate(p.date)}: {fmtHours(p.value)} h. {p.reason}</li>)}</ul>
+          </div>
+        )}
+        <Card title="Engine hours over time" sub="Green line joins accepted readings; red points are drops or jumps.">{chart}</Card>
+        <Card title="All readings for this asset">
+          <KitTable compact scroll rows={newest} getRowId={(p) => p.key} onRowClick={(p) => onEdit(p.row)} empty="No readings recorded for this asset."
+            columns={[
+              { key: 'date', header: 'Reading date', cell: (p) => fmtDate(p.date) },
+              { key: 'value', header: 'Engine hours', numeric: true, cell: (p) => `${fmtHours(p.value)} h` },
+              { key: 'source', header: 'Source', cell: (p) => p.row.source || 'Not recorded' },
+              { key: 'site', header: 'Site', cell: (p) => p.row.site || 'Not recorded' },
+              { key: 'status', header: 'Status', cell: (p) => (p.flagged || p.jump
+                ? <span><span className={`cc-pill ${p.jump ? 'warn' : 'bad'}`}>{p.jump ? 'Jump' : 'Drop'}</span><span className="cc-sub eh-reason">{p.reason}</span></span>
+                : <span className="cc-pill good">Accepted</span>) },
+            ]} />
+          <p className="eh-note"><Info size={12} aria-hidden="true" /> Click a reading to edit it.</p>
+        </Card>
+      </div>
+    </SideDrawer>
   )
 }

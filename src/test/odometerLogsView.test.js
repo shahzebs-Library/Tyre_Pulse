@@ -67,3 +67,24 @@ describe('odometerLogsView', () => {
     expect(out.map(a => a.type)).toEqual(['jump', 'regression'])
   })
 })
+
+describe('assetMeterSeries', () => {
+  const rows = [
+    { id: 1, kind: 'km', value: 1000, reading_date: '2026-01-01', asset_no: 'A1' },
+    { id: 2, kind: 'km', value: 1500, reading_date: '2026-01-10', asset_no: 'A1' },
+    { id: 3, kind: 'km', value: 1400, reading_date: '2026-01-12', asset_no: 'A1', flagged: true },
+    { id: 4, kind: 'hours', value: 20, reading_date: '2026-01-05', asset_no: 'A1' },
+    { id: 5, kind: 'km', value: 9, reading_date: '2026-01-05', asset_no: 'B2' },
+  ]
+  it('orders one asset oldest first and explains flags', async () => {
+    const { assetMeterSeries } = await import('../lib/odometerLogsView')
+    const s = assetMeterSeries(rows, (r) => r.asset_no === 'A1', [])
+    expect(s.km.map((p) => p.value)).toEqual([1000, 1500, 1400])
+    expect(s.km[2].reason).toBe('Saved below the last recorded reading')
+    expect(s.kmTravelled).toBe(500)
+    expect(s.hoursRun).toBeNull()
+    expect(s.flaggedCount).toBe(1)
+    expect(s.firstDate).toBe('2026-01-01')
+    expect(s.lastDate).toBe('2026-01-12')
+  })
+})

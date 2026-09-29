@@ -98,6 +98,9 @@ export default function KpiScorecard() {
   const [showYoY, setShowYoY]         = useState(false)
   const [yoyRecords, setYoyRecords]   = useState([])
   const [yoyLoading, setYoyLoading]   = useState(false)
+  // Last year's read can fail on its own. Without this the LY line drew as a
+  // flat zero, which reads as "we spent nothing last year".
+  const [yoyError, setYoyError]       = useState('')
   const [yoySplit, setYoySplit]       = useState(null)
   const [activeMainTab, setActiveMainTab] = useState('overview')
   const [costSplit, setCostSplit]     = useState(null)
@@ -194,8 +197,16 @@ export default function KpiScorecard() {
           loadGovernedCostSplit({ country: effectiveCountry, from: range.from, to: range.to, maxAgeMs: COST_SPLIT_TTL_MS }).catch(() => null),
         ])
         if (cancelled) return
+        if (recs?.error) throw recs.error
+        if (recs?.truncated) throw new Error('Last year has more records than can be compared. Narrow the range or pick one country.')
+        setYoyError('')
         setYoyRecords(recs?.data || [])
         setYoySplit(split)
+      } catch (err) {
+        if (cancelled) return
+        setYoyRecords([])
+        setYoySplit(null)
+        setYoyError(toUserMessage(err, 'Could not load last year for comparison.'))
       } finally {
         if (!cancelled) setYoyLoading(false)
       }
@@ -204,11 +215,11 @@ export default function KpiScorecard() {
   }, [showYoY, yoyMonths, activeCountry, effectiveCountry])
 
   const yoyActualsMap = useMemo(() => {
-    if (!showYoY) return {}
+    if (!showYoY || yoyError) return {}
     const recs = countryChip === 'All' ? yoyRecords : yoyRecords.filter(r => r.country === countryChip)
     const ly = monthlyActuals(recs, yoyMonths, gridCostByMonth(yoySplit))
     return Object.fromEntries(months.map((m, i) => [m, ly[i]]))
-  }, [showYoY, yoyRecords, yoyMonths, yoySplit, months, countryChip])
+  }, [showYoY, yoyError, yoyRecords, yoyMonths, yoySplit, months, countryChip])
 
   const reg = useMemo(() => costRegression(actuals), [actuals])
   const forecast = useMemo(() => (reg ? [1, 2, 3].map(f => Math.max(0, Math.round(reg.predict(actuals.length - 1 + f)))) : []), [reg, actuals.length])
@@ -227,11 +238,11 @@ export default function KpiScorecard() {
           borderColor: colorAt(2), borderDash: [4, 2], fill: false, tension: 0.35, spanGaps: true },
         reg && { label: t('kpiscorecard.charts.series.trendLine'), data: months.map((_, i) => Math.max(0, Math.round(reg.predict(i)))),
           borderColor: withAlpha(colorAt(5), 0.5), borderDash: [2, 4], fill: false, pointRadius: 0 },
-        showYoY && { label: t('kpiscorecard.charts.series.lyCost'), data: months.map(m => yoyActualsMap[m]?.totalCost ?? null),
+        showYoY && !yoyError && { label: t('kpiscorecard.charts.series.lyCost'), data: months.map(m => yoyActualsMap[m]?.totalCost ?? null),
           borderColor: withAlpha(colorAt(4), 0.8), borderDash: [3, 3], fill: false, tension: 0.35, spanGaps: true },
       ].filter(Boolean),
     }
-  }, [months, actuals, forecast, reg, targets, showYoY, yoyActualsMap, t])
+  }, [months, actuals, forecast, reg, targets, showYoY, yoyError, yoyActualsMap, t])
 
   const highRiskChartData = useMemo(() => ({
     labels: months,
@@ -388,6 +399,9 @@ export default function KpiScorecard() {
               {t('kpiscorecard.actions.yoyCompare')}
               {yoyLoading && <span className="text-xs ml-1">...</span>}
             </button>
+            {showYoY && yoyError && (
+              <span role="alert" className="text-xs text-red-400 self-center">{yoyError}</span>
+            )}
             <button type="button" onClick={() => doExport('excel')} disabled={!actuals.length}
               className={`btn-secondary flex items-center gap-1.5 text-sm px-3 ${TOUCH}`}>
               <Download size={14} aria-hidden="true" /> {t('kpiscorecard.actions.excel')}

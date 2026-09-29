@@ -230,6 +230,9 @@ export default function BoardOverview() {
   const [updatedAt, setUpdatedAt] = useState(null)
   const [exporting, setExporting] = useState(false)
   const [truncated, setTruncated] = useState(false)
+  // Sources that failed to load. The board still renders from the rest, but it
+  // must say which figures are missing rather than show them as zero.
+  const [failedSources, setFailedSources] = useState([])
 
   const [sections, setSections] = useState(() => {
     try {
@@ -274,8 +277,8 @@ export default function BoardOverview() {
         // The window stays unbounded deliberately; narrowing it would change
         // what the executive KPIs mean, which is the owner's call, not a
         // performance fix.
-        listWorkOrdersForPage({ countries, lean: true }).catch(() => []),
-        listStockRecords({ countries }).catch(() => []),
+        listWorkOrdersForPage({ countries, lean: true }).catch(() => null),
+        listStockRecords({ countries }).catch(() => null),
       ])
       if (stale()) return
       const tyres = tyresRes.data ?? []
@@ -284,9 +287,11 @@ export default function BoardOverview() {
       const fleetSize = (fleetQ?.data ?? []).length
       const accidents = accRes?.data ?? []
       setTruncated(Boolean(tyresRes.truncated || inspRes.truncated || actionsQ.truncated || fleetQ.truncated))
+      setFailedSources([workOrders == null && 'work orders', stock == null && 'stock'].filter(Boolean))
       setRaw({
         tyres, inspections, actions, fleetSize, accidents,
         workOrders: workOrders || [], stock: stock || [],
+        workOrdersFailed: workOrders == null, stockFailed: stock == null,
       })
       setUpdatedAt(new Date())
     } catch (e) {
@@ -312,7 +317,13 @@ export default function BoardOverview() {
     const now = new Date()
     return {
       rows: { tyres, inspections, accidents, workOrders },
-      kpis: buildBoardKpis({ tyres, inspections, actions: raw.actions, fleetSize: raw.fleetSize, accidents, workOrders, stock: raw.stock, now }),
+      kpis: (() => {
+        const kp = buildBoardKpis({ tyres, inspections, actions: raw.actions, fleetSize: raw.fleetSize, accidents, workOrders, stock: raw.stock, now })
+        // An unread source is unknown, not zero.
+        if (raw.workOrdersFailed) { kp.workOrdersOpen = null; kp.workOrdersOverdue = null }
+        if (raw.stockFailed) { kp.stockItems = null; kp.lowStock = null }
+        return kp
+      })(),
       trends: buildTrends({ tyres, accidents, inspections, now }),
       breakdowns: buildBreakdowns({ accidents, tyres }),
     }
@@ -832,6 +843,12 @@ export default function BoardOverview() {
         <Card className="text-center text-[var(--text-muted)]"><div className="py-10">No data yet for {scopeTitle}. Records will appear here as they are captured.</div></Card>
       ) : (
         <>
+          {failedSources.length > 0 && (
+            <div role="alert" className="flex items-center gap-2 text-amber-400 text-xs bg-amber-400/10 border border-amber-400/20 rounded-xl px-4 py-2.5">
+              <AlertTriangle size={13} />
+              Could not load {failedSources.join(' and ')}. Those figures show N/A; everything else on the board is complete. Use Retry above.
+            </div>
+          )}
           {truncated && (
             <div className="flex items-center gap-2 text-amber-400 text-xs bg-amber-400/10 border border-amber-400/20 rounded-xl px-4 py-2.5">
               <AlertTriangle size={13} />

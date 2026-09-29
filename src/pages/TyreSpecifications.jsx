@@ -1,30 +1,34 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+/**
+ * Tyre Specifications (route /tyre-specifications), rebuilt on the shared
+ * Command Center kit to the owner's light reference design.
+ *
+ * Layout: hero, six KPI tiles, a filter bar, the specification register as a
+ * card grid or a table, the selected rule's detail (six tabs), tread pattern and
+ * technical drawing cards, and an "Add new tyre specification" rail form that
+ * also edits and duplicates.
+ *
+ * Kept from the previous page, moved unchanged into src/components/tyreSpec:
+ * Fleet compliance, Non-conformance (raise work order), Quick setup, Fitment
+ * policy (PDF + size inventory), Value advisor (supplier quotes) and the audit
+ * trail, plus the Excel export and compliance PDF.
+ *
+ * Data truth: a `tyre_specifications` row is an approved fitment rule for a
+ * vehicle type and position. It stores sizes, brands, load index, speed
+ * symbol, ply, pressure, tread and notes. Pattern, tube type, dual load,
+ * weight, images, documents and an approval state are not stored, so they read
+ * "Not recorded" or N/A. "Approved for fleet" and "Not approved" count FITTED
+ * tyres that conform, or do not, to a rule.
+ */
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
-  Chart as ChartJS,
-  ArcElement, Tooltip, Legend,
-} from 'chart.js'
-import { Doughnut } from 'react-chartjs-2'
-import {
-  ClipboardList, Plus, Search,
-  FileText, FileSpreadsheet, Edit2, Trash2, X, Save,
-  CheckCircle, AlertTriangle, AlertOctagon, HelpCircle,
-  ChevronLeft, ChevronRight, Tag, Shield,
-  RefreshCw, History, Zap, Truck, Info, BarChart3,
-  ClipboardCheck, Wrench, BookOpen,
-  Scale, DollarSign, TrendingDown, Award, Gauge, Package,
+  ClipboardList, Tag, Ruler, Layers, CheckCircle2, AlertTriangle, Search, LayoutGrid, List,
+  FileSpreadsheet, FileText, RefreshCw, Plus, X,
 } from 'lucide-react'
-import PageHeader from '../components/ui/PageHeader'
-import Card from '../components/ui/Card'
-import Modal from '../components/ui/Modal'
-import EmptyState from '../components/EmptyState'
-import EnterpriseTable from '../components/ui/EnterpriseTable'
-const uuidv4 = () => crypto.randomUUID()
-import * as tyreSpecsApi from '../lib/api/tyreSpecs'
 import {
-  VEHICLE_TYPES, POSITIONS, SPEED_INDICES, PLY_RATINGS, APPROVED_BRANDS, SMART_DEFAULTS,
-  BRAND_META, brandMeta,
-} from '../lib/tyreSpecCatalog'
+  Card, CardState, Kpi, PageHero, Pager, KitTable, Tabs, fmtInt,
+} from '../components/commandCenter/kit'
+import * as tyreSpecsApi from '../lib/api/tyreSpecs'
+import { BRAND_META } from '../lib/tyreSpecCatalog'
 import { buildPolicySections, renderTyreSpecPolicyPdf, buildSizeInventoryRows } from '../lib/tyreSpecPolicy'
 import { normalizePosition } from '../lib/tyrePositions'
 import * as procurementApi from '../lib/api/tyreProcurement'
@@ -37,1080 +41,26 @@ import { useTenant } from '../contexts/TenantContext'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { loadAutoTable } from '../lib/pdfEngine'
-
-ChartJS.register(ArcElement, Tooltip, Legend)
-
-// ── Constants ─────────────────────────────────────────────────────────────────
-
-const PAGE_SIZE = 25
-
-// POSITIONS, VEHICLE_TYPES, SPEED_INDICES, PLY_RATINGS, APPROVED_BRANDS and
-// SMART_DEFAULTS are the shared single source imported from ../lib/tyreSpecCatalog.
-
-const STATUS_CONFIG = {
-  Approved:            { label: 'Approved',           color: 'text-green-400',  bg: 'bg-green-900/20 border-green-800',  icon: CheckCircle },
-  'Non-Standard Size': { label: 'Non-Standard Size',  color: 'text-orange-400', bg: 'bg-orange-900/20 border-orange-800', icon: AlertTriangle },
-  'Non-Approved Brand':{ label: 'Non-Approved Brand', color: 'text-orange-400', bg: 'bg-orange-900/20 border-orange-800', icon: AlertTriangle },
-  'Multiple Violations':{ label: 'Multiple Violations', color: 'text-red-400', bg: 'bg-red-900/20 border-red-800',    icon: AlertOctagon },
-  'No Spec Defined':   { label: 'No Spec Defined',    color: 'text-gray-400',   bg: 'bg-gray-800 border-gray-700',        icon: HelpCircle },
-}
-
-const DOUGHNUT_COLORS = ['#22c55e', '#f97316', '#f59e0b', '#6b7280', '#ef4444']
-
-const CHART_OPTS = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      position: 'right',
-      labels: { color: '#9ca3af', boxWidth: 12, font: { size: 11 }, padding: 12 },
-    },
-    tooltip: {
-      backgroundColor: 'var(--panel)',
-      borderColor: 'var(--hairline)',
-      borderWidth: 1,
-      titleColor: '#f9fafb',
-      bodyColor: '#d1d5db',
-    },
-  },
-}
-
-// ── Spec normalization helpers ─────────────────────────────────────────────────
-
-// Convert a form/default object into a DB-ready row (whitelisted columns only).
-function specToRow(form, { country = null, createdBy = null } = {}) {
-  const toNum = v => {
-    if (v === '' || v == null) return null
-    const n = Number(v)
-    return Number.isFinite(n) ? n : null
-  }
-  const row = {
-    vehicle_type: String(form.vehicle_type ?? '').trim(),
-    position: form.position ?? 'Steer',
-    approved_sizes: Array.isArray(form.approved_sizes) ? form.approved_sizes : [],
-    approved_brands: Array.isArray(form.approved_brands) ? form.approved_brands : [],
-    min_load_index: toNum(form.min_load_index),
-    min_speed_index: form.min_speed_index || null,
-    ply_rating: form.ply_rating?.trim() ? form.ply_rating.trim() : null,
-    recommended_pressure: toNum(form.recommended_pressure),
-    min_tread_depth: toNum(form.min_tread_depth),
-    notes: form.notes?.trim() ? form.notes.trim() : null,
-  }
-  if (country != null) row.country = country
-  if (createdBy != null) row.created_by = createdBy
-  return row
-}
-
-// Convert a DB row into the form/UI shape (numeric fields -> '' when null for inputs).
-function rowToSpec(row) {
-  return {
-    ...row,
-    approved_sizes: row.approved_sizes ?? [],
-    approved_brands: row.approved_brands ?? [],
-    min_load_index: row.min_load_index ?? '',
-    min_speed_index: row.min_speed_index ?? '',
-    ply_rating: row.ply_rating ?? '',
-    recommended_pressure: row.recommended_pressure ?? '',
-    min_tread_depth: row.min_tread_depth ?? '',
-    notes: row.notes ?? '',
-  }
-}
-
-// ── Tag input component ────────────────────────────────────────────────────────
-
-function TagInput({ values = [], onChange, placeholder }) {
-  const [input, setInput] = useState('')
-  const ref = useRef()
-
-  function add() {
-    const v = input.trim().toUpperCase()
-    if (v && !values.includes(v)) onChange([...values, v])
-    setInput('')
-  }
-
-  function remove(v) {
-    onChange(values.filter(x => x !== v))
-  }
-
-  return (
-    <div
-      className="min-h-[40px] bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-2 py-1 flex flex-wrap gap-1 cursor-text focus-within:border-blue-500 transition-colors"
-      onClick={() => ref.current?.focus()}
-    >
-      {values.map(v => (
-        <span key={v} className="flex items-center gap-1 bg-blue-900/40 text-blue-300 text-xs px-2 py-0.5 rounded-full border border-blue-700">
-          {v}
-          <button type="button" onClick={() => remove(v)} className="text-blue-400 hover:text-red-400 transition-colors">
-            <X size={10} />
-          </button>
-        </span>
-      ))}
-      <input
-        ref={ref}
-        value={input}
-        onChange={e => setInput(e.target.value)}
-        onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add() } }}
-        onBlur={add}
-        placeholder={values.length === 0 ? placeholder : ''}
-        className="flex-1 min-w-[80px] bg-transparent text-[var(--text-primary)] text-sm outline-none placeholder-gray-600"
-      />
-    </div>
-  )
-}
-
-// ── Brand tag input (preserves case) ──────────────────────────────────────────
-
-function BrandTagInput({ values = [], onChange, placeholder, suggestions = [] }) {
-  const [input, setInput] = useState('')
-  const ref = useRef()
-  const listId = useRef(`brand-suggestions-${Math.random().toString(36).slice(2)}`)
-
-  function add() {
-    const v = input.trim()
-    if (v && !values.includes(v)) onChange([...values, v])
-    setInput('')
-  }
-
-  function remove(v) {
-    onChange(values.filter(x => x !== v))
-  }
-
-  return (
-    <div
-      className="min-h-[40px] bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-2 py-1 flex flex-wrap gap-1 cursor-text focus-within:border-blue-500 transition-colors"
-      onClick={() => ref.current?.focus()}
-    >
-      {values.map(v => (
-        <span key={v} className="flex items-center gap-1 bg-purple-900/40 text-purple-300 text-xs px-2 py-0.5 rounded-full border border-purple-700">
-          {v}
-          <button type="button" onClick={() => remove(v)} className="text-purple-400 hover:text-red-400 transition-colors">
-            <X size={10} />
-          </button>
-        </span>
-      ))}
-      <input
-        ref={ref}
-        list={suggestions.length ? listId.current : undefined}
-        value={input}
-        onChange={e => setInput(e.target.value)}
-        onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add() } }}
-        onBlur={add}
-        placeholder={values.length === 0 ? placeholder : ''}
-        className="flex-1 min-w-[80px] bg-transparent text-[var(--text-primary)] text-sm outline-none placeholder-gray-600"
-      />
-      {suggestions.length > 0 && (
-        <datalist id={listId.current}>
-          {suggestions.filter(b => !values.includes(b)).map(b => <option key={b} value={b} />)}
-        </datalist>
-      )}
-    </div>
-  )
-}
-
-// ── KPI Card ──────────────────────────────────────────────────────────────────
-
-// Card is `flex flex-col` and `.flex-col` is emitted after `.flex-row`, so the
-// row direction has to go in `style`, which Card spreads last. `items-start`
-// stays a class - it is what stops the icon block being stretched to the height
-// of the text column now that the tile is a flex row.
-function KpiCard({ icon: Icon, label, value, sub, color = 'text-blue-400', loading }) {
-  return (
-    <Card
-      as={motion.div}
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="items-start gap-4"
-      style={{ flexDirection: 'row' }}
-    >
-      <div className={`p-2.5 rounded-lg bg-[var(--input-bg)] ${color}`}>
-        <Icon size={20} />
-      </div>
-      <div>
-        <p className="text-[var(--text-muted)] text-xs mb-1">{label}</p>
-        {loading ? (
-          <div className="h-7 w-16 bg-[var(--input-bg)] rounded animate-pulse" />
-        ) : (
-          <p className={`text-2xl font-bold ${color}`}>{value}</p>
-        )}
-        {sub && <p className="text-[var(--text-muted)] text-xs mt-0.5">{sub}</p>}
-      </div>
-    </Card>
-  )
-}
-
-// ── Spec Form Modal ────────────────────────────────────────────────────────────
-
-function SpecFormModal({ spec, onClose, onSave, isAdmin, saving }) {
-  const [form, setForm] = useState(spec ?? {
-    vehicle_type: '',
-    position: 'Steer',
-    approved_sizes: [],
-    approved_brands: [],
-    min_load_index: '',
-    min_speed_index: '',
-    ply_rating: '',
-    recommended_pressure: '',
-    min_tread_depth: '',
-    notes: '',
-  })
-  const [error, setError] = useState('')
-
-  function set(field, val) { setForm(prev => ({ ...prev, [field]: val })) }
-
-  function validate() {
-    if (!form.vehicle_type.trim()) return 'Vehicle Type is required'
-    if (!form.position) return 'Position is required'
-    if (form.approved_sizes.length === 0) return 'At least one approved size is required'
-    if (form.approved_brands.length === 0) return 'At least one approved brand is required'
-    return null
-  }
-
-  function submit(e) {
-    e.preventDefault()
-    const err = validate()
-    if (err) { setError(err); return }
-    onSave(form)
-  }
-
-  // Admin-only gate, unchanged: a non-admin never renders this dialog at all,
-  // and RLS enforces the same boundary server-side.
-  if (!isAdmin) return null
-
-  // Escape, the backdrop and the X all route through ONE guarded close. The old
-  // markup guarded only the Cancel button (`disabled={saving}`) while the
-  // backdrop and the X could dismiss a save that was still in flight; those
-  // three paths must not disagree. `handleSaveSpec` clears `saving` in a
-  // `finally`, so the dialog can never be left unclosable.
-  const guardedClose = () => { if (!saving) onClose() }
-
-  return (
-    <Modal
-      open
-      onClose={guardedClose}
-      size="lg"
-      title={spec?.id ? 'Edit Specification' : 'Add Specification'}
-    >
-          {/* The submit button STAYS inside its <form>: Modal's footer renders
-              outside the form element, so moving it there would need a
-              `form="…"` association - a behaviour change, not a migration. */}
-          <form onSubmit={submit} className="space-y-5">
-            {error && (
-              <div className="bg-red-900/30 border border-red-700 text-red-300 text-sm px-4 py-2.5 rounded-lg flex items-center gap-2">
-                <AlertTriangle size={14} /> {error}
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-[var(--text-muted)] text-xs mb-1.5 block">Vehicle Type *</label>
-                <div className="relative">
-                  <input
-                    list="vehicle-types-list"
-                    value={form.vehicle_type}
-                    onChange={e => set('vehicle_type', e.target.value)}
-                    placeholder="e.g. Rigid Truck"
-                    className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm focus:border-blue-500 outline-none"
-                  />
-                  <datalist id="vehicle-types-list">
-                    {VEHICLE_TYPES.map(v => <option key={v} value={v} />)}
-                  </datalist>
-                </div>
-              </div>
-              <div>
-                <label className="text-[var(--text-muted)] text-xs mb-1.5 block">Position *</label>
-                <select
-                  value={form.position}
-                  onChange={e => set('position', e.target.value)}
-                  className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm focus:border-blue-500 outline-none"
-                >
-                  {POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label className="text-[var(--text-muted)] text-xs mb-1.5 block">
-                Approved Sizes * <span className="text-[var(--text-dim)]">(press Enter or comma to add)</span>
-              </label>
-              <TagInput
-                values={form.approved_sizes}
-                onChange={v => set('approved_sizes', v)}
-                placeholder="e.g. 315/80R22.5"
-              />
-            </div>
-
-            <div>
-              <label className="text-[var(--text-muted)] text-xs mb-1.5 block">
-                Approved Brands * <span className="text-[var(--text-dim)]">(press Enter or comma to add)</span>
-              </label>
-              <BrandTagInput
-                values={form.approved_brands}
-                onChange={v => set('approved_brands', v)}
-                placeholder="e.g. Double Coin"
-                suggestions={APPROVED_BRANDS}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-[var(--text-muted)] text-xs mb-1.5 block">Min Load Index</label>
-                <input
-                  type="number"
-                  value={form.min_load_index}
-                  onChange={e => set('min_load_index', e.target.value)}
-                  placeholder="e.g. 154"
-                  className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm focus:border-blue-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="text-[var(--text-muted)] text-xs mb-1.5 block">Min Speed Index</label>
-                <select
-                  value={form.min_speed_index}
-                  onChange={e => set('min_speed_index', e.target.value)}
-                  className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm focus:border-blue-500 outline-none"
-                >
-                  <option value="">Select...</option>
-                  {SPEED_INDICES.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-[var(--text-muted)] text-xs mb-1.5 block">Min Ply / Star Rating</label>
-                <input
-                  list="ply-ratings-list"
-                  value={form.ply_rating}
-                  onChange={e => set('ply_rating', e.target.value)}
-                  placeholder="e.g. 18PR"
-                  className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm focus:border-blue-500 outline-none"
-                />
-                <datalist id="ply-ratings-list">
-                  {PLY_RATINGS.map(p => <option key={p} value={p} />)}
-                </datalist>
-              </div>
-              <div>
-                <label className="text-[var(--text-muted)] text-xs mb-1.5 block">Recommended Pressure (PSI)</label>
-                <input
-                  type="number"
-                  value={form.recommended_pressure}
-                  onChange={e => set('recommended_pressure', e.target.value)}
-                  placeholder="e.g. 120"
-                  className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm focus:border-blue-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="text-[var(--text-muted)] text-xs mb-1.5 block">Min Tread Depth (mm)</label>
-                <input
-                  type="number"
-                  step="0.5"
-                  value={form.min_tread_depth}
-                  onChange={e => set('min_tread_depth', e.target.value)}
-                  placeholder="e.g. 3"
-                  className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm focus:border-blue-500 outline-none"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="text-[var(--text-muted)] text-xs mb-1.5 block">Notes</label>
-              <textarea
-                value={form.notes}
-                onChange={e => set('notes', e.target.value)}
-                rows={3}
-                placeholder="Engineering notes, compliance requirements..."
-                className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm focus:border-blue-500 outline-none resize-none"
-              />
-            </div>
-
-            <div className="flex justify-end gap-3 pt-2">
-              <button type="button" onClick={onClose} disabled={saving} className="px-4 py-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-50 text-sm transition-colors">
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="btn-primary gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {saving ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
-                {saving ? 'Saving...' : spec?.id ? 'Update Specification' : 'Save Specification'}
-              </button>
-            </div>
-          </form>
-    </Modal>
-  )
-}
-
-// ── Delete Confirm Modal ───────────────────────────────────────────────────────
-
-// No form here, so the actions belong in Modal's pinned footer. The red panel
-// edge the old overlay carried was decorative; the dialog shell owns its border
-// now and the destructive intent is carried by the red Delete button and the
-// consequence line, which is where it belongs.
-function DeleteConfirmModal({ spec, onClose, onConfirm }) {
-  return (
-    <Modal
-      open
-      onClose={onClose}
-      size="sm"
-      title="Delete Specification"
-      footer={(
-        <>
-          <button onClick={onClose} className="px-4 py-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] text-sm transition-colors">Cancel</button>
-          <button onClick={onConfirm} className="flex items-center gap-2 bg-red-700 hover:bg-red-600 text-white text-sm px-4 py-2 rounded-lg transition-colors">
-            <Trash2 size={14} /> Delete
-          </button>
-        </>
-      )}
-    >
-      <div className="flex items-start gap-3">
-        <div className="p-2 bg-red-900/30 rounded-lg shrink-0">
-          <Trash2 size={18} className="text-red-400" />
-        </div>
-        <div>
-          <p className="text-[var(--text-muted)] text-sm mb-2">
-            Delete <span className="text-[var(--text-primary)] font-medium">{spec?.vehicle_type}, {spec?.position}</span>?
-          </p>
-          {/* Kept verbatim. Deleting a fitment standard silently re-labels every
-              affected vehicle in the compliance report, so the reader has to be
-              told before, not after. */}
-          <p className="text-[var(--text-muted)] text-xs">This action cannot be undone. Compliance records will show "No Spec Defined" for affected vehicles.</p>
-        </div>
-      </div>
-    </Modal>
-  )
-}
-
-// ── Raise Work Order Modal ─────────────────────────────────────────────────────
-
-function RaiseWorkOrderModal({ asset, violations, country, createdBy, onClose }) {
-  const [done, setDone] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-
-  async function submit(e) {
-    e.preventDefault()
-    setError('')
-    setSaving(true)
-    try {
-      // Whitelisted columns only (verified against public.work_orders schema).
-      const payload = {
-        asset_no: asset.asset_no,
-        work_type: 'Tyre Change',
-        priority: 'High',
-        status: 'Open',
-        description: `Non-conforming tyre fitment detected. ${violations.join('; ')}`,
-        site: asset.site || null,
-        country: country || null,
-        created_by: createdBy || null,
-      }
-
-      // Server-side sequential WO number; fall back to year-based sequence.
-      const { data: woNo } = await tyreSpecsApi.generateWorkOrderNo()
-      payload.work_order_no = woNo || `WO-${new Date().getFullYear()}-${Date.now()}`
-
-      const { error: insErr } = await tyreSpecsApi.insertWorkOrder(payload)
-      if (insErr) throw insErr
-      setDone(true)
-    } catch (err) {
-      setError(toUserMessage(err, 'Failed to raise work order'))
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  // One guarded close for Escape, the backdrop and the X. Previously only the
-  // Cancel button was disabled while the insert was in flight, so dismissing
-  // via the backdrop mid-request left the caller with no idea whether the work
-  // order had been created. `submit` clears `saving` in a `finally`.
-  const guardedClose = () => { if (!saving) onClose() }
-
-  return (
-    <Modal
-      open
-      onClose={guardedClose}
-      size="md"
-      title={done ? 'Work Order Raised' : 'Raise Work Order'}
-    >
-          {done ? (
-            <div className="text-center py-4">
-              <CheckCircle size={40} className="text-green-400 mx-auto mb-3" />
-              <p className="text-[var(--text-muted)] text-sm">A high-priority work order has been created for {asset.asset_no}.</p>
-              <button onClick={onClose} className="btn-secondary mt-4">Close</button>
-            </div>
-          ) : (
-            <>
-              <p className="text-[var(--text-muted)] text-sm mb-2">Asset: <span className="text-[var(--text-primary)]">{asset.asset_no}</span>, Site: <span className="text-[var(--text-primary)]">{asset.site}</span></p>
-              {/* The violations this work order is being raised for, listed in
-                  full - the person approving it must see what they are
-                  committing a workshop to. */}
-              <div className="bg-[var(--input-bg)] rounded-lg p-3 mb-4 space-y-1">
-                {violations.map((v, i) => (
-                  <div key={i} className="flex items-center gap-2 text-xs text-orange-300">
-                    <AlertTriangle size={11} /> {v}
-                  </div>
-                ))}
-              </div>
-              {error && (
-                <div className="bg-red-900/30 border border-red-700 text-red-300 text-sm px-4 py-2.5 rounded-lg flex items-center gap-2 mb-4">
-                  <AlertTriangle size={14} /> {error}
-                </div>
-              )}
-              {/* Submit stays inside its <form> rather than moving to Modal's
-                  footer, which sits outside the form element. */}
-              <form onSubmit={submit} className="flex justify-end gap-3">
-                <button type="button" onClick={onClose} disabled={saving} className="px-4 py-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-50 text-sm transition-colors">Cancel</button>
-                <button type="submit" disabled={saving} className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm px-5 py-2 rounded-lg transition-colors">
-                  {saving ? <RefreshCw size={14} className="animate-spin" /> : <Wrench size={14} />}
-                  {saving ? 'Creating...' : 'Create Work Order'}
-                </button>
-              </form>
-            </>
-          )}
-    </Modal>
-  )
-}
-
-// ── Value Advisor helpers ──────────────────────────────────────────────────────
-
-// Currency-aware money formatter. Null / blank -> "N/A" (never a dash).
-function fmtMoney(v, currency = 'SAR') {
-  if (v === null || v === undefined || v === '' || Number.isNaN(Number(v))) return 'N/A'
-  return `${Number(v).toLocaleString('en-US', { maximumFractionDigits: 2 })} ${currency}`
-}
-
-// Plain value or "N/A".
-function fmtVal(v, suffix = '') {
-  if (v === null || v === undefined || v === '' || (typeof v === 'number' && Number.isNaN(v))) return 'N/A'
-  return `${v}${suffix}`
-}
-
-// Whitelisted DB row from the quote form (numbers coerced, blanks -> null).
-function quoteToRow(form, { country = null, createdBy = null } = {}) {
-  const toNum = v => {
-    if (v === '' || v == null) return null
-    const n = Number(v)
-    return Number.isFinite(n) ? n : null
-  }
-  const row = {
-    vehicle_type: String(form.vehicle_type ?? '').trim(),
-    position: form.position || 'All Positions',
-    brand: String(form.brand ?? '').trim(),
-    size: form.size?.trim() ? form.size.trim() : null,
-    ply_rating: form.ply_rating?.trim() ? form.ply_rating.trim() : null,
-    supplier: form.supplier?.trim() ? form.supplier.trim() : null,
-    unit_price: toNum(form.unit_price),
-    currency: (form.currency?.trim() || 'SAR'),
-    expected_life_km: toNum(form.expected_life_km),
-    retreadable: !!form.retreadable,
-    retread_count: toNum(form.retread_count),
-    retread_cost_pct: toNum(form.retread_cost_pct),
-    warranty_km: toNum(form.warranty_km),
-    casing_value: toNum(form.casing_value),
-    notes: form.notes?.trim() ? form.notes.trim() : null,
-  }
-  if (country != null) row.country = country
-  if (createdBy != null) row.created_by = createdBy
-  return row
-}
-
-const CONFIDENCE_META = {
-  high:     { label: 'High',     color: 'text-green-400',  bg: 'bg-green-900/20 border-green-800' },
-  moderate: { label: 'Moderate', color: 'text-yellow-400', bg: 'bg-yellow-900/20 border-yellow-800' },
-  guidance: { label: 'Guidance', color: 'text-[var(--text-muted)]', bg: 'bg-[var(--input-bg)] border-[var(--input-border)]' },
-}
-
-// Row badges derived from the engine flags on each ranked econ item.
-function EconBadges({ e }) {
-  const pills = []
-  if (e.bestValue)   pills.push({ key: 'bv', label: 'Best Value',   icon: Award,        cls: 'text-green-300 bg-green-900/30 border-green-800' })
-  if (e.bestDeal)    pills.push({ key: 'bd', label: 'Best Deal',    icon: DollarSign,   cls: 'text-blue-300 bg-blue-900/30 border-blue-800' })
-  if (e.lowestCpk)   pills.push({ key: 'lc', label: 'Lowest CPK',   icon: TrendingDown, cls: 'text-emerald-300 bg-emerald-900/30 border-emerald-800' })
-  if (e.longestLife) pills.push({ key: 'll', label: 'Longest Life', icon: Gauge,        cls: 'text-purple-300 bg-purple-900/30 border-purple-800' })
-  if (pills.length === 0) return <span className="text-[var(--text-dim)] text-xs">-</span>
-  return (
-    <div className="flex flex-wrap gap-1">
-      {pills.map(p => (
-        <span key={p.key} className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border ${p.cls}`}>
-          <p.icon size={9} /> {p.label}
-        </span>
-      ))}
-    </div>
-  )
-}
-
-// Honest brand-economics guidance when there is not enough quote data to rank.
-function BrandGuidancePanel({ brands = [] }) {
-  const list = Array.isArray(brands) ? brands.filter(Boolean) : []
-  if (list.length === 0) {
-    return (
-      <p className="text-[var(--text-dim)] text-sm">
-        No approved brands recorded for this fitment. Define the approved brands in the Specification
-        Library to unlock brand-economics guidance.
-      </p>
-    )
-  }
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-      {list.map(b => {
-        const m = brandMeta(b)
-        return (
-          <div key={b} className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-3">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[var(--text-primary)] font-medium text-sm flex items-center gap-1.5">
-                <Package size={12} className="text-purple-400" /> {b}
-              </span>
-              <span className="text-[10px] uppercase tracking-wide text-[var(--text-muted)] bg-[var(--input-bg)] px-2 py-0.5 rounded-full">
-                {m.tier || 'unknown'}
-              </span>
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div><span className="text-[var(--text-muted)]">Origin: </span><span className="text-[var(--text-secondary)]">{fmtVal(m.origin || null)}</span></div>
-              <div><span className="text-[var(--text-muted)]">Retreadable: </span><span className="text-[var(--text-secondary)]">{m.retreadable ? 'Yes' : 'No'}</span></div>
-              <div><span className="text-[var(--text-muted)]">Casing: </span><span className="text-[var(--text-secondary)]">{fmtVal(m.casing || null)}</span></div>
-              <div><span className="text-[var(--text-muted)]">Price idx: </span><span className="text-[var(--text-secondary)]">{fmtVal(m.priceIndex)}</span></div>
-              <div><span className="text-[var(--text-muted)]">Durability idx: </span><span className="text-[var(--text-secondary)]">{fmtVal(m.durabilityIndex)}</span></div>
-              <div className="col-span-2">
-                <span className="text-[var(--text-muted)]">Application: </span>
-                <span className="text-[var(--text-secondary)]">{m.application?.length ? m.application.join(', ') : 'N/A'}</span>
-              </div>
-            </div>
-            {m.note && <p className="text-[var(--text-dim)] text-xs mt-2 leading-snug">{m.note}</p>}
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-// ── Quote Form Modal ───────────────────────────────────────────────────────────
-
-function QuoteFormModal({ quote, onClose, onSave, saving }) {
-  const [form, setForm] = useState(quote ? {
-    vehicle_type: quote.vehicle_type ?? '',
-    position: quote.position ?? 'All Positions',
-    brand: quote.brand ?? '',
-    size: quote.size ?? '',
-    ply_rating: quote.ply_rating ?? '',
-    supplier: quote.supplier ?? '',
-    unit_price: quote.unit_price ?? '',
-    currency: quote.currency ?? 'SAR',
-    expected_life_km: quote.expected_life_km ?? '',
-    retreadable: !!quote.retreadable,
-    retread_count: quote.retread_count ?? '',
-    retread_cost_pct: quote.retread_cost_pct ?? 0.4,
-    warranty_km: quote.warranty_km ?? '',
-    casing_value: quote.casing_value ?? '',
-    notes: quote.notes ?? '',
-  } : {
-    vehicle_type: '',
-    position: 'All Positions',
-    brand: '',
-    size: '',
-    ply_rating: '',
-    supplier: '',
-    unit_price: '',
-    currency: 'SAR',
-    expected_life_km: '',
-    retreadable: false,
-    retread_count: '',
-    retread_cost_pct: 0.4,
-    warranty_km: '',
-    casing_value: '',
-    notes: '',
-  })
-  const [error, setError] = useState('')
-
-  function set(field, val) { setForm(prev => ({ ...prev, [field]: val })) }
-
-  function validate() {
-    if (!form.vehicle_type.trim()) return 'Vehicle Type is required'
-    if (!form.position) return 'Position is required'
-    if (!form.brand.trim()) return 'Brand is required'
-    if (!form.supplier.trim()) return 'Supplier is required'
-    if (form.unit_price === '' || !(Number(form.unit_price) > 0)) return 'Unit Price must be a positive number'
-    if (form.expected_life_km === '' || !(Number(form.expected_life_km) > 0)) return 'Expected Life (km) must be a positive number'
-    return null
-  }
-
-  function submit(e) {
-    e.preventDefault()
-    const err = validate()
-    if (err) { setError(err); return }
-    onSave(form)
-  }
-
-  const inputCls = 'w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm focus:border-blue-500 outline-none'
-  const labelCls = 'text-[var(--text-muted)] text-xs mb-1.5 block'
-
-  // Same single guarded close as the specification form: the old backdrop and
-  // X could both dismiss a save still in flight while Cancel was disabled.
-  // `handleSaveQuote` clears `saving` in a `finally`.
-  const guardedClose = () => { if (!saving) onClose() }
-
-  return (
-    <Modal
-      open
-      onClose={guardedClose}
-      size="lg"
-      title={quote?.id ? 'Edit Supplier Quote' : 'Add Supplier Quote'}
-    >
-          {/* Submit stays inside its <form>; Modal's footer is outside it. */}
-          <form onSubmit={submit} className="space-y-5">
-            {error && (
-              <div className="bg-red-900/30 border border-red-700 text-red-300 text-sm px-4 py-2.5 rounded-lg flex items-center gap-2">
-                <AlertTriangle size={14} /> {error}
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className={labelCls}>Vehicle Type *</label>
-                <input list="advisor-vehicle-types" value={form.vehicle_type} onChange={e => set('vehicle_type', e.target.value)} placeholder="e.g. Rigid Truck" className={inputCls} />
-                <datalist id="advisor-vehicle-types">{VEHICLE_TYPES.map(v => <option key={v} value={v} />)}</datalist>
-              </div>
-              <div>
-                <label className={labelCls}>Position *</label>
-                <select value={form.position} onChange={e => set('position', e.target.value)} className={inputCls}>
-                  {POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className={labelCls}>Brand *</label>
-                <input list="advisor-brands" value={form.brand} onChange={e => set('brand', e.target.value)} placeholder="e.g. Double Coin" className={inputCls} />
-                <datalist id="advisor-brands">{APPROVED_BRANDS.map(b => <option key={b} value={b} />)}</datalist>
-              </div>
-              <div>
-                <label className={labelCls}>Supplier *</label>
-                <input value={form.supplier} onChange={e => set('supplier', e.target.value)} placeholder="e.g. Al Jazira Tyres" className={inputCls} />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className={labelCls}>Size</label>
-                <input value={form.size} onChange={e => set('size', e.target.value)} placeholder="e.g. 315/80R22.5" className={inputCls} />
-              </div>
-              <div>
-                <label className={labelCls}>Ply / Star Rating</label>
-                <input list="advisor-ply" value={form.ply_rating} onChange={e => set('ply_rating', e.target.value)} placeholder="e.g. 18PR" className={inputCls} />
-                <datalist id="advisor-ply">{PLY_RATINGS.map(p => <option key={p} value={p} />)}</datalist>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              <div>
-                <label className={labelCls}>Unit Price *</label>
-                <input type="number" step="0.01" value={form.unit_price} onChange={e => set('unit_price', e.target.value)} placeholder="e.g. 1450" className={inputCls} />
-              </div>
-              <div>
-                <label className={labelCls}>Currency</label>
-                <input value={form.currency} onChange={e => set('currency', e.target.value)} placeholder="SAR" className={inputCls} />
-              </div>
-              <div>
-                <label className={labelCls}>Expected Life (km) *</label>
-                <input type="number" value={form.expected_life_km} onChange={e => set('expected_life_km', e.target.value)} placeholder="e.g. 120000" className={inputCls} />
-              </div>
-              <div>
-                <label className={labelCls}>Warranty (km)</label>
-                <input type="number" value={form.warranty_km} onChange={e => set('warranty_km', e.target.value)} placeholder="e.g. 60000" className={inputCls} />
-              </div>
-              <div>
-                <label className={labelCls}>Casing Value</label>
-                <input type="number" step="0.01" value={form.casing_value} onChange={e => set('casing_value', e.target.value)} placeholder="e.g. 200" className={inputCls} />
-              </div>
-              <div>
-                <label className={labelCls}>Retread Cost (fraction of new)</label>
-                <input type="number" step="0.05" value={form.retread_cost_pct} onChange={e => set('retread_cost_pct', e.target.value)} placeholder="0.4" className={inputCls} />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 items-end">
-              <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer select-none pt-5">
-                <input type="checkbox" checked={form.retreadable} onChange={e => set('retreadable', e.target.checked)} className="w-4 h-4 accent-blue-600" />
-                Retreadable casing
-              </label>
-              <div>
-                <label className={labelCls}>Planned Retread Count</label>
-                <input type="number" value={form.retread_count} onChange={e => set('retread_count', e.target.value)} placeholder="e.g. 1" disabled={!form.retreadable} className={`${inputCls} disabled:opacity-40`} />
-              </div>
-            </div>
-
-            <div>
-              <label className={labelCls}>Notes</label>
-              <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2} placeholder="Lead time, payment terms, delivery..." className={`${inputCls} resize-none`} />
-            </div>
-
-            <div className="flex justify-end gap-3 pt-2">
-              <button type="button" onClick={onClose} disabled={saving} className="px-4 py-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-50 text-sm transition-colors">Cancel</button>
-              <button type="submit" disabled={saving} className="btn-primary gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                {saving ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
-                {saving ? 'Saving...' : quote?.id ? 'Update Quote' : 'Save Quote'}
-              </button>
-            </div>
-          </form>
-    </Modal>
-  )
-}
-
-// ── Delete Quote Confirm Modal ─────────────────────────────────────────────────
-
-// No form, so the actions sit in Modal's pinned footer.
-function DeleteQuoteConfirmModal({ quote, onClose, onConfirm }) {
-  return (
-    <Modal
-      open
-      onClose={onClose}
-      size="sm"
-      title="Delete Supplier Quote"
-      footer={(
-        <>
-          <button onClick={onClose} className="px-4 py-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] text-sm transition-colors">Cancel</button>
-          <button onClick={onConfirm} className="flex items-center gap-2 bg-red-700 hover:bg-red-600 text-white text-sm px-4 py-2 rounded-lg transition-colors">
-            <Trash2 size={14} /> Delete
-          </button>
-        </>
-      )}
-    >
-      <div className="flex items-start gap-3">
-        <div className="p-2 bg-red-900/30 rounded-lg shrink-0"><Trash2 size={18} className="text-red-400" /></div>
-        <div>
-          <p className="text-[var(--text-muted)] text-sm mb-2">
-            Delete the quote for <span className="text-[var(--text-primary)] font-medium">{quote?.brand || 'this brand'}</span>
-            {quote?.supplier ? <> from <span className="text-[var(--text-primary)] font-medium">{quote.supplier}</span></> : null}?
-          </p>
-          {/* Kept verbatim: removing a quote changes which option the advisor
-              ranks as best value, so the effect is stated, not implied. */}
-          <p className="text-[var(--text-muted)] text-xs">This removes it from the value ranking. This action cannot be undone.</p>
-        </div>
-      </div>
-    </Modal>
-  )
-}
-
-// ── Main Component ─────────────────────────────────────────────────────────────
-
-// ── Shared table shell ─────────────────────────────────────────────────────────
-// Every grid on this page keeps its OWN controls: the compliance grid has four
-// filters and its own pager, the size inventory its own search and export, the
-// advisor ranking and the audit trail carry an order that IS the record. So the
-// shared EnterpriseTable runs here with search, sorting, column filters, export
-// and keyboard nav switched OFF - it contributes the header contract, empty
-// state and row rendering only, and can never re-order or re-scope a grid.
-function SpecTable({ columns, data, getRowId, emptyMessage = 'No records', maxHeight = 640, onRowClick }) {
-  return (
-    <EnterpriseTable
-      columns={columns}
-      data={data}
-      getRowId={getRowId}
-      className="border-0 rounded-none shadow-none"
-      enableGlobalFilter={false}
-      enableColumnFilters={false}
-      enableSorting={false}
-      enableExport={false}
-      enableColumnVisibility={false}
-      enableKeyboard={false}
-      virtual
-      maxHeight={maxHeight}
-      emptyMessage={emptyMessage}
-      onRowClick={onRowClick}
-    />
-  )
-}
-
-const dash = (v) => (v == null || v === '' ? 'N/A' : v)
-
-function complianceColumns({ isAdmin, onRaiseWo }) {
-  return [
-    { id: 'asset', header: 'Asset No', cell: ({ row }) => <span className="text-[var(--text-primary)] text-sm font-mono">{dash(row.original.asset_no)}</span> },
-    { id: 'type', header: 'Vehicle Type', cell: ({ row }) => row.original.vehicleType ? <span className="text-[var(--text-secondary)] text-sm">{row.original.vehicleType}</span> : <span className="text-[var(--text-dim)] text-sm">Unknown</span> },
-    { id: 'position', header: 'Position', cell: ({ row }) => <span className="text-[var(--text-secondary)] text-sm">{dash(normalizePosition(row.original.position))}</span> },
-    { id: 'size', header: 'Fitted Size', cell: ({ row }) => <span className="text-[var(--text-secondary)] text-sm font-mono">{dash(row.original.size)}</span> },
-    { id: 'brand', header: 'Fitted Brand', cell: ({ row }) => <span className="text-[var(--text-secondary)] text-sm">{dash(row.original.brand)}</span> },
-    { id: 'site', header: 'Site', cell: ({ row }) => <span className="text-[var(--text-muted)] text-sm">{dash(row.original.site)}</span> },
-    {
-      id: 'status', header: 'Spec Status',
-      cell: ({ row }) => {
-        const cfg = STATUS_CONFIG[row.original.specStatus] || STATUS_CONFIG['No Spec Defined']
-        const Icon = cfg.icon
-        return (
-          <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.color}`}>
-            <Icon size={10} /> {cfg.label}
-          </span>
-        )
-      },
-    },
-    {
-      id: 'action', header: 'Action',
-      cell: ({ row }) => {
-        const r = row.original
-        if (r.specStatus === 'Approved' || r.specStatus === 'No Spec Defined' || !isAdmin) return null
-        return (
-          <button
-            onClick={() => onRaiseWo({ asset_no: r.asset_no, site: r.site, violations: r.violations })}
-            className="text-xs text-orange-400 hover:text-orange-300 underline whitespace-nowrap"
-          >
-            Raise WO
-          </button>
-        )
-      },
-    },
-  ]
-}
-
-function nonConformanceColumns({ isAdmin, onRaiseWo }) {
-  return [
-    {
-      id: 'rank', header: 'Rank',
-      cell: ({ row }) => (
-        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${row.original.rank <= 3 ? 'bg-red-900 text-red-300' : 'bg-[var(--input-bg)] text-[var(--text-muted)]'}`}>{row.original.rank}</span>
-      ),
-    },
-    { id: 'asset', header: 'Asset No', cell: ({ row }) => <span className="text-[var(--text-primary)] font-mono text-sm">{row.original.asset_no}</span> },
-    { id: 'site', header: 'Site', cell: ({ row }) => <span className="text-[var(--text-muted)] text-sm">{dash(row.original.site)}</span> },
-    { id: 'type', header: 'Vehicle Type', cell: ({ row }) => <span className="text-[var(--text-secondary)] text-sm">{row.original.vehicleType || 'Unknown'}</span> },
-    {
-      id: 'count', header: 'Violations',
-      cell: ({ row }) => <span className={`text-sm font-bold ${row.original.violations.length >= 3 ? 'text-red-400' : 'text-orange-400'}`}>{row.original.violations.length}</span>,
-    },
-    {
-      id: 'types', header: 'Violation Types',
-      cell: ({ row }) => (
-        <div className="flex flex-wrap gap-1">
-          {row.original.violationTypes.map(v => (
-            <span key={v} className="text-xs bg-red-900/30 text-red-300 border border-red-800 px-2 py-0.5 rounded-full">{v}</span>
-          ))}
-        </div>
-      ),
-    },
-    {
-      id: 'recommend', header: 'Recommended Action',
-      cell: () => <span className="block text-[var(--text-muted)] text-xs max-w-[180px] whitespace-normal">Replace non-approved fitments with spec-compliant tyres during next scheduled change</span>,
-    },
-    {
-      id: 'action', header: 'Action',
-      cell: ({ row }) => {
-        const a = row.original
-        if (!isAdmin) return null
-        return (
-          <button
-            onClick={() => onRaiseWo({ asset_no: a.asset_no, site: a.site, violations: a.violations })}
-            className="flex items-center gap-1 bg-orange-900/30 hover:bg-orange-900/50 text-orange-400 text-xs px-3 py-1.5 rounded-lg border border-orange-800 transition-colors"
-          >
-            <Wrench size={11} /> Raise WO
-          </button>
-        )
-      },
-    },
-  ]
-}
-
-const textCell = (key, cls = 'text-[var(--text-secondary)] text-xs whitespace-nowrap') =>
-  ({ row }) => <span className={cls}>{dash(row.original[key])}</span>
-
-const SIZE_INVENTORY_COLUMNS = [
-  { id: 'size', header: 'Tyre Size', cell: textCell('size', 'text-[var(--text-primary)] text-xs font-semibold whitespace-nowrap') },
-  { id: 'count', header: 'Fitted Qty', cell: textCell('count') },
-  { id: 'brands', header: 'Brands In Use', cell: ({ row }) => <span className="block text-[var(--text-secondary)] text-xs max-w-[220px] whitespace-normal" title={row.original.brandsLabel}>{dash(row.original.brandsLabel)}</span> },
-  { id: 'approved', header: 'Approved Brands', cell: ({ row }) => <span className="block text-[var(--text-secondary)] text-xs max-w-[220px] whitespace-normal" title={row.original.approvedBrandsLabel}>{dash(row.original.approvedBrandsLabel)}</span> },
-  { id: 'ply', header: 'Ply Rating', cell: textCell('plyRating') },
-  { id: 'tread', header: 'Min Tread (mm)', cell: textCell('minTreadDepth') },
-  { id: 'load', header: 'Load Idx', cell: textCell('minLoadIndex') },
-  { id: 'speed', header: 'Speed', cell: textCell('minSpeedIndex') },
-  { id: 'pressure', header: 'Pressure (PSI)', cell: textCell('recommendedPressure') },
-  { id: 'types', header: 'Vehicle Types', cell: ({ row }) => <span className="block text-[var(--text-secondary)] text-xs max-w-[200px] whitespace-normal" title={row.original.vehicleTypesLabel}>{dash(row.original.vehicleTypesLabel)}</span> },
-  {
-    id: 'nonConforming', header: 'Non-Conforming',
-    cell: ({ row }) => row.original.nonConformingCount > 0
-      ? <span className="text-orange-400 font-medium text-xs">{row.original.nonConformingCount}</span>
-      : <span className="text-green-400 text-xs">0</span>,
-  },
-]
-
-/**
- * A policy section's table arrives in one of three shapes (head / columns / an
- * array-of-arrays). Normalise it to string-indexed cells and generate the column
- * defs from however many cells the widest row carries.
- */
-function policyTableModel(table) {
-  const head = Array.isArray(table?.head) ? table.head
-    : Array.isArray(table?.columns) ? table.columns
-    : (Array.isArray(table) && Array.isArray(table[0]) ? table[0] : [])
-  const raw = Array.isArray(table?.rows) ? table.rows
-    : (Array.isArray(table) ? table.slice(head.length ? 1 : 0) : [])
-  const rows = raw.map((r, ri) => {
-    const cells = Array.isArray(r) ? r : Object.values(r || {})
-    return { __key: String(ri), cells }
-  })
-  const width = Math.max(head.length, ...rows.map(r => r.cells.length), 0)
-  const columns = Array.from({ length: width }, (_, ci) => ({
-    id: `c${ci}`,
-    header: head[ci] != null ? String(head[ci]) : '',
-    cell: ({ row }) => {
-      const v = row.original.cells[ci]
-      return <span className="text-[var(--text-secondary)] text-xs">{v == null || v === '' ? 'N/A' : String(v)}</span>
-    },
-  }))
-  return { columns, rows }
-}
-
-function advisorColumns(rec, cur) {
-  return [
-    {
-      id: 'brand', header: 'Brand',
-      cell: ({ row }) => {
-        const e = row.original
-        return (
-          <div className="text-[var(--text-primary)] text-sm font-medium whitespace-nowrap">
-            <span className="flex items-center gap-1.5">
-              {e === rec.pick && <CheckCircle size={12} className="text-emerald-400 shrink-0" />}
-              {e.brand || 'N/A'}
-            </span>
-            {!e.valid && <span className="block text-[10px] text-amber-400">incomplete (needs price + life)</span>}
-          </div>
-        )
-      },
-    },
-    { id: 'supplier', header: 'Supplier', cell: ({ row }) => <span className="text-[var(--text-secondary)] text-sm whitespace-nowrap">{row.original.supplier || 'N/A'}</span> },
-    { id: 'price', header: 'Price', cell: ({ row }) => <span className="text-[var(--text-secondary)] text-sm whitespace-nowrap">{fmtMoney(row.original.unit_price, cur)}</span> },
-    { id: 'life', header: 'Exp Life (km)', cell: ({ row }) => <span className="text-[var(--text-secondary)] text-sm whitespace-nowrap">{fmtVal(row.original.expected_life_km != null ? Number(row.original.expected_life_km).toLocaleString('en-US') : null)}</span> },
-    { id: 'cpk', header: 'Lifecycle CPK', cell: ({ row }) => <span className="text-sm whitespace-nowrap font-semibold text-[var(--text-primary)]">{fmtVal(row.original.lifecycleCpk)}</span> },
-    { id: 'per1000', header: 'Cost/1000km', cell: ({ row }) => <span className="text-[var(--text-secondary)] text-sm whitespace-nowrap">{fmtVal(row.original.costPer1000Km)}</span> },
-    { id: 'warranty', header: 'Warranty %', cell: ({ row }) => <span className="text-[var(--text-secondary)] text-sm whitespace-nowrap">{fmtVal(row.original.warrantyCoverPct, '%')}</span> },
-    { id: 'realized', header: 'Realized CPK', cell: ({ row }) => <span className="text-[var(--text-secondary)] text-sm whitespace-nowrap">{fmtVal(row.original.realizedCpk)}</span> },
-    {
-      id: 'confidence', header: 'Confidence',
-      cell: ({ row }) => {
-        const cm = CONFIDENCE_META[row.original.confidence] || CONFIDENCE_META.guidance
-        return <span className={`inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full border ${cm.bg} ${cm.color}`}>{cm.label}</span>
-      },
-    },
-    { id: 'badges', header: 'Badges', cell: ({ row }) => <EconBadges e={row.original} /> },
-  ]
-}
-
-function historyActionColor(action) {
-  if (action === 'Add' || action === 'Quick Setup Import' || action === 'Import') return 'text-green-400'
-  if (action === 'Edit') return 'text-blue-400'
-  return 'text-red-400'
-}
-
-const HISTORY_COLUMNS = [
-  {
-    id: 'date', header: 'Date',
-    cell: ({ row }) => {
-      const d = new Date(row.original.date)
-      return <span className="text-[var(--text-muted)] text-xs whitespace-nowrap">{Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-    },
-  },
-  { id: 'action', header: 'Action', cell: ({ row }) => <span className={`text-xs font-medium ${historyActionColor(row.original.action)}`}>{row.original.action}</span> },
-  { id: 'user', header: 'User', cell: ({ row }) => <span className="block text-[var(--text-muted)] text-xs max-w-[120px] truncate">{dash(row.original.user)}</span> },
-  { id: 'type', header: 'Vehicle Type', cell: ({ row }) => <span className="text-[var(--text-secondary)] text-xs">{dash(row.original.vehicle_type)}</span> },
-  { id: 'position', header: 'Position', cell: ({ row }) => <span className="text-[var(--text-muted)] text-xs">{dash(row.original.position)}</span> },
-  { id: 'field', header: 'Changed Field', cell: ({ row }) => <span className="text-[var(--text-muted)] text-xs">{dash(row.original.changed_field)}</span> },
-  { id: 'old', header: 'Old Value', cell: ({ row }) => <span className="block text-[var(--text-dim)] text-xs max-w-[120px] truncate">{dash(row.original.old_value)}</span> },
-  { id: 'new', header: 'New Value', cell: ({ row }) => <span className="block text-[var(--text-muted)] text-xs max-w-[120px] truncate">{dash(row.original.new_value)}</span> },
-]
+import {
+  EMPTY_FILTERS, filterSpecs, filterScope, filterOptions, specUsage, specKpis, USAGE_STATUS, TYRE_TYPES,
+  clampPage, pageSlice,
+} from '../lib/tyreSpecView'
+import {
+  PAGE_SIZE, DOUGHNUT_COLORS, specToRow, rowToSpec, quoteToRow,
+  DeleteConfirmModal, RaiseWorkOrderModal, QuoteFormModal, DeleteQuoteConfirmModal,
+  complianceColumns, nonConformanceColumns,
+} from '../components/tyreSpec/parts'
+import {
+  ComplianceTab, NonConformanceTab, QuickSetupTab, FitmentPolicyTab, ValueAdvisorTab, AuditTrailTab,
+} from '../components/tyreSpec/WorkbenchTabs'
+import SpecFormPanel from '../components/tyreSpec/SpecFormPanel'
+import {
+  SpecGrid, specTableColumns, SpecDetail, TreadPatternCard, TechnicalDrawingCard,
+} from '../components/tyreSpec/SpecCatalog'
+import './TyreSpecifications.css'
+
+const uuidv4 = () => crypto.randomUUID()
+const SPEC_PAGE_SIZES = [6, 12, 24, 48]
 
 export default function TyreSpecifications() {
   const { profile, user } = useAuth()
@@ -1122,11 +72,13 @@ export default function TyreSpecifications() {
   const canManageQuotes = ['Admin', 'Manager', 'Director'].includes(profile?.role)
   const country = activeCountry && activeCountry !== 'All' ? activeCountry : null
 
-  const [activeTab, setActiveTab] = useState('library')
+  const [activeTab, setActiveTab] = useState('specs')
   const [specs, setSpecs] = useState([])
   const [loadingSpecs, setLoadingSpecs] = useState(true)
   const [specsError, setSpecsError] = useState('')
   const [savingSpec, setSavingSpec] = useState(false)
+  const [saveError, setSaveError] = useState('')
+  const [actionError, setActionError] = useState('')
   const [tyreRecords, setTyreRecords] = useState([])
   const [fleetMaster, setFleetMaster] = useState([])
   const [loadingRecords, setLoadingRecords] = useState(true)
@@ -1143,9 +95,11 @@ export default function TyreSpecifications() {
   const [deletingQuote, setDeletingQuote] = useState(null)
 
   // library filters
-  const [libSearch, setLibSearch] = useState('')
-  const [libTypeFilter, setLibTypeFilter] = useState('')
-  const [libPosFilter, setLibPosFilter] = useState('')
+  const [filters, setFilters] = useState(EMPTY_FILTERS)
+  const [view, setView] = useState('grid')
+  const [specPage, setSpecPage] = useState(0)
+  const [specPageSize, setSpecPageSize] = useState(12)
+  const [selectedId, setSelectedId] = useState(null)
 
   // compliance filters / pagination
   const [compSearch, setCompSearch] = useState('')
@@ -1155,8 +109,10 @@ export default function TyreSpecifications() {
   const [compPage, setCompPage] = useState(0)
 
   // modals
-  const [showSpecModal, setShowSpecModal] = useState(false)
+  // The rail form edits `editingSpec` (null = a new specification). formKey
+  // remounts it so Cancel and a finished save always start from a clean form.
   const [editingSpec, setEditingSpec] = useState(null)
+  const [formKey, setFormKey] = useState(0)
   const [deletingSpec, setDeletingSpec] = useState(null)
   const [workOrderAsset, setWorkOrderAsset] = useState(null)
 
@@ -1191,7 +147,7 @@ export default function TyreSpecifications() {
       if (error) throw error
       setSpecs((data ?? []).map(rowToSpec))
     } catch (e) {
-      setSpecsError(e.message || 'Failed to load specifications')
+      setSpecsError(toUserMessage(e, 'Failed to load specifications'))
       setSpecs([])
     } finally {
       setLoadingSpecs(false)
@@ -1232,7 +188,7 @@ export default function TyreSpecifications() {
       if (optErr) throw optErr
       setProcurementOptions(opts ?? [])
     } catch (e) {
-      setOptionsError(e.message || 'Failed to load supplier quotes')
+      setOptionsError(toUserMessage(e, 'Failed to load supplier quotes'))
       setProcurementOptions([])
     } finally {
       setLoadingOptions(false)
@@ -1319,23 +275,13 @@ export default function TyreSpecifications() {
 
   // ── Filtered library ──────────────────────────────────────────────────────────
 
-  const filteredSpecs = useMemo(() => {
-    return specs.filter(s => {
-      const matchSearch = !libSearch || s.vehicle_type.toLowerCase().includes(libSearch.toLowerCase()) || s.position.toLowerCase().includes(libSearch.toLowerCase()) || s.approved_sizes.some(x => x.toLowerCase().includes(libSearch.toLowerCase())) || s.approved_brands.some(x => x.toLowerCase().includes(libSearch.toLowerCase()))
-      const matchType = !libTypeFilter || s.vehicle_type === libTypeFilter
-      const matchPos = !libPosFilter || s.position === libPosFilter
-      return matchSearch && matchType && matchPos
-    })
-  }, [specs, libSearch, libTypeFilter, libPosFilter])
+  // In-service usage per rule (fitted tyres covered, conforming, out of spec).
+  const usageBySpec = useMemo(() => specUsage(complianceData), [complianceData])
 
-  // Plain-English description of the Spec Library filters, for the export.
-  const specLibraryScope = useMemo(() => {
-    const parts = []
-    if (libSearch.trim()) parts.push(`search "${libSearch.trim()}"`)
-    if (libTypeFilter) parts.push(`vehicle type: ${libTypeFilter}`)
-    if (libPosFilter) parts.push(`position: ${libPosFilter}`)
-    return parts.join(', ')
-  }, [libSearch, libTypeFilter, libPosFilter])
+  const filteredSpecs = useMemo(() => filterSpecs(specs, filters, usageBySpec), [specs, filters, usageBySpec])
+
+  // Plain-English description of the register filters, for the export.
+  const specLibraryScope = useMemo(() => filterScope(filters), [filters])
 
   // ── Filtered compliance ────────────────────────────────────────────────────────
 
@@ -1394,7 +340,6 @@ export default function TyreSpecifications() {
 
   const siteOptions = useMemo(() => [...new Set(tyreRecords.map(r => r.site).filter(Boolean))].sort(), [tyreRecords])
   const typeOptions = useMemo(() => [...new Set(specs.map(s => s.vehicle_type).filter(Boolean))].sort(), [specs])
-  const libTypeOptions = useMemo(() => [...new Set(specs.map(s => s.vehicle_type).filter(Boolean))].sort(), [specs])
 
   // ── Value Advisor derivations ───────────────────────────────────────────────
 
@@ -1450,7 +395,7 @@ export default function TyreSpecifications() {
 
   async function handleSaveSpec(form) {
     setSavingSpec(true)
-    setSpecsError('')
+    setSaveError('')
     try {
       const existing = editingSpec?.id ? specs.find(s => s.id === editingSpec.id) : null
       if (existing) {
@@ -1465,10 +410,10 @@ export default function TyreSpecifications() {
         logHistory('Add', form)
       }
       await fetchSpecs()
-      setShowSpecModal(false)
       setEditingSpec(null)
+      setFormKey(k => k + 1)
     } catch (e) {
-      setSpecsError(e.message || 'Failed to save specification')
+      setSaveError(toUserMessage(e, 'Failed to save specification'))
     } finally {
       setSavingSpec(false)
     }
@@ -1476,14 +421,14 @@ export default function TyreSpecifications() {
 
   async function handleDeleteSpec() {
     const target = deletingSpec
-    setSpecsError('')
+    setActionError('')
     try {
       const { error } = await tyreSpecsApi.deleteSpec(target.id)
       if (error) throw error
       logHistory('Delete', target)
       await fetchSpecs()
     } catch (e) {
-      setSpecsError(e.message || 'Failed to delete specification')
+      setActionError(toUserMessage(e, 'Failed to delete specification'))
     } finally {
       setDeletingSpec(null)
     }
@@ -1492,7 +437,7 @@ export default function TyreSpecifications() {
   async function importQuickDefault(def) {
     const exists = specs.find(s => s.vehicle_type === def.vehicle_type && s.position === def.position)
     if (exists) return
-    setSpecsError('')
+    setActionError('')
     try {
       const row = specToRow(def, { country, createdBy: user?.id })
       const { error } = await tyreSpecsApi.insertSpec(row)
@@ -1500,7 +445,7 @@ export default function TyreSpecifications() {
       logHistory('Quick Setup Import', def)
       await fetchSpecs()
     } catch (e) {
-      setSpecsError(e.message || 'Failed to import default')
+      setActionError(toUserMessage(e, 'Failed to import default'))
     }
   }
 
@@ -1523,7 +468,7 @@ export default function TyreSpecifications() {
       setShowQuoteModal(false)
       setEditingQuote(null)
     } catch (e) {
-      setOptionsError(e.message || 'Failed to save quote')
+      setOptionsError(toUserMessage(e, 'Failed to save quote'))
     } finally {
       setSavingQuote(false)
     }
@@ -1537,7 +482,7 @@ export default function TyreSpecifications() {
       if (error) throw error
       await fetchAdvisorData()
     } catch (e) {
-      setOptionsError(e.message || 'Failed to delete quote')
+      setOptionsError(toUserMessage(e, 'Failed to delete quote'))
     } finally {
       setDeletingQuote(null)
     }
@@ -1769,17 +714,28 @@ export default function TyreSpecifications() {
     }
   }
 
-  // ── Tabs ───────────────────────────────────────────────────────────────────────
+  // ── Register view model ──────────────────────────────────────────────────────
 
-  const TABS = [
-    { id: 'library',     label: 'Specification Library', icon: BookOpen },
-    { id: 'compliance',  label: 'Fleet Compliance',      icon: ClipboardCheck },
-    { id: 'violations',  label: 'Non-Conformance',       icon: AlertOctagon },
-    { id: 'defaults',    label: 'Quick Setup',           icon: Zap },
-    { id: 'policy',      label: 'Fitment Policy',        icon: FileText },
-    { id: 'advisor',     label: 'Value Advisor',         icon: Scale },
-    { id: 'history',     label: 'Audit Trail',           icon: History },
-  ]
+  const options = useMemo(() => filterOptions(specs), [specs])
+  const figures = useMemo(() => specKpis(specs, loadingRecords ? null : kpis), [specs, kpis, loadingRecords])
+  const safeSpecPage = clampPage(specPage, filteredSpecs.length, specPageSize)
+  const pageRows = useMemo(() => pageSlice(filteredSpecs, safeSpecPage, specPageSize), [filteredSpecs, safeSpecPage, specPageSize])
+  const selectedSpec = useMemo(
+    () => filteredSpecs.find(s => s.id === selectedId) || pageRows[0] || null,
+    [filteredSpecs, selectedId, pageRows],
+  )
+  const tableCols = useMemo(() => specTableColumns(usageBySpec), [usageBySpec])
+  const activeFilterCount = Object.values(filters).filter(Boolean).length
+
+  const setFilter = (key, value) => { setFilters(f => ({ ...f, [key]: value })); setSpecPage(0) }
+  const startCreate = () => { setEditingSpec(null); setSaveError(''); setFormKey(k => k + 1) }
+  const startEdit = (spec) => { setEditingSpec(spec); setSaveError(''); setFormKey(k => k + 1) }
+  const startDuplicate = (spec) => {
+    const { id: _id, created_at: _c, updated_at: _u, created_by: _b, ...rest } = spec
+    setEditingSpec({ ...rest, notes: rest.notes ? `${rest.notes} (copy)` : '' })
+    setSaveError('')
+    setFormKey(k => k + 1)
+  }
 
   // ── Table column models (shared EnterpriseTable shell) ──────────────────────
   const complianceCols = complianceColumns({ isAdmin, onRaiseWo: setWorkOrderAsset })
@@ -1787,858 +743,209 @@ export default function TyreSpecifications() {
   const nonConformanceRanked = nonConformanceByAsset.map((a, i) => ({ ...a, rank: i + 1 }))
   const historyNewestFirst = [...history].reverse()
 
+  // Everything the moved workbench tabs read, unchanged from the old page.
+  const ctx = {
+    advisorRecs, approvedBrandsFor, canManageQuotes, compPage, compSearch, compSiteFilter, compStatusFilter,
+    compTypeFilter, complianceCols, complianceData, compliancePage, complianceTotalPages, doughnutData,
+    downloadPolicyPdf, exportAdvisorExcel, exportSizeInventoryExcel, fetchAdvisorData, filteredCompliance,
+    filteredSizeInventory, historyNewestFirst, importQuickDefault, isAdmin, loadingOptions, loadingRecords,
+    nonConformanceByAsset, nonConformanceCols, nonConformanceRanked, optionsError, policyBusy, policyError,
+    policySections, setCompPage, setCompSearch, setCompSiteFilter, setCompStatusFilter, setCompTypeFilter,
+    setDeletingQuote, setEditingQuote, setOptionsError, setPolicyError, setShowQuoteModal, setSizeSearch,
+    siteOptions, sizeInventory, sizeSearch, specs, typeOptions,
+  }
+
+  const TABS = [
+    { key: 'specs', label: 'Specifications', count: specs.length },
+    { key: 'compliance', label: 'Fleet compliance' },
+    { key: 'violations', label: 'Non-conformance', count: nonConformanceByAsset.length || null, countTone: 'red' },
+    { key: 'defaults', label: 'Quick setup' },
+    { key: 'policy', label: 'Fitment policy' },
+    { key: 'advisor', label: 'Value advisor' },
+    { key: 'history', label: 'Audit trail' },
+  ]
+
+  const specsState = { loading: loadingSpecs, data: loadingSpecs ? null : specs, error: specsError || null, retry: fetchSpecs }
+  const fittedTitle = 'Fitted tyres checked against the rule for their vehicle type and position'
+
   // ── Render ─────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-6">
-
-      <PageHeader
-        title="Tyre Specification Manager"
-        subtitle="Define approved fitments, track compliance, and flag non-conforming tyres"
-        icon={Shield}
-        actions={
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={() => { setEditingSpec(null); setShowSpecModal(true) }}
-              disabled={!isAdmin}
-              title={!isAdmin ? 'Admin access required' : ''}
-              className="btn-primary gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <Plus size={15} /> Add Specification
-            </button>
-            <button
-              onClick={exportSpecsExcel}
-              title={specLibraryScope
-                ? `Exports ${filteredSpecs.length} of ${specs.length} specifications, filtered by ${specLibraryScope}`
-                : `Exports all ${specs.length} specifications`}
-              className="flex items-center gap-2 bg-[var(--input-bg)] hover:bg-gray-700 text-[var(--text-secondary)] text-sm px-3 py-2 rounded-lg border border-[var(--input-border)] transition-colors"
-            >
-              <FileSpreadsheet size={14} /> Export
-            </button>
-            <button
-              onClick={exportCompliancePdf}
-              className="flex items-center gap-2 bg-[var(--input-bg)] hover:bg-gray-700 text-[var(--text-secondary)] text-sm px-3 py-2 rounded-lg border border-[var(--input-border)] transition-colors"
-            >
-              <FileText size={14} /> PDF Report
-            </button>
-            <button
-              onClick={() => { fetchSpecs(); fetchLiveData() }}
-              disabled={loadingRecords || loadingSpecs}
-              className="flex items-center gap-2 bg-[var(--input-bg)] hover:bg-gray-700 text-[var(--text-secondary)] text-sm px-3 py-2 rounded-lg border border-[var(--input-border)] transition-colors"
-            >
-              <RefreshCw size={14} className={(loadingRecords || loadingSpecs) ? 'animate-spin' : ''} />
-            </button>
-          </div>
-        }
+    <div className="cc ts-page">
+      <PageHero
+        title="Tyre Specifications"
+        lead="Manage tyre specifications, brands, patterns, sizes, load/speed ratings and approved models for your fleet."
+        imgLight="/dashboard/hero-tyres-light.webp"
+        imgDark="/dashboard/hero-tyres-dark.webp"
       />
 
-      {specsError && !loadingSpecs && (
-        <div className="bg-red-900/30 border border-red-700 text-red-300 text-sm px-4 py-2.5 rounded-lg flex items-center gap-2">
-          <AlertTriangle size={14} /> {specsError}
-          <button onClick={fetchSpecs} className="ml-auto flex items-center gap-1 text-red-200 hover:text-[var(--text-primary)]"><RefreshCw size={13} /> Retry</button>
-          <button onClick={() => setSpecsError('')}><X size={14} /></button>
+      <div className="ts-toolbar">
+        <div className="ts-toolbar-actions">
+          <button type="button" className="cc-btn-primary" onClick={() => { setActiveTab('specs'); startCreate() }}
+            disabled={!isAdmin} title={!isAdmin ? 'Admin access required' : undefined}>
+            <Plus size={15} aria-hidden="true" /> Add specification
+          </button>
+          <button type="button" className="cc-btn-ghost" onClick={exportSpecsExcel}
+            title={specLibraryScope
+              ? `Exports ${filteredSpecs.length} of ${specs.length} specifications, filtered by ${specLibraryScope}`
+              : `Exports all ${specs.length} specifications`}>
+            <FileSpreadsheet size={14} aria-hidden="true" /> Export
+          </button>
+          <button type="button" className="cc-btn-ghost" onClick={exportCompliancePdf}>
+            <FileText size={14} aria-hidden="true" /> PDF report
+          </button>
+          <button type="button" className="cc-icon-btn" aria-label="Refresh" title="Refresh"
+            onClick={() => { fetchSpecs(); fetchLiveData() }} disabled={loadingRecords || loadingSpecs}>
+            <RefreshCw size={14} className={(loadingRecords || loadingSpecs) ? 'animate-spin' : ''} />
+          </button>
+        </div>
+      </div>
+
+      {actionError && (
+        <div className="cc-card ts-banner" role="alert">
+          <AlertTriangle size={15} aria-hidden="true" /><span>{actionError}</span>
+          <button type="button" className="cc-icon-btn" aria-label="Dismiss" onClick={() => setActionError('')}><X size={14} /></button>
         </div>
       )}
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard icon={ClipboardList} label="Total Spec Profiles" value={specs.length} color="text-blue-400" loading={loadingSpecs} sub={`${typeOptions.length} vehicle types`} />
-        <KpiCard icon={Shield} label="Fleet Compliance Rate" value={`${kpis.complianceRate}%`} color={kpis.complianceRate >= 80 ? 'text-green-400' : kpis.complianceRate >= 60 ? 'text-yellow-400' : 'text-red-400'} loading={loadingRecords} sub={`${kpis.approved} of ${kpis.total} fitments`} />
-        <KpiCard icon={AlertOctagon} label="Non-Conforming Fitments" value={kpis.nonConforming} color={kpis.nonConforming === 0 ? 'text-green-400' : 'text-orange-400'} loading={loadingRecords} sub="size or brand violations" />
-        <KpiCard icon={Truck} label="Vehicle Types Covered" value={kpis.vehicleTypesCovered} color="text-purple-400" loading={loadingSpecs} sub={`${specs.length} total spec entries`} />
+      <div className="cc-kpis ts-kpis">
+        <Kpi icon={ClipboardList} tone="t-green" value={figures.total} label="Total specifications" loading={loadingSpecs} />
+        <Kpi icon={Tag} tone="t-blue" value={figures.brands} label="Brands" loading={loadingSpecs} title="Distinct approved brands across all rules" />
+        <Kpi icon={Layers} tone="t-purple" display="N/A" label="Patterns" title="Tread pattern is not stored for a specification" />
+        <Kpi icon={Ruler} tone="t-orange" value={figures.sizes} label="Sizes" loading={loadingSpecs} title="Distinct approved sizes across all rules" />
+        <Kpi icon={CheckCircle2} tone="t-green" value={figures.approvedFitted} label="Approved for fleet (fitted tyres)"
+          loading={loadingRecords} title={fittedTitle} onClick={() => { setActiveTab('compliance'); setCompStatusFilter('Approved') }} />
+        <Kpi icon={AlertTriangle} tone="t-red" value={figures.notApprovedFitted} label="Not approved (fitted tyres)"
+          loading={loadingRecords} danger={figures.notApprovedFitted > 0} title={fittedTitle} onClick={() => setActiveTab('violations')} />
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 bg-[var(--surface-1)] rounded-xl p-1 border border-[var(--input-border)] overflow-x-auto">
-        {TABS.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${activeTab === tab.id ? 'bg-blue-600 text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)]'}`}
-          >
-            <tab.icon size={14} />
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <Tabs label="Tyre specification sections" value={activeTab} onChange={setActiveTab} tabs={TABS} />
 
-      {/* ── Tab: Specification Library ────────────────────────────────────────── */}
-      <AnimatePresence mode="wait">
-        {activeTab === 'library' && (
-          <motion.div key="library" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
-
-            {/* Filters */}
-            <div className="flex flex-wrap gap-3">
-              <div className="relative flex-1 min-w-[200px]">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-                <input
-                  value={libSearch}
-                  onChange={e => setLibSearch(e.target.value)}
-                  placeholder="Search specs..."
-                  className="w-full pl-9 pr-3 py-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg text-[var(--text-primary)] text-sm focus:border-blue-500 outline-none"
-                />
-              </div>
-              <select
-                value={libTypeFilter}
-                onChange={e => setLibTypeFilter(e.target.value)}
-                className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-secondary)] text-sm focus:border-blue-500 outline-none"
-              >
-                <option value="">All Vehicle Types</option>
-                {libTypeOptions.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-              <select
-                value={libPosFilter}
-                onChange={e => setLibPosFilter(e.target.value)}
-                className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-secondary)] text-sm focus:border-blue-500 outline-none"
-              >
-                <option value="">All Positions</option>
-                {POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
-            </div>
-
-            {/* Spec Cards */}
-            {/* `py-16` would be DEAD on a Card - Card writes `padding` inline
-                and a plain utility loses to it, so the roominess moves into
-                `style`, which Card spreads after its own padding and so leaves
-                the inline-axis padding intact. --space-12 is the top of the
-                spacing ladder the tokens tell components to pick from. */}
-            {loadingSpecs ? (
-              <Card className="text-center" style={{ paddingBlock: 'var(--space-12)' }}>
-                <RefreshCw size={28} className="animate-spin text-[var(--text-dim)] mx-auto mb-3" />
-                <p className="text-[var(--text-muted)] text-sm">Loading specifications...</p>
-              </Card>
-            ) : specsError ? (
-              <div className="bg-[var(--surface-1)] border border-red-800 rounded-xl py-16 text-center">
-                <AlertOctagon size={40} className="text-red-500 mx-auto mb-3" />
-                <p className="text-red-300 font-medium mb-1">Failed to Load Specifications</p>
-                <p className="text-[var(--text-muted)] text-sm mb-4 max-w-md mx-auto">{specsError}</p>
-                <button onClick={fetchSpecs} className="flex items-center gap-2 mx-auto bg-[var(--input-bg)] hover:bg-gray-700 text-[var(--text-secondary)] text-sm px-4 py-2 rounded-lg border border-[var(--input-border)] transition-colors">
-                  <RefreshCw size={14} /> Retry
-                </button>
-              </div>
-            ) : filteredSpecs.length === 0 ? (
-              /* The empty state distinguishes "nothing defined yet" from
-                 "nothing matches the filters" - collapsing the two would read
-                 as an empty specification library when it is only a search. */
-              <Card className="text-center" style={{ paddingBlock: 'var(--space-12)' }}>
-                <ClipboardList size={40} className="text-[var(--text-dim)] mx-auto mb-3" />
-                <p className="text-[var(--text-muted)] font-medium mb-1">No Specification Profiles</p>
-                <p className="text-[var(--text-dim)] text-sm mb-4">
-                  {specs.length === 0 ? 'Get started by adding your first tyre specification or using Quick Setup.' : 'No specs match the current filters.'}
-                </p>
-                {/* `self-center` because Card is a flex column: a direct child
-                    with no definite width is stretched to the full card, which
-                    would drag this link's underline edge to edge. */}
-                {isAdmin && specs.length === 0 && (
-                  <button onClick={() => setActiveTab('defaults')} className="self-center text-blue-400 hover:text-blue-300 text-sm underline">
-                    View Quick Setup defaults →
-                  </button>
-                )}
-              </Card>
-            ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-                {/* The old `hover:border-[var(--input-border)]` is DEAD on a
-                    Card - a variant prefix does not save a class that loses to
-                    an inline `border`. It is dropped rather than replaced with
-                    `interactive`: the card is not clickable as a whole, its
-                    edit and delete buttons are, and an interactive affordance
-                    on a non-clickable surface is a lie. */}
-                {filteredSpecs.map((spec, idx) => (
-                  <Card
-                    as={motion.div}
-                    key={spec.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: idx * 0.03 }}
-                    className="transition-colors"
-                  >
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <Truck size={13} className="text-blue-400" />
-                          <span className="text-[var(--text-primary)] font-medium text-sm">{spec.vehicle_type}</span>
-                        </div>
-                        <span className="text-xs text-[var(--text-muted)] bg-[var(--input-bg)] px-2 py-0.5 rounded-full">{spec.position}</span>
-                      </div>
-                      {isAdmin && (
-                        <div className="flex gap-1">
-                          <button
-                            onClick={() => { setEditingSpec(spec); setShowSpecModal(true) }}
-                            className="p-1.5 text-[var(--text-muted)] hover:text-blue-400 hover:bg-blue-900/20 rounded-lg transition-colors"
-                          >
-                            <Edit2 size={13} />
-                          </button>
-                          <button
-                            onClick={() => setDeletingSpec(spec)}
-                            className="p-1.5 text-[var(--text-muted)] hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="space-y-2.5">
-                      <div>
-                        <p className="text-[var(--text-muted)] text-xs mb-1 flex items-center gap-1"><Tag size={10} /> Approved Sizes</p>
-                        <div className="flex flex-wrap gap-1">
-                          {spec.approved_sizes.map(s => (
-                            <span key={s} className="text-xs bg-blue-900/30 text-blue-300 border border-blue-800 px-2 py-0.5 rounded-full">{s}</span>
-                          ))}
-                        </div>
-                      </div>
-                      <div>
-                        <p className="text-[var(--text-muted)] text-xs mb-1 flex items-center gap-1"><Shield size={10} /> Approved Brands</p>
-                        <div className="flex flex-wrap gap-1">
-                          {spec.approved_brands.map(b => (
-                            <span key={b} className="text-xs bg-purple-900/30 text-purple-300 border border-purple-800 px-2 py-0.5 rounded-full">{b}</span>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 border-t border-[var(--input-border)]">
-                        {spec.recommended_pressure ? (
-                          <div className="text-center">
-                            <p className="text-[var(--text-muted)] text-xs">PSI</p>
-                            <p className="text-[var(--text-primary)] text-sm font-semibold">{spec.recommended_pressure}</p>
-                          </div>
-                        ) : null}
-                        {spec.min_tread_depth ? (
-                          <div className="text-center">
-                            <p className="text-[var(--text-muted)] text-xs">Min Tread</p>
-                            <p className="text-[var(--text-primary)] text-sm font-semibold">{spec.min_tread_depth}mm</p>
-                          </div>
-                        ) : null}
-                        {spec.min_load_index ? (
-                          <div className="text-center">
-                            <p className="text-[var(--text-muted)] text-xs">Load Idx</p>
-                            <p className="text-[var(--text-primary)] text-sm font-semibold">{spec.min_load_index}{spec.min_speed_index}</p>
-                          </div>
-                        ) : null}
-                        {spec.ply_rating ? (
-                          <div className="text-center">
-                            <p className="text-[var(--text-muted)] text-xs">Ply</p>
-                            <p className="text-[var(--text-primary)] text-sm font-semibold">{spec.ply_rating}</p>
-                          </div>
-                        ) : null}
-                      </div>
-
-                      {spec.notes && (
-                        <p className="text-[var(--text-muted)] text-xs border-t border-[var(--input-border)] pt-2 line-clamp-2">{spec.notes}</p>
-                      )}
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </motion.div>
-        )}
-
-        {/* ── Tab: Fleet Compliance ───────────────────────────────────────────── */}
-        {activeTab === 'compliance' && (
-          <motion.div key="compliance" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
-
-            {/* Chart + Summary */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              {/* `flex flex-col` was redundant even before the migration -
-                  Card is a flex column natively, which is what lets the chart
-                  well below take the remaining height via `flex-1`. The chart
-                  is a canvas, not a DOM overlay, so this card needs no clip. */}
-              <Card>
-                <p className="text-[var(--text-muted)] text-sm font-medium mb-3 flex items-center gap-2"><BarChart3 size={14} /> Compliance Breakdown</p>
-                <div className="flex-1 min-h-[180px]">
-                  {complianceData.length > 0 ? (
-                    <Doughnut data={doughnutData} options={CHART_OPTS} />
-                  ) : (
-                    <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">No data</div>
-                  )}
+      {activeTab === 'specs' && (
+        <div className="ts-layout">
+          <div className="ts-main">
+            <Card>
+              <div className="cc-filters">
+                <label className="cc-field"><span>Brand</span>
+                  <select className="cc-select" value={filters.brand} onChange={e => setFilter('brand', e.target.value)}>
+                    <option value="">All brands</option>
+                    {options.brands.map(b => <option key={b} value={b}>{b}</option>)}
+                  </select>
+                </label>
+                <label className="cc-field"><span>Size</span>
+                  <select className="cc-select" value={filters.size} onChange={e => setFilter('size', e.target.value)}>
+                    <option value="">All sizes</option>
+                    {options.sizes.map(z => <option key={z} value={z}>{z}</option>)}
+                  </select>
+                </label>
+                <label className="cc-field"><span>Tyre type</span>
+                  <select className="cc-select" value={filters.tyreType} onChange={e => setFilter('tyreType', e.target.value)}>
+                    <option value="">All tyre types</option>
+                    {TYRE_TYPES.map(t => <option key={t} value={t} disabled={!options.tyreTypes.includes(t)}>{t}</option>)}
+                  </select>
+                </label>
+                <label className="cc-field"><span>Application</span>
+                  <select className="cc-select" value={filters.vehicleType} onChange={e => setFilter('vehicleType', e.target.value)}>
+                    <option value="">All applications</option>
+                    {options.vehicleTypes.map(v => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                </label>
+                <label className="cc-field"><span>Status in service</span>
+                  <select className="cc-select" value={filters.status} onChange={e => setFilter('status', e.target.value)}>
+                    <option value="">All status</option>
+                    {USAGE_STATUS.map(u => <option key={u.key} value={u.key}>{u.label}</option>)}
+                  </select>
+                </label>
+                <div className="cc-search">
+                  <Search size={15} aria-hidden="true" />
+                  <input value={filters.search} onChange={e => setFilter('search', e.target.value)}
+                    placeholder="Search application, size, brand, ply..." aria-label="Search specifications" />
                 </div>
-              </Card>
-
-              <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-3 gap-3 content-start">
-                {Object.entries({
-                  Approved: complianceData.filter(r => r.specStatus === 'Approved').length,
-                  'Non-Standard Size': complianceData.filter(r => r.specStatus === 'Non-Standard Size').length,
-                  'Non-Approved Brand': complianceData.filter(r => r.specStatus === 'Non-Approved Brand').length,
-                  'Multiple Violations': complianceData.filter(r => r.specStatus === 'Multiple Violations').length,
-                  'No Spec Defined': complianceData.filter(r => r.specStatus === 'No Spec Defined').length,
-                }).map(([status, count]) => {
-                  const cfg = STATUS_CONFIG[status]
-                  const Icon = cfg.icon
-                  const pct = complianceData.length > 0 ? Math.round((count / complianceData.length) * 100) : 0
-                  return (
-                    <div key={status} className={`bg-[var(--surface-1)] border rounded-xl p-3 ${cfg.bg}`}>
-                      <div className={`flex items-center gap-1.5 mb-1 ${cfg.color}`}>
-                        <Icon size={13} />
-                        <span className="text-xs font-medium">{status}</span>
-                      </div>
-                      <p className={`text-2xl font-bold ${cfg.color}`}>{count}</p>
-                      <p className="text-[var(--text-muted)] text-xs">{pct}% of fleet</p>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-
-            {/* Compliance Table Filters */}
-            <div className="flex flex-wrap gap-3">
-              <div className="relative flex-1 min-w-[200px]">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-                <input
-                  value={compSearch}
-                  onChange={e => { setCompSearch(e.target.value); setCompPage(0) }}
-                  placeholder="Search asset or vehicle type..."
-                  className="w-full pl-9 pr-3 py-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg text-[var(--text-primary)] text-sm focus:border-blue-500 outline-none"
-                />
-              </div>
-              <select value={compSiteFilter} onChange={e => { setCompSiteFilter(e.target.value); setCompPage(0) }} className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-secondary)] text-sm focus:border-blue-500 outline-none">
-                <option value="">All Sites</option>
-                {siteOptions.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-              <select value={compTypeFilter} onChange={e => { setCompTypeFilter(e.target.value); setCompPage(0) }} className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-secondary)] text-sm focus:border-blue-500 outline-none">
-                <option value="">All Vehicle Types</option>
-                {typeOptions.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-              <select value={compStatusFilter} onChange={e => { setCompStatusFilter(e.target.value); setCompPage(0) }} className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-secondary)] text-sm focus:border-blue-500 outline-none">
-                <option value="">All Statuses</option>
-                {Object.keys(STATUS_CONFIG).map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-
-            {/* Compliance Table */}
-            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
-              {loadingRecords ? (
-                <div className="py-16 text-center">
-                  <RefreshCw size={24} className="animate-spin text-[var(--text-dim)] mx-auto mb-3" />
-                  <p className="text-[var(--text-muted)] text-sm">Loading fleet data...</p>
+                <div className="ts-view" role="group" aria-label="View">
+                  <button type="button" aria-pressed={view === 'grid'} onClick={() => setView('grid')}><LayoutGrid size={14} aria-hidden="true" /> Grid view</button>
+                  <button type="button" aria-pressed={view === 'table'} onClick={() => setView('table')}><List size={14} aria-hidden="true" /> Table view</button>
                 </div>
-              ) : (
-                /* Shared table shell with search/sort/export OFF: the four filters
-                   above and the PAGE_SIZE pager below stay the only controls, and
-                   `exportCompliancePdf` still walks the full `filteredCompliance`. */
-                <>
-                    <SpecTable
-                      columns={complianceCols}
-                      data={compliancePage}
-                      getRowId={(r, i) => `${r.id}-${i}`}
-                      emptyMessage="No records match filters"
-                    />
-
-                  {/* Pagination */}
-                  {complianceTotalPages > 1 && (
-                    <div className="px-4 py-3 border-t border-[var(--input-border)] flex items-center justify-between">
-                      <p className="text-[var(--text-muted)] text-xs">
-                        Showing {compPage * PAGE_SIZE + 1}-{Math.min((compPage + 1) * PAGE_SIZE, filteredCompliance.length)} of {filteredCompliance.length}
-                      </p>
-                      <div className="flex gap-1">
-                        <button onClick={() => setCompPage(p => Math.max(0, p - 1))} disabled={compPage === 0} className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30 transition-colors">
-                          <ChevronLeft size={15} />
-                        </button>
-                        {Array.from({ length: Math.min(complianceTotalPages, 7) }, (_, i) => {
-                          const pg = complianceTotalPages <= 7 ? i : compPage <= 3 ? i : compPage >= complianceTotalPages - 4 ? complianceTotalPages - 7 + i : compPage - 3 + i
-                          return (
-                            <button key={pg} onClick={() => setCompPage(pg)} className={`w-7 h-7 rounded text-xs transition-colors ${compPage === pg ? 'bg-blue-600 text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)]'}`}>{pg + 1}</button>
-                          )
-                        })}
-                        <button onClick={() => setCompPage(p => Math.min(complianceTotalPages - 1, p + 1))} disabled={compPage >= complianceTotalPages - 1} className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30 transition-colors">
-                          <ChevronRight size={15} />
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          </motion.div>
-        )}
-
-        {/* ── Tab: Non-Conformance ────────────────────────────────────────────── */}
-        {activeTab === 'violations' && (
-          <motion.div key="violations" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
-
-            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
-              <div className="px-4 py-3 border-b border-[var(--input-border)] flex items-center justify-between">
-                <p className="text-[var(--text-primary)] font-medium text-sm flex items-center gap-2">
-                  <AlertOctagon size={15} className="text-red-400" />
-                  Non-Conformance Report, Grouped by Asset
-                </p>
-                <span className="text-[var(--text-muted)] text-xs">{nonConformanceByAsset.length} vehicles with violations</span>
               </div>
-
-              {loadingRecords ? (
-                <div className="py-12 text-center">
-                  <RefreshCw size={24} className="animate-spin text-[var(--text-dim)] mx-auto mb-3" />
-                  <p className="text-[var(--text-muted)] text-sm">Analysing fleet...</p>
-                </div>
-              ) : nonConformanceByAsset.length === 0 ? (
-                <EmptyState
-                  illustration="state/success"
-                  icon={CheckCircle}
-                  title="Full Compliance"
-                  description="No non-conforming fitments detected across the fleet."
-                />
-              ) : (
-                <SpecTable
-                  columns={nonConformanceCols}
-                  data={nonConformanceRanked}
-                  getRowId={(r) => String(r.asset_no)}
-                  emptyMessage="No non-conforming fitments"
-                />
-              )}
-            </div>
-          </motion.div>
-        )}
-
-        {/* ── Tab: Quick Setup ────────────────────────────────────────────────── */}
-        {activeTab === 'defaults' && (
-          <motion.div key="defaults" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
-
-            <Card className="items-start gap-3" style={{ flexDirection: 'row' }}>
-              <Info size={16} className="text-blue-400 mt-0.5 shrink-0" />
-              <p className="text-[var(--text-secondary)] text-sm">
-                Industry-standard tyre specification defaults. Click <strong>Import</strong> to add any profile to your specification library. Already-imported specs are greyed out.
+              <p className="ts-note">
+                {activeFilterCount > 0
+                  ? <>Showing {fmtInt(filteredSpecs.length)} of {fmtInt(specs.length)} rules. <button type="button" className="cc-link cc-link-btn" onClick={() => { setFilters(EMPTY_FILTERS); setSpecPage(0) }}>Clear filters</button></>
+                  : 'Pattern is not stored for a specification, so there is no pattern filter. Status reflects the fitted tyres each rule covers.'}
               </p>
             </Card>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-              {SMART_DEFAULTS.map((def, i) => {
-                const alreadyImported = specs.some(s => s.vehicle_type === def.vehicle_type && s.position === def.position)
-                return (
-                  <motion.div
-                    key={i}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.05 }}
-                    className={`bg-[var(--surface-1)] border rounded-xl p-4 transition-colors ${alreadyImported ? 'border-[var(--input-border)] opacity-50' : 'border-[var(--input-border)] hover:border-blue-700'}`}
-                  >
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <Zap size={13} className="text-yellow-400" />
-                          <span className="text-[var(--text-primary)] font-medium text-sm">{def.vehicle_type}</span>
-                        </div>
-                        <span className="text-xs text-[var(--text-muted)] bg-[var(--input-bg)] px-2 py-0.5 rounded-full">{def.position}</span>
-                      </div>
-                      {alreadyImported ? (
-                        <span className="flex items-center gap-1 text-xs text-green-400 bg-green-900/20 border border-green-800 px-2 py-1 rounded-lg">
-                          <CheckCircle size={10} /> Imported
-                        </span>
-                      ) : (
-                        isAdmin && (
-                          <button
-                            onClick={() => importQuickDefault(def)}
-                            className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded-lg transition-colors"
-                          >
-                            <Plus size={11} /> Import
-                          </button>
-                        )
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <div>
-                        <p className="text-[var(--text-muted)] text-xs mb-1">Approved Sizes</p>
-                        <div className="flex flex-wrap gap-1">
-                          {def.approved_sizes.map(s => <span key={s} className="text-xs bg-blue-900/30 text-blue-300 border border-blue-800 px-2 py-0.5 rounded-full">{s}</span>)}
-                        </div>
-                      </div>
-                      <div>
-                        <p className="text-[var(--text-muted)] text-xs mb-1">Approved Brands</p>
-                        <div className="flex flex-wrap gap-1">
-                          {def.approved_brands.map(b => <span key={b} className="text-xs bg-purple-900/30 text-purple-300 border border-purple-800 px-2 py-0.5 rounded-full">{b}</span>)}
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-[var(--input-border)]">
-                        <div className="text-center">
-                          <p className="text-[var(--text-muted)] text-xs">PSI</p>
-                          <p className="text-[var(--text-primary)] text-sm font-semibold">{def.recommended_pressure}</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-[var(--text-muted)] text-xs">Min Tread</p>
-                          <p className="text-[var(--text-primary)] text-sm font-semibold">{def.min_tread_depth}mm</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-[var(--text-muted)] text-xs">Load/Speed</p>
-                          <p className="text-[var(--text-primary)] text-sm font-semibold">{def.min_load_index}{def.min_speed_index}</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-[var(--text-muted)] text-xs">Ply</p>
-                          <p className="text-[var(--text-primary)] text-sm font-semibold">{def.ply_rating || 'N/A'}</p>
-                        </div>
-                      </div>
-                      <p className="text-[var(--text-dim)] text-xs pt-1">{def.notes}</p>
-                    </div>
-                  </motion.div>
-                )
-              })}
-            </div>
-          </motion.div>
-        )}
-
-        {/* ── Tab: Fitment Policy ─────────────────────────────────────────────── */}
-        {activeTab === 'policy' && (
-          <motion.div key="policy" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
-
-            {/* Intro + download. The direction is RESPONSIVE here, and its base
-                (column) is already Card's own, so no inline `flexDirection` is
-                needed: Tailwind emits `sm:flex-row` after the unprefixed
-                `flex-col` Card carries, so the variant still wins at >=sm. */}
-            <Card className="sm:flex-row sm:items-center gap-4">
-              <div className="p-2.5 rounded-lg bg-[var(--input-bg)] text-blue-400 shrink-0">
-                <FileText size={20} />
-              </div>
-              <div className="flex-1">
-                <p className="text-[var(--text-primary)] font-medium text-sm mb-1">Tyre Fitment and Specification Policy</p>
-                <p className="text-[var(--text-muted)] text-sm">
-                  Generate a standardized, company-branded policy document that defines the approved
-                  tyre fitment standards every workshop and fitter must follow. It compiles the current
-                  specification library into an official reference for procurement, fitment and audit.
-                </p>
-              </div>
-              <button
-                onClick={downloadPolicyPdf}
-                disabled={policyBusy}
-                className="btn-primary gap-2 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-              >
-                {policyBusy ? <RefreshCw size={15} className="animate-spin" /> : <FileText size={15} />}
-                {policyBusy ? 'Generating...' : 'Download Policy (PDF)'}
-              </button>
-            </Card>
-
-            {policyError && (
-              <div className="bg-red-900/30 border border-red-700 text-red-300 text-sm px-4 py-2.5 rounded-lg flex items-center gap-2">
-                <AlertTriangle size={14} /> {policyError}
-                <button onClick={() => setPolicyError('')} className="ml-auto"><X size={14} /></button>
-              </div>
-            )}
-
-            {specs.length === 0 && (
-              <div className="bg-amber-900/20 border border-amber-800 text-amber-300 text-sm px-4 py-2.5 rounded-lg flex items-center gap-2">
-                <Info size={14} className="shrink-0" />
-                No specifications defined yet. The governance sections below still apply; adding specs in
-                the Specification Library will populate the Approved Fitment Standards table.
-              </div>
-            )}
-
-            {/* Current Fleet Tyres by Size */}
-            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
-              <div className="px-4 py-3 border-b border-[var(--input-border)] flex flex-col sm:flex-row sm:items-center gap-3">
-                <div className="flex-1 flex items-start gap-2.5">
-                  <div className="p-1.5 rounded-lg bg-[var(--input-bg)] text-purple-400 shrink-0 mt-0.5">
-                    <Gauge size={15} />
-                  </div>
+            <Card title="Specification register" sub={`${fmtInt(filteredSpecs.length)} rule${filteredSpecs.length === 1 ? '' : 's'}`}>
+              <CardState
+                state={specsState}
+                lines={4}
+                empty={!loadingSpecs && !specsError && filteredSpecs.length === 0 ? (
                   <div>
-                    <p className="text-[var(--text-primary)] font-medium text-sm">Current Fleet Tyres by Size</p>
-                    <p className="text-[var(--text-muted)] text-xs mt-0.5">
-                      Every tyre size currently fitted anywhere in the fleet, with the brands in use,
-                      the approved brand list and the ply rating, minimum tread, load index, speed
-                      index and recommended pressure that apply. Grouped from live tyre records
-                      directly, so it covers every vehicle type, site and country in scope. Included as
-                      an appendix in the downloaded policy PDF.
-                    </p>
+                    {specs.length === 0
+                      ? 'No tyre specifications are defined yet. Add one on the right, or import industry defaults from Quick setup.'
+                      : 'No specifications match the current filters.'}
+                    {isAdmin && specs.length === 0 && (
+                      <><br /><button type="button" className="cc-btn" onClick={() => setActiveTab('defaults')}>Open quick setup</button></>
+                    )}
                   </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <div className="relative">
-                    <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-                    <input
-                      value={sizeSearch}
-                      onChange={e => setSizeSearch(e.target.value)}
-                      placeholder="Search size, brand, type..."
-                      className="pl-8 pr-3 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-[var(--text-primary)] text-xs w-48 focus:border-blue-500 outline-none"
-                    />
-                  </div>
-                  <button
-                    onClick={exportSizeInventoryExcel}
-                    disabled={filteredSizeInventory.length === 0}
-                    title={filteredSizeInventory.length === 0 ? 'No rows to export' : `Exports ${filteredSizeInventory.length} size(s)`}
-                    className="flex items-center gap-1.5 bg-[var(--input-bg)] hover:bg-gray-700 text-[var(--text-secondary)] text-xs px-3 py-1.5 rounded-lg border border-[var(--input-border)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
-                  >
-                    <FileSpreadsheet size={13} /> Export
-                  </button>
-                </div>
-              </div>
-
-              {loadingRecords ? (
-                <div className="p-6 text-center text-[var(--text-muted)] text-sm">Loading current tyre fitments...</div>
-              ) : filteredSizeInventory.length === 0 ? (
-                <div className="p-6 text-center text-[var(--text-muted)] text-sm">
-                  {sizeInventory.length === 0
-                    ? 'No current tyre fitments are on record yet for this scope.'
-                    : 'No sizes match your search.'}
-                </div>
-              ) : (
-                /* Search and Excel export stay the panel header controls above;
-                   the table shell has its own search and export switched off. */
-                <SpecTable
-                  columns={SIZE_INVENTORY_COLUMNS}
-                  data={filteredSizeInventory}
-                  getRowId={(r) => String(r.size)}
-                  emptyMessage="No sizes match your search."
-                />
-              )}
-            </div>
-
-            {/* Live preview */}
-            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
-              <div className="px-4 py-3 border-b border-[var(--input-border)] flex items-center justify-between">
-                <p className="text-[var(--text-primary)] font-medium text-sm flex items-center gap-2">
-                  <BookOpen size={15} className="text-blue-400" /> Policy Preview
-                </p>
-                <span className="text-[var(--text-muted)] text-xs">{policySections.length} sections</span>
-              </div>
-
-              <div className="p-4 space-y-4">
-                {policySections.length === 0 ? (
-                  <p className="text-[var(--text-muted)] text-sm">Policy content will appear here.</p>
-                ) : (
-                  <ol className="space-y-3">
-                    {policySections.map((section, idx) => (
-                      <li key={section.n ?? idx} className="border-l-2 border-[var(--input-border)] pl-4">
-                        <p className="text-[var(--text-primary)] text-sm font-semibold mb-1">
-                          {section.n != null ? `${section.n}. ` : ''}{section.title}
-                        </p>
-                        {section.body && (
-                          <p className="text-[var(--text-muted)] text-xs whitespace-pre-line">{section.body}</p>
-                        )}
-                        {section.table && (() => {
-                          const { columns: policyCols, rows: policyRows } = policyTableModel(section.table)
-                          if (policyRows.length === 0) {
-                            return <p className="text-[var(--text-dim)] text-xs">No approved standards recorded yet.</p>
-                          }
-                          return (
-                            <div className="mt-2 border border-[var(--input-border)] rounded-lg overflow-hidden">
-                              <SpecTable columns={policyCols} data={policyRows} getRowId={(r) => r.__key} maxHeight={420} />
-                            </div>
-                          )
-                        })()}
-                      </li>
-                    ))}
-                  </ol>
-                )}
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-        {/* ── Tab: Value Advisor ──────────────────────────────────────────────── */}
-        {activeTab === 'advisor' && (
-          <motion.div key="advisor" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
-
-            {/* Intro / method card. Responsive direction again - the column
-                base is Card's own, so only the `lg:` half is needed. */}
-            <Card className="lg:flex-row lg:items-center gap-4">
-              <div className="p-2.5 rounded-lg bg-[var(--input-bg)] text-emerald-400 shrink-0">
-                <Scale size={20} />
-              </div>
-              <div className="flex-1">
-                <p className="text-[var(--text-primary)] font-medium text-sm mb-1">Best-Value Procurement Advisor</p>
-                <p className="text-[var(--text-muted)] text-sm">
-                  Recommendations rank options by lifecycle cost-per-km (price adjusted for expected life,
-                  retreads and casing value), grounded in your fleet realized CPK where available. Add supplier
-                  quotes to compare deals per approved fitment. Where no quotes exist yet, brand-economics
-                  guidance is shown instead.
-                </p>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  onClick={exportAdvisorExcel}
-                  disabled={advisorRecs.length === 0}
-                  className="flex items-center gap-2 bg-[var(--input-bg)] hover:bg-gray-700 text-[var(--text-secondary)] text-sm px-3 py-2 rounded-lg border border-[var(--input-border)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  <FileSpreadsheet size={14} /> Export
-                </button>
-                <button
-                  onClick={() => { setEditingQuote(null); setShowQuoteModal(true) }}
-                  disabled={!canManageQuotes}
-                  title={!canManageQuotes ? 'Manager access or above required' : ''}
-                  className="btn-primary gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  <Plus size={15} /> Add Quote
-                </button>
-              </div>
+                ) : null}
+              >
+                {view === 'grid'
+                  ? <SpecGrid rows={pageRows} usage={usageBySpec} selectedId={selectedSpec?.id} onSelect={setSelectedId} />
+                  : (
+                    <KitTable className="ts-table" manualPagination showPagination={false} enableSorting={false}
+                      pageIndex={0} pageSize={specPageSize} pageCount={1} totalRows={pageRows.length}
+                      getRowId={(r) => String(r.id)} onRowClick={(r) => r && setSelectedId(r.id)}
+                      rows={pageRows} columns={tableCols} />
+                  )}
+                <Pager page={safeSpecPage} pageSize={specPageSize} total={filteredSpecs.length} noun="rules"
+                  onPage={setSpecPage} onPageSize={(n) => { setSpecPageSize(n); setSpecPage(0) }} sizes={SPEC_PAGE_SIZES} />
+              </CardState>
             </Card>
 
-            {optionsError && (
-              <div className="bg-red-900/30 border border-red-700 text-red-300 text-sm px-4 py-2.5 rounded-lg flex items-center gap-2">
-                <AlertTriangle size={14} /> {optionsError}
-                <button onClick={fetchAdvisorData} className="ml-auto flex items-center gap-1 text-red-200 hover:text-[var(--text-primary)]"><RefreshCw size={13} /> Retry</button>
-                <button onClick={() => setOptionsError('')}><X size={14} /></button>
-              </div>
-            )}
-
-            {loadingOptions ? (
-              <Card className="text-center" style={{ paddingBlock: 'var(--space-12)' }}>
-                <RefreshCw size={28} className="animate-spin text-[var(--text-dim)] mx-auto mb-3" />
-                <p className="text-[var(--text-muted)] text-sm">Loading supplier quotes...</p>
-              </Card>
-            ) : advisorRecs.length === 0 ? (
-              // Honest empty state: no quotes anywhere. Still useful via brand guidance.
-              <div className="space-y-4">
-                {/* `py-10` is dead on a Card for the same reason as `py-16`
-                    above, so the block padding moves to `style`. The button
-                    already carries `mx-auto`, and an auto cross-axis margin
-                    beats the flex `stretch` default, so it keeps its natural
-                    width without needing `self-center`. */}
-                <Card className="text-center" style={{ paddingBlock: 'var(--space-10)' }}>
-                  <DollarSign size={40} className="text-[var(--text-dim)] mx-auto mb-3" />
-                  <p className="text-[var(--text-muted)] font-medium mb-1">No Supplier Quotes Yet</p>
-                  <p className="text-[var(--text-dim)] text-sm mb-4 max-w-md mx-auto">
-                    Add supplier quotes to rank options by lifecycle cost-per-km and surface the best deals.
-                    Until then, the brand-economics guidance below applies to your approved fitments.
-                  </p>
-                  {canManageQuotes && (
-                    <button onClick={() => { setEditingQuote(null); setShowQuoteModal(true) }} className="btn-primary gap-2 mx-auto">
-                      <Plus size={15} /> Add First Quote
-                    </button>
-                  )}
-                </Card>
-
-                {specs.length > 0 && (
-                  <div className="space-y-4">
-                    {specs.map(spec => (
-                      <Card key={spec.id} className="space-y-3">
-                        <div className="flex items-center gap-2">
-                          <Truck size={14} className="text-blue-400" />
-                          <span className="text-[var(--text-primary)] font-medium text-sm">{spec.vehicle_type}</span>
-                          <span className="text-xs text-[var(--text-muted)] bg-[var(--input-bg)] px-2 py-0.5 rounded-full">{spec.position}</span>
-                          {/* Says outright that this is guidance, not a ranking
-                              - there are no quotes behind it. */}
-                          <span className="ml-auto text-[var(--text-dim)] text-xs flex items-center gap-1"><Info size={11} /> Brand-economics guidance</span>
-                        </div>
-                        <BrandGuidancePanel brands={spec.approved_brands} />
-                      </Card>
-                    ))}
-                  </div>
-                )}
-              </div>
+            {selectedSpec ? (
+              <SpecDetail
+                key={selectedSpec.id}
+                spec={selectedSpec}
+                usage={usageBySpec}
+                history={history}
+                isAdmin={isAdmin}
+                onEdit={startEdit}
+                onDuplicate={startDuplicate}
+                onDelete={setDeletingSpec}
+                onOpenPolicy={() => setActiveTab('policy')}
+              />
             ) : (
-              <div className="space-y-4">
-                {advisorRecs.map(g => {
-                  const { rec } = g
-                  const cur = rec.currency
-                  const valids = rec.ranked.filter(e => e.valid && e.lifecycleCpk != null)
-                  return (
-                    <Card key={g.key} className="space-y-4">
-
-                      {/* Header + headline */}
-                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 border-b border-[var(--input-border)] pb-3">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <Truck size={14} className="text-blue-400" />
-                            <span className="text-[var(--text-primary)] font-semibold text-sm">{g.vehicle_type}</span>
-                            <span className="text-xs text-[var(--text-muted)] bg-[var(--input-bg)] px-2 py-0.5 rounded-full">{g.position}</span>
-                            <span className="text-xs text-[var(--text-dim)]">{g.options.length} quote{g.options.length === 1 ? '' : 's'}</span>
-                          </div>
-                          <p className={`text-sm flex items-start gap-1.5 ${rec.hasEnoughData ? 'text-emerald-300' : 'text-[var(--text-muted)]'}`}>
-                            <Award size={14} className="mt-0.5 shrink-0" /> {rec.headline}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Engineer rationale */}
-                      {rec.rationale?.length > 0 && (
-                        <div className="bg-[var(--input-bg)] rounded-lg p-3">
-                          <p className="text-[var(--text-muted)] text-xs font-medium mb-1.5 flex items-center gap-1"><Info size={11} /> Engineering rationale</p>
-                          <ul className="space-y-1">
-                            {rec.rationale.map((r, i) => (
-                              <li key={i} className="text-[var(--text-secondary)] text-xs flex items-start gap-1.5">
-                                <span className="text-emerald-400 mt-0.5">-</span> {r}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-
-                      {/* Ranked comparison. The row ORDER is the recommendation (the engine
-                          ranks by lifecycle CPK), so the table shell runs with sorting OFF. */}
-                      {valids.length > 0 ? (
-                        <div className="border border-[var(--input-border)] rounded-lg overflow-hidden">
-                          <SpecTable columns={advisorColumns(rec, cur)} data={rec.ranked} getRowId={(r, i) => String(r.id ?? `${r.brand}-${i}`)} maxHeight={480} />
-                        </div>
-                      ) : (
-                        <p className="text-[var(--text-dim)] text-sm">No quote in this fitment has both a unit price and an expected life yet.</p>
-                      )}
-
-                      {/* Savings line */}
-                      {rec.hasEnoughData && rec.savingsVsPremiumPct ? (
-                        <p className="text-emerald-300 text-xs flex items-center gap-1.5">
-                          <TrendingDown size={13} /> The pick is {rec.savingsVsPremiumPct}% cheaper per km than the most expensive option in this set.
-                          {rec.savingsVsBudgetNote ? <span className="text-[var(--text-muted)]"> {rec.savingsVsBudgetNote}</span> : null}
-                        </p>
-                      ) : null}
-
-                      {/* Brand guidance fallback when not enough data to rank confidently */}
-                      {!rec.hasEnoughData && (
-                        <div className="pt-1">
-                          <p className="text-[var(--text-muted)] text-xs font-medium mb-2 flex items-center gap-1"><Package size={11} /> Approved-brand economics for this fitment</p>
-                          <BrandGuidancePanel brands={approvedBrandsFor(g.vehicle_type, g.position)} />
-                        </div>
-                      )}
-
-                      {/* Per-quote manage row */}
-                      {canManageQuotes && (
-                        <div className="flex flex-wrap gap-2 pt-1 border-t border-[var(--input-border)]">
-                          {g.options.map(o => (
-                            <span key={o.id} className="inline-flex items-center gap-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-full pl-3 pr-1.5 py-1 text-xs text-[var(--text-secondary)]">
-                              {o.brand || 'Quote'}{o.supplier ? ` / ${o.supplier}` : ''}
-                              <button onClick={() => { setEditingQuote(o); setShowQuoteModal(true) }} className="p-1 text-[var(--text-muted)] hover:text-blue-400 rounded transition-colors"><Edit2 size={11} /></button>
-                              <button onClick={() => setDeletingQuote(o)} className="p-1 text-[var(--text-muted)] hover:text-red-400 rounded transition-colors"><Trash2 size={11} /></button>
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </Card>
-                  )
-                })}
-              </div>
+              <Card title="Specification details"><div className="cc-empty">Select a specification to see its details.</div></Card>
             )}
-          </motion.div>
-        )}
 
-        {/* ── Tab: Audit Trail ────────────────────────────────────────────────── */}
-        {activeTab === 'history' && (
-          <motion.div key="history" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
-
-            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
-              <div className="px-4 py-3 border-b border-[var(--input-border)] flex items-center justify-between">
-                <p className="text-[var(--text-primary)] font-medium text-sm flex items-center gap-2">
-                  <History size={15} className="text-blue-400" />
-                  Specification Change History
-                </p>
-                <span className="text-[var(--text-muted)] text-xs">Last {Math.min(history.length, 100)} events</span>
-              </div>
-
-              {history.length === 0 ? (
-                <EmptyState
-                  illustration="state/no-data"
-                  icon={History}
-                  title="No history yet"
-                  description="Changes to specifications will be tracked here."
-                />
-              ) : (
-                /* Append-only audit trail read newest-first: its order is the record,
-                   so the table shell runs with sorting OFF. */
-                <SpecTable
-                  columns={HISTORY_COLUMNS}
-                  data={historyNewestFirst}
-                  getRowId={(r, i) => String(r.id ?? i)}
-                  emptyMessage="No history yet"
-                />
-              )}
+            <div className="ts-two">
+              <TreadPatternCard />
+              <TechnicalDrawingCard spec={selectedSpec} />
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
 
-      {/* Modals */}
-      {showSpecModal && (
-        <SpecFormModal
-          spec={editingSpec}
-          onClose={() => { setShowSpecModal(false); setEditingSpec(null) }}
-          onSave={handleSaveSpec}
-          isAdmin={isAdmin}
-          saving={savingSpec}
-        />
+          <aside className="ts-rail" aria-label="Specification form">
+            <SpecFormPanel
+              key={formKey}
+              spec={editingSpec}
+              isAdmin={isAdmin}
+              saving={savingSpec}
+              error={saveError}
+              onSave={handleSaveSpec}
+              onCancel={() => { setEditingSpec(null); setSaveError(''); setFormKey(k => k + 1) }}
+            />
+          </aside>
+        </div>
+      )}
+
+      {activeTab !== 'specs' && (
+        <div className="ts-workbench">
+          {activeTab === 'compliance' && <ComplianceTab ctx={ctx} />}
+          {activeTab === 'violations' && <NonConformanceTab ctx={ctx} />}
+          {activeTab === 'defaults' && <QuickSetupTab ctx={ctx} />}
+          {activeTab === 'policy' && <FitmentPolicyTab ctx={ctx} />}
+          {activeTab === 'advisor' && <ValueAdvisorTab ctx={ctx} />}
+          {activeTab === 'history' && <AuditTrailTab ctx={ctx} />}
+        </div>
       )}
 
       {deletingSpec && (

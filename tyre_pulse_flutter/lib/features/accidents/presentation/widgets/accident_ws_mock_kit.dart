@@ -579,8 +579,11 @@ class AccidentMockChoiceTile extends StatelessWidget {
       enabled: onTap != null,
       label: label,
       excludeSemantics: true,
+      // passthrough: the grid gives every tile the same tight width; a loose
+      // Stack shrank each tile to its label, so tiles in one row differed.
       child: Stack(
         clipBehavior: Clip.none,
+        fit: StackFit.passthrough,
         children: <Widget>[
           Material(
             color: selected ? palette.primarySoft : palette.surface,

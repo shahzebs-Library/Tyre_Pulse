@@ -556,10 +556,16 @@ void main() {
     // 2122 + 2 = 2124. Push notifications (FCM): the foreground banner's
     // Open action and its title when a push arrives without one
     // (pushNotificationOpen, pushNotificationFallbackTitle).
-    test('en, ar and ur each carry exactly 2124 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2124);
-      expect(_translatableKeys(ar).length, 2124);
-      expect(_translatableKeys(ur).length, 2124);
+    // 2124 + 11 = 2135. Maintenance Control Center: the canonical work order
+    // statuses shown on its queue chips in the reader's language
+    // (pmWoStatusNew ... pmWoStatusOpen).
+    // 2135 + 4 = 2139. Tyre records: the four risk levels on the tyre card and
+    // the risk filter in the reader's language (recordsRiskLow ...
+    // recordsRiskCritical).
+    test('en, ar and ur each carry exactly 2139 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2139);
+      expect(_translatableKeys(ar).length, 2139);
+      expect(_translatableKeys(ur).length, 2139);
     });
   });
 

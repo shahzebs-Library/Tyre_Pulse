@@ -526,6 +526,7 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
           title: l10n.accAfterRegistrationNotify,
           children: <Widget>[
             AccidentWsTwoUp(
+              minHalfWidth: 166,
               children: <Widget>[
                 for (final ClaimNotifyRecipient r in package.recipients)
                   _RecipientTile(recipient: r),

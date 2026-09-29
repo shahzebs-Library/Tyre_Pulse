@@ -12844,6 +12844,96 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'New notification'**
   String get pushNotificationFallbackTitle;
+
+  /// Maintenance Control Center: work order status chip for the canonical status "New".
+  ///
+  /// In en, this message translates to:
+  /// **'New'**
+  String get pmWoStatusNew;
+
+  /// Maintenance Control Center: work order status chip for the canonical status "Assigned".
+  ///
+  /// In en, this message translates to:
+  /// **'Assigned'**
+  String get pmWoStatusAssigned;
+
+  /// Maintenance Control Center: work order status chip for the canonical status "In Progress".
+  ///
+  /// In en, this message translates to:
+  /// **'In Progress'**
+  String get pmWoStatusInProgress;
+
+  /// Maintenance Control Center: work order status chip for the canonical status "Waiting for Parts".
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for Parts'**
+  String get pmWoStatusWaitingForParts;
+
+  /// Maintenance Control Center: work order status chip for the canonical status "Quality Inspection".
+  ///
+  /// In en, this message translates to:
+  /// **'Quality Inspection'**
+  String get pmWoStatusQualityInspection;
+
+  /// Maintenance Control Center: work order status chip for the canonical status "Completed".
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get pmWoStatusCompleted;
+
+  /// Maintenance Control Center: work order status chip for the canonical status "Closed".
+  ///
+  /// In en, this message translates to:
+  /// **'Closed'**
+  String get pmWoStatusClosed;
+
+  /// Maintenance Control Center: work order status chip for the canonical status "Cancelled".
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get pmWoStatusCancelled;
+
+  /// Maintenance Control Center: work order status chip for the canonical status "Overdue".
+  ///
+  /// In en, this message translates to:
+  /// **'Overdue'**
+  String get pmWoStatusOverdue;
+
+  /// Maintenance Control Center: work order status chip for the canonical status "On Hold".
+  ///
+  /// In en, this message translates to:
+  /// **'On Hold'**
+  String get pmWoStatusOnHold;
+
+  /// Maintenance Control Center: work order status chip for the canonical status "Open".
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get pmWoStatusOpen;
+
+  /// Tyre records: the Low risk level shown on a tyre card and the risk filter, in the reader's language (the stored value stays English).
+  ///
+  /// In en, this message translates to:
+  /// **'Low'**
+  String get recordsRiskLow;
+
+  /// Tyre records: the Medium risk level shown on a tyre card and the risk filter, in the reader's language (the stored value stays English).
+  ///
+  /// In en, this message translates to:
+  /// **'Medium'**
+  String get recordsRiskMedium;
+
+  /// Tyre records: the High risk level shown on a tyre card and the risk filter, in the reader's language (the stored value stays English).
+  ///
+  /// In en, this message translates to:
+  /// **'High'**
+  String get recordsRiskHigh;
+
+  /// Tyre records: the Critical risk level shown on a tyre card and the risk filter, in the reader's language (the stored value stays English).
+  ///
+  /// In en, this message translates to:
+  /// **'Critical'**
+  String get recordsRiskCritical;
 }
 
 class _AppLocalizationsDelegate

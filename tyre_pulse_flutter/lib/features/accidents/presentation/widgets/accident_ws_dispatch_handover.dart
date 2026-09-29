@@ -26,6 +26,7 @@ import 'package:tyre_pulse/features/accidents/data/accident_photo_capture.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_case_vocab.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_handover_gating.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_models.dart';
+import 'package:tyre_pulse/features/accidents/presentation/accident_mock_copy.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_header.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_mock_kit.dart';
 import 'package:tyre_pulse/features/inspections/presentation/widgets/inspection_signature_pad.dart';
@@ -365,8 +366,14 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
     final Duration? transit = transitElapsed(d, _now);
     final VendorSlaChip sla = vendorSlaChip(d, bundle?.vendorSla, _now);
     final String route = _routeLabel(c, v?.repairRoute ?? record.repairType);
-    final String dispatchStatus =
-        d == null ? c.notSet : dispatchLiveStateLabel(d.liveStatus);
+    final String dispatchStatus = d == null
+        ? c.notSet
+        : accidentVocabLabel(
+            AccidentMockCopy.of(context),
+            'live',
+            d.liveStatus,
+            dispatchLiveStateLabel(d.liveStatus),
+          );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -506,7 +513,14 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
     final String token = (raw ?? '').trim().toLowerCase().replaceAll(' ', '_');
     if (token.isEmpty) return c.notSet;
     for (final VocabItem tile in repairRouteTiles) {
-      if (token.contains(tile.key)) return tile.label;
+      if (token.contains(tile.key)) {
+        return accidentVocabLabel(
+          AccidentMockCopy.of(context),
+          'route',
+          tile.key,
+          tile.label,
+        );
+      }
     }
     return humaniseAccidentToken(token);
   }
@@ -547,8 +561,8 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
                 (c.l10n.accDhWorkshopName, name),
                 (c.l10n.accDhCity, v?.vendorCity),
                 (c.l10n.accDhVendorContactName, v?.contactName),
-                (c.l10n.accDhPhone, v?.contactPhone),
-                (c.l10n.accDhEmail, v?.contactEmail),
+                (c.l10n.accDhPhone, _ltrValue(context, v?.contactPhone)),
+                (c.l10n.accDhEmail, _ltrValue(context, v?.contactEmail)),
                 (c.l10n.accDhWorkshopRegistrationTaxNo, v?.registrationNo),
                 (
                   c.l10n.accDhAssignedVendorInspector,
@@ -1484,4 +1498,14 @@ class _StoredImage extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// A phone number or email address kept left-to-right inside Arabic and
+/// Urdu text, so "+966..." does not print as "...966+".
+String? _ltrValue(BuildContext context, String? value) {
+  final String v = value?.trim() ?? '';
+  if (v.isEmpty) return value;
+  return Directionality.of(context) == TextDirection.rtl
+      ? TpDirection.isolateLtr(v)
+      : v;
 }

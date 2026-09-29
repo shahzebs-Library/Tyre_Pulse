@@ -21,7 +21,11 @@ import 'package:tyre_pulse/features/accidents/data/accident_assessment_repositor
 import 'package:tyre_pulse/features/accidents/data/accident_photo_capture.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_assessment_gating.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_case_vocab.dart';
+import 'package:tyre_pulse/features/accidents/domain/accident_damage_map.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_models.dart';
+import 'package:tyre_pulse/features/accidents/presentation/accident_copy.dart';
+import 'package:tyre_pulse/features/accidents/presentation/accident_damage_copy.dart';
+import 'package:tyre_pulse/features/accidents/presentation/accident_mock_copy.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_header.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_shared.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
@@ -726,9 +730,29 @@ class _DamageRow extends StatelessWidget {
       'minor' => palette.ok.base,
       _ => palette.unknown.base,
     };
+    // The stored tokens print in the reader's language; the vocabulary's
+    // English label stays the fallback for any token the catalog lacks.
+    final AccidentCopy damageCopy = AccidentCopy.of(context);
+    final AccidentDamageType? type = AccidentDamageType.values
+        .where((AccidentDamageType t) => t.name == row.damageType)
+        .firstOrNull;
+    final AccidentDamageSeverity? level = AccidentDamageSeverity.values
+        .where((AccidentDamageSeverity l) => l.name == row.severity)
+        .firstOrNull;
     final String detail = <String>[
-      if (row.damageTypeLabel.isNotEmpty) row.damageTypeLabel,
-      if (row.severityLabel.isNotEmpty) row.severityLabel,
+      if (type != null)
+        accidentVocabLabel(
+          AccidentMockCopy.of(context),
+          'damageType',
+          type == AccidentDamageType.bent ? 'bent' : '',
+          accidentDamageTypeCopyLabel(damageCopy, type),
+        )
+      else if (row.damageTypeLabel.isNotEmpty)
+        row.damageTypeLabel,
+      if (level != null)
+        accidentDamageLevelLabel(context, level)
+      else if (row.severityLabel.isNotEmpty)
+        row.severityLabel,
     ].join(' · ');
     return Row(
       children: <Widget>[
@@ -761,7 +785,12 @@ class _DamageRow extends StatelessWidget {
               ),
               Text(
                 row.actionLabel.isNotEmpty
-                    ? row.actionLabel
+                    ? accidentVocabLabel(
+                        AccidentMockCopy.of(context),
+                        'action',
+                        row.action ?? '',
+                        row.actionLabel,
+                      )
                     : row.source == DamageRowSource.phone
                         ? AppLocalizations.of(context).accActionNotAssessed
                         : AppLocalizations.of(context)
@@ -885,7 +914,12 @@ class _RouteTile extends StatelessWidget {
                   Icon(_icon(tile.key), color: palette.primary, size: 28),
                   const SizedBox(height: TpSpace.xs),
                   Text(
-                    tile.label,
+                    accidentVocabLabel(
+                      AccidentMockCopy.of(context),
+                      'route',
+                      tile.key,
+                      tile.label,
+                    ),
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           fontWeight: FontWeight.w700,

@@ -3125,5 +3125,20 @@
   "fleetListSortServiceDue": "الصيانة المستحقة أولا",
   "fleetListSortTyreActions": "الأكثر إجراءات إطارات",
   "pushNotificationOpen": "فتح",
-  "pushNotificationFallbackTitle": "إشعار جديد"
+  "pushNotificationFallbackTitle": "إشعار جديد",
+  "pmWoStatusNew": "جديد",
+  "pmWoStatusAssigned": "مُسند",
+  "pmWoStatusInProgress": "قيد التنفيذ",
+  "pmWoStatusWaitingForParts": "بانتظار قطع الغيار",
+  "pmWoStatusQualityInspection": "فحص الجودة",
+  "pmWoStatusCompleted": "مكتمل",
+  "pmWoStatusClosed": "مغلق",
+  "pmWoStatusCancelled": "ملغى",
+  "pmWoStatusOverdue": "متأخر",
+  "pmWoStatusOnHold": "معلّق",
+  "pmWoStatusOpen": "مفتوح",
+  "recordsRiskLow": "منخفض",
+  "recordsRiskMedium": "متوسط",
+  "recordsRiskHigh": "مرتفع",
+  "recordsRiskCritical": "حرج"
 }

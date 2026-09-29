@@ -433,14 +433,27 @@ class AccidentWsPersonTile extends StatelessWidget {
 
 /// Two cards per row when there is room, one per row on a narrow phone.
 class AccidentWsTwoUp extends StatelessWidget {
-  const AccidentWsTwoUp({required this.children, super.key});
+  const AccidentWsTwoUp({
+    required this.children,
+    this.minHalfWidth = 200,
+    super.key,
+  });
+
+  /// The narrowest a half may be before the pair stacks.
+  final double minHalfWidth;
 
   final List<Widget> children;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
-          final bool twoUp = constraints.maxWidth >= 340;
+          // Two up only when each half still fits a full action label: the
+          // shared button never wraps, so a half-width "Upload document" was
+          // cut to "Upload docume...". Scaled with the reader's text size.
+          final double halfNeeded =
+              MediaQuery.textScalerOf(context).scale(minHalfWidth);
+          final bool twoUp =
+              (constraints.maxWidth - TpSpace.sm) / 2 >= halfNeeded;
           final double width = twoUp
               ? (constraints.maxWidth - TpSpace.sm) / 2
               : constraints.maxWidth;
@@ -479,6 +492,8 @@ class AccidentWsNotifyChips extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     return AccidentWsTwoUp(
+      // Person cards wrap their text, so they keep the earlier threshold.
+      minHalfWidth: 166,
       children: <Widget>[
         for (final NotifyRole role in notifyRoles)
           if (keys.contains(role.key))

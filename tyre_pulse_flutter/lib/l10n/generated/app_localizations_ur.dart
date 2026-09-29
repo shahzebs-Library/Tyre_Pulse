@@ -7372,4 +7372,49 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get pushNotificationFallbackTitle => 'نئی اطلاع';
+
+  @override
+  String get pmWoStatusNew => 'نیا';
+
+  @override
+  String get pmWoStatusAssigned => 'تفویض شدہ';
+
+  @override
+  String get pmWoStatusInProgress => 'جاری';
+
+  @override
+  String get pmWoStatusWaitingForParts => 'پرزوں کا انتظار';
+
+  @override
+  String get pmWoStatusQualityInspection => 'کوالٹی معائنہ';
+
+  @override
+  String get pmWoStatusCompleted => 'مکمل';
+
+  @override
+  String get pmWoStatusClosed => 'بند';
+
+  @override
+  String get pmWoStatusCancelled => 'منسوخ';
+
+  @override
+  String get pmWoStatusOverdue => 'تاخیر شدہ';
+
+  @override
+  String get pmWoStatusOnHold => 'روکا گیا';
+
+  @override
+  String get pmWoStatusOpen => 'کھلا';
+
+  @override
+  String get recordsRiskLow => 'کم';
+
+  @override
+  String get recordsRiskMedium => 'درمیانہ';
+
+  @override
+  String get recordsRiskHigh => 'زیادہ';
+
+  @override
+  String get recordsRiskCritical => 'سنگین';
 }

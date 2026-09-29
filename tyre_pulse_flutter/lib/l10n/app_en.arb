@@ -7994,5 +7994,65 @@
   "pushNotificationFallbackTitle": "New notification",
   "@pushNotificationFallbackTitle": {
     "description": "Banner title when a push notification arrives without a title"
+  },
+  "pmWoStatusNew": "New",
+  "@pmWoStatusNew": {
+    "description": "Maintenance Control Center: work order status chip for the canonical status \"New\"."
+  },
+  "pmWoStatusAssigned": "Assigned",
+  "@pmWoStatusAssigned": {
+    "description": "Maintenance Control Center: work order status chip for the canonical status \"Assigned\"."
+  },
+  "pmWoStatusInProgress": "In Progress",
+  "@pmWoStatusInProgress": {
+    "description": "Maintenance Control Center: work order status chip for the canonical status \"In Progress\"."
+  },
+  "pmWoStatusWaitingForParts": "Waiting for Parts",
+  "@pmWoStatusWaitingForParts": {
+    "description": "Maintenance Control Center: work order status chip for the canonical status \"Waiting for Parts\"."
+  },
+  "pmWoStatusQualityInspection": "Quality Inspection",
+  "@pmWoStatusQualityInspection": {
+    "description": "Maintenance Control Center: work order status chip for the canonical status \"Quality Inspection\"."
+  },
+  "pmWoStatusCompleted": "Completed",
+  "@pmWoStatusCompleted": {
+    "description": "Maintenance Control Center: work order status chip for the canonical status \"Completed\"."
+  },
+  "pmWoStatusClosed": "Closed",
+  "@pmWoStatusClosed": {
+    "description": "Maintenance Control Center: work order status chip for the canonical status \"Closed\"."
+  },
+  "pmWoStatusCancelled": "Cancelled",
+  "@pmWoStatusCancelled": {
+    "description": "Maintenance Control Center: work order status chip for the canonical status \"Cancelled\"."
+  },
+  "pmWoStatusOverdue": "Overdue",
+  "@pmWoStatusOverdue": {
+    "description": "Maintenance Control Center: work order status chip for the canonical status \"Overdue\"."
+  },
+  "pmWoStatusOnHold": "On Hold",
+  "@pmWoStatusOnHold": {
+    "description": "Maintenance Control Center: work order status chip for the canonical status \"On Hold\"."
+  },
+  "pmWoStatusOpen": "Open",
+  "@pmWoStatusOpen": {
+    "description": "Maintenance Control Center: work order status chip for the canonical status \"Open\"."
+  },
+  "recordsRiskLow": "Low",
+  "@recordsRiskLow": {
+    "description": "Tyre records: the Low risk level shown on a tyre card and the risk filter, in the reader's language (the stored value stays English)."
+  },
+  "recordsRiskMedium": "Medium",
+  "@recordsRiskMedium": {
+    "description": "Tyre records: the Medium risk level shown on a tyre card and the risk filter, in the reader's language (the stored value stays English)."
+  },
+  "recordsRiskHigh": "High",
+  "@recordsRiskHigh": {
+    "description": "Tyre records: the High risk level shown on a tyre card and the risk filter, in the reader's language (the stored value stays English)."
+  },
+  "recordsRiskCritical": "Critical",
+  "@recordsRiskCritical": {
+    "description": "Tyre records: the Critical risk level shown on a tyre card and the risk filter, in the reader's language (the stored value stays English)."
   }
 }

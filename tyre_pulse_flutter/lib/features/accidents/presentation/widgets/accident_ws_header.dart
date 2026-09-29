@@ -126,10 +126,11 @@ class AccidentWorkstreamHeader extends ConsumerWidget {
         key: const Key('accident.ws.header'),
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Wrap(
-            spacing: TpSpace.sm,
-            runSpacing: TpSpace.xs,
-            crossAxisAlignment: WrapCrossAlignment.center,
+          // A Row, not a Wrap: the long line must wrap beside its leading
+          // chip or icon instead of dropping below it and leaving the icon
+          // alone on the first line.
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               if (status.isNotEmpty)
                 TpStatusChip(
@@ -149,19 +150,22 @@ class AccidentWorkstreamHeader extends ConsumerWidget {
                   size: TpSizing.iconMd,
                   color: palette.primary,
                 ),
-              Text.rich(
-                TextSpan(
-                  children: <InlineSpan>[
-                    TextSpan(text: '$stepLabel: '),
-                    TextSpan(
-                      text: title,
-                      style: TextStyle(color: palette.primary),
-                    ),
-                    TextSpan(text: ' | ${copy('ownerLabel')}: $ownerShown'),
-                  ],
+              const SizedBox(width: TpSpace.sm),
+              Expanded(
+                child: Text.rich(
+                  TextSpan(
+                    children: <InlineSpan>[
+                      TextSpan(text: '$stepLabel: '),
+                      TextSpan(
+                        text: title,
+                        style: TextStyle(color: palette.primary),
+                      ),
+                      TextSpan(text: ' | ${copy('ownerLabel')}: $ownerShown'),
+                    ],
+                  ),
+                  key: const Key('accident.ws.header.line1'),
+                  style: text.titleSmall?.copyWith(fontWeight: FontWeight.w800),
                 ),
-                key: const Key('accident.ws.header.line1'),
-                style: text.titleSmall?.copyWith(fontWeight: FontWeight.w800),
               ),
             ],
           ),

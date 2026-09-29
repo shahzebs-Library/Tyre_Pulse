@@ -7376,4 +7376,49 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get pushNotificationFallbackTitle => 'إشعار جديد';
+
+  @override
+  String get pmWoStatusNew => 'جديد';
+
+  @override
+  String get pmWoStatusAssigned => 'مُسند';
+
+  @override
+  String get pmWoStatusInProgress => 'قيد التنفيذ';
+
+  @override
+  String get pmWoStatusWaitingForParts => 'بانتظار قطع الغيار';
+
+  @override
+  String get pmWoStatusQualityInspection => 'فحص الجودة';
+
+  @override
+  String get pmWoStatusCompleted => 'مكتمل';
+
+  @override
+  String get pmWoStatusClosed => 'مغلق';
+
+  @override
+  String get pmWoStatusCancelled => 'ملغى';
+
+  @override
+  String get pmWoStatusOverdue => 'متأخر';
+
+  @override
+  String get pmWoStatusOnHold => 'معلّق';
+
+  @override
+  String get pmWoStatusOpen => 'مفتوح';
+
+  @override
+  String get recordsRiskLow => 'منخفض';
+
+  @override
+  String get recordsRiskMedium => 'متوسط';
+
+  @override
+  String get recordsRiskHigh => 'مرتفع';
+
+  @override
+  String get recordsRiskCritical => 'حرج';
 }

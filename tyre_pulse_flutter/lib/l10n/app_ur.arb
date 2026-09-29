@@ -3125,5 +3125,20 @@
   "fleetListSortServiceDue": "پہلے واجب سروس",
   "fleetListSortTyreActions": "سب سے زیادہ ٹائر اقدامات",
   "pushNotificationOpen": "کھولیں",
-  "pushNotificationFallbackTitle": "نئی اطلاع"
+  "pushNotificationFallbackTitle": "نئی اطلاع",
+  "pmWoStatusNew": "نیا",
+  "pmWoStatusAssigned": "تفویض شدہ",
+  "pmWoStatusInProgress": "جاری",
+  "pmWoStatusWaitingForParts": "پرزوں کا انتظار",
+  "pmWoStatusQualityInspection": "کوالٹی معائنہ",
+  "pmWoStatusCompleted": "مکمل",
+  "pmWoStatusClosed": "بند",
+  "pmWoStatusCancelled": "منسوخ",
+  "pmWoStatusOverdue": "تاخیر شدہ",
+  "pmWoStatusOnHold": "روکا گیا",
+  "pmWoStatusOpen": "کھلا",
+  "recordsRiskLow": "کم",
+  "recordsRiskMedium": "درمیانہ",
+  "recordsRiskHigh": "زیادہ",
+  "recordsRiskCritical": "سنگین"
 }

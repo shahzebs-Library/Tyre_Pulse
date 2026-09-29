@@ -599,7 +599,12 @@ class _AccidentFleetValidationMockWorkspaceState
         .map((String? value) => value?.trim() ?? '')
         .where((String value) => value.isNotEmpty)
         .join(' · ');
-    final String type = humaniseAccidentToken(_record.accidentType);
+    // The stored event type prints in the reader's language; an unknown
+    // token keeps the humanised fallback.
+    final Map<String, String> typeLabels =
+        accidentTypeOptions(AppLocalizations.of(context));
+    final String type = typeLabels[_record.accidentType?.trim() ?? ''] ??
+        humaniseAccidentToken(_record.accidentType);
     final String driver = _record.driverName?.trim() ?? '';
     final List<_SummaryFact> facts = <_SummaryFact>[
       _SummaryFact(Icons.car_crash_outlined, copy('type'), type),

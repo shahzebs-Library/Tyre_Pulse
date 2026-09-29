@@ -7354,4 +7354,49 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pushNotificationFallbackTitle => 'New notification';
+
+  @override
+  String get pmWoStatusNew => 'New';
+
+  @override
+  String get pmWoStatusAssigned => 'Assigned';
+
+  @override
+  String get pmWoStatusInProgress => 'In Progress';
+
+  @override
+  String get pmWoStatusWaitingForParts => 'Waiting for Parts';
+
+  @override
+  String get pmWoStatusQualityInspection => 'Quality Inspection';
+
+  @override
+  String get pmWoStatusCompleted => 'Completed';
+
+  @override
+  String get pmWoStatusClosed => 'Closed';
+
+  @override
+  String get pmWoStatusCancelled => 'Cancelled';
+
+  @override
+  String get pmWoStatusOverdue => 'Overdue';
+
+  @override
+  String get pmWoStatusOnHold => 'On Hold';
+
+  @override
+  String get pmWoStatusOpen => 'Open';
+
+  @override
+  String get recordsRiskLow => 'Low';
+
+  @override
+  String get recordsRiskMedium => 'Medium';
+
+  @override
+  String get recordsRiskHigh => 'High';
+
+  @override
+  String get recordsRiskCritical => 'Critical';
 }

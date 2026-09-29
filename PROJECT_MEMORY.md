@@ -86,6 +86,18 @@ batching stops them being started at all.
 - Honest choices vs mockup: spend under All countries lists per-country totals (never blended); spend legend = Tyres/Spare/Oil
   (real buckets); compliance tiles N/A when unreadable; map is a static Natural Earth path (`worldLand.js`) framed to the
   countries operated in. Hero art = crops of the owner's mockups (`public/dashboard/hero-*.webp`), truck grille emblems blurred.
+- **SAME KIT, 6 MORE PAGES (part 14b):** Fleet Master, Asset Management, Site Management, Fleet Groups, Tyre Passport,
+  Predictive Maintenance rebuilt to the owner's LIGHT mockups; dark derives from the same `.cc` tokens.
+  **Shared kit = `src/components/commandCenter/kit.jsx`** (PageHero, Kpi, Card, CardState, Tabs, Donut, Pager, VehicleThumb,
+  MeterCell, fmtInt/fmtPct, **KitTable**). USE IT for any new redesigned page; do not hand-roll cards.
+  **KitTable wraps EnterpriseTable** (the design ratchet forbids a raw `<table>` in src/pages, baseline 0). For
+  server/URL paging pass `manualPagination showPagination={false}` and keep the kit `Pager` below; custom sort headers
+  are passed as `header` nodes with `enableSorting={false}`. `EnterpriseTable` gained `showPagination` (default true).
+- **Vehicle pictures = `src/lib/vehiclePhoto.js`**, a port of the Flutter `vehicle_photo_resolver.dart` over
+  `public/vehicle-photos/*.webp` (same photos). CHANGE BOTH TOGETHER. Branded art only when make/model names the brand;
+  otherwise null -> neutral icon.
+- New engines (pure + tests): `siteOperations.js`, `fleetGroupsView.js`, `predictiveOverview.js`, `tyrePassportView.js`,
+  plus `api/fleetMasterData.js`, `api/siteOperations.js`, `api/fleetGroupSignals.js`, `api/predictiveOverview.js`.
 
 ---
 

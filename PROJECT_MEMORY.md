@@ -94,6 +94,26 @@ batching stops them being started at all.
 
 ---
 
+# ⚑ SESSION 2026-09-29 (part 3) — FLUTTER MOCK PARITY (8 agents) + FCM PUSH + BROWSER QA. 10 LOCAL COMMITS, NOT PUSHED (owner: show first).
+- **Approval "old data" bug FIXED:** approval queues loaded once and kept rows across tabs, so a supervisor opened an OLDER
+  pending sheet of the same asset. Queues now re-read when shown/on return/on resume (`approvals/presentation/widgets/
+  refresh_when_shown.dart`); review screen resets on id change. Same code on main, so every build had it.
+- Inspection wizard no longer carries previous odometer/hours/notes into the next inspection of the same asset.
+- Mock parity (owner jpgs in scratchpad m/ + mocks/ + mocks3/): Vehicle 360 to vehicle_360.jpg (header, service-due + tyre
+  actions strip, Overview/Timeline/Costs/Documents, share PDF; health score + downtime cost OMITTED, no source); fleet list
+  due lines/filters/sort; home plan row + summary; profile tasks; tyre records PDF export; checklist hours; accident label
+  and card fixes; loader tyre/machine switch. Mock 12 file is EMPTY (ask owner again).
+- **FCM push:** firebase_core/messaging, google-services.json COMMITTED on purpose, token via register_user_device,
+  workflow-notify sends Expo tokens to Expo and others to FCM v1 via secret FIREBASE_SERVICE_ACCOUNT (owner set it).
+  **workflow-notify NOT YET DEPLOYED.** Android Gradle plugin 4.4.4 unverified (no Android SDK here) - CI build_android is the check.
+- Browser QA: preview harness in scratchpad qa_web (tests converted to a web gallery, Playwright screenshots). Fixed navy
+  logo box on light chrome, 0pt-tall cost bar, cut labels, fleet 14px overflow at 360dp.
+- Tests: `flutter test`/`very_good test` via shell are BLOCKED by a vgv plugin hook; the very-good MCP test tool times out
+  at 60s. Analyze clean on HEAD. Goldens changed (Windows regen needed): asset_overview_light, inspection_tyres_selected.
+- ARB parity pin 2124.
+
+---
+
 # ⚑ SESSION 2026-09-29 (part 2) — 8-AGENT BATCH: 12 PAGES FIXED/REBUILT. 6 migrations APPLIED LIVE. PR #370 STILL UNMERGED.
 - **Migrations (all applied + verified by impersonation, files in supabase/migrations/):** 20260929120500 fleet_renewal_plans
   += planned_year/currency + `get_fleet_renewal_signals(country)` (INVOKER); 121000 `rfid_tag_events` (append-only, trigger on

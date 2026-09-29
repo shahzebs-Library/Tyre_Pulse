@@ -57,3 +57,46 @@ export function findAssetInspectionForClearance({ assetNo, date } = {}) {
 export function insertGatePass(values) {
   return supabase.from('gate_passes').insert(values)
 }
+
+/**
+ * Gate passes across an inclusive pass_date range (newest first), optionally
+ * narrowed to a site. Drives the redesigned page's date-range navigator.
+ */
+export function listGatePassesRange({ from, to, site } = {}) {
+  return fetchAllPages((f, t) => {
+    let q = supabase.from('gate_passes').select('*').gte('pass_date', from).lte('pass_date', to)
+      .order('created_at', { ascending: false }).order('id', { ascending: false }).range(f, t)
+    if (site) q = q.eq('site', site)
+    return q
+  }, { max: 20000 })
+}
+
+/**
+ * Fleet register rows (asset, class, make, model, site) for the asset picker
+ * and the vehicle pictures. PAGED past the 1000-row response cap; `id` is the
+ * tiebreak because asset_no is unique per country, not globally.
+ */
+export function listGateFleet() {
+  return fetchAllPages(
+    (from, to) => supabase.from('vehicle_fleet').select('id, asset_no, vehicle_type, make, model, site, country')
+      .order('asset_no').order('id').range(from, to),
+    { max: 20000 },
+  )
+}
+
+/** Display names for the people recorded on passes (one read, ids chunked). */
+export async function listActorNames(ids = []) {
+  const list = [...new Set(ids.filter(Boolean))]
+  const out = {}
+  for (let i = 0; i < list.length; i += 200) {
+    const { data, error } = await supabase.from('profiles').select('id, full_name').in('id', list.slice(i, i + 200))
+    if (error) throw error
+    for (const r of data || []) if (r.full_name) out[r.id] = r.full_name
+  }
+  return out
+}
+
+/** Update one gate pass (status moves and custom_data stamps). */
+export function updateGatePass(id, patch) {
+  return supabase.from('gate_passes').update(patch).eq('id', id)
+}

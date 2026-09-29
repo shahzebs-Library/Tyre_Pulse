@@ -5083,7 +5083,7 @@ abstract class AppLocalizations {
   /// No description provided for @alertsCopyCatalog.
   ///
   /// In en, this message translates to:
-  /// **'title=Tyre Alerts~all=All~critical=Critical~warnings=Warnings~info=Info~flagged=flagged~criticalCount=critical~emptyTitle=No active alerts~emptyFilter=No alerts match this filter.~loadError=Could not load alerts. Pull down to retry.~unknownAsset=Unknown asset~pressureLow=Tyre pressure is low~treadLow=Tread depth is low~position=Position~serial=Serial~tread=Tread~retry=Retry'**
+  /// **'title=Tyre Alerts~all=All~critical=Critical~warnings=Warnings~info=Info~flagged=flagged~criticalCount=critical~emptyTitle=No active alerts~emptyFilter=No alerts match this filter.~loadError=Could not load alerts. Pull down to retry.~unknownAsset=Unknown asset~pressureLow=Tyre pressure is low~treadLow=Tread depth is low~position=Position~serial=Serial~tread=Tread~retry=Retry~acknowledge=Acknowledge~ackTitle=Acknowledge alert~ackBody=Mark this alert as reviewed? It will be removed from the list.~ackFailed=Could not acknowledge. Please try again.~cancel=Cancel'**
   String get alertsCopyCatalog;
 
   /// No description provided for @notificationInboxCopyCatalog.
@@ -5113,7 +5113,7 @@ abstract class AppLocalizations {
   /// No description provided for @stockCountCopyCatalog.
   ///
   /// In en, this message translates to:
-  /// **'title=Stock Count~items=Items~reorder=Need reorder~notToday=Not counted~search=Search description or site~all=All~low=Low stock~stale=Not counted today~empty=No stock items~emptyBody=No stock records match these filters.~count=Count~stockItem=Stock item~physicalCount=Physical count~reason=Reason (optional)~cancel=Cancel~save=Save count~invalid=Enter a count of zero or more.~offlineSaved=Count saved offline and queued for sync.~saveFailed=The stock count could not be saved.~loadFailed=Stock records could not be loaded.~Critical=Critical~Low=Low~OK=OK~onHand=on hand'**
+  /// **'title=Stock Count~items=Items~reorder=Need reorder~notToday=Not counted~search=Search description or site~all=All~low=Low stock~stale=Not counted today~empty=No stock items~emptyBody=No stock records match these filters.~count=Count~stockItem=Stock item~physicalCount=Physical count~reason=Reason (optional)~cancel=Cancel~save=Save count~invalid=Enter a count of zero or more.~offlineSaved=Count saved offline and queued for sync.~saveFailed=The stock count could not be saved.~loadFailed=Stock records could not be loaded.~Critical=Critical~Low=Low~OK=OK~onHand=on hand~add=Add stock~addTitle=Add stock~size=Tyre size~description=Description (optional)~site=Location (site)~quantity=Quantity~minLevel=Minimum level~criticalLevel=Critical level~sizeRequired=Enter a tyre size for this stock.~siteRequired=Enter a location (site) for this stock.~addFailed=Could not add stock. Please try again.~increase=Increase~decrease=Decrease'**
   String get stockCountCopyCatalog;
 
   /// No description provided for @calendarCopyCatalog.
@@ -12514,6 +12514,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Report Accident'**
   String get accRptTitle;
+
+  /// No description provided for @accountDeletionCopyCatalog.
+  ///
+  /// In en, this message translates to:
+  /// **'title=Delete my account~subtitle=Request deletion of your account and personal data~intro=This submits a request for an administrator to delete your account and the personal data associated with it. It does not delete your account instantly.~what=Your access to the app is revoked on request. Personal profile data is deleted; some fleet records created for your organisation may be retained as business or audit records and de-identified from your profile.~timeline=Verified requests are completed within about 30 days.~reason=Reason (optional)~confirm=Type DELETE to confirm~word=DELETE~submit=Submit deletion request~cancel=Cancel~successTitle=Request submitted~successBody=Your account deletion request has been recorded. An administrator will action it within about 30 days.~errorTitle=Could not submit request~mismatch=Type DELETE exactly to confirm.~unavailable=Account deletion is not available right now. Please email us to request deletion.~failed=Could not submit your request. Please try again.~ok=OK'**
+  String get accountDeletionCopyCatalog;
 }
 
 class _AppLocalizationsDelegate

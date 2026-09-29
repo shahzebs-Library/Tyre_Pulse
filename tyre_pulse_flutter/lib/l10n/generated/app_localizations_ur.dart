@@ -2829,7 +2829,7 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get alertsCopyCatalog =>
-      'title=ٹائر الرٹس~all=تمام~critical=سنگین~warnings=انتباہات~info=معلومات~flagged=نشان زدہ~criticalCount=سنگین~emptyTitle=کوئی فعال الرٹ نہیں~emptyFilter=اس فلٹر سے کوئی الرٹ نہیں ملا۔~loadError=الرٹس لوڈ نہیں ہو سکے۔ دوبارہ کوشش کے لیے نیچے کھینچیں۔~unknownAsset=نامعلوم اثاثہ~pressureLow=ٹائر کا دباؤ کم ہے~treadLow=ٹریڈ کی گہرائی کم ہے~position=پوزیشن~serial=سیریل~tread=ٹریڈ~retry=دوبارہ کوشش';
+      'title=ٹائر الرٹس~all=تمام~critical=سنگین~warnings=انتباہات~info=معلومات~flagged=نشان زدہ~criticalCount=سنگین~emptyTitle=کوئی فعال الرٹ نہیں~emptyFilter=اس فلٹر سے کوئی الرٹ نہیں ملا۔~loadError=الرٹس لوڈ نہیں ہو سکے۔ دوبارہ کوشش کے لیے نیچے کھینچیں۔~unknownAsset=نامعلوم اثاثہ~pressureLow=ٹائر کا دباؤ کم ہے~treadLow=ٹریڈ کی گہرائی کم ہے~position=پوزیشن~serial=سیریل~tread=ٹریڈ~retry=دوبارہ کوشش~acknowledge=تسلیم کریں~ackTitle=الرٹ تسلیم کریں~ackBody=کیا اس الرٹ کو جائزہ شدہ نشان زد کریں؟ یہ فہرست سے ہٹا دیا جائے گا۔~ackFailed=تسلیم نہیں ہو سکا۔ دوبارہ کوشش کریں۔~cancel=منسوخ';
 
   @override
   String get notificationInboxCopyCatalog =>
@@ -2849,7 +2849,7 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get stockCountCopyCatalog =>
-      'title=اسٹاک گنتی~items=اشیاء~reorder=دوبارہ آرڈر~notToday=آج نہیں گنا~search=تفصیل یا سائٹ تلاش کریں~all=تمام~low=کم اسٹاک~stale=آج نہیں گنا~empty=کوئی اسٹاک آئٹم نہیں~emptyBody=کوئی اسٹاک ریکارڈ ان فلٹرز سے میل نہیں کھاتا۔~count=گنتی~stockItem=اسٹاک آئٹم~physicalCount=اصل گنتی~reason=وجہ (اختیاری)~cancel=منسوخ~save=گنتی محفوظ کریں~invalid=صفر یا زیادہ گنتی درج کریں۔~offlineSaved=گنتی آف لائن محفوظ اور ہم وقت سازی کے لیے قطار میں ہے۔~saveFailed=اسٹاک گنتی محفوظ نہیں ہو سکی۔~loadFailed=اسٹاک ریکارڈ لوڈ نہیں ہو سکے۔~Critical=انتہائی کم~Low=کم~OK=درست~onHand=دستیاب';
+      'title=اسٹاک گنتی~items=اشیاء~reorder=دوبارہ آرڈر~notToday=آج نہیں گنا~search=تفصیل یا سائٹ تلاش کریں~all=تمام~low=کم اسٹاک~stale=آج نہیں گنا~empty=کوئی اسٹاک آئٹم نہیں~emptyBody=کوئی اسٹاک ریکارڈ ان فلٹرز سے میل نہیں کھاتا۔~count=گنتی~stockItem=اسٹاک آئٹم~physicalCount=اصل گنتی~reason=وجہ (اختیاری)~cancel=منسوخ~save=گنتی محفوظ کریں~invalid=صفر یا زیادہ گنتی درج کریں۔~offlineSaved=گنتی آف لائن محفوظ اور ہم وقت سازی کے لیے قطار میں ہے۔~saveFailed=اسٹاک گنتی محفوظ نہیں ہو سکی۔~loadFailed=اسٹاک ریکارڈ لوڈ نہیں ہو سکے۔~Critical=انتہائی کم~Low=کم~OK=درست~onHand=دستیاب~add=اسٹاک شامل کریں~addTitle=اسٹاک شامل کریں~size=ٹائر سائز~description=تفصیل (اختیاری)~site=مقام (سائٹ)~quantity=مقدار~minLevel=کم از کم سطح~criticalLevel=نازک سطح~sizeRequired=اس اسٹاک کے لیے ٹائر سائز درج کریں۔~siteRequired=اس اسٹاک کے لیے مقام درج کریں۔~addFailed=اسٹاک شامل نہیں ہو سکا۔ دوبارہ کوشش کریں۔~increase=اضافہ~decrease=کمی';
 
   @override
   String get calendarCopyCatalog =>
@@ -7147,4 +7147,8 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get accRptTitle => 'حادثہ رپورٹ کریں';
+
+  @override
+  String get accountDeletionCopyCatalog =>
+      'title=میرا اکاؤنٹ حذف کریں~subtitle=اپنے اکاؤنٹ اور ذاتی ڈیٹا کو حذف کرنے کی درخواست کریں~intro=یہ ایڈمنسٹریٹر کو آپ کا اکاؤنٹ اور اس سے متعلق ذاتی ڈیٹا حذف کرنے کی درخواست بھیجتا ہے۔ آپ کا اکاؤنٹ فوراً حذف نہیں ہوتا۔~what=درخواست پر ایپ تک آپ کی رسائی ختم کر دی جاتی ہے۔ ذاتی پروفائل ڈیٹا حذف کیا جاتا ہے؛ آپ کی تنظیم کے لیے بنائے گئے کچھ فلیٹ ریکارڈ کاروباری یا آڈٹ ریکارڈ کے طور پر رکھے جا سکتے ہیں اور آپ کی شناخت سے الگ کر دیے جاتے ہیں۔~timeline=تصدیق شدہ درخواستیں تقریباً 30 دن میں مکمل کی جاتی ہیں۔~reason=وجہ (اختیاری)~confirm=تصدیق کے لیے DELETE لکھیں~word=DELETE~submit=حذف کی درخواست بھیجیں~cancel=منسوخ~successTitle=درخواست بھیج دی گئی~successBody=آپ کے اکاؤنٹ کو حذف کرنے کی درخواست درج کر لی گئی ہے۔ ایڈمنسٹریٹر تقریباً 30 دن میں اس پر عمل کرے گا۔~errorTitle=درخواست نہیں بھیجی جا سکی~mismatch=تصدیق کے لیے بالکل DELETE لکھیں۔~unavailable=اکاؤنٹ حذف کرنا ابھی دستیاب نہیں۔ حذف کی درخواست کے لیے ہمیں ای میل کریں۔~failed=آپ کی درخواست نہیں بھیجی جا سکی۔ دوبارہ کوشش کریں۔~ok=ٹھیک ہے';
 }

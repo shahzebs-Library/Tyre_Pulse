@@ -179,3 +179,15 @@ photos, however, are NOT queued media:
 |---|---|---|---|
 | Workshop evidence photos (Report Problem / Request Parts) | Direct upload to `tyre-photos` at `modules/workshop/<uid8>/<ms>_<i>_<rand>.<ext>` before the event is enqueued; the returned `tp-storage://` refs are folded into the event's `note` | **ONLINE-ONLY, best effort** | `tech_activity_events` has no photos column, so the refs must live inside `note` text. The queue can only substitute uploaded media into a command whose spec sets `requiresMediaReady`, and `WORKSHOP_EVENT`'s does not; changing that means editing `command_registry.dart` / `sync_engine.dart`, which AGENTS.md reserves for a human. This is also exactly the Expo behaviour (artifact 01 section 5.28): a photo that cannot upload is dropped, the event still records, and the screen says so. A local photo copy is deleted only after the server confirmed its upload |
 
+
+### 7.2 Expo parity write paths (added 2026-09-29)
+
+Ported from the Expo app so a person gets the same actions on Flutter. Each
+mirrors the Expo write exactly (same table, columns, RPC and parameters).
+
+| Module | Writes | Verdict | Why |
+|---|---|---|---|
+| Tyre alerts - Acknowledge | `alerts` INSERT `{asset_no, alert_type:'tyre_risk', severity, message:'rec:<tyre_records.id>', site, country, resolved:true, is_active:false, created_by}`; the feed now also reads `alerts` (`alert_type='tyre_risk' AND resolved`) and hides acknowledged tyres | Online only | Expo `mobile/app/(app)/alerts.tsx` did not queue it; whether an alert is already handled is server state |
+| Stock Count - quick +/- | RPC `post_stock_movement(p_stock_id, p_type adjustment_up/adjustment_down, p_qty, p_reason null, p_reference null)`; on a connectivity failure the existing `STOCK_ADJUST` command with the absolute quantity | Queued fallback (existing command) | Expo `adjustStock` in `mobile/lib/stock.ts`; section 3 explains why STOCK_ADJUST is safe |
+| Stock Count - Add stock | `stock_records` INSERT (size prefixed into `description`, `min_level`/`critical_level` only for Admin or super admin) then a best-effort `stock_movements` `Initial` row | Online only | Expo `createStockRecord`: no row exists to reconcile a queued insert against |
+| Profile - Delete my account | `account_deletion_requests` INSERT `{user_id, email, reason}` (V317) | Online only | Expo `mobile/lib/accountDeletion.ts`; records a request only, never deletes client-side |

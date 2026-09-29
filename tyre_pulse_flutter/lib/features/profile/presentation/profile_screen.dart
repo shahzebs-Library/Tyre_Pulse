@@ -133,6 +133,7 @@ import 'package:tyre_pulse/features/checklists/domain/checklist_i18n.dart';
 import 'package:tyre_pulse/features/driver_workspace/presentation/driver_workspace_panel.dart';
 import 'package:tyre_pulse/features/notifications/notifications_providers.dart';
 import 'package:tyre_pulse/features/notifications/presentation/notifications_copy.dart';
+import 'package:tyre_pulse/features/profile/data/account_deletion_repository.dart';
 import 'package:tyre_pulse/features/profile/data/saved_signature_repository.dart';
 import 'package:tyre_pulse/features/profile/profile_providers.dart';
 
@@ -1638,7 +1639,154 @@ class _AccountBlock extends StatelessWidget {
             ],
           ),
         ],
+        const SizedBox(height: TpSpace.md),
+        const _AccountDeletionButton(),
       ],
+    );
+  }
+}
+
+/// "Delete my account" - Expo parity (`mobile/app/(app)/profile.tsx` danger
+/// zone + `mobile/lib/accountDeletion.ts`), and the Play in-app deletion
+/// path. Records a REQUEST only; typing the confirm word is required first.
+class _AccountDeletionButton extends ConsumerStatefulWidget {
+  const _AccountDeletionButton();
+
+  @override
+  ConsumerState<_AccountDeletionButton> createState() =>
+      _AccountDeletionButtonState();
+}
+
+class _AccountDeletionButtonState
+    extends ConsumerState<_AccountDeletionButton> {
+  Map<String, String> _copy(BuildContext context) => <String, String>{
+        for (final String entry in AppLocalizations.of(context)
+            .accountDeletionCopyCatalog
+            .split('~'))
+          if (entry.indexOf('=') > 0)
+            entry.substring(0, entry.indexOf('=')):
+                entry.substring(entry.indexOf('=') + 1),
+      };
+
+  Future<void> _open() async {
+    final Map<String, String> copy = _copy(context);
+    String t(String key) => copy[key] ?? key;
+    final TextEditingController reason = TextEditingController();
+    final TextEditingController confirm = TextEditingController();
+    bool busy = false;
+    String? problem;
+    final AccountDeletionOutcome? outcome =
+        await showDialog<AccountDeletionOutcome>(
+      context: context,
+      builder: (BuildContext dialogContext) => StatefulBuilder(
+        builder: (BuildContext context, StateSetter setDialogState) =>
+            AlertDialog(
+          title: Text(t('title')),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(t('intro')),
+                const SizedBox(height: TpSpace.sm),
+                Text(t('what')),
+                const SizedBox(height: TpSpace.sm),
+                Text(t('timeline')),
+                const SizedBox(height: TpSpace.md),
+                TextField(
+                  key: const Key('profile.deleteAccount.reason'),
+                  controller: reason,
+                  maxLines: 2,
+                  decoration: InputDecoration(labelText: t('reason')),
+                ),
+                TextField(
+                  key: const Key('profile.deleteAccount.confirm'),
+                  controller: confirm,
+                  decoration: InputDecoration(labelText: t('confirm')),
+                ),
+                if (problem != null) ...<Widget>[
+                  const SizedBox(height: TpSpace.sm),
+                  Text(
+                    problem!,
+                    style:
+                        TextStyle(color: Theme.of(context).colorScheme.error),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: busy ? null : () => Navigator.of(context).pop(),
+              child: Text(t('cancel')),
+            ),
+            FilledButton(
+              key: const Key('profile.deleteAccount.submit'),
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.error,
+              ),
+              onPressed: busy
+                  ? null
+                  : () async {
+                      if (confirm.text.trim().toUpperCase() !=
+                          t('word').toUpperCase()) {
+                        setDialogState(() => problem = t('mismatch'));
+                        return;
+                      }
+                      setDialogState(() {
+                        busy = true;
+                        problem = null;
+                      });
+                      final AccountDeletionOutcome result = await ref
+                          .read(accountDeletionRepositoryProvider)
+                          .request(reason: reason.text);
+                      if (result == AccountDeletionOutcome.submitted) {
+                        if (context.mounted) {
+                          Navigator.of(context).pop(result);
+                        }
+                        return;
+                      }
+                      setDialogState(() {
+                        busy = false;
+                        problem = result == AccountDeletionOutcome.unavailable
+                            ? t('unavailable')
+                            : t('failed');
+                      });
+                    },
+              child: Text(t('submit')),
+            ),
+          ],
+        ),
+      ),
+    );
+    reason.dispose();
+    confirm.dispose();
+    if (outcome != AccountDeletionOutcome.submitted || !mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: Text(t('successTitle')),
+        content: Text(t('successBody')),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(t('ok')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final Map<String, String> copy = _copy(context);
+    final TpPalette palette = TpPalette.of(context);
+    return TextButton.icon(
+      key: const Key('profile.deleteAccount'),
+      onPressed: () => unawaited(_open()),
+      style: TextButton.styleFrom(foregroundColor: palette.critical.base),
+      icon: const Icon(Icons.person_remove_outlined),
+      label: Text(copy['title'] ?? 'title'),
     );
   }
 }

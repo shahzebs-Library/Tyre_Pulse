@@ -12,6 +12,7 @@ import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
+import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/alerts/alerts_providers.dart';
 import 'package:tyre_pulse/features/alerts/domain/tyre_alert.dart';
 import 'package:tyre_pulse/features/alerts/presentation/alerts_copy.dart';
@@ -27,6 +28,51 @@ class AlertsScreen extends ConsumerStatefulWidget {
 
 class _AlertsScreenState extends ConsumerState<AlertsScreen> {
   TyreAlertFilter _filter = TyreAlertFilter.all;
+  String? _ackingId;
+
+  /// Expo parity (`mobile/app/(app)/alerts.tsx` acknowledge): confirm, write
+  /// the resolved `tyre_risk` marker, then refresh so the tyre leaves the
+  /// feed. Online only - a failure says so and keeps the alert listed.
+  Future<void> _acknowledge(TyreAlert alert, AlertsCopy copy) async {
+    if (_ackingId != null) return;
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: Text(copy('ackTitle')),
+        content: Text(copy('ackBody')),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(copy('cancel')),
+          ),
+          FilledButton(
+            key: const Key('alerts.ack.confirm'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(copy('acknowledge')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _ackingId = alert.id);
+    try {
+      final workspace = ref.read(workspaceContextProvider);
+      await ref.read(alertsRepositoryProvider).acknowledge(
+            alert: alert,
+            userId: workspace?.userId,
+            country: workspace?.activeCountry,
+          );
+      ref.invalidate(tyreAlertsProvider);
+    } on Object {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(copy('ackFailed'))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _ackingId = null);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -73,6 +119,9 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen> {
                   copy: copy,
                   onRefresh: _refresh,
                   onOpen: _openInspection,
+                  onAcknowledge: (TyreAlert alert) =>
+                      unawaited(_acknowledge(alert, copy)),
+                  busyId: _ackingId,
                 ),
               ),
             ),
@@ -223,8 +272,12 @@ class _AlertsList extends StatelessWidget {
     required this.copy,
     required this.onRefresh,
     required this.onOpen,
+    required this.onAcknowledge,
+    required this.busyId,
   });
 
+  final ValueChanged<TyreAlert> onAcknowledge;
+  final String? busyId;
   final List<TyreAlert> items;
   final bool hasFilter;
   final AlertsCopy copy;
@@ -268,6 +321,8 @@ class _AlertsList extends StatelessWidget {
                   alert: alert,
                   copy: copy,
                   onTap: alert.assetNo == null ? null : () => onOpen(alert),
+                  onAcknowledge: () => onAcknowledge(alert),
+                  acknowledging: busyId == alert.id,
                 );
               },
             ),
@@ -280,11 +335,15 @@ class _AlertCard extends StatelessWidget {
     required this.alert,
     required this.copy,
     required this.onTap,
+    required this.onAcknowledge,
+    required this.acknowledging,
   });
 
   final TyreAlert alert;
   final AlertsCopy copy;
   final VoidCallback? onTap;
+  final VoidCallback onAcknowledge;
+  final bool acknowledging;
 
   @override
   Widget build(BuildContext context) {
@@ -354,6 +413,21 @@ class _AlertCard extends StatelessWidget {
                   ),
                   const SizedBox(height: TpSpace.xs),
                   _AlertDetailLine(alert: alert, copy: copy),
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: TextButton.icon(
+                      key: Key('alerts.ack.${alert.id}'),
+                      onPressed: acknowledging ? null : onAcknowledge,
+                      icon: acknowledging
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.done_all_rounded, size: 18),
+                      label: Text(copy('acknowledge')),
+                    ),
+                  ),
                   if (alert.treadDepthMm != null) ...<Widget>[
                     const SizedBox(height: TpSpace.xs),
                     Text(

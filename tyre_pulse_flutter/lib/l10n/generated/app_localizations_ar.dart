@@ -2823,7 +2823,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get alertsCopyCatalog =>
-      'title=تنبيهات الإطارات~all=الكل~critical=حرج~warnings=تحذيرات~info=معلومات~flagged=تنبيهات~criticalCount=حرجة~emptyTitle=لا توجد تنبيهات نشطة~emptyFilter=لا توجد تنبيهات تطابق هذا الفلتر.~loadError=تعذر تحميل التنبيهات. اسحب للأسفل لإعادة المحاولة.~unknownAsset=معدة غير معروفة~pressureLow=ضغط الإطار منخفض~treadLow=عمق النقشة منخفض~position=الموضع~serial=الرقم التسلسلي~tread=عمق النقشة~retry=إعادة المحاولة';
+      'title=تنبيهات الإطارات~all=الكل~critical=حرج~warnings=تحذيرات~info=معلومات~flagged=تنبيهات~criticalCount=حرجة~emptyTitle=لا توجد تنبيهات نشطة~emptyFilter=لا توجد تنبيهات تطابق هذا الفلتر.~loadError=تعذر تحميل التنبيهات. اسحب للأسفل لإعادة المحاولة.~unknownAsset=معدة غير معروفة~pressureLow=ضغط الإطار منخفض~treadLow=عمق النقشة منخفض~position=الموضع~serial=الرقم التسلسلي~tread=عمق النقشة~retry=إعادة المحاولة~acknowledge=إقرار~ackTitle=الإقرار بالتنبيه~ackBody=هل تريد تعليم هذا التنبيه كمراجَع؟ ستتم إزالته من القائمة.~ackFailed=تعذّر الإقرار. يرجى المحاولة مرة أخرى.~cancel=إلغاء';
 
   @override
   String get notificationInboxCopyCatalog =>
@@ -2843,7 +2843,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get stockCountCopyCatalog =>
-      'title=جرد المخزون~items=الأصناف~reorder=تحتاج طلباً~notToday=لم تجرد~search=بحث بالوصف أو الموقع~all=الكل~low=مخزون منخفض~stale=لم يجرد اليوم~empty=لا توجد أصناف~emptyBody=لا توجد سجلات مخزون تطابق المرشحات.~count=جرد~stockItem=صنف مخزون~physicalCount=الكمية الفعلية~reason=السبب (اختياري)~cancel=إلغاء~save=حفظ الجرد~invalid=أدخل كمية صفر أو أكثر.~offlineSaved=حفظ الجرد دون اتصال ووضع في قائمة المزامنة.~saveFailed=تعذر حفظ جرد المخزون.~loadFailed=تعذر تحميل سجلات المخزون.~Critical=حرج~Low=منخفض~OK=جيد~onHand=متوفر';
+      'title=جرد المخزون~items=الأصناف~reorder=تحتاج طلباً~notToday=لم تجرد~search=بحث بالوصف أو الموقع~all=الكل~low=مخزون منخفض~stale=لم يجرد اليوم~empty=لا توجد أصناف~emptyBody=لا توجد سجلات مخزون تطابق المرشحات.~count=جرد~stockItem=صنف مخزون~physicalCount=الكمية الفعلية~reason=السبب (اختياري)~cancel=إلغاء~save=حفظ الجرد~invalid=أدخل كمية صفر أو أكثر.~offlineSaved=حفظ الجرد دون اتصال ووضع في قائمة المزامنة.~saveFailed=تعذر حفظ جرد المخزون.~loadFailed=تعذر تحميل سجلات المخزون.~Critical=حرج~Low=منخفض~OK=جيد~onHand=متوفر~add=إضافة مخزون~addTitle=إضافة مخزون~size=مقاس الإطار~description=الوصف (اختياري)~site=الموقع~quantity=الكمية~minLevel=الحد الأدنى~criticalLevel=الحد الحرج~sizeRequired=أدخل مقاس الإطار لهذا المخزون.~siteRequired=أدخل الموقع لهذا المخزون.~addFailed=تعذّرت إضافة المخزون. يرجى المحاولة مرة أخرى.~increase=زيادة~decrease=إنقاص';
 
   @override
   String get calendarCopyCatalog =>
@@ -7150,4 +7150,8 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get accRptTitle => 'الإبلاغ عن حادث';
+
+  @override
+  String get accountDeletionCopyCatalog =>
+      'title=حذف حسابي~subtitle=طلب حذف حسابك وبياناتك الشخصية~intro=يؤدي هذا إلى إرسال طلب إلى المسؤول لحذف حسابك والبيانات الشخصية المرتبطة به. لا يتم حذف حسابك على الفور.~what=يتم إلغاء وصولك إلى التطبيق عند الطلب. تُحذف بيانات ملفك الشخصي؛ وقد يتم الاحتفاظ ببعض سجلات الأسطول التي أُنشئت لمؤسستك كسجلات تجارية أو تدقيقية مع إزالة هويتك منها.~timeline=تكتمل الطلبات المؤكدة خلال نحو 30 يومًا.~reason=السبب (اختياري)~confirm=اكتب DELETE للتأكيد~word=DELETE~submit=إرسال طلب الحذف~cancel=إلغاء~successTitle=تم إرسال الطلب~successBody=تم تسجيل طلب حذف حسابك. سيقوم المسؤول بتنفيذه خلال نحو 30 يومًا.~errorTitle=تعذّر إرسال الطلب~mismatch=اكتب DELETE تمامًا للتأكيد.~unavailable=حذف الحساب غير متاح حاليًا. يرجى مراسلتنا بالبريد لطلب الحذف.~failed=تعذّر إرسال طلبك. يرجى المحاولة مرة أخرى.~ok=حسنًا';
 }

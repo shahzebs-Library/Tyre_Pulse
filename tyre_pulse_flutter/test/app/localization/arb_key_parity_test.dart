@@ -524,10 +524,15 @@ void main() {
     // report footer and damage sheet copy moved into ARB (designAcc*).
     // 2014 + 55 = 2069. Accident mock pass 2: insurance claim workstream
     // (accClaim*) and report step 1 identify asset (accRpt*).
-    test('en, ar and ur each carry exactly 2069 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2069);
-      expect(_translatableKeys(ar).length, 2069);
-      expect(_translatableKeys(ur).length, 2069);
+    // 2069 + 1 = 2070. Expo parity pass: accountDeletionCopyCatalog, the
+    // Profile "Delete my account" request (Play in-app deletion path, Expo
+    // mobile/lib/accountDeletion.ts). The alert acknowledge and stock
+    // add/adjust strings were appended INSIDE the existing alertsCopyCatalog
+    // and stockCountCopyCatalog values, so they add no keys.
+    test('en, ar and ur each carry exactly 2070 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2070);
+      expect(_translatableKeys(ar).length, 2070);
+      expect(_translatableKeys(ur).length, 2070);
     });
   });
 

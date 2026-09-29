@@ -121,6 +121,11 @@ batching stops them being started at all.
   removal); a new exchange saves ONE tyre_service_events row (Replacement->replacement, Interchange->rotation,
   Transfer->other; RLS checked: org default + auth insert OK) and does NOT change tyre_records. No time of day /
   technician / condition / photo storage on records = shown honestly. Old 6 tabs kept in "Transfer analysis".
+- Tyre Specifications: tyre_specifications = FITMENT RULES per vehicle type + position (approved_sizes[]/
+  approved_brands[]/min_load/min_speed/ply/pressure/min_tread/notes), NOT a brand-pattern catalogue, 0 rows live.
+  Pattern/TT-TL/dual load/weight/images/approval status have NO column -> "Not recorded"/N/A. "Approved/Not approved"
+  KPIs = fitted tyres conforming or not. Page 2,680 -> ~990 lines; 6 heavy tabs moved unchanged to
+  src/components/tyreSpec/. Approval history tab is session-only (says so).
 **IN PROGRESS (agents, uncommitted):** Rotation Schedule (/rotation, hero-rotation; RotationOptimizer untouched) (src/pages/TyreExchange.jsx) Tyre Specifications
 (src/pages/TyreSpecifications.jsx, 2,680 lines: heavy tabs moved to src/components/tyreSpec/*). Mockups were only
 pasted, so both reuse hero-tyres. If cleared: git status, verify, commit by pathspec, push once.

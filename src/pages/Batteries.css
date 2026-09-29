@@ -1,0 +1,47 @@
+/* Battery Lifecycle page. Only --cc-* tokens, so light and dark share one sheet. */
+.bt-page .cc-hero { min-height: 150px; }
+
+.bt-banner { flex-direction: row; align-items: flex-start; gap: 10px; }
+.bt-banner > svg { flex: none; margin-top: 2px; }
+.bt-banner.warn > svg { color: var(--cc-amber); }
+.bt-banner > div { flex: 1; min-width: 0; font-size: 13px; }
+.bt-banner p { margin: 3px 0 0; color: var(--cc-ink-2); font-size: 12.5px; }
+
+.bt-row { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+.bt-note { font-size: 11px; color: var(--cc-ink-3); margin: 10px 0 0; line-height: 1.45; }
+
+/* Replacement forecast bars */
+.bt-fc-head { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--cc-ink-2); margin-bottom: 8px; }
+.bt-fc-head b { color: var(--cc-ink); font-weight: 700; }
+.bt-bars { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 6px; align-items: end; height: 170px; padding-top: 14px; }
+.bt-bar { position: relative; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; min-width: 0; }
+.bt-bar i { display: block; width: 70%; min-height: 2px; border-radius: 4px 4px 0 0; background: var(--cc-green); opacity: .85; }
+.bt-bar small { font-size: 10px; color: var(--cc-ink-3); margin-top: 5px; }
+.bt-bar-n { font-size: 10px; font-weight: 600; color: var(--cc-ink-2); margin-bottom: 3px; min-height: 12px; }
+
+/* Lifecycle stages */
+.bt-stages { display: flex; flex-direction: column; gap: 12px; }
+.bt-stage { display: grid; grid-template-columns: 32px minmax(90px, 1fr) minmax(60px, 1.1fr) 36px 38px; gap: 10px; align-items: center; font-size: 12.5px; color: var(--cc-ink); }
+.bt-stage b { text-align: right; font-weight: 700; }
+.bt-stage-pct { text-align: right; color: var(--cc-ink-3); font-size: 12px; }
+.bt-stage-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bt-stage .cc-row-icon.muted { color: var(--cc-ink-3); background: var(--cc-track); }
+
+/* Register */
+.bt-filters { align-items: center; gap: 8px; }
+.bt-filters .cc-select { padding-top: 9px; padding-bottom: 9px; font-size: 12.5px; }
+.bt-toolbar-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; align-items: center; }
+.bt-filter-meta { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; color: var(--cc-ink-3); padding: 8px 0 6px; }
+.bt-actions { display: inline-flex; gap: 5px; }
+.bt-actions .cc-icon-btn:disabled { opacity: .45; cursor: not-allowed; }
+.bt-actions .bt-danger:hover { color: var(--cc-red); border-color: var(--cc-red); }
+.bt-volt { white-space: nowrap; }
+
+@media (max-width: 1280px) {
+  .bt-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .bt-row > :last-child { grid-column: 1 / -1; }
+}
+@media (max-width: 760px) {
+  .bt-row { grid-template-columns: minmax(0, 1fr); }
+  .bt-toolbar-actions { margin-left: 0; }
+}

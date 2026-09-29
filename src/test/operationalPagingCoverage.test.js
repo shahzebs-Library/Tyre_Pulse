@@ -9,8 +9,9 @@ const pageSource = (name) => readFileSync(
 
 describe('operational registers expose honest paging', () => {
   it('RfidRegistry registers page every row through EnterpriseTable', () => {
+    // KitTable is the kit skin over EnterpriseTable (src/components/commandCenter/kit.jsx).
     const source = pageSource('RfidRegistry')
-    expect(source).toContain('<EnterpriseTable')
+    expect(source).toMatch(/<(EnterpriseTable|KitTable)\b/)
     expect(source).not.toMatch(/\.slice\(0,\s*\d+\)\.map/)
   })
 

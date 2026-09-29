@@ -1,91 +1,137 @@
+/**
+ * SerialTracker (route /serial-tracker) - track and trace tyre serial numbers,
+ * rebuilt on the shared page kit to the owner's light reference design.
+ *
+ * Layout: hero with "Scan Serial Number" (a keyboard-wedge / typed entry, no
+ * camera), six KPI tiles from exact server counts, a server-paged serial
+ * register with filters, a details rail for the selected serial (status,
+ * identity, current assignment, photos, scrap actions, exports), movement
+ * history and tyre life and usage.
+ *
+ * Kept from the previous page: single serial search (escaped ilike, padding
+ * tolerant), bulk lookup from Excel/CSV with status chips and exports, the
+ * scrapped register with Edit reason / Undo scrap, the scrap badge, and the
+ * server-decided scrap rights (tyre_scrap_allowed / tyre_unscrap_allowed via
+ * scrap_tyre_by_serial / unscrap_tyre_by_serial).
+ *
+ * Honest gaps: tyre_records carries no pattern, load index, speed rating, DOT,
+ * manufacturing date, temperature, fitter name, stock or repair status. Those
+ * blocks say "N/A" or "not recorded" rather than inventing a value. A serial is
+ * not a unique tyre id: the register lists fitment records.
+ */
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
-import { findSerialRecords } from '../lib/api/serialTracker'
+import { Link } from 'react-router-dom'
+import {
+  ScanLine, Search, FileText, Upload, AlertTriangle, Trash2, RotateCcw, FileSpreadsheet,
+  ClipboardList, UserX, CalendarClock, Hash, CheckCircle2, Package, Wrench, Ban,
+  EyeOff, Eye, ExternalLink, X, ImageOff, ArrowRight, QrCode,
+} from 'lucide-react'
+import { findSerialRecords, listSerialRegister, getSerialKpis, listSizeOptions } from '../lib/api/serialTracker'
+import { listFilterOptions } from '../lib/api/tyreRecords'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToPdf, exportToExcel, reportFileName } from '../lib/exportUtils'
 import { formatCurrencyCompact, formatDate } from '../lib/formatters'
-import { ScanLine, Search, FileText, Upload, AlertTriangle, Trash2, RotateCcw, FileSpreadsheet, ClipboardList, UserX, CalendarClock } from 'lucide-react'
-import PageHeader from '../components/ui/PageHeader'
-import Card, { CardBody, CardHeader } from '../components/ui/Card'
 import Modal from '../components/ui/Modal'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
-import EmptyState from '../components/EmptyState'
+import {
+  Card, CardState, Kpi, PageHero, Pager, KitTable, Tabs, VehicleThumb, useCard, fmtInt,
+} from '../components/commandCenter/kit'
 import { toUserMessage } from '../lib/safeError'
+import { safeImageSrc } from '../lib/safeUrl'
+import { resolveStorageUrls } from '../lib/storageRefs'
 import { useAuth } from '../contexts/AuthContext'
 import { scrapTyreBySerial, unscrapTyreBySerial, getScrapMark, listScrapMarks, listScrappedTyres, updateScrapReason, getScrapPermissions } from '../lib/api/tyreExchange'
 import { COUNTRY_CURRENCY } from '../lib/api/assetMaster'
 import {
-  serialStats, serialTimeline, summarizeBulkSerial, bulkSummary as summarizeBulk,
+  serialStats, summarizeBulkSerial, bulkSummary as summarizeBulk,
   filterBulkResults, filterScrapList, scrapRegisterSummary, recordPrice,
 } from '../lib/serialTrackerAnalytics'
+import {
+  STATUS_OPTIONS, statusMeta, cleanSerial, sameSerial, currentAssignment, historyEvents,
+  filterEvents, eventCounts, HISTORY_TABS, USAGE_TABS, lifeUsage, sparkPath, recordPhotos,
+} from '../lib/serialTrackerView'
 import { compareValues } from '../lib/consoleTable'
+import './SerialTracker.css'
 
 // EnterpriseTable sorts through the shared console comparator, so blanks sort
 // last and numeric strings compare as numbers on every column.
 const sortCompare = (a, b, id) => compareValues(a.getValue(id), b.getValue(id))
 const blankToUndef = (v) => (v === null || v === undefined || v === '' ? undefined : v)
 const moneyFor = (n, country) => (n == null ? 'N/A' : formatCurrencyCompact(n, COUNTRY_CURRENCY[country] || 'SAR'))
+const fmtKm = (n) => (n == null ? 'N/A' : `${Math.round(n).toLocaleString('en-US')} km`)
+const dateOrNA = (v) => (v ? formatDate(v) : 'N/A')
 
-const BULK_TONE = {
-  'Not Found': 'bg-[var(--surface-2)] text-[var(--text-muted)] border-[var(--border-bright)]',
-  Active: 'bg-green-900/30 text-green-400 border-green-700/50',
-  Scrapped: 'bg-red-900/30 text-red-400 border-red-700/50',
-  Retired: 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)]',
+const BULK_TONE = { 'Not Found': 'muted', Active: 'good', Scrapped: 'bad', Retired: 'muted' }
+const REGISTER_PAGE_SIZES = [10, 25, 50]
+
+/** Plain tyre glyph: an illustration, never presented as a photo of the tyre. */
+function TyreGlyph({ size = 30 }) {
+  return (
+    <svg className="st-tyre" width={size} height={size} viewBox="0 0 40 40" aria-hidden="true">
+      <circle cx="20" cy="20" r="18" fill="#1f2937" />
+      <circle cx="20" cy="20" r="18" fill="none" stroke="#4b5563" strokeWidth="2" strokeDasharray="3 2.4" />
+      <circle cx="20" cy="20" r="9" fill="#9ca3af" />
+      <circle cx="20" cy="20" r="3.2" fill="#374151" />
+    </svg>
+  )
 }
 
-function SearchSkeleton() {
-  return (
-    <>
-      <Card className="animate-pulse">
-        <div className="flex items-start justify-between flex-wrap gap-4 mb-4">
-          <div className="space-y-2">
-            <div className="flex items-center gap-3">
-              <div className="h-8 w-40 bg-[var(--surface-2)] rounded-md" />
-              <div className="h-6 w-16 bg-[var(--surface-2)] rounded-full" />
-            </div>
-            <div className="h-4 w-56 bg-[var(--surface-2)] rounded" />
-          </div>
-          <div className="flex gap-2">
-            <div className="h-8 w-20 bg-[var(--surface-2)] rounded-md" />
-            <div className="h-8 w-16 bg-[var(--surface-2)] rounded-md" />
-          </div>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="bg-[var(--surface-2)] rounded-lg p-3 text-center space-y-2">
-              <div className="h-6 w-12 bg-[var(--surface-3)] rounded mx-auto" />
-              <div className="h-3 w-20 bg-[var(--surface-3)] rounded mx-auto" />
-            </div>
-          ))}
-        </div>
-        <div className="h-4 w-32 bg-[var(--surface-2)] rounded mt-3" />
-      </Card>
+function StatusPill({ status, scrapped }) {
+  const m = statusMeta(status, { scrapped })
+  return <span className={`cc-pill ${m.tone}`}>{m.label}</span>
+}
 
-      <Card className="animate-pulse">
-        <div className="h-5 w-32 bg-[var(--surface-2)] rounded mb-4" />
-        <div className="space-y-4">
-          {[...Array(3)].map((_, gi) => (
-            <div key={gi}>
-              <div className="h-4 w-28 bg-[var(--surface-2)] rounded mb-2" />
-              <div className="space-y-2 pl-3 border-l border-[var(--border-dim)]">
-                {[...Array(2)].map((_, ri) => (
-                  <div key={ri} className="flex items-start gap-3 py-2">
-                    <div className="h-3 w-20 bg-[var(--surface-2)] rounded flex-shrink-0 mt-1" />
-                    <div className="flex-1 space-y-1.5">
-                      <div className="flex gap-3">
-                        <div className="h-3 w-16 bg-[var(--surface-2)] rounded" />
-                        <div className="h-3 w-12 bg-[var(--surface-2)] rounded" />
-                        <div className="h-3 w-10 bg-[var(--surface-2)] rounded" />
-                      </div>
-                      <div className="h-3 w-36 bg-[var(--surface-2)] rounded" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
-    </>
+function Field({ label, children }) {
+  return (
+    <div className="st-field">
+      <dt>{label}</dt>
+      <dd>{children ?? <span className="cc-na">N/A</span>}</dd>
+    </div>
+  )
+}
+
+/** Small line chart for one usage series. Draws nothing below two points. */
+function UsageChart({ points, unit }) {
+  const W = 320; const H = 130
+  const geo = sparkPath(points, { width: W, height: H, pad: 14 })
+  if (!geo) return null
+  const area = `${geo.coords[0][0]},${H - 14} ${geo.line} ${geo.coords[geo.coords.length - 1][0]},${H - 14}`
+  return (
+    <svg className="st-chart" viewBox={`0 0 ${W} ${H + 18}`} role="img"
+      aria-label={points.map((p) => `${formatDate(p.date)} ${p.value} ${unit}`).join(', ')}>
+      <line x1="14" x2={W - 14} y1={H - 14} y2={H - 14} className="st-axis" />
+      <polygon points={area} className="st-area" />
+      <polyline points={geo.line} className="st-line" />
+      {geo.coords.map(([x, y], i) => <circle key={i} cx={x} cy={y} r="3" className="st-dot" />)}
+      <text x="14" y="10" className="st-axis-label">{Math.round(geo.max).toLocaleString('en-US')} {unit}</text>
+      <text x="14" y={H + 12} className="st-axis-label">{formatDate(points[0].date)}</text>
+      <text x={W - 14} y={H + 12} textAnchor="end" className="st-axis-label">{formatDate(points[points.length - 1].date)}</text>
+    </svg>
+  )
+}
+
+/** Scan entry: a handheld scanner types into the focused box and sends Enter. */
+function ScanModal({ onClose, onSubmit }) {
+  const [value, setValue] = useState('')
+  const input = useRef(null)
+  useEffect(() => { const t = setTimeout(() => input.current?.focus(), 30); return () => clearTimeout(t) }, [])
+  const submit = () => { const v = cleanSerial(value); if (v) onSubmit(v) }
+  return (
+    <Modal open onClose={onClose} title="Scan serial number" size="sm"
+      footer={<>
+        <button type="button" className="btn-secondary text-sm" onClick={onClose}>Cancel</button>
+        <button type="button" className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-50" disabled={!cleanSerial(value)} onClick={submit}><Search size={14} aria-hidden="true" /> Find tyre</button>
+      </>}>
+      <p className="text-sm text-[var(--text-secondary)] mb-3">
+        Scan the serial barcode with a handheld scanner, or type the serial and press Enter.
+      </p>
+      <label className="st-scan">
+        <Hash size={18} aria-hidden="true" />
+        <input ref={input} type="text" autoComplete="off" spellCheck={false} aria-label="Serial number"
+          placeholder="Serial number" value={value} onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submit() } }} />
+      </label>
+    </Modal>
   )
 }
 
@@ -115,7 +161,7 @@ export default function SerialTracker() {
     || (typeof grantedModules?.has === 'function' && grantedModules.has('serial_tracker:scrap'))
   const canUndo = perms.canUndo
 
-  const [activeTab, setActiveTab] = useState('single')
+  const [activeTab, setActiveTab] = useState('register')
 
   // ── Single Search state ───────────────────────────────────────────────────
   const [serialInput, setSerialInput] = useState('')
@@ -214,14 +260,15 @@ export default function SerialTracker() {
   const scrapSummary = useMemo(() => scrapRegisterSummary(scrapList), [scrapList])
 
   // ── Single search ─────────────────────────────────────────────────────────
-  async function search() {
-    if (!serialInput.trim()) return
+  async function search(serialArg) {
+    const q = cleanSerial(typeof serialArg === 'string' ? serialArg : serialInput)
+    if (!q) return
+    setSerialInput(q)
     setLoading(true)
     setSearched(false)
     setError(null)
     const request = ++queryId.current
     setBulkLoading(false)
-    const q = serialInput.trim()
     setScrapMark(null)
     setScrapErr(null)
     try {
@@ -279,7 +326,6 @@ export default function SerialTracker() {
   // tyre_records column, so the old sum always read zero; the price is now the
   // tyre's recorded per-tyre price, and null (N/A) when none was recorded.
   const stats = useMemo(() => serialStats(records), [records])
-  const timeline = useMemo(() => serialTimeline(records), [records])
 
   // Lifecycle rows as exported: every record, with the price and dates
   // rendered, never a blank that reads as zero.
@@ -525,7 +571,7 @@ export default function SerialTracker() {
     { id: 'cost', accessorFn: r => r.cost ?? undefined, header: 'Price per tyre', sortingFn: sortCompare, sortUndefined: 'last', meta: { align: 'right' }, cell: ({ row, getValue }) => moneyFor(getValue() ?? null, row.original.country) },
     {
       accessorKey: 'status', header: 'Status', sortingFn: sortCompare,
-      cell: ({ getValue }) => <span className={`text-xs px-2 py-0.5 rounded-full border ${BULK_TONE[getValue()] || BULK_TONE.Retired}`}>{getValue()}</span>,
+      cell: ({ getValue }) => <span className={`cc-pill ${BULK_TONE[getValue()] || 'muted'}`}>{getValue()}</span>,
     },
   ], [])
 
@@ -556,11 +602,11 @@ export default function SerialTracker() {
             />
             <div className="flex gap-2">
               <button onClick={() => saveEditReason(r.serial)} disabled={rowBusy === r.serial}
-                className="btn-primary text-xs px-3 min-h-[36px] disabled:opacity-50">
+                className="cc-btn-primary">
                 {rowBusy === r.serial ? 'Saving...' : 'Save'}
               </button>
               <button onClick={() => { setEditSerial(null); setEditReason('') }} disabled={rowBusy === r.serial}
-                className="btn-secondary text-xs px-3 min-h-[36px] disabled:opacity-50">Cancel</button>
+                className="cc-btn-ghost">Cancel</button>
             </div>
           </div>
         ) : (
@@ -589,11 +635,11 @@ export default function SerialTracker() {
             {canScrap && (
               <button onClick={() => { setEditSerial(r.serial); setEditReason(r.reason || '') }}
                 disabled={rowBusy === r.serial}
-                className="btn-secondary text-xs px-2.5 min-h-[36px] disabled:opacity-50">Edit reason</button>
+                className="cc-btn-ghost">Edit reason</button>
             )}
             {canUndo && (
               <button onClick={() => undoScrapRow(r.serial)} disabled={rowBusy === r.serial}
-                className="flex items-center gap-1 text-xs px-2.5 min-h-[36px] rounded-md font-medium border border-green-700/50 bg-green-900/20 text-green-400 hover:bg-green-900/40 transition-colors disabled:opacity-50">
+                className="cc-btn-ghost">
                 <RotateCcw size={12} aria-hidden="true" /> {rowBusy === r.serial ? 'Working...' : 'Undo scrap'}
               </button>
             )}
@@ -604,493 +650,527 @@ export default function SerialTracker() {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- row handlers are recreated each render; the edit/busy state they read is listed.
   ], [editSerial, editReason, rowBusy, canScrap, canUndo, lastQuery, scrapMark])
 
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Serial Tracker"
-        subtitle="Search a tyre by serial number, trace its history, and mark it as scrap"
-        icon={ScanLine}
-      />
 
-      <div className="flex flex-wrap gap-1 p-1 bg-[var(--surface-2)] rounded-lg w-fit max-w-full" role="tablist" aria-label="Serial tracker views">
-        {[['single', 'Single Search'], ['bulk', 'Bulk Lookup'], ['scrapped', 'Scrapped']].map(([key, label]) => (
-          <button
-            key={key}
-            role="tab"
-            aria-selected={activeTab === key}
-            onClick={() => { setActiveTab(key); if (key === 'scrapped') loadScrapList() }}
-            className={`min-h-[44px] px-4 rounded-md text-sm font-medium transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-              activeTab === key ? 'bg-[var(--surface-3)] text-[var(--text-primary)] shadow' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-            }`}
-          >
-            {label}
+  // ── Serial register (server paged) ────────────────────────────────────────
+  const [scanOpen, setScanOpen] = useState(false)
+  const [regSearch, setRegSearch] = useState('')
+  const [regSearchDebounced, setRegSearchDebounced] = useState('')
+  const [brand, setBrand] = useState('')
+  const [size, setSize] = useState('')
+  const [status, setStatus] = useState('')
+  const [site, setSite] = useState('')
+  const [regPage, setRegPage] = useState(0)
+  const [regSize, setRegSize] = useState(10)
+  const [historyTab, setHistoryTab] = useState('all')
+  const [usageTab, setUsageTab] = useState('km')
+  const [photoUrls, setPhotoUrls] = useState({ loading: false, urls: [] })
+
+  useEffect(() => {
+    const t = setTimeout(() => setRegSearchDebounced(regSearch.trim()), 300)
+    return () => clearTimeout(t)
+  }, [regSearch])
+  // Any filter change starts the register from its first page.
+  useEffect(() => { setRegPage(0) }, [regSearchDebounced, brand, size, status, site, regSize, activeCountry])
+
+  const kpis = useCard(() => getSerialKpis(activeCountry), [activeCountry])
+  const options = useCard(async () => {
+    const [f, sizes] = await Promise.all([listFilterOptions(activeCountry), listSizeOptions(activeCountry)])
+    return { brands: f.brands, sites: f.sites, sizes }
+  }, [activeCountry])
+  const register = useCard(
+    () => listSerialRegister({ page: regPage, pageSize: regSize, search: regSearchDebounced, brand, size, status, site, country: activeCountry }),
+    [regPage, regSize, regSearchDebounced, brand, size, status, site, activeCountry],
+  )
+  const regRows = register.data?.rows || []
+  const regTotal = register.data?.total ?? 0
+  const filtersOn = !!(regSearch || brand || size || status || site)
+  const clearFilters = () => { setRegSearch(''); setBrand(''); setSize(''); setStatus(''); setSite('') }
+
+  // Open the first serial of the register once, so the details rail is never blank on arrival.
+  const autoPicked = useRef(false)
+  useEffect(() => { autoPicked.current = false }, [activeCountry])
+  useEffect(() => {
+    if (autoPicked.current || lastQuery || loading) return
+    const first = regRows.find((r) => cleanSerial(r.serial_no))
+    if (first) { autoPicked.current = true; search(first.serial_no) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- search reads current state; only a new register page should trigger this.
+  }, [regRows])
+
+  function openSerial(serial) {
+    const s = cleanSerial(serial)
+    if (!s) return
+    setHistoryTab('all')
+    search(s)
+  }
+
+  const assignment = useMemo(() => currentAssignment(records), [records])
+  const usage = useMemo(() => lifeUsage(records), [records])
+  const events = useMemo(() => historyEvents(records, { scrapMark }), [records, scrapMark])
+  const counts = useMemo(() => eventCounts(events), [events])
+  const shownEvents = useMemo(() => filterEvents(events, historyTab), [events, historyTab])
+  const photoRefs = useMemo(() => recordPhotos(records), [records])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!photoRefs.length) { setPhotoUrls({ loading: false, urls: [] }); return undefined }
+    setPhotoUrls({ loading: true, urls: [] })
+    resolveStorageUrls(photoRefs)
+      .then((urls) => { if (!cancelled) setPhotoUrls({ loading: false, urls: urls.map(safeImageSrc).filter(Boolean) }) })
+      .catch(() => { if (!cancelled) setPhotoUrls({ loading: false, urls: [] }) })
+    return () => { cancelled = true }
+  }, [photoRefs])
+
+  const k = kpis.data
+  const registerColumns = [
+    { key: 'n', header: '#', sortable: false, cell: (r) => <span className="st-muted">{regPage * regSize + regRows.indexOf(r) + 1}</span> },
+    { key: 'tyre', header: '', sortable: false, cell: () => <TyreGlyph size={28} /> },
+    {
+      key: 'serial_no', header: 'Serial number', cell: (r) => {
+        const s = cleanSerial(r.serial_no)
+        if (!s) return <span className="cc-na">No serial</span>
+        return (
+          <button type="button" className={`st-serial ${sameSerial(s, lastQuery) ? 'is-active' : ''}`} onClick={(e) => { e.stopPropagation(); openSerial(s) }}>
+            {s}
           </button>
-        ))}
+        )
+      },
+    },
+    { key: 'brand', header: 'Tyre brand', cell: (r) => r.brand || <span className="cc-na">N/A</span> },
+    { key: 'size', header: 'Size', cell: (r) => r.size || <span className="cc-na">N/A</span> },
+    {
+      key: 'asset_no', header: 'Vehicle / asset', cell: (r) => r.asset_no ? (
+        <span className="cc-vehicle">
+          <VehicleThumb row={r} size="sm" />
+          <span><span className="cc-strong">{r.asset_no}</span><span className="cc-sub">{r.vehicle_type || 'Type not recorded'}</span></span>
+        </span>
+      ) : <span className="cc-na">Not fitted</span>,
+    },
+    { key: 'site', header: 'Current location', cell: (r) => r.site || <span className="cc-na">N/A</span> },
+    { key: 'status', header: 'Status', cell: (r) => <StatusPill status={r.status} /> },
+    { key: 'issue_date', header: 'Installed date', cell: (r) => dateOrNA(r.issue_date || r.fitment_date) },
+    {
+      key: 'actions', header: 'Actions', sortable: false, align: 'right', cell: (r) => {
+        const s = cleanSerial(r.serial_no)
+        return (
+          <span className="st-actions">
+            <button type="button" className="cc-icon-btn" aria-label={`View ${s || 'record'}`} disabled={!s} onClick={(e) => { e.stopPropagation(); openSerial(s) }}><Eye size={14} aria-hidden="true" /></button>
+            {s && <Link className="cc-icon-btn" to={`/tyre-passport/${encodeURIComponent(s)}`} aria-label={`Tyre passport for ${s}`} onClick={(e) => e.stopPropagation()}><ExternalLink size={14} aria-hidden="true" /></Link>}
+          </span>
+        )
+      },
+    },
+  ]
+
+  const eventColumns = [
+    { key: 'date', header: 'Date', cell: (e) => dateOrNA(e.date) },
+    { key: 'label', header: 'Event type', cell: (e) => <span className={`st-event st-event-${e.type}`}>{e.label}</span> },
+    { key: 'from', header: 'From', cell: (e) => e.from || <span className="cc-na">N/A</span> },
+    { key: 'to', header: 'To', cell: (e) => e.to || <span className="cc-na">N/A</span> },
+    { key: 'vehicle', header: 'Vehicle / asset', cell: (e) => e.vehicle ? <>{e.vehicle}{e.position && <span className="cc-sub">{e.position}</span>}</> : <span className="cc-na">N/A</span> },
+    { key: 'by', header: 'Performed by', cell: (e) => e.by || <span className="cc-na">Not recorded</span> },
+    { key: 'remarks', header: 'Remarks', cell: (e) => e.remarks || <span className="cc-na">None</span> },
+  ]
+
+  const EMPTY_HISTORY = {
+    inspection: 'Inspection readings are not linked to tyre serials yet.',
+    repair: 'Tyre repairs are not recorded against serials yet.',
+    disposal: 'This tyre has not been disposed.',
+  }
+  const selectedStatusScrapped = !!scrapMark || stats?.scrapped
+  const usagePoints = usage.series[usageTab] || []
+  const USAGE_UNIT = { km: 'km', wear: 'mm', pressure: 'psi', temperature: 'C' }
+
+  const detailsState = { loading: loading && !stats, data: stats, error: error && !loading && !stats ? error : null, retry: () => search(lastQuery || serialInput) }
+
+  return (
+    <div className="cc st-page">
+      <PageHero
+        title="Serial Tracker"
+        lead="Track and trace tyre serial numbers, installation history, movement, inspections and current location"
+        imgLight="/dashboard/hero-tyres-light.webp"
+        imgDark="/dashboard/hero-tyres-dark.webp"
+      />
+      <div className="st-hero-actions">
+        <button type="button" className="cc-btn-primary" onClick={() => setScanOpen(true)}><ScanLine size={15} aria-hidden="true" /> Scan Serial Number</button>
       </div>
 
-      {/* ── Single Search tab ──────────────────────────────────────────────── */}
-      {activeTab === 'single' && (
-        <>
-          {/* Deliberately NOT clipped: this is the page's search control. */}
+      <div className="cc-kpis">
+        <Kpi icon={Hash} tone="t-green" value={k?.total} loading={kpis.loading} label="Total serial numbers"
+          title="Tyre records that carry a serial. One tyre has one record per fitment, so this counts records, not distinct tyres." />
+        <Kpi icon={CheckCircle2} tone="t-green" value={k?.installed} loading={kpis.loading} label="Currently installed"
+          onClick={() => { setActiveTab('register'); setStatus('Active') }} title="Records with status Active. Click to filter the register." />
+        <Kpi icon={Package} tone="t-blue" display="N/A" label="In stock" title="Tyre records carry no stock status. Stock lives in Stock Management." />
+        <Kpi icon={Wrench} tone="t-amber" display="N/A" label="In repair" title="Tyre records carry no repair status." />
+        <Kpi icon={Ban} tone="t-red" value={k?.disposed} loading={kpis.loading} label="Disposed"
+          onClick={() => { setActiveTab('register'); setStatus('Scrapped') }} title="Records with status Scrapped. Click to filter the register." />
+        <Kpi icon={EyeOff} tone="t-purple" value={k?.notTracked} loading={kpis.loading} label="Not tracked"
+          title="Tyre records with no serial number, so they cannot be traced by serial." />
+      </div>
+      {kpis.error && (
+        <div className="cc-card st-alert" role="alert">
+          <AlertTriangle size={16} aria-hidden="true" /><span>{kpis.error}</span>
+          <button type="button" className="cc-btn-ghost" onClick={kpis.retry}>Try again</button>
+        </div>
+      )}
+
+      <div className="st-layout">
+        <div className="st-main">
           <Card>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <label htmlFor="serial-search" className="sr-only">Serial number</label>
-              <input
-                id="serial-search"
-                type="search"
-                className="input flex-1 text-base min-h-[44px]"
-                placeholder="Enter a serial number"
-                value={serialInput}
-                onChange={e => setSerialInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && search()}
-              />
-              <button onClick={search} disabled={loading || !serialInput.trim()}
-                className="btn-primary flex items-center justify-center gap-2 px-5 min-h-[44px] disabled:opacity-50">
-                <Search size={16} />
-                {loading ? 'Searching...' : 'Search'}
-              </button>
-            </div>
-          </Card>
-
-          {loading && <SearchSkeleton />}
-
-          {!loading && error && (
-            /* Card is flex-col by default and Tailwind emits .flex-col after
-               .flex-row, so a row-direction card sets its direction through
-               `style`, where Card spreads it last and it deterministically wins. */
-            <Card tone="crit" className="items-center gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
-              <AlertTriangle size={18} className="text-red-400 shrink-0" />
-              <p className="text-sm text-red-400 flex-1">{error}</p>
-              <button onClick={search} className="btn-secondary text-xs px-3 min-h-[44px]">Retry</button>
-            </Card>
-          )}
-
-          {!loading && !error && searched && records.length === 0 && (
-            <Card>
-              <EmptyState
-                illustration="state/search-empty"
-                icon={ScanLine}
-                title="No records found"
-                description={`No tyre records match serial "${lastQuery}" in the selected country. Check the spelling, or switch the country scope.`}
-              />
-            </Card>
-          )}
-
-          {!loading && stats && (
-            <>
-              <Card>
-                <div className="flex items-start justify-between flex-wrap gap-4 mb-4">
-                  <div>
-                    <div className="flex items-center gap-3 mb-1 flex-wrap">
-                      <span className="text-2xl font-bold font-mono text-[var(--text-primary)]">{lastQuery}</span>
-                      {scrapMark ? (
-                        <span className="text-xs px-2.5 py-1 rounded-full font-medium border bg-red-900/30 text-red-400 border-red-700/50 flex items-center gap-1">
-                          <Trash2 size={12} /> Scrapped
-                        </span>
-                      ) : (
-                        <span className={`text-xs px-2.5 py-1 rounded-full font-medium border ${
-                          stats.active
-                            ? 'bg-green-900/30 text-green-400 border-green-700/50'
-                            : 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)]'
-                        }`}>
-                          {stats.active ? 'Active' : 'Retired'}
-                        </span>
-                      )}
-                    </div>
-                    {(stats.brand || stats.description) && (
-                      <p className="text-[var(--text-secondary)] text-sm">{[stats.brand, stats.description].filter(Boolean).join(' · ')}</p>
-                    )}
-                    {scrapMark && (
-                      <p className="text-xs text-red-400/80 mt-1">
-                        Scrapped {formatDate(scrapMark.created_at)}{scrapMark.reason ? ` · ${scrapMark.reason}` : ''}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex gap-2 flex-wrap">
-                    {/* Undo is admin only, marking is not, so they are gated
-                        separately rather than by one flag. */}
-                    {scrapMark ? (canUndo && (
-                      <button onClick={undoScrap} disabled={scrapBusy}
-                        className="btn-secondary flex items-center gap-1.5 text-sm px-3 min-h-[44px] disabled:opacity-50">
-                        <RotateCcw size={14} /> {scrapBusy ? 'Working...' : 'Undo scrap'}
-                      </button>
-                    )) : (canScrap && (
-                      <button onClick={() => { setScrapErr(null); setScrapReason(''); setScrapOpen(true) }}
-                        className="flex items-center gap-1.5 text-sm px-3 min-h-[44px] rounded-md font-medium border border-red-700/50 bg-red-900/20 text-red-400 hover:bg-red-900/40 transition-colors">
-                        <Trash2 size={14} /> Mark as Scrap
-                      </button>
-                    ))}
-                    <button onClick={exportLifecycleExcel} className="btn-secondary flex items-center gap-1.5 text-sm px-3 min-h-[44px]">
-                      <FileSpreadsheet size={14} aria-hidden="true" /> Excel
-                    </button>
-                    <button onClick={exportLifecyclePdf} className="btn-secondary flex items-center gap-1.5 text-sm px-3 min-h-[44px]">
-                      <FileText size={14} /> PDF
-                    </button>
-                  </div>
+            <Tabs variant="line" label="Serial tracker views" value={activeTab}
+              onChange={(key) => { setActiveTab(key); if (key === 'scrapped') loadScrapList() }}
+              tabs={[{ key: 'register', label: 'Serial register' }, { key: 'bulk', label: 'Bulk lookup' }, { key: 'scrapped', label: 'Scrapped' }]} />
+            <div className="st-tabbody" />
+            {activeTab === 'register' && (
+              <>
+                <div className="cc-filters st-filters">
+                  <label className="cc-search">
+                    <Search size={15} aria-hidden="true" />
+                    <input type="search" aria-label="Search by serial number or asset" placeholder="Search by serial number or asset"
+                      value={regSearch} onChange={(e) => setRegSearch(e.target.value)} />
+                  </label>
+                  <select className="cc-select" aria-label="Brand" value={brand} onChange={(e) => setBrand(e.target.value)}>
+                    <option value="">All brands</option>
+                    {(options.data?.brands || []).map((b) => <option key={b} value={b}>{b}</option>)}
+                  </select>
+                  <select className="cc-select" aria-label="Size" value={size} onChange={(e) => setSize(e.target.value)}>
+                    <option value="">All sizes</option>
+                    {(options.data?.sizes || []).map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                  <select className="cc-select" aria-label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
+                    <option value="">All status</option>
+                    {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                  <select className="cc-select" aria-label="Location" value={site} onChange={(e) => setSite(e.target.value)}>
+                    <option value="">All locations</option>
+                    {(options.data?.sites || []).map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                  {filtersOn && <button type="button" className="cc-btn-ghost" onClick={clearFilters}><X size={14} aria-hidden="true" /> Clear</button>}
                 </div>
-                {scrapErr && (
-                  <div className="mb-3 -mt-1 flex items-center gap-2 text-sm text-red-400">
-                    <AlertTriangle size={14} className="shrink-0" /> {scrapErr}
+                {options.error && <p className="st-muted">Filter options could not load. <button type="button" className="cc-link cc-link-btn" onClick={options.retry}>Try again</button></p>}
+                <p className="st-muted st-note">One row per fitment record. Tyre pattern is not recorded, so there is no pattern filter.</p>
+                <CardState state={register} lines={6} empty={!register.loading && !register.error && regRows.length === 0
+                  ? (filtersOn ? 'No tyre records match these filters.' : 'No tyre records in this country yet.') : null}>
+                  <KitTable className="st-table" manualPagination showPagination={false} enableSorting={false}
+                    pageIndex={regPage} pageSize={regSize} pageCount={Math.max(1, Math.ceil(regTotal / regSize))}
+                    totalRows={regTotal} getRowId={(r) => String(r.id)} onRowClick={(r) => openSerial(r?.serial_no)}
+                    rows={regRows} columns={registerColumns} />
+                  <Pager page={regPage} pageSize={regSize} total={regTotal} noun="records"
+                    onPage={setRegPage} onPageSize={setRegSize} sizes={REGISTER_PAGE_SIZES} />
+                </CardState>
+              </>
+            )}
+
+            {activeTab === 'bulk' && (
+              <div className="st-stack">
+                <div
+                  className={`st-drop ${bulkDragOver ? 'is-over' : ''}`}
+                  onDragOver={e => { e.preventDefault(); setBulkDragOver(true) }}
+                  onDragLeave={() => setBulkDragOver(false)}
+                  onDrop={handleBulkDrop}
+                >
+                  <input ref={bulkFileRef} type="file" accept=".xlsx,.csv" className="hidden" onChange={handleBulkFileInput} />
+                  <Upload size={28} aria-hidden="true" />
+                  <p className="st-strong">{bulkFileName ? bulkFileName : 'Drop an Excel or CSV file here'}</p>
+                  <p className="st-muted">
+                    File must have a column: <code>serial_no</code>, <code>Serial No</code>, <code>Serial Number</code>, or <code>serial</code>
+                  </p>
+                  <button type="button" className="cc-btn-ghost" onClick={() => bulkFileRef.current?.click()}>Browse file</button>
+                </div>
+
+                {bulkLoading && <div className="cc-empty">Processing serial numbers...</div>}
+
+                {error && !bulkLoading && (
+                  <div className="st-alert" role="alert">
+                    <AlertTriangle size={16} aria-hidden="true" /><span>{error}</span>
+                    <button onClick={() => bulkFileRef.current?.click()} className="cc-btn-ghost">Choose file again</button>
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                  {[
-                    { label: 'First Used',      value: stats.first.issue_date ? formatDate(stats.first.issue_date) : 'N/A' },
-                    { label: 'Total Records',   value: stats.records },
-                    { label: 'Vehicles Used',   value: stats.assets },
-                    { label: 'Sites',           value: stats.sites },
-                    { label: 'Days in Service', value: stats.days == null ? 'N/A' : stats.days.toLocaleString() },
-                    { label: 'Price per tyre',  value: moneyFor(stats.price, stats.country) },
-                  ].map(s => (
-                    <div key={s.label} className="bg-[var(--surface-2)] rounded-lg p-3 text-center">
-                      <p className="text-lg font-bold text-[var(--text-primary)] tabular-nums">{s.value}</p>
-                      <p className="text-xs text-[var(--text-muted)] mt-0.5">{s.label}</p>
-                    </div>
-                  ))}
-                </div>
-                <p className="text-xs text-[var(--text-muted)] mt-3">
-                  {stats.price == null
-                    ? 'No purchase price is recorded on any record of this tyre.'
-                    : `Price taken from the latest priced record (${stats.pricedRecords} of ${stats.records} records carry a price). Moves are not summed: one tyre is bought once.`}
-                </p>
-              </Card>
-
-              <Card>
-                <CardHeader level={2} title="Record history" description={`All ${stats.records} tyre record${stats.records !== 1 ? 's' : ''} for this serial. Sort any column.`} />
-                <EnterpriseTable
-                  columns={recordColumns}
-                  data={records}
-                  getRowId={r => String(r.id)}
-                  enableColumnFilters={false}
-                  enableExport={false}
-                  enableKeyboard={false}
-                  initialPageSize={25}
-                  searchPlaceholder="Search this tyre's records"
-                  emptyMessage="No records."
-                />
-              </Card>
-
-              <Card>
-                <CardHeader level={2} title="Service Timeline" />
-                <div className="space-y-4">
-                  {timeline.map((group, gi) => (
-                    <div key={gi}>
-                      {gi > 0 && (
-                        <div className="flex items-center gap-2 py-1 px-3 rounded-md text-xs text-blue-400 bg-blue-900/20 border border-blue-800/40 mb-3 w-fit">
-                          Transferred to {group.asset || 'unknown'}
+                {bulkDone && !bulkLoading && !error && (
+                  <>
+                    {bulkSummary && (
+                      <div className="st-bulkbar">
+                        <div className="st-chips">
+                          {[
+                            { label: 'Found',   value: bulkSummary.total,    key: null,        active: statusFilter === null },
+                            { label: 'Active',  value: bulkSummary.active,   key: 'Active',    active: statusFilter === 'Active' },
+                            { label: 'Retired', value: bulkSummary.retired,  key: 'Retired',   active: statusFilter === 'Retired' },
+                            { label: 'Scrapped', value: bulkSummary.scrapped, key: 'Scrapped', active: statusFilter === 'Scrapped' },
+                            { label: 'Missing', value: bulkSummary.notFound, key: 'Not Found', active: statusFilter === 'Not Found' },
+                          ].map(chip => (
+                            <button key={chip.label} type="button" aria-pressed={chip.active} className="st-chip"
+                              onClick={() => setStatusFilter(chip.active && chip.key !== null ? null : chip.key)}>
+                              <b>{chip.value}</b> {chip.label}
+                            </button>
+                          ))}
                         </div>
-                      )}
-                      <div className="mb-1">
-                        <span className="text-sm font-semibold text-[var(--text-primary)] font-mono">{group.asset || 'Unknown Asset'}</span>
-                        <span className="text-xs text-[var(--text-muted)] ml-2">{group.records.length} record{group.records.length !== 1 ? 's' : ''}</span>
+                        <div className="st-chips">
+                          <label className="cc-search st-mini-search">
+                            <Search size={14} aria-hidden="true" />
+                            <input type="search" aria-label="Filter bulk results" placeholder="Filter results..." value={bulkSearch} onChange={e => setBulkSearch(e.target.value)} />
+                          </label>
+                          <button onClick={exportBulkExcel} disabled={filteredBulkResults.length === 0} className="cc-btn-ghost"><FileSpreadsheet size={14} aria-hidden="true" /> Excel</button>
+                          <button onClick={exportBulkPdf} disabled={filteredBulkResults.length === 0} className="cc-btn-ghost"><FileText size={14} aria-hidden="true" /> PDF</button>
+                        </div>
+                        {(statusFilter || bulkSearch.trim()) && (
+                          <p className="st-muted">
+                            Showing {filteredBulkResults.length} of {bulkResults.length} results
+                            {statusFilter && <> · filtered by <b>{statusFilter}</b></>}
+                            {bulkSearch.trim() && <> · matching <b>"{bulkSearch}"</b></>}
+                            <button onClick={() => { setStatusFilter(null); setBulkSearch('') }} className="cc-link cc-link-btn" style={{ marginLeft: 8 }}>Clear</button>
+                          </p>
+                        )}
                       </div>
-                      <div className="space-y-2 pl-3 border-l border-[var(--border-bright)]">
-                        {group.records.map(r => (
-                          <div key={r.id} className="flex items-start gap-3 py-2">
-                            <div className="text-xs font-mono text-[var(--text-muted)] w-24 flex-shrink-0 pt-0.5">{formatDate(r.issue_date)}</div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
-                                <span className="text-[var(--text-secondary)]">{r.site || 'N/A'}</span>
-                                {r.position && <span className="text-[var(--text-muted)]">Pos: <span className="text-[var(--text-primary)] font-mono">{r.position}</span></span>}
-                                {r.risk_level && <span className={riskColor(r.risk_level)}>{r.risk_level}</span>}
-                                {recordPrice(r) != null && <span className="text-[var(--text-muted)]">{moneyFor(recordPrice(r), r.country)}</span>}
-                              </div>
-                              {r.description && <p className="text-xs text-[var(--text-dim)] mt-0.5 truncate">{r.description}</p>}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                    )}
+
+                    {bulkResults.length === 0 ? (
+                      <div className="cc-empty">No serial numbers could be extracted from the file. Check that it has a recognised column header.</div>
+                    ) : filteredBulkResults.length === 0 ? (
+                      <div className="cc-empty">No results match the current filter.</div>
+                    ) : (
+                      <EnterpriseTable
+                        className="cc-et"
+                        columns={bulkColumns}
+                        data={filteredBulkResults}
+                        getRowId={r => r.serial}
+                        enableGlobalFilter={false}
+                        enableColumnFilters={false}
+                        enableExport={false}
+                        enableColumnVisibility={false}
+                        stickyHeader={false}
+                        initialPageSize={50}
+                        onRowClick={(r) => { if (r && r.status !== 'Not Found') { setActiveTab('register'); openSerial(r.serial) } }}
+                        emptyMessage="No results match the current filter."
+                      />
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'scrapped' && (
+              <div className="st-stack">
+                <div className="st-scrap-head">
+                  <p className="st-muted">
+                    {scrapListLoad ? 'Loading...' : `${scrapList.length} tyre${scrapList.length !== 1 ? 's' : ''} marked as scrap`}
+                    {canUndo ? ' · edit the reason or undo a mistaken scrap'
+                      : canScrap ? ' · edit the reason' : ''}
+                  </p>
+                  <div className="st-chips">
+                    <label className="cc-search st-mini-search">
+                      <Search size={14} aria-hidden="true" />
+                      <input type="search" aria-label="Filter scrapped tyres" placeholder="Filter serial / reason..." value={scrapListSearch} onChange={e => setScrapListSearch(e.target.value)} />
+                    </label>
+                    <button onClick={exportScrapExcel} disabled={scrapListLoad || !!scrapListErr || filteredScrapList.length === 0} className="cc-btn-ghost"><FileSpreadsheet size={14} aria-hidden="true" /> Excel</button>
+                    <button onClick={exportScrapPdf} disabled={scrapListLoad || !!scrapListErr || filteredScrapList.length === 0} className="cc-btn-ghost"><FileText size={14} aria-hidden="true" /> PDF</button>
+                    <button onClick={loadScrapList} disabled={scrapListLoad} className="cc-btn-ghost"><RotateCcw size={14} aria-hidden="true" /> Refresh</button>
+                  </div>
+                </div>
+                {!canScrap ? (
+                  <p className="st-muted"><AlertTriangle size={12} aria-hidden="true" /> You can view scrapped tyres. Marking one as scrap needs the tyre scrap permission, which an admin grants in Access Control.</p>
+                ) : !canUndo ? (
+                  <p className="st-muted"><AlertTriangle size={12} aria-hidden="true" /> You can mark a tyre as scrap and edit the reason. Undoing a scrap is an administrator action.</p>
+                ) : null}
+
+                <div className="st-mini-kpis">
+                  {[
+                    { label: 'Scrapped tyres', value: scrapSummary.total, icon: Trash2, sub: 'marked as scrap' },
+                    { label: 'Last 30 days', value: scrapSummary.last30, icon: CalendarClock, sub: 'newly scrapped' },
+                    { label: 'With a reason', value: scrapSummary.reasonRate == null ? 'N/A' : `${Math.round(scrapSummary.reasonRate * 100)}%`, icon: ClipboardList, sub: `${scrapSummary.withReason} of ${scrapSummary.total}` },
+                    { label: 'No actor recorded', value: scrapSummary.unattributed, icon: UserX, sub: 'bulk-scrapped from the tyre grid' },
+                  ].map(kk => (
+                    <div key={kk.label} className="st-mini-kpi">
+                      <span><kk.icon size={14} aria-hidden="true" /> {kk.label}</span>
+                      <b>{scrapListLoad ? '...' : scrapListErr ? 'N/A' : kk.value}</b>
+                      <small>{kk.sub}</small>
                     </div>
                   ))}
                 </div>
-              </Card>
-            </>
-          )}
-        </>
-      )}
 
-      {/* ── Bulk Lookup tab ────────────────────────────────────────────────── */}
-      {activeTab === 'bulk' && (
-        <div className="space-y-4">
-          {/* The whole surface is the drop target and is genuinely clickable, so
-              it takes `interactive`. Card sets `border` INLINE and inline beats a
-              class, so the dashed drop affordance is set through `style` - a
-              `border-2 border-dashed` class here would be silently dead. */}
-          <Card
-            interactive
-            className="transition-all cursor-pointer"
-            style={{
-              border: bulkDragOver ? '2px dashed rgb(34 197 94)' : '2px dashed var(--border-bright)',
-              ...(bulkDragOver ? { background: 'rgba(20, 83, 45, 0.10)' } : {}),
-            }}
-            onDragOver={e => { e.preventDefault(); setBulkDragOver(true) }}
-            onDragLeave={() => setBulkDragOver(false)}
-            onDrop={handleBulkDrop}
-            onClick={() => bulkFileRef.current?.click()}
-          >
-            <input
-              ref={bulkFileRef}
-              type="file"
-              accept=".xlsx,.csv"
-              className="hidden"
-              onChange={handleBulkFileInput}
-            />
-            <div className="flex flex-col items-center justify-center py-10 gap-3 text-center pointer-events-none">
-              <Upload size={32} className={bulkDragOver ? 'text-green-400' : 'text-[var(--text-muted)]'} />
-              <p className="text-[var(--text-primary)] font-medium">
-                {bulkFileName ? bulkFileName : 'Drop an Excel or CSV file here'}
-              </p>
-              <p className="text-[var(--text-muted)] text-sm">
-                File must have a column: <span className="font-mono text-[var(--text-secondary)]">serial_no</span>, <span className="font-mono text-[var(--text-secondary)]">Serial No</span>, <span className="font-mono text-[var(--text-secondary)]">Serial Number</span>, or <span className="font-mono text-[var(--text-secondary)]">serial</span>
-              </p>
-              <button
-                className="btn-secondary text-sm px-4 min-h-[44px] pointer-events-auto"
-                onClick={e => { e.stopPropagation(); bulkFileRef.current?.click() }}
-              >
-                Browse File
-              </button>
-            </div>
-          </Card>
-
-          {/* `py-10` would be DEAD on a Card - Card sets padding inline and
-              inline beats a class - so the state's breathing room is a spacing
-              token instead. */}
-          {bulkLoading && (
-            <Card className="text-center" style={{ paddingBlock: 'var(--space-10)' }}>
-              <div className="inline-block w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin mb-3" />
-              <p className="text-[var(--text-secondary)]">Processing serial numbers...</p>
-            </Card>
-          )}
-
-          {error && !bulkLoading && (
-            <Card tone="crit" className="items-center gap-[var(--space-3)]" style={{ flexDirection: 'row' }} role="alert">
-              <AlertTriangle size={18} className="text-red-400 shrink-0" aria-hidden="true" />
-              <p className="text-sm text-red-400 flex-1">{error}</p>
-              <button onClick={() => bulkFileRef.current?.click()} className="btn-secondary text-xs px-3 min-h-[44px]">Choose file again</button>
-            </Card>
-          )}
-
-          {bulkDone && !bulkLoading && !error && (
-            <>
-              {bulkSummary && (
-                <div className="rounded-xl px-5 py-4 space-y-3"
-                  style={{ background: 'rgba(22,163,74,0.10)', border: '1px solid rgba(22,163,74,0.3)' }}>
-                  <div className="flex flex-wrap items-center gap-3 justify-between">
-                    <div className="flex flex-wrap gap-2">
-                      {[
-                        { label: 'Found',   value: bulkSummary.total,    key: null,         active: statusFilter === null, color: 'green' },
-                        { label: 'Active',  value: bulkSummary.active,   key: 'Active',     active: statusFilter === 'Active',   color: 'emerald' },
-                        { label: 'Retired', value: bulkSummary.retired,  key: 'Retired',    active: statusFilter === 'Retired',  color: 'gray' },
-                        { label: 'Scrapped', value: bulkSummary.scrapped, key: 'Scrapped',  active: statusFilter === 'Scrapped',  color: 'red' },
-                        { label: 'Missing', value: bulkSummary.notFound, key: 'Not Found',  active: statusFilter === 'Not Found', color: 'red' },
-                      ].map(chip => (
-                        <button
-                          key={chip.label}
-                          aria-pressed={chip.active}
-                          onClick={() => setStatusFilter(chip.active && chip.key !== null ? null : chip.key)}
-                          className={`flex items-center gap-1.5 px-3 min-h-[44px] rounded-lg text-sm font-medium border transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                            chip.active && chip.key === null
-                              ? 'bg-green-900/40 text-green-300 border-green-600/50'
-                              : chip.active
-                                ? 'bg-[var(--surface-3)] text-[var(--text-primary)] border-gray-500'
-                                : 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)] hover:border-gray-500 hover:text-[var(--text-primary)]'
-                          }`}
-                        >
-                          <span className={`text-base font-bold ${
-                            chip.label === 'Found'   ? 'text-green-400' :
-                            chip.label === 'Active'  ? 'text-emerald-400' :
-                            chip.label === 'Missing' || chip.label === 'Scrapped' ? 'text-red-400' : 'text-[var(--text-secondary)]'
-                          }`}>{chip.value}</span>
-                          <span>{chip.label}</span>
-                        </button>
-                      ))}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="relative">
-                        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
-                        <input
-                          type="search"
-                          aria-label="Filter bulk results"
-                          className="input text-sm pl-7 pr-3 min-h-[44px] w-44"
-                          placeholder="Filter results..."
-                          value={bulkSearch}
-                          onChange={e => setBulkSearch(e.target.value)}
-                        />
-                      </div>
-                      <button onClick={exportBulkExcel} disabled={filteredBulkResults.length === 0} className="btn-secondary flex items-center gap-1.5 text-sm px-3 min-h-[44px] disabled:opacity-50">
-                        <FileSpreadsheet size={14} aria-hidden="true" /> Excel
-                      </button>
-                      <button onClick={exportBulkPdf} disabled={filteredBulkResults.length === 0} className="btn-secondary flex items-center gap-1.5 text-sm px-3 min-h-[44px] disabled:opacity-50">
-                        <FileText size={14} aria-hidden="true" /> PDF
-                      </button>
-                    </div>
+                {scrapListErr && (
+                  <div className="st-alert" role="alert">
+                    <AlertTriangle size={16} aria-hidden="true" /><span>{scrapListErr}</span>
+                    <button onClick={loadScrapList} className="cc-btn-ghost">Retry</button>
                   </div>
-                  {(statusFilter || bulkSearch.trim()) && (
-                    <p className="text-xs text-[var(--text-muted)]">
-                      Showing {filteredBulkResults.length} of {bulkResults.length} results
-                      {statusFilter && <> · filtered by <span className="text-[var(--text-secondary)]">{statusFilter}</span></>}
-                      {bulkSearch.trim() && <> · matching <span className="text-[var(--text-secondary)]">"{bulkSearch}"</span></>}
-                      <button onClick={() => { setStatusFilter(null); setBulkSearch('') }} className="ml-2 text-[var(--text-muted)] hover:text-[var(--text-secondary)] underline">Clear</button>
-                    </p>
-                  )}
-                </div>
-              )}
+                )}
 
-              {bulkResults.length === 0 ? (
-                <Card>
-                  <EmptyState
-                    illustration="state/search-empty"
-                    icon={FileText}
-                    title="No serials found"
-                    description="No serial numbers could be extracted from the file. Check that it has a recognised column header."
-                  />
-                </Card>
-              ) : filteredBulkResults.length === 0 ? (
-                <Card className="text-center" style={{ paddingBlock: 'var(--space-10)' }}>
-                  <p className="text-[var(--text-secondary)]">No results match the current filter.</p>
-                  <button onClick={() => { setStatusFilter(null); setBulkSearch('') }} className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)] underline mt-1">Clear filters</button>
-                </Card>
-              ) : (
-                <Card>
+                {scrapListLoad ? (
+                  <div className="cc-empty">Loading scrapped tyres...</div>
+                ) : scrapListErr ? null : scrapList.length === 0 ? (
+                  <div className="cc-empty">No scrapped tyres. Tyres you mark as scrap will appear here.</div>
+                ) : filteredScrapList.length === 0 ? (
+                  <div className="cc-empty">No scrapped tyres match "{scrapListSearch}". <button onClick={() => setScrapListSearch('')} className="cc-link cc-link-btn">Clear filter</button></div>
+                ) : (
                   <EnterpriseTable
-                    columns={bulkColumns}
-                    data={filteredBulkResults}
+                    className="cc-et"
+                    columns={scrapColumns}
+                    data={filteredScrapList}
                     getRowId={r => r.serial}
                     enableGlobalFilter={false}
                     enableColumnFilters={false}
                     enableExport={false}
+                    enableKeyboard={false}
+                    enableColumnVisibility={false}
+                    stickyHeader={false}
                     initialPageSize={50}
-                    emptyMessage="No results match the current filter."
+                    emptyMessage="No scrapped tyres match this filter."
                   />
-                </Card>
-              )}
-            </>
-          )}
-        </div>
-      )}
-
-      {/* ── Scrapped register tab ──────────────────────────────────────────── */}
-      {activeTab === 'scrapped' && (
-        <div className="space-y-4">
-          {/* Deliberately NOT clipped: this card hosts the filter input. */}
-          <Card>
-            <CardHeader
-              level={2}
-              title="Scrapped tyres"
-              description={<>
-                {scrapListLoad ? 'Loading...' : `${scrapList.length} tyre${scrapList.length !== 1 ? 's' : ''} marked as scrap`}
-                {canUndo ? ' · edit the reason or undo a mistaken scrap'
-                  : canScrap ? ' · edit the reason' : ''}
-              </>}
-              actions={
-                <>
-                  <div className="relative">
-                    <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
-                    <input
-                      type="search"
-                      aria-label="Filter scrapped tyres"
-                      className="input text-sm pl-7 pr-3 min-h-[44px] w-48"
-                      placeholder="Filter serial / reason..."
-                      value={scrapListSearch}
-                      onChange={e => setScrapListSearch(e.target.value)}
-                    />
-                  </div>
-                  <button onClick={exportScrapExcel} disabled={scrapListLoad || !!scrapListErr || filteredScrapList.length === 0}
-                    className="btn-secondary flex items-center gap-1.5 text-sm px-3 min-h-[44px] disabled:opacity-50">
-                    <FileSpreadsheet size={14} aria-hidden="true" /> Excel
-                  </button>
-                  <button onClick={exportScrapPdf} disabled={scrapListLoad || !!scrapListErr || filteredScrapList.length === 0}
-                    className="btn-secondary flex items-center gap-1.5 text-sm px-3 min-h-[44px] disabled:opacity-50">
-                    <FileText size={14} aria-hidden="true" /> PDF
-                  </button>
-                  <button onClick={loadScrapList} disabled={scrapListLoad}
-                    className="btn-secondary flex items-center gap-1.5 text-sm px-3 min-h-[44px] disabled:opacity-50">
-                    <RotateCcw size={14} aria-hidden="true" /> Refresh
-                  </button>
-                </>
-              }
-            />
-            <CardBody>
-              {!canScrap ? (
-                <p className="text-xs text-[var(--text-muted)] flex items-center gap-1.5">
-                  <AlertTriangle size={12} /> You can view scrapped tyres. Marking one as scrap needs the tyre scrap permission, which an admin grants in Access Control.
-                </p>
-              ) : !canUndo ? (
-                <p className="text-xs text-[var(--text-muted)] flex items-center gap-1.5">
-                  <AlertTriangle size={12} /> You can mark a tyre as scrap and edit the reason. Undoing a scrap is an administrator action.
-                </p>
-              ) : null}
-            </CardBody>
+                )}
+              </div>
+            )}
           </Card>
 
-          {/* KPI strip. A failed read shows N/A, never zeros. */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            {[
-              { label: 'Scrapped tyres', value: scrapSummary.total, icon: Trash2, sub: 'marked as scrap' },
-              { label: 'Last 30 days', value: scrapSummary.last30, icon: CalendarClock, sub: 'newly scrapped' },
-              { label: 'With a reason', value: scrapSummary.reasonRate == null ? 'N/A' : `${Math.round(scrapSummary.reasonRate * 100)}%`, icon: ClipboardList, sub: `${scrapSummary.withReason} of ${scrapSummary.total}` },
-              { label: 'No actor recorded', value: scrapSummary.unattributed, icon: UserX, sub: 'bulk-scrapped from the tyre grid' },
-            ].map(k => (
-              <Card key={k.label}>
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
-                  <k.icon size={15} className="text-[var(--text-muted)]" aria-hidden="true" />
+          <div className="st-bottom">
+            <Card title="Movement & history" sub={stats ? `Serial ${lastQuery}` : undefined}>
+              <Tabs label="History type" value={historyTab} onChange={setHistoryTab}
+                tabs={HISTORY_TABS.map((t) => ({ ...t, count: t.key === 'records' ? records.length : t.key === 'all' ? counts.all : counts[t.key] }))} />
+              <div className="st-tabbody">
+                <CardState state={detailsState} lines={4} empty={!stats && !loading ? 'Select a serial to see its movement.' : null}>
+                  {historyTab === 'records' ? (
+                    <EnterpriseTable
+                      className="cc-et"
+                      columns={recordColumns}
+                      data={records}
+                      getRowId={r => String(r.id)}
+                      enableColumnFilters={false}
+                      enableExport={false}
+                      enableKeyboard={false}
+                      enableColumnVisibility={false}
+                      stickyHeader={false}
+                      initialPageSize={25}
+                      searchPlaceholder="Search this tyre's records"
+                      emptyMessage="No records."
+                    />
+                  ) : shownEvents.length === 0 ? (
+                    <div className="cc-empty">{EMPTY_HISTORY[historyTab] || 'No events of this type for this tyre.'}</div>
+                  ) : (
+                    <KitTable compact rows={shownEvents} columns={eventColumns} getRowId={(e) => e.id} />
+                  )}
+                </CardState>
+              </div>
+            </Card>
+
+            <Card title="Tyre life & usage">
+              <Tabs label="Usage view" value={usageTab} onChange={setUsageTab} tabs={USAGE_TABS} />
+              <CardState state={detailsState} lines={3} empty={!stats && !loading ? 'Select a serial to see its life and usage.' : null}>
+                <div className="st-usage-stats">
+                  <div><span>Total life</span><b>{fmtKm(usage.totalKm)}</b><small>{usage.measured} of {usage.records} fitments measured</small></div>
+                  <div><span>Current km</span><b>{fmtKm(usage.currentKm)}</b><small>{usage.currentKm == null ? 'Not fitted or not measured' : 'This fitment'}</small></div>
+                  <div><span>Remaining</span><b>N/A</b><small>No expected life recorded for this tyre</small></div>
                 </div>
-                <p className="text-2xl font-bold text-[var(--text-primary)] mt-1 tabular-nums">{scrapListLoad ? '...' : scrapListErr ? 'N/A' : k.value}</p>
-                <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{k.sub}</p>
-              </Card>
-            ))}
+                {usageTab === 'temperature' ? (
+                  <div className="cc-empty">Tyre temperature is not recorded.</div>
+                ) : usagePoints.length < 2 ? (
+                  <div className="cc-empty">Not enough readings to draw a trend ({usagePoints.length} recorded).</div>
+                ) : (
+                  <UsageChart points={usagePoints} unit={USAGE_UNIT[usageTab]} />
+                )}
+              </CardState>
+            </Card>
           </div>
-
-          {scrapListErr && (
-            <Card tone="crit" className="items-center gap-[var(--space-3)]" style={{ flexDirection: 'row' }} role="alert">
-              <AlertTriangle size={18} className="text-red-400 shrink-0" />
-              <p className="text-sm text-red-400 flex-1">{scrapListErr}</p>
-              <button onClick={loadScrapList} className="btn-secondary text-xs px-3 min-h-[44px]">Retry</button>
-            </Card>
-          )}
-
-          {scrapListLoad ? (
-            <Card className="text-center" style={{ paddingBlock: 'var(--space-10)' }}>
-              <div className="inline-block w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin mb-3" />
-              <p className="text-[var(--text-secondary)]">Loading scrapped tyres...</p>
-            </Card>
-          ) : scrapListErr ? null : scrapList.length === 0 ? (
-            <Card>
-              <EmptyState
-                illustration="state/search-empty"
-                icon={Trash2}
-                title="No scrapped tyres"
-                description="Tyres you mark as scrap from Single Search will appear here."
-              />
-            </Card>
-          ) : filteredScrapList.length === 0 ? (
-            <Card className="text-center" style={{ paddingBlock: 'var(--space-10)' }}>
-              <p className="text-[var(--text-secondary)]">No scrapped tyres match "{scrapListSearch}".</p>
-              <button onClick={() => setScrapListSearch('')} className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)] underline mt-1">Clear filter</button>
-            </Card>
-          ) : (
-            <Card>
-              <EnterpriseTable
-                columns={scrapColumns}
-                data={filteredScrapList}
-                getRowId={r => r.serial}
-                enableGlobalFilter={false}
-                enableColumnFilters={false}
-                enableExport={false}
-                enableKeyboard={false}
-                initialPageSize={50}
-                emptyMessage="No scrapped tyres match this filter."
-              />
-            </Card>
-          )}
         </div>
+
+        <aside className="st-rail">
+          <Card title="Serial number details" action={stats ? (
+            <span className="st-head-actions">
+              <button type="button" className="cc-btn-ghost" onClick={exportLifecycleExcel}><FileSpreadsheet size={14} aria-hidden="true" /> Excel</button>
+              <button type="button" className="cc-btn-primary" onClick={exportLifecyclePdf}><FileText size={14} aria-hidden="true" /> Export</button>
+            </span>
+          ) : null}>
+            {!loading && error && !stats ? (
+              <div className="cc-empty" role="alert"><div>{error}<br /><button type="button" className="cc-btn" onClick={() => search(lastQuery || serialInput)}>Try again</button></div></div>
+            ) : loading ? (
+              <div style={{ display: 'grid', gap: 10 }}>{Array.from({ length: 6 }, (_, i) => <div key={i} className="cc-skel" style={{ height: 26 }} />)}</div>
+            ) : searched && records.length === 0 ? (
+              <div className="cc-empty">No tyre records match serial "{lastQuery}" in the selected country. Check the spelling, or switch the country scope.</div>
+            ) : !stats ? (
+              <div className="cc-empty">
+                <div>Select a serial in the register, or scan one.<br />
+                  <button type="button" className="cc-btn" onClick={() => setScanOpen(true)}>Scan Serial Number</button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="st-identity">
+                  <TyreGlyph size={84} />
+                  <div>
+                    <StatusPill status={stats.last.status} scrapped={selectedStatusScrapped} />
+                    <h3 className="st-serial-big">{lastQuery}</h3>
+                    <p className="st-muted">{[stats.brand, stats.description].filter(Boolean).join(' · ') || 'Brand not recorded'}</p>
+                    {scrapMark && <p className="st-bad">Scrapped {formatDate(scrapMark.created_at)}{scrapMark.reason ? ` · ${scrapMark.reason}` : ''}</p>}
+                  </div>
+                  <Link className="cc-icon-btn st-qr" to={`/tyre-passport/${encodeURIComponent(lastQuery)}`} aria-label="Open tyre passport"><QrCode size={16} aria-hidden="true" /></Link>
+                </div>
+                <dl className="st-fields">
+                  <Field label="Size">{records[records.length - 1]?.size || null}</Field>
+                  <Field label="First fitted">{stats.first.issue_date ? formatDate(stats.first.issue_date) : null}</Field>
+                  <Field label="Days in service">{stats.days == null ? null : stats.days.toLocaleString('en-US')}</Field>
+                  <Field label="Records">{fmtInt(stats.records)}</Field>
+                  <Field label="Vehicles used">{fmtInt(stats.assets)}</Field>
+                  <Field label="Sites">{fmtInt(stats.sites)}</Field>
+                  <Field label="Current life">{usage.totalKm == null ? null : fmtKm(usage.totalKm)}</Field>
+                  <Field label="Expected life">{null}</Field>
+                  <Field label="Price per tyre">{moneyFor(stats.price, stats.country)}</Field>
+                </dl>
+                <p className="st-muted st-note">
+                  Pattern, load index, speed rating, DOT and manufacturing date are not recorded on tyre records.
+                  {' '}{stats.price == null
+                    ? 'No purchase price is recorded on any record of this tyre.'
+                    : `Price taken from the latest priced record (${stats.pricedRecords} of ${stats.records} records carry a price).`}
+                </p>
+                <div className="st-scrap-actions">
+                  {scrapMark ? (canUndo && (
+                    <button onClick={undoScrap} disabled={scrapBusy} className="cc-btn-ghost"><RotateCcw size={14} aria-hidden="true" /> {scrapBusy ? 'Working...' : 'Undo scrap'}</button>
+                  )) : (canScrap && (
+                    <button onClick={() => { setScrapErr(null); setScrapReason(''); setScrapOpen(true) }} className="cc-btn-ghost st-danger"><Trash2 size={14} aria-hidden="true" /> Mark as Scrap</button>
+                  ))}
+                </div>
+                {scrapErr && <p className="st-bad" role="alert"><AlertTriangle size={13} aria-hidden="true" /> {scrapErr}</p>}
+              </>
+            )}
+          </Card>
+
+          <Card title="Current assignment">
+            {!stats ? <div className="cc-empty">No serial selected.</div> : !assignment ? (
+              <div className="cc-empty">This tyre is not fitted to a vehicle now.</div>
+            ) : (
+              <>
+                <div className="cc-vehicle st-assign">
+                  <VehicleThumb row={assignment} size="md" />
+                  <div><b>{assignment.asset_no || 'Asset not recorded'}</b><span className="cc-sub">{assignment.vehicle_type || 'Type not recorded'}</span></div>
+                </div>
+                <dl className="st-fields">
+                  <Field label="Position">{assignment.position}</Field>
+                  <Field label="Installed date">{assignment.installed ? formatDate(assignment.installed) : null}</Field>
+                  <Field label="Installed by">{'Not recorded'}</Field>
+                  <Field label="Site">{assignment.site}</Field>
+                </dl>
+                {assignment.asset_no && (
+                  <Link className="cc-link" to={`/asset-management/${encodeURIComponent(assignment.asset_no)}`}>View vehicle details <ArrowRight size={13} aria-hidden="true" /></Link>
+                )}
+              </>
+            )}
+          </Card>
+
+          <Card title="Photos & documents">
+            {!stats ? <div className="cc-empty">No serial selected.</div> : photoUrls.loading ? (
+              <div className="st-photos">{[0, 1, 2].map((i) => <div key={i} className="cc-skel" style={{ height: 72 }} />)}</div>
+            ) : photoUrls.urls.length === 0 ? (
+              <div className="cc-empty"><div><ImageOff size={18} aria-hidden="true" /><br />No photos or documents are recorded on this tyre's records.</div></div>
+            ) : (
+              <div className="st-photos">
+                {photoUrls.urls.map((u) => <a key={u} href={u} target="_blank" rel="noopener noreferrer"><img src={u} alt="Tyre record" loading="lazy" /></a>)}
+              </div>
+            )}
+          </Card>
+        </aside>
+      </div>
+
+      {scanOpen && (
+        <ScanModal onClose={() => setScanOpen(false)} onSubmit={(v) => { setScanOpen(false); setActiveTab('register'); openSerial(v) }} />
       )}
 
-      {/* ── Scrap confirmation modal ─────────────────────────────────────────
-          No <form> here, so the actions belong in the Modal footer. The scrap
-          RPC call itself is untouched. */}
+      {/* Scrap confirmation. The scrap RPC call itself is untouched. */}
       {scrapOpen && (
         <Modal
           open
@@ -1100,20 +1180,16 @@ export default function SerialTracker() {
           size="sm"
           footer={
             <>
-              <button onClick={closeScrap} disabled={scrapBusy} className="btn-secondary text-sm px-4 min-h-[44px] disabled:opacity-50">Cancel</button>
-              <button onClick={confirmScrap} disabled={scrapBusy}
-                className="flex items-center gap-1.5 text-sm px-4 min-h-[44px] rounded-md font-medium border border-red-700/50 bg-red-600/80 text-white hover:bg-red-600 transition-colors disabled:opacity-50">
-                <Trash2 size={14} /> {scrapBusy ? 'Marking...' : 'Confirm scrap'}
+              <button onClick={closeScrap} disabled={scrapBusy} className="btn-secondary text-sm disabled:opacity-50">Cancel</button>
+              <button onClick={confirmScrap} disabled={scrapBusy} className="btn-danger text-sm inline-flex items-center gap-1.5 disabled:opacity-50">
+                <Trash2 size={14} aria-hidden="true" /> {scrapBusy ? 'Marking...' : 'Confirm scrap'}
               </button>
             </>
           }
         >
-          <div className="flex items-start gap-3 mb-3">
-            <div className="p-2 rounded-lg bg-red-900/30 text-red-400 shrink-0"><Trash2 size={18} /></div>
-            <p className="text-sm text-[var(--text-secondary)]">
-              This flags the tyre and all {records.length} of its record{records.length !== 1 ? 's' : ''} as Scrapped, removing it from active and pool counts. You can undo this later.
-            </p>
-          </div>
+          <p className="text-sm text-[var(--text-secondary)] mb-3">
+            This flags the tyre and all {records.length} of its record{records.length !== 1 ? 's' : ''} as Scrapped, removing it from active and pool counts. You can undo this later.
+          </p>
           <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1" htmlFor="scrap-reason">Reason (optional)</label>
           <textarea
             id="scrap-reason"
@@ -1122,11 +1198,7 @@ export default function SerialTracker() {
             value={scrapReason}
             onChange={e => setScrapReason(e.target.value)}
           />
-          {scrapErr && (
-            <div className="mt-2 flex items-center gap-2 text-sm text-red-400">
-              <AlertTriangle size={14} className="shrink-0" /> {scrapErr}
-            </div>
-          )}
+          {scrapErr && <p className="mt-2 flex items-center gap-2 text-sm text-red-400"><AlertTriangle size={14} aria-hidden="true" /> {scrapErr}</p>}
         </Modal>
       )}
     </div>

@@ -131,6 +131,16 @@ batching stops them being started at all.
   real columns would need a migration (owner decision). Schedule no derived ROT-<year>-<6 of id>. Wear before/after
   N/A (tread_depth 0 rows). Money N/A under All countries (old page blended currencies). RotationOptimizer untouched.
 - Batch Exchange/Specs/Rotation done + pushed once. PR #370 UNMERGED.
+- **OWNER APPROVED REAL COLUMNS (2026-09-29). Migration `supabase/migrations/20260929090000_rotation_fields_and_
+  tyre_spec_catalog.sql` APPLIED LIVE + verified by impersonation (rolled back).**
+  tyre_rotations += rotation_type (CHECK standard|cross|side_to_side|x_pattern|custom), from_positions[], to_positions[],
+  technician_id/technician_name, attachments jsonb[], completed_at, completed_km (notes header backfilled).
+  NEW tyre_spec_catalog = real brand/pattern/size catalogue (all mockup fields) + approval_status approved|pending|
+  not_approved; trigger lets ONLY Admin/Manager/Director/super set approval (42501 otherwise), stamps approver, and
+  writes tyre_spec_catalog_events (append-only history, users read-only). tyre_specifications STAYS = fitment rules.
+  Files for both go in private bucket tyre-photos (<org>/rotations|spec-catalog/<id>/...).
+  **IN PROGRESS (agents, uncommitted):** Rotation page -> real columns + attachments; Tyre Specs page -> catalogue as
+  primary content, fitment rules kept as a tab.
 **Flutter / Play (owner is moving Internal -> Closed testing):**
 - Checklist + all listing text: `store-assets/FLUTTER_CLOSED_TESTING.md` (owner could not find it in Play Console;
   it is a repo file; the click paths are in it).

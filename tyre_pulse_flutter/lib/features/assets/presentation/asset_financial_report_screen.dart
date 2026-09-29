@@ -12,9 +12,10 @@
 /// Every figure comes from [AssetFinancialSummary] (see
 /// `asset_financials.dart` for the source of each). Left out on purpose,
 /// because no table holds them: an annual budget and its variance, a cost
-/// per km TARGET, a downtime COST (no downtime rate exists), and a separate
-/// "external repairs" bucket (`work_orders.outside_repair_cost` is empty on
-/// every row). The screen says where its numbers come from instead.
+/// per km TARGET and a downtime COST (no downtime rate exists). External
+/// repairs ARE read (`work_orders.outside_repair_cost`), but the column is
+/// empty on most rows, so the composition usually leaves that slice out
+/// rather than drawing 0%. The screen says where its numbers come from.
 library;
 
 import 'dart:async';

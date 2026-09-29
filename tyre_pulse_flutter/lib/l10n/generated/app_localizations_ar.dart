@@ -7164,4 +7164,174 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get accountDeletionCopyCatalog =>
       'title=حذف حسابي~subtitle=طلب حذف حسابك وبياناتك الشخصية~intro=يؤدي هذا إلى إرسال طلب إلى المسؤول لحذف حسابك والبيانات الشخصية المرتبطة به. لا يتم حذف حسابك على الفور.~what=يتم إلغاء وصولك إلى التطبيق عند الطلب. تُحذف بيانات ملفك الشخصي؛ وقد يتم الاحتفاظ ببعض سجلات الأسطول التي أُنشئت لمؤسستك كسجلات تجارية أو تدقيقية مع إزالة هويتك منها.~timeline=تكتمل الطلبات المؤكدة خلال نحو 30 يومًا.~reason=السبب (اختياري)~confirm=اكتب DELETE للتأكيد~word=DELETE~submit=إرسال طلب الحذف~cancel=إلغاء~successTitle=تم إرسال الطلب~successBody=تم تسجيل طلب حذف حسابك. سيقوم المسؤول بتنفيذه خلال نحو 30 يومًا.~errorTitle=تعذّر إرسال الطلب~mismatch=اكتب DELETE تمامًا للتأكيد.~unavailable=حذف الحساب غير متاح حاليًا. يرجى مراسلتنا بالبريد لطلب الحذف.~failed=تعذّر إرسال طلبك. يرجى المحاولة مرة أخرى.~ok=حسنًا';
+
+  @override
+  String get homeOperationalSummary => 'الملخص التشغيلي';
+
+  @override
+  String get homeInspectionsDue => 'فحوصات مستحقة';
+
+  @override
+  String get homeTyresNeedAttention => 'إطارات تحتاج إلى اهتمام';
+
+  @override
+  String get homeApprovalsAwaitingYou => 'موافقات بانتظارك';
+
+  @override
+  String homePlanMoreToday(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count أخرى اليوم',
+      one: 'واحد آخر اليوم',
+      zero: 'لا شيء آخر اليوم',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get profileAssignedTasks => 'المهام المسندة';
+
+  @override
+  String get profileMyActivity => 'نشاطي';
+
+  @override
+  String get tyreRecordsExportAction => 'تصدير';
+
+  @override
+  String get tyreRecordsExportStatus => 'الحالة';
+
+  @override
+  String tyreRecordsExportNote(int shown, int total) {
+    return '$shown من $total سجل إطار محمّل على هذا الجهاز';
+  }
+
+  @override
+  String get tyreRecordsExportError =>
+      'تعذر إنشاء ملف التصدير. يرجى المحاولة مرة أخرى.';
+
+  @override
+  String get fleet360TabDocuments => 'المستندات';
+
+  @override
+  String fleet360AlertServiceDueKm(String km) {
+    return 'الصيانة مستحقة بعد $km كم';
+  }
+
+  @override
+  String fleet360AlertServiceDueHours(String hours) {
+    return 'الصيانة مستحقة بعد $hours ساعة';
+  }
+
+  @override
+  String fleet360AlertServiceDueDays(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'الصيانة مستحقة بعد $days يوم',
+      one: 'الصيانة مستحقة غداً',
+      zero: 'الصيانة مستحقة اليوم',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fleet360AlertServiceOverdue => 'الصيانة متأخرة';
+
+  @override
+  String fleet360AlertTyreActions(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count إجراءات إطارات',
+      one: 'إجراء إطار واحد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fleet360EventInspectionDone => 'اكتمل فحص الإطارات';
+
+  @override
+  String get fleet360EventWashDone => 'اكتمل الغسيل';
+
+  @override
+  String fleet360EventTyreFittedAt(String position) {
+    return 'تم تركيب إطار في $position';
+  }
+
+  @override
+  String fleet360EventTyreRemovedFrom(String position) {
+    return 'تمت إزالة إطار من $position';
+  }
+
+  @override
+  String fleet360EventSerial(String serial) {
+    return 'الرقم التسلسلي: $serial';
+  }
+
+  @override
+  String fleet360EventAccidentCase(String reference) {
+    return 'حالة الحادث $reference';
+  }
+
+  @override
+  String fleet360EventAccidentCaseClosed(String reference) {
+    return 'تم إغلاق حالة الحادث $reference';
+  }
+
+  @override
+  String fleet360SnapshotTitle(String year) {
+    return 'اللمحة المالية، $year حتى تاريخه';
+  }
+
+  @override
+  String get fleet360TotalMaintenance => 'إجمالي الصيانة';
+
+  @override
+  String get fleet360BucketExternal => 'إصلاحات خارجية';
+
+  @override
+  String get fleet360ShareError => 'تعذرت مشاركة الملخص. حاول مرة أخرى.';
+
+  @override
+  String get fleet360DocRegistration => 'التسجيل';
+
+  @override
+  String get fleet360DocInsurance => 'التأمين';
+
+  @override
+  String get fleet360DocOperatingCard => 'بطاقة التشغيل';
+
+  @override
+  String get fleet360DocDriverLicence => 'رخصة السائق';
+
+  @override
+  String fleet360DocIssued(String date) {
+    return 'صدر في $date';
+  }
+
+  @override
+  String fleet360DocExpires(String date) {
+    return 'ينتهي في $date';
+  }
+
+  @override
+  String get fleet360DocExpired => 'منتهي';
+
+  @override
+  String get fleet360DocExpiringSoon => 'ينتهي قريباً';
+
+  @override
+  String get fleet360DocValid => 'ساري';
+
+  @override
+  String get fleet360DocNoExpiry => 'لا يوجد تاريخ انتهاء مسجل';
+
+  @override
+  String get fleet360DocsEmptyTitle => 'لا توجد مستندات مسجلة';
+
+  @override
+  String get fleet360DocsEmptyBody =>
+      'لا توجد تفاصيل تسجيل أو تأمين أو بطاقة تشغيل أو رخصة مسجلة لهذا الأصل.';
 }

@@ -2990,5 +2990,129 @@
     }
   },
   "accRptTitle": "الإبلاغ عن حادث",
-  "accountDeletionCopyCatalog": "title=حذف حسابي~subtitle=طلب حذف حسابك وبياناتك الشخصية~intro=يؤدي هذا إلى إرسال طلب إلى المسؤول لحذف حسابك والبيانات الشخصية المرتبطة به. لا يتم حذف حسابك على الفور.~what=يتم إلغاء وصولك إلى التطبيق عند الطلب. تُحذف بيانات ملفك الشخصي؛ وقد يتم الاحتفاظ ببعض سجلات الأسطول التي أُنشئت لمؤسستك كسجلات تجارية أو تدقيقية مع إزالة هويتك منها.~timeline=تكتمل الطلبات المؤكدة خلال نحو 30 يومًا.~reason=السبب (اختياري)~confirm=اكتب DELETE للتأكيد~word=DELETE~submit=إرسال طلب الحذف~cancel=إلغاء~successTitle=تم إرسال الطلب~successBody=تم تسجيل طلب حذف حسابك. سيقوم المسؤول بتنفيذه خلال نحو 30 يومًا.~errorTitle=تعذّر إرسال الطلب~mismatch=اكتب DELETE تمامًا للتأكيد.~unavailable=حذف الحساب غير متاح حاليًا. يرجى مراسلتنا بالبريد لطلب الحذف.~failed=تعذّر إرسال طلبك. يرجى المحاولة مرة أخرى.~ok=حسنًا"
+  "accountDeletionCopyCatalog": "title=حذف حسابي~subtitle=طلب حذف حسابك وبياناتك الشخصية~intro=يؤدي هذا إلى إرسال طلب إلى المسؤول لحذف حسابك والبيانات الشخصية المرتبطة به. لا يتم حذف حسابك على الفور.~what=يتم إلغاء وصولك إلى التطبيق عند الطلب. تُحذف بيانات ملفك الشخصي؛ وقد يتم الاحتفاظ ببعض سجلات الأسطول التي أُنشئت لمؤسستك كسجلات تجارية أو تدقيقية مع إزالة هويتك منها.~timeline=تكتمل الطلبات المؤكدة خلال نحو 30 يومًا.~reason=السبب (اختياري)~confirm=اكتب DELETE للتأكيد~word=DELETE~submit=إرسال طلب الحذف~cancel=إلغاء~successTitle=تم إرسال الطلب~successBody=تم تسجيل طلب حذف حسابك. سيقوم المسؤول بتنفيذه خلال نحو 30 يومًا.~errorTitle=تعذّر إرسال الطلب~mismatch=اكتب DELETE تمامًا للتأكيد.~unavailable=حذف الحساب غير متاح حاليًا. يرجى مراسلتنا بالبريد لطلب الحذف.~failed=تعذّر إرسال طلبك. يرجى المحاولة مرة أخرى.~ok=حسنًا",
+  "homeOperationalSummary": "الملخص التشغيلي",
+  "homeInspectionsDue": "فحوصات مستحقة",
+  "homeTyresNeedAttention": "إطارات تحتاج إلى اهتمام",
+  "homeApprovalsAwaitingYou": "موافقات بانتظارك",
+  "homePlanMoreToday": "{count, plural, =0{لا شيء آخر اليوم} =1{واحد آخر اليوم} other{{count} أخرى اليوم}}",
+  "profileAssignedTasks": "المهام المسندة",
+  "profileMyActivity": "نشاطي",
+  "tyreRecordsExportAction": "تصدير",
+  "tyreRecordsExportStatus": "الحالة",
+  "tyreRecordsExportNote": "{shown} من {total} سجل إطار محمّل على هذا الجهاز",
+  "tyreRecordsExportError": "تعذر إنشاء ملف التصدير. يرجى المحاولة مرة أخرى.",
+  "fleet360TabDocuments": "المستندات",
+  "fleet360AlertServiceDueKm": "الصيانة مستحقة بعد {km} كم",
+  "@fleet360AlertServiceDueKm": {
+    "placeholders": {
+      "km": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360AlertServiceDueHours": "الصيانة مستحقة بعد {hours} ساعة",
+  "@fleet360AlertServiceDueHours": {
+    "placeholders": {
+      "hours": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360AlertServiceDueDays": "{days, plural, =0{الصيانة مستحقة اليوم} =1{الصيانة مستحقة غداً} other{الصيانة مستحقة بعد {days} يوم}}",
+  "@fleet360AlertServiceDueDays": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "fleet360AlertServiceOverdue": "الصيانة متأخرة",
+  "fleet360AlertTyreActions": "{count, plural, =1{إجراء إطار واحد} other{{count} إجراءات إطارات}}",
+  "@fleet360AlertTyreActions": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fleet360EventInspectionDone": "اكتمل فحص الإطارات",
+  "fleet360EventWashDone": "اكتمل الغسيل",
+  "fleet360EventTyreFittedAt": "تم تركيب إطار في {position}",
+  "@fleet360EventTyreFittedAt": {
+    "placeholders": {
+      "position": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360EventTyreRemovedFrom": "تمت إزالة إطار من {position}",
+  "@fleet360EventTyreRemovedFrom": {
+    "placeholders": {
+      "position": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360EventSerial": "الرقم التسلسلي: {serial}",
+  "@fleet360EventSerial": {
+    "placeholders": {
+      "serial": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360EventAccidentCase": "حالة الحادث {reference}",
+  "@fleet360EventAccidentCase": {
+    "placeholders": {
+      "reference": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360EventAccidentCaseClosed": "تم إغلاق حالة الحادث {reference}",
+  "@fleet360EventAccidentCaseClosed": {
+    "placeholders": {
+      "reference": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360SnapshotTitle": "اللمحة المالية، {year} حتى تاريخه",
+  "@fleet360SnapshotTitle": {
+    "placeholders": {
+      "year": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360TotalMaintenance": "إجمالي الصيانة",
+  "fleet360BucketExternal": "إصلاحات خارجية",
+  "fleet360ShareError": "تعذرت مشاركة الملخص. حاول مرة أخرى.",
+  "fleet360DocRegistration": "التسجيل",
+  "fleet360DocInsurance": "التأمين",
+  "fleet360DocOperatingCard": "بطاقة التشغيل",
+  "fleet360DocDriverLicence": "رخصة السائق",
+  "fleet360DocIssued": "صدر في {date}",
+  "@fleet360DocIssued": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360DocExpires": "ينتهي في {date}",
+  "@fleet360DocExpires": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360DocExpired": "منتهي",
+  "fleet360DocExpiringSoon": "ينتهي قريباً",
+  "fleet360DocValid": "ساري",
+  "fleet360DocNoExpiry": "لا يوجد تاريخ انتهاء مسجل",
+  "fleet360DocsEmptyTitle": "لا توجد مستندات مسجلة",
+  "fleet360DocsEmptyBody": "لا توجد تفاصيل تسجيل أو تأمين أو بطاقة تشغيل أو رخصة مسجلة لهذا الأصل."
 }

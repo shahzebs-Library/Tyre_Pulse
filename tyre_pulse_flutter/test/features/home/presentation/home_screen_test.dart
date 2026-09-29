@@ -37,6 +37,9 @@ import 'package:tyre_pulse/features/home/domain/home_work.dart';
 import 'package:tyre_pulse/features/home/home_providers.dart';
 import 'package:tyre_pulse/features/home/presentation/home_screen.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_draft_summary.dart';
+import 'package:tyre_pulse/features/my_work/data/my_work_loader.dart';
+import 'package:tyre_pulse/features/my_work/domain/my_work_item.dart';
+import 'package:tyre_pulse/features/my_work/my_work_providers.dart';
 import 'package:tyre_pulse/features/notifications/notifications_providers.dart';
 
 import '../../../core/database/database_test_support.dart';
@@ -90,6 +93,7 @@ Future<void> _pumpHome(
   Future<List<TyreAlert>> Function()? alerts,
   Future<HomePendingApprovals> Function()? approvals,
   Future<List<HomeRecentAsset>> Function()? recent,
+  Future<MyWorkSnapshot> Function()? plan,
   GoRouter? router,
   Widget Function(Widget home)? wrap,
 }) async {
@@ -140,6 +144,14 @@ Future<void> _pumpHome(
               const HomePendingApprovals(count: 0),
             )
           : approvals(),
+    ),
+    myWorkClockProvider.overrideWithValue(() => _now),
+    myWorkSnapshotProvider.overrideWith(
+      (Ref ref) => plan == null
+          ? Future<MyWorkSnapshot>.value(
+              MyWorkSnapshot(items: const <MyWorkItem>[], loadedAt: _now),
+            )
+          : plan(),
     ),
     homeRecentAssetsProvider.overrideWith(
       (Ref ref) => recent == null
@@ -884,6 +896,151 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('vehicle:CP045'), findsOneWidget);
+    });
+  });
+
+  group('today\'s plan and operational summary (mocks 07-10)', () {
+    MyWorkSnapshot planOf(List<MyWorkItem> items, {bool capped = false}) =>
+        MyWorkSnapshot(
+          items: items,
+          loadedAt: _now,
+          attempted: const <MyWorkSource>{MyWorkSource.inspectionPlans},
+          incomplete: capped
+              ? const <MyWorkSource>{MyWorkSource.inspectionPlans}
+              : const <MyWorkSource>{},
+        );
+    final DateTime today = DateTime(2026, 8, 28);
+
+    testWidgets(
+        'the next open item on today\'s plan joins the timeline with a count '
+        'of the rest', (WidgetTester tester) async {
+      await _pumpHome(
+        tester,
+        access: _admin,
+        plan: () async => planOf(<MyWorkItem>[
+          MyWorkItem(
+            id: 'inspectionPlan:p1',
+            kind: MyWorkKind.inspectionPlan,
+            state: MyWorkState.dueToday,
+            title: 'Tyre inspection',
+            assetNo: 'PUMP-014',
+            site: 'Al Quoz Yard',
+            dueDay: today,
+            dueAt: DateTime(2026, 8, 28, 13),
+          ),
+          MyWorkItem(
+            id: 'inspectionPlan:p2',
+            kind: MyWorkKind.inspectionPlan,
+            state: MyWorkState.upcoming,
+            title: 'Tomorrow check',
+            assetNo: 'BUS-062',
+            dueDay: today.add(const Duration(days: 1)),
+          ),
+          MyWorkItem(
+            id: 'checklist:c1',
+            kind: MyWorkKind.checklist,
+            state: MyWorkState.dueToday,
+            title: 'Daily Plant Checklist',
+            assetNo: 'CP-045',
+            dueDay: today,
+          ),
+        ]),
+      );
+      await tester.pumpAndSettle();
+
+      final Finder row = find.byKey(HomeScreenKeys.workRow('plan'));
+      expect(row, findsOneWidget);
+      expect(
+        find.descendant(of: row, matching: find.text('Tyre inspection')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: row, matching: find.textContaining('1 more today')),
+        findsOneWidget,
+        reason: 'tomorrow\'s item is not on today\'s plan',
+      );
+    });
+
+    testWidgets('an empty plan adds no row', (WidgetTester tester) async {
+      await _pumpHome(tester, access: _admin);
+      await tester.pumpAndSettle();
+      expect(find.byKey(HomeScreenKeys.workRow('plan')), findsNothing);
+    });
+
+    testWidgets(
+        'summary tiles show real counts, a capped read as N+, and a failed '
+        'read as "Could not check", never 0', (WidgetTester tester) async {
+      await _pumpHome(
+        tester,
+        access: _admin,
+        pendingSync: const AsyncData<int>(7),
+        alerts: () async => <TyreAlert>[_criticalAlert],
+        approvals: () async => _approvals(9),
+        plan: () async => planOf(
+          <MyWorkItem>[
+            MyWorkItem(
+              id: 'inspectionPlan:p1',
+              kind: MyWorkKind.inspectionPlan,
+              state: MyWorkState.overdue,
+              assetNo: 'CP045',
+              dueDay: today.subtract(const Duration(days: 1)),
+            ),
+          ],
+          capped: true,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      Finder tile(String id) => find.byKey(HomeScreenKeys.summaryTile(id));
+      await tester.ensureVisible(tile('approvals'));
+      expect(
+        find.descendant(of: tile('inspections'), matching: find.text('1+')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: tile('sync'), matching: find.text('7')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: tile('tyres'), matching: find.text('1')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: tile('approvals'), matching: find.text('9')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('a failed queue read is said, not shown as zero', (
+      WidgetTester tester,
+    ) async {
+      await _pumpHome(
+        tester,
+        access: _admin,
+        pendingSync: AsyncError<int>(StateError('x'), StackTrace.empty),
+      );
+      await tester.pumpAndSettle();
+      final Finder sync = find.byKey(HomeScreenKeys.summaryTile('sync'));
+      await tester.ensureVisible(sync);
+      expect(
+        find.descendant(of: sync, matching: find.text('Could not check')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: sync, matching: find.text('0')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('a role without the approvals queue gets no approvals tile', (
+      WidgetTester tester,
+    ) async {
+      await _pumpHome(tester, access: _driver);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(HomeScreenKeys.summaryTile('approvals')),
+        findsNothing,
+      );
     });
   });
 }

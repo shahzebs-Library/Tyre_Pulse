@@ -2990,5 +2990,129 @@
     }
   },
   "accRptTitle": "حادثہ رپورٹ کریں",
-  "accountDeletionCopyCatalog": "title=میرا اکاؤنٹ حذف کریں~subtitle=اپنے اکاؤنٹ اور ذاتی ڈیٹا کو حذف کرنے کی درخواست کریں~intro=یہ ایڈمنسٹریٹر کو آپ کا اکاؤنٹ اور اس سے متعلق ذاتی ڈیٹا حذف کرنے کی درخواست بھیجتا ہے۔ آپ کا اکاؤنٹ فوراً حذف نہیں ہوتا۔~what=درخواست پر ایپ تک آپ کی رسائی ختم کر دی جاتی ہے۔ ذاتی پروفائل ڈیٹا حذف کیا جاتا ہے؛ آپ کی تنظیم کے لیے بنائے گئے کچھ فلیٹ ریکارڈ کاروباری یا آڈٹ ریکارڈ کے طور پر رکھے جا سکتے ہیں اور آپ کی شناخت سے الگ کر دیے جاتے ہیں۔~timeline=تصدیق شدہ درخواستیں تقریباً 30 دن میں مکمل کی جاتی ہیں۔~reason=وجہ (اختیاری)~confirm=تصدیق کے لیے DELETE لکھیں~word=DELETE~submit=حذف کی درخواست بھیجیں~cancel=منسوخ~successTitle=درخواست بھیج دی گئی~successBody=آپ کے اکاؤنٹ کو حذف کرنے کی درخواست درج کر لی گئی ہے۔ ایڈمنسٹریٹر تقریباً 30 دن میں اس پر عمل کرے گا۔~errorTitle=درخواست نہیں بھیجی جا سکی~mismatch=تصدیق کے لیے بالکل DELETE لکھیں۔~unavailable=اکاؤنٹ حذف کرنا ابھی دستیاب نہیں۔ حذف کی درخواست کے لیے ہمیں ای میل کریں۔~failed=آپ کی درخواست نہیں بھیجی جا سکی۔ دوبارہ کوشش کریں۔~ok=ٹھیک ہے"
+  "accountDeletionCopyCatalog": "title=میرا اکاؤنٹ حذف کریں~subtitle=اپنے اکاؤنٹ اور ذاتی ڈیٹا کو حذف کرنے کی درخواست کریں~intro=یہ ایڈمنسٹریٹر کو آپ کا اکاؤنٹ اور اس سے متعلق ذاتی ڈیٹا حذف کرنے کی درخواست بھیجتا ہے۔ آپ کا اکاؤنٹ فوراً حذف نہیں ہوتا۔~what=درخواست پر ایپ تک آپ کی رسائی ختم کر دی جاتی ہے۔ ذاتی پروفائل ڈیٹا حذف کیا جاتا ہے؛ آپ کی تنظیم کے لیے بنائے گئے کچھ فلیٹ ریکارڈ کاروباری یا آڈٹ ریکارڈ کے طور پر رکھے جا سکتے ہیں اور آپ کی شناخت سے الگ کر دیے جاتے ہیں۔~timeline=تصدیق شدہ درخواستیں تقریباً 30 دن میں مکمل کی جاتی ہیں۔~reason=وجہ (اختیاری)~confirm=تصدیق کے لیے DELETE لکھیں~word=DELETE~submit=حذف کی درخواست بھیجیں~cancel=منسوخ~successTitle=درخواست بھیج دی گئی~successBody=آپ کے اکاؤنٹ کو حذف کرنے کی درخواست درج کر لی گئی ہے۔ ایڈمنسٹریٹر تقریباً 30 دن میں اس پر عمل کرے گا۔~errorTitle=درخواست نہیں بھیجی جا سکی~mismatch=تصدیق کے لیے بالکل DELETE لکھیں۔~unavailable=اکاؤنٹ حذف کرنا ابھی دستیاب نہیں۔ حذف کی درخواست کے لیے ہمیں ای میل کریں۔~failed=آپ کی درخواست نہیں بھیجی جا سکی۔ دوبارہ کوشش کریں۔~ok=ٹھیک ہے",
+  "homeOperationalSummary": "آپریشنل خلاصہ",
+  "homeInspectionsDue": "واجب الادا معائنے",
+  "homeTyresNeedAttention": "توجہ طلب ٹائر",
+  "homeApprovalsAwaitingYou": "آپ کی منظوری کے منتظر",
+  "homePlanMoreToday": "{count, plural, =1{آج 1 مزید} other{آج {count} مزید}}",
+  "profileAssignedTasks": "تفویض کردہ کام",
+  "profileMyActivity": "میری سرگرمی",
+  "tyreRecordsExportAction": "برآمد کریں",
+  "tyreRecordsExportStatus": "حیثیت",
+  "tyreRecordsExportNote": "اس ڈیوائس پر {total} میں سے {shown} ٹائر ریکارڈز لوڈ ہیں",
+  "tyreRecordsExportError": "برآمد فائل نہیں بن سکی۔ براہ کرم دوبارہ کوشش کریں۔",
+  "fleet360TabDocuments": "دستاویزات",
+  "fleet360AlertServiceDueKm": "سروس {km} کلومیٹر میں واجب ہے",
+  "@fleet360AlertServiceDueKm": {
+    "placeholders": {
+      "km": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360AlertServiceDueHours": "سروس {hours} گھنٹے میں واجب ہے",
+  "@fleet360AlertServiceDueHours": {
+    "placeholders": {
+      "hours": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360AlertServiceDueDays": "{days, plural, =0{سروس آج واجب ہے} =1{سروس کل واجب ہے} other{سروس {days} دن میں واجب ہے}}",
+  "@fleet360AlertServiceDueDays": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "fleet360AlertServiceOverdue": "سروس کی تاریخ گزر چکی ہے",
+  "fleet360AlertTyreActions": "{count, plural, =1{ٹائر کا 1 اقدام} other{ٹائر کے {count} اقدامات}}",
+  "@fleet360AlertTyreActions": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fleet360EventInspectionDone": "ٹائر معائنہ مکمل",
+  "fleet360EventWashDone": "دھلائی مکمل",
+  "fleet360EventTyreFittedAt": "{position} پر ٹائر لگایا گیا",
+  "@fleet360EventTyreFittedAt": {
+    "placeholders": {
+      "position": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360EventTyreRemovedFrom": "{position} سے ٹائر اتارا گیا",
+  "@fleet360EventTyreRemovedFrom": {
+    "placeholders": {
+      "position": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360EventSerial": "سیریل: {serial}",
+  "@fleet360EventSerial": {
+    "placeholders": {
+      "serial": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360EventAccidentCase": "حادثے کا کیس {reference}",
+  "@fleet360EventAccidentCase": {
+    "placeholders": {
+      "reference": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360EventAccidentCaseClosed": "حادثے کا کیس {reference} بند",
+  "@fleet360EventAccidentCaseClosed": {
+    "placeholders": {
+      "reference": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360SnapshotTitle": "مالی خلاصہ، {year} اب تک",
+  "@fleet360SnapshotTitle": {
+    "placeholders": {
+      "year": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360TotalMaintenance": "کل دیکھ بھال",
+  "fleet360BucketExternal": "بیرونی مرمت",
+  "fleet360ShareError": "خلاصہ شیئر نہیں ہو سکا۔ دوبارہ کوشش کریں۔",
+  "fleet360DocRegistration": "رجسٹریشن",
+  "fleet360DocInsurance": "انشورنس",
+  "fleet360DocOperatingCard": "آپریٹنگ کارڈ",
+  "fleet360DocDriverLicence": "ڈرائیور لائسنس",
+  "fleet360DocIssued": "جاری {date}",
+  "@fleet360DocIssued": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360DocExpires": "میعاد ختم {date}",
+  "@fleet360DocExpires": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360DocExpired": "میعاد ختم",
+  "fleet360DocExpiringSoon": "جلد ختم ہو رہا ہے",
+  "fleet360DocValid": "درست",
+  "fleet360DocNoExpiry": "میعاد کی تاریخ درج نہیں",
+  "fleet360DocsEmptyTitle": "کوئی دستاویز درج نہیں",
+  "fleet360DocsEmptyBody": "اس اثاثے کے لیے رجسٹریشن، انشورنس، آپریٹنگ کارڈ یا لائسنس کی کوئی تفصیل درج نہیں۔"
 }

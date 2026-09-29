@@ -9,7 +9,8 @@
 ///   item_description. Not yet listed in `SupabaseTables` (that file is owned
 ///   elsewhere), so its name is declared once here as [partsConsumptionTable].
 /// - `work_orders`: id, work_order_no, asset_no, opened_at, completed_at,
-///   labour_cost, breakdown_hours, work_type, status, description,
+///   labour_cost, outside_repair_cost (summed by the applied V279 / V322
+///   report RPCs), breakdown_hours, work_type, status, description,
 ///   technician_name, country.
 /// - `odometer_logs` / `engine_hours_logs`: asset_no, country, reading_date,
 ///   odometer_km / engine_hours.
@@ -125,7 +126,8 @@ final class SupabaseAssetInsightsSource
             .from(SupabaseTables.workOrders)
             .select(
               'id, work_order_no, opened_at, completed_at, labour_cost, '
-              'breakdown_hours, work_type, status, description',
+              'outside_repair_cost, breakdown_hours, work_type, status, '
+              'description',
             )
             .eq('asset_no', scope.assetNo)
             .gte('opened_at', fromIso)
@@ -171,7 +173,7 @@ final class SupabaseAssetInsightsSource
       AssetTimelineFilter.workOrders => (
           SupabaseTables.workOrders,
           'id, work_order_no, opened_at, created_at, status, work_type, '
-              'description, technician_name',
+              'description, technician_name, breakdown_hours, priority',
           'opened_at',
         ),
       AssetTimelineFilter.inspections => (

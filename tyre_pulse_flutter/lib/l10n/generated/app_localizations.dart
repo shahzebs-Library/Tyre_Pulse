@@ -4861,7 +4861,7 @@ abstract class AppLocalizations {
   /// No description provided for @loginIdentifierLabel.
   ///
   /// In en, this message translates to:
-  /// **'Email or employee ID'**
+  /// **'Employee ID or email'**
   String get loginIdentifierLabel;
 
   /// No description provided for @loginIdentifierPlaceholder.
@@ -12538,6 +12538,246 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'title=Delete my account~subtitle=Request deletion of your account and personal data~intro=This submits a request for an administrator to delete your account and the personal data associated with it. It does not delete your account instantly.~what=Your access to the app is revoked on request. Personal profile data is deleted; some fleet records created for your organisation may be retained as business or audit records and de-identified from your profile.~timeline=Verified requests are completed within about 30 days.~reason=Reason (optional)~confirm=Type DELETE to confirm~word=DELETE~submit=Submit deletion request~cancel=Cancel~successTitle=Request submitted~successBody=Your account deletion request has been recorded. An administrator will action it within about 30 days.~errorTitle=Could not submit request~mismatch=Type DELETE exactly to confirm.~unavailable=Account deletion is not available right now. Please email us to request deletion.~failed=Could not submit your request. Please try again.~ok=OK'**
   String get accountDeletionCopyCatalog;
+
+  /// Heading of Home's section of live operational counts.
+  ///
+  /// In en, this message translates to:
+  /// **'Operational summary'**
+  String get homeOperationalSummary;
+
+  /// Home summary tile: inspection plans assigned to you that are due today, overdue or in progress.
+  ///
+  /// In en, this message translates to:
+  /// **'Inspections due'**
+  String get homeInspectionsDue;
+
+  /// Home summary tile: active high or critical risk tyre records.
+  ///
+  /// In en, this message translates to:
+  /// **'Tyres need attention'**
+  String get homeTyresNeedAttention;
+
+  /// Home summary tile: inspections waiting for your signature.
+  ///
+  /// In en, this message translates to:
+  /// **'Approvals awaiting you'**
+  String get homeApprovalsAwaitingYou;
+
+  /// Home timeline: how many more items are on today's plan besides the one shown.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 more today} other{{count} more today}}'**
+  String homePlanMoreToday(int count);
+
+  /// Profile status tile: open work assigned to the signed-in person.
+  ///
+  /// In en, this message translates to:
+  /// **'Assigned tasks'**
+  String get profileAssignedTasks;
+
+  /// Profile button that opens the person's activity history.
+  ///
+  /// In en, this message translates to:
+  /// **'My activity'**
+  String get profileMyActivity;
+
+  /// Tooltip of the tyre records register export (share PDF) action.
+  ///
+  /// In en, this message translates to:
+  /// **'Export'**
+  String get tyreRecordsExportAction;
+
+  /// Status column header in the tyre records PDF export.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get tyreRecordsExportStatus;
+
+  /// Line under the tyre records PDF title: how many loaded rows of the server total are in the file.
+  ///
+  /// In en, this message translates to:
+  /// **'{shown} of {total} tyre records loaded on this device'**
+  String tyreRecordsExportNote(int shown, int total);
+
+  /// Snackbar when the tyre records PDF could not be built or shared.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not create the export. Please try again.'**
+  String get tyreRecordsExportError;
+
+  /// Vehicle 360 tab listing the asset's recorded permits
+  ///
+  /// In en, this message translates to:
+  /// **'Documents'**
+  String get fleet360TabDocuments;
+
+  /// Next preventive maintenance by odometer
+  ///
+  /// In en, this message translates to:
+  /// **'Service due in {km} km'**
+  String fleet360AlertServiceDueKm(String km);
+
+  /// Next preventive maintenance by engine hours
+  ///
+  /// In en, this message translates to:
+  /// **'Service due in {hours} h'**
+  String fleet360AlertServiceDueHours(String hours);
+
+  /// Next preventive maintenance by calendar date
+  ///
+  /// In en, this message translates to:
+  /// **'{days, plural, =0{Service due today} =1{Service due tomorrow} other{Service due in {days} days}}'**
+  String fleet360AlertServiceDueDays(int days);
+
+  /// A preventive maintenance plan is past due
+  ///
+  /// In en, this message translates to:
+  /// **'Service overdue'**
+  String get fleet360AlertServiceOverdue;
+
+  /// Open corrective actions raised from tyre inspections
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 tyre action} other{{count} tyre actions}}'**
+  String fleet360AlertTyreActions(int count);
+
+  /// Timeline row title for a completed inspection
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre inspection completed'**
+  String get fleet360EventInspectionDone;
+
+  /// Timeline row title for a completed wash
+  ///
+  /// In en, this message translates to:
+  /// **'Wash completed'**
+  String get fleet360EventWashDone;
+
+  /// Timeline row title for a tyre fitment
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre fitted at {position}'**
+  String fleet360EventTyreFittedAt(String position);
+
+  /// Timeline row title for a tyre removal
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre removed from {position}'**
+  String fleet360EventTyreRemovedFrom(String position);
+
+  /// Tyre serial on a timeline row
+  ///
+  /// In en, this message translates to:
+  /// **'Serial: {serial}'**
+  String fleet360EventSerial(String serial);
+
+  /// Timeline row title for an open accident case
+  ///
+  /// In en, this message translates to:
+  /// **'Accident case {reference}'**
+  String fleet360EventAccidentCase(String reference);
+
+  /// Timeline row title for a closed accident case
+  ///
+  /// In en, this message translates to:
+  /// **'Accident case {reference} closed'**
+  String fleet360EventAccidentCaseClosed(String reference);
+
+  /// Vehicle 360 cost card title
+  ///
+  /// In en, this message translates to:
+  /// **'Financial snapshot, {year} year to date'**
+  String fleet360SnapshotTitle(String year);
+
+  /// Vehicle 360 cost card KPI
+  ///
+  /// In en, this message translates to:
+  /// **'Total maintenance'**
+  String get fleet360TotalMaintenance;
+
+  /// Cost composition bucket for outside repairs
+  ///
+  /// In en, this message translates to:
+  /// **'External repairs'**
+  String get fleet360BucketExternal;
+
+  /// Vehicle 360 share failure
+  ///
+  /// In en, this message translates to:
+  /// **'The summary could not be shared. Try again.'**
+  String get fleet360ShareError;
+
+  /// Permit kind
+  ///
+  /// In en, this message translates to:
+  /// **'Registration'**
+  String get fleet360DocRegistration;
+
+  /// Permit kind
+  ///
+  /// In en, this message translates to:
+  /// **'Insurance'**
+  String get fleet360DocInsurance;
+
+  /// Permit kind
+  ///
+  /// In en, this message translates to:
+  /// **'Operating card'**
+  String get fleet360DocOperatingCard;
+
+  /// Permit kind
+  ///
+  /// In en, this message translates to:
+  /// **'Driver licence'**
+  String get fleet360DocDriverLicence;
+
+  /// Permit issue date
+  ///
+  /// In en, this message translates to:
+  /// **'Issued {date}'**
+  String fleet360DocIssued(String date);
+
+  /// Permit expiry date
+  ///
+  /// In en, this message translates to:
+  /// **'Expires {date}'**
+  String fleet360DocExpires(String date);
+
+  /// Permit expiry state
+  ///
+  /// In en, this message translates to:
+  /// **'Expired'**
+  String get fleet360DocExpired;
+
+  /// Permit expiry state
+  ///
+  /// In en, this message translates to:
+  /// **'Expiring soon'**
+  String get fleet360DocExpiringSoon;
+
+  /// Permit expiry state
+  ///
+  /// In en, this message translates to:
+  /// **'Valid'**
+  String get fleet360DocValid;
+
+  /// Permit with no expiry date
+  ///
+  /// In en, this message translates to:
+  /// **'No expiry recorded'**
+  String get fleet360DocNoExpiry;
+
+  /// Documents tab empty title
+  ///
+  /// In en, this message translates to:
+  /// **'No documents recorded'**
+  String get fleet360DocsEmptyTitle;
+
+  /// Documents tab empty body
+  ///
+  /// In en, this message translates to:
+  /// **'No registration, insurance, operating card or licence details are recorded for this asset.'**
+  String get fleet360DocsEmptyBody;
 }
 
 class _AppLocalizationsDelegate

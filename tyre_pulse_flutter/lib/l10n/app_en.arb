@@ -2127,7 +2127,7 @@
   "@loginCardTitle": {},
   "loginCardSubtitle": "Use your email, username, or Employee ID",
   "@loginCardSubtitle": {},
-  "loginIdentifierLabel": "Email or employee ID",
+  "loginIdentifierLabel": "Employee ID or email",
   "@loginIdentifierLabel": {},
   "loginIdentifierPlaceholder": "Enter email, username, or ID",
   "@loginIdentifierPlaceholder": {},
@@ -7712,5 +7712,238 @@
   "@accRptTitle": {
     "description": "Page title of the accident report wizard."
   },
-  "accountDeletionCopyCatalog": "title=Delete my account~subtitle=Request deletion of your account and personal data~intro=This submits a request for an administrator to delete your account and the personal data associated with it. It does not delete your account instantly.~what=Your access to the app is revoked on request. Personal profile data is deleted; some fleet records created for your organisation may be retained as business or audit records and de-identified from your profile.~timeline=Verified requests are completed within about 30 days.~reason=Reason (optional)~confirm=Type DELETE to confirm~word=DELETE~submit=Submit deletion request~cancel=Cancel~successTitle=Request submitted~successBody=Your account deletion request has been recorded. An administrator will action it within about 30 days.~errorTitle=Could not submit request~mismatch=Type DELETE exactly to confirm.~unavailable=Account deletion is not available right now. Please email us to request deletion.~failed=Could not submit your request. Please try again.~ok=OK"
+  "accountDeletionCopyCatalog": "title=Delete my account~subtitle=Request deletion of your account and personal data~intro=This submits a request for an administrator to delete your account and the personal data associated with it. It does not delete your account instantly.~what=Your access to the app is revoked on request. Personal profile data is deleted; some fleet records created for your organisation may be retained as business or audit records and de-identified from your profile.~timeline=Verified requests are completed within about 30 days.~reason=Reason (optional)~confirm=Type DELETE to confirm~word=DELETE~submit=Submit deletion request~cancel=Cancel~successTitle=Request submitted~successBody=Your account deletion request has been recorded. An administrator will action it within about 30 days.~errorTitle=Could not submit request~mismatch=Type DELETE exactly to confirm.~unavailable=Account deletion is not available right now. Please email us to request deletion.~failed=Could not submit your request. Please try again.~ok=OK",
+  "homeOperationalSummary": "Operational summary",
+  "@homeOperationalSummary": {
+    "description": "Heading of Home's section of live operational counts."
+  },
+  "homeInspectionsDue": "Inspections due",
+  "@homeInspectionsDue": {
+    "description": "Home summary tile: inspection plans assigned to you that are due today, overdue or in progress."
+  },
+  "homeTyresNeedAttention": "Tyres need attention",
+  "@homeTyresNeedAttention": {
+    "description": "Home summary tile: active high or critical risk tyre records."
+  },
+  "homeApprovalsAwaitingYou": "Approvals awaiting you",
+  "@homeApprovalsAwaitingYou": {
+    "description": "Home summary tile: inspections waiting for your signature."
+  },
+  "homePlanMoreToday": "{count, plural, =1{1 more today} other{{count} more today}}",
+  "@homePlanMoreToday": {
+    "description": "Home timeline: how many more items are on today's plan besides the one shown.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "profileAssignedTasks": "Assigned tasks",
+  "@profileAssignedTasks": {
+    "description": "Profile status tile: open work assigned to the signed-in person."
+  },
+  "profileMyActivity": "My activity",
+  "@profileMyActivity": {
+    "description": "Profile button that opens the person's activity history."
+  },
+  "tyreRecordsExportAction": "Export",
+  "@tyreRecordsExportAction": {
+    "description": "Tooltip of the tyre records register export (share PDF) action."
+  },
+  "tyreRecordsExportStatus": "Status",
+  "@tyreRecordsExportStatus": {
+    "description": "Status column header in the tyre records PDF export."
+  },
+  "tyreRecordsExportNote": "{shown} of {total} tyre records loaded on this device",
+  "@tyreRecordsExportNote": {
+    "description": "Line under the tyre records PDF title: how many loaded rows of the server total are in the file.",
+    "placeholders": {
+      "shown": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "tyreRecordsExportError": "Could not create the export. Please try again.",
+  "@tyreRecordsExportError": {
+    "description": "Snackbar when the tyre records PDF could not be built or shared."
+  },
+  "fleet360TabDocuments": "Documents",
+  "@fleet360TabDocuments": {
+    "description": "Vehicle 360 tab listing the asset's recorded permits"
+  },
+  "fleet360AlertServiceDueKm": "Service due in {km} km",
+  "@fleet360AlertServiceDueKm": {
+    "description": "Next preventive maintenance by odometer",
+    "placeholders": {
+      "km": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360AlertServiceDueHours": "Service due in {hours} h",
+  "@fleet360AlertServiceDueHours": {
+    "description": "Next preventive maintenance by engine hours",
+    "placeholders": {
+      "hours": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360AlertServiceDueDays": "{days, plural, =0{Service due today} =1{Service due tomorrow} other{Service due in {days} days}}",
+  "@fleet360AlertServiceDueDays": {
+    "description": "Next preventive maintenance by calendar date",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "fleet360AlertServiceOverdue": "Service overdue",
+  "@fleet360AlertServiceOverdue": {
+    "description": "A preventive maintenance plan is past due"
+  },
+  "fleet360AlertTyreActions": "{count, plural, =1{1 tyre action} other{{count} tyre actions}}",
+  "@fleet360AlertTyreActions": {
+    "description": "Open corrective actions raised from tyre inspections",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fleet360EventInspectionDone": "Tyre inspection completed",
+  "@fleet360EventInspectionDone": {
+    "description": "Timeline row title for a completed inspection"
+  },
+  "fleet360EventWashDone": "Wash completed",
+  "@fleet360EventWashDone": {
+    "description": "Timeline row title for a completed wash"
+  },
+  "fleet360EventTyreFittedAt": "Tyre fitted at {position}",
+  "@fleet360EventTyreFittedAt": {
+    "description": "Timeline row title for a tyre fitment",
+    "placeholders": {
+      "position": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360EventTyreRemovedFrom": "Tyre removed from {position}",
+  "@fleet360EventTyreRemovedFrom": {
+    "description": "Timeline row title for a tyre removal",
+    "placeholders": {
+      "position": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360EventSerial": "Serial: {serial}",
+  "@fleet360EventSerial": {
+    "description": "Tyre serial on a timeline row",
+    "placeholders": {
+      "serial": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360EventAccidentCase": "Accident case {reference}",
+  "@fleet360EventAccidentCase": {
+    "description": "Timeline row title for an open accident case",
+    "placeholders": {
+      "reference": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360EventAccidentCaseClosed": "Accident case {reference} closed",
+  "@fleet360EventAccidentCaseClosed": {
+    "description": "Timeline row title for a closed accident case",
+    "placeholders": {
+      "reference": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360SnapshotTitle": "Financial snapshot, {year} year to date",
+  "@fleet360SnapshotTitle": {
+    "description": "Vehicle 360 cost card title",
+    "placeholders": {
+      "year": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360TotalMaintenance": "Total maintenance",
+  "@fleet360TotalMaintenance": {
+    "description": "Vehicle 360 cost card KPI"
+  },
+  "fleet360BucketExternal": "External repairs",
+  "@fleet360BucketExternal": {
+    "description": "Cost composition bucket for outside repairs"
+  },
+  "fleet360ShareError": "The summary could not be shared. Try again.",
+  "@fleet360ShareError": {
+    "description": "Vehicle 360 share failure"
+  },
+  "fleet360DocRegistration": "Registration",
+  "@fleet360DocRegistration": {
+    "description": "Permit kind"
+  },
+  "fleet360DocInsurance": "Insurance",
+  "@fleet360DocInsurance": {
+    "description": "Permit kind"
+  },
+  "fleet360DocOperatingCard": "Operating card",
+  "@fleet360DocOperatingCard": {
+    "description": "Permit kind"
+  },
+  "fleet360DocDriverLicence": "Driver licence",
+  "@fleet360DocDriverLicence": {
+    "description": "Permit kind"
+  },
+  "fleet360DocIssued": "Issued {date}",
+  "@fleet360DocIssued": {
+    "description": "Permit issue date",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360DocExpires": "Expires {date}",
+  "@fleet360DocExpires": {
+    "description": "Permit expiry date",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360DocExpired": "Expired",
+  "@fleet360DocExpired": {
+    "description": "Permit expiry state"
+  },
+  "fleet360DocExpiringSoon": "Expiring soon",
+  "@fleet360DocExpiringSoon": {
+    "description": "Permit expiry state"
+  },
+  "fleet360DocValid": "Valid",
+  "@fleet360DocValid": {
+    "description": "Permit expiry state"
+  },
+  "fleet360DocNoExpiry": "No expiry recorded",
+  "@fleet360DocNoExpiry": {
+    "description": "Permit with no expiry date"
+  },
+  "fleet360DocsEmptyTitle": "No documents recorded",
+  "@fleet360DocsEmptyTitle": {
+    "description": "Documents tab empty title"
+  },
+  "fleet360DocsEmptyBody": "No registration, insurance, operating card or licence details are recorded for this asset.",
+  "@fleet360DocsEmptyBody": {
+    "description": "Documents tab empty body"
+  }
 }

@@ -98,6 +98,14 @@
 /// from the app language), and "My saved signature" (V601 `user_signatures`:
 /// view, draw a new one, or remove - online only).
 ///
+/// Mock-parity pass 3: "Assigned tasks" is now real. The per-person work
+/// list the "My tasks" screen renders (`myWorkSnapshotProvider`: checklist
+/// assignments for the role, this person's inspection plans, work orders and
+/// corrective actions, and drafts on this device) is the source, so the tile
+/// replaces the notifications tile (the app bar bell already carries that
+/// count) for anyone who can open My tasks or the field plan. "My activity"
+/// opens the activity history branch for anyone holding the history module.
+///
 /// Still absent, with the reason: the email line (many accounts carry a
 /// synthetic login address, which would read as a real mailbox), Edit
 /// profile / My activity (no screen or route), the three notification
@@ -122,6 +130,7 @@ import 'package:tyre_pulse/core/auth/auth_controller.dart';
 import 'package:tyre_pulse/core/auth/auth_dependency_providers.dart';
 import 'package:tyre_pulse/core/auth/auth_state.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/core/permissions/module_registry.dart';
 import 'package:tyre_pulse/core/permissions/permission_providers.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
@@ -131,6 +140,8 @@ import 'package:tyre_pulse/features/auth/presentation/login_security_copy.dart';
 import 'package:tyre_pulse/features/checklists/checklists_providers.dart';
 import 'package:tyre_pulse/features/checklists/domain/checklist_i18n.dart';
 import 'package:tyre_pulse/features/driver_workspace/presentation/driver_workspace_panel.dart';
+import 'package:tyre_pulse/features/my_work/data/my_work_loader.dart';
+import 'package:tyre_pulse/features/my_work/my_work_providers.dart';
 import 'package:tyre_pulse/features/notifications/notifications_providers.dart';
 import 'package:tyre_pulse/features/notifications/presentation/notifications_copy.dart';
 import 'package:tyre_pulse/features/profile/data/account_deletion_repository.dart';
@@ -153,6 +164,8 @@ abstract final class ProfileScreenKeys {
   static const Key unsyncedFooter = Key('profile.unsyncedFooter');
   static const Key verifiedBadge = Key('profile.verified');
   static const Key draftsTile = Key('profile.drafts');
+  static const Key assignedTile = Key('profile.assigned');
+  static const Key myActivity = Key('profile.myActivity');
   static const Key checklistLanguageRow = Key('profile.checklistLanguage');
   static const Key rolesRow = Key('profile.roles');
   static const Key countryRow = Key('profile.country');
@@ -417,6 +430,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ref.watch(mySavedSignatureLookupProvider);
     final String? currency = ref.watch(workspaceContextProvider)?.currency;
     final int moduleCount = ref.watch(allowedModulesProvider).length;
+    // Same resolver as `canAccessModuleProvider`, read as one set.
+    final Set<ModuleKey> allowed = ref.watch(allowedModulesProvider);
+    final bool canSeeTasks = allowed.contains(ModuleKey.tasks);
+    final bool canSeeCalendar = allowed.contains(ModuleKey.calendar);
+    final bool canSeeHistory = allowed.contains(ModuleKey.history);
+    // "Assigned tasks" (mock 19): the same personal snapshot "My tasks"
+    // renders, read only when the person can open that list.
+    final AsyncValue<MyWorkSnapshot>? assigned = canSeeTasks || canSeeCalendar
+        ? ref.watch(myWorkSnapshotProvider)
+        : null;
 
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
@@ -438,6 +461,21 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
                     _IdentityHeader(profile: profile),
+                    if (canSeeHistory) ...<Widget>[
+                      const SizedBox(height: TpSpace.md),
+                      Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: TpButton(
+                          key: ProfileScreenKeys.myActivity,
+                          label: AppLocalizations.of(context).profileMyActivity,
+                          icon: Icons.insights_outlined,
+                          variant: TpButtonVariant.secondary,
+                          isCompact: true,
+                          onPressed: () =>
+                              context.go(const ActivityHistoryRoute().location),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: TpSpace.md),
                     const DriverWorkspaceEntry(),
                     const SizedBox(height: TpSpace.md),
@@ -445,6 +483,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       drafts: drafts,
                       pendingSync: pendingSync,
                       unread: unread,
+                      assigned: assigned,
+                      onOpenAssigned: canSeeTasks
+                          ? () => context.push(const TasksRoute().location)
+                          : () => context.push(const CalendarRoute().location),
                       profileStale: authState.profileStale,
                     ),
                     const SizedBox(height: TpSpace.lg),
@@ -766,8 +808,9 @@ String _countText(AsyncValue<int> value) {
   return count == null ? '-' : '$count';
 }
 
-/// Real items only: queued work still on this device, unread notifications,
-/// and - only when the profile itself is served from the offline cache - an
+/// Real items only: open work assigned to this person (when they can open
+/// that list), queued work still on this device, unread notifications (when
+/// there is no assigned-work tile), and - only when the profile itself is served from the offline cache - an
 /// offline marker. No invented task count or "last sync" clock.
 class _ProfileStatusStrip extends StatelessWidget {
   const _ProfileStatusStrip({
@@ -775,12 +818,19 @@ class _ProfileStatusStrip extends StatelessWidget {
     required this.pendingSync,
     required this.unread,
     required this.profileStale,
+    this.assigned,
+    this.onOpenAssigned,
   });
 
   final AsyncValue<int> drafts;
   final AsyncValue<int> pendingSync;
   final AsyncValue<int> unread;
   final bool profileStale;
+
+  /// Open work assigned to this person; null when they cannot open the list,
+  /// in which case the notifications count keeps its place.
+  final AsyncValue<MyWorkSnapshot>? assigned;
+  final VoidCallback? onOpenAssigned;
 
   @override
   Widget build(BuildContext context) {
@@ -798,6 +848,30 @@ class _ProfileStatusStrip extends StatelessWidget {
       child: IntrinsicHeight(
         child: Row(
           children: <Widget>[
+            if (assigned
+                case final AsyncValue<MyWorkSnapshot> work) ...<Widget>[
+              Expanded(
+                child: InkWell(
+                  onTap: onOpenAssigned,
+                  borderRadius: BorderRadius.circular(TpRadius.md),
+                  child: _ProfileStatusItem(
+                    key: ProfileScreenKeys.assignedTile,
+                    icon: Icons.assignment_outlined,
+                    value: switch (work) {
+                      AsyncData<MyWorkSnapshot>(:final value) => () {
+                          final int n =
+                              value.items.where((item) => item.isOpen).length;
+                          return value.partial ? '$n+' : '$n';
+                        }(),
+                      _ => '-',
+                    },
+                    label: l10n.profileAssignedTasks,
+                    tone: palette.ok,
+                  ),
+                ),
+              ),
+              VerticalDivider(width: 1, thickness: 1, color: palette.border),
+            ],
             Expanded(
               child: _ProfileStatusItem(
                 key: ProfileScreenKeys.draftsTile,
@@ -822,15 +896,20 @@ class _ProfileStatusStrip extends StatelessWidget {
                         : palette.ok,
               ),
             ),
-            VerticalDivider(width: 1, thickness: 1, color: palette.border),
-            Expanded(
-              child: _ProfileStatusItem(
-                icon: Icons.notifications_none_rounded,
-                value: _countText(unread),
-                label: NotificationsCopy.of(context)('title'),
-                tone: (unreadCount ?? 0) > 0 ? palette.critical : palette.info,
+            // The bell in the app bar already carries the unread count; the
+            // tile only keeps its place when there is no assigned-work tile.
+            if (assigned == null) ...<Widget>[
+              VerticalDivider(width: 1, thickness: 1, color: palette.border),
+              Expanded(
+                child: _ProfileStatusItem(
+                  icon: Icons.notifications_none_rounded,
+                  value: _countText(unread),
+                  label: NotificationsCopy.of(context)('title'),
+                  tone:
+                      (unreadCount ?? 0) > 0 ? palette.critical : palette.info,
+                ),
               ),
-            ),
+            ],
             if (profileStale) ...<Widget>[
               VerticalDivider(width: 1, thickness: 1, color: palette.border),
               Expanded(

@@ -34,6 +34,9 @@ import 'package:tyre_pulse/core/permissions/module_registry.dart';
 import 'package:tyre_pulse/core/permissions/permission_providers.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/features/checklists/checklists_providers.dart';
+import 'package:tyre_pulse/features/my_work/data/my_work_loader.dart';
+import 'package:tyre_pulse/features/my_work/domain/my_work_item.dart';
+import 'package:tyre_pulse/features/my_work/my_work_providers.dart';
 import 'package:tyre_pulse/features/notifications/notifications_providers.dart';
 import 'package:tyre_pulse/features/profile/data/saved_signature_repository.dart';
 import 'package:tyre_pulse/features/profile/presentation/profile_screen.dart';
@@ -109,6 +112,7 @@ Future<_Pumped> _pumpSignedIn(
     ModuleKey.inspect,
     ModuleKey.checklists,
   },
+  Future<MyWorkSnapshot> Function()? assigned,
 }) async {
   final FakeAuthRepository auth = FakeAuthRepository();
   final FakeProfileRepository profiles = FakeProfileRepository();
@@ -163,6 +167,16 @@ Future<_Pumped> _pumpSignedIn(
         signatureRepository ?? _FakeSignatureRepository(stored: savedSignature),
       ),
       allowedModulesProvider.overrideWithValue(modules),
+      myWorkSnapshotProvider.overrideWith(
+        (Ref ref) =>
+            assigned?.call() ??
+            Future<MyWorkSnapshot>.value(
+              MyWorkSnapshot(
+                items: const <MyWorkItem>[],
+                loadedAt: DateTime(2026, 8, 28),
+              ),
+            ),
+      ),
     ],
   );
   addTearDown(container.dispose);
@@ -839,5 +853,68 @@ void main() {
     await tester.pumpAndSettle();
     expect(p.container.read(checklistContentLanguageProvider), 'hi');
     expect(p.container.read(localeProvider)?.languageCode, isNot('hi'));
+  });
+
+  testWidgets(
+      'Assigned tasks counts open work from My tasks and replaces the '
+      'notifications tile; My activity opens the history', (
+    WidgetTester tester,
+  ) async {
+    await _pumpSignedIn(
+      tester,
+      modules: const <ModuleKey>{
+        ModuleKey.inspect,
+        ModuleKey.checklists,
+        ModuleKey.tasks,
+        ModuleKey.history,
+      },
+      assigned: () async => MyWorkSnapshot(
+        items: const <MyWorkItem>[
+          MyWorkItem(
+            id: 'checklist:a',
+            kind: MyWorkKind.checklist,
+            state: MyWorkState.dueToday,
+          ),
+          MyWorkItem(
+            id: 'checklist:b',
+            kind: MyWorkKind.checklist,
+            state: MyWorkState.overdue,
+          ),
+          MyWorkItem(
+            id: 'checklist:c',
+            kind: MyWorkKind.checklist,
+            state: MyWorkState.completed,
+          ),
+        ],
+        loadedAt: DateTime(2026, 8, 28),
+      ),
+    );
+
+    final Finder tile = find.byKey(ProfileScreenKeys.assignedTile);
+    expect(tile, findsOneWidget);
+    expect(find.descendant(of: tile, matching: find.text('2')), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(ProfileScreenKeys.status),
+        matching: find.byIcon(Icons.notifications_none_rounded),
+      ),
+      findsNothing,
+    );
+    expect(find.byKey(ProfileScreenKeys.myActivity), findsOneWidget);
+  });
+
+  testWidgets('without My tasks the strip keeps the notifications tile', (
+    WidgetTester tester,
+  ) async {
+    await _pumpSignedIn(tester);
+    expect(find.byKey(ProfileScreenKeys.assignedTile), findsNothing);
+    expect(find.byKey(ProfileScreenKeys.myActivity), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(ProfileScreenKeys.status),
+        matching: find.byIcon(Icons.notifications_none_rounded),
+      ),
+      findsOneWidget,
+    );
   });
 }

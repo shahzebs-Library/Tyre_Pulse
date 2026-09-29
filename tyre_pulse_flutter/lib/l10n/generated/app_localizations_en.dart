@@ -2689,7 +2689,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get loginCardSubtitle => 'Use your email, username, or Employee ID';
 
   @override
-  String get loginIdentifierLabel => 'Email or employee ID';
+  String get loginIdentifierLabel => 'Employee ID or email';
 
   @override
   String get loginIdentifierPlaceholder => 'Enter email, username, or ID';
@@ -7142,4 +7142,174 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get accountDeletionCopyCatalog =>
       'title=Delete my account~subtitle=Request deletion of your account and personal data~intro=This submits a request for an administrator to delete your account and the personal data associated with it. It does not delete your account instantly.~what=Your access to the app is revoked on request. Personal profile data is deleted; some fleet records created for your organisation may be retained as business or audit records and de-identified from your profile.~timeline=Verified requests are completed within about 30 days.~reason=Reason (optional)~confirm=Type DELETE to confirm~word=DELETE~submit=Submit deletion request~cancel=Cancel~successTitle=Request submitted~successBody=Your account deletion request has been recorded. An administrator will action it within about 30 days.~errorTitle=Could not submit request~mismatch=Type DELETE exactly to confirm.~unavailable=Account deletion is not available right now. Please email us to request deletion.~failed=Could not submit your request. Please try again.~ok=OK';
+
+  @override
+  String get homeOperationalSummary => 'Operational summary';
+
+  @override
+  String get homeInspectionsDue => 'Inspections due';
+
+  @override
+  String get homeTyresNeedAttention => 'Tyres need attention';
+
+  @override
+  String get homeApprovalsAwaitingYou => 'Approvals awaiting you';
+
+  @override
+  String homePlanMoreToday(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count more today',
+      one: '1 more today',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get profileAssignedTasks => 'Assigned tasks';
+
+  @override
+  String get profileMyActivity => 'My activity';
+
+  @override
+  String get tyreRecordsExportAction => 'Export';
+
+  @override
+  String get tyreRecordsExportStatus => 'Status';
+
+  @override
+  String tyreRecordsExportNote(int shown, int total) {
+    return '$shown of $total tyre records loaded on this device';
+  }
+
+  @override
+  String get tyreRecordsExportError =>
+      'Could not create the export. Please try again.';
+
+  @override
+  String get fleet360TabDocuments => 'Documents';
+
+  @override
+  String fleet360AlertServiceDueKm(String km) {
+    return 'Service due in $km km';
+  }
+
+  @override
+  String fleet360AlertServiceDueHours(String hours) {
+    return 'Service due in $hours h';
+  }
+
+  @override
+  String fleet360AlertServiceDueDays(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'Service due in $days days',
+      one: 'Service due tomorrow',
+      zero: 'Service due today',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fleet360AlertServiceOverdue => 'Service overdue';
+
+  @override
+  String fleet360AlertTyreActions(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count tyre actions',
+      one: '1 tyre action',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fleet360EventInspectionDone => 'Tyre inspection completed';
+
+  @override
+  String get fleet360EventWashDone => 'Wash completed';
+
+  @override
+  String fleet360EventTyreFittedAt(String position) {
+    return 'Tyre fitted at $position';
+  }
+
+  @override
+  String fleet360EventTyreRemovedFrom(String position) {
+    return 'Tyre removed from $position';
+  }
+
+  @override
+  String fleet360EventSerial(String serial) {
+    return 'Serial: $serial';
+  }
+
+  @override
+  String fleet360EventAccidentCase(String reference) {
+    return 'Accident case $reference';
+  }
+
+  @override
+  String fleet360EventAccidentCaseClosed(String reference) {
+    return 'Accident case $reference closed';
+  }
+
+  @override
+  String fleet360SnapshotTitle(String year) {
+    return 'Financial snapshot, $year year to date';
+  }
+
+  @override
+  String get fleet360TotalMaintenance => 'Total maintenance';
+
+  @override
+  String get fleet360BucketExternal => 'External repairs';
+
+  @override
+  String get fleet360ShareError =>
+      'The summary could not be shared. Try again.';
+
+  @override
+  String get fleet360DocRegistration => 'Registration';
+
+  @override
+  String get fleet360DocInsurance => 'Insurance';
+
+  @override
+  String get fleet360DocOperatingCard => 'Operating card';
+
+  @override
+  String get fleet360DocDriverLicence => 'Driver licence';
+
+  @override
+  String fleet360DocIssued(String date) {
+    return 'Issued $date';
+  }
+
+  @override
+  String fleet360DocExpires(String date) {
+    return 'Expires $date';
+  }
+
+  @override
+  String get fleet360DocExpired => 'Expired';
+
+  @override
+  String get fleet360DocExpiringSoon => 'Expiring soon';
+
+  @override
+  String get fleet360DocValid => 'Valid';
+
+  @override
+  String get fleet360DocNoExpiry => 'No expiry recorded';
+
+  @override
+  String get fleet360DocsEmptyTitle => 'No documents recorded';
+
+  @override
+  String get fleet360DocsEmptyBody =>
+      'No registration, insurance, operating card or licence details are recorded for this asset.';
 }

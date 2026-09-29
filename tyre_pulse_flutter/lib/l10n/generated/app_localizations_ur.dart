@@ -7161,4 +7161,173 @@ class AppLocalizationsUr extends AppLocalizations {
   @override
   String get accountDeletionCopyCatalog =>
       'title=میرا اکاؤنٹ حذف کریں~subtitle=اپنے اکاؤنٹ اور ذاتی ڈیٹا کو حذف کرنے کی درخواست کریں~intro=یہ ایڈمنسٹریٹر کو آپ کا اکاؤنٹ اور اس سے متعلق ذاتی ڈیٹا حذف کرنے کی درخواست بھیجتا ہے۔ آپ کا اکاؤنٹ فوراً حذف نہیں ہوتا۔~what=درخواست پر ایپ تک آپ کی رسائی ختم کر دی جاتی ہے۔ ذاتی پروفائل ڈیٹا حذف کیا جاتا ہے؛ آپ کی تنظیم کے لیے بنائے گئے کچھ فلیٹ ریکارڈ کاروباری یا آڈٹ ریکارڈ کے طور پر رکھے جا سکتے ہیں اور آپ کی شناخت سے الگ کر دیے جاتے ہیں۔~timeline=تصدیق شدہ درخواستیں تقریباً 30 دن میں مکمل کی جاتی ہیں۔~reason=وجہ (اختیاری)~confirm=تصدیق کے لیے DELETE لکھیں~word=DELETE~submit=حذف کی درخواست بھیجیں~cancel=منسوخ~successTitle=درخواست بھیج دی گئی~successBody=آپ کے اکاؤنٹ کو حذف کرنے کی درخواست درج کر لی گئی ہے۔ ایڈمنسٹریٹر تقریباً 30 دن میں اس پر عمل کرے گا۔~errorTitle=درخواست نہیں بھیجی جا سکی~mismatch=تصدیق کے لیے بالکل DELETE لکھیں۔~unavailable=اکاؤنٹ حذف کرنا ابھی دستیاب نہیں۔ حذف کی درخواست کے لیے ہمیں ای میل کریں۔~failed=آپ کی درخواست نہیں بھیجی جا سکی۔ دوبارہ کوشش کریں۔~ok=ٹھیک ہے';
+
+  @override
+  String get homeOperationalSummary => 'آپریشنل خلاصہ';
+
+  @override
+  String get homeInspectionsDue => 'واجب الادا معائنے';
+
+  @override
+  String get homeTyresNeedAttention => 'توجہ طلب ٹائر';
+
+  @override
+  String get homeApprovalsAwaitingYou => 'آپ کی منظوری کے منتظر';
+
+  @override
+  String homePlanMoreToday(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'آج $count مزید',
+      one: 'آج 1 مزید',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get profileAssignedTasks => 'تفویض کردہ کام';
+
+  @override
+  String get profileMyActivity => 'میری سرگرمی';
+
+  @override
+  String get tyreRecordsExportAction => 'برآمد کریں';
+
+  @override
+  String get tyreRecordsExportStatus => 'حیثیت';
+
+  @override
+  String tyreRecordsExportNote(int shown, int total) {
+    return 'اس ڈیوائس پر $total میں سے $shown ٹائر ریکارڈز لوڈ ہیں';
+  }
+
+  @override
+  String get tyreRecordsExportError =>
+      'برآمد فائل نہیں بن سکی۔ براہ کرم دوبارہ کوشش کریں۔';
+
+  @override
+  String get fleet360TabDocuments => 'دستاویزات';
+
+  @override
+  String fleet360AlertServiceDueKm(String km) {
+    return 'سروس $km کلومیٹر میں واجب ہے';
+  }
+
+  @override
+  String fleet360AlertServiceDueHours(String hours) {
+    return 'سروس $hours گھنٹے میں واجب ہے';
+  }
+
+  @override
+  String fleet360AlertServiceDueDays(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'سروس $days دن میں واجب ہے',
+      one: 'سروس کل واجب ہے',
+      zero: 'سروس آج واجب ہے',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fleet360AlertServiceOverdue => 'سروس کی تاریخ گزر چکی ہے';
+
+  @override
+  String fleet360AlertTyreActions(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'ٹائر کے $count اقدامات',
+      one: 'ٹائر کا 1 اقدام',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fleet360EventInspectionDone => 'ٹائر معائنہ مکمل';
+
+  @override
+  String get fleet360EventWashDone => 'دھلائی مکمل';
+
+  @override
+  String fleet360EventTyreFittedAt(String position) {
+    return '$position پر ٹائر لگایا گیا';
+  }
+
+  @override
+  String fleet360EventTyreRemovedFrom(String position) {
+    return '$position سے ٹائر اتارا گیا';
+  }
+
+  @override
+  String fleet360EventSerial(String serial) {
+    return 'سیریل: $serial';
+  }
+
+  @override
+  String fleet360EventAccidentCase(String reference) {
+    return 'حادثے کا کیس $reference';
+  }
+
+  @override
+  String fleet360EventAccidentCaseClosed(String reference) {
+    return 'حادثے کا کیس $reference بند';
+  }
+
+  @override
+  String fleet360SnapshotTitle(String year) {
+    return 'مالی خلاصہ، $year اب تک';
+  }
+
+  @override
+  String get fleet360TotalMaintenance => 'کل دیکھ بھال';
+
+  @override
+  String get fleet360BucketExternal => 'بیرونی مرمت';
+
+  @override
+  String get fleet360ShareError => 'خلاصہ شیئر نہیں ہو سکا۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get fleet360DocRegistration => 'رجسٹریشن';
+
+  @override
+  String get fleet360DocInsurance => 'انشورنس';
+
+  @override
+  String get fleet360DocOperatingCard => 'آپریٹنگ کارڈ';
+
+  @override
+  String get fleet360DocDriverLicence => 'ڈرائیور لائسنس';
+
+  @override
+  String fleet360DocIssued(String date) {
+    return 'جاری $date';
+  }
+
+  @override
+  String fleet360DocExpires(String date) {
+    return 'میعاد ختم $date';
+  }
+
+  @override
+  String get fleet360DocExpired => 'میعاد ختم';
+
+  @override
+  String get fleet360DocExpiringSoon => 'جلد ختم ہو رہا ہے';
+
+  @override
+  String get fleet360DocValid => 'درست';
+
+  @override
+  String get fleet360DocNoExpiry => 'میعاد کی تاریخ درج نہیں';
+
+  @override
+  String get fleet360DocsEmptyTitle => 'کوئی دستاویز درج نہیں';
+
+  @override
+  String get fleet360DocsEmptyBody =>
+      'اس اثاثے کے لیے رجسٹریشن، انشورنس، آپریٹنگ کارڈ یا لائسنس کی کوئی تفصیل درج نہیں۔';
 }

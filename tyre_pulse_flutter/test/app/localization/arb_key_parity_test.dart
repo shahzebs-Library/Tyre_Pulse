@@ -532,10 +532,22 @@ void main() {
     // 2070 + 3 = 2073. Home access state: homeSiteAllSites (an organisation
     // wide site scope reads as all sites, not "no site on file") and the
     // homeAccessLoadFailed* retry card shown when the access read fails.
-    test('en, ar and ur each carry exactly 2073 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2073);
-      expect(_translatableKeys(ar).length, 2073);
-      expect(_translatableKeys(ur).length, 2073);
+    // 2073 + 4 = 2077. Tyre records export (share PDF) action: tooltip,
+    // status column, loaded-rows note and failure snackbar (tyreRecordsExport*).
+    // 2077 + 29 = 2106. Vehicle 360 to the owner mock (fleet360*): the
+    // Documents tab and its permit states, the service-due and tyre-action
+    // alert strip, record-derived timeline titles, the snapshot title with
+    // its year, Total maintenance, the External repairs bucket and the share
+    // failure snackbar.
+    // 2106 + 7 = 2113. Home and Profile mock parity (mocks 07-10, 19): the
+    // Home operational summary (homeOperationalSummary, homeInspectionsDue,
+    // homeTyresNeedAttention, homeApprovalsAwaitingYou), the today's-plan
+    // timeline count (homePlanMoreToday), and Profile's Assigned tasks tile
+    // and My activity button (profileAssignedTasks, profileMyActivity).
+    test('en, ar and ur each carry exactly 2113 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2113);
+      expect(_translatableKeys(ar).length, 2113);
+      expect(_translatableKeys(ur).length, 2113);
     });
   });
 

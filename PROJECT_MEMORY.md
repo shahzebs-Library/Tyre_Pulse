@@ -76,6 +76,23 @@ batching stops them being started at all.
 
 ---
 
+# ⚑ SESSION 2026-09-29 — 5 MORE PAGES ON THE COMMAND CENTER KIT + QR LABELS (in progress). No migration.
+Branch == PR #370. **OWNER: do NOT merge yet, keep everything on this one branch, no unnecessary scheduled jobs or
+CI-triggering pushes.** The merge-when-green trigger was deleted. Commit locally; push once at the end.
+- Rebuilt to the owner's light mockups on `commandCenter/kit.jsx` (each has a pure `src/lib/<x>View.js` + test and a
+  page css using only `--cc-*` tokens; hero art `public/dashboard/hero-{renewal,battery,history,disposal,customers}-*.webp`,
+  crops of the mockups with truck badges blurred, dark = darkened light):
+  **Fleet Renewal** (candidates from the register; ASSUMED 10-year planning life because `useful_life` is empty;
+  model_year 20222/2202 rejected; plans table empty so pipeline/CAPEX empty; "AI Recommendations" = rule based);
+  **Batteries** /batteries (existing page rebuilt; ASSUMED 36-month battery life for the forecast; no type/charge columns);
+  **Vehicle History** (unified timeline, per-currency cost, movement INFERRED from record sites, no Add Event);
+  **Asset Disposal** (40 KSA proposed rows, unvalued = 0 or blank; no reason/book value/buyer columns; Request
+  Valuation sheet re-imports; blank value cell on upload overwrites); **Customers** (0 rows; accounts and contracts
+  linked to a customer by exact normalised NAME, stated on the page; revenue/satisfaction/SLA N/A).
+- Owner to confirm: the 10-year and 36-month life assumptions.
+
+---
+
 # ⚑ SESSION 2026-09-28 (part 14) — HOME = COMMAND CENTER (owner's light + dark mockups). No migration.
 - `/` now renders `src/pages/CommandCenter.jsx` -> `src/components/commandCenter/CommandCenter.jsx` (+ `commandCenter.css`,
   dark default, `html.light .cc` overrides). Nav label "Command Center" (en+ar). The OLD Dashboard is kept, lazy-mounted

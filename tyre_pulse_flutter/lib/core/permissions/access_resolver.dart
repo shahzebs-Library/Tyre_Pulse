@@ -198,27 +198,49 @@ final class AccessState {
     Map<String, Object?>? roleMatrixRaw,
     bool permissionsError = false,
   }) {
+    // Grants: the phone's own key and a `mobile:<webKey>` alias
+    // (webModuleKeyAliases) both count. Across the two, a REVOKE beats a
+    // GRANT - the same rule `get_my_access_grants` applies per key - so
+    // merging the two key spaces can never widen access.
     final Map<ModuleKey, GrantEffect> grants = <ModuleKey, GrantEffect>{};
     if (grantsRaw != null) {
       for (final MapEntry<String, Object?> entry in grantsRaw.entries) {
-        final ModuleKey? key = moduleKeyFromMobileGrantKey(entry.key);
+        final ModuleKey? key = moduleKeyFromMobileGrantKey(entry.key) ??
+            moduleKeyFromMobileAliasKey(entry.key);
         final GrantEffect? effect = grantEffectFromWire(entry.value);
-        if (key != null && effect != null) {
+        if (key == null || effect == null) {
+          continue;
+        }
+        if (grants[key] != GrantEffect.revoke) {
           grants[key] = effect;
         }
       }
     }
 
+    // Role matrix: the phone's own key is authoritative; an alias row only
+    // fills a module the phone key is silent on.
     final Map<ModuleKey, bool> matrix = <ModuleKey, bool>{};
+    final Map<ModuleKey, bool> aliasMatrix = <ModuleKey, bool>{};
     if (roleMatrixRaw != null) {
       for (final MapEntry<String, Object?> entry in roleMatrixRaw.entries) {
-        final ModuleKey? key = moduleKeyFromMobileGrantKey(entry.key);
         final Object? value = entry.value;
-        if (key != null && value is bool) {
-          matrix[key] = value;
+        if (value is! bool) {
+          continue;
+        }
+        final ModuleKey? native = moduleKeyFromMobileGrantKey(entry.key);
+        if (native != null) {
+          matrix[native] = value;
+          continue;
+        }
+        final ModuleKey? alias = moduleKeyFromMobileAliasKey(entry.key);
+        if (alias != null) {
+          aliasMatrix[alias] = value;
         }
       }
     }
+    aliasMatrix.forEach((ModuleKey key, bool value) {
+      matrix.putIfAbsent(key, () => value);
+    });
 
     return AccessState(
       role: role,

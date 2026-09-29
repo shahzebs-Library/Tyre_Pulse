@@ -43,6 +43,7 @@ library;
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tyre_pulse/core/auth/access_permissions_repository.dart';
 import 'package:tyre_pulse/core/auth/app_version.dart';
 import 'package:tyre_pulse/core/auth/auth_dependency_providers.dart';
 import 'package:tyre_pulse/core/auth/auth_lifecycle.dart';
@@ -55,6 +56,7 @@ import 'package:tyre_pulse/core/auth/profile_cache.dart';
 import 'package:tyre_pulse/core/auth/sign_in_outcome.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/permissions/access_resolver.dart';
+import 'package:tyre_pulse/core/permissions/roles.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 
@@ -63,6 +65,7 @@ final class AuthController extends Notifier<AuthState> {
   late final AuthRepository _auth;
   late final ProfileRepository _profiles;
   late final VersionGateRepository _versionGate;
+  late final AccessPermissionsRepository _permissions;
   late final ProfileCache _cache;
   late final Duration _restoreTimeout;
 
@@ -83,6 +86,14 @@ final class AuthController extends Notifier<AuthState> {
   /// comes back to the foreground.
   bool _workspaceAdopted = false;
 
+  /// The last successfully loaded raw permission maps for THIS sign-in, and
+  /// the role the matrix was loaded for. Kept so a failed refresh (a lost
+  /// signal on resume) never strips access that already loaded; cleared on
+  /// every new session and on sign-out.
+  Map<String, Object?>? _lastGrantsRaw;
+  Map<String, Object?>? _lastMatrixRaw;
+  UserRole? _lastMatrixRole;
+
   DateTime? _lastForegroundCheckAt;
 
   @override
@@ -96,6 +107,7 @@ final class AuthController extends Notifier<AuthState> {
     _auth = ref.read(authRepositoryProvider);
     _profiles = ref.read(profileRepositoryProvider);
     _versionGate = ref.read(versionGateRepositoryProvider);
+    _permissions = ref.read(accessPermissionsRepositoryProvider);
     _cache = ref.read(profileCacheProvider);
     _restoreTimeout = ref.read(sessionRestoreTimeoutDurationProvider);
     final ForegroundSignal foreground = ref.read(foregroundSignalProvider);
@@ -182,6 +194,7 @@ final class AuthController extends Notifier<AuthState> {
     _generation++;
     _lastForegroundCheckAt = null;
     _workspaceAdopted = false;
+    _forgetPermissions();
 
     final String? outgoingUserId = state.userId;
 
@@ -225,6 +238,7 @@ final class AuthController extends Notifier<AuthState> {
       _generation++;
       _lastForegroundCheckAt = null;
       _workspaceAdopted = false;
+      _forgetPermissions();
       unawaited(_auth.stopAutoRefresh());
       ref.read(workspaceControllerProvider.notifier).clear();
       state = const AuthState.signedOut();
@@ -242,6 +256,7 @@ final class AuthController extends Notifier<AuthState> {
     }
 
     _generation++;
+    _forgetPermissions();
     final int myGeneration = _generation;
     state = AuthState(
       sessionPhase: AuthSessionPhase.authenticated,
@@ -260,11 +275,10 @@ final class AuthController extends Notifier<AuthState> {
 
   Future<void> _startSession(String userId, int myGeneration) async {
     unawaited(_auth.startAutoRefresh());
-    // Grants/matrix are not read here (see this class's own header note in
-    // `auth_dependency_providers.dart`'s absence of any such provider); the
-    // version-gate check runs in parallel with the profile fetch, exactly as
-    // the React Native reference runs its grants/matrix fetches alongside the
-    // AWAITED profile fetch - the profile is the security-critical path.
+    // The version-gate check runs in parallel with the profile fetch; the
+    // grants/matrix load starts once the profile resolves (see
+    // `_refreshPermissions`) because it needs the role - the profile is the
+    // security-critical path.
     unawaited(_runVersionGateCheck(myGeneration));
     await _fetchAndApplyProfile(userId, myGeneration, hardFailOnError: true);
   }
@@ -323,7 +337,11 @@ final class AuthController extends Notifier<AuthState> {
     if (myGeneration != _generation) {
       return; // superseded
     }
-    _applyProfileOutcome(outcome, hardFailOnError: hardFailOnError);
+    _applyProfileOutcome(
+      outcome,
+      hardFailOnError: hardFailOnError,
+      generation: myGeneration,
+    );
   }
 
   /// Applies one fetch outcome to [state].
@@ -339,6 +357,7 @@ final class AuthController extends Notifier<AuthState> {
   void _applyProfileOutcome(
     ProfileFetchOutcome outcome, {
     required bool hardFailOnError,
+    required int generation,
   }) {
     switch (outcome) {
       case ProfileFetchSucceeded(
@@ -354,6 +373,11 @@ final class AuthController extends Notifier<AuthState> {
         if (!_workspaceAdopted) {
           _adoptWorkspace(profile);
         }
+        // Every successful profile load - the first one and each foreground
+        // revalidation - re-reads the grants and role matrix, so an access
+        // change made in the web console reaches an open phone session on its
+        // next resume, and a role change on the profile is applied too.
+        unawaited(_refreshPermissions(profile, generation));
         break;
       case ProfileFetchFailed(error: final AppError error):
         if (hardFailOnError) {
@@ -380,19 +404,13 @@ final class AuthController extends Notifier<AuthState> {
   /// Installs the workspace once a profile has resolved for the first time
   /// this sign-in.
   ///
-  /// PARTIAL BY NECESSITY - see the accompanying report for the full account.
-  /// In short: [WorkspaceContext.fromProfile] needs an [AccessState], and this
-  /// lane has no verified way to call the two RPCs that would populate its
-  /// per-user grants and role-matrix maps (`get_my_access_grants` and
-  /// `get_user_module_permissions` - both documented in artifact 04, neither
-  /// present in the `SupabaseRpcs` registry this lane may read but not edit).
-  /// Reporting [AccessState.permissionsError] as `true` here is the SAME
-  /// convention [AccessState.signedOut] already uses for "no identity
-  /// resolved yet, or nothing trustworthy to decide from" - it makes the three
-  /// SENSITIVE modules (admin, users, approvals) fail CLOSED, while every
-  /// ordinary module still falls through to the role default, exactly the
-  /// asymmetry `access_resolver.dart` documents as deliberate for a
-  /// genuinely-unavailable permission source.
+  /// The workspace is adopted immediately with [AccessState.permissionsError]
+  /// set, the same "nothing trustworthy yet" convention [AccessState.signedOut]
+  /// uses: the three SENSITIVE modules stay closed and ordinary modules fall
+  /// through to role defaults. [_refreshPermissions], started right after,
+  /// replaces it with the real per-user grants and role matrix
+  /// (`get_my_access_grants`, `get_user_module_permissions`) the web Access
+  /// Manager writes.
   ///
   /// No default country, site or currency is chosen - `WorkspaceContext
   /// .fromProfile` with neither supplied yields a context with no country
@@ -407,6 +425,57 @@ final class AuthController extends Notifier<AuthState> {
     );
     ref.read(workspaceControllerProvider.notifier).adopt(
           WorkspaceContext.fromProfile(profile, effectivePermissions: access),
+        );
+  }
+
+  void _forgetPermissions() {
+    _lastGrantsRaw = null;
+    _lastMatrixRaw = null;
+    _lastMatrixRole = null;
+  }
+
+  /// Loads `get_my_access_grants` + `get_user_module_permissions` and applies
+  /// them to the adopted workspace through the ONE resolver input
+  /// ([AccessState]) the tab bar, Home hub and route guards all read.
+  ///
+  /// A failed read keeps what the previous read of this sign-in returned (a
+  /// matrix only while the role is unchanged). With nothing to keep, the
+  /// state is flagged `permissionsError`, which fails CLOSED on the sensitive
+  /// modules and falls through to role defaults everywhere else - exactly
+  /// the state the app was in before this load existed.
+  Future<void> _refreshPermissions(
+    WorkspaceProfile profile,
+    int myGeneration,
+  ) async {
+    AccessPermissionsSnapshot snapshot;
+    try {
+      snapshot = await _permissions.load();
+    } on Object {
+      snapshot = const AccessPermissionsSnapshot();
+    }
+    if (myGeneration != _generation) {
+      return; // superseded by a newer sign-in or a sign-out
+    }
+
+    final Map<String, Object?>? grants = snapshot.grantsRaw ?? _lastGrantsRaw;
+    final Map<String, Object?>? matrix = snapshot.roleMatrixRaw ??
+        (_lastMatrixRole == profile.role ? _lastMatrixRaw : null);
+    if (snapshot.grantsRaw != null) {
+      _lastGrantsRaw = snapshot.grantsRaw;
+    }
+    if (snapshot.roleMatrixRaw != null) {
+      _lastMatrixRaw = snapshot.roleMatrixRaw;
+      _lastMatrixRole = profile.role;
+    }
+
+    ref.read(workspaceControllerProvider.notifier).updatePermissions(
+          AccessState.fromRaw(
+            role: profile.role,
+            isSuperAdmin: profile.isSuperAdmin,
+            grantsRaw: grants,
+            roleMatrixRaw: matrix,
+            permissionsError: grants == null || matrix == null,
+          ),
         );
   }
 

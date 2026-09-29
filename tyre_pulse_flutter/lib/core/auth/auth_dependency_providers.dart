@@ -32,6 +32,7 @@
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tyre_pulse/core/auth/access_permissions_repository.dart';
 import 'package:tyre_pulse/core/auth/auth_lifecycle.dart';
 import 'package:tyre_pulse/core/auth/auth_profile_repository.dart';
 import 'package:tyre_pulse/core/auth/auth_repository.dart';
@@ -76,6 +77,14 @@ final Provider<ProfileRepository> profileRepositoryProvider =
   (ref) => SupabaseProfileRepository(
     ref.watch(supabaseClientProvider),
     ref.watch(profileCacheProvider),
+  ),
+);
+
+/// The per-user grants and role matrix the web Access Manager writes.
+final Provider<AccessPermissionsRepository>
+    accessPermissionsRepositoryProvider = Provider<AccessPermissionsRepository>(
+  (ref) => SupabaseAccessPermissionsRepository(
+    ref.watch(supabaseClientProvider),
   ),
 );
 

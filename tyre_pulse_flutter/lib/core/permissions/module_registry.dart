@@ -124,6 +124,50 @@ ModuleKey? moduleKeyFromWireKey(String wireKey) {
   return null;
 }
 
+/// WEB module keys the web console writes behind the `mobile:` prefix, and
+/// the phone module each one means.
+///
+/// The web Access Manager has TWO writers for phone access. The Mobile App
+/// panel writes the phone's own key (`mobile:records`). The module tree's
+/// Web/Mobile/Both scope control writes the WEB key instead
+/// (`mobile:tyre_records`), because the tree is built from the web catalogue.
+/// Measured live 2026-09-29: `module_permissions` holds `mobile:tyre_records`,
+/// `mobile:inspections`, `mobile:fleet_master`, `mobile:serial_tracker`,
+/// `mobile:work_orders` and `mobile:maintenance_calendar` rows, none of which
+/// matched a phone key, so those decisions reached nobody.
+///
+/// Explicit, never guessed: a web key missing here stays dropped. A key that
+/// is identical on both sides (`accidents`, `alerts`, `stock`, `rca`,
+/// `analytics`, `reports`, `approvals`) needs no entry. Sub-module keys
+/// (`fleet_master:assets`) are never aliased - the phone has no sub-modules.
+///
+/// An alias row only fills a gap: when the phone's OWN key is present for the
+/// same module, the phone key wins (see `AccessState.fromRaw`).
+const Map<String, ModuleKey> webModuleKeyAliases = <String, ModuleKey>{
+  'tyre_records': ModuleKey.records,
+  'inspections': ModuleKey.inspect,
+  'work_orders': ModuleKey.workorders,
+  'fleet_master': ModuleKey.vehicles,
+  'serial_tracker': ModuleKey.serial,
+  'maintenance_calendar': ModuleKey.calendar,
+  'odometer_logs': ModuleKey.meter,
+  'vehicle_washing': ModuleKey.washing,
+  'pm_programs': ModuleKey.pm,
+  'repair_requests': ModuleKey.repairRequest,
+  'user_management': ModuleKey.users,
+};
+
+/// Parses a `mobile:<webKey>` row to the phone module it means, via
+/// [webModuleKeyAliases]. Null for a phone key, an unknown key or a key
+/// without the `mobile:` prefix. A BARE web key (web scope) is never mapped:
+/// the web console's "Web only" scope choice must not reach the phone.
+ModuleKey? moduleKeyFromMobileAliasKey(String rawKey) {
+  if (!rawKey.startsWith(mobileGrantPrefix)) {
+    return null;
+  }
+  return webModuleKeyAliases[rawKey.substring(mobileGrantPrefix.length)];
+}
+
 /// Grouping used by the access editor and the Home hub.
 enum ModuleGroup {
   field('Field'),

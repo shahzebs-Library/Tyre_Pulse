@@ -143,8 +143,14 @@ batching stops them being started at all.
   then relabelled to industry patterns: Front to Rear=standard, Forward Cross=cross, Rearward Cross=rearward_cross
   (CHECK widened live 20260929100000), Side to Side, X Pattern, Custom; team may refine later); Tyre Specs "Catalogue" tab = tyre_spec_catalog (approve/reject for elevated, history from
   events), fitment rules kept on a "Fitment rules" tab. Files stay in storage on delete (bucket has no delete policy).
-  **IN PROGRESS (agent, uncommitted):** Flutter access parity with web (same module/grant/revoke/custom-role rules as
-  the web Access Manager; code only, NO mobile build).
+  **FLUTTER ACCESS FIX (code only, NOT on phones until the owner asks for a build):** the Flutter app NEVER loaded
+  get_my_access_grants / get_user_module_permissions, so every web Access Manager setting (~150 live `mobile:` role
+  rows + per-user grants) was ignored and Approvals/Admin/Users were shut for all but Admin. New
+  core/auth/access_permissions_repository.dart loads both at sign-in + on resume (max once/min); `webModuleKeyAliases`
+  in module_registry.dart maps `mobile:<webKey>` rows (tyre_records->records, inspections->inspect, ...), phone key
+  wins, revoke beats grant. 395/395 permission/auth/router tests pass. OPEN (owner): plain web-only grants do NOT
+  reach the phone (by design of "Web only" scope); Maintenance Supervisor loses Serial Search because live row
+  `mobile:serial_tracker=false`; no realtime (resume only).
 **Flutter / Play (owner is moving Internal -> Closed testing):**
 - Checklist + all listing text: `store-assets/FLUTTER_CLOSED_TESTING.md` (owner could not find it in Play Console;
   it is a repo file; the click paths are in it).

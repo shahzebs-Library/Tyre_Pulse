@@ -9,7 +9,7 @@
  * (org has not run the migration) degrades listing to an empty array so the page
  * can render its "apply the migration" empty state instead of erroring.
  */
-import { supabase, unwrap, applyCountry } from './_client'
+import { supabase, unwrap, applyCountry, fetchAllPages } from './_client'
 import { toNumber } from '../engineHours'
 
 export const COLS =
@@ -42,19 +42,29 @@ function str(v, max) {
 /**
  * List engine-hour readings (newest first). Optional `asset_no` and `country`
  * filters. Returns [] when the table has not been provisioned yet.
+ *
+ * PAGED: the server caps every response at 1,000 rows and the table holds
+ * several thousand readings, so a single request silently dropped the older
+ * history the utilisation maths depends on. `limit` is a ceiling on the total,
+ * and the id tiebreak keeps page boundaries stable.
  * @param {{ country?:string, asset_no?:string, limit?:number }} [opts]
  */
-export async function listEngineHours({ country, asset_no, limit = 1000 } = {}) {
+export const MAX_ENGINE_HOUR_ROWS = 50000
+
+export async function listEngineHours({ country, asset_no, limit = MAX_ENGINE_HOUR_ROWS } = {}) {
   try {
-    let q = supabase.from('engine_hours_logs').select(COLS)
-    if (asset_no) q = q.eq('asset_no', asset_no)
-    q = applyCountry(q, country)
-    return unwrap(
-      await q
+    const { data, error } = await fetchAllPages((from, to) => {
+      let q = supabase.from('engine_hours_logs').select(COLS)
+      if (asset_no) q = q.eq('asset_no', asset_no)
+      q = applyCountry(q, country)
+      return q
         .order('reading_date', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false })
-        .limit(limit),
-    ) || []
+        .order('id', { ascending: true })
+        .range(from, to)
+    }, { max: limit })
+    if (error) throw error
+    return data || []
   } catch (err) {
     if (isMissingRelation(err)) return []
     throw err

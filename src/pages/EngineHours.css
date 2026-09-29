@@ -1,0 +1,74 @@
+/* Engine Hours page. Only --cc-* tokens, so light and dark share one sheet. */
+.eh-page .eh-hero-wrap { position: relative; }
+.eh-page .cc-hero { min-height: 140px; }
+.eh-page .eh-hero-actions { position: absolute; top: 12px; right: 12px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.eh-page .eh-kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.eh-page .cc-kpi { cursor: default; }
+.eh-page button.cc-kpi { cursor: pointer; font: inherit; text-align: left; color: inherit; }
+
+.eh-banner { flex-direction: row; align-items: flex-start; gap: 10px; }
+.eh-banner > svg { flex: none; margin-top: 2px; }
+.eh-banner > div { flex: 1; min-width: 0; font-size: 13px; }
+.eh-banner p { margin: 3px 0 0; color: var(--cc-ink-2); font-size: 12.5px; }
+.eh-banner.warn > svg { color: var(--cc-amber); }
+.eh-banner.bad > svg { color: var(--cc-red); }
+
+.eh-filterbar { gap: 8px; }
+.eh-filterbar .cc-filters { gap: 8px; align-items: center; }
+.eh-filterbar .cc-select { padding-top: 9px; padding-bottom: 9px; font-size: 12.5px; }
+.eh-date-input { background-image: none !important; padding-right: 10px !important; min-width: 138px; }
+.eh-more { padding-top: 4px; border-top: 1px solid var(--cc-inner-border); }
+.eh-count { margin: 0; font-size: 11.5px; color: var(--cc-ink-3); }
+
+.eh-row2 { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 14px; }
+.eh-row2-even { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.eh-head-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+
+.eh-bars { width: 100%; height: 210px; display: block; }
+.eh-bar { fill: var(--cc-green); }
+.eh-bar:hover { fill: var(--cc-green-strong); }
+.eh-grid { stroke: var(--cc-inner-border); stroke-width: 1; }
+.eh-legend { display: flex; gap: 14px; font-size: 11.5px; color: var(--cc-ink-2); margin-bottom: 6px; }
+.eh-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.eh-swatch { width: 11px; height: 11px; border-radius: 3px; background: var(--cc-green); display: inline-block; }
+.eh-note { display: block; margin: 10px 0 0; font-size: 11.5px; color: var(--cc-ink-3); line-height: 1.45; }
+.eh-note svg { vertical-align: -2px; margin-right: 4px; }
+
+.eh-actions { display: inline-flex; gap: 6px; justify-content: flex-end; }
+.eh-actions a.cc-icon-btn { text-decoration: none; }
+.eh-danger:hover { color: var(--cc-red); border-color: var(--cc-red); }
+.eh-overdue { color: var(--cc-red) !important; }
+.eh-bad-text { color: var(--cc-red); font-weight: 600; }
+.eh-warn-text { color: var(--cc-amber); font-weight: 600; }
+.eh-nowrap { white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+.eh-mini { font-size: 10px; padding: 1px 6px; }
+.eh-notes { display: block; max-width: 240px; overflow: hidden; text-overflow: ellipsis; color: var(--cc-ink-2); }
+.eh-page .cc-sub { display: block; font-size: 11px; color: var(--cc-ink-3); margin-top: 1px; }
+.eh-page .cc-strong { font-weight: 600; }
+
+.eh-strip { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+
+.eh-barlist { display: flex; flex-direction: column; gap: 9px; }
+.eh-barlist-row { display: grid; grid-template-columns: minmax(80px, 150px) 1fr auto auto; gap: 10px; align-items: center; font-size: 12.5px; color: var(--cc-ink); }
+.eh-barlist-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eh-barlist-meta { font-size: 11px; color: var(--cc-ink-3); min-width: 70px; text-align: right; }
+
+.eh-downloads { display: flex; flex-wrap: wrap; gap: 8px; }
+.eh-settings { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; align-items: end; }
+.eh-num { background-image: none !important; padding-right: 10px !important; }
+.eh-settings-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.eh-spin { animation: eh-spin 1s linear infinite; }
+@keyframes eh-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .eh-spin { animation: none; } }
+
+@media (max-width: 1400px) {
+  .eh-page .eh-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 1100px) {
+  .eh-row2, .eh-row2-even { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 760px) {
+  .eh-page .eh-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .eh-page .eh-hero-actions { position: static; margin-top: 8px; justify-content: flex-start; }
+}

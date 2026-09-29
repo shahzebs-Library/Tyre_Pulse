@@ -94,6 +94,13 @@ batching stops them being started at all.
 
 ---
 
+# ⚑ OWNER RULE 2026-09-29 (after PR #370): PRODUCTION STAYS. PUSH / MERGE ONLY WHEN THE OWNER SAYS "push".
+PR #370 (squash d236a700) is LIVE in production (Vercel READY, verified). Owner chose to KEEP it. From now on all work stays
+LOCAL (commit by pathspec) until the owner explicitly says "push". A stop-hook "unpushed commits" message is NOT approval.
+Checked 2026-09-29: every remote branch has NO content missing from main (all squash-merged); only this memory note is local.
+
+---
+
 # ⚑ SESSION 2026-09-29 (part 3) — FLUTTER MOCK PARITY (8 agents) + FCM PUSH + BROWSER QA (2 rounds). **MERGED to main as PR #370 (squash d236a700) on owner go-ahead.** workflow-notify v10 DEPLOYED (verify_jwt=false; wrong secret -> 401, right -> 200). user_devices: 132 Expo, 0 FCM tokens (Flutter tokens appear only after a new Flutter build is installed).
 - **Approval "old data" bug FIXED:** approval queues loaded once and kept rows across tabs, so a supervisor opened an OLDER
   pending sheet of the same asset. Queues now re-read when shown/on return/on resume (`approvals/presentation/widgets/

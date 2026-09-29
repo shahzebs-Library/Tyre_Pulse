@@ -17,6 +17,21 @@ import { safeHref } from '../safeUrl'
 /** Scheme-guard a URL on write: safe → the string, anything unsafe/blank → null. */
 const asUrl = (v) => { const s = safeHref(v); return s === undefined ? null : s }
 
+/**
+ * A signature is either a safe URL or the self-contained `<svg>` markup the
+ * shared SignatureCapture pad emits (same format as the field app). Markup is
+ * never truncated (a cut SVG is not a signature); oversize markup is refused.
+ */
+function asSignature(v) {
+  if (v == null || v === '') return null
+  const s = String(v).trim()
+  if (/^<svg[\s>]/i.test(s)) {
+    if (s.length > 200000) throw new Error('The signature is too large to save. Clear it and sign again.')
+    return /<\/svg>$/i.test(s) ? s : null
+  }
+  return asUrl(s.slice(0, 2000))
+}
+
 export const COLS =
   'id,organisation_id,country,report_no,asset_no,handover_type,from_driver,' +
   'to_driver,handover_at,odometer_km,fuel_level_pct,condition_rating,damages,' +
@@ -127,7 +142,7 @@ export async function createHandoverReport(values = {}) {
     damages,
     damage_count: deriveDamageCount(values.damage_count, damages),
     cleanliness: asEnum(values.cleanliness, CLEANLINESS),
-    signature_url: asUrl(asText(values.signature_url, 2000)),
+    signature_url: asSignature(values.signature_url),
     photo_url: asUrl(asText(values.photo_url, 2000)),
     notes: values.notes ? String(values.notes).slice(0, 8000) : null,
     country: values.country ?? null,
@@ -163,7 +178,7 @@ export async function updateHandoverReport(id, patch = {}) {
     clean.damage_count = deriveDamageCount(patch.damage_count, null)
   }
   if (patch.cleanliness !== undefined) clean.cleanliness = asEnum(patch.cleanliness, CLEANLINESS)
-  if (patch.signature_url !== undefined) clean.signature_url = asUrl(asText(patch.signature_url, 2000))
+  if (patch.signature_url !== undefined) clean.signature_url = asSignature(patch.signature_url)
   if (patch.photo_url !== undefined) clean.photo_url = asUrl(asText(patch.photo_url, 2000))
   if (patch.notes !== undefined) clean.notes = patch.notes ? String(patch.notes).slice(0, 8000) : null
   if (patch.country !== undefined) clean.country = patch.country ?? null
@@ -173,4 +188,19 @@ export async function updateHandoverReport(id, patch = {}) {
 
 export async function deleteHandoverReport(id) {
   return unwrap(await supabase.from('handover_reports').delete().eq('id', id))
+}
+
+/**
+ * Drivers for the handover picker (table `drivers`, V50). Country-scoped
+ * (null-safe). Returns [] when the table is not provisioned.
+ */
+export async function listHandoverDrivers({ country, limit = 1000 } = {}) {
+  try {
+    let q = supabase.from('drivers').select('id,driver_id,driver_name,phone,assigned_asset_no,site,country,status')
+    q = applyCountry(q, country)
+    return unwrap(await q.order('driver_name', { ascending: true }).order('id', { ascending: true }).limit(limit)) || []
+  } catch (err) {
+    if (isMissingRelation(err)) return []
+    throw err
+  }
 }

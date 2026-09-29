@@ -22,6 +22,7 @@ import {
 import { loadPmDashboard, listPmServiceRecords } from '../lib/api/pmPrograms'
 import { summarizePmCompliance } from '../lib/pmSchedule'
 import { monthlyServiceCost, costByCategory, outcomeBreakdown } from '../lib/pmAnalytics'
+import { toUserMessage } from '../lib/safeError'
 
 /**
  * Executive Analytics — presentation-quality boardroom analytics built on
@@ -124,10 +125,10 @@ export default function ExecutiveAnalytics() {
     } catch (e) {
       if (myReq === reqIdRef.current) {
         setSlices({
-          tyres: { data: [], error: e.message || String(e), truncated: false },
-          inspections: { data: [], error: e.message || String(e), truncated: false },
-          fleet: { data: [], error: e.message || String(e), truncated: false },
-          openTyres: { data: [], error: e.message || String(e), truncated: false }
+          tyres: { data: [], error: e, truncated: false },
+          inspections: { data: [], error: e, truncated: false },
+          fleet: { data: [], error: e, truncated: false },
+          openTyres: { data: [], error: e, truncated: false }
         })
       }
     } finally {
@@ -159,7 +160,7 @@ export default function ExecutiveAnalytics() {
       if (myReq !== pmReqRef.current) return
       setPm({
         loading: false,
-        error: err?.message || String(err) || 'Failed to load preventive maintenance data.',
+        error: toUserMessage(err, 'Could not load preventive maintenance data.'),
         plans: [], records: [], kmByAsset: {}, hoursByAsset: {},
       })
     }
@@ -750,9 +751,7 @@ export default function ExecutiveAnalytics() {
           title="Executive gauges"
           subtitle="Pressure compliance (90-day inspections) and fleet availability (active share)"
           loading={loading}
-          error={slices.inspections.error && slices.fleet.error
-            ? `${slices.inspections.error} / ${slices.fleet.error}`
-            : slices.inspections.error || slices.fleet.error}
+          error={slices.inspections.error || slices.fleet.error}
           empty={!loading && !gaugeData.pressure.total && !gaugeData.availability.total}
           onRetry={load}
           onPng={() => exportPng('gauges')}
@@ -880,7 +879,7 @@ function PmComplianceCard({ loading, error, empty, hasPlans, compliance, onRetry
       {!loading && error && (
         <div className="flex flex-col items-center justify-center py-8 text-center">
           <AlertTriangle size={24} className="text-red-400 mb-2" />
-          <p className="text-sm text-[var(--text-secondary)] mb-3 max-w-sm break-words">{String(error)}</p>
+          <p className="text-sm text-[var(--text-secondary)] mb-3 max-w-sm break-words">{toUserMessage(error, 'Could not load this chart. Please retry.')}</p>
           {onRetry && (
             <button type="button" onClick={onRetry}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs transition-colors">
@@ -979,7 +978,7 @@ function ChartCard({
       {!loading && error && (
         <div className="flex-1 flex flex-col items-center justify-center py-10 text-center">
           <AlertTriangle size={26} className="text-red-400 mb-2" />
-          <p className="text-sm text-[var(--text-secondary)] mb-3 max-w-sm break-words">{String(error)}</p>
+          <p className="text-sm text-[var(--text-secondary)] mb-3 max-w-sm break-words">{toUserMessage(error, 'Could not load this chart. Please retry.')}</p>
           {onRetry && (
             <button type="button" onClick={onRetry}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs transition-colors">

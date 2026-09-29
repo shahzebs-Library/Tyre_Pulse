@@ -74,6 +74,9 @@ export default function TyreRecords() {
   const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState('')
   const [records, setRecords]         = useState([])
+  // A failed read must say so. It used to fall through to an empty grid, which
+  // read as "this fleet has no tyre records" on the flagship register.
+  const [loadError, setLoadError]     = useState('')
   const [total, setTotal]             = useState(0)
   const [page, setPage]               = useState(0)
   const [loading, setLoading]         = useState(true)
@@ -174,13 +177,20 @@ export default function TyreRecords() {
     const myReq = ++reqIdRef.current
     setLoading(true)
     try {
-      const { data, count } = await tyreRecordsApi.listRecords({
+      const { data, count, error } = await tyreRecordsApi.listRecords({
         page, pageSize: PAGE_SIZE, search: debouncedSearch, siteFilter, brandFilter, riskFilter, country: activeCountry,
       })
       if (myReq !== reqIdRef.current) return   // a newer filter/page superseded this
+      if (error) throw error
+      setLoadError('')
       setRecords(data ?? [])
       setTotal(count ?? 0)
       clear()
+    } catch (err) {
+      if (myReq !== reqIdRef.current) return
+      setRecords([])
+      setTotal(0)
+      setLoadError(toUserMessage(err, 'Could not load tyre records. Please retry.'))
     } finally {
       if (myReq === reqIdRef.current) setLoading(false)   // never leave the spinner stuck
     }
@@ -553,6 +563,12 @@ export default function TyreRecords() {
                     <div className="px-4"><div className="flex gap-2"><div className="w-7 h-7 rounded-lg bg-gray-800/40 animate-pulse" /><div className="w-7 h-7 rounded-lg bg-gray-800/40 animate-pulse" /></div></div>
                   </div>
                 ))}
+              </div>
+            ) : loadError ? (
+              <div role="alert" className="flex flex-col items-center gap-3 py-16 text-center">
+                <AlertTriangle className="w-8 h-8 text-red-400" aria-hidden="true" />
+                <span className="text-sm text-[var(--text-secondary)]">{loadError}</span>
+                <button type="button" onClick={loadRecords} className="btn-secondary min-h-[44px] px-4 text-sm">Retry</button>
               </div>
             ) : records.length === 0 ? (
               <div className="flex flex-col items-center gap-3 text-muted py-16">

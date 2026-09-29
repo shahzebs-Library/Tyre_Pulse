@@ -660,6 +660,7 @@ export default function Accidents() {
   const [bulkError, setBulkError]              = useState('')
   const [bulkBusy, setBulkBusy]                = useState(false)
   const [pendingDeleteId, setPendingDeleteId]  = useState(null)
+  const [deleteOneError, setDeleteOneError]    = useState('')
   const [deletingOne, setDeletingOne]          = useState(false)
 
   // Asset search combobox
@@ -1980,12 +1981,21 @@ export default function Accidents() {
     const id = pendingDeleteId
     if (!id) return
     setDeletingOne(true)
+    setDeleteOneError('')
     try {
-      await accidentsApi.deleteAccident(id)
+      const { data, error } = await accidentsApi.deleteAccident(id)
+      if (error) throw error
+      // Nothing came back: the row was not removed (usually a permission
+      // refusal). Closing the dialog here used to look like success.
+      if (!Array.isArray(data) || data.length === 0) {
+        throw new Error('This incident was not deleted. You may not have permission to delete it.')
+      }
+      setPendingDeleteId(null)
       loadRecords()
+    } catch (err) {
+      setDeleteOneError(toUserMessage(err, 'Could not delete this incident. Please retry.'))
     } finally {
       setDeletingOne(false)
-      setPendingDeleteId(null)
     }
   }, [pendingDeleteId, loadRecords])
 
@@ -4011,12 +4021,12 @@ export default function Accidents() {
       {/* ── Single incident delete confirmation ─────────────────────────────── */}
       <Modal
         open={!!pendingDeleteId}
-        onClose={deletingOne ? undefined : () => setPendingDeleteId(null)}
+        onClose={deletingOne ? undefined : () => { setPendingDeleteId(null); setDeleteOneError('') }}
         size="sm"
         title="Delete incident"
         footer={(
           <>
-            <button onClick={() => setPendingDeleteId(null)} disabled={deletingOne} className="btn-secondary">Cancel</button>
+            <button onClick={() => { setPendingDeleteId(null); setDeleteOneError('') }} disabled={deletingOne} className="btn-secondary">Cancel</button>
             <button onClick={confirmDeleteOne} disabled={deletingOne}
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-semibold disabled:opacity-50 transition-colors">
               <Trash2 size={14} /> {deletingOne ? 'Deleting...' : 'Delete'}
@@ -4025,6 +4035,9 @@ export default function Accidents() {
         )}
       >
         <p className="text-[var(--text-muted)] text-sm">Delete this incident record?</p>
+        {deleteOneError && (
+          <p role="alert" className="mt-3 text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5">{deleteOneError}</p>
+        )}
       </Modal>
 
       {/* ── Identify Asset scanner (Report Accident wizard step) ─────────── */}

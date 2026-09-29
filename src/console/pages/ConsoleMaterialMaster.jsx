@@ -98,6 +98,7 @@ export default function ConsoleMaterialMaster() {
 
   const [detail, setDetail] = useState(null)      // the item being reviewed
   const [detailTxns, setDetailTxns] = useState([])
+  const [detailTxnsError, setDetailTxnsError] = useState('')
   const [detailLoading, setDetailLoading] = useState(false)
   const [draft, setDraft] = useState({})
   // Which item the transaction list belongs to, so a slow answer for the item
@@ -227,16 +228,26 @@ export default function ConsoleMaterialMaster() {
   }
 
   async function openDetail(row) {
-    const seq = ++detailSeq.current
     setDetail(row)
     setDraft({ category: row.category, subcategory: row.subcategory || '', uom: row.uom || '', notes: row.notes || '' })
+    await loadDetailTxns(row)
+  }
+
+  // Separate from openDetail so Retry re-reads the lines without wiping a draft
+  // the reviewer has already started typing.
+  async function loadDetailTxns(row) {
+    const seq = ++detailSeq.current
     setDetailTxns([])
+    setDetailTxnsError('')
     // An item with no transactions used to read "Loading the transactions" for
     // ever, because an empty answer looked the same as no answer yet.
     setDetailLoading(true)
     try {
       const txns = await listMaterialTransactions(row.country, row.item_code, 40)
       if (seq === detailSeq.current) setDetailTxns(txns)
+    } catch (err) {
+      // A failed read must not render as "No transactions could be found".
+      if (seq === detailSeq.current) setDetailTxnsError(toUserMessage(err, 'Could not read the lines behind this item.'))
     } finally {
       if (seq === detailSeq.current) setDetailLoading(false)
     }
@@ -575,6 +586,8 @@ export default function ConsoleMaterialMaster() {
               </p>
               {detailLoading ? (
                 <LoadingState label="Loading the transactions" rows={2} />
+              ) : detailTxnsError ? (
+                <ErrorState message={detailTxnsError} onRetry={() => loadDetailTxns(detail)} />
               ) : detailTxns.length === 0 ? (
                 <p className="text-[11px] text-gray-400">No transactions could be found for this code.</p>
               ) : (

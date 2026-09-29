@@ -59,6 +59,7 @@ vi.mock('../lib/api/tyrePool', () => ({
   isMissingRelation: () => false,
   addToPool: vi.fn(), assignFromPool: vi.fn(), returnToPool: vi.fn(),
 }))
+vi.mock('../lib/api/assets', () => ({ listAssets: vi.fn(() => Promise.resolve([{ id: 'f1', asset_no: 'TRK-2', make: 'Volvo', model: 'FH', current_km: 400 }])) }))
 vi.mock('../lib/api/vehicleCheckInOut', () => ({
   listCheckInOut: vi.fn(() => Promise.resolve([
     { id: 1, asset_no: 'TRK-2', driver_name: 'Omar', direction: 'out', status: 'open', odometer_km: 500, checked_at: '2026-09-25T08:00:00Z' },
@@ -117,9 +118,11 @@ describe('upgraded toll, trip, tyre and handover pages render', () => {
     await waitFor(() => expect(screen.getAllByText('SP1').length).toBeGreaterThan(0))
   })
 
-  it('VehicleCheckInOut lists vehicles still out', async () => {
+  it('VehicleCheckInOut shows the live board and lists vehicles still out', async () => {
     wrap(<VehicleCheckInOut />)
-    await waitFor(() => expect(screen.getByText('Vehicles still out')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('Live status', { selector: 'h2' })).toBeTruthy())
     await waitFor(() => expect(screen.getAllByText('Omar').length).toBeGreaterThan(0))
+    fireEvent.click(screen.getByRole('tab', { name: /Check in/ }))
+    await waitFor(() => expect(screen.getByText('Vehicles still out')).toBeTruthy())
   })
 })

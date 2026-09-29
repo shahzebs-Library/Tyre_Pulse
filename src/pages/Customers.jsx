@@ -1,93 +1,61 @@
 /**
- * Customers (route /customers) - Customer Management registry.
+ * Customers (route /customers) - Customer Management registry, rebuilt on the
+ * shared page kit to the owner's light reference design.
  *
- * A per-organisation book of customer accounts (fleet operators, workshops,
- * partners) with contact details, classification and a status lifecycle. Full
- * CRUD with role-gated writes (RLS enforces Admin/Manager/Director), KPI tiles,
- * contact-quality coverage, status and type charts, search + filters, a
- * sortable register and Excel/PDF export. Country-scoped via Settings.
+ * The `customers` table (V158) holds identity, contact, type (shown as
+ * industry), site and status. Assigned assets, open service requests, account
+ * codes and SLA targets come from Customer Portal accounts; active contracts
+ * and renewals from the contracts register. Both are linked by name (rule in
+ * src/lib/customersView.js, stated on screen) and each loads and fails on its
+ * own. Revenue, satisfaction and SLA performance have no source and read N/A.
  *
- * Every figure comes from the pure engine src/lib/customersAnalytics.js (built
- * on src/lib/customers.js). A failed read shows an error with Retry; a missing
- * table is confirmed by a probe before the page claims it is not installed.
+ * Kept from the previous page: create / edit / delete with role-gated writes
+ * (RLS), contact-quality and site filters, Excel and PDF export of the filtered
+ * register, loading / error+Retry states and the not-provisioned probe.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import {
-  Building2, Users, User, Phone, Mail, Plus, Pencil, Trash2, Search, X,
-  Save, Loader2, AlertTriangle, FileSpreadsheet, FileText, CheckCircle2,
-  RefreshCw, MapPin, PhoneOff, PieChart, BarChart3,
+  Users, UserCheck, FileText, Truck, AlertTriangle, BarChart3, Plus, Pencil, Trash2,
+  Search, X, Save, Loader2, FileSpreadsheet, RefreshCw, Link2, Download, ShieldCheck,
+  CalendarClock, Star, PieChart, SlidersHorizontal, Info, Mail,
 } from 'lucide-react'
-import {
-  Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend,
-} from 'chart.js'
-import { Bar, Doughnut } from 'react-chartjs-2'
-import PageHeader from '../components/ui/PageHeader'
-import Card, { CardHeader, CardBody } from '../components/ui/Card'
 import Modal from '../components/ui/Modal'
-import EnterpriseTable from '../components/ui/EnterpriseTable'
+import {
+  Card, CardState, Kpi, PageHero, Donut, Pager, KitTable, ViewAll, fmtInt, fmtPct, useCard,
+} from '../components/commandCenter/kit'
+import { WORLD_LAND_PATH, WORLD_W, WORLD_H, project } from '../components/commandCenter/worldLand'
+import { COUNTRY_POINTS } from '../lib/commandCenter'
 import { useSettings } from '../contexts/SettingsContext'
 import {
-  listCustomers, createCustomer, updateCustomer, deleteCustomer,
-  CUSTOMER_STATUSES,
+  listCustomers, createCustomer, updateCustomer, deleteCustomer, CUSTOMER_STATUSES,
 } from '../lib/api/customers'
+import { listCustomerAccounts } from '../lib/api/customerPortal'
+import { listContracts } from '../lib/api/contracts'
 import { isValidEmail } from '../lib/customers'
 import {
-  statusLabel, filterCustomers, distinctValues, customerKpis, countBy, statusMix,
-  contactQuality, CONTACT_QUALITY, contactQualityLabel, customerExportRows, CUSTOMER_EXPORT_COLUMNS,
+  statusLabel, filterCustomers, distinctValues, CONTACT_QUALITY,
+  customerExportRows, CUSTOMER_EXPORT_COLUMNS,
 } from '../lib/customersAnalytics'
+import {
+  buildCustomerRows, customerViewKpis, byCountry, topByFleet, healthSegments, serviceCoverage,
+  renewalsDue, filterView, periodLabel, healthLabel, MATCH_RULE, HEALTH_RULE, RENEWAL_DAYS,
+} from '../lib/customersView'
 import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { isMissingRelation, probeRelation } from '../lib/api/_client'
-import { colorAt, withAlpha } from '../lib/reportColors'
-import { compareValues, isBlank } from '../lib/consoleTable'
-
-ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
+import './customers.css'
 
 // The service reads the newest customers up to this many; say so when hit.
 const READ_LIMIT = 500
-
-const STATUS_CLS = {
-  active: 'bg-green-900/40 text-green-300 border border-green-700/50',
-  inactive: 'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]',
-  prospect: 'bg-sky-900/40 text-sky-300 border border-sky-700/50',
-}
-// Semantic tones for the status doughnut (the colour carries meaning).
-const STATUS_TONE = { active: '#22c55e', inactive: '#94a3b8', prospect: '#0ea5e9' }
-const QUALITY_TONE = {
-  complete: 'text-green-500',
-  reachable: 'text-sky-500',
-  invalid_email: 'text-amber-500',
-  missing: 'text-red-400',
-}
 
 const EMPTY_FORM = {
   name: '', customer_type: '', contact_name: '', email: '', phone: '',
   address: '', site: '', status: 'active', notes: '',
 }
 
-/** Column sorting through the shared console comparator (blanks sort last). */
-const sortable = (fn) => ({
-  accessorFn: (r) => { const v = fn(r); return isBlank(v) ? undefined : v },
-  sortingFn: (a, b, id) => compareValues(a.getValue(id), b.getValue(id)),
-  sortUndefined: 'last',
-})
-
-const BAR_OPTS = {
-  responsive: true,
-  maintainAspectRatio: false,
-  indexAxis: 'y',
-  plugins: { legend: { display: false } },
-  scales: {
-    x: { beginAtZero: true, ticks: { color: 'var(--text-muted)', precision: 0 }, grid: { color: 'var(--panel-2)' } },
-    y: { ticks: { color: 'var(--text-muted)' }, grid: { display: false } },
-  },
-}
-const DOUGHNUT_OPTS = {
-  responsive: true,
-  maintainAspectRatio: false,
-  cutout: '60%',
-  plugins: { legend: { position: 'right', labels: { color: 'var(--text-muted)', boxWidth: 12 } } },
-}
+const STATUS_TONE = { active: 'good', inactive: 'muted', prospect: 'info' }
+const HEALTH_TONE = { healthy: 'good', at_risk: 'warn', critical: 'bad', inactive: 'muted', prospect: 'info' }
 
 // ─── Create / edit modal ──────────────────────────────────────────────────────
 function CustomerModal({ open, initial, onClose, onSaved, country, typeOptions }) {
@@ -230,20 +198,62 @@ function DeleteConfirm({ customer, onCancel, onConfirm }) {
   )
 }
 
+// ─── Customer distribution map ────────────────────────────────────────────────
+function CustomerMap({ points, unplaced, country, onCountry }) {
+  const view = useMemo(() => {
+    if (!points.length) return [0, 0, WORLD_W, WORLD_H]
+    const xs = points.map((p) => p.xy[0]); const ys = points.map((p) => p.xy[1])
+    const cx = (Math.min(...xs) + Math.max(...xs)) / 2; const cy = (Math.min(...ys) + Math.max(...ys)) / 2
+    const w = Math.max(420, (Math.max(...xs) - Math.min(...xs)) * 4)
+    const h = w * 0.52
+    return [cx - w / 2, cy - h / 2, w, h]
+  }, [points])
+  const max = Math.max(1, ...points.map((p) => p.total))
+  return (
+    <div className="cc-map cu-map">
+      <svg viewBox={view.join(' ')} preserveAspectRatio="xMidYMid slice" role="img"
+        aria-label={`Customers by country: ${points.map((p) => `${p.country} ${p.total}`).join(', ')}`}>
+        <path d={WORLD_LAND_PATH} fill="var(--cc-land)" stroke="var(--cc-land-stroke)" strokeWidth={0.4} vectorEffect="non-scaling-stroke" />
+        {points.map((p) => {
+          const r = (7 + 9 * Math.sqrt(p.total / max)) * view[2] / 520
+          const on = country === p.country
+          return (
+            <g key={p.country} className="cu-pin" role="button" tabIndex={0} aria-label={`${p.country}: ${p.total} customers. Filter the register.`}
+              onClick={() => onCountry(on ? '' : p.country)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onCountry(on ? '' : p.country) } }}>
+              <circle cx={p.xy[0]} cy={p.xy[1]} r={r * 1.7} fill="var(--cc-green)" opacity={on ? 0.3 : 0.16} />
+              <circle cx={p.xy[0]} cy={p.xy[1]} r={r} fill="var(--cc-green-strong)" stroke="var(--cc-green)" strokeWidth={r * 0.18} />
+              <text x={p.xy[0]} y={p.xy[1]} dy="0.35em" textAnchor="middle" fontSize={r * 0.95} fontWeight="700" fill="#fff">{p.total}</text>
+              <title>{`${p.country}: ${p.total} customers`}</title>
+            </g>
+          )
+        })}
+      </svg>
+      {unplaced > 0 && (
+        <div className="cc-map-legend"><b>Not on the map</b><div>No country recorded<span>{fmtInt(unplaced)}</span></div></div>
+      )}
+    </div>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function Customers() {
   const { activeCountry } = useSettings()
   const [rows, setRows] = useState(null)
   const [error, setError] = useState('')
+  const [actionError, setActionError] = useState('')
   const [missing, setMissing] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  const [updatedAt, setUpdatedAt] = useState(null)
 
-  const [statusFilter, setStatusFilter] = useState('all')
-  const [typeFilter, setTypeFilter] = useState('')
+  const [search, setSearch] = useState('')
+  const [countryFilter, setCountryFilter] = useState('')
+  const [industryFilter, setIndustryFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
   const [siteFilter, setSiteFilter] = useState('')
   const [qualityFilter, setQualityFilter] = useState('all')
-  const [search, setSearch] = useState('')
+  const [moreFilters, setMoreFilters] = useState(false)
+  const [page, setPage] = useState(0)
+  const [pageSize, setPageSize] = useState(10)
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -261,7 +271,6 @@ export default function Customers() {
         const { exists, checked } = await probeRelation('customers')
         setMissing(checked && !exists)
       }
-      setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setMissing(true)
       else setError(toUserMessage(err, 'Could not load customers.'))
@@ -270,27 +279,45 @@ export default function Customers() {
       setRefreshing(false)
     }
   }, [activeCountry])
-
   useEffect(() => { load() }, [load])
 
-  const loading = rows === null
-  const typeOptions = useMemo(() => distinctValues(rows || [], 'customer_type'), [rows])
-  const siteOptions = useMemo(() => distinctValues(rows || [], 'site'), [rows])
+  // Linked registers: each loads and fails on its own.
+  const accountsCard = useCard(() => listCustomerAccounts({ country: activeCountry, limit: 1000 }), [activeCountry])
+  const contractsCard = useCard(async () => (await listContracts({ country: activeCountry, limit: 1000 })).rows, [activeCountry])
+  const accounts = useMemo(() => (accountsCard.error || accountsCard.loading ? null : (accountsCard.data || [])), [accountsCard.error, accountsCard.loading, accountsCard.data])
+  const contracts = useMemo(() => (contractsCard.error || contractsCard.loading ? null : (contractsCard.data || [])), [contractsCard.error, contractsCard.loading, contractsCard.data])
 
-  const filtered = useMemo(() => filterCustomers(rows || [], {
-    status: statusFilter, type: typeFilter, site: siteFilter, quality: qualityFilter, query: search,
-  }), [rows, statusFilter, typeFilter, siteFilter, qualityFilter, search])
-  // The tiles and charts cover the customers matching type, site and search.
-  // Status and contact quality are held out: the tiles and the status chart
-  // report on those, so narrowing them by their own filter restates the choice.
-  const kpiScope = useMemo(
-    () => filterCustomers(rows || [], { type: typeFilter, site: siteFilter, query: search }),
-    [rows, typeFilter, siteFilter, search],
-  )
-  const kpi = useMemo(() => customerKpis(kpiScope), [kpiScope])
-  const mix = useMemo(() => statusMix(kpiScope).filter((s) => s.count > 0), [kpiScope])
-  const byType = useMemo(() => countBy(kpiScope, 'customer_type').slice(0, 8), [kpiScope])
+  const loading = rows === null
+  const now = useMemo(() => new Date(), [rows, accounts, contracts]) // eslint-disable-line react-hooks/exhaustive-deps
+  const viewRows = useMemo(() => buildCustomerRows(rows || [], { accounts, contracts, now }), [rows, accounts, contracts, now])
+  const kpi = useMemo(() => customerViewKpis(viewRows, { accountsKnown: accounts != null, contractsKnown: contracts != null }), [viewRows, accounts, contracts])
+
+  const countries = useMemo(() => byCountry(viewRows), [viewRows])
+  const mapPoints = useMemo(() => countries
+    .map((c) => ({ ...c, xy: COUNTRY_POINTS[c.country] ? project(...COUNTRY_POINTS[c.country]) : null }))
+    .filter((c) => c.xy), [countries])
+  const unplaced = countries.filter((c) => !COUNTRY_POINTS[c.country]).reduce((s, c) => s + c.total, 0)
+  const top = useMemo(() => topByFleet(viewRows), [viewRows])
+  const health = useMemo(() => healthSegments(viewRows), [viewRows])
+  const healthy = health.find((h) => h.key === 'healthy')?.count || 0
+  const coverage = useMemo(() => serviceCoverage(viewRows, contracts != null), [viewRows, contracts])
+  const renewals = useMemo(() => renewalsDue(viewRows, now), [viewRows, now])
+
+  const industryOptions = useMemo(() => distinctValues(rows || [], 'customer_type'), [rows])
+  const siteOptions = useMemo(() => distinctValues(rows || [], 'site'), [rows])
+  const filtered = useMemo(() => {
+    const base = filterView(viewRows, { query: search, country: countryFilter, industry: industryFilter, status: statusFilter })
+    if (!siteFilter && qualityFilter === 'all') return base
+    const keep = new Set(filterCustomers(base, { site: siteFilter, quality: qualityFilter }).map((r) => r.id))
+    return base.filter((r) => keep.has(r.id))
+  }, [viewRows, search, countryFilter, industryFilter, statusFilter, siteFilter, qualityFilter])
+  useEffect(() => { setPage(0) }, [search, countryFilter, industryFilter, statusFilter, siteFilter, qualityFilter, pageSize])
+  const pages = Math.max(1, Math.ceil(filtered.length / pageSize))
+  const safePage = Math.min(page, pages - 1)
+  const pageRows = filtered.slice(safePage * pageSize, safePage * pageSize + pageSize)
   const truncated = (rows || []).length >= READ_LIMIT
+  const hasFilters = search || countryFilter || industryFilter || statusFilter || siteFilter || qualityFilter !== 'all'
+  const clearFilters = () => { setSearch(''); setCountryFilter(''); setIndustryFilter(''); setStatusFilter(''); setSiteFilter(''); setQualityFilter('all') }
 
   const onSaved = useCallback((row, kind) => {
     if (!row) { load(); return }
@@ -298,16 +325,14 @@ export default function Customers() {
       const list = prev || []
       return kind === 'create' ? [row, ...list] : list.map((r) => (r.id === row.id ? { ...r, ...row } : r))
     })
-    setUpdatedAt(new Date())
+    if (kind === 'create') setMissing(false)
   }, [load])
-
   const onDeleted = useCallback((id) => {
     setRows((prev) => (prev || []).filter((r) => r.id !== id))
     setDeleting(null)
   }, [])
-
-  const clearFilters = () => { setStatusFilter('all'); setTypeFilter(''); setSiteFilter(''); setQualityFilter('all'); setSearch('') }
-  const hasFilters = statusFilter !== 'all' || typeFilter || siteFilter || qualityFilter !== 'all' || search
+  const openCreate = () => { setEditing(null); setModalOpen(true) }
+  const openEdit = useCallback((r) => { setEditing(r); setModalOpen(true) }, [])
 
   const exportName = reportFileName('Customer registry', new Date().toISOString().slice(0, 10))
   const doExport = async (kind) => {
@@ -316,233 +341,262 @@ export default function Customers() {
       if (kind === 'excel') await exportToExcel(out, CUSTOMER_EXPORT_COLUMNS.map((c) => c.key), CUSTOMER_EXPORT_COLUMNS.map((c) => c.header), exportName)
       else await exportToPdf(out, CUSTOMER_EXPORT_COLUMNS, 'Customer Registry', exportName, 'landscape')
     } catch (e) {
-      setError(toUserMessage(e, 'Could not export. Try again.'))
+      setActionError(toUserMessage(e, 'Could not export. Try again.'))
     }
   }
 
+  const na = (t = 'N/A') => <span className="cc-na">{t}</span>
+  const linkedDisplay = (card, v) => (card.loading ? '...' : card.error ? 'N/A' : v == null ? 'N/A' : fmtInt(v))
+  const custState = { loading, error: error && !rows?.length ? error : null, retry: load, data: rows }
+  const noCustomers = !loading && !(rows || []).length
+  const emptyInvite = (text) => (
+    <div>
+      {missing ? 'Customer Management is not enabled yet.' : text}
+      {!missing && <><br /><button type="button" className="cc-btn" onClick={openCreate}>Add customer</button></>}
+    </div>
+  )
+
   const kpis = [
-    { label: 'Total customers', value: kpi.total, icon: Building2, tone: 'text-[var(--text-primary)]', sub: `${kpi.types} type${kpi.types === 1 ? '' : 's'}` },
-    { label: 'Active', value: kpi.active, icon: CheckCircle2, tone: 'text-green-400', sub: kpi.activePct == null ? undefined : `${kpi.activePct}% of the registry` },
-    { label: 'Prospects', value: kpi.prospect, icon: Users, tone: 'text-sky-400', sub: `${kpi.inactive} inactive` },
-    { label: 'Reachable', value: kpi.reachablePct == null ? 'N/A' : `${kpi.reachablePct}%`, icon: Phone, tone: 'text-violet-400', sub: 'Valid email or a phone number' },
-    { label: 'Contact gaps', value: kpi.needsAttention, icon: PhoneOff, tone: kpi.needsAttention > 0 ? 'text-amber-400' : 'text-[var(--text-primary)]',
-      sub: `${kpi.quality.invalid_email} bad email, ${kpi.quality.missing} none` },
-    { label: 'Sites', value: kpi.sites, icon: MapPin, tone: 'text-[var(--text-primary)]' },
+    { icon: Users, tone: 't-green', value: kpi.total, label: 'Total Customers', title: truncated ? `Only the newest ${READ_LIMIT} customers are loaded.` : 'Customers in the registry for this country scope.' },
+    { icon: UserCheck, tone: 't-green', value: kpi.active, label: 'Active Customers', title: 'Customers marked active.' },
+    { icon: FileText, tone: 't-purple', label: 'Active Contracts', display: linkedDisplay(contractsCard, kpi.activeContracts), to: '/contracts',
+      title: `Active, unexpired contracts linked to a customer. ${MATCH_RULE}` },
+    { icon: Truck, tone: 't-green', label: 'Assigned Assets', display: linkedDisplay(accountsCard, kpi.assignedAssets),
+      title: kpi.assignedAssets == null ? `No customer is linked to a Customer Portal account with an asset count. ${MATCH_RULE}` : `Linked asset counts from ${kpi.linkedAccounts} Customer Portal account(s).` },
+    { icon: AlertTriangle, tone: 't-red', danger: (kpi.openIssues || 0) > 0, label: 'Open Service Issues', display: linkedDisplay(accountsCard, kpi.openIssues),
+      title: kpi.openIssues == null ? `No customer is linked to a Customer Portal account. ${MATCH_RULE}` : 'Open service requests on linked Customer Portal accounts.' },
+    { icon: BarChart3, tone: 't-green', label: 'Monthly Revenue', display: 'N/A', title: 'No billing or revenue is recorded for customers, so none is shown.' },
   ]
 
-  const statusChart = useMemo(() => ({
-    labels: mix.map((m) => m.label),
-    datasets: [{ data: mix.map((m) => m.count), backgroundColor: mix.map((m) => STATUS_TONE[m.key]), borderColor: 'var(--panel-2)', borderWidth: 2 }],
-  }), [mix])
-  const typeChart = useMemo(() => ({
-    labels: byType.map((t) => t.key),
-    datasets: [{ label: 'Customers', data: byType.map((t) => t.count), backgroundColor: byType.map((_, i) => withAlpha(colorAt(i), 0.85)), borderRadius: 4 }],
-  }), [byType])
-
-  const openEdit = useCallback((r) => { setEditing(r); setModalOpen(true) }, [])
-
-  const columns = useMemo(() => [
-    { id: 'name', header: 'Customer', ...sortable((r) => r.name), size: 220,
-      cell: ({ row }) => (
-        <div>
-          <div className="font-medium text-[var(--text-primary)]">{row.original.name}</div>
-          {row.original.address && <div className="text-xs text-[var(--text-muted)] truncate max-w-[240px]" title={row.original.address}>{row.original.address}</div>}
-        </div>
-      ) },
-    { id: 'type', header: 'Type', ...sortable((r) => r.customer_type), size: 120,
-      cell: ({ row }) => <span className="text-[var(--text-secondary)]">{row.original.customer_type || 'N/A'}</span> },
-    { id: 'contact', header: 'Contact', ...sortable((r) => r.contact_name), size: 220,
-      cell: ({ row }) => {
-        const r = row.original
-        return (
-          <div className="space-y-0.5">
-            {r.contact_name && <div className="text-[var(--text-secondary)] flex items-center gap-1.5"><User size={12} className="text-[var(--text-muted)]" aria-hidden="true" />{r.contact_name}</div>}
-            {r.email && <div className="text-xs text-[var(--text-muted)] flex items-center gap-1.5"><Mail size={11} aria-hidden="true" />{r.email}</div>}
-            {r.phone && <div className="text-xs text-[var(--text-muted)] flex items-center gap-1.5"><Phone size={11} aria-hidden="true" />{r.phone}</div>}
-            {!r.contact_name && !r.email && !r.phone && <span className="text-[var(--text-muted)]">N/A</span>}
-          </div>
-        )
-      } },
-    { id: 'quality', header: 'Contact quality', ...sortable((r) => contactQualityLabel(contactQuality(r))), size: 170,
-      cell: ({ row }) => {
-        const q = contactQuality(row.original)
-        return <span className={`text-xs font-medium ${QUALITY_TONE[q]}`}>{contactQualityLabel(q)}</span>
-      } },
-    { id: 'site', header: 'Site', ...sortable((r) => r.site), size: 130,
-      cell: ({ row }) => <span className="text-[var(--text-secondary)]">{row.original.site || 'N/A'}</span> },
-    { id: 'status', header: 'Status', ...sortable((r) => statusLabel(r.status)), size: 110,
-      cell: ({ row }) => {
-        const k = String(row.original.status || '').toLowerCase()
-        return <span className={`badge text-[11px] px-2 py-0.5 rounded ${STATUS_CLS[k] || STATUS_CLS.inactive}`}>{statusLabel(row.original.status)}</span>
-      } },
-    { id: 'actions', header: '', enableSorting: false, size: 110, meta: { export: false },
-      cell: ({ row }) => {
-        const r = row.original
-        return (
-          <div className="flex items-center justify-end gap-1">
-            <button type="button" onClick={() => openEdit(r)} className="w-11 h-11 inline-flex items-center justify-center rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] focus-visible:ring-2 focus-visible:ring-blue-500" aria-label={`Edit ${r.name || 'customer'}`}><Pencil size={15} /></button>
-            <button type="button" onClick={() => setDeleting(r)} className="w-11 h-11 inline-flex items-center justify-center rounded-lg hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400 focus-visible:ring-2 focus-visible:ring-red-500" aria-label={`Delete ${r.name || 'customer'}`}><Trash2 size={15} /></button>
-          </div>
-        )
-      } },
-  ], [openEdit])
+  const columns = [
+    { key: 'code', header: 'Customer Code', cell: (r) => r.code || na() },
+    {
+      key: 'name', header: 'Customer Name',
+      cell: (r) => (
+        <span className="cu-name">
+          <b>{r.name}</b>
+          {r.email ? <span className="cc-sub"><Mail size={11} aria-hidden="true" /> {r.email}</span> : <span className="cc-sub">{r.contact_name || 'No email on file'}</span>}
+        </span>
+      ),
+    },
+    { key: 'customer_type', header: 'Industry / Segment', cell: (r) => r.customer_type || na() },
+    { key: 'country', header: 'Country', cell: (r) => r.country || na() },
+    { key: 'assets', header: 'Assigned Assets', align: 'right', cell: (r) => (r.assets == null ? na() : <span className="cc-strong">{fmtInt(r.assets)}</span>) },
+    { key: 'site', header: 'Site', cell: (r) => r.site || na() },
+    { key: 'period', header: 'Contract Period', cell: (r) => (contractsCard.loading ? na('...') : periodLabel(r.period) || na(r.contractsKnown ? 'No linked contract' : 'N/A')) },
+    { key: 'status', header: 'Status', cell: (r) => <span className={`cc-pill ${STATUS_TONE[String(r.status || '').toLowerCase()] || 'muted'}`}>{statusLabel(r.status)}</span> },
+    { key: 'health', header: 'Health', cell: (r) => <span className={`cc-pill ${HEALTH_TONE[r.health] || 'muted'}`} title={HEALTH_RULE}>{healthLabel(r.health)}</span> },
+    {
+      key: 'sla', header: 'SLA Status',
+      cell: (r) => <span title="The portal account records an SLA target only. No response times are recorded, so SLA performance cannot be measured.">{r.slaHours == null ? na() : <span className="cc-na">Target {fmtInt(r.slaHours)} h, not measured</span>}</span>,
+    },
+    {
+      key: '_actions', header: 'Actions', sortable: false,
+      cell: (r) => (
+        <span className="cu-actions" onClick={(e) => e.stopPropagation()}>
+          <Link className="cc-icon-btn" to="/contracts" aria-label={`Contracts for ${r.name}`} title="View contracts"><FileText size={14} /></Link>
+          <button type="button" className="cc-icon-btn" onClick={() => openEdit(r)} aria-label={`Edit ${r.name || 'customer'}`}><Pencil size={14} /></button>
+          <button type="button" className="cc-icon-btn cu-danger" onClick={() => setDeleting(r)} aria-label={`Delete ${r.name || 'customer'}`}><Trash2 size={14} /></button>
+        </span>
+      ),
+    },
+  ]
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Customers"
-        subtitle="Your customer registry: accounts, contacts and classification, country-scoped."
-        icon={Building2}
-        onRefresh={load}
-        refreshing={refreshing}
-        updatedAt={updatedAt}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={() => doExport('excel')} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!filtered.length}>
-              <FileSpreadsheet size={14} aria-hidden="true" /> Excel
-            </button>
-            <button type="button" onClick={() => doExport('pdf')} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!filtered.length}>
-              <FileText size={14} aria-hidden="true" /> PDF
-            </button>
-            <button type="button" onClick={() => { setEditing(null); setModalOpen(true) }} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={missing}>
-              <Plus size={14} aria-hidden="true" /> New customer
-            </button>
-          </div>
-        }
-      />
+    <div className="cc cu-page">
+      <div className="cu-hero-wrap">
+        <PageHero
+          title="Customers"
+          lead="Manage your customers, contracts, sites and fleet allocations"
+          imgLight="/dashboard/hero-customers-light.webp"
+          imgDark="/dashboard/hero-customers-dark.webp"
+        />
+        <div className="cu-hero-actions">
+          <button type="button" className="cc-btn-ghost" onClick={openCreate} disabled={missing}><Plus size={15} aria-hidden="true" /> Add Customer</button>
+          <Link className="cc-btn-ghost" to="/contracts"><FileText size={15} aria-hidden="true" /> View Contracts</Link>
+          <button type="button" className="cc-btn-ghost" disabled title="Assets cannot be assigned to a customer yet: Customer Portal accounts store an asset count, not a list of assets."><Link2 size={15} aria-hidden="true" /> Assign Assets</button>
+          <button type="button" className="cc-btn-ghost" onClick={() => doExport('excel')} disabled={!filtered.length}><Download size={15} aria-hidden="true" /> Export List</button>
+        </div>
+      </div>
 
       {missing && (
-        <Card tone="warn" className="items-start gap-3" style={{ flexDirection: 'row' }}>
-          <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" aria-hidden="true" />
-          <div>
-            <p className="text-[var(--text-primary)] font-medium">Customer Management is not enabled on this database yet.</p>
-            <p className="text-[var(--text-muted)] text-sm mt-1">
-              Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V158_CUSTOMERS.sql</span>, then reload.
-            </p>
-          </div>
-        </Card>
+        <div className="cc-card cu-banner warn" role="status">
+          <AlertTriangle size={17} aria-hidden="true" />
+          <div><b>Customer Management is not enabled on this database yet.</b><p>Apply MIGRATIONS_V158_CUSTOMERS.sql, then reload.</p></div>
+        </div>
       )}
-
-      {error && !missing && (
-        <Card tone="crit" className="items-start gap-3" style={{ flexDirection: 'row' }} role="alert">
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
-          <div className="flex-1 min-w-0">
-            <p className="text-[var(--text-primary)] font-medium">Something went wrong with customers.</p>
-            <p className="text-[var(--text-muted)] text-sm mt-1">{error}</p>
-          </div>
-          <button type="button" onClick={load} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]">
-            <RefreshCw size={14} aria-hidden="true" /> Retry
-          </button>
-        </Card>
+      {error && (
+        <div className="cc-card cu-banner bad" role="alert">
+          <AlertTriangle size={17} aria-hidden="true" />
+          <div><b>Could not load customers.</b><p>{error}</p></div>
+          <button type="button" className="cc-btn-ghost" onClick={load}><RefreshCw size={14} aria-hidden="true" /> Retry</button>
+        </div>
       )}
-
-      {/* KPI tiles */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        {kpis.map((k) => {
-          const Icon = k.icon
-          return (
-            <Card key={k.label}>
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
-                <Icon size={16} className={k.tone} aria-hidden="true" />
-              </div>
-              {loading
-                ? <div className="h-7 w-12 mt-2 rounded bg-[var(--input-bg)] animate-pulse" />
-                : <p className={`text-2xl font-bold mt-1 tabular-nums ${k.tone}`}>{k.value}</p>}
-              {k.sub && !loading && <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{k.sub}</p>}
-            </Card>
-          )
-        })}
-      </div>
-      {!loading && (kpiScope.length !== (rows || []).length || truncated) && (
-        <p className="text-xs text-[var(--text-muted)] -mt-3">
-          {kpiScope.length !== (rows || []).length && (
-            <>These figures cover the {kpiScope.length} customer{kpiScope.length === 1 ? '' : 's'} matching your type, site and search filters, of {(rows || []).length}. The status and contact-quality filters are not applied here. </>
-          )}
-          {truncated && <>Only the newest {READ_LIMIT} customers are loaded.</>}
-        </p>
-      )}
-
-      {/* Charts */}
-      {!loading && !missing && (rows || []).length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <Card>
-            <CardHeader title="Status mix" icon={PieChart} />
-            <CardBody style={{ height: '14rem' }}>
-              {mix.length
-                ? <Doughnut data={statusChart} options={DOUGHNUT_OPTS} role="img" aria-label="Customers by status" />
-                : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No status recorded.</div>}
-            </CardBody>
-          </Card>
-          <Card>
-            <CardHeader title="Customers by type" icon={BarChart3} />
-            <CardBody style={{ height: '14rem' }}>
-              {byType.length
-                ? <Bar data={typeChart} options={BAR_OPTS} role="img" aria-label="Customers by type" />
-                : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No customer types recorded.</div>}
-            </CardBody>
-          </Card>
+      {actionError && (
+        <div className="cc-card cu-banner bad" role="alert">
+          <AlertTriangle size={17} aria-hidden="true" />
+          <div><p>{actionError}</p></div>
+          <button type="button" className="cc-icon-btn" onClick={() => setActionError('')} aria-label="Dismiss message"><X size={14} /></button>
         </div>
       )}
 
-      {/* Filters */}
-      <Card className="space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
-            <input className="input pl-9 w-full" placeholder="Search name, contact, email, phone, site" aria-label="Search customers" value={search} onChange={(e) => setSearch(e.target.value)} />
+      <div className="cc-kpis">
+        {kpis.map((k) => <Kpi key={k.label} {...k} loading={loading} />)}
+      </div>
+
+      <div className="cu-row cu-row-1">
+        <Card title="Customer Distribution" sub="Customers by country"
+          action={(
+            <select className="cc-select" aria-label="Country" value={countryFilter} onChange={(e) => setCountryFilter(e.target.value)}>
+              <option value="">All countries</option>
+              {countries.map((c) => <option key={c.country} value={c.country}>{c.country}</option>)}
+            </select>
+          )}>
+          <CardState state={custState} lines={6} empty={noCustomers ? emptyInvite('No customers yet, so there is nothing to place on the map.') : null}>
+            <CustomerMap points={mapPoints} unplaced={unplaced} country={countryFilter} onCountry={setCountryFilter} />
+          </CardState>
+        </Card>
+
+        <Card title="Top Customers by Fleet Size" sub="Assets linked on Customer Portal accounts"
+          action={<ViewAll to="/customer-portal" label="Portal accounts" />}>
+          <CardState state={noCustomers ? custState : { ...accountsCard, loading: accountsCard.loading || loading }} lines={5}
+            empty={noCustomers ? emptyInvite('No customers yet.')
+              : top.length === 0 ? <span title={MATCH_RULE}>No customer is linked to a portal account with assets. Accounts link by matching company name.</span> : null}>
+            <ol className="cu-top">
+              {top.map((t, i) => {
+                const w = Math.round((t.assets / top[0].assets) * 100)
+                return (
+                  <li key={t.id}>
+                    <span className="cu-rank">{i + 1}</span>
+                    <span className="cu-top-name"><b>{t.name}</b><small>{fmtInt(t.assets)} assets</small></span>
+                    <span className="cc-bar-track cu-top-bar"><i style={{ width: `${w}%`, background: 'var(--cc-green)' }} /></span>
+                    <b className="cu-top-n">{fmtInt(t.assets)}</b>
+                  </li>
+                )
+              })}
+            </ol>
+          </CardState>
+        </Card>
+
+        <Card title="Customer Health Overview" sub="Rule-based, from status, contact and linked records"
+          action={<span className="cu-info" title={HEALTH_RULE}><Info size={14} aria-label="How health is judged" /></span>}>
+          <CardState state={custState} lines={5} empty={noCustomers ? emptyInvite('No customers yet.') : null}>
+            <Donut segments={health} total={healthy} centerLabel={viewRows.length ? `Healthy, ${fmtPct((healthy / viewRows.length) * 100)}` : "Healthy"}
+              onSelect={(s) => { if (['active', 'inactive', 'prospect'].includes(s.key)) setStatusFilter(s.key) }} />
+          </CardState>
+        </Card>
+      </div>
+
+      <div className="cu-row cu-row-2">
+        <Card className="cu-mini">
+          <div className="cu-mini-body">
+            <span className="cc-kpi-icon t-green"><ShieldCheck size={20} aria-hidden="true" /></span>
+            <div>
+              <h2 className="cc-card-title">Service Coverage</h2>
+              <b className="cu-mini-val">{contractsCard.loading ? '...' : contractsCard.error ? 'N/A' : fmtPct(coverage.pct)}</b>
+              <small>{contractsCard.error ? <>Contracts could not be read. <button type="button" className="cc-link cc-link-btn" onClick={contractsCard.retry}>Try again</button></>
+                : coverage.pct == null ? (coverage.of ? 'Contracts not loaded yet' : 'No active customers yet')
+                  : `${coverage.covered} of ${coverage.of} active customers hold an active contract`}</small>
+            </div>
           </div>
-          <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
-            <option value="all">All statuses</option>
+        </Card>
+        <Card className="cu-mini">
+          <div className="cu-mini-body">
+            <span className="cc-kpi-icon t-blue"><CalendarClock size={20} aria-hidden="true" /></span>
+            <div>
+              <h2 className="cc-card-title">Contract Renewal <span className="cu-muted">(next {RENEWAL_DAYS} days)</span></h2>
+              <b className="cu-mini-val">{contractsCard.loading ? '...' : contractsCard.error ? 'N/A' : fmtInt(renewals.length)}</b>
+              <small title={renewals.map((r) => `${r.customer}: ${r.title}, ${r.days} day(s)`).join('\n') || undefined}>
+                {contractsCard.error ? <>Contracts could not be read. <button type="button" className="cc-link cc-link-btn" onClick={contractsCard.retry}>Try again</button></>
+                  : renewals.length ? `Soonest: ${renewals[0].customer}, ${renewals[0].days} day(s)` : 'No linked contract ends in this window'}
+              </small>
+            </div>
+          </div>
+        </Card>
+        <Card className="cu-mini">
+          <div className="cu-mini-body">
+            <span className="cc-kpi-icon t-amber"><Star size={20} aria-hidden="true" /></span>
+            <div>
+              <h2 className="cc-card-title">Customer Satisfaction</h2>
+              <b className="cu-mini-val">N/A</b>
+              <small>No customer ratings or surveys are recorded.</small>
+            </div>
+          </div>
+        </Card>
+        <Card className="cu-mini">
+          <div className="cu-mini-body">
+            <span className="cc-kpi-icon t-purple"><PieChart size={20} aria-hidden="true" /></span>
+            <div>
+              <h2 className="cc-card-title">Revenue by Segment</h2>
+              <b className="cu-mini-val">N/A</b>
+              <small>No customer revenue is recorded, so segments cannot be valued.</small>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      <Card className="cu-register">
+        <div className="cc-filters cu-filters">
+          <div className="cc-search">
+            <Search size={15} aria-hidden="true" />
+            <label htmlFor="cu-search" className="sr-only">Search customers</label>
+            <input id="cu-search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by customer name, code, contact, industry..." />
+          </div>
+          <select className="cc-select" aria-label="Country" value={countryFilter} onChange={(e) => setCountryFilter(e.target.value)}>
+            <option value="">All Countries</option>
+            {countries.map((c) => <option key={c.country} value={c.country}>{c.country}</option>)}
+          </select>
+          <select className="cc-select" aria-label="Industry" value={industryFilter} onChange={(e) => setIndustryFilter(e.target.value)} disabled={!industryOptions.length}>
+            <option value="">All Industries</option>
+            {industryOptions.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <select className="cc-select" aria-label="Status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <option value="">All Statuses</option>
             {CUSTOMER_STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
           </select>
-          <select className="input" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Type" disabled={!typeOptions.length}>
-            <option value="">All types</option>
-            {typeOptions.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
-          <select className="input" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} aria-label="Site" disabled={!siteOptions.length}>
-            <option value="">All sites</option>
-            {siteOptions.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
-          <select className="input" value={qualityFilter} onChange={(e) => setQualityFilter(e.target.value)} aria-label="Contact quality">
-            <option value="all">Any contact quality</option>
-            {CONTACT_QUALITY.map((q) => <option key={q.key} value={q.key}>{q.label}</option>)}
-          </select>
-          {hasFilters && (
-            <button type="button" onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]">
-              <X size={14} aria-hidden="true" /> Clear
-            </button>
-          )}
-          <span className="text-xs text-[var(--text-muted)] ml-auto" aria-live="polite">{filtered.length} of {(rows || []).length}</span>
+          <button type="button" className="cc-btn-ghost" aria-expanded={moreFilters} onClick={() => setMoreFilters((v) => !v)}><SlidersHorizontal size={14} aria-hidden="true" /> More Filters</button>
+          {hasFilters && <button type="button" className="cc-btn-ghost" onClick={clearFilters}><X size={13} aria-hidden="true" /> Clear</button>}
         </div>
-      </Card>
-
-      {/* Register: the WHOLE filtered set; the table pages and sorts across it. */}
-      <Card pad="none" clip>
-        <EnterpriseTable
-          columns={columns}
-          data={filtered}
-          getRowId={(r) => String(r.id)}
-          loading={loading}
-          enableGlobalFilter={false}
-          enableColumnFilters={false}
-          enableSorting
-          enableExport={false}
-          initialPageSize={25}
-          pageSizeOptions={[25, 50, 100]}
-          emptyMessage={missing
-            ? 'Customer Management is not enabled yet.'
-            : (rows || []).length === 0
-              ? 'No customers yet. Use "New customer" to add the first account.'
-              : 'No customers match these filters.'}
-        />
+        {moreFilters && (
+          <div className="cc-filters cu-filters cu-more">
+            <select className="cc-select" aria-label="Site" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} disabled={!siteOptions.length}>
+              <option value="">All sites</option>
+              {siteOptions.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <select className="cc-select" aria-label="Contact quality" value={qualityFilter} onChange={(e) => setQualityFilter(e.target.value)}>
+              <option value="all">Any contact quality</option>
+              {CONTACT_QUALITY.map((q) => <option key={q.key} value={q.key}>{q.label}</option>)}
+            </select>
+            <button type="button" className="cc-btn-ghost" onClick={() => doExport('pdf')} disabled={!filtered.length}><FileText size={14} aria-hidden="true" /> Export PDF</button>
+            <button type="button" className="cc-btn-ghost" onClick={() => doExport('excel')} disabled={!filtered.length}><FileSpreadsheet size={14} aria-hidden="true" /> Export Excel</button>
+            <button type="button" className="cc-btn-ghost" onClick={() => { load(); accountsCard.retry(); contractsCard.retry() }} disabled={refreshing}>
+              {refreshing ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <RefreshCw size={14} aria-hidden="true" />} Refresh
+            </button>
+          </div>
+        )}
+        {(accountsCard.error || contractsCard.error) && (
+          <p className="cu-note" role="status">
+            {accountsCard.error && <>Customer Portal accounts could not be read, so assets, issues, codes and SLA targets show N/A. <button type="button" className="cc-link cc-link-btn" onClick={accountsCard.retry}>Try again</button> </>}
+            {contractsCard.error && <>Contracts could not be read, so contract figures show N/A. <button type="button" className="cc-link cc-link-btn" onClick={contractsCard.retry}>Try again</button></>}
+          </p>
+        )}
+        <CardState state={custState} lines={8}
+          empty={noCustomers ? emptyInvite('No customers yet. Add your first customer to start the registry.')
+            : filtered.length === 0 ? 'No customers match these filters.' : null}>
+          <KitTable manualPagination showPagination={false} enableSorting={false}
+            pageIndex={safePage} pageSize={pageSize} pageCount={pages} totalRows={filtered.length}
+            getRowId={(r) => String(r.id)} rows={pageRows} columns={columns} />
+          <Pager page={safePage} pageSize={pageSize} total={filtered.length} noun="customers"
+            onPage={setPage} onPageSize={setPageSize} sizes={[10, 25, 50, 100]} />
+        </CardState>
+        <p className="cu-note">{MATCH_RULE}{truncated ? ` Only the newest ${READ_LIMIT} customers are loaded.` : ''}</p>
       </Card>
 
       <CustomerModal
         open={modalOpen}
         initial={editing}
         country={activeCountry}
-        typeOptions={typeOptions}
+        typeOptions={industryOptions}
         onClose={() => { setModalOpen(false); setEditing(null) }}
         onSaved={onSaved}
       />

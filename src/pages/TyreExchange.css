@@ -1,0 +1,74 @@
+/* Tyre Exchange page. Only --cc-* tokens, so light and dark share one sheet. */
+.tx-page { display: flex; flex-direction: column; gap: 14px; }
+.tx-layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 14px; align-items: start; }
+.tx-main, .tx-rail { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+@media (max-width: 1200px) { .tx-layout { grid-template-columns: minmax(0, 1fr); } }
+
+.tx-banner { flex-direction: row; align-items: center; gap: 10px; font-size: 13px; }
+.tx-banner > svg { flex: none; color: var(--cc-red); }
+.tx-banner > div { flex: 1; min-width: 0; }
+
+.tx-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.tx-filters .cc-select { max-width: 170px; }
+.tx-range { display: inline-flex; align-items: center; gap: 6px; }
+.tx-range span { font-size: 12px; color: var(--cc-ink-3); }
+.tx-range input[type="date"] { font-size: 12.5px; color: var(--cc-ink); background: var(--cc-inner); border: 1px solid var(--cc-inner-border); border-radius: 8px; padding: 6px 8px; }
+html.light .tx-range input[type="date"] { background: #fff; }
+
+.tx-table td, .tx-table th { font-size: 12px; }
+.tx-dt { display: flex; flex-direction: column; line-height: 1.25; white-space: nowrap; }
+.tx-dt small { color: var(--cc-ink-3); font-size: 11px; }
+.tx-veh { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.tx-veh b, .tx-tyre b { display: block; font-size: 12.5px; color: var(--cc-ink); }
+.tx-veh small, .tx-tyre small { display: block; font-size: 11px; color: var(--cc-ink-3); }
+.tx-tyre { display: inline-flex; align-items: center; gap: 8px; }
+.tx-tyre-glyph { width: 18px; height: 18px; flex: none; border-radius: 999px; border: 4px solid var(--cc-ink-2); box-sizing: border-box; }
+.tx-actions-cell { display: inline-flex; gap: 6px; align-items: center; }
+
+.tx-bottom { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 1000px) { .tx-bottom { grid-template-columns: minmax(0, 1fr); } }
+.tx-flow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.tx-stop { flex: 1 1 120px; display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border: 1px solid var(--cc-inner-border); border-radius: 10px; background: var(--cc-inner); min-width: 0; }
+.tx-stop small { font-size: 11px; color: var(--cc-ink-3); }
+.tx-stop b { font-size: 13.5px; color: var(--cc-ink); }
+.tx-stop span { font-size: 11.5px; color: var(--cc-ink-2); overflow-wrap: anywhere; }
+.tx-stop-tyre { font-weight: 600; }
+.tx-flow-arrow { display: inline-flex; align-items: center; gap: 4px; }
+.tx-photos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.tx-photos img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; border: 1px solid var(--cc-inner-border); }
+
+.tx-form { display: flex; flex-direction: column; gap: 10px; }
+.tx-form label, .tx-label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--cc-ink-2); font-weight: 500; }
+.tx-form em { color: var(--cc-red); font-style: normal; }
+.tx-form input, .tx-form select, .tx-form textarea { width: 100%; font-size: 12.5px; color: var(--cc-ink); background: var(--cc-inner); border: 1px solid var(--cc-inner-border); border-radius: 8px; padding: 8px 10px; font-family: inherit; box-sizing: border-box; }
+html.light .tx-form input, html.light .tx-form select, html.light .tx-form textarea { background: #fff; }
+.tx-form input:focus, .tx-form select:focus, .tx-form textarea:focus { outline: none; border-color: var(--cc-green); }
+.tx-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.tx-inline { position: relative; display: block; }
+.tx-inline input { padding-right: 30px; }
+.tx-inline svg { position: absolute; right: 9px; top: 50%; transform: translateY(-50%); color: var(--cc-ink-3); }
+.tx-seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.tx-seg button { font-size: 12.5px; font-weight: 600; padding: 8px 4px; border-radius: 8px; border: 1px solid var(--cc-inner-border); background: var(--cc-inner); color: var(--cc-ink-2); cursor: pointer; }
+.tx-seg button[aria-pressed="true"] { background: var(--cc-green-strong); color: #fff; border-color: var(--cc-green-strong); }
+.tx-picked { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--cc-inner-border); border-radius: 8px; background: var(--cc-inner); }
+.tx-picked b { font-size: 13px; color: var(--cc-ink); }
+.tx-picked small { flex: 1; font-size: 11px; color: var(--cc-ink-3); }
+.tx-matches { list-style: none; margin: -4px 0 0; padding: 4px; border: 1px solid var(--cc-inner-border); border-radius: 8px; background: var(--cc-card-flat); max-height: 200px; overflow-y: auto; }
+.tx-matches button { width: 100%; display: flex; justify-content: space-between; gap: 8px; padding: 6px 8px; border: 0; background: none; border-radius: 6px; cursor: pointer; font-size: 12.5px; color: var(--cc-ink); }
+.tx-matches button:hover { background: var(--cc-inner); }
+.tx-matches small { color: var(--cc-ink-3); }
+.tx-diagram { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px; border: 1px solid var(--cc-inner-border); border-radius: 10px; }
+.tx-note { font-size: 11.5px; color: var(--cc-ink-3); margin: 0; }
+.tx-upload { display: flex; align-items: center; gap: 8px; border: 1.5px dashed var(--cc-inner-border); border-radius: 10px; padding: 10px; font-size: 11.5px; color: var(--cc-ink-3); }
+.tx-err { margin: 0; padding: 8px 10px 8px 24px; border-radius: 8px; border: 1px solid var(--cc-red); background: var(--cc-red-tint); color: var(--cc-red); font-size: 12px; }
+.tx-ok { margin: 0; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--cc-green); background: var(--cc-green-tint); color: var(--cc-ink); font-size: 12px; }
+.tx-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.tx-actions button { justify-content: center; }
+.tx-recent { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.tx-recent li { display: flex; flex-direction: column; gap: 2px; padding-bottom: 8px; border-bottom: 1px solid var(--cc-inner-border); }
+.tx-recent li:last-child { border-bottom: 0; }
+.tx-recent b { font-size: 12.5px; color: var(--cc-ink); }
+.tx-recent small { font-size: 11px; color: var(--cc-ink-3); }
+.tx-recent span { font-size: 11.5px; color: var(--cc-ink-2); overflow-wrap: anywhere; }
+
+.tx-legacy { margin-top: 12px; }

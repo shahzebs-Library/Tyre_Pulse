@@ -23,6 +23,7 @@ import 'package:tyre_pulse/core/network/supabase_client_provider.dart';
 import 'package:tyre_pulse/core/sync/queued_command_repository.dart';
 import 'package:tyre_pulse/core/sync/sync_workspace_id.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
+import 'package:tyre_pulse/features/checklists/data/checklist_asset_hours_repository.dart';
 import 'package:tyre_pulse/features/checklists/data/checklist_draft_repository.dart';
 import 'package:tyre_pulse/features/checklists/data/checklist_history_repository.dart';
 import 'package:tyre_pulse/features/checklists/data/checklist_photo_capture.dart';
@@ -120,4 +121,22 @@ final lastChecklistOdometerProvider =
     FutureProvider.autoDispose.family<LastOdometerReading?, String>(
   (ref, assetNo) =>
       ref.watch(meterLogRepositoryProvider).readLastOdometer(assetNo),
+);
+
+/// Reads the latest engine-hour reading for the hub's selected-asset card.
+final Provider<ChecklistAssetHoursRepository>
+    checklistAssetHoursRepositoryProvider =
+    Provider<ChecklistAssetHoursRepository>(
+  (ref) =>
+      SupabaseChecklistAssetHoursRepository(ref.watch(supabaseClientProvider)),
+);
+
+/// The latest `engine_hours_logs.engine_hours` for one asset. Null means the
+/// server has no reading; an error means the read failed - the card hides the
+/// hours fact in both cases rather than showing a fabricated value.
+final lastChecklistEngineHoursProvider =
+    FutureProvider.autoDispose.family<double?, String>(
+  (ref, assetNo) => ref
+      .watch(checklistAssetHoursRepositoryProvider)
+      .readLastEngineHours(assetNo),
 );

@@ -15,11 +15,25 @@ import {
   CalendarClock, Download, FileText, AlertTriangle, CheckCircle,
   Clock, TrendingUp, DollarSign, Truck, ChevronDown, ChevronUp,
   Info, Filter, ShieldAlert, Activity, Gauge, Sigma, Percent, Target,
-  TrendingDown, Search, X,
+  TrendingDown, Search, X, Wrench, CalendarCheck, Coins, RefreshCw,
 } from 'lucide-react'
-import PageHeader from '../components/ui/PageHeader'
+import { PageHero, Kpi, Tabs } from '../components/commandCenter/kit'
+import {
+  RiskScoredAssets, MaintenanceForecast, DueSoon, TyreHealthTrend, RiskDistribution,
+  FailureTypes, Recommendations,
+} from '../components/predictive/PredictiveOverview'
+import {
+  buildAssetRisk, riskDistribution, overviewKpis, maintenanceForecast, dueSoon,
+  removalTrend, failureTypes, buildRecommendations, PREDICTED_FAILURE_DAYS, DUE_SOON_DAYS,
+} from '../lib/predictiveOverview'
+import { listPmPrograms } from '../lib/api/pmPrograms'
+import { listOpenJobAssets } from '../lib/api/predictiveOverview'
+import { createJob } from '../lib/api/workshopLive'
+import { useAuth } from '../contexts/AuthContext'
+import './PredictiveMaintenance.css'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import EmailPdfButton from '../components/EmailPdfButton'
+import Modal from '../components/ui/Modal'
 import {
   buildPredictions, buildFailureRiskRows, buildCohortModels, computeFleetStats,
   LEGAL_MIN_TREAD_MM, REPLACE_TARGET_MM, PRESSURE_TARGET_PSI, MAX_AGE_YEARS,
@@ -78,6 +92,8 @@ function fmt(n, dec = 0) {
 }
 
 function fmtCurrency(n, currency) {
+  // No currency = the All-countries view: SAR, AED and EGP are never added up.
+  if (!currency) return 'N/A'
   if (n == null || Number.isNaN(Number(n))) return 'N/A'
   return `${currency} ${fmt(n, 0)}`
 }
@@ -457,6 +473,8 @@ function FailureRiskPanel({
 export default function PredictiveMaintenance() {
   const loadId = useRef(0)
   const { activeCurrency, activeCountry } = useSettings()
+  // Money is shown only for one country, in that country's own currency.
+  const moneyCurrency = activeCountry && activeCountry !== 'All' ? activeCurrency : null
   // One clock read per mount: every engine gets the same injected "now".
   const [now] = useState(() => new Date())
 
@@ -478,6 +496,20 @@ export default function PredictiveMaintenance() {
   const [selectedRisk, setSelectedRisk] = useState(null)
 
   const [assumptionsOpen, setAssumptionsOpen] = useState(false)
+
+  // Overview state (hero, KPI strip, cards, recommendations).
+  const { hasCapability } = useAuth()
+  const canCreateJob = typeof hasCapability === 'function' ? hasCapability('work_orders', 'create') : false
+  const [fcMonths, setFcMonths] = useState(6)
+  const [typeHorizon, setTypeHorizon] = useState(180)
+  const [recLevel, setRecLevel] = useState('all')
+  const [pmState, setPmState] = useState({ loading: true, rows: [], error: null })
+  const [openJobs, setOpenJobs] = useState(() => new Set())
+  const [jobDraft, setJobDraft] = useState(null)
+  const [jobBusy, setJobBusy] = useState(false)
+  const [jobError, setJobError] = useState(null)
+  const [notice, setNotice] = useState(null)
+  const detailRef = useRef(null)
 
   // ── Data loading ─────────────────────────────────────────────────────────────
   const loadData = useCallback(async () => {
@@ -511,7 +543,7 @@ export default function PredictiveMaintenance() {
       try {
         const { data: fleetData, error: fleetErr } = await fetchAllPages((from, to) => scopeCountry(supabase
           .from('vehicle_fleet')
-          .select('asset_no,site,vehicle_type,expected_km_per_tyre,monthly_tyre_budget,current_km')
+          .select('asset_no,site,country,vehicle_type,make,model,expected_km_per_tyre,monthly_tyre_budget,current_km')
           .order('asset_no').order('id')).range(from, to), { max: 20000 })
 
         if (request !== loadId.current) return
@@ -537,6 +569,19 @@ export default function PredictiveMaintenance() {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps -- Invalidate the current request on cleanup.
   useEffect(() => { loadData(); return () => { loadId.current++ } }, [loadData])
+
+  // Preventive-maintenance plans feed the forecast, Due soon and Due for service.
+  // A failed read is shown on those cards, never as "nothing due".
+  const loadPm = useCallback(async () => {
+    setPmState((st) => ({ ...st, loading: true, error: null }))
+    try {
+      const rows = await listPmPrograms({ country: activeCountry && activeCountry !== 'All' ? activeCountry : undefined })
+      setPmState({ loading: false, rows: rows || [], error: null })
+    } catch (err) {
+      setPmState({ loading: false, rows: [], error: toUserMessage(err, 'Service plans could not be loaded.') })
+    }
+  }, [activeCountry])
+  useEffect(() => { loadPm() }, [loadPm])
 
   // ── Engines (canonical libs) ─────────────────────────────────────────────────
   const fleetStats = useMemo(() => computeFleetStats(records), [records])
@@ -594,6 +639,119 @@ export default function PredictiveMaintenance() {
   const quarterly = useMemo(() => quarterlyForecast(monthlyBudget), [monthlyBudget])
   const urgentVehicles = useMemo(() => buildUrgentVehicles(forecastBase), [forecastBase])
 
+  // ── Overview (pure engine: src/lib/predictiveOverview.js) ────────────────────
+  const currencySafe = !!activeCountry && activeCountry !== 'All'
+  const assetRisk = useMemo(() => buildAssetRisk(failureRiskRows, allPredictions, fleetMaster), [failureRiskRows, allPredictions, fleetMaster])
+  const riskDist = useMemo(() => riskDistribution(assetRisk), [assetRisk])
+  const ovKpis = useMemo(
+    () => overviewKpis({ assets: assetRisk, predictions: allPredictions, pmPrograms: pmState.rows, now, currencySafe }),
+    [assetRisk, allPredictions, pmState.rows, now, currencySafe],
+  )
+  const ovForecast = useMemo(
+    () => maintenanceForecast({ predictions: allPredictions, pmPrograms: pmState.rows, now, months: fcMonths }),
+    [allPredictions, pmState.rows, now, fcMonths],
+  )
+  const dueRows = useMemo(
+    () => dueSoon({ predictions: allPredictions, pmPrograms: pmState.rows, now, fleet: fleetMaster }),
+    [allPredictions, pmState.rows, now, fleetMaster],
+  )
+  const hasCompletedLives = useMemo(
+    () => records.some((r) => r.km_at_removal != null && r.km_at_fitment != null && Number(r.km_at_removal) > Number(r.km_at_fitment)),
+    [records],
+  )
+  const removals = useMemo(
+    () => removalTrend(records, now, 6, hasCompletedLives ? fleetStats.avgKmLife : null),
+    [records, now, hasCompletedLives, fleetStats.avgKmLife],
+  )
+  const failTypes = useMemo(() => failureTypes(allPredictions, typeHorizon), [allPredictions, typeHorizon])
+  const recAssetKey = useMemo(
+    () => buildRecommendations({ assets: assetRisk, predictions: allPredictions }).map((r) => r.asset_no).join('|'),
+    [assetRisk, allPredictions],
+  )
+  useEffect(() => {
+    let live = true
+    const assets = recAssetKey ? recAssetKey.split('|') : []
+    if (!assets.length) { setOpenJobs(new Set()); return undefined }
+    listOpenJobAssets(assets, activeCountry && activeCountry !== 'All' ? activeCountry : undefined)
+      .then((set) => { if (live) setOpenJobs(set) })
+      .catch(() => { if (live) setOpenJobs(new Set()) })
+    return () => { live = false }
+  }, [recAssetKey, activeCountry])
+  const recommendations = useMemo(
+    () => buildRecommendations({ assets: assetRisk, predictions: allPredictions, openJobs, currencySafe }),
+    [assetRisk, allPredictions, openJobs, currencySafe],
+  )
+  const recSites = useMemo(() => uniqueSorted(recommendations.map((r) => r.site)), [recommendations])
+  const heroStat = useMemo(() => {
+    const src = fleetMasterAvailable && fleetMaster.length ? fleetMaster : null
+    if (!src) return null
+    const sites = new Set(src.map((f) => f.site).filter(Boolean))
+    const countries = new Set(src.map((f) => f.country).filter(Boolean))
+    return {
+      value: fmt(src.length),
+      lines: ['Vehicles across', `${fmt(sites.size)} site${sites.size === 1 ? '' : 's'}`, `${fmt(countries.size)} countr${countries.size === 1 ? 'y' : 'ies'}`],
+    }
+  }, [fleetMaster, fleetMasterAvailable])
+
+  const openDetail = useCallback((tab) => {
+    setActiveTab(tab)
+    requestAnimationFrame(() => detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+  }, [])
+
+  const exportRecs = useCallback((rows) => {
+    exportToExcel(
+      rows.map((r) => ({
+        ...r,
+        level: r.level || 'N/A',
+        cost: r.cost != null ? `${activeCurrency} ${Math.round(r.cost)}` : 'N/A',
+        confidence: r.confidence != null ? `${Math.round(r.confidence * 100)}%` : 'N/A',
+        targetDays: r.targetDays != null ? r.targetDays : 'N/A',
+        status: r.status === 'job_open' ? 'Job open' : 'No job',
+      })),
+      ['asset_no', 'site', 'text', 'benefit', 'cost', 'confidence', 'level', 'targetDays', 'status'],
+      ['Asset No', 'Site', 'Recommendation', 'Predicted Benefit', 'Est. Cost', 'Confidence', 'Risk Level', 'Target (days)', 'Status'],
+      reportFileName('Predictive Recommendations', todayStamp(now)),
+      'Recommendations',
+    )
+  }, [activeCurrency, now])
+
+  const startJob = useCallback((rec) => {
+    const target = new Date(now)
+    target.setDate(target.getDate() + Math.max(0, rec.targetDays ?? 7))
+    setJobError(null)
+    setJobDraft({
+      rec,
+      work_type: rec.type === 'replace' ? 'Tyre Change' : 'Inspection',
+      priority: rec.level === 'high' ? 'High' : rec.level === 'medium' ? 'Medium' : 'Low',
+      description: rec.text,
+      target_completion: target.toISOString().slice(0, 10),
+    })
+  }, [now])
+
+  const submitJob = useCallback(async () => {
+    if (!jobDraft) return
+    setJobBusy(true)
+    setJobError(null)
+    try {
+      const row = await createJob({
+        asset_no: jobDraft.rec.asset_no,
+        work_type: jobDraft.work_type,
+        priority: jobDraft.priority,
+        description: jobDraft.description,
+        target_completion: jobDraft.target_completion,
+        site: jobDraft.rec.site || undefined,
+        country: currencySafe ? activeCountry : undefined,
+      })
+      setOpenJobs((s) => new Set(s).add(jobDraft.rec.asset_no))
+      setNotice(`Work order ${row?.work_order_no || ''} created for ${jobDraft.rec.asset_no}.`.replace('  ', ' '))
+      setJobDraft(null)
+    } catch (err) {
+      setJobError(toUserMessage(err, 'The work order could not be created.'))
+    } finally {
+      setJobBusy(false)
+    }
+  }, [jobDraft, currencySafe, activeCountry])
+
   // ── Chart data ────────────────────────────────────────────────────────────────
   const lineChartData = useMemo(() => {
     const labels = monthlyBudget.map((m) => formatMonthYear(m.date))
@@ -647,21 +805,21 @@ export default function PredictiveMaintenance() {
     { id: 'urgency', header: 'Urgency', accessorKey: 'urgency', cell: ({ getValue }) => <UrgencyBadge urgency={getValue()} /> },
     { id: 'limiting_factor', header: 'Limiting factor', accessorKey: 'limiting_factor', cell: ({ getValue }) => <LimitingFactorChip factor={getValue()} /> },
     { id: 'confidence', header: 'Confidence', accessorKey: 'confidence', cell: ({ row }) => <ConfidenceBadge label={row.original.confidence_label} value={row.original.confidence} /> },
-    { id: 'estimated_cost', header: 'Est. cost', accessorKey: 'estimated_cost', meta: { align: 'right' }, cell: ({ getValue }) => <span className="font-semibold tabular-nums">{fmtCurrency(getValue(), activeCurrency)}</span> },
+    { id: 'estimated_cost', header: 'Est. cost', accessorKey: 'estimated_cost', meta: { align: 'right' }, cell: ({ getValue }) => <span className="font-semibold tabular-nums">{fmtCurrency(getValue(), moneyCurrency)}</span> },
     { id: 'days_away', header: 'Days away', accessorKey: 'days_away', meta: { align: 'right' },
       cell: ({ getValue }) => {
         const d = getValue()
         const cls = d <= URGENT_DAYS ? 'text-red-400' : d <= SOON_DAYS ? 'text-amber-400' : 'text-[var(--text-muted)]'
         return <span className={`font-semibold tabular-nums ${cls}`}>{d != null ? `${d}d` : 'N/A'}</span>
       } },
-  ], [activeCurrency])
+  ], [moneyCurrency])
 
   const siteColumns = useMemo(() => [
     { id: 'site', header: 'Site', accessorKey: 'site', cell: ({ getValue }) => <span className="font-semibold">{getValue()}</span> },
     { id: 'due30', header: `Due ${URGENT_DAYS}d`, accessorKey: 'due30', meta: { align: 'right' }, cell: ({ getValue }) => <span className={`tabular-nums font-semibold ${getValue() > 0 ? 'text-red-400' : 'text-[var(--text-muted)]'}`}>{getValue()}</span> },
     { id: 'due90', header: `Due ${SOON_DAYS}d`, accessorKey: 'due90', meta: { align: 'right' }, cell: ({ getValue }) => <span className={`tabular-nums font-semibold ${getValue() > 0 ? 'text-amber-400' : 'text-[var(--text-muted)]'}`}>{getValue()}</span> },
     { id: 'due12mo', header: 'Due 12mo', accessorKey: 'due12mo', meta: { align: 'right' } },
-    { id: 'cost', header: 'Forecast cost', accessorKey: 'cost', meta: { align: 'right' }, cell: ({ getValue }) => <span className="font-semibold tabular-nums">{fmtCurrency(getValue(), activeCurrency)}</span> },
+    { id: 'cost', header: 'Forecast cost', accessorKey: 'cost', meta: { align: 'right' }, cell: ({ getValue }) => <span className="font-semibold tabular-nums">{fmtCurrency(getValue(), moneyCurrency)}</span> },
     { id: 'pctBudget', header: 'Share of forecast', accessorKey: 'pctBudget',
       cell: ({ getValue }) => {
         const v = getValue()
@@ -675,7 +833,7 @@ export default function PredictiveMaintenance() {
           </div>
         )
       } },
-  ], [activeCurrency])
+  ], [moneyCurrency])
 
   const vehicleColumns = useMemo(() => [
     { id: 'rank', header: '#', accessorKey: 'rank', meta: { align: 'right' } },
@@ -686,9 +844,9 @@ export default function PredictiveMaintenance() {
       cell: ({ getValue }) => (getValue() > 0 ? <span className="px-1.5 py-0.5 bg-red-900/40 text-red-300 rounded font-bold tabular-nums">{getValue()}</span> : <span className="text-[var(--text-dim)]">0</span>) },
     { id: 'soon_count', header: 'Soon', accessorKey: 'soon_count', meta: { align: 'right' },
       cell: ({ getValue }) => (getValue() > 0 ? <span className="px-1.5 py-0.5 bg-amber-900/40 text-amber-300 rounded font-bold tabular-nums">{getValue()}</span> : <span className="text-[var(--text-dim)]">0</span>) },
-    { id: 'total_cost', header: 'Forecast cost', accessorKey: 'total_cost', meta: { align: 'right' }, cell: ({ getValue }) => <span className="font-semibold tabular-nums">{fmtCurrency(getValue(), activeCurrency)}</span> },
+    { id: 'total_cost', header: 'Forecast cost', accessorKey: 'total_cost', meta: { align: 'right' }, cell: ({ getValue }) => <span className="font-semibold tabular-nums">{fmtCurrency(getValue(), moneyCurrency)}</span> },
     { id: 'recommended_action', header: 'Recommended action', accessorKey: 'recommended_action' },
-  ], [activeCurrency])
+  ], [moneyCurrency])
 
   // ── Export handlers ───────────────────────────────────────────────────────────
   const stamp = todayStamp(now)
@@ -699,7 +857,7 @@ export default function PredictiveMaintenance() {
     const rows = filteredPredictions.map((p) => ({
       ...p,
       due_date: fmtDate(p.due_date),
-      estimated_cost: `${activeCurrency} ${p.estimated_cost}`,
+      estimated_cost: moneyCurrency ? `${moneyCurrency} ${p.estimated_cost}` : 'N/A',
       tread_depth: p.tread_depth ?? 'N/A',
       limiting_factor: LIMITING_FACTOR_LABEL[p.limiting_factor] || 'N/A',
     }))
@@ -710,7 +868,7 @@ export default function PredictiveMaintenance() {
       forecastFile,
       'Upcoming Replacements',
     )
-  }, [filteredPredictions, activeCurrency, forecastFile])
+  }, [filteredPredictions, moneyCurrency, forecastFile])
 
   // A landscape A4 page holds ~30 of these rows, so 500 is already ~17 pages and
   // the whole document is built in memory. The cap stays; the header says when
@@ -721,7 +879,7 @@ export default function PredictiveMaintenance() {
     const rows = filteredPredictions.slice(0, PDF_ROW_CAP).map((p) => ({
       ...p,
       due_date: fmtDate(p.due_date),
-      estimated_cost: fmtCurrency(p.estimated_cost, activeCurrency),
+      estimated_cost: fmtCurrency(p.estimated_cost, moneyCurrency),
       tread_depth: p.tread_depth != null ? `${p.tread_depth} mm` : 'N/A',
       limiting_factor: LIMITING_FACTOR_LABEL[p.limiting_factor] || 'N/A',
     }))
@@ -752,7 +910,7 @@ export default function PredictiveMaintenance() {
           : opts.subtitleNote,
       },
     )
-  }, [filteredPredictions, activeCurrency, forecastFile])
+  }, [filteredPredictions, moneyCurrency, forecastFile])
 
   const riskExportRows = useCallback(() => filteredRisk.map((r) => ({
     ...r,
@@ -796,128 +954,156 @@ export default function PredictiveMaintenance() {
   }, [riskExportRows, riskFile])
 
   // ── Render ────────────────────────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-24" role="status" aria-live="polite">
-        <div className="text-center space-y-3">
-          <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" aria-hidden="true" />
-          <p className="text-[var(--text-muted)] text-sm">Loading predictive maintenance data...</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center py-24">
-        <div role="alert" className="bg-[var(--surface-1)] border border-red-800/50 rounded-xl p-8 max-w-md text-center space-y-3">
-          <AlertTriangle className="text-red-400 mx-auto" size={32} aria-hidden="true" />
-          <p className="text-red-300 font-semibold">Predictive maintenance data could not be loaded</p>
-          <p className="text-[var(--text-muted)] text-sm">{error}</p>
-          <p className="text-[var(--text-muted)] text-xs">No forecast is shown, because a failed read is not the same as no replacements due.</p>
-          <button type="button" onClick={loadData}
-            className="min-h-[44px] px-4 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300">
-            Retry
-          </button>
-        </div>
-      </div>
-    )
-  }
-
   const hasAnyData = allPredictions.length > 0 || failureRiskRows.length > 0
-  const tabs = [
-    { key: 'forecast', label: 'Replacement Forecast', icon: CalendarClock, count: allPredictions.length },
-    { key: 'risk', label: 'Failure Risk', icon: ShieldAlert, count: failureRiskRows.length },
+  const detailTabs = [
+    { key: 'forecast', label: 'Replacement forecast', count: fmt(allPredictions.length) },
+    { key: 'risk', label: 'Failure risk', count: fmt(failureRiskRows.length) },
   ]
+  const money30 = ovKpis.cost30 != null ? `${activeCurrency} ${fmt(ovKpis.cost30)}` : 'N/A'
+
+  const exportActions = activeTab === 'forecast' ? (
+    <>
+      <button type="button" onClick={handleExcelExport} disabled={!filteredPredictions.length} className="cc-btn-ghost">
+        <Download size={14} aria-hidden="true" /> Excel
+      </button>
+      <button type="button" onClick={() => handlePdfExport()} disabled={!filteredPredictions.length} className="cc-btn-ghost">
+        <FileText size={14} aria-hidden="true" /> PDF
+      </button>
+      <EmailPdfButton
+        className="cc-btn-ghost"
+        getPdf={async () => ({
+          base64: await handlePdfExport({ returnBase64: true }),
+          filename: `${forecastFile}.pdf`,
+          subject: 'Predictive Maintenance',
+          bodyHtml: '<p>Attached is the Predictive Maintenance report.</p>',
+        })}
+      />
+    </>
+  ) : (
+    <>
+      <button type="button" onClick={handleRiskExcel} disabled={!filteredRisk.length} className="cc-btn-ghost">
+        <Download size={14} aria-hidden="true" /> Excel
+      </button>
+      <button type="button" onClick={() => handleRiskPdf()} disabled={!filteredRisk.length} className="cc-btn-ghost">
+        <FileText size={14} aria-hidden="true" /> PDF
+      </button>
+    </>
+  )
 
   return (
-    <div className="space-y-6 min-w-0">
-
-      <PageHeader
-        title="Predictive Maintenance Engine"
-        subtitle={`Tyre replacement forecasting, failure-risk scoring and budget planning | ${fmtDate(now)}`}
-        icon={CalendarClock}
-        onRefresh={loadData}
-        actions={
-          <div className="flex items-center gap-2 flex-wrap">
-            {!fleetMasterAvailable && (
-              <span className="text-xs text-amber-400 border border-amber-800/40 bg-amber-900/20 px-2 py-1 rounded-lg">
-                Fleet master unavailable, using tyre records only
-              </span>
-            )}
-            {activeTab === 'forecast' ? (
-              <>
-                <button type="button" onClick={handleExcelExport} disabled={!filteredPredictions.length} className={BTN_CLS}>
-                  <Download size={14} aria-hidden="true" /> Excel
-                </button>
-                <button type="button" onClick={() => handlePdfExport()} disabled={!filteredPredictions.length} className={BTN_CLS}>
-                  <FileText size={14} aria-hidden="true" /> PDF
-                </button>
-                <EmailPdfButton
-                  className={BTN_CLS}
-                  getPdf={async () => ({
-                    base64: await handlePdfExport({ returnBase64: true }),
-                    filename: `${forecastFile}.pdf`,
-                    subject: 'Predictive Maintenance',
-                    bodyHtml: '<p>Attached is the Predictive Maintenance report.</p>',
-                  })}
-                />
-              </>
-            ) : (
-              <>
-                <button type="button" onClick={handleRiskExcel} disabled={!filteredRisk.length} className={BTN_CLS}>
-                  <Download size={14} aria-hidden="true" /> Excel
-                </button>
-                <button type="button" onClick={() => handleRiskPdf()} disabled={!filteredRisk.length} className={BTN_CLS}>
-                  <FileText size={14} aria-hidden="true" /> PDF
-                </button>
-              </>
-            )}
-          </div>
-        }
+    <div className="cc pm-page min-w-0">
+      <PageHero
+        title="Predictive Maintenance"
+        lead={(
+          <>
+            Predict issues. Prevent downtime. Maximise tyre life.
+            <span className="pm-lead-2">Data-driven insights to keep your fleet moving, safely and cost-effectively.</span>
+          </>
+        )}
+        imgLight="/dashboard/hero-predictive-light.webp"
+        imgDark="/dashboard/hero-predictive-dark.webp"
+        stat={heroStat}
       />
 
-      {activeCountry === 'All' && hasAnyData && (
-        <div className="flex items-start gap-2 text-xs text-amber-400/90 bg-amber-900/15 border border-amber-800/40 rounded-lg px-3 py-2">
-          <Info size={13} className="mt-0.5 flex-shrink-0" aria-hidden="true" />
-          <span>Showing all countries. Cost and budget figures span multiple currencies (SAR, AED, EGP) and are not a single-currency total. Select a country to see figures in that country's currency.</span>
+      <div className="pm-toolbar">
+        <p className="pm-asof">Forecast as of {fmtDate(now)}</p>
+        {!fleetMasterAvailable && !loading && (
+          <span className="cc-pill warn">Fleet master unavailable, using tyre records only</span>
+        )}
+        <button type="button" className="cc-btn-ghost" onClick={() => { loadData(); loadPm() }} disabled={loading}>
+          <RefreshCw size={14} aria-hidden="true" /> Refresh
+        </button>
+      </div>
+
+      {notice && (
+        <div className="pm-banner pm-banner-good" role="status">
+          <CheckCircle size={14} aria-hidden="true" /><span>{notice}</span>
+          <button type="button" className="cc-icon-btn" aria-label="Dismiss" onClick={() => setNotice(null)}><X size={14} /></button>
         </div>
       )}
 
-      {!hasAnyData && (
-        <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-12 text-center">
-          <CalendarClock className="text-[var(--text-dim)] mx-auto mb-3" size={40} aria-hidden="true" />
-          <p className="text-[var(--text-secondary)] font-semibold">No active tyre records found</p>
-          <p className="text-[var(--text-muted)] text-sm mt-1">Upload tyre fitment data to generate replacement forecasts.</p>
+      {loading ? (
+        <div role="status" aria-live="polite" aria-label="Loading predictive maintenance data">
+          <div className="cc-kpis pm-kpis">{Array.from({ length: 5 }, (_, i) => <div key={i} className="cc-card cc-skel" style={{ height: 70 }} />)}</div>
+          <div className="pm-grid" style={{ marginTop: 14 }}>{Array.from({ length: 3 }, (_, i) => <div key={i} className="cc-card cc-skel" style={{ height: 260 }} />)}</div>
         </div>
-      )}
-
-      {hasAnyData && (
-        <div role="tablist" aria-label="Predictive maintenance views" className="flex items-center gap-1 border-b border-[var(--input-border)] overflow-x-auto">
-          {tabs.map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              role="tab"
-              id={`pm-tab-${t.key}`}
-              aria-selected={activeTab === t.key}
-              aria-controls={`pm-panel-${t.key}`}
-              onClick={() => setActiveTab(t.key)}
-              className={`flex items-center gap-2 px-4 min-h-[44px] text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                activeTab === t.key
-                  ? 'border-blue-500 text-[var(--text-primary)]'
-                  : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-              }`}
-            >
-              <t.icon size={15} aria-hidden="true" /> {t.label}
-              <span className="text-xs px-1.5 py-0.5 rounded-full bg-[var(--input-bg)] text-[var(--text-muted)] tabular-nums">{fmt(t.count)}</span>
-            </button>
-          ))}
+      ) : error ? (
+        <div className="cc-card pm-error" role="alert">
+          <AlertTriangle size={28} aria-hidden="true" />
+          <p className="cc-card-title">Predictive maintenance data could not be loaded</p>
+          <p className="cc-card-sub">{error}</p>
+          <p className="cc-card-sub">No forecast is shown, because a failed read is not the same as no replacements due.</p>
+          <button type="button" onClick={loadData} className="cc-btn-primary">Retry</button>
         </div>
-      )}
+      ) : (
+        <>
+          {activeCountry === 'All' && hasAnyData && (
+            <div className="pm-banner pm-banner-warn">
+              <Info size={13} aria-hidden="true" />
+              <span>Showing all countries. Cost figures span several currencies (SAR, AED, EGP) and are not added together. Select a country to see cost in that country's currency.</span>
+            </div>
+          )}
 
+          {!hasAnyData ? (
+            <div className="cc-card cc-empty pm-empty">
+              <div>
+                <CalendarClock size={36} aria-hidden="true" />
+                <p className="cc-card-title">No active tyre records found</p>
+                <p className="cc-card-sub">Upload tyre fitment data to generate replacement forecasts and risk scores.</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="cc-kpis pm-kpis">
+                <Kpi icon={Truck} tone="t-green" value={ovKpis.assetsMonitored} label="Assets monitored"
+                  title="Assets with at least one active tyre scored by the prediction engine" onClick={() => openDetail('risk')} />
+                <Kpi icon={ShieldAlert} tone="t-red" value={ovKpis.highRisk} label="High-risk assets" danger={ovKpis.highRisk > 0}
+                  title="Assets whose worst tyre has a composite risk of 70 or more" onClick={() => { setRiskBandFilter('extreme'); openDetail('risk') }} />
+                <Kpi icon={Wrench} tone="t-amber" value={ovKpis.predictedFailures} label="Predicted failures"
+                  title={`Tyres forecast to reach their replacement limit within ${PREDICTED_FAILURE_DAYS} days`}
+                  onClick={() => { setHorizonFilter('30d'); openDetail('forecast') }} />
+                <Kpi icon={CalendarCheck} tone="t-blue" value={pmState.error ? null : ovKpis.dueForService}
+                  display={pmState.loading ? '...' : undefined}
+                  label="Due for service"
+                  title={pmState.error ? 'Service plans could not be loaded' : `Active service plans due within ${DUE_SOON_DAYS} days, including overdue`}
+                  to="/pm-programs" />
+                <Kpi icon={Coins} tone="t-green" display={money30} label={`Replacement cost, next ${PREDICTED_FAILURE_DAYS} days`}
+                  title={currencySafe
+                    ? `Estimated cost of the tyres forecast for replacement in the next ${PREDICTED_FAILURE_DAYS} days, from recorded tyre prices`
+                    : 'Pick a country: costs are not added across currencies'} />
+              </div>
+
+              <div className="pm-grid">
+                <RiskScoredAssets assets={assetRisk} onViewAll={() => openDetail('risk')} />
+                <MaintenanceForecast forecast={ovForecast} months={fcMonths} onMonths={setFcMonths} pmState={pmState} />
+                <DueSoon rows={dueRows} onViewAll={() => { setHorizonFilter('30d'); openDetail('forecast') }} />
+              </div>
+
+              <div className="pm-grid pm-grid-2">
+                <TyreHealthTrend trend={removals} />
+                <RiskDistribution dist={riskDist} onSelect={(level) => setRecLevel(level)} />
+                <FailureTypes types={failTypes} horizon={typeHorizon} onHorizon={setTypeHorizon} />
+              </div>
+
+              <Recommendations
+                recs={recommendations}
+                sites={recSites}
+                currency={activeCurrency}
+                currencySafe={currencySafe}
+                canCreate={canCreateJob}
+                onCreateJob={startJob}
+                onExport={exportRecs}
+                filterLevel={recLevel}
+                setFilterLevel={setRecLevel}
+              />
+
+              <section className="cc-card pm-detail" ref={detailRef} aria-label="Detailed analysis">
+                <div className="pm-detail-head">
+                  <Tabs variant="line" label="Predictive maintenance views" tabs={detailTabs} value={activeTab} onChange={setActiveTab} />
+                  <div className="pm-detail-actions">{exportActions}</div>
+                </div>
       {hasAnyData && activeTab === 'forecast' && (
-        <div role="tabpanel" id="pm-panel-forecast" aria-labelledby="pm-tab-forecast" className="space-y-6">
+        <div role="tabpanel" aria-label="Replacement forecast" className="space-y-6 pm-panel">
           {allPredictions.length === 0 ? (
             <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-10 text-center">
               <CalendarClock className="text-[var(--text-dim)] mx-auto mb-3" size={36} aria-hidden="true" />
@@ -994,10 +1180,10 @@ export default function PredictiveMaintenance() {
               )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-                <KpiCard icon={AlertTriangle} label={`Replacements due in ${URGENT_DAYS} days`} value={`${fmt(kpis.urgentCount)} tyres`} sub={fmtCurrency(kpis.urgentCost, activeCurrency)} color="red" />
-                <KpiCard icon={Clock} label={`Replacements due 31 to ${SOON_DAYS} days`} value={`${fmt(kpis.soonCount)} tyres`} sub={fmtCurrency(kpis.soonCost, activeCurrency)} color="amber" />
-                <KpiCard icon={CheckCircle} label="Replacements due 91 to 365 days" value={`${fmt(kpis.monitorCount)} tyres`} sub={fmtCurrency(kpis.monitorCost, activeCurrency)} color="green" />
-                <KpiCard icon={DollarSign} label="12-month budget forecast" value={fmtCurrency(kpis.annualCost, activeCurrency)} sub={`${fmt(kpis.yearCount)} replacements`} color="blue" />
+                <KpiCard icon={AlertTriangle} label={`Replacements due in ${URGENT_DAYS} days`} value={`${fmt(kpis.urgentCount)} tyres`} sub={fmtCurrency(kpis.urgentCost, moneyCurrency)} color="red" />
+                <KpiCard icon={Clock} label={`Replacements due 31 to ${SOON_DAYS} days`} value={`${fmt(kpis.soonCount)} tyres`} sub={fmtCurrency(kpis.soonCost, moneyCurrency)} color="amber" />
+                <KpiCard icon={CheckCircle} label="Replacements due 91 to 365 days" value={`${fmt(kpis.monitorCount)} tyres`} sub={fmtCurrency(kpis.monitorCost, moneyCurrency)} color="green" />
+                <KpiCard icon={DollarSign} label="12-month budget forecast" value={fmtCurrency(kpis.annualCost, moneyCurrency)} sub={`${fmt(kpis.yearCount)} replacements`} color="blue" />
                 <KpiCard icon={TrendingUp} label="Fleet avg tyre life" value={fleetStats.avgKmLife != null ? `${fmt(fleetStats.avgKmLife, 0)} km` : 'N/A'} sub="Based on completed records" color="purple" />
                 <KpiCard icon={Truck} label="Fleet avg daily km per vehicle" value={fleetStats.avgDailyKm != null ? `${fmt(fleetStats.avgDailyKm, 0)} km` : 'N/A'} sub="Estimated from records" color="cyan" />
               </div>
@@ -1006,8 +1192,10 @@ export default function PredictiveMaintenance() {
                 <div className="xl:col-span-2 min-w-0">
                   <Panel title="12-Month Budget Forecast" subtitle="Forecast tyre replacement spend by month">
                     <div style={{ height: 240 }} role="img"
-                      aria-label={`12-month replacement spend forecast totalling ${fmtCurrency(quarterly.total, activeCurrency)}`}>
-                      <Line data={lineChartData} options={lineOpts(activeCurrency)} />
+                      aria-label={`12-month replacement spend forecast totalling ${fmtCurrency(quarterly.total, moneyCurrency)}`}>
+                      {moneyCurrency
+                        ? <Line data={lineChartData} options={lineOpts(moneyCurrency)} />
+                        : <p className="text-xs text-[var(--text-muted)] py-16 text-center">Pick a country to see forecast spend in that country's currency.</p>}
                     </div>
                   </Panel>
                 </div>
@@ -1034,7 +1222,7 @@ export default function PredictiveMaintenance() {
                 ].map((card) => (
                   <div key={card.label} className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
                     <p className="text-xs text-[var(--text-muted)]">{card.label}</p>
-                    <p className="text-lg font-bold text-[var(--text-primary)] mt-1 tabular-nums">{fmtCurrency(card.value, activeCurrency)}</p>
+                    <p className="text-lg font-bold text-[var(--text-primary)] mt-1 tabular-nums">{fmtCurrency(card.value, moneyCurrency)}</p>
                   </div>
                 ))}
               </div>
@@ -1123,7 +1311,7 @@ export default function PredictiveMaintenance() {
                         },
                         {
                           title: 'Cost and fleet master',
-                          body: `${fleetMasterAvailable ? 'vehicle_fleet loaded: expected km/tyre, current_km and budgets used.' : 'vehicle_fleet unavailable, tyre_records history only.'} Cost uses the tyre's cost_per_tyre, else asset mean, else fleet average (${fmtCurrency(fleetStats.avgCost, activeCurrency)}). No fabricated costs.`,
+                          body: `${fleetMasterAvailable ? 'vehicle_fleet loaded: expected km/tyre, current_km and budgets used.' : 'vehicle_fleet unavailable, tyre_records history only.'} Cost uses the tyre's cost_per_tyre, else asset mean, else fleet average (${fmtCurrency(fleetStats.avgCost, moneyCurrency)}). No fabricated costs.`,
                         },
                       ].map((item) => (
                         <div key={item.title} className="bg-[var(--input-bg)]/40 rounded-lg p-3">
@@ -1144,7 +1332,7 @@ export default function PredictiveMaintenance() {
       )}
 
       {hasAnyData && activeTab === 'risk' && (
-        <div role="tabpanel" id="pm-panel-risk" aria-labelledby="pm-tab-risk">
+        <div role="tabpanel" aria-label="Failure risk" className="pm-panel">
           <FailureRiskPanel
             rows={filteredRisk}
             totalRows={failureRiskRows.length}
@@ -1162,6 +1350,57 @@ export default function PredictiveMaintenance() {
           />
         </div>
       )}
+              </section>
+            </>
+          )}
+        </>
+      )}
+
+      <Modal
+        open={!!jobDraft}
+        onClose={() => { if (!jobBusy) setJobDraft(null) }}
+        closeOnBackdrop={!jobBusy}
+        title="Create work order"
+        subtitle={jobDraft ? `From the recommendation for ${jobDraft.rec.asset_no}` : undefined}
+        size="sm"
+        footer={(
+          <div className="cc pm-modal-foot">
+            <button type="button" className="cc-btn-ghost" onClick={() => setJobDraft(null)} disabled={jobBusy}>Cancel</button>
+            <button type="button" className="cc-btn-primary" onClick={submitJob} disabled={jobBusy || !jobDraft?.description?.trim()}>
+              {jobBusy ? 'Creating...' : 'Create work order'}
+            </button>
+          </div>
+        )}
+      >
+        {jobDraft && (
+          <div className="cc pm-form">
+            <div className="pm-form-row"><span>Asset</span><b>{jobDraft.rec.asset_no}{jobDraft.rec.site ? `, ${jobDraft.rec.site}` : ''}</b></div>
+            <label>
+              <span>Work type</span>
+              <select className="cc-select" value={jobDraft.work_type} onChange={(e) => setJobDraft((d) => ({ ...d, work_type: e.target.value }))}>
+                {['Tyre Change', 'Inspection', 'Rotation', 'Pressure Check', 'Repair'].map((w) => <option key={w} value={w}>{w}</option>)}
+              </select>
+            </label>
+            <label>
+              <span>Priority</span>
+              <select className="cc-select" value={jobDraft.priority} onChange={(e) => setJobDraft((d) => ({ ...d, priority: e.target.value }))}>
+                {['Critical', 'High', 'Medium', 'Low'].map((w) => <option key={w} value={w}>{w}</option>)}
+              </select>
+            </label>
+            <label>
+              <span>Target completion</span>
+              <input type="date" className="cc-select pm-input" value={jobDraft.target_completion}
+                onChange={(e) => setJobDraft((d) => ({ ...d, target_completion: e.target.value }))} />
+            </label>
+            <label>
+              <span>Description</span>
+              <textarea className="pm-input" rows={3} value={jobDraft.description}
+                onChange={(e) => setJobDraft((d) => ({ ...d, description: e.target.value }))} />
+            </label>
+            {jobError && <p className="pm-form-error" role="alert">{jobError}</p>}
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }

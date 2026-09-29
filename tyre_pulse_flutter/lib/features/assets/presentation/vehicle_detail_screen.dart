@@ -670,10 +670,15 @@ class _AssetHeroCard extends StatelessWidget {
       vehicle360Present(asset.model) ?? vehicle360Present(asset.vehicleType),
     ]);
     final String? site = vehicle360Present(asset.site);
+    // Units through the ARB so the Arabic and Urdu heroes read "88,421 كم"
+    // rather than a bidi-flipped "km 88,421" (English is unchanged).
     final String? km = asset.currentKm == null
         ? null
-        : '${formatVehicleOdometer(asset.currentKm!)} km';
-    final String? hours = vehicle360HoursLabel(engineHours);
+        : l10n.tyreMockKmValue(formatVehicleOdometer(asset.currentKm!));
+    final double? hoursValue = engineHours;
+    final String? hours = hoursValue == null
+        ? null
+        : l10n.tyreMockHoursValue(formatAssetMoney(hoursValue));
     final InspectionDraftSummary? liveDraft = draft;
 
     return Container(
@@ -1380,13 +1385,19 @@ class _StickyAssetActions extends StatelessWidget {
     final TpPalette palette = TpPalette.of(context);
     final VoidCallback? report = onReportIssue;
     final VoidCallback? createWorkOrder = onCreateWorkOrder;
+    // On a narrow phone (360dp and below) the two labelled buttons cannot
+    // both fit with their icons, and TpButton cuts the label to one line
+    // ("Report an is..."). The words carry the meaning, so on a narrow bar
+    // the icons go and the side padding tightens; the labels stay whole.
+    final bool narrow = MediaQuery.sizeOf(context).width < 380;
+    final double side = narrow ? TpSpace.md : TpSpace.lg;
     return Container(
       key: VehicleDetailScreenKeys.actionBar,
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(
-        TpSpace.lg,
+      padding: EdgeInsetsDirectional.fromSTEB(
+        side,
         TpSpace.sm,
-        TpSpace.lg,
+        side,
         TpSpace.md,
       ),
       decoration: BoxDecoration(
@@ -1408,20 +1419,20 @@ class _StickyAssetActions extends StatelessWidget {
               child: TpButton.secondary(
                 key: VehicleDetailScreenKeys.reportIssue,
                 label: reportLabel,
-                icon: Icons.warning_amber_rounded,
+                icon: narrow ? null : Icons.warning_amber_rounded,
                 isFullWidth: true,
                 onPressed: report,
               ),
             ),
           if (report != null && createWorkOrder != null)
-            const SizedBox(width: TpSpace.md),
+            SizedBox(width: narrow ? TpSpace.sm : TpSpace.md),
           if (createWorkOrder != null)
             Expanded(
               child: _PrimaryLift(
                 child: TpButton.primary(
                   key: VehicleDetailScreenKeys.createWorkOrder,
                   label: workOrderLabel,
-                  icon: Icons.add_box_outlined,
+                  icon: narrow ? null : Icons.add_box_outlined,
                   isFullWidth: true,
                   onPressed: createWorkOrder,
                 ),

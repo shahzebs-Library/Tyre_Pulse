@@ -78,6 +78,7 @@ import 'package:tyre_pulse/features/records/presentation/controllers/tyre_record
 import 'package:tyre_pulse/features/records/presentation/state/tyre_records_list_state.dart';
 import 'package:tyre_pulse/features/records/presentation/tyre_detail_sheet.dart';
 import 'package:tyre_pulse/features/records/presentation/tyre_records_export.dart';
+import 'package:tyre_pulse/features/records/presentation/tyre_risk_label.dart';
 
 /// How close to the bottom (in logical pixels of remaining scroll extent)
 /// triggers the next page. Loading a little before the true bottom keeps the
@@ -496,7 +497,7 @@ class _TyreRecordCard extends StatelessWidget {
                           const SizedBox(width: TpSpace.sm),
                           TpStatusChip(
                             status: riskStatus,
-                            label: record.riskLevel,
+                            label: tyreRiskLabel(l10n, record.riskLevel!),
                             isCompact: true,
                           ),
                         ],
@@ -743,9 +744,12 @@ class _Metric extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
+          // Two lines: the Arabic labels ("الكيلومترات المقطوعة") are twice
+          // the English width and were cut to "الكيلومترات المقـ..." in a
+          // third-width column.
           Text(
             label,
-            maxLines: 1,
+            maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: text.labelSmall?.copyWith(color: palette.textMuted),
           ),
@@ -810,7 +814,9 @@ class _FilterPillsRow extends StatelessWidget {
             _DropdownPill(
               key: TyreRecordsListKeys.riskPill,
               label: l10n.tyreMockRiskPill(
-                query.riskLevel ?? l10n.tyreMockTabAll,
+                query.riskLevel == null
+                    ? l10n.tyreMockTabAll
+                    : tyreRiskLabel(l10n, query.riskLevel!),
               ),
               isActive: query.riskLevel != null,
               onTap: onOpenSheet,
@@ -1027,9 +1033,12 @@ class _ListStatusLine extends StatelessWidget {
           ),
           const SizedBox(width: TpSpace.xs),
           Expanded(
+            // Two lines, not one: the load time is the fact this line
+            // exists to give, and at 360 to 390dp one line cut it to
+            // "Loaded 4:...".
             child: Text(
               line,
-              maxLines: 1,
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: text.labelMedium?.copyWith(color: palette.textSecondary),
             ),
@@ -1257,7 +1266,7 @@ class _FilterSheet extends ConsumerWidget {
             children: <Widget>[
               for (final String level in kTyreRiskLevels)
                 _TogglePill(
-                  label: level,
+                  label: tyreRiskLabel(l10n, level),
                   status: tyreRiskStatus(level),
                   isSelected: state.query.riskLevel == level,
                   onTap: () => controller.setRiskFilter(

@@ -558,8 +558,14 @@ class _Menu<T> extends StatelessWidget {
           PopupMenuItem<T>(value: v, child: Text(labelOf(v))),
       ],
       child: Container(
-        height: TpSizing.minTouchTarget,
-        padding: const EdgeInsets.symmetric(horizontal: TpSpace.md),
+        // A minimum, not a fixed height: at 320 to 390dp, or with a larger
+        // text scale, "Last 12 months" wraps to a second line instead of
+        // being cut to "Last 12 mon...".
+        constraints: const BoxConstraints(minHeight: TpSizing.minTouchTarget),
+        padding: const EdgeInsetsDirectional.symmetric(
+          horizontal: TpSpace.sm,
+          vertical: TpSpace.xs,
+        ),
         decoration: BoxDecoration(
           color: palette.surface,
           border: Border.all(color: palette.borderStrong),
@@ -572,7 +578,7 @@ class _Menu<T> extends StatelessWidget {
             Expanded(
               child: Text(
                 labelOf(value),
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.labelLarge,
               ),
@@ -662,6 +668,10 @@ class AssetCostSnapshotPanel extends ConsumerWidget {
                 children: <Widget>[
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    // A gap between the three tiles: without it a long
+                    // value ("Not measurable") ran straight into the next
+                    // tile's value ("Not recorded") as one word.
+                    spacing: TpSpace.md,
                     children: <Widget>[
                       Expanded(
                         child: AssetKpiTile(

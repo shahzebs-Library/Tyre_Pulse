@@ -879,9 +879,11 @@ class _ScopeLine extends StatelessWidget {
           Icon(Icons.public_rounded, size: 18, color: palette.textSecondary),
           const SizedBox(width: TpSpace.xs),
           Expanded(
+            // Two lines: beside the sort control, one line cut the scope to
+            // "All countries · All authoriz..." on every phone width.
             child: Text(
               '$c · $s',
-              maxLines: 1,
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context)
                   .textTheme

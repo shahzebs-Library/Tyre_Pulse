@@ -38,6 +38,11 @@ vi.mock('../lib/api/tyrePassport', () => ({
   }),
 }))
 
+vi.mock('../lib/api/tyrePassportInspections', () => ({ listTyreInspections: () => Promise.resolve({ rows: [], truncated: false }) }))
+vi.mock('../lib/api/assets', () => ({ getAssetByNo: () => Promise.resolve(null) }))
+vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ profile: { role: 'Admin' }, isSuperAdmin: false }) }))
+vi.mock('qrcode', () => ({ default: { toDataURL: () => Promise.resolve('data:image/png;base64,AA') } }))
+
 import TyreScrapManagement from '../pages/TyreScrapManagement'
 import TyrePassport from '../pages/TyrePassport'
 
@@ -85,12 +90,12 @@ describe('TyrePassport', () => {
         <Routes><Route path="/tyre-passport/:serial" element={<TyrePassport />} /></Routes>
       </MemoryRouter>,
     )
-    await waitFor(() => expect(screen.getByRole('tab', { name: /Journey/ })).toBeTruthy())
-    for (const name of [/Journey/, /Wear curve/, /Service/, /Warranty/, /Data quality/, /Overview/]) {
+    await waitFor(() => expect(screen.getByRole('tab', { name: /Fitment & Movement/ })).toBeTruthy())
+    for (const name of [/Lifecycle Timeline/, /Inspection History/, /Service & Repair/, /Fitment & Movement/, /Warranty/, /Documents/, /Data quality/, /Overview/]) {
       fireEvent.click(screen.getByRole('tab', { name }))
       await waitFor(() => expect(screen.getByRole('tab', { name }).getAttribute('aria-selected')).toBe('true'))
     }
-    fireEvent.click(screen.getByRole('tab', { name: /Journey/ }))
+    fireEvent.click(screen.getByRole('tab', { name: /Fitment & Movement/ }))
     await waitFor(() => expect(screen.getAllByText('TM1').length).toBeGreaterThan(0))
   })
 })

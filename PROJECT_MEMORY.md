@@ -36,7 +36,13 @@ no-build-unless-the-owner-asks rule above still applies to the Flutter workflow 
 
 # ⚑ UPDATE 2026-09-29: THE OWNER PUT THE FLUTTER APP ON PLAY CLOSED TESTING HIMSELF.
 The internal-only note below is superseded for Closed testing (owner's own action). Production is still the owner's call only.
-Parity pass Expo -> Flutter (every Expo feature/access in Flutter) IN PROGRESS (agent, code only, no build).
+Parity pass Expo -> Flutter DONE (code only): every Expo route has a Flutter screen; added alert Acknowledge (+hides
+acknowledged), stock +/- (post_stock_movement, offline fallback) + Add stock, Profile "Delete my account" request
+(account_deletion_requests). alerts_compact_dark golden regenerated via flutter-ci update_goldens.
+STILL MISSING in Flutter: push registration (needs firebase_messaging + config + build), admin approvals tab (pending
+uploads / accident closure; 0 waiting live), admin add/edit site + vehicle (Expo's add-vehicle is BROKEN: writes
+status 'active' vs CHECK Active), accident parts/remarks in PDF, server-side language save, stock size/location
+filters. Accident detail status/delete deliberately NOT ported (owner decision).
 
 # ⚑ FLUTTER = INTERNAL TESTING ONLY. OWNER INSTRUCTION 2026-09-27, STANDING.
 

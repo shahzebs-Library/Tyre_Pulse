@@ -121,7 +121,40 @@ class _InspectionApprovalReviewScreenState
 
   String get _inspectionId => widget.route.inspectionId.value;
 
+  /// Bumped by every [_load]. A read only lands when it is still the newest
+  /// one AND is still for the inspection this screen now names, so a slow
+  /// read of a previous inspection can never paint over the current one.
+  int _loadGeneration = 0;
+
+  @override
+  void didUpdateWidget(covariant InspectionApprovalReviewScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // go_router keys this page by its route PATTERN
+    // (`/approvals/inspections/:inspectionId`), not by the id in it, so a
+    // navigation that replaces the location with another inspection's
+    // (a `go` from a link or a notification while a review is already the
+    // top of the Approvals branch) reuses this State and `initState` does
+    // not run again. Without this, the screen kept showing - and would have
+    // let a supervisor sign - the PREVIOUS inspection's tyre readings under
+    // the new inspection's route. Same class of fix as
+    // `NewInspectionScreen.didUpdateWidget`.
+    if (oldWidget.route.inspectionId.value == _inspectionId) return;
+    _loadGeneration++;
+    _item = null;
+    _loadError = null;
+    _loading = true;
+    _approverSignature = null;
+    _busy = null;
+    _noteController.clear();
+    // Never setState during the parent's build; build runs next anyway.
+    Future<void>.microtask(() {
+      if (mounted) unawaited(_load());
+    });
+  }
+
   Future<void> _load() async {
+    final int generation = ++_loadGeneration;
+    final String requestedId = _inspectionId;
     setState(() {
       _loading = true;
       _loadError = null;
@@ -129,14 +162,22 @@ class _InspectionApprovalReviewScreenState
     try {
       final InspectionApprovalItem? item = await ref
           .read(inspectionApprovalRepositoryProvider)
-          .byId(_inspectionId);
-      if (!mounted) return;
+          .byId(requestedId);
+      if (!mounted ||
+          generation != _loadGeneration ||
+          requestedId != _inspectionId) {
+        return;
+      }
       setState(() {
         _item = item;
         _loading = false;
       });
     } on Object catch (error) {
-      if (!mounted) return;
+      if (!mounted ||
+          generation != _loadGeneration ||
+          requestedId != _inspectionId) {
+        return;
+      }
       setState(() {
         _loadError = _asAppError(
           context,

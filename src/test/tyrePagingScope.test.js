@@ -281,8 +281,8 @@ describe('the long tyre registers are actually paged', () => {
     },
     {
       file: 'pages/TyreLifecycle.jsx',
-      what: 'the lifecycle register (EnterpriseTable pages it)',
-      requires: ['<EnterpriseTable', 'initialPageSize={25}'],
+      what: 'the lifecycle register (KitTable, which wraps EnterpriseTable, pages it)',
+      requires: ['<KitTable', 'initialPageSize={25}'],
       forbids: '{filtered.map(r => {',
     },
     {

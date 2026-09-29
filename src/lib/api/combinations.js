@@ -1,5 +1,5 @@
 /**
- * Combinations service — Asset Combination Manager (V141). Links a prime-mover
+ * Combinations service - Asset Combination Manager (V141). Links a prime-mover
  * asset to one or more trailer assets under a named, status-tracked combination.
  * RLS enforces org isolation; this layer keeps an explicit column list, null-safe
  * country scoping, and validates/normalises input, mirroring support.js.
@@ -22,9 +22,37 @@ const TYRE_COLS =
 
 const COLS =
   'id,organisation_id,country,name,prime_mover_no,trailer_nos,site,status,notes,' +
+  'combination_no,combination_type,axle_config,tyre_config,max_load_tonnes,' +
   'created_by,created_at,updated_at'
 
-export const COMBINATION_STATUSES = ['active', 'inactive']
+// Columns added by 20260929125000_combination_manager. Used to retry a read
+// with the base list when the migration has not reached an environment yet.
+const BASE_COLS =
+  'id,organisation_id,country,name,prime_mover_no,trailer_nos,site,status,notes,' +
+  'created_by,created_at,updated_at'
+
+/** Trim a free-text field to a max length; blank becomes null. */
+const textOrNull = (v, max) => (v == null || String(v).trim() === '' ? null : String(v).trim().slice(0, max))
+
+/** Keep only whole, non-negative steer / drive / trailer counts. */
+function cleanTyreConfig(raw) {
+  const out = {}
+  const o = raw && typeof raw === 'object' ? raw : {}
+  for (const k of ['steer', 'drive', 'trailer']) {
+    const n = Number(o[k])
+    if (o[k] !== '' && o[k] != null && Number.isFinite(n) && n >= 0 && n <= 99) out[k] = Math.round(n)
+  }
+  return out
+}
+
+function cleanLoad(v) {
+  if (v === '' || v == null) return null
+  const n = Number(v)
+  if (!Number.isFinite(n) || n <= 0 || n > 1000) throw new Error('Max load must be between 0 and 1000 tonnes.')
+  return Math.round(n * 100) / 100
+}
+
+export const COMBINATION_STATUSES = ['active', 'under_review', 'inactive']
 
 /**
  * List combinations (newest first). Optional status/country filters. If the
@@ -33,10 +61,19 @@ export const COMBINATION_STATUSES = ['active', 'inactive']
  */
 export async function listCombinations({ country, status, limit = 500 } = {}) {
   try {
-    let q = supabase.from('asset_combinations').select(COLS)
-    if (status) q = q.eq('status', status)
-    q = applyCountry(q, country)
-    return unwrap(await q.order('created_at', { ascending: false }).limit(limit)) || []
+    const run = async (cols) => {
+      let q = supabase.from('asset_combinations').select(cols)
+      if (status) q = q.eq('status', status)
+      q = applyCountry(q, country)
+      return unwrap(await q.order('created_at', { ascending: false }).order('id', { ascending: true }).limit(limit)) || []
+    }
+    try {
+      return await run(COLS)
+    } catch (err) {
+      const code = err?.code || err?.cause?.code
+      if (code === '42703' || code === 'PGRST204') return await run(BASE_COLS)
+      throw err
+    }
   } catch (err) {
     // Missing relation (table not migrated) → empty set, not a hard error.
     if (isMissingRelation(err)) return []
@@ -58,6 +95,11 @@ export async function createCombination(values = {}) {
     notes: values.notes ? String(values.notes).slice(0, 2000) : null,
     country: values.country ?? null,
   }
+  if ('combination_no' in values) payload.combination_no = textOrNull(values.combination_no, 60)
+  if ('combination_type' in values) payload.combination_type = textOrNull(values.combination_type, 80)
+  if ('axle_config' in values) payload.axle_config = textOrNull(values.axle_config, 40)
+  if ('tyre_config' in values) payload.tyre_config = cleanTyreConfig(values.tyre_config)
+  if ('max_load_tonnes' in values) payload.max_load_tonnes = cleanLoad(values.max_load_tonnes)
   return unwrap(await supabase.from('asset_combinations').insert(payload).select(COLS).single())
 }
 
@@ -76,12 +118,34 @@ export async function updateCombination(id, patch = {}) {
   if ('site' in clean) clean.site = clean.site ? String(clean.site).trim().slice(0, 200) : null
   if ('notes' in clean) clean.notes = clean.notes ? String(clean.notes).slice(0, 2000) : null
   if ('status' in clean && !COMBINATION_STATUSES.includes(clean.status)) delete clean.status
+  if ('combination_no' in clean) clean.combination_no = textOrNull(clean.combination_no, 60)
+  if ('combination_type' in clean) clean.combination_type = textOrNull(clean.combination_type, 80)
+  if ('axle_config' in clean) clean.axle_config = textOrNull(clean.axle_config, 40)
+  if ('tyre_config' in clean) clean.tyre_config = cleanTyreConfig(clean.tyre_config)
+  if ('max_load_tonnes' in clean) clean.max_load_tonnes = cleanLoad(clean.max_load_tonnes)
   return unwrap(await supabase.from('asset_combinations').update(clean).eq('id', id).select(COLS).single())
 }
 
 export async function deleteCombination(id) {
   if (!id) throw new Error('A combination id is required.')
   return unwrap(await supabase.from('asset_combinations').delete().eq('id', id))
+}
+
+/**
+ * Fleet register rows for the prime-mover / trailer pickers, thumbnails and
+ * the vehicle-type filter. Paged past the 1,000-row server cap with an id
+ * tiebreak; a failed read throws (the page shows an error, never an empty list).
+ */
+export async function listFleetAssets({ country, max = 20000 } = {}) {
+  const res = await fetchAllPages((from, to) => {
+    const q = supabase.from('vehicle_fleet').select(VEHICLE_COLS)
+      .order('asset_no', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to)
+    return applyCountry(q, country)
+  }, { max })
+  if (res.error) throw res.error
+  return { rows: res.data || [], truncated: !!res.truncated }
 }
 
 // ── Combined-unit intelligence reads ─────────────────────────────────────────
@@ -131,7 +195,8 @@ export async function listMemberTyreRecords(assetNos = [], { country } = {}) {
     const out = []
     for (let i = 0; i < ids.length; i += CHUNK) {
       const slice = ids.slice(i, i + CHUNK)
-      const rows = await fetchAllPages((from, to) => {
+      // fetchAllPages resolves {data, error, truncated}, not a bare array.
+      const res = await fetchAllPages((from, to) => {
         const q = supabase.from('tyre_records').select(TYRE_COLS)
           .in('asset_no', slice)
           .order('asset_no', { ascending: true, nullsFirst: false })
@@ -139,7 +204,8 @@ export async function listMemberTyreRecords(assetNos = [], { country } = {}) {
           .range(from, to)
         return applyCountry(q, country)
       })
-      if (Array.isArray(rows)) out.push(...rows)
+      if (res.error) throw res.error
+      if (Array.isArray(res.data)) out.push(...res.data)
     }
     return out
   } catch (err) {

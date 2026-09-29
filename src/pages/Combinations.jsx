@@ -1,112 +1,77 @@
 /**
- * Combinations (route /combinations) - Combination Manager + combined-unit tyre
- * intelligence. Two tabs:
- *   - Registry: full CRUD on the `asset_combinations` table (V141), the
- *     operational units fleets dispatch (a prime-mover asset linked to one or
- *     more trailers), with a KPI strip, search + filters, a sortable
- *     EnterpriseTable and Excel/PDF export.
- *   - Unit intelligence: pick a combination and see its resolved member assets
- *     (with data-quality warnings for unresolved ones), blended combined-unit
- *     KPIs (fitted tyres, unit CPK, unit spend, scrap), a position-class
- *     breakdown, and an honest note that live per-tyre pressure/temperature and
- *     the axle schematic need telemetry this dataset does not capture.
+ * Combinations (route /combinations) - Combination Manager, rebuilt on the
+ * Command Center kit to the owner's mockup (19, top-right panel).
  *
- * Tyre maths reuse the canonical calc services (kpiEngine/tco via
- * src/lib/combinations.js); page-side filtering, KPIs and export shapes live in
- * src/lib/combinationsAnalytics.js.
+ * Registry: KPI strip, filters, the combination table with prime-mover
+ * thumbnails, an always-open Add / Edit panel, and three cards for the
+ * selected combination (axle tyre layout, load distribution per axle, tyre
+ * configuration). Unit intelligence: the combined-unit tyre rollup.
+ *
+ * Data: asset_combinations (V141, extended by 20260929125000) and the fleet
+ * register. Tyre maths reuse src/lib/combinations.js; page logic lives in
+ * src/lib/combinationManagerView.js and src/lib/combinationsAnalytics.js.
+ * Axle load, tyre load and legal limits are not recorded, so they read N/A.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
-  Combine, Truck, Link2, Boxes, Search, X, Plus, Pencil, Trash2,
-  FileSpreadsheet, FileText, AlertTriangle, Database, Network, Gauge,
-  DollarSign, Recycle, CircleDot, CheckCircle2, XCircle, Info, Activity, Layers,
-  MapPin, Unlink, Copy,
+  Combine, CheckCircle2, XCircle, ClipboardList, ShieldCheck, Search, X, Plus,
+  Pencil, Trash2, Network, RefreshCw, FileSpreadsheet, FileText, AlertTriangle,
 } from 'lucide-react'
-import PageHeader from '../components/ui/PageHeader'
-import Card, { CardBody, CardHeader } from '../components/ui/Card'
+import {
+  Card, CardState, Kpi, KitTable, PageHero, Tabs, VehicleThumb, fmtInt,
+} from '../components/commandCenter/kit'
 import Modal from '../components/ui/Modal'
-import StatTile from '../components/ui/StatTile'
-import EnterpriseTable from '../components/ui/EnterpriseTable'
+import CombinationFormPanel from '../components/combinations/CombinationFormPanel'
+import CombinationIntelligence from '../components/combinations/CombinationIntelligence'
+import { AxleTyreLayoutCard, LoadDistributionCard, TyreConfigCard } from '../components/combinations/CombinationCards'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listCombinations, createCombination, updateCombination, deleteCombination,
-  getCombinationIntelligence, COMBINATION_STATUSES,
+  getCombinationIntelligence, listFleetAssets,
 } from '../lib/api/combinations'
 import { parseTrailerList, computeCombinationRollup, detectDuplicateTrailers } from '../lib/combinations'
 import {
-  filterCombinations, combinationKpis, siteOptions as siteOptionsOf, registryRow,
-  combinationExportRows, COMBINATION_EXPORT_COLUMNS, scrapSharePct, positionRows, memberCoverage,
+  filterCombinations, combinationKpis, siteOptions as siteOptionsOf,
+  combinationExportRows, COMBINATION_EXPORT_COLUMNS,
 } from '../lib/combinationsAnalytics'
-import { formatCurrency, fmt } from '../lib/formatters'
+import {
+  managerKpis, filterManager, typeOptions as typeOptionsOf, vehicleTypeOptions, buildFleetMap,
+  statusMeta, tyreConfigLabel, suggestNextNumber, EMPTY_MANAGER_FORM, formFromRow,
+  validateManagerForm, payloadFromForm, MANAGER_STATUSES, STATUS_META,
+} from '../lib/combinationManagerView'
 import { toUserMessage } from '../lib/safeError'
+import './Combinations.css'
 
 const loadExportUtils = () => import('../lib/exportUtils')
-
-const STATUS_STYLES = {
-  active: 'bg-green-900/40 text-green-300 border border-green-700/50',
-  inactive: 'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]',
-}
-
-const EMPTY_FORM = { name: '', prime_mover_no: '', trailer_nos: '', site: '', status: 'active', notes: '' }
-const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s)
-
-function StatusBadge({ status }) {
-  const s = status || 'inactive'
-  const Icon = s === 'active' ? CheckCircle2 : XCircle
-  return (
-    <span className={`badge inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded ${STATUS_STYLES[s] || STATUS_STYLES.inactive}`}>
-      <Icon size={11} aria-hidden="true" /> {cap(s)}
-    </span>
-  )
-}
-
-function TabBar({ tabs, value, onChange, label }) {
-  return (
-    <div role="tablist" aria-label={label} className="flex flex-wrap items-center gap-1 border-b border-[var(--input-border)]">
-      {tabs.map((t) => {
-        const Icon = t.icon
-        const active = value === t.key
-        return (
-          <button
-            key={t.key}
-            type="button"
-            role="tab"
-            aria-selected={active}
-            onClick={() => onChange(t.key)}
-            className={`inline-flex items-center gap-1.5 px-4 min-h-[44px] text-sm font-medium border-b-2 -mb-px transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] rounded-t ${
-              active ? 'border-brand-bright text-[var(--text-primary)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-            }`}
-          >
-            <Icon size={15} aria-hidden="true" /> {t.label}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
+const NA = <span className="cc-na">N/A</span>
+const norm = (v) => String(v ?? '').trim().toUpperCase()
 
 export default function Combinations() {
   const { activeCountry, activeCurrency, appSettings } = useSettings() || {}
   const company = appSettings?.company_name || ''
+  const currency = activeCurrency || 'SAR'
+
   const [rows, setRows] = useState(null)
   const [loadError, setLoadError] = useState('')
+  const [loading, setLoading] = useState(true)
   const [actionError, setActionError] = useState('')
-  const [refreshing, setRefreshing] = useState(false)
-  const [updatedAt, setUpdatedAt] = useState(null)
   const [exporting, setExporting] = useState(false)
 
-  const [view, setView] = useState('registry')
+  const [fleet, setFleet] = useState({ loading: true, rows: [], error: '', truncated: false })
 
-  const [statusFilter, setStatusFilter] = useState('all')
+  const [view, setView] = useState('registry')
   const [siteFilter, setSiteFilter] = useState('')
+  const [vtFilter, setVtFilter] = useState('')
+  const [typeFilter, setTypeFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
   const [trailerFilter, setTrailerFilter] = useState('all')
   const [search, setSearch] = useState('')
 
-  const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
-  const [form, setForm] = useState(EMPTY_FORM)
+  const [form, setForm] = useState(EMPTY_MANAGER_FORM)
+  const [formErrors, setFormErrors] = useState({})
   const [saving, setSaving] = useState(false)
-  const [formError, setFormError] = useState('')
+  const [saveError, setSaveError] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
 
@@ -115,53 +80,64 @@ export default function Combinations() {
   const [intelLoading, setIntelLoading] = useState(false)
   const [intelError, setIntelError] = useState('')
 
-  const currency = activeCurrency || 'SAR'
-
   const load = useCallback(async () => {
-    setRefreshing(true); setLoadError('')
+    setLoading(true); setLoadError('')
     try {
       const data = await listCombinations({ country: activeCountry })
       setRows(Array.isArray(data) ? data : [])
-      setUpdatedAt(new Date())
     } catch (err) {
       // A failed read stays unknown (null), never an empty registry.
       setLoadError(toUserMessage(err, 'Could not load combinations.'))
       setRows(null)
     } finally {
-      setRefreshing(false)
+      setLoading(false)
+    }
+  }, [activeCountry])
+
+  const loadFleet = useCallback(async () => {
+    setFleet((f) => ({ ...f, loading: true, error: '' }))
+    try {
+      const { rows: list, truncated } = await listFleetAssets({ country: activeCountry })
+      setFleet({ loading: false, rows: list, error: '', truncated })
+    } catch (err) {
+      setFleet({ loading: false, rows: [], error: toUserMessage(err, 'Could not load the fleet register.'), truncated: false })
     }
   }, [activeCountry])
 
   useEffect(() => { load() }, [load])
+  useEffect(() => { loadFleet() }, [loadFleet])
 
-  const kpis = useMemo(() => combinationKpis(rows || []), [rows])
-  const duplicateTrailers = useMemo(() => detectDuplicateTrailers(rows || []), [rows])
-  const siteOptions = useMemo(() => siteOptionsOf(rows || []), [rows])
+  const fleetMap = useMemo(() => buildFleetMap(fleet.rows), [fleet.rows])
+  const list = useMemo(() => rows || [], [rows])
+  const kpis = useMemo(() => managerKpis(list), [list])
+  const regKpis = useMemo(() => combinationKpis(list), [list])
+  const duplicateTrailers = useMemo(() => detectDuplicateTrailers(list), [list])
+  const siteOptions = useMemo(() => siteOptionsOf(list), [list])
+  const typeOptions = useMemo(() => typeOptionsOf(list), [list])
+  const vtOptions = useMemo(() => vehicleTypeOptions(list, fleetMap), [list, fleetMap])
+  const fleetOptions = useMemo(() => fleet.rows.map((f) => f.asset_no).filter(Boolean), [fleet.rows])
+  const formSites = useMemo(() => [...new Set([...siteOptions, ...fleet.rows.map((f) => f.site).filter(Boolean)])].sort(), [siteOptions, fleet.rows])
 
-  const filtered = useMemo(
-    () => filterCombinations(rows || [], { status: statusFilter, site: siteFilter, trailers: trailerFilter, search }),
-    [rows, statusFilter, siteFilter, trailerFilter, search],
-  )
-  const tableRows = useMemo(() => filtered.map(registryRow), [filtered])
+  const filtered = useMemo(() => filterCombinations(
+    filterManager(list, { site: siteFilter, vehicleType: vtFilter, type: typeFilter, status: statusFilter, search }, fleetMap),
+    { trailers: trailerFilter },
+  ), [list, siteFilter, vtFilter, typeFilter, statusFilter, search, trailerFilter, fleetMap])
 
-  const clearFilters = () => { setStatusFilter('all'); setSiteFilter(''); setTrailerFilter('all'); setSearch('') }
-  const hasFilters = statusFilter !== 'all' || siteFilter || trailerFilter !== 'all' || search
-
-  const selectedCombo = useMemo(
-    () => (rows || []).find((r) => String(r.id) === String(selectedId)) || null,
-    [rows, selectedId],
-  )
+  const hasFilters = siteFilter || vtFilter || typeFilter || statusFilter || search || trailerFilter !== 'all'
+  const clearFilters = () => { setSiteFilter(''); setVtFilter(''); setTypeFilter(''); setStatusFilter(''); setSearch(''); setTrailerFilter('all') }
 
   useEffect(() => {
-    if (!selectedId && rows && rows.length) setSelectedId(String(rows[0].id))
-  }, [rows, selectedId])
+    if (!list.length) { if (selectedId) setSelectedId(''); return }
+    if (!list.some((r) => String(r.id) === String(selectedId))) setSelectedId(String(list[0].id))
+  }, [list, selectedId])
+
+  const selectedCombo = useMemo(() => list.find((r) => String(r.id) === String(selectedId)) || null, [list, selectedId])
 
   const loadIntel = useCallback(async (combo) => {
     if (!combo) { setIntel(null); return }
     setIntelLoading(true); setIntelError('')
     try {
-      const data = await getCombinationIntelligence(combo, { country: activeCountry })
-      setIntel(data)
+      setIntel(await getCombinationIntelligence(combo, { country: activeCountry }))
     } catch (err) {
       setIntelError(toUserMessage(err, 'Could not load combined-unit data.'))
       setIntel(null)
@@ -187,7 +163,7 @@ export default function Combinations() {
       const file = reportFileName('Asset Combinations')
       if (format === 'pdf') {
         await exportToPdf(data, COMBINATION_EXPORT_COLUMNS, 'Asset Combinations', file, 'landscape', company, {
-          meta: { Combinations: kpis.total, Active: kpis.active, 'Trailers linked': kpis.trailers },
+          meta: { Combinations: kpis.total, Active: kpis.active, 'Under review': kpis.underReview, 'Trailers linked': regKpis.trailers },
         })
       } else {
         await exportToExcel(data, COMBINATION_EXPORT_COLUMNS.map((c) => c.key), COMBINATION_EXPORT_COLUMNS.map((c) => c.header), file, 'Combinations')
@@ -199,57 +175,63 @@ export default function Combinations() {
     }
   }
 
-  // Modal
-  const openCreate = () => { setEditing(null); setForm(EMPTY_FORM); setFormError(''); setModalOpen(true) }
-  const openEdit = useCallback((r) => {
-    setEditing(r)
-    setForm({
-      name: r.name || '',
-      prime_mover_no: r.prime_mover_no || '',
-      trailer_nos: parseTrailerList(r.trailer_nos).join(', '),
-      site: r.site || '',
-      status: r.status || 'active',
-      notes: r.notes || '',
-    })
-    setFormError('')
-    setModalOpen(true)
+  const exportPositions = async (posRows) => {
+    try {
+      const { exportToExcel, reportFileName } = await loadExportUtils()
+      const label = selectedCombo?.combination_no || selectedCombo?.name || selectedCombo?.prime_mover_no || 'unit'
+      await exportToExcel(
+        posRows.map((p) => ({ label: p.label, count: p.count, spend: p.spend, share: p.spendSharePct ?? 'N/A', cpk: p.cpk ?? 'N/A' })),
+        ['label', 'count', 'spend', 'share', 'cpk'],
+        ['Position class', 'Tyres', `Spend (${currency})`, 'Share of spend %', `Cost per km (${currency})`],
+        reportFileName('Combination Position Breakdown', label), 'Positions',
+      )
+    } catch (e) {
+      setActionError(toUserMessage(e, 'Could not export. Try again.'))
+    }
+  }
+
+  // Form panel
+  const setField = useCallback((k, v) => {
+    setForm((f) => ({ ...f, [k]: v }))
+    setFormErrors((e) => (e[k] ? { ...e, [k]: undefined } : e))
   }, [])
-  const closeModal = useCallback(() => {
-    if (!saving) { setModalOpen(false); setEditing(null) }
-  }, [saving])
-  const closeConfirmDelete = useCallback(() => {
-    if (!deleting) setConfirmDelete(null)
-  }, [deleting])
+  const resetForm = useCallback(() => {
+    setEditing(null); setForm(EMPTY_MANAGER_FORM); setFormErrors({}); setSaveError('')
+  }, [])
+  const openEdit = useCallback((r) => {
+    setEditing(r); setForm(formFromRow(r)); setFormErrors({}); setSaveError('')
+    setSelectedId(String(r.id))
+  }, [])
 
   const submitForm = async (e) => {
     e.preventDefault()
-    setSaving(true); setFormError('')
+    const errs = validateManagerForm(form)
+    setFormErrors(errs)
+    if (Object.keys(errs).length) return
+    setSaving(true); setSaveError('')
     try {
-      const payload = {
-        name: form.name,
-        prime_mover_no: form.prime_mover_no,
-        trailer_nos: form.trailer_nos,
-        site: form.site,
-        status: form.status,
-        notes: form.notes,
-        country: activeCountry && activeCountry !== 'All' ? activeCountry : null,
+      const payload = payloadFromForm(form)
+      if (editing) {
+        await updateCombination(editing.id, payload)
+      } else {
+        await createCombination({ ...payload, country: activeCountry && activeCountry !== 'All' ? activeCountry : null })
       }
-      if (editing) await updateCombination(editing.id, payload)
-      else await createCombination(payload)
-      setModalOpen(false); setEditing(null)
+      resetForm()
       await load()
     } catch (err) {
-      setFormError(toUserMessage(err, 'Could not save combination.'))
+      setSaveError(toUserMessage(err, 'Could not save combination.'))
     } finally {
       setSaving(false)
     }
   }
 
+  const closeConfirmDelete = useCallback(() => { if (!deleting) setConfirmDelete(null) }, [deleting])
   const doDelete = async () => {
     if (!confirmDelete) return
     setDeleting(true)
     try {
       await deleteCombination(confirmDelete.id)
+      if (editing && String(editing.id) === String(confirmDelete.id)) resetForm()
       setConfirmDelete(null)
       await load()
     } catch (err) {
@@ -262,246 +244,194 @@ export default function Combinations() {
 
   const columns = useMemo(() => [
     {
-      id: 'name', header: 'Name', accessorFn: (r) => r.name || undefined, sortUndefined: 'last', size: 180,
-      cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original.name || 'N/A'}</span>,
-    },
-    {
-      id: 'prime_mover_no', header: 'Prime mover', accessorFn: (r) => r.prime_mover_no || undefined, sortUndefined: 'last', size: 130,
-      cell: ({ row }) => <span className="font-mono text-xs text-[var(--text-secondary)]">{row.original.prime_mover_no || 'N/A'}</span>,
-    },
-    {
-      id: 'trailers', header: 'Trailers', accessorFn: (r) => r.trailerCount, size: 240,
-      meta: { exportValue: (r) => r.trailers.join(', ') },
-      cell: ({ row }) => (row.original.trailers.length ? (
-        <div className="flex flex-wrap gap-1">
-          {row.original.trailers.map((t, i) => (
-            <span key={`${t}-${i}`} className="badge text-[11px] px-2 py-0.5 rounded bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--input-border)] font-mono">{t}</span>
-          ))}
+      key: 'combination_no', header: 'Combination No.',
+      sortValue: (r) => r.combination_no || r.name || '',
+      cell: (r) => (
+        <div className="cm-cell">
+          <b className="cm-no">{r.combination_no || NA}</b>
+          {r.name && <small>{r.name}</small>}
         </div>
-      ) : <span className="text-[var(--text-muted)]">None linked</span>),
+      ),
     },
     {
-      id: 'site', header: 'Site', accessorFn: (r) => r.site || undefined, sortUndefined: 'last', size: 130,
-      cell: ({ row }) => <span className="text-[var(--text-secondary)]">{row.original.site || 'N/A'}</span>,
-    },
-    {
-      id: 'status', header: 'Status', accessorFn: (r) => r.status || 'inactive', size: 110,
-      cell: ({ row }) => <StatusBadge status={row.original.status} />,
-    },
-    {
-      id: 'actions', header: '', enableSorting: false, enableHiding: false, size: 110, meta: { export: false, align: 'right' },
-      cell: ({ row }) => {
-        const r = row.original
-        const label = r.name || r.prime_mover_no || 'combination'
+      key: 'prime_mover_no', header: 'Prime Mover',
+      cell: (r) => {
+        const f = fleetMap.get(norm(r.prime_mover_no))
         return (
-          <div className="flex items-center justify-end gap-1">
-            <button type="button" onClick={(e) => { e.stopPropagation(); setSelectedId(String(r.id)); setView('intelligence') }}
-              className="min-w-[36px] min-h-[36px] inline-flex items-center justify-center rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
-              aria-label={`Analyse ${label}`} title="Unit intelligence"><Network size={15} /></button>
-            <button type="button" onClick={(e) => { e.stopPropagation(); openEdit(r) }}
-              className="min-w-[36px] min-h-[36px] inline-flex items-center justify-center rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
-              aria-label={`Edit ${label}`} title="Edit"><Pencil size={15} /></button>
-            <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmDelete(r) }}
-              className="min-w-[36px] min-h-[36px] inline-flex items-center justify-center rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
-              aria-label={`Delete ${label}`} title="Delete"><Trash2 size={15} /></button>
+          <div className="cm-veh">
+            <VehicleThumb row={f || {}} size="sm" />
+            <div className="cm-cell"><b>{r.prime_mover_no}</b><small>{f?.vehicle_type || 'Not in fleet register'}</small></div>
           </div>
         )
       },
     },
-  ], [openEdit])
+    {
+      key: 'trailers', header: 'Trailer / Equipment', sortValue: (r) => parseTrailerList(r.trailer_nos).length,
+      cell: (r) => {
+        const t = parseTrailerList(r.trailer_nos)
+        return (
+          <div className="cm-cell">
+            {t.length ? <b>{t.join(', ')}</b> : <span className="cc-na">None linked</span>}
+            {r.combination_type && <small>{r.combination_type}</small>}
+          </div>
+        )
+      },
+    },
+    { key: 'axle_config', header: 'Axle Config.', cell: (r) => r.axle_config || NA },
+    { key: 'tyre_config', header: 'Tyre Config.', sortValue: (r) => tyreConfigLabel(r.tyre_config) || '', cell: (r) => tyreConfigLabel(r.tyre_config) || NA },
+    { key: 'max_load_tonnes', header: 'Max Load (Ton)', numeric: true, sortValue: (r) => (r.max_load_tonnes == null ? undefined : Number(r.max_load_tonnes)), cell: (r) => (r.max_load_tonnes == null ? NA : fmtInt(r.max_load_tonnes)) },
+    { key: 'site', header: 'Site', cell: (r) => r.site || NA },
+    {
+      key: 'status', header: 'Status', sortValue: (r) => r.status || 'inactive',
+      cell: (r) => { const m = statusMeta(r.status); return <span className={`cc-pill ${m.tone}`}>{m.label}</span> },
+    },
+    {
+      key: 'actions', header: 'Actions', sortable: false,
+      cell: (r) => {
+        const label = r.combination_no || r.name || r.prime_mover_no || 'combination'
+        return (
+          <div className="cm-actions">
+            <button type="button" className="cc-icon-btn" onClick={(e) => { e.stopPropagation(); setSelectedId(String(r.id)); setView('intelligence') }} aria-label={`Analyse ${label}`} title="Unit intelligence"><Network size={14} /></button>
+            <button type="button" className="cc-icon-btn" onClick={(e) => { e.stopPropagation(); openEdit(r) }} aria-label={`Edit ${label}`} title="Edit"><Pencil size={14} /></button>
+            <button type="button" className="cc-icon-btn" onClick={(e) => { e.stopPropagation(); setConfirmDelete(r) }} aria-label={`Delete ${label}`} title="Delete"><Trash2 size={14} /></button>
+          </div>
+        )
+      },
+    },
+  ], [fleetMap, openEdit])
 
-  const TABS = [
-    { key: 'registry', label: 'Registry', icon: Boxes },
-    { key: 'intelligence', label: 'Unit intelligence', icon: Network },
-  ]
   const unknown = rows === null
-  const v = (n) => (unknown ? 'N/A' : n)
+  const registryState = { loading: loading && !rows, data: rows, error: loadError, retry: load }
+  const kpiDisplay = () => (unknown ? 'N/A' : undefined)
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Combination Manager"
-        subtitle="Prime-mover and trailer combinations: the operational units your fleet dispatches."
-        icon={Combine}
-        onRefresh={load}
-        refreshing={refreshing}
-        updatedAt={updatedAt}
-        actions={
-          view === 'registry' ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <button type="button" onClick={() => runExport('excel')} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[40px]" disabled={!filtered.length || exporting}>
-                <FileSpreadsheet size={14} aria-hidden="true" /> Excel
-              </button>
-              <button type="button" onClick={() => runExport('pdf')} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[40px]" disabled={!filtered.length || exporting}>
-                <FileText size={14} aria-hidden="true" /> PDF
-              </button>
-              <button type="button" onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[40px]">
-                <Plus size={14} aria-hidden="true" /> New combination
-              </button>
-            </div>
-          ) : null
-        }
-      />
-
-      <TabBar tabs={TABS} value={view} onChange={setView} label="Combination views" />
-
-      {loadError && view === 'intelligence' && (
-        <Card tone="crit" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }} role="alert">
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
-          <div className="min-w-0 flex-1">
-            <p className="text-red-300 font-medium">Could not load combinations.</p>
-            <p className="text-[var(--text-muted)] text-sm mt-1 break-words">{loadError}</p>
-            <p className="text-[var(--text-muted)] text-xs mt-2 flex items-center gap-1.5">
-              <Database size={12} aria-hidden="true" /> If this is a missing-table error, apply <span className="font-mono">MIGRATIONS_V141_ASSET_COMBINATIONS.sql</span>.
-            </p>
-          </div>
-          <button type="button" onClick={load} className="btn-secondary text-sm shrink-0 min-h-[40px]">Retry</button>
-        </Card>
-      )}
+    <div className="cc cm-page">
+      <div className="cm-hero">
+        <PageHero
+          hello="Fleet & Assets"
+          title="Combination Manager"
+          lead="Manage vehicle and trailer combinations with tyre configurations, axle loads and operating status."
+          imgLight="/dashboard/hero-combinations-light.webp"
+          imgDark="/dashboard/hero-combinations-dark.webp"
+        />
+        <div className="cm-hero-actions">
+          <button type="button" className="cc-btn-ghost" onClick={() => { load(); loadFleet() }} disabled={loading}><RefreshCw size={14} aria-hidden="true" /> Refresh</button>
+          <button type="button" className="cc-btn-primary" onClick={() => { resetForm(); setView('registry') }}><Plus size={14} aria-hidden="true" /> New Combination</button>
+        </div>
+      </div>
 
       {actionError && (
-        <Card tone="crit" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }} role="alert">
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
-          <p className="text-sm text-red-300 flex-1 break-words">{actionError}</p>
-          <button type="button" onClick={() => setActionError('')} className="min-w-[36px] min-h-[36px] inline-flex items-center justify-center rounded text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Dismiss message"><X size={15} /></button>
-        </Card>
+        <div className="cc-card cm-banner" role="alert">
+          <AlertTriangle size={16} aria-hidden="true" /><div>{actionError}</div>
+          <button type="button" className="cc-icon-btn" onClick={() => setActionError('')} aria-label="Dismiss message"><X size={14} /></button>
+        </div>
       )}
-
+      {fleet.error && (
+        <div className="cc-card cm-banner" role="alert">
+          <AlertTriangle size={16} aria-hidden="true" />
+          <div>The fleet register could not be read, so vehicle pictures, types and the prime mover list are missing. {fleet.error}</div>
+          <button type="button" className="cc-btn-ghost" onClick={loadFleet}>Retry</button>
+        </div>
+      )}
       {duplicateTrailers.length > 0 && (
-        <Card tone="warn" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
-          <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" aria-hidden="true" />
-          <div className="min-w-0">
-            <p className="text-amber-300 font-medium">
-              {duplicateTrailers.length} trailer{duplicateTrailers.length !== 1 ? 's' : ''} assigned to more than one active combination.
-            </p>
-            <p className="text-[var(--text-muted)] text-sm mt-1">A trailer can only be part of one active unit at a time. Review these registry entries.</p>
-            <div className="flex flex-wrap gap-1.5 mt-2">
+        <div className="cc-card cm-banner" role="status">
+          <AlertTriangle size={16} aria-hidden="true" />
+          <div>
+            {duplicateTrailers.length} trailer{duplicateTrailers.length === 1 ? ' is' : 's are'} linked to more than one active combination. A trailer can only run in one active unit at a time.
+            <div className="cm-chips">
               {duplicateTrailers.map((d) => (
-                <button type="button" key={d.trailer} onClick={() => { setView('registry'); setSearch(d.trailer) }}
-                  className="badge text-[11px] px-2 py-0.5 rounded bg-amber-900/30 text-amber-300 border border-amber-700/50 font-mono hover:bg-amber-900/50"
-                  title="Show the combinations holding this trailer">
+                <button type="button" key={d.trailer} className="cc-pill warn cm-chip" onClick={() => { setView('registry'); setSearch(d.trailer) }}>
                   {d.trailer} x{d.combinations.length}
                 </button>
               ))}
             </div>
           </div>
-        </Card>
+        </div>
       )}
+
+      <div className="cc-kpis cm-kpis">
+        <Kpi icon={Combine} tone="t-green" value={kpis.total} display={kpiDisplay()} label="Total Combinations" loading={loading && !rows} onClick={() => setStatusFilter('')} />
+        <Kpi icon={CheckCircle2} tone="t-blue" value={kpis.active} display={kpiDisplay()} label="Active" loading={loading && !rows} onClick={() => setStatusFilter('active')} />
+        <Kpi icon={XCircle} tone="t-amber" value={kpis.inactive} display={kpiDisplay()} label="Inactive" loading={loading && !rows} onClick={() => setStatusFilter('inactive')} />
+        <Kpi icon={ClipboardList} tone="t-red" value={kpis.underReview} display={kpiDisplay()} label="Under Review" loading={loading && !rows} onClick={() => setStatusFilter('under_review')} />
+        <Kpi icon={ShieldCheck} tone="t-green" display={unknown || kpis.compliancePct == null ? 'N/A' : `${kpis.compliancePct}%`} label="Compliance" loading={loading && !rows}
+          title="Share of combinations with an axle configuration, tyre configuration and max load recorded" />
+      </div>
+
+      <Card className="cm-tabbar">
+        <Tabs
+          tabs={[{ key: 'registry', label: 'Registry', count: unknown ? null : kpis.total }, { key: 'intelligence', label: 'Unit intelligence' }]}
+          value={view} onChange={setView} label="Combination views" variant="line"
+        />
+      </Card>
 
       {view === 'registry' ? (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-[var(--gap-grid)]">
-            <StatTile label="Combinations" value={v(kpis.total)} icon={Combine} sub={kpis.sites ? `${kpis.sites} site${kpis.sites === 1 ? '' : 's'}` : undefined} />
-            <StatTile label="Active" value={v(kpis.active)} icon={Truck} tone="accent" sub={kpis.activePct == null ? 'N/A of registry' : `${kpis.activePct}% of registry`} />
-            <StatTile label="Trailers linked" value={v(kpis.trailers)} icon={Link2} tone="info" sub={kpis.avgTrailersPerUnit == null ? 'Avg N/A per unit' : `Avg ${kpis.avgTrailersPerUnit} per unit`} />
-            <StatTile label="Total units" value={v(kpis.units)} icon={Boxes} sub="Prime movers plus trailers" />
-            <StatTile label="No trailer linked" value={v(kpis.withoutTrailer)} icon={Unlink} tone={kpis.withoutTrailer > 0 ? 'warn' : 'neutral'} sub="Prime mover only" />
-            <StatTile label="Double-booked trailers" value={v(kpis.duplicateTrailers)} icon={Copy} tone={kpis.duplicateTrailers > 0 ? 'crit' : 'neutral'} sub="Across active units" />
+          <div className="cm-main">
+            <Card className="cm-registry">
+              <div className="cm-filters">
+                <select className="cc-select" aria-label="Site" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)}>
+                  <option value="">All Sites</option>
+                  {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+                <select className="cc-select" aria-label="Vehicle type" value={vtFilter} onChange={(e) => setVtFilter(e.target.value)}>
+                  <option value="">All Vehicle Types</option>
+                  {vtOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+                <select className="cc-select" aria-label="Combination type" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+                  <option value="">All Combination Types</option>
+                  {typeOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+                <select className="cc-select" aria-label="Status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                  <option value="">All Status</option>
+                  {MANAGER_STATUSES.map((s) => <option key={s} value={s}>{STATUS_META[s].label}</option>)}
+                </select>
+                <select className="cc-select" aria-label="Trailer link" value={trailerFilter} onChange={(e) => setTrailerFilter(e.target.value)}>
+                  <option value="all">Any trailer link</option>
+                  <option value="with">With trailers</option>
+                  <option value="without">No trailer linked</option>
+                </select>
+                <div className="cc-search"><Search size={14} aria-hidden="true" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by combination name, vehicle, trailer" aria-label="Search combinations" /></div>
+                {hasFilters && <button type="button" className="cc-btn-ghost" onClick={clearFilters}><X size={14} aria-hidden="true" /> Clear</button>}
+                <button type="button" className="cc-btn-ghost" onClick={() => runExport('excel')} disabled={!filtered.length || exporting}><FileSpreadsheet size={14} aria-hidden="true" /> Export</button>
+                <button type="button" className="cc-btn-ghost" onClick={() => runExport('pdf')} disabled={!filtered.length || exporting}><FileText size={14} aria-hidden="true" /> PDF</button>
+              </div>
+              <p className="cm-summary" aria-live="polite">
+                {unknown ? 'N/A' : `${fmtInt(filtered.length)} of ${fmtInt(kpis.total)} shown | ${fmtInt(regKpis.trailers)} trailers linked | ${fmtInt(regKpis.withoutTrailer)} with no trailer | ${fmtInt(regKpis.duplicateTrailers)} double-booked trailers`}
+              </p>
+              <CardState state={registryState}>
+                <KitTable
+                  columns={columns}
+                  rows={filtered}
+                  getRowId={(r) => String(r.id)}
+                  onRowClick={(r) => setSelectedId(String(r.id))}
+                  empty={list.length === 0 ? 'No combinations yet. Use the panel to add your first prime mover and trailer link.' : 'No combinations match these filters.'}
+                />
+              </CardState>
+            </Card>
+
+            <CombinationFormPanel
+              form={form} setField={setField} errors={formErrors} editing={editing} saving={saving} saveError={saveError}
+              placeholderNo={suggestNextNumber(list)} fleetOptions={fleetOptions} typeOptions={typeOptions} siteOptions={formSites}
+              onSave={submitForm} onCancel={resetForm}
+            />
           </div>
 
-          <Card>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(220px,1fr)_auto_auto_auto_auto] items-end gap-2">
-              <div className="relative">
-                <label htmlFor="combo-search" className="sr-only">Search combinations</label>
-                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
-                <input id="combo-search" className="input pl-9 w-full min-h-[40px]" placeholder="Search name, prime mover, trailer, site" value={search} onChange={(e) => setSearch(e.target.value)} />
-              </div>
-              <select className="input min-h-[40px]" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter by status">
-                <option value="all">All statuses</option>
-                {COMBINATION_STATUSES.map((s) => <option key={s} value={s}>{cap(s)}</option>)}
-              </select>
-              <select className="input min-h-[40px]" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} aria-label="Filter by site">
-                <option value="">All sites</option>
-                {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
-              <select className="input min-h-[40px]" value={trailerFilter} onChange={(e) => setTrailerFilter(e.target.value)} aria-label="Filter by trailer link">
-                <option value="all">Any trailer link</option>
-                <option value="with">With trailers</option>
-                <option value="without">No trailer linked</option>
-              </select>
-              <div className="flex items-center gap-2 justify-between sm:justify-end">
-                {hasFilters && (
-                  <button type="button" onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[40px]"><X size={14} aria-hidden="true" /> Clear</button>
-                )}
-                <span className="text-xs text-[var(--text-muted)] whitespace-nowrap" aria-live="polite">{unknown ? 'N/A' : `${filtered.length} of ${kpis.total}`}</span>
-              </div>
-            </div>
-          </Card>
-
-          <EnterpriseTable
-            columns={columns}
-            data={tableRows}
-            getRowId={(r) => String(r.id)}
-            loading={unknown && refreshing}
-            error={loadError ? `${loadError} If this is a missing-table error, apply MIGRATIONS_V141_ASSET_COMBINATIONS.sql.` : null}
-            onRetry={load}
-            enableGlobalFilter={false}
-            enableColumnFilters={false}
-            enableExport={false}
-            viewKey="combinations-registry"
-            initialPageSize={25}
-            onRowClick={(r) => openEdit(r)}
-            emptyMessage={(rows || []).length === 0 ? 'No combinations yet. Create your first prime-mover and trailer link.' : 'No combinations match these filters.'}
-          />
+          <div className="cm-cards">
+            <AxleTyreLayoutCard rows={list} combo={selectedCombo} value={selectedId} onChange={setSelectedId} fleetMap={fleetMap} />
+            <LoadDistributionCard combo={selectedCombo} />
+            <TyreConfigCard combo={selectedCombo} />
+          </div>
         </>
       ) : (
-        <IntelligenceTab
-          rows={rows} loading={refreshing}
-          selectedId={selectedId} setSelectedId={setSelectedId}
-          selectedCombo={selectedCombo}
-          intelLoading={intelLoading} intelError={intelError}
-          onRetryIntel={() => loadIntel(selectedCombo)}
-          rollup={rollup} currency={currency}
-        />
+        <CardState state={registryState}>
+          <CombinationIntelligence
+            rows={list} selectedId={selectedId} setSelectedId={setSelectedId} selectedCombo={selectedCombo}
+            intelLoading={intelLoading} intelError={intelError} onRetryIntel={() => loadIntel(selectedCombo)}
+            rollup={rollup} currency={currency} onExportPositions={exportPositions}
+          />
+        </CardState>
       )}
-
-      <Modal open={modalOpen} onClose={closeModal} size="md" title={editing ? 'Edit combination' : 'New combination'}>
-        <form onSubmit={submitForm} className="space-y-4">
-          <div>
-            <label htmlFor="combo-name" className="block text-xs text-[var(--text-muted)] mb-1">Name</label>
-            <input id="combo-name" className="input w-full" placeholder="e.g. Route 12 rig" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
-          </div>
-          <div>
-            <label htmlFor="combo-pm" className="block text-xs text-[var(--text-muted)] mb-1">Prime mover number <span className="text-red-400" aria-hidden="true">*</span></label>
-            <input id="combo-pm" className="input w-full font-mono" placeholder="e.g. PM-1024" value={form.prime_mover_no} onChange={(e) => setForm((f) => ({ ...f, prime_mover_no: e.target.value }))} required aria-required="true" />
-          </div>
-          <div>
-            <label htmlFor="combo-trailers" className="block text-xs text-[var(--text-muted)] mb-1">Trailer numbers</label>
-            <input id="combo-trailers" className="input w-full font-mono" placeholder="Comma-separated, e.g. TR-01, TR-02" value={form.trailer_nos} onChange={(e) => setForm((f) => ({ ...f, trailer_nos: e.target.value }))} aria-describedby="combo-trailers-help" />
-            <p id="combo-trailers-help" className="text-[11px] text-[var(--text-muted)] mt-1">{parseTrailerList(form.trailer_nos).length} trailer(s)</p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="combo-site" className="block text-xs text-[var(--text-muted)] mb-1">Site</label>
-              <input id="combo-site" className="input w-full" placeholder="Depot / yard" value={form.site} onChange={(e) => setForm((f) => ({ ...f, site: e.target.value }))} list="combo-site-options" />
-              <datalist id="combo-site-options">{siteOptions.map((s) => <option key={s} value={s} />)}</datalist>
-            </div>
-            <div>
-              <label htmlFor="combo-status" className="block text-xs text-[var(--text-muted)] mb-1">Status</label>
-              <select id="combo-status" className="input w-full" value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}>
-                {COMBINATION_STATUSES.map((s) => <option key={s} value={s}>{cap(s)}</option>)}
-              </select>
-            </div>
-          </div>
-          <div>
-            <label htmlFor="combo-notes" className="block text-xs text-[var(--text-muted)] mb-1">Notes</label>
-            <textarea id="combo-notes" className="input w-full min-h-[72px]" placeholder="Optional context" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
-          </div>
-
-          {formError && (
-            <div role="alert" className="text-sm text-red-300 bg-red-900/30 border border-red-800/50 rounded px-3 py-2 flex items-start gap-2">
-              <AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden="true" /> <span className="break-words">{formError}</span>
-            </div>
-          )}
-
-          <div className="flex items-center justify-end gap-2 pt-2">
-            <button type="button" onClick={closeModal} disabled={saving} className="btn-secondary text-sm min-h-[40px]">Cancel</button>
-            <button type="submit" disabled={saving} className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60 min-h-[40px]">
-              {saving ? 'Saving...' : editing ? 'Save changes' : 'Create combination'}
-            </button>
-          </div>
-        </form>
-      </Modal>
 
       <Modal
         open={!!confirmDelete}
@@ -510,211 +440,15 @@ export default function Combinations() {
         title="Delete combination"
         footer={
           <>
-            <button type="button" onClick={closeConfirmDelete} disabled={deleting} className="btn-secondary text-sm min-h-[40px]">Cancel</button>
-            <button type="button" onClick={doDelete} disabled={deleting} className="btn-primary text-sm !bg-red-600 hover:!bg-red-700 disabled:opacity-60 min-h-[40px]">
-              {deleting ? 'Deleting...' : 'Delete'}
-            </button>
+            <button type="button" onClick={closeConfirmDelete} disabled={deleting} className="cc-btn-ghost">Cancel</button>
+            <button type="button" onClick={doDelete} disabled={deleting} className="cc-btn-primary cm-danger">{deleting ? 'Deleting...' : 'Delete'}</button>
           </>
         }
       >
-        <p className="text-sm text-[var(--text-muted)] flex items-start gap-2">
-          <Trash2 size={16} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
-          <span>
-            Delete <span className="font-semibold text-[var(--text-secondary)]">{confirmDelete?.name || confirmDelete?.prime_mover_no}</span>? This cannot be undone.
-          </span>
+        <p className="cm-note">
+          Delete {confirmDelete?.combination_no || confirmDelete?.name || confirmDelete?.prime_mover_no}? This cannot be undone.
         </p>
       </Modal>
-    </div>
-  )
-}
-
-// Unit-intelligence tab
-function IntelligenceTab({
-  rows, loading, selectedId, setSelectedId, selectedCombo, intelLoading, intelError, onRetryIntel, rollup, currency,
-}) {
-  const posRows = useMemo(() => positionRows(rollup), [rollup])
-  const coverage = useMemo(() => memberCoverage(rollup), [rollup])
-
-  const posColumns = useMemo(() => [
-    { id: 'label', header: 'Position class', accessorFn: (p) => p.label, size: 200 },
-    { id: 'count', header: 'Tyres', accessorFn: (p) => p.count, meta: { align: 'right' }, size: 90 },
-    {
-      id: 'spend', header: 'Spend', accessorFn: (p) => p.spend, meta: { align: 'right' }, size: 140,
-      cell: ({ row }) => formatCurrency(row.original.spend, currency, 0),
-    },
-    {
-      id: 'share', header: 'Share of spend', accessorFn: (p) => p.spendSharePct ?? undefined, sortUndefined: 'last', meta: { align: 'right' }, size: 130,
-      cell: ({ row }) => (row.original.spendSharePct == null ? 'N/A' : `${row.original.spendSharePct}%`),
-    },
-    {
-      id: 'cpk', header: 'CPK (blended)', accessorFn: (p) => p.cpk ?? undefined, sortUndefined: 'last', meta: { align: 'right' }, size: 140,
-      cell: ({ row }) => <span className="font-mono">{row.original.cpk != null ? `${currency} ${fmt(row.original.cpk, 3)}` : 'N/A'}</span>,
-    },
-  ], [currency])
-
-  if (rows === null) {
-    return loading
-      ? <Card><div className="h-40 bg-[var(--input-bg)] rounded animate-pulse" aria-label="Loading combinations" /></Card>
-      : <Card className="text-center text-[var(--text-muted)]"><div style={{ paddingBlock: 'var(--space-8)' }}>Combinations could not be loaded. Use Retry above.</div></Card>
-  }
-  if (rows.length === 0) {
-    return (
-      <Card className="text-center text-[var(--text-muted)]">
-        <div style={{ paddingTop: 'var(--space-8)', paddingBottom: 'var(--space-8)' }}>
-          <Network size={26} className="mx-auto mb-2 opacity-60" aria-hidden="true" />
-          No combinations yet. Create one in the Registry tab to analyse it as a combined unit.
-        </div>
-      </Card>
-    )
-  }
-
-  const scrapPct = scrapSharePct(rollup)
-
-  return (
-    <div className="space-y-4">
-      <Card>
-        <div className="flex flex-wrap items-center gap-3">
-          <label htmlFor="combo-select" className="text-sm text-[var(--text-muted)] inline-flex items-center gap-1.5">
-            <Combine size={15} className="text-brand-bright" aria-hidden="true" /> Combined unit
-          </label>
-          <select id="combo-select" className="input w-full sm:w-auto sm:min-w-[260px] min-h-[40px]" value={selectedId} onChange={(e) => setSelectedId(e.target.value)}>
-            {rows.map((r) => {
-              const n = parseTrailerList(r.trailer_nos).length
-              return (
-                <option key={r.id} value={r.id}>
-                  {(r.name || r.prime_mover_no || 'Unnamed')} | {r.prime_mover_no || 'N/A'} ({n} trailer{n !== 1 ? 's' : ''})
-                </option>
-              )
-            })}
-          </select>
-          {selectedCombo && <StatusBadge status={selectedCombo.status} />}
-          {selectedCombo?.site && (
-            <span className="text-xs text-[var(--text-muted)] inline-flex items-center gap-1"><MapPin size={12} aria-hidden="true" /> {selectedCombo.site}</span>
-          )}
-        </div>
-      </Card>
-
-      {intelError && (
-        <Card tone="crit" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }} role="alert">
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
-          <div className="flex-1">
-            <p className="text-red-300 font-medium">Could not load combined-unit data.</p>
-            <p className="text-[var(--text-muted)] text-sm mt-1 break-words">{intelError}</p>
-          </div>
-          <button type="button" onClick={onRetryIntel} className="btn-secondary text-sm shrink-0 min-h-[40px]">Retry</button>
-        </Card>
-      )}
-
-      {intelLoading || !rollup ? (
-        !intelError && (
-          <div className="grid gap-[var(--gap-grid)]" aria-busy="true" aria-label="Loading combined-unit data">
-            <Card><div className="h-24 bg-[var(--input-bg)] rounded animate-pulse" /></Card>
-            <Card><div className="h-40 bg-[var(--input-bg)] rounded animate-pulse" /></Card>
-          </div>
-        )
-      ) : (
-        <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-[var(--gap-grid)]">
-            <StatTile label="Fitted tyres" value={rollup.fittedTyres} icon={CircleDot} tone="info"
-              sub={`${rollup.tyreCount} record${rollup.tyreCount !== 1 ? 's' : ''} across unit`} />
-            <StatTile label="Unit CPK (blended)" value={rollup.blendedCpk != null ? `${currency} ${fmt(rollup.blendedCpk, 3)}` : 'N/A'} icon={Gauge} tone="accent"
-              sub={rollup.canonicalCpk?.validCount ? `Canonical avg ${currency} ${fmt(rollup.canonicalCpk.fleetAvgCpk, 3)} (${rollup.canonicalCpk.validCount} valid)` : 'No valid cost per km rows'} />
-            <StatTile label="Unit tyre spend" value={formatCurrency(rollup.totalSpend, currency, 0)} icon={DollarSign}
-              sub={rollup.avgTyreLifeKm != null ? `Avg life ${rollup.avgTyreLifeKm.toLocaleString()} km` : 'No km data'} />
-            <StatTile label="Scrapped tyres" value={rollup.scrapTyres} icon={Recycle} tone={rollup.scrapTyres > 0 ? 'crit' : 'neutral'}
-              sub={scrapPct == null ? 'No fitted or scrapped tyres' : `${scrapPct}% of fitted plus scrap`} />
-          </div>
-
-          <Card>
-            <CardHeader
-              level={2}
-              icon={Truck}
-              title="Member assets"
-              actions={
-                <span className="text-xs text-[var(--text-muted)]">
-                  {coverage.resolved}/{coverage.total} resolved in fleet master{coverage.pct == null ? '' : ` (${coverage.pct}%)`}
-                </span>
-              }
-            />
-            <CardBody>
-              {rollup.resolution.unresolvedCount > 0 && (
-                <div className="mb-3 rounded border border-amber-700/50 bg-amber-900/10 px-3 py-2 text-sm text-amber-300 flex items-start gap-2">
-                  <AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
-                  <span>
-                    {rollup.resolution.unresolvedCount} member{rollup.resolution.unresolvedCount !== 1 ? 's' : ''} not found in <span className="font-mono">vehicle_fleet</span>:{' '}
-                    <span className="font-mono">{rollup.resolution.unresolved.join(', ')}</span>. Add them to fleet master for complete intelligence.
-                  </span>
-                </div>
-              )}
-              <ul className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                {rollup.members.map((m) => (
-                  <li key={`${m.role}-${m.asset_no}`} className={`rounded-lg border p-3 ${m.resolved ? 'border-[var(--input-border)] bg-[var(--input-bg)]/40' : 'border-amber-700/50 bg-amber-900/10'}`}>
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono text-sm font-semibold text-[var(--text-primary)]">{m.asset_no}</span>
-                      {m.resolved
-                        ? <span className="inline-flex items-center gap-1 text-[11px] text-green-400"><CheckCircle2 size={14} aria-hidden="true" /> Resolved</span>
-                        : <span className="inline-flex items-center gap-1 text-[11px] text-amber-400"><XCircle size={14} aria-hidden="true" /> Missing</span>}
-                    </div>
-                    <div className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mt-0.5">
-                      {m.role === 'prime_mover' ? 'Prime mover' : 'Trailer'}
-                    </div>
-                    {m.resolved ? (
-                      <div className="text-xs text-[var(--text-secondary)] mt-1.5 space-y-0.5">
-                        <div>{[m.make, m.model].filter(Boolean).join(' ') || m.vehicle_type || 'N/A'}</div>
-                        <div className="text-[var(--text-muted)]">{m.vehicle_type || 'N/A'}{m.status ? ` | ${m.status}` : ''}</div>
-                      </div>
-                    ) : (
-                      <div className="text-xs text-amber-300/80 mt-1.5">Not in fleet master</div>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </CardBody>
-          </Card>
-
-          <Card>
-            <CardHeader level={2} icon={Layers} title="Position-class breakdown"
-              description={'Positions that do not parse to steer, drive or trailer are grouped honestly as "Other / Unclassified".'} />
-            <EnterpriseTable
-              columns={posColumns}
-              data={posRows}
-              getRowId={(p) => p.positionClass}
-              enableGlobalFilter={false}
-              enableColumnFilters={false}
-              enableColumnVisibility={false}
-              enableExport
-              exportFileName="combination_position_breakdown"
-              reportMeta={{ title: `Position breakdown: ${selectedCombo?.name || selectedCombo?.prime_mover_no || 'unit'}`, currency }}
-              initialPageSize={25}
-              emptyMessage="No tyre records found for this unit's members."
-            />
-          </Card>
-
-          <Card>
-            <div className="flex items-start gap-3">
-              <Info size={18} className="text-[var(--text-muted)] mt-0.5 shrink-0" aria-hidden="true" />
-              <div className="min-w-0">
-                <h3 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-1.5">
-                  <Activity size={14} aria-hidden="true" /> Live telemetry and axle schematic: not available in this dataset
-                </h3>
-                <p className="text-sm text-[var(--text-muted)] mt-1.5">
-                  Per-tyre pressure (PSI), temperature and the top-down axle / wheel-position diagram require
-                  live TPMS telemetry and a wheel-position map. This deployment's <span className="font-mono">tyre_records</span> and{' '}
-                  <span className="font-mono">vehicle_fleet</span> tables do not capture those signals, so no gauges or
-                  schematics are shown here rather than fabricating readings. Connect a TPMS / wheel-position source to enable them.
-                </p>
-                <div className="flex flex-wrap gap-1.5 mt-2.5">
-                  {['Live PSI', 'Temperature', 'Pressure target', 'Wheel positions', 'Axle schematic'].map((x) => (
-                    <span key={x} className="badge text-[11px] px-2 py-0.5 rounded bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]">
-                      {x}: no source
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </Card>
-        </>
-      )}
     </div>
   )
 }

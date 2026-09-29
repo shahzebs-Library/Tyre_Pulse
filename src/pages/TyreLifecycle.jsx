@@ -1,511 +1,315 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+/**
+ * TyreLifecycle (route /tyre-lifecycle) - Tyre Lifecycle Tracker on the
+ * Command Center kit.
+ *
+ * Register of every tyre record in scope (paged read, bounded, country scoped
+ * on the server), joined to the running-life view for active tyres so the
+ * table can show current km and life used with the SAME bands as Running and
+ * Remaining (measureFor). A tyre whose life cannot be measured reads N/A.
+ *
+ * Capabilities kept from the earlier page: search, brand, site, category,
+ * stage and date filters; the lifecycle stage funnel, brand life, spend by
+ * category and km-band charts (Analytics tab); per-serial history; PDF, Excel
+ * and email export of the whole filtered set; consumption, Running and
+ * Remaining, and tyre change tracking sections.
+ *
+ * Money is never added across currencies: priced spend and average prices need
+ * one country in scope.
+ */
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
-  Chart as ChartJS,
-  CategoryScale, LinearScale, BarElement, ArcElement,
-  Title, Tooltip, Legend, PointElement, LineElement,
-} from 'chart.js'
-import { Bar, Doughnut } from 'react-chartjs-2'
-import {
-  CircleDot, RefreshCw, Trash2, Search, X, FileText, FileSpreadsheet, Gauge,
-  DollarSign, Activity, Filter, ChevronRight, AlertTriangle, History, CheckCircle2,
+  CircleDot, Activity, Truck, AlertTriangle, Archive, Search, FileText, FileSpreadsheet,
+  RefreshCw, Eye, Pencil, ExternalLink, SlidersHorizontal, X,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { escapeLike } from '../lib/searchFilter'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToPdf, exportToExcel, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
-import { compareValues } from '../lib/consoleTable'
-import { colorAt, withAlpha, categorical } from '../lib/reportColors'
-import PageHeader from '../components/ui/PageHeader'
+import useLatestRequest from '../lib/useLatestRequest'
+import { getTyreRunningLife } from '../lib/api/tyreRunningLife'
+import { shapeRunningLife } from '../lib/tyreRunningLife'
+import { CATEGORIES, lifecycleKpis } from '../lib/tyreLifecycleAnalytics'
+import {
+  indexRunningLife, buildRows, viewKpis, tabRows, filterViewRows, filterOptions, TABS,
+  STATUSES, STATUS_META, lifeProgression, removalReasons, topBrandsByLife,
+  viewExportRows, VIEW_EXPORT_COLS, VIEW_EXPORT_HEADERS,
+} from '../lib/tyreLifecycleView'
+import { Card, Kpi, KitTable, PageHero, Tabs, VehicleThumb, Donut, fmtInt, useCard } from '../components/commandCenter/kit'
 import EmailPdfButton from '../components/EmailPdfButton'
-import EnterpriseTable from '../components/ui/EnterpriseTable'
-import { SkeletonCards, SkeletonChart } from '../components/ui/Skeleton'
-import PeriodFilter, { filterByPeriodValue, periodLabel } from '../components/ui/PeriodFilter'
 import TyreRunningLife from '../components/tyre/TyreRunningLife'
 import TyreConsumptionSection from '../components/tyre/TyreConsumptionSection'
 import TyreChangeTracking from '../components/tyre/TyreChangeTracking'
-import {
-  CATEGORIES, STAGES, filterLifecycle, distinct, lifecycleKpis, stageFunnel, brandLife,
-  costByCategory, kmBandCounts, lifecycleRows, lifecycleExportRows, EXPORT_COLS, EXPORT_HEADERS,
-  kmRun, lifecycleStage,
-} from '../lib/tyreLifecycleAnalytics'
+import LifecycleAnalytics from '../components/tyreLifecycle/LifecycleAnalytics'
+import TyreHistoryPanel from '../components/tyreLifecycle/TyreHistoryPanel'
+import { LifeProgressionChart, TopBrandsBars } from '../components/tyreLifecycle/LifecycleCharts'
+import './TyreLifecycle.css'
 
-ChartJS.register(
-  CategoryScale, LinearScale, BarElement, ArcElement,
-  Title, Tooltip, Legend, PointElement, LineElement,
-)
+const ROW_CAP = 50000
+const REASON_COLORS = ['var(--cc-green)', 'var(--cc-blue)', 'var(--cc-amber)', 'var(--cc-red)', 'var(--cc-purple)', 'var(--cc-ink-3)']
+const BAND_COLOR = { overdue: 'var(--cc-red)', 'due-soon': 'var(--cc-amber)', 'mid-life': 'var(--cc-blue)', healthy: 'var(--cc-green)' }
+const EMPTY_FILTERS = { search: '', vehicleType: 'All', brand: 'All', position: 'All', status: 'All', site: 'All', category: 'All', from: '', to: '' }
 
-const GRID = { color: 'var(--panel-2)' }
-const TICK = { color: 'var(--text-secondary)' }
-const LEGEND = { labels: { color: 'var(--text-secondary)', boxWidth: 12 } }
+const na = <span className="cc-na">N/A</span>
 
-const BASE_CHART_OPTS = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: { legend: LEGEND },
-  scales: { x: { ticks: TICK, grid: GRID }, y: { ticks: TICK, grid: GRID, beginAtZero: true } },
-}
-
-const DONUT_OPTS = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: { position: 'bottom', labels: { color: 'var(--text-secondary)', boxWidth: 12, padding: 12 } },
-    tooltip: {
-      callbacks: {
-        label: ctx => {
-          const sum = ctx.dataset.data.reduce((a, b) => a + b, 0)
-          return ` ${ctx.label}: ${ctx.parsed.toLocaleString()} (${sum ? ((ctx.parsed / sum) * 100).toFixed(1) : 0}%)`
-        },
-      },
-    },
-  },
-}
-
-const SORT = { sortingFn: (a, b, id) => compareValues(a.getValue(id), b.getValue(id)), sortUndefined: 'last' }
-const undef = (v) => (v == null || v === '' ? undefined : v)
-
-// Semantic stage colours. Every pill also carries the stage name as text.
-const STAGE_CLS = {
-  'In Service': 'text-green-400 bg-green-500/10 border-green-500/30',
-  'Retread Eligible': 'text-cyan-400 bg-cyan-500/10 border-cyan-500/30',
-  Retreaded: 'text-blue-400 bg-blue-500/10 border-blue-500/30',
-  Scrapped: 'text-red-400 bg-red-500/10 border-red-500/30',
-  Removed: 'text-[var(--text-secondary)] bg-[var(--panel-2)] border-[var(--border)]',
-}
-const STAGE_ICON = { 'In Service': Activity, 'Retread Eligible': CircleDot, Retreaded: RefreshCw, Scrapped: Trash2, Removed: CheckCircle2 }
-
-const inputCls =
-  'w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 min-h-[44px] sm:min-h-[38px] text-sm '
-  + 'text-[var(--text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
-const btnCls =
-  'inline-flex items-center gap-1.5 px-3 min-h-[44px] sm:min-h-[36px] bg-[var(--surface-2)] hover:bg-[var(--surface-3)] '
-  + 'border border-[var(--border-bright)] rounded-lg text-sm text-[var(--text-secondary)] transition-colors '
-  + 'focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] disabled:opacity-40'
-
-const fmtNum = (v, d = 0) => (v == null || !Number.isFinite(v) ? 'N/A' : v.toLocaleString(undefined, { maximumFractionDigits: d, minimumFractionDigits: d }))
-const fmtPct = (v) => (v == null || !Number.isFinite(v) ? 'N/A' : `${v.toFixed(1)}%`)
-
-function StagePill({ stage }) {
-  return <span className={`text-xs px-2 py-0.5 rounded-full border font-medium whitespace-nowrap ${STAGE_CLS[stage] || STAGE_CLS.Removed}`}>{stage}</span>
-}
-
-function Kpi({ icon: Icon, label, value, sub }) {
+function LifeBar({ row }) {
+  if (row._lifePct == null) {
+    return <span className="cc-na" title={row._stage === 'In Service' ? 'No running-life measure for this tyre' : 'Removed tyre'}>N/A</span>
+  }
+  const v = Math.round(row._lifePct)
   return (
-    <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-4 min-w-0">
-      <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
-        <Icon size={13} aria-hidden="true" /><span className="truncate">{label}</span>
-      </div>
-      <p className="text-xl sm:text-2xl font-bold text-[var(--text-primary)] mt-1 tabular-nums truncate">{value}</p>
-      {sub && <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{sub}</p>}
-    </div>
+    <span className="cc-meter" title={row._lifeDim === 'hours' ? 'Judged on engine hours' : 'Judged on distance'}>
+      <b>{v}%</b>
+      <span className="cc-meter-track"><span style={{ width: `${Math.min(100, v)}%`, background: BAND_COLOR[row._band] || 'var(--cc-ink-3)' }} /></span>
+    </span>
   )
 }
 
 export default function TyreLifecycle() {
   const { activeCountry, activeCurrency } = useSettings()
-
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [capped, setCapped] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
+  const [tab, setTab] = useState('all')
+  const [filters, setFilters] = useState(EMPTY_FILTERS)
+  const [moreOpen, setMoreOpen] = useState(false)
+  const [selected, setSelected] = useState(null)
+  const [historySerial, setHistorySerial] = useState('')
+  const [historyQuery, setHistoryQuery] = useState('')
+  const latest = useLatestRequest()
 
-  const [search, setSearch] = useState('')
-  const [filterBrand, setFilterBrand] = useState('')
-  const [filterSite, setFilterSite] = useState('')
-  const [filterCategory, setFilterCategory] = useState('')
-  const [filterStage, setFilterStage] = useState('')
-  const [period, setPeriod] = useState({ mode: 'all' })
-
-  const fetchData = useCallback(async () => {
+  useEffect(() => {
+    const stale = latest.begin()
     setLoading(true)
     setError(null)
-    try {
-      const { data, error: qErr, truncated } = await fetchAllPages((from, to) => {
-        let q = supabase
-          .from('tyre_records')
-          .select('id,asset_no,serial_number:serial_no,position,brand,size,tread_depth,cost_per_tyre,qty,issue_date,removal_date,km_at_fitment,km_at_removal,risk_level,site,country,category')
-          .order('issue_date', { ascending: false })
-          .order('id', { ascending: false })
-        if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-        return q.range(from, to)
-      }, { max: 50000 })
-      if (qErr) throw qErr
-      setRecords(data || [])
-      setCapped(Boolean(truncated))
-    } catch (err) {
-      setError(toUserMessage(err, 'Could not load lifecycle data.'))
-      setRecords([])
-      setCapped(false)
-    } finally {
+    fetchAllPages((from, to) => {
+      let q = supabase
+        .from('tyre_records')
+        .select('id,asset_no,serial_number:serial_no,position,brand,size,tread_depth,cost_per_tyre,qty,issue_date,removal_date,km_at_fitment,km_at_removal,risk_level,site,country,category,vehicle_type,removal_reason')
+        .order('issue_date', { ascending: false })
+        .order('id', { ascending: false })
+      if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+      return q.range(from, to)
+    }, { max: ROW_CAP }).then(({ data, error: err, truncated }) => {
+      if (stale()) return
+      if (err) {
+        setError(toUserMessage(err, 'Could not load lifecycle data.'))
+        setRecords([]); setCapped(false)
+      } else {
+        setRecords(data || []); setCapped(Boolean(truncated))
+      }
       setLoading(false)
-    }
-  }, [activeCountry])
+    })
+  }, [activeCountry, refreshKey, latest])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  const rl = useCard(async () => {
+    const payload = await getTyreRunningLife({ country: activeCountry, maxAgeMs: refreshKey ? 0 : 60000 })
+    if (!payload || payload.ok === false) throw new Error(payload?.reason || 'Running life could not be read.')
+    return shapeRunningLife(payload).rows
+  }, [activeCountry, refreshKey])
 
-  const uniqueBrands = useMemo(() => distinct(records, 'brand'), [records])
-  const uniqueSites = useMemo(() => distinct(records, 'site'), [records])
+  const reload = useCallback(() => setRefreshKey((k) => k + 1), [])
+  const rlIndex = useMemo(() => indexRunningLife(rl.data || []), [rl.data])
+  const rows = useMemo(() => buildRows(records, rlIndex), [records, rlIndex])
+  const options = useMemo(() => filterOptions(rows), [rows])
+  const filtered = useMemo(() => filterViewRows(rows, filters), [rows, filters])
+  const shown = useMemo(() => tabRows(filtered, tab), [filtered, tab])
+  const kpis = useMemo(() => viewKpis(filtered), [filtered])
+  const life = useMemo(() => lifecycleKpis(filtered), [filtered])
+  const progression = useMemo(() => lifeProgression(filtered), [filtered])
+  const reasons = useMemo(() => removalReasons(filtered), [filtered])
+  const brands = useMemo(() => topBrandsByLife(filtered), [filtered])
 
-  const filtered = useMemo(
-    () => filterLifecycle(filterByPeriodValue(records, period, 'issue_date'), {
-      search, brand: filterBrand, site: filterSite, category: filterCategory, stage: filterStage,
-    }),
-    [records, search, filterBrand, filterSite, filterCategory, filterStage, period],
-  )
-  const hasFilter = Boolean(search || filterBrand || filterSite || filterCategory || filterStage || period.mode !== 'all')
+  const hasFilter = Object.keys(EMPTY_FILTERS).some((k) => filters[k] !== EMPTY_FILTERS[k])
+  const setF = (k) => (e) => setFilters((f) => ({ ...f, [k]: e.target.value }))
+  const clearFilters = () => setFilters(EMPTY_FILTERS)
+  const singleCurrency = activeCountry !== 'All' ? activeCurrency : null
+  const rlPending = rl.loading && !rl.data
+  const statusOf = (r) => (rlPending && r._stage === 'In Service' ? null : r._status)
 
-  function clearFilters() {
-    setSearch(''); setFilterBrand(''); setFilterSite('')
-    setFilterCategory(''); setFilterStage(''); setPeriod({ mode: 'all' })
-  }
-
-  const kpis = useMemo(() => lifecycleKpis(filtered), [filtered])
-  const funnel = useMemo(() => stageFunnel(filtered), [filtered])
-  const brands = useMemo(() => brandLife(filtered), [filtered])
-  const cost = useMemo(() => costByCategory(filtered), [filtered])
-  const bands = useMemo(() => kmBandCounts(filtered), [filtered])
-  const rows = useMemo(() => lifecycleRows(filtered), [filtered])
-
-  const brandChart = {
-    labels: brands.map(b => b.brand),
-    datasets: [
-      { label: 'New (avg km)', data: brands.map(b => (b.newAvg == null ? null : Math.round(b.newAvg))), backgroundColor: withAlpha(colorAt(0), 0.75), borderRadius: 4 },
-      { label: 'Retread (avg km)', data: brands.map(b => (b.retreadAvg == null ? null : Math.round(b.retreadAvg))), backgroundColor: withAlpha(colorAt(1), 0.75), borderRadius: 4 },
-    ],
-  }
-  const donutColors = categorical(cost.buckets.length)
-  const costDonut = {
-    labels: cost.buckets.map(b => b.label),
-    datasets: [{
-      data: cost.buckets.map(b => Math.round(b.total)),
-      backgroundColor: donutColors.map(c => withAlpha(c, 0.85)),
-      borderColor: 'var(--panel)', borderWidth: 2,
-    }],
-  }
-  const bandChart = {
-    labels: bands.map(b => b.label),
-    datasets: [{ label: 'Tyres', data: bands.map(b => b.count), backgroundColor: bands.map((_, i) => withAlpha(colorAt(i), 0.75)), borderRadius: 4 }],
-  }
-
-  // ── Serial history (selected row) ──────────────────────────────────────────
-  const [selectedSerial, setSelectedSerial] = useState(null)
-  const [history, setHistory] = useState({})
-  const [historyError, setHistoryError] = useState(null)
-
-  const loadHistory = useCallback(async (serial) => {
-    setHistoryError(null)
-    const { data, error: hErr } = await supabase
-      .from('tyre_records')
-      .select('id,asset_no,serial_number:serial_no,position,brand,size,issue_date,removal_date,km_at_fitment,km_at_removal,category,risk_level,cost_per_tyre,site,tread_depth')
-      .ilike('serial_no', escapeLike(serial))
-      .order('issue_date')
-    if (hErr) { setHistoryError(toUserMessage(hErr, 'Could not load this tyre history.')); return }
-    setHistory(prev => ({ ...prev, [serial]: data || [] }))
-  }, [])
-
-  function selectRow(r) {
-    if (!r?.serial_number) return
-    if (selectedSerial === r.serial_number) { setSelectedSerial(null); return }
-    setSelectedSerial(r.serial_number)
-    if (!history[r.serial_number]) loadHistory(r.serial_number)
-  }
-
-  // ── Export (whole filtered set, never a page) ─────────────────────────────
-  const scope = [periodLabel(period), filterBrand, filterSite, filterCategory, filterStage].filter(Boolean).join(' | ')
+  // Export the whole filtered set on the active tab, never one page.
+  const scope = [filters.from && `from ${filters.from}`, filters.to && `to ${filters.to}`, ...['vehicleType', 'brand', 'position', 'status', 'site', 'category'].map((k) => (filters[k] !== 'All' ? filters[k] : null))].filter(Boolean).join(' | ')
   const fileName = reportFileName('TyrePulse Tyre Lifecycle', activeCountry !== 'All' ? activeCountry : null)
-  function handlePdfExport(opts = {}) {
+  const exportSet = tab === 'inService' || tab === 'removed' ? shown : filtered
+  function handlePdf(opts = {}) {
     return exportToPdf(
-      lifecycleExportRows(filtered),
-      EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })),
+      viewExportRows(exportSet),
+      VIEW_EXPORT_COLS.map((k, i) => ({ key: k, header: VIEW_EXPORT_HEADERS[i] })),
       `Tyre Lifecycle Report${scope ? ` (${scope})` : ''}`,
       fileName, 'landscape', '', opts,
     )
   }
-  function handleExcelExport() {
-    exportToExcel(lifecycleExportRows(filtered), EXPORT_COLS, EXPORT_HEADERS, fileName, 'Lifecycle')
+  const handleExcel = () => exportToExcel(viewExportRows(exportSet), VIEW_EXPORT_COLS, VIEW_EXPORT_HEADERS, fileName, 'Lifecycle')
+
+  function onStage(stage) {
+    setFilters((f) => ({ ...f, status: stage === 'In Service' ? 'All' : stage }))
+    setTab(stage === 'In Service' ? 'inService' : 'removed')
   }
 
-  const na = <span className="text-[var(--text-muted)]">N/A</span>
-  const columns = useMemo(() => [
-    { id: 'serial', header: 'Serial', accessorFn: r => undef(r.serial_number), size: 140, ...SORT, cell: ({ getValue }) => (getValue() ? <span className="font-mono text-xs">{getValue()}</span> : na) },
-    { id: 'brand', header: 'Brand', accessorFn: r => undef(r.brand), size: 120, ...SORT, cell: ({ getValue }) => getValue() ?? na },
-    { id: 'size', header: 'Size', accessorFn: r => undef(r.size), size: 110, ...SORT, cell: ({ getValue }) => getValue() ?? na },
-    { id: 'position', header: 'Position', accessorFn: r => undef(r.position), size: 90, ...SORT, cell: ({ getValue }) => getValue() ?? na },
-    { id: 'asset', header: 'Asset', accessorFn: r => undef(r.asset_no), size: 100, ...SORT, cell: ({ getValue }) => getValue() ?? na },
-    { id: 'site', header: 'Site', accessorFn: r => undef(r.site), size: 110, ...SORT, cell: ({ getValue }) => getValue() ?? na },
-    { id: 'issue_date', header: 'Fitment date', accessorFn: r => undef(r.issue_date), size: 110, ...SORT, cell: ({ getValue }) => getValue() ?? na },
-    { id: 'removal_date', header: 'Removal date', accessorFn: r => undef(r.removal_date), size: 110, ...SORT, cell: ({ getValue }) => getValue() ?? na },
-    { id: 'km', header: 'km run', accessorFn: r => undef(r._km), size: 90, meta: { align: 'right' }, ...SORT, cell: ({ getValue }) => (getValue() == null ? na : <span className="tabular-nums">{getValue().toLocaleString()}</span>) },
-    { id: 'category', header: 'Category', accessorFn: r => r._category, size: 100, meta: { filterVariant: 'select', filterOptions: CATEGORIES }, ...SORT },
-    { id: 'cpk', header: 'Cost per km', accessorFn: r => undef(r._cpk), size: 100, meta: { align: 'right' }, ...SORT, cell: ({ getValue }) => (getValue() == null ? na : <span className="tabular-nums">{getValue().toFixed(4)}</span>) },
-    { id: 'stage', header: 'Stage', accessorFn: r => r._stage, size: 130, meta: { filterVariant: 'select', filterOptions: STAGES }, ...SORT, cell: ({ getValue }) => <StagePill stage={getValue()} /> },
-  ], []) // eslint-disable-line react-hooks/exhaustive-deps
+  const columns = [
+    { key: 'serial', header: 'Serial Number', sortValue: (r) => r.serial_number || '', cell: (r) => (r.serial_number
+      ? <Link className="tlc-serial" to={`/tyre-passport/${encodeURIComponent(r.serial_number)}`} onClick={(e) => e.stopPropagation()}>{r.serial_number}</Link>
+      : na) },
+    { key: 'asset', header: 'Vehicle / Asset', sortValue: (r) => r.asset_no || '', cell: (r) => (
+      <span className="cc-vehicle"><VehicleThumb row={{ asset_no: r.asset_no, vehicle_type: r.vehicle_type }} size="sm" />
+        <span><b>{r.asset_no || 'N/A'}</b><span className="cc-sub">{r.site || r.vehicle_type || 'Site not recorded'}</span></span></span>
+    ) },
+    { key: 'brand', header: 'Brand', cell: (r) => r.brand || na },
+    { key: 'size', header: 'Size', cell: (r) => r.size || na },
+    { key: 'position', header: 'Position', cell: (r) => r.position || na },
+    { key: 'issue_date', header: 'Fitment Date', cell: (r) => r.issue_date || na },
+    { key: 'km', header: 'Current KM', numeric: true, sortValue: (r) => r._currentKm ?? r.km_at_removal ?? -1, cell: (r) => {
+      if (r._currentKm != null) return fmtInt(r._currentKm)
+      if (r._stage !== 'In Service' && r.km_at_removal != null) return <span title="Odometer when the tyre came off">{fmtInt(r.km_at_removal)}<span className="cc-sub">at removal</span></span>
+      return na
+    } },
+    { key: 'life', header: 'Life %', sortValue: (r) => r._lifePct ?? -1, cell: (r) => <LifeBar row={r} /> },
+    { key: 'status', header: 'Status', sortValue: (r) => r._status, cell: (r) => {
+      const s = statusOf(r)
+      return s ? <span className={`cc-pill ${STATUS_META[s]?.tone || 'muted'}`} title={STATUS_META[s]?.note}>{s}</span> : <span className="cc-na">Checking</span>
+    } },
+    { key: 'actions', header: 'Actions', sortable: false, cell: (r) => (
+      <span className="tlc-actions" onClick={(e) => e.stopPropagation()} role="presentation">
+        <button type="button" className="cc-icon-btn" aria-label={`View tyre ${r.serial_number || r.id}`} title="View history" disabled={!r.serial_number} onClick={() => setSelected(r)}><Eye size={14} /></button>
+        <Link className="cc-icon-btn" to={`/tyre-records${r.serial_number ? `?search=${encodeURIComponent(r.serial_number)}` : ''}`} aria-label="Edit in tyre records" title="Edit in Tyre Records"><Pencil size={14} /></Link>
+        {r.asset_no && <Link className="cc-icon-btn" to={`/assets/${encodeURIComponent(r.asset_no)}`} aria-label={`Open asset ${r.asset_no}`} title="Open asset"><ExternalLink size={14} /></Link>}
+      </span>
+    ) },
+  ]
 
-  const selectedHistory = selectedSerial ? history[selectedSerial] : null
+  const kpiNA = error ? 'N/A' : undefined
+  const nearEndDisplay = error ? 'N/A' : rl.error ? 'N/A' : undefined
+  const tabsWithCounts = TABS.map((t) => (t.key === 'all' ? { ...t, count: loading ? null : fmtInt(filtered.length) }
+    : t.key === 'inService' ? { ...t, count: loading ? null : fmtInt(kpis.active) }
+      : t.key === 'removed' ? { ...t, count: loading ? null : fmtInt(kpis.removed) } : t))
 
   return (
-    <div className="space-y-6">
-      <PageHeader
+    <div className="cc tlc-page">
+      <PageHero
+        hello="Tyre Management"
         title="Tyre Lifecycle Tracker"
-        subtitle="Full lifecycle visibility from fitment to retirement"
-        icon={Activity}
-        actions={(
-          <div className="flex flex-wrap items-center gap-2">
-            <button onClick={() => handlePdfExport()} disabled={loading || !filtered.length} className={btnCls}>
-              <FileText size={14} aria-hidden="true" /> PDF
-            </button>
-            <EmailPdfButton
-              className={btnCls}
-              getPdf={async () => ({
-                base64: await handlePdfExport({ returnBase64: true }),
-                filename: `${fileName}.pdf`,
-                subject: 'Tyre Lifecycle',
-                bodyHtml: '<p>Attached is the Tyre Lifecycle report.</p>',
-              })}
-            />
-            <button onClick={handleExcelExport} disabled={loading || !filtered.length} className={btnCls}>
-              <FileSpreadsheet size={14} aria-hidden="true" /> Excel
-            </button>
-          </div>
-        )}
+        lead="Track complete tyre lifecycle from fitment to removal with real usage, performance, cost and condition."
+        imgLight="/dashboard/hero-lifecycle-light.webp"
+        imgDark="/dashboard/hero-lifecycle-dark.webp"
+        stat={{ value: loading || error || life.avgLifeKm == null ? 'N/A' : `${fmtInt(Math.round(life.avgLifeKm))} km`, lines: ['Average tyre life', `${fmtInt(life.measuredLife)} tyres measured`] }}
       />
 
-      {error && (
-        <div className="card border border-red-500/30 flex flex-wrap items-center gap-3" role="alert">
-          <AlertTriangle size={18} className="text-red-400 shrink-0" aria-hidden="true" />
-          <p className="text-sm text-red-400 flex-1">{error}</p>
-          <button onClick={fetchData} className={btnCls}><RefreshCw size={14} aria-hidden="true" /> Retry</button>
-        </div>
-      )}
+      {error && <div className="cc-card tlc-banner" role="alert"><AlertTriangle size={16} aria-hidden="true" /><div>{error}</div><button type="button" className="cc-btn" onClick={reload}>Retry</button></div>}
+      {capped && <div className="cc-card tlc-banner" role="status"><AlertTriangle size={16} aria-hidden="true" /><div>Showing the most recent {ROW_CAP.toLocaleString()} tyre records. Narrow the country for a complete view.</div></div>}
+      {rl.error && <div className="cc-card tlc-banner" role="alert"><AlertTriangle size={16} aria-hidden="true" /><div>Running life could not be read, so life used and Near End read N/A. {rl.error}</div><button type="button" className="cc-btn" onClick={rl.retry}>Retry</button></div>}
 
-      {capped && (
-        <div className="card border border-amber-500/30 flex items-center gap-3" role="status">
-          <AlertTriangle size={18} className="text-amber-400 shrink-0" aria-hidden="true" />
-          <p className="text-sm text-amber-400 flex-1">
-            Capped view: showing the most recent 50,000 tyre records. Narrow the country or period for a complete view.
-          </p>
-        </div>
-      )}
+      <div className="cc-kpis tlc-kpis">
+        <Kpi icon={CircleDot} tone="t-green" value={kpis.total} display={kpiNA} label="Total Tyres" loading={loading} onClick={() => setTab('all')} title="Tyre records in scope" />
+        <Kpi icon={Activity} tone="t-blue" value={kpis.active} display={kpiNA} label="Active" loading={loading} onClick={() => setTab('inService')} title="Records with no removal recorded" />
+        <Kpi icon={Truck} tone="t-green" value={kpis.inService} display={nearEndDisplay} label="In Service" loading={loading || rlPending} onClick={() => { setTab('inService'); setFilters((f) => ({ ...f, status: 'Normal' })) }} title="Active tyres not near the end of their expected life" />
+        <Kpi icon={AlertTriangle} tone="t-red" value={kpis.nearEnd} display={nearEndDisplay} label="Near End of Life" loading={loading || rlPending} onClick={() => { setTab('inService'); setFilters((f) => ({ ...f, status: 'Near End' })) }} title="Past or within the due-soon band of the expected life" />
+        <Kpi icon={Archive} tone="t-orange" value={kpis.removed} display={kpiNA} label="Removed" loading={loading} onClick={() => setTab('removed')} title="Removed, retreaded or scrapped records" />
+      </div>
 
-      {loading ? (
-        <>
-          <SkeletonCards count={5} />
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6"><SkeletonChart /><SkeletonChart /></div>
-        </>
-      ) : error ? null : records.length === 0 ? (
-        <div className="card py-16 flex flex-col items-center gap-3 text-center">
-          <CircleDot size={40} className="text-[var(--text-dim)]" aria-hidden="true" />
-          <p className="text-[var(--text-secondary)] font-medium">No tyre records for this country yet</p>
-          <p className="text-[var(--text-muted)] text-sm">Import tyre records to track each tyre from fitment to retirement.</p>
-        </div>
-      ) : (
-        <>
-          {/* KPI strip */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-            <Kpi icon={CircleDot} label="Tyres tracked" value={fmtNum(kpis.serials)} sub={`${fmtNum(kpis.records)} records${kpis.missingSerial ? `, ${fmtNum(kpis.missingSerial)} without serial` : ''}`} />
-            <Kpi icon={Gauge} label="Avg life" value={kpis.avgLifeKm == null ? 'N/A' : `${fmtNum(kpis.avgLifeKm)} km`} sub={`${fmtNum(kpis.measuredLife)} tyres measured`} />
-            <Kpi icon={RefreshCw} label="Retread rate" value={fmtPct(kpis.retreadRate)} sub={kpis.categorised ? `of ${fmtNum(kpis.categorised)} categorised` : 'No category recorded'} />
-            <Kpi icon={Trash2} label="Scrap rate" value={fmtPct(kpis.scrapRate)} sub={kpis.removed ? `${fmtNum(kpis.scrapped)} of ${fmtNum(kpis.removed)} removed` : 'No removals recorded'} />
-            <Kpi icon={DollarSign} label="Avg cost per km" value={kpis.avgCpk == null ? 'N/A' : kpis.avgCpk.toFixed(4)} sub={kpis.measuredCpk ? `${fmtNum(kpis.measuredCpk)} priced and measured` : 'Needs price and removal km'} />
-          </div>
+      <Card className="tlc-main">
+        <Tabs tabs={tabsWithCounts} value={tab} onChange={setTab} label="Tyre lifecycle views" />
 
-          {/* Filters */}
-          <section className="card p-4 space-y-3" aria-label="Filters">
-            <div className="flex items-center gap-2 text-sm text-[var(--text-secondary)] font-medium">
-              <Filter size={14} aria-hidden="true" />
-              <span>Filters</span>
-              <span className="text-xs text-[var(--text-muted)] font-normal">{fmtNum(filtered.length)} of {fmtNum(records.length)} records</span>
-              {hasFilter && (
-                <button onClick={clearFilters} className={`ml-auto ${btnCls}`}>
-                  <X size={12} aria-hidden="true" /> Clear
-                </button>
-              )}
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
-              <label className="relative sm:col-span-2 lg:col-span-1">
-                <span className="sr-only">Search serial, asset or brand</span>
-                <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
-                <input type="search" placeholder="Serial, asset or brand" value={search} onChange={e => setSearch(e.target.value)} className={`${inputCls} pl-8`} />
+        {(tab === 'all' || tab === 'inService' || tab === 'removed') && (
+          <>
+            <div className="cc-filters tlc-filters">
+              <label className="cc-field"><span>Vehicle type</span>
+                <select className="cc-select" value={filters.vehicleType} onChange={setF('vehicleType')}><option value="All">All Vehicle Types</option>{options.vehicleTypes.map((o) => <option key={o} value={o}>{o}</option>)}</select>
               </label>
-              <label><span className="sr-only">Brand</span>
-                <select value={filterBrand} onChange={e => setFilterBrand(e.target.value)} className={inputCls}>
-                  <option value="">All brands</option>
-                  {uniqueBrands.map(b => <option key={b} value={b}>{b}</option>)}
-                </select>
+              <label className="cc-field"><span>Brand</span>
+                <select className="cc-select" value={filters.brand} onChange={setF('brand')}><option value="All">All Tyre Brands</option>{options.brands.map((o) => <option key={o} value={o}>{o}</option>)}</select>
               </label>
-              <label><span className="sr-only">Site</span>
-                <select value={filterSite} onChange={e => setFilterSite(e.target.value)} className={inputCls}>
-                  <option value="">All sites</option>
-                  {uniqueSites.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
+              <label className="cc-field"><span>Position</span>
+                <select className="cc-select" value={filters.position} onChange={setF('position')}><option value="All">All Positions</option>{options.positions.map((o) => <option key={o} value={o}>{o}</option>)}</select>
               </label>
-              <label><span className="sr-only">Category</span>
-                <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className={inputCls}>
-                  <option value="">All categories</option>
-                  {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
+              <label className="cc-field"><span>Status</span>
+                <select className="cc-select" value={filters.status} onChange={setF('status')}><option value="All">All Status</option>{STATUSES.map((o) => <option key={o} value={o}>{o}</option>)}</select>
               </label>
-              <label><span className="sr-only">Stage</span>
-                <select value={filterStage} onChange={e => setFilterStage(e.target.value)} className={inputCls}>
-                  <option value="">All stages</option>
-                  {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </label>
-              <PeriodFilter records={records} value={period} onChange={setPeriod} className="sm:col-span-2 lg:col-span-1" />
-            </div>
-          </section>
-
-          {/* Lifecycle funnel: each stage is a filter button */}
-          <section className="card p-5" aria-labelledby="tl-funnel">
-            <h2 id="tl-funnel" className="text-sm font-semibold text-[var(--text-primary)] mb-1">Lifecycle stages</h2>
-            <p className="text-xs text-[var(--text-muted)] mb-4">Select a stage to filter the table. Stages are mutually exclusive and add up to the records in scope.</p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-              {funnel.map((s, i) => {
-                const Icon = STAGE_ICON[s.stage]
-                const active = filterStage === s.stage
-                return (
-                  <div key={s.stage} className="flex items-center">
-                    <button
-                      onClick={() => setFilterStage(active ? '' : s.stage)}
-                      aria-pressed={active}
-                      className={`flex-1 rounded-xl border p-4 text-left min-h-[44px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${STAGE_CLS[s.stage]} ${active ? 'ring-2 ring-[var(--accent)]' : ''}`}
-                    >
-                      <div className="flex items-center gap-1.5 text-xs font-medium"><Icon size={14} aria-hidden="true" />{s.stage}</div>
-                      <p className="text-2xl font-bold mt-1 tabular-nums">{fmtNum(s.count)}</p>
-                      <p className="text-xs text-[var(--text-muted)] mt-0.5">{fmtPct(s.pct)} of records</p>
-                      <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                        {s.avgCost == null ? 'Avg price N/A' : `Avg ${activeCurrency} ${fmtNum(s.avgCost)}`}
-                      </p>
-                    </button>
-                    {i < funnel.length - 1 && <ChevronRight size={16} className="hidden lg:block text-[var(--text-dim)] shrink-0" aria-hidden="true" />}
-                  </div>
-                )
-              })}
-            </div>
-          </section>
-
-          {/* Charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 card p-5">
-              <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-4">Brand lifecycle (avg km run: new vs retread)</h2>
-              <div style={{ height: 280 }}>
-                {brands.length > 0 ? (
-                  <div className="h-full" role="img" aria-label={`Average km run for ${brands.length} brands, new and retread`}>
-                    <Bar data={brandChart} options={BASE_CHART_OPTS} />
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center h-full text-[var(--text-muted)] text-sm text-center px-4">
-                    No tyre in scope has both a fitment and a removal km, so life cannot be measured.
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="card p-5">
-              <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-1">Spend by category</h2>
-              <p className="text-xs text-[var(--text-muted)] mb-3">
-                Priced tyre records only ({fmtNum(cost.priced)} priced); the authoritative total is from the expense grid.
-              </p>
-              <div style={{ height: 260 }}>
-                {cost.total ? (
-                  <div className="h-full" role="img" aria-label={`Spend by category, ${cost.buckets.map(b => `${b.label} ${Math.round(b.total)}`).join(', ')}`}>
-                    <Doughnut data={costDonut} options={DONUT_OPTS} />
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center h-full text-[var(--text-muted)] text-sm">No priced tyres in scope</div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="card p-5">
-            <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-4">Life distribution (km run bands)</h2>
-            {kpis.measuredLife === 0 ? (
-              <p className="text-sm text-[var(--text-muted)]">No measured tyre life in scope.</p>
-            ) : (
-              <div style={{ height: 220 }} role="img" aria-label={`Tyres per km band: ${bands.map(b => `${b.label} ${b.count}`).join(', ')}`}>
-                <Bar
-                  data={bandChart}
-                  options={{
-                    ...BASE_CHART_OPTS,
-                    plugins: { legend: { display: false } },
-                    scales: { x: { ticks: TICK, grid: GRID }, y: { ticks: TICK, grid: GRID, beginAtZero: true, title: { display: true, text: 'Tyres', color: 'var(--text-muted)' } } },
-                  }}
+              <label className="cc-field tlc-date"><span>Fitted from</span><input type="date" className="tlc-input" value={filters.from} onChange={setF('from')} /></label>
+              <label className="cc-field tlc-date"><span>Fitted to</span><input type="date" className="tlc-input" value={filters.to} onChange={setF('to')} /></label>
+              <div className="cc-search"><Search size={15} aria-hidden="true" /><input type="search" value={filters.search} onChange={setF('search')} placeholder="Search by serial no, vehicle, brand" aria-label="Search tyres" /></div>
+              <button type="button" className="cc-btn-ghost" aria-expanded={moreOpen} onClick={() => setMoreOpen((v) => !v)}><SlidersHorizontal size={14} aria-hidden="true" /> More</button>
+              {hasFilter && <button type="button" className="cc-btn-ghost" onClick={clearFilters}><X size={14} aria-hidden="true" /> Clear</button>}
+              <span className="tlc-export">
+                <button type="button" className="cc-btn-ghost" onClick={() => handlePdf()} disabled={loading || !exportSet.length}><FileText size={14} aria-hidden="true" /> PDF</button>
+                <button type="button" className="cc-btn-ghost" onClick={handleExcel} disabled={loading || !exportSet.length}><FileSpreadsheet size={14} aria-hidden="true" /> Excel</button>
+                <EmailPdfButton
+                  className="cc-btn-ghost"
+                  getPdf={async () => ({ base64: await handlePdf({ returnBase64: true }), filename: `${fileName}.pdf`, subject: 'Tyre Lifecycle', bodyHtml: '<p>Attached is the Tyre Lifecycle report.</p>' })}
                 />
+                <button type="button" className="cc-icon-btn" onClick={reload} aria-label="Refresh lifecycle data" title="Refresh"><RefreshCw size={14} /></button>
+              </span>
+            </div>
+            {moreOpen && (
+              <div className="cc-filters tlc-filters">
+                <label className="cc-field"><span>Site</span>
+                  <select className="cc-select" value={filters.site} onChange={setF('site')}><option value="All">All sites</option>{options.sites.map((o) => <option key={o} value={o}>{o}</option>)}</select>
+                </label>
+                <label className="cc-field"><span>Category</span>
+                  <select className="cc-select" value={filters.category} onChange={setF('category')}><option value="All">All categories</option>{CATEGORIES.map((o) => <option key={o} value={o}>{o}</option>)}</select>
+                </label>
               </div>
             )}
+            <p className="tlc-count" aria-live="polite">{fmtInt(shown.length)} of {fmtInt(rows.length)} records. Select a row to see where that tyre has been.</p>
+            <div className="tlc-scroll">
+              <KitTable
+                columns={columns} rows={shown} loading={loading} error={error} onRetry={reload}
+                getRowId={(r) => String(r.id)} onRowClick={(r) => r.serial_number && setSelected(r)} initialPageSize={25}
+                empty={rows.length ? 'No tyres match these filters' : 'No tyre records for this country yet. Import tyre records to track each tyre from fitment to retirement.'}
+              />
+            </div>
+          </>
+        )}
+
+        {tab === 'history' && (
+          <div className="tlc-history">
+            <form className="cc-filters" onSubmit={(e) => { e.preventDefault(); setHistorySerial(historyQuery.trim()) }}>
+              <div className="cc-search"><Search size={15} aria-hidden="true" /><input value={historyQuery} onChange={(e) => setHistoryQuery(e.target.value)} placeholder="Enter a tyre serial number" aria-label="Tyre serial number" /></div>
+              <button type="submit" className="cc-btn-primary" disabled={!historyQuery.trim()}>Show history</button>
+            </form>
+            {historySerial
+              ? <TyreHistoryPanel key={historySerial} serial={historySerial} row={rows.find((r) => (r.serial_number || '').toUpperCase() === historySerial.toUpperCase())} />
+              : <div className="cc-empty">Enter a serial, or select a row on the All Tyres tab, to see every fitment and removal for that tyre.</div>}
+            <TyreChangeTracking />
           </div>
+        )}
 
-          {/* Lifecycle register */}
-          <section className="space-y-2" aria-labelledby="tl-table">
-            <h2 id="tl-table" className="text-sm font-semibold text-[var(--text-primary)]">Tyre lifecycle register</h2>
-            <p className="text-xs text-[var(--text-muted)]">Select a row with a serial to see where that tyre has been.</p>
-            <EnterpriseTable
-              viewKey="tyre-lifecycle"
-              columns={columns}
-              data={rows}
-              getRowId={r => String(r.id)}
-              enableGlobalFilter={false}
-              enableColumnFilters
-              enableExport={false}
-              initialPageSize={25}
-              pageSizeOptions={[25, 50, 100]}
-              onRowClick={selectRow}
-              emptyMessage="No records match the current filters"
-            />
-          </section>
+        {tab === 'analytics' && (
+          error ? <div className="cc-empty" role="alert"><div>Could not load lifecycle data.<br /><button type="button" className="cc-btn" onClick={reload}>Retry</button></div></div>
+            : loading ? <div className="cc-skel" style={{ height: 240 }} />
+              : <LifecycleAnalytics records={filtered} currency={singleCurrency} onStage={onStage} />
+        )}
+      </Card>
 
-          {selectedSerial && (
-            <section className="card border border-[var(--border-brand)] space-y-3" aria-label={`History of tyre ${selectedSerial}`}>
-              <div className="flex items-center justify-between gap-2">
-                <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
-                  <History size={15} aria-hidden="true" /> Tyre history <span className="font-mono">{selectedSerial}</span>
-                </h3>
-                <button onClick={() => setSelectedSerial(null)} aria-label="Close tyre history" className="w-11 h-11 inline-flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:bg-[var(--panel-2)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
-                  <X size={16} aria-hidden="true" />
-                </button>
-              </div>
-              {historyError ? (
-                <div role="alert" className="flex flex-wrap items-center gap-3">
-                  <p className="text-sm text-red-400">{historyError}</p>
-                  <button onClick={() => loadHistory(selectedSerial)} className={btnCls}><RefreshCw size={14} aria-hidden="true" /> Retry</button>
-                </div>
-              ) : !selectedHistory ? (
-                <p className="text-xs text-[var(--text-muted)]" role="status">Loading history...</p>
-              ) : selectedHistory.length === 0 ? (
-                <p className="text-xs text-[var(--text-muted)]">No history records found for this serial.</p>
-              ) : (
-                <ol className="relative pl-4 border-l border-[var(--border)] space-y-3">
-                  {selectedHistory.map(h => {
-                    const hStage = lifecycleStage(h)
-                    const hKm = kmRun(h)
-                    return (
-                      <li key={h.id} className="flex flex-wrap items-center gap-x-5 gap-y-1 text-xs">
-                        <span className="text-[var(--text-primary)] font-medium">{h.issue_date || 'Date N/A'}</span>
-                        <span className="text-[var(--text-secondary)]">Asset {h.asset_no || 'N/A'}</span>
-                        <span className="text-[var(--text-secondary)]">Site {h.site || 'N/A'}</span>
-                        <span className="text-[var(--text-secondary)]">Position {h.position || 'N/A'}</span>
-                        <span className="text-[var(--text-secondary)]">{hKm != null ? `${hKm.toLocaleString()} km` : 'km N/A'}</span>
-                        <StagePill stage={hStage} />
-                      </li>
-                    )
-                  })}
-                </ol>
-              )}
-            </section>
-          )}
-        </>
+      {selected && (tab === 'all' || tab === 'inService' || tab === 'removed') && (
+        <TyreHistoryPanel key={selected.id} serial={selected.serial_number} row={selected} onClose={() => setSelected(null)} />
       )}
 
+      <div className="tlc-bottom">
+        <Card title="Tyre Life Progression" sub={`Life used against distance run, active tyres by wheel corner (${fmtInt(progression.sample)} measured)`}>
+          {rl.error ? <div className="cc-empty">Running life could not be read.</div>
+            : (loading || rlPending) ? <div className="cc-skel" style={{ height: 200 }} />
+              : progression.sample === 0 ? <div className="cc-empty">No active tyre in scope has a measured life on distance.</div>
+                : <LifeProgressionChart data={progression} />}
+        </Card>
+        <Card title="Removal Reasons" sub={reasons.unrecorded ? `${fmtInt(reasons.unrecorded)} of ${fmtInt(reasons.removed)} removed tyres have no reason recorded` : 'Removed tyres in scope'}>
+          {loading ? <div className="cc-skel" style={{ height: 200 }} />
+            : error ? <div className="cc-empty">Could not load lifecycle data.</div>
+              : reasons.recorded === 0 ? <div className="cc-empty">No removal reason is recorded in scope.</div>
+                : <Donut segments={reasons.segments.map((s, i) => ({ ...s, label: s.label === 'OTHER' ? 'Other' : s.label, color: REASON_COLORS[i % REASON_COLORS.length] }))} total={reasons.recorded} centerLabel="Removed" />}
+        </Card>
+        <Card title="Top Tyre Brands (by Life)" sub="Average km run per removed tyre, brands with at least 5 measured">
+          {loading ? <div className="cc-skel" style={{ height: 200 }} />
+            : error ? <div className="cc-empty">Could not load lifecycle data.</div>
+              : brands.length === 0 ? <div className="cc-empty">No brand has 5 tyres with a measured life in scope.</div>
+                : <TopBrandsBars brands={brands} />}
+        </Card>
+      </div>
+
       <TyreConsumptionSection />
-
       <TyreRunningLife />
-
-      {/* Flagged tyres tracked through to replacement. Lives here, beside
-          Running & Remaining, because the flags come from that same life
-          judgement - a separate page would split one story across two routes. */}
-      <TyreChangeTracking />
     </div>
   )
 }

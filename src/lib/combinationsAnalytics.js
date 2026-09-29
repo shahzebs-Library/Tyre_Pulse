@@ -78,10 +78,15 @@ export function registryRow(r) {
 }
 
 export const COMBINATION_EXPORT_COLUMNS = [
+  { key: 'combination_no', header: 'Combination No' },
   { key: 'name', header: 'Name' },
   { key: 'prime_mover_no', header: 'Prime Mover' },
   { key: 'trailers', header: 'Trailers' },
   { key: 'trailer_count', header: 'Trailer Count' },
+  { key: 'combination_type', header: 'Type' },
+  { key: 'axle_config', header: 'Axle Config' },
+  { key: 'tyre_config', header: 'Tyre Config' },
+  { key: 'max_load_tonnes', header: 'Max Load (t)' },
   { key: 'site', header: 'Site' },
   { key: 'status', header: 'Status' },
   { key: 'notes', header: 'Notes' },
@@ -91,13 +96,22 @@ export const COMBINATION_EXPORT_COLUMNS = [
 export function combinationExportRows(rows = []) {
   return (rows || []).filter(Boolean).map((r) => {
     const trailers = parseTrailerList(r.trailer_nos)
+    const tc = r.tyre_config && typeof r.tyre_config === 'object' ? r.tyre_config : {}
+    const tyreParts = [['steer', 'Steer'], ['drive', 'Drive'], ['trailer', 'Trailer']]
+      .filter(([k]) => Number.isFinite(Number(tc[k])) && tc[k] !== null && tc[k] !== '')
+      .map(([k, l]) => `${l} ${Number(tc[k])}`)
     return {
+      combination_no: r.combination_no || 'N/A',
       name: r.name || 'N/A',
       prime_mover_no: r.prime_mover_no || 'N/A',
       trailers: trailers.length ? trailers.join(', ') : 'N/A',
       trailer_count: trailers.length,
+      combination_type: r.combination_type || 'N/A',
+      axle_config: r.axle_config || 'N/A',
+      tyre_config: tyreParts.length ? tyreParts.join(', ') : 'N/A',
+      max_load_tonnes: r.max_load_tonnes == null ? 'N/A' : Number(r.max_load_tonnes),
       site: r.site || 'N/A',
-      status: r.status || 'inactive',
+      status: r.status === 'under_review' ? 'Under review' : (r.status || 'inactive'),
       notes: r.notes || '',
     }
   })

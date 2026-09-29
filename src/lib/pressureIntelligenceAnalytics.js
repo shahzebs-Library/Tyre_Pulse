@@ -26,6 +26,7 @@ import {
 } from './inspectionView'
 import { computePressureCompliance } from './kpiEngine'
 import { positionGroup, AXLE_GROUPS } from './positionIntelligenceAnalytics'
+import { isSevereCondition } from './inspectionTyreFlags'
 
 export { PRESSURE_MIN_READINGS, PRESSURE_TOLERANCE }
 
@@ -54,6 +55,26 @@ export const STATUS_META = {
   unmeasured: { label: 'Fewer than 4 readings on this inspection', short: 'Not measured', tone: 'neutral' },
 }
 
+/**
+ * Serial numbers per wheel, keyed exactly as normalizeTyreConditions keys the
+ * wheels (object key, or position/label for the array shape). The normaliser
+ * drops the serial, so it is read here from the raw record.
+ */
+function serialsOf(ins) {
+  let tc = ins?.tyre_conditions
+  if (typeof tc === 'string') { try { tc = JSON.parse(tc) } catch { return {} } }
+  if (!tc || typeof tc !== 'object') return {}
+  const entries = Array.isArray(tc)
+    ? tc.map((d, i) => [d && (d.position || d.label) ? String(d.position || d.label) : String(i), d])
+    : Object.entries(tc)
+  const out = {}
+  for (const [pos, d] of entries) {
+    const s = d && typeof d === 'object' ? txt(d.serial_number ?? d.serial_no ?? d.serial) : ''
+    if (s) out[pos] = s
+  }
+  return out
+}
+
 const live = (rows) => (Array.isArray(rows) ? rows : []).filter((r) => r && r.status !== 'Cancelled')
 
 /**
@@ -66,6 +87,7 @@ export function buildReadings(inspections = []) {
   for (const ins of live(inspections)) {
     const tc = normalizeTyreConditions(ins)
     const stats = inspectionStats(tc)
+    const serials = serialsOf(ins)
     for (const [position, d] of Object.entries(tc)) {
       if (d?.pressure == null) continue
       const dev = pressureDeviation(d.pressure, stats)
@@ -85,6 +107,9 @@ export function buildReadings(inspections = []) {
         deviationPct: dev ? Math.round(dev.dev * 1000) / 10 : null,
         status: dev ? (dev.check ? dev.direction : 'ok') : 'unmeasured',
         condition: d.condition,
+        serial: serials[position] || null,
+        // A wheel recorded flat, burst or damaged: the app's single severe rule.
+        critical: isSevereCondition(d.condition),
       })
     }
   }

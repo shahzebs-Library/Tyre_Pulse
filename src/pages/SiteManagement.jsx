@@ -408,7 +408,6 @@ export default function SiteManagement() {
   const scoped = useMemo(() => (f.country ? all.filter((s) => s.country === f.country) : all), [all, f.country])
   const kpi = useMemo(() => operationalKpis(scoped), [scoped])
   const health = useMemo(() => healthSummary(scoped, { opsKnown, inspectionsKnown: Boolean(insp.data) }), [scoped, opsKnown, insp.data])
-  const counts = useMemo(() => statusCounts(scoped), [scoped])
   const bubbles = useMemo(() => countryBubbles(all), [all])
   const allCounts = useMemo(() => statusCounts(all), [all])
   const types = useMemo(() => siteTypeSegments(scoped), [scoped])

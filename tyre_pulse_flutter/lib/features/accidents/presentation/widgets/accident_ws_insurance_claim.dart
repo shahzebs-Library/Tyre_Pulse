@@ -619,11 +619,14 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
       };
 
   /// "Request driving licence": lower case in languages that have case.
+  /// Only the first letter is lowered, so acronyms and names inside the label
+  /// ("Accident report PDF", "Police / Najm report") keep their spelling.
   String _requestLabel(BuildContext context, String key) {
     final String label = claimDocLabel(AppLocalizations.of(context), key);
-    return Localizations.localeOf(context).languageCode == 'en'
-        ? label.toLowerCase()
-        : label;
+    if (label.isEmpty || Localizations.localeOf(context).languageCode != 'en') {
+      return label;
+    }
+    return label[0].toLowerCase() + label.substring(1);
   }
 
   String _sourceLabel(AppLocalizations l10n, String token) => switch (token) {

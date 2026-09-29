@@ -795,7 +795,7 @@ class _ChecklistHubHeader extends StatelessWidget {
         Row(
           children: <Widget>[
             Image.asset(
-              'assets/login/figma_brand_pulse.png',
+              'assets/login/figma_brand_pulse_mark.png',
               width: 40,
               height: 28,
               fit: BoxFit.contain,

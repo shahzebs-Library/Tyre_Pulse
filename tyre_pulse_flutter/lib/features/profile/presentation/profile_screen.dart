@@ -845,84 +845,112 @@ class _ProfileStatusStrip extends StatelessWidget {
         horizontal: TpSpace.sm,
         vertical: TpSpace.md,
       ),
-      child: IntrinsicHeight(
-        child: Row(
-          children: <Widget>[
-            if (assigned
-                case final AsyncValue<MyWorkSnapshot> work) ...<Widget>[
-              Expanded(
-                child: InkWell(
-                  onTap: onOpenAssigned,
-                  borderRadius: BorderRadius.circular(TpRadius.md),
+      child: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          final int tiles = (assigned != null ? 1 : 0) +
+              2 +
+              (assigned == null ? 1 : 0) +
+              (profileStale ? 1 : 0);
+          final bool stacked = constraints.maxWidth / tiles < 136;
+          return IntrinsicHeight(
+            child: Row(
+              children: <Widget>[
+                if (assigned
+                    case final AsyncValue<MyWorkSnapshot> work) ...<Widget>[
+                  Expanded(
+                    child: InkWell(
+                      onTap: onOpenAssigned,
+                      borderRadius: BorderRadius.circular(TpRadius.md),
+                      child: _ProfileStatusItem(
+                        key: ProfileScreenKeys.assignedTile,
+                        icon: Icons.assignment_outlined,
+                        value: switch (work) {
+                          AsyncData<MyWorkSnapshot>(:final value) => () {
+                              final int n = value.items
+                                  .where((item) => item.isOpen)
+                                  .length;
+                              return value.partial ? '$n+' : '$n';
+                            }(),
+                          _ => '-',
+                        },
+                        label: l10n.profileAssignedTasks,
+                        tone: palette.ok,
+                        stacked: stacked,
+                      ),
+                    ),
+                  ),
+                  VerticalDivider(
+                    width: 1,
+                    thickness: 1,
+                    color: palette.border,
+                  ),
+                ],
+                Expanded(
                   child: _ProfileStatusItem(
-                    key: ProfileScreenKeys.assignedTile,
-                    icon: Icons.assignment_outlined,
-                    value: switch (work) {
-                      AsyncData<MyWorkSnapshot>(:final value) => () {
-                          final int n =
-                              value.items.where((item) => item.isOpen).length;
-                          return value.partial ? '$n+' : '$n';
-                        }(),
-                      _ => '-',
-                    },
-                    label: l10n.profileAssignedTasks,
-                    tone: palette.ok,
+                    key: ProfileScreenKeys.draftsTile,
+                    icon: Icons.description_outlined,
+                    value: _countText(drafts),
+                    label: l10n.clMockPendingDrafts,
+                    tone: (drafts.asData?.value ?? 0) > 0
+                        ? palette.warning
+                        : palette.info,
+                    stacked: stacked,
                   ),
                 ),
-              ),
-              VerticalDivider(width: 1, thickness: 1, color: palette.border),
-            ],
-            Expanded(
-              child: _ProfileStatusItem(
-                key: ProfileScreenKeys.draftsTile,
-                icon: Icons.description_outlined,
-                value: _countText(drafts),
-                label: l10n.clMockPendingDrafts,
-                tone: (drafts.asData?.value ?? 0) > 0
-                    ? palette.warning
-                    : palette.info,
-              ),
-            ),
-            VerticalDivider(width: 1, thickness: 1, color: palette.border),
-            Expanded(
-              child: _ProfileStatusItem(
-                icon: Icons.cloud_upload_outlined,
-                value: _countText(pendingSync),
-                label: l10n.homeSyncStatLabel,
-                tone: pending == null
-                    ? palette.neutral
-                    : pending > 0
-                        ? palette.warning
-                        : palette.ok,
-              ),
-            ),
-            // The bell in the app bar already carries the unread count; the
-            // tile only keeps its place when there is no assigned-work tile.
-            if (assigned == null) ...<Widget>[
-              VerticalDivider(width: 1, thickness: 1, color: palette.border),
-              Expanded(
-                child: _ProfileStatusItem(
-                  icon: Icons.notifications_none_rounded,
-                  value: _countText(unread),
-                  label: NotificationsCopy.of(context)('title'),
-                  tone:
-                      (unreadCount ?? 0) > 0 ? palette.critical : palette.info,
+                VerticalDivider(width: 1, thickness: 1, color: palette.border),
+                Expanded(
+                  child: _ProfileStatusItem(
+                    icon: Icons.cloud_upload_outlined,
+                    value: _countText(pendingSync),
+                    label: l10n.homeSyncStatLabel,
+                    tone: pending == null
+                        ? palette.neutral
+                        : pending > 0
+                            ? palette.warning
+                            : palette.ok,
+                    stacked: stacked,
+                  ),
                 ),
-              ),
-            ],
-            if (profileStale) ...<Widget>[
-              VerticalDivider(width: 1, thickness: 1, color: palette.border),
-              Expanded(
-                child: _ProfileStatusItem(
-                  icon: Icons.cloud_off_outlined,
-                  value: l10n.offlineTitle,
-                  label: l10n.stateOfflineCachedTitle,
-                  tone: palette.warning,
-                ),
-              ),
-            ],
-          ],
-        ),
+                // The bell in the app bar already carries the unread count; the
+                // tile only keeps its place when there is no assigned-work tile.
+                if (assigned == null) ...<Widget>[
+                  VerticalDivider(
+                    width: 1,
+                    thickness: 1,
+                    color: palette.border,
+                  ),
+                  Expanded(
+                    child: _ProfileStatusItem(
+                      icon: Icons.notifications_none_rounded,
+                      value: _countText(unread),
+                      label: NotificationsCopy.of(context)('title'),
+                      tone: (unreadCount ?? 0) > 0
+                          ? palette.critical
+                          : palette.info,
+                      stacked: stacked,
+                    ),
+                  ),
+                ],
+                if (profileStale) ...<Widget>[
+                  VerticalDivider(
+                    width: 1,
+                    thickness: 1,
+                    color: palette.border,
+                  ),
+                  Expanded(
+                    child: _ProfileStatusItem(
+                      icon: Icons.cloud_off_outlined,
+                      value: l10n.offlineTitle,
+                      label: l10n.stateOfflineCachedTitle,
+                      tone: palette.warning,
+                      stacked: stacked,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -934,6 +962,7 @@ class _ProfileStatusItem extends StatelessWidget {
     required this.label,
     required this.value,
     required this.tone,
+    this.stacked = false,
     super.key,
   });
 
@@ -942,9 +971,67 @@ class _ProfileStatusItem extends StatelessWidget {
   final String value;
   final TpStatusColors tone;
 
+  /// Icon above the number and label, for a tile too narrow to hold both
+  /// side by side (see [_ProfileStatusStrip]).
+  final bool stacked;
+
   @override
   Widget build(BuildContext context) {
     final TextTheme text = Theme.of(context).textTheme;
+    {
+      {
+        // Three or four tiles share a phone-width strip. Beside a 44pt icon
+        // a label like "Pending drafts" has under 60pt left and breaks in
+        // the middle of a word, so a narrow tile stacks the icon above the
+        // number and label instead.
+        if (stacked) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: TpSpace.xs),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: tone.soft,
+                    borderRadius: BorderRadius.circular(TpRadius.md),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(icon, size: 20, color: tone.base),
+                ),
+                const SizedBox(height: TpSpace.xs),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: text.titleLarge?.copyWith(
+                    color: tone.base,
+                    fontWeight: FontWeight.w900,
+                    height: 1.1,
+                  ),
+                ),
+                Text(
+                  label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: text.labelSmall?.copyWith(
+                    color: TpPalette.of(context).textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+        return _wide(context, text);
+      }
+    }
+  }
+
+  Widget _wide(BuildContext context, TextTheme text) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: TpSpace.sm),
       child: Row(
@@ -1566,66 +1653,72 @@ class _SettingsRow extends StatelessWidget {
           horizontal: TpSpace.md,
           vertical: TpSpace.sm,
         ),
-        child: Row(
-          children: <Widget>[
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: tone.soft,
-                shape: BoxShape.circle,
+        child: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) => Row(
+            children: <Widget>[
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: tone.soft,
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: Icon(icon, size: 20, color: tone.base),
               ),
-              alignment: Alignment.center,
-              child: Icon(icon, size: 20, color: tone.base),
-            ),
-            const SizedBox(width: TpSpace.md),
-            Expanded(
-              flex: 2,
-              child: Text(
-                label,
-                style: text.bodyMedium?.copyWith(
-                  color: palette.text,
-                  fontWeight: FontWeight.w600,
+              const SizedBox(width: TpSpace.md),
+              // The label takes whatever the value does not need, so a short
+              // value ("All", "Light") never squeezes the label onto several
+              // lines; a long value is capped at just under half the row.
+              Expanded(
+                child: Text(
+                  label,
+                  style: text.bodyMedium?.copyWith(
+                    color: palette.text,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
-            ),
-            if (value != null) ...<Widget>[
-              const SizedBox(width: TpSpace.md),
-              Expanded(
-                flex: 3,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Text(
-                      value!,
-                      textAlign: TextAlign.end,
-                      style: text.bodyMedium?.copyWith(
-                        color: valueColor ?? palette.textSecondary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    if (caption != null)
+              if (value != null) ...<Widget>[
+                const SizedBox(width: TpSpace.md),
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: constraints.maxWidth * 0.45,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
                       Text(
-                        caption!,
+                        value!,
                         textAlign: TextAlign.end,
-                        style: text.labelSmall?.copyWith(
-                          color: palette.textMuted,
+                        style: text.bodyMedium?.copyWith(
+                          color: valueColor ?? palette.textSecondary,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                  ],
+                      if (caption != null)
+                        Text(
+                          caption!,
+                          textAlign: TextAlign.end,
+                          style: text.labelSmall?.copyWith(
+                            color: palette.textMuted,
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
+              ],
+              if (onTap != null) ...<Widget>[
+                const SizedBox(width: TpSpace.xs),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: TpSizing.iconMd,
+                  color: palette.primary,
+                ),
+              ],
             ],
-            if (onTap != null) ...<Widget>[
-              const SizedBox(width: TpSpace.xs),
-              Icon(
-                Icons.chevron_right_rounded,
-                size: TpSizing.iconMd,
-                color: palette.primary,
-              ),
-            ],
-          ],
+          ),
         ),
       ),
     );

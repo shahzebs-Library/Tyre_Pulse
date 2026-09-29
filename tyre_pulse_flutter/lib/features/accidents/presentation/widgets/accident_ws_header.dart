@@ -24,6 +24,7 @@ import 'package:tyre_pulse/features/accidents/domain/accident_case_vocab.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_models.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_mock_copy.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_ui.dart';
+import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_workstream_editor.dart';
 
 /// What a line-2 segment describes; drives its icon.
 enum AccidentSlaSegmentKind { received, withTeam, sla, info }
@@ -134,7 +135,12 @@ class AccidentWorkstreamHeader extends ConsumerWidget {
                 TpStatusChip(
                   key: const Key('accident.ws.header.status'),
                   status: accidentTone(status),
-                  label: humaniseAccidentToken(status),
+                  // The editor already carries the status vocabulary in
+                  // en/ar/ur; the humaniser is English-only, which put
+                  // "In Progress" on an Arabic header.
+                  label: _localisedStatuses.contains(status)
+                      ? workstreamEditorCopy(context, status)
+                      : humaniseAccidentToken(status),
                   isCompact: true,
                 )
               else
@@ -357,3 +363,13 @@ String accidentSlaLine({
       fallbackTeam: fallbackTeam,
       now: now,
     ).map((AccidentSlaSegment s) => s.text).join(' · ');
+
+/// Workstream statuses [workstreamEditorCopy] translates.
+const Set<String> _localisedStatuses = <String>{
+  'in_progress',
+  'waiting_info',
+  'waiting_external',
+  'on_hold',
+  'completed',
+  'reopened',
+};

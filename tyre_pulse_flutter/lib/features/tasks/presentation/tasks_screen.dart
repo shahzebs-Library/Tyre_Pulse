@@ -485,14 +485,20 @@ class _TabRow extends StatelessWidget {
                   ),
                 ),
               ),
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: on ? palette.primaryDark : palette.textSecondary,
-                      fontWeight: on ? FontWeight.w800 : FontWeight.w600,
-                    ),
+              padding: const EdgeInsets.symmetric(horizontal: TpSpace.xs),
+              // Three tabs share the space left by the search and filter
+              // boxes; on a 360pt phone "Completed" would otherwise touch
+              // the border or be cut, so the label scales down instead.
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: on ? palette.primaryDark : palette.textSecondary,
+                        fontWeight: on ? FontWeight.w800 : FontWeight.w600,
+                      ),
+                ),
               ),
             ),
           ),

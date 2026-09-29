@@ -758,38 +758,42 @@ class _PeriodBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final AssetCostPeriod resolved = period.resolve(now);
-    return Row(
-      children: <Widget>[
-        Expanded(
-          child: PopupMenuButton<AssetReportPeriod>(
-            key: AssetFinancialReportKeys.period,
-            onSelected: onChanged,
-            itemBuilder: (BuildContext context) =>
-                <PopupMenuEntry<AssetReportPeriod>>[
-              for (final AssetReportPeriod p in AssetReportPeriod.values)
-                PopupMenuItem<AssetReportPeriod>(
-                  value: p,
-                  child: Text(p.label(l10n)),
-                ),
-            ],
+    // Both pills keep one height even when only one label wraps.
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Expanded(
+            child: PopupMenuButton<AssetReportPeriod>(
+              key: AssetFinancialReportKeys.period,
+              onSelected: onChanged,
+              itemBuilder: (BuildContext context) =>
+                  <PopupMenuEntry<AssetReportPeriod>>[
+                for (final AssetReportPeriod p in AssetReportPeriod.values)
+                  PopupMenuItem<AssetReportPeriod>(
+                    value: p,
+                    child: Text(p.label(l10n)),
+                  ),
+              ],
+              child: _Pill(
+                icon: Icons.calendar_month_outlined,
+                label: period.label(l10n),
+                trailing: Icons.keyboard_arrow_down_rounded,
+              ),
+            ),
+          ),
+          const SizedBox(width: TpSpace.sm),
+          Expanded(
             child: _Pill(
-              icon: Icons.calendar_month_outlined,
-              label: period.label(l10n),
-              trailing: Icons.keyboard_arrow_down_rounded,
+              icon: Icons.trending_up_rounded,
+              label: l10n.fleetMockFinVsYear(
+                '${resolved.previousYear.to.year}',
+              ),
+              muted: true,
             ),
           ),
-        ),
-        const SizedBox(width: TpSpace.sm),
-        Expanded(
-          child: _Pill(
-            icon: Icons.trending_up_rounded,
-            label: l10n.fleetMockFinVsYear(
-              '${resolved.previousYear.to.year}',
-            ),
-            muted: true,
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -810,9 +814,14 @@ class _Pill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
+    // The two pills share a phone-width row, so the label may take a second
+    // line rather than being cut to "This year to ...".
     return Container(
-      height: TpSizing.minTouchTarget,
-      padding: const EdgeInsets.symmetric(horizontal: TpSpace.md),
+      constraints: const BoxConstraints(minHeight: TpSizing.minTouchTarget),
+      padding: const EdgeInsets.symmetric(
+        horizontal: TpSpace.sm,
+        vertical: TpSpace.xs,
+      ),
       decoration: BoxDecoration(
         color: palette.surface,
         border: Border.all(color: palette.controlBorder),
@@ -825,7 +834,7 @@ class _Pill extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              maxLines: 1,
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
                     color: muted ? palette.textSecondary : palette.text,

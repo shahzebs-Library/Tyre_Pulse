@@ -25,8 +25,11 @@ class TpBrandLockup extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
+          // The transparent cut of the login pulse: the login artwork sits
+          // on an opaque navy plate made for the dark hero, which reads as a
+          // black box on the light app chrome.
           Image.asset(
-            'assets/login/figma_brand_pulse.png',
+            'assets/login/figma_brand_pulse_mark.png',
             width: compact ? 42 : 48,
             height: compact ? 24 : 28,
             fit: BoxFit.contain,

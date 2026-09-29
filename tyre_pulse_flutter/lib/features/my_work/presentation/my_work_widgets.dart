@@ -920,7 +920,7 @@ class _QueueTile extends StatelessWidget {
             Expanded(
               child: Text(
                 label,
-                maxLines: 2,
+                maxLines: 3,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.labelMedium,
               ),

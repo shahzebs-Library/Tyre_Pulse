@@ -75,7 +75,11 @@ class AssetCompositionBar extends StatelessWidget {
           borderRadius: BorderRadius.circular(TpRadius.pill),
           child: SizedBox(
             height: 14,
+            // A childless ColoredBox takes the smallest size its parent
+            // allows, so without `stretch` every slice is 0pt tall and the
+            // bar is invisible.
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
                 for (final AssetCostBucket b in present)
                   Expanded(

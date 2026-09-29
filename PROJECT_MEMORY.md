@@ -76,20 +76,50 @@ batching stops them being started at all.
 
 ---
 
-# ⚑ SESSION 2026-09-29 — 5 MORE PAGES ON THE COMMAND CENTER KIT + QR LABELS (in progress). No migration.
-Branch == PR #370. **OWNER: do NOT merge yet, keep everything on this one branch, no unnecessary scheduled jobs or
-CI-triggering pushes.** The merge-when-green trigger was deleted. Commit locally; push once at the end.
-- Rebuilt to the owner's light mockups on `commandCenter/kit.jsx` (each has a pure `src/lib/<x>View.js` + test and a
-  page css using only `--cc-*` tokens; hero art `public/dashboard/hero-{renewal,battery,history,disposal,customers}-*.webp`,
-  crops of the mockups with truck badges blurred, dark = darkened light):
-  **Fleet Renewal** (candidates from the register; ASSUMED 10-year planning life because `useful_life` is empty;
-  model_year 20222/2202 rejected; plans table empty so pipeline/CAPEX empty; "AI Recommendations" = rule based);
-  **Batteries** /batteries (existing page rebuilt; ASSUMED 36-month battery life for the forecast; no type/charge columns);
-  **Vehicle History** (unified timeline, per-currency cost, movement INFERRED from record sites, no Add Event);
-  **Asset Disposal** (40 KSA proposed rows, unvalued = 0 or blank; no reason/book value/buyer columns; Request
-  Valuation sheet re-imports; blank value cell on upload overwrites); **Customers** (0 rows; accounts and contracts
-  linked to a customer by exact normalised NAME, stated on the page; revenue/satisfaction/SLA N/A).
-- Owner to confirm: the 10-year and 36-month life assumptions.
+# ⚑ SESSION 2026-09-29 — 15+ PAGES REBUILT ON THE COMMAND CENTER KIT (owner mockups). No migration. LIVE STATUS BELOW.
+**Branch `claude/command-center-dashboard` == PR #370. OWNER RULES FOR THIS WORK (standing):**
+- **Do NOT merge PR #370 until the owner says so.** Keep ALL work on this one branch.
+- **No unnecessary tests or actions:** no scheduled jobs/triggers (the merge-when-green trigger was DELETED), no
+  repeated pushes (each push = full CI + Vercel preview). Commit locally by pathspec; push ONCE per finished batch.
+  Agents run only eslint + their own tests + one `vite build`, never the full suite.
+- **Keep this memory entry current** so the owner can clear/compact the session at any time.
+- Agent brief for every page: scratchpad `PAGES_BRIEF.md` (lost on container reset; its rules are the kit rules in
+  part 14 below + real data only / N/A / no blended currency / keep every existing capability / no raw <table>).
+
+**DONE + committed (pages on `commandCenter/kit.jsx`, each with pure `src/lib/<x>View.js` + test + page css on `--cc-*`):**
+- Fleet Renewal (ASSUMED 10-yr planning life, useful_life empty; model_year 20222/2202 rejected; plans table 0 rows).
+- Batteries /batteries = Battery Lifecycle (ASSUMED 36-month life; no type/charge columns).
+- Vehicle History (unified timeline, per-currency cost, movement INFERRED from record sites, no Add Event).
+- Asset Disposal (40 KSA proposed rows unvalued; Request Valuation sheet; blank value on upload overwrites).
+- Customers (0 rows; accounts/contracts linked by exact normalised NAME; revenue/satisfaction/SLA N/A).
+- QR Labels (label info toggles, custom width in qrLabelLayout.js; print queue/history are SESSION ONLY, no table).
+- RFID Registry: **REAL BUG FIXED** - old page read V122 columns (tag_uid/tag_epc/tyre_record_id) that the live
+  V132 `rfid_tags` does not have and inserted status 'available' (CHECK allows active/unassigned/retired) -> every
+  load and save failed in production. Keyboard-wedge scan; read success rate N/A.
+- Engine Hours: **REAL BUG FIXED** - `listEngineHours` used one .limit(1000) over ~4,883 rows; now fetchAllPages.
+- Odometer Logs (accept-but-flag; missing = no reading in 30 d; thresholds saved in browser only).
+- Fleet Utilization (asset_utilization is a SNAPSHOT per capture date, not daily; trend by capture date only).
+- Vehicle Check In/Out (expected-in DERIVED = checkout + 24 h; quick check-in closes the open checkout).
+- Vehicle Handover /handovers: 5-step wizard; **drawn signature now SAVED** (old page discarded it), rendered as
+  data-URL <img> (safe). Zones saved in `damages` jsonb.
+- Hero art `public/dashboard/hero-*.webp` = crops of the owner mockups, truck badges/brand text blurred, dark =
+  darkened light. Keys: renewal battery history disposal customers rfid reservations tyres gatepass (+ older ones).
+  When a mockup is only pasted (not on disk) there is no art: reuse an existing hero and say so.
+
+**IN PROGRESS (agents, uncommitted when this was written):** Vehicle Reservations (/reservations, clash check),
+Tyre Records (keep server paging, get_tyre_filter_options, scrap RPC, real head counts), Gate Pass (initials not
+photos, overstay = past expected out), Serial Tracker (keep scrap/unscrap tab; reuses hero-tyres).
+If the session was cleared: check `git status`, finish/verify those four, commit by pathspec, push once, keep PR open.
+
+**Flutter / Play (owner is moving Internal -> Closed testing):**
+- Checklist + all listing text: `store-assets/FLUTTER_CLOSED_TESTING.md` (owner could not find it in Play Console;
+  it is a repo file; the click paths are in it).
+- 8 real phone screenshots (1080x1920) committed in `store-assets/flutter_screenshots/` (rendered from golden-test
+  fixtures with real fonts; Mercedes badge blurred on 07).
+- **The Flutter launcher icon is still the DEFAULT FLUTTER LOGO** (android mipmap ic_launcher). New icon draft
+  (white tyre ring + lime pulse, full-bleed square 512) at scratchpad `icon/play_icon_512.png`, script `icon/icon.py`;
+  awaiting owner approval, then generate mipmaps/adaptive icon. Needs a build to reach phones - owner decides builds.
+- Flutter SDK was re-downloaded to scratchpad `flutter-sdk` (lost on container reset).
 
 ---
 

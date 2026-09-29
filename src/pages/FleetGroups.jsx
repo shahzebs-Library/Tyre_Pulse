@@ -1,165 +1,209 @@
 /**
- * FleetGroups (route /fleet-groups) - Fleet Groups / Holding-Company Hierarchy.
- * Organises fleet assets into a governed corporate/operational tree: holding
- * companies, subsidiaries, divisions, depots, cost centres, and custom groups.
- * Assets roll up through the hierarchy, so cost, budget, and utilisation can be
- * reported at any node: a single depot, a division, or the whole holding.
+ * FleetGroups (route /fleet-groups) - Fleet Groups / holding-company hierarchy,
+ * rebuilt on the shared page kit to the owner's light reference design.
  *
- * Runs on the `fleet_groups` table (V189). Real data only: KPI strip, a
- * collapsible roll-up tree, a type breakdown, data-quality findings, a sortable
- * register (EnterpriseTable), search + filters, create/edit/delete, Excel/PDF
- * export, and loading / empty / error+Retry / not-provisioned states.
+ * Runs on the `fleet_groups` table (V189). A group records its name, code,
+ * type, parent, region, manager, a typed asset COUNT, budget and status; it
+ * does NOT record a list of member assets. Per-group figures that need real
+ * assets (utilisation, issues, members, performance) therefore come from the
+ * site register: a group whose name or code is a registered site owns the
+ * assets registered at that site, and a parent owns its subtree's sites. The
+ * rule lives in src/lib/fleetGroupsView.js and is stated on screen. A group
+ * with no matched site shows N/A for those figures, never 0.
  *
- * Hierarchy maths lives in src/lib/fleetGroups.js; the KPI, register, budget and
- * export shaping lives in src/lib/fleetGroupsAnalytics.js. Budgets in different
- * currencies are never summed into one figure.
+ * Kept from the previous page: create / edit / delete, the hierarchy (register
+ * is in hierarchy order, indented by depth), data-quality findings, Excel and
+ * PDF export of the filtered register, loading / error+Retry / not-provisioned
+ * states. Budgets in different currencies are never summed.
  */
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
-  Building2, Network, Layers, Boxes, Wallet, Search, X, FileSpreadsheet,
-  FileText, Plus, Pencil, Trash2, AlertTriangle, ChevronRight, ChevronDown,
-  MapPin, User, RefreshCw, Lightbulb, PieChart, Loader2, Save,
+  Users, CheckCircle2, Truck, BarChart3, AlertTriangle, Plus, MoreVertical, Search,
+  Pencil, Trash2, Gauge, CalendarCheck, Wrench, FileText, MoreHorizontal, ChevronRight,
+  ArrowRight, MapPin, Layers, Building2, User, Calendar, Clock, Network, Bookmark,
+  RefreshCw, X, Loader2, Save, FileSpreadsheet, Info,
 } from 'lucide-react'
-import PageHeader from '../components/ui/PageHeader'
 import Modal from '../components/ui/Modal'
-import EnterpriseTable from '../components/ui/EnterpriseTable'
+import {
+  Card, CardState, Kpi, PageHero, Donut, Pager, MeterCell, KitTable, fmtInt,
+} from '../components/commandCenter/kit'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listFleetGroups, createFleetGroup, updateFleetGroup, deleteFleetGroup, GROUP_TYPES,
 } from '../lib/api/fleetGroups'
-import { buildHierarchy, rollupAssetCount } from '../lib/fleetGroups'
+import { loadGroupSites, loadMemberFleet, loadMemberSignals } from '../lib/api/fleetGroupSignals'
+import { siteRegionMap } from '../lib/api/sites'
 import {
-  filterGroups, groupRegisterRows, buildGroupKpis, buildGroupInsights, typeBreakdown,
+  filterGroups, groupRegisterRows, buildGroupKpis, buildGroupInsights,
   groupExportRows, GROUP_EXPORT_COLUMNS, groupTypeLabel,
 } from '../lib/fleetGroupsAnalytics'
-import { compareValues } from '../lib/consoleTable'
-import { colorAt } from '../lib/reportColors'
+import {
+  matchGroupSites, regionForGroup, membersFor, latestUtilByAsset, utilizationFor,
+  issuesFor, issueHeadline, hierarchyOrder, compositionSegments, lastMonths,
+  monthlyUtilization, tyresByAsset, assetKey,
+} from '../lib/fleetGroupsView'
 import { formatCurrencyCompact } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
 import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { isMissingRelation } from '../lib/api/_client'
+import './FleetGroups.css'
 
 const EMPTY_FORM = {
   group_name: '', group_code: '', group_type: '', parent_group: '',
   manager: '', region: '', asset_count: '', budget: '', currency: '', active: true, notes: '',
 }
 
-// Semantic type tint. Text label always accompanies the colour.
-const TYPE_CLS = {
-  holding: 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30',
-  subsidiary: 'bg-violet-500/15 text-violet-400 border-violet-500/30',
-  division: 'bg-sky-500/15 text-sky-400 border-sky-500/30',
-  depot: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
-  cost_center: 'bg-amber-500/15 text-amber-500 border-amber-500/30',
-  custom: 'bg-[var(--input-bg)] text-[var(--text-secondary)] border-[var(--input-border)]',
+const TYPE_TONE = {
+  holding: 'info', subsidiary: 'fg-purple', division: 'good', depot: 'orange', cost_center: 'warn', custom: 'muted',
+}
+const DONUT_COLORS = ['#16a34a', '#f59e0b', '#0d9488', '#2563eb', '#db2777', '#eab308', '#92400e', '#0f766e', '#7c3aed', '#64748b']
+const MEMBERS_RULE = 'Fleet groups store an asset count, not a member list. Members are the assets registered at the site whose name or code matches the group (a parent group includes the sites of every group beneath it).'
+const ISSUE_RULE = 'Open issues on member assets: open corrective actions, fitted tyres rated Critical, and active maintenance plans past their due date. Groups with no matched site cannot be assessed.'
+const VIEWS_KEY = 'fleetGroups.views.v1'
+
+function readViews() {
+  try { const v = JSON.parse(localStorage.getItem(VIEWS_KEY) || '[]'); return Array.isArray(v) ? v : [] } catch { return [] }
+}
+function writeViews(v) {
+  try { localStorage.setItem(VIEWS_KEY, JSON.stringify(v)) } catch { /* storage unavailable: views stay for this visit only */ }
 }
 
-const ICON_BTN = 'inline-flex items-center justify-center h-11 w-11 sm:h-9 sm:w-9 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]'
-const valueSort = (a, b, id) => compareValues(a.getValue(id), b.getValue(id))
-const blank = (v) => (v === null || v === undefined || v === '' ? undefined : v)
-const fmtInt = (v) => (v == null ? 'N/A' : Number(v).toLocaleString())
-
-function TypeBadge({ type }) {
-  if (!type) return <span className="text-[var(--text-muted)]">N/A</span>
-  return (
-    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${TYPE_CLS[type] || TYPE_CLS.custom}`}>
-      {groupTypeLabel(type)}
-    </span>
-  )
+function relTime(iso, now = Date.now()) {
+  const t = iso ? Date.parse(iso) : NaN
+  if (!Number.isFinite(t)) return 'N/A'
+  const m = Math.round((now - t) / 60000)
+  if (m < 1) return 'Just now'
+  if (m < 60) return `${m} minute${m === 1 ? '' : 's'} ago`
+  const h = Math.round(m / 60)
+  if (h < 24) return `${h} hour${h === 1 ? '' : 's'} ago`
+  const d = Math.round(h / 24)
+  if (d < 31) return `${d} day${d === 1 ? '' : 's'} ago`
+  return new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+const fmtDate = (iso) => {
+  const t = iso ? Date.parse(iso) : NaN
+  return Number.isFinite(t) ? new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A'
 }
 
-function Kpi({ label, value, sub, icon: Icon, tone }) {
+/** Popover menu positioned against the viewport so a scrolling table never clips it. */
+function Menu({ label, trigger, items, className = 'cc-icon-btn', align = 'right', children }) {
+  const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState(null)
+  const btn = useRef(null)
+  const pop = useRef(null)
+  const place = useCallback(() => {
+    const r = btn.current?.getBoundingClientRect()
+    if (!r) return
+    setPos({ top: r.bottom + 4, left: align === 'right' ? undefined : r.left, right: align === 'right' ? window.innerWidth - r.right : undefined })
+  }, [align])
+  useEffect(() => {
+    if (!open) return undefined
+    place()
+    const onDoc = (e) => { if (!pop.current?.contains(e.target) && !btn.current?.contains(e.target)) setOpen(false) }
+    const onKey = (e) => { if (e.key === 'Escape') { setOpen(false); btn.current?.focus() } }
+    const onScroll = () => setOpen(false)
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
+    window.addEventListener('resize', onScroll)
+    window.addEventListener('scroll', onScroll, true)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('keydown', onKey)
+      window.removeEventListener('resize', onScroll)
+      window.removeEventListener('scroll', onScroll, true)
+    }
+  }, [open, place])
+  useEffect(() => { if (open) pop.current?.querySelector('button,a,input')?.focus() }, [open, pos])
   return (
-    <div className="card min-w-0">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs text-[var(--text-muted)] truncate">{label}</p>
-        <Icon size={16} className={tone} aria-hidden="true" />
-      </div>
-      <p className={`text-2xl font-bold mt-1 tabular-nums break-words ${tone}`}>{value}</p>
-      {sub && <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{sub}</p>}
-    </div>
-  )
-}
-
-/** Recursive tree row. Shows own + rolled-up asset counts and supports collapse. */
-function TreeNode({ node, rows, depth, currency, onEdit }) {
-  const [open, setOpen] = useState(true)
-  const g = node.group
-  const hasKids = node.children.length > 0
-  const own = g.asset_count == null || g.asset_count === '' ? null : Number(g.asset_count) || 0
-  const rolled = rollupAssetCount(rows, g.group_name)
-  const budget = g.budget == null || g.budget === '' ? null : Number(g.budget) || 0
-
-  return (
-    <li>
-      <div
-        className="flex items-center gap-2 py-1.5 pr-1 rounded-lg hover:bg-[var(--input-bg)]/50 group min-w-0"
-        style={{ paddingLeft: `${Math.min(depth, 8) * 16 + 4}px` }}
-      >
-        {hasKids ? (
-          <button
-            type="button"
-            onClick={() => setOpen((o) => !o)}
-            className={ICON_BTN}
-            aria-expanded={open}
-            aria-label={`${open ? 'Collapse' : 'Expand'} ${g.group_name}`}
-          >
-            {open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
-          </button>
-        ) : (
-          <span className="w-11 sm:w-9 shrink-0" aria-hidden="true" />
-        )}
-        <Network size={14} className="text-[var(--text-muted)] shrink-0" aria-hidden="true" />
-        <span className="font-medium text-[var(--text-primary)] truncate">{g.group_name}</span>
-        {g.group_code && <span className="hidden md:inline text-[11px] text-[var(--text-muted)] font-mono shrink-0">#{g.group_code}</span>}
-        <span className="hidden sm:inline"><TypeBadge type={g.group_type} /></span>
-        {g.active === false && (
-          <span className="text-[10px] uppercase tracking-wide text-[var(--text-muted)] border border-[var(--input-border)] rounded px-1.5 py-0.5 shrink-0">Inactive</span>
-        )}
-        <div className="ml-auto flex items-center gap-2 shrink-0">
-          <span className="text-xs text-[var(--text-muted)] whitespace-nowrap tabular-nums">
-            <span className="text-[var(--text-secondary)] font-semibold">{rolled.toLocaleString()}</span> assets
-            {hasKids && own != null && own !== rolled && <span className="hidden sm:inline opacity-80"> ({own.toLocaleString()} own)</span>}
-          </span>
-          {budget != null && (
-            <span className="text-xs text-[var(--text-secondary)] whitespace-nowrap hidden md:inline">
-              {formatCurrencyCompact(budget, g.currency || currency)}
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={() => onEdit(g)}
-            className={`${ICON_BTN} sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100`}
-            aria-label={`Edit ${g.group_name}`}
-          >
-            <Pencil size={13} />
-          </button>
-        </div>
-      </div>
-      {hasKids && open && (
-        <ul>
-          {node.children.map((child) => (
-            <TreeNode key={child.group.id} node={child} rows={rows} depth={depth + 1} currency={currency} onEdit={onEdit} />
+    <>
+      <button ref={btn} type="button" className={className} aria-label={label} aria-haspopup="menu" aria-expanded={open}
+        onClick={(e) => { e.stopPropagation(); setOpen((o) => !o) }}>
+        {trigger}
+      </button>
+      {open && pos && (
+        <div ref={pop} className="fg-menu" role="menu" style={{ top: pos.top, left: pos.left, right: pos.right }} onClick={(e) => e.stopPropagation()}>
+          {children}
+          {(items || []).filter(Boolean).map((it) => (
+            <button key={it.label} type="button" role="menuitem" className={`fg-menu-item ${it.danger ? 'danger' : ''}`} disabled={it.disabled}
+              onClick={() => { setOpen(false); it.onClick() }}>
+              {it.icon && <it.icon size={14} aria-hidden="true" />} {it.label}
+            </button>
           ))}
-        </ul>
+        </div>
       )}
-    </li>
+    </>
+  )
+}
+
+function TypePill({ type }) {
+  if (!type) return <span className="cc-na">N/A</span>
+  return <span className={`cc-pill ${TYPE_TONE[type] || 'muted'}`}>{groupTypeLabel(type)}</span>
+}
+
+/** Monthly utilisation bars (0 to 100%). A month with no snapshot is a gap. */
+function UtilBars({ series }) {
+  const W = 290; const H = 160; const L = 32; const B = 24; const T = 8
+  const plotH = H - B - T
+  const step = (W - L) / Math.max(series.length, 1)
+  const barW = Math.min(34, step * 0.56)
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="fg-bars" role="img"
+      aria-label={series.map((s) => `${s.label} ${s.value == null ? 'no data' : `${Math.round(s.value)}%`}`).join(', ')}>
+      {[0, 25, 50, 75, 100].map((v) => {
+        const y = T + plotH - (v / 100) * plotH
+        return (
+          <g key={v}>
+            <line x1={L} x2={W} y1={y} y2={y} className="fg-grid" />
+            <text x={L - 6} y={y + 3} textAnchor="end" className="fg-axis">{v}%</text>
+          </g>
+        )
+      })}
+      {series.map((s, i) => {
+        const x = L + i * step + (step - barW) / 2
+        const h = s.value == null ? 0 : (Math.max(0, Math.min(100, s.value)) / 100) * plotH
+        return (
+          <g key={s.month}>
+            {s.value == null
+              ? <text x={x + barW / 2} y={T + plotH - 4} textAnchor="middle" className="fg-axis">N/A</text>
+              : <rect x={x} y={T + plotH - h} width={barW} height={h} rx="3" style={{ fill: 'var(--cc-green)' }}><title>{`${s.label}: ${Math.round(s.value)}% from ${s.samples} snapshot(s)`}</title></rect>}
+            <text x={x + barW / 2} y={H - 6} textAnchor="middle" className="fg-axis">{s.label}</text>
+          </g>
+        )
+      })}
+    </svg>
   )
 }
 
 export default function FleetGroups() {
   const { activeCountry, activeCurrency } = useSettings()
   const currency = activeCurrency || 'SAR'
+  const countryScope = activeCountry && activeCountry !== 'All' ? activeCountry : ''
+  const [params, setParams] = useSearchParams()
+  const search = params.get('q') || ''
+  const typeFilter = params.get('type') || ''
+  const regionFilter = params.get('region') || ''
+  const activeFilter = params.get('status') || ''
+  const page = Math.max(0, Number(params.get('page')) || 0)
+  const pageSize = [10, 25, 50].includes(Number(params.get('size'))) ? Number(params.get('size')) : 10
+  const selectedId = params.get('g') || ''
+
+  const setParam = useCallback((patch, keepPage = false) => {
+    setParams((prev) => {
+      const next = new URLSearchParams(prev)
+      for (const [k, v] of Object.entries(patch)) {
+        if (v === '' || v == null) next.delete(k); else next.set(k, String(v))
+      }
+      if (!keepPage && !('page' in patch)) next.delete('page')
+      return next
+    }, { replace: true })
+  }, [setParams])
+
   const [rows, setRows] = useState(null)
   const [error, setError] = useState('')
   const [actionError, setActionError] = useState('')
   const [notProvisioned, setNotProvisioned] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  const [updatedAt, setUpdatedAt] = useState(null)
-
-  const [typeFilter, setTypeFilter] = useState('')
-  const [activeFilter, setActiveFilter] = useState('')
-  const [search, setSearch] = useState('')
 
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -169,73 +213,157 @@ export default function FleetGroups() {
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [deleteError, setDeleteError] = useState('')
   const [deleting, setDeleting] = useState(false)
+  const [checked, setChecked] = useState(() => new Set())
+
+  const [views, setViews] = useState(readViews)
+  const [viewName, setViewName] = useState('')
+
+  const [perfMonths, setPerfMonths] = useState(6)
+  const [membersGroupId, setMembersGroupId] = useState('')
+  const [membersPage, setMembersPage] = useState(0)
+  const membersRef = useRef(null)
 
   const load = useCallback(async () => {
     setRefreshing(true); setError(''); setNotProvisioned(false)
     try {
       const data = await listFleetGroups({ country: activeCountry })
       setRows(Array.isArray(data) ? data : [])
-      setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) { setNotProvisioned(true); setRows([]) }
-      else { setError(toUserMessage(err, 'Could not load fleet groups.')); setRows((prev) => prev) }
+      else setError(toUserMessage(err, 'Could not load fleet groups.'))
     } finally {
       setRefreshing(false)
     }
   }, [activeCountry])
-
   useEffect(() => { load() }, [load])
 
   const loading = rows === null && !error
   const all = useMemo(() => rows || [], [rows])
+
+  // Linked registers: site register, member fleet, member signals.
+  const [linked, setLinked] = useState({ loading: true, error: null, sites: [], fleet: [], signals: null })
+  const [linkNonce, setLinkNonce] = useState(0)
+  useEffect(() => {
+    if (rows === null) return undefined
+    let alive = true
+    setLinked((s) => ({ ...s, loading: true, error: null }))
+    ;(async () => {
+      try {
+        const sites = await loadGroupSites({ country: activeCountry })
+        const matched = matchGroupSites(rows, sites)
+        const siteNames = [...new Set([...matched.values()].flat())]
+        const fleet = await loadMemberFleet(siteNames, { country: activeCountry })
+        const signals = await loadMemberSignals(fleet.map((a) => a.asset_no), { country: activeCountry })
+        if (alive) setLinked({ loading: false, error: null, sites, fleet, signals })
+      } catch (e) {
+        if (alive) setLinked({ loading: false, error: toUserMessage(e, 'Could not load the linked fleet data.'), sites: [], fleet: [], signals: null })
+      }
+    })()
+    return () => { alive = false }
+  }, [rows, activeCountry, linkNonce])
+  const retryLinked = () => setLinkNonce((n) => n + 1)
+
+  const regionMap = useMemo(() => siteRegionMap(linked.sites), [linked.sites])
+  const matched = useMemo(() => matchGroupSites(all, linked.sites), [all, linked.sites])
+  const latestUtil = useMemo(() => latestUtilByAsset(linked.signals?.util || []), [linked.signals])
+  const tyreCounts = useMemo(() => tyresByAsset(linked.signals?.tyres || []), [linked.signals])
+
+  // Per-group derived view, keyed by id.
+  const derived = useMemo(() => {
+    const map = new Map()
+    for (const g of all) {
+      const sites = matched.get(g.id) || []
+      const members = membersFor(sites, linked.fleet, countryScope ? '' : (g.country || ''))
+      const util = sites.length ? utilizationFor(members, latestUtil) : { value: null, measured: 0, total: 0 }
+      const issues = sites.length && linked.signals ? issuesFor(members, linked.signals) : null
+      map.set(g.id, { sites, members, util, issues, region: regionForGroup(g, sites, regionMap) })
+    }
+    return map
+  }, [all, matched, linked.fleet, linked.signals, latestUtil, regionMap, countryScope])
+
   const kpi = useMemo(() => buildGroupKpis(all, currency), [all, currency])
   const insights = useMemo(() => buildGroupInsights(all, currency), [all, currency])
-  const tree = useMemo(() => buildHierarchy(all), [all])
-  const types = useMemo(() => typeBreakdown(all), [all])
 
-  const parentOptions = useMemo(
-    () => [...new Set(all.map((r) => r.group_name).filter(Boolean))].sort(),
-    [all],
+  const grouped = useMemo(() => {
+    const assets = new Map()
+    for (const d of derived.values()) for (const a of d.members) assets.set(`${assetKey(a.asset_no)}|${a.country || ''}`, a)
+    const list = [...assets.values()]
+    const u = utilizationFor(list, latestUtil)
+    let withIssues = 0; let assessed = 0
+    for (const d of derived.values()) {
+      if (d.issues?.total != null) { assessed += 1; if (d.issues.total > 0) withIssues += 1 }
+    }
+    return { matchedAssets: list.length, util: u, withIssues, assessed }
+  }, [derived, latestUtil])
+
+  const regionOptions = useMemo(() => {
+    const s = new Set()
+    for (const d of derived.values()) if (d.region.region) s.add(d.region.region)
+    return [...s].sort((a, b) => a.localeCompare(b))
+  }, [derived])
+
+  const filtered = useMemo(() => {
+    const base = filterGroups(all, { type: typeFilter, active: activeFilter, search })
+    return regionFilter ? base.filter((g) => derived.get(g.id)?.region.region === regionFilter) : base
+  }, [all, typeFilter, activeFilter, search, regionFilter, derived])
+
+  const register = useMemo(() => {
+    const keep = new Set(filtered.map((g) => g.id))
+    const enriched = new Map(groupRegisterRows(filtered, all).map((r) => [r.id, r]))
+    return hierarchyOrder(all).filter((x) => keep.has(x.row.id)).map((x) => ({ ...enriched.get(x.row.id), depth: x.depth }))
+  }, [filtered, all])
+
+  const pages = Math.max(1, Math.ceil(register.length / pageSize))
+  const safePage = Math.min(page, pages - 1)
+  const pageRows = register.slice(safePage * pageSize, safePage * pageSize + pageSize)
+
+  const selected = useMemo(
+    () => all.find((g) => String(g.id) === selectedId) || register[0] || null,
+    [all, selectedId, register],
   )
+  const selectedReg = useMemo(() => (selected ? groupRegisterRows([selected], all)[0] : null), [selected, all])
+  const selD = selected ? derived.get(selected.id) : null
 
-  const filtered = useMemo(
-    () => filterGroups(all, { type: typeFilter, active: activeFilter, search }),
-    [all, typeFilter, activeFilter, search],
-  )
-  const register = useMemo(() => groupRegisterRows(filtered, all), [filtered, all])
+  const membersGroup = all.find((g) => String(g.id) === membersGroupId) || selected
+  const membersD = membersGroup ? derived.get(membersGroup.id) : null
+  useEffect(() => { setMembersPage(0) }, [membersGroupId, selected?.id])
 
-  const budgetLabel = kpi.budget.total != null
-    ? formatCurrencyCompact(kpi.budget.total, kpi.budget.currency)
-    : 'N/A'
-  const budgetSub = kpi.budget.mixed
-    ? `Mixed currencies: ${kpi.budget.totals.map((t) => formatCurrencyCompact(t.total, t.currency)).join(' + ')}`
-    : kpi.budgetCoverage != null ? `${Math.round(kpi.budgetCoverage * 100)}% of groups budgeted` : null
+  const segments = useMemo(() => compositionSegments(all, DONUT_COLORS), [all])
+  const segTotal = segments.reduce((s, x) => s + x.count, 0)
 
-  const kpis = [
-    { label: 'Total groups', value: kpi.total.toLocaleString(), icon: Boxes, tone: 'text-[var(--text-primary)]', sub: `${kpi.inactive} inactive` },
-    { label: 'Active groups', value: kpi.active.toLocaleString(), icon: Building2, tone: 'text-emerald-500' },
-    { label: 'Root entities', value: kpi.roots.toLocaleString(), icon: Network, tone: 'text-sky-500', sub: kpi.maxDepth != null ? `Depth ${kpi.maxDepth}` : null },
-    { label: 'Assets grouped', value: fmtInt(kpi.totalAssets), icon: Layers, tone: 'text-violet-500', sub: kpi.assetCoverage != null && kpi.assetCoverage < 1 ? `${Math.round(kpi.assetCoverage * 100)}% of groups report a count` : null },
-    { label: 'Total budget', value: budgetLabel, icon: Wallet, tone: 'text-amber-500', sub: budgetSub },
-  ]
+  const months = useMemo(() => lastMonths(perfMonths), [perfMonths])
+  const perfSeries = useMemo(() => {
+    if (!selD) return []
+    return monthlyUtilization(selD.members, linked.signals?.util || [], months).map((m) => ({
+      ...m, label: new Date(`${m.month}-01T00:00:00`).toLocaleDateString('en-GB', { month: 'short' }),
+    }))
+  }, [selD, linked.signals, months])
+  const perfHasData = perfSeries.some((s) => s.value != null)
 
-  // Export walks the full filtered register, never just the visible page.
-  const exportRows = useMemo(() => groupExportRows(filtered, all, currency), [filtered, all, currency])
-  const scopeLabel = activeCountry && activeCountry !== 'All' ? activeCountry : 'All countries'
-  const doExcel = async () => {
+  const topIssues = useMemo(() => all
+    .map((g) => ({ g, iss: derived.get(g.id)?.issues }))
+    .filter((x) => x.iss?.total > 0)
+    .sort((a, b) => b.iss.total - a.iss.total || String(a.g.group_name).localeCompare(String(b.g.group_name)))
+    .slice(0, 5), [all, derived])
+
+  // Exports walk the full filtered register (or the ticked rows), never one page.
+  const scopeLabel = countryScope || 'All countries'
+  const exportRowsFor = (list) => groupExportRows(list, all, currency)
+  const doExcel = async (list = filtered) => {
     setActionError('')
     try {
-      await exportToExcel(exportRows, GROUP_EXPORT_COLUMNS.map((c) => c.key), GROUP_EXPORT_COLUMNS.map((c) => c.header), reportFileName('Fleet Groups', scopeLabel))
+      await exportToExcel(exportRowsFor(list), GROUP_EXPORT_COLUMNS.map((c) => c.key), GROUP_EXPORT_COLUMNS.map((c) => c.header), reportFileName('Fleet Groups', scopeLabel))
     } catch (e) { setActionError(toUserMessage(e, 'Could not export. Try again.')) }
   }
-  const doPdf = async () => {
+  const doPdf = async (list = filtered) => {
     setActionError('')
     try {
-      await exportToPdf(exportRows, GROUP_EXPORT_COLUMNS, `Fleet Groups Hierarchy (${scopeLabel})`, reportFileName('Fleet Groups', scopeLabel), 'landscape')
+      await exportToPdf(exportRowsFor(list), GROUP_EXPORT_COLUMNS, `Fleet Groups Hierarchy (${scopeLabel})`, reportFileName('Fleet Groups', scopeLabel), 'landscape')
     } catch (e) { setActionError(toUserMessage(e, 'Could not export. Try again.')) }
   }
 
-  // ── Modal ────────────────────────────────────────────────────────────────
+  // Create / edit / delete (unchanged behaviour).
+  const parentOptions = useMemo(() => [...new Set(all.map((r) => r.group_name).filter(Boolean))].sort(), [all])
   const openCreate = () => { setEditing(null); setForm(EMPTY_FORM); setFormError(''); setShowModal(true) }
   const openEdit = useCallback((r) => {
     setEditing(r)
@@ -250,7 +378,6 @@ export default function FleetGroups() {
   }, [])
   const closeModal = () => { if (!saving) { setShowModal(false); setEditing(null) } }
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
-
   const submit = useCallback(async (e) => {
     e?.preventDefault?.()
     setFormError('')
@@ -284,8 +411,10 @@ export default function FleetGroups() {
     if (!confirmDelete) return
     setDeleting(true); setDeleteError('')
     try {
-      await deleteFleetGroup(confirmDelete.id)
+      const targets = confirmDelete.bulk || [confirmDelete]
+      for (const t of targets) await deleteFleetGroup(t.id)
       setConfirmDelete(null)
+      setChecked(new Set())
       await load()
     } catch (err) {
       setDeleteError(toUserMessage(err, 'Could not delete the group.'))
@@ -294,234 +423,382 @@ export default function FleetGroups() {
     }
   }, [confirmDelete, load])
 
-  const clearFilters = () => { setTypeFilter(''); setActiveFilter(''); setSearch('') }
-  const hasFilters = typeFilter || activeFilter || search
+  const selectGroup = (g) => setParam({ g: g.id }, true)
+  const hasFilters = search || typeFilter || regionFilter || activeFilter
+  const clearFilters = () => setParam({ q: '', type: '', region: '', status: '' })
 
-  const columns = useMemo(() => [
+  const saveView = () => {
+    const name = viewName.trim()
+    if (!name) return
+    const next = [...views.filter((v) => v.name !== name), { name, params: { q: search, type: typeFilter, region: regionFilter, status: activeFilter } }]
+    setViews(next); writeViews(next); setViewName('')
+  }
+  const applyView = (v) => setParam({ q: v.params.q || '', type: v.params.type || '', region: v.params.region || '', status: v.params.status || '' })
+  const removeView = (name) => { const next = views.filter((v) => v.name !== name); setViews(next); writeViews(next) }
+
+  const toggle = (id) => setChecked((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const pageIds = pageRows.map((r) => r.id)
+  const allOnPage = pageIds.length > 0 && pageIds.every((id) => checked.has(id))
+  const toggleAll = () => setChecked((prev) => {
+    const n = new Set(prev)
+    if (allOnPage) pageIds.forEach((id) => n.delete(id)); else pageIds.forEach((id) => n.add(id))
+    return n
+  })
+  const checkedRows = all.filter((g) => checked.has(g.id))
+
+  const linkedState = { loading: linked.loading, error: linked.error, retry: retryLinked, data: linked.loading ? null : true }
+  const noMatches = !linked.loading && ![...derived.values()].some((d) => d.sites.length)
+
+  const kpis = [
+    { icon: Users, tone: 't-green', value: kpi.total, label: 'Total Groups', title: `${kpi.inactive} inactive. Depth ${kpi.maxDepth ?? 0}, ${kpi.roots} top-level group(s).` },
+    { icon: CheckCircle2, tone: 't-green', value: kpi.active, label: 'Active Groups', title: 'Groups marked active.' },
+    { icon: Truck, tone: 't-green', value: kpi.totalAssets, label: 'Grouped Assets', title: kpi.totalAssets == null ? 'No group records an asset count yet.' : `Sum of each group's own recorded asset count (children are not counted twice).${kpi.assetCoverage != null && kpi.assetCoverage < 1 ? ` ${Math.round(kpi.assetCoverage * 100)}% of groups record a count.` : ''}` },
     {
-      id: 'group_name', header: 'Group', accessorFn: (r) => blank(r.group_name), sortingFn: valueSort, sortUndefined: 'last', size: 220,
-      cell: ({ row }) => {
-        const r = row.original
+      icon: BarChart3, tone: 't-green', label: 'Avg. Utilization',
+      display: linked.loading ? '...' : grouped.util.value == null ? 'N/A' : `${Math.round(grouped.util.value)}%`,
+      title: grouped.util.value == null
+        ? 'No grouped asset has a telematics utilisation snapshot. Groups link to assets through the site register.'
+        : `Mean of the latest telematics utilisation for ${grouped.util.measured} of ${grouped.matchedAssets} grouped asset(s) with a snapshot.`,
+    },
+    {
+      icon: AlertTriangle, tone: 't-red', danger: true, label: 'Groups with Issues',
+      display: linked.loading ? '...' : grouped.assessed ? fmtInt(grouped.withIssues) : 'N/A',
+      title: `${ISSUE_RULE} ${grouped.assessed} group(s) could be assessed.`,
+    },
+  ]
+
+  const na = (t = 'N/A') => <span className="cc-na">{t}</span>
+  const groupColumns = [
+    {
+      key: '_sel', sortable: false,
+      header: <input type="checkbox" aria-label="Select all groups on this page" checked={allOnPage} onChange={toggleAll} />,
+      cell: (r) => <span onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Select ${r.group_name}`} checked={checked.has(r.id)} onChange={() => toggle(r.id)} /></span>,
+    },
+    {
+      key: 'group_name', header: 'Group Name',
+      cell: (r) => (
+        <span className="fg-name" style={{ paddingLeft: Math.min(r.depth || 0, 6) * 14 }}>
+          {r.depth > 0 && <span className="fg-branch" aria-hidden="true" />}
+          <button type="button" className="fg-name-btn" onClick={(e) => { e.stopPropagation(); selectGroup(r) }}>{r.group_name || 'N/A'}</button>
+        </span>
+      ),
+    },
+    { key: 'group_code', header: 'Code', cell: (r) => r.group_code || na() },
+    { key: 'group_type', header: 'Type', cell: (r) => <TypePill type={r.group_type} /> },
+    { key: 'region', header: 'Region', cell: (r) => { const d = derived.get(r.id); return <span title={d?.region.derived ? 'From the site register' : undefined}>{d?.region.region || na()}</span> } },
+    {
+      key: 'assets', header: 'Assets', align: 'right',
+      cell: (r) => (
+        <span className="cc-strong" title={r.ownAssets != null && r.ownAssets !== r.rolledAssets ? `${fmtInt(r.ownAssets)} own, ${fmtInt(r.rolledAssets)} including child groups` : 'Recorded asset count, including child groups'}>
+          {r.ownAssets == null && !r.rolledAssets ? na() : fmtInt(r.rolledAssets)}
+        </span>
+      ),
+    },
+    {
+      key: 'util', header: 'Utilization',
+      cell: (r) => { const d = derived.get(r.id); return <span title={d?.sites.length ? `${d.util.measured} of ${d.util.total} member asset(s) have a snapshot` : MEMBERS_RULE}>{linked.loading ? na('...') : <MeterCell value={d?.util.value} suffix="%" />}</span> },
+    },
+    { key: 'status', header: 'Status', cell: (r) => <span className={`cc-pill ${r.isActive ? 'good' : 'muted'}`}>{r.isActive ? 'Active' : 'Inactive'}</span> },
+    {
+      key: 'issues', header: 'Issues',
+      cell: (r) => {
+        const d = derived.get(r.id)
         return (
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="font-medium text-[var(--text-primary)] truncate">{r.group_name || 'N/A'}</span>
-            {r.group_code && <span className="text-[11px] text-[var(--text-muted)] font-mono">#{r.group_code}</span>}
-            {!r.isActive && <span className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">inactive</span>}
-          </div>
-        )
-      },
-    },
-    { id: 'type', header: 'Type', accessorFn: (r) => (r.group_type ? r.typeLabel : undefined), sortingFn: valueSort, sortUndefined: 'last', size: 120, cell: ({ row }) => <TypeBadge type={row.original.group_type} /> },
-    {
-      id: 'parent', header: 'Parent', accessorFn: (r) => blank(r.parent_group), sortingFn: valueSort, sortUndefined: 'last', size: 160,
-      cell: ({ row }) => <span className="text-[var(--text-secondary)]">{row.original.parent_group || <span className="text-[var(--text-muted)]">Top level</span>}</span>,
-    },
-    { id: 'depth', header: 'Depth', accessorFn: (r) => r.depth ?? undefined, sortingFn: valueSort, sortUndefined: 'last', size: 70, meta: { align: 'right' }, cell: ({ getValue }) => <span className="tabular-nums">{getValue() ?? 'N/A'}</span> },
-    {
-      id: 'manager', header: 'Manager', accessorFn: (r) => blank(r.manager), sortingFn: valueSort, sortUndefined: 'last', size: 150,
-      cell: ({ row }) => row.original.manager ? <span className="inline-flex items-center gap-1 text-[var(--text-secondary)]"><User size={12} className="opacity-60" aria-hidden="true" />{row.original.manager}</span> : <span className="text-[var(--text-muted)]">N/A</span>,
-    },
-    {
-      id: 'region', header: 'Region', accessorFn: (r) => blank(r.region), sortingFn: valueSort, sortUndefined: 'last', size: 140,
-      cell: ({ row }) => row.original.region ? <span className="inline-flex items-center gap-1 text-[var(--text-secondary)]"><MapPin size={12} className="opacity-60" aria-hidden="true" />{row.original.region}</span> : <span className="text-[var(--text-muted)]">N/A</span>,
-    },
-    {
-      id: 'rolled', header: 'Assets (rolled)', accessorFn: (r) => r.rolledAssets, sortingFn: valueSort, size: 130, meta: { align: 'right' },
-      cell: ({ row }) => {
-        const r = row.original
-        return (
-          <span className="tabular-nums font-semibold text-[var(--text-primary)]">
-            {r.rolledAssets.toLocaleString()}
-            {r.ownAssets != null && r.ownAssets !== r.rolledAssets && <span className="text-xs text-[var(--text-muted)] font-normal"> / {fmtInt(r.ownAssets)} own</span>}
+          <span title={d?.issues ? `${d.issues.actions ?? 'N/A'} open action(s), ${d.issues.tyres ?? 'N/A'} critical tyre(s), ${d.issues.pm ?? 'N/A'} overdue plan(s)` : 'No matched site, so issues cannot be measured'}>
+            {d?.issues?.total == null ? na(linked.loading ? '...' : 'N/A') : <span className={`fg-count ${d.issues.total > 0 ? 'bad' : 'ok'}`}>{d.issues.total}</span>}
           </span>
         )
       },
     },
     {
-      id: 'budget', header: 'Budget', accessorFn: (r) => r.budgetValue ?? undefined, sortingFn: valueSort, sortUndefined: 'last', size: 120, meta: { align: 'right' },
-      cell: ({ row }) => <span className="tabular-nums text-[var(--text-secondary)] whitespace-nowrap">{row.original.budgetValue == null ? 'N/A' : formatCurrencyCompact(row.original.budgetValue, row.original.currency || currency)}</span>,
-    },
-    {
-      id: 'actions', header: '', enableSorting: false, size: 100, meta: { export: false },
-      cell: ({ row }) => (
-        <div className="flex items-center justify-end gap-1">
-          <button type="button" onClick={() => openEdit(row.original)} className={ICON_BTN} aria-label={`Edit ${row.original.group_name}`}><Pencil size={14} /></button>
-          <button type="button" onClick={() => { setDeleteError(''); setConfirmDelete(row.original) }} className={`${ICON_BTN} hover:text-red-500`} aria-label={`Delete ${row.original.group_name}`}><Trash2 size={14} /></button>
-        </div>
+      key: '_actions', header: 'Actions', sortable: false,
+      cell: (r) => (
+        <span onClick={(e) => e.stopPropagation()}>
+          <Menu label={`Actions for ${r.group_name}`} className="fg-row-btn" trigger={<MoreHorizontal size={16} aria-hidden="true" />} items={[
+            { label: 'View details', icon: Info, onClick: () => selectGroup(r) },
+            { label: 'Edit group', icon: Pencil, onClick: () => openEdit(r) },
+            { label: 'Delete group', icon: Trash2, danger: true, onClick: () => { setDeleteError(''); setConfirmDelete(r) } },
+          ]} />
+        </span>
       ),
     },
-  ], [currency, openEdit])
-
-  const maxTypeCount = Math.max(1, ...types.map((t) => t.count))
-
+  ]
+  const memberColumns = [
+    { key: 'asset_no', header: 'Asset ID', cell: (a) => <Link className="fg-link" to={`/asset-management/${encodeURIComponent(a.asset_no)}`}>{a.asset_no}</Link> },
+    { key: 'make', header: 'Make / Model', cell: (a) => [a.make, a.model].filter(Boolean).join(' ') || na() },
+    { key: 'fleet_number', header: 'Fleet No.', cell: (a) => a.fleet_number || na() },
+    { key: 'site', header: 'Site', cell: (a) => a.site || na() },
+    { key: 'tyres', header: 'Tyres', align: 'right', cell: (a) => (linked.signals?.tyres == null ? na() : fmtInt(tyreCounts.get(assetKey(a.asset_no)) || 0)) },
+    {
+      key: 'status', header: 'Status',
+      cell: (a) => {
+        const st = a.ops_status || a.status || ''
+        const tone = /inactive|scrap|breakdown/i.test(st) ? 'bad' : /maint|repair|idle|reallocation/i.test(st) ? 'warn' : st ? 'good' : 'muted'
+        return st ? <span className={`cc-pill ${tone}`}>{st.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase())}</span> : na()
+      },
+    },
+  ]
   return (
-    <div className="space-y-6">
-      <PageHeader
+    <div className="cc fg-page">
+      <PageHero
         title="Fleet Groups"
-        subtitle="Model your holding-company hierarchy (subsidiaries, divisions, depots, and cost centres) and roll up assets, budget, and utilisation across every level."
-        icon={Network}
-        onRefresh={load}
-        refreshing={refreshing}
-        updatedAt={updatedAt}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={doExcel} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] sm:min-h-0" disabled={!filtered.length}>
-              <FileSpreadsheet size={14} aria-hidden="true" /> Excel
-            </button>
-            <button type="button" onClick={doPdf} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] sm:min-h-0" disabled={!filtered.length}>
-              <FileText size={14} aria-hidden="true" /> PDF
-            </button>
-            <button type="button" onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px] sm:min-h-0" disabled={notProvisioned}>
-              <Plus size={14} aria-hidden="true" /> New group
-            </button>
-          </div>
-        }
+        lead={<>Organize, monitor and optimize your fleet by group.<span className="fg-lead-2">Group assets by operation, region, customer or any structure that fits your business.</span></>}
+        imgLight="/dashboard/hero-groups-light.webp"
+        imgDark="/dashboard/hero-groups-dark.webp"
       />
 
       {notProvisioned && (
-        <div className="card border border-amber-500/40 flex items-start gap-3" role="status">
-          <AlertTriangle size={18} className="text-amber-500 mt-0.5 shrink-0" aria-hidden="true" />
-          <div>
-            <p className="text-[var(--text-primary)] font-medium">Fleet Groups is not enabled on this database yet.</p>
-            <p className="text-[var(--text-muted)] text-sm mt-1">
-              Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V189_FLEET_GROUPS.sql</span>, then reload.
-            </p>
-          </div>
+        <div className="cc-card fg-banner warn" role="status">
+          <AlertTriangle size={17} aria-hidden="true" />
+          <div><b>Fleet Groups is not enabled on this database yet.</b><p>Apply MIGRATIONS_V189_FLEET_GROUPS.sql, then reload.</p></div>
         </div>
       )}
-
       {error && (
-        <div className="card border border-red-500/40 flex flex-wrap items-start gap-3" role="alert">
-          <AlertTriangle size={18} className="text-red-500 mt-0.5 shrink-0" aria-hidden="true" />
-          <div className="flex-1 min-w-0">
-            <p className="text-[var(--text-primary)] font-medium">Could not load fleet groups.</p>
-            <p className="text-[var(--text-muted)] text-sm mt-1">{error}</p>
-          </div>
-          <button type="button" onClick={load} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] sm:min-h-0"><RefreshCw size={14} aria-hidden="true" /> Retry</button>
+        <div className="cc-card fg-banner bad" role="alert">
+          <AlertTriangle size={17} aria-hidden="true" />
+          <div><b>Could not load fleet groups.</b><p>{error}</p></div>
+          <button type="button" className="cc-btn-ghost" onClick={load}><RefreshCw size={14} aria-hidden="true" /> Retry</button>
         </div>
       )}
-
       {actionError && (
-        <div className="card border border-red-500/40 flex items-start gap-3" role="alert">
-          <AlertTriangle size={18} className="text-red-500 mt-0.5 shrink-0" aria-hidden="true" />
-          <p className="text-sm text-[var(--text-secondary)] flex-1">{actionError}</p>
-          <button type="button" onClick={() => setActionError('')} className={ICON_BTN} aria-label="Dismiss message"><X size={14} /></button>
+        <div className="cc-card fg-banner bad" role="alert">
+          <AlertTriangle size={17} aria-hidden="true" />
+          <div><p>{actionError}</p></div>
+          <button type="button" className="cc-icon-btn" onClick={() => setActionError('')} aria-label="Dismiss message"><X size={14} /></button>
         </div>
       )}
 
-      {/* KPI strip: covers every group in scope (filters only narrow the register). */}
-      <section aria-label="Fleet group figures">
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
-          {kpis.map((k) => <Kpi key={k.label} {...k} value={loading || (rows === null) ? 'N/A' : k.value} sub={loading ? null : k.sub} />)}
-        </div>
-        <p className="text-[11px] text-[var(--text-muted)] mt-2">Figures cover all {kpi.total.toLocaleString()} group(s) in {scopeLabel}. Filters below narrow the register only.</p>
-      </section>
+      <div className="cc-kpis fg-kpis">
+        {kpis.map((k) => <Kpi key={k.label} {...k} loading={loading} />)}
+      </div>
 
-      {!loading && insights.length > 0 && (
-        <div className="card">
-          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-2 flex items-center gap-2"><Lightbulb size={15} className="text-amber-500" aria-hidden="true" /> Findings</h2>
-          <ul className="space-y-1.5">
-            {insights.map((s) => (
-              <li key={s} className="text-sm text-[var(--text-secondary)] flex items-start gap-2">
-                <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" aria-hidden="true" /> {s}
+      <div className="fg-layout">
+        <div className="fg-main">
+          <Card
+            className="fg-registry"
+            title="Group Registry"
+            sub="All fleet groups across your organization."
+            action={
+              <div className="fg-head-actions">
+                <Menu label="Saved views" className="cc-btn-ghost" align="right" trigger={<><Bookmark size={14} aria-hidden="true" /> Saved Views</>}>
+                  <div className="fg-menu-section">
+                    {views.length === 0 && <p className="fg-menu-note">No saved views yet.</p>}
+                    {views.map((v) => (
+                      <div key={v.name} className="fg-menu-row">
+                        <button type="button" role="menuitem" className="fg-menu-item" onClick={() => applyView(v)}>{v.name}</button>
+                        <button type="button" className="fg-menu-x" aria-label={`Delete view ${v.name}`} onClick={() => removeView(v.name)}><X size={12} /></button>
+                      </div>
+                    ))}
+                  </div>
+                  <form className="fg-menu-save" onSubmit={(e) => { e.preventDefault(); saveView() }}>
+                    <label htmlFor="fg-view-name" className="sr-only">View name</label>
+                    <input id="fg-view-name" value={viewName} maxLength={40} onChange={(e) => setViewName(e.target.value)} placeholder="Save current filters as..." />
+                    <button type="submit" className="cc-btn" disabled={!viewName.trim()}>Save</button>
+                  </form>
+                </Menu>
+                <button type="button" className="cc-btn-primary" onClick={openCreate} disabled={notProvisioned}><Plus size={15} aria-hidden="true" /> Create Group</button>
+                <Menu label="More registry actions" trigger={<MoreVertical size={15} aria-hidden="true" />} items={[
+                  { label: 'Export Excel', icon: FileSpreadsheet, onClick: () => doExcel(), disabled: !filtered.length },
+                  { label: 'Export PDF', icon: FileText, onClick: () => doPdf(), disabled: !filtered.length },
+                  { label: refreshing ? 'Refreshing...' : 'Refresh', icon: RefreshCw, onClick: () => { load(); retryLinked() } },
+                ]} />
+              </div>
+            }
+          >
+            <div className="fg-registry-body">
+              <div className="fg-registry-table">
+                <div className="cc-filters fg-filters">
+                  <div className="cc-search">
+                    <Search size={15} aria-hidden="true" />
+                    <label htmlFor="fg-search" className="sr-only">Search groups</label>
+                    <input id="fg-search" value={search} onChange={(e) => setParam({ q: e.target.value })} placeholder="Search groups by name, code or description..." />
+                  </div>
+                  <select className="cc-select" aria-label="Group type" value={typeFilter} onChange={(e) => setParam({ type: e.target.value })}>
+                    <option value="">All group types</option>
+                    {GROUP_TYPES.map((t) => <option key={t} value={t}>{groupTypeLabel(t)}</option>)}
+                  </select>
+                  <select className="cc-select" aria-label="Region" value={regionFilter} onChange={(e) => setParam({ region: e.target.value })}>
+                    <option value="">All regions</option>
+                    {regionOptions.map((r) => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                  <select className="cc-select" aria-label="Status" value={activeFilter} onChange={(e) => setParam({ status: e.target.value })}>
+                    <option value="">Status: All</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                  {hasFilters && <button type="button" className="cc-btn-ghost" onClick={clearFilters}><X size={13} aria-hidden="true" /> Clear</button>}
+                </div>
+
+                {checked.size > 0 && (
+                  <div className="cc-bulk">
+                    <span className="cc-bulk-count">{checked.size} selected</span>
+                    <button type="button" className="cc-btn-ghost" onClick={() => doExcel(checkedRows)}><FileSpreadsheet size={14} aria-hidden="true" /> Export selected</button>
+                    <button type="button" className="cc-btn-ghost fg-danger" onClick={() => { setDeleteError(''); setConfirmDelete({ bulk: checkedRows, group_name: `${checkedRows.length} groups` }) }}><Trash2 size={14} aria-hidden="true" /> Delete selected</button>
+                    <button type="button" className="cc-btn-ghost" onClick={() => setChecked(new Set())}>Clear selection</button>
+                  </div>
+                )}
+
+                <CardState
+                  state={{ loading, error: error && rows === null ? error : null, retry: load, data: rows }}
+                  empty={register.length === 0 ? (all.length === 0 ? (notProvisioned ? 'Fleet Groups is not enabled yet.' : 'No groups yet. Create your first group.') : 'No groups match these filters.') : null}
+                  lines={8}
+                >
+                  <KitTable className="fg-table" manualPagination showPagination={false} enableSorting={false}
+                    pageIndex={safePage} pageSize={pageSize} pageCount={Math.max(1, Math.ceil(register.length / pageSize))}
+                    totalRows={register.length} getRowId={(r) => String(r.id)} onRowClick={selectGroup}
+                    rows={pageRows} columns={groupColumns} />
+                  <Pager page={safePage} pageSize={pageSize} total={register.length} noun="groups"
+                    onPage={(p) => setParam({ page: p || '' }, true)}
+                    onPageSize={(s) => setParam({ size: s === 10 ? '' : s })} sizes={[10, 25, 50]} />
+                </CardState>
+                {insights.length > 0 && (
+                  <details className="fg-notes">
+                    <summary><Info size={13} aria-hidden="true" /> {insights.length} data note{insights.length === 1 ? '' : 's'}</summary>
+                    <ul>{insights.map((s) => <li key={s}>{s}</li>)}</ul>
+                  </details>
+                )}
+              </div>
+
+              <section className="fg-comp" aria-label="Fleet composition by group">
+                <div className="cc-card-head">
+                  <div>
+                    <h3 className="cc-card-title">Fleet Composition by Group</h3>
+                    <p className="cc-card-sub">Share of recorded assets.</p>
+                  </div>
+                </div>
+                {loading ? <div className="cc-skel" style={{ height: 200 }} />
+                  : segments.length === 0 ? <div className="cc-empty">No group records an asset count yet.</div>
+                    : <Donut segments={segments} total={segTotal} centerLabel="Assets"
+                      onSelect={(s) => { const g = all.find((x) => x.group_name === s.label); if (g) selectGroup(g) }} />}
+              </section>
+            </div>
+          </Card>
+
+          <div className="fg-bottom">
+            <Card
+              title="Group Performance"
+              sub={selected ? selected.group_name : 'Utilization by month'}
+              action={
+                <select className="cc-select" aria-label="Performance period" value={perfMonths} onChange={(e) => setPerfMonths(Number(e.target.value))}>
+                  <option value={3}>Last 3 months</option>
+                  <option value={6}>Last 6 months</option>
+                  <option value={12}>Last 12 months</option>
+                </select>
+              }
+            >
+              <CardState state={linkedState} lines={4}
+                empty={!selected ? 'Select a group to see its performance.'
+                  : !selD?.sites.length ? 'This group matches no registered site, so it has no measured members.'
+                    : !perfHasData ? 'No telematics utilisation snapshot was captured for this group\'s assets in this period.' : null}>
+                <div className="fg-perf">
+                  <UtilBars series={perfSeries} />
+                  <p className="fg-foot"><span className="fg-dot" aria-hidden="true" /> Utilization (mean of telematics snapshots). No monthly tyre health index is recorded, so none is drawn.</p>
+                </div>
+              </CardState>
+            </Card>
+
+            <Card
+              title="Group Members & Assets"
+              action={
+                <select className="cc-select fg-member-select" aria-label="Group for members" value={membersGroup?.id || ''} onChange={(e) => setMembersGroupId(e.target.value)}>
+                  {all.map((g) => <option key={g.id} value={g.id}>{g.group_name}{g.group_code ? ` (${g.group_code})` : ''}</option>)}
+                </select>
+              }
+            >
+              <div ref={membersRef} id="fg-members" />
+              <CardState state={linkedState} lines={5}
+                empty={!membersGroup ? 'No groups yet.'
+                  : !membersD?.sites.length ? <span title={MEMBERS_RULE}>No registered site matches this group, so no member assets can be listed. Name the group or its code after a site in Site Management.</span>
+                    : membersD.members.length === 0 ? `No assets are registered at ${membersD.sites.join(', ')}.` : null}>
+                {membersD && (
+                  <>
+                    <KitTable compact className="fg-members" getRowId={(a) => String(a.id)}
+                      rows={membersD.members.slice(membersPage * 5, membersPage * 5 + 5)} columns={memberColumns} />
+                    <div className="fg-card-foot">
+                      <span>Showing {fmtInt(Math.min(membersD.members.length, membersPage * 5 + 1))} to {fmtInt(Math.min(membersD.members.length, membersPage * 5 + 5))} of {fmtInt(membersD.members.length)} assets</span>
+                      <span className="fg-mini-pager">
+                        <button type="button" className="cc-icon-btn" aria-label="Previous members" disabled={membersPage === 0} onClick={() => setMembersPage((p) => p - 1)}><ChevronRight size={14} style={{ transform: 'rotate(180deg)' }} /></button>
+                        <button type="button" className="cc-icon-btn" aria-label="Next members" disabled={(membersPage + 1) * 5 >= membersD.members.length} onClick={() => setMembersPage((p) => p + 1)}><ChevronRight size={14} /></button>
+                      </span>
+                    </div>
+                  </>
+                )}
+              </CardState>
+            </Card>
+
+            <Card title="Top Issues by Group" sub="Open right now" action={<span className="fg-info" title={ISSUE_RULE}><Info size={14} aria-label="How issues are counted" /></span>}>
+              <CardState state={linkedState} lines={5}
+                empty={noMatches ? 'No group matches a registered site, so issues cannot be measured yet.'
+                  : topIssues.length === 0 ? 'No open issues on grouped assets.' : null}>
+                <ul className="fg-issues">
+                  {topIssues.map(({ g, iss }) => (
+                    <li key={g.id}>
+                      <button type="button" onClick={() => selectGroup(g)}>
+                        <span className="fg-issue-name">{g.group_name}</span>
+                        <span className="fg-count bad">{iss.total}</span>
+                        <span className="fg-issue-text">{issueHeadline(iss)}</span>
+                        <ChevronRight size={14} className="cc-chev" aria-hidden="true" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <Link to="/actions" className="cc-link fg-view-all">View all issues <ArrowRight size={13} aria-hidden="true" /></Link>
+              </CardState>
+            </Card>
+          </div>
+        </div>
+
+        <aside className="fg-rail">
+          <Card title="Group Insights" className="fg-insights">
+            {loading ? <CardState state={{ loading: true }} lines={6} />
+              : !selected ? <div className="cc-empty">No group selected.</div>
+                : (
+                  <>
+                    <div className="fg-ins-head">
+                      <span className="cc-kpi-icon t-green"><Users size={20} aria-hidden="true" /></span>
+                      <div className="fg-ins-title">
+                        <b>{selected.group_name}</b>
+                        <span>{selected.group_code || 'No code'}</span>
+                      </div>
+                      <span className={`cc-pill ${selected.active !== false ? 'good' : 'muted'}`}>{selected.active !== false ? 'Active' : 'Inactive'}</span>
+                    </div>
+                    <dl className="fg-ins-list">
+                      <div><dt><Layers size={14} aria-hidden="true" /> Type</dt><dd>{selected.group_type ? groupTypeLabel(selected.group_type) : 'N/A'}</dd></div>
+                      <div><dt><MapPin size={14} aria-hidden="true" /> Region</dt><dd title={selD?.region.derived ? 'From the site register' : undefined}>{selD?.region.region || 'N/A'}</dd></div>
+                      <div><dt><Network size={14} aria-hidden="true" /> Parent</dt><dd>{selected.parent_group || 'Top level'}</dd></div>
+                      <div><dt><Truck size={14} aria-hidden="true" /> Assets</dt><dd title="Recorded count including child groups">{selectedReg?.ownAssets == null && !selectedReg?.rolledAssets ? 'N/A' : `${fmtInt(selectedReg?.rolledAssets)} vehicles`}</dd></div>
+                      <div><dt><Building2 size={14} aria-hidden="true" /> Sites</dt><dd title={selD?.sites.length ? `${selD.sites.join(', ')}. ${selD.members.length} asset(s) registered there.` : MEMBERS_RULE}>{linked.loading ? '...' : selD?.sites.length ? `${selD.sites.length} site${selD.sites.length === 1 ? '' : 's'}` : 'None matched'}</dd></div>
+                      <div><dt><User size={14} aria-hidden="true" /> Manager</dt><dd>{selected.manager || 'N/A'}</dd></div>
+                      <div><dt><FileText size={14} aria-hidden="true" /> Budget</dt><dd>{selectedReg?.budgetValue == null ? 'N/A' : formatCurrencyCompact(selectedReg.budgetValue, selected.currency || currency)}</dd></div>
+                      <div><dt><Calendar size={14} aria-hidden="true" /> Created</dt><dd>{fmtDate(selected.created_at)}</dd></div>
+                      <div><dt><Clock size={14} aria-hidden="true" /> Last updated</dt><dd>{relTime(selected.updated_at)}</dd></div>
+                    </dl>
+                    <button type="button" className="cc-btn fg-details-btn" onClick={() => { setMembersGroupId(String(selected.id)); membersRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }) }}>
+                      View Group Details <ArrowRight size={14} aria-hidden="true" />
+                    </button>
+                  </>
+                )}
+          </Card>
+
+          <Card title="Quick Actions">
+            <ul className="fg-quick">
+              <li><button type="button" disabled={!selected} onClick={() => selected && openEdit(selected)}><Pencil size={16} aria-hidden="true" /> Edit Group <ChevronRight size={14} className="cc-chev" aria-hidden="true" /></button></li>
+              <li><Link to="/fleet-master" title="Members follow each asset's site, which is set in Fleet Master"><Users size={16} aria-hidden="true" /> Manage Members <ChevronRight size={14} className="cc-chev" aria-hidden="true" /></Link></li>
+              <li><Link to="/tyre-lifecycle"><Gauge size={16} aria-hidden="true" /> View Tyre Health <ChevronRight size={14} className="cc-chev" aria-hidden="true" /></Link></li>
+              <li><Link to="/inspection-planner"><CalendarCheck size={16} aria-hidden="true" /> Schedule Inspection <ChevronRight size={14} className="cc-chev" aria-hidden="true" /></Link></li>
+              <li><Link to="/pm-programs"><Wrench size={16} aria-hidden="true" /> Create Maintenance Plan <ChevronRight size={14} className="cc-chev" aria-hidden="true" /></Link></li>
+              <li><button type="button" disabled={!filtered.length} onClick={() => doExcel()}><FileText size={16} aria-hidden="true" /> Export Report <ChevronRight size={14} className="cc-chev" aria-hidden="true" /></button></li>
+              <li>
+                <Menu label="More actions" className="fg-quick-more" align="right" trigger={<><MoreHorizontal size={16} aria-hidden="true" /> More Actions <ChevronRight size={14} className="cc-chev" aria-hidden="true" /></>} items={[
+                  { label: 'Export PDF', icon: FileText, onClick: () => doPdf(), disabled: !filtered.length },
+                  { label: 'Create group', icon: Plus, onClick: openCreate, disabled: notProvisioned },
+                  selected && { label: 'Delete selected group', icon: Trash2, danger: true, onClick: () => { setDeleteError(''); setConfirmDelete(selected) } },
+                ]} />
               </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        {/* Hierarchy tree */}
-        <div className="card xl:col-span-2 min-w-0">
-          <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
-            <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
-              <Network size={15} aria-hidden="true" /> Organisation hierarchy
-            </h2>
-            {all.length > 0 && (
-              <span className="text-xs text-[var(--text-muted)]">Depth {kpi.maxDepth ?? 0} | {kpi.roots} root{kpi.roots === 1 ? '' : 's'}</span>
-            )}
-          </div>
-          {loading ? (
-            <div className="space-y-2" aria-busy="true">
-              {[0, 1, 2].map((i) => <div key={i} className="h-8 bg-[var(--input-bg)] rounded animate-pulse" />)}
-            </div>
-          ) : error && rows === null ? (
-            <p className="text-sm text-[var(--text-muted)] py-6 text-center">The hierarchy could not be loaded. Use Retry above.</p>
-          ) : tree.length === 0 ? (
-            <div className="py-10 text-center text-[var(--text-muted)]">
-              <Network size={26} className="mx-auto mb-2 opacity-60" aria-hidden="true" />
-              <p className="text-sm">{notProvisioned ? 'Enable the module to start building your hierarchy.' : 'No groups yet. Create a holding company or division to begin.'}</p>
-            </div>
-          ) : (
-            <ul className="max-h-[480px] overflow-y-auto -mx-1" aria-label="Group hierarchy">
-              {tree.map((node) => (
-                <TreeNode key={node.group.id} node={node} rows={all} depth={0} currency={currency} onEdit={openEdit} />
-              ))}
             </ul>
-          )}
-        </div>
-
-        {/* Type breakdown */}
-        <div className="card min-w-0">
-          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2"><PieChart size={15} aria-hidden="true" /> Groups by type</h2>
-          {loading ? (
-            <div className="h-32 bg-[var(--input-bg)] rounded animate-pulse" />
-          ) : types.length === 0 ? (
-            <p className="text-sm text-[var(--text-muted)]">No groups to break down yet.</p>
-          ) : (
-            <ul className="space-y-3">
-              {types.map((t, i) => (
-                <li key={t.type || 'none'}>
-                  <div className="flex items-center justify-between text-xs mb-1 gap-2">
-                    <button type="button" onClick={() => setTypeFilter(t.type)} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] underline-offset-2 hover:underline truncate" disabled={!t.type} aria-label={`Filter register to ${t.label}`}>{t.label}</button>
-                    <span className="tabular-nums text-[var(--text-primary)] font-semibold">{t.count} <span className="font-normal text-[var(--text-muted)]">| {t.assetsKnown ? `${t.assets.toLocaleString()} assets` : 'no asset count'}</span></span>
-                  </div>
-                  <div className="h-2 rounded-full bg-[var(--input-bg)] overflow-hidden" aria-hidden="true">
-                    <div className="h-full rounded-full" style={{ width: `${Math.max(4, Math.round((t.count / maxTypeCount) * 100))}%`, background: colorAt(i) }} />
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+          </Card>
+        </aside>
       </div>
-
-      {/* Filters */}
-      <div className="card">
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="relative flex-1 min-w-[200px]">
-            <label htmlFor="fg-search" className="sr-only">Search groups</label>
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
-            <input id="fg-search" className="input pl-9 w-full" placeholder="Search group, code, manager, region..." value={search} onChange={(e) => setSearch(e.target.value)} />
-          </div>
-          <select className="input w-full sm:w-auto" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Group type">
-            <option value="">All types</option>
-            {GROUP_TYPES.map((t) => <option key={t} value={t}>{groupTypeLabel(t)}</option>)}
-          </select>
-          <select className="input w-full sm:w-auto" value={activeFilter} onChange={(e) => setActiveFilter(e.target.value)} aria-label="Status">
-            <option value="">All statuses</option>
-            <option value="active">Active only</option>
-            <option value="inactive">Inactive only</option>
-          </select>
-          {hasFilters && <button type="button" onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] sm:min-h-0"><X size={14} aria-hidden="true" /> Clear</button>}
-          <span className="text-xs text-[var(--text-muted)] ml-auto" aria-live="polite">{filtered.length} of {kpi.total}</span>
-        </div>
-      </div>
-
-      <EnterpriseTable
-        columns={columns}
-        data={register}
-        getRowId={(r) => String(r.id)}
-        loading={loading}
-        error={error && rows === null ? error : null}
-        onRetry={load}
-        enableGlobalFilter={false}
-        enableColumnFilters={false}
-        enableExport={false}
-        viewKey="fleet-groups"
-        initialPageSize={25}
-        emptyMessage={all.length === 0 && !notProvisioned ? 'No groups yet. Create your first group.' : notProvisioned ? 'Fleet Groups is not enabled yet.' : 'No groups match these filters.'}
-      />
 
       {showModal && (
         <Modal open onClose={closeModal} size="lg" title={editing ? 'Edit group' : 'New fleet group'}>
@@ -530,6 +807,7 @@ export default function FleetGroups() {
               <div>
                 <label className="label" htmlFor="fg-name">Group name *</label>
                 <input id="fg-name" className="input w-full" placeholder="e.g. Gulf Logistics Holding" value={form.group_name} maxLength={200} required onChange={(e) => set('group_name', e.target.value)} />
+                <p className="text-[11px] text-[var(--text-muted)] mt-1">Use a site name (or code) to link the group to that site&apos;s assets.</p>
               </div>
               <div>
                 <label className="label" htmlFor="fg-code">Group code (optional)</label>
@@ -583,13 +861,11 @@ export default function FleetGroups() {
               <input type="checkbox" className="accent-indigo-500 h-4 w-4" checked={form.active} onChange={(e) => set('active', e.target.checked)} />
               Active group
             </label>
-
             {formError && (
               <div role="alert" className="flex items-start gap-2 text-sm text-red-500 bg-red-500/10 border border-red-500/40 rounded-lg px-3 py-2">
                 <AlertTriangle size={15} className="mt-0.5 shrink-0" aria-hidden="true" /> {formError}
               </div>
             )}
-
             <div className="flex items-center justify-end gap-2 pt-1">
               <button type="button" onClick={closeModal} className="btn-secondary text-sm min-h-[44px] sm:min-h-0" disabled={saving}>Cancel</button>
               <button type="submit" className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60 min-h-[44px] sm:min-h-0" disabled={saving}>
@@ -606,7 +882,7 @@ export default function FleetGroups() {
           open
           onClose={closeDelete}
           size="sm"
-          title="Delete this group?"
+          title={confirmDelete.bulk ? 'Delete these groups?' : 'Delete this group?'}
           footer={
             <>
               <button type="button" onClick={closeDelete} className="btn-secondary text-sm" disabled={deleting}>Cancel</button>

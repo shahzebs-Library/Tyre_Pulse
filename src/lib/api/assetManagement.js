@@ -14,7 +14,7 @@
  * `Promise.allSettled` / `.then`). Country filtering stays client-side in the
  * page (unchanged). Additive only.
  */
-import { supabase, fetchAllPages, applyCountry } from './_client'
+import { supabase, fetchAllPages, applyCountry, isMissingColumn } from './_client'
 
 // Explicit column list (no SELECT *) — least-privilege + stable shape. `is_active`
 // is surfaced as `active` so the registry/detail keep their existing field name.
@@ -34,10 +34,42 @@ function toFleetRow(payload = {}) {
   return row
 }
 
-/** All fleet assets from vehicle_fleet, ordered by asset number. Paged past the 1000-row cap. */
-export function listFleetMaster() {
+// Operational state (V539) and the three compliance expiry dates (V330) the
+// register's filters read. Optional: if a database lacks them the read falls
+// back to FLEET_COLS instead of failing the whole register.
+const FLEET_EXTRA_COLS = ',ops_status,ops_status_note,insurance_expiry,mvip_expiry,operating_card_expiry'
+
+function readFleet(cols) {
   return fetchAllPages((from, to) =>
-    supabase.from('vehicle_fleet').select(FLEET_COLS).order('asset_no').order('id').range(from, to))
+    supabase.from('vehicle_fleet').select(cols).order('asset_no').order('id').range(from, to))
+}
+
+/** All fleet assets from vehicle_fleet, ordered by asset number. Paged past the 1000-row cap. */
+export async function listFleetMaster() {
+  const res = await readFleet(FLEET_COLS + FLEET_EXTRA_COLS)
+  if (res?.error && isMissingColumn(res.error)) return readFleet(FLEET_COLS)
+  return res
+}
+
+/**
+ * Inspections for a short list of assets (one register page), newest first.
+ * Bounded: the caller passes one page of codes. `truncated` is true when the
+ * row limit was reached, so an asset missing from the result is "not checked"
+ * rather than "never inspected".
+ */
+export const INSPECTION_LOOKUP_LIMIT = 500
+export async function listLatestInspections(assetNos, country) {
+  const codes = [...new Set((assetNos || []).filter(Boolean))]
+  if (!codes.length) return { rows: [], truncated: false }
+  const { data, error } = await applyCountry(supabase
+    .from('inspections')
+    .select('asset_no,country,inspection_date,completed_date')
+    .in('asset_no', codes), country)
+    .order('inspection_date', { ascending: false, nullsFirst: false })
+    .limit(INSPECTION_LOOKUP_LIMIT)
+  if (error) throw error
+  const rows = data || []
+  return { rows, truncated: rows.length >= INSPECTION_LOOKUP_LIMIT }
 }
 
 /** Per-asset overview aggregates via RPC (country passed straight through). */

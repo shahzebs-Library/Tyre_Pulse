@@ -190,6 +190,7 @@ import { useFilterState } from '../hooks/useFilterState'
 const PAGE_DEFAULTS = {
   AssetManagement: {
     search: '', site: '', country: '', type: '', status: '', risk: '', ops: '',
+    cat: '', health: '', comp: '', cell: '',
     sort: 'asset_no', dir: 'asc', page: '1',
   },
   DriverManagement: {

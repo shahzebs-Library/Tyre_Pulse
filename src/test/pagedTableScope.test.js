@@ -104,11 +104,11 @@ const CASES = [
   {
     file: 'pages/AssetManagement.jsx',
     what: 'the table body renders the page',
-    // CONTRACT MOVED, deliberately: the register is an EnterpriseTable handed
-    // the URL-borne PAGE (the shared TablePagination bar still owns paging,
+    // CONTRACT MOVED, deliberately (2026-09-28 redesign): the register is a
+    // kit table whose body maps the URL-borne PAGE (the kit Pager owns paging,
     // and the URL sort orders the whole filtered set first).
-    required: 'data={pageAssets}',
-    forbidden: 'data={filteredAssets}',
+    required: 'rows={pageAssets}',
+    forbidden: 'rows={filteredAssets}',
   },
 
   // ── Accidents: EnterpriseTable owns the paging; it is handed everything ───
@@ -176,16 +176,18 @@ describe('paged registers: the page narrows the screen, never the export or the 
    * reader meets the same control on every table; a page that hand-rolls its
    * own drifts in size, in labelling and in whether it clamps.
    */
+  // AssetManagement moved to the redesign kit's numbered Pager (shared by the
+  // Command Center, Fleet Master and Asset Management), so it imports that.
   const SHARED_BAR = [
-    { file: 'pages/WorkshopManagement.jsx', uses: '<TablePagination {...jobsPager} />' },
-    { file: 'pages/AssetManagement.jsx', uses: '<TablePagination' },
+    { file: 'pages/WorkshopManagement.jsx', uses: '<TablePagination {...jobsPager} />', from: "from '../components/ui/TablePagination'" },
+    { file: 'pages/AssetManagement.jsx', uses: '<Pager ', from: "from '../components/commandCenter/kit'" },
   ]
 
   for (const c of SHARED_BAR) {
     it(`${c.file}: renders the shared pagination bar`, () => {
       const src = read(c.file)
       expect(
-        src.includes("from '../components/ui/TablePagination'"),
+        src.includes(c.from),
         `${c.file} stopped importing the shared pager`,
       ).toBe(true)
       expect(src.includes(c.uses), `${c.file} stopped rendering ${c.uses}`).toBe(true)

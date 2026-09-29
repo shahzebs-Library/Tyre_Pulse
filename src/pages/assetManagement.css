@@ -1,0 +1,156 @@
+/* Asset Management: the redesigned register, built on the Command Center kit
+   (commandCenter.css tokens). Light and dark read the same layout because every
+   colour here is a --cc-* token or a hue legible on both surfaces. */
+
+.am-page { max-width: 1800px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+.am-note { font-size: 11.5px; color: var(--cc-ink-3); margin: 8px 0 0; line-height: 1.45; }
+.am-scope { margin: -6px 0 0; }
+.am-alert { flex-direction: row; align-items: center; gap: 10px; color: var(--cc-red); font-size: 13px; }
+.am-alert span { flex: 1; }
+
+/* Filter row */
+.am-filters { align-items: flex-end; }
+.am-filters .cc-search { flex: 1 1 200px; min-width: 180px; max-width: 340px; align-self: flex-end; }
+.am-filters .cc-field { min-width: 108px; flex: 0 1 140px; }
+.am-filter-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
+.am-refresh { width: 36px; height: 36px; }
+.am-refresh:disabled { opacity: .5; cursor: not-allowed; }
+.am-spin { animation: am-spin 1s linear infinite; }
+@keyframes am-spin { to { transform: rotate(360deg); } }
+.am-more { margin-top: -4px; padding: 10px 12px; border: 1px dashed var(--cc-inner-border); border-radius: 10px; }
+.am-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: -4px; }
+
+/* Overview cards row */
+.am-cards { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.05fr); gap: 14px; }
+.am-card { min-height: 270px; }
+.am-comp .cc-donut-wrap { display: flex; align-items: center; gap: 22px; }
+.am-comp .cc-legend-table { flex: 1; min-width: 0; }
+
+/* Health x utilisation grid */
+.am-heat-wrap { display: flex; align-items: stretch; gap: 6px; }
+.am-heat-axis-y { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 11px; font-weight: 600; color: var(--cc-ink-2); text-align: center; }
+.am-heat { flex: 1; min-width: 0; }
+.am-heat .cc-heat-y small, .am-heat .cc-heat-x small { display: block; font-size: 10px; color: var(--cc-ink-3); }
+.am-heat .cc-heat-cell { min-height: 48px; transition: transform .12s ease, box-shadow .12s ease; }
+.am-heat .cc-heat-cell:hover { transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0, 0, 0, .18); }
+.am-heat-on { outline: 2px solid var(--cc-ink); outline-offset: -2px; }
+.am-heat-axis-x { font-size: 11.5px; font-weight: 600; color: var(--cc-ink-2); text-align: center; margin: 4px 0 0; }
+.am-heat-g1 { background: #86efac; }
+.am-heat-g2 { background: #6ee7a0; }
+.am-heat-a1 { background: #fde68a; }
+.am-heat-a2 { background: #fcd34d; }
+.am-heat-o1 { background: #fdba74; }
+.am-heat-r1 { background: #fecaca; }
+.am-heat-r2 { background: #fca5a5; }
+.am-heat-r3 { background: #f87171; }
+.cc .am-heat .cc-heat-cell { color: #0f172a; }
+html:not(.light) .am-heat-g1 { background: rgba(74, 222, 128, .55); }
+html:not(.light) .am-heat-g2 { background: rgba(74, 222, 128, .7); }
+html:not(.light) .am-heat-a1 { background: rgba(250, 204, 21, .55); }
+html:not(.light) .am-heat-a2 { background: rgba(250, 204, 21, .7); }
+html:not(.light) .am-heat-o1 { background: rgba(251, 146, 60, .7); }
+html:not(.light) .am-heat-r1 { background: rgba(248, 113, 113, .45); }
+html:not(.light) .am-heat-r2 { background: rgba(248, 113, 113, .6); }
+html:not(.light) .am-heat-r3 { background: rgba(248, 113, 113, .78); }
+html:not(.light) .cc .am-heat .cc-heat-cell { color: #f8fafc; text-shadow: 0 1px 1px rgba(0, 0, 0, .35); }
+
+/* Trend */
+.am-trend-legend { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12px; color: var(--cc-ink-2); margin-bottom: 4px; }
+.am-trend-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.am-trend-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.am-trend-legend b { color: var(--cc-ink); font-weight: 600; }
+.am-trend { height: 180px; }
+.am-trend svg { width: 100%; height: 100%; display: block; }
+
+/* Registry */
+.am-registry .cc-card-head { align-items: center; }
+.am-count { font-weight: 500; color: var(--cc-ink-3); font-size: 13px; }
+.am-head-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.am-sel { font-size: 12.5px; color: var(--cc-ink-2); }
+.am-table td { padding-top: 7px; padding-bottom: 7px; }
+.am-table tbody tr:focus-visible { outline: 2px solid var(--cc-green); outline-offset: -2px; }
+.am-col-check { width: 34px; }
+.am-col-actions { width: 60px; text-align: center; }
+.am-sort { color: var(--cc-ink-3); opacity: .7; }
+.am-sort-on { color: var(--cc-green); }
+.am-trunc { display: inline-block; max-width: 170px; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
+.am-cond { min-width: 72px; justify-content: center; border-radius: 6px; }
+.am-insp { display: inline-flex; gap: 14px; align-items: center; }
+.am-insp-st { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--cc-ink-2); }
+.am-insp-st i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.am-insp-st.is-good i { background: var(--cc-green); }
+.am-insp-st.is-bad i { background: var(--cc-red); }
+.am-insp-st.is-bad { color: var(--cc-red); }
+.am-dots { border-color: transparent; background: transparent; }
+.cc-disabled { opacity: .5; }
+.cc-btn-ghost:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Portalled popovers carry the .cc token scope themselves. */
+.am-pop {
+  position: fixed; z-index: 70; display: flex; flex-direction: column; gap: 2px; padding: 8px;
+  background: var(--cc-card-flat); border: 1px solid var(--cc-inner-border); border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .28); overflow-y: auto;
+}
+html.light .am-pop { background: #fff; box-shadow: 0 12px 32px rgba(16, 24, 40, .14); }
+.am-pop-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--cc-ink-3); margin: 2px 6px 4px; }
+.am-pop-empty { font-size: 11.5px; color: var(--cc-ink-3); margin: 4px 6px; }
+.am-pop-item { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; font-size: 13px; color: var(--cc-ink); background: none; border: 0; border-radius: 8px; padding: 7px 8px; cursor: pointer; }
+.am-pop-item:hover, .am-pop-item:focus-visible { background: var(--cc-green-tint); outline: none; }
+.am-pop-row { display: flex; align-items: center; gap: 4px; }
+.am-pop-row .am-pop-item { flex: 1; }
+.am-pop-save { display: flex; gap: 6px; margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--cc-inner-border); }
+.am-pop-save input { flex: 1; min-width: 0; font-size: 12.5px; color: var(--cc-ink); background: var(--cc-inner); border: 1px solid var(--cc-inner-border); border-radius: 8px; padding: 6px 8px; outline: none; }
+.am-pop-save input:focus { border-color: var(--cc-green); }
+.am-pop-save .cc-btn-primary { padding: 6px 12px; }
+.am-pop-check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--cc-ink); padding: 6px 8px; border-radius: 8px; cursor: pointer; }
+.am-pop-check:hover { background: var(--cc-green-tint); }
+.am-pop-check input { accent-color: var(--cc-green); width: 15px; height: 15px; }
+.am-pop-reset { margin: 6px 8px 2px; align-self: flex-start; }
+
+/* Composition + health tabs */
+.am-two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+.am-chart { height: 260px; position: relative; }
+.am-legend { display: flex; gap: 12px; font-size: 11.5px; color: var(--cc-ink-2); flex-wrap: wrap; }
+.am-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.am-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.am-sw-g { background: var(--cc-green); } .am-sw-a { background: var(--cc-amber); } .am-sw-r { background: var(--cc-red); }
+.am-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 8px; margin-top: 12px; }
+.am-tile { display: flex; flex-direction: column; gap: 3px; text-align: left; padding: 10px; border-radius: 10px; background: var(--cc-inner); border: 1px solid var(--cc-inner-border); color: var(--cc-ink); cursor: pointer; min-width: 0; }
+.am-tile:hover { border-color: var(--cc-green); }
+.am-tile:focus-visible { outline: 2px solid var(--cc-green); outline-offset: 2px; }
+.am-tile > i { height: 5px; border-radius: 5px; background: var(--cc-track); margin-bottom: 4px; }
+.am-tile b { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.am-tile small { font-size: 11px; color: var(--cc-ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.am-tile-foot { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; margin-top: 2px; }
+.am-tile-foot strong { font-size: 18px; }
+.am-tile-good > i { background: var(--cc-green); }
+.am-tile-monitor > i { background: var(--cc-amber); }
+.am-tile-critical > i { background: var(--cc-red); }
+.am-lowrow { width: 100%; background: none; border-left: 0; border-right: 0; border-bottom: 0; cursor: pointer; text-align: left; font: inherit; }
+.am-lowrow:focus-visible { outline: 2px solid var(--cc-green); outline-offset: 2px; }
+.am-score { width: 36px; height: 36px; border-radius: 9px; display: grid; place-items: center; font-weight: 700; font-size: 13px; flex: none; color: #fff; }
+.am-score.am-tile-critical { background: var(--cc-red); }
+.am-score.am-tile-monitor { background: var(--cc-amber); }
+.am-score.am-tile-good { background: var(--cc-green); }
+
+@media (max-width: 1280px) {
+  .am-cards { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .am-cards > :last-child { grid-column: 1 / -1; }
+}
+@media (max-width: 900px) {
+  .am-cards, .am-two { grid-template-columns: minmax(0, 1fr); }
+  .am-filters .cc-search { max-width: none; flex-basis: 100%; }
+  .am-filter-actions { margin-left: 0; }
+}
+@media (max-width: 560px) {
+
+  .am-comp .cc-donut-wrap { flex-direction: column; align-items: stretch; }
+  .am-filters .cc-field { flex: 1 1 calc(50% - 10px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .am-spin { animation: none; }
+  .am-heat .cc-heat-cell { transition: none; }
+}
+
+/* Sort buttons inside the kit table header */
+.am-table th button { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }

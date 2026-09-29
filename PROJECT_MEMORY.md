@@ -113,10 +113,10 @@ batching stops them being started at all.
   purpose/expected times/check-in-out stored in `gate_passes.custom_data` (no CHECK on status; verified). New statuses
   Checked in/Approved/Checked out; 'Cleared' counts elsewhere unchanged. Pass no = GP-<year>-<8 hex of id>. No photos
   or driver phone (no column). Overstay = checked in, not out, past expected out.
-**IN PROGRESS (agents, uncommitted when this was written):** Tyre Records (keep server paging, get_tyre_filter_options, scrap RPC, real head counts), Gate Pass (initials not
-photos, overstay = past expected out), Serial Tracker (keep scrap/unscrap tab; reuses hero-tyres).
-If the session was cleared: check `git status`, finish/verify those four, commit by pathspec, push once, keep PR open.
-
+- Tyre Records (server paging + get_tyre_filter_options + scrap RPC kept; columns verified) and Serial Tracker
+  (server-paged register, handheld scan, history built from records; stock/repair/expected life/DOT/temperature
+  N/A = no column) DONE. Gate Pass profiles name read bounded (.limit(200)) for rowCapGuard.
+- ALL 4 of the last batch done + pushed once. PR #370 still UNMERGED (owner rule).
 **Flutter / Play (owner is moving Internal -> Closed testing):**
 - Checklist + all listing text: `store-assets/FLUTTER_CLOSED_TESTING.md` (owner could not find it in Play Console;
   it is a repo file; the click paths are in it).

@@ -140,8 +140,11 @@ batching stops them being started at all.
   writes tyre_spec_catalog_events (append-only history, users read-only). tyre_specifications STAYS = fitment rules.
   Files for both go in private bucket tyre-photos (<org>/rotations|spec-catalog/<id>/...).
   DONE + pushed: Rotation page saves/reads the real columns + attachments (Cross = forward cross, X Pattern = full X:
-  owner to confirm); Tyre Specs "Catalogue" tab = tyre_spec_catalog (approve/reject for elevated, history from
+  then relabelled to industry patterns: Front to Rear=standard, Forward Cross=cross, Rearward Cross=rearward_cross
+  (CHECK widened live 20260929100000), Side to Side, X Pattern, Custom; team may refine later); Tyre Specs "Catalogue" tab = tyre_spec_catalog (approve/reject for elevated, history from
   events), fitment rules kept on a "Fitment rules" tab. Files stay in storage on delete (bucket has no delete policy).
+  **IN PROGRESS (agent, uncommitted):** Flutter access parity with web (same module/grant/revoke/custom-role rules as
+  the web Access Manager; code only, NO mobile build).
 **Flutter / Play (owner is moving Internal -> Closed testing):**
 - Checklist + all listing text: `store-assets/FLUTTER_CLOSED_TESTING.md` (owner could not find it in Play Console;
   it is a repo file; the click paths are in it).

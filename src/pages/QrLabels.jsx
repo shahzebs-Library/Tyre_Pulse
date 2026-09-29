@@ -1,31 +1,53 @@
+/**
+ * QrLabels (route /qr-labels) - QR label generator, rebuilt on the shared page
+ * kit to the owner's light reference design.
+ *
+ * Labels are generated on demand from the tyre register (tyre_records) and the
+ * fleet register (vehicle_fleet, split into vehicles and tyreless equipment).
+ * There is NO label, print or scan register in the database, so the print
+ * queue and the list of batches made here live in this browser tab only, the
+ * page says so, and the inventory / assignment / scan tabs are honest empty
+ * states. Counts that would need a label register read N/A.
+ *
+ * Kept from the previous page: paste or upload a list of codes (ambiguous codes
+ * are never auto-selected), the size control that derives the A4 grid, serials
+ * that wrap and are never cut, the company logo on each label with a wordmark
+ * fallback, browser printing, the PDF sheet and the Excel of the details.
+ */
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import QRCode from 'qrcode'
 import { useSettings } from '../contexts/SettingsContext'
 import { applyCountry } from '../lib/api/_client'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
-import { LABEL_SIZES, labelGrid, pageCount, fitLabelText, fitLogoBox } from '../lib/qrLabelLayout'
+import {
+  labelGrid, pageCount, fitLabelText, fitLogoBox, resolveLabelSize, clampCustomWidth, CUSTOM_WIDTH, LABEL_SIZES,
+} from '../lib/qrLabelLayout'
 import { parseCodes, codesFromRows, matchCodes, matchSummary, rowWhere } from '../lib/qrBulkMatch'
 import { useAuth } from '../contexts/AuthContext'
-import { motion, AnimatePresence } from 'framer-motion'
 import {
-  QrCode, Printer, Download, Search, CircleDot, Truck,
-  CheckSquare, RefreshCw, Check, Info, X, AlertCircle,
-  ClipboardList, Upload, FileSpreadsheet, ChevronDown, ChevronUp, Layers, MapPin,
+  QrCode, Printer, Download, Search, CircleDot, Truck, Factory, Check, X, AlertCircle, ClipboardList,
+  Upload, FileSpreadsheet, ChevronDown, ChevronRight, RefreshCw, Tags, ListChecks, Minus, Plus,
+  SlidersHorizontal, Trash2, FileText, Info, Eye, Lock, ListPlus, Bookmark, CircleSlash, Package,
 } from 'lucide-react'
-import EnterpriseTable from '../components/ui/EnterpriseTable'
+import Modal from '../components/ui/Modal'
 import {
-  labelCode, labelSub, qrState, filterLabelRows, summarizeLabels, QR_STATE_OPTIONS,
-} from '../lib/qrLabelsAnalytics'
-import PageHeader from '../components/ui/PageHeader'
+  Card, CardState, Kpi, PageHero, Pager, Tabs, KitTable, VehicleThumb, fmtInt, useCard,
+} from '../components/commandCenter/kit'
+import { labelCode, qrState, QR_STATE_OPTIONS } from '../lib/qrLabelsAnalytics'
+import {
+  ITEM_TYPES, itemTypeLabel, rowsForType, registerFor, filterOptions, filterRegister, rowStatus, fleetKind,
+  SIZE_TABS, QR_LEVELS, LABEL_INFO, infoLabel, toEntry, expandCopies, clampCopies, COPIES,
+  addToQueue, queueLabelCount, queueToPrint, BATCH_ACTIONS, makeBatch, formatBatchTime, buildQrKpis,
+  PAGE_TABS, TAB_EMPTY, normalizeDesign, saveTemplate, cleanCustomText, splitFleet,
+} from '../lib/qrLabelsView'
 import { toUserMessage } from '../lib/safeError'
 import { exportToExcel, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import { getCompanyLogo } from '../lib/api/brandLogo'
+import './QrLabels.css'
 
-// Preview pixels per printed millimetre. The on-screen card is a scaled picture
-// of the real label, so choosing Large now makes the preview bigger AND the
-// printed label bigger - before, the size control moved only the preview and the
-// sheet always printed 60 mm while the page said "70 mm labels".
+// Preview pixels per printed millimetre. The preview is a scaled picture of the
+// real label, so choosing Large makes the preview AND the printed label bigger.
 const PREVIEW_PX_PER_MM = 3.2
 
 // Ceilings on the paged reads. Both sit well above the live table sizes
@@ -35,11 +57,23 @@ const PREVIEW_PX_PER_MM = 3.2
 const FLEET_ROW_CAP = 20000
 const TYRE_ROW_CAP  = 40000
 
+// Per-viewer conveniences only (a remembered design and named templates); the
+// page renders correctly without them.
+const DESIGN_KEY = 'tp.qrLabels.design.v1'
+const TEMPLATES_KEY = 'tp.qrLabels.templates.v1'
+function readStore(key, fallback) {
+  try { const v = window.localStorage.getItem(key); return v ? JSON.parse(v) : fallback } catch { return fallback }
+}
+function writeStore(key, value) {
+  try { window.localStorage.setItem(key, JSON.stringify(value)) } catch { /* private window: keep going */ }
+}
+
+const TYPE_ICON = { tyres: CircleDot, vehicles: Truck, equipment: Factory }
 
 // ── QR generation helper ──────────────────────────────────────────────────────
-async function makeQR(value) {
+async function makeQR(value, level = 'M') {
   return QRCode.toDataURL(value, {
-    width: 400, margin: 1, errorCorrectionLevel: 'M',
+    width: 400, margin: 1, errorCorrectionLevel: level,
     color: { dark: '#000000', light: '#ffffff' },
   })
 }
@@ -71,25 +105,46 @@ async function fetchLogoDataUrl(url) {
   } catch { return null }
 }
 
+/** Header strip of one label: the company logo, the wordmark, or nothing. */
+function LabelHeader({ showLogo, companyLogo, logoUrl, className, style, imgStyle }) {
+  if (!showLogo) return null
+  return (
+    <div className={className} style={style}>
+      {companyLogo && logoUrl
+        ? <img src={logoUrl} alt="" crossOrigin="anonymous" style={imgStyle} />
+        : <span>TYRE PULSE</span>}
+    </div>
+  )
+}
+
 export default function QrLabels() {
   const { profile } = useAuth()
   const { activeCountry } = useSettings()
   const loadId = useRef(0)
 
-  const [mode,       setMode]       = useState('tyres')  // 'tyres' | 'assets'
+  // ── Page state ─────────────────────────────────────────────────────────────
+  const [tab,        setTab]        = useState('generate')
+  const [type,       setType]       = useState('tyres')  // 'tyres' | 'vehicles' | 'equipment'
+  const register = registerFor(type)                      // 'tyres' | 'fleet'
+  // The label-text helpers speak 'tyres' | 'assets'.
+  const mode = type === 'tyres' ? 'tyres' : 'assets'
   const [data,       setData]       = useState([])
   const [loading,    setLoading]    = useState(true)
   const [error,      setError]      = useState(null)
-  const [sites,      setSites]      = useState([])
   const [selected,   setSelected]   = useState(new Set())
   const [search,     setSearch]     = useState('')
   const [filterSite, setFilterSite] = useState('all')
   const [filterQr,   setFilterQr]   = useState('all')
-  const [labelSize,  setLabelSize]  = useState('md')
+  const [filterMaker, setFilterMaker] = useState('all')
+  const [filterSize, setFilterSize] = useState('all')
+  const [moreFilters, setMoreFilters] = useState(false)
+  const [page,       setPage]       = useState(0)
+  const [pageSize,   setPageSize]   = useState(25)
   const [qrImages,   setQrImages]   = useState({})       // { id: dataURL }
   const [truncated,  setTruncated]  = useState(false)
   const [generating, setGenerating] = useState(false)
   const [exporting,  setExporting]  = useState(false)
+  const [notice,     setNotice]     = useState(null)
   // Bulk intake: paste or upload a list of identifiers and get their labels.
   const [bulkOpen,   setBulkOpen]   = useState(false)
   const [bulkText,   setBulkText]   = useState('')
@@ -97,8 +152,35 @@ export default function QrLabels() {
   const [bulkError,  setBulkError]  = useState(null)
   const [bulkResult, setBulkResult] = useState(null)
   const [logoUrl,    setLogoUrl]    = useState('')       // company logo, live URL for the preview
+  // Label design, remembered on this device.
+  const [design,     setDesign]     = useState(() => normalizeDesign(readStore(DESIGN_KEY, null)))
+  const [templates,  setTemplates]  = useState(() => (Array.isArray(readStore(TEMPLATES_KEY, [])) ? readStore(TEMPLATES_KEY, []) : []))
+  const [templateName, setTemplateName] = useState('')
+  // This session only: the print queue and the batches made on this page.
+  const [queue,      setQueue]      = useState(() => new Map())
+  const [queueOpen,  setQueueOpen]  = useState(false)
+  const [batches,    setBatches]    = useState([])
+  const [viewBatch,  setViewBatch]  = useState(null)
+  const [sessionLabels, setSessionLabels] = useState(0)
+  const [exportMenu, setExportMenu] = useState(false)
+  const [printEntries, setPrintEntries] = useState(null)
+  const [previewQr,  setPreviewQr]  = useState(null)
+  const batchSeq = useRef(0)
   const printAreaRef = useRef(null)
   const fileRef      = useRef(null)
+  const exportRef    = useRef(null)
+
+  const labelSize = design.size
+  const info = design.info
+  const copies = design.copies
+  const sizeOpts = useMemo(() => ({ customW: design.customW }), [design.customW])
+  const companyLogo = info.logo && design.logo === 'company'
+
+  function setDesignPart(patch) {
+    setDesign((d) => normalizeDesign({ ...d, ...patch }))
+  }
+  useEffect(() => { writeStore(DESIGN_KEY, design) }, [design])
+  useEffect(() => { writeStore(TEMPLATES_KEY, templates) }, [templates])
 
   // The company logo is org-wide and rarely changes - load it once, not per
   // export. '' means no logo is set, and the label falls back to the wordmark.
@@ -108,6 +190,22 @@ export default function QrLabels() {
     return () => { live = false }
   }, [])
 
+  // Headline counts: each tile reads its own register, so a failed count shows
+  // N/A on its own tile instead of taking the page down.
+  const counts = useCard(async () => {
+    const [tyreRes, fleetRes] = await Promise.all([
+      applyCountry(supabase.from('tyre_records').select('id', { count: 'exact', head: true }), activeCountry),
+      fetchAllPages(
+        (from, to) => applyCountry(supabase.from('vehicle_fleet').select('id, vehicle_type'), activeCountry)
+          .not('asset_no', 'is', null).order('asset_no').order('id').range(from, to),
+        { max: FLEET_ROW_CAP },
+      ),
+    ])
+    if (tyreRes.error) throw tyreRes.error
+    if (fleetRes.error) throw fleetRes.error
+    return { tyres: tyreRes.count ?? null, fleet: fleetRes.data || [] }
+  }, [activeCountry])
+
   const loadData = useCallback(async () => {
     const request = ++loadId.current
     const countryQuery = (table, columns) => applyCountry(supabase.from(table).select(columns), activeCountry)
@@ -115,18 +213,14 @@ export default function QrLabels() {
     setLoading(true)
     setError(null)
     try {
-      if (mode === 'tyres') {
+      if (register === 'tyres') {
         // serial_number is a DEAD legacy column - empty on all tyre rows;
-        // serial_no is the canonical one. Reading the dead name meant every
-        // printed QR label encoded an empty string while the caption beside it
-        // still looked right. Aliased rather than renamed so the rest of this
-        // file keeps working unchanged.
+        // serial_no is the canonical one. Aliased so the label helpers keep
+        // reading `serial_number` unchanged.
         //
         // Paged: the server caps EVERY response at 1000 rows whatever a
-        // .limit() says, and tyre_records is past 11,000 - the old .limit(1000)
-        // meant the search box below could not find a tyre outside the first
-        // page and "Select All (1000)" read as the whole fleet. `id` is the
-        // unique paging tiebreak (asset_no repeats across a vehicle's tyres).
+        // .limit() says, and tyre_records is past 11,000. `id` is the unique
+        // paging tiebreak (asset_no repeats across a vehicle's tyres).
         const { data: rows, error: qErr, truncated } = await fetchAllPages(
           (from, to) => countryQuery('tyre_records', 'id, serial_number:serial_no, brand, site, country, asset_no, risk_level, size, position:tyre_position')
             .order('asset_no').order('id')
@@ -137,12 +231,9 @@ export default function QrLabels() {
         if (qErr) throw qErr
         setData(rows || [])
         setTruncated(truncated)
-        setSites([...new Set((rows || []).map(r => r.site).filter(Boolean))].sort())
       } else {
-        // Paged for the same reason: the fleet is past 1,600 assets, so the
-        // old .limit(1000) left ~600 vehicles with no printable label AND
-        // unreachable from this page's own search box. asset_no is unique per
-        // COUNTRY, not globally, so `id` is the tiebreak.
+        // Paged for the same reason: the fleet is past 1,600 assets. asset_no
+        // is unique per COUNTRY, not globally, so `id` is the tiebreak.
         const { data: rows, error: qErr, truncated } = await fetchAllPages(
           (from, to) => countryQuery('vehicle_fleet', 'id, asset_no, vehicle_type, site, country, status, ops_status, make, model, model_year, registration_no, fleet_number, chassis_no, engine_no, capacity, current_km')
             .not('asset_no', 'is', null)
@@ -154,23 +245,21 @@ export default function QrLabels() {
         if (qErr) throw qErr
         setData(rows || [])
         setTruncated(truncated)
-        setSites([...new Set((rows || []).map(r => r.site).filter(Boolean))].sort())
       }
     } catch (err) {
       if (request !== loadId.current) return
       setError(toUserMessage(err, 'Could not load records.'))
-      setData([]); setSites([]); setTruncated(false)
+      setData([]); setTruncated(false)
     } finally {
       if (request === loadId.current) setLoading(false)
     }
-  }, [mode, activeCountry])
+  }, [register, activeCountry])
 
   useEffect(() => {
     setSelected(new Set())
     setQrImages({})
     setSearch('')
-    setFilterSite('all')
-    setFilterQr('all')
+    setFilterSite('all'); setFilterQr('all'); setFilterMaker('all'); setFilterSize('all')
     setTruncated(false)
     setBulkText(''); setBulkResult(null); setBulkError(null)
     loadData()
@@ -178,17 +267,32 @@ export default function QrLabels() {
     return () => { loadId.current++ }
   }, [loadData])
 
-  // The filter and the label text live in qrLabelsAnalytics so they are tested.
+  // Picking a tile starts a fresh selection: a selection that spans item types
+  // would print labels the table is no longer showing.
+  function chooseType(next) {
+    if (next === type) return
+    setType(next)
+    setSelected(new Set())
+    setSearch(''); setFilterSite('all'); setFilterQr('all'); setFilterMaker('all'); setFilterSize('all')
+    setPage(0)
+    setBulkResult(null); setBulkError(null)
+  }
+
+  const typeRows = useMemo(() => rowsForType(data, type), [data, type])
+  const options = useMemo(() => filterOptions(typeRows, type), [typeRows, type])
   const filtered = useMemo(
-    () => filterLabelRows(data, { mode, search, site: filterSite, qr: filterQr }, { selected, qrImages }),
-    [data, mode, search, filterSite, filterQr, selected, qrImages],
+    () => filterRegister(typeRows, { type, search, site: filterSite, qr: filterQr, maker: filterMaker, size: filterSize }, { selected, qrImages }),
+    [typeRows, type, search, filterSite, filterQr, filterMaker, filterSize, selected, qrImages],
   )
-  const labelStats = useMemo(() => summarizeLabels(data, mode, selected, qrImages), [data, mode, selected, qrImages])
+  useEffect(() => { setPage(0) }, [type, search, filterSite, filterQr, filterMaker, filterSize, pageSize])
+  const pageTotal = Math.max(1, Math.ceil(filtered.length / pageSize))
+  const safePage = Math.min(page, pageTotal - 1)
+  const pageRows = useMemo(() => filtered.slice(safePage * pageSize, safePage * pageSize + pageSize), [filtered, safePage, pageSize])
 
   function getLabel(item) { return labelCode(item, mode) }
-  // ASCII separator: this line is printed onto the label and into the PDF,
-  // where the house rule keeps output to plain characters.
-  function getSub(item)   { return labelSub(item, mode) }
+  const entryFor = useCallback((item) => toEntry(item, type, {
+    code: labelCode(item, mode), qr: qrImages[item.id], info, customText: design.customText,
+  }), [type, mode, qrImages, info, design.customText])
 
   function toggleSelect(id) {
     setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
@@ -199,6 +303,14 @@ export default function QrLabels() {
         ? new Set()
         : new Set(filtered.map(r => r.id))
     )
+  }
+
+  const byName = profile?.full_name || profile?.username || 'You'
+  function recordBatch(action, entries, labels) {
+    if (!entries.length) return
+    batchSeq.current += 1
+    const b = makeBatch({ seq: batchSeq.current, type: entries[0]?.type || type, items: new Set(entries.map((e) => e.key)).size, labels: labels ?? entries.length, action, by: byName })
+    setBatches((prev) => [{ ...b, entries }, ...prev].slice(0, 50))
   }
 
   // `items` lets the bulk intake generate exactly what it just matched without
@@ -213,18 +325,27 @@ export default function QrLabels() {
     await Promise.all(list.map(async item => {
       const val = getLabel(item)
       if (val) {
-        try { results[item.id] = await makeQR(val) } catch { /* skip */ }
+        try { results[item.id] = await makeQR(val, design.qrLevel) } catch { /* skip */ }
       }
     }))
     setQrImages(prev => ({ ...prev, ...results }))
+    const made = list.filter((r) => results[r.id])
+    setSessionLabels((n) => n + made.length)
+    recordBatch('generated', made.map((r) => toEntry(r, type, { code: getLabel(r), qr: results[r.id], info, customText: design.customText })))
     setGenerating(false)
+  }
+
+  // A new error-correction level makes every generated code stale.
+  function setQrLevel(level) {
+    setDesignPart({ qrLevel: level })
+    setQrImages({})
   }
 
   // ── Bulk intake ────────────────────────────────────────────────────────────
   // Paste a column of asset codes (or tyre serials) and get their labels. The
-  // match runs against the WHOLE loaded set, not the filtered view, so a code is
-  // never reported missing merely because a site filter was left on; the filters
-  // are then cleared so every match is actually visible on the table below.
+  // match runs against the WHOLE loaded register, not the filtered view, so a
+  // code is never reported missing merely because a site filter was left on;
+  // the filters are then cleared so every match is actually visible below.
   async function runBulk(codes) {
     setBulkError(null)
     const result = matchCodes(codes, data, { getCode: getLabel })
@@ -232,17 +353,28 @@ export default function QrLabels() {
     // Cleared unconditionally: the preview grid and both exports read the
     // FILTERED set, so a match left behind a site filter would be selected and
     // generated and then quietly missing from the printed sheet.
-    setSearch(''); setFilterSite('all'); setFilterQr('all')
+    setSearch(''); setFilterSite('all'); setFilterQr('all'); setFilterMaker('all'); setFilterSize('all')
     if (result.ids.length) {
       setSelected(prev => new Set([...prev, ...result.ids]))
       const rows = result.matched.map(m => m.row)
+      // The fleet register holds vehicles AND equipment; show the kind most of
+      // the matches belong to, and name the rest so none goes unprinted.
+      if (register === 'fleet') {
+        const split = splitFleet(rows)
+        const main = split.equipment.length > split.vehicles.length ? 'equipment' : 'vehicles'
+        if (main !== type) setType(main)
+        const other = main === 'vehicles' ? split.equipment.length : split.vehicles.length
+        setNotice(other > 0
+          ? { tone: 'warn', text: `${other} matched ${other === 1 ? 'code is' : 'codes are'} ${main === 'vehicles' ? 'equipment' : 'vehicles'}. Switch the item type to print ${other === 1 ? 'it' : 'them'} too.` }
+          : null)
+      }
       await handleGenerate(rows)
     }
   }
 
   async function handleBulkPaste() {
     const { codes } = parseCodes(bulkText)
-    if (!codes.length) { setBulkResult(null); setBulkError('Nothing to look up - paste or upload a list of codes first.'); return }
+    if (!codes.length) { setBulkResult(null); setBulkError('Nothing to look up. Paste or upload a list of codes first.'); return }
     setBulkBusy(true)
     try { await runBulk(codes) }
     finally { setBulkBusy(false) }
@@ -273,122 +405,146 @@ export default function QrLabels() {
     }
   }
 
-  function handlePrint() {
-    window.print()
-  }
+  // ── Selection -> printable labels ──────────────────────────────────────────
+  const selectedItems = filtered.filter(r => selected.has(r.id))
+  const readyItems    = selectedItems.filter(r => qrImages[r.id])
+  const pendingItems  = selectedItems.filter(r => !qrImages[r.id])
+  const readyEntries  = useMemo(() => readyItems.map(entryFor), [readyItems, entryFor])
+  const printTotal    = readyEntries.length * copies
+  const grid          = labelGrid(labelSize, sizeOpts)
+  const sheets        = pageCount(printTotal, labelSize, sizeOpts)
+  const printList     = printEntries || expandCopies(readyEntries, copies)
 
-  async function exportPDF() {
-    const { default: jsPDF } = await import('jspdf')
-    const readyItems = filtered.filter(r => selected.has(r.id) && qrImages[r.id])
+  // Print through the browser. A list (the queue, a past batch) replaces the
+  // selection for this one run, then the print area returns to the selection.
+  function handlePrint(list) {
+    const entries = list || expandCopies(readyEntries, copies)
+    if (!entries.length) return
+    setPrintEntries(entries)
+    recordBatch('printed', entries, entries.length)
+    setTimeout(() => { try { window.print() } catch { /* no print dialog here */ } }, 60)
+  }
+  useEffect(() => {
+    const done = () => setPrintEntries(null)
+    window.addEventListener('afterprint', done)
+    return () => window.removeEventListener('afterprint', done)
+  }, [])
+
+  async function exportPDF(list) {
+    const readyItems = list || expandCopies(filtered.filter(r => selected.has(r.id) && qrImages[r.id]).map(entryFor), copies)
     if (!readyItems.length) return
     setExporting(true)
+    try {
+      const { default: jsPDF } = await import('jspdf')
 
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-    // The grid is DERIVED from the label size the user chose, so a Small label
-    // gets 20 to a sheet instead of the 12 the old fixed 3x4 grid gave every
-    // size, and a Large one stops running off the page width.
-    const g = labelGrid(labelSize)
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+      // The grid is DERIVED from the label size the user chose, so a Small label
+      // gets 20 to a sheet and a Large one never runs off the page width.
+      const g = labelGrid(labelSize, sizeOpts)
 
-    // Load the logo ONCE for the whole run, and measure it once. A missing or
-    // blocked logo leaves `logo` null and the header falls back to the wordmark -
-    // the sheet is never lost for the sake of an image.
-    let logo = null
-    const logoData = await fetchLogoDataUrl(logoUrl)
-    if (logoData) {
-      let props = null
-      try { props = doc.getImageProperties ? doc.getImageProperties(logoData) : null } catch { props = null }
-      const fmt = /png/i.test(logoData.slice(0, 40)) || props?.fileType === 'PNG' ? 'PNG'
-        : /webp/i.test(logoData.slice(0, 40)) ? 'WEBP' : 'JPEG'
-      logo = { data: logoData, w: props?.width || 0, h: props?.height || 0, fmt }
-    }
-    // jsPDF's own measurement, handed to the pure fitter.
-    const measure = (text, size) => {
-      doc.setFontSize(size)
-      return doc.getTextWidth(text)
-    }
-    const textW = g.w - 4   // 2 mm of quiet margin each side
-
-    readyItems.forEach((item, idx) => {
-      const pagePos = idx % g.perPage
-      const col     = pagePos % g.cols
-      const row     = Math.floor(pagePos / g.cols)
-
-      if (idx > 0 && pagePos === 0) doc.addPage()
-
-      const x   = g.marginX + col * (g.w + g.gap)
-      const y   = g.marginY + row * (g.h + g.gap)
-      const val = getLabel(item)
-      const sub = getSub(item)
-
-      // ── Card: white face, soft green border ─────────────────────────────
-      doc.setFillColor(255, 255, 255)
-      doc.setDrawColor(22, 163, 74)
-      doc.setLineWidth(0.4)
-      doc.roundedRect(x, y, g.w, g.h, 2.2, 2.2, 'FD')
-
-      // ── Header: the LOGO carries the brand, not a text name ──────────────
-      // The owner asked for the logo instead of the "TyrePulse" wordmark. The
-      // logo sits on the white face (its real colours read there) with a thin
-      // green rule beneath it; only when no logo is set does the wordmark stand
-      // in, so a label is never blank at the top.
-      const headH = 7
-      if (logo) {
-        const box = fitLogoBox(logo.w, logo.h, g.w - 6, headH - 1.5)
-        try {
-          doc.addImage(logo.data, logo.fmt, x + 3 + box.dx, y + 1.2 + box.dy, box.w, box.h, undefined, 'FAST')
-        } catch { /* a bad frame must not lose the label */ }
-      } else {
-        doc.setTextColor(22, 163, 74)
-        doc.setFontSize(6)
-        doc.setFont('helvetica', 'bold')
-        doc.text('TYRE PULSE', x + g.w / 2, y + 4.6, { align: 'center' })
+      // Load the logo ONCE for the whole run, and measure it once. A missing or
+      // blocked logo leaves `logo` null and the header falls back to the wordmark -
+      // the sheet is never lost for the sake of an image.
+      let logo = null
+      if (companyLogo) {
+        const logoData = await fetchLogoDataUrl(logoUrl)
+        if (logoData) {
+          let props = null
+          try { props = doc.getImageProperties ? doc.getImageProperties(logoData) : null } catch { props = null }
+          const fmt = /png/i.test(logoData.slice(0, 40)) || props?.fileType === 'PNG' ? 'PNG'
+            : /webp/i.test(logoData.slice(0, 40)) ? 'WEBP' : 'JPEG'
+          logo = { data: logoData, w: props?.width || 0, h: props?.height || 0, fmt }
+        }
       }
-      // Green accent rule under the header.
-      doc.setDrawColor(22, 163, 74)
-      doc.setLineWidth(0.35)
-      doc.line(x + 2.5, y + headH + 0.5, x + g.w - 2.5, y + headH + 0.5)
+      // jsPDF's own measurement, handed to the pure fitter.
+      const measure = (text, size) => {
+        doc.setFontSize(size)
+        return doc.getTextWidth(text)
+      }
+      const textW = g.w - 4   // 2 mm of quiet margin each side
 
-      // ── Identifier, fitted ───────────────────────────────────────────────
-      // WRAPPED, NEVER TRUNCATED. A cut serial is not a shorter serial, it is a
-      // different one: somebody reading "EP0604207..." off the label and typing
-      // it in finds nothing, or finds another tyre. So it shrinks, then breaks
-      // across two lines, and only the fitter decides how small.
-      doc.setTextColor(0, 0, 0)
-      doc.setFont('helvetica', 'bold')
-      const fitVal = fitLabelText(measure, val, textW, { startSize: 7.5, minSize: 4.5, mode: 'wrap', maxLines: 2 })
-      const subFit = sub
-        ? fitLabelText(measure, sub, textW, { startSize: 5.5, minSize: 4, mode: 'clip', maxLines: 1 })
-        : { lines: [], size: 5.5 }
+      readyItems.forEach((item, idx) => {
+        const pagePos = idx % g.perPage
+        const col     = pagePos % g.cols
+        const row     = Math.floor(pagePos / g.cols)
 
-      // Lay the identifier out from the bottom up so one line and two lines both
-      // sit clear of the border.
-      const subH = subFit.lines.length ? subFit.size * 0.42 + 1.2 : 0
-      const baseY = y + g.h - 2.5 - subH
-      doc.setFontSize(fitVal.size)
-      fitVal.lines.forEach((line, i) => {
-        const dy = (fitVal.lines.length - 1 - i) * (fitVal.size * 0.42)
-        doc.text(line, x + g.w / 2, baseY - dy, { align: 'center' })
+        if (idx > 0 && pagePos === 0) doc.addPage()
+
+        const x   = g.marginX + col * (g.w + g.gap)
+        const y   = g.marginY + row * (g.h + g.gap)
+        const val = item.val
+
+        // ── Card: white face, soft green border ─────────────────────────────
+        doc.setFillColor(255, 255, 255)
+        doc.setDrawColor(22, 163, 74)
+        doc.setLineWidth(0.4)
+        doc.roundedRect(x, y, g.w, g.h, 2.2, 2.2, 'FD')
+
+        // ── Header: the LOGO carries the brand, not a text name ──────────────
+        // The logo sits on the white face with a thin green rule beneath it; only
+        // when no logo is set does the wordmark stand in. Turned off, the label
+        // gives the room to the QR code.
+        const headH = info.logo ? 7 : 1
+        if (info.logo) {
+          if (logo) {
+            const box = fitLogoBox(logo.w, logo.h, g.w - 6, headH - 1.5)
+            try {
+              doc.addImage(logo.data, logo.fmt, x + 3 + box.dx, y + 1.2 + box.dy, box.w, box.h, undefined, 'FAST')
+            } catch { /* a bad frame must not lose the label */ }
+          } else {
+            doc.setTextColor(22, 163, 74)
+            doc.setFontSize(6)
+            doc.setFont('helvetica', 'bold')
+            doc.text('TYRE PULSE', x + g.w / 2, y + 4.6, { align: 'center' })
+          }
+          doc.setDrawColor(22, 163, 74)
+          doc.setLineWidth(0.35)
+          doc.line(x + 2.5, y + headH + 0.5, x + g.w - 2.5, y + headH + 0.5)
+        }
+
+        // ── Identifier, fitted ───────────────────────────────────────────────
+        // WRAPPED, NEVER TRUNCATED. A cut serial is not a shorter serial, it is a
+        // different one, so it shrinks, then breaks across two lines.
+        doc.setTextColor(0, 0, 0)
+        doc.setFont('helvetica', 'bold')
+        const fitVal = fitLabelText(measure, val, textW, { startSize: 7.5, minSize: 4.5, mode: 'wrap', maxLines: 2 })
+        const subFits = (item.lines || []).map((l) => fitLabelText(measure, l, textW, { startSize: 5.5, minSize: 4, mode: 'clip', maxLines: 1 }))
+          .filter((f) => f.lines.length)
+
+        // Lay out from the bottom up so any number of lines sits clear of the border.
+        const lineH = (f) => f.size * 0.42 + 1.2
+        const subH = subFits.reduce((s, f) => s + lineH(f), 0)
+        const baseY = y + g.h - 2.5 - subH
+        doc.setFontSize(fitVal.size)
+        fitVal.lines.forEach((line, i) => {
+          const dy = (fitVal.lines.length - 1 - i) * (fitVal.size * 0.42)
+          doc.text(line, x + g.w / 2, baseY - dy, { align: 'center' })
+        })
+
+        // ── QR code, filling what the text leaves ────────────────────────────
+        const qrTop = y + headH + 2
+        const qrRoom = Math.max(6, baseY - (fitVal.lines.length - 1) * (fitVal.size * 0.42) - 3 - qrTop)
+        const qrSize = Math.max(6, Math.min(g.w - 10, qrRoom))
+        doc.addImage(item.qr, 'PNG', x + (g.w - qrSize) / 2, qrTop, qrSize, qrSize)
+
+        // ── Detail lines ─────────────────────────────────────────────────────
+        let ly = baseY
+        subFits.forEach((f) => {
+          ly += lineH(f)
+          doc.setFontSize(f.size)
+          doc.setFont('helvetica', 'normal')
+          doc.setTextColor(100, 100, 100)
+          doc.text(f.lines[0], x + g.w / 2, ly, { align: 'center' })
+        })
       })
 
-      // ── QR code, filling what the text leaves ────────────────────────────
-      // Sized from the space actually available rather than a fixed padding, so
-      // a two-line serial shrinks the code instead of colliding with it.
-      const qrTop = y + headH + 2
-      const qrRoom = Math.max(6, baseY - (fitVal.lines.length - 1) * (fitVal.size * 0.42) - 3 - qrTop)
-      const qrSize = Math.max(6, Math.min(g.w - 10, qrRoom))
-      doc.addImage(qrImages[item.id], 'PNG', x + (g.w - qrSize) / 2, qrTop, qrSize, qrSize)
-
-      // ── Secondary line ───────────────────────────────────────────────────
-      if (subFit.lines.length) {
-        doc.setFontSize(subFit.size)
-        doc.setFont('helvetica', 'normal')
-        doc.setTextColor(100, 100, 100)
-        doc.text(subFit.lines[0], x + g.w / 2, y + g.h - 2.5, { align: 'center' })
-      }
-    })
-
-    doc.save(`${reportFileName('TyrePulse QR Labels', mode === 'tyres' ? 'Tyres' : 'Vehicles', reportDateLabel())}.pdf`)
-    setExporting(false)
+      doc.save(`${reportFileName('TyrePulse QR Labels', itemTypeLabel(readyItems[0]?.type || type), reportDateLabel())}.pdf`)
+      recordBatch('pdf', readyItems, readyItems.length)
+    } catch (err) {
+      setNotice({ tone: 'bad', text: toUserMessage(err, 'Could not build the label PDF.') })
+    } finally {
+      setExporting(false)
+    }
   }
 
   // The details behind the labels, so a printed run comes with a sheet naming
@@ -419,16 +575,47 @@ export default function QrLabels() {
         rows,
         EXCEL_COLS.map(([k]) => k),
         EXCEL_COLS.map(([, h]) => h),
-        reportFileName('TyrePulse QR', mode === 'tyres' ? 'Tyre Details' : 'Vehicle Details', reportDateLabel()),
-        mode === 'tyres' ? 'Tyres' : 'Vehicles',
-        { title: mode === 'tyres' ? 'Tyre label details' : 'Vehicle label details' },
+        reportFileName('TyrePulse QR', `${itemTypeLabel(type)} Details`, reportDateLabel()),
+        itemTypeLabel(type).slice(0, 30),
+        { title: `${itemTypeLabel(type)} label details` },
       )
+      recordBatch('excel', items.map(entryFor), items.length)
     } catch (err) {
       setError(toUserMessage(err, 'Could not build the spreadsheet.'))
     } finally {
       setExporting(false)
     }
   }
+
+  function queueSelection(items) {
+    const list = (items || readyItems).map(entryFor)
+    const { queue: next, added } = addToQueue(queue, list, copies)
+    setQueue(next)
+    if (added) recordBatch('queued', list, list.length * copies)
+    setNotice({ tone: 'good', text: added ? `${added} ${added === 1 ? 'label' : 'labels'} added to the print queue.` : 'Those labels are already in the print queue.' })
+  }
+
+  // Close the export menu on an outside click or Escape.
+  useEffect(() => {
+    if (!exportMenu) return undefined
+    const onDown = (e) => { if (exportRef.current && !exportRef.current.contains(e.target)) setExportMenu(false) }
+    const onKey = (e) => { if (e.key === 'Escape') setExportMenu(false) }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey) }
+  }, [exportMenu])
+
+  // ── Live preview: the first selected label, else the first row on screen ──
+  const previewRow = readyItems[0] || selectedItems[0] || filtered[0] || null
+  const previewCode = previewRow ? getLabel(previewRow) : ''
+  useEffect(() => {
+    let live = true
+    if (!previewRow || !previewCode) { setPreviewQr(null); return undefined }
+    if (qrImages[previewRow.id]) { setPreviewQr(qrImages[previewRow.id]); return undefined }
+    makeQR(previewCode, design.qrLevel).then((u) => { if (live) setPreviewQr(u) }).catch(() => { if (live) setPreviewQr(null) })
+    return () => { live = false }
+  }, [previewRow, previewCode, qrImages, design.qrLevel])
+  const previewEntry = previewRow ? toEntry(previewRow, type, { code: previewCode, qr: previewQr, info, customText: design.customText }) : null
 
   // EnterpriseTable speaks { [rowId]: true }; the page keeps a Set of real ids
   // (qrImages is keyed by them), so translate at the boundary only.
@@ -443,61 +630,84 @@ export default function QrLabels() {
     return o
   }, [selected])
   const onRowSelectionChange = useCallback((next) => {
-    setSelected(new Set(Object.keys(next || {}).filter(k => next[k]).map(k => (idByKey.has(k) ? idByKey.get(k) : k))))
-  }, [idByKey])
+    const obj = typeof next === 'function' ? next(rowSelection) : next
+    setSelected(new Set(Object.keys(obj || {}).filter(k => obj[k]).map(k => (idByKey.has(k) ? idByKey.get(k) : k))))
+  }, [idByKey, rowSelection])
 
-  const tableColumns = useMemo(() => {
-    const cols = [
-      {
-        id: 'code', header: mode === 'tyres' ? 'Serial No' : 'Asset No', accessorFn: (r) => getLabel(r),
-        cell: ({ row }) => {
-          const r = row.original
-          const noSerial = mode === 'tyres' && !r.serial_number
-          return (
-            <span className="font-mono text-xs text-[var(--text-primary)]">
-              {getLabel(r) || 'N/A'}
-              {noSerial && <span className="ml-2 font-sans text-[11px] text-amber-300">no serial, uses asset code</span>}
-            </span>
-          )
-        },
+  const tyres = type === 'tyres'
+  const columns = [
+    {
+      key: 'code', header: tyres ? 'Tyre ID' : 'Asset ID', sortable: false,
+      cell: (r) => {
+        const noSerial = tyres && !r.serial_number
+        return (
+          <span className="ql-code">
+            {getLabel(r) || 'N/A'}
+            {noSerial && <span className="ql-hint">No serial, uses asset code</span>}
+          </span>
+        )
       },
-    ]
-    if (mode === 'tyres') {
-      cols.push({ id: 'asset_no', header: 'Asset', accessorFn: (r) => r.asset_no || '', cell: ({ getValue }) => getValue() || 'N/A' })
-      cols.push({ id: 'brand', header: 'Brand', accessorFn: (r) => r.brand || '', cell: ({ getValue }) => getValue() || 'N/A' })
-      cols.push({ id: 'position', header: 'Position', accessorFn: (r) => r.position || '', cell: ({ getValue }) => getValue() || 'N/A' })
-    } else {
-      cols.push({ id: 'vehicle_type', header: 'Vehicle Type', accessorFn: (r) => r.vehicle_type || '', cell: ({ getValue }) => getValue() || 'N/A' })
-      cols.push({ id: 'registration_no', header: 'Registration', accessorFn: (r) => r.registration_no || '', cell: ({ getValue }) => getValue() || 'N/A' })
-    }
-    cols.push({ id: 'site', header: 'Site', accessorFn: (r) => r.site || '', cell: ({ getValue }) => getValue() || 'N/A' })
-    if (mode === 'tyres') {
-      cols.push({ id: 'risk_level', header: 'Risk', accessorFn: (r) => r.risk_level || '', cell: ({ getValue }) => (getValue()
-        ? <span className="text-[11px] px-2 py-0.5 rounded-full bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--input-border)]">{getValue()}</span>
-        : 'N/A') })
-    } else {
-      cols.push({ id: 'status', header: 'Status', accessorFn: (r) => r.ops_status || r.status || '', cell: ({ getValue }) => getValue() || 'N/A' })
-    }
-    cols.push({
-      id: 'qr', header: 'QR', accessorFn: (r) => QR_STATE_OPTIONS.find(o => o.key === qrState(r, selected, qrImages))?.label || '',
-      cell: ({ row }) => {
-        const st = qrState(row.original, selected, qrImages)
-        if (st === 'ready') return <span className="flex items-center gap-1 text-xs text-green-400"><Check size={11} aria-hidden="true" /> Ready</span>
-        if (st === 'pending') return <span className="text-xs text-amber-400">Pending</span>
-        return <span className="text-xs text-[var(--text-muted)]">Not selected</span>
+    },
+    {
+      key: 'vehicle', header: 'Vehicle / asset', sortable: false,
+      cell: (r) => (tyres
+        ? <span>{r.asset_no || <span className="cc-na">N/A</span>}{r.position && <span className="cc-sub">{r.position}</span>}</span>
+        : (
+          <span className="cc-vehicle">
+            <VehicleThumb row={r} size="sm" />
+            <span>{r.asset_no}<span className="cc-sub">{r.vehicle_type || 'Type not recorded'}</span></span>
+          </span>
+        )),
+    },
+    {
+      key: 'make', header: tyres ? 'Brand' : 'Make / model', sortable: false,
+      cell: (r) => (tyres ? r.brand : [r.make, r.model].filter(Boolean).join(' ')) || <span className="cc-na">N/A</span>,
+    },
+    { key: 'size', header: tyres ? 'Size' : 'Capacity', sortable: false, cell: (r) => (tyres ? r.size : r.capacity) || <span className="cc-na">N/A</span> },
+    {
+      key: 'serial', header: tyres ? 'Serial no' : 'Plate / chassis', sortable: false,
+      cell: (r) => (tyres ? r.serial_number : (r.registration_no || r.chassis_no)) || <span className="cc-na">N/A</span>,
+    },
+    { key: 'site', header: 'Current location', sortable: false, cell: (r) => r.site || <span className="cc-na">N/A</span> },
+    {
+      key: 'status', header: 'Status', sortable: false,
+      cell: (r) => { const s = rowStatus(r, type); return s ? <span className={`cc-pill ${s.tone}`}>{s.label}</span> : <span className="cc-na">N/A</span> },
+    },
+    {
+      key: 'qr', header: 'QR', sortable: false,
+      cell: (r) => {
+        const st = qrState(r, selected, qrImages)
+        if (st === 'ready') return <span className="cc-pill good"><Check size={11} aria-hidden="true" /> Ready</span>
+        if (st === 'pending') return <span className="cc-pill warn">Pending</span>
+        return <span className="cc-na">Not selected</span>
       },
-    })
-    return cols
-  }, [mode, selected, qrImages]) // eslint-disable-line react-hooks/exhaustive-deps
+    },
+    {
+      key: 'actions', header: <span className="sr-only">Actions</span>, sortable: false,
+      cell: (r) => (
+        <span className="ql-row-actions" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} role="presentation">
+          <button type="button" className="cc-icon-btn" aria-label={`Generate QR for ${getLabel(r)}`} title="Generate QR"
+            onClick={async () => { setSelected(prev => new Set([...prev, r.id])); await handleGenerate([r]) }}>
+            <QrCode size={14} />
+          </button>
+          <button type="button" className="cc-icon-btn" aria-label={`Add ${getLabel(r)} to the print queue`} title={qrImages[r.id] ? 'Add to print queue' : 'Generate the QR first'}
+            disabled={!qrImages[r.id]} onClick={() => queueSelection([r])}>
+            <ListPlus size={14} />
+          </button>
+        </span>
+      ),
+    },
+  ]
 
-  const selectedItems  = filtered.filter(r => selected.has(r.id))
-  const readyItems     = selectedItems.filter(r => qrImages[r.id])
-  const pendingItems   = selectedItems.filter(r => !qrImages[r.id])
-  // The preview is a scaled picture of the real label, so the size control moves
-  // both. It used to move only this.
-  const grid           = labelGrid(labelSize)
-  const dim            = Math.round(grid.w * PREVIEW_PX_PER_MM)
-  const sheets         = pageCount(readyItems.length, labelSize)
+  const kpis = buildQrKpis({ tyres: counts.data?.tyres ?? null, fleet: counts.data?.fleet ?? null, sessionLabels })
+  const kpiLoading = counts.loading && !counts.data
+  const kpiDisplay = (v) => (counts.error || v == null ? 'N/A' : fmtInt(v))
+  const queueCount = queueLabelCount(queue)
+  const dim = Math.round(grid.w * PREVIEW_PX_PER_MM)
+  const previewW = Math.min(dim, 230)
+  const sizeInfo = resolveLabelSize(labelSize, design.customW)
+
+  const tabs = PAGE_TABS.map((t) => ({ ...t, count: t.key === 'prints' && batches.length ? batches.length : undefined }))
 
   return (
     <>
@@ -521,7 +731,7 @@ export default function QrLabels() {
             display: flex !important;
             flex-direction: column !important;
             align-items: center !important;
-            width: 60mm !important;
+            width: ${grid.w}mm !important;
             border: 1.5px solid #16a34a !important;
             border-radius: 3mm !important;
             overflow: hidden !important;
@@ -535,11 +745,11 @@ export default function QrLabels() {
             padding: 1.5mm 0 !important; border-bottom: 0.6mm solid #16a34a !important;
             min-height: 7mm !important;
           }
-          .tp-print-header img { max-width: 46mm !important; max-height: 6mm !important; object-fit: contain !important; }
+          .tp-print-header img { max-width: ${Math.max(20, grid.w - 14)}mm !important; max-height: 6mm !important; object-fit: contain !important; }
           .tp-print-header span { color: #16a34a !important; font-size: 7pt !important; font-weight: bold !important; letter-spacing: 0.06em !important; font-family: Arial, sans-serif !important; }
-          .tp-print-qr { width: 50mm !important; height: 50mm !important; margin: 2mm !important; }
-          .tp-print-serial { font-family: monospace !important; font-size: 8pt !important; font-weight: bold !important; text-align: center !important; color: #000 !important; margin-bottom: 1mm !important; }
-          .tp-print-sub { font-size: 6pt !important; color: #666 !important; text-align: center !important; padding-bottom: 2mm !important; }
+          .tp-print-qr { width: ${Math.max(20, grid.w - 10)}mm !important; height: ${Math.max(20, grid.w - 10)}mm !important; margin: 2mm !important; }
+          .tp-print-serial { font-family: monospace !important; font-size: 8pt !important; font-weight: bold !important; text-align: center !important; color: #000 !important; margin: 0 2mm 1mm !important; word-break: break-all !important; }
+          .tp-print-sub { font-size: 6pt !important; color: #666 !important; text-align: center !important; padding: 0 2mm 1.5mm !important; margin: 0 !important; }
           @page { size: A4 portrait; margin: 0; }
         }
       `}</style>
@@ -551,473 +761,605 @@ export default function QrLabels() {
         style={{ position: 'fixed', top: 0, left: '-99999px', width: '210mm', background: 'white' }}
         aria-hidden
       >
-        {readyItems.map(item => (
-          <div key={item.id} className="tp-print-label">
-            <div className="tp-print-header">
-              {logoUrl
-                ? <img src={logoUrl} alt="" crossOrigin="anonymous" />
-                : <span>TYRE PULSE</span>}
-            </div>
-            <img src={qrImages[item.id]} alt={`QR code for ${getLabel(item)}`} className="tp-print-qr" />
-            <p className="tp-print-serial">{getLabel(item)}</p>
-            {getSub(item) && <p className="tp-print-sub">{getSub(item)}</p>}
+        {printList.map((item, i) => (
+          <div key={`${item.key}-${i}`} className="tp-print-label">
+            {info.logo && (
+              <div className="tp-print-header">
+                {companyLogo && logoUrl
+                  ? <img src={logoUrl} alt="" crossOrigin="anonymous" />
+                  : <span>TYRE PULSE</span>}
+              </div>
+            )}
+            <img src={item.qr} alt={`QR code for ${item.val}`} className="tp-print-qr" />
+            <p className="tp-print-serial">{item.val}</p>
+            {item.lines.map((l) => <p key={l} className="tp-print-sub">{l}</p>)}
           </div>
         ))}
       </div>
 
       {/* ── Page ─────────────────────────────────────────────────────────────── */}
-      <div className="space-y-6">
-        <PageHeader
-          title="QR Label Generator"
-          subtitle="Auto-generate QR code labels for tyres and vehicles, print and stick on assets"
-          icon={QrCode}
-          actions={
-            <div className="flex gap-2 flex-wrap">
-              <button
-                onClick={handlePrint}
-                disabled={readyItems.length === 0}
-                className="btn-secondary flex items-center gap-1.5 text-sm disabled:opacity-40"
-              >
-                <Printer size={14} /> Print Labels
-              </button>
-              <button
-                onClick={exportExcel}
-                disabled={selectedItems.length === 0 || exporting}
-                className="btn-secondary flex items-center gap-1.5 text-sm disabled:opacity-40"
-                title={mode === 'tyres' ? 'Spreadsheet of the selected tyres' : 'Spreadsheet of the selected vehicles and their details'}
-              >
-                <FileSpreadsheet size={14} />
-                {`Export Excel${selectedItems.length > 0 ? ` (${selectedItems.length})` : ''}`}
-              </button>
-              <button
-                onClick={exportPDF}
-                disabled={readyItems.length === 0 || exporting}
-                className="btn-primary flex items-center gap-1.5 text-sm disabled:opacity-40"
-              >
-                <Download size={14} />
-                {exporting ? 'Exporting...' : `Export PDF${readyItems.length > 0 ? ` (${readyItems.length})` : ''}`}
-              </button>
-            </div>
-          }
-        />
-
-        {/* ── Controls row ──────────────────────────────────────────────────────── */}
-        <div className="flex flex-wrap gap-3 items-center">
-          {/* Mode */}
-          <div className="flex p-1 rounded-lg gap-1" style={{ background: 'var(--input-bg)', border: '1px solid var(--input-border)' }}>
-            {[
-              { key: 'tyres',  icon: CircleDot, label: 'Tyre Serials' },
-              { key: 'assets', icon: Truck,     label: 'Vehicle Assets' },
-            ].map(({ key, icon: Icon, label }) => (
-              <button
-                key={key}
-                type="button"
-                aria-pressed={mode === key}
-                onClick={() => setMode(key)}
-                className={`flex items-center gap-2 px-4 min-h-[44px] rounded-md text-sm font-medium transition-all ${
-                  mode === key
-                    ? 'text-green-300'
-                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                }`}
-                style={mode === key ? {
-                  background: 'rgba(22,163,74,0.16)',
-                  border: '1px solid rgba(22,163,74,0.3)',
-                } : { border: '1px solid transparent' }}
-              >
-                <Icon size={13} /> {label}
-              </button>
-            ))}
+      <div className="cc ql-page">
+        <div className="ql-hero-wrap">
+          <PageHero
+            hello={<nav aria-label="Breadcrumb" className="ql-crumb">Fleet &amp; Assets <ChevronRight size={13} aria-hidden="true" /> <span aria-current="page">QR Labels</span></nav>}
+            title="QR Labels"
+            lead="Generate and manage QR labels for tyres, vehicles and assets. Print, track and assign QR codes for easy identification in the field."
+            imgLight="/dashboard/hero-assets-light.webp"
+            imgDark="/dashboard/hero-assets-dark.webp"
+          />
+          <div className="ql-hero-actions">
+            <button type="button" className="cc-btn-ghost" onClick={() => setQueueOpen(true)}>
+              <Printer size={15} aria-hidden="true" /> Print Queue ({fmtInt(queueCount)})
+            </button>
+            <button type="button" className="cc-btn-ghost" onClick={() => setTab('settings')}>
+              <Tags size={15} aria-hidden="true" /> Label Templates
+            </button>
           </div>
-
-          {/* Label size */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-[var(--text-muted)]">Label size:</span>
-            <div className="flex p-0.5 rounded-lg gap-0.5" style={{ background: 'var(--input-bg)', border: '1px solid var(--input-border)' }}>
-              {Object.entries(LABEL_SIZES).map(([key, { label, w }]) => (
-                <button
-                  key={key}
-                  type="button"
-                  aria-pressed={labelSize === key}
-                  onClick={() => setLabelSize(key)}
-                  className={`px-3 min-h-[44px] rounded-md text-xs font-semibold transition-all ${
-                    labelSize === key
-                      ? 'bg-green-600 text-white shadow'
-                      : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-                  }`}
-                >
-                  {label} <span className="opacity-60">{w} mm</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Generate button - right side */}
-          {selected.size > 0 && (
-            <div className="flex items-center gap-3 ml-auto">
-              <span className="text-xs text-[var(--text-muted)]">{selected.size} selected</span>
-              {pendingItems.length > 0 && (
-                <button
-                  onClick={() => handleGenerate()}
-                  disabled={generating}
-                  className="btn-primary text-sm flex items-center gap-1.5 disabled:opacity-50"
-                  style={{ boxShadow: generating ? 'none' : '0 0 20px rgba(22,163,74,0.35)' }}
-                >
-                  {generating
-                    ? <><RefreshCw size={13} className="animate-spin" /> Generating...</>
-                    : <><QrCode size={13} /> Generate {pendingItems.length} QR{pendingItems.length !== 1 ? 's' : ''}</>
-                  }
-                </button>
-              )}
-              {readyItems.length > 0 && (
-                <span className="flex items-center gap-1 text-xs text-green-400">
-                  <Check size={12} /> {readyItems.length} ready
-                </span>
-              )}
-            </div>
-          )}
         </div>
 
-        {/* ── Bulk intake: paste a list of codes, get their labels ─────────────── */}
-        <div className="card p-0 overflow-hidden">
-          <button
-            type="button"
-            aria-expanded={bulkOpen}
-            onClick={() => setBulkOpen(o => !o)}
-            className="w-full flex items-center gap-2 px-4 py-3 min-h-[44px] text-left"
-          >
-            <ClipboardList size={14} className="text-green-400 shrink-0" />
-            <span className="text-sm font-semibold text-[var(--text-primary)]">
-              {mode === 'tyres' ? 'Paste a list of tyre serials' : 'Paste a list of asset codes'}
-            </span>
-            <span className="text-xs text-[var(--text-muted)] hidden sm:inline">
-              {mode === 'tyres'
-                ? 'one per line, or upload a file - labels are generated for the ones found'
-                : 'like TM360 - one per line, or upload a file, and labels are generated automatically'}
-            </span>
-            {bulkOpen
-              ? <ChevronUp size={14} className="ml-auto text-[var(--text-muted)] shrink-0" />
-              : <ChevronDown size={14} className="ml-auto text-[var(--text-muted)] shrink-0" />}
-          </button>
-
-          {bulkOpen && (
-            <div className="px-4 pb-4 space-y-3" style={{ borderTop: '1px solid var(--border-dim)' }}>
-              <textarea
-                aria-label={mode === 'tyres' ? 'Tyre serials, one per line' : 'Asset codes, one per line'}
-                className="input w-full text-sm font-mono min-h-28 mt-3"
-                placeholder={mode === 'tyres' ? 'EP060420711\nYMA55312\n...' : 'TM360\nMP093\nBH021\n...'}
-                value={bulkText}
-                onChange={e => setBulkText(e.target.value)}
-                spellCheck={false}
-              />
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  onClick={handleBulkPaste}
-                  disabled={bulkBusy}
-                  className="btn-primary text-sm flex items-center gap-1.5 disabled:opacity-50"
-                >
-                  {bulkBusy
-                    ? <><RefreshCw size={13} className="animate-spin" /> Matching...</>
-                    : <><QrCode size={13} /> Find and generate</>}
-                </button>
-                <button
-                  onClick={() => fileRef.current?.click()}
-                  disabled={bulkBusy}
-                  className="btn-secondary text-sm flex items-center gap-1.5 disabled:opacity-50"
-                >
-                  <Upload size={13} /> Upload a file
-                </button>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept=".csv,.txt,.tsv,.xlsx,.xls"
-                  onChange={handleBulkFile}
-                  className="hidden"
-                />
-                {(bulkText || bulkResult) && (
-                  <button
-                    onClick={() => { setBulkText(''); setBulkResult(null); setBulkError(null) }}
-                    className="text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)] inline-flex items-center gap-1"
-                  >
-                    <X size={12} /> Clear list
-                  </button>
-                )}
-                <span className="text-xs text-[var(--text-muted)] ml-auto">
-                  A CSV, Excel sheet or plain list all work. Every cell is read.
-                </span>
-              </div>
-
-              {bulkError && (
-                <p className="text-xs text-red-300 flex items-center gap-1.5">
-                  <AlertCircle size={12} className="shrink-0" /> {bulkError}
-                </p>
-              )}
-
-              {bulkResult && (
-                <div className="space-y-2 text-xs">
-                  <p className={bulkResult.counts.matched ? 'text-green-300' : 'text-amber-300'}>
-                    {matchSummary(bulkResult, mode === 'tyres' ? 'serial' : 'asset code')}
-                    {bulkResult.counts.matched > 0 && ' Labels generated and selected below.'}
-                  </p>
-
-                  {/* Not in the register: named, never quietly dropped. */}
-                  {bulkResult.unmatched.length > 0 && (
-                    <div className="rounded-lg px-3 py-2" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)' }}>
-                      <p className="text-amber-300 font-semibold mb-1">
-                        Not found ({bulkResult.unmatched.length})
-                      </p>
-                      <p className="font-mono text-amber-200/80 break-all leading-relaxed">
-                        {bulkResult.unmatched.join('  ')}
-                      </p>
-                      <p className="text-amber-200/60 mt-1">
-                        These are not in the register you can see. Check the spelling, or the record may sit in another country.
-                        {truncated && ' This page also stopped short of the full register, so some may simply not be loaded.'}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Two machines can share a code, so the person picks. */}
-                  {bulkResult.ambiguous.length > 0 && (
-                    <div className="rounded-lg px-3 py-2 space-y-2" style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.25)' }}>
-                      <p className="text-blue-300 font-semibold">
-                        Found in more than one place ({bulkResult.ambiguous.length})
-                      </p>
-                      <p className="text-blue-200/70">
-                        The same code exists on more than one record, and they are usually different machines.
-                        Nothing was selected for these - pick the right one.
-                      </p>
-                      {bulkResult.ambiguous.map(({ code, rows }) => (
-                        <div key={code} className="space-y-1">
-                          <p className="font-mono text-blue-100">{code}</p>
-                          <div className="flex flex-wrap gap-1.5">
-                            {rows.map(r => (
-                              <button
-                                type="button"
-                                key={r.id}
-                                aria-pressed={selected.has(r.id)}
-                                onClick={async () => {
-                                  setSelected(prev => new Set([...prev, r.id]))
-                                  await handleGenerate([r])
-                                }}
-                                className="px-2 min-h-[44px] rounded-md text-[11px] transition-colors"
-                                style={{ background: 'var(--input-bg)', border: '1px solid var(--input-border)' }}
-                              >
-                                {selected.has(r.id) ? <Check size={10} className="inline mr-1 text-green-400" /> : null}
-                                {rowWhere(r)}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* ── KPI strip ─────────────────────────────────────────────────────────── */}
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-          {[
-            { label: mode === 'tyres' ? 'Tyres loaded' : 'Vehicles loaded', value: loading || error ? 'N/A' : labelStats.total.toLocaleString(), hint: truncated ? 'Partial read' : null, icon: Layers },
-            { label: 'Sites', value: loading || error ? 'N/A' : labelStats.sites, icon: MapPin },
-            { label: 'Selected', value: labelStats.selected.toLocaleString(), icon: CheckSquare },
-            { label: 'QR ready', value: labelStats.ready.toLocaleString(), hint: sheets > 0 ? `${sheets} A4 ${sheets === 1 ? 'sheet' : 'sheets'}` : null, icon: QrCode },
-            mode === 'tyres'
-              ? { label: 'No serial recorded', value: loading || error ? 'N/A' : labelStats.noSerial.toLocaleString(), hint: 'Label encodes the asset code', icon: Info }
-              : { label: 'Awaiting a QR', value: labelStats.pending.toLocaleString(), hint: 'Selected, not generated', icon: Info },
-          ].map(k => {
-            const Icon = k.icon
-            return (
-              <div key={k.label} className="card">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
-                  <Icon size={15} className="text-[var(--text-muted)]" aria-hidden="true" />
-                </div>
-                <p className="text-2xl font-bold mt-1 tabular-nums text-[var(--text-primary)]">{k.value}</p>
-                {k.hint && <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{k.hint}</p>}
-              </div>
-            )
-          })}
-        </div>
-
-        {/* ── Filters ──────────────────────────────────────────────────────────── */}
-        <div className="flex gap-3 flex-wrap">
-          <div className="relative flex-1 min-w-52">
-            <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
-            <input
-              aria-label={mode === 'tyres' ? 'Search tyres' : 'Search vehicles'}
-              className="input pl-8 text-sm w-full min-h-[44px]"
-              placeholder={mode === 'tyres' ? 'Search serial, brand, site...' : 'Search asset, type, site...'}
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
-          </div>
-          <select aria-label="Site" className="input w-44 text-sm min-h-[44px]" value={filterSite} onChange={e => setFilterSite(e.target.value)}>
-            <option value="all">All Sites</option>
-            {sites.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-          <select aria-label="QR status" className="input w-52 text-sm min-h-[44px]" value={filterQr} onChange={e => setFilterQr(e.target.value)}>
-            <option value="all">Any QR status</option>
-            {QR_STATE_OPTIONS.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
-          </select>
-          <button
-            type="button"
-            onClick={toggleAll}
-            className="btn-secondary text-sm px-4 min-h-[44px]"
-          >
-            {selected.size === filtered.length && filtered.length > 0 ? 'Deselect All' : `Select All (${filtered.length})`}
-          </button>
-        </div>
-
-        {/* A partial read must never masquerade as the whole register - the
-            count on Select All is otherwise indistinguishable from a total. */}
-        {truncated && (
-          <div className="flex items-start gap-2 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
-            <AlertCircle size={13} className="shrink-0 mt-0.5" />
-            <span>
-              Showing the first {data.length.toLocaleString()} records only. Narrow by site or search to reach the rest.
-            </span>
+        {notice && (
+          <div className={`cc-card ql-banner ${notice.tone}`} role="status">
+            <Info size={16} aria-hidden="true" />
+            <p>{notice.text}</p>
+            <button type="button" className="cc-icon-btn" aria-label="Dismiss message" onClick={() => setNotice(null)}><X size={14} /></button>
           </div>
         )}
 
-        {/* ── Generated QR preview grid ─────────────────────────────────────────── */}
-        <AnimatePresence>
-          {readyItems.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              className="space-y-3"
-            >
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-[var(--text-secondary)] flex items-center gap-2">
-                  <QrCode size={13} className="text-green-400" />
-                  Label Preview - {readyItems.length} generated
-                </h3>
-                <span className="text-xs text-[var(--text-muted)]">
-                  {grid.w} mm labels, {grid.cols} x {grid.rows} per A4 sheet
-                  {sheets > 0 ? `, ${sheets} ${sheets === 1 ? 'sheet' : 'sheets'} to print` : ''}
-                </span>
-              </div>
-
-              <div className="flex flex-wrap gap-3">
-                {readyItems.map(item => {
-                  const val = getLabel(item)
-                  const sub = getSub(item)
-                  return (
-                    <motion.div
-                      key={item.id}
-                      initial={{ opacity: 0, scale: 0.88 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      style={{ width: dim }}
-                    >
-                      {/* Label card */}
-                      <div
-                        className="flex flex-col rounded-xl overflow-hidden"
-                        style={{
-                          border: '1.5px solid rgba(22,163,74,0.45)',
-                          boxShadow: '0 0 24px rgba(22,163,74,0.1), 0 4px 16px rgba(0,0,0,0.4)',
-                        }}
-                      >
-                        {/* Header - the company logo, on white, with a green rule.
-                            The label carries the brand as an image now, not a name;
-                            when no logo is set the wordmark stands in so it is
-                            never blank. */}
-                        <div
-                          className="flex items-center justify-center bg-white px-2"
-                          style={{ height: Math.max(24, dim * 0.16), borderBottom: '1.5px solid #16a34a' }}
-                        >
-                          {logoUrl
-                            ? <img src={logoUrl} alt="" crossOrigin="anonymous" style={{ maxHeight: '80%', maxWidth: '86%', objectFit: 'contain', display: 'block' }} />
-                            : <span className="text-[9px] font-black tracking-[0.16em] uppercase" style={{ color: '#16a34a' }}>TYRE PULSE</span>}
-                        </div>
-
-                        {/* QR image - white background so codes are scannable */}
-                        <div className="flex items-center justify-center p-2 bg-white">
-                          <img
-                            src={qrImages[item.id]}
-                            alt={val}
-                            style={{ width: dim - 20, height: dim - 20, display: 'block' }}
-                          />
-                        </div>
-
-                        {/* Serial / info */}
-                        <div
-                          className="px-2 pt-1.5 pb-2 text-center"
-                          style={{ background: 'var(--panel-deep)' }}
-                        >
-                          {/* NOT truncated: the printed label keeps the whole identifier, so a
-                              preview that ends in "..." would be showing something the
-                              sheet does not print. It wraps here as it wraps there. */}
-                          <p className="text-[11px] font-bold font-mono text-[var(--text-primary)] tracking-tight break-all leading-tight">{val}</p>
-                          {sub && (
-                            <p className="text-[8.5px] text-[var(--text-muted)] truncate mt-0.5">{sub}</p>
-                          )}
-                        </div>
-                      </div>
-                    </motion.div>
-                  )
-                })}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* ── Records table ────────────────────────────────────────────────────── */}
-        <EnterpriseTable
-          columns={tableColumns}
-          data={filtered}
-          getRowId={(r) => String(r.id)}
-          loading={loading}
-          error={error}
-          onRetry={loadData}
-          enableGlobalFilter={false}
-          enableRowSelection
-          rowSelection={rowSelection}
-          onRowSelectionChange={onRowSelectionChange}
-          onRowClick={(r) => toggleSelect(r.id)}
-          initialPageSize={50}
-          pageSizeOptions={[25, 50, 100, 250]}
-          exportFileName={reportFileName('TyrePulse QR', mode === 'tyres' ? 'Tyres' : 'Vehicles', reportDateLabel())}
-          emptyMessage={data.length === 0 ? 'No records in this register yet.' : 'No records match these filters.'}
-        />
-
-        {/* ── How-to card ──────────────────────────────────────────────────────── */}
-        <div
-          className="card space-y-2"
-          style={{ background: 'rgba(22,163,74,0.04)', border: '1px solid rgba(22,163,74,0.12)' }}
-        >
-          <h3 className="text-sm font-semibold text-green-400 flex items-center gap-2">
-            <Info size={13} /> How to use
-          </h3>
-          <ol className="space-y-1 text-xs text-[var(--text-muted)] list-decimal list-inside leading-relaxed">
-            <li>Choose <strong className="text-[var(--text-muted)]">Tyre Serials</strong> (serial-level labels) or <strong className="text-[var(--text-muted)]">Vehicle Assets</strong> (vehicle-level labels)</li>
-            <li>
-              Already have a list? Open <strong className="text-[var(--text-muted)]">{mode === 'tyres' ? 'Paste a list of tyre serials' : 'Paste a list of asset codes'}</strong>,
-              paste it or upload the file, and the labels are found and generated for you. Anything not in the register is named rather than skipped.
-            </li>
-            <li>Otherwise tick the rows you want, or use <strong className="text-[var(--text-muted)]">Select All</strong>, then click <strong className="text-[var(--text-muted)]">Generate QRs</strong></li>
-            <li>
-              <strong className="text-[var(--text-muted)]">Print Labels</strong> opens the browser print dialog. Or use{' '}
-              <strong className="text-[var(--text-muted)]">Export PDF</strong> for a ready-to-send file: at the {LABEL_SIZES[labelSize].label.toLowerCase()} size
-              that is {grid.cols} x {grid.rows} = {grid.perPage} labels per A4 sheet.
-            </li>
-            <li>
-              <strong className="text-[var(--text-muted)]">Export Excel</strong> gives the same selection as a spreadsheet with the
-              {mode === 'tyres' ? ' tyre' : ' vehicle'} details, so a printed run comes with a list naming every code.
-            </li>
-            <li>Cut and stick labels onto the tyre or vehicle windscreen / chassis plate</li>
-            <li>Scan with the <strong className="text-[var(--text-muted)]">TyrePulse Scanner</strong> to instantly pull up full tyre details</li>
-            <li>
-              Labels carry your <strong className="text-[var(--text-muted)]">company logo</strong> across the top.
-              {logoUrl
-                ? ' It is loaded from your report branding.'
-                : ' Set one in the console under Report Colors and it appears here automatically.'}
-            </li>
-          </ol>
+        <div className="cc-kpis">
+          <Kpi icon={QrCode} tone="t-green" display={fmtInt(kpis.generated)} label="Labels generated this session"
+            title="Counted in this browser tab. No record of generated labels is kept in the system." />
+          <Kpi icon={CircleDot} tone="t-blue" loading={kpiLoading} display={kpiDisplay(kpis.tyres)} label="Tyres to label"
+            title="Tyre records in the register that a label can be made for" onClick={() => chooseType('tyres')} />
+          <Kpi icon={Truck} tone="t-purple" loading={kpiLoading} display={kpiDisplay(kpis.vehicles)} label="Vehicles to label"
+            title="Fleet records that carry tyres" onClick={() => chooseType('vehicles')} />
+          <Kpi icon={Factory} tone="t-orange" loading={kpiLoading} display={kpiDisplay(kpis.equipment)} label="Assets / equipment to label"
+            title="Tyreless fleet records such as generators and plants" onClick={() => chooseType('equipment')} />
+          <Kpi icon={ListChecks} tone="t-amber" display="N/A" label="Active QR codes"
+            title="Not measured: no record is kept of which labels are stuck on an item in the field." />
+          <Kpi icon={CircleSlash} tone="t-red" display="N/A" label="Unassigned labels"
+            title="Not measured: labels are generated for a specific item, so none is issued unassigned." />
         </div>
+        {counts.error && (
+          <p className="ql-note" role="alert">Register counts could not be loaded. <button type="button" className="cc-link cc-link-btn" onClick={counts.retry}>Try again</button></p>
+        )}
+
+        <Card className="ql-tabs-card">
+          <Tabs tabs={tabs} value={tab} onChange={setTab} label="QR label sections" variant="line" />
+        </Card>
+
+        {tab === 'generate' && (
+          <div className="ql-layout">
+            <div className="ql-col">
+              {/* 1. Select item type */}
+              <Card title={<><span className="ql-step">1</span> Select item type</>}>
+                <div className="ql-types" role="radiogroup" aria-label="Item type">
+                  {ITEM_TYPES.map((t) => {
+                    const Icon = TYPE_ICON[t.key]
+                    return (
+                      <button key={t.key} type="button" role="radio" aria-checked={type === t.key}
+                        className={`ql-type ${type === t.key ? 'on' : ''}`} onClick={() => chooseType(t.key)}>
+                        <span className="ql-type-icon"><Icon size={22} aria-hidden="true" /></span>
+                        <b>{t.label}</b>
+                        <small>{t.sub}</small>
+                        {type === t.key && <Check size={15} className="ql-type-check" aria-hidden="true" />}
+                      </button>
+                    )
+                  })}
+                </div>
+              </Card>
+
+              {/* 2. Filter & select items */}
+              <Card
+                title={<><span className="ql-step">2</span> Filter &amp; select items</>}
+                sub={loading ? 'Loading the register...' : `${fmtInt(filtered.length)} of ${fmtInt(typeRows.length)} ${itemTypeLabel(type).toLowerCase()} shown, ${fmtInt(selected.size)} selected`}
+                action={
+                  <button type="button" className="cc-btn-ghost" onClick={() => setBulkOpen(o => !o)} aria-expanded={bulkOpen}>
+                    <ClipboardList size={14} aria-hidden="true" /> {mode === 'tyres' ? 'Paste serials' : 'Paste asset codes'}
+                  </button>
+                }
+              >
+                {/* ── Bulk intake: paste a list of codes, get their labels ─────── */}
+                {bulkOpen && (
+                  <div className="ql-bulk">
+                    <p className="ql-bulk-lead">
+                      {mode === 'tyres'
+                        ? 'Paste tyre serials one per line, or upload a file. Labels are generated for the ones found.'
+                        : 'Paste asset codes like TM360 one per line, or upload a file. Labels are generated automatically.'}
+                    </p>
+                    <textarea
+                      aria-label={mode === 'tyres' ? 'Tyre serials, one per line' : 'Asset codes, one per line'}
+                      className="ql-textarea"
+                      placeholder={mode === 'tyres' ? 'EP060420711\nYMA55312\n...' : 'TM360\nMP093\nBH021\n...'}
+                      value={bulkText}
+                      onChange={e => setBulkText(e.target.value)}
+                      spellCheck={false}
+                    />
+                    <div className="ql-bulk-actions">
+                      <button type="button" onClick={handleBulkPaste} disabled={bulkBusy} className="cc-btn-primary">
+                        {bulkBusy
+                          ? <><RefreshCw size={13} className="animate-spin" aria-hidden="true" /> Matching...</>
+                          : <><QrCode size={13} aria-hidden="true" /> Find and generate</>}
+                      </button>
+                      <button type="button" onClick={() => fileRef.current?.click()} disabled={bulkBusy} className="cc-btn-ghost">
+                        <Upload size={13} aria-hidden="true" /> Upload a file
+                      </button>
+                      <input ref={fileRef} type="file" accept=".csv,.txt,.tsv,.xlsx,.xls" onChange={handleBulkFile} className="hidden" aria-label="Upload a list of codes" />
+                      {(bulkText || bulkResult) && (
+                        <button type="button" onClick={() => { setBulkText(''); setBulkResult(null); setBulkError(null) }} className="cc-link cc-link-btn">
+                          <X size={12} aria-hidden="true" /> Clear list
+                        </button>
+                      )}
+                      <span className="ql-muted">A CSV, Excel sheet or plain list all work. Every cell is read.</span>
+                    </div>
+
+                    {bulkError && <p className="ql-err"><AlertCircle size={12} aria-hidden="true" /> {bulkError}</p>}
+
+                    {bulkResult && (
+                      <div className="ql-bulk-result">
+                        <p className={bulkResult.counts.matched ? 'ql-good' : 'ql-warn'}>
+                          {matchSummary(bulkResult, mode === 'tyres' ? 'serial' : 'asset code')}
+                          {bulkResult.counts.matched > 0 && ' Labels generated and selected below.'}
+                        </p>
+
+                        {/* Not in the register: named, never quietly dropped. */}
+                        {bulkResult.unmatched.length > 0 && (
+                          <div className="ql-box warn">
+                            <b>Not found ({bulkResult.unmatched.length})</b>
+                            <p className="ql-mono">{bulkResult.unmatched.join('  ')}</p>
+                            <p>
+                              These are not in the register you can see. Check the spelling, or the record may sit in another country.
+                              {truncated && ' This page also stopped short of the full register, so some may simply not be loaded.'}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Two machines can share a code, so the person picks. */}
+                        {bulkResult.ambiguous.length > 0 && (
+                          <div className="ql-box info">
+                            <b>Found in more than one place ({bulkResult.ambiguous.length})</b>
+                            <p>The same code exists on more than one record, and they are usually different machines. Nothing was selected for these. Pick the right one.</p>
+                            {bulkResult.ambiguous.map(({ code, rows }) => (
+                              <div key={code} className="ql-amb">
+                                <p className="ql-mono">{code}</p>
+                                <div className="ql-amb-rows">
+                                  {rows.map(r => (
+                                    <button
+                                      type="button"
+                                      key={r.id}
+                                      aria-pressed={selected.has(r.id)}
+                                      onClick={async () => {
+                                        if (register === 'fleet' && fleetKind(r) !== type) setType(fleetKind(r))
+                                        setSelected(prev => new Set([...prev, r.id]))
+                                        await handleGenerate([r])
+                                      }}
+                                      className="cc-btn-ghost ql-amb-btn"
+                                    >
+                                      {selected.has(r.id) && <Check size={11} aria-hidden="true" />}
+                                      {rowWhere(r)}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="cc-filters ql-filters">
+                  <label className="cc-field">
+                    <span>Site</span>
+                    <select className="cc-select" value={filterSite} onChange={e => setFilterSite(e.target.value)}>
+                      <option value="all">All sites</option>
+                      {options.sites.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </label>
+                  <label className="cc-field">
+                    <span>{tyres ? 'Manufacturer' : 'Make'}</span>
+                    <select className="cc-select" value={filterMaker} onChange={e => setFilterMaker(e.target.value)}>
+                      <option value="all">All</option>
+                      {options.makers.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </label>
+                  <label className="cc-field">
+                    <span>{tyres ? 'Size' : 'Type'}</span>
+                    <select className="cc-select" value={filterSize} onChange={e => setFilterSize(e.target.value)}>
+                      <option value="all">All</option>
+                      {options.sizes.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </label>
+                  <div className="cc-search">
+                    <Search size={15} aria-hidden="true" />
+                    <input
+                      aria-label={tyres ? 'Search tyres' : 'Search vehicles and assets'}
+                      placeholder={tyres ? 'Search serial, brand, asset, site...' : 'Search asset, type, make, site...'}
+                      value={search}
+                      onChange={e => setSearch(e.target.value)}
+                    />
+                  </div>
+                  <button type="button" className="cc-btn-ghost" aria-expanded={moreFilters} onClick={() => setMoreFilters(v => !v)}>
+                    <SlidersHorizontal size={14} aria-hidden="true" /> More Filters
+                  </button>
+                </div>
+                {moreFilters && (
+                  <div className="cc-filters ql-filters ql-more">
+                    <label className="cc-field">
+                      <span>QR status</span>
+                      <select className="cc-select" value={filterQr} onChange={e => setFilterQr(e.target.value)}>
+                        <option value="all">Any QR status</option>
+                        {QR_STATE_OPTIONS.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+                      </select>
+                    </label>
+                    <button type="button" className="cc-btn-ghost" onClick={() => { setSearch(''); setFilterSite('all'); setFilterQr('all'); setFilterMaker('all'); setFilterSize('all') }}>
+                      <X size={13} aria-hidden="true" /> Clear filters
+                    </button>
+                  </div>
+                )}
+
+                <div className="cc-bulk">
+                  <button type="button" onClick={toggleAll} className="cc-btn-ghost" disabled={!filtered.length}>
+                    {selected.size === filtered.length && filtered.length > 0 ? 'Deselect all' : `Select all (${fmtInt(filtered.length)})`}
+                  </button>
+                  {selected.size > 0 && <span className="cc-bulk-count">{fmtInt(selected.size)} selected</span>}
+                  {selected.size > 0 && <button type="button" className="cc-link cc-link-btn" onClick={() => setSelected(new Set())}>Clear selection</button>}
+                </div>
+
+                {/* A partial read must never masquerade as the whole register - the
+                    count on Select all is otherwise indistinguishable from a total. */}
+                {truncated && (
+                  <p className="ql-box warn" role="status">
+                    Showing the first {data.length.toLocaleString()} records only. Narrow by site or search to reach the rest.
+                  </p>
+                )}
+
+                <KitTable
+                  className="ql-table"
+                  columns={columns}
+                  rows={pageRows}
+                  getRowId={(r) => String(r.id)}
+                  loading={loading}
+                  error={error}
+                  onRetry={loadData}
+                  enableRowSelection
+                  rowSelection={rowSelection}
+                  onRowSelectionChange={onRowSelectionChange}
+                  onRowClick={(r) => toggleSelect(r.id)}
+                  manualPagination
+                  showPagination={false}
+                  enableSorting={false}
+                  pageIndex={safePage}
+                  pageSize={pageSize}
+                  pageCount={pageTotal}
+                  totalRows={filtered.length}
+                  empty={typeRows.length === 0 ? `No ${itemTypeLabel(type).toLowerCase()} in this register yet.` : 'No records match these filters.'}
+                />
+                {!loading && !error && filtered.length > 0 && (
+                  <Pager page={safePage} pageSize={pageSize} total={filtered.length} noun={itemTypeLabel(type).toLowerCase()}
+                    onPage={setPage} onPageSize={setPageSize} sizes={[10, 25, 50, 100]} />
+                )}
+              </Card>
+
+              {/* 4. Generate & print */}
+              <Card title={<><span className="ql-step">4</span> Generate &amp; print</>}>
+                <div className="ql-gen">
+                  <div className="ql-gen-stat">
+                    <span>Selected items</span>
+                    <b>{fmtInt(selectedItems.length)}</b>
+                    <small>{fmtInt(readyItems.length)} with a QR ready{pendingItems.length ? `, ${fmtInt(pendingItems.length)} to generate` : ''}</small>
+                  </div>
+                  <div className="ql-gen-stat">
+                    <span>Copies per label</span>
+                    <div className="ql-stepper">
+                      <button type="button" aria-label="Fewer copies" disabled={copies <= COPIES.min} onClick={() => setDesignPart({ copies: copies - 1 })}><Minus size={14} /></button>
+                      <input aria-label="Copies per label" inputMode="numeric" value={copies}
+                        onChange={(e) => setDesignPart({ copies: clampCopies(e.target.value) })} />
+                      <button type="button" aria-label="More copies" disabled={copies >= COPIES.max} onClick={() => setDesignPart({ copies: copies + 1 })}><Plus size={14} /></button>
+                    </div>
+                  </div>
+                  <div className="ql-gen-stat">
+                    <span>Total labels to print</span>
+                    <b>{fmtInt(printTotal)}</b>
+                    <small>{sheets > 0 ? `${sheets} A4 ${sheets === 1 ? 'sheet' : 'sheets'}, ${grid.cols} x ${grid.rows} per sheet` : 'Generate QR codes to print'}</small>
+                  </div>
+                </div>
+                <div className="ql-gen-actions">
+                  <button type="button" onClick={() => handleGenerate()} disabled={generating || pendingItems.length === 0} className="cc-btn-primary">
+                    {generating
+                      ? <><RefreshCw size={14} className="animate-spin" aria-hidden="true" /> Generating...</>
+                      : <><QrCode size={14} aria-hidden="true" /> Generate Labels{pendingItems.length ? ` (${pendingItems.length})` : ''}</>}
+                  </button>
+                  <button type="button" className="cc-btn-ghost" disabled={readyItems.length === 0} onClick={() => queueSelection()}>
+                    <ListPlus size={14} aria-hidden="true" /> Add to Print Queue
+                  </button>
+                  <button type="button" className="cc-btn-ghost" disabled={readyItems.length === 0} onClick={() => handlePrint()}>
+                    <Printer size={14} aria-hidden="true" /> Print
+                  </button>
+                  <div className="ql-menu" ref={exportRef}>
+                    <button type="button" className="cc-btn-ghost" aria-haspopup="menu" aria-expanded={exportMenu}
+                      disabled={selectedItems.length === 0 || exporting} onClick={() => setExportMenu(v => !v)}>
+                      <Download size={14} aria-hidden="true" /> {exporting ? 'Exporting...' : 'Export QR Data'} <ChevronDown size={13} aria-hidden="true" />
+                    </button>
+                    {exportMenu && (
+                      <div className="ql-menu-list" role="menu">
+                        <button type="button" role="menuitem" disabled={readyItems.length === 0} onClick={() => { setExportMenu(false); exportPDF() }}>
+                          <FileText size={14} aria-hidden="true" /> Label sheet (PDF){readyItems.length ? ` (${printTotal})` : ''}
+                        </button>
+                        <button type="button" role="menuitem" onClick={() => { setExportMenu(false); exportExcel() }}>
+                          <FileSpreadsheet size={14} aria-hidden="true" /> Details (Excel) ({selectedItems.length})
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {readyItems.length === 0 && selectedItems.length > 0 && (
+                  <p className="ql-note">Press Generate Labels to make the QR codes before printing or adding to the queue.</p>
+                )}
+              </Card>
+            </div>
+
+            <div className="ql-col ql-rail">
+              {/* 3. Label design & preview */}
+              <Card title={<><span className="ql-step">3</span> Label design &amp; preview</>}>
+                <Tabs tabs={SIZE_TABS} value={labelSize} onChange={(k) => setDesignPart({ size: k })} label="Label size" />
+                {labelSize === 'custom' && (
+                  <label className="cc-field ql-custom-w">
+                    <span>Custom width (mm, {CUSTOM_WIDTH.min} to {CUSTOM_WIDTH.max})</span>
+                    <input type="number" min={CUSTOM_WIDTH.min} max={CUSTOM_WIDTH.max} value={design.customW}
+                      onChange={(e) => setDesignPart({ customW: e.target.value })}
+                      onBlur={(e) => setDesignPart({ customW: clampCustomWidth(e.target.value) })} />
+                  </label>
+                )}
+
+                <div className="ql-preview">
+                  {previewEntry ? (
+                    <div className="ql-label" style={{ width: previewW }}>
+                      <LabelHeader showLogo={info.logo} companyLogo={companyLogo} logoUrl={logoUrl} className="ql-label-head"
+                        imgStyle={{ maxHeight: '80%', maxWidth: '86%', objectFit: 'contain', display: 'block' }} />
+                      <div className="ql-label-qr">
+                        {previewEntry.qr
+                          ? <img src={previewEntry.qr} alt={`QR code preview for ${previewEntry.val}`} style={{ width: previewW - 24, height: previewW - 24 }} />
+                          : <div className="cc-skel" style={{ width: previewW - 24, height: previewW - 24 }} />}
+                      </div>
+                      <div className="ql-label-text">
+                        {/* NOT truncated: the printed label keeps the whole identifier, so a
+                            preview ending in "..." would show something the sheet does not print. */}
+                        <p className="ql-label-code">{previewEntry.val}</p>
+                        {previewEntry.lines.map((l) => <p key={l} className="ql-label-sub">{l}</p>)}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="cc-empty">{loading ? 'Loading a record to preview...' : 'No record to preview. Choose an item type with records.'}</div>
+                  )}
+                  <p className="ql-muted">
+                    {sizeInfo.label} label, {grid.w} x {grid.h} mm, {grid.perPage} per A4 sheet.
+                    {previewRow && !readyItems[0] ? ' Preview only: press Generate Labels to make the printable code.' : ''}
+                  </p>
+                </div>
+
+                <div className="ql-info">
+                  <h3>Label information</h3>
+                  {LABEL_INFO.map((f) => {
+                    const locked = !!f.locked
+                    const unavailable = !!f.unavailable
+                    const on = locked ? true : unavailable ? false : !!info[f.key]
+                    return (
+                      <label key={f.key} className={`ql-toggle ${locked || unavailable ? 'dim' : ''}`} title={unavailable ? f.unavailable : locked ? 'Always printed: a label without it identifies nothing.' : undefined}>
+                        <input type="checkbox" checked={on} disabled={locked || unavailable}
+                          onChange={(e) => setDesignPart({ info: { ...info, [f.key]: e.target.checked } })} />
+                        <span className="ql-switch" aria-hidden="true" />
+                        <span>{infoLabel(f.key, type)}</span>
+                        {locked && <Lock size={12} aria-hidden="true" />}
+                        {unavailable && <small>Not available</small>}
+                      </label>
+                    )
+                  })}
+                  {info.custom && (
+                    <label className="cc-field">
+                      <span>Custom text</span>
+                      <input className="ql-input" maxLength={40} value={design.customText}
+                        onChange={(e) => setDesign((d) => ({ ...d, customText: e.target.value }))}
+                        onBlur={(e) => setDesignPart({ customText: cleanCustomText(e.target.value) })}
+                        placeholder="For example: Property of the fleet" />
+                    </label>
+                  )}
+                </div>
+
+                <div className="ql-selects">
+                  <label className="cc-field">
+                    <span>Logo</span>
+                    <select className="cc-select" value={design.logo} disabled={!info.logo} onChange={(e) => setDesignPart({ logo: e.target.value })}>
+                      <option value="company">Company logo{logoUrl ? '' : ' (not set, wordmark used)'}</option>
+                      <option value="wordmark">Tyre Pulse wordmark</option>
+                    </select>
+                  </label>
+                  <label className="cc-field">
+                    <span>Label size (mm)</span>
+                    <select className="cc-select" value={labelSize} onChange={(e) => setDesignPart({ size: e.target.value })}>
+                      {Object.values(LABEL_SIZES).map((s) => <option key={s.key} value={s.key}>{s.w} mm ({s.label})</option>)}
+                      <option value="custom">Custom ({clampCustomWidth(design.customW)} mm)</option>
+                    </select>
+                  </label>
+                  <div className="cc-field">
+                    <span>Label material</span>
+                    <p className="ql-readout">Chosen on your printer. Not stored here.</p>
+                  </div>
+                  <label className="cc-field">
+                    <span>QR code type</span>
+                    <select className="cc-select" value={design.qrLevel} onChange={(e) => setQrLevel(e.target.value)}>
+                      {QR_LEVELS.map((l) => <option key={l.key} value={l.key}>Error correction {l.label}</option>)}
+                    </select>
+                  </label>
+                </div>
+              </Card>
+
+              {/* Recent generated labels (this session) */}
+              <Card title="Recent generated labels" sub="This session only. Not saved to the system."
+                action={batches.length > 0 && <button type="button" className="cc-link cc-link-btn" onClick={() => setTab('prints')}>View all</button>}>
+                <BatchTable batches={batches.slice(0, 6)} onView={setViewBatch} compact empty="No labels generated yet in this session." />
+              </Card>
+            </div>
+
+            {/* Generated labels, as they will print */}
+            {readyEntries.length > 0 && (
+              <Card className="ql-wide" title={`Generated labels (${fmtInt(readyEntries.length)})`}
+                sub={`${grid.w} mm labels, ${grid.cols} x ${grid.rows} per A4 sheet${sheets > 0 ? `, ${sheets} ${sheets === 1 ? 'sheet' : 'sheets'} to print with ${copies} ${copies === 1 ? 'copy' : 'copies'} each` : ''}`}>
+                <div className="ql-grid">
+                  {readyEntries.map((e) => (
+                    <div key={e.key} className="ql-label" style={{ width: Math.min(dim, 200) }}>
+                      <LabelHeader showLogo={info.logo} companyLogo={companyLogo} logoUrl={logoUrl} className="ql-label-head"
+                        imgStyle={{ maxHeight: '80%', maxWidth: '86%', objectFit: 'contain', display: 'block' }} />
+                      <div className="ql-label-qr"><img src={e.qr} alt={e.val} style={{ width: Math.min(dim, 200) - 20, height: Math.min(dim, 200) - 20 }} /></div>
+                      <div className="ql-label-text">
+                        <p className="ql-label-code">{e.val}</p>
+                        {e.lines.map((l) => <p key={l} className="ql-label-sub">{l}</p>)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+
+            <details className="cc-card ql-wide ql-howto">
+              <summary><Info size={14} aria-hidden="true" /> How to use</summary>
+              <ol>
+                <li>Choose Tyres, Vehicles or Assets / Equipment.</li>
+                <li>Already have a list? Use {mode === 'tyres' ? 'Paste serials' : 'Paste asset codes'}, paste it or upload the file, and the labels are found and generated for you. Anything not in the register is named rather than skipped.</li>
+                <li>Otherwise tick the rows you want, or use Select all, then press Generate Labels.</li>
+                <li>Print opens the browser print dialog. Export QR Data gives the label sheet as a PDF ({grid.cols} x {grid.rows} = {grid.perPage} labels per A4 sheet at this size) or the details as a spreadsheet, so a printed run comes with a list naming every code.</li>
+                <li>Cut and stick labels onto the tyre, the windscreen or the chassis plate, then scan them with the Tyre Pulse scanner to open the record.</li>
+                <li>Labels carry your company logo across the top.{logoUrl ? ' It is loaded from your report branding.' : ' Set one in the console under Report Colors and it appears here automatically.'}</li>
+              </ol>
+            </details>
+          </div>
+        )}
+
+        {['inventory', 'assigned', 'scans'].includes(tab) && (
+          <Card title={PAGE_TABS.find((t) => t.key === tab)?.label}>
+            <div className="cc-empty ql-tab-empty">
+              <div>
+                <Package size={28} aria-hidden="true" />
+                <b>{TAB_EMPTY[tab].title}</b>
+                <p>{TAB_EMPTY[tab].body}</p>
+                <button type="button" className="cc-btn" onClick={() => setTab('generate')}>Generate labels</button>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {tab === 'prints' && (
+          <Card title="Print history" sub="Print runs and exports made on this page in this browser tab. Not saved to the system.">
+            <BatchTable batches={batches} onView={setViewBatch} empty={TAB_EMPTY.prints.body} />
+          </Card>
+        )}
+
+        {tab === 'settings' && (
+          <div className="ql-settings">
+            <Card title="Label templates" sub="Saved in this browser on this device.">
+              <form className="ql-tpl-form" onSubmit={(e) => { e.preventDefault(); setTemplates((t) => saveTemplate(t, templateName, design)); setTemplateName('') }}>
+                <label className="cc-field">
+                  <span>Save the current design as</span>
+                  <input className="ql-input" maxLength={40} value={templateName} onChange={(e) => setTemplateName(e.target.value)} placeholder="Template name" />
+                </label>
+                <button type="submit" className="cc-btn-primary" disabled={!templateName.trim()}><Bookmark size={14} aria-hidden="true" /> Save template</button>
+              </form>
+              {templates.length === 0
+                ? <div className="cc-empty">No templates yet. Set up a design, name it and save it here.</div>
+                : (
+                  <ul className="ql-tpl-list">
+                    {templates.map((t) => {
+                      const d = normalizeDesign(t.design)
+                      const sz = resolveLabelSize(d.size, d.customW)
+                      return (
+                        <li key={t.name}>
+                          <div><b>{t.name}</b><small>{sz.label}, {sz.w} mm, {d.copies} {d.copies === 1 ? 'copy' : 'copies'}, error correction {d.qrLevel}</small></div>
+                          <button type="button" className="cc-btn" onClick={() => { setDesign(d); setQrImages({}); setTab('generate') }}>Apply</button>
+                          <button type="button" className="cc-icon-btn" aria-label={`Delete template ${t.name}`} onClick={() => setTemplates((list) => list.filter((x) => x.name !== t.name))}><Trash2 size={14} /></button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+            </Card>
+            <Card title="Branding and defaults">
+              <ul className="ql-facts">
+                <li><b>Company logo</b><span>{logoUrl ? 'Set, loaded from your report branding.' : 'Not set. Labels use the Tyre Pulse wordmark. Set one in the console under Report Colors.'}</span></li>
+                <li><b>Your label design</b><span>Remembered in this browser on this device.</span></li>
+                <li><b>Print queue and history</b><span>Kept in this browser tab only and cleared when it closes.</span></li>
+              </ul>
+              <button type="button" className="cc-btn-ghost" onClick={() => { setDesign(normalizeDesign(null)); setQrImages({}) }}>
+                <RefreshCw size={14} aria-hidden="true" /> Reset design to defaults
+              </button>
+            </Card>
+          </div>
+        )}
       </div>
+
+      {/* ── Print queue (this session) ───────────────────────────────────────── */}
+      <Modal open={queueOpen} onClose={() => setQueueOpen(false)} size="lg" title={`Print queue (${fmtInt(queueCount)} labels)`}
+        subtitle="Kept in this browser tab only. Printed at the current label size."
+        footer={
+          <>
+            <button type="button" className="cc-btn-ghost" disabled={!queue.size} onClick={() => setQueue(new Map())}><Trash2 size={14} aria-hidden="true" /> Clear queue</button>
+            <button type="button" className="cc-btn-ghost" disabled={!queue.size || exporting} onClick={() => exportPDF(queueToPrint(queue))}><FileText size={14} aria-hidden="true" /> Export PDF</button>
+            <button type="button" className="cc-btn-primary" disabled={!queue.size} onClick={() => { setQueueOpen(false); handlePrint(queueToPrint(queue)) }}><Printer size={14} aria-hidden="true" /> Print queue</button>
+          </>
+        }>
+        {queue.size === 0
+          ? <div className="cc-empty">The queue is empty. Generate labels, then use Add to Print Queue.</div>
+          : (
+            <ul className="ql-queue">
+              {[...queue.values()].map((e) => (
+                <li key={e.key}>
+                  {e.qr && <img src={e.qr} alt="" />}
+                  <div><b className="ql-mono">{e.val}</b><small>{itemTypeLabel(e.type)}{e.lines.length ? `, ${e.lines.join(', ')}` : ''}</small></div>
+                  <span className="cc-pill muted">{e.copies} {e.copies === 1 ? 'copy' : 'copies'}</span>
+                  <button type="button" className="cc-icon-btn" aria-label={`Remove ${e.val} from the queue`}
+                    onClick={() => setQueue((q) => { const n = new Map(q); n.delete(e.key); return n })}><X size={14} /></button>
+                </li>
+              ))}
+            </ul>
+          )}
+      </Modal>
+
+      {/* ── One batch ────────────────────────────────────────────────────────── */}
+      <Modal open={!!viewBatch} onClose={() => setViewBatch(null)} size="md" title={viewBatch ? `Batch ${viewBatch.batchNo}` : ''}
+        subtitle={viewBatch ? `${BATCH_ACTIONS[viewBatch.action]?.label || viewBatch.action}, ${formatBatchTime(viewBatch.at)}` : ''}
+        footer={viewBatch && viewBatch.entries?.some((e) => e.qr) && (
+          <button type="button" className="cc-btn-primary" onClick={() => { const list = viewBatch.entries.filter((e) => e.qr); setViewBatch(null); handlePrint(list) }}>
+            <Printer size={14} aria-hidden="true" /> Print again
+          </button>
+        )}>
+        {viewBatch && (
+          <ul className="ql-queue">
+            {[...new Map((viewBatch.entries || []).map((e) => [e.key, e])).values()].map((e) => (
+              <li key={e.key}>
+                {e.qr && <img src={e.qr} alt="" />}
+                <div><b className="ql-mono">{e.val || 'N/A'}</b><small>{e.lines.join(', ') || itemTypeLabel(e.type)}</small></div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Modal>
     </>
+  )
+}
+
+function BatchTable({ batches, onView, compact = false, empty }) {
+  const cols = [
+    { key: 'batchNo', header: 'Batch no', cell: (b) => <span className="ql-mono">{b.batchNo}</span> },
+    { key: 'type', header: 'Type', cell: (b) => itemTypeLabel(b.type) },
+    { key: 'labels', header: 'Items', cell: (b) => fmtInt(b.items) },
+    { key: 'by', header: 'Generated by', cell: (b) => b.by },
+    { key: 'at', header: 'Date / time', cell: (b) => formatBatchTime(b.at) },
+    { key: 'status', header: 'Status', cell: (b) => { const a = BATCH_ACTIONS[b.action]; return <span className={`cc-pill ${a?.tone || 'muted'}`}>{a?.label || b.action}</span> } },
+    { key: 'view', header: <span className="sr-only">View</span>, sortable: false,
+      cell: (b) => <button type="button" className="cc-icon-btn" aria-label={`View batch ${b.batchNo}`} onClick={() => onView(b)}><Eye size={14} /></button> },
+  ]
+  return (
+    <CardState state={{ loading: false, data: batches, error: null }} empty={batches.length ? null : empty}>
+      <KitTable compact={compact} columns={cols} rows={batches} getRowId={(b) => b.id} className="ql-batches" empty={empty} />
+    </CardState>
   )
 }

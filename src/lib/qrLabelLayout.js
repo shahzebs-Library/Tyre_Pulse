@@ -44,6 +44,27 @@ export const LABEL_SIZES = {
 export const DEFAULT_SIZE = 'md'
 
 /**
+ * A custom label width, in millimetres, for stock the three presets do not
+ * cover. Clamped: below 30 mm a QR code stops scanning reliably off a dusty
+ * wheel, and above 100 mm a label no longer fits two across on A4 with its
+ * margins. Kept OUT of LABEL_SIZES on purpose, so every preset stays a fixed,
+ * tested size and the custom one is always explicit.
+ */
+export const CUSTOM_WIDTH = { min: 30, max: 100, default: 50 }
+
+export function clampCustomWidth(w) {
+  const n = Math.round(Number(w))
+  if (!Number.isFinite(n)) return CUSTOM_WIDTH.default
+  return Math.min(CUSTOM_WIDTH.max, Math.max(CUSTOM_WIDTH.min, n))
+}
+
+/** The label size in use: a preset, or the clamped custom width. */
+export function resolveLabelSize(sizeKey = DEFAULT_SIZE, customW) {
+  if (sizeKey === 'custom') return { key: 'custom', label: 'Custom', w: clampCustomWidth(customW) }
+  return LABEL_SIZES[sizeKey] || LABEL_SIZES[DEFAULT_SIZE]
+}
+
+/**
  * The grid for one label size: how many fit across and down an A4 page, and
  * where the first one starts.
  *
@@ -51,8 +72,8 @@ export const DEFAULT_SIZE = 'md'
  * 60 mm label; at 40 mm that wastes most of the sheet and at 70 mm it would
  * overflow the page width.
  */
-export function labelGrid(sizeKey = DEFAULT_SIZE) {
-  const size = LABEL_SIZES[sizeKey] || LABEL_SIZES[DEFAULT_SIZE]
+export function labelGrid(sizeKey = DEFAULT_SIZE, opts = {}) {
+  const size = resolveLabelSize(sizeKey, opts.customW)
   const w = size.w
   const h = w + 8
   // At least one column, however wide the label: a grid of zero prints nothing.
@@ -74,10 +95,10 @@ export function labelGrid(sizeKey = DEFAULT_SIZE) {
 }
 
 /** How many sheets a run of labels needs. Zero labels is zero pages, not one. */
-export function pageCount(labelCount, sizeKey = DEFAULT_SIZE) {
+export function pageCount(labelCount, sizeKey = DEFAULT_SIZE, opts = {}) {
   const n = Number(labelCount) || 0
   if (n <= 0) return 0
-  return Math.ceil(n / labelGrid(sizeKey).perPage)
+  return Math.ceil(n / labelGrid(sizeKey, opts).perPage)
 }
 
 /**

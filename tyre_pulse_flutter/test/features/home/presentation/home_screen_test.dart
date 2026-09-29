@@ -23,6 +23,7 @@ import 'package:go_router/go_router.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
+import 'package:tyre_pulse/core/auth/auth_providers.dart';
 import 'package:tyre_pulse/core/database/app_database_provider.dart';
 import 'package:tyre_pulse/core/permissions/access_resolver.dart';
 import 'package:tyre_pulse/core/permissions/permission_providers.dart';
@@ -78,6 +79,9 @@ Future<void> _pumpHome(
   WidgetTester tester, {
   required AccessState access,
   String? legacySite = 'NHC',
+  SiteScope siteScope = SiteScope.none,
+  bool accessFailed = false,
+  VoidCallback? onRetryAccess,
   Locale locale = const Locale('en'),
   ThemeData? theme,
   int notificationCount = 0,
@@ -94,7 +98,7 @@ Future<void> _pumpHome(
     role: access.role,
     effectivePermissions: access,
     countryScope: CountryScope.none,
-    siteScope: SiteScope.none,
+    siteScope: siteScope,
     companyId: 'org-1',
     tenantId: 'org-1',
     legacySite: legacySite,
@@ -106,6 +110,8 @@ Future<void> _pumpHome(
 
   final List<Override> overrides = <Override>[
     accessStateProvider.overrideWithValue(access),
+    accessLoadFailedProvider.overrideWithValue(accessFailed),
+    retryAccessLoadProvider.overrideWithValue(onRetryAccess),
     workspaceContextProvider.overrideWithValue(workspace),
     appDatabaseProvider.overrideWithValue(db),
     unreadNotificationsCountProvider.overrideWithValue(
@@ -427,6 +433,43 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(find.text('No site on file'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'an organisation wide site scope reads as All sites, not No site on file',
+    (WidgetTester tester) async {
+      await _pumpHome(
+        tester,
+        access: _tyreMan,
+        legacySite: '',
+        siteScope: SiteScope.fromValues(const <String>['ALL']),
+      );
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('All sites'), findsOneWidget);
+      expect(find.text('No site on file'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'a failed access read says so with Retry instead of an empty role',
+    (WidgetTester tester) async {
+      int retries = 0;
+      await _pumpHome(
+        tester,
+        access: _driver,
+        accessFailed: true,
+        onRetryAccess: () => retries++,
+      );
+
+      final Finder row = find.byKey(HomeScreenKeys.workRow('access'));
+      expect(row, findsOneWidget);
+      expect(find.text('Your access could not be loaded'), findsOneWidget);
+      expect(find.byKey(HomeScreenKeys.workRow('none')), findsNothing);
+      await tester.tap(row);
+      await tester.pump();
+      expect(retries, 1);
     },
   );
 

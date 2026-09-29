@@ -2105,6 +2105,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get homeSiteStatUnavailable => 'No site on file';
 
   @override
+  String get homeSiteAllSites => 'All sites';
+
+  @override
+  String get homeAccessLoadFailedTitle => 'Your access could not be loaded';
+
+  @override
+  String get homeAccessLoadFailedBody =>
+      'Some sections may be hidden until it loads. Tap to retry.';
+
+  @override
   String get homeFleetSizeStatLabel => 'Fleet size';
 
   @override

@@ -2114,6 +2114,16 @@ class AppLocalizationsAr extends AppLocalizations {
   String get homeSiteStatUnavailable => 'لا يوجد موقع مسجل';
 
   @override
+  String get homeSiteAllSites => 'جميع المواقع';
+
+  @override
+  String get homeAccessLoadFailedTitle => 'تعذر تحميل صلاحيات الوصول الخاصة بك';
+
+  @override
+  String get homeAccessLoadFailedBody =>
+      'قد تبقى بعض الأقسام مخفية حتى يتم التحميل. اضغط لإعادة المحاولة.';
+
+  @override
   String get homeFleetSizeStatLabel => 'حجم الأسطول';
 
   @override

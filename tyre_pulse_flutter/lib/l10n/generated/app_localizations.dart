@@ -3784,6 +3784,24 @@ abstract class AppLocalizations {
   /// **'No site on file'**
   String get homeSiteStatUnavailable;
 
+  /// No description provided for @homeSiteAllSites.
+  ///
+  /// In en, this message translates to:
+  /// **'All sites'**
+  String get homeSiteAllSites;
+
+  /// No description provided for @homeAccessLoadFailedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your access could not be loaded'**
+  String get homeAccessLoadFailedTitle;
+
+  /// No description provided for @homeAccessLoadFailedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Some sections may be hidden until it loads. Tap to retry.'**
+  String get homeAccessLoadFailedBody;
+
   /// No description provided for @homeFleetSizeStatLabel.
   ///
   /// In en, this message translates to:

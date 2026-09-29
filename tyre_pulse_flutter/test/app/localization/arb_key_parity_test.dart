@@ -529,10 +529,13 @@ void main() {
     // mobile/lib/accountDeletion.ts). The alert acknowledge and stock
     // add/adjust strings were appended INSIDE the existing alertsCopyCatalog
     // and stockCountCopyCatalog values, so they add no keys.
-    test('en, ar and ur each carry exactly 2070 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2070);
-      expect(_translatableKeys(ar).length, 2070);
-      expect(_translatableKeys(ur).length, 2070);
+    // 2070 + 3 = 2073. Home access state: homeSiteAllSites (an organisation
+    // wide site scope reads as all sites, not "no site on file") and the
+    // homeAccessLoadFailed* retry card shown when the access read fails.
+    test('en, ar and ur each carry exactly 2073 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2073);
+      expect(_translatableKeys(ar).length, 2073);
+      expect(_translatableKeys(ur).length, 2073);
     });
   });
 

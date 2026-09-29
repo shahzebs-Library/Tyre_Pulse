@@ -112,6 +112,11 @@ batching stops them being started at all.
   max_load_tonnes + under_review; fixed Unit intelligence always reading 0 tyres; Compliance = config fields filled, owner
   to confirm), Pressure Intelligence (/pressure-intel; only source = inspections.tyre_conditions, vs vehicle median rule,
   tpms_readings 0 rows, temperature/fuel N/A).
+- **FLUTTER TESTERS SEE NO MODULES (owner screenshot, Fleet Supervisor):** server is fine (get_user_module_permissions
+  returns 10 mobile: rows when impersonated). Cause = the Play closed-testing build predates the access loader, which is
+  only on this branch, not main. Fixed now (code only): "All sites" instead of "No site on file" on Home + Profile when
+  sites=['ALL']; failed access read shows Retry instead of "nothing for your role" (PermissionsStatus). Testers need
+  merge + a new Flutter build (owner's call). ARB key parity now 2073.
 - **KitTable** now one style for all kit pages (fixed heights, numeric right-align, `numeric`/`scroll` props).
 - **OPEN:** network policy blocks supabase.co / vercel.app / manufacturer sites = no browser QA, no datasheet fetch; Director demo
   account NOT created yet (waits on network access). Catalogue rows need manager approval. Badges on side/rear/top vehicle views

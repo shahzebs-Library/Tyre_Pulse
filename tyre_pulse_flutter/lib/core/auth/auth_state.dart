@@ -71,6 +71,25 @@ enum ProfileStatus {
 
 /// The full picture the auth layer holds. Immutable; every change produces a
 /// new value so a provider watching it sees a real change.
+/// Where the per-user grants and role matrix read stands for this sign-in.
+///
+/// Kept apart from [ProfileStatus] on purpose: a failed access read must not
+/// gate the whole shell (field work still runs on role defaults), but it must
+/// be SAID, so Home can offer a retry instead of looking empty.
+enum PermissionsStatus {
+  /// No signed-in profile yet.
+  none,
+
+  /// The first read of this sign-in is in flight.
+  loading,
+
+  /// Both reads succeeded, or a previous good read of this sign-in is kept.
+  loaded,
+
+  /// A read failed and there was nothing trustworthy to keep.
+  failed,
+}
+
 final class AuthState {
   const AuthState({
     this.sessionPhase = AuthSessionPhase.restoring,
@@ -80,6 +99,7 @@ final class AuthState {
     this.profileError,
     this.profileStale = false,
     this.versionGate = const VersionGateResult.notChecked(),
+    this.permissionsStatus = PermissionsStatus.none,
   });
 
   /// The state before anything has been read. The starting point of every
@@ -121,6 +141,9 @@ final class AuthState {
   /// sign-in; only a definitive [VersionGateReason.buildBelowMinimum] does.
   final VersionGateResult versionGate;
 
+  /// See [PermissionsStatus].
+  final PermissionsStatus permissionsStatus;
+
   AuthState copyWith({
     AuthSessionPhase? sessionPhase,
     String? userId,
@@ -132,6 +155,7 @@ final class AuthState {
     bool clearProfileError = false,
     bool? profileStale,
     VersionGateResult? versionGate,
+    PermissionsStatus? permissionsStatus,
   }) =>
       AuthState(
         sessionPhase: sessionPhase ?? this.sessionPhase,
@@ -142,13 +166,15 @@ final class AuthState {
             clearProfileError ? null : (profileError ?? this.profileError),
         profileStale: profileStale ?? this.profileStale,
         versionGate: versionGate ?? this.versionGate,
+        permissionsStatus: permissionsStatus ?? this.permissionsStatus,
       );
 
   @override
   String toString() =>
       'AuthState(session: ${sessionPhase.name}, user: $userId, '
       'profile: ${profileStatus.name}, stale: $profileStale, '
-      'versionGate: ${versionGate.reason.name})';
+      'versionGate: ${versionGate.reason.name}, '
+      'permissions: ${permissionsStatus.name})';
 }
 
 /// Turns the full [AuthState] into the narrow [TpSession] navigation depends

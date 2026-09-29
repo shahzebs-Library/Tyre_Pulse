@@ -502,9 +502,12 @@ class _IdentityHeader extends StatelessWidget {
     final TextTheme text = Theme.of(context).textTheme;
 
     final String? name = profile.fullName;
+    // Organisation wide scope ('ALL') means every site, not none.
     final String site = (profile.legacySite?.trim().isNotEmpty ?? false)
         ? profile.legacySite!.trim()
-        : l10n.homeSiteStatUnavailable;
+        : profile.siteScope.isOrganisationWide
+            ? l10n.homeSiteAllSites
+            : l10n.homeSiteStatUnavailable;
     final List<String> countries = profile.countryScope.seesAllCountries
         ? const <String>[]
         : profile.countryScope.namedCountries;

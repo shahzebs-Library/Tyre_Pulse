@@ -97,11 +97,38 @@ TpShellGateActions buildAuthShellGateActions(
 
 /// The auth layer's contribution to the root `ProviderScope`. See the library
 /// comment for what else the composition root must supply alongside this.
+/// True when the grants and role matrix read failed this sign-in and nothing
+/// trustworthy was kept (see [PermissionsStatus.failed]).
+///
+/// Defaults to false so a screen test that never wires the auth layer is not
+/// forced to build the real controller. [authLayerOverrides] points it at
+/// the live [AuthController] state.
+final Provider<bool> accessLoadFailedProvider =
+    Provider<bool>((Ref ref) => false);
+
+/// Re-reads the grants and role matrix. Null when nothing can retry (no auth
+/// layer wired), in which case the retry control is not offered.
+final Provider<VoidCallback?> retryAccessLoadProvider =
+    Provider<VoidCallback?>((Ref ref) => null);
+
 final authLayerOverrides = [
   sessionProvider.overrideWith(
     (Ref ref) => deriveSession(ref.watch(authControllerProvider)),
   ),
   shellGateActionsProvider.overrideWith(
     (Ref ref) => buildAuthShellGateActions(ref),
+  ),
+  accessLoadFailedProvider.overrideWith(
+    (Ref ref) => ref.watch(
+      authControllerProvider.select(
+        (AuthState state) =>
+            state.permissionsStatus == PermissionsStatus.failed,
+      ),
+    ),
+  ),
+  retryAccessLoadProvider.overrideWith(
+    (Ref ref) => () => unawaited(
+          ref.read(authControllerProvider.notifier).retryPermissions(),
+        ),
   ),
 ];

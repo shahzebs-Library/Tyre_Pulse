@@ -76,11 +76,13 @@ import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
+import 'package:tyre_pulse/core/auth/auth_providers.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/permissions/module_registry.dart';
 import 'package:tyre_pulse/core/permissions/permission_providers.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
+import 'package:tyre_pulse/core/workspace/workspace_scope.dart';
 import 'package:tyre_pulse/features/alerts/alerts_providers.dart';
 import 'package:tyre_pulse/features/alerts/domain/tyre_alert.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
@@ -320,6 +322,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final AsyncValue<int> notificationCount =
         ref.watch(unreadNotificationsCountProvider);
 
+    final bool accessFailed = ref.watch(accessLoadFailedProvider);
+    final VoidCallback? retryAccess = ref.watch(retryAccessLoadProvider);
     final _TodaysWork work = _buildTodaysWork(
       l10n: l10n,
       palette: palette,
@@ -327,6 +331,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       draft: draft,
       alerts: alerts,
       approvals: approvals,
+      accessFailed: accessFailed,
+      onRetryAccess: retryAccess,
     );
 
     return TpScaffold(
@@ -502,6 +508,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     required AsyncValue<InspectionDraftSummary?>? draft,
     required AsyncValue<List<TyreAlert>>? alerts,
     required AsyncValue<HomePendingApprovals>? approvals,
+    bool accessFailed = false,
+    VoidCallback? onRetryAccess,
   }) {
     final List<_WorkRowData> rows = <_WorkRowData>[];
     final List<String> failed = <String>[];
@@ -557,6 +565,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       loading: loading,
       loadedAny: loadedAny,
       applicable: draft != null || alerts != null || approvals != null,
+      accessFailed: accessFailed,
+      onRetryAccess: onRetryAccess,
       onRetry: failed.isEmpty
           ? null
           : () => ref
@@ -662,8 +672,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     WorkspaceContext? workspace,
     AppLocalizations l10n,
   ) {
-    final String site =
-        _workspaceSiteLabel(workspace) ?? l10n.homeSiteStatUnavailable;
+    final String site = _workspaceSiteLabel(workspace, l10n);
     final String country = workspace?.activeCountry?.trim().isNotEmpty == true
         ? workspace!.activeCountry!.trim()
         : l10n.valueNotMeasured;
@@ -736,18 +745,28 @@ String _scalarCountText(AsyncValue<int> state) => switch (state) {
       _ => '—',
     };
 
-String? _workspaceSiteLabel(WorkspaceContext? workspace) {
-  if (workspace == null) return null;
+/// The site the header chip names.
+///
+/// A named site wins. With none, an organisation wide scope (`sites` holding
+/// the `ALL` sentinel, which V309 backfilled onto every profile) reads as all
+/// sites: that person has MORE site reach, not none, so "No site on file"
+/// would be the wrong sentence. Only a genuinely empty scope says no site.
+String _workspaceSiteLabel(WorkspaceContext? workspace, AppLocalizations l10n) {
+  if (workspace == null) return l10n.homeSiteStatUnavailable;
   final String? legacy = workspace.legacySite?.trim();
-  if (legacy?.isNotEmpty == true) return legacy;
+  if (legacy?.isNotEmpty == true) return legacy!;
   for (final String site in <String>[
     ...workspace.activeSites,
     ...workspace.siteScope.namedSites,
   ]) {
     final String value = site.trim();
-    if (value.isNotEmpty) return value;
+    if (value.isNotEmpty &&
+        !SiteScope.allSentinels.contains(value.toUpperCase())) {
+      return value;
+    }
   }
-  return null;
+  if (workspace.siteScope.isOrganisationWide) return l10n.homeSiteAllSites;
+  return l10n.homeSiteStatUnavailable;
 }
 
 /// Joins the non-blank [parts] with the mock's bullet separator.
@@ -911,8 +930,7 @@ class _HomeHeader extends StatelessWidget {
     final String? fullName = workspace?.fullName;
     final String name = _firstName(fullName) ?? l10n.homeFallbackUser;
     final String? initials = _initials(fullName);
-    final String site =
-        _workspaceSiteLabel(workspace) ?? l10n.homeSiteStatUnavailable;
+    final String site = _workspaceSiteLabel(workspace, l10n);
     final String? country = workspace?.activeCountry?.trim();
     final bool showBadge = notificationCount != '—' && notificationCount != '0';
 
@@ -1437,6 +1455,8 @@ class _TodaysWork {
     required this.loading,
     required this.loadedAny,
     required this.applicable,
+    this.accessFailed = false,
+    this.onRetryAccess,
     this.onRetry,
   });
 
@@ -1446,6 +1466,13 @@ class _TodaysWork {
 
   /// False when no work source applies to this role at all.
   final bool applicable;
+
+  /// True when the person's access could not be read. The role-based lists
+  /// below are then incomplete, so "nothing for your role" would be untrue.
+  final bool accessFailed;
+
+  /// Re-reads the access; null when nothing can retry.
+  final VoidCallback? onRetryAccess;
 
   /// Re-reads the failed sources; null when nothing failed.
   final VoidCallback? onRetry;
@@ -1469,6 +1496,17 @@ class _TodaysWorkCard extends StatelessWidget {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final TpPalette palette = TpPalette.of(context);
     final List<_WorkRowData> rows = <_WorkRowData>[
+      if (work.accessFailed)
+        _WorkRowData(
+          id: 'access',
+          tone: palette.warning,
+          icon: Icons.lock_reset_rounded,
+          tag: '',
+          title: l10n.homeAccessLoadFailedTitle,
+          detail: l10n.homeAccessLoadFailedBody,
+          secondary: work.onRetryAccess == null ? null : l10n.actionRetry,
+          onTap: work.onRetryAccess,
+        ),
       ...work.rows,
       if (work.failed.isNotEmpty)
         _WorkRowData(
@@ -1481,7 +1519,7 @@ class _TodaysWorkCard extends StatelessWidget {
           secondary: work.onRetry == null ? null : l10n.actionRetry,
           onTap: work.onRetry,
         ),
-      if (!work.applicable)
+      if (!work.applicable && !work.accessFailed)
         _WorkRowData(
           id: 'none',
           tone: palette.unknown,

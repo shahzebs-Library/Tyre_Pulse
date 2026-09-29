@@ -263,9 +263,19 @@ void main() {
     'no site on record renders the same honest "no site on file" caption '
     'the Home screen already uses for the identical gap',
     (WidgetTester tester) async {
-      await _pumpSignedIn(tester, site: null);
+      await _pumpSignedIn(tester, site: null, sites: const <String>[]);
 
       expect(find.text('No site on file'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'organisation wide site scope with no single site reads as all sites',
+    (WidgetTester tester) async {
+      await _pumpSignedIn(tester, site: null);
+
+      expect(find.text('No site on file'), findsNothing);
+      expect(find.text('All sites'), findsOneWidget);
     },
   );
 

@@ -2114,6 +2114,16 @@ class AppLocalizationsUr extends AppLocalizations {
   String get homeSiteStatUnavailable => 'کوئی سائٹ درج نہیں';
 
   @override
+  String get homeSiteAllSites => 'تمام سائٹس';
+
+  @override
+  String get homeAccessLoadFailedTitle => 'آپ کی رسائی لوڈ نہیں ہو سکی';
+
+  @override
+  String get homeAccessLoadFailedBody =>
+      'لوڈ ہونے تک کچھ حصے چھپے رہ سکتے ہیں۔ دوبارہ کوشش کے لیے ٹیپ کریں۔';
+
+  @override
   String get homeFleetSizeStatLabel => 'فلیٹ کا حجم';
 
   @override

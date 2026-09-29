@@ -418,6 +418,7 @@ final class AuthController extends Notifier<AuthState> {
   /// requires ("Never hard-code Saudi Arabia, SAR, one company, one site").
   void _adoptWorkspace(WorkspaceProfile profile) {
     _workspaceAdopted = true;
+    state = state.copyWith(permissionsStatus: PermissionsStatus.loading);
     final AccessState access = AccessState(
       role: profile.role,
       isSuperAdmin: profile.isSuperAdmin,
@@ -468,15 +469,31 @@ final class AuthController extends Notifier<AuthState> {
       _lastMatrixRole = profile.role;
     }
 
+    final bool failed = grants == null || matrix == null;
     ref.read(workspaceControllerProvider.notifier).updatePermissions(
           AccessState.fromRaw(
             role: profile.role,
             isSuperAdmin: profile.isSuperAdmin,
             grantsRaw: grants,
             roleMatrixRaw: matrix,
-            permissionsError: grants == null || matrix == null,
+            permissionsError: failed,
           ),
         );
+    state = state.copyWith(
+      permissionsStatus:
+          failed ? PermissionsStatus.failed : PermissionsStatus.loaded,
+    );
+  }
+
+  /// Re-reads the grants and role matrix after Home reported
+  /// [PermissionsStatus.failed]. A no-op with no loaded profile.
+  Future<void> retryPermissions() async {
+    final WorkspaceProfile? profile = state.profile;
+    if (profile == null || state.profileStatus != ProfileStatus.loaded) {
+      return;
+    }
+    state = state.copyWith(permissionsStatus: PermissionsStatus.loading);
+    await _refreshPermissions(profile, _generation);
   }
 
   // --------------------------------------------------------------------

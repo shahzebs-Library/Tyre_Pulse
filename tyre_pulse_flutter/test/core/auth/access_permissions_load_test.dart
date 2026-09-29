@@ -6,6 +6,7 @@ import 'package:tyre_pulse/core/auth/access_permissions_repository.dart';
 import 'package:tyre_pulse/core/auth/auth_controller.dart';
 import 'package:tyre_pulse/core/auth/auth_profile_repository.dart';
 import 'package:tyre_pulse/core/auth/auth_repository.dart';
+import 'package:tyre_pulse/core/auth/auth_state.dart';
 import 'package:tyre_pulse/core/permissions/access_resolver.dart';
 import 'package:tyre_pulse/core/permissions/module_registry.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
@@ -100,6 +101,41 @@ void main() {
       isTrue,
     );
     expect(permissions.loads, 2);
+  });
+
+  test('a failed read is reported as failed and Retry recovers it', () async {
+    permissions.snapshot = const AccessPermissionsSnapshot(
+      roleMatrixRaw: <String, Object?>{},
+    );
+    await signIn();
+    expect(
+      container.read(authControllerProvider).permissionsStatus,
+      PermissionsStatus.failed,
+    );
+
+    permissions.snapshot = const AccessPermissionsSnapshot(
+      grantsRaw: <String, Object?>{},
+      roleMatrixRaw: <String, Object?>{'mobile:approvals': true},
+    );
+    await container.read(authControllerProvider.notifier).retryPermissions();
+    await pumpEventQueue(times: 10);
+    expect(
+      container.read(authControllerProvider).permissionsStatus,
+      PermissionsStatus.loaded,
+    );
+    expect(access().permissionsError, isFalse);
+    expect(
+      canAccessModule(module: ModuleKey.approvals, access: access()),
+      isTrue,
+    );
+  });
+
+  test('a good read is reported as loaded', () async {
+    await signIn();
+    expect(
+      container.read(authControllerProvider).permissionsStatus,
+      PermissionsStatus.loaded,
+    );
   });
 
   test('sign-out clears the workspace and the loaded permissions', () async {

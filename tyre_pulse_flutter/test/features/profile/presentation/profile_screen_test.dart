@@ -617,7 +617,7 @@ void main() {
         ),
         findsOneWidget,
       );
-      expect(find.text('Manager · 2 modules'), findsOneWidget);
+      expect(find.text('\u2068Manager\u2069 · 2 modules'), findsOneWidget);
       expect(find.text('Checklist content language'), findsOneWidget);
       expect(find.text('Independent from app language'), findsOneWidget);
       await tester.scrollUntilVisible(

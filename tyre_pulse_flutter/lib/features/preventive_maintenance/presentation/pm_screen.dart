@@ -1004,6 +1004,7 @@ class _PmPlanRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
     final TextTheme text = Theme.of(context).textTheme;
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final PmDueBand band = plan.dueBand(now);
     final int? days = plan.daysToDue(now);
     final TpStatus status = switch (band) {
@@ -1168,7 +1169,8 @@ class _PmPlanRow extends StatelessWidget {
                                   _PmChip(label: bandChip, tone: tone),
                                 if (plan.priority != null)
                                   _PmChip(
-                                    label: _capitalised(plan.priority!),
+                                    label:
+                                        _pmPriorityLabel(l10n, plan.priority!),
                                     tone: palette.forStatus(
                                       workOrderToneToStatus(
                                         workOrderPriorityTone(plan.priority),
@@ -1222,6 +1224,43 @@ String _capitalised(String value) {
   final String trimmed = value.trim();
   if (trimmed.isEmpty) return trimmed;
   return trimmed[0].toUpperCase() + trimmed.substring(1).toLowerCase();
+}
+
+/// The priority chip in the reader's language. The four catalogue values
+/// (stored lower case on plans, title case on work orders) are translated;
+/// any other stored value is shown as recorded, never guessed into a band.
+String _pmPriorityLabel(AppLocalizations l10n, String raw) =>
+    switch (raw.trim().toLowerCase()) {
+      'low' => l10n.workOrderPriorityLow,
+      'medium' => l10n.workOrderPriorityMedium,
+      'high' => l10n.workOrderPriorityHigh,
+      'critical' => l10n.workOrderPriorityCritical,
+      _ => _capitalised(raw),
+    };
+
+/// The work order status chip in the reader's language. Only the canonical
+/// statuses (matched ignoring case and spacing) are translated; a legacy or
+/// unexpected stored value is shown verbatim, exactly as
+/// [workOrderStatusLabel] does, so nothing the fleet recorded is rewritten.
+String _pmStatusLabel(AppLocalizations l10n, String? raw) {
+  final String key = (raw ?? '').trim().toLowerCase().replaceAll(
+        RegExp(r'[\s_-]+'),
+        ' ',
+      );
+  return switch (key) {
+    'new' => l10n.pmWoStatusNew,
+    'assigned' => l10n.pmWoStatusAssigned,
+    'in progress' => l10n.pmWoStatusInProgress,
+    'waiting for parts' => l10n.pmWoStatusWaitingForParts,
+    'quality inspection' => l10n.pmWoStatusQualityInspection,
+    'completed' => l10n.pmWoStatusCompleted,
+    'closed' => l10n.pmWoStatusClosed,
+    'cancelled' => l10n.pmWoStatusCancelled,
+    'overdue' => l10n.pmWoStatusOverdue,
+    'on hold' => l10n.pmWoStatusOnHold,
+    'open' => l10n.pmWoStatusOpen,
+    _ => workOrderStatusLabel(l10n, raw),
+  };
 }
 
 /// The queue's loading row, shown until both sources have answered once.
@@ -1489,7 +1528,10 @@ class _WorkOrderRow extends StatelessWidget {
                                 ),
                                 if (order.priority != null)
                                   _PmChip(
-                                    label: order.priority!,
+                                    label: _pmPriorityLabel(
+                                      l10n,
+                                      order.priority!,
+                                    ),
                                     tone: palette.forStatus(
                                       workOrderToneToStatus(
                                         workOrderPriorityTone(order.priority),
@@ -1497,10 +1539,7 @@ class _WorkOrderRow extends StatelessWidget {
                                     ),
                                   ),
                                 _PmChip(
-                                  label: workOrderStatusLabel(
-                                    l10n,
-                                    order.status,
-                                  ),
+                                  label: _pmStatusLabel(l10n, order.status),
                                   tone: statusTone,
                                 ),
                               ],

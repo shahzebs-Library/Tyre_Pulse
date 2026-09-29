@@ -982,7 +982,10 @@ class _SelectedChecklistAssetCard extends StatelessWidget {
     // The mock's "68,420 km / 8,742 h": each half only when it was recorded.
     final String metersText =
         <String?>[km, hours].whereType<String>().join(' / ');
-    final String? meters = metersText.isEmpty ? null : metersText;
+    // Isolated left-to-right so "68,420 km" never reads "km 68,420" in an
+    // Arabic or Urdu row.
+    final String? meters =
+        metersText.isEmpty ? null : '\u2066$metersText\u2069';
 
     return Semantics(
       button: onTap != null,
@@ -1060,7 +1063,9 @@ class _SelectedChecklistAssetCard extends StatelessWidget {
                             child: Text(
                               AppLocalizations.of(context)
                                   .checklistsMasterDataVerified,
-                              maxLines: 1,
+                              // Two lines: the Arabic and Urdu wording is
+                              // longer than the English and was cut off.
+                              maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: Theme.of(context)
                                   .textTheme

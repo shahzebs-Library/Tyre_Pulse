@@ -743,8 +743,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       detail: _joinParts(<String?>[alert.position, alert.assetNo, alert.site]),
       secondary: tread == null
           ? null
+          // The reading is isolated left-to-right so "4.8 mm" never renders as
+          // "mm 4.8" inside an Arabic or Urdu sentence.
           : '${l10n.tyreDetailStatTread}: '
-              '${tread % 1 == 0 ? tread.toInt() : tread.toStringAsFixed(1)} mm',
+              '\u2066${tread % 1 == 0 ? tread.toInt() : tread.toStringAsFixed(1)} mm\u2069',
       // `issue_date` is the tyre record's own date, not when the alert was
       // raised, so it is shown as a date rather than as "N minutes ago".
       time: issued == null
@@ -1456,7 +1458,7 @@ class _HomeSyncStatus extends StatelessWidget {
     };
     return ConstrainedBox(
       key: HomeScreenKeys.syncStatus,
-      constraints: const BoxConstraints(maxWidth: 180),
+      constraints: const BoxConstraints(maxWidth: 240),
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: tone.soft,

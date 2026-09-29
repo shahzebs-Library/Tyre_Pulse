@@ -1207,7 +1207,10 @@ class _SettingsColumn extends StatelessWidget {
               icon: Icons.groups_outlined,
               tone: palette.info,
               label: l10n.clMockRolesAccess,
-              value: '${profile.role.displayName} · '
+              // The role is the server's catalogue name (Latin script); a
+              // first-strong isolate keeps it from pulling the module count
+              // out of order inside an Arabic or Urdu row.
+              value: '\u2068${profile.role.displayName}\u2069 · '
                   '${l10n.clMockModuleCount(moduleCount)}',
             ),
           ],

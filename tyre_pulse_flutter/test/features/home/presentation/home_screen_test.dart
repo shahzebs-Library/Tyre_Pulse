@@ -254,7 +254,7 @@ void main() {
 
       expect(find.text('Tyre issue needs attention'), findsOneWidget);
       expect(find.text('R1R • CP045 • NHC'), findsOneWidget);
-      expect(find.text('Tread depth: 4.8 mm'), findsOneWidget);
+      expect(find.text('Tread depth: \u20664.8 mm\u2069'), findsOneWidget);
 
       expect(find.text('Inspection Approvals'), findsOneWidget);
       expect(find.text('3 awaiting sign-off'), findsOneWidget);

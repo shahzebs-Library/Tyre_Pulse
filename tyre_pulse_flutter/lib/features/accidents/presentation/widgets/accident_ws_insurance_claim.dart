@@ -403,7 +403,7 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
                 AccidentWsWarning(message: l10n.accClaimRegistrationLocked),
               ],
               const SizedBox(height: TpSpace.sm),
-              _TwoUp(
+              AccidentWsTwoUp(
                 children: <Widget>[
                   if (firstMissing != null)
                     _WarningOutlinedButton(
@@ -525,7 +525,8 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
           number: 4,
           title: l10n.accAfterRegistrationNotify,
           children: <Widget>[
-            _TwoUp(
+            AccidentWsTwoUp(
+              minHalfWidth: 166,
               children: <Widget>[
                 for (final ClaimNotifyRecipient r in package.recipients)
                   _RecipientTile(recipient: r),
@@ -560,40 +561,35 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
         ),
         const SizedBox(height: TpSpace.md),
         if (!registered)
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: TpButton.secondary(
-                  key: const Key('accident.ws.insurance.saveDraft'),
-                  label: l10n.accSaveClaimDraft,
-                  icon: Icons.bookmark_border_rounded,
-                  onPressed: _busy ? null : _saveDraft,
-                ),
-              ),
-              const SizedBox(width: TpSpace.sm),
-              Expanded(
-                child: docs.isComplete
-                    ? TpButton.primary(
-                        key: const Key(
-                          'accident.ws.insurance.completeDocuments',
-                        ),
-                        label: l10n.accClaimRegisterShort,
-                        icon: Icons.check_circle_outline_rounded,
-                        isBusy: _busy,
-                        onPressed: canRegister && !_busy
-                            ? () => _register(context)
-                            : null,
-                      )
-                    : TpButton.primary(
-                        key: const Key(
-                          'accident.ws.insurance.completeDocuments',
-                        ),
-                        label: l10n.accCompleteDocuments,
-                        icon: Icons.check_circle_outline_rounded,
-                        onPressed: _scrollToPackage,
-                      ),
-              ),
+          AccidentWsFooterPair(
+            labels: <String>[
+              l10n.accSaveClaimDraft,
+              if (docs.isComplete)
+                l10n.accClaimRegisterShort
+              else
+                l10n.accCompleteDocuments,
             ],
+            first: TpButton.secondary(
+              key: const Key('accident.ws.insurance.saveDraft'),
+              label: l10n.accSaveClaimDraft,
+              icon: Icons.bookmark_border_rounded,
+              onPressed: _busy ? null : _saveDraft,
+            ),
+            second: docs.isComplete
+                ? TpButton.primary(
+                    key: const Key('accident.ws.insurance.completeDocuments'),
+                    label: l10n.accClaimRegisterShort,
+                    icon: Icons.check_circle_outline_rounded,
+                    isBusy: _busy,
+                    onPressed:
+                        canRegister && !_busy ? () => _register(context) : null,
+                  )
+                : TpButton.primary(
+                    key: const Key('accident.ws.insurance.completeDocuments'),
+                    label: l10n.accCompleteDocuments,
+                    icon: Icons.check_circle_outline_rounded,
+                    onPressed: _scrollToPackage,
+                  ),
           ),
         if (monitor?.singleName != null) ...<Widget>[
           const SizedBox(height: TpSpace.md),
@@ -624,11 +620,14 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
       };
 
   /// "Request driving licence": lower case in languages that have case.
+  /// Only the first letter is lowered, so acronyms and names inside the label
+  /// ("Accident report PDF", "Police / Najm report") keep their spelling.
   String _requestLabel(BuildContext context, String key) {
     final String label = claimDocLabel(AppLocalizations.of(context), key);
-    return Localizations.localeOf(context).languageCode == 'en'
-        ? label.toLowerCase()
-        : label;
+    if (label.isEmpty || Localizations.localeOf(context).languageCode != 'en') {
+      return label;
+    }
+    return label[0].toLowerCase() + label.substring(1);
   }
 
   String _sourceLabel(AppLocalizations l10n, String token) => switch (token) {
@@ -1072,30 +1071,6 @@ class _Columns extends StatelessWidget {
 }
 
 /// Two equal buttons or tiles per row when they fit, one per row when not.
-class _TwoUp extends StatelessWidget {
-  const _TwoUp({required this.children});
-
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) => LayoutBuilder(
-        builder: (BuildContext context, BoxConstraints constraints) {
-          final bool twoUp = constraints.maxWidth >= 340;
-          final double width = twoUp
-              ? (constraints.maxWidth - TpSpace.sm) / 2
-              : constraints.maxWidth;
-          return Wrap(
-            spacing: TpSpace.sm,
-            runSpacing: TpSpace.sm,
-            children: <Widget>[
-              for (final Widget child in children)
-                SizedBox(width: width, child: child),
-            ],
-          );
-        },
-      );
-}
-
 class _RouteBanner extends StatelessWidget {
   const _RouteBanner({required this.text, super.key});
 
@@ -1314,75 +1289,18 @@ class _RecipientTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final TpPalette palette = TpPalette.of(context);
     final String who = switch (recipient.names.length) {
       0 => recipient.fallbackRole,
       1 => recipient.names.single,
       final int n => l10n.accClaimNotifyPeople(n),
     };
-    final String team = switch (recipient.roleKey) {
-      'fleet' => l10n.accClaimTeamFleet,
-      'workshop' => l10n.accClaimTeamWorkshop,
-      'command_center' => l10n.accClaimTeamCommandCenter,
-      'pmv_manager' => l10n.accClaimTeamPmvManager,
-      'insurance' => l10n.accClaimTeamInsurance,
-      _ => recipient.roleKey,
-    };
-    return MergeSemantics(
-      child: Tooltip(
-        message: recipient.names.length > 1 ? recipient.names.join(', ') : '',
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            border: Border.all(color: palette.border),
-            borderRadius: BorderRadius.circular(TpRadius.md),
-          ),
-          child: ConstrainedBox(
-            constraints:
-                const BoxConstraints(minHeight: TpSizing.minTouchTarget),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: TpSpace.sm,
-                vertical: TpSpace.sm,
-              ),
-              child: Row(
-                children: <Widget>[
-                  Icon(
-                    recipient.visibilityOnly
-                        ? Icons.visibility_outlined
-                        : Icons.person_outline_rounded,
-                    size: TpSizing.iconMd,
-                    color: palette.textSecondary,
-                  ),
-                  const SizedBox(width: TpSpace.sm),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          who,
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodyMedium
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                        Text(
-                          recipient.visibilityOnly
-                              ? l10n.accClaimNotifyVisibility
-                              : team,
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: palette.textSecondary,
-                                  ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
+    return AccidentWsPersonTile(
+      who: who,
+      team: recipient.visibilityOnly
+          ? l10n.accClaimNotifyVisibility
+          : accidentWsTeamLabel(l10n, recipient.roleKey),
+      visibilityOnly: recipient.visibilityOnly,
+      tooltip: recipient.names.length > 1 ? recipient.names.join(', ') : '',
     );
   }
 }

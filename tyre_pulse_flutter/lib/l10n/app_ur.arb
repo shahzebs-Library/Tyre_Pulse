@@ -645,6 +645,9 @@
   "homeSyncStatLabel": "مطابقت زیر التوا",
   "homeSiteStatLabel": "سائٹ",
   "homeSiteStatUnavailable": "کوئی سائٹ درج نہیں",
+  "homeSiteAllSites": "تمام سائٹس",
+  "homeAccessLoadFailedTitle": "آپ کی رسائی لوڈ نہیں ہو سکی",
+  "homeAccessLoadFailedBody": "لوڈ ہونے تک کچھ حصے چھپے رہ سکتے ہیں۔ دوبارہ کوشش کے لیے ٹیپ کریں۔",
   "homeFleetSizeStatLabel": "فلیٹ کا حجم",
   "homeStatLoadingCaption": "جانچا جا رہا ہے",
   "homeStatUnavailableCaption": "جانچ نہیں ہو سکی",
@@ -876,12 +879,12 @@
   "accidentCaseLocationLabel": "مقام",
   "accidentCaseReportedByLabel": "رپورٹ کرنے والا",
   "tasksCopyCatalog": "title=میرا کام~today=آج~assignedTab=تفویض شدہ~dueToday=آج واجب~inProgress=جاری~completed=مکمل~urgent=فوری~upcoming=آنے والا~open=کھلے~emptyTitle=کوئی کام نہیں~emptyMessage=اس منظر سے کوئی کام مطابقت نہیں رکھتا۔~loadError=میرا کام ابھی لوڈ نہیں ہو سکا۔~due=مقررہ تاریخ~assigned=تفویض شدہ~unassigned=غیر تفویض شدہ~normal=عام~overdue=تاخیر شدہ~details=کام کی تفصیل~description=تفصیل~site=سائٹ~asset=اثاثہ~priority=ترجیح~status=حالت~view=دیکھیں~reportIssue=مسئلہ رپورٹ کریں~retry=دوبارہ کوشش",
-  "alertsCopyCatalog": "title=ٹائر الرٹس~all=تمام~critical=سنگین~warnings=انتباہات~info=معلومات~flagged=نشان زدہ~criticalCount=سنگین~emptyTitle=کوئی فعال الرٹ نہیں~emptyFilter=اس فلٹر سے کوئی الرٹ نہیں ملا۔~loadError=الرٹس لوڈ نہیں ہو سکے۔ دوبارہ کوشش کے لیے نیچے کھینچیں۔~unknownAsset=نامعلوم اثاثہ~pressureLow=ٹائر کا دباؤ کم ہے~treadLow=ٹریڈ کی گہرائی کم ہے~position=پوزیشن~serial=سیریل~tread=ٹریڈ~retry=دوبارہ کوشش",
+  "alertsCopyCatalog": "title=ٹائر الرٹس~all=تمام~critical=سنگین~warnings=انتباہات~info=معلومات~flagged=نشان زدہ~criticalCount=سنگین~emptyTitle=کوئی فعال الرٹ نہیں~emptyFilter=اس فلٹر سے کوئی الرٹ نہیں ملا۔~loadError=الرٹس لوڈ نہیں ہو سکے۔ دوبارہ کوشش کے لیے نیچے کھینچیں۔~unknownAsset=نامعلوم اثاثہ~pressureLow=ٹائر کا دباؤ کم ہے~treadLow=ٹریڈ کی گہرائی کم ہے~position=پوزیشن~serial=سیریل~tread=ٹریڈ~retry=دوبارہ کوشش~acknowledge=تسلیم کریں~ackTitle=الرٹ تسلیم کریں~ackBody=کیا اس الرٹ کو جائزہ شدہ نشان زد کریں؟ یہ فہرست سے ہٹا دیا جائے گا۔~ackFailed=تسلیم نہیں ہو سکا۔ دوبارہ کوشش کریں۔~cancel=منسوخ",
   "notificationInboxCopyCatalog": "title=اطلاعات~markAll=سب کو پڑھا ہوا کریں~fallbackTitle=اطلاع~emptyTitle=آپ تمام تازہ معلومات دیکھ چکے ہیں~emptyBody=ذمہ داریاں، منظوریوں اور عملی اپ ڈیٹس یہاں نظر آئیں گی۔~loadFailed=اطلاعات لوڈ نہیں ہو سکیں۔ دوبارہ کوشش کے لیے نیچے کھینچیں۔~markFailed=اس اطلاع کو پڑھا ہوا نہیں کیا جا سکا۔~markAllFailed=تمام اطلاعات کو پڑھا ہوا نہیں کیا جا سکا۔~justNow=ابھی~minutesAgo=%count% منٹ پہلے~hoursAgo=%count% گھنٹے پہلے~daysAgo=%count% دن پہلے",
   "reportIssueCopyCatalog": "title=مسئلہ رپورٹ کریں~problem=کیا خرابی ہے؟~problemHint=مسئلے کی مختصر وضاحت کریں~priority=ترجیح~low=کم~medium=درمیانی~high=زیادہ~critical=سنگین~site=سائٹ~siteHint=جہاں مسئلہ ملا~asset=اثاثہ~assetHint=اثاثہ نمبر~due=مقررہ مدت~noDate=کوئی تاریخ نہیں~threeDays=3 دن~oneWeek=1 ہفتہ~twoWeeks=2 ہفتے~details=تفصیل~detailsHint=علامات، درست مقام اور فوری کارروائی درج کریں~photos=ثبوت~optional=(اختیاری)~addPhoto=تصویر شامل کریں~camera=کیمرہ~gallery=گیلری سے~photoFailed=تصویر شامل نہیں ہو سکی۔~submit=مسئلہ جمع کریں~titleRequired=محفوظ کرنے سے پہلے خرابی درج کریں۔~workspaceUnavailable=آپ کی ورک اسپیس لوڈ ہو رہی ہے۔ کچھ دیر بعد دوبارہ کوشش کریں۔~savedTitle=مسئلہ محفوظ ہو گیا~savedBody=مسئلہ میرے کام میں شامل ہے اور خودکار طور پر سنک ہو گا۔~stay=یہیں رہیں~viewTasks=میرا کام دیکھیں~saveFailed=مسئلہ محفوظ نہیں ہو سکا۔ دوبارہ کوشش کریں۔~category=مسئلے کی قسم~mechanical=مکینیکل~electrical=برقی~hydraulic=ہائیڈرولک~tyre=ٹائر~body=باڈی~washing=دھلائی~safety=حفاظت~other=دیگر~operation=کیا اثاثہ محفوظ طریقے سے چل سکتا ہے؟~yes=ہاں~restricted=محدود~no=نہیں~restriction=آپریٹنگ پابندی~saveDraft=مسودہ محفوظ کریں~draftSaved=مسودہ محفوظ ہو گیا~createWorkOrder=سپروائزر کے جائزے کے بعد ورک آرڈر بنائیں~notifyTeam=فلیٹ سپروائزر اور ورکشاپ ٹیم کو اطلاع دی جائے گی",
   "rcaCopyCatalog": "title=بنیادی وجہ کا تجزیہ~records=ریکارڈز~newRecord=نیا تجزیہ~none=کوئی تجزیاتی ریکارڈ نہیں~noneBody=مکمل بنیادی وجہ کے ریکارڈ یہاں نظر آئیں گے۔~unknown=نامعلوم اثاثہ~asset=اثاثہ~serial=ٹائر سیریل~brand=برانڈ~site=سائٹ~km=خرابی کے وقت کلومیٹر~factors=معاون عوامل~rootCause=بنیادی وجہ~photos=ثبوت کی تصاویر~photo=تصویر~addPhoto=تصویر شامل کریں~camera=کیمرہ~gallery=گیلری~photoFailed=تصویر شامل نہیں ہو سکی۔~save=تجزیہ محفوظ کریں~missingCause=محفوظ کرنے سے پہلے بنیادی وجہ درج کریں۔~invalidKm=درست کلومیٹر ریڈنگ درج کریں۔~loadFailed=تجزیاتی ریکارڈ لوڈ نہیں ہو سکے۔~saveFailed=تجزیہ محفوظ نہیں ہو سکا۔ دوبارہ کوشش کریں۔",
   "pmCopyCatalog": "title=دیکھ بھال کنٹرول سینٹر~subtitle=آج کے دیکھ بھال کے کام کو کنٹرول کریں~createWorkOrder=ورک آرڈر بنائیں~pmDue=پی ایم واجب~priorityQueue=ترجیحی کاموں کی قطار~viewAll=سب دیکھیں~allWorkOrders=تمام ورک آرڈرز دیکھیں~quickAccess=فوری رسائی~workOrders=ورک آرڈرز~workOrdersHint=بنائیں اور منظم کریں~pmSchedule=پی ایم شیڈول~pmScheduleHint=پی ایم کی منصوبہ بندی اور پیروی~inspections=معائنے~inspectionsHint=جانچیں اور رپورٹ کریں~parts=پرزے~partsHint=اسٹاک اور درخواستیں~tyres=ٹائر~tyresHint=ریکارڈ، گردش اور تبدیلی~overdue=تاخیر شدہ~dueSoon=جلد واجب~active=فعال منصوبے~due=اب واجب~all=تمام منصوبے~empty=دیکھ بھال کا کوئی منصوبہ نہیں~emptyDue=اگلے 14 دنوں میں کوئی احتیاطی دیکھ بھال واجب نہیں۔~emptyAll=کوئی فعال احتیاطی دیکھ بھال منصوبہ دستیاب نہیں۔~plan=دیکھ بھال منصوبہ~daysOverdue=دن تاخیر~daysLeft=دن باقی~noDate=واجب تاریخ نہیں~record=سروس ریکارڈ کریں~meter=میٹر ریڈنگ~performedBy=کام کرنے والا~workshop=ورکشاپ~partsCost=پرزوں کی قیمت~labourCost=مزدوری کی قیمت~findings=مشاہدات~completed=مکمل~partial=جزوی مکمل~deferred=ملتوی~failed=ناکام~save=سروس محفوظ کریں~invalidNumber=درست عددی قدریں درج کریں۔~loadFailed=دیکھ بھال منصوبے لوڈ نہیں ہو سکے۔~saveFailed=سروس ریکارڈ محفوظ نہیں ہو سکا۔ دوبارہ کوشش کریں۔~openBreakdowns=کھلی خرابیاں~activeWorkOrders=فعال ورک آرڈرز~breakdown=خرابی~workOrder=ورک آرڈر~dueToday=آج واجب~since=سے~opened=کھولا گیا~queueEmpty=کسی چیز پر توجہ درکار نہیں~woLoadFailed=کھلے ورک آرڈرز لوڈ نہیں ہو سکے۔~retry=دوبارہ کوشش کریں~countFailed=یہ تعداد لوڈ نہیں ہو سکی۔ دوبارہ کوشش کے لیے ٹیپ کریں۔",
-  "stockCountCopyCatalog": "title=اسٹاک گنتی~items=اشیاء~reorder=دوبارہ آرڈر~notToday=آج نہیں گنا~search=تفصیل یا سائٹ تلاش کریں~all=تمام~low=کم اسٹاک~stale=آج نہیں گنا~empty=کوئی اسٹاک آئٹم نہیں~emptyBody=کوئی اسٹاک ریکارڈ ان فلٹرز سے میل نہیں کھاتا۔~count=گنتی~stockItem=اسٹاک آئٹم~physicalCount=اصل گنتی~reason=وجہ (اختیاری)~cancel=منسوخ~save=گنتی محفوظ کریں~invalid=صفر یا زیادہ گنتی درج کریں۔~offlineSaved=گنتی آف لائن محفوظ اور ہم وقت سازی کے لیے قطار میں ہے۔~saveFailed=اسٹاک گنتی محفوظ نہیں ہو سکی۔~loadFailed=اسٹاک ریکارڈ لوڈ نہیں ہو سکے۔~Critical=انتہائی کم~Low=کم~OK=درست~onHand=دستیاب",
+  "stockCountCopyCatalog": "title=اسٹاک گنتی~items=اشیاء~reorder=دوبارہ آرڈر~notToday=آج نہیں گنا~search=تفصیل یا سائٹ تلاش کریں~all=تمام~low=کم اسٹاک~stale=آج نہیں گنا~empty=کوئی اسٹاک آئٹم نہیں~emptyBody=کوئی اسٹاک ریکارڈ ان فلٹرز سے میل نہیں کھاتا۔~count=گنتی~stockItem=اسٹاک آئٹم~physicalCount=اصل گنتی~reason=وجہ (اختیاری)~cancel=منسوخ~save=گنتی محفوظ کریں~invalid=صفر یا زیادہ گنتی درج کریں۔~offlineSaved=گنتی آف لائن محفوظ اور ہم وقت سازی کے لیے قطار میں ہے۔~saveFailed=اسٹاک گنتی محفوظ نہیں ہو سکی۔~loadFailed=اسٹاک ریکارڈ لوڈ نہیں ہو سکے۔~Critical=انتہائی کم~Low=کم~OK=درست~onHand=دستیاب~add=اسٹاک شامل کریں~addTitle=اسٹاک شامل کریں~size=ٹائر سائز~description=تفصیل (اختیاری)~site=مقام (سائٹ)~quantity=مقدار~minLevel=کم از کم سطح~criticalLevel=نازک سطح~sizeRequired=اس اسٹاک کے لیے ٹائر سائز درج کریں۔~siteRequired=اس اسٹاک کے لیے مقام درج کریں۔~addFailed=اسٹاک شامل نہیں ہو سکا۔ دوبارہ کوشش کریں۔~increase=اضافہ~decrease=کمی",
   "calendarCopyCatalog": "title=آج کا فیلڈ پلان~scheduled=مقررہ~overdue=تاخیر شدہ~today=آج واجب~week=اس ہفتے~later=بعد میں~inspection=معائنہ~maintenance=دیکھ بھال~task=اصلاحی کام~empty=کچھ مقرر نہیں~emptyBody=آنے والے معائنے، دیکھ بھال اور اصلاحی کام یہاں نظر آئیں گے۔~loadFailed=شیڈول لوڈ نہیں ہو سکا۔",
   "managementCopyCatalog": "overviewTitle=فلیٹ جائزہ~analyticsTitle=فلیٹ تجزیات~reportsTitle=مالی رپورٹ~reportsSubtitle=لاگت اور کارکردگی کا براہ راست خلاصہ~teamTitle=ٹیم~last=آخری~days=دن~days30=30 دن~days90=90 دن~year1=1 سال~allSites=تمام سائٹس~tyres=ٹائر~vehicles=گاڑیاں~critical=انتہائی اہم~openActions=کھلے اقدامات~highRisk=زیادہ خطرہ~inspections30=معائنے (30 دن)~tyreSpend=ٹائر خرچ~risk=خطرے کی تقسیم~sites=نمایاں سائٹس~brands=نمایاں برانڈز~analyticsFailed=تجزیات لوڈ نہیں ہو سکے۔~reportsFailed=رپورٹ ڈیٹا لوڈ نہیں ہو سکا۔~reportUnavailable=براہ راست رپورٹ دستیاب نہیں~reportUnavailableBody=مستند سرور خلاصہ دستیاب نہیں۔ کوئی اعداد وضع نہیں کیے گئے۔~retry=دوبارہ کوشش~generated=تیار شدہ~costPerformance=لاگت اور کارکردگی~fleet=فلیٹ~tyre_spend=ٹائر خرچ~accidents=حادثات~open_accidents=کھلے حادثات~claims_claimed=جمع دعوے~claims_recovered=وصول دعوے~inspections=معائنے~work_orders_open=کھلے ورک آرڈر~tyre_cost=ٹائر لاگت~maintenance_cost=دیکھ بھال لاگت~total_cost=کل لاگت~km=کلومیٹر~engine_hours=انجن گھنٹے~m3=پیداوار م3~cost_per_km=فی کلومیٹر لاگت~cost_per_hour=فی گھنٹہ لاگت~cost_per_m3=فی م3 لاگت~tyre_cpk=ٹائر سی پی کے~severity=حادثے کی شدت~accidents_by_site=سائٹ کے لحاظ سے حادثات~tyres_by_site=سائٹ کے لحاظ سے ٹائر~claim_status=دعویٰ حالت~members=ارکان~manage=ٹیم انتظام~active=فعال~pending=زیر التوا~teamSearch=نام، کردار یا سائٹ تلاش کریں~noMembers=کوئی رکن نہیں~trySearch=دوسری تلاش آزمائیں۔~teamFailed=ٹیم ڈائریکٹری لوڈ نہیں ہو سکی۔",
   "profileSignOutConfirmTitle": "سائن آؤٹ کریں؟",
@@ -2986,5 +2989,156 @@
       }
     }
   },
-  "accRptTitle": "حادثہ رپورٹ کریں"
+  "accRptTitle": "حادثہ رپورٹ کریں",
+  "accountDeletionCopyCatalog": "title=میرا اکاؤنٹ حذف کریں~subtitle=اپنے اکاؤنٹ اور ذاتی ڈیٹا کو حذف کرنے کی درخواست کریں~intro=یہ ایڈمنسٹریٹر کو آپ کا اکاؤنٹ اور اس سے متعلق ذاتی ڈیٹا حذف کرنے کی درخواست بھیجتا ہے۔ آپ کا اکاؤنٹ فوراً حذف نہیں ہوتا۔~what=درخواست پر ایپ تک آپ کی رسائی ختم کر دی جاتی ہے۔ ذاتی پروفائل ڈیٹا حذف کیا جاتا ہے؛ آپ کی تنظیم کے لیے بنائے گئے کچھ فلیٹ ریکارڈ کاروباری یا آڈٹ ریکارڈ کے طور پر رکھے جا سکتے ہیں اور آپ کی شناخت سے الگ کر دیے جاتے ہیں۔~timeline=تصدیق شدہ درخواستیں تقریباً 30 دن میں مکمل کی جاتی ہیں۔~reason=وجہ (اختیاری)~confirm=تصدیق کے لیے DELETE لکھیں~word=DELETE~submit=حذف کی درخواست بھیجیں~cancel=منسوخ~successTitle=درخواست بھیج دی گئی~successBody=آپ کے اکاؤنٹ کو حذف کرنے کی درخواست درج کر لی گئی ہے۔ ایڈمنسٹریٹر تقریباً 30 دن میں اس پر عمل کرے گا۔~errorTitle=درخواست نہیں بھیجی جا سکی~mismatch=تصدیق کے لیے بالکل DELETE لکھیں۔~unavailable=اکاؤنٹ حذف کرنا ابھی دستیاب نہیں۔ حذف کی درخواست کے لیے ہمیں ای میل کریں۔~failed=آپ کی درخواست نہیں بھیجی جا سکی۔ دوبارہ کوشش کریں۔~ok=ٹھیک ہے",
+  "homeOperationalSummary": "آپریشنل خلاصہ",
+  "homeInspectionsDue": "واجب الادا معائنے",
+  "homeTyresNeedAttention": "توجہ طلب ٹائر",
+  "homeApprovalsAwaitingYou": "آپ کی منظوری کے منتظر",
+  "homePlanMoreToday": "{count, plural, =1{آج 1 مزید} other{آج {count} مزید}}",
+  "profileAssignedTasks": "تفویض کردہ کام",
+  "profileMyActivity": "میری سرگرمی",
+  "tyreRecordsExportAction": "برآمد کریں",
+  "tyreRecordsExportStatus": "حیثیت",
+  "tyreRecordsExportNote": "اس ڈیوائس پر {total} میں سے {shown} ٹائر ریکارڈز لوڈ ہیں",
+  "tyreRecordsExportError": "برآمد فائل نہیں بن سکی۔ براہ کرم دوبارہ کوشش کریں۔",
+  "fleet360TabDocuments": "دستاویزات",
+  "fleet360AlertServiceDueKm": "سروس {km} کلومیٹر میں واجب ہے",
+  "@fleet360AlertServiceDueKm": {
+    "placeholders": {
+      "km": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360AlertServiceDueHours": "سروس {hours} گھنٹے میں واجب ہے",
+  "@fleet360AlertServiceDueHours": {
+    "placeholders": {
+      "hours": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360AlertServiceDueDays": "{days, plural, =0{سروس آج واجب ہے} =1{سروس کل واجب ہے} other{سروس {days} دن میں واجب ہے}}",
+  "@fleet360AlertServiceDueDays": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "fleet360AlertServiceOverdue": "سروس کی تاریخ گزر چکی ہے",
+  "fleet360AlertTyreActions": "{count, plural, =1{ٹائر کا 1 اقدام} other{ٹائر کے {count} اقدامات}}",
+  "@fleet360AlertTyreActions": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fleet360EventInspectionDone": "ٹائر معائنہ مکمل",
+  "fleet360EventWashDone": "دھلائی مکمل",
+  "fleet360EventTyreFittedAt": "{position} پر ٹائر لگایا گیا",
+  "@fleet360EventTyreFittedAt": {
+    "placeholders": {
+      "position": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360EventTyreRemovedFrom": "{position} سے ٹائر اتارا گیا",
+  "@fleet360EventTyreRemovedFrom": {
+    "placeholders": {
+      "position": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360EventSerial": "سیریل: {serial}",
+  "@fleet360EventSerial": {
+    "placeholders": {
+      "serial": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360EventAccidentCase": "حادثے کا کیس {reference}",
+  "@fleet360EventAccidentCase": {
+    "placeholders": {
+      "reference": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360EventAccidentCaseClosed": "حادثے کا کیس {reference} بند",
+  "@fleet360EventAccidentCaseClosed": {
+    "placeholders": {
+      "reference": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360SnapshotTitle": "مالی خلاصہ، {year} اب تک",
+  "@fleet360SnapshotTitle": {
+    "placeholders": {
+      "year": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360TotalMaintenance": "کل دیکھ بھال",
+  "fleet360BucketExternal": "بیرونی مرمت",
+  "fleet360ShareError": "خلاصہ شیئر نہیں ہو سکا۔ دوبارہ کوشش کریں۔",
+  "fleet360DocRegistration": "رجسٹریشن",
+  "fleet360DocInsurance": "انشورنس",
+  "fleet360DocOperatingCard": "آپریٹنگ کارڈ",
+  "fleet360DocDriverLicence": "ڈرائیور لائسنس",
+  "fleet360DocIssued": "جاری {date}",
+  "@fleet360DocIssued": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360DocExpires": "میعاد ختم {date}",
+  "@fleet360DocExpires": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360DocExpired": "میعاد ختم",
+  "fleet360DocExpiringSoon": "جلد ختم ہو رہا ہے",
+  "fleet360DocValid": "درست",
+  "fleet360DocNoExpiry": "میعاد کی تاریخ درج نہیں",
+  "fleet360DocsEmptyTitle": "کوئی دستاویز درج نہیں",
+  "fleet360DocsEmptyBody": "اس اثاثے کے لیے رجسٹریشن، انشورنس، آپریٹنگ کارڈ یا لائسنس کی کوئی تفصیل درج نہیں۔",
+  "inspectionModuleTyre": "ٹائر معائنہ",
+  "inspectionModuleMachine": "مشین معائنہ",
+  "fleetListDueSoon": "جلد واجب",
+  "fleetListDueSoonUnavailable": "واجب اشیاء چیک نہیں ہو سکیں",
+  "fleetListFiltersTitle": "فلٹرز",
+  "fleetListFiltersActive": "{count, plural, =0{فلٹرز} =1{فلٹرز، 1 فعال} other{فلٹرز، {count} فعال}}",
+  "fleetListSortAssetNo": "اثاثہ نمبر",
+  "fleetListSortServiceDue": "پہلے واجب سروس",
+  "fleetListSortTyreActions": "سب سے زیادہ ٹائر اقدامات",
+  "pushNotificationOpen": "کھولیں",
+  "pushNotificationFallbackTitle": "نئی اطلاع",
+  "pmWoStatusNew": "نیا",
+  "pmWoStatusAssigned": "تفویض شدہ",
+  "pmWoStatusInProgress": "جاری",
+  "pmWoStatusWaitingForParts": "پرزوں کا انتظار",
+  "pmWoStatusQualityInspection": "کوالٹی معائنہ",
+  "pmWoStatusCompleted": "مکمل",
+  "pmWoStatusClosed": "بند",
+  "pmWoStatusCancelled": "منسوخ",
+  "pmWoStatusOverdue": "تاخیر شدہ",
+  "pmWoStatusOnHold": "روکا گیا",
+  "pmWoStatusOpen": "کھلا",
+  "recordsRiskLow": "کم",
+  "recordsRiskMedium": "درمیانہ",
+  "recordsRiskHigh": "زیادہ",
+  "recordsRiskCritical": "سنگین"
 }

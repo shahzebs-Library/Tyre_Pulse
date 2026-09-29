@@ -303,6 +303,18 @@ PreferredSizeWidget myWorkAppBar(
 // Stat strip
 // ---------------------------------------------------------------------------
 
+/// The work order priority in the reader's language. The four catalogue
+/// values are translated; anything else the server stores is shown as is,
+/// never guessed into a band.
+String myWorkPriorityLabel(AppLocalizations l10n, String raw) =>
+    switch (raw.trim().toLowerCase()) {
+      'low' => l10n.workOrderPriorityLow,
+      'medium' => l10n.workOrderPriorityMedium,
+      'high' => l10n.workOrderPriorityHigh,
+      'critical' => l10n.workOrderPriorityCritical,
+      _ => raw,
+    };
+
 @immutable
 final class MyWorkStat {
   const MyWorkStat({
@@ -353,43 +365,68 @@ class _StatCell extends StatelessWidget {
       excludeSemantics: true,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: TpSpace.sm),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Container(
-              width: 40,
-              height: 40,
+        // On a narrow phone (360dp) a third of the card leaves the label
+        // about 45dp beside the icon, which broke "Assigned" and "Overdue"
+        // mid-word; below that width the icon sits above the figures.
+        child: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            final bool stacked = constraints.maxWidth < 100;
+            final Widget badge = Container(
+              width: stacked ? 32 : 40,
+              height: stacked ? 32 : 40,
               decoration: BoxDecoration(color: c.soft, shape: BoxShape.circle),
-              child: Icon(stat.icon, color: c.base, size: TpSizing.iconMd),
-            ),
-            const SizedBox(width: TpSpace.sm),
-            Flexible(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Icon(
+                stat.icon,
+                color: c.base,
+                size: stacked ? TpSizing.iconSm : TpSizing.iconMd,
+              ),
+            );
+            final Widget figures = Column(
+              crossAxisAlignment: stacked
+                  ? CrossAxisAlignment.center
+                  : CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(
+                  '${stat.value}',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: c.base,
+                        fontWeight: FontWeight.w800,
+                        height: 1,
+                      ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  stat.label,
+                  maxLines: 2,
+                  textAlign: stacked ? TextAlign.center : TextAlign.start,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: palette.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ],
+            );
+            if (stacked) {
+              return Column(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
-                  Text(
-                    '${stat.value}',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: c.base,
-                          fontWeight: FontWeight.w800,
-                          height: 1,
-                        ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    stat.label,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: palette.textSecondary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                  ),
+                  badge,
+                  const SizedBox(height: TpSpace.xs),
+                  figures,
                 ],
-              ),
-            ),
-          ],
+              );
+            }
+            return Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                badge,
+                const SizedBox(width: TpSpace.sm),
+                Flexible(child: figures),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -639,7 +676,7 @@ class _DueColumn extends StatelessWidget {
     if (item.kind == MyWorkKind.workOrder && item.priority != null) {
       lines.add(
         Text(
-          '${l10n.myWorkPriority} ${item.priority}',
+          '${l10n.myWorkPriority} ${myWorkPriorityLabel(l10n, item.priority!)}',
           style: small(palette.textSecondary),
         ),
       );
@@ -709,7 +746,11 @@ class _Details extends StatelessWidget {
           if (item.status != null)
             Text('${l10n.myWorkStatus}: ${item.status}', style: style),
           if (item.priority != null)
-            Text('${l10n.myWorkPriority}: ${item.priority}', style: style),
+            Text(
+              '${l10n.myWorkPriority}: '
+              '${myWorkPriorityLabel(l10n, item.priority!)}',
+              style: style,
+            ),
         ],
       ),
     );
@@ -920,7 +961,7 @@ class _QueueTile extends StatelessWidget {
             Expanded(
               child: Text(
                 label,
-                maxLines: 2,
+                maxLines: 3,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.labelMedium,
               ),

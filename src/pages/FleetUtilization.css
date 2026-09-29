@@ -1,0 +1,60 @@
+/* Fleet Utilization page. Only --cc-* tokens, so light and dark share one sheet. */
+.fu-page .fu-kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.fu-banner { flex-direction: row; align-items: center; gap: 10px; }
+.fu-banner > svg { flex: none; }
+.fu-banner > div { flex: 1; min-width: 0; font-size: 13px; }
+.fu-banner p { margin: 0; color: var(--cc-ink-2); }
+.fu-banner.bad > svg { color: var(--cc-red); }
+.fu-banner.warn > svg { color: var(--cc-amber); }
+
+.fu-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.fu-filters { gap: 8px; align-items: center; }
+.fu-filters .cc-select { padding-top: 8px; padding-bottom: 8px; font-size: 12.5px; }
+.fu-row { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 14px; align-items: stretch; }
+.fu-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.fu-table-filters { gap: 8px; align-items: center; margin-bottom: 10px; }
+.fu-table-filters .cc-select { padding-top: 8px; padding-bottom: 8px; font-size: 12.5px; }
+.fu-check { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--cc-ink-2); cursor: pointer; min-height: 36px; }
+.fu-check input { width: 15px; height: 15px; accent-color: var(--cc-green); }
+.fu-count { margin-left: auto; font-size: 12px; color: var(--cc-ink-3); }
+.fu-sort { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+.fu-sort:focus-visible { outline: 2px solid var(--cc-green); outline-offset: 2px; border-radius: 3px; }
+.fu-warn { color: var(--cc-amber); font-weight: 600; }
+.fu-note { font-size: 12px; color: var(--cc-ink-3); margin: 6px 0 0; line-height: 1.5; }
+
+.fu-cols { min-height: 190px; }
+.fu-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--cc-ink-2); margin-top: 10px; }
+.fu-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.fu-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.fu-legend b { color: var(--cc-ink); font-weight: 700; }
+.fu-snapshot { display: flex; flex-direction: column; gap: 12px; }
+.fu-split { display: flex; height: 22px; border-radius: 6px; overflow: hidden; background: var(--cc-track); }
+.fu-split span { display: block; height: 100%; }
+
+.fu-hbars { display: flex; flex-direction: column; gap: 10px; }
+.fu-hbar { display: grid; grid-template-columns: minmax(80px, 150px) 1fr 48px; gap: 10px; align-items: center; font-size: 12.5px; color: var(--cc-ink); }
+.fu-hbar-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--cc-ink-2); }
+.fu-hbar b { text-align: right; font-weight: 700; }
+
+.fu-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 8px; }
+.fu-stats span { display: block; font-size: 11.5px; color: var(--cc-ink-3); }
+.fu-stats b { font-size: 18px; font-weight: 700; color: var(--cc-ink); }
+
+.fu-reports { display: flex; flex-direction: column; gap: 10px; }
+.fu-report { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid var(--cc-inner-border); border-radius: 10px; padding: 12px 14px; background: var(--cc-inner); }
+.fu-report b { font-size: 13.5px; color: var(--cc-ink); }
+.fu-report p { margin: 3px 0 0; font-size: 12.5px; color: var(--cc-ink-2); }
+.fu-spin { animation: fu-spin 1s linear infinite; }
+@keyframes fu-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .fu-spin { animation: none; } }
+
+@media (max-width: 1100px) {
+  .fu-page .fu-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .fu-row { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .fu-page .fu-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fu-count { margin-left: 0; }
+  .fu-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

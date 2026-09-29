@@ -16,7 +16,7 @@ describe('service and claims pages render every tab', () => {
   it('tse register', async () => { wrap(<TyreServiceEvents />, '/?tab=register'); await waitFor(() => expect(screen.getAllByText('S1').length).toBeGreaterThan(0)) })
   it('tse overview', async () => { wrap(<TyreServiceEvents />); await waitFor(() => expect(screen.getByText('Most-serviced assets')).toBeTruthy()) })
   it('eh anomalies', async () => { wrap(<EngineHours />, '/?tab=anomalies'); await waitFor(() => expect(screen.getAllByText(/10 h/).length).toBeGreaterThan(0)) })
-  it('eh register+overview', async () => { wrap(<EngineHours />, '/?tab=register'); await waitFor(() => expect(screen.getAllByText('G1').length).toBeGreaterThan(0)); fireEvent.click(screen.getByRole('tab', { name: /Utilisation/ })) })
+  it('eh register+overview', async () => { wrap(<EngineHours />, '/?tab=register'); await waitFor(() => expect(screen.getAllByText('G1').length).toBeGreaterThan(0)); fireEvent.click(screen.getByRole('tab', { name: /Overview/ })) })
   it('ic error', async () => { wrap(<InsuranceClaims />, '/?tab=register'); await waitFor(() => expect(screen.getAllByText(/Could not load insurance claims/).length).toBeGreaterThan(0)); fireEvent.click(screen.getByRole('tab', { name: /Insurers/ })); fireEvent.click(screen.getByRole('tab', { name: /Overview/ })) })
   it('rc', async () => { wrap(<RetreadClaims />); await waitFor(() => expect(screen.getAllByText('RTC-9').length).toBeGreaterThan(0)); fireEvent.click(screen.getByRole('tab', { name: /Analytics/ })); await waitFor(() => expect(screen.getByText('Vendor performance')).toBeTruthy()); fireEvent.click(screen.getByRole('button', { name: /New claim/ })); expect(screen.getByText('New retread claim')).toBeTruthy() })
 })

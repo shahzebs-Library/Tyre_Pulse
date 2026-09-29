@@ -53,6 +53,7 @@ abstract final class ChecklistsHomeScreenKeys {
   static const Key masterDataVerified = ValueKey<String>(
     'checklists.master-data-verified',
   );
+  static const Key assetMeters = ValueKey<String>('checklists.asset-meters');
   static const Key meterReading = ValueKey<String>('checklists.meter-reading');
   static const Key meterRecord = ValueKey<String>('checklists.meter-record');
   static const Key pendingApprovals = ValueKey<String>(
@@ -387,6 +388,15 @@ class _ChecklistsHomeScreenState extends ConsumerState<ChecklistsHomeScreen> {
         canLogMeter && selectedAssetNo != null
             ? ref.watch(lastChecklistOdometerProvider(selectedAssetNo))
             : null;
+    // Engine hours for the selected-asset card. `vehicle_fleet` has no hours
+    // column, so the newest `engine_hours_logs` row is the only real source.
+    // Read under the same meter-log gate as the odometer row; a failed or
+    // empty read hides the fact rather than inventing one.
+    final double? lastEngineHours = canLogMeter && selectedAssetNo != null
+        ? ref
+            .watch(lastChecklistEngineHoursProvider(selectedAssetNo))
+            .whenOrNull(data: (double? value) => value)
+        : null;
 
     return TpScaffold(
       backFallback: TpRoutePaths.home,
@@ -398,6 +408,7 @@ class _ChecklistsHomeScreenState extends ConsumerState<ChecklistsHomeScreen> {
         canInspect: canInspect,
         canOpenVehicles: canOpenVehicles,
         lastOdometer: lastOdometer,
+        lastEngineHours: lastEngineHours,
         pendingInspectionApprovals: pendingInspectionApprovals,
       ),
     );
@@ -411,6 +422,7 @@ class _ChecklistsHomeScreenState extends ConsumerState<ChecklistsHomeScreen> {
     required bool canInspect,
     required bool canOpenVehicles,
     required AsyncValue<LastOdometerReading?>? lastOdometer,
+    required double? lastEngineHours,
     required int? pendingInspectionApprovals,
   }) {
     if (_loading) return const TpLoadingState();
@@ -569,6 +581,7 @@ class _ChecklistsHomeScreenState extends ConsumerState<ChecklistsHomeScreen> {
               assetNo: selectedAssetNo,
               vehicle: selectedVehicleAsset,
               fallbackSite: _siteForAsset(selectedAssetNo)?.value,
+              engineHours: lastEngineHours,
               verified: selectedVehicleVerified,
               onTap:
                   canOpenVehicles ? () => _openVehicle(selectedAssetNo) : null,
@@ -782,7 +795,7 @@ class _ChecklistHubHeader extends StatelessWidget {
         Row(
           children: <Widget>[
             Image.asset(
-              'assets/login/figma_brand_pulse.png',
+              'assets/login/figma_brand_pulse_mark.png',
               width: 40,
               height: 28,
               fit: BoxFit.contain,
@@ -934,6 +947,7 @@ class _SelectedChecklistAssetCard extends StatelessWidget {
     required this.vehicle,
     required this.fallbackSite,
     required this.onTap,
+    this.engineHours,
     this.verified = false,
   });
 
@@ -941,6 +955,9 @@ class _SelectedChecklistAssetCard extends StatelessWidget {
   final VehicleAsset? vehicle;
   final String? fallbackSite;
   final VoidCallback? onTap;
+
+  /// Newest `engine_hours_logs` reading, or null when none was read.
+  final double? engineHours;
 
   /// The asset was read live from the fleet register (`vehicle_fleet`).
   final bool verified;
@@ -959,6 +976,16 @@ class _SelectedChecklistAssetCard extends StatelessWidget {
     final String? km = asset?.currentKm == null
         ? null
         : '${_formatInteger(asset!.currentKm!)} km';
+    final String? hours = engineHours == null
+        ? null
+        : '${_formatInteger(engineHours!.round())} h';
+    // The mock's "68,420 km / 8,742 h": each half only when it was recorded.
+    final String metersText =
+        <String?>[km, hours].whereType<String>().join(' / ');
+    // Isolated left-to-right so "68,420 km" never reads "km 68,420" in an
+    // Arabic or Urdu row.
+    final String? meters =
+        metersText.isEmpty ? null : '\u2066$metersText\u2069';
 
     return Semantics(
       button: onTap != null,
@@ -1013,9 +1040,13 @@ class _SelectedChecklistAssetCard extends StatelessWidget {
                       const SizedBox(height: TpSpace.xs),
                       _AssetFact(icon: Icons.location_on_outlined, value: site),
                     ],
-                    if (km != null) ...<Widget>[
+                    if (meters != null) ...<Widget>[
                       const SizedBox(height: TpSpace.xs),
-                      _AssetFact(icon: Icons.speed_outlined, value: km),
+                      _AssetFact(
+                        key: ChecklistsHomeScreenKeys.assetMeters,
+                        icon: Icons.speed_outlined,
+                        value: meters,
+                      ),
                     ],
                     if (verified) ...<Widget>[
                       const SizedBox(height: TpSpace.xs),
@@ -1032,7 +1063,9 @@ class _SelectedChecklistAssetCard extends StatelessWidget {
                             child: Text(
                               AppLocalizations.of(context)
                                   .checklistsMasterDataVerified,
-                              maxLines: 1,
+                              // Two lines: the Arabic and Urdu wording is
+                              // longer than the English and was cut off.
+                              maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: Theme.of(context)
                                   .textTheme
@@ -1063,7 +1096,7 @@ class _SelectedChecklistAssetCard extends StatelessWidget {
 }
 
 class _AssetFact extends StatelessWidget {
-  const _AssetFact({required this.icon, required this.value});
+  const _AssetFact({required this.icon, required this.value, super.key});
 
   final IconData icon;
   final String value;

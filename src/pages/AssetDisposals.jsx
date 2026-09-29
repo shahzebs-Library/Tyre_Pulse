@@ -1,44 +1,43 @@
 /**
- * AssetDisposals (route /asset-disposals) - the disposal committee register.
+ * AssetDisposals (route /asset-disposals) - the disposal committee register,
+ * rebuilt on the shared page kit to the owner's light reference design.
  *
  * The committee proposes machines to scrap or sell. That proposal is where the
  * work STARTS, and this page exists because of the gap it leaves behind: most
  * of these machines are still marked Active in the fleet register, some are not
- * in the register at all, and several still have tyres bolted to them. Until
- * somebody acts, the fleet count is overstated and recoverable stock is about to
- * leave on the back of a lorry.
+ * in the register at all, and several still have tyres bolted to them. So every
+ * row is shown beside its LIVE evidence - the register's own view of the asset,
+ * its job cards and spend, the tyres still fitted BY SERIAL, and its downtime
+ * from the breakdown register - and an elevated user can add, edit and decide.
  *
- * So every row is shown beside its LIVE evidence - the register's own view of
- * the asset, its job cards and spend, and the tyres still fitted BY SERIAL - and
- * an elevated user can edit the row and record the decision here.
- *
- * All maths live in the pure `assetDisposal` engine; this file is orchestration
- * and presentation. Nothing is fabricated: a machine nobody valued reads "Not
- * valued", never SAR 0, and a failed read says so rather than showing an empty
- * register that reads as "there is nothing to dispose of".
+ * Maths live in the pure engines: `assetDisposal` (register, economics,
+ * findings), `assetDisposalReliability`, `assetBreakdowns`, and
+ * `assetDisposalView` (tiles, pipeline, reasons, recovery trend, next action).
+ * Nothing is fabricated: an estimated value of 0 or blank reads "Not valued",
+ * book value is not carried by any source so it reads N/A, recovery money is
+ * shown per currency and never summed across countries, and a failed read says
+ * so rather than showing an empty register.
  */
-import { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend,
-} from 'chart.js'
-import { Bar, Doughnut } from 'react-chartjs-2'
-import {
-  Recycle, AlertTriangle, Truck, Upload, FileSpreadsheet, FileText, Presentation,
-  Filter, X, Loader2, ExternalLink, CircleDot, Save, Wrench, Info, Search,
-  Banknote, RefreshCw, Activity, History, Tag,
+  Recycle, AlertTriangle, Upload, FileSpreadsheet, FileText, Presentation,
+  X, Loader2, ExternalLink, Save, Search, RefreshCw, CheckCircle2, Clock,
+  ShoppingCart, Coins, ShieldAlert, Plus, FileSearch, Download, Eye, Pencil,
+  History, ClipboardCheck, SlidersHorizontal, ChevronDown, Info,
 } from 'lucide-react'
-import PageHeader from '../components/ui/PageHeader'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
-import Card, { CardHeader, CardBody } from '../components/ui/Card'
 import Modal from '../components/ui/Modal'
 import StudioBoundary from '../components/present/StudioBoundary'
-import { useSettings } from '../contexts/SettingsContext'
+import {
+  Card, CardState, Kpi, PageHero, Pager, Tabs, KitTable, fmtInt,
+} from '../components/commandCenter/kit'
+import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import {
   getDisposalRegister, getDisposalReliability, getDisposalFleetBaseline,
   listReplacementBenchmarks,
-  updateDisposal, setDisposalDecision,
+  updateDisposal, setDisposalDecision, upsertDisposal,
   importDisposalRows, mapDisposalSheetRows,
 } from '../lib/api/assetDisposals'
 import {
@@ -56,17 +55,20 @@ import {
   dispositionMeta, disposalStatusMeta, conditionMeta, regionMeta,
   DISPOSITIONS, DISPOSAL_STATUSES, CONDITIONS,
 } from '../lib/assetDisposal'
+import {
+  disposalKpis, recoveryLabel, pipeline, topReasons, recoveryTrend, nextAction,
+  approvalPill, CONDITION_TONE, makeModel, ageOf, valuationOf, applyViewFilters,
+  valuationRequestRows, VALUATION_COLUMNS, VALUATION_HEADERS, ADDED_WINDOWS,
+} from '../lib/assetDisposalView'
 import { parseWorkbook } from '../lib/import/parseWorkbook'
-import { colorAt, categorical, withAlpha } from '../lib/reportColors'
 import { exportToExcel, exportSheetsToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import { disposalWorkbookSheets, workbookNotes } from '../lib/assetDisposalWorkbook'
 import { toUserMessage } from '../lib/safeError'
 import {
   disposalFilterOptions, countActiveFilters, mergeExportModel, uploadPreviewCounts,
-  downtimeSortValue, stillActiveShare, findingDotClass,
+  stillActiveShare, findingDotClass,
 } from '../lib/assetDisposalsAnalytics'
-
-ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
+import './AssetDisposals.css'
 
 const DisposalDeckBuilder = lazy(() => import('../components/disposal/DisposalDeckBuilder'))
 const ReliabilityPanel = lazy(() => import('../components/disposal/ReliabilityPanel'))
@@ -74,13 +76,15 @@ const ReplacementPanel = lazy(() => import('../components/disposal/ReplacementPa
 const AssetHistoryDrawer = lazy(() => import('../components/disposal/AssetHistoryDrawer'))
 
 const WRITE_ROLES = new Set(['Admin', 'Manager', 'Director'])
+const COUNTRY_CURRENCY = { KSA: 'SAR', UAE: 'AED', Egypt: 'EGP' }
 
 const EMPTY_FILTERS = {
   search: '', disposition: '', region: '', assetType: '',
   status: '', condition: '', site: '', inRegister: 'all', downtime: '',
+  added: '', valuation: '', compliance: '', sold: false,
 }
 
-/** Tone -> the two classes every badge and finding on this page uses. */
+/** Tone -> the classes the badges in the modals use (they portal to the app theme). */
 const TONE_CLASS = {
   danger: 'bg-red-500/15 text-red-300 border-red-500/30',
   warning: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
@@ -112,79 +116,255 @@ function Badge({ meta, className = '' }) {
   )
 }
 
+const Pill = ({ tone = 'muted', children, title }) => <span className={`cc-pill ${tone}`} title={title}>{children}</span>
+const NA = ({ title, children = 'N/A' }) => <span className="cc-na" title={title}>{children}</span>
+
 /**
  * How long this machine has been standing still, from the breakdown register.
- *
- * A machine with no breakdown row prints "Not recorded", NEVER "0 days". The
- * breakdown register only began this month, so an absent row means nobody has
- * told us - not that the machine has never stopped - and on a page where the
- * decision is whether to scrap something, the difference between those two is
- * the whole argument.
+ * A machine with no breakdown row prints "Not recorded", NEVER "0 days": the
+ * breakdown register is young, so no row means nobody told us, not that the
+ * machine has never stopped.
  */
 function DowntimeCell({ entry }) {
-  if (!entry) return <span className="text-[var(--text-muted)] text-xs">Not recorded</span>
+  if (!entry) return <NA>Not recorded</NA>
   const note = downtimeNote(entry)
   if (entry.open > 0) {
     const long = (entry.currentDays ?? 0) >= 30
     return (
-      <span className="inline-flex flex-col gap-0.5">
-        <Badge meta={{ label: note, tone: long ? 'danger' : 'warning' }} />
-        {entry.repairLocation && (
-          <span className="text-[10px] text-[var(--text-muted)]">{repairLabel(entry.repairLocation)}</span>
-        )}
+      <span className="ad-stack">
+        <Pill tone={long ? 'bad' : 'warn'}>{note}</Pill>
+        {entry.repairLocation && <small>{repairLabel(entry.repairLocation)}</small>}
       </span>
     )
   }
-  return <span className="text-[var(--text-secondary)] text-xs">{note || 'Back in service'}</span>
-}
-
-/**
- * A headline number. Clickable tiles apply a filter rather than just informing.
- *
- * `interactive` is what carries the clickable affordance now: it adds the
- * pointer cursor AND a focus-visible ring the hand-rolled version never had.
- *
- * The selected border is a `style` longhand rather than `border-blue-500`,
- * because Card sets `border`/`borderColor` INLINE and a plain utility class is
- * a normal declaration that loses to it - the class would render nothing. It is
- * only present when the tile is active: passing `borderColor: undefined` would
- * REMOVE Card's own value (React drops undefined style props) and leave the
- * border falling back to currentColor.
- *
- * `transition-colors` is gone because `.tp-card` already transitions
- * border-color and box-shadow, which is the only thing that moves here.
- */
-function Tile({ label, value, sub, tone = 'quiet', onClick, active, icon: Icon }) {
-  const Cmp = onClick ? 'button' : 'div'
-  return (
-    <Card
-      as={Cmp}
-      onClick={onClick}
-      interactive={!!onClick}
-      type={onClick ? 'button' : undefined}
-      aria-pressed={onClick ? !!active : undefined}
-      className="text-left w-full min-h-11 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-      style={active ? { borderColor: '#3b82f6' } : undefined}
-    >
-      <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-[var(--text-muted)]">
-        {Icon && <Icon size={13} />} {label}
-      </div>
-      <div className={`mt-1 text-2xl font-semibold tabular-nums ${tone === 'danger' ? 'text-red-300' : tone === 'warning' ? 'text-amber-300' : 'text-[var(--text-primary)]'}`}>
-        {value}
-      </div>
-      {sub && <div className="mt-0.5 text-xs text-[var(--text-muted)]">{sub}</div>}
-    </Card>
-  )
+  return <span className="ad-soft">{note || 'Back in service'}</span>
 }
 
 const inputCls = 'w-full rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/40 min-h-11'
 
-const chartOpts = (extra = {}) => ({
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: { legend: { display: false }, ...(extra.plugins || {}) },
-  ...extra,
-})
+/* ------------------------------------------------------------------ *
+ * Cards
+ * ------------------------------------------------------------------ */
+
+function PipelineCard({ state, rows, sites }) {
+  const [site, setSite] = useState('')
+  const p = useMemo(() => pipeline(rows, { site }), [rows, site])
+  return (
+    <Card title="Disposal Pipeline" sub="Where each machine on the list stands today."
+      action={(
+        <select className="cc-select" aria-label="Pipeline site" value={site} onChange={(e) => setSite(e.target.value)}>
+          <option value="">All sites</option>
+          {sites.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+      )}>
+      <CardState state={state} empty={state.data && !p.total ? (site ? 'No machine on the list sits at this site.' : 'No machine is on the disposal list.') : null}>
+        <div className="ad-pipe" role="list">
+          {p.stages.map((s) => (
+            <div key={s.key} className="ad-pipe-row" role="listitem">
+              <span className="ad-pipe-label">{s.label}</span>
+              <span className="ad-pipe-track"><i style={{ width: p.max ? `${(s.count / p.max) * 100}%` : 0, background: s.color }} /></span>
+              <b>{fmtInt(s.count)}</b>
+            </div>
+          ))}
+        </div>
+        <p className="ad-foot">The register records proposed, approved, rejected and disposed, plus whether a valuation exists. No other stage is tracked, so none is drawn.</p>
+      </CardState>
+    </Card>
+  )
+}
+
+const REASON_DOT = { bad: 'var(--cc-red)', warn: 'var(--cc-amber)', good: 'var(--cc-green)', info: 'var(--cc-blue)', muted: 'var(--cc-ink-3)' }
+
+function ReasonsCard({ state, rows }) {
+  const [months, setMonths] = useState(0)
+  const r = useMemo(() => topReasons(rows, { months, now: Date.now() }), [rows, months])
+  return (
+    <Card title="Top Disposal Reasons" sub="The condition the committee recorded."
+      action={(
+        <select className="cc-select" aria-label="Reasons period" value={months} onChange={(e) => setMonths(Number(e.target.value))}>
+          <option value={0}>All time</option>
+          <option value={6}>Added in last 6 months</option>
+          <option value={12}>Added in last 12 months</option>
+        </select>
+      )}>
+      <CardState state={state} empty={state.data && !r.total ? 'No machine was added to the list in this period.' : null}>
+        <ul className="ad-reasons">
+          {r.reasons.map((x) => {
+            const tone = CONDITION_TONE[x.tone] || 'muted'
+            return (
+              <li key={x.label}>
+                <i style={{ background: REASON_DOT[tone] }} aria-hidden="true" />
+                <span>{x.label}</span>
+                <b>{fmtInt(x.count)}</b>
+                <small>{x.pct == null ? 'N/A' : `${x.pct}%`}</small>
+              </li>
+            )
+          })}
+        </ul>
+        <p className="ad-foot">The committee sheet has no separate reason field, so the recorded condition is grouped.{r.more ? ` ${r.more} more not shown.` : ''}</p>
+      </CardState>
+    </Card>
+  )
+}
+
+function RecoveryChart({ trend, currency }) {
+  const W = 420; const H = 170; const pad = { l: 44, r: 30, t: 10, b: 22 }
+  const series = trend.series
+  const vals = series.map((s) => (currency ? (s.values[currency] ?? 0) : 0))
+  const vMax = Math.max(1, ...vals)
+  const cMax = Math.max(1, ...series.map((s) => s.count))
+  const bw = (W - pad.l - pad.r) / series.length
+  const x = (i) => pad.l + i * bw + bw / 2
+  const yv = (v) => pad.t + (1 - v / vMax) * (H - pad.t - pad.b)
+  const yc = (c) => pad.t + (1 - c / cMax) * (H - pad.t - pad.b)
+  const line = series.map((s, i) => `${i ? 'L' : 'M'}${x(i)},${yc(s.count)}`).join(' ')
+  const label = series.map((s, i) => `${s.label} ${s.count} disposed${currency ? `, ${currency} ${Math.round(vals[i]).toLocaleString('en-US')}` : ''}`).join('; ')
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={`Recovery by month: ${label}`}>
+      {[0, 0.5, 1].map((f) => (
+        <g key={f}>
+          <line x1={pad.l} x2={W - pad.r} y1={yv(vMax * f)} y2={yv(vMax * f)} stroke="var(--cc-track)" />
+          {currency && <text className="cc-axis" x={pad.l - 6} y={yv(vMax * f)} dy="0.35em" textAnchor="end">{Math.round(vMax * f).toLocaleString('en-US')}</text>}
+          <text className="cc-axis" x={W - pad.r + 6} y={yc(cMax * f)} dy="0.35em">{Math.round(cMax * f)}</text>
+        </g>
+      ))}
+      {currency && vals.map((v, i) => v > 0 && (
+        <rect key={series[i].key} x={x(i) - bw * 0.3} y={yv(v)} width={bw * 0.6} height={H - pad.b - yv(v)} rx="2" fill="var(--cc-green)" opacity="0.55" />
+      ))}
+      <path d={line} fill="none" stroke="var(--cc-green-strong)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+      {series.map((s, i) => <circle key={s.key} cx={x(i)} cy={yc(s.count)} r="3" fill="var(--cc-green-strong)" />)}
+      {series.map((s, i) => <text key={`l${s.key}`} className="cc-axis" x={x(i)} y={H - 5} textAnchor="middle">{s.label}</text>)}
+    </svg>
+  )
+}
+
+function RecoveryCard({ state, rows }) {
+  const [months, setMonths] = useState(12)
+  const trend = useMemo(() => recoveryTrend(rows, { months, now: Date.now() }), [rows, months])
+  const [cur, setCur] = useState('')
+  const currency = trend.currencies.includes(cur) ? cur : trend.currencies[0] || ''
+  return (
+    <Card title="Recovery Value Trend" sub="Machines disposed by month and the proceeds recorded on them."
+      action={(
+        <div className="ad-head-selects">
+          {trend.currencies.length > 1 && (
+            <select className="cc-select" aria-label="Currency" value={currency} onChange={(e) => setCur(e.target.value)}>
+              {trend.currencies.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          )}
+          <select className="cc-select" aria-label="Recovery period" value={months} onChange={(e) => setMonths(Number(e.target.value))}>
+            <option value={6}>Last 6 months</option>
+            <option value={12}>Last 12 months</option>
+            <option value={24}>Last 24 months</option>
+          </select>
+        </div>
+      )}>
+      <CardState state={state} empty={state.data && !trend.disposed
+        ? `No machine has been marked disposed in this period${trend.undated ? ` (${trend.undated} disposed with no date)` : ''}, so there is no recovery to chart.`
+        : null}>
+        <div className="ad-legend">
+          {trend.hasValue && <span><i style={{ background: 'var(--cc-green)', opacity: 0.55 }} aria-hidden="true" />Recovery value ({currency})</span>}
+          <span><i style={{ background: 'var(--cc-green-strong)' }} aria-hidden="true" />Assets disposed</span>
+        </div>
+        <div className="cc-chart ad-chart"><RecoveryChart trend={trend} currency={trend.hasValue ? currency : ''} /></div>
+        {!trend.hasValue && <p className="ad-foot">No sale proceeds are recorded on these disposals, so only the count is drawn.</p>}
+        {trend.currencies.length > 1 && <p className="ad-foot">Proceeds are shown one currency at a time and never added across countries.</p>}
+      </CardState>
+    </Card>
+  )
+}
+
+/** Export menu: register sheet, full workbook, PDF and the deck builder. */
+function ExportMenu({ disabled, onRegister, onWorkbook, onPdf, onDeck }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!open) return undefined
+    const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    const esc = (e) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', close)
+    document.addEventListener('keydown', esc)
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', esc) }
+  }, [open])
+  const run = (fn) => { setOpen(false); fn() }
+  return (
+    <div className="ad-menu" ref={ref}>
+      <button type="button" className="cc-btn-ghost" disabled={disabled} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        <Download size={14} aria-hidden="true" /> Export <ChevronDown size={13} aria-hidden="true" />
+      </button>
+      {open && (
+        <div className="ad-menu-list" role="menu">
+          <button type="button" role="menuitem" onClick={() => run(onRegister)}><FileSpreadsheet size={14} aria-hidden="true" /> Register only (Excel)</button>
+          <button type="button" role="menuitem" onClick={() => run(onWorkbook)} title="Register, reliability, replacement prices, quotations, board points and the fleet comparison, in one workbook"><FileSpreadsheet size={14} aria-hidden="true" /> Download everything</button>
+          <button type="button" role="menuitem" onClick={() => run(onPdf)}><FileText size={14} aria-hidden="true" /> PDF</button>
+          <button type="button" role="menuitem" onClick={() => run(onDeck)}><Presentation size={14} aria-hidden="true" /> Build deck</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Bars({ list, money, currency }) {
+  const vals = list.map((g) => (money ? g.spend : g.count) ?? 0)
+  const max = Math.max(1, ...vals)
+  return (
+    <div className="ad-pipe">
+      {list.map((g, i) => (
+        <div key={g.label} className="ad-pipe-row">
+          <span className="ad-pipe-label">{g.label}</span>
+          <span className="ad-pipe-track"><i style={{ width: `${(vals[i] / max) * 100}%`, background: 'var(--cc-green)' }} /></span>
+          <b>{money ? fmtMoney(vals[i], currency) : fmtInt(vals[i])}</b>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** The register profile: the breakdowns the old register tab charted. */
+function ProfilePanel({ filtered, totals, findings, currency }) {
+  const byType = byGroup(filtered, 'asset_type')
+  const byRegion = byGroup(filtered, 'region').map((g) => ({ ...g, label: regionMeta(g.label).label === 'Not recorded' ? g.label : regionMeta(g.label).label }))
+  const byCondition = byGroup(filtered, 'condition')
+  const spendTypes = byType.filter((g) => g.spend != null && g.spend > 0)
+  const ages = ageBands(filtered)
+  const empty = <div className="cc-empty">Nothing to show for this selection.</div>
+  return (
+    <div className="ad-profile">
+      <div className="ad-profile-grid">
+        <section><h3 className="ad-h3">Machines by asset type</h3>{byType.length ? <Bars list={byType} /> : empty}</section>
+        <section><h3 className="ad-h3">Machines by region</h3>{byRegion.length ? <Bars list={byRegion} /> : empty}</section>
+        <section><h3 className="ad-h3">Condition</h3>{byCondition.length ? <Bars list={byCondition} /> : empty}</section>
+        <section>
+          <h3 className="ad-h3">Lifetime spend by asset type {currency && <span className="ad-soft">({currency})</span>}</h3>
+          {totals.mixedCurrency
+            ? <div className="cc-empty">This selection carries more than one currency, so spend is not shown as a single total.</div>
+            : spendTypes.length ? <Bars list={spendTypes} money currency={currency} /> : <div className="cc-empty">No spend is recorded against these machines.</div>}
+        </section>
+      </div>
+      <section>
+        <h3 className="ad-h3">Age</h3>
+        <div className="ad-ages">
+          {ages.map((b) => <div key={b.key}><b>{fmtNum(b.count)}</b><span>{b.label}</span></div>)}
+        </div>
+        <p className="ad-foot">Age is worked out from the model year. {fmtNum(totals.agedKnown)} of {fmtNum(totals.assets)} machines carry one.</p>
+      </section>
+      {findings.length > 0 && (
+        <section>
+          <h3 className="ad-h3"><Info size={14} aria-hidden="true" /> What this list says</h3>
+          <ul className="ad-findings">
+            {findings.map((f) => (
+              <li key={f.key}><span aria-hidden="true" className={`ad-fdot ${findingDotClass(f.tone)}`} />{f.text}</li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ *
+ * Page
+ * ------------------------------------------------------------------ */
 
 export default function AssetDisposals() {
   const { activeCountry, appSettings } = useSettings()
@@ -194,37 +374,34 @@ export default function AssetDisposals() {
 
   const [register, setRegister] = useState(null)
   const [reliability, setReliability] = useState(null)
-  // The list measured against the fleet it is leaving. Its own read, because a
-  // missing baseline must cost two recommendation points and never the page.
   const [baseline, setBaseline] = useState(null)
-  // Supplier quotations that price a whole asset class. Kept raw so the editor
-  // can write them back; shaped below for every reader.
   const [benchmarkRows, setBenchmarkRows] = useState([])
   const [tab, setTab] = useState('register')
-  const [history, setHistory] = useState(null)  // machine open in the history drawer
+  const [history, setHistory] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
-  const [updatedAt, setUpdatedAt] = useState(null)
   const [filters, setFilters] = useState(EMPTY_FILTERS)
-  const [showFilters, setShowFilters] = useState(false)
+  const [showMore, setShowMore] = useState(false)
+  const [page, setPage] = useState(0)
+  const [pageSize, setPageSize] = useState(10)
 
-  const [detail, setDetail] = useState(null)   // row open in the drawer
-  const [editing, setEditing] = useState(null) // row open in the editor
+  const [detail, setDetail] = useState(null)
+  const [editing, setEditing] = useState(null)
   const [deciding, setDeciding] = useState(null)
+  const [starting, setStarting] = useState(false)
   const [upload, setUpload] = useState(null)
   const [breakdownRows, setBreakdownRows] = useState([])
+  const [breakdownState, setBreakdownState] = useState('loading')
   const [deckOpen, setDeckOpen] = useState(false)
   const [busy, setBusy] = useState(false)
 
-  const load = useCallback(async (isRefresh) => {
-    if (isRefresh) setRefreshing(true); else setLoading(true)
+  const load = useCallback(async () => {
+    setLoading(true)
     setError('')
     try {
-      // The reads are independent on purpose: a database without the
-      // reliability RPC must still show the register, a register that fails
-      // to load must not be reported as a fleet that never breaks down, and a
-      // failed quotation read must cost only the replacement figures.
+      // Independent reads: a database without the reliability RPC must still
+      // show the register, and a failed quotation or breakdown read costs only
+      // its own figures.
       const [reg, rel, base, bench, brk] = await Promise.allSettled([
         getDisposalRegister({ country: activeCountry }),
         getDisposalReliability({ country: activeCountry }),
@@ -234,37 +411,29 @@ export default function AssetDisposals() {
       ])
       if (reg.status === 'fulfilled') {
         setRegister(shapeDisposalRegister(reg.value))
-        setError('')
       } else {
         setRegister(null)
         setError(toUserMessage(reg.reason))
       }
       setReliability(shapeReliability(rel.status === 'fulfilled' ? rel.value : null))
       setBaseline(base.status === 'fulfilled' ? base.value : null)
-      // A read that failed leaves NO quotations, so every machine reads as
-      // unpriced with its reason. It never leaves a stale price on screen.
       setBenchmarkRows(bench.status === 'fulfilled' ? (bench.value?.rows || []) : [])
       // A failed breakdown read leaves NO downtime, so every machine reads
-      // "Not recorded" with its reason - never a silent zero days down.
+      // "Not recorded" - never a silent zero days down.
       setBreakdownRows(brk.status === 'fulfilled' ? (brk.value?.rows || []) : [])
-      setUpdatedAt(new Date())
+      setBreakdownState(brk.status === 'fulfilled' ? 'ready' : 'error')
     } catch (e) {
       setError(toUserMessage(e))
       setRegister(null)
     } finally {
       setLoading(false)
-      setRefreshing(false)
     }
   }, [activeCountry])
 
-  useEffect(() => { load(false) }, [load])
+  useEffect(() => { load() }, [load])
 
-  // Memoised so the empty-array fallback does not mint a new identity on every
-  // render and re-run every derived memo below it.
-  // Reliability is merged onto the register rows BEFORE filtering, so a filtered
-  // reliability table describes the same machines as the filtered register. If
-  // the engine is unavailable the register rows pass through untouched and the
-  // reliability surface reports that it could not measure anything.
+  // Reliability and downtime are merged BEFORE filtering so a filtered table and
+  // every panel describe the same machines.
   const baseRows = useMemo(() => {
     const base = register?.rows || []
     const assets = reliability?.ok ? (reliability.assets || []) : []
@@ -272,43 +441,40 @@ export default function AssetDisposals() {
     const merged = mergeReliability(base, assets)
     return Array.isArray(merged) ? merged : base
   }, [register, reliability])
-  // Downtime is merged BEFORE filtering, for the same reason reliability is:
-  // a filtered table and a filtered downtime column must describe the same
-  // machines. A machine with no breakdown row keeps breakdown null and reads
-  // "Not recorded" rather than being claimed as never having stopped.
-  const rows = useMemo(
-    () => mergeBreakdowns(baseRows, breakdownRows, Date.now()),
-    [baseRows, breakdownRows],
+  const rows = useMemo(() => mergeBreakdowns(baseRows, breakdownRows, Date.now()), [baseRows, breakdownRows])
+  const filtered = useMemo(
+    () => applyViewFilters(filterDisposals(rows, filters), filters, Date.now()),
+    [rows, filters],
   )
-  const filtered = useMemo(() => filterDisposals(rows, filters), [rows, filters])
-  // Machines that are down long enough to be worth a committee look but are not
-  // on the register. Derived from the FULL register, not the filtered view: a
-  // machine is either on the list or it is not, and a filter must never make it
-  // look like it is missing.
+  // From the FULL register: a filter must never make a machine look missing.
   const missingCandidates = useMemo(
     () => disposalCandidatesFromBreakdowns(breakdownRows, baseRows, { now: Date.now() }),
     [breakdownRows, baseRows],
   )
-  // Totals follow the FILTERED rows: a filtered table under register-wide
-  // headlines is how a reader ends up quoting a number that is not on screen.
   const totals = useMemo(() => disposalSummary(filtered), [filtered])
   const findings = useMemo(() => disposalFindings(filtered, totals), [filtered, totals])
   const baselines = useMemo(() => spendBaselines(rows), [rows])
-  // Shaped once: inactive rows dropped, the newest quotation per class winning,
-  // and the older one kept visible as superseded rather than silently gone.
   const benchmarks = useMemo(() => shapeBenchmarks(benchmarkRows, { now: Date.now() }), [benchmarkRows])
-
+  // The tiles cover the whole register in scope: each one is also a filter, and
+  // a tile recomputed over its own filter would only echo the choice back.
+  const kpis = useMemo(() => disposalKpis(rows), [rows])
+  const activeShare = useMemo(() => stillActiveShare(disposalSummary(rows)), [rows])
 
   const options = useMemo(() => disposalFilterOptions(rows), [rows])
   const activeFilterCount = useMemo(() => countActiveFilters(filters), [filters])
-  const activeShare = useMemo(() => stillActiveShare(totals), [totals])
-  const setFilter = (k, v) => setFilters((f) => ({ ...f, [k]: v }))
+  const setFilter = (k, v) => { setFilters((f) => ({ ...f, [k]: v })); setPage(0) }
+  const toggle = (patch) => {
+    setFilters((f) => {
+      const on = Object.entries(patch).every(([k, v]) => f[k] === v)
+      const reset = { status: '', valuation: '', compliance: '', sold: false }
+      return on ? { ...f, ...reset } : { ...f, ...reset, ...patch }
+    })
+    setPage(0)
+  }
+  const isOn = (patch) => Object.entries(patch).every(([k, v]) => filters[k] === v)
 
   const currency = totals.mixedCurrency ? '' : (totals.currency || '')
 
-  // Computed ONCE here and handed to the reliability panel, so the points on
-  // screen and the points in the workbook are the same objects rather than two
-  // calls that agree today and drift the first time either gains an argument.
   const shapedBaseline = useMemo(() => shapeFleetBaseline(baseline), [baseline])
   const boardPoints = useMemo(() => {
     const fleet = fleetReliability(filtered)
@@ -319,126 +485,82 @@ export default function AssetDisposals() {
     })
   }, [filtered, currency, shapedBaseline])
 
-  // ── charts (palette follows the super-admin report theme) ──────────────────
-  const byType = useMemo(() => byGroup(filtered, 'asset_type'), [filtered])
-  const byRegion = useMemo(() => byGroup(filtered, 'region'), [filtered])
-  const byCondition = useMemo(() => byGroup(filtered, 'condition'), [filtered])
-  const ages = useMemo(() => ageBands(filtered), [filtered])
-
-  const barData = (list, label) => ({
-    labels: list.map((g) => g.label),
-    datasets: [{
-      label,
-      data: list.map((g) => g.count),
-      backgroundColor: list.map((_, i) => withAlpha(colorAt(i), 0.75)),
-      borderColor: list.map((_, i) => colorAt(i)),
-      borderWidth: 1,
-    }],
-  })
-
-  const spendByTypeData = useMemo(() => {
-    const priced = byType.filter((g) => g.spend != null && g.spend > 0)
-    return {
-      hasData: priced.length > 0,
-      data: {
-        labels: priced.map((g) => g.label),
-        datasets: [{
-          label: `Lifetime spend ${currency}`.trim(),
-          data: priced.map((g) => g.spend),
-          backgroundColor: priced.map((_, i) => withAlpha(colorAt(i), 0.75)),
-          borderColor: priced.map((_, i) => colorAt(i)),
-          borderWidth: 1,
-        }],
-      },
-    }
-  }, [byType, currency])
-
-  const conditionData = useMemo(() => ({
-    labels: byCondition.map((g) => g.label),
-    datasets: [{
-      data: byCondition.map((g) => g.count),
-      backgroundColor: categorical(byCondition.length),
-      borderWidth: 0,
-    }],
-  }), [byCondition])
-
-  // ── tables ─────────────────────────────────────────────────────────────────
-  // Economics computed once per row so sort keys and cells read the same numbers.
-  const registerRows = useMemo(
-    () => filtered.map((r) => ({ row: r, e: assetEconomics(r, { peerSpendPerYear: baselines[r?.asset_type] }) })),
-    [filtered, baselines],
+  // ── table ──────────────────────────────────────────────────────────────────
+  const pages = Math.max(1, Math.ceil(filtered.length / pageSize))
+  const safePage = Math.min(page, pages - 1)
+  const pageRows = useMemo(
+    () => filtered.slice(safePage * pageSize, (safePage + 1) * pageSize),
+    [filtered, safePage, pageSize],
   )
-  const registerColumns = useMemo(() => [
-    { id: 'asset', header: 'Asset', accessorFn: (x) => x.row.asset_no, cell: ({ row }) => <span className="font-medium text-[var(--text-primary)] whitespace-nowrap">{row.original.row.asset_no}</span> },
-    { id: 'type', header: 'Type', accessorFn: (x) => x.row.asset_type || 'N/A' },
-    { id: 'where', header: 'Region / Site', accessorFn: (x) => `${regionMeta(x.row.region).label} / ${x.row.site || 'N/A'}`, cell: ({ row }) => <span className="whitespace-nowrap text-[var(--text-secondary)]">{regionMeta(row.original.row.region).label}<span className="text-[var(--text-muted)]"> / {row.original.row.site || 'N/A'}</span></span> },
-    { id: 'disposition', header: 'Disposition', accessorFn: (x) => dispositionMeta(x.row.disposition).label, cell: ({ row }) => <Badge meta={dispositionMeta(row.original.row.disposition)} /> },
-    { id: 'condition', header: 'Condition', accessorFn: (x) => conditionMeta(x.row.condition).label, cell: ({ row }) => <Badge meta={conditionMeta(row.original.row.condition)} /> },
-    { id: 'register', header: 'Fleet register', accessorFn: (x) => (x.e.inRegister ? (x.e.fleetStatus || 'Listed') : 'Not in register'), cell: ({ row }) => (row.original.e.inRegister ? <span className="text-[var(--text-secondary)]">{row.original.e.fleetStatus || 'Listed'}</span> : <Badge meta={{ label: 'Not in register', tone: 'warning' }} />) },
-    { id: 'downtime', header: 'Downtime', accessorFn: (x) => downtimeSortValue(x.row.breakdown) ?? undefined, sortUndefined: 'last', sortingFn: 'basic', meta: { exportValue: (x) => (x.row.breakdown ? downtimeNote(x.row.breakdown) || 'Back in service' : 'Not recorded') }, cell: ({ row }) => <DowntimeCell entry={row.original.row.breakdown} /> },
-    { id: 'jobCards', header: 'Job cards', accessorFn: (x) => x.e.jobCards ?? undefined, sortUndefined: 'last', sortingFn: 'basic', meta: { align: 'right' }, cell: ({ row }) => <span className="tabular-nums">{fmtNum(row.original.e.jobCards)}</span> },
-    { id: 'spend', header: 'Spend', accessorFn: (x) => (x.e.spend == null ? undefined : Number(x.e.spend)), sortUndefined: 'last', sortingFn: 'basic', meta: { align: 'right' }, cell: ({ row }) => <span className="tabular-nums whitespace-nowrap">{fmtMoney(row.original.e.spend, row.original.e.currency)}</span> },
-    { id: 'tyres', header: 'Tyres fitted', accessorFn: (x) => x.e.tyresActive ?? 0, meta: { align: 'right' }, cell: ({ row }) => <span className="tabular-nums">{row.original.e.tyresActive || ''}</span> },
-    { id: 'status', header: 'Status', accessorFn: (x) => disposalStatusMeta(x.row.status).label, cell: ({ row }) => <Badge meta={disposalStatusMeta(row.original.row.status)} /> },
+  const now = Date.now()
+  const columns = [
     {
-      id: 'history', header: 'History', enableSorting: false, meta: { export: false },
-      cell: ({ row }) => (
-        <button
-          type="button"
-          onClick={(ev) => { ev.stopPropagation(); setHistory(row.original.row) }}
-          className="text-blue-400 hover:underline inline-flex items-center gap-1 text-xs min-h-11 px-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
-          aria-label={`Open the history of ${row.original.row.asset_no}`}
-        >
-          <History size={13} aria-hidden="true" /> History
-        </button>
+      key: 'asset_no', header: 'Asset no',
+      cell: (r) => <span className="cc-strong ad-nowrap">{r.asset_no}</span>,
+    },
+    {
+      key: 'plate', header: 'Plate',
+      cell: (r) => (r.registration_no ? <span className="ad-nowrap">{r.registration_no}</span> : <NA title={r.in_register ? 'No plate in the fleet register' : 'Not in the fleet register'} />),
+    },
+    { key: 'make', header: 'Make / model', cell: (r) => makeModel(r) || <NA /> },
+    { key: 'asset_type', header: 'Category', cell: (r) => r.asset_type || <NA /> },
+    { key: 'age', header: 'Age (years)', align: 'right', cell: (r) => { const a = ageOf(r, now); return a == null ? <NA title="No model year recorded" /> : a } },
+    {
+      key: 'condition', header: 'Condition',
+      cell: (r) => { const m = conditionMeta(r.condition); return <Pill tone={CONDITION_TONE[m.tone] || 'muted'}>{m.label}</Pill> },
+    },
+    { key: 'book', header: 'Book value', align: 'right', cell: () => <NA title="No source records a book value for these machines" /> },
+    {
+      key: 'value', header: 'Est. resale / scrap value', align: 'right',
+      cell: (r) => { const v = valuationOf(r); return v == null ? <NA title="Blank or zero on the committee sheet">Not valued</NA> : <span className="ad-nowrap">{fmtMoney(v, r.currency || 'SAR')}</span> },
+    },
+    { key: 'downtime', header: 'Downtime', cell: (r) => <DowntimeCell entry={r.breakdown} /> },
+    { key: 'status', header: 'Approval status', cell: (r) => { const p = approvalPill(r); return <Pill tone={p.tone}>{p.label}</Pill> } },
+    {
+      key: 'channel', header: 'Channel / reference',
+      cell: (r) => (
+        <span className="ad-stack">
+          <span>{dispositionMeta(r.disposition).label}</span>
+          {r.disposal_ref && <small>{r.disposal_ref}</small>}
+        </span>
       ),
     },
-  ], [])
-  const candidateColumns = useMemo(() => [
-    { id: 'asset', header: 'Asset', accessorFn: (c) => c.asset_no, cell: ({ row }) => <Link to={`/asset-management/${encodeURIComponent(row.original.asset_no)}`} className="text-blue-400 hover:underline font-medium whitespace-nowrap">{row.original.asset_no}</Link> },
-    { id: 'days', header: 'Days down', accessorFn: (c) => (c.currentDays != null && Number.isFinite(Number(c.currentDays)) ? Number(c.currentDays) : undefined), sortUndefined: 'last', sortingFn: 'basic', meta: { align: 'right' }, cell: ({ row }) => <span className="tabular-nums text-amber-300">{fmtNum(row.original.currentDays)}</span> },
-    { id: 'fault', header: 'Fault', accessorFn: (c) => c.fault || 'Not recorded' },
-    { id: 'repair', header: 'Repaired at', accessorFn: (c) => repairLabel(c.repairLocation) },
-  ], [])
+    { key: 'next', header: 'Next action', cell: (r) => { const a = nextAction(r); return <span className={`ad-next ${a.tone}`}>{a.label}</span> } },
+    {
+      key: 'actions', header: 'Actions',
+      cell: (r) => (
+        <span className="ad-actions" onClick={(ev) => ev.stopPropagation()} role="presentation">
+          <button type="button" className="ad-act" aria-label={`View ${r.asset_no}`} onClick={() => setDetail(r)}><Eye size={15} /></button>
+          {canWrite && <button type="button" className="ad-act" aria-label={`Edit ${r.asset_no}`} onClick={() => setEditing(r)}><Pencil size={15} /></button>}
+          {canWrite && <button type="button" className="ad-act" aria-label={`Record a decision on ${r.asset_no}`} onClick={() => setDeciding(r)}><ClipboardCheck size={15} /></button>}
+          <button type="button" className="ad-act" aria-label={`Open the history of ${r.asset_no}`} onClick={() => setHistory(r)}><History size={15} /></button>
+        </span>
+      ),
+    },
+  ]
+  const candidateColumns = [
+    { key: 'asset_no', header: 'Asset', cell: (c) => <Link to={`/asset-management/${encodeURIComponent(c.asset_no)}`} className="ad-link">{c.asset_no}</Link> },
+    { key: 'days', header: 'Days down', align: 'right', cell: (c) => <span className="ad-amber">{fmtNum(c.currentDays)}</span> },
+    { key: 'fault', header: 'Fault', cell: (c) => c.fault || <NA>Not recorded</NA> },
+    { key: 'repair', header: 'Repaired at', cell: (c) => repairLabel(c.repairLocation) },
+  ]
 
   // ── exports ────────────────────────────────────────────────────────────────
-  /**
-   * One export, both halves. The committee columns and the reliability columns
-   * are produced by their own engines over the SAME filtered array in the same
-   * order, so they are zipped by index. A duplicated key keeps the register's
-   * version. When reliability is unavailable the export is the register alone
-   * rather than a sheet of blank reliability columns.
-   */
   const exportModel = useCallback(() => {
     const base = disposalExportRows(filtered)
     return reliability?.ok ? mergeExportModel(base, reliabilityExportRows(filtered)) : base
   }, [filtered, reliability])
-  const [exportError, setExportError] = useState('')
-  // Every export goes through here so a failed file says so instead of the
-  // button appearing to do nothing.
+  const [notice, setNotice] = useState(null)
   const runExport = async (fn) => {
-    setExportError('')
-    try { await fn() } catch (e) { setExportError(toUserMessage(e, 'The export could not be created.')) }
+    setNotice(null)
+    try { await fn() } catch (e) { setNotice({ tone: 'bad', text: toUserMessage(e, 'The export could not be created.') }) }
   }
-
   const doExportExcel = async () => {
-    const { columns, rows: objects, head } = exportModel()
-    const name = reportFileName('Asset Disposals', reportDateLabel())
-    await exportToExcel(objects, columns, head, name, 'Disposals', {
+    const { columns: cols, rows: objects, head } = exportModel()
+    await exportToExcel(objects, cols, head, reportFileName('Asset Disposals', reportDateLabel()), 'Disposals', {
       title: 'Asset Disposal Register', company, currency: currency || 'SAR',
     })
   }
-
-  /**
-   * Everything the module knows, in one workbook.
-   *
-   * The register, the reliability history, the replacement prices, the
-   * quotations behind them, the board points and the fleet comparison are the
-   * SAME figures the screen shows - built from the same export builders, so a
-   * forwarded spreadsheet can never disagree with the page it came from. It
-   * exports what is on screen, filters included, and the Contents sheet records
-   * the basis each figure rests on.
-   */
   const doExportWorkbook = async () => {
     const sheets = disposalWorkbookSheets({
       rows: filtered,
@@ -453,476 +575,298 @@ export default function AssetDisposals() {
     await exportSheetsToExcel(sheets, reportFileName('Asset Disposals full', reportDateLabel()), {
       title: 'Asset Disposal - complete record',
       company,
-      meta: {
-        Country: activeCountry || 'All countries',
-        'Machines exported': filtered.length,
-      },
+      meta: { Country: activeCountry || 'All countries', 'Machines exported': filtered.length },
       notes: workbookNotes({ rows: filtered, benchmarks, baseline, now: Date.now() }),
     })
   }
   const doExportPdf = async () => {
-    const { columns, rows: objects, head } = exportModel()
-    const name = reportFileName('Asset Disposals', reportDateLabel())
+    const { columns: cols, rows: objects, head } = exportModel()
     await exportToPdf(
-      objects,
-      columns.map((k, i) => ({ key: k, header: head[i] })),
-      'Asset Disposal Register',
-      name,
-      'landscape',
-      company,
-      { currency: currency || 'SAR' },
+      objects, cols.map((k, i) => ({ key: k, header: head[i] })),
+      'Asset Disposal Register', reportFileName('Asset Disposals', reportDateLabel()),
+      'landscape', company, { currency: currency || 'SAR' },
     )
+  }
+  /**
+   * A valuation request is a sheet of the open machines nobody has valued, in
+   * the columns the upload reads back. The valuer fills Estimated value and the
+   * sheet goes back in through Upload sheet, which refreshes each row in place.
+   */
+  const doRequestValuation = async () => {
+    const list = valuationRequestRows(filtered)
+    if (!list.length) { setNotice({ tone: 'good', text: 'Every open machine in this selection already carries a valuation.' }); return }
+    await exportSheetsToExcel([{
+      name: 'Valuation request', rows: list, columns: VALUATION_COLUMNS, headers: VALUATION_HEADERS,
+      note: 'Fill Estimated value, then upload this file with Upload sheet.',
+    }], reportFileName('Disposal valuation request', reportDateLabel()), {
+      title: 'Disposal valuation request', company,
+      meta: { Country: activeCountry || 'All countries', Machines: list.length },
+      notes: ['Leave Asset, Disposition and the other columns as they are: the upload refreshes each machine in place on its asset code.'],
+    })
+    setNotice({ tone: 'good', text: `Valuation request for ${list.length} machine${list.length === 1 ? '' : 's'} downloaded. Upload it back with Upload sheet once the values are filled in.` })
   }
 
   // ── write paths ────────────────────────────────────────────────────────────
-  const saveEdit = async (patch) => {
+  const writeThen = async (fn, close) => {
     setBusy(true)
     try {
-      await updateDisposal(editing.id, patch)
-      setEditing(null)
+      await fn()
+      close()
       setDetail(null)
-      await load(true)
+      await load()
     } catch (e) {
-      setError(toUserMessage(e))
+      setNotice({ tone: 'bad', text: toUserMessage(e) })
     } finally { setBusy(false) }
   }
-
-  const saveDecision = async (decision) => {
-    setBusy(true)
-    try {
-      await setDisposalDecision(deciding.id, decision)
-      setDeciding(null)
-      setDetail(null)
-      await load(true)
-    } catch (e) {
-      setError(toUserMessage(e))
-    } finally { setBusy(false) }
-  }
+  const saveEdit = (patch) => writeThen(() => updateDisposal(editing.id, patch), () => setEditing(null))
+  const saveDecision = (decision) => writeThen(() => setDisposalDecision(deciding.id, decision), () => setDeciding(null))
+  const saveStart = (row) => writeThen(() => upsertDisposal(row), () => setStarting(false))
 
   const notProvisioned = register && register.ok === false && register.reason === 'not_provisioned'
   const readFailed = register && register.ok === false && !notProvisioned
+  const regFailed = !!(readFailed || error)
+  const regState = {
+    loading,
+    data: register?.ok ? register : null,
+    error: regFailed ? 'This section needs the disposal register, which could not be read.' : notProvisioned ? 'Asset Disposal is not enabled on this database yet.' : null,
+    retry: load,
+  }
+  const ready = !loading && register?.ok
+  const kpiLoading = loading
+  const kpiNA = !loading && !register?.ok ? 'N/A' : undefined
+  const recovery = recoveryLabel(kpis.recovery)
 
   return (
-    <div className="space-y-6">
-      <PageHeader
+    <div className="cc ad-page">
+      <PageHero
         title="Asset Disposal"
-        subtitle="Machines the disposal committee has proposed to scrap or sell, shown beside what the fleet register, the job card ledger and the tyre records still say about them."
-        icon={Recycle}
-        onRefresh={() => load(true)}
-        refreshing={refreshing}
-        updatedAt={updatedAt}
-        actions={(
-          <div className="flex flex-wrap items-center gap-2">
-            {canWrite && (
-              <button onClick={() => setUpload({ stage: 'pick' })} className="btn-secondary text-sm inline-flex items-center gap-1.5">
-                <Upload size={14} /> Upload sheet
-              </button>
-            )}
-            <button onClick={() => setDeckOpen(true)} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
-              <Presentation size={14} /> Build deck
-            </button>
-            {/* The whole module in one workbook. Kept beside the single-sheet
-                export rather than replacing it: somebody who wants only the
-                register should not have to open a six-sheet file to find it. */}
-            <button
-              onClick={() => runExport(doExportWorkbook)}
-              className="btn-secondary text-sm inline-flex items-center gap-1.5"
-              disabled={!filtered.length}
-              title="Register, reliability, replacement prices, quotations, board points and the fleet comparison, in one workbook"
-            >
-              <FileSpreadsheet size={14} /> Download everything
-            </button>
-            <button onClick={() => runExport(doExportExcel)} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
-              <FileSpreadsheet size={14} /> Register only
-            </button>
-            <button onClick={() => runExport(doExportPdf)} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
-              <FileText size={14} /> PDF
-            </button>
-          </div>
-        )}
+        lead="Maximize value. Ensure compliance. A cleaner, more efficient fleet."
+        imgLight="/dashboard/hero-disposal-light.webp"
+        imgDark="/dashboard/hero-disposal-dark.webp"
       />
 
-      {exportError && (
-        <Card tone="crit" role="alert" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
-          <p className="text-sm text-red-300 flex-1">{exportError}</p>
-          <button type="button" onClick={() => setExportError('')} className="btn-secondary text-sm min-h-11" aria-label="Dismiss export error"><X size={14} aria-hidden="true" /></button>
-        </Card>
+      {notice && (
+        <div className={`cc-card ad-banner ${notice.tone}`} role={notice.tone === 'bad' ? 'alert' : 'status'}>
+          {notice.tone === 'bad' ? <AlertTriangle size={17} aria-hidden="true" /> : <CheckCircle2 size={17} aria-hidden="true" />}
+          <div><p>{notice.text}</p></div>
+          <button type="button" className="cc-icon-btn" onClick={() => setNotice(null)} aria-label="Dismiss message"><X size={14} /></button>
+        </div>
       )}
 
       {notProvisioned && (
-        // The amber tint comes from `tone`, not `border border-amber-800/50`:
-        // Card sets `border`/`borderColor` INLINE and a plain utility loses to
-        // that, so the class would render nothing. And Card is `flex flex-col`
-        // - Tailwind emits .flex-col after .flex-row, so the row direction goes
-        // in `style`, which Card spreads last.
-        <Card tone="warn" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
-          <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
+        <div className="cc-card ad-banner warn" role="status">
+          <AlertTriangle size={17} aria-hidden="true" />
+          <div><b>Asset Disposal is not enabled on this database yet.</b><p>The disposal register has not been created here. Nothing is missing from your data.</p></div>
+        </div>
+      )}
+
+      {regFailed && (
+        <div className="cc-card ad-banner bad" role="alert">
+          <AlertTriangle size={17} aria-hidden="true" />
           <div>
-            <p className="text-amber-300 font-medium">Asset Disposal is not enabled on this database yet.</p>
-            <p className="text-[var(--text-muted)] text-sm mt-1">The disposal register has not been created here. Nothing is missing from your data.</p>
+            <b>The disposal register could not be loaded.</b>
+            <p>{error || 'We could not read the register, so this page is not showing an empty list. It is showing nothing at all.'}</p>
           </div>
-        </Card>
+          <button type="button" className="cc-btn-ghost" onClick={load}><RefreshCw size={14} aria-hidden="true" /> Retry</button>
+        </div>
       )}
 
-      {(readFailed || error) && (
-        <Card tone="crit" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-          <div className="flex-1">
-            <p className="text-red-300 font-medium">The disposal register could not be loaded.</p>
-            <p className="text-[var(--text-muted)] text-sm mt-1">
-              {error || 'We could not read the register, so this page is not showing an empty list - it is showing nothing at all.'}
-            </p>
+      <div className="cc-kpis ad-kpis">
+        <Kpi icon={Recycle} tone="t-red" value={kpis.candidates} label="Disposal candidates" display={kpiNA} loading={kpiLoading}
+          title="On the list, awaiting a committee decision" onClick={() => toggle({ status: 'proposed' })} />
+        <Kpi icon={CheckCircle2} tone="t-green" value={kpis.approved} label="Approved for disposal" display={kpiNA} loading={kpiLoading}
+          onClick={() => toggle({ status: 'approved' })} />
+        <Kpi icon={Clock} tone="t-amber" value={kpis.pendingValuation} label="Pending valuation" display={kpiNA} loading={kpiLoading}
+          title="Open machines with no estimated value. A zero on the committee sheet is read as not valued." onClick={() => toggle({ valuation: 'pending' })} />
+        <Kpi icon={ShoppingCart} tone="t-blue" value={kpis.sold} label="Sold assets" display={kpiNA} loading={kpiLoading}
+          title="Disposed machines the committee chose to sell" onClick={() => toggle({ sold: true })} />
+        <Kpi icon={Coins} tone="t-purple" display={kpiNA || recovery || 'N/A'} label="Total scrap / recovery value" loading={kpiLoading}
+          title={recovery ? `Sale proceeds recorded on ${kpis.recoveredMachines} disposed machine(s), per currency` : 'No sale proceeds are recorded on a disposed machine yet'} />
+        <Kpi icon={ShieldAlert} tone="t-orange" value={kpis.compliancePending} label="Compliance pending" display={kpiNA} loading={kpiLoading} danger={kpis.compliancePending > 0}
+          title={`Still Active in the fleet register or with tyres still fitted${activeShare == null ? '' : `. ${activeShare}% of the list is still counted as available fleet`}`}
+          onClick={() => toggle({ compliance: 'pending' })} />
+      </div>
+
+      <div className="ad-cards">
+        <PipelineCard state={regState} rows={rows} sites={options.sites} />
+        <ReasonsCard state={regState} rows={rows} />
+        <RecoveryCard state={regState} rows={rows} />
+      </div>
+
+      {/* Down long enough to consider: machines out of service over 30 days
+          that are not on the list. Proposes only; adding one stays the
+          committee's decision. Renders nothing when there is nothing to show. */}
+      {missingCandidates.length > 0 && (
+        <Card className="ad-candidates" title={`Down long enough to consider (${missingCandidates.length})`}
+          sub="Out of service for over 30 days and not on the disposal register. Not a recommendation to scrap: the list the committee has not seen."
+          action={<Link to="/asset-breakdowns" className="cc-link">Breakdown register <ExternalLink size={12} aria-hidden="true" /></Link>}>
+          <KitTable compact columns={candidateColumns} rows={missingCandidates} getRowId={(c) => String(c.asset_no)}
+            empty="No machine has been down long enough to consider." />
+        </Card>
+      )}
+      {breakdownState === 'error' && (
+        <p className="ad-foot ad-pad">The breakdown register could not be read, so downtime reads Not recorded and no candidates are proposed.</p>
+      )}
+
+      <Card className="ad-register">
+        <Tabs label="Disposal views" variant="line" value={tab} onChange={setTab} tabs={[
+          { key: 'register', label: 'Register', count: ready ? filtered.length : null },
+          { key: 'profile', label: 'Profile' },
+          { key: 'reliability', label: 'Reliability and board view' },
+          { key: 'replacement', label: 'Replacement' },
+        ]} />
+
+        <div className="ad-toolbar">
+          <div className="cc-search">
+            <Search size={15} aria-hidden="true" />
+            <input value={filters.search} onChange={(e) => setFilter('search', e.target.value)}
+              placeholder="Search asset no, brand, type, site or tyre serial" aria-label="Search the disposal register" />
           </div>
-          <button onClick={() => load(true)} className="btn-secondary text-sm inline-flex items-center gap-1.5">
-            <RefreshCw size={14} /> Retry
+          <select className="cc-select" aria-label="Category" value={filters.assetType} onChange={(e) => setFilter('assetType', e.target.value)}>
+            <option value="">All categories</option>
+            {options.assetTypes.map((a) => <option key={a} value={a}>{a}</option>)}
+          </select>
+          <select className="cc-select" aria-label="Status" value={filters.status} onChange={(e) => setFilter('status', e.target.value)}>
+            <option value="">All statuses</option>
+            {Object.values(DISPOSAL_STATUSES).map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+          </select>
+          <select className="cc-select" aria-label="Site" value={filters.site} onChange={(e) => setFilter('site', e.target.value)}>
+            <option value="">All sites</option>
+            {options.sites.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select className="cc-select" aria-label="Date added to the list" value={filters.added} onChange={(e) => setFilter('added', e.target.value)}>
+            {ADDED_WINDOWS.map((w) => <option key={w.key} value={w.key}>{w.label}</option>)}
+          </select>
+          <button type="button" className="cc-btn-ghost" aria-expanded={showMore} onClick={() => setShowMore((s) => !s)}>
+            <SlidersHorizontal size={14} aria-hidden="true" /> More{activeFilterCount ? ` (${activeFilterCount})` : ''}
           </button>
-        </Card>
-      )}
+          {activeFilterCount > 0 && (
+            <button type="button" className="cc-btn-ghost" onClick={() => { setFilters(EMPTY_FILTERS); setPage(0) }}><X size={13} aria-hidden="true" /> Clear</button>
+          )}
+          <span className="ad-spacer" />
+          {canWrite && (
+            <button type="button" className="cc-btn-primary" disabled={notProvisioned || regFailed} onClick={() => setStarting(true)}>
+              <Plus size={15} aria-hidden="true" /> Start Disposal
+            </button>
+          )}
+          <button type="button" className="cc-btn-ghost" disabled={!filtered.length} onClick={() => runExport(doRequestValuation)}
+            title="Download the open machines with no valuation, in a sheet the upload reads back">
+            <FileSearch size={14} aria-hidden="true" /> Request Valuation
+          </button>
+          {canWrite && (
+            <button type="button" className="cc-btn-ghost" disabled={notProvisioned} onClick={() => setUpload({ stage: 'pick' })}>
+              <Upload size={14} aria-hidden="true" /> Upload sheet
+            </button>
+          )}
+          <ExportMenu disabled={!filtered.length}
+            onRegister={() => runExport(doExportExcel)} onWorkbook={() => runExport(doExportWorkbook)}
+            onPdf={() => runExport(doExportPdf)} onDeck={() => setDeckOpen(true)} />
+        </div>
 
-      {loading && (
-        <Card className="items-center gap-[var(--space-2)] text-[var(--text-muted)]" style={{ flexDirection: 'row' }}>
-          <Loader2 size={16} className="animate-spin" /> Loading the disposal register...
-        </Card>
-      )}
+        {showMore && (
+          <div className="ad-toolbar ad-more">
+            <select className="cc-select" aria-label="Disposition" value={filters.disposition} onChange={(e) => setFilter('disposition', e.target.value)}>
+              <option value="">Any disposition</option>
+              {Object.values(DISPOSITIONS).map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
+            </select>
+            <select className="cc-select" aria-label="Region" value={filters.region} onChange={(e) => setFilter('region', e.target.value)}>
+              <option value="">All regions</option>
+              {options.regions.map((r) => <option key={r} value={r}>{regionMeta(r).label}</option>)}
+            </select>
+            <select className="cc-select" aria-label="Condition" value={filters.condition} onChange={(e) => setFilter('condition', e.target.value)}>
+              <option value="">Any condition</option>
+              {Object.values(CONDITIONS).map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+            </select>
+            <select className="cc-select" aria-label="Fleet register" value={filters.inRegister} onChange={(e) => setFilter('inRegister', e.target.value)}>
+              <option value="all">In or out of the fleet register</option>
+              <option value="yes">In the fleet register</option>
+              <option value="no">Not in the fleet register</option>
+            </select>
+            <select className="cc-select" aria-label="Downtime" value={filters.downtime} onChange={(e) => setFilter('downtime', e.target.value)}>
+              <option value="">Any downtime</option>
+              <option value="down">Down right now</option>
+              <option value="long">Down over 30 days</option>
+              <option value="unknown">No breakdown on record</option>
+            </select>
+            <select className="cc-select" aria-label="Valuation" value={filters.valuation} onChange={(e) => setFilter('valuation', e.target.value)}>
+              <option value="">Valued or not</option>
+              <option value="pending">Pending valuation</option>
+            </select>
+            <select className="cc-select" aria-label="Compliance" value={filters.compliance} onChange={(e) => setFilter('compliance', e.target.value)}>
+              <option value="">Any compliance state</option>
+              <option value="pending">Compliance pending</option>
+            </select>
+          </div>
+        )}
 
-      {!loading && register?.ok && rows.length === 0 && (
-        <Card className="text-[var(--text-muted)]">
-          <p className="text-[var(--text-primary)] font-medium">No machines are on the disposal list.</p>
-          <p className="text-sm mt-1">The register was read successfully and it is empty. Upload a committee sheet to start one.</p>
-        </Card>
-      )}
+        {(isOn({ sold: true })) && <p className="ad-foot">Showing sold machines only.</p>}
 
-      {!loading && register?.ok && rows.length > 0 && (
-        <>
-          {/* ── Headline strip ───────────────────────────────────────────── */}
-          <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
-            <Tile label="On the list" value={fmtNum(totals.assets)} icon={Recycle}
-              sub={filtered.length !== rows.length ? `of ${rows.length} in the register` : null} />
-            <Tile label="To scrap" value={fmtNum(totals.toScrap)} icon={Wrench}
-              onClick={() => setFilter('disposition', filters.disposition === 'scrap' ? '' : 'scrap')}
-              active={filters.disposition === 'scrap'} />
-            <Tile label="To sell" value={fmtNum(totals.toSell)} icon={Banknote}
-              onClick={() => setFilter('disposition', filters.disposition === 'sell' ? '' : 'sell')}
-              active={filters.disposition === 'sell'} />
-            <Tile
-              label="Still Active in the register"
-              value={fmtNum(totals.stillActive)}
-              tone={totals.stillActive > 0 ? 'danger' : 'quiet'}
-              sub={activeShare == null ? 'Counted as available fleet' : `${activeShare}% of this list, counted as available fleet`}
-              icon={Truck}
-              onClick={() => setFilter('inRegister', filters.inRegister === 'yes' ? 'all' : 'yes')}
-              active={filters.inRegister === 'yes'}
+        {tab === 'register' && (
+          <CardState state={regState} lines={6}
+            empty={ready && rows.length === 0 ? 'No machines are on the disposal list. The register was read and it is empty. Start a disposal or upload a committee sheet.' : null}>
+            <KitTable
+              className="ad-table"
+              columns={columns}
+              rows={pageRows}
+              manualPagination
+              showPagination={false}
+              enableSorting={false}
+              getRowId={(r) => String(r.id || r.asset_no)}
+              onRowClick={(r) => setDetail(r)}
+              empty="No machines match these filters."
             />
-            <Tile label="Not in the register" value={fmtNum(totals.notInRegister)}
-              tone={totals.notInRegister > 0 ? 'warning' : 'quiet'} icon={AlertTriangle}
-              onClick={() => setFilter('inRegister', filters.inRegister === 'no' ? 'all' : 'no')}
-              active={filters.inRegister === 'no'} />
-            <Tile label="Lifetime spend"
-              value={totals.mixedCurrency ? 'Mixed currencies' : fmtMoney(totals.lifetimeSpend, currency)}
-              sub={totals.mixedCurrency ? 'Not summed across currencies' : `${fmtNum(totals.jobCards)} job cards`}
-              icon={Banknote} />
-            <Tile label="Tyres still fitted" value={fmtNum(totals.activeTyres)}
-              tone={totals.activeTyres > 0 ? 'warning' : 'quiet'} sub="Recover before disposal" icon={CircleDot} />
-          </div>
+            <Pager page={safePage} pageSize={pageSize} total={filtered.length} noun="machines"
+              onPage={setPage} onPageSize={(s) => { setPageSize(s); setPage(0) }} />
+          </CardState>
+        )}
 
-          {/* ── Findings ─────────────────────────────────────────────────── */}
-          {findings.length > 0 && (
-            <Card className="space-y-2">
-              <div className="flex items-center gap-2 text-[var(--text-secondary)]">
-                <Info size={15} /> <span className="text-sm font-medium">What this list says</span>
-              </div>
-              <ul className="space-y-1.5">
-                {findings.map((f) => (
-                  <li key={f.key} className="flex items-start gap-2 text-sm">
-                    <span aria-hidden="true" className={`mt-1.5 h-1.5 w-1.5 rounded-full shrink-0 ${findingDotClass(f.tone)}`} />
-                    <span className="text-[var(--text-secondary)]">{f.text}</span>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
+        {tab === 'profile' && (
+          <CardState state={regState} lines={6} empty={ready && !filtered.length ? 'No machines match these filters.' : null}>
+            <ProfilePanel filtered={filtered} totals={totals} findings={findings} currency={currency} />
+          </CardState>
+        )}
 
-          {/* ── Filters (shared by both tabs) ──────────────────────────────
-              Deliberately NOT `clip`: eight native <select> dropdowns live in
-              here. A native select paints its option list as an OS-level popup
-              outside the page's overflow context so clipping could not reach
-              it either way, but there is nothing here to crop. */}
-          <Card className="space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1 min-w-0">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-                <input
-                  value={filters.search}
-                  onChange={(e) => setFilter('search', e.target.value)}
-                  placeholder="Search asset, brand, type, site or tyre serial"
-                  className={`${inputCls} pl-9`}
-                  aria-label="Search the disposal register"
-                />
-              </div>
-              <button type="button" onClick={() => setShowFilters((s) => !s)} aria-expanded={showFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-11">
-                <Filter size={14} /> Filters{activeFilterCount ? ` (${activeFilterCount})` : ''}
-              </button>
-              {activeFilterCount > 0 && (
-                <button onClick={() => setFilters(EMPTY_FILTERS)} className="btn-secondary text-sm inline-flex items-center gap-1.5">
-                  <X size={14} /> Clear
-                </button>
-              )}
-            </div>
-            {showFilters && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
-                <label className="text-xs text-[var(--text-muted)] space-y-1">
-                  <span>Disposition</span>
-                  <select value={filters.disposition} onChange={(e) => setFilter('disposition', e.target.value)} className={inputCls}>
-                    <option value="">All</option>
-                    {Object.values(DISPOSITIONS).map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
-                  </select>
-                </label>
-                <label className="text-xs text-[var(--text-muted)] space-y-1">
-                  <span>Status</span>
-                  <select value={filters.status} onChange={(e) => setFilter('status', e.target.value)} className={inputCls}>
-                    <option value="">All</option>
-                    {Object.values(DISPOSAL_STATUSES).map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-                  </select>
-                </label>
-                <label className="text-xs text-[var(--text-muted)] space-y-1">
-                  <span>Region</span>
-                  <select value={filters.region} onChange={(e) => setFilter('region', e.target.value)} className={inputCls}>
-                    <option value="">All</option>
-                    {options.regions.map((r) => <option key={r} value={r}>{regionMeta(r).label}</option>)}
-                  </select>
-                </label>
-                <label className="text-xs text-[var(--text-muted)] space-y-1">
-                  <span>Asset type</span>
-                  <select value={filters.assetType} onChange={(e) => setFilter('assetType', e.target.value)} className={inputCls}>
-                    <option value="">All</option>
-                    {options.assetTypes.map((a) => <option key={a} value={a}>{a}</option>)}
-                  </select>
-                </label>
-                <label className="text-xs text-[var(--text-muted)] space-y-1">
-                  <span>Condition</span>
-                  <select value={filters.condition} onChange={(e) => setFilter('condition', e.target.value)} className={inputCls}>
-                    <option value="">All</option>
-                    {Object.values(CONDITIONS).map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
-                  </select>
-                </label>
-                <label className="text-xs text-[var(--text-muted)] space-y-1">
-                  <span>Site</span>
-                  <select value={filters.site} onChange={(e) => setFilter('site', e.target.value)} className={inputCls}>
-                    <option value="">All</option>
-                    {options.sites.map((s) => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </label>
-                <label className="text-xs text-[var(--text-muted)] space-y-1">
-                  <span>Fleet register</span>
-                  <select value={filters.inRegister} onChange={(e) => setFilter('inRegister', e.target.value)} className={inputCls}>
-                    <option value="all">All</option>
-                    <option value="yes">In the register</option>
-                    <option value="no">Not in the register</option>
-                  </select>
-                </label>
-                <label className="text-xs text-[var(--text-muted)] space-y-1">
-                  <span>Downtime</span>
-                  <select value={filters.downtime} onChange={(e) => setFilter('downtime', e.target.value)} className={inputCls}>
-                    <option value="">All</option>
-                    <option value="down">Down right now</option>
-                    <option value="long">Down over 30 days</option>
-                    {/* Its own choice, not folded into "never broken down" - no
-                        record is not the same as no breakdown. */}
-                    <option value="unknown">No breakdown on record</option>
-                  </select>
-                </label>
-              </div>
-            )}
-          </Card>
-
-          {/* ── Tabs ─────────────────────────────────────────────────────── */}
-          <div role="tablist" aria-label="Disposal views" className="flex flex-wrap items-center gap-2 border-b border-[var(--input-border)]">
-            {[
-              { key: 'register', label: 'Register', icon: Recycle },
-              { key: 'reliability', label: 'Reliability and board view', icon: Activity },
-              { key: 'replacement', label: 'Replacement', icon: Tag },
-            ].map((t) => (
-              <button
-                key={t.key}
-                type="button"
-                role="tab"
-                aria-selected={tab === t.key}
-                onClick={() => setTab(t.key)}
-                className={`inline-flex items-center gap-1.5 px-3 py-2 min-h-11 text-sm border-b-2 -mb-px focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-t ${tab === t.key ? 'border-blue-500 text-[var(--text-primary)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
-              >
-                <t.icon size={14} /> {t.label}
-              </button>
-            ))}
-          </div>
-
-          {tab === 'reliability' && (
-            <StudioBoundary>
-              <Suspense fallback={<Card className="text-[var(--text-muted)]">Loading the reliability view...</Card>}>
-                <ReliabilityPanel
-                  rows={filtered}
-                  reliability={reliability}
-                  baseline={baseline}
-                  recommendations={boardPoints}
-                  currency={currency}
-                  loading={loading}
-                  onRetry={() => load(true)}
-                  onOpenAsset={(r) => setHistory(r)}
-                />
-              </Suspense>
-            </StudioBoundary>
-          )}
-
-          {tab === 'replacement' && (
-            <StudioBoundary>
-              <Suspense fallback={<Card className="text-[var(--text-muted)]">Loading the replacement view...</Card>}>
-                <ReplacementPanel
-                  rows={filtered}
-                  benchmarks={benchmarks}
-                  benchmarksRaw={benchmarkRows}
-                  currency={currency}
-                  canEdit={canWrite}
-                  onSaved={() => load(true)}
-                />
-              </Suspense>
-            </StudioBoundary>
-          )}
-
-          {tab === 'register' && (
-          <>
-          {/* ── Charts ───────────────────────────────────────────────────── */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-[var(--gap-grid)]">
-            <Card>
-              <CardHeader level={3} title="Machines by asset type" />
-              <CardBody style={{ height: '16rem' }}>{byType.length ? <Bar data={barData(byType, 'Machines')} options={chartOpts()} /> : <p className="text-sm text-[var(--text-muted)]">Nothing to chart for this selection.</p>}</CardBody>
-            </Card>
-            <Card>
-              <CardHeader level={3} title="Machines by region" />
-              <CardBody style={{ height: '16rem' }}>{byRegion.length ? <Bar data={barData(byRegion, 'Machines')} options={chartOpts()} /> : <p className="text-sm text-[var(--text-muted)]">Nothing to chart for this selection.</p>}</CardBody>
-            </Card>
-            <Card>
-              <CardHeader level={3} title="Condition" />
-              <CardBody style={{ height: '16rem' }}>
-                {byCondition.length
-                  ? <Doughnut data={conditionData} options={chartOpts({ plugins: { legend: { display: true, position: 'right', labels: { color: 'var(--text-secondary)', boxWidth: 12 } } } })} />
-                  : <p className="text-sm text-[var(--text-muted)]">Nothing to chart for this selection.</p>}
-              </CardBody>
-            </Card>
-            <Card>
-              <CardHeader
-                level={3}
-                title={<>Lifetime spend by asset type {currency && <span className="text-[var(--text-muted)]">({currency})</span>}</>}
+        {tab === 'reliability' && (
+          <StudioBoundary>
+            <Suspense fallback={<div className="cc-skel" style={{ height: 200 }} />}>
+              <ReliabilityPanel
+                rows={filtered}
+                reliability={reliability}
+                baseline={baseline}
+                recommendations={boardPoints}
+                currency={currency}
+                loading={loading}
+                onRetry={load}
+                onOpenAsset={(r) => setHistory(r)}
               />
-              <CardBody style={{ height: '16rem' }}>
-                {totals.mixedCurrency
-                  ? <p className="text-sm text-[var(--text-muted)]">This selection carries more than one currency, so spend is not charted as a single total.</p>
-                  : spendByTypeData.hasData
-                    ? <Bar data={spendByTypeData.data} options={chartOpts()} />
-                    : <p className="text-sm text-[var(--text-muted)]">No spend is recorded against these machines.</p>}
-              </CardBody>
-            </Card>
-          </div>
+            </Suspense>
+          </StudioBoundary>
+        )}
 
-          {/* Age bands read as a strip rather than a chart: five buckets do not
-              need axes, and "Year not recorded" has to stay visible. */}
-          <Card>
-            <CardHeader level={3} title="Age" />
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-[var(--space-3)]">
-              {ages.map((b) => (
-                <div key={b.key} className="rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2">
-                  <div className="text-lg font-semibold tabular-nums text-[var(--text-primary)]">{fmtNum(b.count)}</div>
-                  <div className="text-[11px] text-[var(--text-muted)]">{b.label}</div>
-                </div>
-              ))}
-            </div>
-            <p className="text-xs text-[var(--text-muted)] mt-2">
-              Age is worked out from the model year. {fmtNum(totals.agedKnown)} of {fmtNum(totals.assets)} machines carry one.
-            </p>
-          </Card>
-
-          {/* ── Down long enough to consider ─────────────────────────────
-              The link between the two registers that actually carries value.
-              Renders NOTHING when there is nothing to propose - a panel that is
-              always on screen is a panel nobody reads. It proposes only; adding
-              a machine to the disposal list stays the committee's decision. */}
-          {missingCandidates.length > 0 && (
-            // `p-4` and `border border-amber-500/30` would BOTH be dead against
-            // Card's inline padding and border. `pad="tight"` is the exact same
-            // 1rem at default density (--pad-card-tight = --space-4) and, unlike
-            // the literal, it also compresses under compact density; the tint
-            // comes from `tone`.
-            //
-            // Not `clip`: the table's page-size control is a native <select>.
-            <Card pad="tight" tone="warn">
-              <div className="flex items-center gap-2 mb-1">
-                <Wrench size={15} className="text-amber-300 shrink-0" />
-                <h3 className="text-sm font-medium text-[var(--text-primary)]">
-                  Down long enough to consider ({missingCandidates.length})
-                </h3>
-                <Link to="/asset-breakdowns" className="ml-auto text-xs text-blue-400 hover:underline inline-flex items-center gap-1">
-                  Breakdown register <ExternalLink size={12} />
-                </Link>
-              </div>
-              <p className="text-xs text-[var(--text-muted)] mb-3">
-                These machines have been out of service for over 30 days and are not on the disposal
-                register. That is not a recommendation to scrap them - it is the list the committee has
-                not seen.
-              </p>
-              <EnterpriseTable
-                columns={candidateColumns}
-                data={missingCandidates}
-                getRowId={(c) => String(c.asset_no)}
-                enableColumnFilters={false}
-                searchPlaceholder="Search these machines"
-                initialPageSize={25}
-                exportFileName={reportFileName('Disposal candidates from breakdowns', reportDateLabel())}
-                reportMeta={{ title: 'Down long enough to consider', company }}
-                emptyMessage="No machine has been down long enough to consider."
+        {tab === 'replacement' && (
+          <StudioBoundary>
+            <Suspense fallback={<div className="cc-skel" style={{ height: 200 }} />}>
+              <ReplacementPanel
+                rows={filtered}
+                benchmarks={benchmarks}
+                benchmarksRaw={benchmarkRows}
+                currency={currency}
+                canEdit={canWrite}
+                onSaved={load}
               />
-            </Card>
-          )}
+            </Suspense>
+          </StudioBoundary>
+        )}
+      </Card>
 
-          {/* ── Register table ─────────────────────────────────────────────
-              EnterpriseTable over the FULL filtered list, so a sort orders every
-              machine, not just the page on screen. Its own search and export are
-              off: the page's search box above drives both tabs, and the page's
-              three exports carry the reliability columns the table does not.
-              Composite cells keep their Badge pills and the DowntimeCell, whose
-              "Not recorded" is a deliberate distinction from zero days (it sorts
-              last, never as 0). Enter on a focused row opens the detail. */}
-          <Card pad="none" clip>
-            <EnterpriseTable
-              columns={registerColumns}
-              data={registerRows}
-              getRowId={(r) => String(r.row.id || r.row.asset_no)}
-              enableGlobalFilter={false}
-              enableColumnFilters={false}
-              enableExport={false}
-              initialPageSize={25}
-              onRowClick={(r) => setDetail(r.row)}
-              emptyMessage="No machines match these filters."
-            />
-          </Card>
-          </>
-          )}
-        </>
-      )}
-
-      {/* ── History drawer ─────────────────────────────────────────────── */}
       {history && (
         <StudioBoundary>
           <Suspense fallback={null}>
-            <AssetHistoryDrawer
-              row={history}
-              rows={filtered}
-              currency={currency}
-              onClose={() => setHistory(null)}
-            />
+            <AssetHistoryDrawer row={history} rows={filtered} currency={currency} onClose={() => setHistory(null)} />
           </Suspense>
         </StudioBoundary>
       )}
 
-      {/* ── Detail drawer ──────────────────────────────────────────────── */}
       <Modal
         open={!!detail}
         onClose={() => setDetail(null)}
@@ -939,38 +883,17 @@ export default function AssetDisposals() {
         {detail && <DisposalDetail row={detail} baselines={baselines} />}
       </Modal>
 
-      {/* ── Editor ─────────────────────────────────────────────────────── */}
-      {editing && (
-        <DisposalEditor
-          row={editing}
-          busy={busy}
-          onClose={() => setEditing(null)}
-          onSave={saveEdit}
-        />
+      {editing && <DisposalEditor row={editing} busy={busy} onClose={() => setEditing(null)} onSave={saveEdit} />}
+      {deciding && <DecisionModal row={deciding} busy={busy} onClose={() => setDeciding(null)} onSave={saveDecision} />}
+      {starting && (
+        <StartDisposalModal country={activeCountry} existing={rows} busy={busy}
+          onClose={() => setStarting(false)} onSave={saveStart} />
       )}
-
-      {/* ── Decision ───────────────────────────────────────────────────── */}
-      {deciding && (
-        <DecisionModal
-          row={deciding}
-          busy={busy}
-          onClose={() => setDeciding(null)}
-          onSave={saveDecision}
-        />
-      )}
-
-      {/* ── Upload ─────────────────────────────────────────────────────── */}
       {upload && (
-        <UploadModal
-          country={activeCountry}
-          existing={rows}
-          onClose={() => setUpload(null)}
-          onDone={async () => { setUpload(null); await load(true) }}
-        />
+        <UploadModal country={activeCountry} existing={rows}
+          onClose={() => setUpload(null)} onDone={async () => { setUpload(null); await load() }} />
       )}
 
-      {/* The deck builder is another agent's surface: it is lazily loaded and
-          boundaried so a failure inside it cannot take this page down. */}
       {deckOpen && (
         <StudioBoundary>
           <Suspense fallback={null}>
@@ -978,10 +901,6 @@ export default function AssetDisposals() {
               rows={filtered}
               totals={totals}
               benchmarks={benchmarks}
-              // Without this the "against the rest of the fleet" slide always
-              // resolved to "baseline was not supplied" while the page had it
-              // loaded all along - a slide that silently says nothing reads as
-              // a comparison nobody could make, rather than one nobody wired.
               fleetBaseline={baseline}
               country={activeCountry}
               company={company}
@@ -991,6 +910,89 @@ export default function AssetDisposals() {
         </StudioBoundary>
       )}
     </div>
+  )
+}
+
+/* ------------------------------------------------------------------ *
+ * Start a disposal - one machine added to the committee list
+ * ------------------------------------------------------------------ */
+
+function StartDisposalModal({ country, existing, busy, onClose, onSave }) {
+  const fixed = country && country !== 'All' ? country : ''
+  const [form, setForm] = useState({
+    country: fixed, asset_no: '', asset_type: '', model_year: '', disposition: 'undecided',
+    condition: '', site: '', remarks: '',
+  })
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
+  const code = form.asset_no.toUpperCase().replace(/\s+/g, '')
+  const already = code && (existing || []).some((r) => String(r.asset_no || '').toUpperCase() === code && (!form.country || r.country === form.country))
+  const valid = code && form.country
+  const submit = () => onSave({
+    ...form,
+    asset_no: code,
+    model_year: form.model_year === '' ? null : form.model_year,
+    currency: COUNTRY_CURRENCY[form.country] || null,
+  })
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      size="md"
+      title="Start a disposal"
+      subtitle="Adds one machine to the committee list as Proposed. It does not change the fleet register."
+      footer={(
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="btn-secondary text-sm" disabled={busy}>Cancel</button>
+          <button onClick={submit} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={busy || !valid}>
+            {busy ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} {already ? 'Refresh listed machine' : 'Add to list'}
+          </button>
+        </div>
+      )}
+    >
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <label className="text-xs text-[var(--text-muted)] space-y-1">
+          <span>Country</span>
+          <select value={form.country} onChange={(e) => set('country', e.target.value)} className={inputCls} disabled={!!fixed}>
+            <option value="">Choose a country</option>
+            {COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </label>
+        <label className="text-xs text-[var(--text-muted)] space-y-1">
+          <span>Asset no</span>
+          <input value={form.asset_no} onChange={(e) => set('asset_no', e.target.value)} className={inputCls} placeholder="For example TM514" />
+        </label>
+        <label className="text-xs text-[var(--text-muted)] space-y-1">
+          <span>Category</span>
+          <input value={form.asset_type} onChange={(e) => set('asset_type', e.target.value)} className={inputCls} placeholder="Asset type" />
+        </label>
+        <label className="text-xs text-[var(--text-muted)] space-y-1">
+          <span>Model year</span>
+          <input type="number" value={form.model_year} onChange={(e) => set('model_year', e.target.value)} className={inputCls} placeholder="Leave blank if unknown" />
+        </label>
+        <label className="text-xs text-[var(--text-muted)] space-y-1">
+          <span>Disposition</span>
+          <select value={form.disposition} onChange={(e) => set('disposition', e.target.value)} className={inputCls}>
+            {Object.values(DISPOSITIONS).map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
+          </select>
+        </label>
+        <label className="text-xs text-[var(--text-muted)] space-y-1">
+          <span>Condition</span>
+          <select value={form.condition} onChange={(e) => set('condition', e.target.value)} className={inputCls}>
+            <option value="">Not recorded</option>
+            {Object.values(CONDITIONS).map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+          </select>
+        </label>
+        <label className="text-xs text-[var(--text-muted)] space-y-1 sm:col-span-2">
+          <span>Site</span>
+          <input value={form.site} onChange={(e) => set('site', e.target.value)} className={inputCls} placeholder="Where the machine sits" />
+        </label>
+        <label className="text-xs text-[var(--text-muted)] space-y-1 sm:col-span-2">
+          <span>Remarks</span>
+          <textarea value={form.remarks} onChange={(e) => set('remarks', e.target.value)} rows={3} className={inputCls} placeholder="Why the machine is proposed" />
+        </label>
+      </div>
+      {already && <p className="text-xs text-amber-300 mt-3">This machine is already on the list for this country. Saving refreshes its record rather than adding it twice.</p>}
+    </Modal>
   )
 }
 
@@ -1298,8 +1300,13 @@ function UploadModal({ country, existing, onClose, onDone }) {
     setState((s) => ({ ...s, phase: 'reading', error: '', fileName: file.name }))
     try {
       const parsed = await parseWorkbook(file)
-      const sheet = (parsed?.sheets || [])[0]
-      const mapped = mapDisposalSheetRows(sheet?.rows || [], { country, sourceFile: file.name })
+      // The first sheet that carries asset codes, so a workbook opening on a
+      // Contents sheet (the valuation request this page downloads) still reads.
+      let mapped = []
+      for (const sheet of parsed?.sheets || []) {
+        mapped = mapDisposalSheetRows(sheet?.rows || [], { country, sourceFile: file.name })
+        if (mapped.length) break
+      }
       if (!mapped.length) {
         setState((s) => ({
           ...s,

@@ -166,3 +166,213 @@ export function lowHealthAssets(assets, { threshold = 60, limit = 10 } = {}) {
     .filter((a) => a._healthScore != null && a._healthScore < threshold)
     .slice(0, limit)
 }
+
+// ── Registry redesign helpers (2026-09-28) ────────────────────────────────────
+// Everything below feeds the redesigned register: conditions, at-risk, the
+// health x utilisation grid, composition, compliance and inspection status.
+// Same honesty rules as above: unknown stays unknown, never a flattering zero.
+
+const upperCode = (v) => String(v ?? '').trim().toUpperCase()
+const finite = (v) => {
+  if (v === null || v === undefined || v === '') return null
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
+/**
+ * Condition from the health score: good >= 80, monitor 50 to 79, critical
+ * below 50, 'none' when the asset has no score.
+ */
+export function conditionBand(score) {
+  const s = finite(score)
+  if (s == null) return 'none'
+  if (s >= 80) return 'good'
+  if (s >= 50) return 'monitor'
+  return 'critical'
+}
+
+export const CONDITION_META = {
+  good: { label: 'Good', tone: 'good' },
+  monitor: { label: 'Monitor', tone: 'warn' },
+  critical: { label: 'Critical', tone: 'bad' },
+  none: { label: 'Not measured', tone: 'muted' },
+}
+
+/** At risk: health below 50, or the worst fitted tyre is High or Critical. */
+export function isAtRisk(a) {
+  if (!a) return false
+  if (a._worstRisk === 'Critical' || a._worstRisk === 'High') return true
+  return a._healthScore != null && a._healthScore < 50
+}
+
+/** Mean health over the assets that carry a score; null when none do. */
+export function averageHealth(assets) {
+  const scored = (Array.isArray(assets) ? assets : []).filter((a) => a && a._healthScore != null)
+  if (!scored.length) return null
+  return Math.round(scored.reduce((s, a) => s + a._healthScore, 0) / scored.length)
+}
+
+/** Share of assets with make, model, site and vehicle type all recorded. */
+export function completenessPct(assets) {
+  const list = Array.isArray(assets) ? assets : []
+  if (!list.length) return null
+  const ok = list.filter((a) => a && a.make && a.model && a.site && a.vehicle_type).length
+  return Math.round((ok / list.length) * 100)
+}
+
+/**
+ * Latest utilisation reading per asset. Keyed by asset code AND country:
+ * the same code in two countries is a different machine, so a KSA reading
+ * never lands on a UAE asset. A reading with no country matches on code alone.
+ */
+export function utilizationIndex(rows) {
+  const byKey = new Map()
+  for (const r of Array.isArray(rows) ? rows : []) {
+    const pct = finite(r?.utilization_pct)
+    const code = upperCode(r?.asset_no)
+    if (pct == null || !code) continue
+    const key = `${code}|${r.country || ''}`
+    const prev = byKey.get(key)
+    const at = String(r.captured_at || r.created_at || '')
+    if (!prev || at > prev.at) byKey.set(key, { pct, at })
+  }
+  return byKey
+}
+
+/** The utilisation % for one asset from utilizationIndex, or null. */
+export function utilizationFor(index, asset) {
+  if (!index || !asset) return null
+  const code = upperCode(asset.asset_no)
+  const hit = index.get(`${code}|${asset.country || ''}`) || index.get(`${code}|`)
+  return hit ? hit.pct : null
+}
+
+/** Utilisation band on the mockup scale: low 0 to 30, medium 31 to 70, high above 70. */
+export function utilizationBand(pct) {
+  const p = finite(pct)
+  if (p == null) return null
+  if (p <= 30) return 'low'
+  if (p <= 70) return 'medium'
+  return 'high'
+}
+
+/** Health row of the grid: high 80 to 100, medium 50 to 79, low 0 to 49. */
+export function healthRow(score) {
+  const b = conditionBand(score)
+  return b === 'good' ? 'high' : b === 'monitor' ? 'medium' : b === 'critical' ? 'low' : null
+}
+
+export const GRID_ROWS = ['high', 'medium', 'low']
+export const GRID_COLS = ['low', 'medium', 'high']
+
+/**
+ * Health x utilisation counts. An asset lacking either measure is NOT placed
+ * in the grid; it is counted in `noHealth` / `noUtil` so the card can say so.
+ * `utilOf(asset)` returns the asset's utilisation % or null.
+ */
+export function healthUtilGrid(assets, utilOf) {
+  const cells = {}
+  for (const r of GRID_ROWS) for (const c of GRID_COLS) cells[`${r}:${c}`] = 0
+  let placed = 0; let noHealth = 0; let noUtil = 0
+  for (const a of Array.isArray(assets) ? assets : []) {
+    const r = healthRow(a?._healthScore)
+    const c = utilizationBand(utilOf ? utilOf(a) : null)
+    if (!r) noHealth += 1
+    if (!c) noUtil += 1
+    if (r && c) { cells[`${r}:${c}`] += 1; placed += 1 }
+  }
+  return { cells, placed, noHealth, noUtil, unplaced: (Array.isArray(assets) ? assets.length : 0) - placed }
+}
+
+/** Does an asset sit in grid cell 'row:col'? */
+export function inGridCell(asset, cell, utilOf) {
+  if (!cell) return true
+  const [r, c] = String(cell).split(':')
+  return healthRow(asset?._healthScore) === r && utilizationBand(utilOf ? utilOf(asset) : null) === c
+}
+
+/**
+ * Composition segments by category label. The top `max - 1` categories keep
+ * their own slice; the rest (and anything unknown) fold into "Other".
+ * `categoryOf(asset)` returns a label.
+ */
+export function compositionSegments(assets, categoryOf, { max = 6 } = {}) {
+  const counts = new Map()
+  for (const a of Array.isArray(assets) ? assets : []) {
+    const label = categoryOf(a) || 'Other'
+    counts.set(label, (counts.get(label) || 0) + 1)
+  }
+  const sorted = [...counts.entries()]
+    .map(([label, count]) => ({ label, count }))
+    .sort((x, y) => y.count - x.count || x.label.localeCompare(y.label))
+  const named = sorted.filter((s) => s.label !== 'Other')
+  const keep = named.slice(0, Math.max(1, max - 1))
+  const rest = named.slice(keep.length)
+  const otherCount = rest.reduce((s, x) => s + x.count, 0) + (counts.get('Other') || 0)
+  const out = keep.map((s) => ({ ...s, members: [s.label] }))
+  if (otherCount > 0) out.push({ label: 'Other', count: otherCount, members: ['Other', ...rest.map((r) => r.label)] })
+  return out
+}
+
+export const COMPLIANCE_FIELDS = [
+  { key: 'insurance_expiry', label: 'Insurance' },
+  { key: 'mvip_expiry', label: 'MVIP' },
+  { key: 'operating_card_expiry', label: 'Operating card' },
+]
+export const EXPIRING_DAYS = 30
+
+/**
+ * Compliance from the recorded expiry dates: 'expired' when any recorded date
+ * has passed, 'expiring' when any falls within 30 days, 'compliant' when every
+ * recorded date is further out, 'none' when no expiry date is recorded at all.
+ */
+export function complianceStatus(asset, now = new Date()) {
+  const nowMs = now.getTime()
+  let recorded = 0; let expired = false; let expiring = false
+  for (const f of COMPLIANCE_FIELDS) {
+    const v = asset?.[f.key]
+    if (!v) continue
+    const t = new Date(v).getTime()
+    if (!Number.isFinite(t)) continue
+    recorded += 1
+    if (t < nowMs) expired = true
+    else if (t - nowMs <= EXPIRING_DAYS * MS_DAY) expiring = true
+  }
+  if (!recorded) return 'none'
+  if (expired) return 'expired'
+  if (expiring) return 'expiring'
+  return 'compliant'
+}
+
+export const INSPECTION_OVERDUE_DAYS = 30
+
+/** 'on_schedule' when inspected within 30 days, 'overdue' when older, null when never. */
+export function inspectionStatus(date, now = new Date()) {
+  if (!date) return null
+  const t = new Date(date).getTime()
+  if (!Number.isFinite(t)) return null
+  return now.getTime() - t > INSPECTION_OVERDUE_DAYS * MS_DAY ? 'overdue' : 'on_schedule'
+}
+
+/**
+ * Latest inspection date per asset, keyed code|country (the same code in two
+ * countries is a different machine). A row with no country keys on code alone.
+ */
+export function latestInspectionIndex(rows) {
+  const out = {}
+  for (const r of Array.isArray(rows) ? rows : []) {
+    const code = upperCode(r?.asset_no)
+    const d = r?.inspection_date || r?.completed_date || null
+    if (!code || !d) continue
+    const key = `${code}|${r.country || ''}`
+    if (!out[key] || String(d) > String(out[key])) out[key] = d
+  }
+  return out
+}
+
+/** The latest inspection date for one asset from latestInspectionIndex, or null. */
+export function latestInspectionFor(index, asset) {
+  if (!index || !asset) return null
+  const code = upperCode(asset.asset_no)
+  return index[`${code}|${asset.country || ''}`] || index[`${code}|`] || null
+}

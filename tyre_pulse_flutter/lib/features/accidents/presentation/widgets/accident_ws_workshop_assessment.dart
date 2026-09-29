@@ -9,6 +9,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart' show NumberFormat;
 import 'package:tyre_pulse/app/localization/tp_direction.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
@@ -20,7 +21,11 @@ import 'package:tyre_pulse/features/accidents/data/accident_assessment_repositor
 import 'package:tyre_pulse/features/accidents/data/accident_photo_capture.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_assessment_gating.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_case_vocab.dart';
+import 'package:tyre_pulse/features/accidents/domain/accident_damage_map.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_models.dart';
+import 'package:tyre_pulse/features/accidents/presentation/accident_copy.dart';
+import 'package:tyre_pulse/features/accidents/presentation/accident_damage_copy.dart';
+import 'package:tyre_pulse/features/accidents/presentation/accident_mock_copy.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_header.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_shared.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
@@ -435,34 +440,34 @@ class _State extends ConsumerState<AccidentWorkshopAssessmentMockWorkspace> {
           ],
         ),
         const SizedBox(height: TpSpace.md),
-        Row(
-          children: <Widget>[
-            Expanded(
-              child: TpButton.secondary(
-                key: const Key('accident.ws.assessment.save'),
-                label: l10n.accSaveAssessment,
-                icon: Icons.save_outlined,
-                isBusy: _busy,
-                onPressed: _busy || submitted ? null : () => _save(bundle),
-              ),
-            ),
-            const SizedBox(width: TpSpace.sm),
-            Expanded(
-              child: TpButton.primary(
-                key: const Key('accident.ws.assessment.submit'),
-                label: submitted
-                    ? l10n.accAssessmentSubmitted
-                    : l10n.accSubmitAssessment,
-                icon: !submitted && !submittable
-                    ? Icons.lock_outline
-                    : Icons.send_outlined,
-                isBusy: _busy,
-                onPressed: _busy || submitted || !submittable
-                    ? null
-                    : () => _save(bundle, submit: true),
-              ),
-            ),
+        AccidentWsFooterPair(
+          labels: <String>[
+            l10n.accSaveAssessment,
+            if (submitted)
+              l10n.accAssessmentSubmitted
+            else
+              l10n.accSubmitAssessment,
           ],
+          first: TpButton.secondary(
+            key: const Key('accident.ws.assessment.save'),
+            label: l10n.accSaveAssessment,
+            icon: Icons.save_outlined,
+            isBusy: _busy,
+            onPressed: _busy || submitted ? null : () => _save(bundle),
+          ),
+          second: TpButton.primary(
+            key: const Key('accident.ws.assessment.submit'),
+            label: submitted
+                ? l10n.accAssessmentSubmitted
+                : l10n.accSubmitAssessment,
+            icon: !submitted && !submittable
+                ? Icons.lock_outline
+                : Icons.send_outlined,
+            isBusy: _busy,
+            onPressed: _busy || submitted || !submittable
+                ? null
+                : () => _save(bundle, submit: true),
+          ),
         ),
         if (!submittable && !submitted)
           Padding(
@@ -620,6 +625,17 @@ class _VehicleCard extends ConsumerWidget {
       record.site,
       if ((record.location ?? '').trim().isNotEmpty) record.location!.trim(),
     ].where((String s) => s.trim().isNotEmpty).join(' · ');
+    final String plateRaw =
+        (vehicle.registrationNo ?? record.plateNumber ?? '').trim();
+    final String plate =
+        plateRaw.isEmpty ? accidentWsNotSet(context) : ltr(plateRaw);
+    final String km = vehicle.currentKm == null
+        ? accidentWsNotSet(context)
+        : ltr(
+            NumberFormat.decimalPattern(
+              Localizations.localeOf(context).toLanguageTag(),
+            ).format(vehicle.currentKm),
+          );
     return TpCard(
       key: const Key('accident.ws.assessment.vehicleCard'),
       child: Column(
@@ -663,9 +679,22 @@ class _VehicleCard extends ConsumerWidget {
                       style: text.titleMedium
                           ?.copyWith(fontWeight: FontWeight.w800),
                     ),
+                    const SizedBox(height: TpSpace.xs),
+                    // The mock's one compact identity line:
+                    // asset · KM · Plate, then the site and location.
                     Text(
-                      ltr(record.assetNo),
-                      style: text.bodyMedium
+                      <String>[
+                        ltr(record.assetNo),
+                        '${l10n.accKm}: $km',
+                        '${l10n.accPlate}: $plate',
+                      ].join(' · '),
+                      style: text.bodySmall
+                          ?.copyWith(color: palette.textSecondary),
+                    ),
+                    const SizedBox(height: TpSpace.xs),
+                    Text(
+                      siteLine.isEmpty ? accidentWsNotSet(context) : siteLine,
+                      style: text.bodySmall
                           ?.copyWith(color: palette.textSecondary),
                     ),
                   ],
@@ -674,25 +703,6 @@ class _VehicleCard extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: TpSpace.sm),
-          AccidentWsFact(
-            label: l10n.accKm,
-            value: vehicle.currentKm == null
-                ? accidentWsNotSet(context)
-                : ltr(l10n.accKmValue('${vehicle.currentKm}')),
-          ),
-          AccidentWsFact(
-            label: l10n.accPlate,
-            value: (vehicle.registrationNo ?? record.plateNumber ?? '')
-                    .trim()
-                    .isEmpty
-                ? accidentWsNotSet(context)
-                : ltr((vehicle.registrationNo ?? record.plateNumber)!.trim()),
-          ),
-          AccidentWsFact(
-            label: l10n.accSiteLocation,
-            value: siteLine.isEmpty ? accidentWsNotSet(context) : siteLine,
-          ),
-          const SizedBox(height: TpSpace.xs),
           TpButton.secondary(
             key: const Key('accident.ws.assessment.viewDamageMap'),
             label: l10n.accViewDamageMap(areaCount),
@@ -720,9 +730,29 @@ class _DamageRow extends StatelessWidget {
       'minor' => palette.ok.base,
       _ => palette.unknown.base,
     };
+    // The stored tokens print in the reader's language; the vocabulary's
+    // English label stays the fallback for any token the catalog lacks.
+    final AccidentCopy damageCopy = AccidentCopy.of(context);
+    final AccidentDamageType? type = AccidentDamageType.values
+        .where((AccidentDamageType t) => t.name == row.damageType)
+        .firstOrNull;
+    final AccidentDamageSeverity? level = AccidentDamageSeverity.values
+        .where((AccidentDamageSeverity l) => l.name == row.severity)
+        .firstOrNull;
     final String detail = <String>[
-      if (row.damageTypeLabel.isNotEmpty) row.damageTypeLabel,
-      if (row.severityLabel.isNotEmpty) row.severityLabel,
+      if (type != null)
+        accidentVocabLabel(
+          AccidentMockCopy.of(context),
+          'damageType',
+          type == AccidentDamageType.bent ? 'bent' : '',
+          accidentDamageTypeCopyLabel(damageCopy, type),
+        )
+      else if (row.damageTypeLabel.isNotEmpty)
+        row.damageTypeLabel,
+      if (level != null)
+        accidentDamageLevelLabel(context, level)
+      else if (row.severityLabel.isNotEmpty)
+        row.severityLabel,
     ].join(' · ');
     return Row(
       children: <Widget>[
@@ -755,7 +785,12 @@ class _DamageRow extends StatelessWidget {
               ),
               Text(
                 row.actionLabel.isNotEmpty
-                    ? row.actionLabel
+                    ? accidentVocabLabel(
+                        AccidentMockCopy.of(context),
+                        'action',
+                        row.action ?? '',
+                        row.actionLabel,
+                      )
                     : row.source == DamageRowSource.phone
                         ? AppLocalizations.of(context).accActionNotAssessed
                         : AppLocalizations.of(context)
@@ -879,7 +914,12 @@ class _RouteTile extends StatelessWidget {
                   Icon(_icon(tile.key), color: palette.primary, size: 28),
                   const SizedBox(height: TpSpace.xs),
                   Text(
-                    tile.label,
+                    accidentVocabLabel(
+                      AccidentMockCopy.of(context),
+                      'route',
+                      tile.key,
+                      tile.label,
+                    ),
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           fontWeight: FontWeight.w700,
@@ -888,10 +928,33 @@ class _RouteTile extends StatelessWidget {
                   ),
                   if (recommended) ...<Widget>[
                     const SizedBox(height: TpSpace.xs),
-                    TpStatusChip(
-                      status: TpStatus.ok,
-                      label: AppLocalizations.of(context).accRecommended,
-                      isCompact: true,
+                    // The mock's filled "Recommended" pill. It scales down
+                    // rather than truncating inside a narrow third-width tile.
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: palette.primary,
+                        borderRadius: BorderRadius.circular(TpRadius.pill),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: TpSpace.sm,
+                          vertical: 2,
+                        ),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            AppLocalizations.of(context).accRecommended,
+                            maxLines: 1,
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelSmall
+                                ?.copyWith(
+                                  color: palette.onPrimary,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+                        ),
+                      ),
                     ),
                   ],
                 ],

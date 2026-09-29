@@ -12,9 +12,10 @@
 /// Every figure comes from [AssetFinancialSummary] (see
 /// `asset_financials.dart` for the source of each). Left out on purpose,
 /// because no table holds them: an annual budget and its variance, a cost
-/// per km TARGET, a downtime COST (no downtime rate exists), and a separate
-/// "external repairs" bucket (`work_orders.outside_repair_cost` is empty on
-/// every row). The screen says where its numbers come from instead.
+/// per km TARGET and a downtime COST (no downtime rate exists). External
+/// repairs ARE read (`work_orders.outside_repair_cost`), but the column is
+/// empty on most rows, so the composition usually leaves that slice out
+/// rather than drawing 0%. The screen says where its numbers come from.
 library;
 
 import 'dart:async';
@@ -757,38 +758,42 @@ class _PeriodBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final AssetCostPeriod resolved = period.resolve(now);
-    return Row(
-      children: <Widget>[
-        Expanded(
-          child: PopupMenuButton<AssetReportPeriod>(
-            key: AssetFinancialReportKeys.period,
-            onSelected: onChanged,
-            itemBuilder: (BuildContext context) =>
-                <PopupMenuEntry<AssetReportPeriod>>[
-              for (final AssetReportPeriod p in AssetReportPeriod.values)
-                PopupMenuItem<AssetReportPeriod>(
-                  value: p,
-                  child: Text(p.label(l10n)),
-                ),
-            ],
+    // Both pills keep one height even when only one label wraps.
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Expanded(
+            child: PopupMenuButton<AssetReportPeriod>(
+              key: AssetFinancialReportKeys.period,
+              onSelected: onChanged,
+              itemBuilder: (BuildContext context) =>
+                  <PopupMenuEntry<AssetReportPeriod>>[
+                for (final AssetReportPeriod p in AssetReportPeriod.values)
+                  PopupMenuItem<AssetReportPeriod>(
+                    value: p,
+                    child: Text(p.label(l10n)),
+                  ),
+              ],
+              child: _Pill(
+                icon: Icons.calendar_month_outlined,
+                label: period.label(l10n),
+                trailing: Icons.keyboard_arrow_down_rounded,
+              ),
+            ),
+          ),
+          const SizedBox(width: TpSpace.sm),
+          Expanded(
             child: _Pill(
-              icon: Icons.calendar_month_outlined,
-              label: period.label(l10n),
-              trailing: Icons.keyboard_arrow_down_rounded,
+              icon: Icons.trending_up_rounded,
+              label: l10n.fleetMockFinVsYear(
+                '${resolved.previousYear.to.year}',
+              ),
+              muted: true,
             ),
           ),
-        ),
-        const SizedBox(width: TpSpace.sm),
-        Expanded(
-          child: _Pill(
-            icon: Icons.trending_up_rounded,
-            label: l10n.fleetMockFinVsYear(
-              '${resolved.previousYear.to.year}',
-            ),
-            muted: true,
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -809,9 +814,14 @@ class _Pill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
+    // The two pills share a phone-width row, so the label may take a second
+    // line rather than being cut to "This year to ...".
     return Container(
-      height: TpSizing.minTouchTarget,
-      padding: const EdgeInsets.symmetric(horizontal: TpSpace.md),
+      constraints: const BoxConstraints(minHeight: TpSizing.minTouchTarget),
+      padding: const EdgeInsets.symmetric(
+        horizontal: TpSpace.sm,
+        vertical: TpSpace.xs,
+      ),
       decoration: BoxDecoration(
         color: palette.surface,
         border: Border.all(color: palette.controlBorder),
@@ -824,7 +834,7 @@ class _Pill extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              maxLines: 1,
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
                     color: muted ? palette.textSecondary : palette.text,

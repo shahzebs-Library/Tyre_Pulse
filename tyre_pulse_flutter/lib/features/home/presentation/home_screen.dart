@@ -29,9 +29,23 @@
 /// condition THAT inspection recorded, and the section is labelled for what
 /// it is rather than as a live fleet state.
 ///
-/// The mock's "Scheduled daily checklist" row and its "Fleet pulse"
-/// Good/Attention/Critical/Not-checked counts have NO data source this app
-/// can read: the only fleet aggregate (`get_mobile_analytics`, V479) counts
+/// - SCHEDULED / DUE TODAY / OVERDUE - the next open item on today's plan,
+///   from the same `myWorkSnapshotProvider` "My tasks" and "Today's field
+///   plan" render (checklist assignments for the role, this person's
+///   inspection plans, work orders and corrective actions, drafts on this
+///   device), with a count of the rest. This is the mock's "Daily checklist"
+///   row and mocks 08/09's "current assignment", read only for a person who
+///   can open the plan (calendar or tasks module).
+///
+/// Below the recent strip, mock 10's "Operational summary": inspections due
+/// (this person's plans due today, overdue or in progress), pending sync
+/// (the local queue), tyres needing attention (active High/Critical tyre
+/// records, a bounded page of 300 shown as `300+`) and approvals awaiting
+/// the person. A tile appears only for a source the person can read, and a
+/// failed read says "Could not check" instead of showing 0.
+///
+/// The mock's "Fleet pulse" Good/Attention/Critical/Not-checked counts have
+/// NO data source this app can read: the only fleet aggregate (`get_mobile_analytics`, V479) counts
 /// `tyre_records.risk_level`, which is essentially unpopulated, so those
 /// counts would read as an unrated fleet rather than a measurement. They are
 /// not rendered.
@@ -76,11 +90,13 @@ import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
+import 'package:tyre_pulse/core/auth/auth_providers.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/permissions/module_registry.dart';
 import 'package:tyre_pulse/core/permissions/permission_providers.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
+import 'package:tyre_pulse/core/workspace/workspace_scope.dart';
 import 'package:tyre_pulse/features/alerts/alerts_providers.dart';
 import 'package:tyre_pulse/features/alerts/domain/tyre_alert.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
@@ -88,6 +104,11 @@ import 'package:tyre_pulse/features/home/domain/home_work.dart';
 import 'package:tyre_pulse/features/home/home_layout.dart';
 import 'package:tyre_pulse/features/home/home_providers.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_draft_summary.dart';
+import 'package:tyre_pulse/features/my_work/data/my_work_loader.dart';
+import 'package:tyre_pulse/features/my_work/domain/my_work_board.dart';
+import 'package:tyre_pulse/features/my_work/domain/my_work_item.dart';
+import 'package:tyre_pulse/features/my_work/my_work_providers.dart';
+import 'package:tyre_pulse/features/my_work/presentation/my_work_widgets.dart';
 import 'package:tyre_pulse/features/notifications/notifications_providers.dart';
 
 /// Real local time in production; overridden for deterministic goldens.
@@ -106,6 +127,11 @@ abstract final class HomeScreenKeys {
   static const Key newInspection = Key('home.newInspection');
   static const Key todaysWork = Key('home.todaysWork');
   static const Key recentAssets = Key('home.recentAssets');
+  static const Key summary = Key('home.summary');
+
+  /// One operational-summary tile: `inspections`, `sync`, `tyres`,
+  /// `approvals`.
+  static Key summaryTile(String id) => Key('home.summary.$id');
   static const Key refresh = Key('home.refresh');
 
   /// One timeline row: `draft`, `critical`, `approvals`, `unavailable`,
@@ -235,7 +261,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ..invalidate(homePendingInspectionApprovalsProvider)
       ..invalidate(tyreAlertsProvider)
       ..invalidate(homePendingSyncCountProvider)
-      ..invalidate(homeRecentAssetsProvider);
+      ..invalidate(homeRecentAssetsProvider)
+      ..invalidate(myWorkSnapshotProvider);
   }
 
   /// Pull-to-refresh: invalidate, then wait for the sources this role is
@@ -246,6 +273,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     required bool approvals,
     required bool alerts,
     required bool recent,
+    required bool plan,
   }) async {
     _refreshSources();
     Future<void> settle(Future<Object?> future) =>
@@ -257,6 +285,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         settle(ref.read(homePendingInspectionApprovalsProvider.future)),
       if (alerts) settle(ref.read(tyreAlertsProvider.future)),
       if (recent) settle(ref.read(homeRecentAssetsProvider.future)),
+      if (plan) settle(ref.read(myWorkSnapshotProvider.future)),
     ]);
   }
 
@@ -292,6 +321,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final bool canSeeTasks = ref.watch(
       canAccessModuleProvider(ModuleKey.tasks),
     );
+    final bool canSeeCalendar = ref.watch(
+      canAccessModuleProvider(ModuleKey.calendar),
+    );
     final bool canReportIssue = ref.watch(
       canAccessModuleProvider(ModuleKey.reportIssue),
     );
@@ -316,10 +348,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         canInspect ? ref.watch(homeRecentAssetsProvider) : null;
     final AsyncValue<List<TyreAlert>>? alerts =
         canSeeAlerts ? ref.watch(tyreAlertsProvider) : null;
+    // Today's plan (mocks 08 and 09 "current assignment"): the same personal
+    // snapshot "My tasks" and "Today's field plan" render, read only when the
+    // person can open one of those screens to see the rest of it.
+    final bool canSeePlan = canSeeCalendar || canSeeTasks;
+    final AsyncValue<MyWorkSnapshot>? plan =
+        canSeePlan ? ref.watch(myWorkSnapshotProvider) : null;
     final AsyncValue<int> pendingSync = ref.watch(homePendingSyncCountProvider);
     final AsyncValue<int> notificationCount =
         ref.watch(unreadNotificationsCountProvider);
 
+    final bool accessFailed = ref.watch(accessLoadFailedProvider);
+    final VoidCallback? retryAccess = ref.watch(retryAccessLoadProvider);
     final _TodaysWork work = _buildTodaysWork(
       l10n: l10n,
       palette: palette,
@@ -327,6 +367,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       draft: draft,
       alerts: alerts,
       approvals: approvals,
+      plan: plan,
+      onOpenPlan: canSeeCalendar
+          ? () => context.push(const CalendarRoute().location)
+          : canSeeTasks
+              ? () => context.push(const TasksRoute().location)
+              : null,
+      accessFailed: accessFailed,
+      onRetryAccess: retryAccess,
     );
 
     return TpScaffold(
@@ -339,6 +387,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           approvals: approvals != null,
           alerts: alerts != null,
           recent: recent != null,
+          plan: plan != null,
         ),
         child: ListView(
           padding: EdgeInsets.zero,
@@ -452,6 +501,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
                   ],
                   const SizedBox(height: 26),
+                  _HomeSectionHeader(title: l10n.homeOperationalSummary),
+                  const SizedBox(height: 12),
+                  _OperationalSummary(
+                    tiles: _summaryTiles(
+                      l10n: l10n,
+                      palette: palette,
+                      plan: plan,
+                      pendingSync: pendingSync,
+                      alerts: alerts,
+                      approvals: approvals,
+                      onOpenPlan: canSeeCalendar
+                          ? () => context.push(const CalendarRoute().location)
+                          : canSeeTasks
+                              ? () => context.push(const TasksRoute().location)
+                              : null,
+                    ),
+                  ),
+                  const SizedBox(height: 26),
                   _HomeSectionHeader(title: l10n.homeQuickActions),
                   const SizedBox(height: 12),
                   // Deliberately NOT animated: the grid sits below the fold on
@@ -502,6 +569,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     required AsyncValue<InspectionDraftSummary?>? draft,
     required AsyncValue<List<TyreAlert>>? alerts,
     required AsyncValue<HomePendingApprovals>? approvals,
+    AsyncValue<MyWorkSnapshot>? plan,
+    VoidCallback? onOpenPlan,
+    bool accessFailed = false,
+    VoidCallback? onRetryAccess,
   }) {
     final List<_WorkRowData> rows = <_WorkRowData>[];
     final List<String> failed = <String>[];
@@ -551,18 +622,80 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         loading = true;
     }
 
+    // The mock's "Scheduled" row: the next open item on today's plan.
+    switch (plan) {
+      case AsyncData<MyWorkSnapshot>(:final value):
+        loadedAny = true;
+        final List<MyWorkItem> today = <MyWorkItem>[
+          for (final MyWorkItem i
+              in itemsForDay(value.items, day: now, now: now))
+            if (i.isOpen) i,
+        ];
+        if (today.isNotEmpty) {
+          rows.add(_planRow(l10n, palette, today, onOpenPlan));
+        }
+      case AsyncError<MyWorkSnapshot>():
+        failed.add(l10n.myWorkFieldPlanTitle);
+      case null:
+        break;
+      default:
+        loading = true;
+    }
+
     return _TodaysWork(
       rows: rows,
       failed: failed,
       loading: loading,
       loadedAny: loadedAny,
-      applicable: draft != null || alerts != null || approvals != null,
+      applicable:
+          draft != null || alerts != null || approvals != null || plan != null,
+      accessFailed: accessFailed,
+      onRetryAccess: onRetryAccess,
       onRetry: failed.isEmpty
           ? null
           : () => ref
             ..invalidate(homeLatestInspectionDraftProvider)
             ..invalidate(tyreAlertsProvider)
-            ..invalidate(homePendingInspectionApprovalsProvider),
+            ..invalidate(homePendingInspectionApprovalsProvider)
+            ..invalidate(myWorkSnapshotProvider),
+    );
+  }
+
+  /// The first open item on today's plan, in the plan's own order (timed
+  /// items first, then worst state). A count of the rest is shown beside it
+  /// so the row never reads as the whole day.
+  _WorkRowData _planRow(
+    AppLocalizations l10n,
+    TpPalette palette,
+    List<MyWorkItem> today,
+    VoidCallback? onOpenPlan,
+  ) {
+    final MyWorkItem item = today.first;
+    final int? answered = item.answered;
+    final int? total = item.total;
+    final DateTime? at = item.dueAt;
+    return _WorkRowData(
+      id: 'plan',
+      tone: switch (item.state) {
+        MyWorkState.overdue => palette.critical,
+        MyWorkState.inProgress => palette.info,
+        MyWorkState.dueToday => palette.ok,
+        MyWorkState.upcoming || MyWorkState.completed => palette.neutral,
+      },
+      icon: myWorkIcon(item),
+      tag: myWorkStateLabel(l10n, item.state),
+      title: myWorkTitle(l10n, item),
+      detail: _joinParts(<String?>[item.reference, item.assetNo, item.site]),
+      secondary: _nonEmpty(
+        _joinParts(<String?>[
+          if (answered != null && total != null && total > 0)
+            l10n.myWorkAnswered(answered, total),
+          if (today.length > 1) l10n.homePlanMoreToday(today.length - 1),
+        ]),
+      ),
+      time: at == null ? null : myWorkTime(context, at),
+      timeIsAlert: item.state == MyWorkState.overdue,
+      onTap: onOpenPlan,
     );
   }
 
@@ -610,8 +743,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       detail: _joinParts(<String?>[alert.position, alert.assetNo, alert.site]),
       secondary: tread == null
           ? null
+          // The reading is isolated left-to-right so "4.8 mm" never renders as
+          // "mm 4.8" inside an Arabic or Urdu sentence.
           : '${l10n.tyreDetailStatTread}: '
-              '${tread % 1 == 0 ? tread.toInt() : tread.toStringAsFixed(1)} mm',
+              '\u2066${tread % 1 == 0 ? tread.toInt() : tread.toStringAsFixed(1)} mm\u2069',
       // `issue_date` is the tyre record's own date, not when the alert was
       // raised, so it is shown as a date rather than as "N minutes ago".
       time: issued == null
@@ -641,6 +776,124 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
+  /// Mock 10's operational summary. A tile appears only for a source this
+  /// person can read; a failed read says so and never renders as 0.
+  List<_SummaryTileData> _summaryTiles({
+    required AppLocalizations l10n,
+    required TpPalette palette,
+    required AsyncValue<MyWorkSnapshot>? plan,
+    required AsyncValue<int> pendingSync,
+    required AsyncValue<List<TyreAlert>>? alerts,
+    required AsyncValue<HomePendingApprovals>? approvals,
+    required VoidCallback? onOpenPlan,
+  }) {
+    _SummaryTileData tile<T>({
+      required String id,
+      required IconData icon,
+      required TpStatusColors tone,
+      required String label,
+      required AsyncValue<T> state,
+      required String Function(T value) value,
+      VoidCallback? onTap,
+    }) =>
+        switch (state) {
+          AsyncData<T>(value: final T v) => _SummaryTileData(
+              id: id,
+              icon: icon,
+              tone: tone,
+              label: label,
+              value: value(v),
+              onTap: onTap,
+            ),
+          AsyncError<T>() => _SummaryTileData(
+              id: id,
+              icon: icon,
+              tone: palette.unknown,
+              label: label,
+              value: '-',
+              note: l10n.homeStatUnavailableCaption,
+              onTap: onTap,
+            ),
+          _ => _SummaryTileData(
+              id: id,
+              icon: icon,
+              tone: palette.unknown,
+              label: label,
+              value: '-',
+              note: l10n.homeStatLoadingCaption,
+              onTap: onTap,
+            ),
+        };
+
+    final MyWorkSnapshot? snapshot = plan?.asData?.value;
+    final bool planHasInspections = plan != null &&
+        (snapshot == null ||
+            snapshot.attempted.contains(MyWorkSource.inspectionPlans));
+    return <_SummaryTileData>[
+      if (planHasInspections)
+        tile<MyWorkSnapshot>(
+          id: 'inspections',
+          icon: Icons.assignment_outlined,
+          tone: palette.info,
+          label: l10n.homeInspectionsDue,
+          state: snapshot != null &&
+                  snapshot.failed.contains(MyWorkSource.inspectionPlans)
+              ? AsyncError<MyWorkSnapshot>(
+                  StateError('inspection plans unreadable'),
+                  StackTrace.empty,
+                )
+              : plan,
+          value: (MyWorkSnapshot v) {
+            final int n = v.items
+                .where(
+                  (MyWorkItem i) =>
+                      i.kind == MyWorkKind.inspectionPlan &&
+                      (i.state == MyWorkState.overdue ||
+                          i.state == MyWorkState.inProgress ||
+                          i.state == MyWorkState.dueToday),
+                )
+                .length;
+            return v.incomplete.contains(MyWorkSource.inspectionPlans)
+                ? '$n+'
+                : '$n';
+          },
+          onTap: onOpenPlan,
+        ),
+      tile<int>(
+        id: 'sync',
+        icon: Icons.sync_rounded,
+        tone:
+            (pendingSync.asData?.value ?? 0) > 0 ? palette.warning : palette.ok,
+        label: l10n.homeSyncStatLabel,
+        state: pendingSync,
+        value: (int v) => '$v',
+        onTap: () => context.go(const ProfileRoute().location),
+      ),
+      if (alerts != null)
+        tile<List<TyreAlert>>(
+          id: 'tyres',
+          icon: Icons.tire_repair_outlined,
+          tone: palette.critical,
+          label: l10n.homeTyresNeedAttention,
+          state: alerts,
+          // The alerts read is a bounded page of 300 rows.
+          value: (List<TyreAlert> v) =>
+              v.length >= 300 ? '${v.length}+' : '${v.length}',
+          onTap: () => context.push(const AlertsRoute().location),
+        ),
+      if (approvals != null)
+        tile<HomePendingApprovals>(
+          id: 'approvals',
+          icon: Icons.how_to_reg_outlined,
+          tone: palette.warning,
+          label: l10n.homeApprovalsAwaitingYou,
+          state: approvals,
+          value: (HomePendingApprovals v) => '${v.count}',
+          onTap: () => context.go(const InspectionApprovalsRoute().location),
+        ),
+    ];
+  }
+
   VoidCallback? _seeAllDestination({
     required bool canSeeAlerts,
     required bool canSeeApprovals,
@@ -662,8 +915,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     WorkspaceContext? workspace,
     AppLocalizations l10n,
   ) {
-    final String site =
-        _workspaceSiteLabel(workspace) ?? l10n.homeSiteStatUnavailable;
+    final String site = _workspaceSiteLabel(workspace, l10n);
     final String country = workspace?.activeCountry?.trim().isNotEmpty == true
         ? workspace!.activeCountry!.trim()
         : l10n.valueNotMeasured;
@@ -736,19 +988,31 @@ String _scalarCountText(AsyncValue<int> state) => switch (state) {
       _ => '—',
     };
 
-String? _workspaceSiteLabel(WorkspaceContext? workspace) {
-  if (workspace == null) return null;
+/// The site the header chip names.
+///
+/// A named site wins. With none, an organisation wide scope (`sites` holding
+/// the `ALL` sentinel, which V309 backfilled onto every profile) reads as all
+/// sites: that person has MORE site reach, not none, so "No site on file"
+/// would be the wrong sentence. Only a genuinely empty scope says no site.
+String _workspaceSiteLabel(WorkspaceContext? workspace, AppLocalizations l10n) {
+  if (workspace == null) return l10n.homeSiteStatUnavailable;
   final String? legacy = workspace.legacySite?.trim();
-  if (legacy?.isNotEmpty == true) return legacy;
+  if (legacy?.isNotEmpty == true) return legacy!;
   for (final String site in <String>[
     ...workspace.activeSites,
     ...workspace.siteScope.namedSites,
   ]) {
     final String value = site.trim();
-    if (value.isNotEmpty) return value;
+    if (value.isNotEmpty &&
+        !SiteScope.allSentinels.contains(value.toUpperCase())) {
+      return value;
+    }
   }
-  return null;
+  if (workspace.siteScope.isOrganisationWide) return l10n.homeSiteAllSites;
+  return l10n.homeSiteStatUnavailable;
 }
+
+String? _nonEmpty(String value) => value.isEmpty ? null : value;
 
 /// Joins the non-blank [parts] with the mock's bullet separator.
 String _joinParts(List<String?> parts) => parts
@@ -911,8 +1175,7 @@ class _HomeHeader extends StatelessWidget {
     final String? fullName = workspace?.fullName;
     final String name = _firstName(fullName) ?? l10n.homeFallbackUser;
     final String? initials = _initials(fullName);
-    final String site =
-        _workspaceSiteLabel(workspace) ?? l10n.homeSiteStatUnavailable;
+    final String site = _workspaceSiteLabel(workspace, l10n);
     final String? country = workspace?.activeCountry?.trim();
     final bool showBadge = notificationCount != '—' && notificationCount != '0';
 
@@ -1195,7 +1458,7 @@ class _HomeSyncStatus extends StatelessWidget {
     };
     return ConstrainedBox(
       key: HomeScreenKeys.syncStatus,
-      constraints: const BoxConstraints(maxWidth: 180),
+      constraints: const BoxConstraints(maxWidth: 240),
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: tone.soft,
@@ -1437,6 +1700,8 @@ class _TodaysWork {
     required this.loading,
     required this.loadedAny,
     required this.applicable,
+    this.accessFailed = false,
+    this.onRetryAccess,
     this.onRetry,
   });
 
@@ -1446,6 +1711,13 @@ class _TodaysWork {
 
   /// False when no work source applies to this role at all.
   final bool applicable;
+
+  /// True when the person's access could not be read. The role-based lists
+  /// below are then incomplete, so "nothing for your role" would be untrue.
+  final bool accessFailed;
+
+  /// Re-reads the access; null when nothing can retry.
+  final VoidCallback? onRetryAccess;
 
   /// Re-reads the failed sources; null when nothing failed.
   final VoidCallback? onRetry;
@@ -1469,6 +1741,17 @@ class _TodaysWorkCard extends StatelessWidget {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final TpPalette palette = TpPalette.of(context);
     final List<_WorkRowData> rows = <_WorkRowData>[
+      if (work.accessFailed)
+        _WorkRowData(
+          id: 'access',
+          tone: palette.warning,
+          icon: Icons.lock_reset_rounded,
+          tag: '',
+          title: l10n.homeAccessLoadFailedTitle,
+          detail: l10n.homeAccessLoadFailedBody,
+          secondary: work.onRetryAccess == null ? null : l10n.actionRetry,
+          onTap: work.onRetryAccess,
+        ),
       ...work.rows,
       if (work.failed.isNotEmpty)
         _WorkRowData(
@@ -1481,7 +1764,7 @@ class _TodaysWorkCard extends StatelessWidget {
           secondary: work.onRetry == null ? null : l10n.actionRetry,
           onTap: work.onRetry,
         ),
-      if (!work.applicable)
+      if (!work.applicable && !work.accessFailed)
         _WorkRowData(
           id: 'none',
           tone: palette.unknown,
@@ -2589,5 +2872,152 @@ void _openHomeTile(BuildContext context, String id) {
     case 'inspectionApprovals':
       context.go(const InspectionApprovalsRoute().location);
       return;
+  }
+}
+
+class _SummaryTileData {
+  const _SummaryTileData({
+    required this.id,
+    required this.icon,
+    required this.tone,
+    required this.label,
+    required this.value,
+    this.note,
+    this.onTap,
+  });
+
+  final String id;
+  final IconData icon;
+  final TpStatusColors tone;
+  final String label;
+  final String value;
+
+  /// "Checking" or "Could not check" when the value is not a measurement.
+  final String? note;
+  final VoidCallback? onTap;
+}
+
+/// Mock 10's "Operational summary": two tiles a row on a phone, four on a
+/// tablet. Each tile is one real count and opens where that count lives.
+class _OperationalSummary extends StatelessWidget {
+  const _OperationalSummary({required this.tiles});
+
+  final List<_SummaryTileData> tiles;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      key: HomeScreenKeys.summary,
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final int columns = constraints.maxWidth >= 560 ? 4 : 2;
+        const double gap = 10;
+        final double width =
+            (constraints.maxWidth - gap * (columns - 1)) / columns;
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: <Widget>[
+            for (final _SummaryTileData tile in tiles)
+              SizedBox(width: width, child: _SummaryTile(tile: tile)),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _SummaryTile extends StatelessWidget {
+  const _SummaryTile({required this.tile});
+
+  final _SummaryTileData tile;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final TextTheme text = Theme.of(context).textTheme;
+    final String? note = tile.note;
+    return Semantics(
+      button: tile.onTap != null,
+      label:
+          <String>[tile.label, tile.value, if (note != null) note].join(', '),
+      excludeSemantics: true,
+      child: Material(
+        key: HomeScreenKeys.summaryTile(tile.id),
+        color: palette.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(TpRadius.lg),
+          side: BorderSide(color: palette.border),
+        ),
+        child: InkWell(
+          onTap: tile.onTap,
+          customBorder: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(TpRadius.lg),
+          ),
+          child: ConstrainedBox(
+            constraints:
+                const BoxConstraints(minHeight: TpSizing.minTouchTarget),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      Container(
+                        width: 36,
+                        height: 36,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: tile.tone.soft,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(tile.icon, size: 20, color: tile.tone.base),
+                      ),
+                      const Spacer(),
+                      if (tile.onTap != null)
+                        Icon(
+                          // Mirrors itself under RTL (matchTextDirection).
+                          Icons.chevron_right_rounded,
+                          size: 20,
+                          color: palette.textMuted,
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    tile.value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: text.headlineSmall?.copyWith(
+                      color: tile.tone.base,
+                      fontWeight: FontWeight.w900,
+                      height: 1.1,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    tile.label,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: text.labelMedium?.copyWith(
+                      color: palette.textSecondary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  if (note != null)
+                    Text(
+                      note,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style:
+                          text.labelSmall?.copyWith(color: palette.textMuted),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

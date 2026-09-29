@@ -38,6 +38,7 @@ import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/permissions/module_registry.dart';
 import 'package:tyre_pulse/core/permissions/permission_providers.dart';
+import 'package:tyre_pulse/features/assets/data/asset_360_repository.dart';
 import 'package:tyre_pulse/features/assets/data/asset_insights_repository.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
 import 'package:tyre_pulse/features/assets/domain/asset_financials.dart';
@@ -135,13 +136,62 @@ class _FakeInsightsSource implements AssetInsightsSource {
   }
 }
 
+/// A real-shaped fake of the Vehicle 360 header reads. Defaults: nothing
+/// recorded, so the header shows no hours, no alert strip and the Documents
+/// tab its empty state.
+class _Fake360Source implements Asset360Source {
+  _Fake360Source({
+    this.engineHours,
+    this.pmRows = const <Map<String, dynamic>>[],
+    this.actionRows = const <Map<String, dynamic>>[],
+    this.documentRow,
+  });
+
+  final num? engineHours;
+  final List<Map<String, dynamic>> pmRows;
+  final List<Map<String, dynamic>> actionRows;
+  final Map<String, dynamic>? documentRow;
+  int pmReads = 0;
+  int actionReads = 0;
+
+  @override
+  Future<Map<String, dynamic>?> latestEngineHours(AssetScope scope) async =>
+      engineHours == null
+          ? null
+          : <String, dynamic>{
+              'id': 'h1',
+              'reading_date': '2026-09-01',
+              'engine_hours': engineHours,
+            };
+
+  @override
+  Future<List<Map<String, dynamic>>> pmPlans(AssetScope scope) async {
+    pmReads++;
+    return pmRows;
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> tyreActions(AssetScope scope) async {
+    actionReads++;
+    return actionRows;
+  }
+
+  @override
+  Future<Map<String, dynamic>?> documents(String fleetRowId) async =>
+      documentRow;
+}
+
 Future<void> _pump(
   WidgetTester tester,
   List<Override> overrides, {
   String assetNo = _assetNo,
   InspectionDraftSummary? draft,
   bool canAccidents = true,
+  bool canPm = true,
+  bool canTasks = true,
+  bool canWorkOrders = true,
   _FakeInsightsSource? source,
+  _Fake360Source? facts,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -149,15 +199,21 @@ Future<void> _pump(
         canAccessModuleProvider(ModuleKey.reportIssue)
             .overrideWith((Ref ref) => true),
         canAccessModuleProvider(ModuleKey.workorders)
-            .overrideWith((Ref ref) => true),
+            .overrideWith((Ref ref) => canWorkOrders),
         canAccessModuleProvider(ModuleKey.accidents)
             .overrideWith((Ref ref) => canAccidents),
         canAccessModuleProvider(ModuleKey.washing)
             .overrideWith((Ref ref) => true),
         canAccessModuleProvider(ModuleKey.vehicles)
             .overrideWith((Ref ref) => true),
+        canAccessModuleProvider(ModuleKey.pm).overrideWith((Ref ref) => canPm),
+        canAccessModuleProvider(ModuleKey.tasks)
+            .overrideWith((Ref ref) => canTasks),
         assetInsightsSourceProvider.overrideWith(
           (Ref ref) => source ?? _FakeInsightsSource(),
+        ),
+        asset360SourceProvider.overrideWith(
+          (Ref ref) => facts ?? _Fake360Source(),
         ),
         // No on-device draft unless a test says otherwise: the real provider
         // would reach the local database, which a widget test has not got.
@@ -254,12 +310,12 @@ void main() {
     // marks), so textContaining rather than an exact match - see
     // vehicles_list_screen_test.dart's identical note.
     expect(find.textContaining(_assetNo), findsWidgets);
-    expect(find.text('FN-88'), findsNWidgets(2));
-    // make + model, joined with a single space by _DetailView's own
-    // _join - NOT the comma-separated join the list screen's summary
-    // uses. Getting this separator wrong is exactly the kind of thing
-    // that would silently pass a looser assertion.
-    expect(find.text('Sinotruk HOWO'), findsOneWidget);
+    expect(find.text('FN-88'), findsOneWidget);
+    // make + model, joined with a single space - in the header line AND the
+    // master record - NOT the comma-separated join the list screen's
+    // summary uses. Getting this separator wrong is exactly the kind of
+    // thing that would silently pass a looser assertion.
+    expect(find.text('Sinotruk HOWO'), findsNWidgets(2));
     expect(find.text('2019'), findsOneWidget);
     expect(find.text('128,000 km'), findsNWidgets(2));
     expect(find.text('A. Rahman'), findsOneWidget);
@@ -269,7 +325,9 @@ void main() {
     expect(find.text('KSA'), findsOneWidget);
     expect(find.text('315/80R22.5'), findsOneWidget);
     expect(find.text('ABC-1234'), findsOneWidget);
-    expect(find.text('TR-MIXER'), findsNWidgets(2));
+    // The header names make + model (the mock's "SANY Concrete Pump"
+    // line); the class stays in the master record.
+    expect(find.text('TR-MIXER'), findsOneWidget);
     expect(find.byKey(VehicleDetailScreenKeys.tyreMap), findsOneWidget);
     // The map carries no readings, so its wheels are "not recorded"; the key
     // explains that tone instead of leaving it an unexplained colour.
@@ -316,7 +374,8 @@ void main() {
   );
 
   testWidgets(
-    'asset actions show report issue and create work order',
+    'the sticky bar is the mock pair: outlined Report issue and filled '
+    'Create work order',
     (WidgetTester tester) async {
       const VehicleAsset asset = VehicleAsset(id: 'v1', assetNo: _assetNo);
 
@@ -326,18 +385,28 @@ void main() {
       ]);
       await _pumpLoadedFrame(tester);
 
-      expect(
-        find.byKey(VehicleDetailScreenKeys.reportIssue),
-        findsOneWidget,
+      final Finder bar = find.byKey(VehicleDetailScreenKeys.actionBar);
+      final TpButton report = tester.widget<TpButton>(
+        find.descendant(
+          of: bar,
+          matching: find.byKey(VehicleDetailScreenKeys.reportIssue),
+        ),
       );
-      // With inspection allowed, the work order lives in the overflow menu
-      // so the bar carries one primary action.
-      await tester.tap(find.byKey(VehicleDetailScreenKeys.moreActions));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
+      expect(report.variant, TpButtonVariant.secondary);
+      final TpButton workOrder = tester.widget<TpButton>(
+        find.descendant(
+          of: bar,
+          matching: find.byKey(VehicleDetailScreenKeys.createWorkOrder),
+        ),
+      );
+      expect(workOrder.variant, TpButtonVariant.primary);
+      // Inspect now moved to the app bar overflow, not a third bar button.
       expect(
-        find.byKey(VehicleDetailScreenKeys.createWorkOrder),
-        findsOneWidget,
+        find.descendant(
+          of: bar,
+          matching: find.byKey(VehicleDetailScreenKeys.inspectNow),
+        ),
+        findsNothing,
       );
     },
   );
@@ -374,22 +443,26 @@ void main() {
       expect(find.textContaining('TM4271'), findsWidgets);
       expect(find.text('88,421 km'), findsWidgets);
       expect(find.byKey(VehicleDetailScreenKeys.overviewTab), findsOneWidget);
-      expect(find.byKey(VehicleDetailScreenKeys.tyresTab), findsOneWidget);
       expect(find.byKey(VehicleDetailScreenKeys.timelineTab), findsOneWidget);
       expect(find.byKey(VehicleDetailScreenKeys.costsTab), findsOneWidget);
+      expect(find.byKey(VehicleDetailScreenKeys.documentsTab), findsOneWidget);
       expect(find.byKey(VehicleDetailScreenKeys.tyreMap), findsOneWidget);
       expect(
         find.byKey(VehicleDetailScreenKeys.reportIssue),
         findsOneWidget,
       );
-      expect(find.byKey(VehicleDetailScreenKeys.inspectNow), findsOneWidget);
+      expect(
+        find.byKey(VehicleDetailScreenKeys.createWorkOrder),
+        findsOneWidget,
+      );
+      expect(find.byKey(VehicleDetailScreenKeys.share), findsOneWidget);
       expect(find.byKey(VehicleDetailScreenKeys.moreActions), findsOneWidget);
       expect(
         tester.getTopLeft(find.byKey(VehicleDetailScreenKeys.overviewTab)).dy,
-        // The single informational hero card (class pill, large code,
-        // site, large class artwork) sits above the facts; the tabs still
-        // start well inside the first 852pt phone screen.
-        inInclusiveRange(300, 520),
+        // The single identity header (artwork, code, make, site, status,
+        // meters) sits above the tabs; they start inside the first 852pt
+        // phone screen.
+        inInclusiveRange(200, 520),
       );
       await expectLater(
         find.byType(VehicleDetailScreen),
@@ -399,14 +472,21 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byKey(VehicleDetailScreenKeys.tyreMap), findsNothing);
       expect(find.byKey(Vehicle360Keys.timeline), findsOneWidget);
-      expect(find.text('Tyre inspection'), findsOneWidget);
+      // An approved inspection reads as completed, as in the mock.
+      expect(find.text('Tyre inspection completed'), findsOneWidget);
+      // The mock's timeline view closes on the financial snapshot.
+      expect(find.byKey(Vehicle360Keys.costs), findsOneWidget);
 
       await tester.tap(find.byKey(VehicleDetailScreenKeys.costsTab));
       await tester.pumpAndSettle();
       expect(find.byKey(Vehicle360Keys.costs), findsOneWidget);
       expect(find.text('No cost recorded'), findsNothing);
 
-      await tester.tap(find.byKey(VehicleDetailScreenKeys.tyresTab));
+      await tester.tap(find.byKey(VehicleDetailScreenKeys.documentsTab));
+      await tester.pumpAndSettle();
+      expect(find.byKey(Vehicle360Keys.documentsEmpty), findsOneWidget);
+
+      await tester.tap(find.byKey(VehicleDetailScreenKeys.overviewTab));
       await tester.pump(const Duration(milliseconds: 200));
       expect(find.byKey(VehicleDetailScreenKeys.tyreMap), findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -414,7 +494,7 @@ void main() {
   );
 
   testWidgets(
-    'the hero does not offer Inspect now to someone who cannot inspect',
+    'Inspect now is not offered to someone who cannot inspect',
     (WidgetTester tester) async {
       const VehicleAsset asset = VehicleAsset(
         id: 'v1',
@@ -427,48 +507,20 @@ void main() {
       ]);
       await _pumpLoadedFrame(tester);
 
-      expect(find.byKey(VehicleDetailScreenKeys.hero), findsOneWidget);
-      expect(find.byKey(VehicleDetailScreenKeys.inspectNow), findsNothing);
-      // Report issue / New work order stay reachable either way.
-      expect(find.byKey(VehicleDetailScreenKeys.reportIssue), findsOneWidget);
-      expect(
-        find.byKey(VehicleDetailScreenKeys.createWorkOrder),
-        findsOneWidget,
-      );
-    },
-  );
-
-  testWidgets(
-    'the hero offers Inspect now to someone who can inspect, and keeps '
-    'Report issue and New work order reachable',
-    (WidgetTester tester) async {
-      const VehicleAsset asset = VehicleAsset(
-        id: 'v1',
-        assetNo: _assetNo,
-        vehicleType: 'TR-MIXER',
-      );
-      await _pump(tester, <Override>[
-        _resolved(const VehicleDetailLoaded(asset)),
-        _canStartInspection(true),
-      ]);
-      await _pumpLoadedFrame(tester);
-
-      expect(find.byKey(VehicleDetailScreenKeys.inspectNow), findsOneWidget);
-      expect(find.text('Inspect now'), findsOneWidget);
-      expect(find.byKey(VehicleDetailScreenKeys.reportIssue), findsOneWidget);
       await tester.tap(find.byKey(VehicleDetailScreenKeys.moreActions));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
+      expect(find.byKey(VehicleDetailScreenKeys.inspectNow), findsNothing);
+      // The financial report stays in the menu for anyone on this screen.
       expect(
-        find.byKey(VehicleDetailScreenKeys.createWorkOrder),
+        find.byKey(VehicleDetailScreenKeys.openFinancialReport),
         findsOneWidget,
       );
     },
   );
 
   testWidgets(
-    'the sticky action bar carries Inspect now as its one primary action; '
-    'the hero stays informational',
+    'someone who can inspect finds Inspect now in the app bar overflow',
     (WidgetTester tester) async {
       const VehicleAsset asset = VehicleAsset(
         id: 'v1',
@@ -481,51 +533,32 @@ void main() {
       ]);
       await _pumpLoadedFrame(tester);
 
-      final Finder bar = find.byKey(VehicleDetailScreenKeys.actionBar);
-      expect(bar, findsOneWidget);
-      expect(
-        find.descendant(
-          of: bar,
-          matching: find.byKey(VehicleDetailScreenKeys.inspectNow),
-        ),
-        findsOneWidget,
-      );
-      expect(
-        find.descendant(
-          of: find.byKey(VehicleDetailScreenKeys.hero),
-          matching: find.byKey(VehicleDetailScreenKeys.inspectNow),
-        ),
-        findsNothing,
-      );
-      final TpButton primary = tester.widget<TpButton>(
-        find.byKey(VehicleDetailScreenKeys.inspectNow),
-      );
-      expect(primary.variant, TpButtonVariant.primary);
-      final TpButton report = tester.widget<TpButton>(
-        find.byKey(VehicleDetailScreenKeys.reportIssue),
-      );
-      expect(report.variant, TpButtonVariant.secondary);
-      // The work order is not a second bar button competing with it.
-      expect(find.byKey(VehicleDetailScreenKeys.createWorkOrder), findsNothing);
+      expect(find.byKey(VehicleDetailScreenKeys.inspectNow), findsNothing);
+      await tester.tap(find.byKey(VehicleDetailScreenKeys.moreActions));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.byKey(VehicleDetailScreenKeys.inspectNow), findsOneWidget);
+      expect(find.text('Inspect now'), findsOneWidget);
     },
   );
 
   testWidgets(
-    'without inspection the work order is the bar primary and there is no '
-    'overflow menu',
+    'an action the person may not use is not offered; the other takes the '
+    'bar',
     (WidgetTester tester) async {
       const VehicleAsset asset = VehicleAsset(id: 'v1', assetNo: _assetNo);
-      await _pump(tester, <Override>[
-        _resolved(const VehicleDetailLoaded(asset)),
-        _canStartInspection(false),
-      ]);
+      await _pump(
+        tester,
+        <Override>[
+          _resolved(const VehicleDetailLoaded(asset)),
+          _canStartInspection(false),
+        ],
+        canWorkOrders: false,
+      );
       await _pumpLoadedFrame(tester);
 
-      expect(find.byKey(VehicleDetailScreenKeys.moreActions), findsNothing);
-      final TpButton workOrder = tester.widget<TpButton>(
-        find.byKey(VehicleDetailScreenKeys.createWorkOrder),
-      );
-      expect(workOrder.variant, TpButtonVariant.primary);
+      expect(find.byKey(VehicleDetailScreenKeys.createWorkOrder), findsNothing);
+      expect(find.byKey(VehicleDetailScreenKeys.reportIssue), findsOneWidget);
     },
   );
 
@@ -560,8 +593,8 @@ void main() {
   );
 
   testWidgets(
-    'the hero shows class, make and model, and site from the real row, and '
-    'no readiness ring when there is no draft',
+    'the header shows make and model, site and status from the real row, '
+    'no health score and no readiness ring when there is no draft',
     (WidgetTester tester) async {
       const VehicleAsset asset = VehicleAsset(
         id: 'v1',
@@ -570,6 +603,8 @@ void main() {
         model: '42Z',
         vehicleType: 'PUMPS',
         site: 'Main Yard',
+        opsStatus: 'In service',
+        currentKm: 68420,
       );
       await _pump(
         tester,
@@ -590,16 +625,24 @@ void main() {
         findsWidgets,
       );
       expect(
-        find.descendant(
-          of: hero,
-          matching: find.text('Putzmeister \u00B7 42Z'),
-        ),
+        find.descendant(of: hero, matching: find.text('Putzmeister 42Z')),
         findsOneWidget,
       );
       expect(
-        find.descendant(of: hero, matching: find.text('PUMPS')),
+        find.descendant(of: hero, matching: find.text('In service')),
         findsOneWidget,
       );
+      expect(
+        find.descendant(of: hero, matching: find.text('68,420 km')),
+        findsOneWidget,
+      );
+      // No engine-hour reading exists, so no hours are printed.
+      expect(
+        find.descendant(of: hero, matching: find.textContaining(' h')),
+        findsNothing,
+      );
+      // No table or formula produces a health score: none is drawn.
+      expect(find.textContaining('/100'), findsNothing);
       expect(
         find.descendant(of: hero, matching: find.text('Main Yard')),
         findsOneWidget,
@@ -709,7 +752,7 @@ void main() {
 
       expect(find.byKey(VehicleDetailScreenKeys.hero), findsOneWidget);
       expect(find.byKey(VehicleDetailScreenKeys.heroPhoto), findsOneWidget);
-      expect(find.byKey(VehicleDetailScreenKeys.inspectNow), findsOneWidget);
+      expect(find.byKey(VehicleDetailScreenKeys.moreActions), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
@@ -747,6 +790,11 @@ void main() {
                 .overrideWith((Ref ref) => true),
             canAccessModuleProvider(ModuleKey.workorders)
                 .overrideWith((Ref ref) => true),
+            canAccessModuleProvider(ModuleKey.pm)
+                .overrideWith((Ref ref) => false),
+            canAccessModuleProvider(ModuleKey.tasks)
+                .overrideWith((Ref ref) => false),
+            asset360SourceProvider.overrideWith((Ref ref) => _Fake360Source()),
             vehicleInspectionDraftProvider(_assetNo)
                 .overrideWith((Ref ref) async => null),
             _resolved(const VehicleDetailLoaded(asset)),
@@ -764,6 +812,9 @@ void main() {
       );
       await _pumpLoadedFrame(tester);
 
+      await tester.tap(find.byKey(VehicleDetailScreenKeys.moreActions));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
       await tester.tap(find.byKey(VehicleDetailScreenKeys.inspectNow));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
@@ -921,6 +972,130 @@ void main() {
         expect(find.byKey(Vehicle360Keys.costsIncomplete), findsOneWidget);
         expect(find.textContaining('more than 5000 entries'), findsOneWidget);
         expect(find.textContaining('SAR'), findsNothing);
+      },
+    );
+  });
+
+  group('Vehicle 360 header facts', () {
+    const VehicleAsset asset = VehicleAsset(
+      id: 'v1',
+      assetNo: _assetNo,
+      vehicleType: 'PUMPS',
+      site: 'NHC',
+      currentKm: 68420,
+    );
+
+    testWidgets(
+      'engine hours, service due and open tyre actions come from real rows',
+      (WidgetTester tester) async {
+        final _Fake360Source facts = _Fake360Source(
+          engineHours: 8742,
+          pmRows: <Map<String, dynamic>>[
+            <String, dynamic>{
+              'id': 'pm1',
+              'name': 'A service',
+              'status': 'active',
+              'meter_source': 'odometer',
+              'next_due_meter': 68740,
+            },
+          ],
+          actionRows: <Map<String, dynamic>>[
+            <String, dynamic>{'id': 'a1', 'status': 'Open'},
+            <String, dynamic>{'id': 'a2', 'status': null},
+            <String, dynamic>{'id': 'a3', 'status': 'Closed'},
+          ],
+        );
+        await _pump(
+          tester,
+          <Override>[
+            _resolved(const VehicleDetailLoaded(asset)),
+            _canStartInspection(true),
+          ],
+          facts: facts,
+        );
+        await _pumpLoadedFrame(tester);
+        await tester.pump(const Duration(milliseconds: 100));
+
+        expect(find.text('8,742 h'), findsOneWidget);
+        expect(find.text('Service due in 320 km'), findsOneWidget);
+        expect(find.text('2 tyre actions'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'without PM or corrective-action access those rows are never read and '
+      'no alert strip is drawn',
+      (WidgetTester tester) async {
+        final _Fake360Source facts = _Fake360Source(
+          pmRows: <Map<String, dynamic>>[
+            <String, dynamic>{
+              'id': 'pm1',
+              'status': 'active',
+              'meter_source': 'odometer',
+              'next_due_meter': 68740,
+            },
+          ],
+          actionRows: <Map<String, dynamic>>[
+            <String, dynamic>{'id': 'a1', 'status': 'Open'},
+          ],
+        );
+        await _pump(
+          tester,
+          <Override>[
+            _resolved(const VehicleDetailLoaded(asset)),
+            _canStartInspection(true),
+          ],
+          canPm: false,
+          canTasks: false,
+          facts: facts,
+        );
+        await _pumpLoadedFrame(tester);
+        await tester.pump(const Duration(milliseconds: 100));
+
+        expect(facts.pmReads, 0);
+        expect(facts.actionReads, 0);
+        expect(find.byKey(VehicleDetailScreenKeys.alerts), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'the Documents tab lists recorded permits with their expiry state',
+      (WidgetTester tester) async {
+        final DateTime soon = DateTime.now().add(const Duration(days: 10));
+        final _Fake360Source facts = _Fake360Source(
+          documentRow: <String, dynamic>{
+            'id': 'v1',
+            'registration_no': '4205 SXA',
+            'insurance_name': 'Walaa',
+            'insurance_expiry': '2020-01-01',
+            'operating_card_no': 'OC-9',
+            'operating_card_expiry': AssetCostPeriod.isoDay(soon),
+          },
+        );
+        await _pump(
+          tester,
+          <Override>[
+            _resolved(const VehicleDetailLoaded(asset)),
+            _canStartInspection(true),
+          ],
+          facts: facts,
+        );
+        await _pumpLoadedFrame(tester);
+        await tester.ensureVisible(
+          find.byKey(VehicleDetailScreenKeys.documentsTab),
+        );
+        await tester.tap(find.byKey(VehicleDetailScreenKeys.documentsTab));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(Vehicle360Keys.document(0)), findsOneWidget);
+        expect(find.text('Registration'), findsOneWidget);
+        expect(find.text('Insurance'), findsOneWidget);
+        expect(find.text('Operating card'), findsOneWidget);
+        // A licence with no dates is not listed as a document on file.
+        expect(find.text('Driver licence'), findsNothing);
+        expect(find.text('Expired'), findsOneWidget);
+        expect(find.text('Expiring soon'), findsOneWidget);
+        expect(find.text('No expiry recorded'), findsOneWidget);
       },
     );
   });

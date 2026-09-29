@@ -13,11 +13,21 @@ import { supabase, unwrap, applyCountry, isMissingRelation } from './_client'
 
 export const COLS =
   'id,organisation_id,country,asset_no,current_km,age_years,recommendation,' +
-  'target_replace_date,est_cost,priority,status,site,notes,' +
+  'target_replace_date,planned_year,est_cost,currency,priority,status,site,notes,' +
   'created_by,created_at,updated_at'
 
 export const RENEWAL_STATUSES = ['planned', 'approved', 'deferred', 'completed']
 export const RENEWAL_PRIORITIES = ['low', 'medium', 'high']
+export const RENEWAL_CURRENCIES = ['SAR', 'AED', 'EGP']
+
+const toYearOrNull = (v) => {
+  const n = toNumberOrNull(v)
+  return n != null && Number.isInteger(n) && n >= 2000 && n <= 2100 ? n : null
+}
+const toCurrencyOrNull = (v) => {
+  const s = v == null ? '' : String(v).trim().toUpperCase()
+  return RENEWAL_CURRENCIES.includes(s) ? s : null
+}
 
 
 const toNumberOrNull = (v) => {
@@ -103,7 +113,9 @@ export async function createRenewalPlan(values = {}) {
     age_years: toNumberOrNull(values.age_years),
     recommendation: values.recommendation ? String(values.recommendation).slice(0, 8000) : null,
     target_replace_date: emptyToNull(values.target_replace_date),
+    planned_year: toYearOrNull(values.planned_year),
     est_cost: toNumberOrNull(values.est_cost),
+    currency: toCurrencyOrNull(values.currency),
     priority,
     status,
     site: emptyToNull(values.site),
@@ -124,6 +136,8 @@ export async function updateRenewalPlan(id, patch = {}) {
   if ('age_years' in clean) clean.age_years = toNumberOrNull(clean.age_years)
   if ('est_cost' in clean) clean.est_cost = toNumberOrNull(clean.est_cost)
   if ('target_replace_date' in clean) clean.target_replace_date = emptyToNull(clean.target_replace_date)
+  if ('planned_year' in clean) clean.planned_year = toYearOrNull(clean.planned_year)
+  if ('currency' in clean) clean.currency = toCurrencyOrNull(clean.currency)
   if ('asset_no' in clean) clean.asset_no = emptyToNull(clean.asset_no)
   if ('site' in clean) clean.site = emptyToNull(clean.site)
   if (clean.priority && !RENEWAL_PRIORITIES.includes(clean.priority)) delete clean.priority

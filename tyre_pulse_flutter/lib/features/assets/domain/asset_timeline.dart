@@ -48,6 +48,8 @@ class AssetTimelineEvent {
     this.detail,
     this.person,
     this.photoCount,
+    this.description,
+    this.hours,
   });
 
   final AssetTimelineKind kind;
@@ -67,6 +69,13 @@ class AssetTimelineEvent {
   /// Inspector, washed by, technician.
   final String? person;
   final int? photoCount;
+
+  /// The work order's own free-text description, used as the row title when
+  /// present ("High-priority hydraulic issue reported"). Null otherwise.
+  final String? description;
+
+  /// `work_orders.breakdown_hours`, positive values only.
+  final double? hours;
 
   bool matches(AssetTimelineFilter filter) => switch (filter) {
         AssetTimelineFilter.all => true,
@@ -88,8 +97,10 @@ class AssetTimelineEvent {
       recordId: _s(row['id']),
       reference: _s(row['work_order_no']),
       status: _s(row['status']),
-      detail: _s(row['work_type']) ?? _s(row['description']),
+      detail: _s(row['work_type']),
+      description: _s(row['description']),
       person: _s(row['technician_name']),
+      hours: _positive(row['breakdown_hours']),
     );
   }
 
@@ -160,6 +171,13 @@ class AssetTimelineEvent {
       status: _s(row['workflow_stage']) ?? _s(row['status']),
       detail: _s(row['accident_type']),
     );
+  }
+
+  static double? _positive(Object? raw) {
+    final double? v = raw is num
+        ? raw.toDouble()
+        : (raw is String ? double.tryParse(raw.trim()) : null);
+    return v != null && v > 0 ? v : null;
   }
 
   static String? _s(Object? raw) {

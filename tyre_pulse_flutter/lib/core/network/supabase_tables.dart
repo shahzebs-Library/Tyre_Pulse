@@ -267,6 +267,14 @@ abstract final class SupabaseRpcs {
   /// `mobile/lib/ssoPolicy.ts`.
   static const String ssoPasswordLoginCheck = 'sso_password_login_check';
 
+  /// The caller's own per-user overrides: jsonb `{module_key: grant|revoke}`,
+  /// expired rows already dropped and revoke-wins already applied (V225).
+  static const String getMyAccessGrants = 'get_my_access_grants';
+
+  /// The caller's role matrix: jsonb `{module_key: bool}` from
+  /// `module_permissions`, keyed by the Title Case `profiles.role`.
+  static const String getUserModulePermissions = 'get_user_module_permissions';
+
   static const String registerUserDevice = 'register_user_device';
   static const String revokeUserDevice = 'revoke_user_device';
   static const String setUserAccessGrant = 'set_user_access_grant';

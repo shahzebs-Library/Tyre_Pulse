@@ -18,7 +18,7 @@
     "noPolicySet": "No Policy Set"
   },
   "filters": {
-    "searchPlaceholder": "Search asset, fleet no, make, model...",
+    "searchPlaceholder": "Search vehicles, asset no, fleet no, make, model or operator...",
     "allSites": "All Sites",
     "allStatuses": "All Statuses"
   },

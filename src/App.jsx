@@ -109,8 +109,7 @@ const ConsoleSecurity      = lazyConsolePage('ConsoleSecurity', 'Security')
 
 // ── Lazy page imports ─────────────────────────────────────────────────────
 const Login                  = lazy(() => import('./pages/Login'))
-const loadDashboard          = () => import('./pages/Dashboard')
-const Dashboard              = lazy(loadDashboard)
+const CommandCenterPage      = lazy(() => import('./pages/CommandCenter'))
 
 // Load dashboard code only after access is resolved.
 const MyWorkspace = lazy(() => import('./pages/MyWorkspace'))
@@ -393,7 +392,7 @@ function HomeRoute() {
   if (loading) return <LoadingSpinner />
   if (isChecklistOnlyRole(profile?.role) && moduleAvailable(auth, 'checklists')) return <Navigate to="/checklists" replace />
   if (profile?.role === 'Tyre Man' && moduleAvailable(auth, 'inspections')) return <Navigate to="/inspections" replace />
-  return executiveHomeAllowed(auth) ? <Dashboard key={profile?.id} /> : <MyWorkspace />
+  return executiveHomeAllowed(auth) ? <CommandCenterPage key={profile?.id} /> : <MyWorkspace />
 }
 
 // ── Checklist-only access gate ────────────────────────────────────────────────

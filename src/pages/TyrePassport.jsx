@@ -2,40 +2,47 @@
  * TyrePassport (routes /tyre-passport and /tyre-passport/:serial). A per-tyre
  * whole-life "passport": look up a serial and see that physical tyre's complete
  * lifecycle assembled from tyre_records plus service events, warranty claims,
- * status marks and retread claims:
- *   - identity + spec + lifetime totals (km / cost / CPK),
- *   - a composite Health Score (0 to 100) with weighted sub-scores + risk band,
- *   - Wear Intelligence + a tread-over-time curve,
- *   - a cross-vehicle Journey of fitment stints (per-stint km / cost / CPK),
- *   - cost breakdown + honest predictions,
- *   - service and repair history, warranty history,
- *   - an honest data-quality audit.
- * All engines live in src/lib/tyrePassport.js and degrade honestly where a
- * signal has no source in this dataset (labelled "no data" or "N/A", never
- * fabricated). Exports a passport summary PDF and an Excel journey workbook.
+ * status marks, retread claims and the inspections recorded against it.
+ *
+ * All passport maths lives in src/lib/tyrePassport.js; the card and table
+ * shapers live in src/lib/tyrePassportView.js. Every figure degrades honestly:
+ * a signal with no source reads "N/A" (with a tooltip saying why), an estimate
+ * is labelled "(Est.)", and money is never shown in a blended currency.
+ * Exports a passport PDF and an Excel journey workbook.
  */
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
-  ScanLine, Search, Truck, MapPin, Gauge, DollarSign, Calendar,
-  AlertTriangle, ArrowLeft, CircleDot, Loader2, Package, Activity,
-  HeartPulse, TrendingDown, Layers, BarChart3, Wrench, ShieldCheck,
-  ClipboardCheck, CheckCircle2, FileDown, Sheet, RefreshCw, Recycle, Clock, Milestone,
+  ScanLine, Search, Truck, Gauge, Calendar, AlertTriangle, ArrowLeft, CircleDot, Loader2, Package,
+  HeartPulse, Ruler, Coins, BarChart3, ShieldCheck, ClipboardCheck, CheckCircle2, FileDown,
+  Sheet, RefreshCw, Milestone, ChevronRight, ChevronDown, MapPin, FileText, History, ExternalLink,
 } from 'lucide-react'
 import { Line } from 'react-chartjs-2'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement,
   Title, Tooltip as ChartTooltip, Legend, Filler,
 } from 'chart.js'
-import PageHeader from '../components/ui/PageHeader'
-import Card, { CardHeader } from '../components/ui/Card'
+import QRCode from 'qrcode'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
+import { Tabs, VehicleThumb, ViewAll, KitTable } from '../components/commandCenter/kit'
 import { useSettings } from '../contexts/SettingsContext'
-import { formatCurrencyCompact, formatCurrency, formatDate } from '../lib/formatters'
+import { useAuth } from '../contexts/AuthContext'
+import { formatCurrency, formatDate } from '../lib/formatters'
 import { getPassportBundle, searchSerials } from '../lib/api/tyrePassport'
-import { buildPassport, passportKpiValues, journeyWithDays, journeySummary } from '../lib/tyrePassport'
-import { toUserMessage } from '../lib/safeError'
+import { listTyreInspections } from '../lib/api/tyrePassportInspections'
+import { getAssetByNo } from '../lib/api/assets'
+import { listCatalogueForBrand } from '../lib/api/serialTracker'
+import { matchCatalogue } from '../lib/tyreImage'
+import TyreTreadImage from '../components/tyre/TyreTreadImage'
+import { buildPassport, journeyWithDays, journeySummary } from '../lib/tyrePassport'
+import {
+  passportCurrency, ageMonths, healthLabel, healthCoverage, treadInfo, kmInfo, cpkSeries,
+  inspectionRowsForTyre, latestPressure, movementRows, lifecycleSteps, warrantySummary,
+  timelineEvents, statusTone, statusText,
+} from '../lib/tyrePassportView'
 import { colorAt, withAlpha } from '../lib/reportColors'
+import { toUserMessage } from '../lib/safeError'
+import './tyrePassport.css'
 
 // exportUtils pulls the PDF/Excel report engines that most sessions never
 // trigger, so it loads on first click instead of riding with the route chunk.
@@ -44,85 +51,114 @@ const loadExportUtils = () => import('../lib/exportUtils')
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, ChartTooltip, Legend, Filler)
 
 const NA = 'N/A'
-
-const STATUS_TONE = (s) => {
-  const v = String(s || '').toLowerCase()
-  if (/scrap|remov|write.?off/.test(v)) return 'bg-red-900/40 text-red-300 border border-red-700/50'
-  if (/service|fit|active|in_service/.test(v)) return 'bg-green-900/40 text-green-300 border border-green-700/50'
-  return 'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]'
-}
-
-const RISK_META = {
-  low: { label: 'Low risk', cls: 'text-emerald-300 border-emerald-500/40 bg-emerald-500/10', ring: '#34d399' },
-  medium: { label: 'Medium risk', cls: 'text-amber-300 border-amber-500/40 bg-amber-500/10', ring: '#fbbf24' },
-  high: { label: 'High risk', cls: 'text-orange-300 border-orange-500/40 bg-orange-500/10', ring: '#fb923c' },
-  critical: { label: 'Critical', cls: 'text-red-300 border-red-500/40 bg-red-500/10', ring: '#f87171' },
-  unknown: { label: 'Unknown', cls: 'text-[var(--text-muted)] border-[var(--input-border)]', ring: '#94a3b8' },
-}
-
-const COMPONENT_LABELS = {
-  tread: 'Tread', pressure: 'Pressure', age: 'Age', alerts: 'Alerts', history: 'Repair history',
-}
-
-const SEV_TONE = {
-  high: 'text-red-300 border-red-500/40 bg-red-500/10',
-  medium: 'text-amber-300 border-amber-500/40 bg-amber-500/10',
-  low: 'text-sky-300 border-sky-500/40 bg-sky-500/10',
+const kmTxt = (v) => (v == null ? NA : `${Number(v).toLocaleString('en-US')} km`)
+const dateTxt = (v) => (v ? formatDate(v) : NA)
+const assetHref = (a) => `/asset-management/${encodeURIComponent(a)}`
+const assetLink = (a) => (a
+  ? <Link to={assetHref(a)} className="tp-link tp-mono" onClick={(e) => e.stopPropagation()}>{a}</Link>
+  : <span className="cc-na">{NA}</span>)
+/** Load index (single/dual) and speed symbol from a catalogue entry. */
+const specLoad = (c) => {
+  if (!c) return NA
+  const load = [c.load_index_single, c.load_index_dual].filter((v) => v != null && v !== '').join('/')
+  return [load, c.speed_rating].filter(Boolean).join(' ') || 'Not recorded'
 }
 
 const EVENT_TONE = (t) => {
   const v = String(t || '').toLowerCase()
-  if (v === 'repair') return 'bg-orange-500/15 text-orange-300 border border-orange-500/30'
-  if (v === 'rotation') return 'bg-sky-500/15 text-sky-300 border border-sky-500/30'
-  if (v === 'retread') return 'bg-violet-500/15 text-violet-300 border border-violet-500/30'
-  if (v === 'inflation') return 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-  if (v === 'replacement') return 'bg-red-500/15 text-red-300 border border-red-500/30'
-  return 'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]'
+  if (v === 'repair' || v === 'replacement') return 'bad'
+  if (v === 'rotation') return 'info'
+  if (v === 'retread') return 'orange'
+  if (v === 'inflation' || v === 'fitment') return 'good'
+  return 'muted'
+}
+const ACTION_TONE = { Fitted: 'good', Moved: 'info', Rotated: 'info', Refitted: 'info', Removed: 'muted' }
+const CONDITION_TONE = (c) => {
+  const v = String(c || '').toLowerCase()
+  if (!v) return 'muted'
+  if (/good|ok/.test(v)) return 'good'
+  if (/wear|worn|monitor/.test(v)) return 'warn'
+  return 'bad'
+}
+const SEV_TONE = { high: 'bad', medium: 'warn', low: 'info' }
+const RING = { low: 'var(--cc-green)', medium: 'var(--cc-amber)', high: 'var(--cc-orange)', critical: 'var(--cc-red)', unknown: 'var(--cc-ink-3)' }
+
+const TABS = [
+  { key: 'overview', label: 'Overview' },
+  { key: 'timeline', label: 'Lifecycle Timeline' },
+  { key: 'inspections', label: 'Inspection History' },
+  { key: 'service', label: 'Service & Repair History' },
+  { key: 'movement', label: 'Fitment & Movement History' },
+  { key: 'warranty', label: 'Warranty' },
+  { key: 'documents', label: 'Documents' },
+  { key: 'quality', label: 'Data quality' },
+]
+
+function SerialQr({ serial }) {
+  const [src, setSrc] = useState(null)
+  useEffect(() => {
+    let live = true
+    if (!serial) { setSrc(null); return undefined }
+    QRCode.toDataURL(serial, { width: 160, margin: 1, errorCorrectionLevel: 'M', color: { dark: '#000000', light: '#ffffff' } })
+      .then((u) => { if (live) setSrc(u) })
+      .catch(() => { if (live) setSrc(null) })
+    return () => { live = false }
+  }, [serial])
+  if (!src) return null
+  return <img className="tp-qr" src={src} alt={`QR code for serial ${serial}`} title="Scan to read the serial" />
 }
 
-/** Circular health gauge (SVG). */
-function HealthRing({ score, risk }) {
-  const meta = RISK_META[risk] || RISK_META.unknown
-  const r = 46
+function HealthRing({ score, risk, size = 64 }) {
+  const r = 26
   const c = 2 * Math.PI * r
   const pct = Math.max(0, Math.min(100, score ?? 0))
   const dash = (pct / 100) * c
   return (
-    <div className="relative w-32 h-32 shrink-0">
-      <svg viewBox="0 0 120 120" className="w-full h-full -rotate-90">
-        <circle cx="60" cy="60" r={r} fill="none" stroke="var(--input-border)" strokeWidth="10" />
-        <circle
-          cx="60" cy="60" r={r} fill="none" stroke={meta.ring} strokeWidth="10" strokeLinecap="round"
-          strokeDasharray={`${dash} ${c - dash}`}
-        />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-3xl font-bold text-[var(--text-primary)]">{score ?? NA}</span>
-        <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">Health</span>
-      </div>
-    </div>
+    <svg viewBox="0 0 64 64" width={size} height={size} className="tp-ring" aria-hidden="true">
+      <circle cx="32" cy="32" r={r} fill="none" stroke="var(--cc-track)" strokeWidth="7" />
+      {score != null && <circle cx="32" cy="32" r={r} fill="none" stroke={RING[risk] || RING.unknown} strokeWidth="7" strokeLinecap="round" strokeDasharray={`${dash} ${c - dash}`} transform="rotate(-90 32 32)" />}
+      <HeartPulse x="22" y="22" width="20" height="20" color={RING[risk] || RING.unknown} />
+    </svg>
   )
 }
 
-function ScoreBar({ label, score, hasData }) {
-  const pct = Math.max(0, Math.min(100, score))
-  const tone = pct >= 80 ? 'bg-emerald-500' : pct >= 60 ? 'bg-amber-500' : pct >= 40 ? 'bg-orange-500' : 'bg-red-500'
+function Spark({ values }) {
+  if (!values || values.length < 2) return null
+  const w = 90; const h = 30
+  const min = Math.min(...values); const max = Math.max(...values)
+  const span = max - min || 1
+  const pts = values.map((v, i) => `${(i / (values.length - 1)) * w},${h - 3 - ((v - min) / span) * (h - 6)}`).join(' ')
   return (
-    <div>
-      <div className="flex items-center justify-between text-xs mb-1">
-        <span className="text-[var(--text-secondary)]">{label}</span>
-        {hasData
-          ? <span className="text-[var(--text-primary)] font-medium">{score}</span>
-          : <span className="text-[var(--text-muted)] italic">no data</span>}
-      </div>
-      <div className="h-1.5 rounded-full bg-[var(--input-bg)] overflow-hidden">
-        <div className={`h-full rounded-full ${hasData ? tone : 'bg-[var(--input-border)]'}`} style={{ width: `${hasData ? pct : 100}%`, opacity: hasData ? 1 : 0.35 }} />
-      </div>
-    </div>
+    <svg viewBox={`0 0 ${w} ${h}`} width={w} height={h} className="tp-spark" role="img" aria-label="Cost per km by fitment stint">
+      <polyline points={pts} fill="none" stroke="var(--cc-green)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
   )
 }
 
-function SearchBox({ country, onPick }) {
+function Bar({ pct, tone = 'var(--cc-green)' }) {
+  if (pct == null) return null
+  const v = Math.max(0, Math.min(100, pct))
+  return <span className="tp-bar" aria-hidden="true"><span style={{ width: `${v}%`, background: tone }} /></span>
+}
+
+function Metric({ icon: Icon, tone, label, value, unit, foot, children, title, onClick }) {
+  const body = (
+    <>
+      <span className={`tp-metric-icon ${tone}`}><Icon size={22} aria-hidden="true" /></span>
+      <div className="tp-metric-body">
+        <div className="tp-metric-label">{label}</div>
+        <div className="tp-metric-val">{value}{value !== NA && unit && <small> {unit}</small>}</div>
+        {children}
+        {foot && <div className="tp-metric-foot">{foot}</div>}
+      </div>
+      {onClick && <ChevronRight size={16} className="tp-metric-chev" aria-hidden="true" />}
+    </>
+  )
+  if (onClick) return <button type="button" className="cc-card tp-metric" title={title} onClick={onClick}>{body}</button>
+  return <div className="cc-card tp-metric" title={title}>{body}</div>
+}
+
+function SearchBox({ country, onPick, autoFocus }) {
   const [q, setQ] = useState('')
   const [results, setResults] = useState([])
   const [open, setOpen] = useState(false)
@@ -142,16 +178,17 @@ function SearchBox({ country, onPick }) {
   }, [q, country])
 
   return (
-    <div className="relative max-w-xl">
-      <div className="relative">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+    <div className="tp-searchbox">
+      <div className="cc-search">
+        <Search size={16} aria-hidden="true" className="tp-search-icon" />
         <input
           aria-label="Search a tyre serial number"
           role="combobox"
           aria-expanded={open && results.length > 0}
           aria-controls="tyre-passport-serial-results"
           aria-autocomplete="list"
-          className="input pl-9 w-full min-h-[44px]"
+          autoFocus={autoFocus}
+          className="tp-search-input"
           placeholder="Search a tyre serial number"
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -161,25 +198,18 @@ function SearchBox({ country, onPick }) {
             if (e.key === 'Escape') setOpen(false)
           }}
         />
-        {loading && <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-[var(--text-muted)]" aria-label="Searching" />}
+        {loading && <Loader2 size={14} className="tp-search-spin" aria-label="Searching" />}
       </div>
       {open && q.trim().length >= 2 && !loading && results.length === 0 && (
-        <p role="status" className="mt-1 text-xs text-[var(--text-muted)]">No serial starts with that text. Press Enter to open it anyway.</p>
+        <p role="status" className="tp-muted tp-small">No serial starts with that text. Press Enter to open it anyway.</p>
       )}
       {open && results.length > 0 && (
-        <div id="tyre-passport-serial-results" role="listbox" aria-label="Matching serials" className="absolute z-30 mt-1 w-full max-h-72 overflow-auto rounded-lg border border-[var(--input-border)] bg-[var(--surface-2)] shadow-xl py-1">
+        <div id="tyre-passport-serial-results" role="listbox" aria-label="Matching serials" className="tp-results">
           {results.map((r) => (
-            <button
-              key={r.serial}
-              type="button"
-              role="option"
-              aria-selected="false"
-              onClick={() => { setOpen(false); onPick(r.serial) }}
-              className="flex w-full items-center gap-2 px-3 min-h-[44px] text-left text-sm hover:bg-[var(--surface-1)] focus:outline-none focus-visible:bg-[var(--surface-1)]"
-            >
-              <CircleDot size={14} className="text-[var(--text-muted)] shrink-0" />
-              <span className="font-mono text-[var(--text-primary)]">{r.serial}</span>
-              <span className="text-xs text-[var(--text-muted)] truncate">{[r.brand, r.size, r.asset_no].filter(Boolean).join(' / ')}</span>
+            <button key={r.serial} type="button" role="option" aria-selected="false" onClick={() => { setOpen(false); onPick(r.serial) }}>
+              <CircleDot size={14} aria-hidden="true" />
+              <span className="tp-mono">{r.serial}</span>
+              <span className="tp-muted">{[r.brand, r.size, r.asset_no].filter(Boolean).join(' / ')}</span>
             </button>
           ))}
         </div>
@@ -190,32 +220,58 @@ function SearchBox({ country, onPick }) {
 
 function Empty({ icon: Icon, title, sub }) {
   return (
-    <div className="py-12 text-center text-[var(--text-muted)]">
-      <Icon size={26} className="mx-auto mb-2 opacity-60" />
-      <p className="text-sm text-[var(--text-secondary)]">{title}</p>
-      {sub && <p className="text-xs mt-1">{sub}</p>}
+    <div className="cc-empty tp-empty">
+      <div>
+        <Icon size={24} aria-hidden="true" />
+        <p>{title}</p>
+        {sub && <p className="tp-small">{sub}</p>}
+      </div>
     </div>
   )
 }
 
-const TABS = [
-  { key: 'overview', label: 'Overview', icon: HeartPulse },
-  { key: 'journey', label: 'Journey', icon: Milestone },
-  { key: 'wear', label: 'Wear curve', icon: BarChart3 },
-  { key: 'service', label: 'Service & repairs', icon: Wrench },
-  { key: 'warranty', label: 'Warranty', icon: ShieldCheck },
-  { key: 'quality', label: 'Data quality', icon: ClipboardCheck },
-]
+function MoreMenu({ items }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!open) return undefined
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onKey) }
+  }, [open])
+  return (
+    <div className="tp-menu-wrap" ref={ref}>
+      <button type="button" className="cc-btn-ghost" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        More actions <ChevronDown size={14} aria-hidden="true" />
+      </button>
+      {open && (
+        <div role="menu" className="tp-menu">
+          {items.map((it) => (
+            <button key={it.label} type="button" role="menuitem" disabled={it.disabled} onClick={() => { setOpen(false); it.onClick() }}>
+              <it.icon size={14} aria-hidden="true" /> {it.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function TyrePassport() {
   const { serial } = useParams()
   const navigate = useNavigate()
   const { activeCountry, activeCurrency } = useSettings()
+  const { profile, isSuperAdmin } = useAuth() || {}
   const [bundle, setBundle] = useState(null)
   const loadId = useRef(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [tab, setTab] = useState('overview')
+  const [insp, setInsp] = useState({ rows: [], truncated: false, error: null, loading: false })
+  const [asset, setAsset] = useState(null)
+  const [catalogue, setCatalogue] = useState({ rows: [], error: null, loading: false })
 
   const load = useCallback(async (sn) => {
     const request = ++loadId.current
@@ -230,7 +286,7 @@ export default function TyrePassport() {
     } finally { if (request === loadId.current) setLoading(false) }
   }, [activeCountry])
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- Invalidate the current request on cleanup.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Invalidate the current request on cleanup.
   useEffect(() => { load(serial); return () => { loadId.current++ } }, [serial, load])
   useEffect(() => { setTab('overview') }, [serial])
 
@@ -243,16 +299,67 @@ export default function TyrePassport() {
       retreadClaims: bundle.retreadClaims,
     })
   }, [bundle])
+
+  // Inspections and the current vehicle load after the passport, each on its
+  // own, so a failed side read never blanks the passport itself.
+  const assetsKey = passport ? passport.assets.join('|') : ''
+  useEffect(() => {
+    if (!passport) { setInsp({ rows: [], truncated: false, error: null, loading: false }); return undefined }
+    let live = true
+    setInsp((s) => ({ ...s, loading: true, error: null }))
+    listTyreInspections(passport.serial, passport.assets, { country: activeCountry })
+      .then((r) => { if (live) setInsp({ rows: r.rows, truncated: r.truncated, error: null, loading: false }) })
+      .catch((e) => { if (live) setInsp({ rows: [], truncated: false, error: toUserMessage(e, 'Inspections could not be loaded.'), loading: false }) })
+    return () => { live = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [passport?.serial, assetsKey, activeCountry])
+
+  const currentAssetNo = passport?.currentAssetNo || null
+  useEffect(() => {
+    if (!currentAssetNo) { setAsset(null); return undefined }
+    let live = true
+    getAssetByNo(currentAssetNo, activeCountry === 'All' ? undefined : activeCountry)
+      .then((row) => { if (live) setAsset(row || null) })
+      .catch(() => { if (live) setAsset(null) })
+    return () => { live = false }
+  }, [currentAssetNo, activeCountry])
+
+  // The tyre catalogue entry for this brand and size feeds the tread picture
+  // and the pattern / load / speed block. A failed read is shown as "could not
+  // check", never as "not in the catalogue".
+  const passportBrand = passport?.brand || ''
+  const catalogueKey = `${passportBrand}|${activeCountry}`
+  const [catalogueNonce, setCatalogueNonce] = useState(0)
+  useEffect(() => {
+    if (!passportBrand) { setCatalogue({ rows: [], error: null, loading: false }); return undefined }
+    let live = true
+    setCatalogue({ rows: [], error: null, loading: true })
+    listCatalogueForBrand(passportBrand, { country: activeCountry })
+      .then((rows) => { if (live) setCatalogue({ rows, error: null, loading: false }) })
+      .catch((e) => { if (live) setCatalogue({ rows: [], error: toUserMessage(e, 'The tyre catalogue could not be checked.'), loading: false }) })
+    return () => { live = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- catalogueKey covers brand + country.
+  }, [catalogueKey, catalogueNonce])
+  const catEntry = useMemo(
+    () => matchCatalogue(catalogue.rows, { brand: passport?.brand, size: passport?.size }),
+    [catalogue.rows, passport],
+  )
+
   const journeyRows = useMemo(() => journeyWithDays(passport?.journey || []), [passport])
   const journeyStats = useMemo(() => journeySummary(passport?.journey || []), [passport])
-
-  const money = (v) => (v == null ? NA : formatCurrencyCompact(v, activeCurrency))
-  const moneyFull = useCallback(
-    (v) => (v == null ? NA : formatCurrency(v, activeCurrency)),
-    [activeCurrency],
+  const inspectionRows = useMemo(
+    () => inspectionRowsForTyre({ inspections: insp.rows, journey: passport?.journey || [], serial: passport?.serial }),
+    [insp.rows, passport],
   )
-  const kmTxt = (v) => (v == null ? NA : Number(v).toLocaleString())
-  const dateTxt = (v) => (v ? formatDate(v) : NA)
+  const movement = useMemo(() => movementRows(passport?.events || []), [passport])
+  const steps = useMemo(() => lifecycleSteps(passport), [passport])
+  const timeline = useMemo(() => timelineEvents(passport, inspectionRows), [passport, inspectionRows])
+  const cur = useMemo(() => passportCurrency(bundle?.records || [], activeCurrency), [bundle, activeCurrency])
+
+  const moneyFull = useCallback(
+    (v) => (v == null || cur.mixed ? NA : formatCurrency(v, cur.currency || '')),
+    [cur],
+  )
 
   const wearChart = useMemo(() => {
     const series = passport?.treadSeries?.length ? passport.treadSeries : []
@@ -293,7 +400,7 @@ export default function TyrePassport() {
       removed: s.removed ? dateTxt(s.removed) : 'Current',
       km_run: s.km_run == null ? NA : Number(s.km_run).toLocaleString(),
       cost: s.cost == null ? NA : moneyFull(s.cost),
-      cpk: s.cpk == null ? NA : String(s.cpk),
+      cpk: s.cpk == null || cur.mixed ? NA : String(s.cpk),
       reason: s.reason || NA,
     }))
     const headers = ['Asset', 'Position', 'Fitted', 'Removed', 'Km run', 'Cost', 'CPK', 'Reason']
@@ -305,7 +412,7 @@ export default function TyrePassport() {
       reportFileName('Tyre Passport', passport.serial),
       'landscape',
     )
-  }, [passport, moneyFull])
+  }, [passport, moneyFull, cur.mixed])
 
   const exportExcel = useCallback(async () => {
     if (!passport) return
@@ -316,21 +423,18 @@ export default function TyrePassport() {
       fitted: s.fitted || '',
       removed: s.removed || 'Current',
       km_run: s.km_run ?? '',
-      cost: s.cost ?? '',
-      cpk: s.cpk ?? '',
+      cost: cur.mixed ? '' : (s.cost ?? ''),
+      cpk: cur.mixed ? '' : (s.cpk ?? ''),
       reason: s.reason || '',
     }))
     const keys = ['asset_no', 'position', 'fitted', 'removed', 'km_run', 'cost', 'cpk', 'reason']
     const headers = ['Asset', 'Position', 'Fitted', 'Removed', 'Km run', 'Cost', 'CPK', 'Reason']
     await exportToExcel(rows, keys, headers, reportFileName('Tyre Passport', passport.serial), 'Journey', {
-      title: `Tyre Passport ${passport.serial}`, currency: activeCurrency,
+      title: `Tyre Passport ${passport.serial}`, currency: cur.currency || '',
     })
-  }, [passport, activeCurrency])
+  }, [passport, cur])
 
-  const pill = (cls, text) => <span className={`text-[11px] px-2 py-0.5 rounded ${cls}`}>{text}</span>
-  const assetLink = (a) => (a
-    ? <Link to={`/asset-management/${encodeURIComponent(a)}`} className="font-mono text-[var(--brand-bright)] hover:underline">{a}</Link>
-    : <span className="text-[var(--text-muted)]">{NA}</span>)
+  const pill = (tone, text) => <span className={`cc-pill ${tone}`}>{text}</span>
 
   const journeyColumns = useMemo(() => [
     { accessorKey: 'asset_no', header: 'Asset', cell: ({ getValue }) => assetLink(getValue()) },
@@ -339,431 +443,510 @@ export default function TyrePassport() {
     { accessorKey: 'fitted', header: 'Fitted', cell: ({ getValue }) => dateTxt(getValue()) },
     { accessorKey: 'removed', header: 'Removed',
       meta: { exportValue: (r) => (r.removed || 'Current') },
-      cell: ({ getValue }) => (getValue() ? dateTxt(getValue()) : <span className="text-emerald-400 font-medium">Current</span>) },
+      cell: ({ getValue }) => (getValue() ? dateTxt(getValue()) : pill('good', 'Current')) },
     { accessorKey: 'days', header: 'Days on', meta: { align: 'right' },
-      cell: ({ getValue }) => (getValue() == null ? NA : <span className="tabular-nums">{getValue().toLocaleString()}</span>) },
+      cell: ({ getValue }) => (getValue() == null ? NA : getValue().toLocaleString()) },
     { accessorKey: 'km_run', header: 'Km run', meta: { align: 'right' },
-      cell: ({ getValue }) => <span className="tabular-nums">{kmTxt(getValue())}</span> },
+      cell: ({ getValue }) => (getValue() == null ? NA : Number(getValue()).toLocaleString()) },
     { accessorKey: 'cost', header: 'Cost', meta: { align: 'right' },
-      cell: ({ getValue }) => <span className="tabular-nums">{getValue() == null ? NA : money(getValue())}</span> },
+      cell: ({ getValue }) => moneyFull(getValue()) },
     { accessorKey: 'cpk', header: 'CPK', meta: { align: 'right' },
-      cell: ({ getValue }) => (getValue() == null ? NA : getValue()) },
+      cell: ({ getValue }) => (getValue() == null || cur.mixed ? NA : getValue()) },
     { accessorKey: 'reason', header: 'Removal reason', cell: ({ getValue }) => getValue() || NA },
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- formatters close over activeCurrency only
-  ], [activeCurrency])
+  ], [moneyFull, cur.mixed])
 
   const serviceColumns = useMemo(() => [
-    { accessorKey: 'date', header: 'Date', cell: ({ getValue }) => <span className="whitespace-nowrap">{dateTxt(getValue())}</span> },
-    { accessorKey: 'type', header: 'Type', cell: ({ getValue }) => pill(EVENT_TONE(getValue()), getValue() || NA) },
-    { accessorKey: 'asset_no', header: 'Asset', cell: ({ getValue }) => <span className="font-mono">{getValue() || NA}</span> },
+    { accessorKey: 'date', header: 'Date', cell: ({ getValue }) => dateTxt(getValue()) },
+    { accessorKey: 'type', header: 'Type', cell: ({ getValue }) => pill(EVENT_TONE(getValue()), statusText(getValue())) },
+    { accessorKey: 'asset_no', header: 'Asset', cell: ({ getValue }) => assetLink(getValue()) },
+    { accessorKey: 'site', header: 'Site', cell: ({ getValue }) => getValue() || NA },
     { accessorKey: 'position', header: 'Position', cell: ({ getValue }) => getValue() || NA },
     { accessorKey: 'tread', header: 'Tread', meta: { align: 'right' }, cell: ({ getValue }) => (getValue() == null ? NA : `${getValue()} mm`) },
     { accessorKey: 'pressure', header: 'Pressure', meta: { align: 'right' }, cell: ({ getValue }) => (getValue() == null ? NA : `${getValue()} psi`) },
-    { accessorKey: 'cost', header: 'Cost', meta: { align: 'right' }, cell: ({ getValue }) => (getValue() == null ? NA : money(getValue())) },
-    { accessorKey: 'technician', header: 'Technician', cell: ({ getValue }) => getValue() || NA },
-    { accessorKey: 'notes', header: 'Notes',
-      cell: ({ getValue }) => <span className="block max-w-[220px] truncate text-[var(--text-muted)]" title={getValue() || ''}>{getValue() || NA}</span> },
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- formatters close over activeCurrency only
-  ], [activeCurrency])
+    { accessorKey: 'cost', header: 'Cost', meta: { align: 'right' }, cell: ({ getValue }) => moneyFull(getValue()) },
+    { accessorKey: 'technician', header: 'Performed by', cell: ({ getValue }) => getValue() || NA },
+    { accessorKey: 'notes', header: 'Description',
+      cell: ({ getValue }) => <span className="tp-trunc" title={getValue() || ''}>{getValue() || NA}</span> },
+  ], [moneyFull])
+
+  const inspectionColumns = useMemo(() => [
+    { accessorKey: 'date', header: 'Date', cell: ({ getValue }) => dateTxt(getValue()) },
+    { accessorKey: 'asset_no', header: 'Asset', cell: ({ getValue }) => assetLink(getValue()) },
+    { accessorKey: 'site', header: 'Location', cell: ({ getValue }) => getValue() || NA },
+    { accessorKey: 'position', header: 'Position', cell: ({ getValue }) => getValue() || NA },
+    { accessorKey: 'tread', header: 'Tread (mm)', meta: { align: 'right' }, cell: ({ getValue }) => (getValue() == null ? NA : getValue()) },
+    { accessorKey: 'pressure', header: 'Pressure (psi)', meta: { align: 'right' }, cell: ({ getValue }) => (getValue() == null ? NA : getValue()) },
+    { accessorKey: 'condition', header: 'Condition', cell: ({ getValue }) => (getValue() ? pill(CONDITION_TONE(getValue()), getValue()) : NA) },
+    { accessorKey: 'inspector', header: 'Inspector', cell: ({ getValue }) => getValue() || NA },
+    { accessorKey: 'findings', header: 'Findings', cell: ({ getValue }) => <span className="tp-trunc" title={getValue() || ''}>{getValue() || NA}</span> },
+    { accessorKey: 'basis', header: 'Matched by', meta: { exportValue: (r) => (r.basis === 'serial' ? 'Serial' : 'Position') },
+      cell: ({ getValue }) => (getValue() === 'serial' ? 'Serial' : 'Position') },
+  ], [])
 
   const warrantyColumns = useMemo(() => [
-    { accessorKey: 'claim_no', header: 'Claim no', cell: ({ getValue }) => <span className="font-mono">{getValue() || NA}</span> },
-    { accessorKey: 'status', header: 'Status', cell: ({ getValue }) => pill(STATUS_TONE(getValue()), getValue() || NA) },
+    { accessorKey: 'claim_no', header: 'Claim no', cell: ({ getValue }) => <span className="tp-mono">{getValue() || NA}</span> },
+    { accessorKey: 'status', header: 'Status', cell: ({ getValue }) => pill(statusTone(getValue()), statusText(getValue())) },
     { accessorKey: 'failure_type', header: 'Failure type', cell: ({ getValue }) => getValue() || NA },
     { accessorKey: 'supplier', header: 'Supplier', cell: ({ getValue }) => getValue() || NA },
-    { accessorKey: 'km_run', header: 'Km run', meta: { align: 'right' }, cell: ({ getValue }) => kmTxt(getValue()) },
-    { accessorKey: 'credit_amount', header: 'Credit', meta: { align: 'right' },
-      cell: ({ getValue }) => (getValue() == null ? NA : <span className="text-emerald-400">{money(getValue())}</span>) },
+    { accessorKey: 'km_run', header: 'Km run', meta: { align: 'right' }, cell: ({ getValue }) => (getValue() == null ? NA : Number(getValue()).toLocaleString()) },
+    { accessorKey: 'credit_amount', header: 'Credit', meta: { align: 'right' }, cell: ({ getValue }) => moneyFull(getValue()) },
     { accessorKey: 'credit_date', header: 'Credit date', cell: ({ getValue }) => dateTxt(getValue()) },
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- formatters close over activeCurrency only
-  ], [activeCurrency])
+  ], [moneyFull])
 
   const retreadColumns = useMemo(() => [
-    { accessorKey: 'claim_no', header: 'Claim no', cell: ({ getValue }) => <span className="font-mono">{getValue() || NA}</span> },
+    { accessorKey: 'claim_no', header: 'Claim no', cell: ({ getValue }) => <span className="tp-mono">{getValue() || NA}</span> },
     { accessorKey: 'vendor', header: 'Vendor', cell: ({ getValue }) => getValue() || NA },
-    { accessorKey: 'status', header: 'Status', cell: ({ getValue }) => pill(STATUS_TONE(getValue()), getValue() || NA) },
-    { accessorKey: 'reason', header: 'Reason',
-      cell: ({ getValue }) => <span className="block max-w-[220px] truncate" title={getValue() || ''}>{getValue() || NA}</span> },
-    { accessorKey: 'cost', header: 'Cost', meta: { align: 'right' }, cell: ({ getValue }) => (getValue() == null ? NA : money(getValue())) },
-    { accessorKey: 'amount_recovered', header: 'Recovered', meta: { align: 'right' },
-      cell: ({ getValue }) => (getValue() == null ? NA : <span className="text-emerald-400">{money(getValue())}</span>) },
+    { accessorKey: 'status', header: 'Status', cell: ({ getValue }) => pill(statusTone(getValue()), statusText(getValue())) },
+    { accessorKey: 'reason', header: 'Reason', cell: ({ getValue }) => <span className="tp-trunc" title={getValue() || ''}>{getValue() || NA}</span> },
+    { accessorKey: 'cost', header: 'Cost', meta: { align: 'right' }, cell: ({ getValue }) => moneyFull(getValue()) },
+    { accessorKey: 'amount_recovered', header: 'Recovered', meta: { align: 'right' }, cell: ({ getValue }) => moneyFull(getValue()) },
     { accessorKey: 'claim_date', header: 'Date', cell: ({ getValue }) => dateTxt(getValue()) },
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- formatters close over activeCurrency only
-  ], [activeCurrency])
+  ], [moneyFull])
 
-  const kv = passportKpiValues(passport)
-  const kpis = kv ? [
-    { label: 'Lifetime km', value: kv.lifetimeKm == null ? NA : kv.lifetimeKm.toLocaleString(), icon: Gauge },
-    { label: 'Lifetime cost', value: money(kv.lifetimeCost), icon: DollarSign },
-    { label: 'CPK', value: kv.cpk == null ? NA : String(kv.cpk), icon: Activity },
-    { label: 'Vehicles', value: kv.vehicles ?? NA, icon: Truck },
-    { label: 'Retreads', value: kv.retreads, icon: Recycle },
-    { label: 'Records', value: kv.records, icon: Package },
+  const isAdmin = isSuperAdmin || String(profile?.role || '') === 'Admin'
+  const menuItems = [
+    { label: 'Export PDF', icon: FileDown, onClick: exportPdf, disabled: !passport },
+    { label: 'Export Excel', icon: Sheet, onClick: exportExcel, disabled: !passport },
+    { label: 'Refresh', icon: RefreshCw, onClick: () => load(serial), disabled: loading },
+    ...(currentAssetNo ? [{ label: `Open asset ${currentAssetNo}`, icon: Truck, onClick: () => navigate(assetHref(currentAssetNo)) }] : []),
+    { label: 'Open tyre records', icon: ExternalLink, onClick: () => navigate('/tyres') },
+    ...(isAdmin ? [{ label: 'Open serial tracker', icon: ScanLine, onClick: () => navigate('/serial-tracker') }] : []),
+    { label: 'Look up another serial', icon: Search, onClick: () => navigate('/tyre-passport') },
+  ]
+
+  const tread = treadInfo(passport)
+  const km = kmInfo(passport)
+  const pressure = latestPressure(passport, inspectionRows)
+  const cov = healthCoverage(passport?.health)
+  const warranty = warrantySummary(passport)
+  const spark = cpkSeries(passport?.journey || [])
+  const months = ageMonths(passport?.ageDays)
+  const lastFit = passport ? [...passport.events].reverse().find((e) => e.fitment_date || e.date) : null
+  const statusNote = !passport ? ''
+    : passport.scrapped ? (passport.scrapReason ? `Removed: ${passport.scrapReason}` : 'No longer fitted')
+      : passport.currentAssetNo ? `On ${passport.currentAssetNo} since ${dateTxt(lastFit?.fitment_date || lastFit?.date)}` : 'Not currently fitted'
+  const lastPositionEvent = passport ? [...passport.events].reverse().find((e) => e.position || e.asset_no) : null
+
+  const detailRows = passport ? [
+    ['Tyre serial', <span key="s" className="tp-mono">{passport.serial || NA}</span>],
+    ['Brand', passport.brand || NA],
+    ['Size', passport.size || NA],
+    ['Supplier', passport.supplier || NA],
+    ['Pattern', catEntry?.pattern || (catalogue.error ? 'Catalogue could not be checked' : 'Not in the tyre catalogue')],
+    ['Load index / speed', specLoad(catEntry)],
+    ['Ply rating', catEntry?.ply_rating || NA],
+    ['New tread depth (catalogue)', catEntry?.tread_depth_new_mm == null ? NA : `${catEntry.tread_depth_new_mm} mm`],
+    ['First fitted', dateTxt(passport.firstFittedDate)],
+    ['Age since first fitted', passport.ageDays == null ? NA : `${passport.ageDays.toLocaleString()} days`],
+    ['Records', passport.recordCount],
+    ['Vehicles served', passport.distinctVehicles || 0],
+    ['Positions served', passport.stats.positionsServed],
+    ['Rotations', passport.rotationCount],
+    ['Retreads', passport.retreadCount],
+    ['Repairs', passport.stats.repairCount],
+    ['Purchase cost', moneyFull(passport.costBreakdown.purchase || null)],
+    ['Service and repair cost', moneyFull(passport.costBreakdown.service)],
+    ['Recovered', moneyFull(passport.costBreakdown.recovered)],
+    ['Net lifetime cost', moneyFull(passport.costBreakdown.netLifetime)],
+    ['Current location', passport.currentAssetNo ? [passport.currentAssetNo, passport.currentPosition].filter(Boolean).join(' / ') : 'Not currently fitted'],
+    ['Status', <span key="st" className="tp-status-inline"><i className={`tp-dot ${statusTone(passport.status)}`} aria-hidden="true" />{statusText(passport.status)}</span>],
   ] : []
 
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Tyre Passport"
-        subtitle="Look up any tyre serial for its full whole-life record: health, wear, cost/CPK, cross-vehicle journey, service, warranty and data quality."
-        icon={ScanLine}
-        actions={serial ? (
-          <div className="flex items-center gap-2">
-            {passport && (
-              <>
-                <button onClick={exportPdf} className="btn-secondary text-sm min-h-[44px] inline-flex items-center gap-1.5"><FileDown size={14} aria-hidden="true" /> PDF</button>
-                <button onClick={exportExcel} className="btn-secondary text-sm min-h-[44px] inline-flex items-center gap-1.5"><Sheet size={14} aria-hidden="true" /> Excel</button>
-                <button onClick={() => load(serial)} disabled={loading} className="btn-secondary text-sm min-h-[44px] min-w-[44px] inline-flex items-center justify-center gap-1.5 disabled:opacity-50" aria-label="Refresh this passport" title="Refresh"><RefreshCw size={14} className={loading ? 'animate-spin' : ''} /></button>
-              </>
-            )}
-            <button onClick={() => navigate('/tyre-passport')} className="btn-secondary text-sm min-h-[44px] inline-flex items-center gap-1.5"><ArrowLeft size={14} aria-hidden="true" /> New search</button>
-          </div>
-        ) : null}
-      />
-
-      {/* No `clip` on either search card: SearchBox renders an absolutely
-          positioned results popover that must be able to escape the card. */}
-      {!serial && (
-        <Card className="space-y-3">
-          <p className="text-sm text-[var(--text-secondary)]">Enter a serial number to open its passport.</p>
-          <SearchBox country={activeCountry} onPick={(sn) => navigate(`/tyre-passport/${encodeURIComponent(sn)}`)} />
-        </Card>
-      )}
-
-      {/* Honest incompleteness notice — this passport is missing history. */}
-      {!!bundle?.unavailableSources?.length && <Card as="p" role="alert" tone="warn" className="text-sm text-amber-500">Some history could not be loaded: {bundle.unavailableSources.join(', ')}. This passport is incomplete; refresh to try again.</Card>}
+  const heading = (
+    <header className="tp-head">
+      <div className="tp-head-img tp-head-dark" style={{ backgroundImage: 'url(/dashboard/hero-dark.webp)' }} aria-hidden="true" />
+      <div className="tp-head-img tp-head-light" style={{ backgroundImage: 'url(/dashboard/hero-light.webp)' }} aria-hidden="true" />
+      <div className="tp-head-copy">
+        <h1>Tyre Passport</h1>
+        {!serial && <p className="tp-lead">Look up any tyre serial for its full whole-life record: health, wear, cost per km, movements, service, warranty and data quality.</p>}
+      </div>
       {serial && (
-        <>
-          <Card><SearchBox country={activeCountry} onPick={(sn) => navigate(`/tyre-passport/${encodeURIComponent(sn)}`)} /></Card>
-
-          {loading ? (
-            <Card className="animate-pulse h-40" role="status" aria-label="Loading the tyre passport" />
-          ) : error ? (
-            <Card tone="crit">
-              <div className="flex items-start gap-[var(--space-3)]">
-                <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-                <div className="flex-1">
-                  <p className="text-red-300 font-medium" role="alert">Could not load this tyre.</p>
-                  <p className="text-[var(--text-muted)] text-sm mt-1">{error} Nothing is shown until it loads, so a failed read is never mistaken for a tyre with no history.</p>
-                  <button onClick={() => load(serial)} className="btn-secondary text-sm min-h-[44px] inline-flex items-center gap-1.5 mt-3"><RefreshCw size={14} aria-hidden="true" /> Retry</button>
-                </div>
-              </div>
-            </Card>
-          ) : !passport ? (
-            // Card sets `padding` inline, so `py-12` would be dead here and this
-            // empty state would silently collapse. Tokens, applied inline.
-            <Card className="text-center space-y-2" style={{ paddingTop: 'var(--space-12)', paddingBottom: 'var(--space-12)' }}>
-              <Package size={30} className="mx-auto text-[var(--text-muted)]" />
-              <p className="text-[var(--text-primary)] font-semibold">No records for {serial}.</p>
-              <p className="text-sm text-[var(--text-muted)]">Check the serial or try a different one.</p>
-            </Card>
-          ) : (
-            <>
-              {/* Identity + health header */}
-              <Card>
-                <div className="flex items-start justify-between gap-4 flex-wrap">
-                  <div className="flex items-start gap-5">
-                    <HealthRing score={passport.health.overall} risk={passport.health.risk} />
-                    <div>
-                      <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Serial</p>
-                      <p className="text-2xl font-bold font-mono text-[var(--text-primary)]">{passport.serial || NA}</p>
-                      <p className="text-sm text-[var(--text-muted)] mt-1">{[passport.brand, passport.size, passport.supplier].filter(Boolean).join(' / ') || 'No brand/size on record'}</p>
-                      <div className="flex items-center gap-2 mt-2 flex-wrap">
-                        <span className={`text-xs px-2 py-0.5 rounded-full border ${(RISK_META[passport.health.risk] || RISK_META.unknown).cls}`}>{(RISK_META[passport.health.risk] || RISK_META.unknown).label}</span>
-                        <span className={`text-xs px-2.5 py-1 rounded ${STATUS_TONE(passport.status)}`}>{String(passport.status || 'unknown').replace(/_/g, ' ')}</span>
-                        {passport.statusMarks.map((m) => (
-                          <span key={m} className="text-xs px-2 py-0.5 rounded-full border border-red-500/40 bg-red-500/10 text-red-300">{String(m).replace(/_/g, ' ')}</span>
-                        ))}
-                      </div>
-                      <div className="flex items-center gap-x-4 gap-y-1 mt-2 text-xs text-[var(--text-muted)] flex-wrap">
-                        <span className="flex items-center gap-1"><Calendar size={12} /> First fitted {dateTxt(passport.firstFittedDate)}</span>
-                        <span className="flex items-center gap-1"><Clock size={12} /> Age {passport.ageDays == null ? NA : `${passport.ageDays.toLocaleString()} days`}</span>
-                        {passport.currentAssetNo ? (
-                          <span className="flex items-center gap-1">
-                            <Truck size={12} /> On
-                            <Link to={`/asset-management/${encodeURIComponent(passport.currentAssetNo)}`} className="font-mono text-[var(--brand-bright)] hover:underline">{passport.currentAssetNo}</Link>
-                            {passport.currentPosition && <span>pos {passport.currentPosition}</span>}
-                          </span>
-                        ) : (
-                          <span className="flex items-center gap-1"><MapPin size={12} /> Not currently fitted</span>
-                        )}
-                        <span className="flex items-center gap-1"><Recycle size={12} /> {passport.rotationCount} rotation(s)</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 min-w-[220px]">
-                    {kpis.map((k) => {
-                      const Icon = k.icon
-                      return (
-                        <div key={k.label} className="rounded-lg bg-[var(--input-bg)]/50 p-3">
-                          <div className="flex items-center justify-between"><span className="text-xs text-[var(--text-muted)]">{k.label}</span><Icon size={14} className="text-[var(--text-muted)]" /></div>
-                          <p className="text-lg font-bold text-[var(--text-primary)] mt-0.5">{k.value}</p>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-                {passport.assets.length > 0 && (
-                  <p className="text-xs text-[var(--text-muted)] mt-3 flex items-center gap-1.5 flex-wrap">
-                    <Truck size={12} /> Ran on:
-                    {passport.assets.map((a) => (
-                      <Link key={a} to={`/asset-management/${encodeURIComponent(a)}`} className="font-mono text-[var(--text-secondary)] hover:text-[var(--brand-bright)] hover:underline">{a}</Link>
-                    ))}
-                  </p>
-                )}
-              </Card>
-
-              {/* Tabs */}
-              <div role="tablist" aria-label="Passport sections" className="flex items-center gap-1 border-b border-[var(--input-border)] overflow-x-auto">
-                {TABS.map((t) => {
-                  const Icon = t.icon
-                  const active = tab === t.key
-                  const badge = t.key === 'service' ? passport.serviceEvents.length
-                    : t.key === 'warranty' ? passport.warranty.length
-                    : t.key === 'quality' ? passport.dataQuality.length : 0
-                  return (
-                    <button
-                      key={t.key}
-                      role="tab"
-                      aria-selected={active}
-                      onClick={() => setTab(t.key)}
-                      className={`inline-flex items-center gap-1.5 px-3 min-h-[44px] text-sm border-b-2 -mb-px whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-bright)] rounded-t ${active ? 'border-[var(--brand-bright)] text-[var(--text-primary)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
-                    >
-                      <Icon size={14} aria-hidden="true" /> {t.label}
-                      {badge > 0 && <span aria-label={`${badge} items`} className={`ml-0.5 text-[10px] px-1.5 py-0.5 rounded-full ${t.key === 'quality' ? 'bg-amber-500/20 text-amber-300' : 'bg-[var(--input-bg)] text-[var(--text-muted)]'}`}>{badge}</span>}
-                    </button>
-                  )
-                })}
-              </div>
-
-              {/* Overview */}
-              {tab === 'overview' && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-[var(--gap-grid)]">
-                  <Card>
-                    {/* The description is an honesty affordance: it says what the
-                        score does NOT know. Kept verbatim. */}
-                    <CardHeader
-                      level={2}
-                      icon={HeartPulse}
-                      title="Health breakdown"
-                      description={'Weighted 0 to 100 score. Signals without a source in this dataset are shown as "no data" and use a neutral baseline.'}
-                    />
-                    <div className="space-y-3">
-                      {Object.entries(passport.health.components).map(([key, c]) => (
-                        <ScoreBar key={key} label={COMPONENT_LABELS[key] || key} score={c.score} hasData={c.hasData} />
-                      ))}
-                    </div>
-                  </Card>
-
-                  <Card>
-                    <CardHeader level={2} icon={TrendingDown} title="Wear intelligence" />
-                    <div className="grid grid-cols-2 gap-3">
-                      {[
-                        { label: 'Tread remaining', value: passport.wear.treadRemainingPct == null ? NA : `${passport.wear.treadRemainingPct}%` },
-                        { label: 'Current tread', value: passport.wear.currentTread == null ? NA : `${passport.wear.currentTread} mm` },
-                        { label: 'Wear rate', value: passport.wear.wearRatePer1000Km == null ? NA : `${passport.wear.wearRatePer1000Km} mm/1000km` },
-                        { label: 'Readings', value: passport.wear.readingCount },
-                      ].map((m) => (
-                        <div key={m.label} className="rounded-lg bg-[var(--input-bg)]/50 p-3">
-                          <p className="text-xs text-[var(--text-muted)]">{m.label}</p>
-                          <p className="text-lg font-bold text-[var(--text-primary)] mt-0.5">{m.value}</p>
-                        </div>
-                      ))}
-                    </div>
-                    {passport.wear.readingCount <= 1 && (
-                      <p className="text-[11px] text-[var(--text-muted)] mt-3">Wear rate needs at least two tread readings over distance; only {passport.wear.readingCount} reading available.</p>
-                    )}
-                  </Card>
-
-                  {/* Predictions */}
-                  <Card>
-                    <CardHeader level={2} icon={Activity} title="Predictions" />
-                    <div className="grid grid-cols-2 gap-3">
-                      {[
-                        { label: 'Projected life left', value: passport.predictions.projectedRemainingKm == null ? NA : `${passport.predictions.projectedRemainingKm.toLocaleString()} km` },
-                        { label: 'Projected replacement', value: dateTxt(passport.predictions.projectedReplacementDate) },
-                      ].map((m) => (
-                        <div key={m.label} className="rounded-lg bg-[var(--input-bg)]/50 p-3">
-                          <p className="text-xs text-[var(--text-muted)]">{m.label}</p>
-                          <p className="text-base font-bold text-[var(--text-primary)] mt-0.5">{m.value}</p>
-                        </div>
-                      ))}
-                    </div>
-                    <p className="text-[11px] text-[var(--text-muted)] mt-3">
-                      {passport.scrapped
-                        ? 'This tyre is removed / scrapped, so no forward projection is made.'
-                        : 'Projections are computed only from the observed wear rate and average daily distance; they are omitted (N/A) when not derivable.'}
-                    </p>
-                  </Card>
-
-                  {/* Cost breakdown */}
-                  <Card>
-                    <CardHeader level={2} icon={DollarSign} title="Cost breakdown" />
-                    <div className="space-y-2 text-sm">
-                      {[
-                        ['Purchase', passport.costBreakdown.purchase],
-                        ['Service and repairs', passport.costBreakdown.service],
-                        ['Recovered (warranty / retread)', passport.costBreakdown.recovered == null ? null : -passport.costBreakdown.recovered],
-                      ].map(([label, v]) => (
-                        <div key={label} className="flex items-center justify-between">
-                          <span className="text-[var(--text-secondary)]">{label}</span>
-                          <span className={`font-medium ${typeof v === 'number' && v < 0 ? 'text-emerald-400' : 'text-[var(--text-primary)]'}`}>{v == null ? NA : moneyFull(v)}</span>
-                        </div>
-                      ))}
-                      <div className="flex items-center justify-between border-t border-[var(--input-border)] pt-2 mt-1">
-                        <span className="text-[var(--text-primary)] font-semibold">Net lifetime cost</span>
-                        <span className="text-[var(--text-primary)] font-bold">{moneyFull(passport.costBreakdown.netLifetime)}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-[var(--text-secondary)]">Net CPK</span>
-                        <span className="text-[var(--text-primary)] font-medium">{passport.costBreakdown.netCpk == null ? NA : passport.costBreakdown.netCpk}</span>
-                      </div>
-                    </div>
-                  </Card>
-
-                  {/* Lifecycle statistics */}
-                  <Card className="lg:col-span-2">
-                    <CardHeader level={2} icon={Layers} title="Lifecycle statistics" />
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                      {[
-                        { label: 'Records', value: passport.stats.recordCount, icon: Package },
-                        { label: 'Vehicles', value: passport.distinctVehicles, icon: Truck },
-                        { label: 'Positions', value: passport.stats.positionsServed, icon: MapPin },
-                        { label: 'Km earned', value: kmTxt(passport.stats.kmEarned || null), icon: Gauge },
-                        { label: 'Repairs', value: passport.stats.repairCount, icon: Wrench },
-                        { label: 'Last pressure', value: passport.stats.lastPressure == null ? NA : `${passport.stats.lastPressure} psi`, icon: Gauge },
-                      ].map((s) => {
-                        const Icon = s.icon
-                        return (
-                          <div key={s.label} className="rounded-lg bg-[var(--input-bg)]/50 p-3">
-                            <div className="flex items-center justify-between"><span className="text-xs text-[var(--text-muted)]">{s.label}</span><Icon size={13} className="text-[var(--text-muted)]" /></div>
-                            <p className="text-base font-bold text-[var(--text-primary)] mt-0.5">{s.value}</p>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </Card>
-                </div>
-              )}
-
-              {/* Journey. `pad="none"` for the edge-to-edge table, but NO `clip`:
-                  TablePagination carries a native rows-per-page <select>. */}
-              {tab === 'journey' && (
-                <Card>
-                  <CardHeader
-                    level={2}
-                    icon={Milestone}
-                    title="Cross-vehicle journey"
-                    description={`${journeyStats.stints} stint(s) across ${passport.distinctVehicles} vehicle(s). Average ${journeyStats.avgKmPerStint == null ? NA : `${journeyStats.avgKmPerStint.toLocaleString()} km`} per measured stint (${journeyStats.measuredStints} of ${journeyStats.stints} have distance).`}
-                  />
-                  <EnterpriseTable
-                    columns={journeyColumns}
-                    data={journeyRows}
-                    getRowId={(r, i) => String(r.id ?? i)}
-                    enableColumnFilters={false}
-                    searchPlaceholder="Search asset, site or reason"
-                    exportFileName={`Tyre Passport ${passport.serial} journey`}
-                    emptyMessage="No stint history on record."
-                  />
-                </Card>
-              )}
-
-              {/* Wear curve. Padded, so the canvas never reaches the radius and
-                  `clip` would only arm the clipping hazard for a later menu. */}
-              {tab === 'wear' && (
-                <Card>
-                  <CardHeader
-                    level={2}
-                    icon={BarChart3}
-                    title="Tread depth over time"
-                    description="Combines tread readings from fitment records and service events."
-                  />
-                  {wearChart ? (
-                    <div className="h-72"><Line data={wearChart.data} options={wearChart.options} /></div>
-                  ) : (
-                    <Empty icon={BarChart3} title="No tread readings recorded for this tyre yet." />
-                  )}
-                </Card>
-              )}
-
-              {/* Service & repairs */}
-              {tab === 'service' && (
-                <Card>
-                  <CardHeader level={2} icon={Wrench} title="Service and repair history" description={`${passport.serviceEvents.length} event(s) recorded against this serial.`} />
-                  <EnterpriseTable
-                    columns={serviceColumns}
-                    data={passport.serviceEvents}
-                    getRowId={(r, i) => String(r.id ?? i)}
-                    enableColumnFilters={false}
-                    searchPlaceholder="Search type, asset or technician"
-                    exportFileName={`Tyre Passport ${passport.serial} service`}
-                    emptyMessage="No service or repair events recorded for this tyre."
-                  />
-                </Card>
-              )}
-
-              {/* Warranty */}
-              {tab === 'warranty' && (
-                <div className="space-y-6">
-                  <Card>
-                    <CardHeader level={2} icon={ShieldCheck} title="Warranty claims" />
-                    <EnterpriseTable
-                      columns={warrantyColumns}
-                      data={passport.warranty}
-                      getRowId={(r, i) => String(r.id ?? i)}
-                      enableColumnFilters={false}
-                      enableGlobalFilter={passport.warranty.length > 10}
-                      exportFileName={`Tyre Passport ${passport.serial} warranty`}
-                      emptyMessage="No warranty claims recorded for this tyre."
-                    />
-                  </Card>
-
-                  {passport.retreadClaims.length > 0 && (
-                    <Card>
-                      <CardHeader level={2} icon={Recycle} title="Retread claims" />
-                      <EnterpriseTable
-                        columns={retreadColumns}
-                        data={passport.retreadClaims}
-                        getRowId={(r, i) => String(r.id ?? i)}
-                        enableColumnFilters={false}
-                        enableGlobalFilter={passport.retreadClaims.length > 10}
-                        exportFileName={`Tyre Passport ${passport.serial} retread`}
-                        emptyMessage="No retread claims."
-                      />
-                    </Card>
-                  )}
-                </div>
-              )}
-
-              {/* Data quality. This whole tab is an honesty affordance: it reports
-                  what is NOT known about the tyre. Content unchanged. */}
-              {tab === 'quality' && (
-                <Card>
-                  <CardHeader level={2} icon={ClipboardCheck} title="Data quality audit" />
-                  {passport.dataQuality.length === 0 ? (
-                    <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
-                      <CheckCircle2 size={16} /> All checks passed. No data-quality issues detected for this tyre.
-                    </div>
-                  ) : (
-                    <ul className="space-y-3">
-                      {passport.dataQuality.map((w, i) => (
-                        <li key={i} className={`flex items-start gap-3 rounded-lg border px-4 py-3 text-sm ${SEV_TONE[w.severity] || SEV_TONE.low}`}>
-                          <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-                          <div>
-                            <p className="font-medium capitalize">{String(w.severity)} severity</p>
-                            <p className="opacity-90 mt-0.5">{w.message}</p>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  <p className="text-[11px] text-[var(--text-muted)] mt-4">Checks: impossible cross-vehicle date overlap, tread readings that increase over time, and stints missing fitment or removal odometer.</p>
-                </Card>
-              )}
-            </>
-          )}
-        </>
+        <div className="tp-head-actions">
+          <button type="button" className="cc-btn-ghost" onClick={() => navigate('/tyre-passport')}><ArrowLeft size={14} aria-hidden="true" /> Back to Tyre Passport</button>
+          <MoreMenu items={menuItems} />
+          <button type="button" className="cc-btn-primary" onClick={exportPdf} disabled={!passport}><FileDown size={14} aria-hidden="true" /> Export PDF</button>
+        </div>
       )}
+    </header>
+  )
+
+  return (
+    <div className="cc tp">
+      {heading}
+
+      {!serial && (
+        <section className="cc-card tp-lookup" aria-label="Find a tyre">
+          <h2 className="cc-card-title">Find a tyre</h2>
+          <p className="cc-card-sub">Enter or scan a serial number to open its passport.</p>
+          <SearchBox country={activeCountry} autoFocus onPick={(sn) => navigate(`/tyre-passport/${encodeURIComponent(sn)}`)} />
+        </section>
+      )}
+
+      {!!bundle?.unavailableSources?.length && (
+        <p role="alert" className="tp-alert">Some history could not be loaded: {bundle.unavailableSources.join(', ')}. This passport is incomplete; refresh to try again.</p>
+      )}
+
+      {serial && (loading ? (
+        <div className="cc-card" role="status" aria-label="Loading the tyre passport">
+          <div className="cc-skel" style={{ height: 150 }} />
+        </div>
+      ) : error ? (
+        <div className="cc-card tp-error" role="alert">
+          <AlertTriangle size={18} aria-hidden="true" />
+          <div>
+            <p className="tp-strong">Could not load this tyre.</p>
+            <p className="tp-muted tp-small">{error} Nothing is shown until it loads, so a failed read is never mistaken for a tyre with no history.</p>
+            <button type="button" onClick={() => load(serial)} className="cc-btn tp-mt"><RefreshCw size={13} aria-hidden="true" /> Retry</button>
+          </div>
+        </div>
+      ) : !passport ? (
+        <div className="cc-card">
+          <Empty icon={Package} title={`No records for ${serial}.`} sub="Check the serial or try a different one." />
+        </div>
+      ) : (
+        <>
+          {/* Identity */}
+          <section className="cc-card tp-id" aria-label="Tyre identity">
+            <div className="tp-id-art">
+              <TyreTreadImage variant="hero" width={186} size={passport.size}
+                position={passport.currentPosition || lastPositionEvent?.position} catalogue={catEntry} />
+              <SerialQr serial={passport.serial} />
+            </div>
+            <div className="tp-id-main">
+              <span className="tp-eyebrow">Tyre serial / ID</span>
+              <div className="tp-serial tp-mono">{passport.serial || NA}</div>
+              <div className="tp-specs">
+                <div className="tp-brand">{passport.brand || <span className="cc-na">No brand on record</span>}</div>
+                <div className="tp-spec"><span>Size</span><b>{passport.size || NA}</b></div>
+                <div className="tp-spec"><span>Supplier</span><b>{passport.supplier || NA}</b></div>
+                <div className="tp-spec"><span>First fitted</span><b>{dateTxt(passport.firstFittedDate)}</b></div>
+                <div className="tp-spec" title={catEntry ? 'From the tyre catalogue entry for this brand and size.' : 'Pattern, load and speed index are read from the tyre catalogue. The DOT date is not captured on tyre records.'}>
+                  <span>Pattern</span>
+                  {catalogue.loading ? <b className="cc-na">Checking</b>
+                    : catalogue.error ? <b className="cc-na">Could not check <button type="button" className="tp-link" onClick={() => setCatalogueNonce((n) => n + 1)}>Retry</button></b>
+                      : catEntry?.pattern ? <b>{catEntry.pattern}</b>
+                        : <b className="cc-na">{catEntry ? 'Not recorded' : 'Not in the catalogue'}</b>}
+                </div>
+                <div className="tp-spec"><span>Load / speed</span><b className={catEntry && (catEntry.load_index_single || catEntry.speed_rating) ? '' : 'cc-na'}>{specLoad(catEntry)}</b></div>
+              </div>
+            </div>
+            <div className="tp-id-side">
+              <div className={`tp-status ${statusTone(passport.status)}`}>
+                <span className="tp-eyebrow">Current status</span>
+                <div className="tp-status-val"><i className={`tp-dot ${statusTone(passport.status)}`} aria-hidden="true" />{statusText(passport.status)}</div>
+                <div className="tp-small tp-muted">{statusNote}{passport.statusMarks.length ? `, marked ${passport.statusMarks.map((m) => String(m).replace(/_/g, ' ')).join(', ')}` : ''}</div>
+              </div>
+              <div className="tp-veh">
+                <div className="tp-veh-cell">
+                  {passport.currentAssetNo ? (
+                    <Link to={assetHref(passport.currentAssetNo)} className="tp-veh-link">
+                      <VehicleThumb row={asset || { asset_no: passport.currentAssetNo }} size="md" />
+                      <span>
+                        <span className="tp-small tp-muted">Vehicle / asset</span>
+                        <b>{passport.currentAssetNo}</b>
+                        <span className="tp-small tp-muted">{asset ? [asset.make, asset.model].filter(Boolean).join(' ') || asset.vehicle_type || 'Make and model not recorded' : 'Make and model not loaded'}</span>
+                      </span>
+                    </Link>
+                  ) : (
+                    <span className="tp-veh-link">
+                      <span className="cc-thumb cc-thumb-md"><Truck size={18} aria-hidden="true" /></span>
+                      <span><span className="tp-small tp-muted">Vehicle / asset</span><b>Not currently fitted</b>
+                        {lastPositionEvent?.asset_no && <span className="tp-small tp-muted">Last on {lastPositionEvent.asset_no}</span>}</span>
+                    </span>
+                  )}
+                </div>
+                <div className="tp-veh-cell">
+                  <span className="tp-pos-icon"><MapPin size={20} aria-hidden="true" /></span>
+                  <span>
+                    <span className="tp-small tp-muted">Fitted position</span>
+                    <b>{passport.currentPosition || NA}</b>
+                    {!passport.currentPosition && lastPositionEvent?.position && <span className="tp-small tp-muted">Last at {lastPositionEvent.position}</span>}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Metric cards */}
+          <div className="tp-metrics">
+            <Metric icon={Ruler} tone="green" label="Tread depth" value={tread.current == null ? NA : tread.current} unit="mm"
+              title={tread.current == null ? 'No tread reading recorded for this tyre.' : 'Latest tread reading. The share is of usable tread above the 3 mm scrap limit.'}
+              foot={tread.pct == null ? (tread.current == null ? 'No reading recorded' : null) : `${Math.round(tread.pct)}% of usable tread left${tread.assumed ? ` (new tread assumed ${tread.initial} mm)` : ` (new ${tread.initial} mm)`}`}
+              onClick={() => setTab('inspections')}>
+              <Bar pct={tread.pct} tone={tread.pct == null ? undefined : tread.pct >= 50 ? 'var(--cc-green)' : tread.pct >= 25 ? 'var(--cc-amber)' : 'var(--cc-red)'} />
+            </Metric>
+            <Metric icon={Gauge} tone="amber" label="Tyre pressure" value={pressure.value == null ? NA : pressure.value} unit="psi"
+              title="Latest recorded pressure. No per-tyre target pressure is stored, so none is compared."
+              foot={pressure.value == null ? 'No reading recorded' : `No target on record. ${pressure.source}, ${dateTxt(pressure.date)}`}
+              onClick={() => setTab('inspections')} />
+            <Metric icon={Calendar} tone="amber" label="Tyre age" value={months == null ? NA : months} unit={months === 1 ? 'month' : 'months'}
+              title="Measured from the first fitment date. The manufacture (DOT) date is not recorded."
+              foot={passport.firstFittedDate ? `Since first fitted ${dateTxt(passport.firstFittedDate)}` : 'No fitment date recorded'}
+              onClick={() => setTab('timeline')} />
+            <Metric icon={Milestone} tone="green" label="Kilometers run" value={km.km == null ? NA : km.km.toLocaleString('en-US')} unit="km"
+              title={km.estLife ? 'Expected life is estimated from the observed wear rate.' : 'An expected life needs two tread readings over distance.'}
+              foot={km.estLife ? `Est. life ${km.estLife.toLocaleString('en-US')} km, ${km.pct}% used` : (km.km == null ? 'No distance recorded' : 'Expected life not computable')}
+              onClick={() => setTab('movement')}>
+              <Bar pct={km.pct} />
+            </Metric>
+            <Metric icon={Coins} tone="blue" label="Cost per km" value={cur.mixed || passport.costBreakdown.cpk == null ? NA : `${cur.currency || ''} ${passport.costBreakdown.cpk}`.trim()}
+              title={cur.mixed ? 'Records span more than one country, so costs are in different currencies and are not combined.' : 'Lifetime cost (purchase plus service) divided by kilometers run.'}
+              foot={cur.mixed ? 'Costs in more than one currency' : `Total cost ${moneyFull(passport.costBreakdown.lifetime || null)}`}
+              onClick={() => setTab('service')}>
+              <Spark values={cur.mixed ? [] : spark} />
+            </Metric>
+            <div className="cc-card tp-metric tp-health" title={`${cov.measured} of ${cov.total} health signals are measured; the rest use a neutral baseline.`}>
+              <HealthRing score={passport.health.overall} risk={passport.health.risk} />
+              <div className="tp-metric-body">
+                <div className="tp-metric-label">Health score</div>
+                <div className="tp-metric-val">{passport.health.overall ?? NA}<small> / 100</small></div>
+                <div className="tp-metric-foot" style={{ color: RING[passport.health.risk] }}>{healthLabel(passport.health.risk)}</div>
+                <div className="tp-metric-foot">{cov.measured} of {cov.total} signals measured</div>
+              </div>
+            </div>
+          </div>
+
+          <Tabs variant="line" label="Passport sections" value={tab} onChange={setTab}
+            tabs={TABS.map((t) => ({
+              ...t,
+              count: t.key === 'service' ? passport.serviceEvents.length || null
+                : t.key === 'warranty' ? passport.warranty.length || null
+                : t.key === 'quality' ? passport.dataQuality.length || null
+                : t.key === 'inspections' ? inspectionRows.length || null : null,
+              countTone: t.key === 'quality' ? 'warn' : undefined,
+            }))} />
+
+          {tab === 'overview' && (
+            <div className="tp-grid">
+              <section className="cc-card tp-a-details" aria-label="Tyre details">
+                <div className="cc-card-head"><h2 className="cc-card-title">Tyre details</h2></div>
+                <dl className="tp-dl">
+                  {detailRows.map(([k, v]) => (<div key={k}><dt>{k}</dt><dd>{v}</dd></div>))}
+                </dl>
+              </section>
+
+              <div className="tp-col">
+              <section className="cc-card tp-a-life" aria-label="Lifecycle timeline">
+                <div className="cc-card-head"><h2 className="cc-card-title">Lifecycle timeline</h2><ViewAll label="View full timeline" onClick={() => setTab('timeline')} /></div>
+                <ol className="tp-steps">
+                  {steps.map((s) => (
+                    <li key={s.key} className={`tp-step ${s.state}`}>
+                      <span className="tp-step-dot" aria-hidden="true">{s.state === 'done' || s.state === 'current' ? <CheckCircle2 size={16} /> : null}</span>
+                      <b>{s.label}</b>
+                      {s.date && <span>{dateTxt(s.date)}</span>}
+                      {s.sub && <span>{s.sub}</span>}
+                    </li>
+                  ))}
+                </ol>
+              </section>
+
+              <section className="cc-card tp-a-insp" aria-label="Latest inspection summary">
+                <div className="cc-card-head"><h2 className="cc-card-title">Latest inspection summary</h2><ViewAll label="View all inspections" onClick={() => setTab('inspections')} /></div>
+                {insp.error ? <div className="cc-empty" role="alert">{insp.error}</div> : insp.loading ? <div className="cc-skel" style={{ height: 90 }} /> : (
+                  <KitTable compact empty="No inspection has recorded a reading for this tyre."
+                    getRowId={(r) => String(r.id)}
+                    rows={inspectionRows.slice(0, 5)}
+                    columns={[
+                      { key: 'date', header: 'Date', cell: (r) => dateTxt(r.date) },
+                      { key: 'site', header: 'Location', cell: (r) => r.site || NA },
+                      { key: 'tread', header: 'Tread (mm)', cell: (r) => r.tread ?? NA },
+                      { key: 'pressure', header: 'Pressure (psi)', cell: (r) => r.pressure ?? NA },
+                      { key: 'condition', header: 'Condition', cell: (r) => (r.condition ? pill(CONDITION_TONE(r.condition), r.condition) : NA) },
+                      { key: 'inspector', header: 'Inspector', cell: (r) => r.inspector || NA },
+                      { key: 'findings', header: 'Findings', cell: (r) => <span className="tp-trunc">{r.findings || NA}</span> },
+                    ]} />
+                )}
+              </section>
+
+              <section className="cc-card tp-a-svc" aria-label="Service and repair history">
+                <div className="cc-card-head"><h2 className="cc-card-title">Service and repair history</h2><ViewAll label="View all service history" onClick={() => setTab('service')} /></div>
+                <KitTable compact empty="No service or repair events recorded for this tyre."
+                  getRowId={(e) => String(e.id)}
+                  rows={passport.serviceEvents.slice(0, 4)}
+                  columns={[
+                    { key: 'date', header: 'Date', cell: (e) => dateTxt(e.date) },
+                    { key: 'type', header: 'Type', cell: (e) => pill(EVENT_TONE(e.type), statusText(e.type)) },
+                    { key: 'site', header: 'Workshop', cell: (e) => e.site || NA },
+                    { key: 'notes', header: 'Description', cell: (e) => <span className="tp-trunc">{e.notes || NA}</span> },
+                    { key: 'cost', header: 'Cost', cell: (e) => moneyFull(e.cost) },
+                    { key: 'technician', header: 'Performed by', cell: (e) => e.technician || NA },
+                  ]} />
+              </section>
+
+              </div>
+              <div className="tp-col">
+              <section className="cc-card tp-a-move" aria-label="Fitment and movement history">
+                <div className="cc-card-head"><h2 className="cc-card-title">Fitment and movement history</h2><ViewAll onClick={() => setTab('movement')} /></div>
+                <KitTable compact empty="No fitment history on record."
+                  getRowId={(m) => String(m.id)}
+                  rows={movement.slice(0, 5)}
+                  onRowClick={(m) => { if (m?.asset_no) navigate(assetHref(m.asset_no)) }}
+                  columns={[
+                    { key: 'date', header: 'Date', cell: (m) => dateTxt(m.date) },
+                    { key: 'asset_no', header: 'Asset', cell: (m) => assetLink(m.asset_no) },
+                    { key: 'position', header: 'Position', cell: (m) => m.position || NA },
+                    { key: 'odometer', header: 'Odometer', cell: (m) => kmTxt(m.odometer) },
+                    { key: 'action', header: 'Action', cell: (m) => pill(m.current ? 'good' : ACTION_TONE[m.action] || 'muted', m.current ? 'In service' : m.action) },
+                  ]} />
+              </section>
+
+              <section className="cc-card tp-a-war" aria-label="Warranty status">
+                <div className="cc-card-head"><h2 className="cc-card-title">Warranty status</h2><ViewAll onClick={() => setTab('warranty')} /></div>
+                {warranty.latest ? (
+                  <div className="tp-war">
+                    <span className="tp-war-icon"><ShieldCheck size={22} aria-hidden="true" /></span>
+                    <div>
+                      <b>{statusText(warranty.latest.status)}</b>
+                      <div className="tp-small tp-muted">Claim {warranty.latest.claim_no || NA}{warranty.count > 1 ? `, ${warranty.count} claims in total` : ''}</div>
+                      <dl className="tp-dl tp-dl-tight">
+                        <div><dt>Failure type</dt><dd>{warranty.latest.failure_type || NA}</dd></div>
+                        <div><dt>Supplier</dt><dd>{warranty.latest.supplier || NA}</dd></div>
+                        <div><dt>Credit</dt><dd>{moneyFull(warranty.latest.credit_amount)}</dd></div>
+                      </dl>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="tp-war">
+                    <span className="tp-war-icon muted"><ShieldCheck size={22} aria-hidden="true" /></span>
+                    <div><b>No warranty claim on record</b><div className="tp-small tp-muted">Warranty terms and expiry are not stored per tyre, so coverage cannot be shown.</div></div>
+                  </div>
+                )}
+              </section>
+
+              <section className="cc-card tp-a-docs" aria-label="Attached documents">
+                <div className="cc-card-head"><h2 className="cc-card-title">Attached documents</h2><ViewAll onClick={() => setTab('documents')} /></div>
+                <div className="cc-empty tp-small"><div><FileText size={20} aria-hidden="true" /><br />No documents are attached to this tyre.</div></div>
+              </section>
+              </div>
+            </div>
+          )}
+
+          {tab === 'timeline' && (
+            <section className="cc-card" aria-label="Lifecycle timeline">
+              <div className="cc-card-head"><div><h2 className="cc-card-title">Lifecycle timeline</h2><p className="cc-card-sub">Every fitment, movement, removal, service event, warranty claim and inspection recorded for this tyre, newest first.</p></div></div>
+              <ol className="tp-steps tp-steps-wide">
+                {steps.map((s) => (
+                  <li key={s.key} className={`tp-step ${s.state}`}>
+                    <span className="tp-step-dot" aria-hidden="true">{s.state !== 'future' ? <CheckCircle2 size={16} /> : null}</span>
+                    <b>{s.label}</b>{s.date && <span>{dateTxt(s.date)}</span>}{s.sub && <span>{s.sub}</span>}
+                  </li>
+                ))}
+              </ol>
+              {timeline.length === 0 ? <Empty icon={History} title="Nothing recorded yet." /> : (
+                <ul className="tp-feed">
+                  {timeline.map((e) => (
+                    <li key={e.id} className={`tp-feed-${e.kind}`}>
+                      <i aria-hidden="true" />
+                      <div><b>{statusText(e.title)}</b>{e.detail && <span className="tp-muted"> {e.detail}</span>}</div>
+                      <time className="tp-muted tp-small">{dateTxt(e.date)}</time>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
+
+          {tab === 'inspections' && (
+            <div className="tp-stack">
+              <section className="cc-card" aria-label="Inspection history">
+                <div className="cc-card-head"><div><h2 className="cc-card-title">Inspection history</h2>
+                  <p className="cc-card-sub">Inspections that name this serial, or that recorded this tyre's asset and position while it was fitted.{insp.truncated ? ' The inspection read reached its row limit, so older inspections may be missing.' : ''}</p></div></div>
+                {insp.error ? <div className="cc-empty" role="alert">{insp.error}</div> : (
+                  <EnterpriseTable columns={inspectionColumns} data={inspectionRows} getRowId={(r, i) => String(r.id ?? i)}
+                    enableColumnFilters={false} searchPlaceholder="Search asset, inspector or findings"
+                    exportFileName={`Tyre Passport ${passport.serial} inspections`}
+                    emptyMessage={insp.loading ? 'Loading inspections...' : 'No inspection has recorded a reading for this tyre.'} />
+                )}
+              </section>
+              <section className="cc-card" aria-label="Tread depth over time">
+                <div className="cc-card-head"><div><h2 className="cc-card-title">Tread depth over time</h2><p className="cc-card-sub">Tread readings from fitment records and service events.</p></div></div>
+                <div className="tp-wear-stats">
+                  <div><span>Tread remaining</span><b>{passport.wear.treadRemainingPct == null ? NA : `${passport.wear.treadRemainingPct}%`}</b></div>
+                  <div><span>Wear rate</span><b>{passport.wear.wearRatePer1000Km == null ? NA : `${passport.wear.wearRatePer1000Km} mm per 1,000 km`}</b></div>
+                  <div><span>Projected life left</span><b>{passport.predictions.projectedRemainingKm == null ? NA : kmTxt(passport.predictions.projectedRemainingKm)}</b></div>
+                  <div><span>Readings</span><b>{passport.wear.readingCount}</b></div>
+                </div>
+                {wearChart ? <div className="tp-chart"><Line data={wearChart.data} options={wearChart.options} /></div>
+                  : <Empty icon={BarChart3} title="No tread readings recorded for this tyre yet." />}
+              </section>
+            </div>
+          )}
+
+          {tab === 'service' && (
+            <section className="cc-card" aria-label="Service and repair history">
+              <div className="cc-card-head"><div><h2 className="cc-card-title">Service and repair history</h2><p className="cc-card-sub">{passport.serviceEvents.length} event(s) recorded against this serial.</p></div></div>
+              <EnterpriseTable columns={serviceColumns} data={passport.serviceEvents} getRowId={(r, i) => String(r.id ?? i)}
+                enableColumnFilters={false} searchPlaceholder="Search type, asset or technician"
+                exportFileName={`Tyre Passport ${passport.serial} service`}
+                emptyMessage="No service or repair events recorded for this tyre." />
+              <div className="tp-cost">
+                {[
+                  ['Purchase', moneyFull(passport.costBreakdown.purchase || null)],
+                  ['Service and repairs', moneyFull(passport.costBreakdown.service)],
+                  ['Recovered (warranty and retread)', moneyFull(passport.costBreakdown.recovered)],
+                  ['Net lifetime cost', moneyFull(passport.costBreakdown.netLifetime)],
+                  ['Net cost per km', passport.costBreakdown.netCpk == null || cur.mixed ? NA : `${cur.currency || ''} ${passport.costBreakdown.netCpk}`.trim()],
+                ].map(([k, v]) => <div key={k}><span>{k}</span><b>{v}</b></div>)}
+              </div>
+            </section>
+          )}
+
+          {tab === 'movement' && (
+            <section className="cc-card" aria-label="Fitment and movement history">
+              <div className="cc-card-head"><div><h2 className="cc-card-title">Fitment and movement history</h2>
+                <p className="cc-card-sub">{journeyStats.stints} stint(s) across {passport.distinctVehicles} vehicle(s). Average {journeyStats.avgKmPerStint == null ? NA : `${journeyStats.avgKmPerStint.toLocaleString()} km`} per measured stint ({journeyStats.measuredStints} of {journeyStats.stints} have distance).</p></div></div>
+              <EnterpriseTable columns={journeyColumns} data={journeyRows} getRowId={(r, i) => String(r.id ?? i)}
+                enableColumnFilters={false} searchPlaceholder="Search asset, site or reason"
+                exportFileName={`Tyre Passport ${passport.serial} journey`} emptyMessage="No stint history on record."
+                onRowClick={(r) => { if (r?.asset_no) navigate(assetHref(r.asset_no)) }} />
+            </section>
+          )}
+
+          {tab === 'warranty' && (
+            <div className="tp-stack">
+              <section className="cc-card" aria-label="Warranty claims">
+                <div className="cc-card-head"><h2 className="cc-card-title">Warranty claims</h2></div>
+                <EnterpriseTable columns={warrantyColumns} data={passport.warranty} getRowId={(r, i) => String(r.id ?? i)}
+                  enableColumnFilters={false} enableGlobalFilter={passport.warranty.length > 10}
+                  exportFileName={`Tyre Passport ${passport.serial} warranty`} emptyMessage="No warranty claims recorded for this tyre." />
+              </section>
+              {passport.retreadClaims.length > 0 && (
+                <section className="cc-card" aria-label="Retread claims">
+                  <div className="cc-card-head"><h2 className="cc-card-title">Retread claims</h2></div>
+                  <EnterpriseTable columns={retreadColumns} data={passport.retreadClaims} getRowId={(r, i) => String(r.id ?? i)}
+                    enableColumnFilters={false} enableGlobalFilter={passport.retreadClaims.length > 10}
+                    exportFileName={`Tyre Passport ${passport.serial} retread`} emptyMessage="No retread claims." />
+                </section>
+              )}
+            </div>
+          )}
+
+          {tab === 'documents' && (
+            <section className="cc-card" aria-label="Documents">
+              <div className="cc-card-head"><h2 className="cc-card-title">Documents</h2></div>
+              <Empty icon={FileText} title="No documents are attached to this tyre." sub="No photos are stored on this tyre's records, and invoices and reports are not linked to tyre serials, so there is nothing to list here." />
+            </section>
+          )}
+
+          {tab === 'quality' && (
+            <section className="cc-card" aria-label="Data quality audit">
+              <div className="cc-card-head"><h2 className="cc-card-title">Data quality audit</h2></div>
+              {passport.dataQuality.length === 0 ? (
+                <p className="tp-ok"><CheckCircle2 size={16} aria-hidden="true" /> All checks passed. No data quality issues detected for this tyre.</p>
+              ) : (
+                <ul className="tp-issues">
+                  {passport.dataQuality.map((w, i) => (
+                    <li key={i}>{pill(SEV_TONE[w.severity] || 'info', `${statusText(w.severity)} severity`)}<span>{w.message}</span></li>
+                  ))}
+                </ul>
+              )}
+              <p className="tp-small tp-muted tp-mt">Checks: impossible cross-vehicle date overlap, tread readings that increase over time, and stints missing fitment or removal odometer.</p>
+            </section>
+          )}
+
+          <p className="tp-small tp-muted tp-foot"><ClipboardCheck size={12} aria-hidden="true" /> Figures come from tyre records, service events, warranty claims and inspections. Anything not recorded shows N/A.{cur.mixed ? ' Costs are shown as N/A because the records span more than one country and currency.' : ''}</p>
+        </>
+      ))}
     </div>
   )
 }

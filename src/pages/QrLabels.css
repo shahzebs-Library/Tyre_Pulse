@@ -1,0 +1,158 @@
+/* QR Labels page. Only --cc-* tokens, so light and dark share one sheet. */
+.ql-page .ql-hero-wrap { position: relative; }
+.ql-page .cc-hero { min-height: 150px; }
+.ql-crumb { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--cc-ink-3); }
+.ql-crumb span { color: var(--cc-ink-2); font-weight: 600; }
+.ql-hero-actions { position: absolute; right: 10px; bottom: 10px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.ql-hero-actions .cc-btn-ghost { box-shadow: var(--cc-shadow); }
+
+.ql-banner { flex-direction: row; align-items: center; gap: 10px; }
+.ql-banner p { flex: 1; margin: 0; font-size: 13px; color: var(--cc-ink-2); }
+.ql-banner > svg { flex: none; color: var(--cc-blue); }
+.ql-banner.good > svg { color: var(--cc-green); }
+.ql-banner.warn > svg { color: var(--cc-amber); }
+.ql-banner.bad > svg { color: var(--cc-red); }
+.ql-note { font-size: 12px; color: var(--cc-ink-3); margin: 0; }
+.ql-muted { font-size: 11.5px; color: var(--cc-ink-3); }
+.ql-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+
+.ql-tabs-card { padding: 0 16px; }
+.ql-tabs-card .cc-tabs-line { margin-bottom: 0; }
+
+/* Layout: working column and the design rail */
+.ql-layout { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 14px; align-items: start; }
+.ql-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.ql-wide { grid-column: 1 / -1; }
+.ql-step { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--cc-green-tint); color: var(--cc-green); font-size: 12px; font-weight: 700; margin-right: 6px; vertical-align: 1px; }
+
+/* 1. Item type tiles */
+.ql-types { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.ql-type { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 14px; border-radius: 12px; border: 1px solid var(--cc-inner-border); background: var(--cc-inner); color: var(--cc-ink); cursor: pointer; text-align: left; font: inherit; }
+.ql-type:hover { border-color: var(--cc-green); }
+.ql-type.on { border-color: var(--cc-green); background: var(--cc-green-tint); box-shadow: 0 0 0 1px var(--cc-green) inset; }
+.ql-type:focus-visible { outline: 2px solid var(--cc-green); outline-offset: 2px; }
+.ql-type b { font-size: 14px; font-weight: 700; }
+.ql-type small { font-size: 11.5px; color: var(--cc-ink-3); }
+.ql-type-icon { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; background: var(--cc-green-tint); color: var(--cc-green); margin-bottom: 4px; }
+.ql-type-check { position: absolute; right: 12px; top: 12px; color: var(--cc-green); }
+html.light .ql-type:not(.on) { background: #fff; }
+
+/* 2. Filters, bulk intake and table */
+.ql-filters { margin-bottom: 8px; }
+.ql-filters .cc-field { min-width: 120px; flex: 0 1 160px; }
+.ql-filters .cc-search { flex: 1 1 200px; }
+.ql-more { padding: 8px 0 0; border-top: 1px dashed var(--cc-inner-border); }
+.ql-bulk { border: 1px solid var(--cc-inner-border); border-radius: 12px; padding: 12px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px; }
+.ql-bulk-lead { margin: 0; font-size: 12.5px; color: var(--cc-ink-2); }
+.ql-textarea, .ql-input { width: 100%; font-size: 13px; color: var(--cc-ink); background: var(--cc-inner); border: 1px solid var(--cc-inner-border); border-radius: 9px; padding: 8px 11px; outline: none; font-family: inherit; }
+.ql-textarea { min-height: 110px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; resize: vertical; }
+html.light .ql-textarea, html.light .ql-input { background: #fff; }
+.ql-textarea:focus, .ql-input:focus { border-color: var(--cc-green); }
+.ql-bulk-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ql-bulk-actions .ql-muted { margin-left: auto; }
+.ql-bulk-result { display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; }
+.ql-bulk-result > p { margin: 0; }
+.ql-good { color: var(--cc-green); }
+.ql-warn { color: var(--cc-amber); }
+.ql-err { display: flex; align-items: center; gap: 6px; color: var(--cc-red); font-size: 12.5px; margin: 0; }
+.ql-box { border-radius: 10px; padding: 9px 12px; font-size: 12.5px; margin: 0 0 8px; }
+.ql-box b { display: block; margin-bottom: 3px; }
+.ql-box p { margin: 3px 0 0; color: var(--cc-ink-2); }
+.ql-box.warn { background: var(--cc-amber-tint); border: 1px solid var(--cc-amber); }
+.ql-box.warn b { color: var(--cc-amber); }
+.ql-box.info { background: var(--cc-blue-tint); border: 1px solid var(--cc-blue); }
+.ql-box.info b { color: var(--cc-blue); }
+.ql-amb { margin-top: 8px; }
+.ql-amb-rows { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.ql-amb-btn { min-height: 36px; font-size: 12px; }
+.ql-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
+.ql-hint { display: block; font-family: inherit; font-size: 11px; font-weight: 400; color: var(--cc-amber); }
+.ql-row-actions { display: inline-flex; gap: 6px; }
+.ql-row-actions .cc-icon-btn:disabled { opacity: .45; cursor: not-allowed; }
+.ql-table th, .ql-table td { padding-left: 8px; padding-right: 8px; }
+
+/* 4. Generate and print */
+.ql-gen { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.ql-gen-stat { border: 1px solid var(--cc-inner-border); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+.ql-gen-stat > span { font-size: 12px; color: var(--cc-ink-2); }
+.ql-gen-stat b { font-size: 24px; font-weight: 800; color: var(--cc-ink); line-height: 1.1; }
+.ql-gen-stat small { font-size: 11px; color: var(--cc-ink-3); }
+.ql-stepper { display: inline-flex; align-items: center; border: 1px solid var(--cc-inner-border); border-radius: 9px; overflow: hidden; width: max-content; }
+.ql-stepper button { width: 34px; height: 34px; display: grid; place-items: center; background: var(--cc-inner); border: 0; color: var(--cc-ink); cursor: pointer; }
+.ql-stepper button:disabled { opacity: .4; cursor: not-allowed; }
+.ql-stepper input { width: 48px; height: 34px; text-align: center; border: 0; border-left: 1px solid var(--cc-inner-border); border-right: 1px solid var(--cc-inner-border); background: transparent; color: var(--cc-ink); font-weight: 700; font-size: 15px; }
+.ql-gen-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; align-items: center; }
+.ql-menu { position: relative; }
+.ql-menu-list { position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 20; min-width: 230px; background: var(--cc-card-flat); border: 1px solid var(--cc-inner-border); border-radius: 10px; box-shadow: var(--cc-shadow); padding: 4px; display: flex; flex-direction: column; }
+.ql-menu-list button { display: flex; align-items: center; gap: 8px; padding: 9px 10px; background: none; border: 0; border-radius: 8px; color: var(--cc-ink); font-size: 13px; text-align: left; cursor: pointer; }
+.ql-menu-list button:hover:not(:disabled) { background: var(--cc-green-tint); }
+.ql-menu-list button:disabled { opacity: .45; cursor: not-allowed; }
+
+/* 3. Design and preview */
+.ql-custom-w input { width: 110px; font-size: 13px; color: var(--cc-ink); background: var(--cc-inner); border: 1px solid var(--cc-inner-border); border-radius: 9px; padding: 7px 10px; }
+html.light .ql-custom-w input { background: #fff; }
+.ql-preview { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 0 12px; border-bottom: 1px solid var(--cc-inner-border); margin-bottom: 12px; text-align: center; }
+.ql-label { display: flex; flex-direction: column; border: 1.5px solid #16a34a; border-radius: 12px; overflow: hidden; background: #fff; box-shadow: var(--cc-shadow); }
+.ql-label-head { display: flex; align-items: center; justify-content: center; background: #fff; height: 30px; padding: 0 8px; border-bottom: 1.5px solid #16a34a; }
+.ql-label-head span { font-size: 9px; font-weight: 900; letter-spacing: .16em; color: #16a34a; }
+.ql-label-qr { display: flex; justify-content: center; padding: 10px 10px 4px; background: #fff; }
+.ql-label-qr img { display: block; }
+.ql-label-text { padding: 2px 8px 8px; background: #fff; text-align: center; }
+.ql-label-code { margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; font-weight: 700; color: #101828; word-break: break-all; line-height: 1.25; }
+.ql-label-sub { margin: 2px 0 0; font-size: 9.5px; color: #667085; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ql-grid { display: flex; flex-wrap: wrap; gap: 12px; }
+
+.ql-info { display: flex; flex-direction: column; gap: 2px; padding-bottom: 12px; border-bottom: 1px solid var(--cc-inner-border); margin-bottom: 12px; }
+.ql-info h3 { font-size: 13px; font-weight: 700; margin: 0 0 6px; color: var(--cc-ink); }
+.ql-toggle { position: relative; display: flex; align-items: center; gap: 10px; padding: 6px 2px; font-size: 12.5px; color: var(--cc-ink); cursor: pointer; }
+.ql-toggle input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.ql-switch { width: 32px; height: 18px; border-radius: 999px; background: var(--cc-track); position: relative; flex: none; transition: background .15s; }
+.ql-switch::after { content: ""; position: absolute; left: 2px; top: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .15s; }
+.ql-toggle input:checked + .ql-switch { background: var(--cc-green-strong); }
+.ql-toggle input:checked + .ql-switch::after { transform: translateX(14px); }
+.ql-toggle input:focus-visible + .ql-switch { outline: 2px solid var(--cc-green); outline-offset: 2px; }
+.ql-toggle.dim { cursor: default; color: var(--cc-ink-2); }
+.ql-toggle svg { color: var(--cc-ink-3); }
+.ql-toggle small { margin-left: auto; font-size: 11px; color: var(--cc-ink-3); }
+.ql-info .cc-field { margin-top: 6px; }
+.ql-selects { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.ql-selects .cc-field { min-width: 0; }
+.ql-selects .cc-select { width: 100%; }
+.ql-readout { margin: 0; font-size: 12px; color: var(--cc-ink-3); padding: 7px 0; }
+@media (prefers-reduced-motion: reduce) { .ql-switch, .ql-switch::after { transition: none; } }
+
+/* Batches, queue, templates */
+.ql-queue { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.ql-queue li { display: flex; align-items: center; gap: 12px; padding: 9px 2px; border-top: 1px solid var(--cc-inner-border); }
+.ql-queue li:first-child { border-top: 0; }
+.ql-queue img { width: 44px; height: 44px; border-radius: 6px; background: #fff; border: 1px solid var(--cc-inner-border); flex: none; }
+.ql-queue li > div { flex: 1; min-width: 0; }
+.ql-queue small { display: block; font-size: 11.5px; color: var(--cc-ink-3); margin-top: 2px; }
+.ql-tab-empty > div { display: flex; flex-direction: column; align-items: center; gap: 6px; max-width: 520px; }
+.ql-tab-empty svg { color: var(--cc-ink-3); }
+.ql-tab-empty b { color: var(--cc-ink); font-size: 14px; }
+.ql-tab-empty p { margin: 0; line-height: 1.5; }
+.ql-settings { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.ql-tpl-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin-bottom: 12px; }
+.ql-tpl-form .cc-field { flex: 1 1 220px; }
+.ql-tpl-list { list-style: none; margin: 0; padding: 0; }
+.ql-tpl-list li { display: flex; align-items: center; gap: 8px; padding: 9px 2px; border-top: 1px solid var(--cc-inner-border); }
+.ql-tpl-list li > div { flex: 1; min-width: 0; }
+.ql-tpl-list b { font-size: 13px; }
+.ql-tpl-list small { display: block; font-size: 11.5px; color: var(--cc-ink-3); }
+.ql-facts { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.ql-facts li { display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; }
+.ql-facts span { color: var(--cc-ink-2); }
+.ql-howto { padding: 12px 16px; }
+.ql-howto summary { cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; color: var(--cc-ink); }
+.ql-howto ol { margin: 10px 0 0; padding-left: 20px; font-size: 12.5px; color: var(--cc-ink-2); line-height: 1.6; }
+
+@media (max-width: 1280px) {
+  .ql-layout { grid-template-columns: minmax(0, 1fr); }
+  .ql-rail { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+}
+@media (max-width: 900px) {
+  .ql-rail, .ql-settings { grid-template-columns: minmax(0, 1fr); }
+  .ql-types, .ql-gen { grid-template-columns: minmax(0, 1fr); }
+  .ql-hero-actions { position: static; justify-content: flex-start; margin-top: 10px; }
+}

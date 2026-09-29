@@ -346,4 +346,35 @@ void main() {
       },
     );
   });
+
+  group('export', () {
+    IconButton exportButton(WidgetTester tester) => tester.widget<IconButton>(
+          find.byKey(TyreRecordsListKeys.exportAction),
+        );
+
+    testWidgets('is disabled while nothing has loaded', (
+      WidgetTester tester,
+    ) async {
+      await _pump(tester, access: _admin, repo: FakeTyreRecordsRepository());
+      await tester.pumpAndSettle();
+
+      expect(exportButton(tester).onPressed, isNull);
+    });
+
+    testWidgets('is enabled once rows are on screen', (
+      WidgetTester tester,
+    ) async {
+      await _pump(
+        tester,
+        access: _admin,
+        repo: FakeTyreRecordsRepository(
+          dataset: <TyreRecord>[buildTyreRecord(id: '1')],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(exportButton(tester).onPressed, isNotNull);
+      expect(exportButton(tester).tooltip, 'Export');
+    });
+  });
 }

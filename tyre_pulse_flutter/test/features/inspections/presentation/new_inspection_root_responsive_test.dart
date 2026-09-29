@@ -8,6 +8,8 @@ import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/core/permissions/module_registry.dart';
+import 'package:tyre_pulse/core/permissions/permission_providers.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
@@ -316,7 +318,7 @@ void main() {
       );
 
       expect(find.text('Tyre inspection'), findsOneWidget);
-      expect(find.text('TM749 · Site A'), findsOneWidget);
+      expect(find.text('TM749 · Tri-mixer · Site A'), findsOneWidget);
       // A damaged wheel makes the whole inspection read Critical at the top.
       final TpStatusChip overall = tester.widget<TpStatusChip>(
         find.byKey(NewInspectionScreenKeys.tyreOverallStatus),
@@ -885,6 +887,98 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
 
     expect(find.byType(TyrePositionEditorSheet), findsOneWidget);
+  });
+
+  group('wheel-loader module switch (mock 16)', () {
+    const List<String> positions = <String>['FL', 'FR', 'RL', 'RR'];
+    InspectionWizardState loaderState() => InspectionWizardState(
+          step: InspectionWizardStep.tyres,
+          selectedAssetNo: 'WL102',
+          selectedVehicleType: '',
+          selectedSite: 'Quarry',
+          positions: positions,
+          tyreConditions: <String, TyrePositionReading>{
+            for (final String position in positions)
+              position: TyrePositionReading.seed(position),
+          },
+        );
+
+    testWidgets('shows Tyre / Machine inspection when checklists are open', (
+      WidgetTester tester,
+    ) async {
+      await _pumpScreen(
+        tester,
+        size: const Size(390, 1100),
+        initialState: loaderState(),
+        extraOverrides: <Override>[
+          canAccessModuleProvider(ModuleKey.checklists).overrideWithValue(true),
+          vehicleFleetListProvider.overrideWith(
+            (ref) async => const VehicleFleetListLoaded(
+              assets: <VehicleAsset>[
+                VehicleAsset(id: 'wl-1', assetNo: 'WL102', make: 'SANY'),
+              ],
+              truncated: false,
+            ),
+          ),
+        ],
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(
+        find.byKey(NewInspectionScreenKeys.tyreModuleSwitch),
+        findsOneWidget,
+      );
+      expect(find.text('Machine inspection'), findsOneWidget);
+      expect(find.text('WL102 · SANY Wheel loader · Quarry'), findsOneWidget);
+      expect(
+        tester.getSize(find.byKey(NewInspectionScreenKeys.tyreModuleMachine)),
+        predicate<Size>((Size s) => s.height >= 48),
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('is hidden from users who cannot open checklists', (
+      WidgetTester tester,
+    ) async {
+      await _pumpScreen(
+        tester,
+        size: const Size(390, 1100),
+        initialState: loaderState(),
+        extraOverrides: <Override>[
+          canAccessModuleProvider(ModuleKey.checklists)
+              .overrideWithValue(false),
+        ],
+      );
+      expect(
+        find.byKey(NewInspectionScreenKeys.tyreModuleSwitch),
+        findsNothing,
+      );
+    });
+
+    testWidgets('is not shown on road vehicles', (WidgetTester tester) async {
+      await _pumpScreen(
+        tester,
+        size: const Size(390, 1100),
+        initialState: InspectionWizardState(
+          step: InspectionWizardStep.tyres,
+          selectedAssetNo: 'PL101',
+          selectedVehicleType: '',
+          selectedSite: 'Site A',
+          positions: positions,
+          tyreConditions: <String, TyrePositionReading>{
+            for (final String position in positions)
+              position: TyrePositionReading.seed(position),
+          },
+        ),
+        extraOverrides: <Override>[
+          canAccessModuleProvider(ModuleKey.checklists).overrideWithValue(true),
+        ],
+      );
+      expect(
+        find.byKey(NewInspectionScreenKeys.tyreModuleSwitch),
+        findsNothing,
+      );
+    });
   });
 }
 

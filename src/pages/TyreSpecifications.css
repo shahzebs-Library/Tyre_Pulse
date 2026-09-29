@@ -1,0 +1,124 @@
+/* Tyre Specifications page. Only --cc-* tokens, so light and dark share one sheet. */
+.ts-page { display: flex; flex-direction: column; gap: 14px; }
+.ts-page .ts-kpis { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.ts-toolbar { display: flex; justify-content: flex-end; }
+.ts-toolbar-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ts-banner { flex-direction: row; align-items: center; gap: 10px; font-size: 13px; color: var(--cc-ink); border-color: var(--cc-red); }
+.ts-banner > svg { color: var(--cc-red); flex: none; }
+.ts-banner > span { flex: 1; min-width: 0; }
+
+.ts-layout { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 14px; align-items: start; }
+.ts-main, .ts-rail { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.ts-rail { position: sticky; top: 12px; }
+.ts-two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+.ts-stack { display: flex; flex-direction: column; gap: 10px; }
+.ts-note { font-size: 11.5px; color: var(--cc-ink-3); margin: 8px 0 0; }
+.ts-muted { color: var(--cc-ink-3); font-weight: 500; font-size: 12px; }
+.ts-strong { color: var(--cc-ink); font-weight: 600; }
+.ts-err { color: var(--cc-red); font-size: 12px; margin: 0; }
+
+.ts-view { display: inline-flex; border: 1px solid var(--cc-inner-border); border-radius: 9px; overflow: hidden; }
+.ts-view button { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; padding: 8px 12px; background: var(--cc-inner); color: var(--cc-ink-2); border: 0; cursor: pointer; }
+.ts-view button + button { border-left: 1px solid var(--cc-inner-border); }
+.ts-view button[aria-pressed="true"] { background: var(--cc-green-tint); color: var(--cc-green); font-weight: 600; }
+.ts-view button:focus-visible { outline: 2px solid var(--cc-green); outline-offset: -2px; }
+
+/* Spec cards */
+.ts-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.ts-spec-card { text-align: left; gap: 10px; cursor: pointer; font: inherit; color: inherit; align-items: stretch; }
+.ts-spec-card:hover { border-color: var(--cc-green); }
+.ts-spec-card[aria-pressed="true"] { border-color: var(--cc-green); box-shadow: 0 0 0 1px var(--cc-green); }
+.ts-spec-card:focus-visible { outline: 2px solid var(--cc-green); outline-offset: 2px; }
+.ts-spec-card > .cc-pill { align-self: flex-start; }
+.ts-spec-top { display: flex; align-items: center; gap: 12px; }
+.ts-spec-id { min-width: 0; display: flex; flex-direction: column; }
+.ts-spec-brand { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--cc-green); }
+.ts-spec-id b { font-size: 14px; color: var(--cc-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ts-spec-id small { font-size: 11.5px; color: var(--cc-ink-3); }
+.ts-spec-rows { margin: 0; display: grid; gap: 4px; }
+.ts-spec-rows div { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
+.ts-spec-rows dt { color: var(--cc-ink-3); }
+.ts-spec-rows dd { margin: 0; color: var(--cc-ink); font-weight: 500; text-align: right; overflow-wrap: anywhere; }
+.ts-spec-apps { display: flex; flex-wrap: wrap; gap: 6px; border-top: 1px solid var(--cc-inner-border); padding-top: 8px; }
+.ts-spec-apps span { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--cc-ink-2); background: var(--cc-inner); border: 1px solid var(--cc-inner-border); border-radius: 999px; padding: 2px 8px; }
+
+.ts-glyph { flex: none; }
+.ts-glyph-tyre { fill: var(--cc-ink-2); }
+.ts-glyph-lug { fill: var(--cc-ink); }
+.ts-glyph-rim { fill: var(--cc-track); stroke: var(--cc-ink-3); stroke-width: 2; }
+.ts-glyph-hub { fill: var(--cc-ink-3); }
+
+.ts-chips { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.ts-table .ts-chips { margin-top: 0; }
+.ts-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 500; color: var(--cc-ink); background: var(--cc-inner); border: 1px solid var(--cc-inner-border); border-radius: 999px; padding: 2px 8px; }
+.ts-chip.muted { color: var(--cc-ink-3); }
+.ts-chip button { display: inline-grid; place-items: center; background: none; border: 0; padding: 0; color: var(--cc-ink-3); cursor: pointer; }
+.ts-chip button:hover { color: var(--cc-red); }
+.ts-chip button:focus-visible { outline: 2px solid var(--cc-green); border-radius: 4px; }
+
+/* Detail */
+.ts-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ts-details { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 16px; margin: 4px 0 0; }
+.ts-details > div { min-width: 0; }
+.ts-details dt { font-size: 11.5px; color: var(--cc-ink-3); }
+.ts-details dd { margin: 3px 0 0; font-size: 13px; color: var(--cc-ink); font-weight: 500; overflow-wrap: anywhere; }
+.ts-details .ts-wide { grid-column: 1 / -1; }
+
+.ts-drawing { width: 100%; max-height: 220px; }
+.ts-draw-tyre { fill: var(--cc-inner); stroke: var(--cc-ink-2); stroke-width: 2; }
+.ts-draw-rim { fill: var(--cc-track); stroke: var(--cc-ink-3); stroke-width: 1.5; }
+.ts-draw-dim { stroke: var(--cc-green); stroke-width: 1.5; }
+.ts-draw-text { font-size: 10px; fill: var(--cc-ink-2); }
+
+/* Rail form */
+.ts-form { display: flex; flex-direction: column; gap: 10px; }
+.ts-form label, .ts-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--cc-ink-2); font-weight: 500; }
+.ts-field > span { font-size: 12px; }
+.ts-form em { color: var(--cc-red); font-style: normal; }
+.ts-form .ts-note { margin: 0; font-weight: 400; }
+.ts-form input, .ts-form select, .ts-form textarea { width: 100%; font-size: 12.5px; color: var(--cc-ink); background: var(--cc-inner); border: 1px solid var(--cc-inner-border); border-radius: 8px; padding: 8px 10px; font-family: inherit; }
+html.light .ts-form input, html.light .ts-form select, html.light .ts-form textarea { background: #fff; }
+.ts-form input:focus, .ts-form select:focus, .ts-form textarea:focus { outline: none; border-color: var(--cc-green); }
+.ts-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ts-inline { display: flex; gap: 6px; align-items: center; }
+.ts-inline input { flex: 1; min-width: 0; }
+.ts-size { display: flex; gap: 5px; align-items: center; }
+.ts-size input { flex: 1; min-width: 0; text-align: center; }
+.ts-size b { color: var(--cc-ink-3); font-size: 12px; }
+.ts-seg { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+.ts-seg button { font-size: 11.5px; font-weight: 600; padding: 7px 2px; border-radius: 8px; border: 1px solid var(--cc-inner-border); background: var(--cc-inner); color: var(--cc-ink-2); cursor: pointer; }
+.ts-seg button[aria-pressed="true"] { background: var(--cc-green-strong); color: #fff; border-color: var(--cc-green-strong); }
+.ts-seg button:focus-visible { outline: 2px solid var(--cc-green); outline-offset: 2px; }
+.ts-upload { display: flex; gap: 8px; align-items: center; border: 1.5px dashed var(--cc-inner-border); border-radius: 10px; padding: 10px 12px; font-size: 11.5px; color: var(--cc-ink-3); }
+.ts-upload svg { flex: none; }
+.ts-form-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ts-form-actions button { justify-content: center; }
+
+/* Moved workbench tabs keep their own styling inside the kit page. */
+.ts-workbench { min-width: 0; }
+
+@media (max-width: 1280px) {
+  .ts-page .ts-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .ts-layout { grid-template-columns: minmax(0, 1fr); }
+  .ts-rail { position: static; }
+}
+@media (max-width: 760px) {
+  .ts-page .ts-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ts-two { grid-template-columns: minmax(0, 1fr); }
+  .ts-details { grid-template-columns: minmax(0, 1fr); }
+  .ts-toolbar { justify-content: flex-start; }
+}
+
+/* Catalogue additions */
+.ts-thumb { flex: none; width: 52px; height: 52px; object-fit: cover; border-radius: 10px; }
+.ts-tread-img { display: block; width: 100%; max-height: 220px; object-fit: contain; border-radius: 10px; }
+label.ts-upload { cursor: pointer; }
+label.ts-upload:focus-within { outline: 2px solid var(--cc-blue); outline-offset: 2px; }
+.ts-section-note { margin: 0 0 12px; }
+
+/* Fleet coverage tab */
+.ts-page .ts-cov-kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.ts-scroll-x { max-width: 100%; overflow-x: auto; }
+.ts-source { display: inline-flex; align-items: center; gap: 4px; overflow-wrap: anywhere; }
+@media (max-width: 1100px) { .ts-page .ts-cov-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .ts-page .ts-cov-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

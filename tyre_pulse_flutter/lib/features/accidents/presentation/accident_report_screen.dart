@@ -1138,7 +1138,7 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
             label: _l10n.accReportEventType,
             value: _type,
             hint: _l10n.accReportSelectEventType,
-            items: _accidentTypeOptions(_l10n),
+            items: accidentTypeOptions(_l10n),
             onChanged: (String value) => _change(() => _type = value),
           ),
           const SizedBox(height: TpSpace.md),
@@ -1534,51 +1534,93 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
   /// One action row, as in the mock. Step 1 has no Back, so Save and exit
   /// takes that slot as the secondary action; from step 2 it lives in the
   /// app-bar overflow menu and Back takes the slot.
+  /// Whether [label] prints in full on a shared button [width] wide. The
+  /// button never wraps or shrinks its text, so this measures it the way the
+  /// button lays it out: label, icon, gap and horizontal padding.
+  bool _footerLabelFits(BuildContext context, String label, double width) {
+    final TextPainter painter = TextPainter(
+      text: TextSpan(
+        text: label,
+        style: Theme.of(context).textTheme.labelLarge ??
+            const TextStyle(fontWeight: FontWeight.w700),
+      ),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout();
+    final double needed =
+        painter.width + TpSizing.iconMd + TpSpace.sm + 2 * TpSpace.lg + 4;
+    painter.dispose();
+    return needed <= width;
+  }
+
   Widget _bottomBar() {
     final bool firstStep = _currentStep.index == 0;
+    final String secondaryLabel =
+        firstStep ? _l10n.accReportSaveAndExit : _l10n.accReportBack;
+    final String primaryLabel = _currentStep == AccidentIntakePage.review
+        ? _l10n.accReportSubmit
+        : _currentStep == AccidentIntakePage.identifyAsset
+            ? _l10n.accReportContinueToIncident
+            : _currentStep == AccidentIntakePage.damage
+                ? _l10n.accReportContinueToEvidence
+                : _l10n.accReportSaveAndContinue;
     final Widget secondary = firstStep
         ? TpButton.secondary(
             key: const ValueKey<String>('accident.report.saveAndExit'),
-            label: _l10n.accReportSaveAndExit,
+            label: secondaryLabel,
             icon: Icons.save_outlined,
             onPressed:
                 _submitting || _busyEvidenceKey != null ? null : _saveAndExit,
             isFullWidth: true,
           )
         : TpButton.secondary(
-            label: _l10n.accReportBack,
+            label: secondaryLabel,
             icon: Icons.arrow_back_rounded,
             onPressed: _submitting ? null : _backStep,
             isFullWidth: true,
           );
-    final Widget actions = Row(
-      children: <Widget>[
-        Expanded(child: secondary),
-        const SizedBox(width: TpSpace.sm),
-        Expanded(
-          flex: 2,
-          child: TpButton.primary(
-            key: const ValueKey<String>('accident.report.continue'),
-            label: _currentStep == AccidentIntakePage.review
-                ? _l10n.accReportSubmit
-                : _currentStep == AccidentIntakePage.identifyAsset
-                    ? _l10n.accReportContinueToIncident
-                    : _currentStep == AccidentIntakePage.damage
-                        ? _l10n.accReportContinueToEvidence
-                        : _l10n.accReportSaveAndContinue,
-            icon: _currentStep == AccidentIntakePage.review
-                ? Icons.check_circle_outline
-                : Icons.arrow_forward_rounded,
-            isBusy: _submitting,
-            onPressed: _submitting
-                ? null
-                : _currentStep == AccidentIntakePage.review
-                    ? _submit
-                    : _saveAndContinue,
-            isFullWidth: true,
-          ),
-        ),
-      ],
+    final Widget primary = TpButton.primary(
+      key: const ValueKey<String>('accident.report.continue'),
+      label: primaryLabel,
+      icon: _currentStep == AccidentIntakePage.review
+          ? Icons.check_circle_outline
+          : Icons.arrow_forward_rounded,
+      isBusy: _submitting,
+      onPressed: _submitting
+          ? null
+          : _currentStep == AccidentIntakePage.review
+              ? _submit
+              : _saveAndContinue,
+      isFullWidth: true,
+    );
+    // One row, as in the mock, whenever both labels print in full. The
+    // shared button never wraps, so on a phone a third-width "Save and
+    // exit" printed as "Save a..."; there the pair stacks (secondary above,
+    // primary nearest the thumb).
+    final Widget actions = LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints box) {
+        final double third = (box.maxWidth - TpSpace.sm) / 3;
+        if (_footerLabelFits(context, secondaryLabel, third) &&
+            _footerLabelFits(context, primaryLabel, third * 2)) {
+          return Row(
+            children: <Widget>[
+              Expanded(child: secondary),
+              const SizedBox(width: TpSpace.sm),
+              Expanded(flex: 2, child: primary),
+            ],
+          );
+        }
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            secondary,
+            const SizedBox(height: TpSpace.xs),
+            primary,
+          ],
+        );
+      },
     );
     return Material(
       color: TpPalette.of(context).surface,
@@ -1600,25 +1642,6 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
     );
   }
 }
-
-/// Event types the `accidents.accident_type` CHECK accepts, keyed by the
-/// stored token and labelled in the reader's language.
-Map<String, String> _accidentTypeOptions(AppLocalizations l10n) =>
-    <String, String>{
-      'collision': l10n.accTypeCollision,
-      'rollover': l10n.accTypeRollover,
-      'rear_end': l10n.accTypeRearEnd,
-      'side_swipe': l10n.accTypeSideSwipe,
-      'reversing': l10n.accTypeReversing,
-      'fire': l10n.accTypeFire,
-      'vandalism': l10n.accTypeVandalism,
-      'weather': l10n.accTypeWeather,
-      'tyre_failure': l10n.accTypeTyreFailure,
-      'mechanical': l10n.accTypeMechanical,
-      'near_miss': l10n.accTypeNearMiss,
-      'property_damage': l10n.accTypePropertyDamage,
-      'other': l10n.accTypeOther,
-    };
 
 class _PickerField extends StatelessWidget {
   const _PickerField({
@@ -1865,7 +1888,7 @@ String _yesNo(AppLocalizations l10n, bool? value) => switch (value) {
 String _eventTypeLabel(AppLocalizations l10n, String value) {
   final String token = value.trim();
   if (token.isEmpty) return l10n.accNotRecorded;
-  return _accidentTypeOptions(l10n)[token] ?? token.replaceAll('_', ' ');
+  return accidentTypeOptions(l10n)[token] ?? token.replaceAll('_', ' ');
 }
 
 String _severityLabel(AppLocalizations l10n, String value) =>

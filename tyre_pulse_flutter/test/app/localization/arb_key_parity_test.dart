@@ -524,10 +524,48 @@ void main() {
     // report footer and damage sheet copy moved into ARB (designAcc*).
     // 2014 + 55 = 2069. Accident mock pass 2: insurance claim workstream
     // (accClaim*) and report step 1 identify asset (accRpt*).
-    test('en, ar and ur each carry exactly 2069 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2069);
-      expect(_translatableKeys(ar).length, 2069);
-      expect(_translatableKeys(ur).length, 2069);
+    // 2069 + 1 = 2070. Expo parity pass: accountDeletionCopyCatalog, the
+    // Profile "Delete my account" request (Play in-app deletion path, Expo
+    // mobile/lib/accountDeletion.ts). The alert acknowledge and stock
+    // add/adjust strings were appended INSIDE the existing alertsCopyCatalog
+    // and stockCountCopyCatalog values, so they add no keys.
+    // 2070 + 3 = 2073. Home access state: homeSiteAllSites (an organisation
+    // wide site scope reads as all sites, not "no site on file") and the
+    // homeAccessLoadFailed* retry card shown when the access read fails.
+    // 2073 + 4 = 2077. Tyre records export (share PDF) action: tooltip,
+    // status column, loaded-rows note and failure snackbar (tyreRecordsExport*).
+    // 2077 + 29 = 2106. Vehicle 360 to the owner mock (fleet360*): the
+    // Documents tab and its permit states, the service-due and tyre-action
+    // alert strip, record-derived timeline titles, the snapshot title with
+    // its year, Total maintenance, the External repairs bucket and the share
+    // failure snackbar.
+    // 2106 + 7 = 2113. Home and Profile mock parity (mocks 07-10, 19): the
+    // Home operational summary (homeOperationalSummary, homeInspectionsDue,
+    // homeTyresNeedAttention, homeApprovalsAwaitingYou), the today's-plan
+    // timeline count (homePlanMoreToday), and Profile's Assigned tasks tile
+    // and My activity button (profileAssignedTasks, profileMyActivity).
+    // 2113 + 2 = 2115. Wheel-loader inspection mock 16: the Tyre inspection /
+    // Machine inspection module switch (inspectionModuleTyre,
+    // inspectionModuleMachine).
+    // 2115 + 7 = 2122. Fleet & assets mock parity: the Due soon filter and
+    // its could-not-check line (fleetListDueSoon,
+    // fleetListDueSoonUnavailable), the filter sheet title and badge label
+    // (fleetListFiltersTitle, fleetListFiltersActive) and the three sort
+    // options (fleetListSortAssetNo, fleetListSortServiceDue,
+    // fleetListSortTyreActions).
+    // 2122 + 2 = 2124. Push notifications (FCM): the foreground banner's
+    // Open action and its title when a push arrives without one
+    // (pushNotificationOpen, pushNotificationFallbackTitle).
+    // 2124 + 11 = 2135. Maintenance Control Center: the canonical work order
+    // statuses shown on its queue chips in the reader's language
+    // (pmWoStatusNew ... pmWoStatusOpen).
+    // 2135 + 4 = 2139. Tyre records: the four risk levels on the tyre card and
+    // the risk filter in the reader's language (recordsRiskLow ...
+    // recordsRiskCritical).
+    test('en, ar and ur each carry exactly 2139 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2139);
+      expect(_translatableKeys(ar).length, 2139);
+      expect(_translatableKeys(ur).length, 2139);
     });
   });
 

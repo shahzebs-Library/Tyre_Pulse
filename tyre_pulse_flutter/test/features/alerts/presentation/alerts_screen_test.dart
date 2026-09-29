@@ -28,6 +28,17 @@ final class _FakeAlertsRepository implements AlertsRepository {
     lastCountry = country;
     return _result();
   }
+
+  final List<String> acknowledged = <String>[];
+
+  @override
+  Future<void> acknowledge({
+    required TyreAlert alert,
+    required String? userId,
+    required String? country,
+  }) async {
+    acknowledged.add(alert.id);
+  }
 }
 
 const List<TyreAlert> _alerts = <TyreAlert>[
@@ -239,5 +250,35 @@ void main() {
       find.byType(MaterialApp),
       matchesGoldenFile('goldens/alerts_compact_dark.png'),
     );
+  });
+
+  testWidgets('acknowledge confirms, records the ack and re-reads the feed', (
+    WidgetTester tester,
+  ) async {
+    final _FakeAlertsRepository repository = _FakeAlertsRepository(
+      () async => _alerts,
+    );
+    await _pump(tester, repository);
+    await tester.pumpAndSettle();
+    final int readsBefore = repository.calls;
+
+    await tester.ensureVisible(find.byKey(const Key('alerts.ack.critical')));
+    await tester.tap(find.byKey(const Key('alerts.ack.critical')));
+    await tester.pumpAndSettle();
+    expect(find.text('Acknowledge alert'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('alerts.ack.confirm')));
+    await tester.pumpAndSettle();
+
+    expect(repository.acknowledged, <String>['critical']);
+    expect(repository.calls, greaterThan(readsBefore));
+  });
+
+  test('acknowledged ids are read from the rec:<id> markers only', () {
+    expect(
+      acknowledgedTyreIds(<Object?>['rec:a', 'rec:', 'other', null, 'rec:b']),
+      <String>{'a', 'b'},
+    );
+    expect(alertAckMessage('x1'), 'rec:x1');
   });
 }

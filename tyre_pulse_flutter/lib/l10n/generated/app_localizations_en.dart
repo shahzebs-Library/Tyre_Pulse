@@ -2105,6 +2105,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get homeSiteStatUnavailable => 'No site on file';
 
   @override
+  String get homeSiteAllSites => 'All sites';
+
+  @override
+  String get homeAccessLoadFailedTitle => 'Your access could not be loaded';
+
+  @override
+  String get homeAccessLoadFailedBody =>
+      'Some sections may be hidden until it loads. Tap to retry.';
+
+  @override
   String get homeFleetSizeStatLabel => 'Fleet size';
 
   @override
@@ -2679,7 +2689,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get loginCardSubtitle => 'Use your email, username, or Employee ID';
 
   @override
-  String get loginIdentifierLabel => 'Email or employee ID';
+  String get loginIdentifierLabel => 'Employee ID or email';
 
   @override
   String get loginIdentifierPlaceholder => 'Enter email, username, or ID';
@@ -2815,7 +2825,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get alertsCopyCatalog =>
-      'title=Tyre Alerts~all=All~critical=Critical~warnings=Warnings~info=Info~flagged=flagged~criticalCount=critical~emptyTitle=No active alerts~emptyFilter=No alerts match this filter.~loadError=Could not load alerts. Pull down to retry.~unknownAsset=Unknown asset~pressureLow=Tyre pressure is low~treadLow=Tread depth is low~position=Position~serial=Serial~tread=Tread~retry=Retry';
+      'title=Tyre Alerts~all=All~critical=Critical~warnings=Warnings~info=Info~flagged=flagged~criticalCount=critical~emptyTitle=No active alerts~emptyFilter=No alerts match this filter.~loadError=Could not load alerts. Pull down to retry.~unknownAsset=Unknown asset~pressureLow=Tyre pressure is low~treadLow=Tread depth is low~position=Position~serial=Serial~tread=Tread~retry=Retry~acknowledge=Acknowledge~ackTitle=Acknowledge alert~ackBody=Mark this alert as reviewed? It will be removed from the list.~ackFailed=Could not acknowledge. Please try again.~cancel=Cancel';
 
   @override
   String get notificationInboxCopyCatalog =>
@@ -2835,7 +2845,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get stockCountCopyCatalog =>
-      'title=Stock Count~items=Items~reorder=Need reorder~notToday=Not counted~search=Search description or site~all=All~low=Low stock~stale=Not counted today~empty=No stock items~emptyBody=No stock records match these filters.~count=Count~stockItem=Stock item~physicalCount=Physical count~reason=Reason (optional)~cancel=Cancel~save=Save count~invalid=Enter a count of zero or more.~offlineSaved=Count saved offline and queued for sync.~saveFailed=The stock count could not be saved.~loadFailed=Stock records could not be loaded.~Critical=Critical~Low=Low~OK=OK~onHand=on hand';
+      'title=Stock Count~items=Items~reorder=Need reorder~notToday=Not counted~search=Search description or site~all=All~low=Low stock~stale=Not counted today~empty=No stock items~emptyBody=No stock records match these filters.~count=Count~stockItem=Stock item~physicalCount=Physical count~reason=Reason (optional)~cancel=Cancel~save=Save count~invalid=Enter a count of zero or more.~offlineSaved=Count saved offline and queued for sync.~saveFailed=The stock count could not be saved.~loadFailed=Stock records could not be loaded.~Critical=Critical~Low=Low~OK=OK~onHand=on hand~add=Add stock~addTitle=Add stock~size=Tyre size~description=Description (optional)~site=Location (site)~quantity=Quantity~minLevel=Minimum level~criticalLevel=Critical level~sizeRequired=Enter a tyre size for this stock.~siteRequired=Enter a location (site) for this stock.~addFailed=Could not add stock. Please try again.~increase=Increase~decrease=Decrease';
 
   @override
   String get calendarCopyCatalog =>
@@ -7128,4 +7138,265 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get accRptTitle => 'Report Accident';
+
+  @override
+  String get accountDeletionCopyCatalog =>
+      'title=Delete my account~subtitle=Request deletion of your account and personal data~intro=This submits a request for an administrator to delete your account and the personal data associated with it. It does not delete your account instantly.~what=Your access to the app is revoked on request. Personal profile data is deleted; some fleet records created for your organisation may be retained as business or audit records and de-identified from your profile.~timeline=Verified requests are completed within about 30 days.~reason=Reason (optional)~confirm=Type DELETE to confirm~word=DELETE~submit=Submit deletion request~cancel=Cancel~successTitle=Request submitted~successBody=Your account deletion request has been recorded. An administrator will action it within about 30 days.~errorTitle=Could not submit request~mismatch=Type DELETE exactly to confirm.~unavailable=Account deletion is not available right now. Please email us to request deletion.~failed=Could not submit your request. Please try again.~ok=OK';
+
+  @override
+  String get homeOperationalSummary => 'Operational summary';
+
+  @override
+  String get homeInspectionsDue => 'Inspections due';
+
+  @override
+  String get homeTyresNeedAttention => 'Tyres need attention';
+
+  @override
+  String get homeApprovalsAwaitingYou => 'Approvals awaiting you';
+
+  @override
+  String homePlanMoreToday(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count more today',
+      one: '1 more today',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get profileAssignedTasks => 'Assigned tasks';
+
+  @override
+  String get profileMyActivity => 'My activity';
+
+  @override
+  String get tyreRecordsExportAction => 'Export';
+
+  @override
+  String get tyreRecordsExportStatus => 'Status';
+
+  @override
+  String tyreRecordsExportNote(int shown, int total) {
+    return '$shown of $total tyre records loaded on this device';
+  }
+
+  @override
+  String get tyreRecordsExportError =>
+      'Could not create the export. Please try again.';
+
+  @override
+  String get fleet360TabDocuments => 'Documents';
+
+  @override
+  String fleet360AlertServiceDueKm(String km) {
+    return 'Service due in $km km';
+  }
+
+  @override
+  String fleet360AlertServiceDueHours(String hours) {
+    return 'Service due in $hours h';
+  }
+
+  @override
+  String fleet360AlertServiceDueDays(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'Service due in $days days',
+      one: 'Service due tomorrow',
+      zero: 'Service due today',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fleet360AlertServiceOverdue => 'Service overdue';
+
+  @override
+  String fleet360AlertTyreActions(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count tyre actions',
+      one: '1 tyre action',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fleet360EventInspectionDone => 'Tyre inspection completed';
+
+  @override
+  String get fleet360EventWashDone => 'Wash completed';
+
+  @override
+  String fleet360EventTyreFittedAt(String position) {
+    return 'Tyre fitted at $position';
+  }
+
+  @override
+  String fleet360EventTyreRemovedFrom(String position) {
+    return 'Tyre removed from $position';
+  }
+
+  @override
+  String fleet360EventSerial(String serial) {
+    return 'Serial: $serial';
+  }
+
+  @override
+  String fleet360EventAccidentCase(String reference) {
+    return 'Accident case $reference';
+  }
+
+  @override
+  String fleet360EventAccidentCaseClosed(String reference) {
+    return 'Accident case $reference closed';
+  }
+
+  @override
+  String fleet360SnapshotTitle(String year) {
+    return 'Financial snapshot, $year year to date';
+  }
+
+  @override
+  String get fleet360TotalMaintenance => 'Total maintenance';
+
+  @override
+  String get fleet360BucketExternal => 'External repairs';
+
+  @override
+  String get fleet360ShareError =>
+      'The summary could not be shared. Try again.';
+
+  @override
+  String get fleet360DocRegistration => 'Registration';
+
+  @override
+  String get fleet360DocInsurance => 'Insurance';
+
+  @override
+  String get fleet360DocOperatingCard => 'Operating card';
+
+  @override
+  String get fleet360DocDriverLicence => 'Driver licence';
+
+  @override
+  String fleet360DocIssued(String date) {
+    return 'Issued $date';
+  }
+
+  @override
+  String fleet360DocExpires(String date) {
+    return 'Expires $date';
+  }
+
+  @override
+  String get fleet360DocExpired => 'Expired';
+
+  @override
+  String get fleet360DocExpiringSoon => 'Expiring soon';
+
+  @override
+  String get fleet360DocValid => 'Valid';
+
+  @override
+  String get fleet360DocNoExpiry => 'No expiry recorded';
+
+  @override
+  String get fleet360DocsEmptyTitle => 'No documents recorded';
+
+  @override
+  String get fleet360DocsEmptyBody =>
+      'No registration, insurance, operating card or licence details are recorded for this asset.';
+
+  @override
+  String get inspectionModuleTyre => 'Tyre inspection';
+
+  @override
+  String get inspectionModuleMachine => 'Machine inspection';
+
+  @override
+  String get fleetListDueSoon => 'Due soon';
+
+  @override
+  String get fleetListDueSoonUnavailable => 'Due items could not be checked';
+
+  @override
+  String get fleetListFiltersTitle => 'Filters';
+
+  @override
+  String fleetListFiltersActive(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Filters, $count active',
+      one: 'Filters, 1 active',
+      zero: 'Filters',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fleetListSortAssetNo => 'Asset number';
+
+  @override
+  String get fleetListSortServiceDue => 'Service due first';
+
+  @override
+  String get fleetListSortTyreActions => 'Most tyre actions';
+
+  @override
+  String get pushNotificationOpen => 'Open';
+
+  @override
+  String get pushNotificationFallbackTitle => 'New notification';
+
+  @override
+  String get pmWoStatusNew => 'New';
+
+  @override
+  String get pmWoStatusAssigned => 'Assigned';
+
+  @override
+  String get pmWoStatusInProgress => 'In Progress';
+
+  @override
+  String get pmWoStatusWaitingForParts => 'Waiting for Parts';
+
+  @override
+  String get pmWoStatusQualityInspection => 'Quality Inspection';
+
+  @override
+  String get pmWoStatusCompleted => 'Completed';
+
+  @override
+  String get pmWoStatusClosed => 'Closed';
+
+  @override
+  String get pmWoStatusCancelled => 'Cancelled';
+
+  @override
+  String get pmWoStatusOverdue => 'Overdue';
+
+  @override
+  String get pmWoStatusOnHold => 'On Hold';
+
+  @override
+  String get pmWoStatusOpen => 'Open';
+
+  @override
+  String get recordsRiskLow => 'Low';
+
+  @override
+  String get recordsRiskMedium => 'Medium';
+
+  @override
+  String get recordsRiskHigh => 'High';
+
+  @override
+  String get recordsRiskCritical => 'Critical';
 }

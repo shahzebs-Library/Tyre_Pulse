@@ -1,5 +1,5 @@
 /**
- * RFID service — RFID Registry tags (V132). Register passive/RAIN RFID tags,
+ * RFID service: RFID Registry tags (V132). Register passive/RAIN RFID tags,
  * map them to tyres (by serial) and assets, and resolve a scanned tag to its
  * mapping. RLS enforces org isolation; this layer keeps an explicit column
  * list, null-safe country scoping and canonical tag-id normalisation, mirroring
@@ -114,4 +114,59 @@ export async function findByTag(tagId, { country, touch = true } = {}) {
     }
   }
   return row
+}
+
+// ── Tag history (rfid_tag_events, written by a database trigger) ─────────────
+export const EVENT_COLS =
+  'id,country,tag_row_id,tag_id,action,from_asset_no,to_asset_no,from_tyre_serial,to_tyre_serial,' +
+  'from_status,to_status,from_site,to_site,actor_name,created_at'
+
+/**
+ * Page through tag history, newest first. Throws on a failed read (the page
+ * shows error + Retry); returns [] only when the table is not provisioned.
+ * @param {{ country?:string, tagRowId?:string, max?:number }} [opts]
+ */
+export async function listTagEvents({ country, tagRowId, max = 20000 } = {}) {
+  const out = []
+  const size = 1000
+  try {
+    for (let from = 0; from < max; from += size) {
+      let q = supabase.from('rfid_tag_events').select(EVENT_COLS)
+      if (tagRowId) q = q.eq('tag_row_id', tagRowId)
+      q = applyCountry(q, country)
+      const rows = unwrap(await q.order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, from + size - 1)) || []
+      out.push(...rows)
+      if (rows.length < size) return { rows: out, truncated: false }
+    }
+    return { rows: out, truncated: true }
+  } catch (err) {
+    if (isMissingRelation(err)) return { rows: [], truncated: false, missing: true }
+    throw err
+  }
+}
+
+/** Map a tag to an asset or a tyre serial (clears the other side). */
+export async function assignTag(id, { assetNo = null, tyreSerial = null, site } = {}) {
+  const a = assetNo ? String(assetNo).trim() : ''
+  const s = tyreSerial ? String(tyreSerial).trim() : ''
+  if (!a && !s) throw new Error('Enter an asset number or a tyre serial to assign the tag to.')
+  const patch = { asset_no: a || null, tyre_serial: s || null, status: 'active' }
+  if (site !== undefined) patch.site = site ? String(site).trim() : null
+  return unwrap(await supabase.from('rfid_tags').update(patch).eq('id', id).select(COLS).single())
+}
+
+/** Remove the mapping; the tag stays registered as unassigned. */
+export async function unassignTag(id) {
+  return unwrap(await supabase.from('rfid_tags').update({ asset_no: null, tyre_serial: null, status: 'unassigned' }).eq('id', id).select(COLS).single())
+}
+
+/** Retire a tag (damaged / removed from use). The mapping is kept for history. */
+export async function retireTag(id) {
+  return unwrap(await supabase.from('rfid_tags').update({ status: 'retired' }).eq('id', id).select(COLS).single())
+}
+
+/** Bring a retired tag back: active when still mapped, otherwise unassigned. */
+export async function reactivateTag(row) {
+  const mapped = Boolean(row?.asset_no || row?.tyre_serial)
+  return unwrap(await supabase.from('rfid_tags').update({ status: mapped ? 'active' : 'unassigned' }).eq('id', row.id).select(COLS).single())
 }

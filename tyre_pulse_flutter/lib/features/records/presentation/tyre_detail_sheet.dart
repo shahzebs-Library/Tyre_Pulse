@@ -27,6 +27,7 @@ import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/records/domain/models/tyre_record.dart';
 import 'package:tyre_pulse/features/records/domain/tyre_risk.dart';
+import 'package:tyre_pulse/features/records/presentation/tyre_risk_label.dart';
 
 /// Opens [record] in a modal bottom sheet. Returns the same [Future] as
 /// [TpBottomSheet.show], so a caller that ever needs to know when the sheet
@@ -92,7 +93,7 @@ class TyreDetailSheet extends ConsumerWidget {
                   const SizedBox(width: TpSpace.md),
                   TpStatusChip(
                     status: tyreRiskStatus(record.riskLevel),
-                    label: record.riskLevel,
+                    label: tyreRiskLabel(l10n, record.riskLevel!),
                   ),
                 ],
               ],

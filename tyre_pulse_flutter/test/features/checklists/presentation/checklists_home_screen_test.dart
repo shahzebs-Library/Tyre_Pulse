@@ -130,6 +130,8 @@ Future<ProviderContainer> _pump(
   bool canLogMeter = false,
   LastOdometerReading? lastOdometer,
   bool lastOdometerFails = false,
+  double? lastEngineHours,
+  bool lastEngineHoursFails = false,
   int? pendingInspectionApprovals,
 }) async {
   tester.view.physicalSize = size;
@@ -169,6 +171,15 @@ Future<ProviderContainer> _pump(
               isRetryable: true,
             )
           : lastOdometer,
+    ),
+    lastChecklistEngineHoursProvider('CP-045').overrideWith(
+      (Ref ref) async => lastEngineHoursFails
+          ? throw const AppError(
+              kind: AppErrorKind.network,
+              message: 'offline',
+              isRetryable: true,
+            )
+          : lastEngineHours,
     ),
   ];
 
@@ -228,7 +239,7 @@ void main() {
       );
       expect(find.textContaining('CP-045 · Concrete Pump'), findsOneWidget);
       expect(find.textContaining('Dubai Industrial City'), findsNWidgets(2));
-      expect(find.text('68,420 km'), findsOneWidget);
+      expect(find.text('\u206668,420 km\u2069'), findsOneWidget);
       // Read live from the fleet register, so it is stated as verified.
       expect(
         find.byKey(ChecklistsHomeScreenKeys.masterDataVerified),
@@ -517,5 +528,21 @@ void main() {
       findsNothing,
     );
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the asset card pairs km with the latest engine hours', (
+    WidgetTester tester,
+  ) async {
+    await _pump(tester, canLogMeter: true, lastEngineHours: 8742.4);
+    expect(find.text('\u206668,420 km / 8,742 h\u2069'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a failed hours read hides hours instead of inventing them', (
+    WidgetTester tester,
+  ) async {
+    await _pump(tester, canLogMeter: true, lastEngineHoursFails: true);
+    expect(find.text('\u206668,420 km\u2069'), findsOneWidget);
+    expect(find.textContaining('km / '), findsNothing);
   });
 }

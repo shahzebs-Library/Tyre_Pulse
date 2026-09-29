@@ -25,7 +25,7 @@
     "Administration": "Administration"
   },
   "items": {
-    "/": "Dashboard",
+    "/": "Command Center",
     "/tyres": "Tyre Records",
     "/fleet-master": "Fleet Master",
     "/asset-management": "Asset Management",

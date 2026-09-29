@@ -604,3 +604,22 @@ Uint8List? _dataImageBytes(String reference) {
     return null;
   }
 }
+
+/// Event types the `accidents.accident_type` CHECK accepts, keyed by the
+/// stored token and labelled in the reader's language.
+Map<String, String> accidentTypeOptions(AppLocalizations l10n) =>
+    <String, String>{
+      'collision': l10n.accTypeCollision,
+      'rollover': l10n.accTypeRollover,
+      'rear_end': l10n.accTypeRearEnd,
+      'side_swipe': l10n.accTypeSideSwipe,
+      'reversing': l10n.accTypeReversing,
+      'fire': l10n.accTypeFire,
+      'vandalism': l10n.accTypeVandalism,
+      'weather': l10n.accTypeWeather,
+      'tyre_failure': l10n.accTypeTyreFailure,
+      'mechanical': l10n.accTypeMechanical,
+      'near_miss': l10n.accTypeNearMiss,
+      'property_damage': l10n.accTypePropertyDamage,
+      'other': l10n.accTypeOther,
+    };

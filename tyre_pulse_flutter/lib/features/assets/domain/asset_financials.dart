@@ -18,6 +18,11 @@
 ///   country the grid lines belong to (the repository scopes both reads by
 ///   one country). `parts_cost` / `tyre_cost` on a job card are deliberately
 ///   NOT read: they would double count the grid.
+/// - External repairs: `work_orders.outside_repair_cost` (live column, summed
+///   by the applied V279 / V322 report RPCs). Same currency rule as labour.
+///   It is empty on most rows today, so the bucket usually carries nothing
+///   and the composition bar then leaves it out rather than drawing a 0%
+///   slice.
 /// - Downtime: `work_orders.breakdown_hours`. Hours only. No labour or
 ///   downtime rate exists anywhere in the schema, so no downtime COST is
 ///   derived - inventing a rate would make up money.
@@ -36,7 +41,7 @@ library;
 import 'package:flutter/foundation.dart' show immutable;
 
 /// The four buckets the cost composition bar shows.
-enum AssetCostBucket { spareParts, lubricants, tyres, labour }
+enum AssetCostBucket { spareParts, lubricants, tyres, labour, external }
 
 /// One `parts_consumption` line.
 @immutable
@@ -88,6 +93,7 @@ class AssetJobCard {
     this.openedAt,
     this.completedAt,
     this.labourCost,
+    this.outsideRepairCost,
     this.breakdownHours,
     this.workType,
     this.status,
@@ -103,6 +109,7 @@ class AssetJobCard {
       openedAt: parseAssetDate(row['opened_at']),
       completedAt: parseAssetDate(row['completed_at']),
       labourCost: _num(row['labour_cost']),
+      outsideRepairCost: _num(row['outside_repair_cost']),
       breakdownHours: _num(row['breakdown_hours']),
       workType: _str(row['work_type']),
       status: _str(row['status']),
@@ -115,6 +122,9 @@ class AssetJobCard {
   final DateTime? openedAt;
   final DateTime? completedAt;
   final double? labourCost;
+
+  /// `work_orders.outside_repair_cost`: work sent to an outside workshop.
+  final double? outsideRepairCost;
   final double? breakdownHours;
   final String? workType;
   final String? status;
@@ -225,6 +235,7 @@ class AssetFinancialSummary {
     required this.lubricants,
     required this.tyres,
     required this.labour,
+    this.external,
     required this.monthly,
     required this.entries,
     required this.lineCount,
@@ -253,6 +264,10 @@ class AssetFinancialSummary {
   /// figure, not a zero.
   final double? labour;
 
+  /// Outside repairs from the job cards. Null when none was recorded - a
+  /// missing figure, not a zero.
+  final double? external;
+
   final List<AssetMonthlyCost> monthly;
   final List<AssetCostEntry> entries;
   final int lineCount;
@@ -278,12 +293,14 @@ class AssetFinancialSummary {
 
   bool get isMixed => mixedCurrencies.length > 1;
 
-  bool get hasCost => lineCount > 0 || (labour ?? 0) > 0;
+  bool get hasCost => lineCount > 0 || (labour ?? 0) > 0 || (external ?? 0) > 0;
 
-  double get total => spare + lubricants + tyres + (labour ?? 0);
+  double get total =>
+      spare + lubricants + tyres + (labour ?? 0) + (external ?? 0);
 
   /// Everything except tyres.
-  double get maintenance => spare + lubricants + (labour ?? 0);
+  double get maintenance =>
+      spare + lubricants + (labour ?? 0) + (external ?? 0);
 
   double? get totalChangePct => _change(total, previousTotal);
   double? get maintenanceChangePct => _change(maintenance, previousMaintenance);
@@ -305,6 +322,7 @@ class AssetFinancialSummary {
         AssetCostBucket.lubricants => lubricants,
         AssetCostBucket.tyres => tyres,
         AssetCostBucket.labour => labour ?? 0,
+        AssetCostBucket.external => external ?? 0,
       };
 
   /// Share of [bucket] in [total], 0..1. Null when there is no total.
@@ -369,6 +387,12 @@ AssetFinancialSummary computeAssetFinancials({
   final double? priorLabour = _sumPositive(
     priorCards.map((AssetJobCard c) => c.labourCost),
   );
+  final double? external = _sumPositive(
+    currentCards.map((AssetJobCard c) => c.outsideRepairCost),
+  );
+  final double? priorExternal = _sumPositive(
+    priorCards.map((AssetJobCard c) => c.outsideRepairCost),
+  );
   final double? downtime = _sumPositive(
     currentCards.map((AssetJobCard c) => c.breakdownHours),
   );
@@ -379,8 +403,10 @@ AssetFinancialSummary computeAssetFinancials({
     priorOil += l.oil;
     priorTyre += l.tyre;
   }
-  final bool hasPrior = prior.isNotEmpty || (priorLabour ?? 0) > 0;
-  final double priorMaintenance = priorSpare + priorOil + (priorLabour ?? 0);
+  final bool hasPrior =
+      prior.isNotEmpty || (priorLabour ?? 0) > 0 || (priorExternal ?? 0) > 0;
+  final double priorMaintenance =
+      priorSpare + priorOil + (priorLabour ?? 0) + (priorExternal ?? 0);
 
   // Monthly trend: contiguous months from the period start to its end, zero
   // for a month with no line (a genuine "nothing issued" month inside a
@@ -394,7 +420,12 @@ AssetFinancialSummary computeAssetFinancials({
     );
   }
   for (final AssetJobCard c in currentCards) {
-    final double v = c.labourCost ?? 0;
+    // Only positive figures, matching `_sumPositive` for the totals, so the
+    // chart can never disagree with the tiles beside it.
+    final double labourPart = (c.labourCost ?? 0) > 0 ? c.labourCost! : 0;
+    final double externalPart =
+        (c.outsideRepairCost ?? 0) > 0 ? c.outsideRepairCost! : 0;
+    final double v = labourPart + externalPart;
     if (v <= 0) continue;
     byMonth.update(
       _monthKey(_cardDate(c)!),
@@ -445,6 +476,7 @@ AssetFinancialSummary computeAssetFinancials({
     lubricants: oil,
     tyres: tyre,
     labour: labour,
+    external: external,
     monthly: monthly,
     entries: entries,
     lineCount: current.length,

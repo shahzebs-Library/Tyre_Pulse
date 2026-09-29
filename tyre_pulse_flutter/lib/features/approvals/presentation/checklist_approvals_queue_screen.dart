@@ -39,6 +39,7 @@ import 'package:tyre_pulse/features/approvals/data/queued_checklist_approval_dec
 import 'package:tyre_pulse/features/approvals/domain/checklist_approval.dart';
 import 'package:tyre_pulse/features/approvals/presentation/widgets/checklist_approval_status_chip.dart';
 import 'package:tyre_pulse/features/approvals/presentation/widgets/queue_list_kit.dart';
+import 'package:tyre_pulse/features/approvals/presentation/widgets/refresh_when_shown.dart';
 
 enum _QueueFilter { all, mine }
 
@@ -53,7 +54,8 @@ class ChecklistApprovalsQueueScreen extends ConsumerStatefulWidget {
 }
 
 class _ChecklistApprovalsQueueScreenState
-    extends ConsumerState<ChecklistApprovalsQueueScreen> {
+    extends ConsumerState<ChecklistApprovalsQueueScreen>
+    with RefreshWhenShown<ChecklistApprovalsQueueScreen> {
   bool _loading = true;
   AppError? _error;
   List<ChecklistApprovalItem> _items = const <ChecklistApprovalItem>[];
@@ -75,6 +77,10 @@ class _ChecklistApprovalsQueueScreenState
     super.initState();
     unawaited(_load());
   }
+
+  /// Same staleness as the inspection queue - see [RefreshWhenShown].
+  @override
+  void refreshWhenShown() => unawaited(_load());
 
   Future<void> _load() async {
     setState(() {

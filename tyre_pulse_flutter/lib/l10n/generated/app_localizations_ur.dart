@@ -2114,6 +2114,16 @@ class AppLocalizationsUr extends AppLocalizations {
   String get homeSiteStatUnavailable => 'کوئی سائٹ درج نہیں';
 
   @override
+  String get homeSiteAllSites => 'تمام سائٹس';
+
+  @override
+  String get homeAccessLoadFailedTitle => 'آپ کی رسائی لوڈ نہیں ہو سکی';
+
+  @override
+  String get homeAccessLoadFailedBody =>
+      'لوڈ ہونے تک کچھ حصے چھپے رہ سکتے ہیں۔ دوبارہ کوشش کے لیے ٹیپ کریں۔';
+
+  @override
   String get homeFleetSizeStatLabel => 'فلیٹ کا حجم';
 
   @override
@@ -2829,7 +2839,7 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get alertsCopyCatalog =>
-      'title=ٹائر الرٹس~all=تمام~critical=سنگین~warnings=انتباہات~info=معلومات~flagged=نشان زدہ~criticalCount=سنگین~emptyTitle=کوئی فعال الرٹ نہیں~emptyFilter=اس فلٹر سے کوئی الرٹ نہیں ملا۔~loadError=الرٹس لوڈ نہیں ہو سکے۔ دوبارہ کوشش کے لیے نیچے کھینچیں۔~unknownAsset=نامعلوم اثاثہ~pressureLow=ٹائر کا دباؤ کم ہے~treadLow=ٹریڈ کی گہرائی کم ہے~position=پوزیشن~serial=سیریل~tread=ٹریڈ~retry=دوبارہ کوشش';
+      'title=ٹائر الرٹس~all=تمام~critical=سنگین~warnings=انتباہات~info=معلومات~flagged=نشان زدہ~criticalCount=سنگین~emptyTitle=کوئی فعال الرٹ نہیں~emptyFilter=اس فلٹر سے کوئی الرٹ نہیں ملا۔~loadError=الرٹس لوڈ نہیں ہو سکے۔ دوبارہ کوشش کے لیے نیچے کھینچیں۔~unknownAsset=نامعلوم اثاثہ~pressureLow=ٹائر کا دباؤ کم ہے~treadLow=ٹریڈ کی گہرائی کم ہے~position=پوزیشن~serial=سیریل~tread=ٹریڈ~retry=دوبارہ کوشش~acknowledge=تسلیم کریں~ackTitle=الرٹ تسلیم کریں~ackBody=کیا اس الرٹ کو جائزہ شدہ نشان زد کریں؟ یہ فہرست سے ہٹا دیا جائے گا۔~ackFailed=تسلیم نہیں ہو سکا۔ دوبارہ کوشش کریں۔~cancel=منسوخ';
 
   @override
   String get notificationInboxCopyCatalog =>
@@ -2849,7 +2859,7 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get stockCountCopyCatalog =>
-      'title=اسٹاک گنتی~items=اشیاء~reorder=دوبارہ آرڈر~notToday=آج نہیں گنا~search=تفصیل یا سائٹ تلاش کریں~all=تمام~low=کم اسٹاک~stale=آج نہیں گنا~empty=کوئی اسٹاک آئٹم نہیں~emptyBody=کوئی اسٹاک ریکارڈ ان فلٹرز سے میل نہیں کھاتا۔~count=گنتی~stockItem=اسٹاک آئٹم~physicalCount=اصل گنتی~reason=وجہ (اختیاری)~cancel=منسوخ~save=گنتی محفوظ کریں~invalid=صفر یا زیادہ گنتی درج کریں۔~offlineSaved=گنتی آف لائن محفوظ اور ہم وقت سازی کے لیے قطار میں ہے۔~saveFailed=اسٹاک گنتی محفوظ نہیں ہو سکی۔~loadFailed=اسٹاک ریکارڈ لوڈ نہیں ہو سکے۔~Critical=انتہائی کم~Low=کم~OK=درست~onHand=دستیاب';
+      'title=اسٹاک گنتی~items=اشیاء~reorder=دوبارہ آرڈر~notToday=آج نہیں گنا~search=تفصیل یا سائٹ تلاش کریں~all=تمام~low=کم اسٹاک~stale=آج نہیں گنا~empty=کوئی اسٹاک آئٹم نہیں~emptyBody=کوئی اسٹاک ریکارڈ ان فلٹرز سے میل نہیں کھاتا۔~count=گنتی~stockItem=اسٹاک آئٹم~physicalCount=اصل گنتی~reason=وجہ (اختیاری)~cancel=منسوخ~save=گنتی محفوظ کریں~invalid=صفر یا زیادہ گنتی درج کریں۔~offlineSaved=گنتی آف لائن محفوظ اور ہم وقت سازی کے لیے قطار میں ہے۔~saveFailed=اسٹاک گنتی محفوظ نہیں ہو سکی۔~loadFailed=اسٹاک ریکارڈ لوڈ نہیں ہو سکے۔~Critical=انتہائی کم~Low=کم~OK=درست~onHand=دستیاب~add=اسٹاک شامل کریں~addTitle=اسٹاک شامل کریں~size=ٹائر سائز~description=تفصیل (اختیاری)~site=مقام (سائٹ)~quantity=مقدار~minLevel=کم از کم سطح~criticalLevel=نازک سطح~sizeRequired=اس اسٹاک کے لیے ٹائر سائز درج کریں۔~siteRequired=اس اسٹاک کے لیے مقام درج کریں۔~addFailed=اسٹاک شامل نہیں ہو سکا۔ دوبارہ کوشش کریں۔~increase=اضافہ~decrease=کمی';
 
   @override
   String get calendarCopyCatalog =>
@@ -7147,4 +7157,264 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get accRptTitle => 'حادثہ رپورٹ کریں';
+
+  @override
+  String get accountDeletionCopyCatalog =>
+      'title=میرا اکاؤنٹ حذف کریں~subtitle=اپنے اکاؤنٹ اور ذاتی ڈیٹا کو حذف کرنے کی درخواست کریں~intro=یہ ایڈمنسٹریٹر کو آپ کا اکاؤنٹ اور اس سے متعلق ذاتی ڈیٹا حذف کرنے کی درخواست بھیجتا ہے۔ آپ کا اکاؤنٹ فوراً حذف نہیں ہوتا۔~what=درخواست پر ایپ تک آپ کی رسائی ختم کر دی جاتی ہے۔ ذاتی پروفائل ڈیٹا حذف کیا جاتا ہے؛ آپ کی تنظیم کے لیے بنائے گئے کچھ فلیٹ ریکارڈ کاروباری یا آڈٹ ریکارڈ کے طور پر رکھے جا سکتے ہیں اور آپ کی شناخت سے الگ کر دیے جاتے ہیں۔~timeline=تصدیق شدہ درخواستیں تقریباً 30 دن میں مکمل کی جاتی ہیں۔~reason=وجہ (اختیاری)~confirm=تصدیق کے لیے DELETE لکھیں~word=DELETE~submit=حذف کی درخواست بھیجیں~cancel=منسوخ~successTitle=درخواست بھیج دی گئی~successBody=آپ کے اکاؤنٹ کو حذف کرنے کی درخواست درج کر لی گئی ہے۔ ایڈمنسٹریٹر تقریباً 30 دن میں اس پر عمل کرے گا۔~errorTitle=درخواست نہیں بھیجی جا سکی~mismatch=تصدیق کے لیے بالکل DELETE لکھیں۔~unavailable=اکاؤنٹ حذف کرنا ابھی دستیاب نہیں۔ حذف کی درخواست کے لیے ہمیں ای میل کریں۔~failed=آپ کی درخواست نہیں بھیجی جا سکی۔ دوبارہ کوشش کریں۔~ok=ٹھیک ہے';
+
+  @override
+  String get homeOperationalSummary => 'آپریشنل خلاصہ';
+
+  @override
+  String get homeInspectionsDue => 'واجب الادا معائنے';
+
+  @override
+  String get homeTyresNeedAttention => 'توجہ طلب ٹائر';
+
+  @override
+  String get homeApprovalsAwaitingYou => 'آپ کی منظوری کے منتظر';
+
+  @override
+  String homePlanMoreToday(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'آج $count مزید',
+      one: 'آج 1 مزید',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get profileAssignedTasks => 'تفویض کردہ کام';
+
+  @override
+  String get profileMyActivity => 'میری سرگرمی';
+
+  @override
+  String get tyreRecordsExportAction => 'برآمد کریں';
+
+  @override
+  String get tyreRecordsExportStatus => 'حیثیت';
+
+  @override
+  String tyreRecordsExportNote(int shown, int total) {
+    return 'اس ڈیوائس پر $total میں سے $shown ٹائر ریکارڈز لوڈ ہیں';
+  }
+
+  @override
+  String get tyreRecordsExportError =>
+      'برآمد فائل نہیں بن سکی۔ براہ کرم دوبارہ کوشش کریں۔';
+
+  @override
+  String get fleet360TabDocuments => 'دستاویزات';
+
+  @override
+  String fleet360AlertServiceDueKm(String km) {
+    return 'سروس $km کلومیٹر میں واجب ہے';
+  }
+
+  @override
+  String fleet360AlertServiceDueHours(String hours) {
+    return 'سروس $hours گھنٹے میں واجب ہے';
+  }
+
+  @override
+  String fleet360AlertServiceDueDays(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'سروس $days دن میں واجب ہے',
+      one: 'سروس کل واجب ہے',
+      zero: 'سروس آج واجب ہے',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fleet360AlertServiceOverdue => 'سروس کی تاریخ گزر چکی ہے';
+
+  @override
+  String fleet360AlertTyreActions(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'ٹائر کے $count اقدامات',
+      one: 'ٹائر کا 1 اقدام',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fleet360EventInspectionDone => 'ٹائر معائنہ مکمل';
+
+  @override
+  String get fleet360EventWashDone => 'دھلائی مکمل';
+
+  @override
+  String fleet360EventTyreFittedAt(String position) {
+    return '$position پر ٹائر لگایا گیا';
+  }
+
+  @override
+  String fleet360EventTyreRemovedFrom(String position) {
+    return '$position سے ٹائر اتارا گیا';
+  }
+
+  @override
+  String fleet360EventSerial(String serial) {
+    return 'سیریل: $serial';
+  }
+
+  @override
+  String fleet360EventAccidentCase(String reference) {
+    return 'حادثے کا کیس $reference';
+  }
+
+  @override
+  String fleet360EventAccidentCaseClosed(String reference) {
+    return 'حادثے کا کیس $reference بند';
+  }
+
+  @override
+  String fleet360SnapshotTitle(String year) {
+    return 'مالی خلاصہ، $year اب تک';
+  }
+
+  @override
+  String get fleet360TotalMaintenance => 'کل دیکھ بھال';
+
+  @override
+  String get fleet360BucketExternal => 'بیرونی مرمت';
+
+  @override
+  String get fleet360ShareError => 'خلاصہ شیئر نہیں ہو سکا۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get fleet360DocRegistration => 'رجسٹریشن';
+
+  @override
+  String get fleet360DocInsurance => 'انشورنس';
+
+  @override
+  String get fleet360DocOperatingCard => 'آپریٹنگ کارڈ';
+
+  @override
+  String get fleet360DocDriverLicence => 'ڈرائیور لائسنس';
+
+  @override
+  String fleet360DocIssued(String date) {
+    return 'جاری $date';
+  }
+
+  @override
+  String fleet360DocExpires(String date) {
+    return 'میعاد ختم $date';
+  }
+
+  @override
+  String get fleet360DocExpired => 'میعاد ختم';
+
+  @override
+  String get fleet360DocExpiringSoon => 'جلد ختم ہو رہا ہے';
+
+  @override
+  String get fleet360DocValid => 'درست';
+
+  @override
+  String get fleet360DocNoExpiry => 'میعاد کی تاریخ درج نہیں';
+
+  @override
+  String get fleet360DocsEmptyTitle => 'کوئی دستاویز درج نہیں';
+
+  @override
+  String get fleet360DocsEmptyBody =>
+      'اس اثاثے کے لیے رجسٹریشن، انشورنس، آپریٹنگ کارڈ یا لائسنس کی کوئی تفصیل درج نہیں۔';
+
+  @override
+  String get inspectionModuleTyre => 'ٹائر معائنہ';
+
+  @override
+  String get inspectionModuleMachine => 'مشین معائنہ';
+
+  @override
+  String get fleetListDueSoon => 'جلد واجب';
+
+  @override
+  String get fleetListDueSoonUnavailable => 'واجب اشیاء چیک نہیں ہو سکیں';
+
+  @override
+  String get fleetListFiltersTitle => 'فلٹرز';
+
+  @override
+  String fleetListFiltersActive(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'فلٹرز، $count فعال',
+      one: 'فلٹرز، 1 فعال',
+      zero: 'فلٹرز',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fleetListSortAssetNo => 'اثاثہ نمبر';
+
+  @override
+  String get fleetListSortServiceDue => 'پہلے واجب سروس';
+
+  @override
+  String get fleetListSortTyreActions => 'سب سے زیادہ ٹائر اقدامات';
+
+  @override
+  String get pushNotificationOpen => 'کھولیں';
+
+  @override
+  String get pushNotificationFallbackTitle => 'نئی اطلاع';
+
+  @override
+  String get pmWoStatusNew => 'نیا';
+
+  @override
+  String get pmWoStatusAssigned => 'تفویض شدہ';
+
+  @override
+  String get pmWoStatusInProgress => 'جاری';
+
+  @override
+  String get pmWoStatusWaitingForParts => 'پرزوں کا انتظار';
+
+  @override
+  String get pmWoStatusQualityInspection => 'کوالٹی معائنہ';
+
+  @override
+  String get pmWoStatusCompleted => 'مکمل';
+
+  @override
+  String get pmWoStatusClosed => 'بند';
+
+  @override
+  String get pmWoStatusCancelled => 'منسوخ';
+
+  @override
+  String get pmWoStatusOverdue => 'تاخیر شدہ';
+
+  @override
+  String get pmWoStatusOnHold => 'روکا گیا';
+
+  @override
+  String get pmWoStatusOpen => 'کھلا';
+
+  @override
+  String get recordsRiskLow => 'کم';
+
+  @override
+  String get recordsRiskMedium => 'درمیانہ';
+
+  @override
+  String get recordsRiskHigh => 'زیادہ';
+
+  @override
+  String get recordsRiskCritical => 'سنگین';
 }

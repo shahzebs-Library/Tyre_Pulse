@@ -126,6 +126,8 @@ export default function EnterpriseTable({
   reportMeta = null,
 
   // extras
+  // `showPagination={false}` hides the footer for short, fixed lists.
+  showPagination = true,
   toolbarExtras = null,
   onRowClick,
 }) {
@@ -642,7 +644,7 @@ export default function EnterpriseTable({
           </div>
 
           {/* Pagination footer */}
-          {!virtual && !loading && filteredTotal > 0 && (
+          {showPagination && !virtual && !loading && filteredTotal > 0 && (
             <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-[var(--border-dim)]">
               <p className="text-sm text-muted">
                 {paginationLabel

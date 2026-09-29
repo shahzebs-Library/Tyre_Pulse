@@ -101,12 +101,18 @@ String accidentWorkstreamOwner(
     final String owner = <String?>[row.team, row.ownerRole]
         .map((String? value) => value?.trim() ?? '')
         .where((String value) => value.isNotEmpty)
+        .map((String value) => accidentOwnerLabel(copy, value))
         .join(' / ');
     if (owner.isNotEmpty) return owner;
   }
   final String fallback = caseFlowStep(workstreamKey)?.owner ?? '';
-  return fallback.isEmpty ? copy('notSet') : fallback;
+  return fallback.isEmpty ? copy('notSet') : accidentOwnerLabel(copy, fallback);
 }
+
+/// A team or owner-role name in the reader's language when it is one of the
+/// case-flow vocabulary names; any other recorded name prints as stored.
+String accidentOwnerLabel(AccidentMockCopy copy, String name) =>
+    accidentVocabLabel(copy, 'owner', name, name);
 
 AccidentWorkstream? accidentWorkstreamRow(
   List<AccidentWorkstream> workstreams,
@@ -633,6 +639,68 @@ const Map<String, List<String>> _strings = <String, List<String>>{
     'محدد',
     'منتخب',
   ],
+
+  // Case-flow owner teams and roles (printed on the workstream header).
+  'owner.Fleet': <String>['Fleet', 'الأسطول', 'فلیٹ'],
+  'owner.Workshop': <String>['Workshop', 'الورشة', 'ورکشاپ'],
+  'owner.External workshop': <String>[
+    'External workshop',
+    'الورشة الخارجية',
+    'بیرونی ورکشاپ',
+  ],
+  'owner.Insurance': <String>['Insurance', 'التأمين', 'انشورنس'],
+  'owner.Command Center': <String>[
+    'Command Center',
+    'مركز القيادة',
+    'کمانڈ سینٹر',
+  ],
+  'owner.Fleet Supervisor': <String>[
+    'Fleet Supervisor',
+    'مشرف الأسطول',
+    'فلیٹ سپروائزر',
+  ],
+  'owner.Insurance Officer': <String>[
+    'Insurance Officer',
+    'مسؤول التأمين',
+    'انشورنس افسر',
+  ],
+  'owner.Workshop Supervisor': <String>[
+    'Workshop Supervisor',
+    'مشرف الورشة',
+    'ورکشاپ سپروائزر',
+  ],
+
+  // Repair route tiles and dispatch live states
+  'route.internal': <String>[
+    'Internal workshop',
+    'ورشة داخلية',
+    'اندرونی ورکشاپ',
+  ],
+  'route.external': <String>[
+    'External workshop',
+    'ورشة خارجية',
+    'بیرونی ورکشاپ',
+  ],
+  'route.on_site': <String>[
+    'On-site repair',
+    'إصلاح في الموقع',
+    'موقع پر مرمت',
+  ],
+  'live.preparing': <String>['Preparing', 'قيد التجهيز', 'تیاری جاری'],
+  'live.in_transit': <String>['In transit', 'قيد النقل', 'راستے میں'],
+  'live.arrived': <String>['Arrived', 'وصلت', 'پہنچ گئی'],
+  'live.accepted': <String>['Accepted', 'تم الاستلام', 'وصول کر لی گئی'],
+  'damageType.bent': <String>['Bent', 'منحني', 'مڑا ہوا'],
+
+  // Assessor action per damaged area
+  'action.repair': <String>['Repair', 'إصلاح', 'مرمت'],
+  'action.replace': <String>['Replace', 'استبدال', 'تبدیل'],
+  'action.structural_review': <String>[
+    'Replace / structural review',
+    'استبدال / مراجعة هيكلية',
+    'تبدیل / ساختی جائزہ',
+  ],
+  'action.monitor': <String>['Monitor', 'مراقبة', 'نگرانی'],
 
   // Case-flow step titles
   'flow.fleet_validation': <String>[

@@ -32,6 +32,7 @@
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tyre_pulse/core/auth/access_permissions_repository.dart';
 import 'package:tyre_pulse/core/auth/auth_lifecycle.dart';
 import 'package:tyre_pulse/core/auth/auth_profile_repository.dart';
 import 'package:tyre_pulse/core/auth/auth_repository.dart';
@@ -79,6 +80,14 @@ final Provider<ProfileRepository> profileRepositoryProvider =
   ),
 );
 
+/// The per-user grants and role matrix the web Access Manager writes.
+final Provider<AccessPermissionsRepository>
+    accessPermissionsRepositoryProvider = Provider<AccessPermissionsRepository>(
+  (ref) => SupabaseAccessPermissionsRepository(
+    ref.watch(supabaseClientProvider),
+  ),
+);
+
 /// The minimum-supported-version check.
 final Provider<VersionGateRepository> versionGateRepositoryProvider =
     Provider<VersionGateRepository>(
@@ -104,3 +113,15 @@ final Provider<ForegroundSignal> foregroundSignalProvider =
 /// than the real 8 seconds.
 final Provider<Duration> sessionRestoreTimeoutDurationProvider =
     Provider<Duration>((ref) => sessionRestoreTimeout);
+
+/// Work that must run BEFORE the session ends on a user-initiated sign-out,
+/// while server calls still carry the user's session (today: revoking this
+/// device's push token). The default does nothing; `main.dart` overrides it.
+///
+/// `AuthController.signOut` bounds this and swallows every failure, so it can
+/// never keep someone from reaching the login screen.
+final Provider<Future<void> Function()> beforeSignOutProvider =
+    Provider<Future<void> Function()>((ref) => () async {});
+
+/// The upper bound `AuthController.signOut` gives [beforeSignOutProvider].
+const Duration beforeSignOutTimeout = Duration(seconds: 5);

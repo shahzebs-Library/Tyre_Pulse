@@ -523,7 +523,10 @@ void main() {
     test('drops a key this app version does not know', () {
       final AccessState access = AccessState.fromRaw(
         role: managerRole,
-        grantsRaw: const <String, Object?>{'mobile:inspections': 'revoke'},
+        // `mobile:inspections` is no longer here: it is the web console's
+        // spelling of the phone's `inspect` and is now mapped through
+        // webModuleKeyAliases (see the alias group below).
+        grantsRaw: const <String, Object?>{'mobile:no_such_module': 'revoke'},
       );
       expect(access.grants, isEmpty);
     });
@@ -611,6 +614,92 @@ void main() {
             expect(result.precedence, precedence);
           }
         }
+      }
+    });
+  });
+
+  group('web-console key aliases (mobile:<webKey>)', () {
+    test('a mobile:tyre_records matrix row reaches the records module', () {
+      final AccessState access = AccessState.fromRaw(
+        role: reporterRole,
+        roleMatrixRaw: <String, Object?>{'mobile:tyre_records': true},
+      );
+      expect(access.roleMatrix[ModuleKey.records], isTrue);
+    });
+
+    test('the phone key beats an alias for the same module', () {
+      final AccessState access = AccessState.fromRaw(
+        role: reporterRole,
+        roleMatrixRaw: <String, Object?>{
+          'mobile:fleet_master': false,
+          'mobile:vehicles': true,
+        },
+      );
+      expect(access.roleMatrix[ModuleKey.vehicles], isTrue);
+      expect(decide(ModuleKey.vehicles, access).isAllowed, isTrue);
+    });
+
+    test('an alias revoke beats a phone-key grant', () {
+      final AccessState access = AccessState.fromRaw(
+        role: managerRole,
+        grantsRaw: <String, Object?>{
+          'mobile:inspect': 'grant',
+          'mobile:inspections': 'revoke',
+        },
+      );
+      expect(access.grants[ModuleKey.inspect], GrantEffect.revoke);
+      expect(
+        decide(ModuleKey.inspect, access).reason,
+        AccessReason.perUserRevoke,
+      );
+    });
+
+    test('a bare web key (web-only scope) never reaches the phone', () {
+      final AccessState access = AccessState.fromRaw(
+        role: reporterRole,
+        grantsRaw: <String, Object?>{
+          'tyre_records': 'grant',
+          'approvals': 'grant',
+        },
+        roleMatrixRaw: <String, Object?>{'tyre_records': true},
+      );
+      expect(access.grants, isEmpty);
+      expect(access.roleMatrix, isEmpty);
+    });
+
+    test('sub-module keys are never aliased', () {
+      final AccessState access = AccessState.fromRaw(
+        role: reporterRole,
+        roleMatrixRaw: <String, Object?>{'mobile:fleet_master:assets': false},
+      );
+      expect(access.roleMatrix, isEmpty);
+    });
+
+    test('an unmapped custom role is governed by its role matrix', () {
+      final AccessState access = AccessState.fromRaw(
+        role: unknownRole,
+        roleMatrixRaw: <String, Object?>{'mobile:inspect': true},
+      );
+      expect(
+        decide(ModuleKey.inspect, access).reason,
+        AccessReason.roleMatrixEnabled,
+      );
+      expect(decide(ModuleKey.scan, access).reason, AccessReason.unknownRole);
+    });
+
+    test('super admin is never locked, even by a revoke', () {
+      final AccessState access = AccessState.fromRaw(
+        role: reporterRole,
+        isSuperAdmin: true,
+        grantsRaw: <String, Object?>{'mobile:admin': 'revoke'},
+      );
+      expect(decide(ModuleKey.admin, access).isAllowed, isTrue);
+    });
+
+    test('every alias target is a real module and no alias shadows a phone key',
+        () {
+      for (final String webKey in webModuleKeyAliases.keys) {
+        expect(moduleKeyFromWireKey(webKey), isNull, reason: webKey);
       }
     });
   });

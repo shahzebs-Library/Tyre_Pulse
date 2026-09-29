@@ -34,6 +34,24 @@ no-build-unless-the-owner-asks rule above still applies to the Flutter workflow 
 
 ---
 
+# ⚑ UPDATE 2026-09-29: THE OWNER PUT THE FLUTTER APP ON PLAY CLOSED TESTING HIMSELF.
+**UPDATE 2026-09-29 (later): `flutter-release-play.yml` now publishes STRAIGHT to Closed testing (track `alpha`),
+owner request. Guard allows only `alpha` + package `com.shahzebrahman.tyrepulse`; production still owner-only.**
+**FORCED UPDATE (Flutter, 2026-09-29):** set `system_config.flutter_min_version` (e.g. `0.1.1`); any Flutter build
+below it sees "Update required" (Open the store -> Play listing of com.shahzebrahman.tyrepulse, or Sign out). SEPARATE
+key from Expo's `mobile_min_version` (Expo is 1.x, Flutter 0.x). Checked after sign-in; FAILS OPEN on blank/junk.
+The release workflow now passes `--dart-define=APP_VERSION=<pubspec version name>`; builds before this fix default to
+999.0.0 and can NEVER be blocked. RULE: bump `version:` in tyre_pulse_flutter/pubspec.yaml before each release, set the
+minimum only AFTER the new build is live on the track.
+The internal-only note below is superseded for Closed testing (owner's own action). Production is still the owner's call only.
+Parity pass Expo -> Flutter DONE (code only): every Expo route has a Flutter screen; added alert Acknowledge (+hides
+acknowledged), stock +/- (post_stock_movement, offline fallback) + Add stock, Profile "Delete my account" request
+(account_deletion_requests). alerts_compact_dark golden regenerated via flutter-ci update_goldens.
+STILL MISSING in Flutter: push registration (needs firebase_messaging + config + build), admin approvals tab (pending
+uploads / accident closure; 0 waiting live), admin add/edit site + vehicle (Expo's add-vehicle is BROKEN: writes
+status 'active' vs CHECK Active), accident parts/remarks in PDF, server-side language save, stock size/location
+filters. Accident detail status/delete deliberately NOT ported (owner decision).
+
 # ⚑ FLUTTER = INTERNAL TESTING ONLY. OWNER INSTRUCTION 2026-09-27, STANDING.
 
 **Never publish the Flutter app to Closed/Open/Production, and never into the production app listing.**
@@ -73,6 +91,184 @@ web build.
 pushing the branch ref raises no preview. That is a different lever - it stops
 PREVIEW builds; `ignoreCommand` stops PRODUCTION ones for irrelevant paths;
 batching stops them being started at all.
+
+---
+
+# ⚑ SESSION 2026-09-29 (part 3) — FLUTTER MOCK PARITY (8 agents) + FCM PUSH + BROWSER QA (2 rounds). 13 LOCAL COMMITS, NOT PUSHED (owner: push only on "push"; PR #370 still NOT to be merged).
+- **Approval "old data" bug FIXED:** approval queues loaded once and kept rows across tabs, so a supervisor opened an OLDER
+  pending sheet of the same asset. Queues now re-read when shown/on return/on resume (`approvals/presentation/widgets/
+  refresh_when_shown.dart`); review screen resets on id change. Same code on main, so every build had it.
+- Inspection wizard no longer carries previous odometer/hours/notes into the next inspection of the same asset.
+- Mock parity (owner jpgs in scratchpad m/ + mocks/ + mocks3/): Vehicle 360 to vehicle_360.jpg (header, service-due + tyre
+  actions strip, Overview/Timeline/Costs/Documents, share PDF; health score + downtime cost OMITTED, no source); fleet list
+  due lines/filters/sort; home plan row + summary; profile tasks; tyre records PDF export; checklist hours; accident label
+  and card fixes; loader tyre/machine switch. Mock 12 file is EMPTY (ask owner again).
+- **FCM push:** firebase_core/messaging, google-services.json COMMITTED on purpose, token via register_user_device,
+  workflow-notify sends Expo tokens to Expo and others to FCM v1 via secret FIREBASE_SERVICE_ACCOUNT (owner set it).
+  **workflow-notify NOT YET DEPLOYED.** Android Gradle plugin 4.4.4 unverified (no Android SDK here) - CI build_android is the check.
+- Browser QA: preview harness in scratchpad qa_web (tests converted to a web gallery, Playwright screenshots). Fixed navy
+  logo box on light chrome, 0pt-tall cost bar, cut labels, fleet 14px overflow at 360dp.
+- Tests: `flutter test`/`very_good test` via shell are BLOCKED by a vgv plugin hook; the very-good MCP test tool times out
+  at 60s. Analyze clean on HEAD. Goldens changed (Windows regen needed): asset_overview_light, inspection_tyres_selected.
+- **QA round 2 (Playwright, concrete fixes + before/after screenshots):** dea737f7 home/profile/my work/PM/checklists,
+  3076fc9c Vehicle 360/fleet/tyre records, 40578d18 accidents + translations. More goldens to regen: accident_case_overview_light
+  (+ my_work at 360 possibly).
+- ARB parity pin **2139**.
+- **ALL DATA SHOWN IS FROM REAL TABLES**; anything with no source (health score, downtime cost, fleet pulse, Online, tyre
+  pressure/predicted life, engine hours on fleet rows, Add asset / Add tyre record) was OMITTED, not faked.
+- **OPEN (not 100% ready):** tests unverified locally (hook) -> CI after push; goldens -> flutter-ci `update_goldens` input
+  after push; workflow-notify deploy (verify_jwt=false, diff vs repo) after owner OK; Gradle plugin unverified; on-device
+  push untested; mock 12 empty; testers need merge + a new Flutter build (owner's call). QA harness copies in scratchpad qa_a/b/c.
+
+---
+
+# ⚑ SESSION 2026-09-29 (part 2) — 8-AGENT BATCH: 12 PAGES FIXED/REBUILT. 6 migrations APPLIED LIVE. PR #370 STILL UNMERGED.
+- **Migrations (all applied + verified by impersonation, files in supabase/migrations/):** 20260929120500 fleet_renewal_plans
+  += planned_year/currency + `get_fleet_renewal_signals(country)` (INVOKER); 121000 `rfid_tag_events` (append-only, trigger on
+  rfid_tags, no client writes); 121100 `qr_print_jobs` (codes only, no images); 122000 vehicle_reservations += project/
+  cost_centre/driver_id/approval+reject+odometer+actual times/gate_pass_id/handover_id + guard trigger (only elevated approve/
+  reject; Rejected = status cancelled + rejected_* fields) + `vehicle_reservation_events` history; 123000 tyre_spec_catalog +=
+  source_url/source_note + 29 PENDING web-seeded rows (retailer listings via WebSearch; tread/dimensions left blank); 123100
+  `get_tyre_brand_size_mix(country)`.
+- **Pages:** Vehicle History (asset view + register, month timeline over 7 sources, drawer, per-currency spend); Fleet Renewal
+  (0-100 score age30/repair25/downtime15/km10/hours10/accidents10, budget by year); QR Labels (print sheet fixed = was 230mm on
+  A4, persisted print jobs, reprint); RFID (assign/unassign/retire/reactivate + real history tab); Vehicle Handover (damage marked
+  on Flutter 5-view pictures, `public/vehicle-views/*.webp` copies with FRONT badges blurred only, handover PDF); Reservations
+  (detail drawer + actions, every dead click wired); Odometer/Engine Hours (per-asset history drawer + chart); Tyre Passport +
+  Serial Tracker (brand-free tread SVGs `src/lib/tyreImage.js` + `public/tyre-images/`, passport cost no longer double counted,
+  serial match now case-insensitive, undo scrap re-reads status); Tyre Specifications (Fleet coverage tab, `getSpecFor`);
+  Fitment Validation (kit rebuild to mockup 18, score = real checks only; pressure bands 5%/10% are MY choice, owner to confirm;
+  fixed a bug where the size audit always read empty); Gate Pass (layout overflow fixed at 390-1440); Tyre Exchange (serial-less
+  rows no longer merged, blocking + warning checks, detail modal).
+- **Size Optimizer** (/tyre-size, TyreSizeAnalysis.jsx) rebuilt on the kit to the owner mockup: recommendations only within
+  same vehicle type + country, >=5% better measured CPK; runs are session-only; fuel/terrain/downtime N/A (no data);
+  application DERIVED from vehicle type; old analyses kept in the History tab (`components/sizeOptimizer/`).
+- **Mockup 19 batch:** Tyre Lifecycle Tracker (/tyre-lifecycle, `components/tyreLifecycle/`, status from measureFor),
+  Combination Manager (/combinations; migration 20260929125000 adds combination_no/type/axle_config/tyre_config/
+  max_load_tonnes + under_review; fixed Unit intelligence always reading 0 tyres; Compliance = config fields filled, owner
+  to confirm), Pressure Intelligence (/pressure-intel; only source = inspections.tyre_conditions, vs vehicle median rule,
+  tpms_readings 0 rows, temperature/fuel N/A).
+- **FLUTTER TESTERS SEE NO MODULES (owner screenshot, Fleet Supervisor):** server is fine (get_user_module_permissions
+  returns 10 mobile: rows when impersonated). Cause = the Play closed-testing build predates the access loader, which is
+  only on this branch, not main. Fixed now (code only): "All sites" instead of "No site on file" on Home + Profile when
+  sites=['ALL']; failed access read shows Retry instead of "nothing for your role" (PermissionsStatus). Testers need
+  merge + a new Flutter build (owner's call). ARB key parity now 2073.
+- **KitTable** now one style for all kit pages (fixed heights, numeric right-align, `numeric`/`scroll` props).
+- **OPEN:** network policy blocks supabase.co / vercel.app / manufacturer sites = no browser QA, no datasheet fetch; Director demo
+  account NOT created yet (waits on network access). Catalogue rows need manager approval. Badges on side/rear/top vehicle views
+  and the accident module PNGs not yet blurred. `listExchangeTyreRecords` has no row cap.
+
+---
+
+# ⚑ SESSION 2026-09-29 — 15+ PAGES REBUILT ON THE COMMAND CENTER KIT (owner mockups). No migration. LIVE STATUS BELOW.
+**Branch `claude/command-center-dashboard` == PR #370. OWNER RULES FOR THIS WORK (standing):**
+- **Do NOT merge PR #370 until the owner says so.** Keep ALL work on this one branch.
+- **No unnecessary tests or actions:** no scheduled jobs/triggers (the merge-when-green trigger was DELETED), no
+  repeated pushes (each push = full CI + Vercel preview). Commit locally by pathspec; push ONCE per finished batch.
+  Agents run only eslint + their own tests + one `vite build`, never the full suite.
+- **Keep this memory entry current** so the owner can clear/compact the session at any time.
+- Agent brief for every page: scratchpad `PAGES_BRIEF.md` (lost on container reset; its rules are the kit rules in
+  part 14 below + real data only / N/A / no blended currency / keep every existing capability / no raw <table>).
+
+**DONE + committed (pages on `commandCenter/kit.jsx`, each with pure `src/lib/<x>View.js` + test + page css on `--cc-*`):**
+- Fleet Renewal (ASSUMED 10-yr planning life, useful_life empty; model_year 20222/2202 rejected; plans table 0 rows).
+- Batteries /batteries = Battery Lifecycle (ASSUMED 36-month life; no type/charge columns).
+- Vehicle History (unified timeline, per-currency cost, movement INFERRED from record sites, no Add Event).
+- Asset Disposal (40 KSA proposed rows unvalued; Request Valuation sheet; blank value on upload overwrites).
+- Customers (0 rows; accounts/contracts linked by exact normalised NAME; revenue/satisfaction/SLA N/A).
+- QR Labels (label info toggles, custom width in qrLabelLayout.js; print queue/history are SESSION ONLY, no table).
+- RFID Registry: **REAL BUG FIXED** - old page read V122 columns (tag_uid/tag_epc/tyre_record_id) that the live
+  V132 `rfid_tags` does not have and inserted status 'available' (CHECK allows active/unassigned/retired) -> every
+  load and save failed in production. Keyboard-wedge scan; read success rate N/A.
+- Engine Hours: **REAL BUG FIXED** - `listEngineHours` used one .limit(1000) over ~4,883 rows; now fetchAllPages.
+- Odometer Logs (accept-but-flag; missing = no reading in 30 d; thresholds saved in browser only).
+- Fleet Utilization (asset_utilization is a SNAPSHOT per capture date, not daily; trend by capture date only).
+- Vehicle Check In/Out (expected-in DERIVED = checkout + 24 h; quick check-in closes the open checkout).
+- Vehicle Handover /handovers: 5-step wizard; **drawn signature now SAVED** (old page discarded it), rendered as
+  data-URL <img> (safe). Zones saved in `damages` jsonb.
+- Hero art `public/dashboard/hero-*.webp` = crops of the owner mockups, truck badges/brand text blurred, dark =
+  darkened light. Keys: renewal battery history disposal customers rfid reservations tyres gatepass (+ older ones).
+  When a mockup is only pasted (not on disk) there is no art: reuse an existing hero and say so.
+
+- Vehicle Reservations /reservations (786dcedd): calendar day/week/month with lane packing, live clash check
+  (save blocked unless "Save anyway" -> flagged double-booked), availability check, Excel/CSV import. No columns for
+  type/project/driver/attachments (omitted, stated). Map view = honest empty (sites has no coordinates). 0 rows live.
+- Gate Pass (f9086298): inward + outward (outward = the existing safety-gated clearance, kept whole). Direction/driver/
+  purpose/expected times/check-in-out stored in `gate_passes.custom_data` (no CHECK on status; verified). New statuses
+  Checked in/Approved/Checked out; 'Cleared' counts elsewhere unchanged. Pass no = GP-<year>-<8 hex of id>. No photos
+  or driver phone (no column). Overstay = checked in, not out, past expected out.
+- Tyre Records (server paging + get_tyre_filter_options + scrap RPC kept; columns verified) and Serial Tracker
+  (server-paged register, handheld scan, history built from records; stock/repair/expected life/DOT/temperature
+  N/A = no column) DONE. Gate Pass profiles name read bounded (.limit(200)) for rowCapGuard.
+- ALL 4 of the last batch done + pushed once. PR #370 still UNMERGED (owner rule).
+- Tyre Exchange (5a7508a2): register rows TYPED from tyre_records history (transfer/interchange/replacement/fitting/
+  removal); a new exchange saves ONE tyre_service_events row (Replacement->replacement, Interchange->rotation,
+  Transfer->other; RLS checked: org default + auth insert OK) and does NOT change tyre_records. No time of day /
+  technician / condition / photo storage on records = shown honestly. Old 6 tabs kept in "Transfer analysis".
+- Tyre Specifications: tyre_specifications = FITMENT RULES per vehicle type + position (approved_sizes[]/
+  approved_brands[]/min_load/min_speed/ply/pressure/min_tread/notes), NOT a brand-pattern catalogue, 0 rows live.
+  Pattern/TT-TL/dual load/weight/images/approval status have NO column -> "Not recorded"/N/A. "Approved/Not approved"
+  KPIs = fitted tyres conforming or not. Page 2,680 -> ~990 lines; 6 heavy tabs moved unchanged to
+  src/components/tyreSpec/. Approval history tab is session-only (says so).
+- Rotation Schedule /rotation: tyre_rotations has NO type/positions/technician columns (0 rows, no CHECK) -> the
+  form writes a header line into `notes` ("Rotation: X | From: .. | To: .. | Technician: ..") read back by parsePlan;
+  real columns would need a migration (owner decision). Schedule no derived ROT-<year>-<6 of id>. Wear before/after
+  N/A (tread_depth 0 rows). Money N/A under All countries (old page blended currencies). RotationOptimizer untouched.
+- Batch Exchange/Specs/Rotation done + pushed once. PR #370 UNMERGED.
+- **OWNER APPROVED REAL COLUMNS (2026-09-29). Migration `supabase/migrations/20260929090000_rotation_fields_and_
+  tyre_spec_catalog.sql` APPLIED LIVE + verified by impersonation (rolled back).**
+  tyre_rotations += rotation_type (CHECK standard|cross|side_to_side|x_pattern|custom), from_positions[], to_positions[],
+  technician_id/technician_name, attachments jsonb[], completed_at, completed_km (notes header backfilled).
+  NEW tyre_spec_catalog = real brand/pattern/size catalogue (all mockup fields) + approval_status approved|pending|
+  not_approved; trigger lets ONLY Admin/Manager/Director/super set approval (42501 otherwise), stamps approver, and
+  writes tyre_spec_catalog_events (append-only history, users read-only). tyre_specifications STAYS = fitment rules.
+  Files for both go in private bucket tyre-photos (<org>/rotations|spec-catalog/<id>/...).
+  DONE + pushed: Rotation page saves/reads the real columns + attachments (Cross = forward cross, X Pattern = full X:
+  then relabelled to industry patterns: Front to Rear=standard, Forward Cross=cross, Rearward Cross=rearward_cross
+  (CHECK widened live 20260929100000), Side to Side, X Pattern, Custom; team may refine later); Tyre Specs "Catalogue" tab = tyre_spec_catalog (approve/reject for elevated, history from
+  events), fitment rules kept on a "Fitment rules" tab. Files stay in storage on delete (bucket has no delete policy).
+  **FLUTTER ACCESS FIX (code only, NOT on phones until the owner asks for a build):** the Flutter app NEVER loaded
+  get_my_access_grants / get_user_module_permissions, so every web Access Manager setting (~150 live `mobile:` role
+  rows + per-user grants) was ignored and Approvals/Admin/Users were shut for all but Admin. New
+  core/auth/access_permissions_repository.dart loads both at sign-in + on resume (max once/min); `webModuleKeyAliases`
+  in module_registry.dart maps `mobile:<webKey>` rows (tyre_records->records, inspections->inspect, ...), phone key
+  wins, revoke beats grant. 395/395 permission/auth/router tests pass. OPEN (owner): plain web-only grants do NOT
+  reach the phone (by design of "Web only" scope); Maintenance Supervisor loses Serial Search because live row
+  `mobile:serial_tracker=false`; no realtime (resume only).
+**Flutter / Play (owner is moving Internal -> Closed testing):**
+- Checklist + all listing text: `store-assets/FLUTTER_CLOSED_TESTING.md` (owner could not find it in Play Console;
+  it is a repo file; the click paths are in it).
+- 8 real phone screenshots (1080x1920) committed in `store-assets/flutter_screenshots/` (rendered from golden-test
+  fixtures with real fonts; Mercedes badge blurred on 07).
+- **The Flutter launcher icon is still the DEFAULT FLUTTER LOGO** (android mipmap ic_launcher). New icon draft
+  (white tyre ring + lime pulse, full-bleed square 512) at `store-assets/drafts/play_icon_512.png`, script `store-assets/drafts/icon.py`;
+  awaiting owner approval, then generate mipmaps/adaptive icon. Needs a build to reach phones - owner decides builds.
+- Flutter SDK was re-downloaded to scratchpad `flutter-sdk` (lost on container reset).
+
+---
+
+# ⚑ SESSION 2026-09-28 (part 14) — HOME = COMMAND CENTER (owner's light + dark mockups). No migration.
+- `/` now renders `src/pages/CommandCenter.jsx` -> `src/components/commandCenter/CommandCenter.jsx` (+ `commandCenter.css`,
+  dark default, `html.light .cc` overrides). Nav label "Command Center" (en+ar). The OLD Dashboard is kept, lazy-mounted
+  behind a "Detailed analytics" disclosure (mountFetchCost tests still import it). Do NOT build a second home.
+- Pure engine `src/lib/commandCenter.js` (fleetStats/tyreHealth/actionBuckets/maintenanceDue/utilizationByMonth, null = N/A)
+  + per-card loaders `src/lib/api/commandCenter.js` (each card loads/fails/retries alone). Reuses getTyreRunningLife,
+  listActionItems, loadPmDashboard, listAssetUtilization, loadGovernedCost, approvalsQueue. Tests commandCenter.test.js.
+- Honest choices vs mockup: spend under All countries lists per-country totals (never blended); spend legend = Tyres/Spare/Oil
+  (real buckets); compliance tiles N/A when unreadable; map is a static Natural Earth path (`worldLand.js`) framed to the
+  countries operated in. Hero art = crops of the owner's mockups (`public/dashboard/hero-*.webp`), truck grille emblems blurred.
+- **SAME KIT, 6 MORE PAGES (part 14b):** Fleet Master, Asset Management, Site Management, Fleet Groups, Tyre Passport,
+  Predictive Maintenance rebuilt to the owner's LIGHT mockups; dark derives from the same `.cc` tokens.
+  **Shared kit = `src/components/commandCenter/kit.jsx`** (PageHero, Kpi, Card, CardState, Tabs, Donut, Pager, VehicleThumb,
+  MeterCell, fmtInt/fmtPct, **KitTable**). USE IT for any new redesigned page; do not hand-roll cards.
+  **KitTable wraps EnterpriseTable** (the design ratchet forbids a raw `<table>` in src/pages, baseline 0). For
+  server/URL paging pass `manualPagination showPagination={false}` and keep the kit `Pager` below; custom sort headers
+  are passed as `header` nodes with `enableSorting={false}`. `EnterpriseTable` gained `showPagination` (default true).
+- **Vehicle pictures = `src/lib/vehiclePhoto.js`**, a port of the Flutter `vehicle_photo_resolver.dart` over
+  `public/vehicle-photos/*.webp` (same photos). CHANGE BOTH TOGETHER. Branded art only when make/model names the brand;
+  otherwise null -> neutral icon.
+- New engines (pure + tests): `siteOperations.js`, `fleetGroupsView.js`, `predictiveOverview.js`, `tyrePassportView.js`,
+  plus `api/fleetMasterData.js`, `api/siteOperations.js`, `api/fleetGroupSignals.js`, `api/predictiveOverview.js`.
 
 ---
 

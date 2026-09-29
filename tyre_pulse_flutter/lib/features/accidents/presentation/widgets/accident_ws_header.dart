@@ -24,6 +24,7 @@ import 'package:tyre_pulse/features/accidents/domain/accident_case_vocab.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_models.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_mock_copy.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_ui.dart';
+import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_workstream_editor.dart';
 
 /// What a line-2 segment describes; drives its icon.
 enum AccidentSlaSegmentKind { received, withTeam, sla, info }
@@ -125,16 +126,22 @@ class AccidentWorkstreamHeader extends ConsumerWidget {
         key: const Key('accident.ws.header'),
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Wrap(
-            spacing: TpSpace.sm,
-            runSpacing: TpSpace.xs,
-            crossAxisAlignment: WrapCrossAlignment.center,
+          // A Row, not a Wrap: the long line must wrap beside its leading
+          // chip or icon instead of dropping below it and leaving the icon
+          // alone on the first line.
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               if (status.isNotEmpty)
                 TpStatusChip(
                   key: const Key('accident.ws.header.status'),
                   status: accidentTone(status),
-                  label: humaniseAccidentToken(status),
+                  // The editor already carries the status vocabulary in
+                  // en/ar/ur; the humaniser is English-only, which put
+                  // "In Progress" on an Arabic header.
+                  label: _localisedStatuses.contains(status)
+                      ? workstreamEditorCopy(context, status)
+                      : humaniseAccidentToken(status),
                   isCompact: true,
                 )
               else
@@ -143,19 +150,22 @@ class AccidentWorkstreamHeader extends ConsumerWidget {
                   size: TpSizing.iconMd,
                   color: palette.primary,
                 ),
-              Text.rich(
-                TextSpan(
-                  children: <InlineSpan>[
-                    TextSpan(text: '$stepLabel: '),
-                    TextSpan(
-                      text: title,
-                      style: TextStyle(color: palette.primary),
-                    ),
-                    TextSpan(text: ' | ${copy('ownerLabel')}: $ownerShown'),
-                  ],
+              const SizedBox(width: TpSpace.sm),
+              Expanded(
+                child: Text.rich(
+                  TextSpan(
+                    children: <InlineSpan>[
+                      TextSpan(text: '$stepLabel: '),
+                      TextSpan(
+                        text: title,
+                        style: TextStyle(color: palette.primary),
+                      ),
+                      TextSpan(text: ' | ${copy('ownerLabel')}: $ownerShown'),
+                    ],
+                  ),
+                  key: const Key('accident.ws.header.line1'),
+                  style: text.titleSmall?.copyWith(fontWeight: FontWeight.w800),
                 ),
-                key: const Key('accident.ws.header.line1'),
-                style: text.titleSmall?.copyWith(fontWeight: FontWeight.w800),
               ),
             ],
           ),
@@ -357,3 +367,13 @@ String accidentSlaLine({
       fallbackTeam: fallbackTeam,
       now: now,
     ).map((AccidentSlaSegment s) => s.text).join(' · ');
+
+/// Workstream statuses [workstreamEditorCopy] translates.
+const Set<String> _localisedStatuses = <String>{
+  'in_progress',
+  'waiting_info',
+  'waiting_external',
+  'on_hold',
+  'completed',
+  'reopened',
+};

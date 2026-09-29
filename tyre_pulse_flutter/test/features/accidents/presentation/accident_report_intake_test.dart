@@ -418,7 +418,8 @@ void main() {
     handle.dispose();
   });
 
-  testWidgets('footer is one row; save and exit moves to the menu after step 1',
+  testWidgets(
+      'footer never cuts a label; save and exit moves to the menu after step 1',
       (WidgetTester tester) async {
     await _pumpReport(
       tester,
@@ -439,7 +440,11 @@ void main() {
     final Finder next =
         find.byKey(const ValueKey<String>('accident.report.continue'));
     expect(save, findsOneWidget);
-    expect(tester.getCenter(save).dy, tester.getCenter(next).dy);
+    // At 390dp the shared button cannot print "Save and exit" and "Continue
+    // to incident details" in one row without cutting them, so the pair
+    // stacks with the primary action nearest the thumb.
+    expect(tester.getCenter(save).dy, lessThan(tester.getCenter(next).dy));
+    expect(tester.getSize(save).width, tester.getSize(next).width);
     expect(
       find.byKey(const ValueKey<String>('accident.report.moreActions')),
       findsNothing,

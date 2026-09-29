@@ -26,6 +26,8 @@ import 'package:tyre_pulse/features/accidents/domain/accident_case_vocab.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_handover_gating.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_models.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_timeline_feed.dart';
+import 'package:tyre_pulse/features/accidents/presentation/accident_mock_copy.dart';
+import 'package:tyre_pulse/features/accidents/presentation/accident_timeline_copy.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_header.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_mock_kit.dart';
 
@@ -302,7 +304,7 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
     final WsKitCopy c = WsKitCopy(context);
     await TpBottomSheet.show<void>(
       context: context,
-      title: entry.title,
+      title: accidentTimelineText(context, entry.title),
       builder: (BuildContext sheet) => SingleChildScrollView(
         padding: const EdgeInsets.all(TpSpace.lg),
         child: Column(
@@ -324,7 +326,8 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
                 ),
               ],
             ),
-            for (final String detail in entry.details) Text('• $detail'),
+            for (final String detail in entry.details)
+              Text('• ${accidentTimelineText(context, detail)}'),
             for (final String warning in entry.warnings)
               Text(
                 '• $warning',
@@ -386,7 +389,9 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
             ),
             AccidentMockChip(
               label: c.l10n.accTlCurrentOwner,
-              value: c.value(currentOwner(widget.snapshot)),
+              value: c.value(
+                _ownerText(context, currentOwner(widget.snapshot)),
+              ),
               icon: Icons.person_outline,
             ),
             AccidentMockChip(
@@ -537,22 +542,41 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        Wrap(
-          spacing: TpSpace.sm,
-          runSpacing: TpSpace.xs,
-          children: <Widget>[
-            for (final String filter in timelineFilters)
-              ChoiceChip(
-                key: Key('accident.timeline.filter.$filter'),
-                showCheckmark: false,
-                avatar: filter == 'all'
-                    ? null
-                    : Icon(_filterIcon(filter), size: TpSizing.iconSm),
-                label: Text(_filterLabel(c, filter)),
-                selected: _filter == filter,
-                onSelected: (_) => setState(() => _filter = filter),
-              ),
-          ],
+        // One scrollable row of filters, as the mock draws it; the
+        // selected filter is the filled navy chip.
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: <Widget>[
+              for (final String filter in timelineFilters) ...<Widget>[
+                if (filter != timelineFilters.first)
+                  const SizedBox(width: TpSpace.sm),
+                ChoiceChip(
+                  key: Key('accident.timeline.filter.$filter'),
+                  showCheckmark: false,
+                  avatar: filter == 'all'
+                      ? null
+                      : Icon(
+                          _filterIcon(filter),
+                          size: TpSizing.iconSm,
+                          color: _filter == filter
+                              ? TpPalette.of(context).textInverse
+                              : null,
+                        ),
+                  label: Text(_filterLabel(c, filter)),
+                  labelStyle: _filter == filter
+                      ? TextStyle(
+                          color: TpPalette.of(context).textInverse,
+                          fontWeight: FontWeight.w700,
+                        )
+                      : null,
+                  selectedColor: TpPalette.of(context).text,
+                  selected: _filter == filter,
+                  onSelected: (_) => setState(() => _filter = filter),
+                ),
+              ],
+            ],
+          ),
         ),
         const SizedBox(height: TpSpace.sm),
         AccidentMockPanel(
@@ -692,7 +716,9 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
                       for (final DeliveryLogRow row in rows)
                         DataRow(
                           cells: <DataCell>[
-                            DataCell(Text(row.trigger)),
+                            DataCell(
+                              Text(accidentTimelineText(context, row.trigger)),
+                            ),
                             DataCell(
                               Text(
                                 row.recipients.isEmpty
@@ -703,8 +729,12 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
                                         : row.recipients,
                               ),
                             ),
-                            DataCell(Text(row.channel)),
-                            DataCell(Text(row.status)),
+                            DataCell(
+                              Text(accidentTimelineText(context, row.channel)),
+                            ),
+                            DataCell(
+                              Text(accidentTimelineText(context, row.status)),
+                            ),
                             DataCell(
                               Text(
                                 row.at == null
@@ -721,7 +751,8 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
                                         ?.showSnackBar(
                                       SnackBar(
                                         content: Text(
-                                          '${row.trigger} · ${row.status}',
+                                          '${accidentTimelineText(context, row.trigger)} · '
+                                          '${accidentTimelineText(context, row.status)}',
                                         ),
                                       ),
                                     );
@@ -924,7 +955,7 @@ class _TimelineRow extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
                           Text(
-                            entry.title,
+                            accidentTimelineText(context, entry.title),
                             style: const TextStyle(fontWeight: FontWeight.w800),
                           ),
                           if (entry.actor != null)
@@ -932,7 +963,10 @@ class _TimelineRow extends StatelessWidget {
                           if (entry.audience != null)
                             Text('${c.l10n.accTlTo2} ${entry.audience}'),
                           for (final String detail in entry.details)
-                            Text(detail, style: text.bodySmall),
+                            Text(
+                              accidentTimelineText(context, detail),
+                              style: text.bodySmall,
+                            ),
                           for (final String warning in entry.warnings)
                             Row(
                               children: <Widget>[
@@ -945,7 +979,7 @@ class _TimelineRow extends StatelessWidget {
                                 const SizedBox(width: TpSpace.xs),
                                 Flexible(
                                   child: Text(
-                                    warning,
+                                    accidentTimelineText(context, warning),
                                     style: text.bodySmall?.copyWith(
                                       color: palette
                                           .forStatus(TpStatus.warning)
@@ -1076,7 +1110,7 @@ class _DeliveryLogPreview extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
                           Text(
-                            row.trigger,
+                            accidentTimelineText(context, row.trigger),
                             style: const TextStyle(fontWeight: FontWeight.w700),
                           ),
                           Text(
@@ -1087,7 +1121,7 @@ class _DeliveryLogPreview extends StatelessWidget {
                                 '${row.recipients} · ${row.recipientCount}'
                               else
                                 row.recipients,
-                              row.channel,
+                              accidentTimelineText(context, row.channel),
                             ].join(' · '),
                             style: text.bodySmall,
                           ),
@@ -1099,7 +1133,7 @@ class _DeliveryLogPreview extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: <Widget>[
                         Text(
-                          row.status,
+                          accidentTimelineText(context, row.status),
                           style: text.bodySmall?.copyWith(
                             fontWeight: FontWeight.w700,
                             color: palette.primary,
@@ -1127,4 +1161,11 @@ class _DeliveryLogPreview extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The current owner in the reader's language when it is a case-flow team.
+String? _ownerText(BuildContext context, String? owner) {
+  final String v = owner?.trim() ?? '';
+  if (v.isEmpty) return owner;
+  return accidentOwnerLabel(AccidentMockCopy.of(context), v);
 }

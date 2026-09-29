@@ -1,4 +1,4 @@
-/// The Vehicle 360 "Timeline" and "Costs" tab bodies.
+/// The Vehicle 360 "Timeline", "Costs" and "Documents" tab bodies.
 library;
 
 import 'package:flutter/material.dart';
@@ -15,6 +15,7 @@ import 'package:tyre_pulse/core/permissions/module_registry.dart';
 import 'package:tyre_pulse/core/permissions/permission_providers.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/assets/data/asset_insights_repository.dart';
+import 'package:tyre_pulse/features/assets/domain/asset_360_facts.dart';
 import 'package:tyre_pulse/features/assets/domain/asset_financials.dart';
 import 'package:tyre_pulse/features/assets/domain/asset_timeline.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
@@ -31,6 +32,9 @@ abstract final class Vehicle360Keys {
   static const Key costs = Key('vehicle_360.costs');
   static const Key costsIncomplete = Key('vehicle_360.costs.incomplete');
   static const Key openReport = Key('vehicle_360.open_financial_report');
+  static const Key documents = Key('vehicle_360.documents');
+  static const Key documentsEmpty = Key('vehicle_360.documents.empty');
+  static Key document(int index) => Key('vehicle_360.documents.$index');
   static Key event(int index) => Key('vehicle_360.timeline.event.$index');
 }
 
@@ -244,120 +248,289 @@ class _TimelineRow extends StatelessWidget {
     final TpPalette palette = TpPalette.of(context);
     final TextTheme text = Theme.of(context).textTheme;
     final String locale = Localizations.localeOf(context).toString();
-    final (IconData icon, TpStatus tone, String title) = switch (event.kind) {
+    final bool? open = assetStatusIsOpen(event.status);
+    final (IconData icon, TpStatus tone) = switch (event.kind) {
       AssetTimelineKind.workOrder => (
           Icons.build_outlined,
-          assetStatusIsOpen(event.status) == true
-              ? TpStatus.warning
-              : TpStatus.ok,
-          l10n.fleetMockEventWorkOrder,
+          open == true ? TpStatus.critical : TpStatus.ok,
         ),
       AssetTimelineKind.inspection => (
-          Icons.fact_check_outlined,
-          TpStatus.info,
-          l10n.fleetMockEventInspection,
+          Icons.tire_repair_outlined,
+          TpStatus.warning,
         ),
-      AssetTimelineKind.wash => (
-          Icons.water_drop_outlined,
-          TpStatus.info,
-          l10n.fleetMockEventWash,
-        ),
+      AssetTimelineKind.wash => (Icons.water_drop_outlined, TpStatus.info),
       AssetTimelineKind.tyreFitted => (
           Icons.tire_repair_outlined,
           TpStatus.ok,
-          l10n.fleetMockEventTyreFitted,
         ),
       AssetTimelineKind.tyreRemoved => (
           Icons.tire_repair_outlined,
           TpStatus.warning,
-          l10n.fleetMockEventTyreRemoved,
         ),
       AssetTimelineKind.accident => (
-          Icons.report_gmailerrorred_outlined,
-          TpStatus.critical,
-          l10n.fleetMockEventAccident,
+          Icons.shield_outlined,
+          open == false ? TpStatus.info : TpStatus.critical,
         ),
     };
     final TpStatusColors colors = palette.forStatus(tone);
-    final List<String> meta = <String>[
-      if (event.reference != null) event.reference!,
-      if (event.detail != null) event.detail!,
-      if (event.person != null) event.person!,
-      if (event.status != null) event.status!,
-      if (event.photoCount != null)
-        l10n.fleetMockEventPhotos(event.photoCount!),
-    ];
+    final String title = assetTimelineTitle(l10n, event);
+    final List<_Meta> meta = _assetTimelineMeta(l10n, event);
+    final String date = DateFormat('d MMM yyyy', locale).format(event.date);
+    final String spoken = <String>[
+      date,
+      title,
+      for (final _Meta m in meta) m.text,
+    ].join(', ');
 
-    return InkWell(
-      onTap: onTap,
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            SizedBox(
-              width: 40,
-              child: Column(
-                children: <Widget>[
-                  const SizedBox(height: TpSpace.sm),
-                  Container(
-                    width: 34,
-                    height: 34,
-                    decoration: BoxDecoration(
-                      color: colors.soft,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: colors.base),
-                    ),
-                    child: Icon(icon, size: 18, color: colors.base),
-                  ),
-                  if (!isLast)
-                    Expanded(
-                      child: Container(width: 2, color: palette.border),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(width: TpSpace.sm),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: TpSpace.sm),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      DateFormat('d MMM yyyy', locale).format(event.date),
-                      style: text.labelSmall
-                          ?.copyWith(color: palette.textSecondary),
-                    ),
-                    Text(
-                      title,
-                      style: text.bodyMedium
-                          ?.copyWith(fontWeight: FontWeight.w800),
-                    ),
-                    if (meta.isNotEmpty)
-                      Text(
-                        meta.join(' · '),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: text.labelSmall
-                            ?.copyWith(color: palette.textSecondary),
+    return Semantics(
+      button: onTap != null,
+      label: spoken,
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: TpSizing.minTouchTarget),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                SizedBox(
+                  width: 44,
+                  child: Column(
+                    children: <Widget>[
+                      const SizedBox(height: TpSpace.sm),
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: palette.surface,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: colors.base, width: 1.5),
+                        ),
+                        child: Icon(icon, size: 18, color: colors.base),
                       ),
-                  ],
+                      if (!isLast)
+                        Expanded(
+                          child: Container(width: 2, color: palette.border),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
+                const SizedBox(width: TpSpace.sm),
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: TpSpace.sm),
+                    decoration: isLast
+                        ? null
+                        : BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(color: palette.border),
+                            ),
+                          ),
+                    child: Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(
+                                date,
+                                style: text.labelSmall
+                                    ?.copyWith(color: palette.textSecondary),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: text.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  color: palette.text,
+                                ),
+                              ),
+                              if (meta.isNotEmpty) ...<Widget>[
+                                const SizedBox(height: 2),
+                                _MetaLine(meta: meta),
+                              ],
+                            ],
+                          ),
+                        ),
+                        // The document icon and chevron are drawn only on a
+                        // row that really opens its record: they are part of
+                        // the row's tap target, never a second control.
+                        if (onTap != null) ...<Widget>[
+                          const SizedBox(width: TpSpace.sm),
+                          Icon(
+                            Icons.description_outlined,
+                            size: 22,
+                            color: palette.info.base,
+                          ),
+                          const SizedBox(width: TpSpace.xs),
+                          Icon(
+                            Icons.chevron_right_rounded,
+                            color: palette.text,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
-            if (onTap != null)
-              Center(
-                child: Icon(
-                  Icons.chevron_right_rounded,
-                  color: palette.text,
-                ),
-              ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
+
+/// One item on a timeline row's meta line. [dot] paints the status dot the
+/// mock shows before an open work order; [icon] a leading glyph.
+@immutable
+class _Meta {
+  const _Meta(this.text, {this.dot, this.icon});
+
+  final String text;
+  final TpStatus? dot;
+  final IconData? icon;
+}
+
+class _MetaLine extends StatelessWidget {
+  const _MetaLine({required this.meta});
+
+  final List<_Meta> meta;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final TextStyle? style = Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: palette.textSecondary,
+        );
+    return Text.rich(
+      TextSpan(
+        style: style,
+        children: <InlineSpan>[
+          for (int i = 0; i < meta.length; i++) ...<InlineSpan>[
+            if (i > 0) const TextSpan(text: '  |  '),
+            if (meta[i].dot != null)
+              WidgetSpan(
+                alignment: PlaceholderAlignment.middle,
+                child: Padding(
+                  padding: const EdgeInsetsDirectional.only(end: 4),
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: palette.forStatus(meta[i].dot!).base,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+              ),
+            if (meta[i].icon != null)
+              WidgetSpan(
+                alignment: PlaceholderAlignment.middle,
+                child: Padding(
+                  padding: const EdgeInsetsDirectional.only(end: 3),
+                  child: Icon(
+                    meta[i].icon,
+                    size: 13,
+                    color: palette.textSecondary,
+                  ),
+                ),
+              ),
+            TextSpan(text: meta[i].text),
+          ],
+        ],
+      ),
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+    );
+  }
+}
+
+/// The row title, built from the record itself: a work order's own
+/// description, "Tyre inspection completed", "Tyre fitted at LHF1",
+/// "Accident case ACC-2026-0148 closed". Falls back to the kind label when
+/// the record carries nothing more specific.
+@visibleForTesting
+String assetTimelineTitle(AppLocalizations l10n, AssetTimelineEvent e) {
+  final bool done = assetStatusIsOpen(e.status) == false;
+  return switch (e.kind) {
+    AssetTimelineKind.workOrder =>
+      e.description ?? e.detail ?? l10n.fleetMockEventWorkOrder,
+    AssetTimelineKind.inspection =>
+      done ? l10n.fleet360EventInspectionDone : l10n.fleetMockEventInspection,
+    AssetTimelineKind.wash =>
+      done ? l10n.fleet360EventWashDone : l10n.fleetMockEventWash,
+    AssetTimelineKind.tyreFitted => e.detail == null
+        ? l10n.fleetMockEventTyreFitted
+        : l10n.fleet360EventTyreFittedAt(e.detail!),
+    AssetTimelineKind.tyreRemoved => e.detail == null
+        ? l10n.fleetMockEventTyreRemoved
+        : l10n.fleet360EventTyreRemovedFrom(e.detail!),
+    AssetTimelineKind.accident => e.reference == null
+        ? l10n.fleetMockEventAccident
+        : (done
+            ? l10n.fleet360EventAccidentCaseClosed(e.reference!)
+            : l10n.fleet360EventAccidentCase(e.reference!)),
+  };
+}
+
+/// The meta line under the title. Only recorded values appear; money is
+/// deliberately absent here because none of these rows carries a currency.
+List<_Meta> _assetTimelineMeta(AppLocalizations l10n, AssetTimelineEvent e) {
+  final bool? open = assetStatusIsOpen(e.status);
+  return switch (e.kind) {
+    AssetTimelineKind.workOrder => <_Meta>[
+        if (e.status != null)
+          _Meta(e.status!, dot: open == null ? null : _dot(open)),
+        if (e.reference != null)
+          _Meta(e.reference!, icon: Icons.description_outlined),
+        // A work order titled by its description still shows its type.
+        if (e.description != null && e.detail != null) _Meta(e.detail!),
+        if (e.person != null) _Meta(e.person!),
+        if (e.hours != null)
+          _Meta(
+            l10n.fleetMockFinHours(_hours(e.hours!)),
+            icon: Icons.hourglass_empty_rounded,
+          ),
+      ],
+    AssetTimelineKind.inspection => <_Meta>[
+        if (e.person != null) _Meta(e.person!),
+        if (e.reference != null)
+          _Meta(e.reference!, icon: Icons.description_outlined),
+        if (e.status != null && open != false) _Meta(e.status!),
+      ],
+    AssetTimelineKind.wash => <_Meta>[
+        if (e.detail != null) _Meta(e.detail!),
+        if (e.person != null) _Meta(e.person!),
+        if (e.photoCount != null)
+          _Meta(
+            l10n.fleetMockEventPhotos(e.photoCount!),
+            icon: Icons.image_outlined,
+          ),
+      ],
+    AssetTimelineKind.tyreFitted || AssetTimelineKind.tyreRemoved => <_Meta>[
+        if (e.reference != null) _Meta(l10n.fleet360EventSerial(e.reference!)),
+        if (e.status != null) _Meta(e.status!),
+      ],
+    AssetTimelineKind.accident => <_Meta>[
+        if (e.status != null && open != false)
+          _Meta(e.status!, dot: open == null ? null : _dot(open)),
+        if (e.detail != null) _Meta(e.detail!),
+      ],
+  };
+}
+
+/// The status dot: red while open, green once closed.
+TpStatus _dot(bool open) => open ? TpStatus.critical : TpStatus.ok;
+
+/// Hours without a trailing ".0" for a whole figure.
+String _hours(double hours) => formatAssetMoney(
+      hours,
+      decimals: hours == hours.roundToDouble() ? 0 : 1,
+    );
 
 class _Menu<T> extends StatelessWidget {
   const _Menu({
@@ -385,8 +558,14 @@ class _Menu<T> extends StatelessWidget {
           PopupMenuItem<T>(value: v, child: Text(labelOf(v))),
       ],
       child: Container(
-        height: TpSizing.minTouchTarget,
-        padding: const EdgeInsets.symmetric(horizontal: TpSpace.md),
+        // A minimum, not a fixed height: at 320 to 390dp, or with a larger
+        // text scale, "Last 12 months" wraps to a second line instead of
+        // being cut to "Last 12 mon...".
+        constraints: const BoxConstraints(minHeight: TpSizing.minTouchTarget),
+        padding: const EdgeInsetsDirectional.symmetric(
+          horizontal: TpSpace.sm,
+          vertical: TpSpace.xs,
+        ),
         decoration: BoxDecoration(
           color: palette.surface,
           border: Border.all(color: palette.borderStrong),
@@ -399,7 +578,7 @@ class _Menu<T> extends StatelessWidget {
             Expanded(
               child: Text(
                 labelOf(value),
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.labelLarge,
               ),
@@ -439,7 +618,7 @@ class AssetCostSnapshotPanel extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           Text(
-            '${l10n.fleetMockSnapshotTitle} · ${l10n.fleetMockPeriodYtd}',
+            l10n.fleet360SnapshotTitle(now.year.toString()),
             style: text.titleMedium?.copyWith(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: TpSpace.md),
@@ -489,10 +668,14 @@ class AssetCostSnapshotPanel extends ConsumerWidget {
                 children: <Widget>[
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    // A gap between the three tiles: without it a long
+                    // value ("Not measurable") ran straight into the next
+                    // tile's value ("Not recorded") as one word.
+                    spacing: TpSpace.md,
                     children: <Widget>[
                       Expanded(
                         child: AssetKpiTile(
-                          label: l10n.fleetMockFinMaintenance,
+                          label: l10n.fleet360TotalMaintenance,
                           value: assetMoneyLabel(currency, s.maintenance),
                         ),
                       ),
@@ -560,6 +743,163 @@ class AssetCostSnapshotPanel extends ConsumerWidget {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The "Documents" tab: the permits recorded on this asset's
+/// `vehicle_fleet` row (registration, insurance, operating card, driver
+/// licence), each with its issue and expiry date and an expiry state.
+///
+/// Only recorded permits are listed. A permit with no number and no dates is
+/// left out, and an asset with none shows an honest empty state rather than
+/// four blank rows that would read as documents on file. No uploaded files
+/// are listed: no per-asset document store exists in the schema.
+class AssetDocumentsPanel extends ConsumerWidget {
+  const AssetDocumentsPanel({required this.asset, this.clock, super.key});
+
+  final VehicleAsset asset;
+  final DateTime Function()? clock;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final AsyncValue<Map<String, dynamic>?> row =
+        ref.watch(assetDocumentsRowProvider(asset.id));
+    final DateTime now = (clock ?? DateTime.now)();
+    return KeyedSubtree(
+      key: Vehicle360Keys.documents,
+      child: row.when(
+        loading: () => const SizedBox(height: 160, child: TpLoadingState()),
+        error: (Object error, StackTrace _) => SizedBox(
+          height: 280,
+          child: TpErrorState(
+            error: error is AppError ? error : _fallbackError(l10n),
+            onRetry: () => ref.invalidate(assetDocumentsRowProvider(asset.id)),
+          ),
+        ),
+        data: (Map<String, dynamic>? data) {
+          final List<AssetDocument> docs = data == null
+              ? const <AssetDocument>[]
+              : assetDocumentsFromRow(data);
+          if (docs.isEmpty) {
+            return SizedBox(
+              key: Vehicle360Keys.documentsEmpty,
+              height: 240,
+              child: TpEmptyState(
+                icon: Icons.folder_open_outlined,
+                title: l10n.fleet360DocsEmptyTitle,
+                message: l10n.fleet360DocsEmptyBody,
+              ),
+            );
+          }
+          return TpCard(
+            padding: const EdgeInsets.symmetric(
+              horizontal: TpSpace.md,
+              vertical: TpSpace.xs,
+            ),
+            child: Column(
+              children: <Widget>[
+                for (int i = 0; i < docs.length; i++)
+                  _DocumentRow(
+                    key: Vehicle360Keys.document(i),
+                    document: docs[i],
+                    now: now,
+                    showDivider: i < docs.length - 1,
+                  ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _DocumentRow extends StatelessWidget {
+  const _DocumentRow({
+    required this.document,
+    required this.now,
+    required this.showDivider,
+    super.key,
+  });
+
+  final AssetDocument document;
+  final DateTime now;
+  final bool showDivider;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    final TextTheme text = Theme.of(context).textTheme;
+    final String locale = Localizations.localeOf(context).toString();
+    final DateFormat day = DateFormat('d MMM yyyy', locale);
+    final String title = switch (document.kind) {
+      AssetDocumentKind.registration => l10n.fleet360DocRegistration,
+      AssetDocumentKind.insurance => l10n.fleet360DocInsurance,
+      AssetDocumentKind.operatingCard => l10n.fleet360DocOperatingCard,
+      AssetDocumentKind.driverLicence => l10n.fleet360DocDriverLicence,
+    };
+    final AssetDocumentState state = document.stateOn(now);
+    final (TpStatus tone, String stateLabel) = switch (state) {
+      AssetDocumentState.valid => (TpStatus.ok, l10n.fleet360DocValid),
+      AssetDocumentState.expiringSoon => (
+          TpStatus.warning,
+          l10n.fleet360DocExpiringSoon,
+        ),
+      AssetDocumentState.expired => (
+          TpStatus.critical,
+          l10n.fleet360DocExpired,
+        ),
+      AssetDocumentState.noExpiry => (
+          TpStatus.unknown,
+          l10n.fleet360DocNoExpiry,
+        ),
+    };
+    final List<String> lines = <String>[
+      if (document.reference != null) document.reference!,
+      if (document.issued != null)
+        l10n.fleet360DocIssued(day.format(document.issued!)),
+      if (document.expires != null)
+        l10n.fleet360DocExpires(day.format(document.expires!)),
+    ];
+    return Container(
+      constraints: const BoxConstraints(minHeight: TpSizing.minTouchTarget),
+      padding: const EdgeInsets.symmetric(vertical: TpSpace.sm),
+      decoration: showDivider
+          ? BoxDecoration(
+              border: Border(bottom: BorderSide(color: palette.border)),
+            )
+          : null,
+      child: Row(
+        children: <Widget>[
+          Icon(Icons.description_outlined, color: palette.info.base),
+          const SizedBox(width: TpSpace.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  title,
+                  style: text.bodyMedium?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                for (final String line in lines)
+                  Text(
+                    line,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: text.labelSmall?.copyWith(
+                      color: palette.textSecondary,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: TpSpace.sm),
+          TpStatusChip(status: tone, label: stateLabel, isCompact: true),
         ],
       ),
     );

@@ -1,81 +1,77 @@
 /**
- * Batteries (route /batteries) - Battery Lifecycle. Registers and tracks
- * vehicle/asset batteries: install date, warranty term, state-of-health, live
- * voltage, and a status lifecycle (healthy, weak, replace, retired). Derives
- * warranty expiry and a warranty window, flags batteries needing attention, and
- * surfaces a status distribution chart, KPI tiles, filters, search, a sortable
- * EnterpriseTable register, create/edit, delete, and Excel/PDF export.
+ * Batteries (route /batteries) - Battery Lifecycle Management, rebuilt on the
+ * shared page kit to the owner's light reference design.
  *
- * Runs on the `batteries` table (MIGRATIONS_V146_BATTERIES.sql). When the table
- * is not deployed the page says so rather than pretending the fleet has no
- * batteries. Lifecycle maths lives in `src/lib/batteries.js`; the page shaping
- * (enrichment, filters, KPI strip, warranty window, export rows) lives in
- * `src/lib/batteriesAnalytics.js`.
+ * Runs on the `batteries` table (MIGRATIONS_V146_BATTERIES.sql): serial, asset,
+ * brand, install date, warranty term, health %, voltage, status and site. When
+ * the table is not deployed the page says so rather than pretending the fleet
+ * has no batteries.
+ *
+ * Lifecycle maths lives in `src/lib/batteries.js`, page shaping (enrichment,
+ * warranty window, filters, export rows) in `src/lib/batteriesAnalytics.js`,
+ * and the mockup blocks (KPIs, health donut, replacement forecast, lifecycle
+ * stages) in `src/lib/batteryLifecycleView.js`.
+ *
+ * Honest gaps: the table has no battery type and no state of charge, so the
+ * register shows neither and the mockup's type filter is not offered. No
+ * earlier snapshot is stored, so KPI tiles carry no trend arrows.
+ *
+ * Kept from the previous page: register / edit / delete, search and the
+ * status, asset, warranty and needs-attention filters, Excel and PDF export
+ * of the filtered register, loading, error with Retry and not-provisioned
+ * states.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js'
-import { Doughnut } from 'react-chartjs-2'
+import { Link } from 'react-router-dom'
 import {
-  BatteryCharging, Battery, AlertTriangle, Activity, HeartPulse, Plus, Pencil,
-  Trash2, Search, X, FileSpreadsheet, FileText, ShieldCheck, CalendarClock, Gauge,
+  BatteryCharging, CheckCircle2, ShieldCheck, AlertTriangle, RefreshCw, HeartPulse,
+  Plus, Pencil, Trash2, Search, X, FileSpreadsheet, FileText, CalendarClock, Eye, Info,
+  CircleSlash, Clock, Loader2,
 } from 'lucide-react'
-import PageHeader from '../components/ui/PageHeader'
-import EnterpriseTable from '../components/ui/EnterpriseTable'
 import Modal from '../components/ui/Modal'
+import {
+  Card, CardState, Kpi, PageHero, Donut, Pager, KitTable, fmtInt,
+} from '../components/commandCenter/kit'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listBatteries, createBattery, updateBattery, deleteBattery,
 } from '../lib/api/batteries'
 import { warrantyExpiry } from '../lib/batteries'
 import {
-  BATTERY_STATUSES, BATTERY_STATUS_META, EMPTY_BATTERY_FILTERS, WARRANTY_SOON_DAYS,
-  enrichBatteries, filterBatteries, batteryKpis, attentionList, assetOptions,
-  activeBatteryFilterCount, batteryExportRows, BATTERY_EXPORT_COLUMNS, statusLabel,
+  BATTERY_STATUSES, EMPTY_BATTERY_FILTERS, WARRANTY_SOON_DAYS,
+  enrichBatteries, assetOptions, activeBatteryFilterCount, batteryExportRows,
+  BATTERY_EXPORT_COLUMNS, statusLabel,
 } from '../lib/batteriesAnalytics'
+import {
+  lifecycleKpis, healthDistribution, replacementForecast, lifecycleStages, filterRegister,
+  siteOptions, warrantyText, healthTone, statusView, ageYears, FORECAST_RULE, STAGE_RULE,
+} from '../lib/batteryLifecycleView'
+import { greeting } from '../lib/commandCenter'
 import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { isMissingRelation } from '../lib/api/_client'
-
-ChartJS.register(ArcElement, Tooltip, Legend)
-
-// Semantic tints: a 500/15 wash reads on both themes and every text-*-300 has a
-// light-mode override. The label always names the status.
-const STATUS_BADGE = {
-  healthy: 'bg-green-500/15 text-green-300 border border-green-500/40',
-  weak: 'bg-amber-500/15 text-amber-300 border border-amber-500/40',
-  replace: 'bg-red-500/15 text-red-300 border border-red-500/40',
-  retired: 'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]',
-}
-// Semantic status colours (meaning, not decoration), so they stay fixed.
-const STATUS_COLOR = { healthy: '#22c55e', weak: '#f59e0b', replace: '#ef4444', retired: '#64748b' }
-const BAND_TEXT = { good: 'text-green-400', fair: 'text-amber-400', poor: 'text-red-400', unknown: 'text-[var(--text-muted)]' }
-const BAND_BAR = { good: 'bg-green-500', fair: 'bg-amber-500', poor: 'bg-red-500', unknown: 'bg-[var(--text-dim)]' }
-const WARRANTY_TEXT = { expired: 'text-red-400', soon: 'text-amber-400', active: 'text-[var(--text-secondary)]', unknown: 'text-[var(--text-muted)]' }
-
-const ICON_BTN = 'inline-flex items-center justify-center w-11 h-11 rounded-lg text-[var(--text-muted)] hover:bg-[var(--input-bg)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]'
+import './Batteries.css'
 
 const EMPTY_FORM = {
   serial_no: '', asset_no: '', brand: '', install_date: '', warranty_months: '',
   health_pct: '', voltage: '', status: 'healthy', site: '', notes: '',
 }
+const EMPTY_FILTERS = { ...EMPTY_BATTERY_FILTERS, site: '' }
+const STAGE_ICON = { in_service: BatteryCharging, aging: AlertTriangle, due: RefreshCw, warranty: ShieldCheck, retired: CircleSlash }
 
 function fmtDate(v) {
   if (!v) return 'N/A'
   const d = v instanceof Date ? v : new Date(v)
-  return Number.isNaN(d.getTime()) ? 'N/A' : d.toISOString().slice(0, 10)
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })
 }
 
-function Kpi({ label, value, icon: Icon, tone, sub, loading }) {
+function EmptyInvite({ onAdd, missing, text = 'No batteries registered yet.' }) {
+  if (missing) return 'Battery tracking is not enabled on this database yet.'
   return (
-    <div className="card">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs text-[var(--text-muted)]">{label}</p>
-        <Icon size={16} className={tone} aria-hidden="true" />
-      </div>
-      <p className={`text-3xl font-bold mt-1 tabular-nums ${tone}`}>
-        {loading ? <span className="inline-block h-8 w-16 rounded bg-[var(--input-bg)] animate-pulse" aria-label="Loading" /> : (value ?? 'N/A')}
-      </p>
-      {sub && !loading && <p className="text-[11px] text-[var(--text-dim)] mt-0.5">{sub}</p>}
+    <div>
+      {text}
+      <br />
+      <button type="button" className="cc-btn" onClick={onAdd}>Add battery</button>
     </div>
   )
 }
@@ -87,11 +83,13 @@ export default function Batteries() {
   const [notice, setNotice] = useState('')
   const [missing, setMissing] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  const [updatedAt, setUpdatedAt] = useState(null)
   const [nowMs, setNowMs] = useState(() => Date.now())
 
-  const [filters, setFilters] = useState(EMPTY_BATTERY_FILTERS)
-  const setFilter = (k, v) => setFilters((f) => ({ ...f, [k]: v }))
+  const [filters, setFilters] = useState(EMPTY_FILTERS)
+  const setFilter = (k, v) => { setFilters((f) => ({ ...f, [k]: v })); setPage(0) }
+  const [page, setPage] = useState(0)
+  const [pageSize, setPageSize] = useState(10)
+  const [selection, setSelection] = useState({})
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -100,13 +98,14 @@ export default function Batteries() {
   const [formError, setFormError] = useState('')
   const [confirmDel, setConfirmDel] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [confirmSchedule, setConfirmSchedule] = useState(null)
+  const [scheduling, setScheduling] = useState(false)
 
   const load = useCallback(async () => {
     setRefreshing(true); setError(''); setMissing(false)
     try {
       const data = await listBatteries({ country: activeCountry })
       setRows(Array.isArray(data) ? data : [])
-      setUpdatedAt(new Date())
       setNowMs(Date.now())
     } catch (err) {
       if (isMissingRelation(err)) { setMissing(true); setRows([]) }
@@ -120,35 +119,24 @@ export default function Batteries() {
 
   const loading = rows === null
   const failed = Boolean(error)
+  const state = { loading: loading || (refreshing && !rows?.length), data: failed ? null : rows, error: failed ? error : null, retry: load }
+
   const enriched = useMemo(() => enrichBatteries(rows || [], nowMs), [rows, nowMs])
-  const kpi = useMemo(() => batteryKpis(enriched), [enriched])
-  const attention = useMemo(() => attentionList(enriched), [enriched])
+  const kpi = useMemo(() => lifecycleKpis(enriched, nowMs), [enriched, nowMs])
+  const dist = useMemo(() => healthDistribution(enriched), [enriched])
+  const forecast = useMemo(() => replacementForecast(enriched, nowMs), [enriched, nowMs])
+  const stages = useMemo(() => lifecycleStages(enriched, nowMs), [enriched, nowMs])
   const assets = useMemo(() => assetOptions(rows || []), [rows])
-  const filtered = useMemo(() => filterBatteries(enriched, filters), [enriched, filters])
-  const filterCount = activeBatteryFilterCount(filters)
+  const sites = useMemo(() => siteOptions(rows || []), [rows])
+  const filtered = useMemo(() => filterRegister(enriched, filters), [enriched, filters])
+  const filterCount = activeBatteryFilterCount(filters) + (filters.site ? 1 : 0)
+  const pageRows = useMemo(() => filtered.slice(page * pageSize, (page + 1) * pageSize), [filtered, page, pageSize])
+  const selectedRows = useMemo(() => enriched.filter((r) => selection[String(r.id)]), [enriched, selection])
 
-  const donutData = {
-    labels: BATTERY_STATUSES.map((s) => BATTERY_STATUS_META[s].label),
-    datasets: [{
-      data: BATTERY_STATUSES.map((s) => kpi.byStatus[s]),
-      backgroundColor: BATTERY_STATUSES.map((s) => STATUS_COLOR[s]),
-      borderWidth: 0,
-    }],
-  }
-  const donutOpts = {
-    responsive: true, maintainAspectRatio: false, cutout: '58%',
-    plugins: { legend: { position: 'right', labels: { color: 'var(--text-secondary)', boxWidth: 12 } } },
-  }
-
-  const kv = (v) => (failed ? null : v)
-  const kpis = [
-    { label: 'Total batteries', value: kv(kpi.total), icon: BatteryCharging, tone: 'text-[var(--text-primary)]', sub: failed ? null : `${kpi.inService} in service` },
-    { label: 'Healthy', value: kv(kpi.byStatus.healthy), icon: Battery, tone: 'text-green-400' },
-    { label: 'Needs attention', value: kv(kpi.needingAttention), icon: AlertTriangle, tone: 'text-red-400', sub: 'Weak, replace or health under 50%' },
-    { label: 'Avg health', value: failed || kpi.avgHealth == null ? null : `${kpi.avgHealth}%`, icon: HeartPulse, tone: 'text-sky-400', sub: failed || kpi.measuredPct == null ? null : `${kpi.measured} of ${kpi.total} measured` },
-    { label: 'Warranty ending soon', value: kv(kpi.expiringSoon), icon: CalendarClock, tone: 'text-amber-400', sub: `Within ${WARRANTY_SOON_DAYS} days` },
-    { label: 'Out of warranty', value: kv(kpi.outOfWarranty), icon: ShieldCheck, tone: 'text-orange-400', sub: 'In service, warranty ended' },
-  ]
+  useEffect(() => {
+    const pages = Math.max(1, Math.ceil(filtered.length / pageSize))
+    if (page > pages - 1) setPage(pages - 1)
+  }, [filtered.length, pageSize, page])
 
   const doExport = async (kind) => {
     const out = batteryExportRows(filtered)
@@ -175,6 +163,8 @@ export default function Batteries() {
   }, [])
   const closeModal = () => { if (!saving) { setModalOpen(false); setEditing(null) } }
 
+  const replaceRow = (saved) => setRows((prev) => (prev || []).map((r) => (r.id === saved.id ? saved : r)))
+
   const submit = useCallback(async (e) => {
     e?.preventDefault?.()
     setFormError('')
@@ -190,7 +180,6 @@ export default function Batteries() {
         return editing ? list.map((r) => (r.id === saved.id ? saved : r)) : [saved, ...list]
       })
       setModalOpen(false); setEditing(null)
-      setUpdatedAt(new Date())
     } catch (err) {
       setFormError(toUserMessage(err, 'Could not save the battery.'))
     } finally {
@@ -204,6 +193,7 @@ export default function Batteries() {
     try {
       await deleteBattery(confirmDel.id)
       setRows((prev) => (prev || []).filter((r) => r.id !== confirmDel.id))
+      setSelection((s) => { const n = { ...s }; delete n[String(confirmDel.id)]; return n })
       setConfirmDel(null)
     } catch (err) {
       setNotice(toUserMessage(err, 'Could not delete the battery.'))
@@ -213,251 +203,241 @@ export default function Batteries() {
     }
   }, [confirmDel])
 
-  const columns = useMemo(() => [
-    { id: 'serial', header: 'Serial', accessorFn: (r) => r.serial_no || '', size: 150, cell: ({ getValue }) => <span className="font-mono text-xs text-[var(--text-primary)]">{getValue() || 'N/A'}</span> },
-    { id: 'asset', header: 'Asset', accessorFn: (r) => r.asset_no || '', size: 110, cell: ({ getValue }) => getValue() || 'N/A' },
-    { id: 'brand', header: 'Brand', accessorFn: (r) => r.brand || '', size: 120, cell: ({ getValue }) => getValue() || 'N/A' },
-    { id: 'site', header: 'Site', accessorFn: (r) => r.site || '', size: 120, cell: ({ getValue }) => getValue() || 'N/A' },
+  const askSchedule = (list) => {
+    const eligible = list.filter((r) => r.status !== 'replace' && r.status !== 'retired')
+    if (!list.length) { setNotice('Select one or more batteries in the register first, or use the calendar button on a row.'); return }
+    if (!eligible.length) { setNotice('The selected batteries are already marked Replace or are retired.'); return }
+    setConfirmSchedule(eligible)
+  }
+
+  const doSchedule = async () => {
+    if (!confirmSchedule) return
+    setScheduling(true)
+    let failedCount = 0
+    for (const r of confirmSchedule) {
+      try { replaceRow(await updateBattery(r.id, { status: 'replace' })) } catch { failedCount += 1 }
+    }
+    setScheduling(false)
+    setConfirmSchedule(null)
+    setSelection({})
+    if (failedCount) setNotice(`${failedCount} of the selected batteries could not be marked for replacement. Try again.`)
+  }
+
+  const kv = (v) => (failed || missing ? null : v)
+  const kpis = [
+    { icon: BatteryCharging, tone: 't-green', value: kv(kpi.total), label: 'Total batteries' },
+    { icon: CheckCircle2, tone: 't-green', value: kv(kpi.active), label: 'Active batteries', title: 'Every battery not retired' },
+    { icon: ShieldCheck, tone: 't-blue', value: kv(kpi.underWarranty), label: 'Under warranty', title: 'In service with warranty time left (install date plus warranty months)' },
+    { icon: AlertTriangle, tone: 't-amber', value: kv(kpi.lowHealth), label: 'Low health', title: 'In service with recorded health below 50%', onClick: () => setFilters({ ...EMPTY_FILTERS, attentionOnly: true }) },
+    { icon: RefreshCw, tone: 't-red', value: kv(kpi.replacementsDue), label: 'Replacements due', title: FORECAST_RULE },
     {
-      id: 'health', header: 'Health', accessorFn: (r) => r._health, size: 150, sortUndefined: 'last',
-      cell: ({ row }) => {
-        const r = row.original
-        if (r._health == null) return <span className="text-[var(--text-muted)]">Not measured</span>
+      icon: HeartPulse, tone: 't-green', label: 'Avg. battery health',
+      display: failed || missing || kpi.avgHealth == null ? 'N/A' : `${Math.round(kpi.avgHealth)}%`,
+      title: kpi.total ? `${kpi.measured} of ${kpi.total} batteries have a recorded health reading` : 'No health readings recorded',
+    },
+  ]
+
+  const columns = [
+    {
+      key: 'serial', header: 'Battery ID', sortValue: (r) => r.serial_no || '',
+      cell: (r) => <span className="cc-strong">{r.serial_no || <span className="cc-na">N/A</span>}</span>,
+    },
+    { key: 'asset', header: 'Asset no', cell: (r) => r.asset_no || <span className="cc-na">N/A</span> },
+    { key: 'brand', header: 'Brand', cell: (r) => r.brand || <span className="cc-na">N/A</span> },
+    { key: 'installed', header: 'Install date', cell: (r) => (r.install_date ? fmtDate(r.install_date) : <span className="cc-na">N/A</span>) },
+    {
+      key: 'age', header: 'Age',
+      cell: (r) => { const a = ageYears(r.install_date, nowMs); return a == null ? <span className="cc-na">N/A</span> : `${a} yrs` },
+    },
+    {
+      key: 'voltage', header: 'Voltage / charge',
+      cell: (r) => (
+        <span className="bt-volt" title="The register records voltage only; state of charge is not captured.">
+          {r.voltage == null || r.voltage === '' ? <span className="cc-na">N/A</span> : `${Number(r.voltage)} V`}
+          <span className="cc-na"> / N/A</span>
+        </span>
+      ),
+    },
+    {
+      key: 'health', header: 'Health',
+      cell: (r) => (r._health == null
+        ? <span className="cc-na">Not measured</span>
+        : <span className={`cc-pill ${healthTone(r._health)}`}>{Math.round(r._health)}%</span>),
+    },
+    {
+      key: 'warranty', header: 'Warranty',
+      cell: (r) => { const w = warrantyText(r._warranty); return <span className={`cc-pill ${w.tone}`}>{w.text}</span> },
+    },
+    { key: 'site', header: 'Site', cell: (r) => r.site || <span className="cc-na">N/A</span> },
+    {
+      key: 'status', header: 'Status',
+      cell: (r) => { const s = statusView(r.status); return <span className={`cc-pill ${s.tone}`}>{s.label}</span> },
+    },
+    {
+      key: 'actions', header: 'Actions', sortable: false,
+      cell: (r) => {
+        const who = r.asset_no || r.serial_no || 'battery'
+        const canClaim = r._warranty?.key === 'active' || r._warranty?.key === 'soon'
         return (
-          <div className="flex items-center gap-2">
-            <span className={`font-semibold tabular-nums ${BAND_TEXT[r._band.key]}`}>{r._health}%</span>
-            <div className="w-14 bg-[var(--input-bg)] rounded-full h-1.5" aria-hidden="true">
-              <div className={`h-1.5 rounded-full ${BAND_BAR[r._band.key]}`} style={{ width: `${Math.max(0, Math.min(100, r._health))}%` }} />
-            </div>
-            <span className="text-[11px] text-[var(--text-muted)]">{r._band.label}</span>
+          <div className="bt-actions" onClick={(e) => e.stopPropagation()} role="presentation">
+            <button type="button" className="cc-icon-btn" onClick={() => openEdit(r)} aria-label={`View or edit ${who}`} title="View or edit"><Eye size={14} /></button>
+            <button type="button" className="cc-icon-btn" onClick={() => askSchedule([r])} disabled={r.status === 'replace' || r.status === 'retired'} aria-label={`Schedule replacement for ${who}`} title={r.status === 'replace' ? 'Already marked Replace' : 'Schedule replacement (mark as Replace)'}><CalendarClock size={14} /></button>
+            {canClaim
+              ? <Link className="cc-icon-btn" to="/warranty" aria-label={`Claim warranty for ${who}`} title="Open the warranty tracker to raise a claim"><ShieldCheck size={14} /></Link>
+              : <button type="button" className="cc-icon-btn" disabled aria-label={`Warranty claim not available for ${who}`} title="No warranty time left or no warranty recorded"><ShieldCheck size={14} /></button>}
+            <button type="button" className="cc-icon-btn bt-danger" onClick={() => setConfirmDel(r)} aria-label={`Delete ${who}`} title="Delete"><Trash2 size={14} /></button>
           </div>
         )
       },
     },
-    {
-      id: 'voltage', header: 'Voltage', accessorFn: (r) => (r.voltage == null || r.voltage === '' ? null : Number(r.voltage)),
-      size: 90, sortUndefined: 'last', meta: { align: 'right' },
-      cell: ({ getValue }) => (getValue() == null ? 'N/A' : `${getValue()}V`),
-    },
-    { id: 'installed', header: 'Installed', accessorFn: (r) => r.install_date || '', size: 110, cell: ({ getValue }) => fmtDate(getValue()) },
-    {
-      id: 'expiry', header: 'Warranty expiry', accessorFn: (r) => (r._expiry ? r._expiry.getTime() : null), size: 150, sortUndefined: 'last',
-      cell: ({ row }) => {
-        const w = row.original._warranty
-        return (
-          <span className={WARRANTY_TEXT[w.key]}>
-            {row.original._expiry ? fmtDate(row.original._expiry) : 'Not recorded'}
-            {w.key !== 'unknown' && <span className="block text-[11px]">{w.key === 'expired' ? 'Expired' : w.label}</span>}
-          </span>
-        )
-      },
-    },
-    {
-      id: 'status', header: 'Status', accessorFn: (r) => r._statusLabel, size: 110,
-      cell: ({ row }) => <span className={`inline-block text-[11px] font-medium px-2 py-0.5 rounded ${STATUS_BADGE[row.original.status] || STATUS_BADGE.retired}`}>{row.original._statusLabel}</span>,
-    },
-    {
-      id: 'actions', header: '', enableSorting: false, size: 110, meta: { export: false },
-      cell: ({ row }) => {
-        const who = row.original.asset_no || row.original.serial_no || 'battery'
-        return (
-          <div className="flex items-center gap-1 justify-end">
-            <button type="button" onClick={(e) => { e.stopPropagation(); openEdit(row.original) }} className={`${ICON_BTN} hover:text-[var(--text-primary)]`} aria-label={`Edit ${who}`}><Pencil size={15} /></button>
-            <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmDel(row.original) }} className={`${ICON_BTN} hover:text-red-400`} aria-label={`Delete ${who}`}><Trash2 size={15} /></button>
-          </div>
-        )
-      },
-    },
-  ], [openEdit])
+  ]
 
   const previewExpiry = form.install_date && form.warranty_months
     ? warrantyExpiry({ install_date: form.install_date, warranty_months: form.warranty_months })
     : null
 
+  const noData = !failed && !loading && kpi.total === 0
+  const maxBar = Math.max(1, ...forecast.buckets.map((b) => b.count))
+
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Battery Lifecycle"
-        subtitle="Register, track health, and forecast replacement for every battery across the fleet."
-        icon={BatteryCharging}
-        onRefresh={load}
-        refreshing={refreshing}
-        updatedAt={updatedAt}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={() => doExport('excel')} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!filtered.length}>
-              <FileSpreadsheet size={14} /> Excel
-            </button>
-            <button type="button" onClick={() => doExport('pdf')} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!filtered.length}>
-              <FileText size={14} /> PDF
-            </button>
-            <button type="button" onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={missing}>
-              <Plus size={14} /> Register battery
-            </button>
-          </div>
-        }
+    <div className="cc bt-page">
+      <PageHero
+        hello={`${greeting()},`}
+        title="Battery Lifecycle Management"
+        lead="Maximize battery performance, safety and lifecycle value across your fleet."
+        imgLight="/dashboard/hero-battery-light.webp"
+        imgDark="/dashboard/hero-battery-dark.webp"
       />
 
       {missing && (
-        <div className="card border border-amber-500/40 flex items-start gap-3" role="status">
-          <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" aria-hidden="true" />
+        <div className="cc-card bt-banner warn" role="status">
+          <AlertTriangle size={18} aria-hidden="true" />
           <div>
-            <p className="text-amber-300 font-medium">Battery tracking is not enabled on this database yet.</p>
-            <p className="text-[var(--text-muted)] text-sm mt-1">
-              Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V146_BATTERIES.sql</span>, then reload.
-            </p>
+            <b>Battery tracking is not enabled on this database yet.</b>
+            <p>Apply MIGRATIONS_V146_BATTERIES.sql, then reload.</p>
           </div>
         </div>
       )}
-
-      {error && (
-        <div className="card border border-red-500/40 flex flex-wrap items-start justify-between gap-3" role="alert">
-          <div className="flex items-start gap-3">
-            <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
-            <div>
-              <p className="text-red-300 font-medium">Could not load batteries.</p>
-              <p className="text-[var(--text-muted)] text-sm mt-1">{error} The figures below are unavailable until the register loads.</p>
-            </div>
-          </div>
-          <button type="button" onClick={load} className="btn-secondary text-sm min-h-[44px]" disabled={refreshing}>Retry</button>
-        </div>
-      )}
-
       {notice && (
-        <div className="card border border-amber-500/40 flex items-start justify-between gap-3" role="status">
-          <p className="text-sm text-amber-300">{notice}</p>
-          <button type="button" onClick={() => setNotice('')} className={ICON_BTN} aria-label="Dismiss message"><X size={15} /></button>
+        <div className="cc-card bt-banner warn" role="status">
+          <Info size={18} aria-hidden="true" />
+          <div><p>{notice}</p></div>
+          <button type="button" className="cc-icon-btn" onClick={() => setNotice('')} aria-label="Dismiss message"><X size={14} /></button>
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+      <div className="cc-kpis">
         {kpis.map((k) => <Kpi key={k.label} {...k} loading={loading} />)}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="card">
-          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-1.5"><Gauge size={15} aria-hidden="true" /> Status distribution</h2>
-          <div className="h-64">
-            {loading ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" />
-              : failed ? <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">Unavailable: the register could not be loaded.</div>
-                : kpi.total ? (
-                  <div className="h-full" role="img" aria-label={BATTERY_STATUSES.map((s) => `${BATTERY_STATUS_META[s].label} ${kpi.byStatus[s]}`).join(', ')}>
-                    <Doughnut data={donutData} options={donutOpts} />
-                  </div>
-                ) : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No batteries registered yet.</div>}
-          </div>
-        </div>
-        <div className="card">
-          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-1.5">
-            <Activity size={15} className="text-amber-400" aria-hidden="true" /> Batteries needing attention
-          </h2>
-          {loading ? (
-            <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-9 bg-[var(--input-bg)] rounded animate-pulse" />)}</div>
-          ) : failed ? (
-            <p className="text-sm text-[var(--text-muted)]">Unavailable: the register could not be loaded.</p>
-          ) : attention.length === 0 ? (
-            <div className="h-52 flex flex-col items-center justify-center text-sm text-[var(--text-muted)] gap-2">
-              <Battery size={24} className="text-green-400" aria-hidden="true" /> {kpi.total ? 'All batteries are within healthy limits.' : 'No batteries registered yet.'}
+      <div className="bt-row">
+        <Card title="Battery Health Distribution" action={<button type="button" className="cc-link cc-link-btn" onClick={() => setFilters(EMPTY_FILTERS)}>View all batteries</button>}>
+          <CardState state={state} empty={noData || missing ? <EmptyInvite onAdd={openCreate} missing={missing} /> : dist.measured === 0 ? 'No battery has a recorded health reading yet. Add health % when editing a battery.' : null}>
+            <Donut segments={dist.segments} total={dist.avg} centerLabel="Avg. health %" />
+            {dist.notMeasured > 0 && <p className="bt-note">{fmtInt(dist.notMeasured)} batteries have no health reading and are not shown.</p>}
+          </CardState>
+        </Card>
+
+        <Card title="Replacement Forecast" sub="Next 12 months">
+          <CardState state={state} empty={noData || missing ? <EmptyInvite onAdd={openCreate} missing={missing} /> : null}>
+            <div className="bt-fc-head">
+              <span><b>{fmtInt(forecast.dueNow)}</b> due now</span>
+              <span><b>{fmtInt(forecast.total)}</b> in the next 12 months</span>
+              {forecast.unforecastable > 0 && <span>{fmtInt(forecast.unforecastable)} with no install date</span>}
             </div>
-          ) : (
-            <ul className="max-h-56 overflow-y-auto divide-y divide-[var(--input-border)]">
-              {attention.map((r) => (
-                <li key={r.id}>
-                  <button type="button" onClick={() => openEdit(r)} className="w-full flex items-center justify-between gap-3 py-2 px-1 min-h-[44px] text-left rounded hover:bg-[var(--input-bg)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]">
-                    <div className="min-w-0">
-                      <p className="text-sm text-[var(--text-primary)] truncate">{r.asset_no || r.serial_no || 'N/A'}</p>
-                      <p className="text-xs text-[var(--text-muted)] truncate">{r.brand || 'Unknown brand'}{r.site ? `, ${r.site}` : ''}</p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className={`text-sm font-semibold ${BAND_TEXT[r._band.key]}`}>{r._health == null ? 'Not measured' : `${r._health}%`}</span>
-                      <span className={`text-[11px] px-2 py-0.5 rounded ${STATUS_BADGE[r.status] || STATUS_BADGE.retired}`}>{r._statusLabel}</span>
-                    </div>
-                  </button>
-                </li>
+            <div className="bt-bars" role="img" aria-label={forecast.buckets.map((b) => `${b.label} ${b.year}: ${b.count}`).join(', ')}>
+              {forecast.buckets.map((b) => (
+                <div key={b.key} className="bt-bar" title={`${b.label} ${b.year}: ${b.count}`}>
+                  <span className="bt-bar-n">{b.count || ''}</span>
+                  <i style={{ height: `${(b.count / maxBar) * 100}%` }} />
+                  <small>{b.label}</small>
+                </div>
               ))}
-            </ul>
-          )}
-        </div>
+            </div>
+            <p className="bt-note">{FORECAST_RULE}</p>
+          </CardState>
+        </Card>
+
+        <Card title="Lifecycle Stages">
+          <CardState state={state} empty={noData || missing ? <EmptyInvite onAdd={openCreate} missing={missing} /> : null}>
+            <div className="bt-stages">
+              {stages.map((s) => {
+                const Icon = STAGE_ICON[s.key] || Clock
+                return (
+                  <div key={s.key} className="bt-stage">
+                    <span className={`cc-row-icon ${s.tone}`}><Icon size={15} aria-hidden="true" /></span>
+                    <span className="bt-stage-label">{s.label}</span>
+                    <span className="cc-bar-track"><i style={{ width: `${s.pct ?? 0}%`, background: s.color }} /></span>
+                    <b>{fmtInt(s.count)}</b>
+                    <span className="bt-stage-pct">{s.pct == null ? 'N/A' : `${s.pct}%`}</span>
+                  </div>
+                )
+              })}
+            </div>
+            <p className="bt-note">{STAGE_RULE}</p>
+          </CardState>
+        </Card>
       </div>
 
-      {/* Filters */}
-      <div className="card">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(200px,2fr)_1fr_1fr_1fr_auto] gap-3 items-end">
-          <label className="block">
-            <span className="text-xs text-[var(--text-secondary)]">Search</span>
-            <div className="relative mt-1">
-              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
-              <input className="input pl-9 w-full min-h-[44px]" placeholder="Serial, asset, brand, site, notes" value={filters.search} onChange={(e) => setFilter('search', e.target.value)} />
-            </div>
+      <section className="cc-card" aria-label="Battery register">
+        <div className="cc-filters bt-filters">
+          <label className="cc-search">
+            <Search size={15} aria-hidden="true" />
+            <input aria-label="Search batteries" placeholder="Search battery ID, asset no, brand, site, notes..." value={filters.search} onChange={(e) => setFilter('search', e.target.value)} />
           </label>
-          <label className="block">
-            <span className="text-xs text-[var(--text-secondary)]">Status</span>
-            <select className="input w-full mt-1 min-h-[44px]" value={filters.status} onChange={(e) => setFilter('status', e.target.value)}>
-              <option value="all">All statuses</option>
-              {BATTERY_STATUSES.map((s) => <option key={s} value={s}>{BATTERY_STATUS_META[s].label}</option>)}
-            </select>
-          </label>
-          <label className="block">
-            <span className="text-xs text-[var(--text-secondary)]">Asset</span>
-            <select className="input w-full mt-1 min-h-[44px]" value={filters.asset} onChange={(e) => setFilter('asset', e.target.value)}>
-              <option value="">All assets</option>
-              {assets.map((a) => <option key={a} value={a}>{a}</option>)}
-            </select>
-          </label>
-          <label className="block">
-            <span className="text-xs text-[var(--text-secondary)]">Warranty</span>
-            <select className="input w-full mt-1 min-h-[44px]" value={filters.warranty} onChange={(e) => setFilter('warranty', e.target.value)}>
-              <option value="all">Any warranty state</option>
-              <option value="active">In warranty</option>
-              <option value="soon">Ending within {WARRANTY_SOON_DAYS} days</option>
-              <option value="expired">Expired</option>
-              <option value="unknown">Not recorded</option>
-            </select>
-          </label>
-          <button
-            type="button"
-            onClick={() => setFilter('attentionOnly', !filters.attentionOnly)}
-            aria-pressed={filters.attentionOnly}
-            className={`text-sm inline-flex items-center justify-center gap-1.5 px-3 min-h-[44px] rounded-lg border ${filters.attentionOnly ? 'bg-brand-subtle text-brand-bright border-[var(--accent)]' : 'border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
-          >
+          <select className="cc-select" aria-label="Site" value={filters.site} onChange={(e) => setFilter('site', e.target.value)}>
+            <option value="">All sites</option>
+            {sites.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select className="cc-select" aria-label="Status" value={filters.status} onChange={(e) => setFilter('status', e.target.value)}>
+            <option value="all">All statuses</option>
+            {BATTERY_STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
+          </select>
+          <select className="cc-select" aria-label="Asset" value={filters.asset} onChange={(e) => setFilter('asset', e.target.value)}>
+            <option value="">All assets</option>
+            {assets.map((a) => <option key={a} value={a}>{a}</option>)}
+          </select>
+          <select className="cc-select" aria-label="Warranty" value={filters.warranty} onChange={(e) => setFilter('warranty', e.target.value)}>
+            <option value="all">Any warranty state</option>
+            <option value="active">In warranty</option>
+            <option value="soon">Ending within {WARRANTY_SOON_DAYS} days</option>
+            <option value="expired">Expired</option>
+            <option value="unknown">Not recorded</option>
+          </select>
+          <button type="button" className="cc-btn-ghost" aria-pressed={filters.attentionOnly} onClick={() => setFilter('attentionOnly', !filters.attentionOnly)} style={filters.attentionOnly ? { borderColor: 'var(--cc-green)' } : undefined}>
             <AlertTriangle size={14} aria-hidden="true" /> Needs attention
           </button>
+          <div className="bt-toolbar-actions">
+            <button type="button" className="cc-btn-primary" onClick={openCreate} disabled={missing}><Plus size={15} aria-hidden="true" /> Add battery</button>
+            <button type="button" className="cc-btn-ghost" onClick={() => askSchedule(selectedRows)} disabled={missing || !kpi.total} title="Mark the selected batteries as Replace"><CalendarClock size={14} aria-hidden="true" /> Schedule replacement</button>
+            <Link className="cc-btn-ghost" to="/warranty" title="Open the warranty tracker to raise a claim"><ShieldCheck size={14} aria-hidden="true" /> Claim warranty</Link>
+            <button type="button" className="cc-btn-ghost" onClick={() => doExport('excel')} disabled={!filtered.length}><FileSpreadsheet size={14} aria-hidden="true" /> Export</button>
+            <button type="button" className="cc-icon-btn" onClick={() => doExport('pdf')} disabled={!filtered.length} aria-label="Export to PDF" title="PDF"><FileText size={14} /></button>
+            <button type="button" className="cc-icon-btn" onClick={load} aria-label="Refresh" title="Refresh"><RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} /></button>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-2 mt-3">
-          <span className="text-xs text-[var(--text-muted)]" aria-live="polite">{filtered.length} of {kpi.total} batteries</span>
-          {filterCount > 0 && (
-            <button type="button" onClick={() => setFilters(EMPTY_BATTERY_FILTERS)} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]">
-              <X size={14} /> Clear filters
-            </button>
-          )}
+        <div className="bt-filter-meta">
+          <span aria-live="polite">{fmtInt(filtered.length)} of {fmtInt(kpi.total)} batteries{selectedRows.length ? `, ${selectedRows.length} selected` : ''}</span>
+          {filterCount > 0 && <button type="button" className="cc-link cc-link-btn" onClick={() => { setFilters(EMPTY_FILTERS); setPage(0) }}><X size={13} aria-hidden="true" /> Clear filters</button>}
         </div>
-      </div>
 
-      <EnterpriseTable
-        columns={columns}
-        data={filtered}
-        getRowId={(r) => String(r.id)}
-        loading={loading}
-        error={failed ? error : null}
-        onRetry={load}
-        enableGlobalFilter={false}
-        enableExport={false}
-        initialPageSize={25}
-        viewKey="batteries"
-        onRowClick={(r) => openEdit(r)}
-        emptyMessage={
-          missing ? 'Enable battery tracking to start the register.'
-            : kpi.total === 0 ? 'No batteries registered yet. Use Register battery to add the first one.'
-              : 'No batteries match these filters.'
-        }
-      />
+        <CardState state={state} lines={6} empty={noData || missing ? <EmptyInvite onAdd={openCreate} missing={missing} text="No batteries registered yet. Add the first one to start tracking health, warranty and replacement." /> : null}>
+          <KitTable
+            manualPagination showPagination={false} enableSorting={false}
+            pageIndex={page} pageSize={pageSize} pageCount={Math.max(1, Math.ceil(filtered.length / pageSize))}
+            totalRows={filtered.length} onPageChange={setPage}
+            enableRowSelection rowSelection={selection} onRowSelectionChange={setSelection}
+            getRowId={(r) => String(r.id)}
+            onRowClick={(r) => openEdit(r)}
+            rows={pageRows} columns={columns}
+            empty="No batteries match these filters."
+          />
+          <Pager page={page} pageSize={pageSize} total={filtered.length} onPage={setPage} onPageSize={(s) => { setPageSize(s); setPage(0) }} noun="batteries" />
+        </CardState>
+        <p className="bt-note">Battery type and state of charge are not recorded in the register, so they are not shown.</p>
+      </section>
 
-      <Modal
-        open={modalOpen}
-        onClose={closeModal}
-        title={editing ? 'Edit battery' : 'Register battery'}
-        size="md"
-      >
+      <Modal open={modalOpen} onClose={closeModal} title={editing ? 'Edit battery' : 'Add battery'} size="md">
         <form onSubmit={submit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <label className="block"><span className="label">Asset number</span>
@@ -470,7 +450,7 @@ export default function Batteries() {
               <input className="input w-full" placeholder="Exide, Varta, Bosch" value={form.brand} onChange={(e) => set('brand', e.target.value)} maxLength={120} />
             </label>
             <label className="block"><span className="label">Site</span>
-              <input className="input w-full" placeholder="Riyadh Depot" value={form.site} onChange={(e) => set('site', e.target.value)} maxLength={120} />
+              <input className="input w-full" placeholder="Depot name" value={form.site} onChange={(e) => set('site', e.target.value)} maxLength={120} />
             </label>
             <label className="block"><span className="label">Install date</span>
               <input type="date" className="input w-full" value={form.install_date} onChange={(e) => set('install_date', e.target.value)} />
@@ -504,12 +484,40 @@ export default function Batteries() {
             </div>
           )}
           <div className="flex items-center justify-end gap-2 pt-1">
+            {editing && (
+              <button type="button" onClick={() => { setModalOpen(false); setConfirmDel(editing) }} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] mr-auto" disabled={saving}>
+                <Trash2 size={14} /> Delete
+              </button>
+            )}
             <button type="button" onClick={closeModal} className="btn-secondary text-sm min-h-[44px]" disabled={saving}>Cancel</button>
             <button type="submit" className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px] disabled:opacity-60" disabled={saving}>
-              {saving ? 'Saving...' : editing ? 'Save changes' : 'Register battery'}
+              {saving ? 'Saving...' : editing ? 'Save changes' : 'Add battery'}
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={Boolean(confirmSchedule)}
+        onClose={() => { if (!scheduling) setConfirmSchedule(null) }}
+        title="Schedule replacement?"
+        size="sm"
+        footer={(
+          <>
+            <button type="button" onClick={() => setConfirmSchedule(null)} className="btn-secondary text-sm min-h-[44px]" disabled={scheduling}>Cancel</button>
+            <button type="button" onClick={doSchedule} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px] disabled:opacity-60" disabled={scheduling}>
+              {scheduling ? <Loader2 size={14} className="animate-spin" /> : <CalendarClock size={14} />} Mark as Replace
+            </button>
+          </>
+        )}
+      >
+        {confirmSchedule && (
+          <p className="text-sm text-[var(--text-muted)]">
+            {confirmSchedule.length === 1
+              ? <>Battery <span className="font-semibold text-[var(--text-secondary)]">{confirmSchedule[0].asset_no || confirmSchedule[0].serial_no}</span> will be marked Replace and counted as a replacement due.</>
+              : <>{confirmSchedule.length} batteries will be marked Replace and counted as replacements due.</>}
+          </p>
+        )}
       </Modal>
 
       <Modal

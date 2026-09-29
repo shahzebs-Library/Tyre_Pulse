@@ -2114,6 +2114,16 @@ class AppLocalizationsAr extends AppLocalizations {
   String get homeSiteStatUnavailable => 'لا يوجد موقع مسجل';
 
   @override
+  String get homeSiteAllSites => 'جميع المواقع';
+
+  @override
+  String get homeAccessLoadFailedTitle => 'تعذر تحميل صلاحيات الوصول الخاصة بك';
+
+  @override
+  String get homeAccessLoadFailedBody =>
+      'قد تبقى بعض الأقسام مخفية حتى يتم التحميل. اضغط لإعادة المحاولة.';
+
+  @override
   String get homeFleetSizeStatLabel => 'حجم الأسطول';
 
   @override
@@ -2823,7 +2833,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get alertsCopyCatalog =>
-      'title=تنبيهات الإطارات~all=الكل~critical=حرج~warnings=تحذيرات~info=معلومات~flagged=تنبيهات~criticalCount=حرجة~emptyTitle=لا توجد تنبيهات نشطة~emptyFilter=لا توجد تنبيهات تطابق هذا الفلتر.~loadError=تعذر تحميل التنبيهات. اسحب للأسفل لإعادة المحاولة.~unknownAsset=معدة غير معروفة~pressureLow=ضغط الإطار منخفض~treadLow=عمق النقشة منخفض~position=الموضع~serial=الرقم التسلسلي~tread=عمق النقشة~retry=إعادة المحاولة';
+      'title=تنبيهات الإطارات~all=الكل~critical=حرج~warnings=تحذيرات~info=معلومات~flagged=تنبيهات~criticalCount=حرجة~emptyTitle=لا توجد تنبيهات نشطة~emptyFilter=لا توجد تنبيهات تطابق هذا الفلتر.~loadError=تعذر تحميل التنبيهات. اسحب للأسفل لإعادة المحاولة.~unknownAsset=معدة غير معروفة~pressureLow=ضغط الإطار منخفض~treadLow=عمق النقشة منخفض~position=الموضع~serial=الرقم التسلسلي~tread=عمق النقشة~retry=إعادة المحاولة~acknowledge=إقرار~ackTitle=الإقرار بالتنبيه~ackBody=هل تريد تعليم هذا التنبيه كمراجَع؟ ستتم إزالته من القائمة.~ackFailed=تعذّر الإقرار. يرجى المحاولة مرة أخرى.~cancel=إلغاء';
 
   @override
   String get notificationInboxCopyCatalog =>
@@ -2843,7 +2853,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get stockCountCopyCatalog =>
-      'title=جرد المخزون~items=الأصناف~reorder=تحتاج طلباً~notToday=لم تجرد~search=بحث بالوصف أو الموقع~all=الكل~low=مخزون منخفض~stale=لم يجرد اليوم~empty=لا توجد أصناف~emptyBody=لا توجد سجلات مخزون تطابق المرشحات.~count=جرد~stockItem=صنف مخزون~physicalCount=الكمية الفعلية~reason=السبب (اختياري)~cancel=إلغاء~save=حفظ الجرد~invalid=أدخل كمية صفر أو أكثر.~offlineSaved=حفظ الجرد دون اتصال ووضع في قائمة المزامنة.~saveFailed=تعذر حفظ جرد المخزون.~loadFailed=تعذر تحميل سجلات المخزون.~Critical=حرج~Low=منخفض~OK=جيد~onHand=متوفر';
+      'title=جرد المخزون~items=الأصناف~reorder=تحتاج طلباً~notToday=لم تجرد~search=بحث بالوصف أو الموقع~all=الكل~low=مخزون منخفض~stale=لم يجرد اليوم~empty=لا توجد أصناف~emptyBody=لا توجد سجلات مخزون تطابق المرشحات.~count=جرد~stockItem=صنف مخزون~physicalCount=الكمية الفعلية~reason=السبب (اختياري)~cancel=إلغاء~save=حفظ الجرد~invalid=أدخل كمية صفر أو أكثر.~offlineSaved=حفظ الجرد دون اتصال ووضع في قائمة المزامنة.~saveFailed=تعذر حفظ جرد المخزون.~loadFailed=تعذر تحميل سجلات المخزون.~Critical=حرج~Low=منخفض~OK=جيد~onHand=متوفر~add=إضافة مخزون~addTitle=إضافة مخزون~size=مقاس الإطار~description=الوصف (اختياري)~site=الموقع~quantity=الكمية~minLevel=الحد الأدنى~criticalLevel=الحد الحرج~sizeRequired=أدخل مقاس الإطار لهذا المخزون.~siteRequired=أدخل الموقع لهذا المخزون.~addFailed=تعذّرت إضافة المخزون. يرجى المحاولة مرة أخرى.~increase=زيادة~decrease=إنقاص';
 
   @override
   String get calendarCopyCatalog =>
@@ -7150,4 +7160,265 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get accRptTitle => 'الإبلاغ عن حادث';
+
+  @override
+  String get accountDeletionCopyCatalog =>
+      'title=حذف حسابي~subtitle=طلب حذف حسابك وبياناتك الشخصية~intro=يؤدي هذا إلى إرسال طلب إلى المسؤول لحذف حسابك والبيانات الشخصية المرتبطة به. لا يتم حذف حسابك على الفور.~what=يتم إلغاء وصولك إلى التطبيق عند الطلب. تُحذف بيانات ملفك الشخصي؛ وقد يتم الاحتفاظ ببعض سجلات الأسطول التي أُنشئت لمؤسستك كسجلات تجارية أو تدقيقية مع إزالة هويتك منها.~timeline=تكتمل الطلبات المؤكدة خلال نحو 30 يومًا.~reason=السبب (اختياري)~confirm=اكتب DELETE للتأكيد~word=DELETE~submit=إرسال طلب الحذف~cancel=إلغاء~successTitle=تم إرسال الطلب~successBody=تم تسجيل طلب حذف حسابك. سيقوم المسؤول بتنفيذه خلال نحو 30 يومًا.~errorTitle=تعذّر إرسال الطلب~mismatch=اكتب DELETE تمامًا للتأكيد.~unavailable=حذف الحساب غير متاح حاليًا. يرجى مراسلتنا بالبريد لطلب الحذف.~failed=تعذّر إرسال طلبك. يرجى المحاولة مرة أخرى.~ok=حسنًا';
+
+  @override
+  String get homeOperationalSummary => 'الملخص التشغيلي';
+
+  @override
+  String get homeInspectionsDue => 'فحوصات مستحقة';
+
+  @override
+  String get homeTyresNeedAttention => 'إطارات تحتاج إلى اهتمام';
+
+  @override
+  String get homeApprovalsAwaitingYou => 'موافقات بانتظارك';
+
+  @override
+  String homePlanMoreToday(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count أخرى اليوم',
+      one: 'واحد آخر اليوم',
+      zero: 'لا شيء آخر اليوم',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get profileAssignedTasks => 'المهام المسندة';
+
+  @override
+  String get profileMyActivity => 'نشاطي';
+
+  @override
+  String get tyreRecordsExportAction => 'تصدير';
+
+  @override
+  String get tyreRecordsExportStatus => 'الحالة';
+
+  @override
+  String tyreRecordsExportNote(int shown, int total) {
+    return '$shown من $total سجل إطار محمّل على هذا الجهاز';
+  }
+
+  @override
+  String get tyreRecordsExportError =>
+      'تعذر إنشاء ملف التصدير. يرجى المحاولة مرة أخرى.';
+
+  @override
+  String get fleet360TabDocuments => 'المستندات';
+
+  @override
+  String fleet360AlertServiceDueKm(String km) {
+    return 'الصيانة مستحقة بعد $km كم';
+  }
+
+  @override
+  String fleet360AlertServiceDueHours(String hours) {
+    return 'الصيانة مستحقة بعد $hours ساعة';
+  }
+
+  @override
+  String fleet360AlertServiceDueDays(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'الصيانة مستحقة بعد $days يوم',
+      one: 'الصيانة مستحقة غداً',
+      zero: 'الصيانة مستحقة اليوم',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fleet360AlertServiceOverdue => 'الصيانة متأخرة';
+
+  @override
+  String fleet360AlertTyreActions(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count إجراءات إطارات',
+      one: 'إجراء إطار واحد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fleet360EventInspectionDone => 'اكتمل فحص الإطارات';
+
+  @override
+  String get fleet360EventWashDone => 'اكتمل الغسيل';
+
+  @override
+  String fleet360EventTyreFittedAt(String position) {
+    return 'تم تركيب إطار في $position';
+  }
+
+  @override
+  String fleet360EventTyreRemovedFrom(String position) {
+    return 'تمت إزالة إطار من $position';
+  }
+
+  @override
+  String fleet360EventSerial(String serial) {
+    return 'الرقم التسلسلي: $serial';
+  }
+
+  @override
+  String fleet360EventAccidentCase(String reference) {
+    return 'حالة الحادث $reference';
+  }
+
+  @override
+  String fleet360EventAccidentCaseClosed(String reference) {
+    return 'تم إغلاق حالة الحادث $reference';
+  }
+
+  @override
+  String fleet360SnapshotTitle(String year) {
+    return 'اللمحة المالية، $year حتى تاريخه';
+  }
+
+  @override
+  String get fleet360TotalMaintenance => 'إجمالي الصيانة';
+
+  @override
+  String get fleet360BucketExternal => 'إصلاحات خارجية';
+
+  @override
+  String get fleet360ShareError => 'تعذرت مشاركة الملخص. حاول مرة أخرى.';
+
+  @override
+  String get fleet360DocRegistration => 'التسجيل';
+
+  @override
+  String get fleet360DocInsurance => 'التأمين';
+
+  @override
+  String get fleet360DocOperatingCard => 'بطاقة التشغيل';
+
+  @override
+  String get fleet360DocDriverLicence => 'رخصة السائق';
+
+  @override
+  String fleet360DocIssued(String date) {
+    return 'صدر في $date';
+  }
+
+  @override
+  String fleet360DocExpires(String date) {
+    return 'ينتهي في $date';
+  }
+
+  @override
+  String get fleet360DocExpired => 'منتهي';
+
+  @override
+  String get fleet360DocExpiringSoon => 'ينتهي قريباً';
+
+  @override
+  String get fleet360DocValid => 'ساري';
+
+  @override
+  String get fleet360DocNoExpiry => 'لا يوجد تاريخ انتهاء مسجل';
+
+  @override
+  String get fleet360DocsEmptyTitle => 'لا توجد مستندات مسجلة';
+
+  @override
+  String get fleet360DocsEmptyBody =>
+      'لا توجد تفاصيل تسجيل أو تأمين أو بطاقة تشغيل أو رخصة مسجلة لهذا الأصل.';
+
+  @override
+  String get inspectionModuleTyre => 'فحص الإطارات';
+
+  @override
+  String get inspectionModuleMachine => 'فحص المعدة';
+
+  @override
+  String get fleetListDueSoon => 'مستحق قريبا';
+
+  @override
+  String get fleetListDueSoonUnavailable => 'تعذر التحقق من البنود المستحقة';
+
+  @override
+  String get fleetListFiltersTitle => 'عوامل التصفية';
+
+  @override
+  String fleetListFiltersActive(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'عوامل التصفية، $count مفعلة',
+      one: 'عوامل التصفية، 1 مفعل',
+      zero: 'عوامل التصفية',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fleetListSortAssetNo => 'رقم الأصل';
+
+  @override
+  String get fleetListSortServiceDue => 'الصيانة المستحقة أولا';
+
+  @override
+  String get fleetListSortTyreActions => 'الأكثر إجراءات إطارات';
+
+  @override
+  String get pushNotificationOpen => 'فتح';
+
+  @override
+  String get pushNotificationFallbackTitle => 'إشعار جديد';
+
+  @override
+  String get pmWoStatusNew => 'جديد';
+
+  @override
+  String get pmWoStatusAssigned => 'مُسند';
+
+  @override
+  String get pmWoStatusInProgress => 'قيد التنفيذ';
+
+  @override
+  String get pmWoStatusWaitingForParts => 'بانتظار قطع الغيار';
+
+  @override
+  String get pmWoStatusQualityInspection => 'فحص الجودة';
+
+  @override
+  String get pmWoStatusCompleted => 'مكتمل';
+
+  @override
+  String get pmWoStatusClosed => 'مغلق';
+
+  @override
+  String get pmWoStatusCancelled => 'ملغى';
+
+  @override
+  String get pmWoStatusOverdue => 'متأخر';
+
+  @override
+  String get pmWoStatusOnHold => 'معلّق';
+
+  @override
+  String get pmWoStatusOpen => 'مفتوح';
+
+  @override
+  String get recordsRiskLow => 'منخفض';
+
+  @override
+  String get recordsRiskMedium => 'متوسط';
+
+  @override
+  String get recordsRiskHigh => 'مرتفع';
+
+  @override
+  String get recordsRiskCritical => 'حرج';
 }

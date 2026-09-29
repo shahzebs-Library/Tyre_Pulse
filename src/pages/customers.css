@@ -1,0 +1,58 @@
+/* Customers page. Only --cc-* tokens, so light and dark share one sheet. */
+.cu-page .cu-hero-wrap { position: relative; }
+.cu-page .cc-hero { min-height: 150px; }
+.cu-hero-actions { position: absolute; right: 10px; bottom: 10px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.cu-hero-actions .cc-btn-ghost { text-decoration: none; box-shadow: var(--cc-shadow); }
+
+.cu-banner { flex-direction: row; align-items: flex-start; gap: 10px; }
+.cu-banner > svg { flex: none; margin-top: 2px; }
+.cu-banner > div { flex: 1; min-width: 0; font-size: 13px; }
+.cu-banner p { margin: 3px 0 0; color: var(--cc-ink-2); font-size: 12.5px; }
+.cu-banner.warn > svg { color: var(--cc-amber); }
+.cu-banner.bad > svg { color: var(--cc-red); }
+
+.cu-row { display: grid; gap: 14px; }
+.cu-row-1 { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr); }
+.cu-row-1 > .cc-card { min-height: 260px; }
+.cu-row-2 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.cu-map { min-height: 210px; }
+.cu-pin { cursor: pointer; }
+.cu-pin:focus-visible { outline: none; }
+.cu-pin:focus-visible circle:nth-child(2) { stroke: var(--cc-ink); }
+
+.cu-top { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.cu-top li { display: grid; grid-template-columns: 22px minmax(0, 1.2fr) minmax(0, 1fr) 34px; gap: 10px; align-items: center; padding: 7px 0; border-top: 1px solid var(--cc-inner-border); }
+.cu-top li:first-child { border-top: 0; }
+.cu-rank { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; background: var(--cc-track); color: var(--cc-ink-2); }
+.cu-top-name { min-width: 0; }
+.cu-top-name b { display: block; font-size: 12.5px; color: var(--cc-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cu-top-name small { font-size: 11px; color: var(--cc-ink-3); }
+.cu-top-n { font-size: 12.5px; text-align: right; color: var(--cc-ink); }
+.cu-info { color: var(--cc-ink-3); display: inline-flex; }
+
+.cu-mini-body { display: flex; align-items: flex-start; gap: 12px; }
+.cu-mini-body > div { min-width: 0; }
+.cu-mini-val { display: block; font-size: 22px; font-weight: 800; color: var(--cc-green); margin-top: 6px; line-height: 1.1; }
+.cu-mini small { display: block; font-size: 11.5px; color: var(--cc-ink-3); margin-top: 4px; }
+.cu-muted { font-size: 11px; font-weight: 500; color: var(--cc-ink-3); }
+
+.cu-filters { gap: 8px; margin-bottom: 10px; }
+.cu-filters .cc-select { padding-top: 9px; padding-bottom: 9px; font-size: 12.5px; }
+.cu-more { padding-top: 2px; }
+.cu-name { display: flex; flex-direction: column; }
+.cu-name b { font-weight: 600; color: var(--cc-ink); }
+.cu-name .cc-sub { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--cc-ink-3); }
+.cu-actions { display: inline-flex; gap: 6px; }
+.cu-actions a.cc-icon-btn { text-decoration: none; }
+.cu-danger:hover { color: var(--cc-red); border-color: var(--cc-red); }
+.cu-note { font-size: 11.5px; color: var(--cc-ink-3); margin: 10px 0 0; }
+
+@media (max-width: 1400px) {
+  .cu-row-1 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cu-row-1 > .cc-card:first-child { grid-column: 1 / -1; }
+  .cu-row-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .cu-row-1, .cu-row-2 { grid-template-columns: minmax(0, 1fr); }
+  .cu-hero-actions { position: static; justify-content: flex-start; margin-top: 10px; }
+}

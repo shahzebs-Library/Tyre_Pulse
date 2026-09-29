@@ -29,6 +29,194 @@ class StockCountScreen extends ConsumerStatefulWidget {
 class _StockCountScreenState extends ConsumerState<StockCountScreen> {
   final TextEditingController _search = TextEditingController();
   _StockFilter _filter = _StockFilter.all;
+  String? _busyId;
+
+  /// Quick +/- (Expo `quickAdjust`): one audited movement per tap.
+  Future<void> _adjust(StockItem item, int delta, StockCountCopy copy) async {
+    if (_busyId != null) return;
+    if (delta < 0 && item.quantity <= 0) return;
+    final workspace = ref.read(workspaceContextProvider);
+    if (workspace == null) return;
+    setState(() => _busyId = item.id);
+    try {
+      final bool queued = await ref
+          .read(stockCountRepositoryProvider)
+          .adjust(item: item, delta: delta, workspace: workspace);
+      ref.invalidate(stockItemsProvider);
+      if (queued && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(copy('offlineSaved'))),
+        );
+      }
+    } on Object {
+      ref.invalidate(stockItemsProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(copy('saveFailed'))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busyId = null);
+    }
+  }
+
+  /// Add a stock row for a tyre size at a site (Expo `openAdd`/`submitAdd`).
+  /// Reorder thresholds are offered to Admin and super admin only; everyone
+  /// else leaves them to the server defaults.
+  Future<void> _add(StockCountCopy copy, List<StockItem> rows) async {
+    final workspace = ref.read(workspaceContextProvider);
+    if (workspace == null) return;
+    final bool mayEditThresholds =
+        workspace.role.isAdministrator || workspace.isSuperAdmin;
+    final List<String> sites = <String>{
+      for (final StockItem row in rows)
+        if ((row.site ?? '').trim().isNotEmpty) row.site!.trim(),
+    }.toList()
+      ..sort();
+    final TextEditingController size = TextEditingController();
+    final TextEditingController description = TextEditingController();
+    final TextEditingController site = TextEditingController();
+    final TextEditingController quantity = TextEditingController();
+    final TextEditingController minimum = TextEditingController(text: '5');
+    final TextEditingController critical = TextEditingController(text: '3');
+    bool saving = false;
+    String? problem;
+    final bool? saved = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) => StatefulBuilder(
+        builder: (BuildContext context, StateSetter setDialogState) =>
+            AlertDialog(
+          title: Text(copy('addTitle')),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                TextField(
+                  key: const Key('stock.add.size'),
+                  controller: size,
+                  autofocus: true,
+                  decoration: InputDecoration(labelText: copy('size')),
+                ),
+                TextField(
+                  key: const Key('stock.add.description'),
+                  controller: description,
+                  decoration: InputDecoration(labelText: copy('description')),
+                ),
+                TextField(
+                  key: const Key('stock.add.site'),
+                  controller: site,
+                  decoration: InputDecoration(labelText: copy('site')),
+                ),
+                if (sites.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: TpSpace.xs),
+                  Wrap(
+                    spacing: TpSpace.xs,
+                    runSpacing: TpSpace.xs,
+                    children: <Widget>[
+                      for (final String option in sites)
+                        ActionChip(
+                          label: Text(option),
+                          onPressed: () =>
+                              setDialogState(() => site.text = option),
+                        ),
+                    ],
+                  ),
+                ],
+                TextField(
+                  key: const Key('stock.add.quantity'),
+                  controller: quantity,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: false),
+                  decoration: InputDecoration(labelText: copy('quantity')),
+                ),
+                if (mayEditThresholds) ...<Widget>[
+                  TextField(
+                    key: const Key('stock.add.min'),
+                    controller: minimum,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: false),
+                    decoration: InputDecoration(labelText: copy('minLevel')),
+                  ),
+                  TextField(
+                    key: const Key('stock.add.critical'),
+                    controller: critical,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: false),
+                    decoration:
+                        InputDecoration(labelText: copy('criticalLevel')),
+                  ),
+                ],
+                if (problem != null) ...<Widget>[
+                  const SizedBox(height: TpSpace.sm),
+                  Text(
+                    problem!,
+                    style:
+                        TextStyle(color: Theme.of(context).colorScheme.error),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: saving ? null : () => Navigator.pop(context, false),
+              child: Text(copy('cancel')),
+            ),
+            FilledButton(
+              key: const Key('stock.add.save'),
+              onPressed: saving
+                  ? null
+                  : () async {
+                      final int? qty = int.tryParse(quantity.text.trim());
+                      final String? issue = size.text.trim().isEmpty
+                          ? copy('sizeRequired')
+                          : site.text.trim().isEmpty
+                              ? copy('siteRequired')
+                              : (qty == null || qty < 0)
+                                  ? copy('invalid')
+                                  : null;
+                      if (issue != null) {
+                        setDialogState(() => problem = issue);
+                        return;
+                      }
+                      setDialogState(() {
+                        saving = true;
+                        problem = null;
+                      });
+                      try {
+                        await ref.read(stockCountRepositoryProvider).create(
+                              size: size.text,
+                              description: description.text,
+                              site: site.text,
+                              quantity: qty!,
+                              workspace: workspace,
+                              writeThresholds: mayEditThresholds,
+                              minLevel: int.tryParse(minimum.text.trim()),
+                              criticalLevel: int.tryParse(critical.text.trim()),
+                            );
+                        if (context.mounted) Navigator.pop(context, true);
+                      } on Object {
+                        setDialogState(() {
+                          saving = false;
+                          problem = copy('addFailed');
+                        });
+                      }
+                    },
+              child: Text(copy('add')),
+            ),
+          ],
+        ),
+      ),
+    );
+    size.dispose();
+    description.dispose();
+    site.dispose();
+    quantity.dispose();
+    minimum.dispose();
+    critical.dispose();
+    if (saved == true) ref.invalidate(stockItemsProvider);
+  }
 
   @override
   void dispose() {
@@ -51,6 +239,22 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
           _ => null,
         },
         backFallback: fallback,
+        actions: <Widget>[
+          IconButton(
+            key: const Key('stock.add'),
+            tooltip: copy('add'),
+            icon: const Icon(Icons.add_rounded),
+            onPressed: () => unawaited(
+              _add(
+                copy,
+                switch (state) {
+                  AsyncData<List<StockItem>>(:final value) => value,
+                  _ => const <StockItem>[],
+                },
+              ),
+            ),
+          ),
+        ],
       ),
       body: state.when(
         loading: () => const TpLoadingState(),
@@ -167,6 +371,8 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
                 item: item,
                 copy: copy,
                 onCount: () => unawaited(_count(item, copy)),
+                busy: _busyId == item.id,
+                onAdjust: (int delta) => unawaited(_adjust(item, delta, copy)),
               ),
               const SizedBox(height: TpSpace.sm),
             ],
@@ -284,10 +490,14 @@ class _StockCard extends StatelessWidget {
     required this.item,
     required this.copy,
     required this.onCount,
+    required this.onAdjust,
+    required this.busy,
   });
   final StockItem item;
   final StockCountCopy copy;
   final VoidCallback onCount;
+  final ValueChanged<int> onAdjust;
+  final bool busy;
 
   @override
   Widget build(BuildContext context) {
@@ -342,9 +552,29 @@ class _StockCard extends StatelessWidget {
           const SizedBox(width: TpSpace.sm),
           Column(
             children: <Widget>[
-              Text(
-                '${item.quantity}',
-                style: Theme.of(context).textTheme.headlineSmall,
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  IconButton(
+                    key: Key('stock.decrease.${item.id}'),
+                    tooltip: copy('decrease'),
+                    visualDensity: VisualDensity.compact,
+                    onPressed:
+                        busy || item.quantity <= 0 ? null : () => onAdjust(-1),
+                    icon: const Icon(Icons.remove_circle_outline_rounded),
+                  ),
+                  Text(
+                    '${item.quantity}',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  IconButton(
+                    key: Key('stock.increase.${item.id}'),
+                    tooltip: copy('increase'),
+                    visualDensity: VisualDensity.compact,
+                    onPressed: busy ? null : () => onAdjust(1),
+                    icon: const Icon(Icons.add_circle_outline_rounded),
+                  ),
+                ],
               ),
               Text(copy('onHand')),
               TextButton(onPressed: onCount, child: Text(copy('count'))),

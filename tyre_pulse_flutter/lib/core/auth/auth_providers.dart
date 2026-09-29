@@ -68,6 +68,7 @@ import 'package:tyre_pulse/app/router/session.dart';
 import 'package:tyre_pulse/app/router/shell_gates.dart';
 import 'package:tyre_pulse/core/auth/auth_controller.dart';
 import 'package:tyre_pulse/core/auth/auth_state.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Builds the actions the shell gates may offer, wired to [AuthController].
 ///
@@ -77,10 +78,9 @@ import 'package:tyre_pulse/core/auth/auth_state.dart';
 /// [AuthController.state] rather than through a returned value a button press
 /// could inspect.
 ///
-/// [onOpenStore] is passed straight through and defaults to null, which
-/// `TpUpdateRequiredScreen` already treats correctly - see rule 7 in
-/// `shell_gates.dart`'s library comment: "EVERY ACTION IS OPTIONAL AND EVERY
-/// BUTTON IS REAL... When one is not supplied, its button is NOT RENDERED."
+/// [onOpenStore] defaults to opening this app's Play listing, so the
+/// update-required screen offers a real "Open the store" button. A caller may
+/// pass its own (tests do).
 TpShellGateActions buildAuthShellGateActions(
   Ref ref, {
   VoidCallback? onOpenStore,
@@ -91,17 +91,70 @@ TpShellGateActions buildAuthShellGateActions(
     onSignOut: () => unawaited(notifier().signOut()),
     onRetryProfile: () => unawaited(notifier().retryProfile()),
     onRetrySession: () => unawaited(notifier().retrySession()),
-    onOpenStore: onOpenStore,
+    onOpenStore: onOpenStore ?? _openPlayListing,
   );
+}
+
+/// The Play Store listing of THIS app (the Flutter package, not the retired
+/// Expo `...inspector` package). `market://` opens the Play app directly;
+/// the https link is the fallback when no store app is present.
+const String _playPackage = 'com.shahzebrahman.tyrepulse';
+
+void _openPlayListing() {
+  unawaited(() async {
+    final Uri market = Uri.parse('market://details?id=$_playPackage');
+    final Uri web = Uri.parse(
+      'https://play.google.com/store/apps/details?id=$_playPackage',
+    );
+    try {
+      if (await launchUrl(market, mode: LaunchMode.externalApplication)) {
+        return;
+      }
+    } on Object {
+      // No Play app: fall through to the browser.
+    }
+    try {
+      await launchUrl(web, mode: LaunchMode.externalApplication);
+    } on Object {
+      // Nothing can open a link. The screen still offers sign-out.
+    }
+  }());
 }
 
 /// The auth layer's contribution to the root `ProviderScope`. See the library
 /// comment for what else the composition root must supply alongside this.
+/// True when the grants and role matrix read failed this sign-in and nothing
+/// trustworthy was kept (see [PermissionsStatus.failed]).
+///
+/// Defaults to false so a screen test that never wires the auth layer is not
+/// forced to build the real controller. [authLayerOverrides] points it at
+/// the live [AuthController] state.
+final Provider<bool> accessLoadFailedProvider =
+    Provider<bool>((Ref ref) => false);
+
+/// Re-reads the grants and role matrix. Null when nothing can retry (no auth
+/// layer wired), in which case the retry control is not offered.
+final Provider<VoidCallback?> retryAccessLoadProvider =
+    Provider<VoidCallback?>((Ref ref) => null);
+
 final authLayerOverrides = [
   sessionProvider.overrideWith(
     (Ref ref) => deriveSession(ref.watch(authControllerProvider)),
   ),
   shellGateActionsProvider.overrideWith(
     (Ref ref) => buildAuthShellGateActions(ref),
+  ),
+  accessLoadFailedProvider.overrideWith(
+    (Ref ref) => ref.watch(
+      authControllerProvider.select(
+        (AuthState state) =>
+            state.permissionsStatus == PermissionsStatus.failed,
+      ),
+    ),
+  ),
+  retryAccessLoadProvider.overrideWith(
+    (Ref ref) => () => unawaited(
+          ref.read(authControllerProvider.notifier).retryPermissions(),
+        ),
   ),
 ];

@@ -272,7 +272,11 @@ final class InspectionWizardController extends Notifier<InspectionWizardState> {
       }
     }
 
-    final bool sameDraft = state.draftKey == draftKey;
+    // A submitted sheet is finished work: its draft was detached on submit.
+    // Reopening the same asset (Home, Inspect now) without pressing "New
+    // inspection" must not carry the previous meters or notes forward.
+    final bool sameDraft = state.draftKey == draftKey &&
+        state.step != InspectionWizardStep.submitted;
     final String odometerText = sameDraft
         ? state.odometerText
         : (savedHeader?.odometerKm?.toString() ?? '');
@@ -303,9 +307,7 @@ final class InspectionWizardController extends Notifier<InspectionWizardState> {
       clearActivePosition: seededActivePosition == null,
       step: seededActivePosition != null
           ? InspectionWizardStep.tyres
-          : (sameDraft && state.step != InspectionWizardStep.submitted
-              ? state.step
-              : InspectionWizardStep.header),
+          : (sameDraft ? state.step : InspectionWizardStep.header),
       clearSubmitOutcome: !sameDraft,
       clearSubmitWarning: !sameDraft,
     );

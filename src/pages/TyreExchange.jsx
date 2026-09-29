@@ -19,10 +19,23 @@ import {
 } from 'chart.js'
 import { Bar, Doughnut } from 'react-chartjs-2'
 import {
-  ArrowLeftRight, MapPin, RefreshCw, Clock, Search, Filter, X,
+  ArrowLeftRight, RefreshCw, Clock, Search, Filter, X,
   FileText, FileSpreadsheet, CheckCircle, AlertTriangle, AlertCircle, History,
   TrendingUp, Truck, CheckSquare, XCircle, ChevronDown, Lock,
+  Wrench, CircleOff, Sparkles,
 } from 'lucide-react'
+import { PageHero, Kpi, Card, CardState, Tabs, useCard, fmtInt } from '../components/commandCenter/kit'
+import ExchangeRegister from '../components/tyreExchange/ExchangeRegister'
+import ExchangeInsights from '../components/tyreExchange/ExchangeInsights'
+import NewExchangePanel from '../components/tyreExchange/NewExchangePanel'
+import { listServiceEvents, createServiceEvent } from '../lib/api/tyreServiceEvents'
+import {
+  deriveExchanges, filterExchanges, exchangeOptions, exchangeKpis as exchangeViewKpis, assetChoices,
+  defaultRange, registerExportRows, REGISTER_EXPORT_COLUMNS,
+  EMPTY_FILTERS as EMPTY_EXCHANGE_FILTERS, hasFilters as hasExchangeFilters, isExchangeEvent,
+} from '../lib/tyreExchangeView'
+import ExchangeDetailModal from '../components/tyreExchange/ExchangeDetailModal'
+import './TyreExchange.css'
 import * as exchangeApi from '../lib/api/tyreExchange'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { useSettings } from '../contexts/SettingsContext'
@@ -31,7 +44,6 @@ import {
   exportToPdf, exportToExcel, reportFileName, reportDateLabel,
   resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme,
 } from '../lib/exportUtils'
-import PageHeader from '../components/ui/PageHeader'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import EmptyState from '../components/EmptyState'
@@ -479,6 +491,50 @@ export default function TyreExchange() {
     doc.save(`${reportFileName('Tyre Transfer Certificate', tx.serial)}.pdf`)
   }
 
+  // ── Exchange register (tyreExchangeView engine) ───────────────────────────────
+  const [xFilters, setXFilters] = useState(() => ({ ...EMPTY_EXCHANGE_FILTERS, ...defaultRange() }))
+  const setXFilter = (k, v) => setXFilters((f) => ({ ...f, [k]: v }))
+  const [selectedId, setSelectedId] = useState(null)
+  const [detailOpen, setDetailOpen] = useState(false)
+  const openExchange = useCallback((id) => { setSelectedId(id); setDetailOpen(true) }, [])
+  const exchanges = useMemo(() => deriveExchanges(records), [records])
+  const xOptions = useMemo(() => exchangeOptions(exchanges), [exchanges])
+  const xFiltered = useMemo(() => filterExchanges(exchanges, xFilters), [exchanges, xFilters])
+  const xKpis = useMemo(() => exchangeViewKpis(xFiltered), [xFiltered])
+  const selectedExchange = useMemo(() => exchanges.find((e) => e.id === selectedId) || null, [exchanges, selectedId])
+  const assetList = useMemo(() => assetChoices(records), [records])
+  const rangeLabel = xFilters.from || xFilters.to
+    ? `${xFilters.from || 'the start'} to ${xFilters.to || 'today'}`
+    : 'all dates'
+
+  // Recently recorded exchange events (tyre_service_events), loaded on their own.
+  const recentState = useCard(
+    () => listServiceEvents({ country: activeCountry, limit: 200 })
+      .then((rows) => (rows || []).filter(isExchangeEvent)),
+    [activeCountry, reloadKey],
+  )
+  const technicians = useMemo(
+    () => [...new Set((recentState.data || []).map((r) => r.technician).filter(Boolean))].sort(),
+    [recentState.data],
+  )
+
+  async function saveExchange(payload) {
+    await createServiceEvent(payload)
+    recentState.retry()
+  }
+
+  function exportExchanges(format, selection) {
+    const list = selection && selection.length ? selection : xFiltered
+    const data = registerExportRows(list)
+    const cols = REGISTER_EXPORT_COLUMNS
+    const name = reportFileName('Tyre Exchange Register', reportDateLabel())
+    if (format === 'excel') {
+      exportToExcel(data, cols.map((c) => c.key), cols.map((c) => c.header), name)
+    } else {
+      exportToPdf(data, cols.map((c) => ({ key: c.key, header: c.header })), 'Tyre Exchange Register', name, 'landscape', company, { branding })
+    }
+  }
+
   // ── Table columns ─────────────────────────────────────────────────────────────
   const transferColumns = useMemo(() => [
     { id: 'serial', header: 'Serial', accessorFn: (t) => t.serial, cell: ({ row }) => <span className="font-mono text-blue-400 text-xs">{row.original.serial}</span> },
@@ -630,7 +686,7 @@ export default function TyreExchange() {
       id: `to_${to}`, header: to, meta: { align: 'center' },
       cell: ({ row }) => {
         const r = row.original
-        if (r.isTotal) return <span className="text-purple-400 font-semibold">{flow.totalIn[to] || 'N/A'}</span>
+        if (r.isTotal) return <span className="text-purple-400 font-semibold">{flow.totalIn[to] || 0}</span>
         if (r.site === to) return <span className="text-[var(--text-dim)]">N/A</span>
         const v = flow.matrix[r.site]?.[to] || 0
         const band = flowIntensity(v, flow.max)
@@ -670,21 +726,6 @@ export default function TyreExchange() {
     },
   ], [])
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64 text-[var(--text-muted)]">
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
-          className="mr-3"
-        >
-          <RefreshCw size={20} />
-        </motion.div>
-        Loading transfer data...
-      </div>
-    )
-  }
-
   const exportButtons = (onExcel, onPdf, disabled) => (
     <div className="flex gap-2">
       <button type="button" onClick={onExcel} disabled={disabled} className={btnCls}><FileSpreadsheet size={15} /> Excel</button>
@@ -692,82 +733,94 @@ export default function TyreExchange() {
     </div>
   )
 
+  const listState = { loading, error: loadError, retry: reload, data: loading ? null : records }
+  const kitTabs = TABS.map((t) => ({
+    key: t.id,
+    label: t.label,
+    count: t.id === 'pending' && pendingStats.over30 > 0 ? pendingStats.over30 : undefined,
+    countTone: 'red',
+  }))
+
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Tyre Exchange & Transfer Management"
-        subtitle="Track tyre movements across fleet and locations"
-        icon={ArrowLeftRight}
-        onRefresh={reload}
-        refreshing={loading}
-        updatedAt={loadedAt}
-        actions={exportButtons(exportTransfersExcel, exportTransfersPdf, filteredTransfers.length === 0)}
+    <div className="cc tx-page">
+      <PageHero
+        title="Tyre Exchange"
+        lead="Record and manage tyre fitting, removal, replacement and interchange between vehicles."
+        imgLight="/dashboard/hero-exchange-light.webp"
+        imgDark="/dashboard/hero-exchange-dark.webp"
+        stat={loading || loadError ? null : { value: fmtInt(xKpis.total), lines: ['exchanges', rangeLabel] }}
       />
 
       {loadError && (
-        <div role="alert" className="flex items-start gap-3 bg-red-900/20 border border-red-800/50 rounded-xl p-4 text-sm text-red-300">
-          <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
-          <span className="flex-1">{loadError}</span>
-          <button type="button" onClick={reload} className={btnCls}><RefreshCw size={14} /> Retry</button>
+        <div className="cc-card tx-banner" role="alert">
+          <AlertTriangle size={16} aria-hidden="true" />
+          <div>{loadError}</div>
+          <button type="button" className="cc-btn-ghost" onClick={reload}><RefreshCw size={14} aria-hidden="true" /> Retry</button>
         </div>
       )}
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        {[
-          { label: 'Transfers Detected', value: fmtNum(kpis.transfers), icon: ArrowLeftRight, color: 'text-sky-400', bg: 'bg-sky-900/20 border-sky-800/50', sub: `Across ${fmtNum(kpis.serials)} serials` },
-          { label: 'Inter-Vehicle Transfers', value: fmtNum(kpis.interVehicle), icon: ArrowLeftRight, color: 'text-blue-400', bg: 'bg-blue-900/20 border-blue-800/50', sub: 'Serials on 2+ vehicles' },
-          { label: 'Inter-Site Transfers', value: fmtNum(kpis.interSite), icon: MapPin, color: 'text-purple-400', bg: 'bg-purple-900/20 border-purple-800/50', sub: 'Serials on 2+ sites' },
-          { label: 'Retread Send-Outs', value: fmtNum(kpis.retreadCount), icon: RefreshCw, color: 'text-green-400', bg: 'bg-green-900/20 border-green-800/50', sub: `${fmtNum(retreadStats.overdue)} overdue` },
-          { label: 'Pending Returns', value: fmtNum(kpis.pendingReturns), icon: Clock, color: 'text-orange-400', bg: 'bg-orange-900/20 border-orange-800/50', sub: `${fmtNum(kpis.pendingOverdue)} over 30 days` },
-          { label: 'Avg KM at Transfer', value: fmtNum(kpis.avgKm), icon: TrendingUp, color: 'text-yellow-400', bg: 'bg-yellow-900/20 border-yellow-800/50', sub: kpis.avgKm == null ? 'No removal km recorded' : `From ${fmtNum(kpis.kmSample)} transfers` },
-        ].map((kpi, i) => (
-          <motion.div
-            key={kpi.label}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.05 }}
-            className={`rounded-xl border p-4 ${kpi.bg}`}
-          >
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-xs text-[var(--text-muted)] mb-1">{kpi.label}</p>
-                <p className={`text-2xl font-bold ${kpi.color}`}>{kpi.value}</p>
-                <p className="text-xs text-[var(--text-muted)] mt-1">{kpi.sub}</p>
-              </div>
-              <kpi.icon size={20} className={`${kpi.color} opacity-70 mt-1`} />
-            </div>
-          </motion.div>
-        ))}
+      <div className="cc-kpis">
+        <Kpi icon={ArrowLeftRight} tone="t-green" value={loadError ? null : xKpis.total} loading={loading} label="Total exchanges" title={`Every exchange derived from the tyre register, ${rangeLabel}`} onClick={() => setXFilter('type', '')} />
+        <Kpi icon={Wrench} tone="t-blue" value={loadError ? null : xKpis.fittings} loading={loading} label="Fittings (installed)" title="Every tyre put onto a vehicle, including replacements, transfers and interchanges" />
+        <Kpi icon={CircleOff} tone="t-red" value={loadError ? null : xKpis.removals} loading={loading} label="Removals (off)" title="Tyres taken off a position, including the tyre replaced by a new one" onClick={() => setXFilter('type', 'Removal')} />
+        <Kpi icon={Truck} tone="t-orange" value={loadError ? null : xKpis.transfers} loading={loading} label="Inter-vehicle transfer" title="A serial fitted on a vehicle after it was last on another vehicle" onClick={() => setXFilter('type', 'Transfer')} />
+        <Kpi icon={Sparkles} tone="t-purple" value={loadError ? null : xKpis.newFitted} loading={loading} label="New tyres fitted" title="Fitted tyres whose serial has no earlier record and is not marked retread" />
+        <Kpi icon={RefreshCw} tone="t-amber" value={loadError ? null : xKpis.retreadFitted} loading={loading} label="Retreaded fitted" title="Fitted tyres whose record category says retread" />
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 overflow-x-auto pb-1 border-b border-[var(--input-border)]">
-        {TABS.map(tab => {
-          const Icon = tab.icon
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-1.5 px-4 py-2.5 rounded-t-lg text-sm font-medium whitespace-nowrap transition-colors ${
-                activeTab === tab.id
-                  ? 'bg-[var(--input-bg)] text-[var(--text-primary)] border-b-2 border-blue-500'
-                  : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-gray-800/50'
-              }`}
-            >
-              <Icon size={14} />
-              {tab.label}
-              {tab.id === 'pending' && pendingStats.over30 > 0 && (
-                <span className="ml-1 bg-red-600 text-white text-xs rounded-full min-w-4 h-4 px-1 flex items-center justify-center">
-                  {pendingStats.over30}
-                </span>
-              )}
-            </button>
-          )
-        })}
+      <div className="tx-layout">
+        <div className="tx-main">
+          <ExchangeRegister
+            rows={xFiltered}
+            total={exchanges.length}
+            options={xOptions}
+            filters={xFilters}
+            setFilter={setXFilter}
+            setRange={(r) => setXFilters((f) => ({ ...f, from: r.from, to: r.to }))}
+            clearFilters={() => setXFilters((f) => ({ ...EMPTY_EXCHANGE_FILTERS, from: f.from, to: f.to }))}
+            filtersOn={hasExchangeFilters(xFilters)}
+            state={listState}
+            onSelect={openExchange}
+            onExport={exportExchanges}
+            onOpenCustody={(serial) => { setCustodyInput(serial); setCustodySerial(serial); setCustodySearched(true); setActiveTab('custody') }}
+          />
+          <ExchangeInsights
+            events={exchanges}
+            state={listState}
+            selected={selectedExchange}
+            custom={{ from: xFilters.from, to: xFilters.to }}
+            onPickType={(t) => setXFilter('type', t)}
+          />
+        </div>
+        <aside className="tx-rail">
+          <NewExchangePanel
+            assets={assetList}
+            sites={xOptions.sites}
+            records={records}
+            technicians={technicians}
+            country={activeCountry}
+            onSave={saveExchange}
+            recent={recentState}
+          />
+        </aside>
       </div>
 
+      <ExchangeDetailModal
+        open={detailOpen && !!selectedExchange}
+        exchange={selectedExchange}
+        onClose={() => setDetailOpen(false)}
+        onOpenCustody={(serial) => { setDetailOpen(false); setCustodyInput(serial); setCustodySerial(serial); setCustodySearched(true); setActiveTab('custody') }}
+      />
+
+      <Card
+        title="Transfer analysis"
+        sub={loading || loadError ? 'Transfers, retreads, chain of custody and pending returns from the tyre register.' : `${fmtNum(kpis.transfers)} transfers across ${fmtNum(kpis.serials)} serials. ${fmtNum(kpis.interVehicle)} serials on 2 or more vehicles, ${fmtNum(kpis.interSite)} on 2 or more sites, ${fmtNum(kpis.retreadCount)} retread send-outs, ${fmtNum(kpis.pendingReturns)} pending returns. Average km at transfer ${kpis.avgKm == null ? 'N/A (no removal km recorded)' : fmtNum(kpis.avgKm)}.`}
+        action={exportButtons(exportTransfersExcel, exportTransfersPdf, filteredTransfers.length === 0)}
+      >
+      <Tabs tabs={kitTabs} value={activeTab} onChange={setActiveTab} label="Transfer analysis" variant="line" />
+      <div className="tx-legacy">
+      {/* A failed or pending read must not render as "no transfers". */}
+      <CardState state={listState} lines={5}>
       {/* Tab Content */}
       <AnimatePresence mode="wait">
         <motion.div
@@ -1317,6 +1370,9 @@ export default function TyreExchange() {
           )}
         </motion.div>
       </AnimatePresence>
+      </CardState>
+      </div>
+      </Card>
     </div>
   )
 }

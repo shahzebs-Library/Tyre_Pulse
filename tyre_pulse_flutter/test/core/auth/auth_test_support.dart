@@ -30,6 +30,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 // explicitly, needed here because [authTestOverrides] returns a typed list
 // rather than relying on inline list-literal inference.
 import 'package:flutter_riverpod/misc.dart' show Override;
+import 'package:tyre_pulse/core/auth/access_permissions_repository.dart';
 import 'package:tyre_pulse/core/auth/app_version.dart';
 import 'package:tyre_pulse/core/auth/auth_dependency_providers.dart';
 import 'package:tyre_pulse/core/auth/auth_profile_repository.dart';
@@ -231,6 +232,24 @@ WorkspaceProfile profileWith({
 /// (`auth_controller_test.dart`'s own `Harness`) and with a widget-level
 /// `ProviderScope` (`login_screen_test.dart`): both accept a plain
 /// `List<Override>`.
+/// Fake grants/matrix loader. Defaults to two SUCCESSFUL empty reads, so a
+/// session reaches exactly its role defaults; set [snapshot] to simulate
+/// administrator changes or failed reads.
+final class FakeAccessPermissionsRepository
+    implements AccessPermissionsRepository {
+  AccessPermissionsSnapshot snapshot = const AccessPermissionsSnapshot(
+    grantsRaw: <String, Object?>{},
+    roleMatrixRaw: <String, Object?>{},
+  );
+  int loads = 0;
+
+  @override
+  Future<AccessPermissionsSnapshot> load() async {
+    loads++;
+    return snapshot;
+  }
+}
+
 List<Override> authTestOverrides({
   required FakeAuthRepository auth,
   required FakeProfileRepository profiles,
@@ -238,8 +257,12 @@ List<Override> authTestOverrides({
   required FakeSecureStore secureStore,
   required FakeForegroundSignal foreground,
   Duration restoreTimeout = const Duration(milliseconds: 30),
+  FakeAccessPermissionsRepository? permissions,
 }) =>
     <Override>[
+      accessPermissionsRepositoryProvider.overrideWith(
+        (Ref ref) => permissions ?? FakeAccessPermissionsRepository(),
+      ),
       authRepositoryProvider.overrideWith((Ref ref) => auth),
       profileRepositoryProvider.overrideWith((Ref ref) => profiles),
       versionGateRepositoryProvider.overrideWith((Ref ref) => versionGate),

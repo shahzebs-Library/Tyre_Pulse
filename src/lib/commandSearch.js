@@ -27,7 +27,7 @@ const isCustomNavRole = (role) => !!role && !BUILTIN_NAV_ROLES.has(role)
 // are open to every authenticated role except Inspector (see isCommandVisible).
 export const NAV_COMMANDS = [
   // Overview
-  { id: 'dashboard',      label: 'Dashboard',            path: '/',            icon: 'LayoutDashboard' },
+  { id: 'dashboard',      label: 'Command Center',       path: '/',            icon: 'LayoutDashboard', keywords: ['dashboard', 'home', 'overview'] },
   { id: 'tyres',          label: 'Tyre Records',         path: '/tyres',       icon: 'CircleDot' },
   // Operations
   { id: 'fleet-master',   label: 'Fleet Master',         path: '/fleet-master', icon: 'Truck', keywords: ['plate', 'number plate', 'registration', 'vin', 'chassis', 'vehicle list', 'asset register'] },

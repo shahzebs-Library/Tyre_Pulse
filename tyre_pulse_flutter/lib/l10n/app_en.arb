@@ -1698,6 +1698,12 @@
   "@homeSiteStatLabel": {},
   "homeSiteStatUnavailable": "No site on file",
   "@homeSiteStatUnavailable": {},
+  "homeSiteAllSites": "All sites",
+  "@homeSiteAllSites": {},
+  "homeAccessLoadFailedTitle": "Your access could not be loaded",
+  "@homeAccessLoadFailedTitle": {},
+  "homeAccessLoadFailedBody": "Some sections may be hidden until it loads. Tap to retry.",
+  "@homeAccessLoadFailedBody": {},
   "homeFleetSizeStatLabel": "Fleet size",
   "@homeFleetSizeStatLabel": {},
   "homeStatLoadingCaption": "Checking",
@@ -2121,7 +2127,7 @@
   "@loginCardTitle": {},
   "loginCardSubtitle": "Use your email, username, or Employee ID",
   "@loginCardSubtitle": {},
-  "loginIdentifierLabel": "Email or employee ID",
+  "loginIdentifierLabel": "Employee ID or email",
   "@loginIdentifierLabel": {},
   "loginIdentifierPlaceholder": "Enter email, username, or ID",
   "@loginIdentifierPlaceholder": {},
@@ -2225,12 +2231,12 @@
   "accidentCaseLocationLabel": "Location",
   "accidentCaseReportedByLabel": "Reported By",
   "tasksCopyCatalog": "title=My Work~today=Today~assignedTab=Assigned~dueToday=Due today~inProgress=In Progress~completed=Completed~urgent=Urgent~upcoming=Upcoming~open=open~emptyTitle=No tasks~emptyMessage=No work matches this view.~loadError=My work could not be loaded right now.~due=Due~assigned=Assigned to~unassigned=Unassigned~normal=Normal~overdue=Overdue~details=Task details~description=Description~site=Site~asset=Asset~priority=Priority~status=Status~view=View~reportIssue=Report an issue~retry=Retry",
-  "alertsCopyCatalog": "title=Tyre Alerts~all=All~critical=Critical~warnings=Warnings~info=Info~flagged=flagged~criticalCount=critical~emptyTitle=No active alerts~emptyFilter=No alerts match this filter.~loadError=Could not load alerts. Pull down to retry.~unknownAsset=Unknown asset~pressureLow=Tyre pressure is low~treadLow=Tread depth is low~position=Position~serial=Serial~tread=Tread~retry=Retry",
+  "alertsCopyCatalog": "title=Tyre Alerts~all=All~critical=Critical~warnings=Warnings~info=Info~flagged=flagged~criticalCount=critical~emptyTitle=No active alerts~emptyFilter=No alerts match this filter.~loadError=Could not load alerts. Pull down to retry.~unknownAsset=Unknown asset~pressureLow=Tyre pressure is low~treadLow=Tread depth is low~position=Position~serial=Serial~tread=Tread~retry=Retry~acknowledge=Acknowledge~ackTitle=Acknowledge alert~ackBody=Mark this alert as reviewed? It will be removed from the list.~ackFailed=Could not acknowledge. Please try again.~cancel=Cancel",
   "notificationInboxCopyCatalog": "title=Notifications~markAll=Mark all read~fallbackTitle=Notification~emptyTitle=You're all caught up~emptyBody=Assignments, approvals and operational updates will appear here.~loadFailed=Could not load notifications. Pull down to retry.~markFailed=Could not mark this notification as read.~markAllFailed=Could not mark all notifications as read.~justNow=Just now~minutesAgo=%count%m ago~hoursAgo=%count%h ago~daysAgo=%count%d ago",
   "reportIssueCopyCatalog": "title=Report an issue~problem=What is wrong?~problemHint=Briefly describe the issue~priority=Priority~low=Low~medium=Medium~high=High~critical=Critical~site=Site~siteHint=Where the issue was found~asset=Asset~assetHint=Asset number~due=Due in~noDate=No date~threeDays=3 days~oneWeek=1 week~twoWeeks=2 weeks~details=Description~detailsHint=Add symptoms, exact location and any immediate action taken~photos=Evidence~optional=(optional)~addPhoto=Add photo~camera=Camera~gallery=From gallery~photoFailed=The photo could not be added.~submit=Submit issue~titleRequired=Enter what is wrong before saving.~workspaceUnavailable=Your workspace is still loading. Try again in a moment.~savedTitle=Issue saved~savedBody=The issue is in My Work and will sync automatically.~stay=Stay here~viewTasks=View My Work~saveFailed=The issue could not be saved. Try again.~category=Issue category~mechanical=Mechanical~electrical=Electrical~hydraulic=Hydraulic~tyre=Tyre~body=Body~washing=Washing~safety=Safety~other=Other~operation=Can the asset operate safely?~yes=Yes~restricted=Restricted~no=No~restriction=Operating restriction~saveDraft=Save draft~draftSaved=Draft saved~createWorkOrder=Create work order after supervisor review~notifyTeam=Will notify Fleet Supervisor and Workshop team",
   "rcaCopyCatalog": "title=Root Cause Analysis~records=records~newRecord=New RCA~none=No RCA records~noneBody=Completed root-cause records will appear here.~unknown=Unknown asset~asset=Asset~serial=Tyre serial~brand=Brand~site=Site~km=Kilometres at failure~factors=Contributing factors~rootCause=Root cause~photos=Evidence photos~photo=Photo~addPhoto=Add photo~camera=Camera~gallery=Gallery~photoFailed=The photo could not be added.~save=Save RCA~missingCause=Enter the root cause before saving.~invalidKm=Enter a valid kilometre reading.~loadFailed=The RCA records could not be loaded.~saveFailed=The RCA could not be saved. Try again.",
   "pmCopyCatalog": "title=Maintenance Control Center~subtitle=Control today's maintenance workload~createWorkOrder=Create work order~pmDue=PM due~priorityQueue=Priority work queue~viewAll=View all~allWorkOrders=View all work orders~quickAccess=Quick access~workOrders=Work orders~workOrdersHint=Create & manage~pmSchedule=PM schedule~pmScheduleHint=Plan & track PM~inspections=Inspections~inspectionsHint=Check & report~parts=Parts~partsHint=Stock & requests~tyres=Tyres~tyresHint=Records, rotation & replacements~overdue=Overdue~dueSoon=Due soon~active=Active plans~due=Due now~all=All plans~empty=No maintenance plans~emptyDue=No preventive maintenance is due in the next 14 days.~emptyAll=No active preventive maintenance plans are available.~plan=Maintenance plan~daysOverdue=days overdue~daysLeft=days left~noDate=No due date~record=Record service~meter=Meter reading~performedBy=Performed by~workshop=Workshop~partsCost=Parts cost~labourCost=Labour cost~findings=Findings~completed=Completed~partial=Partially completed~deferred=Deferred~failed=Failed~save=Save service~invalidNumber=Enter valid numeric values.~loadFailed=The maintenance plans could not be loaded.~saveFailed=The service record could not be saved. Try again.~openBreakdowns=Open breakdowns~activeWorkOrders=Active work orders~breakdown=Breakdown~workOrder=Work order~dueToday=Due today~since=Since~opened=Opened~queueEmpty=Nothing needs attention~woLoadFailed=Open work orders could not be loaded.~retry=Retry~countFailed=This count could not be loaded. Tap to retry.",
-  "stockCountCopyCatalog": "title=Stock Count~items=Items~reorder=Need reorder~notToday=Not counted~search=Search description or site~all=All~low=Low stock~stale=Not counted today~empty=No stock items~emptyBody=No stock records match these filters.~count=Count~stockItem=Stock item~physicalCount=Physical count~reason=Reason (optional)~cancel=Cancel~save=Save count~invalid=Enter a count of zero or more.~offlineSaved=Count saved offline and queued for sync.~saveFailed=The stock count could not be saved.~loadFailed=Stock records could not be loaded.~Critical=Critical~Low=Low~OK=OK~onHand=on hand",
+  "stockCountCopyCatalog": "title=Stock Count~items=Items~reorder=Need reorder~notToday=Not counted~search=Search description or site~all=All~low=Low stock~stale=Not counted today~empty=No stock items~emptyBody=No stock records match these filters.~count=Count~stockItem=Stock item~physicalCount=Physical count~reason=Reason (optional)~cancel=Cancel~save=Save count~invalid=Enter a count of zero or more.~offlineSaved=Count saved offline and queued for sync.~saveFailed=The stock count could not be saved.~loadFailed=Stock records could not be loaded.~Critical=Critical~Low=Low~OK=OK~onHand=on hand~add=Add stock~addTitle=Add stock~size=Tyre size~description=Description (optional)~site=Location (site)~quantity=Quantity~minLevel=Minimum level~criticalLevel=Critical level~sizeRequired=Enter a tyre size for this stock.~siteRequired=Enter a location (site) for this stock.~addFailed=Could not add stock. Please try again.~increase=Increase~decrease=Decrease",
   "calendarCopyCatalog": "title=Today's field plan~scheduled=scheduled~overdue=Overdue~today=Due today~week=This week~later=Later~inspection=Inspection~maintenance=Maintenance~task=Corrective task~empty=Nothing scheduled~emptyBody=Upcoming inspections, maintenance and corrective tasks will appear here.~loadFailed=The schedule could not be loaded.",
   "managementCopyCatalog": "overviewTitle=Fleet Overview~analyticsTitle=Fleet Analytics~reportsTitle=Financial report~reportsSubtitle=Live executive cost and performance~teamTitle=Team~last=Last~days=days~days30=30 days~days90=90 days~year1=1 year~allSites=All sites~tyres=Tyres~vehicles=Vehicles~critical=Critical~openActions=Open actions~highRisk=High risk~inspections30=Inspections (30d)~tyreSpend=Tyre spend~risk=Risk distribution~sites=Top sites~brands=Top brands~analyticsFailed=Analytics could not be loaded.~reportsFailed=Report data could not be loaded.~reportUnavailable=Live report unavailable~reportUnavailableBody=The authoritative server snapshot is not available. No figures were fabricated.~retry=Retry~generated=Generated~costPerformance=Cost and performance~fleet=Fleet~tyre_spend=Tyre spend~accidents=Accidents~open_accidents=Open accidents~claims_claimed=Claims submitted~claims_recovered=Claims recovered~inspections=Inspections~work_orders_open=Open work orders~tyre_cost=Tyre cost~maintenance_cost=Maintenance cost~total_cost=Total cost~km=Kilometres~engine_hours=Engine hours~m3=Production m3~cost_per_km=Cost per km~cost_per_hour=Cost per hour~cost_per_m3=Cost per m3~tyre_cpk=Tyre CPK~severity=Accident severity~accidents_by_site=Accidents by site~tyres_by_site=Tyres by site~claim_status=Claim status~members=members~manage=Manage team~active=Active~pending=Pending~teamSearch=Search name, role or site~noMembers=No team members~trySearch=Try a different search.~teamFailed=The team directory could not be loaded.",
   "profileSignOutConfirmTitle": "Sign out?",
@@ -7705,5 +7711,348 @@
   "accRptTitle": "Report Accident",
   "@accRptTitle": {
     "description": "Page title of the accident report wizard."
+  },
+  "accountDeletionCopyCatalog": "title=Delete my account~subtitle=Request deletion of your account and personal data~intro=This submits a request for an administrator to delete your account and the personal data associated with it. It does not delete your account instantly.~what=Your access to the app is revoked on request. Personal profile data is deleted; some fleet records created for your organisation may be retained as business or audit records and de-identified from your profile.~timeline=Verified requests are completed within about 30 days.~reason=Reason (optional)~confirm=Type DELETE to confirm~word=DELETE~submit=Submit deletion request~cancel=Cancel~successTitle=Request submitted~successBody=Your account deletion request has been recorded. An administrator will action it within about 30 days.~errorTitle=Could not submit request~mismatch=Type DELETE exactly to confirm.~unavailable=Account deletion is not available right now. Please email us to request deletion.~failed=Could not submit your request. Please try again.~ok=OK",
+  "homeOperationalSummary": "Operational summary",
+  "@homeOperationalSummary": {
+    "description": "Heading of Home's section of live operational counts."
+  },
+  "homeInspectionsDue": "Inspections due",
+  "@homeInspectionsDue": {
+    "description": "Home summary tile: inspection plans assigned to you that are due today, overdue or in progress."
+  },
+  "homeTyresNeedAttention": "Tyres need attention",
+  "@homeTyresNeedAttention": {
+    "description": "Home summary tile: active high or critical risk tyre records."
+  },
+  "homeApprovalsAwaitingYou": "Approvals awaiting you",
+  "@homeApprovalsAwaitingYou": {
+    "description": "Home summary tile: inspections waiting for your signature."
+  },
+  "homePlanMoreToday": "{count, plural, =1{1 more today} other{{count} more today}}",
+  "@homePlanMoreToday": {
+    "description": "Home timeline: how many more items are on today's plan besides the one shown.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "profileAssignedTasks": "Assigned tasks",
+  "@profileAssignedTasks": {
+    "description": "Profile status tile: open work assigned to the signed-in person."
+  },
+  "profileMyActivity": "My activity",
+  "@profileMyActivity": {
+    "description": "Profile button that opens the person's activity history."
+  },
+  "tyreRecordsExportAction": "Export",
+  "@tyreRecordsExportAction": {
+    "description": "Tooltip of the tyre records register export (share PDF) action."
+  },
+  "tyreRecordsExportStatus": "Status",
+  "@tyreRecordsExportStatus": {
+    "description": "Status column header in the tyre records PDF export."
+  },
+  "tyreRecordsExportNote": "{shown} of {total} tyre records loaded on this device",
+  "@tyreRecordsExportNote": {
+    "description": "Line under the tyre records PDF title: how many loaded rows of the server total are in the file.",
+    "placeholders": {
+      "shown": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "tyreRecordsExportError": "Could not create the export. Please try again.",
+  "@tyreRecordsExportError": {
+    "description": "Snackbar when the tyre records PDF could not be built or shared."
+  },
+  "fleet360TabDocuments": "Documents",
+  "@fleet360TabDocuments": {
+    "description": "Vehicle 360 tab listing the asset's recorded permits"
+  },
+  "fleet360AlertServiceDueKm": "Service due in {km} km",
+  "@fleet360AlertServiceDueKm": {
+    "description": "Next preventive maintenance by odometer",
+    "placeholders": {
+      "km": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360AlertServiceDueHours": "Service due in {hours} h",
+  "@fleet360AlertServiceDueHours": {
+    "description": "Next preventive maintenance by engine hours",
+    "placeholders": {
+      "hours": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360AlertServiceDueDays": "{days, plural, =0{Service due today} =1{Service due tomorrow} other{Service due in {days} days}}",
+  "@fleet360AlertServiceDueDays": {
+    "description": "Next preventive maintenance by calendar date",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "fleet360AlertServiceOverdue": "Service overdue",
+  "@fleet360AlertServiceOverdue": {
+    "description": "A preventive maintenance plan is past due"
+  },
+  "fleet360AlertTyreActions": "{count, plural, =1{1 tyre action} other{{count} tyre actions}}",
+  "@fleet360AlertTyreActions": {
+    "description": "Open corrective actions raised from tyre inspections",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fleet360EventInspectionDone": "Tyre inspection completed",
+  "@fleet360EventInspectionDone": {
+    "description": "Timeline row title for a completed inspection"
+  },
+  "fleet360EventWashDone": "Wash completed",
+  "@fleet360EventWashDone": {
+    "description": "Timeline row title for a completed wash"
+  },
+  "fleet360EventTyreFittedAt": "Tyre fitted at {position}",
+  "@fleet360EventTyreFittedAt": {
+    "description": "Timeline row title for a tyre fitment",
+    "placeholders": {
+      "position": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360EventTyreRemovedFrom": "Tyre removed from {position}",
+  "@fleet360EventTyreRemovedFrom": {
+    "description": "Timeline row title for a tyre removal",
+    "placeholders": {
+      "position": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360EventSerial": "Serial: {serial}",
+  "@fleet360EventSerial": {
+    "description": "Tyre serial on a timeline row",
+    "placeholders": {
+      "serial": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360EventAccidentCase": "Accident case {reference}",
+  "@fleet360EventAccidentCase": {
+    "description": "Timeline row title for an open accident case",
+    "placeholders": {
+      "reference": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360EventAccidentCaseClosed": "Accident case {reference} closed",
+  "@fleet360EventAccidentCaseClosed": {
+    "description": "Timeline row title for a closed accident case",
+    "placeholders": {
+      "reference": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360SnapshotTitle": "Financial snapshot, {year} year to date",
+  "@fleet360SnapshotTitle": {
+    "description": "Vehicle 360 cost card title",
+    "placeholders": {
+      "year": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360TotalMaintenance": "Total maintenance",
+  "@fleet360TotalMaintenance": {
+    "description": "Vehicle 360 cost card KPI"
+  },
+  "fleet360BucketExternal": "External repairs",
+  "@fleet360BucketExternal": {
+    "description": "Cost composition bucket for outside repairs"
+  },
+  "fleet360ShareError": "The summary could not be shared. Try again.",
+  "@fleet360ShareError": {
+    "description": "Vehicle 360 share failure"
+  },
+  "fleet360DocRegistration": "Registration",
+  "@fleet360DocRegistration": {
+    "description": "Permit kind"
+  },
+  "fleet360DocInsurance": "Insurance",
+  "@fleet360DocInsurance": {
+    "description": "Permit kind"
+  },
+  "fleet360DocOperatingCard": "Operating card",
+  "@fleet360DocOperatingCard": {
+    "description": "Permit kind"
+  },
+  "fleet360DocDriverLicence": "Driver licence",
+  "@fleet360DocDriverLicence": {
+    "description": "Permit kind"
+  },
+  "fleet360DocIssued": "Issued {date}",
+  "@fleet360DocIssued": {
+    "description": "Permit issue date",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360DocExpires": "Expires {date}",
+  "@fleet360DocExpires": {
+    "description": "Permit expiry date",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "fleet360DocExpired": "Expired",
+  "@fleet360DocExpired": {
+    "description": "Permit expiry state"
+  },
+  "fleet360DocExpiringSoon": "Expiring soon",
+  "@fleet360DocExpiringSoon": {
+    "description": "Permit expiry state"
+  },
+  "fleet360DocValid": "Valid",
+  "@fleet360DocValid": {
+    "description": "Permit expiry state"
+  },
+  "fleet360DocNoExpiry": "No expiry recorded",
+  "@fleet360DocNoExpiry": {
+    "description": "Permit with no expiry date"
+  },
+  "fleet360DocsEmptyTitle": "No documents recorded",
+  "@fleet360DocsEmptyTitle": {
+    "description": "Documents tab empty title"
+  },
+  "fleet360DocsEmptyBody": "No registration, insurance, operating card or licence details are recorded for this asset.",
+  "@fleet360DocsEmptyBody": {
+    "description": "Documents tab empty body"
+  },
+  "inspectionModuleTyre": "Tyre inspection",
+  "@inspectionModuleTyre": {
+    "description": "Tyre inspection module tab on the tyre capture screen"
+  },
+  "inspectionModuleMachine": "Machine inspection",
+  "@inspectionModuleMachine": {
+    "description": "Machine inspection module tab, opens the checklists hub"
+  },
+  "fleetListDueSoon": "Due soon",
+  "@fleetListDueSoon": {
+    "description": "Fleet list filter: only assets with a service overdue or due soon"
+  },
+  "fleetListDueSoonUnavailable": "Due items could not be checked",
+  "@fleetListDueSoonUnavailable": {
+    "description": "Shown when the PM plan and tyre action read failed"
+  },
+  "fleetListFiltersTitle": "Filters",
+  "@fleetListFiltersTitle": {
+    "description": "Title of the Fleet list filter sheet"
+  },
+  "fleetListFiltersActive": "{count, plural, =0{Filters} =1{Filters, 1 active} other{Filters, {count} active}}",
+  "@fleetListFiltersActive": {
+    "description": "Accessible label of the Fleet list filter button",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fleetListSortAssetNo": "Asset number",
+  "@fleetListSortAssetNo": {
+    "description": "Fleet list sort option: register order by asset number"
+  },
+  "fleetListSortServiceDue": "Service due first",
+  "@fleetListSortServiceDue": {
+    "description": "Fleet list sort option: overdue and nearest service first"
+  },
+  "fleetListSortTyreActions": "Most tyre actions",
+  "@fleetListSortTyreActions": {
+    "description": "Fleet list sort option: most open tyre actions first"
+  },
+  "pushNotificationOpen": "Open",
+  "@pushNotificationOpen": {
+    "description": "Action on the in-app banner shown when a push notification arrives while the app is open"
+  },
+  "pushNotificationFallbackTitle": "New notification",
+  "@pushNotificationFallbackTitle": {
+    "description": "Banner title when a push notification arrives without a title"
+  },
+  "pmWoStatusNew": "New",
+  "@pmWoStatusNew": {
+    "description": "Maintenance Control Center: work order status chip for the canonical status \"New\"."
+  },
+  "pmWoStatusAssigned": "Assigned",
+  "@pmWoStatusAssigned": {
+    "description": "Maintenance Control Center: work order status chip for the canonical status \"Assigned\"."
+  },
+  "pmWoStatusInProgress": "In Progress",
+  "@pmWoStatusInProgress": {
+    "description": "Maintenance Control Center: work order status chip for the canonical status \"In Progress\"."
+  },
+  "pmWoStatusWaitingForParts": "Waiting for Parts",
+  "@pmWoStatusWaitingForParts": {
+    "description": "Maintenance Control Center: work order status chip for the canonical status \"Waiting for Parts\"."
+  },
+  "pmWoStatusQualityInspection": "Quality Inspection",
+  "@pmWoStatusQualityInspection": {
+    "description": "Maintenance Control Center: work order status chip for the canonical status \"Quality Inspection\"."
+  },
+  "pmWoStatusCompleted": "Completed",
+  "@pmWoStatusCompleted": {
+    "description": "Maintenance Control Center: work order status chip for the canonical status \"Completed\"."
+  },
+  "pmWoStatusClosed": "Closed",
+  "@pmWoStatusClosed": {
+    "description": "Maintenance Control Center: work order status chip for the canonical status \"Closed\"."
+  },
+  "pmWoStatusCancelled": "Cancelled",
+  "@pmWoStatusCancelled": {
+    "description": "Maintenance Control Center: work order status chip for the canonical status \"Cancelled\"."
+  },
+  "pmWoStatusOverdue": "Overdue",
+  "@pmWoStatusOverdue": {
+    "description": "Maintenance Control Center: work order status chip for the canonical status \"Overdue\"."
+  },
+  "pmWoStatusOnHold": "On Hold",
+  "@pmWoStatusOnHold": {
+    "description": "Maintenance Control Center: work order status chip for the canonical status \"On Hold\"."
+  },
+  "pmWoStatusOpen": "Open",
+  "@pmWoStatusOpen": {
+    "description": "Maintenance Control Center: work order status chip for the canonical status \"Open\"."
+  },
+  "recordsRiskLow": "Low",
+  "@recordsRiskLow": {
+    "description": "Tyre records: the Low risk level shown on a tyre card and the risk filter, in the reader's language (the stored value stays English)."
+  },
+  "recordsRiskMedium": "Medium",
+  "@recordsRiskMedium": {
+    "description": "Tyre records: the Medium risk level shown on a tyre card and the risk filter, in the reader's language (the stored value stays English)."
+  },
+  "recordsRiskHigh": "High",
+  "@recordsRiskHigh": {
+    "description": "Tyre records: the High risk level shown on a tyre card and the risk filter, in the reader's language (the stored value stays English)."
+  },
+  "recordsRiskCritical": "Critical",
+  "@recordsRiskCritical": {
+    "description": "Tyre records: the Critical risk level shown on a tyre card and the risk filter, in the reader's language (the stored value stays English)."
   }
 }

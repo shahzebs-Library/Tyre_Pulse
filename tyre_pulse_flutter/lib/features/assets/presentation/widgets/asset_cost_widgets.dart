@@ -14,14 +14,23 @@ import 'package:tyre_pulse/features/assets/domain/asset_financials.dart';
 String assetMoneyLabel(String currency, double value, {int decimals = 0}) =>
     '$currency ${formatAssetMoney(value, decimals: decimals)}';
 
-/// Distinct, theme-aware colours for the four buckets.
+/// Distinct, theme-aware colours for the five buckets, in the owner mock's
+/// order: parts blue, labour green, tyres orange, external repairs violet.
+/// Lubricants (a bucket the mock folds into parts) take the neutral tone.
+///
+/// The palette has no violet status token (violet carries no status
+/// meaning), so external repairs use one fixed hue per brightness, chosen to
+/// stay distinguishable from the other four on either surface.
 Color assetBucketColor(BuildContext context, AssetCostBucket bucket) {
   final TpPalette p = TpPalette.of(context);
   return switch (bucket) {
-    AssetCostBucket.spareParts => p.primary,
-    AssetCostBucket.lubricants => p.info.base,
+    AssetCostBucket.spareParts => p.info.base,
+    AssetCostBucket.lubricants => p.neutral.base,
     AssetCostBucket.tyres => p.warning.base,
     AssetCostBucket.labour => p.ok.base,
+    AssetCostBucket.external => p.brightness == Brightness.dark
+        ? const Color(0xFFB39DDB)
+        : const Color(0xFF7E57C2),
   };
 }
 
@@ -31,6 +40,7 @@ String assetBucketLabel(AppLocalizations l10n, AssetCostBucket bucket) =>
       AssetCostBucket.lubricants => l10n.fleetMockFinBucketLubricants,
       AssetCostBucket.tyres => l10n.fleetMockFinBucketTyres,
       AssetCostBucket.labour => l10n.fleetMockFinBucketLabour,
+      AssetCostBucket.external => l10n.fleet360BucketExternal,
     };
 
 String assetPercent(double share) => '${(share * 100).round()}%';
@@ -65,7 +75,11 @@ class AssetCompositionBar extends StatelessWidget {
           borderRadius: BorderRadius.circular(TpRadius.pill),
           child: SizedBox(
             height: 14,
+            // A childless ColoredBox takes the smallest size its parent
+            // allows, so without `stretch` every slice is 0pt tall and the
+            // bar is invisible.
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
                 for (final AssetCostBucket b in present)
                   Expanded(

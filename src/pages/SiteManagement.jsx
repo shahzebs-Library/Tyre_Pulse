@@ -1,60 +1,47 @@
 /**
- * Site Management - the operational view of every site/branch the fleet runs
- * from. The governed `sites` register is typically near-empty, so this page
- * MERGES it with the real set of sites derived from distinct
- * `vehicle_fleet.site` values (buildSiteRollup) and shows, per site, its asset
- * count, active-asset count, country/region, governance state and data gaps.
- * Opening a site lists its actual assets (deep-linked to the asset detail page).
+ * Site Management (/sites) - every operational site: the governed `sites`
+ * register merged with the sites that actually appear on `vehicle_fleet`
+ * (buildSiteRollup). Built on the shared page kit to the owner's mockup:
+ * hero, KPI strip, site map, utilisation, insights, site directory, health,
+ * site types and quick actions.
  *
- * KPI strip, assets-by-site and region charts, filters + search, a sortable
- * EnterpriseTable site register, a per-site asset register, Excel/PDF export.
- * Admin/Manager/Director can promote a derived site into the governed register
- * or edit one (writes go through the org-RLS-guarded sites service, whose name
- * normalisation is unchanged). Page figures live in the pure
- * `src/lib/siteManagementAnalytics.js`.
+ * Every figure comes from recorded data. Site capacity is not recorded
+ * anywhere, so the capacity card shows telematics utilisation and says so.
+ * Definitions live in src/lib/siteOperations.js; the directory filters live in
+ * the URL. Admin/Manager/Director add, edit or promote sites through the
+ * org-RLS-guarded sites service (name normalisation unchanged).
  */
-import { useState, useEffect, useMemo, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Tooltip, Legend } from 'chart.js'
-import { Bar } from 'react-chartjs-2'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
-  MapPin, Truck, Search, RefreshCw, AlertTriangle, Globe, Plus, Edit2, X, Save,
-  ToggleLeft, ToggleRight, FileSpreadsheet, FileText, Layers, Activity, Eye, ShieldCheck,
-  MapPinOff, Inbox, BarChart3,
+  MapPin, CheckCircle2, BarChart3, ShieldCheck, Truck, Plus, Minus, Search, Filter, MoreHorizontal,
+  Building2, Wrench, ClipboardCheck, Download, ChevronRight, ShieldAlert, AlertTriangle, RefreshCw,
+  Edit2, Eye, X, Save, ToggleLeft, ToggleRight, FileText, FileSpreadsheet, ArrowUp, ArrowDown,
+  ChevronsUpDown, Upload, MapPinOff, Boxes,
 } from 'lucide-react'
-import PageHeader from '../components/ui/PageHeader'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import Modal from '../components/ui/Modal'
+import {
+  useCard, Card, ViewAll, CardState, Tabs, Kpi, PageHero, Donut, Pager, MeterCell, KitTable, fmtInt, fmtPct,
+} from '../components/commandCenter/kit'
+import { WORLD_LAND_PATH, WORLD_W, WORLD_H, project } from '../components/commandCenter/worldLand'
+import { COUNTRY_POINTS, utilizationByMonth, monthLabel, changePct } from '../lib/commandCenter'
 import * as sitesApi from '../lib/api/sites'
+import { listSiteFleetOps, listSiteUtilization, listSiteInspectionDates } from '../lib/api/siteOperations'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
+import { enrichSites, filterSites, countryOptions, regionOptions, GAP_KEYS, GAP_LABEL } from '../lib/siteManagementAnalytics'
 import {
-  EMPTY_SITE_FILTERS, GAP_KEYS, GAP_LABEL, enrichSites, filterSites, siteKpis, topSitesByAssets,
-  sitesByRegion, countryOptions, regionOptions, activeSiteFilterCount, siteExportRows, SITE_EXPORT_COLUMNS,
-} from '../lib/siteManagementAnalytics'
-import { colorAt, withAlpha } from '../lib/reportColors'
+  SITE_STATUSES, STATUS_META, STATUS_RULE, COMPLIANCE_RULE, UTILIZATION_RULE, countryFlag,
+  enrichOperational, statusCounts, operationalKpis, healthSummary, siteTypeSegments, countryBubbles,
+  siteInsights, sortSites, SITE_OPS_EXPORT_COLUMNS, siteOpsExportRows,
+} from '../lib/siteOperations'
 import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
-
-ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend)
+import './SiteManagement.css'
 
 const fmt = (n) => (n == null || isNaN(Number(n)) ? 'N/A' : Number(n).toLocaleString('en-US'))
-const ICON_BTN = 'inline-flex items-center justify-center w-11 h-11 rounded-lg text-[var(--text-muted)] hover:bg-[var(--input-bg)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]'
-
-function Kpi({ label, value, icon: Icon, tone, sub, loading }) {
-  return (
-    <div className="card">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs text-[var(--text-muted)]">{label}</p>
-        <Icon size={16} className={tone} aria-hidden="true" />
-      </div>
-      <p className={`text-3xl font-bold mt-1 tabular-nums ${tone}`}>
-        {loading ? <span className="inline-block h-8 w-16 rounded bg-[var(--input-bg)] animate-pulse" aria-label="Loading" /> : (value ?? 'N/A')}
-      </p>
-      {sub && !loading && <p className="text-[11px] text-[var(--text-dim)] mt-0.5">{sub}</p>}
-    </div>
-  )
-}
+const FILTER_KEYS = ['q', 'status', 'country', 'region', 'source', 'gap']
 
 // ── Assets at one site ───────────────────────────────────────────────────────
 function SiteAssetsTable({ site, onOpen }) {
@@ -76,7 +63,7 @@ function SiteAssetsTable({ site, onOpen }) {
     {
       id: 'open', header: '', enableSorting: false, size: 70, meta: { export: false },
       cell: ({ row }) => (
-        <button type="button" onClick={(e) => { e.stopPropagation(); onOpen(row.original) }} className={`${ICON_BTN} hover:text-[var(--brand-bright)]`} aria-label={`View asset ${row.original.asset_no || ''}`}>
+        <button type="button" onClick={(e) => { e.stopPropagation(); onOpen(row.original) }} className="inline-flex items-center justify-center w-11 h-11 rounded-lg text-[var(--text-muted)] hover:text-[var(--brand-bright)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]" aria-label={`View asset ${row.original.asset_no || ''}`}>
           <Eye className="w-4 h-4" />
         </button>
       ),
@@ -186,6 +173,186 @@ function SiteModal({ site, onSaved, onClose }) {
   )
 }
 
+// ── Site locations map ───────────────────────────────────────────────────────
+function SiteMap({ state, bubbles, counts, country, countries, onCountry }) {
+  const [zoom, setZoom] = useState(1)
+  const points = useMemo(() => bubbles
+    .map((b) => ({ ...b, xy: COUNTRY_POINTS[b.country] ? project(...COUNTRY_POINTS[b.country]) : null }))
+    .filter((b) => b.xy), [bubbles])
+  const unplaced = bubbles.filter((b) => !COUNTRY_POINTS[b.country]).reduce((n, b) => n + b.total, 0)
+  const view = useMemo(() => {
+    if (!points.length) return [0, 0, WORLD_W, WORLD_H]
+    const xs = points.map((p) => p.xy[0]); const ys = points.map((p) => p.xy[1])
+    const cx = (Math.min(...xs) + Math.max(...xs)) / 2; const cy = (Math.min(...ys) + Math.max(...ys)) / 2
+    const w = Math.max(300, (Math.max(...xs) - Math.min(...xs)) * 3) / zoom
+    const h = w * 0.52
+    return [cx - w / 2, cy - h / 2, w, h]
+  }, [points, zoom])
+  const max = Math.max(1, ...points.map((p) => p.total))
+  return (
+    <Card area="sm-a-map" title="Site Locations" sub="Sites by country and operational status"
+      action={(
+        <select className="cc-select" aria-label="Country" value={country} onChange={(e) => onCountry(e.target.value)}>
+          <option value="">All countries</option>
+          {countries.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+      )}>
+      <CardState state={state} empty={state.data && !bubbles.length ? 'No sites to place on the map yet.' : null} lines={6}>
+        <div className="cc-map sm-map">
+          <svg viewBox={view.join(' ')} preserveAspectRatio="xMidYMid slice" role="img" aria-label={`Sites by country: ${points.map((p) => `${p.country} ${p.total}`).join(', ')}`}>
+            <path d={WORLD_LAND_PATH} fill="var(--cc-land)" stroke="var(--cc-land-stroke)" strokeWidth={0.4 / zoom} vectorEffect="non-scaling-stroke" />
+            {points.map((p) => {
+              const r = (7 + 9 * Math.sqrt(p.total / max)) * view[2] / 520
+              const sel = country && country === p.country
+              return (
+                <g key={p.country} className="sm-bubble" role="button" tabIndex={0} aria-label={`${p.country}: ${p.total} sites. Filter the directory`}
+                  onClick={() => onCountry(sel ? '' : p.country)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onCountry(sel ? '' : p.country) } }}>
+                  <circle cx={p.xy[0]} cy={p.xy[1]} r={r * 1.7} fill="var(--cc-green)" opacity={sel ? 0.3 : 0.16} />
+                  <circle cx={p.xy[0]} cy={p.xy[1]} r={r} fill="var(--cc-green-strong)" stroke={sel ? 'var(--cc-ink)' : 'var(--cc-green)'} strokeWidth={r * 0.18} />
+                  <text x={p.xy[0]} y={p.xy[1]} dy="0.35em" textAnchor="middle" fontSize={r * 0.95} fontWeight="700" fill="#fff">{p.total}</text>
+                  <title>{`${p.country}: ${p.total} sites (${p.active} active, ${p.limited} limited, ${p.inactive} inactive)`}</title>
+                </g>
+              )
+            })}
+          </svg>
+          <div className="cc-map-zoom">
+            <button type="button" aria-label="Zoom in" onClick={() => setZoom((z) => Math.min(4, z * 1.4))}><Plus size={14} /></button>
+            <button type="button" aria-label="Zoom out" onClick={() => setZoom((z) => Math.max(0.35, z / 1.4))}><Minus size={14} /></button>
+          </div>
+          <div className="cc-map-legend" title={STATUS_RULE}>
+            {SITE_STATUSES.map((s) => (
+              <div key={s.key}><span className="cc-dot" style={{ background: s.color }} />{s.label}<span>{fmtInt(counts[s.key])}</span></div>
+            ))}
+          </div>
+          {unplaced > 0 && <p className="sm-map-note">{unplaced} {unplaced === 1 ? 'site has' : 'sites have'} no mappable country</p>}
+        </div>
+      </CardState>
+    </Card>
+  )
+}
+
+// ── Capacity and usage (utilisation; capacity is not recorded) ───────────────
+function UtilRing({ value }) {
+  const size = 150; const stroke = 20; const r = (size - stroke) / 2; const c = 2 * Math.PI * r
+  const v = value == null ? 0 : Math.max(0, Math.min(100, value))
+  return (
+    <div className="sm-ring">
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--cc-track)" strokeWidth={stroke} />
+        {value != null && (
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--cc-green-strong)" strokeWidth={stroke}
+            strokeDasharray={`${(v / 100) * c} ${c}`} transform={`rotate(-90 ${size / 2} ${size / 2})`} strokeLinecap="butt" />
+        )}
+      </svg>
+      <div className="sm-ring-label"><b>{fmtPct(value)}</b><span>Avg. utilization</span></div>
+    </div>
+  )
+}
+
+function CapacityCard({ util, series, avg, utilAssets, siteAssets }) {
+  const idle = avg == null ? null : Math.max(0, 100 - avg)
+  return (
+    <Card area="sm-a-cap" title="Site Capacity & Usage" action={<ViewAll to="/fleet-utilization" label="View utilization" />}>
+      <CardState state={util} empty={util.data && !utilAssets ? 'No telematics utilisation is recorded for assets at these sites yet.' : null} lines={5}>
+        <div className="sm-cap-top">
+          <UtilRing value={avg} />
+          <div className="cc-legend">
+            <div className="cc-legend-row" title={UTILIZATION_RULE}>
+              <span className="cc-square" style={{ background: 'var(--cc-green-strong)' }} /><span>Utilised time</span><b>{fmtPct(avg)}</b><span />
+            </div>
+            <div className="cc-legend-row">
+              <span className="cc-square" style={{ background: 'var(--cc-track)' }} /><span>Not utilised</span><b>{fmtPct(idle)}</b><span />
+            </div>
+            <p className="sm-cap-note">{fmtInt(utilAssets)} of {fmtInt(siteAssets)} site assets report telematics. Site capacity is not recorded, so usage is shown as asset utilisation.</p>
+          </div>
+        </div>
+        <h3 className="sm-subhead">Site Utilization Trend</h3>
+        {series.length ? (
+          <div className="sm-bars" role="img" aria-label={series.map((p) => `${monthLabel(p.month)} ${p.value}%`).join(', ')}>
+            <div className="sm-bars-axis" aria-hidden="true"><span>100%</span><span>50%</span><span>0%</span></div>
+            {series.map((p) => (
+              <div key={p.month} className="sm-bar-col" title={`${monthLabel(p.month)}: ${p.value}%`}>
+                <div className="sm-bar-track"><i style={{ height: `${Math.max(0, Math.min(100, p.value))}%` }} /></div>
+                <span>{monthLabel(p.month)}</span>
+              </div>
+            ))}
+          </div>
+        ) : <p className="cc-na">No dated utilisation readings to trend.</p>}
+      </CardState>
+    </Card>
+  )
+}
+
+// ── Insights ─────────────────────────────────────────────────────────────────
+const INSIGHT_ICON = { shield: ShieldAlert, alert: AlertTriangle, chart: BarChart3, clipboard: ClipboardCheck, pin: MapPinOff, plus: Plus }
+function InsightsCard({ state, items, onAction }) {
+  return (
+    <Card area="sm-a-ins" title="Smart Insights">
+      <CardState state={state} empty={state.data && !items.length ? 'Nothing needs attention across these sites.' : null} lines={5}>
+        <div className="sm-ins-list">
+          {items.map((it) => {
+            const Icon = INSIGHT_ICON[it.icon] || AlertTriangle
+            return (
+              <button key={it.key} type="button" className="cc-insight" onClick={() => onAction(it.action)}>
+                <span className={`cc-row-icon t-${it.tone}`}><Icon size={17} aria-hidden="true" /></span>
+                <span className="cc-row-main"><b>{it.title}</b><small>{it.meta}</small></span>
+                <ChevronRight size={15} className="cc-chev" aria-hidden="true" />
+              </button>
+            )
+          })}
+        </div>
+      </CardState>
+    </Card>
+  )
+}
+
+// ── Row action menu (fixed position so the table scroll cannot clip it) ──────
+function RowMenu({ site, canManage, onView, onEdit }) {
+  const [pos, setPos] = useState(null)
+  const btn = useRef(null)
+  const menu = useRef(null)
+  useEffect(() => {
+    if (!pos) return undefined
+    const close = (e) => { if (!menu.current?.contains(e.target) && !btn.current?.contains(e.target)) setPos(null) }
+    const esc = (e) => { if (e.key === 'Escape') { setPos(null); btn.current?.focus() } }
+    const shut = () => setPos(null)
+    document.addEventListener('mousedown', close); document.addEventListener('keydown', esc)
+    window.addEventListener('scroll', shut, true); window.addEventListener('resize', shut)
+    menu.current?.querySelector('button')?.focus()
+    return () => {
+      document.removeEventListener('mousedown', close); document.removeEventListener('keydown', esc)
+      window.removeEventListener('scroll', shut, true); window.removeEventListener('resize', shut)
+    }
+  }, [pos])
+  const open = (e) => {
+    e.stopPropagation()
+    if (pos) { setPos(null); return }
+    const r = btn.current.getBoundingClientRect()
+    setPos({ top: r.bottom + 4, left: Math.max(8, r.right - 190) })
+  }
+  const pick = (fn) => (e) => { e.stopPropagation(); setPos(null); fn(site) }
+  return (
+    <>
+      <button ref={btn} type="button" className="cc-icon-btn sm-menu-btn" aria-haspopup="menu" aria-expanded={Boolean(pos)} aria-label={`Actions for ${site.name}`} onClick={open}>
+        <MoreHorizontal size={16} />
+      </button>
+      {pos && (
+        <div ref={menu} role="menu" className="sm-menu" style={{ top: pos.top, left: pos.left }} onClick={(e) => e.stopPropagation()}>
+          <button type="button" role="menuitem" onClick={pick(onView)}><Eye size={14} aria-hidden="true" /> View assets</button>
+          {canManage && <button type="button" role="menuitem" onClick={pick(onEdit)}><Edit2 size={14} aria-hidden="true" /> {site.governed ? 'Edit site' : 'Promote to register'}</button>}
+        </div>
+      )}
+    </>
+  )
+}
+
+const COLS = [
+  { key: 'name', label: 'Site Name' }, { key: 'code', label: 'Code' }, { key: 'country', label: 'Country' },
+  { key: 'type', label: 'Type' }, { key: 'assets', label: 'Assets' }, { key: 'util', label: 'Utilization', title: UTILIZATION_RULE },
+  { key: 'compliance', label: 'Compliance', title: COMPLIANCE_RULE }, { key: 'status', label: 'Status', title: STATUS_RULE },
+]
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 export default function SiteManagement() {
   const navigate = useNavigate()
@@ -194,63 +361,122 @@ export default function SiteManagement() {
   const role = profile?.role
   const canManage = role === 'Admin' || role === 'Manager' || role === 'Director'
 
-  const [rollup, setRollup] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState('')
-  const [notice, setNotice] = useState('')
-  const [refreshKey, setRefreshKey] = useState(0)
-  const [updatedAt, setUpdatedAt] = useState(null)
+  const [params, setParams] = useSearchParams()
+  const f = useMemo(() => Object.fromEntries(FILTER_KEYS.map((k) => [k, params.get(k) || ''])), [params])
+  const setF = useCallback((patch) => {
+    setParams((prev) => {
+      const next = new URLSearchParams(prev)
+      for (const [k, v] of Object.entries(patch)) { if (v) next.set(k, v); else next.delete(k) }
+      return next
+    }, { replace: true })
+  }, [setParams])
 
-  const [filters, setFilters] = useState(EMPTY_SITE_FILTERS)
-  const setFilter = (k, v) => setFilters((f) => ({ ...f, [k]: v }))
+  const [refreshKey, setRefreshKey] = useState(0)
+  const reload = () => setRefreshKey((k) => k + 1)
+  const [notice, setNotice] = useState('')
   const [openSite, setOpenSite] = useState(null)
   const [editSite, setEditSite] = useState(null)
   const [showAdd, setShowAdd] = useState(false)
+  const [showFilters, setShowFilters] = useState(() => ['region', 'source', 'gap'].some((k) => params.get(k)))
+  const [sort, setSort] = useState({ col: 'name', dir: 'asc' })
+  const [page, setPage] = useState(0)
+  const [pageSize, setPageSize] = useState(10)
+  const [selected, setSelected] = useState(() => new Set())
+  const dirRef = useRef(null)
 
-  const load = useCallback(async () => {
-    setLoading(true); setLoadError('')
-    try {
-      const [master, assets] = await Promise.all([
-        sitesApi.listSites({ country: activeCountry }),
-        sitesApi.listSiteAssets({ country: activeCountry }),
-      ])
-      setRollup(sitesApi.buildSiteRollup(master ?? [], assets ?? []))
-      setUpdatedAt(new Date())
-    } catch (e) {
-      setLoadError(toUserMessage(e, 'Could not load sites.'))
-      setRollup([])
-    } finally {
-      setLoading(false)
-    }
-  }, [activeCountry])
+  const sites = useCard(async () => {
+    const [master, fleet] = await Promise.all([
+      sitesApi.listSites({ country: activeCountry }),
+      listSiteFleetOps({ country: activeCountry }),
+    ])
+    return { master: master ?? [], fleet: fleet.rows, opsKnown: fleet.opsKnown }
+  }, [activeCountry, refreshKey])
+  const util = useCard(() => listSiteUtilization({ country: activeCountry }), [activeCountry, refreshKey])
+  const insp = useCard(() => listSiteInspectionDates({ country: activeCountry }), [activeCountry, refreshKey])
 
-  useEffect(() => { load() }, [load, refreshKey])
-  const reload = () => setRefreshKey(k => k + 1)
+  const opsKnown = Boolean(sites.data?.opsKnown)
+  const all = useMemo(() => {
+    if (!sites.data) return []
+    const rollup = sitesApi.buildSiteRollup(sites.data.master, sites.data.fleet)
+    return enrichOperational(enrichSites(rollup), {
+      masterRows: sites.data.master, utilRows: util.data || [], inspectionRows: insp.data || null, opsKnown,
+    })
+  }, [sites.data, util.data, insp.data, opsKnown])
 
-  const failed = Boolean(loadError)
-  const enriched = useMemo(() => enrichSites(rollup), [rollup])
-  const kpi = useMemo(() => siteKpis(enriched), [enriched])
-  const countries = useMemo(() => countryOptions(rollup), [rollup])
-  const regions = useMemo(() => regionOptions(rollup), [rollup])
-  const filtered = useMemo(() => filterSites(enriched, filters), [enriched, filters])
-  const topSites = useMemo(() => topSitesByAssets(filtered), [filtered])
-  const byRegion = useMemo(() => sitesByRegion(filtered), [filtered])
-  const filterCount = activeSiteFilterCount(filters)
+  const countries = useMemo(() => countryOptions(all), [all])
+  const regions = useMemo(() => regionOptions(all), [all])
+  const scoped = useMemo(() => (f.country ? all.filter((s) => s.country === f.country) : all), [all, f.country])
+  const kpi = useMemo(() => operationalKpis(scoped), [scoped])
+  const health = useMemo(() => healthSummary(scoped, { opsKnown, inspectionsKnown: Boolean(insp.data) }), [scoped, opsKnown, insp.data])
+  const bubbles = useMemo(() => countryBubbles(all), [all])
+  const allCounts = useMemo(() => statusCounts(all), [all])
+  const types = useMemo(() => siteTypeSegments(scoped), [scoped])
+  const insights = useMemo(() => siteInsights(scoped, { health }), [scoped, health])
 
-  const kv = (v) => (failed ? null : v)
-  const kpis = [
-    { label: 'Total sites', value: kv(fmt(kpi.total)), icon: MapPin, tone: 'text-[var(--text-primary)]', sub: failed ? null : `${kpi.countries} countries` },
-    { label: 'Governed', value: failed || kpi.governedPct == null ? null : `${kpi.governedPct}%`, icon: ShieldCheck, tone: 'text-green-400', sub: failed ? null : `${kpi.governed} in register, ${kpi.derived} derived` },
-    { label: 'Total assets', value: kv(fmt(kpi.assets)), icon: Truck, tone: 'text-violet-400', sub: failed || kpi.avgAssetsPerSite == null ? null : `${kpi.avgAssetsPerSite} per site with assets` },
-    { label: 'Active assets', value: kv(fmt(kpi.activeAssets)), icon: Activity, tone: 'text-teal-400', sub: failed || kpi.activeAssetPct == null ? null : `${kpi.activeAssetPct}% of assets` },
-    { label: 'No region set', value: kv(fmt(kpi.noRegion)), icon: MapPinOff, tone: kpi.noRegion ? 'text-amber-400' : 'text-green-400', sub: 'Cannot roll up by region' },
-    { label: 'Registered, no assets', value: kv(fmt(kpi.emptyGoverned)), icon: Inbox, tone: 'text-sky-400', sub: 'Governed sites with no fleet' },
-  ]
+  const siteAssetKeys = useMemo(() => {
+    const set = new Set()
+    for (const s of scoped) for (const a of s.assets || []) set.add(`${String(a.asset_no || '').trim().toUpperCase()}|${a.country || ''}`)
+    return set
+  }, [scoped])
+  const trend = useMemo(() => {
+    const rows = (util.data || []).filter((r) => {
+      const code = String(r.asset_no || '').trim().toUpperCase()
+      return siteAssetKeys.has(`${code}|${r.country || ''}`)
+    })
+    return utilizationByMonth(rows, 6).series
+  }, [util.data, siteAssetKeys])
+  const utilTrend = trend.length >= 2 ? changePct(trend[trend.length - 1].value, trend[trend.length - 2].value) : null
 
-  const doExport = async (kind) => {
-    const out = siteExportRows(filtered)
-    const keys = SITE_EXPORT_COLUMNS.map(([k]) => k)
-    const headers = SITE_EXPORT_COLUMNS.map(([, h]) => h)
+  // Everything except the status tab, so each tab can show its own count.
+  const base = useMemo(() => filterSites(all, { search: f.q, country: f.country, region: f.region, governed: f.source, gap: f.gap, active: '' }),
+    [all, f.q, f.country, f.region, f.source, f.gap])
+  const filtered = useMemo(() => sortSites(f.status ? base.filter((s) => s._status === f.status) : base, sort.col, sort.dir), [base, f.status, sort])
+  const tabCounts = useMemo(() => statusCounts(base), [base])
+  useEffect(() => { setPage(0) }, [f.q, f.country, f.region, f.source, f.gap, f.status, pageSize])
+  const sortHead = (c) => (
+    <button type="button" className="sm-sort-btn" title={c.title} onClick={() => toggleSort(c.key)}
+      aria-label={`Sort by ${c.label}`}>
+      {c.label}
+      {sort.col === c.key ? (sort.dir === 'asc' ? <ArrowUp size={12} aria-hidden="true" /> : <ArrowDown size={12} aria-hidden="true" />) : <ChevronsUpDown size={12} aria-hidden="true" className="sm-sort-idle" />}
+    </button>
+  )
+  const na = (title) => <span className="cc-na" title={title}>N/A</span>
+  const siteCell = {
+    name: (s) => (
+      <span className="sm-site-name">
+        <span className={`sm-site-icon${s.governed ? '' : ' sm-site-derived'}`} title={s.governed ? 'In the site register' : 'Found on fleet records only, not in the site register'}>
+          <Building2 size={13} aria-hidden="true" />
+        </span>
+        <span className="cc-strong">{s.name}</span>
+        {!s.governed && <span className="sr-only">(not in the site register)</span>}
+      </span>
+    ),
+    code: (s) => s._code || na(),
+    country: (s) => (s.country ? <span>{countryFlag(s.country) && <span aria-hidden="true" className="sm-flag">{countryFlag(s.country)}</span>}{s.country}</span> : na()),
+    type: (s) => (s.siteType ? <span className="sm-cap">{s.siteType}</span> : na('Site type not recorded')),
+    assets: (s) => <span className="cc-strong">{fmtInt(s.assetCount)}</span>,
+    util: (s) => <span title={s._utilAssets ? `${s._utilAssets} assets with telematics` : 'No telematics readings'}><MeterCell value={s._util} suffix="%" /></span>,
+    compliance: (s) => <span title={s._assessed ? `${s._assessed} assets assessed, ${s._expiredAssets} with an expired document` : 'No document expiry dates recorded'}>{fmtPct(s._compliance)}</span>,
+    status: (s) => { const st = STATUS_META[s._status]; return <span className={`cc-pill ${st?.tone || 'muted'}`}><span className="cc-dot" style={{ background: st?.color }} aria-hidden="true" />{st?.label || 'N/A'}</span> },
+  }
+  const pageRows = filtered.slice(page * pageSize, (page + 1) * pageSize)
+  const extraFilters = ['region', 'source', 'gap'].filter((k) => f[k]).length
+
+  const openAsset = useCallback((a) => navigate(`/asset-management/${encodeURIComponent(a.asset_no)}`), [navigate])
+  const toggleSort = (col) => setSort((s) => (s.col === col ? { col, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: col === 'name' || col === 'code' || col === 'country' || col === 'type' ? 'asc' : 'desc' }))
+  const rowKey = (s) => `${s.country ?? ''}|${s.name}`
+  const allOnPage = pageRows.length > 0 && pageRows.every((s) => selected.has(rowKey(s)))
+  const togglePage = () => setSelected((prev) => {
+    const next = new Set(prev)
+    if (allOnPage) pageRows.forEach((s) => next.delete(rowKey(s))); else pageRows.forEach((s) => next.add(rowKey(s)))
+    return next
+  })
+  const toggleRow = (s) => setSelected((prev) => { const n = new Set(prev); const k = rowKey(s); if (n.has(k)) n.delete(k); else n.add(k); return n })
+
+  const doExport = async (kind, rows = filtered) => {
+    const out = siteOpsExportRows(rows, GAP_LABEL)
+    const keys = SITE_OPS_EXPORT_COLUMNS.map(([k]) => k)
+    const headers = SITE_OPS_EXPORT_COLUMNS.map(([, h]) => h)
     const name = reportFileName('TyrePulse Sites')
     try {
       if (kind === 'excel') await exportToExcel(out, keys, headers, name, 'Sites')
@@ -258,246 +484,192 @@ export default function SiteManagement() {
     } catch (e) { setNotice(toUserMessage(e, 'Could not export. Try again.')) }
   }
 
-  const openAsset = useCallback((a) => navigate(`/asset-management/${encodeURIComponent(a.asset_no)}`), [navigate])
+  const scrollToDirectory = () => dirRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  const onInsight = (a) => {
+    if (!a) return
+    if (a.type === 'status') { setF({ status: a.value }); scrollToDirectory() }
+    else if (a.type === 'gap') { setF({ gap: a.value }); setShowFilters(true); scrollToDirectory() }
+    else if (a.type === 'sort') { setSort({ col: a.value, dir: 'asc' }); scrollToDirectory() }
+    else if (a.type === 'site') setOpenSite(a.value)
+    else if (a.type === 'route') navigate(a.value)
+  }
 
-  const columns = useMemo(() => [
-    {
-      id: 'name', header: 'Site', accessorFn: (s) => s.name, size: 200,
-      cell: ({ row }) => {
-        const s = row.original
-        return (
-          <span className="flex flex-col gap-1">
-            <span className="font-semibold text-[var(--text-primary)]">{s.name}</span>
-            <span className="flex flex-wrap gap-1">
-              {s.governed
-                ? <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-500/15 text-green-300 border border-green-500/40 inline-flex items-center gap-1"><ShieldCheck className="w-3 h-3" aria-hidden="true" /> Master</span>
-                : <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/40">Derived</span>}
-              {!s.active && <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[var(--input-bg)] text-[var(--text-muted)] border border-[var(--input-border)]">Inactive</span>}
-            </span>
-          </span>
-        )
-      },
-    },
-    { id: 'country', header: 'Country', accessorFn: (s) => s.country || '', size: 100, cell: ({ getValue }) => getValue() || 'N/A' },
-    {
-      id: 'region', header: 'Region', accessorFn: (s) => s.region || '', size: 120,
-      cell: ({ getValue }) => getValue() || <span className="text-amber-400">Not set</span>,
-    },
-    { id: 'city', header: 'City', accessorFn: (s) => s.city || '', size: 110, cell: ({ getValue }) => getValue() || 'N/A' },
-    { id: 'type', header: 'Type', accessorFn: (s) => s.siteType || '', size: 100, cell: ({ getValue }) => getValue() || 'N/A' },
-    { id: 'assets', header: 'Assets', accessorFn: (s) => s.assetCount, size: 90, meta: { align: 'right' }, cell: ({ getValue }) => <span className="font-semibold tabular-nums">{fmt(getValue())}</span> },
-    {
-      id: 'active', header: 'Active', accessorFn: (s) => s.activeAssetCount, size: 110, meta: { align: 'right' },
-      cell: ({ row }) => (
-        <span className="tabular-nums text-green-400">
-          {fmt(row.original.activeAssetCount)}
-          {row.original._activePct != null && <span className="block text-[11px] text-[var(--text-muted)]">{row.original._activePct}%</span>}
-        </span>
-      ),
-    },
-    {
-      id: 'gaps', header: 'Data gaps', accessorFn: (s) => s._gaps.length, size: 170,
-      cell: ({ row }) => (row.original._gaps.length
-        ? <span className="text-xs text-amber-300">{row.original._gaps.map((g) => GAP_LABEL[g]).join(', ')}</span>
-        : <span className="text-xs text-[var(--text-muted)]">None</span>),
-    },
-    {
-      id: 'actions', header: '', enableSorting: false, size: 110, meta: { export: false },
-      cell: ({ row }) => (
-        <div className="flex items-center justify-end gap-1">
-          <button type="button" onClick={(e) => { e.stopPropagation(); setOpenSite(row.original) }} className={`${ICON_BTN} hover:text-[var(--text-primary)]`} aria-label={`View assets at ${row.original.name}`}><Eye className="w-4 h-4" /></button>
-          {canManage && (
-            <button type="button" onClick={(e) => { e.stopPropagation(); setEditSite(row.original) }} className={`${ICON_BTN} hover:text-amber-400`} aria-label={`Edit or promote ${row.original.name}`}><Edit2 className="w-4 h-4" /></button>
-          )}
-        </div>
-      ),
-    },
-  ], [canManage])
+  const kpiLoading = sites.loading && !sites.data
+  const failed = Boolean(sites.error)
+  const kv = (v) => (failed ? null : v)
 
-  const siteChart = {
-    labels: topSites.map((s) => s.name),
-    datasets: [
-      { label: 'Active', data: topSites.map((s) => s.active), backgroundColor: withAlpha(colorAt(0), 0.9), borderRadius: 3, maxBarThickness: 24 },
-      { label: 'Inactive', data: topSites.map((s) => s.inactive), backgroundColor: withAlpha(colorAt(3), 0.7), borderRadius: 3, maxBarThickness: 24 },
-    ],
-  }
-  const siteOpts = {
-    responsive: true, maintainAspectRatio: false, indexAxis: 'y',
-    plugins: { legend: { labels: { color: 'var(--text-secondary)', boxWidth: 12 } } },
-    scales: {
-      x: { stacked: true, beginAtZero: true, ticks: { color: 'var(--text-muted)', precision: 0 }, grid: { color: 'var(--panel-2)' } },
-      y: { stacked: true, ticks: { color: 'var(--text-secondary)' }, grid: { display: false } },
+  const siteColumns = [
+    {
+      key: '_sel', sortable: false,
+      header: <input type="checkbox" aria-label="Select all sites on this page" checked={allOnPage} onChange={togglePage} />,
+      cell: (s) => <span onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Select ${s.name}`} checked={selected.has(rowKey(s))} onChange={() => toggleRow(s)} /></span>,
     },
-  }
-  const regionChart = {
-    labels: byRegion.map((r) => r.region),
-    datasets: [{ label: 'Assets', data: byRegion.map((r) => r.assets), backgroundColor: byRegion.map((_, i) => colorAt(i)), borderRadius: 4, maxBarThickness: 32 }],
-  }
-  const regionOpts = {
-    responsive: true, maintainAspectRatio: false,
-    plugins: { legend: { display: false }, tooltip: { callbacks: { afterLabel: (ctx) => `${byRegion[ctx.dataIndex]?.sites ?? 0} sites` } } },
-    scales: {
-      x: { ticks: { color: 'var(--text-muted)' }, grid: { display: false } },
-      y: { beginAtZero: true, ticks: { color: 'var(--text-muted)', precision: 0 }, grid: { color: 'var(--panel-2)' } },
+    ...COLS.map((c) => ({ key: c.key, sortable: false, header: sortHead(c), cell: siteCell[c.key] })),
+    {
+      key: '_actions', sortable: false, header: 'Actions',
+      cell: (s) => <span onClick={(e) => e.stopPropagation()}><RowMenu site={s} canManage={canManage} onView={setOpenSite} onEdit={setEditSite} /></span>,
     },
-  }
-  const unavailable = <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">Unavailable: sites could not be loaded.</div>
+  ]
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Site Management"
-        subtitle="Every operational site: governed master plus sites derived from live fleet data"
-        icon={MapPin}
-        onRefresh={reload}
-        refreshing={loading}
-        updatedAt={updatedAt}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={() => doExport('excel')} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!filtered.length}>
-              <FileSpreadsheet size={14} aria-hidden="true" /> Excel
-            </button>
-            <button type="button" onClick={() => doExport('pdf')} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!filtered.length}>
-              <FileText size={14} aria-hidden="true" /> PDF
-            </button>
-            {canManage && (
-              <button type="button" onClick={() => setShowAdd(true)} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px]">
-                <Plus size={14} aria-hidden="true" /> Add Site
-              </button>
-            )}
-          </div>
-        }
+    <div className="cc sm-page">
+      <PageHero
+        hello="Site Management"
+        title="Connected Sites. Greater Uptime."
+        lead="Manage sites, capacity, assets and compliance across your operations."
+        imgLight="/dashboard/hero-sites-light.webp"
+        imgDark="/dashboard/hero-sites-dark.webp"
       />
-
-      {loadError && (
-        <div className="card border border-red-500/40 flex flex-wrap items-start justify-between gap-3" role="alert">
-          <div className="flex items-start gap-3">
-            <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
-            <div>
-              <p className="text-red-300 font-medium">Could not load sites.</p>
-              <p className="text-[var(--text-muted)] text-sm mt-1">{loadError} The figures below are unavailable until the register loads.</p>
-            </div>
-          </div>
-          <button type="button" onClick={reload} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={loading}>
-            <RefreshCw size={14} aria-hidden="true" /> Retry
-          </button>
-        </div>
-      )}
 
       {notice && (
-        <div className="card border border-amber-500/40 flex items-start justify-between gap-3" role="status">
-          <p className="text-sm text-amber-300">{notice}</p>
-          <button type="button" onClick={() => setNotice('')} className={ICON_BTN} aria-label="Dismiss message"><X size={15} /></button>
+        <div className="cc-card sm-notice" role="status">
+          <span>{notice}</span>
+          <button type="button" className="cc-icon-btn" onClick={() => setNotice('')} aria-label="Dismiss message"><X size={14} /></button>
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        {kpis.map((k) => <Kpi key={k.label} {...k} loading={loading} />)}
+      <div className="cc-kpis sm-kpis">
+        <Kpi icon={MapPin} tone="t-green" loading={kpiLoading} display={kv(fmtInt(kpi.total)) ?? 'N/A'} label="Total Sites"
+          title={`${fmtInt(countries.length)} countries. Register sites plus sites found on fleet records.`} onClick={() => { setF({ status: '' }); scrollToDirectory() }} />
+        <Kpi icon={CheckCircle2} tone="t-green" loading={kpiLoading} display={kv(fmtInt(kpi.active)) ?? 'N/A'} label="Active Sites"
+          title={STATUS_RULE} onClick={() => { setF({ status: 'active' }); scrollToDirectory() }} />
+        <Kpi icon={BarChart3} tone="t-green" loading={kpiLoading || (util.loading && !util.data)} display={util.error ? 'N/A' : fmtPct(kpi.avgUtil)} label="Avg. Site Utilization"
+          trend={utilTrend} title={`${UTILIZATION_RULE} ${fmtInt(kpi.utilAssets)} assets report telematics.${utilTrend != null ? ' Arrow: change from the previous month.' : ''}`} to="/fleet-utilization" />
+        <Kpi icon={ShieldCheck} tone="t-green" loading={kpiLoading} display={kv(fmtPct(kpi.complianceRate)) ?? 'N/A'} label="Compliance Rate"
+          title={`${COMPLIANCE_RULE} ${fmtInt(kpi.assessedAssets)} assets assessed.${opsKnown ? '' : ' Document expiry dates are not provisioned.'}`}
+          onClick={() => { setSort({ col: 'compliance', dir: 'asc' }); scrollToDirectory() }} />
+        <Kpi icon={Truck} tone="t-green" loading={kpiLoading} display={kv(fmtInt(kpi.assets)) ?? 'N/A'} label="Assets Assigned"
+          title="Fleet assets whose record names one of these sites." to="/fleet-master" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="card">
-          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-1.5"><BarChart3 size={15} aria-hidden="true" /> Largest sites by assets</h2>
-          <div className="h-72">
-            {loading ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" />
-              : failed ? unavailable
-                : topSites.length ? (
-                  <div className="h-full" role="img" aria-label={topSites.map((s) => `${s.name}: ${s.active} active, ${s.inactive} inactive`).join('; ')}>
-                    <Bar data={siteChart} options={siteOpts} />
-                  </div>
-                ) : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No sites with assets in this view.</div>}
-          </div>
+      {sites.error && (
+        <div className="cc-card sm-notice sm-error" role="alert">
+          <span><AlertTriangle size={15} aria-hidden="true" /> Could not load sites. {sites.error}</span>
+          <button type="button" className="cc-btn" onClick={reload}>Retry</button>
         </div>
-        <div className="card">
-          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-1.5"><Globe size={15} aria-hidden="true" /> Assets by region</h2>
-          <div className="h-72">
-            {loading ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" />
-              : failed ? unavailable
-                : byRegion.length ? (
-                  <div className="h-full" role="img" aria-label={byRegion.map((r) => `${r.region}: ${r.sites} sites, ${r.assets} assets`).join('; ')}>
-                    <Bar data={regionChart} options={regionOpts} />
-                  </div>
-                ) : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No sites in this view.</div>}
-          </div>
-        </div>
-      </div>
+      )}
 
-      {/* Search & filters */}
-      <div className="card">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(200px,2fr)_1fr_1fr_1fr_1fr_1fr] gap-3 items-end">
-          <label className="block">
-            <span className="text-xs text-[var(--text-secondary)]">Search</span>
-            <div className="relative mt-1">
-              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
-              <input className="input pl-9 w-full min-h-[44px]" placeholder="Site, country, region, city" value={filters.search} onChange={(e) => setFilter('search', e.target.value)} />
+      <div className="sm-grid">
+        <SiteMap state={sites} bubbles={bubbles} counts={allCounts} country={f.country} countries={countries} onCountry={(c) => setF({ country: c })} />
+        <CapacityCard util={util} series={trend} avg={kpi.avgUtil} utilAssets={kpi.utilAssets} siteAssets={kpi.assets} />
+        <InsightsCard state={sites} items={insights} onAction={onInsight} />
+
+        <section className="cc-card sm-a-dir" ref={dirRef} aria-label="Site directory">
+          <div className="cc-card-head">
+            <h2 className="cc-card-title">Site Directory <span className="sm-muted">({fmtInt(filtered.length)} sites)</span></h2>
+            <div className="sm-head-actions">
+              <button type="button" className="cc-icon-btn" onClick={reload} aria-label="Refresh sites" title="Refresh"><RefreshCw size={14} className={sites.loading ? 'animate-spin' : ''} /></button>
+              <button type="button" className="cc-icon-btn" onClick={() => doExport('excel')} disabled={!filtered.length} aria-label="Export sites to Excel" title="Excel"><FileSpreadsheet size={14} /></button>
+              <button type="button" className="cc-icon-btn" onClick={() => doExport('pdf')} disabled={!filtered.length} aria-label="Export sites to PDF" title="PDF"><FileText size={14} /></button>
+              {canManage && <Link to="/data-intake" className="cc-icon-btn" aria-label="Import sites and regions (Data Intake, Sites and Regions tab)" title="Import sites and regions"><Upload size={14} /></Link>}
             </div>
-          </label>
-          <label className="block">
-            <span className="text-xs text-[var(--text-secondary)]">Country</span>
-            <select className="input w-full mt-1 min-h-[44px]" value={filters.country} onChange={(e) => setFilter('country', e.target.value)}>
-              <option value="">All countries</option>
-              {countries.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </label>
-          <label className="block">
-            <span className="text-xs text-[var(--text-secondary)]">Region</span>
-            <select className="input w-full mt-1 min-h-[44px]" value={filters.region} onChange={(e) => setFilter('region', e.target.value)}>
-              <option value="">All regions</option>
-              {regions.map(r => <option key={r} value={r}>{r}</option>)}
-            </select>
-          </label>
-          <label className="block">
-            <span className="text-xs text-[var(--text-secondary)]">Source</span>
-            <select className="input w-full mt-1 min-h-[44px]" value={filters.governed} onChange={(e) => setFilter('governed', e.target.value)}>
-              <option value="">All sources</option>
-              <option value="governed">Master</option>
-              <option value="derived">Derived</option>
-            </select>
-          </label>
-          <label className="block">
-            <span className="text-xs text-[var(--text-secondary)]">Status</span>
-            <select className="input w-full mt-1 min-h-[44px]" value={filters.active} onChange={(e) => setFilter('active', e.target.value)}>
-              <option value="">All statuses</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
-          </label>
-          <label className="block">
-            <span className="text-xs text-[var(--text-secondary)]">Data gap</span>
-            <select className="input w-full mt-1 min-h-[44px]" value={filters.gap} onChange={(e) => setFilter('gap', e.target.value)}>
-              <option value="">Any</option>
-              {GAP_KEYS.map(g => <option key={g} value={g}>{GAP_LABEL[g]}</option>)}
-            </select>
-          </label>
-        </div>
-        <div className="flex flex-wrap items-center justify-between gap-2 mt-3">
-          <span className="text-xs text-[var(--text-muted)]" aria-live="polite">
-            <Layers size={12} className="inline mr-1 -mt-0.5" aria-hidden="true" />{filtered.length} of {kpi.total} sites
-          </span>
-          {filterCount > 0 && (
-            <button type="button" onClick={() => setFilters(EMPTY_SITE_FILTERS)} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]">
-              <X size={14} aria-hidden="true" /> Clear filters
+          </div>
+          <div className="sm-dir-bar">
+            <label className="cc-search">
+              <Search size={15} aria-hidden="true" />
+              <input value={f.q} onChange={(e) => setF({ q: e.target.value })} placeholder="Search sites, country, region, city or type" aria-label="Search sites" />
+            </label>
+            <div className="sm-status-tabs">
+              <Tabs label="Site status" value={f.status || 'all'} onChange={(k) => setF({ status: k === 'all' ? '' : k })}
+                tabs={[{ key: 'all', label: 'All', count: tabCounts.all }, ...SITE_STATUSES.map((s) => ({ key: s.key, label: s.label, count: tabCounts[s.key] }))]} />
+            </div>
+            <button type="button" className="cc-btn-ghost" aria-expanded={showFilters} onClick={() => setShowFilters((v) => !v)}>
+              <Filter size={14} aria-hidden="true" /> Filters{extraFilters ? ` (${extraFilters})` : ''}
             </button>
+          </div>
+          {showFilters && (
+            <div className="cc-filters sm-filter-panel">
+              <label className="cc-field"><span>Region</span>
+                <select className="cc-select" value={f.region} onChange={(e) => setF({ region: e.target.value })}>
+                  <option value="">All regions</option>{regions.map((r) => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </label>
+              <label className="cc-field"><span>Source</span>
+                <select className="cc-select" value={f.source} onChange={(e) => setF({ source: e.target.value })}>
+                  <option value="">All sources</option><option value="governed">Site register</option><option value="derived">Fleet records only</option>
+                </select>
+              </label>
+              <label className="cc-field"><span>Data gap</span>
+                <select className="cc-select" value={f.gap} onChange={(e) => setF({ gap: e.target.value })}>
+                  <option value="">Any</option>{GAP_KEYS.map((g) => <option key={g} value={g}>{GAP_LABEL[g]}</option>)}
+                </select>
+              </label>
+              {FILTER_KEYS.some((k) => f[k]) && (
+                <button type="button" className="cc-btn-ghost" onClick={() => setF(Object.fromEntries(FILTER_KEYS.map((k) => [k, ''])))}><X size={14} aria-hidden="true" /> Clear all</button>
+              )}
+            </div>
           )}
-        </div>
-      </div>
+          {selected.size > 0 && (
+            <div className="cc-bulk">
+              <span className="cc-bulk-count">{selected.size} selected</span>
+              <button type="button" className="cc-btn-ghost" onClick={() => doExport('excel', all.filter((s) => selected.has(rowKey(s))))}><Download size={14} aria-hidden="true" /> Export selected</button>
+              <button type="button" className="cc-btn-ghost" onClick={() => setSelected(new Set())}><X size={14} aria-hidden="true" /> Clear</button>
+            </div>
+          )}
+          <CardState state={sites} empty={sites.data && !filtered.length ? (all.length ? 'No sites match these filters.' : 'No sites yet. Assets have no site assigned and the site register is empty.') : null} lines={8}>
+            <KitTable className="sm-table" manualPagination showPagination={false} enableSorting={false}
+              pageIndex={page} pageSize={pageSize} pageCount={Math.max(1, Math.ceil(filtered.length / pageSize))}
+              totalRows={filtered.length} onPageChange={setPage} getRowId={(s) => rowKey(s)}
+              onRowClick={(s) => setOpenSite(s)} rows={pageRows} columns={siteColumns} />
+            <Pager page={page} pageSize={pageSize} total={filtered.length} onPage={setPage} onPageSize={setPageSize} noun="sites" />
+          </CardState>
+        </section>
 
-      <EnterpriseTable
-        columns={columns}
-        data={filtered}
-        getRowId={(s) => `${s.country ?? ''}|${s.name}`}
-        loading={loading}
-        enableGlobalFilter={false}
-        enableExport={false}
-        initialPageSize={25}
-        viewKey="site-management"
-        onRowClick={(s) => setOpenSite(s)}
-        emptyMessage={
-          failed ? 'Sites are unavailable.'
-            : kpi.total === 0 ? 'No sites yet. Assets have no site assigned and the site register is empty.'
-              : 'No sites match these filters.'
-        }
-      />
+        <Card area="sm-a-hlt" title="Site Health Overview">
+          <CardState state={sites} lines={4}>
+            <div className="sm-health">
+              <div className="sm-hl" title={`Sites where no assessed asset has an expired document, out of ${health.assessedSites} sites with recorded expiry dates.`}>
+                <span className="cc-row-icon t-green"><ShieldCheck size={17} aria-hidden="true" /></span>
+                <div><b>{fmtPct(health.compliantPct)}</b><small>Compliant sites</small></div>
+              </div>
+              <button type="button" className="sm-hl" onClick={() => { setSort({ col: 'compliance', dir: 'asc' }); scrollToDirectory() }} title="Sites with at least one asset whose insurance, MVIP or operating card has expired.">
+                <span className="cc-row-icon t-red"><ShieldAlert size={17} aria-hidden="true" /></span>
+                <div><b>{fmtInt(health.atRisk)}</b><small>At risk sites</small></div>
+              </button>
+              <div className="sm-hl" title={opsKnown ? 'Sites with at least one asset whose operational status is breakdown.' : 'Operational status is not provisioned, so this cannot be measured.'}>
+                <span className="cc-row-icon t-blue"><Wrench size={17} aria-hidden="true" /></span>
+                <div><b>{fmtInt(health.inMaintenance)}</b><small>Sites with breakdowns</small></div>
+              </div>
+              <Link className="sm-hl" to="/inspection-planner" title={health.inspectionsDue == null ? 'Inspection history could not be read.' : `Assets last inspected over 30 days ago, across ${health.inspectionSites} sites. Assets never inspected are not counted.`}>
+                <span className="cc-row-icon t-amber"><ClipboardCheck size={17} aria-hidden="true" /></span>
+                <div><b>{fmtInt(health.inspectionsDue)}</b><small>Inspections due</small></div>
+              </Link>
+            </div>
+          </CardState>
+        </Card>
+
+        <Card area="sm-a-typ" title="Site Types Distribution">
+          <CardState state={sites} empty={sites.data && !scoped.length ? 'No sites yet.' : null} lines={4}>
+            <div className="sm-types"><Donut segments={types} total={scoped.length} centerLabel="Total sites" /></div>
+            {types.some((t) => t.label === 'Not recorded') && <p className="sm-cap-note">Sites found only on fleet records have no type until they are added to the register.</p>}
+          </CardState>
+        </Card>
+
+        <Card area="sm-a-qa" title="Quick Actions">
+          <div className="sm-qa">
+            <button type="button" className="cc-insight" onClick={() => setShowAdd(true)} disabled={!canManage} title={canManage ? undefined : 'Only Admin, Manager or Director can add sites'}>
+              <span className="cc-row-icon t-green"><Plus size={17} aria-hidden="true" /></span>
+              <span className="cc-row-main"><b>Add New Site</b><small>Create and configure a new site</small></span>
+              <ChevronRight size={15} className="cc-chev" aria-hidden="true" />
+            </button>
+            <Link className="cc-insight" to="/fleet-master">
+              <span className="cc-row-icon t-green"><Boxes size={17} aria-hidden="true" /></span>
+              <span className="cc-row-main"><b>Bulk Asset Assignment</b><small>Assign assets to sites in Fleet Master</small></span>
+              <ChevronRight size={15} className="cc-chev" aria-hidden="true" />
+            </Link>
+            <Link className="cc-insight" to="/inspection-planner">
+              <span className="cc-row-icon t-green"><ClipboardCheck size={17} aria-hidden="true" /></span>
+              <span className="cc-row-main"><b>Schedule Site Inspection</b><small>Plan inspections and audits</small></span>
+              <ChevronRight size={15} className="cc-chev" aria-hidden="true" />
+            </Link>
+            <button type="button" className="cc-insight" onClick={() => doExport('excel')} disabled={!filtered.length}>
+              <span className="cc-row-icon t-green"><Download size={17} aria-hidden="true" /></span>
+              <span className="cc-row-main"><b>Download Site Report</b><small>Excel of the sites shown, with utilisation and compliance</small></span>
+              <ChevronRight size={15} className="cc-chev" aria-hidden="true" />
+            </button>
+          </div>
+        </Card>
+      </div>
 
       <Modal
         open={Boolean(openSite)}
@@ -523,7 +695,7 @@ export default function SiteManagement() {
           site={editSite ? {
             siteId: editSite.siteId, name: editSite.name, country: editSite.country,
             region: editSite.region, city: editSite.city, site_type: editSite.siteType,
-            site_code: '', active: editSite.active,
+            site_code: editSite._code || '', active: editSite.active,
           } : null}
           onClose={() => { setShowAdd(false); setEditSite(null) }}
           onSaved={() => { setShowAdd(false); setEditSite(null); reload() }}

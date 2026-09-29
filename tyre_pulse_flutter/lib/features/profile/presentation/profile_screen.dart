@@ -98,6 +98,14 @@
 /// from the app language), and "My saved signature" (V601 `user_signatures`:
 /// view, draw a new one, or remove - online only).
 ///
+/// Mock-parity pass 3: "Assigned tasks" is now real. The per-person work
+/// list the "My tasks" screen renders (`myWorkSnapshotProvider`: checklist
+/// assignments for the role, this person's inspection plans, work orders and
+/// corrective actions, and drafts on this device) is the source, so the tile
+/// replaces the notifications tile (the app bar bell already carries that
+/// count) for anyone who can open My tasks or the field plan. "My activity"
+/// opens the activity history branch for anyone holding the history module.
+///
 /// Still absent, with the reason: the email line (many accounts carry a
 /// synthetic login address, which would read as a real mailbox), Edit
 /// profile / My activity (no screen or route), the three notification
@@ -122,6 +130,7 @@ import 'package:tyre_pulse/core/auth/auth_controller.dart';
 import 'package:tyre_pulse/core/auth/auth_dependency_providers.dart';
 import 'package:tyre_pulse/core/auth/auth_state.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/core/permissions/module_registry.dart';
 import 'package:tyre_pulse/core/permissions/permission_providers.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
@@ -131,8 +140,11 @@ import 'package:tyre_pulse/features/auth/presentation/login_security_copy.dart';
 import 'package:tyre_pulse/features/checklists/checklists_providers.dart';
 import 'package:tyre_pulse/features/checklists/domain/checklist_i18n.dart';
 import 'package:tyre_pulse/features/driver_workspace/presentation/driver_workspace_panel.dart';
+import 'package:tyre_pulse/features/my_work/data/my_work_loader.dart';
+import 'package:tyre_pulse/features/my_work/my_work_providers.dart';
 import 'package:tyre_pulse/features/notifications/notifications_providers.dart';
 import 'package:tyre_pulse/features/notifications/presentation/notifications_copy.dart';
+import 'package:tyre_pulse/features/profile/data/account_deletion_repository.dart';
 import 'package:tyre_pulse/features/profile/data/saved_signature_repository.dart';
 import 'package:tyre_pulse/features/profile/profile_providers.dart';
 
@@ -152,6 +164,8 @@ abstract final class ProfileScreenKeys {
   static const Key unsyncedFooter = Key('profile.unsyncedFooter');
   static const Key verifiedBadge = Key('profile.verified');
   static const Key draftsTile = Key('profile.drafts');
+  static const Key assignedTile = Key('profile.assigned');
+  static const Key myActivity = Key('profile.myActivity');
   static const Key checklistLanguageRow = Key('profile.checklistLanguage');
   static const Key rolesRow = Key('profile.roles');
   static const Key countryRow = Key('profile.country');
@@ -416,6 +430,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ref.watch(mySavedSignatureLookupProvider);
     final String? currency = ref.watch(workspaceContextProvider)?.currency;
     final int moduleCount = ref.watch(allowedModulesProvider).length;
+    // Same resolver as `canAccessModuleProvider`, read as one set.
+    final Set<ModuleKey> allowed = ref.watch(allowedModulesProvider);
+    final bool canSeeTasks = allowed.contains(ModuleKey.tasks);
+    final bool canSeeCalendar = allowed.contains(ModuleKey.calendar);
+    final bool canSeeHistory = allowed.contains(ModuleKey.history);
+    // "Assigned tasks" (mock 19): the same personal snapshot "My tasks"
+    // renders, read only when the person can open that list.
+    final AsyncValue<MyWorkSnapshot>? assigned = canSeeTasks || canSeeCalendar
+        ? ref.watch(myWorkSnapshotProvider)
+        : null;
 
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
@@ -437,6 +461,21 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
                     _IdentityHeader(profile: profile),
+                    if (canSeeHistory) ...<Widget>[
+                      const SizedBox(height: TpSpace.md),
+                      Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: TpButton(
+                          key: ProfileScreenKeys.myActivity,
+                          label: AppLocalizations.of(context).profileMyActivity,
+                          icon: Icons.insights_outlined,
+                          variant: TpButtonVariant.secondary,
+                          isCompact: true,
+                          onPressed: () =>
+                              context.go(const ActivityHistoryRoute().location),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: TpSpace.md),
                     const DriverWorkspaceEntry(),
                     const SizedBox(height: TpSpace.md),
@@ -444,6 +483,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       drafts: drafts,
                       pendingSync: pendingSync,
                       unread: unread,
+                      assigned: assigned,
+                      onOpenAssigned: canSeeTasks
+                          ? () => context.push(const TasksRoute().location)
+                          : () => context.push(const CalendarRoute().location),
                       profileStale: authState.profileStale,
                     ),
                     const SizedBox(height: TpSpace.lg),
@@ -501,9 +544,12 @@ class _IdentityHeader extends StatelessWidget {
     final TextTheme text = Theme.of(context).textTheme;
 
     final String? name = profile.fullName;
+    // Organisation wide scope ('ALL') means every site, not none.
     final String site = (profile.legacySite?.trim().isNotEmpty ?? false)
         ? profile.legacySite!.trim()
-        : l10n.homeSiteStatUnavailable;
+        : profile.siteScope.isOrganisationWide
+            ? l10n.homeSiteAllSites
+            : l10n.homeSiteStatUnavailable;
     final List<String> countries = profile.countryScope.seesAllCountries
         ? const <String>[]
         : profile.countryScope.namedCountries;
@@ -762,8 +808,9 @@ String _countText(AsyncValue<int> value) {
   return count == null ? '-' : '$count';
 }
 
-/// Real items only: queued work still on this device, unread notifications,
-/// and - only when the profile itself is served from the offline cache - an
+/// Real items only: open work assigned to this person (when they can open
+/// that list), queued work still on this device, unread notifications (when
+/// there is no assigned-work tile), and - only when the profile itself is served from the offline cache - an
 /// offline marker. No invented task count or "last sync" clock.
 class _ProfileStatusStrip extends StatelessWidget {
   const _ProfileStatusStrip({
@@ -771,12 +818,19 @@ class _ProfileStatusStrip extends StatelessWidget {
     required this.pendingSync,
     required this.unread,
     required this.profileStale,
+    this.assigned,
+    this.onOpenAssigned,
   });
 
   final AsyncValue<int> drafts;
   final AsyncValue<int> pendingSync;
   final AsyncValue<int> unread;
   final bool profileStale;
+
+  /// Open work assigned to this person; null when they cannot open the list,
+  /// in which case the notifications count keeps its place.
+  final AsyncValue<MyWorkSnapshot>? assigned;
+  final VoidCallback? onOpenAssigned;
 
   @override
   Widget build(BuildContext context) {
@@ -791,55 +845,112 @@ class _ProfileStatusStrip extends StatelessWidget {
         horizontal: TpSpace.sm,
         vertical: TpSpace.md,
       ),
-      child: IntrinsicHeight(
-        child: Row(
-          children: <Widget>[
-            Expanded(
-              child: _ProfileStatusItem(
-                key: ProfileScreenKeys.draftsTile,
-                icon: Icons.description_outlined,
-                value: _countText(drafts),
-                label: l10n.clMockPendingDrafts,
-                tone: (drafts.asData?.value ?? 0) > 0
-                    ? palette.warning
-                    : palette.info,
-              ),
-            ),
-            VerticalDivider(width: 1, thickness: 1, color: palette.border),
-            Expanded(
-              child: _ProfileStatusItem(
-                icon: Icons.cloud_upload_outlined,
-                value: _countText(pendingSync),
-                label: l10n.homeSyncStatLabel,
-                tone: pending == null
-                    ? palette.neutral
-                    : pending > 0
+      child: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          final int tiles = (assigned != null ? 1 : 0) +
+              2 +
+              (assigned == null ? 1 : 0) +
+              (profileStale ? 1 : 0);
+          final bool stacked = constraints.maxWidth / tiles < 136;
+          return IntrinsicHeight(
+            child: Row(
+              children: <Widget>[
+                if (assigned
+                    case final AsyncValue<MyWorkSnapshot> work) ...<Widget>[
+                  Expanded(
+                    child: InkWell(
+                      onTap: onOpenAssigned,
+                      borderRadius: BorderRadius.circular(TpRadius.md),
+                      child: _ProfileStatusItem(
+                        key: ProfileScreenKeys.assignedTile,
+                        icon: Icons.assignment_outlined,
+                        value: switch (work) {
+                          AsyncData<MyWorkSnapshot>(:final value) => () {
+                              final int n = value.items
+                                  .where((item) => item.isOpen)
+                                  .length;
+                              return value.partial ? '$n+' : '$n';
+                            }(),
+                          _ => '-',
+                        },
+                        label: l10n.profileAssignedTasks,
+                        tone: palette.ok,
+                        stacked: stacked,
+                      ),
+                    ),
+                  ),
+                  VerticalDivider(
+                    width: 1,
+                    thickness: 1,
+                    color: palette.border,
+                  ),
+                ],
+                Expanded(
+                  child: _ProfileStatusItem(
+                    key: ProfileScreenKeys.draftsTile,
+                    icon: Icons.description_outlined,
+                    value: _countText(drafts),
+                    label: l10n.clMockPendingDrafts,
+                    tone: (drafts.asData?.value ?? 0) > 0
                         ? palette.warning
-                        : palette.ok,
-              ),
-            ),
-            VerticalDivider(width: 1, thickness: 1, color: palette.border),
-            Expanded(
-              child: _ProfileStatusItem(
-                icon: Icons.notifications_none_rounded,
-                value: _countText(unread),
-                label: NotificationsCopy.of(context)('title'),
-                tone: (unreadCount ?? 0) > 0 ? palette.critical : palette.info,
-              ),
-            ),
-            if (profileStale) ...<Widget>[
-              VerticalDivider(width: 1, thickness: 1, color: palette.border),
-              Expanded(
-                child: _ProfileStatusItem(
-                  icon: Icons.cloud_off_outlined,
-                  value: l10n.offlineTitle,
-                  label: l10n.stateOfflineCachedTitle,
-                  tone: palette.warning,
+                        : palette.info,
+                    stacked: stacked,
+                  ),
                 ),
-              ),
-            ],
-          ],
-        ),
+                VerticalDivider(width: 1, thickness: 1, color: palette.border),
+                Expanded(
+                  child: _ProfileStatusItem(
+                    icon: Icons.cloud_upload_outlined,
+                    value: _countText(pendingSync),
+                    label: l10n.homeSyncStatLabel,
+                    tone: pending == null
+                        ? palette.neutral
+                        : pending > 0
+                            ? palette.warning
+                            : palette.ok,
+                    stacked: stacked,
+                  ),
+                ),
+                // The bell in the app bar already carries the unread count; the
+                // tile only keeps its place when there is no assigned-work tile.
+                if (assigned == null) ...<Widget>[
+                  VerticalDivider(
+                    width: 1,
+                    thickness: 1,
+                    color: palette.border,
+                  ),
+                  Expanded(
+                    child: _ProfileStatusItem(
+                      icon: Icons.notifications_none_rounded,
+                      value: _countText(unread),
+                      label: NotificationsCopy.of(context)('title'),
+                      tone: (unreadCount ?? 0) > 0
+                          ? palette.critical
+                          : palette.info,
+                      stacked: stacked,
+                    ),
+                  ),
+                ],
+                if (profileStale) ...<Widget>[
+                  VerticalDivider(
+                    width: 1,
+                    thickness: 1,
+                    color: palette.border,
+                  ),
+                  Expanded(
+                    child: _ProfileStatusItem(
+                      icon: Icons.cloud_off_outlined,
+                      value: l10n.offlineTitle,
+                      label: l10n.stateOfflineCachedTitle,
+                      tone: palette.warning,
+                      stacked: stacked,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -851,6 +962,7 @@ class _ProfileStatusItem extends StatelessWidget {
     required this.label,
     required this.value,
     required this.tone,
+    this.stacked = false,
     super.key,
   });
 
@@ -859,9 +971,67 @@ class _ProfileStatusItem extends StatelessWidget {
   final String value;
   final TpStatusColors tone;
 
+  /// Icon above the number and label, for a tile too narrow to hold both
+  /// side by side (see [_ProfileStatusStrip]).
+  final bool stacked;
+
   @override
   Widget build(BuildContext context) {
     final TextTheme text = Theme.of(context).textTheme;
+    {
+      {
+        // Three or four tiles share a phone-width strip. Beside a 44pt icon
+        // a label like "Pending drafts" has under 60pt left and breaks in
+        // the middle of a word, so a narrow tile stacks the icon above the
+        // number and label instead.
+        if (stacked) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: TpSpace.xs),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: tone.soft,
+                    borderRadius: BorderRadius.circular(TpRadius.md),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(icon, size: 20, color: tone.base),
+                ),
+                const SizedBox(height: TpSpace.xs),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: text.titleLarge?.copyWith(
+                    color: tone.base,
+                    fontWeight: FontWeight.w900,
+                    height: 1.1,
+                  ),
+                ),
+                Text(
+                  label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: text.labelSmall?.copyWith(
+                    color: TpPalette.of(context).textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+        return _wide(context, text);
+      }
+    }
+  }
+
+  Widget _wide(BuildContext context, TextTheme text) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: TpSpace.sm),
       child: Row(
@@ -1037,7 +1207,10 @@ class _SettingsColumn extends StatelessWidget {
               icon: Icons.groups_outlined,
               tone: palette.info,
               label: l10n.clMockRolesAccess,
-              value: '${profile.role.displayName} · '
+              // The role is the server's catalogue name (Latin script); a
+              // first-strong isolate keeps it from pulling the module count
+              // out of order inside an Arabic or Urdu row.
+              value: '\u2068${profile.role.displayName}\u2069 · '
                   '${l10n.clMockModuleCount(moduleCount)}',
             ),
           ],
@@ -1483,66 +1656,72 @@ class _SettingsRow extends StatelessWidget {
           horizontal: TpSpace.md,
           vertical: TpSpace.sm,
         ),
-        child: Row(
-          children: <Widget>[
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: tone.soft,
-                shape: BoxShape.circle,
+        child: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) => Row(
+            children: <Widget>[
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: tone.soft,
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: Icon(icon, size: 20, color: tone.base),
               ),
-              alignment: Alignment.center,
-              child: Icon(icon, size: 20, color: tone.base),
-            ),
-            const SizedBox(width: TpSpace.md),
-            Expanded(
-              flex: 2,
-              child: Text(
-                label,
-                style: text.bodyMedium?.copyWith(
-                  color: palette.text,
-                  fontWeight: FontWeight.w600,
+              const SizedBox(width: TpSpace.md),
+              // The label takes whatever the value does not need, so a short
+              // value ("All", "Light") never squeezes the label onto several
+              // lines; a long value is capped at just under half the row.
+              Expanded(
+                child: Text(
+                  label,
+                  style: text.bodyMedium?.copyWith(
+                    color: palette.text,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
-            ),
-            if (value != null) ...<Widget>[
-              const SizedBox(width: TpSpace.md),
-              Expanded(
-                flex: 3,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Text(
-                      value!,
-                      textAlign: TextAlign.end,
-                      style: text.bodyMedium?.copyWith(
-                        color: valueColor ?? palette.textSecondary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    if (caption != null)
+              if (value != null) ...<Widget>[
+                const SizedBox(width: TpSpace.md),
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: constraints.maxWidth * 0.45,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
                       Text(
-                        caption!,
+                        value!,
                         textAlign: TextAlign.end,
-                        style: text.labelSmall?.copyWith(
-                          color: palette.textMuted,
+                        style: text.bodyMedium?.copyWith(
+                          color: valueColor ?? palette.textSecondary,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                  ],
+                      if (caption != null)
+                        Text(
+                          caption!,
+                          textAlign: TextAlign.end,
+                          style: text.labelSmall?.copyWith(
+                            color: palette.textMuted,
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
+              ],
+              if (onTap != null) ...<Widget>[
+                const SizedBox(width: TpSpace.xs),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: TpSizing.iconMd,
+                  color: palette.primary,
+                ),
+              ],
             ],
-            if (onTap != null) ...<Widget>[
-              const SizedBox(width: TpSpace.xs),
-              Icon(
-                Icons.chevron_right_rounded,
-                size: TpSizing.iconMd,
-                color: palette.primary,
-              ),
-            ],
-          ],
+          ),
         ),
       ),
     );
@@ -1638,7 +1817,154 @@ class _AccountBlock extends StatelessWidget {
             ],
           ),
         ],
+        const SizedBox(height: TpSpace.md),
+        const _AccountDeletionButton(),
       ],
+    );
+  }
+}
+
+/// "Delete my account" - Expo parity (`mobile/app/(app)/profile.tsx` danger
+/// zone + `mobile/lib/accountDeletion.ts`), and the Play in-app deletion
+/// path. Records a REQUEST only; typing the confirm word is required first.
+class _AccountDeletionButton extends ConsumerStatefulWidget {
+  const _AccountDeletionButton();
+
+  @override
+  ConsumerState<_AccountDeletionButton> createState() =>
+      _AccountDeletionButtonState();
+}
+
+class _AccountDeletionButtonState
+    extends ConsumerState<_AccountDeletionButton> {
+  Map<String, String> _copy(BuildContext context) => <String, String>{
+        for (final String entry in AppLocalizations.of(context)
+            .accountDeletionCopyCatalog
+            .split('~'))
+          if (entry.indexOf('=') > 0)
+            entry.substring(0, entry.indexOf('=')):
+                entry.substring(entry.indexOf('=') + 1),
+      };
+
+  Future<void> _open() async {
+    final Map<String, String> copy = _copy(context);
+    String t(String key) => copy[key] ?? key;
+    final TextEditingController reason = TextEditingController();
+    final TextEditingController confirm = TextEditingController();
+    bool busy = false;
+    String? problem;
+    final AccountDeletionOutcome? outcome =
+        await showDialog<AccountDeletionOutcome>(
+      context: context,
+      builder: (BuildContext dialogContext) => StatefulBuilder(
+        builder: (BuildContext context, StateSetter setDialogState) =>
+            AlertDialog(
+          title: Text(t('title')),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(t('intro')),
+                const SizedBox(height: TpSpace.sm),
+                Text(t('what')),
+                const SizedBox(height: TpSpace.sm),
+                Text(t('timeline')),
+                const SizedBox(height: TpSpace.md),
+                TextField(
+                  key: const Key('profile.deleteAccount.reason'),
+                  controller: reason,
+                  maxLines: 2,
+                  decoration: InputDecoration(labelText: t('reason')),
+                ),
+                TextField(
+                  key: const Key('profile.deleteAccount.confirm'),
+                  controller: confirm,
+                  decoration: InputDecoration(labelText: t('confirm')),
+                ),
+                if (problem != null) ...<Widget>[
+                  const SizedBox(height: TpSpace.sm),
+                  Text(
+                    problem!,
+                    style:
+                        TextStyle(color: Theme.of(context).colorScheme.error),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: busy ? null : () => Navigator.of(context).pop(),
+              child: Text(t('cancel')),
+            ),
+            FilledButton(
+              key: const Key('profile.deleteAccount.submit'),
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.error,
+              ),
+              onPressed: busy
+                  ? null
+                  : () async {
+                      if (confirm.text.trim().toUpperCase() !=
+                          t('word').toUpperCase()) {
+                        setDialogState(() => problem = t('mismatch'));
+                        return;
+                      }
+                      setDialogState(() {
+                        busy = true;
+                        problem = null;
+                      });
+                      final AccountDeletionOutcome result = await ref
+                          .read(accountDeletionRepositoryProvider)
+                          .request(reason: reason.text);
+                      if (result == AccountDeletionOutcome.submitted) {
+                        if (context.mounted) {
+                          Navigator.of(context).pop(result);
+                        }
+                        return;
+                      }
+                      setDialogState(() {
+                        busy = false;
+                        problem = result == AccountDeletionOutcome.unavailable
+                            ? t('unavailable')
+                            : t('failed');
+                      });
+                    },
+              child: Text(t('submit')),
+            ),
+          ],
+        ),
+      ),
+    );
+    reason.dispose();
+    confirm.dispose();
+    if (outcome != AccountDeletionOutcome.submitted || !mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: Text(t('successTitle')),
+        content: Text(t('successBody')),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(t('ok')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final Map<String, String> copy = _copy(context);
+    final TpPalette palette = TpPalette.of(context);
+    return TextButton.icon(
+      key: const Key('profile.deleteAccount'),
+      onPressed: () => unawaited(_open()),
+      style: TextButton.styleFrom(foregroundColor: palette.critical.base),
+      icon: const Icon(Icons.person_remove_outlined),
+      label: Text(copy['title'] ?? 'title'),
     );
   }
 }

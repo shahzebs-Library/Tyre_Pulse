@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { createPortal } from 'react-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useFilterState } from '../hooks/useFilterState'
 import { useScrollRestore } from '../hooks/useScrollRestore'
 import { toUserMessage } from '../lib/safeError'
@@ -10,23 +11,37 @@ import { useLanguage } from '../contexts/LanguageContext'
 import { exportToExcel } from '../lib/exportUtils'
 import { canAddResource } from '../lib/api/billing'
 import {
-  Search, Plus, Edit2, Trash2, Save, X, AlertTriangle,
-  FileSpreadsheet, Truck, ClipboardCheck
+  Search, Plus, Edit2, Trash2, Save, X, AlertTriangle, Truck, ClipboardCheck,
+  CheckCircle2, Wrench, AlertCircle, FileText, CircleSlash, MapPin, Activity, Layers,
+  Bookmark, Columns, Download, ChevronDown, MoreHorizontal, Upload, BarChart3,
+  CalendarClock, ShieldCheck, Gauge, ChevronRight, Eye, Copy, Circle,
+  Bus, Car, Construction, Container, Factory, ListChecks,
 } from 'lucide-react'
-import EnterpriseTable from '../components/ui/EnterpriseTable'
-import { Illustration } from '../components/illustrations'
-import { vehicleArt } from '../lib/brand/vehicleArt'
-import { useReportMeta } from '../hooks/useReportMeta'
-import PageHeader from '../components/ui/PageHeader'
+import { vehicleKind } from '../lib/vehiclePhoto'
+import useAnchoredPopover from '../components/ui/useAnchoredPopover'
 import DialogModal from '../components/ui/Modal'
 import CustomFieldsPanel from '../components/CustomFieldsPanel'
+import { PageHero, Kpi, Card, ViewAll, Donut, Pager, VehicleThumb, KitTable, fmtInt, fmtPct } from '../components/commandCenter/kit'
+import './fleetMaster.css'
 
 const DEFAULT_PAGE_SIZE = 25
-// Mirrors EnterpriseTable's own page-size selector. The page size is restored
-// from the URL, so it is validated against this list rather than trusted.
-const PAGE_SIZE_OPTIONS = [25, 50, 100]
+// Mirrors the pager's own page-size selector. The page size is restored from
+// the URL, so it is validated against this list rather than trusted.
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
 
 const STATUS_OPTIONS = ['Active', 'Inactive', 'Retired', 'Transferred']
+
+/**
+ * Quick filters the KPI tiles and insights apply. Each is answered by the
+ * server (assets.listFleetRecords `flag`), so a filtered register is the WHOLE
+ * matching set, never the page that happened to be loaded.
+ */
+const FLAG_LABELS = {
+  maintenance: 'Under maintenance',
+  missing_specs: 'Missing specs',
+  no_policy: 'No policy set',
+  inactive: 'Inactive',
+}
 
 /**
  * Country a NEW vehicle inherits from the working context. On the All-countries
@@ -72,6 +87,7 @@ const EXPORT_COLS = [
   { key: 'site',                    header: 'Site',              width: 24 },
   { key: 'operator_name',           header: 'Operator',          width: 26 },
   { key: 'status',                  header: 'Status',            width: 18 },
+  { key: 'ops_status',              header: 'Operating State',   width: 18 },
   { key: 'expected_km_per_tyre',    header: 'Expected KM/Tyre',  width: 22 },
   { key: 'min_days_between_changes',header: 'Min Days',          width: 16 },
   { key: 'tyre_size',               header: 'Tyre Size',         width: 20 },
@@ -79,17 +95,156 @@ const EXPORT_COLS = [
   { key: 'notes',                   header: 'Notes',             width: 36 },
 ]
 
-const STATUS_BADGE = {
-  Active:      'bg-green-900/50 text-green-300',
-  Inactive:    'bg-gray-800 text-gray-400',
-  Retired:     'bg-red-900/50 text-red-300',
-  Transferred: 'bg-yellow-900/50 text-yellow-300',
+/** Hideable register columns. Asset No, the checkbox and actions always show. */
+const TABLE_COLUMNS = [
+  { key: 'fleet', label: 'Fleet No' },
+  { key: 'vehicle', label: 'Vehicle' },
+  { key: 'type', label: 'Type' },
+  { key: 'year', label: 'Year' },
+  { key: 'site', label: 'Site' },
+  { key: 'operator', label: 'Operator' },
+  { key: 'status', label: 'Status' },
+  { key: 'policy', label: 'Policy' },
+  { key: 'service', label: 'Last Service' },
+]
+const COLUMNS_KEY = 'fleetMaster.columns.v1'
+const VIEWS_KEY = 'fleetMaster.savedViews.v1'
+
+// Browser storage is a per-viewer convenience only. It can be missing or throw
+// (private window, blocked site data), so every read and write is guarded and
+// the page works the same without it.
+function readStore(key, fallback) {
+  try {
+    const raw = window.localStorage.getItem(key)
+    return raw ? JSON.parse(raw) : fallback
+  } catch { return fallback }
+}
+function writeStore(key, value) {
+  try { window.localStorage.setItem(key, JSON.stringify(value)) } catch { /* storage unavailable */ }
+}
+
+const KIND_ICON = {
+  bus: Bus, pickup: Car, wheelLoader: Construction, skidLoader: Construction, trailer: Container,
+  generator: Factory, chiller: Factory, batchingPlant: Factory, placingBoom: Factory, stationaryPump: Factory,
+  towablePump: Container, tyreless: Factory,
+}
+
+const isActiveRow = (r) => r?.status === 'Active'
+const isBreakdown = (r) => String(r?.ops_status || '').toLowerCase() === 'breakdown'
+
+/** Operating state pill: the register status plus today's breakdown flag. */
+function statusPill(r) {
+  if (isActiveRow(r) && isBreakdown(r)) return { tone: 'warn', label: 'Maintenance', Icon: Wrench }
+  if (isActiveRow(r)) return { tone: 'good', label: 'Active', Icon: CheckCircle2 }
+  return { tone: 'muted', label: r?.status || 'Not set', Icon: Circle }
+}
+
+/** Policy readiness: specs first, then the tyre-change policy. */
+function policyPill(r) {
+  if (!r?.make || !r?.model) return { tone: 'bad', label: 'Missing Specs', Icon: AlertCircle }
+  if (!r?.expected_km_per_tyre && !r?.min_days_between_changes) return { tone: 'warn', label: 'No Policy', Icon: null }
+  return { tone: 'good', label: 'Compliant', Icon: null }
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const fmtDate = (v) => {
+  if (!v) return null
+  const d = new Date(v)
+  if (Number.isNaN(d.getTime())) return null
+  return `${String(d.getDate()).padStart(2, '0')} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`
+}
+
+/**
+ * Dropdown anchored to its trigger and portalled to the body, so the table's
+ * horizontal scroll box cannot clip it. The panel carries the `cc` class so it
+ * reads the same light and dark tokens as the page.
+ */
+function Menu({ label, trigger, triggerClass = 'cc-btn-ghost', disabled, width = 220, align = 'right', role = 'menu', children, title }) {
+  const [open, setOpen] = useState(false)
+  const close = useCallback(() => setOpen(false), [])
+  const { triggerRef, panelRef, coords } = useAnchoredPopover(open, {
+    width, height: 300, align, nav: role === 'menu' ? 'menu' : 'trap', onRequestClose: close,
+  })
+  useEffect(() => {
+    if (!open) return undefined
+    const onDown = (e) => {
+      if (panelRef.current?.contains(e.target) || triggerRef.current?.contains(e.target)) return
+      setOpen(false)
+    }
+    const onKey = (e) => { if (e.key === 'Escape') { setOpen(false); triggerRef.current?.focus?.() } }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey) }
+  }, [open, panelRef, triggerRef])
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        className={triggerClass}
+        aria-haspopup={role === 'menu' ? 'menu' : 'dialog'}
+        aria-expanded={open}
+        aria-label={label}
+        title={title}
+        disabled={disabled}
+        onClick={(e) => { e.stopPropagation(); setOpen((o) => !o) }}
+      >
+        {trigger}
+      </button>
+      {open && coords && createPortal(
+        <div
+          ref={panelRef}
+          role={role}
+          aria-label={label}
+          className="cc fm-pop"
+          style={{ top: coords.top, left: coords.left, width, maxHeight: coords.maxHeight }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {typeof children === 'function' ? children(close) : children}
+        </div>,
+        document.body,
+      )}
+    </>
+  )
+}
+
+function MenuItem({ icon: Icon, children, onClick, danger, disabled, title }) {
+  return (
+    <button type="button" role="menuitem" className={`fm-pop-item ${danger ? 'danger' : ''}`} onClick={onClick} disabled={disabled} title={title}>
+      {Icon && <Icon size={14} aria-hidden="true" />}<span>{children}</span>
+    </button>
+  )
+}
+
+function SelectField({ icon: Icon, label, value, onChange, children }) {
+  return (
+    <label className="fm-sel">
+      <span className="fm-sr">{label}</span>
+      <Icon size={15} aria-hidden="true" />
+      <select className="cc-select" value={value} onChange={onChange}>{children}</select>
+    </label>
+  )
+}
+
+/** Insight row. `num` is drawn in the row's tone; null means "not measured". */
+function Insight({ icon: Icon, tone, num, text, fallback, sub, onClick, to }) {
+  const body = (
+    <>
+      <span className={`fm-ins-icon ${tone}`}><Icon size={17} aria-hidden="true" /></span>
+      <span className="fm-ins-main">
+        <b>{num == null ? fallback : <><span className={`fm-ins-num ${tone}`}>{num}</span> {text}</>}</b>
+        <small>{sub}</small>
+      </span>
+      <ChevronRight size={15} className="cc-chev" aria-hidden="true" />
+    </>
+  )
+  if (to) return <Link to={to} className="cc-insight">{body}</Link>
+  return <button type="button" className="cc-insight" onClick={onClick}>{body}</button>
 }
 
 export default function FleetMaster() {
-  const reportMeta = useReportMeta('Fleet Master')
   const navigate = useNavigate()
-  const { profile } = useAuth()
+  const { profile, isSuperAdmin } = useAuth()
   const { activeCountry, activeCurrency } = useSettings()
   const { t } = useLanguage()
 
@@ -99,21 +254,24 @@ export default function FleetMaster() {
   const [loading, setLoading]   = useState(true)
   const [loadError, setLoadError] = useState('')
   const [sites, setSites]       = useState([])
+  const [types, setTypes]       = useState([])
   const [summaryCapped, setSummaryCapped] = useState(false)
 
   // ── filters ──────────────────────────────────────────────────────────────────
-  // Search, site, status, page and page size live in the URL (useFilterState) so
-  // they SURVIVE opening a vehicle and pressing Back: the row opens
-  // `/vehicle/:asset_no` as a route, so without this the register would remount
-  // and reset to page 1 of an unfiltered list.
+  // Search, site, status, type, quick filter, page and page size live in the URL
+  // (useFilterState) so they SURVIVE opening a vehicle and pressing Back: the row
+  // opens `/vehicle/:asset_no` as a route, so without this the register would
+  // remount and reset to page 1 of an unfiltered list.
   const [filters, setFilter, , , setFilters] = useFilterState({
-    search: '', site: '', status: '', page: '1', size: String(DEFAULT_PAGE_SIZE),
+    search: '', site: '', status: '', type: '', flag: '', page: '1', size: String(DEFAULT_PAGE_SIZE),
   })
   const search = filters.search
   const [filterCountry, setFilterCountry] = useState(activeCountry)
   const countryChanged = filterCountry !== activeCountry
   const siteFilter = countryChanged ? '' : filters.site
+  const typeFilter = countryChanged ? '' : filters.type
   const statusFilter = filters.status
+  const flagFilter = FLAG_LABELS[filters.flag] ? filters.flag : ''
   // The URL carries a human-readable 1-based page; the query is 0-based.
   const requestedPage = Number(filters.page)
   const page = !countryChanged && Number.isSafeInteger(requestedPage) && requestedPage > 0
@@ -121,12 +279,12 @@ export default function FleetMaster() {
     : 0
   useEffect(() => {
     if (!countryChanged) return
-    setFilters({ site: '', page: '1' })
+    setFilters({ site: '', type: '', page: '1' })
     setFilterCountry(activeCountry)
   }, [activeCountry, countryChanged, setFilters])
-  // Clamped to the sizes the table itself offers. The value now comes from the
-  // URL, and an arbitrary one would widen the server range this read is bounded
-  // by - a hand-typed `?size=100000` must not become a bigger query.
+  // Clamped to the sizes the pager itself offers. The value comes from the URL,
+  // and an arbitrary one would widen the server range this read is bounded by -
+  // a hand-typed `?size=100000` must not become a bigger query.
   const pageSize = PAGE_SIZE_OPTIONS.includes(Number(filters.size))
     ? Number(filters.size)
     : DEFAULT_PAGE_SIZE
@@ -135,8 +293,8 @@ export default function FleetMaster() {
   // /vehicle/:asset_no. Only once the rows exist, or there is nothing to scroll.
   const listRef = useScrollRestore('fleet-master', !loading && records.length > 0)
   // Debounced copy that actually drives the query, so we don't fire a Supabase
-  // request on every keystroke (was one round-trip per character). Seeded from
-  // the URL so a restored `?search=` queries immediately instead of after 300ms.
+  // request on every keystroke. Seeded from the URL so a restored `?search=`
+  // queries immediately instead of after 300ms.
   const [debouncedSearch, setDebouncedSearch] = useState(() => filters.search)
   // Monotonic request id: only the newest loadRecords() response is applied, so a
   // slow earlier query can't overwrite a faster later one (out-of-order race).
@@ -155,16 +313,45 @@ export default function FleetMaster() {
   // which is when the field needs the hint rather than a quiet default.
   const countryUnset = !String(form.country || '').trim()
 
-  // ── multi-select bulk delete (Admin only) ─────────────────────────────────────
-  const isAdmin = (profile?.role || '').toLowerCase() === 'admin'
-  // TanStack-style selection map ({ [rowId]: true }); persists across pages.
-  const [rowSelection, setRowSelection]       = useState({})
-  const selectedIds = useMemo(() => new Set(Object.keys(rowSelection)), [rowSelection])
+  // ── permissions ──────────────────────────────────────────────────────────────
+  const role = String(profile?.role || '').toLowerCase()
+  const isAdmin = role === 'admin' || isSuperAdmin === true
+  const canDelete = profile?.role === 'Admin' || profile?.role === 'Manager' || isSuperAdmin === true
+  // Bulk edits go through RLS, which decides what each user may write; this only
+  // hides controls from roles that could never use them.
+  const canEdit = isAdmin || role === 'manager' || role === 'director'
+
+  // ── selection (persists across pages) ────────────────────────────────────────
+  // id -> row, so a bulk export or action still knows a row selected on page 1
+  // after the user has paged on.
+  const [selected, setSelected]               = useState({})
+  const selectedIds = useMemo(() => Object.keys(selected), [selected])
+  const selectedRows = useMemo(() => Object.values(selected), [selected])
   const [bulkDeleteOpen, setBulkDeleteOpen]   = useState(false)
   const [bulkError, setBulkError]             = useState('')
   const [bulkBusy, setBulkBusy]               = useState(false)
+  const [bulkDialog, setBulkDialog]           = useState(null) // 'status' | 'policy' | null
+  const [bulkStatus, setBulkStatus]           = useState('Active')
+  const [bulkPolicy, setBulkPolicy]           = useState({ expected_km_per_tyre: '', min_days_between_changes: '', max_tyres_per_day: '' })
+  const [notice, setNotice]                   = useState('')
 
-  // ── tab ──────────────────────────────────────────────────────────────────────
+  // ── columns + saved views (per viewer) ───────────────────────────────────────
+  const [hiddenCols, setHiddenCols] = useState(() => {
+    const v = readStore(COLUMNS_KEY, [])
+    return Array.isArray(v) ? v.filter(k => TABLE_COLUMNS.some(c => c.key === k)) : []
+  })
+  const show = (key) => !hiddenCols.includes(key)
+  const toggleCol = (key) => setHiddenCols((prev) => {
+    const next = prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+    writeStore(COLUMNS_KEY, next)
+    return next
+  })
+  const [views, setViews] = useState(() => {
+    const v = readStore(VIEWS_KEY, [])
+    return Array.isArray(v) ? v.filter(x => x && typeof x.name === 'string' && x.filters) : []
+  })
+  const [viewName, setViewName] = useState('')
+
   // ── load ─────────────────────────────────────────────────────────────────────
   const sitesRequestRef = useRef(0)
   const loadSites = useCallback(async () => {
@@ -183,13 +370,24 @@ export default function FleetMaster() {
     loadSites()
     return invalidateSiteRequests
   }, [loadSites, invalidateSiteRequests])
+
+  useEffect(() => {
+    let cancelled = false
+    setTypes([])
+    Promise.resolve()
+      .then(() => assets.listFleetTypes({ country: activeCountry }))
+      .then((list) => { if (!cancelled && Array.isArray(list)) setTypes(list) })
+      .catch(() => { /* the Type filter simply offers no options */ })
+    return () => { cancelled = true }
+  }, [activeCountry])
+
   // Debounce the search box: reset to page 0 and reload 300ms after typing stops.
   // The page reset only fires when the term actually changed, so arriving on a
   // restored URL (`?search=TM&page=3`) keeps its page instead of snapping to 1.
   useEffect(() => {
     if (search === debouncedSearch) return
-    const t = setTimeout(() => { setDebouncedSearch(search); setPage(0) }, 300)
-    return () => clearTimeout(t)
+    const tm = setTimeout(() => { setDebouncedSearch(search); setPage(0) }, 300)
+    return () => clearTimeout(tm)
   }, [search, debouncedSearch, setPage])
   const loadRecords = useCallback(async () => {
     const myReq = ++reqIdRef.current
@@ -202,6 +400,8 @@ export default function FleetMaster() {
         search: debouncedSearch,
         site: siteFilter,
         status: statusFilter,
+        type: typeFilter,
+        flag: flagFilter,
         country: activeCountry
       })
       if (myReq !== reqIdRef.current) return   // a newer request superseded this one
@@ -216,7 +416,7 @@ export default function FleetMaster() {
     } finally {
       if (myReq === reqIdRef.current) setLoading(false)
     }
-  }, [page, pageSize, search, debouncedSearch, siteFilter, statusFilter, activeCountry])
+  }, [page, pageSize, search, debouncedSearch, siteFilter, statusFilter, typeFilter, flagFilter, activeCountry])
 
   const invalidateRecordRequests = useCallback(() => { reqIdRef.current++ }, [])
   useEffect(() => {
@@ -224,7 +424,18 @@ export default function FleetMaster() {
     return invalidateRecordRequests
   }, [loadRecords, invalidateRecordRequests])
 
-  const totalPages = Math.ceil(total / pageSize)
+  // ── last service for the rows on screen only ─────────────────────────────────
+  const [lastService, setLastService] = useState({ state: 'idle', map: {} })
+  useEffect(() => {
+    let cancelled = false
+    if (loading || !records.length) { setLastService({ state: 'idle', map: {} }); return undefined }
+    setLastService({ state: 'loading', map: {} })
+    Promise.resolve()
+      .then(() => assets.getLastServiceByAsset(records))
+      .then((map) => { if (!cancelled) setLastService({ state: 'ready', map: map || {} }) })
+      .catch(() => { if (!cancelled) setLastService({ state: 'error', map: {} }) })
+    return () => { cancelled = true }
+  }, [records, loading])
 
   // ── summary cards ─────────────────────────────────────────────────────────────
   const [summary, setSummary] = useState(null)
@@ -240,15 +451,21 @@ export default function FleetMaster() {
         const sumData = await assets.getFleetSummary({
           country: activeCountry,
           search: debouncedSearch,
-          site: siteFilter
+          site: siteFilter,
+          type: typeFilter,
         })
         if (cancelled) return
         setSummaryCapped(sumData.truncated)
         setSummary({
           total:        sumData.total,
           active:       sumData.active,
+          maintenance:  sumData.maintenance ?? null,
+          inactive:     sumData.inactive ?? null,
           missingSpecs: sumData.missingSpecs,
           noPolicy:     sumData.noPolicy,
+          sites:        sumData.sites ?? null,
+          countries:    sumData.countries ?? null,
+          growth:       sumData.growth ?? {},
         })
       } catch (e) {
         console.error(e)
@@ -256,7 +473,23 @@ export default function FleetMaster() {
     }
     loadSummary()
     return () => { cancelled = true }
-  }, [activeCountry, search, debouncedSearch, siteFilter, records])
+  }, [activeCountry, search, debouncedSearch, siteFilter, typeFilter, records])
+
+  // ── insights that live outside the register ─────────────────────────────────
+  const [pmDue, setPmDue] = useState({ state: 'loading', data: null })
+  const [util, setUtil] = useState({ state: 'loading', data: null })
+  useEffect(() => {
+    let cancelled = false
+    setPmDue({ state: 'loading', data: null })
+    setUtil({ state: 'loading', data: null })
+    Promise.resolve().then(() => assets.countPmDueSoon({ country: activeCountry }))
+      .then((d) => { if (!cancelled) setPmDue({ state: 'ready', data: d }) })
+      .catch(() => { if (!cancelled) setPmDue({ state: 'error', data: null }) })
+    Promise.resolve().then(() => assets.getUtilisationSummary({ country: activeCountry }))
+      .then((d) => { if (!cancelled) setUtil({ state: 'ready', data: d }) })
+      .catch(() => { if (!cancelled) setUtil({ state: 'error', data: null }) })
+    return () => { cancelled = true }
+  }, [activeCountry])
 
   // ── add / edit ────────────────────────────────────────────────────────────────
   async function openAdd() {
@@ -352,29 +585,89 @@ export default function FleetMaster() {
       await assets.deleteFleetRecord(deleteTarget.id)
       setShowDeleteConfirm(false)
       setDeleteTarget(null)
+      setSelected((prev) => { const n = { ...prev }; delete n[deleteTarget.id]; return n })
       loadRecords()
       loadSites()
     } catch (e) {
-      setDeleteError(e.message || t('fleetmaster.delete.errFailed'))
+      setDeleteError(toUserMessage(e, t('fleetmaster.delete.errFailed')))
     } finally {
       setSaving(false)
     }
   }
 
   async function confirmBulkDelete() {
-    if (selectedIds.size === 0) return
+    if (selectedIds.length === 0) return
     setBulkBusy(true)
     setBulkError('')
     try {
-      await assets.deleteFleetRecords([...selectedIds])
+      await assets.deleteFleetRecords(selectedIds)
       setBulkDeleteOpen(false)
-      setRowSelection({})
+      setSelected({})
       loadRecords()
       loadSites()
     } catch (e) {
-      setBulkError(e.message || t('fleetmaster.bulkDelete.errFailed'))
+      setBulkError(toUserMessage(e, t('fleetmaster.bulkDelete.errFailed')))
     } finally {
       setBulkBusy(false)
+    }
+  }
+
+  // ── bulk edits ────────────────────────────────────────────────────────────────
+  function openBulk(kind) {
+    setBulkError('')
+    if (kind === 'policy') setBulkPolicy({ expected_km_per_tyre: '', min_days_between_changes: '', max_tyres_per_day: '' })
+    setBulkDialog(kind)
+  }
+
+  async function applyBulk() {
+    const patch = {}
+    if (bulkDialog === 'status') {
+      patch.status = bulkStatus
+    } else {
+      for (const [k, v] of Object.entries(bulkPolicy)) {
+        if (String(v).trim() === '') continue
+        const n = Number(v)
+        if (!Number.isFinite(n) || n < 0) { setBulkError('Enter numbers of zero or more.'); return }
+        patch[k] = n
+      }
+      if (!Object.keys(patch).length) { setBulkError('Enter at least one policy value to apply.'); return }
+    }
+    setBulkBusy(true)
+    setBulkError('')
+    try {
+      const updated = await assets.bulkUpdateFleetRecords(selectedIds, patch)
+      const asked = selectedIds.length
+      setBulkDialog(null)
+      setNotice(updated === asked
+        ? `Updated ${fmtInt(updated)} ${updated === 1 ? 'vehicle' : 'vehicles'}.`
+        : `Updated ${fmtInt(updated)} of ${fmtInt(asked)} selected vehicles. The rest could not be changed with your access.`)
+      setSelected({})
+      loadRecords()
+    } catch (e) {
+      setBulkError(toUserMessage(e, 'Could not update the selected vehicles.'))
+    } finally {
+      setBulkBusy(false)
+    }
+  }
+
+  function exportRows(rows, suffix = '') {
+    exportToExcel(
+      rows,
+      EXPORT_COLS.map(c => c.key),
+      EXPORT_COLS.map(c => c.header),
+      `TyrePulse_FleetMaster${suffix}_${new Date().toISOString().slice(0, 10)}`,
+      'Fleet Master'
+    )
+  }
+
+  function copyAssetNumbers() {
+    const text = selectedRows.map(r => r.asset_no).filter(Boolean).join('\n')
+    try {
+      Promise.resolve(navigator.clipboard?.writeText(text))
+        .then(() => setNotice(`Copied ${fmtInt(selectedRows.length)} asset numbers.`))
+        .catch(() => setNotice('Could not copy to the clipboard in this browser.'))
+    } catch {
+      setNotice('Could not copy to the clipboard in this browser.')
     }
   }
 
@@ -385,6 +678,8 @@ export default function FleetMaster() {
         search,
         site: siteFilter,
         status: statusFilter,
+        type: typeFilter,
+        flag: flagFilter,
         country: activeCountry
       })
     } catch (e) {
@@ -407,251 +702,445 @@ export default function FleetMaster() {
 
   function F(field) { return e => setForm(f => ({ ...f, [field]: e.target.value })) }
 
-  const canDelete = profile?.role === 'Admin' || profile?.role === 'Manager'
+  // ── filter helpers ────────────────────────────────────────────────────────────
+  const applyFlag = (flag) => setFilters({ flag, status: '', page: '1' })
+  const applyStatus = (status) => setFilters({ status, flag: '', page: '1' })
+  const clearAll = () => setFilters({ search: '', site: '', status: '', type: '', flag: '', page: '1' })
+  const anyFilter = Boolean(search || siteFilter || statusFilter || typeFilter || flagFilter)
 
-  // ── EnterpriseTable column definitions (TanStack v8) ─────────────────────────
-  const tableColumns = useMemo(() => [
+  function saveView(close) {
+    const name = viewName.trim()
+    if (!name) return
+    const entry = { name, filters: { search, site: siteFilter, status: statusFilter, type: typeFilter, flag: flagFilter } }
+    const next = [...views.filter(v => v.name !== name), entry].slice(-20)
+    setViews(next)
+    writeStore(VIEWS_KEY, next)
+    setViewName('')
+    close()
+  }
+  function applyView(v, close) {
+    const f = v.filters || {}
+    setFilters({
+      search: f.search || '', site: f.site || '', status: f.status || '',
+      type: f.type || '', flag: FLAG_LABELS[f.flag] ? f.flag : '', page: '1',
+    })
+    close()
+  }
+  function deleteView(name) {
+    const next = views.filter(v => v.name !== name)
+    setViews(next)
+    writeStore(VIEWS_KEY, next)
+  }
+
+  // ── selection helpers ─────────────────────────────────────────────────────────
+  const pageAllSelected = records.length > 0 && records.every(r => selected[r.id])
+  const pageSomeSelected = records.some(r => selected[r.id])
+  const togglePage = () => setSelected((prev) => {
+    const n = { ...prev }
+    if (pageAllSelected) records.forEach(r => { delete n[r.id] })
+    else records.forEach(r => { n[r.id] = r })
+    return n
+  })
+  const toggleRow = (r) => setSelected((prev) => {
+    const n = { ...prev }
+    if (n[r.id]) delete n[r.id]; else n[r.id] = r
+    return n
+  })
+  const headCheckRef = useRef(null)
+  useEffect(() => {
+    if (headCheckRef.current) headCheckRef.current.indeterminate = pageSomeSelected && !pageAllSelected
+  }, [pageSomeSelected, pageAllSelected])
+
+  const openVehicle = (r) => navigate(`/vehicle/${encodeURIComponent(r.asset_no)}`)
+  const none = selectedIds.length === 0
+
+  // ── derived ───────────────────────────────────────────────────────────────────
+  const pct = (n) => (summary && summary.total ? (n / summary.total) * 100 : null)
+  const donut = useMemo(() => {
+    if (!summary || summary.maintenance == null || summary.inactive == null) return null
+    return [
+      { key: 'active', label: 'Active', count: Math.max(0, summary.active - summary.maintenance), color: 'var(--cc-green)' },
+      { key: 'maintenance', label: 'Maintenance', count: summary.maintenance, color: 'var(--cc-amber)' },
+      { key: 'inactive', label: 'Inactive', count: summary.inactive, color: 'var(--cc-ink-3)' },
+    ]
+  }, [summary])
+  const NA = <span className="cc-na">N/A</span>
+  const fleetColumns = [
     {
-      accessorKey: 'asset_no',
-      header: t('fleetmaster.columns.assetNo'),
-      cell: ({ getValue }) => (
-        <span className="font-medium text-[var(--text-primary)] font-mono text-xs">{getValue() ?? '-'}</span>
+      key: 'select',
+      header: <input ref={headCheckRef} type="checkbox" aria-label={t('fleetmaster.table.selectAllOnPage')} checked={pageAllSelected} onChange={togglePage} disabled={!records.length} />,
+      cell: (r) => (
+        <span onClick={e => e.stopPropagation()}>
+          <input type="checkbox" aria-label={`Select ${r.asset_no}`} checked={Boolean(selected[r.id])} onChange={() => toggleRow(r)} />
+        </span>
       ),
     },
-    {
-      accessorKey: 'fleet_number',
-      header: t('fleetmaster.columns.fleetNo'),
-      cell: ({ getValue }) => getValue() ?? '-',
-    },
-    {
-      id: 'make_model',
-      accessorFn: r => [r.make, r.model].filter(Boolean).join(' '),
-      header: t('fleetmaster.columns.makeModel'),
-      cell: ({ row }) => {
-        const r = row.original
-        return r.make || r.model
-          ? <span>{[r.make, r.model].filter(Boolean).join(' ')}</span>
-          : <span className="text-yellow-500 text-xs">{t('fleetmaster.table.missing')}</span>
-      },
-    },
-    {
-      accessorKey: 'vehicle_type',
-      header: t('fleetmaster.columns.type'),
-      cell: ({ getValue }) => {
-        const type = getValue()
-        return (
-          <span className="flex items-center gap-2">
-            <Illustration
-              name={vehicleArt(type)}
-              size={32}
-              title={type || 'Vehicle'}
-              className="shrink-0 opacity-80"
-            />
-            <span>{type ?? '-'}</span>
+    { key: 'asset_no', header: 'Asset No', cell: (r) => <span className="cc-strong">{r.asset_no ?? NA}</span> },
+    show('fleet') && { key: 'fleet_number', header: 'Fleet No', cell: (r) => r.fleet_number || NA },
+    show('vehicle') && {
+      key: 'vehicle', header: 'Vehicle',
+      cell: (r) => (
+        <span className="cc-vehicle">
+          <VehicleThumb row={r} size="sm" />
+          <span>
+            {r.make || r.model
+              ? <><span className="cc-strong fm-trunc-name">{[r.make, r.model].filter(Boolean).join(' ')}</span>
+                  <span className="cc-sub fm-trunc-name">{r.make || 'Make not set'} / {r.model || 'Model not set'}</span></>
+              : <span className="cc-na">Make and model not recorded</span>}
           </span>
-        )
-      },
-    },
-    {
-      accessorKey: 'year',
-      header: t('fleetmaster.columns.year'),
-      cell: ({ getValue }) => getValue() ?? '-',
-    },
-    {
-      accessorKey: 'site',
-      header: t('fleetmaster.columns.site'),
-      cell: ({ getValue }) => getValue() ?? '-',
-    },
-    {
-      accessorKey: 'operator_name',
-      header: t('fleetmaster.columns.operator'),
-      cell: ({ getValue }) => (
-        <span className="block max-w-[120px] truncate">{getValue() ?? '-'}</span>
+        </span>
       ),
     },
-    {
-      accessorKey: 'status',
-      header: t('fleetmaster.columns.status'),
-      cell: ({ getValue }) => {
-        const status = getValue()
+    show('type') && {
+      key: 'vehicle_type', header: 'Type',
+      cell: (r) => {
+        const TypeIcon = KIND_ICON[vehicleKind(r)] || Truck
+        return r.vehicle_type
+          ? <span className="fm-type" title={r.vehicle_type}><TypeIcon size={15} aria-hidden="true" /><span>{r.vehicle_type}</span></span>
+          : NA
+      },
+    },
+    show('year') && { key: 'year', header: 'Year', cell: (r) => (r.year ?? r.model_year) || NA },
+    show('site') && {
+      key: 'site', header: 'Site',
+      cell: (r) => (r.site ? <span className="cc-site" title={r.site}><MapPin size={14} aria-hidden="true" /><span>{r.site}</span></span> : NA),
+    },
+    show('operator') && { key: 'operator_name', header: 'Operator', cell: (r) => <span className="fm-trunc">{r.operator_name || NA}</span> },
+    show('status') && {
+      key: 'status', header: 'Status',
+      cell: (r) => { const st = statusPill(r); return <span className={`cc-pill ${st.tone}`} title={r.ops_status_note || undefined}><st.Icon size={12} aria-hidden="true" />{st.label}</span> },
+    },
+    show('policy') && {
+      key: 'policy', header: 'Policy',
+      cell: (r) => { const pol = policyPill(r); return <span className={`cc-pill ${pol.tone}`}>{pol.Icon && <pol.Icon size={12} aria-hidden="true" />}{pol.label}</span> },
+    },
+    show('service') && {
+      key: 'service', header: 'Last Service',
+      cell: (r) => {
+        const svc = fmtDate(lastService.map[`${r.country || ''}|${r.asset_no}`])
+        const km = r.current_km != null && Number.isFinite(Number(r.current_km)) ? `${fmtInt(Math.round(Number(r.current_km)))} km` : null
         return (
-          <span className={`badge ${STATUS_BADGE[status] ?? 'bg-gray-800 text-gray-400'}`}>{status ?? '-'}</span>
+          <>
+            {lastService.state === 'loading'
+              ? <span className="cc-na">...</span>
+              : svc
+                ? <span>{svc}</span>
+                : <span className="cc-na" title={lastService.state === 'error' ? 'Service history could not be read' : 'No completed job card on record'}>N/A</span>}
+            {km && <span className="cc-sub">{km}</span>}
+          </>
         )
       },
     },
     {
-      id: 'policy',
-      header: t('fleetmaster.columns.policy'),
-      enableSorting: false,
-      accessorFn: r => [
-        r.min_days_between_changes ? `${r.min_days_between_changes}d` : '',
-        r.expected_km_per_tyre ? `${r.expected_km_per_tyre.toLocaleString()} km` : '',
-      ].filter(Boolean).join(' / '),
-      cell: ({ row }) => {
-        const r = row.original
-        return (
-          <span className="text-xs text-gray-500">
-            {r.min_days_between_changes ? `${r.min_days_between_changes}d` : '-'}
-            {r.expected_km_per_tyre ? ` / ${r.expected_km_per_tyre.toLocaleString()} km` : ''}
-            {!r.min_days_between_changes && !r.expected_km_per_tyre && (
-              <span className="text-orange-500 text-xs">{t('fleetmaster.table.noPolicy')}</span>
+      key: 'actions', header: 'Actions',
+      cell: (r) => (
+        <span className="fm-act-col" onClick={e => e.stopPropagation()}>
+          <Menu label={`Actions for ${r.asset_no}`} triggerClass="cc-icon-btn" width={200} trigger={<MoreHorizontal size={16} aria-hidden="true" />}>
+            {(close) => (
+              <>
+                <MenuItem icon={Eye} onClick={() => { close(); openVehicle(r) }}>View</MenuItem>
+                <MenuItem icon={ClipboardCheck} onClick={() => { close(); navigate(`/inspections?asset=${encodeURIComponent(r.asset_no)}`) }}>{t('fleetmaster.table.startChecklist')}</MenuItem>
+                <MenuItem icon={Edit2} onClick={() => { close(); openEdit(r) }}>{t('fleetmaster.table.edit')}</MenuItem>
+                {canDelete && <MenuItem icon={Trash2} danger onClick={() => { close(); confirmDelete(r) }}>{t('fleetmaster.table.delete')}</MenuItem>}
+              </>
             )}
-          </span>
-        )
-      },
+          </Menu>
+        </span>
+      ),
     },
-    {
-      id: 'actions',
-      header: '',
-      enableSorting: false,
-      enableHiding: false,
-      meta: { export: false },
-      cell: ({ row }) => {
-        const r = row.original
-        return (
-          <div className="flex items-center gap-2">
-            <button onClick={() => navigate(`/vehicle/${encodeURIComponent(r.asset_no)}`)} className="text-gray-400 hover:text-[var(--accent)] transition-colors" title="Open Vehicle 360">
-              <Truck size={15} />
-            </button>
-            <button onClick={() => navigate(`/inspections?asset=${encodeURIComponent(r.asset_no)}`)} className="text-gray-400 hover:text-green-400 transition-colors" title={t('fleetmaster.table.startChecklist')}>
-              <ClipboardCheck size={15} />
-            </button>
-            <button onClick={() => openEdit(r)} className="text-gray-400 hover:text-yellow-400 transition-colors" title={t('fleetmaster.table.edit')}>
-              <Edit2 size={15} />
-            </button>
-            {canDelete && (
-              <button onClick={() => confirmDelete(r)} className="text-gray-400 hover:text-red-400 transition-colors" title={t('fleetmaster.table.delete')}>
-                <Trash2 size={15} />
-              </button>
-            )}
-          </div>
-        )
-      },
-    },
-  ], [t, canDelete, navigate]) // openEdit/confirmDelete are stable page-level functions
+  ].filter(Boolean)
+
+  const heroStat = !summaryPending && summary
+    ? {
+        value: fmtInt(summary.total),
+        lines: [
+          'Vehicles across',
+          summary.sites != null ? `${fmtInt(summary.sites)} ${summary.sites === 1 ? 'site' : 'sites'}` : 'N/A sites',
+          summary.countries != null ? `${fmtInt(summary.countries)} ${summary.countries === 1 ? 'country' : 'countries'}` : 'N/A countries',
+        ],
+      }
+    : undefined
+
+  const kpiVal = (v) => (summaryPending || v == null ? 'N/A' : fmtInt(v))
 
   return (
-    <div className="space-y-4">
-      <PageHeader
-        title={t('fleetmaster.title')}
-        subtitle={t('fleetmaster.subtitle', { count: total.toLocaleString() })}
-        icon={Truck}
+    <div className="cc fm-page">
+      <PageHero
+        title="Fleet Master"
+        lead="Manage your full vehicle registry, ownership, operating status and policy readiness."
+        imgLight="/dashboard/hero-light.webp"
+        imgDark="/dashboard/hero-dark.webp"
+        stat={heroStat}
       />
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div />
-        <div className="flex gap-2 flex-wrap">
-          <button onClick={openAdd} className="btn-secondary flex items-center gap-2 text-sm">
-            <Plus size={15} /> {t('fleetmaster.actions.addVehicle')}
-          </button>
-          <button onClick={handleExport} className="btn-secondary flex items-center gap-2 text-sm">
-            <FileSpreadsheet size={15} className="text-green-400" /> {t('fleetmaster.actions.exportExcel')}
-          </button>
-        </div>
-      </div>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { label: t('fleetmaster.summary.totalVehicles'), value: summary?.total,        color: 'text-blue-400' },
-          { label: t('fleetmaster.summary.active'),        value: summary?.active,       color: 'text-green-400' },
-          { label: t('fleetmaster.summary.missingSpecs'),  value: summary?.missingSpecs, color: 'text-yellow-400' },
-          { label: t('fleetmaster.summary.noPolicySet'),   value: summary?.noPolicy,     color: 'text-orange-400' },
-        ].map(({ label, value, color }) => (
-          <div key={label} className="card text-center">
-            <p className={`text-2xl font-bold ${color}`}>{summaryPending ? 'N/A' : value.toLocaleString()}</p>
-            <p className="text-gray-400 text-sm mt-1">{label}</p>
-          </div>
-        ))}
+      {/* KPI tiles */}
+      <div className="cc-kpis">
+        <Kpi icon={Truck} tone="t-green" display={kpiVal(summary?.total)} label={t('fleetmaster.summary.totalVehicles')}
+          trend={summaryPending || summary?.growth?.total == null ? null : Math.round(summary.growth.total)} onClick={clearAll}
+          title="Every vehicle in the register for the current country, search, site and type. Click to clear filters." />
+        <Kpi icon={CheckCircle2} tone="t-green" display={kpiVal(summary?.active)} label="Active Vehicles"
+          trend={summaryPending || summary?.growth?.active == null ? null : Math.round(summary.growth.active)} onClick={() => applyStatus('Active')}
+          title="Vehicles whose register status is Active. Click to show them." />
+        <Kpi icon={Wrench} tone="t-amber" display={kpiVal(summary?.maintenance)} label="Under Maintenance"
+          onClick={() => applyFlag('maintenance')}
+          title="Active vehicles whose operating state is Breakdown today (from the monthly asset sheet). Click to show them." />
+        <Kpi icon={AlertCircle} tone="t-red" danger display={kpiVal(summary?.missingSpecs)} label={t('fleetmaster.summary.missingSpecs')}
+          onClick={() => applyFlag('missing_specs')}
+          title="Vehicles with no make or no model recorded. Click to show them." />
+        <Kpi icon={FileText} tone="t-blue" display={kpiVal(summary?.noPolicy)} label={t('fleetmaster.summary.noPolicySet')}
+          onClick={() => applyFlag('no_policy')}
+          title="Vehicles with no expected km per tyre and no minimum days between tyre changes. Click to show them." />
+        <Kpi icon={CircleSlash} tone="t-purple" display={kpiVal(summary?.inactive)} label="Inactive"
+          onClick={() => applyFlag('inactive')}
+          title="Vehicles whose register status is not Active (Inactive, Retired or Transferred). Click to show them." />
       </div>
-      {!summaryPending && (debouncedSearch || siteFilter || statusFilter) && (
-        <p className="text-xs text-gray-400">
-          These figures cover the {summary.total.toLocaleString()} vehicle{summary.total === 1 ? '' : 's'} matching your search and site filters. The status filter is held out, so Active stays comparable against the total.
+      {!summaryPending && (debouncedSearch || siteFilter || typeFilter) && (
+        <p className="fm-note">
+          These figures cover the {summary.total.toLocaleString()} vehicle{summary.total === 1 ? '' : 's'} matching your search, site and type filters. The status and quick filters are held out, so each tile stays comparable against the total.
         </p>
       )}
       {summaryCapped && (
-        <p className="text-xs text-amber-400">
+        <p className="fm-note warn">
           Capped view: summary counts are based on the first 20,000 vehicles. Narrow the filters for exact totals.
         </p>
       )}
 
-      {/* ── Records ──────────────────────────────────────────────────────── */}
-      <>
-          {/* Filters */}
-          <div className="card">
-            <div className="flex flex-wrap gap-3">
-              <div className="relative flex-1 min-w-48">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input
-                  className="input pl-9"
-                  placeholder={t('fleetmaster.filters.searchPlaceholder')}
-                  value={search}
-                  onChange={e => setFilters({ search: e.target.value, page: '1' })}
-                />
-              </div>
-              <select className="input w-auto min-w-36" value={siteFilter} onChange={e => setFilters({ site: e.target.value, page: '1' })}>
-                <option value="">{t('fleetmaster.filters.allSites')}</option>
-                {sites.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-              <select className="input w-auto min-w-36" value={statusFilter} onChange={e => setFilters({ status: e.target.value, page: '1' })}>
-                <option value="">{t('fleetmaster.filters.allStatuses')}</option>
-                {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-          </div>
-
-          {/* Bulk selection bar (Admin only) */}
-          {isAdmin && selectedIds.size > 0 && (
-            <div className="flex items-center justify-between gap-3 bg-blue-950/30 border border-blue-800/50 rounded-xl px-4 py-2.5">
-              <span className="text-sm text-blue-200">{t('fleetmaster.bulkBar.selected', { count: selectedIds.size })}</span>
-              <div className="flex items-center gap-2">
-                <button onClick={() => setRowSelection({})} className="text-xs text-gray-400 hover:text-white px-2 py-1">{t('fleetmaster.bulkBar.clear')}</button>
-                <button onClick={() => { setBulkError(''); setBulkDeleteOpen(true) }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition-colors">
-                  <Trash2 size={14} /> {t('fleetmaster.bulkBar.delete', { count: selectedIds.size })}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Load error */}
-          {loadError && (
-            <div className="flex items-center justify-between gap-3 bg-red-900/30 border border-red-700 text-red-300 rounded-xl px-4 py-2.5 text-sm">
-              <span className="flex items-center gap-2"><AlertTriangle size={15} /> {loadError}</span>
-              <button onClick={() => loadRecords()} className="px-3 py-1 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-medium transition-colors">
-                {t('common.retry') === 'common.retry' ? 'Retry' : t('common.retry')}
-              </button>
-            </div>
-          )}
-
-          {/* Table. The wrapper is the anchor the scroll-restore hook measures
-              from, so returning from a vehicle lands back on the same row. */}
-          <div ref={listRef}>
-          <EnterpriseTable
-            viewKey="fleet-master"
-            reportMeta={reportMeta}
-            columns={tableColumns}
-            data={loading ? [] : records}
-            getRowId={r => String(r.id)}
-            loading={loading}
-            emptyMessage={t('fleetmaster.table.noVehicles')}
-            enableGlobalFilter={false}
-            enableColumnFilters={false}
-            enableRowSelection={isAdmin}
-            rowSelection={rowSelection}
-            onRowSelectionChange={setRowSelection}
-            manualPagination
-            pageIndex={page}
-            pageCount={totalPages}
-            totalRows={total}
-            pageSize={pageSize}
-            onPageChange={setPage}
-            onPageSizeChange={size => setFilters({ size: String(size), page: '1' })}
-            paginationLabel={({ from, to, total: totalCount }) =>
-              t('fleetmaster.pagination.showing', { from, to, total: totalCount.toLocaleString() })}
-            exportFileName={`TyrePulse_FleetMaster_${new Date().toISOString().slice(0, 10)}`}
+      {/* Filter bar */}
+      <section className="cc-card fm-filterbar" aria-label="Filters">
+        <div className="cc-search">
+          <Search size={16} aria-hidden="true" />
+          <input
+            aria-label="Search vehicles"
+            placeholder={t('fleetmaster.filters.searchPlaceholder')}
+            value={search}
+            onChange={e => setFilters({ search: e.target.value, page: '1' })}
           />
+        </div>
+        <SelectField icon={MapPin} label="Site" value={siteFilter} onChange={e => setFilters({ site: e.target.value, page: '1' })}>
+          <option value="">{t('fleetmaster.filters.allSites')}</option>
+          {sites.map(s => <option key={s} value={s}>{s}</option>)}
+        </SelectField>
+        <SelectField icon={Activity} label="Status" value={statusFilter} onChange={e => setFilters({ status: e.target.value, page: '1' })}>
+          <option value="">{t('fleetmaster.filters.allStatuses')}</option>
+          {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+        </SelectField>
+        <SelectField icon={Layers} label="Vehicle type" value={typeFilter} onChange={e => setFilters({ type: e.target.value, page: '1' })}>
+          <option value="">All Types</option>
+          {typeFilter && !types.includes(typeFilter) && <option value={typeFilter}>{typeFilter}</option>}
+          {types.map(s => <option key={s} value={s}>{s}</option>)}
+        </SelectField>
+        <Menu label="Saved views" role="dialog" width={280} trigger={<><Bookmark size={15} aria-hidden="true" /> Saved Views <ChevronDown size={14} aria-hidden="true" /></>}>
+          {(close) => (
+            <div className="fm-views">
+              {views.length === 0 && <p className="fm-pop-empty">No saved views yet. Set the filters you want, name them and save.</p>}
+              {views.map(v => (
+                <div key={v.name} className="fm-view-row">
+                  <button type="button" className="fm-pop-item" onClick={() => applyView(v, close)}><Bookmark size={14} aria-hidden="true" /><span>{v.name}</span></button>
+                  <button type="button" className="cc-icon-btn" aria-label={`Delete saved view ${v.name}`} onClick={() => deleteView(v.name)}><Trash2 size={13} /></button>
+                </div>
+              ))}
+              <form className="fm-view-save" onSubmit={(e) => { e.preventDefault(); saveView(close) }}>
+                <label className="fm-sr" htmlFor="fm-view-name">View name</label>
+                <input id="fm-view-name" className="fm-input" placeholder="Name this view" value={viewName} maxLength={40} onChange={e => setViewName(e.target.value)} />
+                <button type="submit" className="cc-btn-primary" disabled={!viewName.trim()}>Save</button>
+              </form>
+            </div>
+          )}
+        </Menu>
+        {(flagFilter || anyFilter) && (
+          <div className="fm-chips">
+            {flagFilter && (
+              <button type="button" className="fm-chip" onClick={() => setFilters({ flag: '', page: '1' })} aria-label={`Remove filter ${FLAG_LABELS[flagFilter]}`}>
+                {FLAG_LABELS[flagFilter]} <X size={12} aria-hidden="true" />
+              </button>
+            )}
+            {anyFilter && <button type="button" className="cc-link cc-link-btn" onClick={clearAll}>Clear all filters</button>}
           </div>
-      </>
+        )}
+      </section>
+
+      {notice && (
+        <div className="fm-banner" role="status">
+          <span>{notice}</span>
+          <button type="button" className="cc-icon-btn" aria-label="Dismiss" onClick={() => setNotice('')}><X size={14} /></button>
+        </div>
+      )}
+      {loadError && (
+        <div className="fm-banner bad" role="alert">
+          <span><AlertTriangle size={15} aria-hidden="true" /> {loadError}</span>
+          <button type="button" className="cc-btn" onClick={() => loadRecords()}>Try again</button>
+        </div>
+      )}
+
+      <div className="fm-main">
+        {/* Registry */}
+        <section className="cc-card fm-registry" aria-label="Vehicle registry">
+          <div className="cc-card-head fm-reg-head">
+            <div>
+              <h2 className="cc-card-title">Vehicle Registry ({fmtInt(total)})</h2>
+              <p className="cc-card-sub">Complete fleet registry with operating status, service history and policy readiness.</p>
+            </div>
+            <div className="fm-reg-actions">
+              <Menu label="Show or hide columns" trigger={<><Columns size={15} aria-hidden="true" /> Columns</>}>
+                {TABLE_COLUMNS.map(c => (
+                  <button key={c.key} type="button" role="menuitemcheckbox" aria-checked={show(c.key)} className="fm-pop-item" onClick={() => toggleCol(c.key)}>
+                    <span className={`fm-check ${show(c.key) ? 'on' : ''}`} aria-hidden="true" /><span>{c.label}</span>
+                  </button>
+                ))}
+              </Menu>
+              <button type="button" className="cc-btn-ghost" onClick={handleExport}><Download size={15} aria-hidden="true" /> Export</button>
+              <button type="button" className="cc-btn-primary" onClick={openAdd}><Plus size={15} aria-hidden="true" /> {t('fleetmaster.actions.addVehicle')}</button>
+            </div>
+          </div>
+
+          {/* Bulk bar */}
+          <div className="cc-bulk" role="toolbar" aria-label="Bulk actions">
+            <span className="cc-bulk-count">{fmtInt(selectedIds.length)} selected</span>
+            <Menu label="Bulk actions" disabled={none} trigger={<><ListChecks size={15} aria-hidden="true" /> Bulk Actions <ChevronDown size={14} aria-hidden="true" /></>}>
+              {(close) => (
+                <>
+                  <MenuItem icon={Download} onClick={() => { exportRows(selectedRows, '_Selected'); close() }}>Export selected</MenuItem>
+                  {isAdmin && <MenuItem icon={Trash2} danger onClick={() => { setBulkError(''); setBulkDeleteOpen(true); close() }}>Delete selected</MenuItem>}
+                  <MenuItem icon={X} onClick={() => { setSelected({}); close() }}>Clear selection</MenuItem>
+                </>
+              )}
+            </Menu>
+            <button type="button" className="cc-btn-ghost" disabled={none || !canEdit} onClick={() => openBulk('policy')}
+              title={canEdit ? 'Set the tyre-change policy on every selected vehicle' : 'Your role cannot change vehicle policy'}>
+              <ShieldCheck size={15} aria-hidden="true" /> Assign Policy
+            </button>
+            <button type="button" className="cc-btn-ghost" disabled={none || !isAdmin}
+              onClick={() => navigate('/pm-programs', { state: { assetNos: selectedRows.map(r => r.asset_no) } })}
+              title={isAdmin ? 'Open Preventive Maintenance to schedule a service plan' : 'Preventive Maintenance plans are managed by administrators'}>
+              <CalendarClock size={15} aria-hidden="true" /> Schedule Service
+            </button>
+            <button type="button" className="cc-btn-ghost" disabled={none || !canEdit} onClick={() => openBulk('status')}
+              title={canEdit ? 'Change the register status of every selected vehicle' : 'Your role cannot change vehicle status'}>
+              <Activity size={15} aria-hidden="true" /> Change Status
+            </button>
+            <Menu label="More actions" disabled={none} triggerClass="cc-icon-btn" trigger={<MoreHorizontal size={16} aria-hidden="true" />}>
+              {(close) => (
+                <>
+                  <MenuItem icon={Copy} onClick={() => { copyAssetNumbers(); close() }}>Copy asset numbers</MenuItem>
+                  <MenuItem icon={Eye} disabled={selectedRows.length !== 1} title={selectedRows.length === 1 ? undefined : 'Select exactly one vehicle'}
+                    onClick={() => { openVehicle(selectedRows[0]); close() }}>Open vehicle</MenuItem>
+                  <MenuItem icon={ClipboardCheck} disabled={selectedRows.length !== 1} title={selectedRows.length === 1 ? undefined : 'Select exactly one vehicle'}
+                    onClick={() => { navigate(`/inspections?asset=${encodeURIComponent(selectedRows[0].asset_no)}`); close() }}>Start tyre checklist</MenuItem>
+                </>
+              )}
+            </Menu>
+          </div>
+
+          <div ref={listRef}>
+            <KitTable
+              className="fm-table"
+              manualPagination
+              showPagination={false}
+              enableSorting={false}
+              pageIndex={page}
+              pageSize={pageSize}
+              pageCount={Math.max(1, Math.ceil(total / pageSize))}
+              totalRows={total}
+              onPageChange={setPage}
+              loading={loading}
+              skeletonRows={Math.min(pageSize, 8)}
+              getRowId={(r) => String(r.id)}
+              onRowClick={openVehicle}
+              rows={records}
+              empty={(
+                <span>
+                  {loadError ? 'The register could not be loaded.' : t('fleetmaster.table.noVehicles')}
+                  {anyFilter && !loadError && <><br /><button type="button" className="cc-btn" onClick={(e) => { e.stopPropagation(); clearAll() }}>Clear filters</button></>}
+                </span>
+              )}
+              columns={fleetColumns}
+            />
+          </div>
+
+          <Pager
+            page={page}
+            pageSize={pageSize}
+            total={total}
+            onPage={setPage}
+            onPageSize={size => setFilters({ size: String(size), page: '1' })}
+            sizes={PAGE_SIZE_OPTIONS}
+            noun="vehicles"
+          />
+        </section>
+
+        {/* Right rail */}
+        <aside className="fm-rail" aria-label="Fleet summary">
+          <Card title="Fleet Overview" action={<ViewAll to="/fleet-utilization" />}>
+            {summaryPending
+              ? <div className="cc-skel" style={{ height: 150 }} />
+              : donut
+                ? (
+                  <>
+                    <Donut
+                      segments={donut}
+                      total={summary.total}
+                      centerLabel="Vehicles"
+                      onSelect={(s) => {
+                        if (s.key === 'active') applyStatus('Active')
+                        else applyFlag(s.key)
+                      }}
+                    />
+                    <button type="button" className="fm-extra" onClick={() => applyFlag('missing_specs')}>
+                      <i aria-hidden="true" />
+                      <span>Missing specs</span>
+                      <b>{fmtInt(summary.missingSpecs)}</b>
+                      <span className="cc-lt-pct">{fmtPct(pct(summary.missingSpecs))}</span>
+                    </button>
+                    <p className="fm-foot">Active, Maintenance and Inactive add up to the fleet. Missing specs overlaps them.</p>
+                  </>
+                )
+                : <div className="cc-empty">The fleet overview could not be loaded.</div>}
+          </Card>
+
+          <Card title="Smart Insights">
+            <div className="fm-insights">
+              <Insight icon={AlertTriangle} tone="t-red" onClick={() => applyFlag('missing_specs')}
+                num={summaryPending ? null : fmtInt(summary.missingSpecs)}
+                text={`${summary?.missingSpecs === 1 ? 'vehicle' : 'vehicles'} missing specs`}
+                fallback="Vehicles missing specs: N/A"
+                sub="Add make and model so reports can group them" />
+              <Insight icon={Wrench} tone="t-amber" onClick={() => applyFlag('maintenance')}
+                num={summaryPending || summary.maintenance == null ? null : fmtInt(summary.maintenance)}
+                text="under maintenance"
+                fallback="Under maintenance: N/A"
+                sub="Active vehicles broken down today" />
+              <Insight icon={FileText} tone="t-blue" onClick={() => applyFlag('no_policy')}
+                num={summaryPending ? null : fmtInt(summary.noPolicy)}
+                text={`${summary?.noPolicy === 1 ? 'vehicle' : 'vehicles'} without policy`}
+                fallback="Vehicles without policy: N/A"
+                sub={!summaryPending && summary.noPolicy === 0 ? 'Every vehicle has a tyre-change policy' : 'No expected km per tyre or minimum days set'} />
+              <Insight icon={CalendarClock} tone="t-green" to={isAdmin ? '/pm-programs' : '/maintenance-calendar'}
+                num={pmDue.state === 'ready' && pmDue.data?.dueSoon != null ? fmtInt(pmDue.data.dueSoon) : null}
+                text={`${pmDue.data?.dueSoon === 1 ? 'service' : 'services'} due in 7 days`}
+                fallback="Services due in 7 days: N/A"
+                sub={pmDue.state === 'ready' && pmDue.data?.overdue != null
+                  ? `${fmtInt(pmDue.data.overdue)} already overdue`
+                  : pmDue.state === 'loading' ? 'Checking service plans...' : 'Service plans could not be read'} />
+              <Insight icon={Gauge} tone="t-purple" to="/fleet-utilization"
+                num={util.state === 'ready' && util.data?.avg != null ? fmtPct(util.data.avg) : null}
+                text="average utilisation"
+                fallback="Fleet utilisation: N/A"
+                sub={util.state === 'ready' && util.data?.avg != null
+                  ? `Across ${fmtInt(util.data.assets)} vehicles with telematics`
+                  : util.state === 'loading' ? 'Checking telematics...' : 'No telematics utilisation on record'} />
+            </div>
+          </Card>
+
+          <Card title="Quick Actions">
+            <div className="cc-quick">
+              <button type="button" onClick={openAdd}><Plus size={20} aria-hidden="true" />Add Vehicle</button>
+              <Link to="/data-intake"><Upload size={20} aria-hidden="true" />Import Fleet</Link>
+              <button type="button" onClick={handleExport}><FileText size={20} aria-hidden="true" />Export List</button>
+              <Link to="/reports"><BarChart3 size={20} aria-hidden="true" />View Reports</Link>
+            </div>
+          </Card>
+        </aside>
+      </div>
 
       {/* ── Add / Edit Modal ──────────────────────────────────────────────── */}
       {editRecord !== null && (
@@ -703,7 +1192,7 @@ export default function FleetMaster() {
             </div>
 
             {/* Section 2: Assignment */}
-            <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '1rem' }}>
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
               <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-3">{t('fleetmaster.form.sectionAssignment')}</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -735,7 +1224,7 @@ export default function FleetMaster() {
             </div>
 
             {/* Section 3: Tyre Policy */}
-            <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '1rem' }}>
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
               <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-3">{t('fleetmaster.form.sectionPolicy')}</p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
@@ -790,6 +1279,46 @@ export default function FleetMaster() {
         </Modal>
       )}
 
+      {/* ── Bulk status / policy ─────────────────────────────────────────── */}
+      {bulkDialog && (
+        <Modal title={bulkDialog === 'status' ? 'Change status' : 'Assign policy'} onClose={() => { setBulkDialog(null); setBulkError('') }} busy={bulkBusy}>
+          <form onSubmit={(e) => { e.preventDefault(); applyBulk() }} className="space-y-4">
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+              Applies to {fmtInt(selectedIds.length)} selected {selectedIds.length === 1 ? 'vehicle' : 'vehicles'}. Only vehicles your access allows will change.
+            </p>
+            {bulkDialog === 'status' ? (
+              <div>
+                <label className="label" htmlFor="fm-bulk-status">New status</label>
+                <select id="fm-bulk-status" className="input" value={bulkStatus} onChange={e => setBulkStatus(e.target.value)}>
+                  {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {[
+                  ['expected_km_per_tyre', t('fleetmaster.form.expectedKmPerTyre')],
+                  ['min_days_between_changes', t('fleetmaster.form.minDaysBetweenChanges')],
+                  ['max_tyres_per_day', t('fleetmaster.form.maxTyresPerDay')],
+                ].map(([k, label]) => (
+                  <div key={k}>
+                    <label className="label" htmlFor={`fm-bulk-${k}`}>{label}</label>
+                    <input id={`fm-bulk-${k}`} type="number" min={0} className="input" value={bulkPolicy[k]}
+                      onChange={e => setBulkPolicy(p => ({ ...p, [k]: e.target.value }))} placeholder="Leave blank to keep" />
+                  </div>
+                ))}
+              </div>
+            )}
+            {bulkError && <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5">{bulkError}</p>}
+            <div className="flex gap-3">
+              <button type="submit" disabled={bulkBusy} className="btn-primary flex items-center gap-2 disabled:opacity-50">
+                <Save size={15} /> {bulkBusy ? 'Saving...' : 'Apply'}
+              </button>
+              <button type="button" onClick={() => { setBulkDialog(null); setBulkError('') }} disabled={bulkBusy} className="btn-secondary">Cancel</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
       {/* ── Delete Confirmation ───────────────────────────────────────────── */}
       {showDeleteConfirm && deleteTarget && (
         <Modal title={t('fleetmaster.delete.title')} onClose={() => { setShowDeleteConfirm(false); setDeleteTarget(null); setDeleteError('') }} busy={saving}>
@@ -818,7 +1347,7 @@ export default function FleetMaster() {
           <div className="flex gap-3 mb-4">
             <AlertTriangle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-[var(--text-primary)] font-medium">{t('fleetmaster.bulkDelete.question', { count: selectedIds.size })}</p>
+              <p className="text-[var(--text-primary)] font-medium">{t('fleetmaster.bulkDelete.question', { count: selectedIds.length })}</p>
               <p className="text-gray-400 text-sm mt-1">{t('fleetmaster.bulkDelete.warning')}</p>
             </div>
           </div>
@@ -827,7 +1356,7 @@ export default function FleetMaster() {
           )}
           <div className="flex gap-3">
             <button onClick={confirmBulkDelete} disabled={bulkBusy} className="btn-danger flex items-center gap-2 disabled:opacity-50">
-              <Trash2 size={15} /> {bulkBusy ? t('fleetmaster.bulkDelete.deleting') : t('fleetmaster.bulkDelete.confirm', { count: selectedIds.size })}
+              <Trash2 size={15} /> {bulkBusy ? t('fleetmaster.bulkDelete.deleting') : t('fleetmaster.bulkDelete.confirm', { count: selectedIds.length })}
             </button>
             <button onClick={() => { setBulkDeleteOpen(false); setBulkError('') }} disabled={bulkBusy} className="btn-secondary">{t('fleetmaster.bulkDelete.cancel')}</button>
           </div>

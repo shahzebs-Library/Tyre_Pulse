@@ -39,8 +39,13 @@ import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
+import 'package:tyre_pulse/features/assets/data/fleet_signals_repository.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
+import 'package:tyre_pulse/features/assets/domain/asset_360_facts.dart';
+import 'package:tyre_pulse/features/assets/domain/asset_financials.dart'
+    show formatAssetMoney;
 import 'package:tyre_pulse/features/assets/domain/fleet_class_groups.dart';
+import 'package:tyre_pulse/features/assets/domain/fleet_signals.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_detail_screen.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
@@ -75,6 +80,12 @@ abstract final class VehiclesListScreenKeys {
   static const Key classFilters = Key('vehicles.class_filters');
   static const Key groupTabs = Key('vehicles.group_tabs');
   static const Key scope = Key('vehicles.scope');
+  static const Key sync = Key('vehicles.sync');
+  static const Key dueSoon = Key('vehicles.due_soon');
+  static const Key filterSheet = Key('vehicles.filter_sheet');
+  static const Key sort = Key('vehicles.sort');
+  static Key serviceDue(String id) => Key('vehicles.asset.$id.service_due');
+  static Key tyreActions(String id) => Key('vehicles.asset.$id.tyre_actions');
   static Key groupTab(FleetClassGroup? group) =>
       Key('vehicles.group_tab.${group?.name ?? 'all'}');
   static Key asset(String id) => Key('vehicles.asset.$id');
@@ -93,6 +104,19 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
   /// The browse group tab. Null is All. Like the vehicle-type chips, it is a
   /// BROWSE filter: a typed search looks across the whole register.
   FleetClassGroup? _group;
+
+  /// "Due soon": only assets whose next PM service is overdue or inside the
+  /// window [isFleetServiceDueSoon] states.
+  bool _dueSoonOnly = false;
+
+  FleetSortOrder _sort = FleetSortOrder.assetNumber;
+
+  int get _activeFilterCount => <Object?>[
+        _vehicleTypeFilter,
+        _siteFilter,
+        _statusFilter,
+        if (_dueSoonOnly) true,
+      ].whereType<Object>().length;
 
   @override
   void initState() {
@@ -126,6 +150,119 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
     );
   }
 
+  /// The mock's tune button: every filter in one sheet, with Clear.
+  ///
+  /// The sheet edits the SAME state the inline controls do, so the two can
+  /// never disagree; [StatefulBuilder] only repaints the sheet itself.
+  Future<void> _openFilterSheet(
+    BuildContext context,
+    AppLocalizations l10n, {
+    required List<MapEntry<String, int>> vehicleTypes,
+    required bool dueSoonAvailable,
+  }) {
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (BuildContext sheetContext) => StatefulBuilder(
+        builder: (BuildContext context, StateSetter setSheet) {
+          void update(VoidCallback change) {
+            setState(change);
+            setSheet(() {});
+          }
+
+          final TpPalette palette = TpPalette.of(context);
+          final TextTheme text = Theme.of(context).textTheme;
+          return SafeArea(
+            key: VehiclesListScreenKeys.filterSheet,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * .8,
+              ),
+              child: ListView(
+                shrinkWrap: true,
+                padding: const EdgeInsets.fromLTRB(
+                  TpSpace.lg,
+                  0,
+                  TpSpace.lg,
+                  TpSpace.lg,
+                ),
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Semantics(
+                          header: true,
+                          child: Text(
+                            l10n.fleetListFiltersTitle,
+                            style: text.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _activeFilterCount == 0
+                            ? null
+                            : () => update(
+                                  () {
+                                    _vehicleTypeFilter = null;
+                                    _siteFilter = null;
+                                    _statusFilter = null;
+                                    _dueSoonOnly = false;
+                                  },
+                                ),
+                        child: Text(l10n.recordsClearFilters),
+                      ),
+                    ],
+                  ),
+                  SwitchListTile.adaptive(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(l10n.fleetListDueSoon),
+                    subtitle: dueSoonAvailable
+                        ? null
+                        : Text(l10n.fleetListDueSoonUnavailable),
+                    value: _dueSoonOnly,
+                    onChanged: dueSoonAvailable
+                        ? (bool on) => update(() => _dueSoonOnly = on)
+                        : null,
+                  ),
+                  const SizedBox(height: TpSpace.sm),
+                  Text(
+                    l10n.accIntakeVehicleType,
+                    style: text.titleSmall?.copyWith(
+                      color: palette.textSecondary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: TpSpace.xs),
+                  Wrap(
+                    spacing: TpSpace.xs,
+                    runSpacing: TpSpace.xs,
+                    children: <Widget>[
+                      _VehicleTypeChip(
+                        label: l10n.vehiclesAllFilter,
+                        isSelected: _vehicleTypeFilter == null,
+                        onTap: () => update(() => _vehicleTypeFilter = null),
+                      ),
+                      for (final MapEntry<String, int> type in vehicleTypes)
+                        _VehicleTypeChip(
+                          label: '${type.key} (${type.value})',
+                          isSelected: _vehicleTypeFilter == type.key,
+                          onTap: () =>
+                              update(() => _vehicleTypeFilter = type.key),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
@@ -153,15 +290,23 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
               color: TpPalette.of(context).primary,
             ),
           ),
-          Padding(
-            padding: const EdgeInsetsDirectional.only(end: TpSpace.lg),
-            child: Center(
-              child: Icon(
-                Icons.cloud_done_outlined,
-                color: TpPalette.of(context).ok.base,
+          // The real offline-queue state, never a hard-coded "Synced": a
+          // failed or pending read shows nothing rather than a false claim.
+          switch (ref.watch(fleetPendingSyncCountProvider)) {
+            AsyncData<int>(:final int value) => Padding(
+                key: VehiclesListScreenKeys.sync,
+                padding: const EdgeInsetsDirectional.only(end: TpSpace.lg),
+                child: Center(
+                  child: TpSyncLabel(
+                    label: value == 0
+                        ? l10n.inspectionStatusSynced
+                        : l10n.myWorkSyncPending(value),
+                    isPending: value > 0,
+                  ),
+                ),
               ),
-            ),
-          ),
+            _ => const SizedBox(width: TpSpace.lg),
+          },
         ],
       ),
       body: _buildBody(context, l10n, outcomeAsync),
@@ -234,6 +379,22 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
     List<VehicleAsset> assets, {
     required bool truncated,
   }) {
+    final FleetSignalsOutcome? signalsOutcome =
+        switch (ref.watch(fleetSignalsProvider)) {
+      AsyncData<FleetSignalsOutcome>(:final FleetSignalsOutcome value) => value,
+      AsyncError<FleetSignalsOutcome>() => const FleetSignalsUnavailable(),
+      _ => null,
+    };
+    final FleetSignals? signals = switch (signalsOutcome) {
+      FleetSignalsLoaded(signals: final FleetSignals s) => s,
+      _ => null,
+    };
+    final DateTime now = DateTime.now();
+    final Map<String, FleetAssetSignal> signalById = <String, FleetAssetSignal>{
+      if (signals != null)
+        for (final VehicleAsset asset in assets)
+          asset.id: signals.signalFor(asset, now),
+    };
     final List<VehicleAsset> filtered = applyVehicleFilters(
       assets,
       vehicleTypeFilter: _vehicleTypeFilter,
@@ -247,8 +408,34 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
           asset.site?.trim().toLowerCase() == _siteFilter!.toLowerCase();
       final bool matchesStatus = _statusFilter == null ||
           asset.status?.trim().toLowerCase() == _statusFilter!.toLowerCase();
-      return matchesSite && matchesStatus;
-    }).toList(growable: false);
+      final bool matchesDue =
+          !_dueSoonOnly || (signalById[asset.id]?.isDueSoon ?? false);
+      return matchesSite && matchesStatus && matchesDue;
+    }).toList();
+    // Dart's List.sort is not stable: ties fall back to the register order.
+    final Map<String, int> registerOrder = <String, int>{
+      for (int i = 0; i < filtered.length; i++) filtered[i].id: i,
+    };
+    int tie(VehicleAsset a, VehicleAsset b) =>
+        registerOrder[a.id]!.compareTo(registerOrder[b.id]!);
+    switch (signals == null ? FleetSortOrder.assetNumber : _sort) {
+      case FleetSortOrder.assetNumber:
+        break;
+      case FleetSortOrder.serviceDue:
+        filtered.sort((VehicleAsset a, VehicleAsset b) {
+          final int byDue = compareFleetServiceDue(
+            signalById[a.id]?.serviceDue,
+            signalById[b.id]?.serviceDue,
+          );
+          return byDue != 0 ? byDue : tie(a, b);
+        });
+      case FleetSortOrder.tyreActions:
+        filtered.sort((VehicleAsset a, VehicleAsset b) {
+          final int byActions = (signalById[b.id]?.tyreActions ?? 0)
+              .compareTo(signalById[a.id]?.tyreActions ?? 0);
+          return byActions != 0 ? byActions : tie(a, b);
+        });
+    }
     // Filters come from the authoritative vehicle_type values on the loaded
     // fleet rows, not from an inferred asset-number prefix.
     final Map<String, int> vehicleTypeCounts = <String, int>{};
@@ -363,9 +550,12 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
             TpSpace.lg,
             TpSpace.sm,
           ),
-          child: Row(
-            children: <Widget>[
-              Expanded(
+          // Four controls do not fit one row on a 360dp phone: the two menus
+          // were squeezed below their icon + arrow width and overflowed.
+          // Narrow screens put the menus on one row and the toggles below.
+          child: LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              final Widget site = Expanded(
                 child: _FleetFilterMenu(
                   icon: Icons.location_on_outlined,
                   label: _siteFilter == null
@@ -376,9 +566,8 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
                   onSelect: (String? value) =>
                       setState(() => _siteFilter = value),
                 ),
-              ),
-              const SizedBox(width: TpSpace.sm),
-              Expanded(
+              );
+              final Widget status = Expanded(
                 child: _FleetFilterMenu(
                   icon: Icons.tune_rounded,
                   label: _statusFilter == null
@@ -389,14 +578,63 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
                   onSelect: (String? value) =>
                       setState(() => _statusFilter = value),
                 ),
-              ),
-            ],
+              );
+              final Widget dueSoon = _DueSoonToggle(
+                key: VehiclesListScreenKeys.dueSoon,
+                label: l10n.fleetListDueSoon,
+                unavailableLabel: l10n.fleetListDueSoonUnavailable,
+                selected: _dueSoonOnly,
+                // Loading or unavailable: the filter cannot answer, so it is
+                // disabled rather than returning an empty "nothing due" list.
+                available: signals != null,
+                onChanged: (bool on) => setState(() => _dueSoonOnly = on),
+              );
+              final Widget filter = _FilterButton(
+                key: VehiclesListScreenKeys.filter,
+                count: _activeFilterCount,
+                label: l10n.fleetListFiltersActive(_activeFilterCount),
+                onPressed: () => _openFilterSheet(
+                  context,
+                  l10n,
+                  vehicleTypes: vehicleTypes,
+                  dueSoonAvailable: signals != null,
+                ),
+              );
+              const Widget gap = SizedBox(width: TpSpace.sm);
+              if (constraints.maxWidth >= 480) {
+                return Row(
+                  children: <Widget>[
+                    site,
+                    gap,
+                    status,
+                    gap,
+                    dueSoon,
+                    gap,
+                    filter,
+                  ],
+                );
+              }
+              return Column(
+                children: <Widget>[
+                  Row(children: <Widget>[site, gap, status]),
+                  const SizedBox(height: TpSpace.sm),
+                  Row(
+                    children: <Widget>[Expanded(child: dueSoon), gap, filter],
+                  ),
+                ],
+              );
+            },
           ),
         ),
         _ScopeLine(
           key: VehiclesListScreenKeys.scope,
           country: ref.watch(activeCountryProvider),
           site: _siteFilter,
+          sort: _sort,
+          // Sorting by a signal that could not be read would order the list
+          // by nothing; only the register order is offered then.
+          signalsAvailable: signals != null,
+          onSort: (FleetSortOrder order) => setState(() => _sort = order),
         ),
         Expanded(
           child: filtered.isEmpty
@@ -421,6 +659,7 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
                     return _FleetAssetCard(
                       key: VehiclesListScreenKeys.asset(asset.id),
                       asset: asset,
+                      signal: signalById[asset.id],
                       unknownAssetLabel: l10n.vehiclesUnknownAsset,
                       onTap: asset.hasNavigableAssetNo
                           ? () => _openDetail(asset.assetNo!)
@@ -598,10 +837,27 @@ class _GroupTabs extends StatelessWidget {
 
 /// "KSA · All authorized sites": what the list is scoped to.
 class _ScopeLine extends StatelessWidget {
-  const _ScopeLine({required this.country, required this.site, super.key});
+  const _ScopeLine({
+    required this.country,
+    required this.site,
+    required this.sort,
+    required this.signalsAvailable,
+    required this.onSort,
+    super.key,
+  });
 
   final String? country;
   final String? site;
+  final FleetSortOrder sort;
+  final bool signalsAvailable;
+  final ValueChanged<FleetSortOrder> onSort;
+
+  static String sortLabel(AppLocalizations l10n, FleetSortOrder order) =>
+      switch (order) {
+        FleetSortOrder.assetNumber => l10n.fleetListSortAssetNo,
+        FleetSortOrder.serviceDue => l10n.fleetListSortServiceDue,
+        FleetSortOrder.tyreActions => l10n.fleetListSortTyreActions,
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -623,9 +879,11 @@ class _ScopeLine extends StatelessWidget {
           Icon(Icons.public_rounded, size: 18, color: palette.textSecondary),
           const SizedBox(width: TpSpace.xs),
           Expanded(
+            // Two lines: beside the sort control, one line cut the scope to
+            // "All countries · All authoriz..." on every phone width.
             child: Text(
               '$c · $s',
-              maxLines: 1,
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context)
                   .textTheme
@@ -633,7 +891,168 @@ class _ScopeLine extends StatelessWidget {
                   ?.copyWith(color: palette.textSecondary),
             ),
           ),
+          const SizedBox(width: TpSpace.sm),
+          Flexible(
+            child: PopupMenuButton<FleetSortOrder>(
+              key: VehiclesListScreenKeys.sort,
+              tooltip: l10n.tyreMockSortTooltip,
+              onSelected: onSort,
+              itemBuilder: (BuildContext context) =>
+                  <PopupMenuEntry<FleetSortOrder>>[
+                for (final FleetSortOrder order in FleetSortOrder.values)
+                  CheckedPopupMenuItem<FleetSortOrder>(
+                    value: order,
+                    checked: order == sort,
+                    enabled:
+                        signalsAvailable || order == FleetSortOrder.assetNumber,
+                    child: Text(sortLabel(l10n, order)),
+                  ),
+              ],
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  minHeight: TpSizing.minTouchTarget,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Flexible(
+                      child: Text(
+                        sortLabel(
+                          l10n,
+                          signalsAvailable ? sort : FleetSortOrder.assetNumber,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelMedium,
+                      ),
+                    ),
+                    Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: palette.text,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ],
+      ),
+    );
+  }
+}
+
+/// The mock's "Due soon" pill: a real toggle over the PM plans read. While
+/// that read is loading or failed it is disabled and says why, instead of
+/// narrowing the list to a false "nothing is due".
+class _DueSoonToggle extends StatelessWidget {
+  const _DueSoonToggle({
+    required this.label,
+    required this.unavailableLabel,
+    required this.selected,
+    required this.available,
+    required this.onChanged,
+    super.key,
+  });
+
+  final String label;
+  final String unavailableLabel;
+  final bool selected;
+  final bool available;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final bool on = available && selected;
+    final Widget pill = Semantics(
+      button: true,
+      toggled: on,
+      enabled: available,
+      label: available ? label : '$label. $unavailableLabel',
+      excludeSemantics: true,
+      child: Material(
+        color: on ? palette.primary : palette.surface,
+        shape: RoundedRectangleBorder(
+          side: BorderSide(
+            color: on ? palette.primary : palette.controlBorder,
+          ),
+          borderRadius: BorderRadius.circular(TpRadius.md),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: available ? () => onChanged(!selected) : null,
+          child: Container(
+            constraints: const BoxConstraints(
+              minHeight: TpSizing.minTouchTarget,
+              maxWidth: 132,
+            ),
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: TpSpace.md),
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: on
+                        ? palette.onPrimary
+                        : available
+                            ? palette.text
+                            : palette.textMuted,
+                  ),
+            ),
+          ),
+        ),
+      ),
+    );
+    return available ? pill : Tooltip(message: unavailableLabel, child: pill);
+  }
+}
+
+/// The mock's tune button with the active-filter count badge.
+class _FilterButton extends StatelessWidget {
+  const _FilterButton({
+    required this.count,
+    required this.label,
+    required this.onPressed,
+    super.key,
+  });
+
+  final int count;
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return Semantics(
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      child: Material(
+        color: palette.surface,
+        shape: RoundedRectangleBorder(
+          side: BorderSide(color: palette.controlBorder),
+          borderRadius: BorderRadius.circular(TpRadius.md),
+        ),
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(TpRadius.md),
+          child: SizedBox(
+            width: TpSizing.minTouchTarget,
+            height: TpSizing.minTouchTarget,
+            child: Badge(
+              isLabelVisible: count > 0,
+              label: Text('$count'),
+              backgroundColor: palette.primary,
+              textColor: palette.onPrimary,
+              alignment: AlignmentDirectional.topEnd,
+              offset: const Offset(4, -4),
+              child: Center(
+                child: Icon(Icons.tune_rounded, color: palette.text),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -702,13 +1121,30 @@ class _FleetAssetCard extends StatelessWidget {
   const _FleetAssetCard({
     required this.asset,
     required this.unknownAssetLabel,
+    this.signal,
     this.onTap,
     super.key,
   });
 
   final VehicleAsset asset;
   final String unknownAssetLabel;
+
+  /// PM service due and open tyre actions, or null when that read has not
+  /// arrived or failed (the lines are then simply absent, never "0").
+  final FleetAssetSignal? signal;
   final VoidCallback? onTap;
+
+  static String _serviceDueLabel(AppLocalizations l10n, AssetServiceDue due) {
+    if (due.isOverdue) return l10n.fleet360AlertServiceOverdue;
+    final String amount = formatAssetMoney(due.remaining.toDouble());
+    return switch (due.unit) {
+      AssetServiceDueUnit.km => l10n.fleet360AlertServiceDueKm(amount),
+      AssetServiceDueUnit.hours => l10n.fleet360AlertServiceDueHours(amount),
+      AssetServiceDueUnit.days => l10n.fleet360AlertServiceDueDays(
+          due.remaining,
+        ),
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -808,14 +1244,34 @@ class _FleetAssetCard extends StatelessWidget {
                                       BorderRadius.circular(TpRadius.md),
                                   border: Border.all(color: statusColors.base),
                                 ),
-                                child: Text(
-                                  displayStatus!,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: text.labelSmall?.copyWith(
-                                    color: statusColors.onSoft,
-                                    fontWeight: FontWeight.w800,
-                                  ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: <Widget>[
+                                    // The mock's status dot. Colour is never
+                                    // the only signal: the label is beside it.
+                                    ExcludeSemantics(
+                                      child: Container(
+                                        width: 8,
+                                        height: 8,
+                                        decoration: BoxDecoration(
+                                          color: statusColors.base,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Flexible(
+                                      child: Text(
+                                        displayStatus!,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: text.labelSmall?.copyWith(
+                                          color: statusColors.onSoft,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
@@ -875,6 +1331,7 @@ class _FleetAssetCard extends StatelessWidget {
                           ],
                         ),
                       ],
+                      ..._signalLines(context, palette, text),
                     ],
                   ),
                 ),
@@ -890,6 +1347,82 @@ class _FleetAssetCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  /// "Service due in 320 km" / "2 tyre actions", from the register-wide PM
+  /// and tyre-action read. Nothing is drawn for an asset with no plan and
+  /// no open action: an empty line would read as a measurement.
+  List<Widget> _signalLines(
+    BuildContext context,
+    TpPalette palette,
+    TextTheme text,
+  ) {
+    final FleetAssetSignal? s = signal;
+    if (s == null) return const <Widget>[];
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final AssetServiceDue? due = s.serviceDue;
+    final List<Widget> items = <Widget>[
+      if (due != null)
+        _SignalLine(
+          key: VehiclesListScreenKeys.serviceDue(asset.id),
+          icon: due.unit == AssetServiceDueUnit.days
+              ? Icons.event_outlined
+              : Icons.schedule_rounded,
+          label: _serviceDueLabel(l10n, due),
+          tone: due.isOverdue
+              ? palette.forStatus(TpStatus.critical)
+              : s.isDueSoon
+                  ? palette.forStatus(TpStatus.warning)
+                  : palette.forStatus(TpStatus.info),
+        ),
+      if (s.tyreActions > 0)
+        _SignalLine(
+          key: VehiclesListScreenKeys.tyreActions(asset.id),
+          icon: Icons.tire_repair_outlined,
+          label: l10n.fleet360AlertTyreActions(s.tyreActions),
+          tone: palette.forStatus(TpStatus.warning),
+        ),
+    ];
+    if (items.isEmpty) return const <Widget>[];
+    return <Widget>[
+      const SizedBox(height: 5),
+      Wrap(spacing: TpSpace.md, runSpacing: 2, children: items),
+    ];
+  }
+}
+
+class _SignalLine extends StatelessWidget {
+  const _SignalLine({
+    required this.icon,
+    required this.label,
+    required this.tone,
+    super.key,
+  });
+
+  final IconData icon;
+  final String label;
+  final TpStatusColors tone;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Icon(icon, size: 16, color: tone.base),
+        const SizedBox(width: 4),
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: tone.onSoft,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+        ),
+      ],
     );
   }
 }

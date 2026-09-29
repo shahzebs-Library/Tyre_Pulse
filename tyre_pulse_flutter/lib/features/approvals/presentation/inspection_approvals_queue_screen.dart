@@ -38,6 +38,7 @@ import 'package:tyre_pulse/features/approvals/data/inspection_approval_item.dart
 import 'package:tyre_pulse/features/approvals/domain/approval_date_grouping.dart';
 import 'package:tyre_pulse/features/approvals/inspection_approvals_providers.dart';
 import 'package:tyre_pulse/features/approvals/presentation/widgets/queue_list_kit.dart';
+import 'package:tyre_pulse/features/approvals/presentation/widgets/refresh_when_shown.dart';
 
 /// Stable finders for the responsive approvals queue presentation.
 @visibleForTesting
@@ -74,7 +75,8 @@ class InspectionApprovalsQueueScreen extends ConsumerStatefulWidget {
 }
 
 class _InspectionApprovalsQueueScreenState
-    extends ConsumerState<InspectionApprovalsQueueScreen> {
+    extends ConsumerState<InspectionApprovalsQueueScreen>
+    with RefreshWhenShown<InspectionApprovalsQueueScreen> {
   bool _loading = true;
   AppError? _error;
   List<InspectionApprovalItem> _items = const <InspectionApprovalItem>[];
@@ -86,15 +88,26 @@ class _InspectionApprovalsQueueScreenState
   /// badge read 0 - the approved mock keeps that count visible on every tab.
   int? _pendingCount;
 
+  /// Bumped by every [_load]. Only the newest read may land, so a slow read
+  /// that started before a refresh (or before a tab change) can never paint
+  /// its older rows over the fresher ones.
+  int _loadGeneration = 0;
+
   @override
   void initState() {
     super.initState();
     unawaited(_load());
   }
 
+  @override
+  void refreshWhenShown() => unawaited(_load());
+
   Future<void> _load() async {
+    final int generation = ++_loadGeneration;
     setState(() {
-      _loading = true;
+      // Keep the rows already on screen while re-reading: a refresh on
+      // return must not flash the whole queue back to a spinner.
+      _loading = _items.isEmpty;
       _error = null;
     });
     final String? country = ref.read(activeCountryProvider);
@@ -108,7 +121,7 @@ class _InspectionApprovalsQueueScreenState
                   tab.statusValue,
                   country: country,
                 );
-      if (!mounted) return;
+      if (!mounted || generation != _loadGeneration) return;
       setState(() {
         _items = items;
         _pendingCount =
@@ -122,12 +135,14 @@ class _InspectionApprovalsQueueScreenState
       try {
         final int pending =
             (await repository.listPending(country: country)).length;
-        if (mounted) setState(() => _pendingCount = pending);
+        if (mounted && generation == _loadGeneration) {
+          setState(() => _pendingCount = pending);
+        }
       } on Object {
         // Deliberately ignored - see the comment above.
       }
     } on Object catch (error) {
-      if (!mounted) return;
+      if (!mounted || generation != _loadGeneration) return;
       setState(() {
         _error = _asAppError(context, error);
         _loading = false;
@@ -139,15 +154,23 @@ class _InspectionApprovalsQueueScreenState
 
   void _changeTab(InspectionApprovalTab tab) {
     if (tab == _tab) return;
-    setState(() => _tab = tab);
+    setState(() {
+      _tab = tab;
+      // The previous tab's rows are a different status; never show them
+      // under this tab's heading while its own read is in flight.
+      _items = const <InspectionApprovalItem>[];
+    });
     unawaited(_load());
   }
 
-  void _open(InspectionApprovalItem item) {
-    context.push(
+  Future<void> _open(InspectionApprovalItem item) async {
+    await context.push<Object?>(
       InspectionApprovalReviewRoute(inspectionId: InspectionId(item.id))
           .location,
     );
+    // Back from the review: the row just decided has left this status, and
+    // new submissions may have arrived while the review was open.
+    if (mounted) unawaited(_load());
   }
 
   @override
@@ -291,7 +314,7 @@ class _InspectionApprovalsQueueScreenState
               pendingLabel: l10n.inspectionApprovalsPendingBadge,
               approvedLabel: l10n.inspectionApprovalsApprovedTab,
               returnedLabel: l10n.inspectionApprovalsReturnedTab,
-              onTap: () => _open(item),
+              onTap: () => unawaited(_open(item)),
             ),
           );
         },

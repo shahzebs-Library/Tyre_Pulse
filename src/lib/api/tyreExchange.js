@@ -24,7 +24,7 @@ export function listExchangeTyreRecords({ country } = {}) {
   return fetchAllPages((from, to) => {
     let q = supabase
       .from('tyre_records')
-      .select('id,asset_no,serial_number,serial_no,position,brand,size,tread_depth,cost_per_tyre,issue_date,km_at_fitment,km_at_removal,risk_level,site,country,category')
+      .select('id,asset_no,serial_number,serial_no,position,brand,size,tread_depth,cost_per_tyre,issue_date,km_at_fitment,km_at_removal,risk_level,site,country,category,removal_date,tyre_position,vehicle_type,status,photos')
       .order('issue_date', { ascending: true })
       .order('id', { ascending: true })
       .range(from, to)

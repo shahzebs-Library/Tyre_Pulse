@@ -54,6 +54,33 @@ void main() {
     expect(s.monthly[2].total, 180); // March: 100 + 50 + 30 labour
   });
 
+  test('outside repairs are their own bucket, counted as maintenance', () {
+    final AssetFinancialSummary s = computeAssetFinancials(
+      period: ytd,
+      lines: <AssetCostLine>[_line('2026-03-01', spare: 100)],
+      jobCards: <AssetJobCard>[
+        AssetJobCard.fromRow(<String, dynamic>{
+          'id': 'w1',
+          'opened_at': '2026-03-05T08:00:00Z',
+          'outside_repair_cost': 40,
+        })!,
+      ],
+    );
+    expect(s.external, 40);
+    expect(s.labour, isNull);
+    expect(s.amountOf(AssetCostBucket.external), 40);
+    expect(s.maintenance, 140);
+    expect(s.total, 140);
+    expect(s.monthly[2].total, 140);
+
+    final AssetFinancialSummary none = computeAssetFinancials(
+      period: ytd,
+      lines: <AssetCostLine>[_line('2026-03-01', spare: 100)],
+    );
+    // Not recorded is null, not a zero.
+    expect(none.external, isNull);
+  });
+
   test(
       'comparison is against the same window a year earlier, null when '
       'nothing was recorded then', () {

@@ -212,8 +212,11 @@ describe('page wiring', () => {
     expect(src).toContain('supplierExportRows(filteredSuppliers)')
   })
   it('TyreSpecifications renders its grids through EnterpriseTable with sorting off', () => {
-    const src = read('src/pages/TyreSpecifications.jsx')
-    expect(src).not.toMatch(/<table[\s>]/)
-    expect(src).toMatch(/function SpecTable[\s\S]*enableSorting=\{false\}/)
+    // The page was rebuilt on the kit; its table shell moved to tyreSpec/parts.
+    const page = read('src/pages/TyreSpecifications.jsx')
+    const parts = read('src/components/tyreSpec/parts.jsx')
+    expect(page).not.toMatch(/<table[\s>]/)
+    expect(parts).not.toMatch(/<table[\s>]/)
+    expect(parts).toMatch(/function SpecTable[\s\S]*enableSorting=\{false\}/)
   })
 })

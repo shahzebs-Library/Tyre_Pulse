@@ -254,6 +254,14 @@ Each was confirmed by locating its `create function` in a migration.
 `driver_fine_register` and `driver_workspace_run_reminders` exist in the same
 migration and are not called by the phone.
 
+Added 2026-09-29, push notifications (FCM): `register_user_device(p_push_token,
+p_platform, p_device_id, p_app_version)` and `revoke_user_device(p_push_token)`,
+created by `MIGRATIONS_V321_USER_DEVICES.sql` (DEFINER, `auth.uid()` scoped,
+anon revoked). Already listed in section 1 and in `SupabaseRpcs`; the Flutter
+caller is `lib/core/push/push_device_repository.dart`. `user_devices` has no
+provider column: the server tells an FCM token from an Expo token by its form
+(`ExponentPushToken[`/`ExpoPushToken[` = Expo, anything else = FCM).
+
 ### 7.3 Storage buckets
 
 Section 3 lists no buckets at all. These are the ones the Flutter code touches.
@@ -267,6 +275,14 @@ Section 3 lists no buckets at all. These are the ones the Flutter code touches.
 ### 7.4 Edge functions
 
 Unchanged: `chat-ai` is still the only function the phone invokes.
+
+Added 2026-09-29: the phone still invokes only `chat-ai`, but its pushes are
+DELIVERED by `workflow-notify` (server-invoked by the V119 pg_cron deliverer).
+That function now sends FCM HTTP v1 (project `tyrepulse-32127`) for non-Expo
+tokens using the edge secret `FIREBASE_SERVICE_ACCOUNT`, with data keys
+`type`, `event_type`, `entity_type`, `entity_id`, `instance_id`, `channel` and
+Android channel `alerts`. Recipients fan out over `user_devices` through
+`_user_push_tokens` (`20260924124000_push_fanout_user_devices.sql`).
 
 ### 7.5 Registry drift to close
 

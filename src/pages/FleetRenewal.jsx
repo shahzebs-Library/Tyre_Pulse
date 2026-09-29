@@ -1,257 +1,316 @@
 /**
- * FleetRenewal (route /fleet-renewal) - Fleet Renewal Planning.
+ * FleetRenewal (route /fleet-renewal) - Fleet Renewal, rebuilt on the shared
+ * page kit to the owner's light reference design.
  *
- * Vehicle replacement / lifecycle planning: for each asset the page captures its
- * current age & mileage, a recommended action, a target replacement date, an
- * estimated cost and a priority + lifecycle status (planned -> approved ->
- * deferred -> completed). It surfaces a KPI band, a replacement pipeline
- * (by month/year from the target date), status + priority distributions,
- * by-site and by-vehicle-type breakdowns, age & mileage due bands, an overdue
- * watchlist, filters + search + sortable table, full role-gated CRUD, and
- * Excel/PDF export - with honest loading / empty / error states.
+ * Two sources, kept apart on purpose:
+ *   - The fleet register (vehicle_fleet) is the candidate list. Every current
+ *     asset is assessed from its recorded model year, the breakdown register
+ *     and its latest telematics utilisation, by the rule in
+ *     src/lib/fleetRenewalView.js (stated on screen).
+ *   - Renewal plans (fleet_renewal_plans, V159) carry the decision: budget,
+ *     target date and status. An asset with no plan reads "No plan".
  *
- * Backed by `fleet_renewal_plans` (MIGRATIONS_V159_FLEET_RENEWAL.sql), enriched
- * with `vehicle_type` from vehicle_fleet by asset_no (best-effort, RLS-scoped).
- * Analytics live in the pure engine ./lib/fleetRenewalAnalytics; org isolation +
- * RBAC are enforced by RLS. No value is ever fabricated.
+ * Kept from the previous page: plan create / edit / delete, Excel and PDF
+ * export (the planning register and the plans register), country scope and
+ * the not-provisioned state. Money is never summed across currencies, and
+ * nothing without a source (savings, procurement) is shown as a number.
  */
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { Link } from 'react-router-dom'
 import {
-  Chart as ChartJS, ArcElement, BarElement, CategoryScale, LinearScale,
-  Tooltip, Legend,
-} from 'chart.js'
-import { Doughnut, Bar } from 'react-chartjs-2'
-import {
-  Truck, TrendingUp, Calendar, DollarSign, Plus, Pencil, Trash2, Search, X,
-  Save, Loader2, AlertTriangle, FileSpreadsheet, FileText, ClipboardList,
-  Gauge, MapPin, Clock, CalendarClock, Layers, Wallet, ListChecks,
-  AlertOctagon, CalendarDays, RefreshCw,
+  Truck, Clock, Wallet, PiggyBank, CheckCircle2, ShoppingCart, Plus, Search, X,
+  Pencil, Trash2, Loader2, Save, AlertTriangle, FileSpreadsheet, FileText, Send,
+  Scale, Download, MoreHorizontal, RefreshCw, Filter, Info, ListChecks, Eye,
+  AlertOctagon, Wrench, CalendarClock, Sparkles,
 } from 'lucide-react'
-import PageHeader from '../components/ui/PageHeader'
-import Card, { CardHeader } from '../components/ui/Card'
 import Modal from '../components/ui/Modal'
-import EnterpriseTable from '../components/ui/EnterpriseTable'
+import {
+  Card, CardState, Kpi, PageHero, Donut, Pager, MeterCell, KitTable, fmtInt, useCard,
+} from '../components/commandCenter/kit'
 import { useSettings } from '../contexts/SettingsContext'
 import {
-  listRenewalPlansEnriched, createRenewalPlan, updateRenewalPlan, deleteRenewalPlan,
+  listRenewalPlansEnriched, createRenewalPlan, updateRenewalPlan, deleteRenewalPlan, RENEWAL_CURRENCIES,
 } from '../lib/api/fleetRenewal'
+import { loadRenewalFleet, loadRenewalUtilization, loadRenewalBreakdowns, loadRenewalCostSignals } from '../lib/api/fleetRenewalSignals'
 import {
   RENEWAL_STATUSES, RENEWAL_PRIORITIES, RENEWAL_STATUS_META, RENEWAL_PRIORITY_META,
 } from '../lib/fleetRenewal'
 import {
-  buildRenewalKpis, buildRenewalInsights, statusDistribution, priorityDistribution,
-  renewalPipeline, estimateBudget, bySite, byVehicleType, ageBands, mileageBands,
-  overduePlans, sortBySoonest, daysUntil, filterRenewalPlans, renewalRegisterRows,
-  renewalExportRows, RENEWAL_EXPORT_COLUMNS,
-} from '../lib/fleetRenewalAnalytics'
+  buildPlanningRows, sortPlanningRows, filterPlanningRows, ageDistribution, pipelineSegments,
+  capexByQuarter, buildRenewalKpis, planningRules, presetCounts, remainingLifeLabel,
+  planningExportRows, PLANNING_EXPORT_COLUMNS, PRIORITY_META, PRIORITY_KEYS, PLAN_STATUS_META,
+  PLANNING_LIFE_YEARS, AGING_YEARS, currencyForCountry, budgetByYear, moneyText, planYear,
+  SCORE_WEIGHTS, SCORE_PART_LABELS, SCORE_RAISE, planExportRows, PLAN_EXPORT_COLUMNS,
+} from '../lib/fleetRenewalView'
 import { formatCurrencyCompact } from '../lib/formatters'
 import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
-import { compareValues } from '../lib/consoleTable'
-import { colorAt, categorical, withAlpha } from '../lib/reportColors'
 import { isMissingRelation } from '../lib/api/_client'
-
-const EPOCH_DATE = new Date(0)
-const ICON_BTN = 'inline-flex items-center justify-center h-11 w-11 sm:h-9 sm:w-9 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]'
-const valueSort = (a, b, id) => compareValues(a.getValue(id), b.getValue(id))
-const blank = (v) => (v === null || v === undefined || v === '' ? undefined : v)
-
-ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend)
-
-// Semantic colours (status/priority carry meaning -> NOT palettized).
-const STATUS_STYLES = {
-  planned:   'bg-sky-500/15 text-sky-500 border border-sky-500/40',
-  approved:  'bg-green-500/15 text-green-500 border border-green-500/40',
-  deferred:  'bg-amber-500/15 text-amber-500 border border-amber-500/40',
-  completed: 'bg-emerald-500/15 text-emerald-500 border border-emerald-500/40',
-}
-const PRIORITY_STYLES = {
-  low:    'bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--input-border)]',
-  medium: 'bg-sky-500/15 text-sky-500 border border-sky-500/40',
-  high:   'bg-red-500/15 text-red-500 border border-red-500/40',
-}
-const STATUS_HEX = { planned: '#0ea5e9', approved: '#22c55e', deferred: '#f59e0b', completed: '#10b981' }
-const PRIORITY_HEX = { low: '#64748b', medium: '#0ea5e9', high: '#ef4444' }
+import './FleetRenewal.css'
 
 const EMPTY_FORM = {
   asset_no: '', current_km: '', age_years: '', recommendation: '',
   target_replace_date: '', est_cost: '', priority: 'medium', status: 'planned',
-  site: '', notes: '',
+  site: '', notes: '', country: '', planned_year: '', currency: '',
+}
+const RULE_TEXT = `Age comes from the recorded model year (implausible years are ignored). Every asset is planned against a ${PLANNING_LIFE_YEARS}-year life, because the register records no useful life per asset. Health score = 70% age score (100 at new, 0 at ${PLANNING_LIFE_YEARS} years) + 30% reliability (0 with an open breakdown, else 100). Priority: marked Plan For Scrap or 1 year or less left = Critical; 2 years or less, or over ${AGING_YEARS} years with an open breakdown = High; 4 years or less = Medium; otherwise Low. A renewal score of ${SCORE_RAISE} or more raises a Medium or Low asset to High.`
+const RULE_ICON = { scrap: AlertOctagon, past: AlertTriangle, bd: Wrench, noplan: CalendarClock, noage: Info }
+
+const money = (amount, currency) => (amount == null ? 'N/A' : formatCurrencyCompact(amount, currency || ''))
+const PRIORITY_TO_PLAN = { critical: 'high', high: 'high', medium: 'medium', low: 'low' }
+const SCORE_PART_SHORT = { age: 'Age', repair: 'Repair cost', downtime: 'Downtime', km: 'Km', hours: 'Hours', accidents: 'Accidents' }
+function scoreTitle(r) {
+  const parts = Object.entries(r.scoreParts || {}).map(([k, v]) => `${SCORE_PART_SHORT[k] || k} ${v}`)
+  return `${parts.join(', ') || 'No measurable part'}${r.scoreRaised ? '. Raised to High priority by the score.' : ''}`
 }
 
-const fmtDate = (v) => (v ? String(v).slice(0, 10) : 'N/A')
-const num = (v) => (v === '' || v == null || Number.isNaN(Number(v)) ? 'N/A' : Number(v).toLocaleString())
+/** Popover menu positioned against the viewport so a scrolling table never clips it. */
+function RowMenu({ label, items }) {
+  const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState(null)
+  const btn = useRef(null)
+  const pop = useRef(null)
+  useEffect(() => {
+    if (!open) return undefined
+    const r = btn.current?.getBoundingClientRect()
+    if (r) setPos({ top: r.bottom + 4, right: window.innerWidth - r.right })
+    const onDoc = (e) => { if (!pop.current?.contains(e.target) && !btn.current?.contains(e.target)) setOpen(false) }
+    const onKey = (e) => { if (e.key === 'Escape') { setOpen(false); btn.current?.focus() } }
+    const close = () => setOpen(false)
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
+    window.addEventListener('resize', close)
+    window.addEventListener('scroll', close, true)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('keydown', onKey)
+      window.removeEventListener('resize', close)
+      window.removeEventListener('scroll', close, true)
+    }
+  }, [open])
+  useEffect(() => { if (open && pos) pop.current?.querySelector('button,a')?.focus() }, [open, pos])
+  return (
+    <>
+      <button ref={btn} type="button" className="fr-row-btn" aria-label={label} aria-haspopup="menu" aria-expanded={open}
+        onClick={(e) => { e.stopPropagation(); setOpen((o) => !o) }}>
+        <MoreHorizontal size={16} aria-hidden="true" />
+      </button>
+      {open && pos && (
+        <div ref={pop} className="fr-menu" role="menu" style={{ top: pos.top, right: pos.right }}>
+          {items.filter(Boolean).map((it) => (it.to
+            ? <Link key={it.label} role="menuitem" className="fr-menu-item" to={it.to} onClick={() => setOpen(false)}>{it.icon && <it.icon size={14} aria-hidden="true" />} {it.label}</Link>
+            : (
+              <button key={it.label} type="button" role="menuitem" className={`fr-menu-item ${it.danger ? 'danger' : ''}`}
+                onClick={() => { setOpen(false); it.onClick() }}>
+                {it.icon && <it.icon size={14} aria-hidden="true" />} {it.label}
+              </button>
+            )))}
+        </div>
+      )}
+    </>
+  )
+}
+
+/** Vertical bars with a value on top of each. `fmt` formats labels on the bars. */
+function Bars({ data, fmt = fmtInt, fill = 'var(--cc-green)', label }) {
+  const W = 300; const H = 190; const L = 36; const B = 24; const T = 16
+  const plotH = H - B - T
+  const max = Math.max(1, ...data.map((d) => d.value || 0))
+  const nice = (() => { const p = 10 ** Math.floor(Math.log10(max)); const m = Math.ceil(max / p); return (m <= 2 ? 2 : m <= 5 ? 5 : 10) * p })()
+  const step = (W - L) / Math.max(data.length, 1)
+  const barW = Math.min(40, step * 0.6)
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="fr-bars" role="img" aria-label={`${label}: ${data.map((d) => `${d.label} ${d.value == null ? 'N/A' : fmt(d.value)}`).join(', ')}`}>
+      {[0, 0.5, 1].map((f) => {
+        const y = T + plotH - f * plotH
+        return (
+          <g key={f}>
+            <line x1={L} x2={W} y1={y} y2={y} className="fr-grid" />
+            <text x={L - 5} y={y + 3} textAnchor="end" className="fr-axis">{fmt(nice * f)}</text>
+          </g>
+        )
+      })}
+      {data.map((d, i) => {
+        const x = L + i * step + (step - barW) / 2
+        const h = d.value ? (d.value / nice) * plotH : 0
+        return (
+          <g key={d.key || d.label}>
+            {d.value != null && <rect x={x} y={T + plotH - h} width={barW} height={Math.max(h, d.value ? 2 : 0)} rx="3" style={{ fill, opacity: 0.55 + 0.45 * (1 - i / Math.max(data.length, 1)) }} />}
+            <text x={x + barW / 2} y={T + plotH - h - 4} textAnchor="middle" className="fr-val">{d.value == null ? 'N/A' : fmt(d.value)}</text>
+            <text x={x + barW / 2} y={H - 6} textAnchor="middle" className="fr-axis">{d.label}</text>
+          </g>
+        )
+      })}
+    </svg>
+  )
+}
+
+function HealthBadge({ value }) {
+  if (value == null) return <span className="cc-na">N/A</span>
+  const tone = value >= 70 ? 'good' : value >= 40 ? 'warn' : 'bad'
+  return <span className={`fr-health ${tone}`} title="Health score under the planning rule">{value}</span>
+}
 
 export default function FleetRenewal() {
   const { activeCountry, activeCurrency } = useSettings()
-  const [rows, setRows] = useState(null)
-  const [error, setError] = useState('')
-  const [refreshing, setRefreshing] = useState(false)
-  const [updatedAt, setUpdatedAt] = useState(null)
+  const countryScope = activeCountry && activeCountry !== 'All' ? activeCountry : ''
+  const scopeLabel = countryScope || 'All countries'
+  const now = useMemo(() => new Date(), [])
 
-  const [statusFilter, setStatusFilter] = useState('all')
-  const [priorityFilter, setPriorityFilter] = useState('all')
-  const [siteFilter, setSiteFilter] = useState('all')
-  const [fromDate, setFromDate] = useState('')
-  const [toDateVal, setToDateVal] = useState('')
-  const [search, setSearch] = useState('')
-  const [overdueOnly, setOverdueOnly] = useState(false)
-  const [pipelineGranularity, setPipelineGranularity] = useState('month')
+  // Plans (the decision layer). Kept in local state so CRUD updates in place.
+  const [plans, setPlans] = useState(null)
+  const [planError, setPlanError] = useState('')
+  const [notProvisioned, setNotProvisioned] = useState(false)
+  const [actionError, setActionError] = useState('')
+  const loadPlans = useCallback(async () => {
+    setPlanError(''); setNotProvisioned(false)
+    try {
+      const data = await listRenewalPlansEnriched({ country: activeCountry })
+      setPlans(Array.isArray(data) ? data : [])
+    } catch (err) {
+      if (isMissingRelation(err)) { setNotProvisioned(true); setPlans([]) } else { setPlanError(toUserMessage(err, 'Could not load renewal plans.')); setPlans(null) }
+    }
+  }, [activeCountry])
+  useEffect(() => { loadPlans() }, [loadPlans])
 
+  // Register and optional signals: each loads and fails on its own.
+  const fleetCard = useCard(() => loadRenewalFleet({ country: activeCountry }), [activeCountry])
+  const utilCard = useCard(() => loadRenewalUtilization({ country: activeCountry }), [activeCountry])
+  const bdCard = useCard(() => loadRenewalBreakdowns({ country: activeCountry }), [activeCountry])
+  const sigCard = useCard(() => loadRenewalCostSignals({ country: activeCountry }), [activeCountry])
+
+  const allPlans = useMemo(() => plans || [], [plans])
+  const plansLoading = plans === null && !planError
+  const signalsLoading = utilCard.loading || bdCard.loading
+  const costLoading = sigCard.loading
+  const costUnreadable = !sigCard.loading && sigCard.data == null
+
+  const rows = useMemo(() => {
+    if (!fleetCard.data) return []
+    return sortPlanningRows(buildPlanningRows({
+      fleet: fleetCard.data.rows,
+      plans: allPlans,
+      utilRows: utilCard.loading ? null : utilCard.data,
+      breakdownRows: bdCard.loading ? null : bdCard.data,
+      signalRows: sigCard.loading ? null : sigCard.data,
+      now,
+    }))
+  }, [fleetCard.data, allPlans, utilCard.loading, utilCard.data, bdCard.loading, bdCard.data, sigCard.loading, sigCard.data, now])
+
+  const kpi = useMemo(() => buildRenewalKpis(rows, allPlans, now), [rows, allPlans, now])
+  const rules = useMemo(() => planningRules(rows, now), [rows, now])
+  const presets = useMemo(() => presetCounts(rows, now), [rows, now])
+  const pipeline = useMemo(() => pipelineSegments(allPlans, now), [allPlans, now])
+  const capex = useMemo(() => capexByQuarter(allPlans, now), [allPlans, now])
+  const budget = useMemo(() => budgetByYear(allPlans), [allPlans])
+
+  // Age distribution card
+  const [ageType, setAgeType] = useState('')
+  const typeOptions = useMemo(() => [...new Set(rows.map((r) => r.vehicle_type).filter(Boolean))].sort(), [rows])
+  const siteOptions = useMemo(() => [...new Set(rows.map((r) => r.site).filter(Boolean))].sort(), [rows])
+  const ageDist = useMemo(() => ageDistribution(rows, ageType), [rows, ageType])
+
+  // Planning table filters
+  const [q, setQ] = useState('')
+  const [site, setSite] = useState('')
+  const [type, setType] = useState('')
+  const [priority, setPriority] = useState('')
+  const [status, setStatus] = useState('')
+  const [preset, setPreset] = useState('')
+  const [minScore, setMinScore] = useState('')
+  const [page, setPage] = useState(0)
+  const [pageSize, setPageSize] = useState(10)
+  const [checked, setChecked] = useState(() => new Set())
+  const filters = { q, site, type, priority, status, preset, minScore }
+  const filtered = useMemo(() => filterPlanningRows(rows, { q, site, type, priority, status, preset, minScore }, now), [rows, q, site, type, priority, status, preset, minScore, now])
+  useEffect(() => { setPage(0) }, [q, site, type, priority, status, preset, minScore, pageSize, activeCountry])
+  const pages = Math.max(1, Math.ceil(filtered.length / pageSize))
+  const safePage = Math.min(page, pages - 1)
+  const pageRows = filtered.slice(safePage * pageSize, safePage * pageSize + pageSize)
+  const hasFilters = Object.values(filters).some(Boolean)
+  const clearFilters = () => { setQ(''); setSite(''); setType(''); setPriority(''); setStatus(''); setPreset(''); setMinScore('') }
+  const tableRef = useRef(null)
+  const applyPreset = (key) => { setPreset((p) => (p === key ? '' : key)); tableRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }) }
+
+  const toggle = (id) => setChecked((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const pageIds = pageRows.map((r) => r.id)
+  const allOnPage = pageIds.length > 0 && pageIds.every((id) => checked.has(id))
+  const toggleAll = () => setChecked((prev) => {
+    const n = new Set(prev)
+    if (allOnPage) pageIds.forEach((id) => n.delete(id)); else pageIds.forEach((id) => n.add(id))
+    return n
+  })
+  const checkedRows = rows.filter((r) => checked.has(r.id))
+
+  // Exports
+  const doExcel = async (list = filtered) => {
+    try {
+      await exportToExcel(planningExportRows(list), PLANNING_EXPORT_COLUMNS.map((c) => c.key), PLANNING_EXPORT_COLUMNS.map((c) => c.header), reportFileName('Fleet Renewal Planning', scopeLabel))
+    } catch (e) { setActionError(toUserMessage(e, 'Could not export. Try again.')) }
+  }
+  const doPdf = async () => {
+    try {
+      await exportToPdf(planningExportRows(filtered), PLANNING_EXPORT_COLUMNS, `Fleet Renewal Planning (${scopeLabel})`, reportFileName('Fleet Renewal Planning', scopeLabel), 'landscape')
+    } catch (e) { setActionError(toUserMessage(e, 'Could not export. Try again.')) }
+  }
+  const doPlansExcel = async () => {
+    try {
+      const ex = planExportRows(allPlans)
+      await exportToExcel(ex, PLAN_EXPORT_COLUMNS.map((c) => c.key), PLAN_EXPORT_COLUMNS.map((c) => c.header), reportFileName('Fleet Renewal Plans', scopeLabel))
+    } catch (e) { setActionError(toUserMessage(e, 'Could not export. Try again.')) }
+  }
+
+  // CRUD
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(null)
-  // The delete dialog needs its OWN error slot. `formError` renders only inside
-  // the create/edit dialog, so a failed delete used to write its message where
-  // nothing could show it: the dialog just stayed open with no explanation.
   const [deleteError, setDeleteError] = useState('')
   const [deleting, setDeleting] = useState(false)
 
-  const load = useCallback(async () => {
-    setRefreshing(true); setError('')
-    try {
-      const data = await listRenewalPlansEnriched({ country: activeCountry })
-      setRows(Array.isArray(data) ? data : [])
-      setUpdatedAt(new Date())
-    } catch (err) {
-      setError(isMissingRelation(err) ? 'missing' : toUserMessage(err, 'Could not load renewal plans.'))
-      setRows([])
-    } finally {
-      setRefreshing(false)
-    }
-  }, [activeCountry])
-
-  useEffect(() => { load() }, [load])
-
-  const now = updatedAt ?? EPOCH_DATE
-  const kpi = useMemo(() => buildRenewalKpis(rows || [], now), [rows, now])
-  const insights = useMemo(() => buildRenewalInsights(rows || [], now), [rows, now])
-  const statusDist = useMemo(() => statusDistribution(rows || []), [rows])
-  const priorityDist = useMemo(() => priorityDistribution(rows || []), [rows])
-  const pipeline = useMemo(() => renewalPipeline(rows || [], { granularity: pipelineGranularity, now }), [rows, pipelineGranularity, now])
-  const budget = useMemo(() => estimateBudget(rows || []), [rows])
-  const siteBreakdown = useMemo(() => bySite(rows || []), [rows])
-  const typeBreakdown = useMemo(() => byVehicleType(rows || []), [rows])
-  const ageBandData = useMemo(() => ageBands(rows || []), [rows])
-  const mileageBandData = useMemo(() => mileageBands(rows || []), [rows])
-  const overdue = useMemo(() => overduePlans(rows || [], now), [rows, now])
-
-  const siteOptions = useMemo(
-    () => [...new Set((rows || []).map((r) => r.site).filter(Boolean))].sort(),
-    [rows],
-  )
-
-  const filtered = useMemo(() => filterRenewalPlans(rows || [], {
-    status: statusFilter, priority: priorityFilter, site: siteFilter,
-    from: fromDate, to: toDateVal, search, overdueOnly,
-  }, now), [rows, statusFilter, priorityFilter, siteFilter, fromDate, toDateVal, search, overdueOnly, now])
-
-  // Soonest action first; the register sorts across the WHOLE filtered set and
-  // the exports below walk it in full, never just the visible page.
-  const register = useMemo(() => renewalRegisterRows(filtered, now), [filtered, now])
-
-  const chartText = (typeof document !== 'undefined'
-    && getComputedStyle(document.documentElement).getPropertyValue('--text-muted')) || '#9ca3af'
-  const gridColor = 'var(--panel-2)'
-
-  const legendOpts = { legend: { labels: { color: chartText, boxWidth: 12, font: { size: 11 } } } }
-
-  // Status doughnut
-  const statusDonut = {
-    labels: statusDist.map((s) => s.label),
-    datasets: [{ data: statusDist.map((s) => s.count), backgroundColor: statusDist.map((s) => STATUS_HEX[s.key]), borderWidth: 0 }],
+  const openCreate = (row) => {
+    setEditing(null)
+    setForm(row ? {
+      ...EMPTY_FORM,
+      asset_no: row.asset_no || '', site: row.site || '', current_km: row.current_km ?? '', age_years: row.age ?? '',
+      priority: PRIORITY_TO_PLAN[row.priority] || 'medium',
+      recommendation: row.priority && row.priority !== 'unknown' ? row.recommendation : '',
+      country: row.country || '',
+      currency: currencyForCountry(row.country || countryScope) || '',
+    } : { ...EMPTY_FORM, currency: currencyForCountry(countryScope) || '' })
+    setFormError(''); setModalOpen(true)
   }
-  // Priority doughnut
-  const priorityDonut = {
-    labels: priorityDist.map((p) => p.label),
-    datasets: [{ data: priorityDist.map((p) => p.count), backgroundColor: priorityDist.map((p) => PRIORITY_HEX[p.key]), borderWidth: 0 }],
-  }
-  const donutOpts = { responsive: true, maintainAspectRatio: false, plugins: legendOpts }
-
-  // Pipeline bar
-  const pipelineChart = {
-    labels: pipeline.periods.map((p) => p.label),
-    datasets: [{
-      label: 'Plans due',
-      data: pipeline.periods.map((p) => p.count),
-      backgroundColor: pipeline.periods.map((_, i) => withAlpha(colorAt(i), 0.85)),
-      borderRadius: 4,
-    }],
-  }
-  const barOpts = (fmtY) => ({
-    responsive: true, maintainAspectRatio: false,
-    plugins: {
-      legend: { display: false },
-      tooltip: fmtY ? { callbacks: { label: (c) => fmtY(c) } } : undefined,
-    },
-    scales: {
-      x: { ticks: { color: chartText, font: { size: 10 } }, grid: { display: false } },
-      y: { beginAtZero: true, ticks: { color: chartText, precision: 0 }, grid: { color: gridColor } },
-    },
-  })
-
-  // Site + type bars (categorical, themed)
-  const makeCatBar = (data) => ({
-    labels: data.map((d) => d.key),
-    datasets: [{ label: 'Plans', data: data.map((d) => d.count), backgroundColor: categorical(data.length), borderRadius: 4 }],
-  })
-  const siteChart = makeCatBar(siteBreakdown.slice(0, 12))
-  const typeChart = makeCatBar(typeBreakdown.slice(0, 12))
-
-  // Band bars
-  const ageBandChart = {
-    labels: ageBandData.bands.map((b) => b.label),
-    datasets: [{ label: 'Assets', data: ageBandData.bands.map((b) => b.count), backgroundColor: withAlpha(colorAt(2), 0.8), borderRadius: 4 }],
-  }
-  const mileageBandChart = {
-    labels: mileageBandData.bands.map((b) => b.label),
-    datasets: [{ label: 'Assets', data: mileageBandData.bands.map((b) => b.count), backgroundColor: withAlpha(colorAt(4), 0.8), borderRadius: 4 }],
-  }
-
-  // Export: the full filtered register, in soonest-first order.
-  const exportRows = useMemo(() => renewalExportRows(filtered, now), [filtered, now])
-  const scopeLabel = activeCountry && activeCountry !== 'All' ? activeCountry : 'All countries'
-  const doExcel = async () => {
-    try {
-      await exportToExcel(exportRows, RENEWAL_EXPORT_COLUMNS.map((c) => c.key), RENEWAL_EXPORT_COLUMNS.map((c) => c.header), reportFileName('Fleet Renewal Plans', scopeLabel))
-    } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) }
-  }
-  const doPdf = async () => {
-    try {
-      await exportToPdf(exportRows, RENEWAL_EXPORT_COLUMNS, `Fleet Renewal Planning (${scopeLabel})`, reportFileName('Fleet Renewal Plans', scopeLabel), 'landscape')
-    } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) }
-  }
-
-  // CRUD
-  const openCreate = () => { setEditing(null); setForm(EMPTY_FORM); setFormError(''); setModalOpen(true) }
-  const openEdit = (r) => {
-    setEditing(r)
+  const openEdit = (p) => {
+    setEditing(p)
     setForm({
-      asset_no: r.asset_no || '', current_km: r.current_km ?? '', age_years: r.age_years ?? '',
-      recommendation: r.recommendation || '', target_replace_date: r.target_replace_date ? String(r.target_replace_date).slice(0, 10) : '',
-      est_cost: r.est_cost ?? '', priority: r.priority || 'medium', status: r.status || 'planned',
-      site: r.site || '', notes: r.notes || '',
+      asset_no: p.asset_no || '', current_km: p.current_km ?? '', age_years: p.age_years ?? '',
+      recommendation: p.recommendation || '', target_replace_date: p.target_replace_date ? String(p.target_replace_date).slice(0, 10) : '',
+      est_cost: p.est_cost ?? '', priority: p.priority || 'medium', status: p.status || 'planned',
+      site: p.site || '', notes: p.notes || '', country: p.country || '',
+      planned_year: p.planned_year ?? '', currency: p.currency || currencyForCountry(p.country) || '',
     })
     setFormError(''); setModalOpen(true)
   }
   const setField = (k, v) => setForm((f) => ({ ...f, [k]: v }))
+  const formCurrency = form.currency || currencyForCountry(form.country || countryScope) || activeCurrency
 
   const submit = useCallback(async (e) => {
     e?.preventDefault?.()
     setFormError('')
     if (!form.asset_no.trim()) { setFormError('An asset number is required.'); return }
+    const year = String(form.planned_year ?? '').trim()
+    if (year && !/^(20\d\d|2100)$/.test(year)) { setFormError('Planned year must be a year between 2000 and 2100.'); return }
     setSaving(true)
     try {
-      const payload = { ...form, country: activeCountry !== 'All' ? activeCountry : null }
+      const payload = { ...form, country: form.country || countryScope || null, currency: form.currency || currencyForCountry(form.country || countryScope) || null }
       if (editing) {
         const updated = await updateRenewalPlan(editing.id, payload)
-        setRows((prev) => (prev || []).map((r) => (r.id === updated.id ? { ...r, ...updated } : r)))
+        setPlans((prev) => (prev || []).map((r) => (r.id === updated.id ? { ...r, ...updated } : r)))
       } else {
         const created = await createRenewalPlan(payload)
-        setRows((prev) => [created, ...(prev || [])])
+        setPlans((prev) => [created, ...(prev || [])])
       }
       setModalOpen(false)
     } catch (err) {
@@ -259,15 +318,14 @@ export default function FleetRenewal() {
     } finally {
       setSaving(false)
     }
-  }, [form, editing, activeCountry])
+  }, [form, editing, countryScope])
 
   const doDelete = useCallback(async () => {
     if (!confirmDelete) return
-    setDeleting(true)
-    setDeleteError('')
+    setDeleting(true); setDeleteError('')
     try {
       await deleteRenewalPlan(confirmDelete.id)
-      setRows((prev) => (prev || []).filter((r) => r.id !== confirmDelete.id))
+      setPlans((prev) => (prev || []).filter((r) => r.id !== confirmDelete.id))
       setConfirmDelete(null)
     } catch (err) {
       setDeleteError(toUserMessage(err, 'Could not delete the plan.'))
@@ -275,335 +333,293 @@ export default function FleetRenewal() {
       setDeleting(false)
     }
   }, [confirmDelete])
-
-  // One named close per dialog, carrying the in-flight guard the hand-rolled
-  // backdrop already had. Each dialog can now be closed from Escape, the
-  // backdrop, the X and Cancel, and all four must agree: dropping out mid-save
-  // would hide a write that is still running. `useDialogBehavior` keeps onClose
-  // in a ref, so a plain function here needs no useCallback.
   const closeForm = () => { if (!saving) setModalOpen(false) }
   const closeDelete = () => { if (!deleting) { setConfirmDelete(null); setDeleteError('') } }
 
-  const clearFilters = () => {
-    setStatusFilter('all'); setPriorityFilter('all'); setSiteFilter('all')
-    setFromDate(''); setToDateVal(''); setSearch(''); setOverdueOnly(false)
-  }
-  const hasFilters = statusFilter !== 'all' || priorityFilter !== 'all' || siteFilter !== 'all' || fromDate || toDateVal || search || overdueOnly
+  const refreshAll = () => { loadPlans(); fleetCard.retry(); utilCard.retry(); bdCard.retry(); sigCard.retry() }
 
-  const money = (v) => (v == null ? 'N/A' : formatCurrencyCompact(v, activeCurrency))
-
+  // KPIs
+  const regLoading = fleetCard.loading && !fleetCard.data
+  const capexKpi = kpi.capex
+  const capexTitle = capexKpi.mixed
+    ? `Open plans span more than one currency, so no single total is shown: ${capexKpi.byCurrency.map((c) => money(c.amount, c.currency)).join(', ')}. Pick a country to see one figure.`
+    : capexKpi.amount == null ? 'No open renewal plan with a cost targets the next 12 months.' : `${capexKpi.costed} open plan(s) with a cost and a target date within 12 months (overdue included).`
   const kpis = [
-    { label: 'Total plans', value: kpi.total, icon: ClipboardList, tone: 'text-[var(--text-primary)]' },
-    { label: 'Open', value: kpi.open, icon: ListChecks, tone: 'text-sky-400' },
-    { label: 'Overdue', value: kpi.overdue, icon: AlertOctagon, tone: 'text-red-400' },
-    { label: 'Due <= 90d', value: kpi.dueSoon, icon: CalendarClock, tone: 'text-amber-400' },
-    { label: 'High priority open', value: kpi.highPriorityOpen, icon: TrendingUp, tone: 'text-red-400' },
-    { label: 'Est. budget', value: money(kpi.estBudget), icon: Wallet, tone: 'text-emerald-400' },
-    { label: 'Open budget', value: money(kpi.openBudget), icon: DollarSign, tone: 'text-amber-400' },
-    { label: 'Avg age', value: kpi.avgAge == null ? 'N/A' : `${kpi.avgAge.toFixed(1)} yr`, icon: Gauge, tone: 'text-sky-400' },
+    { icon: Truck, tone: 't-red', value: kpi.due, display: fleetCard.error ? 'N/A' : undefined, label: 'Assets due for replacement', loading: regLoading, title: `Critical under the planning rule: marked for scrap, or 1 year or less of a ${PLANNING_LIFE_YEARS}-year planning life left.`, onClick: () => applyPreset('due') },
+    { icon: Clock, tone: 't-amber', value: kpi.aging, display: fleetCard.error ? 'N/A' : undefined, label: `Aging assets (> ${AGING_YEARS} years)`, loading: regLoading, title: `${fmtInt(kpi.withAge)} of ${fmtInt(kpi.assets)} current assets have a usable model year.` },
+    { icon: Wallet, tone: 't-green', label: 'Forecast CAPEX (next 12 months)', loading: plansLoading, display: planError ? 'N/A' : money(capexKpi.amount, capexKpi.currency), title: planError ? 'Renewal plans could not be read.' : capexTitle },
+    { icon: PiggyBank, tone: 't-blue', label: 'Estimated savings', display: 'N/A', title: 'No source records savings. Renewal plans carry an estimated cost only, so a saving would be invented.' },
+    { icon: CheckCircle2, tone: 't-green', value: kpi.approved, display: planError ? 'N/A' : undefined, label: 'Approved replacements', loading: plansLoading, title: 'Renewal plans with status Approved.', onClick: () => { setPreset(''); setStatus('approved') } },
+    { icon: ShoppingCart, tone: 't-purple', label: 'In procurement', display: 'N/A', title: 'Renewal plans record Planned, Approved, Deferred or Completed. No procurement stage is recorded, so this cannot be counted.' },
   ]
 
-  const loading = rows === null
-
+  const na = (t = 'N/A') => <span className="cc-na">{t}</span>
   const columns = [
     {
-      id: 'asset', header: 'Asset', accessorFn: (r) => blank(r.asset_no), sortingFn: valueSort, sortUndefined: 'last', size: 140,
-      cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original.asset_no || 'N/A'}</span>,
+      key: '_sel', sortable: false,
+      header: <input type="checkbox" aria-label="Select all assets on this page" checked={allOnPage} onChange={toggleAll} />,
+      cell: (r) => <input type="checkbox" aria-label={`Select ${r.asset_no}`} checked={checked.has(r.id)} onChange={() => toggle(r.id)} />,
     },
-    { id: 'type', header: 'Type', accessorFn: (r) => blank(r.vehicle_type), sortingFn: valueSort, sortUndefined: 'last', size: 120, cell: ({ getValue }) => <span className="text-[var(--text-secondary)]">{getValue() || 'N/A'}</span> },
-    { id: 'site', header: 'Site', accessorFn: (r) => blank(r.site), sortingFn: valueSort, sortUndefined: 'last', size: 120, cell: ({ getValue }) => <span className="text-[var(--text-secondary)]">{getValue() || 'N/A'}</span> },
-    { id: 'age', header: 'Age', accessorFn: (r) => r.ageValue ?? undefined, sortingFn: valueSort, sortUndefined: 'last', size: 80, meta: { align: 'right' }, cell: ({ getValue }) => <span className="tabular-nums">{getValue() == null ? 'N/A' : `${getValue()} yr`}</span> },
-    { id: 'km', header: 'Current km', accessorFn: (r) => r.kmValue ?? undefined, sortingFn: valueSort, sortUndefined: 'last', size: 110, meta: { align: 'right' }, cell: ({ getValue }) => <span className="tabular-nums">{num(getValue())}</span> },
-    { id: 'recommendation', header: 'Recommendation', accessorFn: (r) => blank(r.recommendation), sortingFn: valueSort, sortUndefined: 'last', size: 220, cell: ({ getValue }) => <span className="text-[var(--text-secondary)] block max-w-[220px] truncate" title={getValue() || ''}>{getValue() || 'N/A'}</span> },
-    { id: 'priority', header: 'Priority', accessorFn: (r) => r.priorityRank || undefined, sortingFn: valueSort, sortUndefined: 'last', size: 100, cell: ({ row }) => <span className={`badge text-[11px] px-2 py-0.5 rounded ${PRIORITY_STYLES[row.original.priority] || ''}`}>{RENEWAL_PRIORITY_META[row.original.priority]?.label || row.original.priority || 'N/A'}</span> },
     {
-      id: 'target', header: 'Target date', accessorFn: (r) => r.daysToTarget ?? undefined, sortingFn: valueSort, sortUndefined: 'last', size: 150,
-      cell: ({ row }) => (
-        <span className="whitespace-nowrap">
-          <span className={row.original.isOverdue ? 'text-red-500 font-medium' : 'text-[var(--text-secondary)]'}>{fmtDate(row.original.target_replace_date)}</span>
-          {row.original.isOverdue && <span className="ml-1.5 text-[10px] font-semibold uppercase text-red-500">overdue</span>}
-        </span>
-      ),
+      key: 'asset_no', header: 'Asset no',
+      cell: (r) => (r.inRegister
+        ? <Link className="fr-asset" to={`/asset-management/${encodeURIComponent(r.asset_no)}`}>{r.asset_no}</Link>
+        : <span title="This plan's asset is not in the current fleet register">{r.asset_no} <span className="fr-sub">Not in register</span></span>),
     },
-    { id: 'cost', header: 'Est. cost', accessorFn: (r) => r.costValue ?? undefined, sortingFn: valueSort, sortUndefined: 'last', size: 110, meta: { align: 'right' }, cell: ({ getValue }) => <span className="tabular-nums text-[var(--text-secondary)]">{getValue() == null ? 'N/A' : formatCurrencyCompact(getValue(), activeCurrency)}</span> },
-    { id: 'status', header: 'Status', accessorFn: (r) => blank(RENEWAL_STATUS_META[r.status]?.label || r.status), sortingFn: valueSort, sortUndefined: 'last', size: 110, cell: ({ row }) => <span className={`badge text-[11px] px-2 py-0.5 rounded ${STATUS_STYLES[row.original.status] || ''}`}>{RENEWAL_STATUS_META[row.original.status]?.label || row.original.status || 'N/A'}</span> },
+    { key: 'fleet_no', header: 'Fleet no', cell: (r) => r.fleet_no || na() },
+    { key: 'make', header: 'Make / model', cell: (r) => [r.make, r.model].filter(Boolean).join(' ') || na() },
+    { key: 'vehicle_type', header: 'Category', cell: (r) => r.vehicle_type || na() },
+    { key: 'age', header: 'Age (years)', align: 'right', cell: (r) => (r.age == null ? <span className="cc-na" title={r.model_year ? `Model year ${r.model_year} is not usable` : 'No model year recorded'}>N/A</span> : r.age) },
     {
-      id: 'actions', header: '', enableSorting: false, size: 100, meta: { export: false },
-      cell: ({ row }) => (
-        <div className="flex items-center justify-end gap-1">
-          <button type="button" onClick={() => openEdit(row.original)} className={ICON_BTN} aria-label={`Edit plan for ${row.original.asset_no}`}><Pencil size={14} /></button>
-          <button type="button" onClick={() => { setDeleteError(''); setConfirmDelete(row.original) }} className={`${ICON_BTN} hover:text-red-500`} aria-label={`Delete plan for ${row.original.asset_no}`}><Trash2 size={14} /></button>
-        </div>
+      key: 'utilization', header: 'Utilization',
+      cell: (r) => (signalsLoading ? na('...') : <span title={utilCard.data == null ? 'Utilisation could not be read' : r.utilization == null ? 'No telematics snapshot' : 'Latest telematics snapshot'}><MeterCell value={r.utilization} suffix="%" /></span>),
+    },
+    { key: 'health', header: 'Health score', cell: (r) => (signalsLoading ? na('...') : <HealthBadge value={r.health} />) },
+    { key: 'remaining', header: 'Remaining life', cell: (r) => remainingLifeLabel(r.remainingYears) },
+    { key: 'score', header: 'Renewal score', align: 'right', cell: (r) => (costLoading ? na('...') : r.score == null ? na() : <span className={`fr-health ${r.score >= SCORE_RAISE ? 'bad' : r.score >= 50 ? 'warn' : 'good'}`} title={scoreTitle(r)}>{r.score}</span>) },
+    { key: 'current_km', header: 'Km / hours', align: 'right', cell: (r) => (
+      <span title={r.lastHoursAt ? `Hour meter read ${r.lastHoursAt}` : undefined}>
+        {r.current_km == null ? na() : fmtInt(Math.round(r.current_km))}
+        <span className="fr-sub">{costLoading ? '...' : r.lastHours == null ? 'Hours N/A' : `${fmtInt(Math.round(r.lastHours))} h`}</span>
+      </span>) },
+    { key: 'repair', header: 'Repair cost 12 mo', align: 'right', cell: (r) => (costLoading ? na('...') : costUnreadable || !r.inRegister ? na() : (moneyText(r.repairCost12m) || <span title="No store issue booked to this asset in the last 12 months">None</span>)) },
+    { key: 'downtime', header: 'Downtime 12 mo', align: 'right', cell: (r) => (costLoading ? na('...') : costUnreadable || !r.inRegister ? na() : r.downtimeHours12m == null ? <span className="cc-na" title={r.jobCards12m ? `${r.jobCards12m} job cards, none with both production out and in times` : 'No job card in the last 12 months'}>N/A</span> : `${fmtInt(Math.round(r.downtimeHours12m))} h`) },
+    { key: 'accidents', header: 'Accidents', align: 'right', cell: (r) => (costLoading ? na('...') : costUnreadable || !r.inRegister ? na() : <span title={`${r.accidents12m} in the last 12 months`}>{r.accidentsAll}</span>) },
+    { key: 'priority', header: 'Priority', cell: (r) => <span className={`cc-pill ${PRIORITY_META[r.priority]?.tone || 'muted'}`}>{PRIORITY_META[r.priority]?.label || 'Unknown'}</span> },
+    { key: 'recommendation', header: 'Recommendation', cell: (r) => <span title={r.plan?.recommendation ? `Plan: ${r.plan.recommendation}` : undefined}>{r.recommendation}</span> },
+    {
+      key: 'budget', header: 'Est. budget', align: 'right',
+      cell: (r) => (!r.plan ? na('No plan') : r.budget == null ? na() : <span title={planYear(r.plan) ? `Planned year ${planYear(r.plan)}` : 'No planned year'}>{money(r.budget, r.currency)}</span>),
+    },
+    {
+      key: 'status', header: 'Approval status',
+      cell: (r) => (r.plan
+        ? <span className={`cc-pill ${PLAN_STATUS_META[r.planStatus]?.tone || 'muted'}`} title={r.plan.target_replace_date ? `Target ${String(r.plan.target_replace_date).slice(0, 10)}` : 'No target date'}>{PLAN_STATUS_META[r.planStatus]?.label || r.planStatus}</span>
+        : <span className="cc-pill muted">No plan</span>),
+    },
+    {
+      key: '_actions', header: 'Actions', sortable: false,
+      cell: (r) => (
+        <RowMenu label={`Actions for ${r.asset_no}`} items={[
+          r.inRegister && { label: 'View asset', icon: Eye, to: `/asset-management/${encodeURIComponent(r.asset_no)}` },
+          r.plan ? { label: 'Edit plan', icon: Pencil, onClick: () => openEdit(r.plan) } : (!notProvisioned && { label: 'Add renewal plan', icon: Plus, onClick: () => openCreate(r) }),
+          r.plan && { label: 'Delete plan', icon: Trash2, danger: true, onClick: () => { setDeleteError(''); setConfirmDelete(r.plan) } },
+        ]} />
       ),
     },
   ]
 
+  const tableState = {
+    loading: fleetCard.loading || plansLoading,
+    error: fleetCard.error || (planError ? `Renewal plans could not be read, so plan status would be wrong. ${planError}` : null),
+    retry: () => { fleetCard.retry(); loadPlans() },
+    data: fleetCard.data && plans ? true : null,
+  }
+  const plansState = { loading: plansLoading, error: planError || null, retry: loadPlans, data: plans }
+  const pipeTotal = pipeline.reduce((s, x) => s + x.count, 0)
+
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Fleet Renewal Planning"
-        subtitle="Vehicle replacement & lifecycle planning: age, mileage, target date, budget and priority across the fleet."
-        icon={Truck}
-        onRefresh={load}
-        refreshing={refreshing}
-        updatedAt={updatedAt}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={doExcel} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] sm:min-h-0" disabled={!filtered.length}>
-              <FileSpreadsheet size={14} aria-hidden="true" /> Excel
-            </button>
-            <button type="button" onClick={doPdf} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] sm:min-h-0" disabled={!filtered.length}>
-              <FileText size={14} aria-hidden="true" /> PDF
-            </button>
-            <button type="button" onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px] sm:min-h-0" disabled={error === 'missing'}>
-              <Plus size={14} aria-hidden="true" /> New plan
-            </button>
-          </div>
-        }
+    <div className="cc fr-page">
+      <PageHero
+        title="Fleet Renewal"
+        lead={<>Plan smarter. Replace at the right time. Maximize value.<span className="fr-lead-2">Replacement planning from the fleet register, the breakdown log and telematics, with every plan's budget and approval in one place.</span></>}
+        imgLight="/dashboard/hero-renewal-light.webp"
+        imgDark="/dashboard/hero-renewal-dark.webp"
       />
 
-      {error === 'missing' ? (
-        // `border border-amber-800/50` as classes would be DEAD here: Card sets
-        // `border` and `borderColor` inline and inline beats a class, so the tint
-        // is carried by `tone` instead. Card is `flex flex-col` and Tailwind
-        // emits .flex-col after .flex-row, so the row direction goes in `style`,
-        // which Card spreads last.
-        <Card tone="warn" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
-          <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
-          <div>
-            <p className="text-amber-300 font-medium">Fleet renewal planning is not enabled on this database yet.</p>
-            <p className="text-[var(--text-muted)] text-sm mt-1">
-              Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V159_FLEET_RENEWAL.sql</span>, then reload.
-            </p>
-          </div>
-        </Card>
-      ) : error ? (
-        <Card tone="crit" className="items-start gap-[var(--space-3)] flex-wrap" style={{ flexDirection: 'row' }} role="alert">
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
-          <div className="flex-1">
-            <p className="text-red-300 font-medium">Could not load renewal plans.</p>
-            <p className="text-[var(--text-muted)] text-sm mt-1">{error}</p>
-          </div>
-          <button type="button" onClick={load} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] sm:min-h-0"><RefreshCw size={14} aria-hidden="true" /> Retry</button>
-        </Card>
-      ) : null}
+      {notProvisioned && (
+        <div className="cc-card fr-banner warn" role="status">
+          <AlertTriangle size={17} aria-hidden="true" />
+          <div><b>Renewal plans are not enabled on this database yet.</b><p>Apply MIGRATIONS_V159_FLEET_RENEWAL.sql, then reload. The register assessment below still works.</p></div>
+        </div>
+      )}
+      {actionError && (
+        <div className="cc-card fr-banner bad" role="alert">
+          <AlertTriangle size={17} aria-hidden="true" />
+          <div><p>{actionError}</p></div>
+          <button type="button" className="cc-icon-btn" onClick={() => setActionError('')} aria-label="Dismiss message"><X size={14} /></button>
+        </div>
+      )}
+      {fleetCard.data?.truncated && (
+        <div className="cc-card fr-banner warn" role="status">
+          <AlertTriangle size={17} aria-hidden="true" />
+          <div><p>The fleet register returned more assets than this page reads at once, so figures cover the first {fmtInt(fleetCard.data.rows.length)}. Pick a country to narrow it.</p></div>
+        </div>
+      )}
 
-      {/* KPI tiles */}
-      <p className="text-[11px] text-[var(--text-muted)] -mb-3">Figures cover all {kpi.total.toLocaleString()} plan(s) in {scopeLabel}. Filters below narrow the register only.</p>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-[var(--gap-grid)]">
-        {kpis.map((k) => {
-          const Icon = k.icon
-          return (
-            <Card key={k.label}>
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
-                <Icon size={16} className={k.tone} />
-              </div>
-              <p className={`text-2xl font-bold mt-1 ${k.tone}`}>{loading ? 'N/A' : k.value}</p>
+      <div className="cc-kpis">
+        {kpis.map((k) => <Kpi key={k.label} {...k} />)}
+      </div>
+
+      <div className="fr-layout">
+        <div className="fr-main">
+          <div className="fr-charts">
+            <Card
+              title="Asset Age Distribution"
+              sub={`Current assets by age. ${ageDist.unknown ? `${fmtInt(ageDist.unknown)} with no usable model year are not shown.` : ''}`}
+              action={
+                <select className="cc-select" aria-label="Asset type for age distribution" value={ageType} onChange={(e) => setAgeType(e.target.value)}>
+                  <option value="">All asset types</option>
+                  {typeOptions.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              }
+            >
+              <CardState state={fleetCard} empty={fleetCard.data && ageDist.total - ageDist.unknown === 0 ? (ageDist.total === 0 ? 'No current assets in this scope.' : 'None of these assets has a usable model year.') : null}>
+                <Bars label="Assets by age in years" data={ageDist.bands.map((b) => ({ key: b.key, label: b.label, value: b.count }))} />
+                <p className="fr-foot">Asset age (years), from the model year.</p>
+              </CardState>
             </Card>
-          )
-        })}
-      </div>
 
-      {/* Insights */}
-      {!loading && insights.length > 0 && (
-        // The old `border border-[var(--input-border)]` only restated the default
-        // card edge, and as a class it could not win against Card's inline
-        // border anyway. Card's default tone already draws it.
-        <Card>
-          <CardHeader icon={AlertTriangle} title="Priority findings" />
-          <ul className="space-y-1.5">
-            {insights.map((s, i) => (
-              <li key={i} className="text-sm text-[var(--text-secondary)] flex items-start gap-2">
-                <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" /> {s}
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
+            <Card className="fr-pipe" title="Renewal Pipeline" sub="Renewal plans by status and target date.">
+              <CardState state={plansState} empty={plans && pipeTotal === 0 ? (notProvisioned ? 'Renewal plans are not enabled yet.' : 'No renewal plans yet. Add one from the planning table.') : null}>
+                <Donut segments={pipeline} total={pipeTotal} centerLabel="Plans"
+                  onSelect={(s) => { setPreset(s.key === 'next12' ? 'next12' : ''); setStatus(s.key === 'approved' ? 'approved' : s.key === 'deferred' ? 'deferred' : s.key === 'completed' ? 'completed' : s.key === 'beyond' ? 'planned' : '') }} />
+                <p className="fr-foot">No review or procurement stage is recorded on a plan, so none is drawn.</p>
+              </CardState>
+            </Card>
 
-      {/* Pipeline */}
-      <Card>
-        {/* Two short toggles only, so they are safe in `actions` (which is
-            flex-shrink-0 and cannot wrap); a wider button group would belong on
-            its own row beneath the header instead. */}
-        <CardHeader
-          icon={CalendarDays}
-          title="Renewal pipeline"
-          actions={
-            <div className="flex items-center gap-1 text-xs">
-              {['month', 'year'].map((g) => (
-                <button key={g} type="button" onClick={() => setPipelineGranularity(g)} aria-pressed={pipelineGranularity === g}
-                  className={`px-2.5 py-1 min-h-[36px] rounded ${pipelineGranularity === g ? 'bg-[var(--input-bg)] text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}>
-                  {g === 'month' ? 'Monthly' : 'Yearly'}
-                </button>
-              ))}
+            <Card title="CAPEX Forecast by Quarter" sub={`Open plans with a cost and a target date, next 4 quarters${capex.currency ? ` (${capex.currency})` : ''}.`}>
+              <CardState state={plansState}
+                empty={plans && (capex.mixed ? 'Plans in this scope are in more than one currency, so quarters are not summed. Pick a country.' : !capex.hasData ? 'No open plan with a cost targets the next 4 quarters.' : null)}>
+                <Bars label="Planned capital spend by quarter" fmt={(v) => (v ? formatCurrencyCompact(v, '') : '0')} data={capex.quarters.map((x) => ({ key: x.key, label: x.label, value: x.amount ?? 0 }))} />
+                <p className="fr-foot">Sum of estimated cost of planned and approved plans.</p>
+              </CardState>
+            </Card>
+          </div>
+
+          <Card title="Renewal Budget by Year" sub="Every renewal plan by planned year (or its target date year), one column per currency. Currencies are never added together.">
+            <CardState state={plansState}
+              empty={plans && budget.years.length === 0 ? (notProvisioned ? 'Renewal plans are not enabled yet.' : 'No renewal plans yet. Add one from the planning table.') : null}>
+              <KitTable className="fr-table" enableSorting={false} showPagination={false}
+                getRowId={(y) => String(y.year ?? 'none')} rows={budget.years}
+                columns={[
+                  { key: 'year', header: 'Planned year', cell: (y) => (y.year == null ? na('No year set') : y.year) },
+                  { key: 'plans', header: 'Plans', align: 'right', cell: (y) => fmtInt(y.plans) },
+                  ...budget.currencies.map((c) => ({ key: `open_${c}`, header: `Open (${c})`, align: 'right', cell: (y) => (y.open[c] == null ? na('None') : money(y.open[c], c)) })),
+                  ...budget.currencies.map((c) => ({ key: `done_${c}`, header: `Completed (${c})`, align: 'right', cell: (y) => (y.completed[c] == null ? na('None') : money(y.completed[c], c)) })),
+                  ...budget.currencies.map((c) => ({ key: `def_${c}`, header: `Deferred (${c})`, align: 'right', cell: (y) => (y.deferred[c] == null ? na('None') : money(y.deferred[c], c)) })),
+                  { key: 'uncosted', header: 'No cost', align: 'right', cell: (y) => (y.uncosted ? <span title="Plans with no estimated cost or currency">{fmtInt(y.uncosted)}</span> : '0') },
+                ]} />
+            </CardState>
+          </Card>
+
+          <div ref={tableRef}>
+            <Card
+              title="Replacement Planning"
+              sub={<span title={RULE_TEXT}>Every current asset, assessed by the planning rule, with its renewal plan. <Info size={12} aria-hidden="true" style={{ verticalAlign: '-2px' }} /></span>}
+              action={
+                <div className="fr-head-actions">
+                  <button type="button" className="cc-btn-ghost" onClick={() => doExcel()} disabled={!filtered.length}><FileSpreadsheet size={14} aria-hidden="true" /> Excel</button>
+                  <button type="button" className="cc-btn-ghost" onClick={doPdf} disabled={!filtered.length}><FileText size={14} aria-hidden="true" /> PDF</button>
+                  <button type="button" className="cc-btn-primary" onClick={() => openCreate()} disabled={notProvisioned}><Plus size={15} aria-hidden="true" /> Add renewal plan</button>
+                </div>
+              }
+            >
+              <div className="cc-filters fr-filters">
+                <div className="cc-search">
+                  <Search size={15} aria-hidden="true" />
+                  <label htmlFor="fr-search" className="sr-only">Search assets</label>
+                  <input id="fr-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search asset, fleet no, make, model..." />
+                </div>
+                <select className="cc-select" aria-label="Site" value={site} onChange={(e) => setSite(e.target.value)}>
+                  <option value="">All sites</option>
+                  {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+                <select className="cc-select" aria-label="Asset type" value={type} onChange={(e) => setType(e.target.value)}>
+                  <option value="">All asset types</option>
+                  {typeOptions.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+                <select className="cc-select" aria-label="Priority" value={priority} onChange={(e) => setPriority(e.target.value)}>
+                  <option value="">All priorities</option>
+                  {PRIORITY_KEYS.map((p) => <option key={p} value={p}>{PRIORITY_META[p].label}</option>)}
+                </select>
+                <select className="cc-select" aria-label="Plan status" value={status} onChange={(e) => setStatus(e.target.value)}>
+                  <option value="">All statuses</option>
+                  <option value="none">No plan</option>
+                  {RENEWAL_STATUSES.map((s) => <option key={s} value={s}>{PLAN_STATUS_META[s].label}</option>)}
+                </select>
+                <select className="cc-select" aria-label="Minimum renewal score" value={minScore} onChange={(e) => setMinScore(e.target.value)}>
+                  <option value="">Any renewal score</option>
+                  <option value="75">Score 75 or more</option>
+                  <option value="50">Score 50 or more</option>
+                  <option value="25">Score 25 or more</option>
+                </select>
+                {hasFilters && <button type="button" className="cc-btn-ghost" onClick={clearFilters}><X size={13} aria-hidden="true" /> Reset</button>}
+              </div>
+              {preset && (
+                <div className="cc-bulk">
+                  <span className="cc-bulk-count"><Filter size={12} aria-hidden="true" /> Preset: {presets.find((p) => p.key === preset)?.label}</span>
+                  <button type="button" className="cc-btn-ghost" onClick={() => setPreset('')}><X size={13} aria-hidden="true" /> Clear preset</button>
+                </div>
+              )}
+              {checked.size > 0 && (
+                <div className="cc-bulk">
+                  <span className="cc-bulk-count">{checked.size} selected</span>
+                  <button type="button" className="cc-btn-ghost" onClick={() => doExcel(checkedRows)}><FileSpreadsheet size={14} aria-hidden="true" /> Export selected</button>
+                  <button type="button" className="cc-btn-ghost" onClick={() => setChecked(new Set())}>Clear selection</button>
+                </div>
+              )}
+              <CardState state={tableState} lines={8}
+                empty={rows.length === 0 ? 'No current assets or renewal plans in this scope.' : filtered.length === 0 ? 'No assets match these filters.' : null}>
+                <KitTable className="fr-table" manualPagination showPagination={false} enableSorting={false}
+                  pageIndex={safePage} pageSize={pageSize} pageCount={pages} totalRows={filtered.length}
+                  getRowId={(r) => String(r.id)} rows={pageRows} columns={columns} />
+                <Pager page={safePage} pageSize={pageSize} total={filtered.length} noun="assets"
+                  onPage={setPage} onPageSize={setPageSize} sizes={[10, 25, 50, 100]} />
+              </CardState>
+              {(bdCard.data === null && !bdCard.loading) && <p className="fr-foot">The breakdown register could not be read, so health scores use age alone.</p>}
+              {costUnreadable && (
+                <p className="fr-foot" role="alert">Repair cost, downtime, accidents and hour meter could not be read, so the renewal score uses age and km only. <button type="button" className="cc-btn-ghost" onClick={sigCard.retry}><RefreshCw size={12} aria-hidden="true" /> Retry</button></p>
+              )}
+              <p className="fr-foot">Renewal score (0 to 100, higher means a stronger replacement case): {Object.entries(SCORE_WEIGHTS).map(([k, w]) => `${Math.round(w * 100)}% ${SCORE_PART_LABELS[k]}`).join('; ')}. Ranks are relative to the assets in this scope; parts that cannot be measured drop out. The 10 year life is ASSUMED because the register holds no useful life per asset.</p>
+            </Card>
+          </div>
+        </div>
+
+        <aside className="fr-rail" aria-label="Planning guidance">
+          <Card title={<>Planning Rules <span className="fr-tag">Rule based</span></>} sub="Findings from the register. These are fixed rules, not AI."
+            action={<button type="button" className="cc-icon-btn" onClick={refreshAll} aria-label="Refresh"><RefreshCw size={14} /></button>}>
+            <CardState state={fleetCard} empty={fleetCard.data && rules.length === 0 ? 'Nothing needs attention under the planning rule.' : null}>
+              <div className="fr-rules">
+                {rules.map((r) => {
+                  const Icon = RULE_ICON[r.key] || Sparkles
+                  return (
+                    <button key={r.key} type="button" className="cc-insight"
+                      onClick={() => { if (r.preset) applyPreset(r.preset); else if (r.priority) { setPreset(''); setPriority(r.priority) } }}>
+                      <span className={`fr-rule-ic ${r.tone}`}><Icon size={15} aria-hidden="true" /></span>
+                      <span><b>{r.title}</b><small>{r.detail}</small></span>
+                    </button>
+                  )
+                })}
+              </div>
+            </CardState>
+          </Card>
+
+          <Card title="Quick Actions">
+            <div className="cc-quick">
+              <button type="button" onClick={() => openCreate()} disabled={notProvisioned}><Plus size={17} aria-hidden="true" /> Add renewal plan</button>
+              <button type="button" disabled title="Renewal plans have no submit or review step. Set a plan to Approved from Edit plan."><Send size={17} aria-hidden="true" /> Submit for approval</button>
+              <Link to="/tco-calculator"><Scale size={17} aria-hidden="true" /> Compare options</Link>
+              <button type="button" onClick={doPlansExcel} disabled={!allPlans.length} title="Excel of every renewal plan in this scope"><Download size={17} aria-hidden="true" /> Export plan</button>
             </div>
-          }
-        />
-        <div className="h-64">
-          {loading ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" />
-            : pipeline.hasDated ? <Bar data={pipelineChart} options={barOpts((c) => `${c.parsed.y} plan(s), ${money(pipeline.periods[c.dataIndex]?.estCost)}`)} />
-            : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No plans carry a target replacement date yet.</div>}
-        </div>
-        {!loading && (pipeline.undated.count > 0 || pipeline.overdueCount > 0) && (
-          <div className="flex flex-wrap gap-4 mt-3 text-xs text-[var(--text-muted)]">
-            {pipeline.overdueCount > 0 && <span className="inline-flex items-center gap-1"><AlertOctagon size={12} className="text-red-400" /> {pipeline.overdueCount} overdue ({money(pipeline.overdueCost)})</span>}
-            {pipeline.undated.count > 0 && <span className="inline-flex items-center gap-1"><Clock size={12} /> {pipeline.undated.count} without a target date</span>}
-          </div>
-        )}
-      </Card>
+          </Card>
 
-      {/* Distributions */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-[var(--gap-grid)]">
-        <Card>
-          <CardHeader title="Lifecycle status" />
-          <div className="h-56">
-            {loading ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" />
-              : (rows && rows.length) ? <Doughnut data={statusDonut} options={donutOpts} />
-              : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No plans yet.</div>}
-          </div>
-        </Card>
-        <Card>
-          <CardHeader title="Priority" />
-          <div className="h-56">
-            {loading ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" />
-              : (rows && rows.length) ? <Doughnut data={priorityDonut} options={donutOpts} />
-              : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No plans yet.</div>}
-          </div>
-        </Card>
-        <Card>
-          <CardHeader icon={Wallet} title="Estimated budget" />
-          {/* `money(null)` is 'N/A', never 0: a fleet with no costed plan must not
-              read as a zero budget. The engine returns null for that case. */}
-          <p className="text-3xl font-bold text-emerald-400">{loading ? 'N/A' : money(budget.total)}</p>
-          {!loading && (
-            <div className="mt-3 space-y-1.5 text-xs text-[var(--text-muted)]">
-              <p>Open plans budget: <span className="text-[var(--text-secondary)] font-medium">{money(budget.openTotal)}</span></p>
-              <p>{budget.withCost} of {budget.total_plans} plans costed ({Math.round(budget.coverage * 100)}% coverage)</p>
-              {budget.withoutCost > 0 && <p className="text-amber-400">{budget.withoutCost} plan(s) have no estimated cost, so the budget is understated.</p>}
-            </div>
-          )}
-        </Card>
+          <Card title="Filter Presets">
+            <CardState state={fleetCard}>
+              <div className="fr-presets">
+                {presets.map((p) => (
+                  <button key={p.key} type="button" className="fr-preset" aria-pressed={preset === p.key} onClick={() => applyPreset(p.key)}>
+                    <ListChecks size={15} aria-hidden="true" />
+                    <span><b>{p.label}</b><small>{p.sub}</small></span>
+                    <span className="cc-count">{fmtInt(p.count)}</span>
+                  </button>
+                ))}
+              </div>
+            </CardState>
+          </Card>
+        </aside>
       </div>
 
-      {/* Breakdowns: site + type */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-[var(--gap-grid)]">
-        <Card>
-          <CardHeader icon={MapPin} title="By site" />
-          <div className="h-56">
-            {loading ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" />
-              : siteBreakdown.length ? <Bar data={siteChart} options={barOpts()} />
-              : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No site data on these plans.</div>}
-          </div>
-        </Card>
-        <Card>
-          <CardHeader icon={Layers} title="By vehicle type" />
-          <div className="h-56">
-            {loading ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" />
-              : typeBreakdown.length ? <Bar data={typeChart} options={barOpts()} />
-              : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No matching fleet-master vehicle types for these assets.</div>}
-          </div>
-        </Card>
-      </div>
-
-      {/* Due bands: age + mileage */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-[var(--gap-grid)]">
-        <Card>
-          <CardHeader icon={Gauge} title="Age bands" />
-          <div className="h-52">
-            {loading ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" />
-              : ageBandData.hasData ? <Bar data={ageBandChart} options={barOpts()} />
-              : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No age recorded on these plans.</div>}
-          </div>
-          {!loading && ageBandData.hasData && <p className="text-xs text-[var(--text-muted)] mt-2">{ageBandData.withData} plan(s) with a recorded age.</p>}
-        </Card>
-        <Card>
-          <CardHeader icon={TrendingUp} title="Mileage bands" />
-          <div className="h-52">
-            {loading ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" />
-              : mileageBandData.hasData ? <Bar data={mileageBandChart} options={barOpts()} />
-              : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No mileage recorded on these plans.</div>}
-          </div>
-          {!loading && mileageBandData.hasData && <p className="text-xs text-[var(--text-muted)] mt-2">{mileageBandData.withData} plan(s) with a recorded odometer.</p>}
-        </Card>
-      </div>
-
-      {/* Overdue watchlist */}
-      {!loading && overdue.length > 0 && (
-        // Deliberately NOT CardHeader: the red heading is semantic here (this is
-        // an alert surface), and CardHeader pins its title to --text-primary.
-        // The `border border-red-800/50` classes moved to `tone`, which is the
-        // only place a Card border tint can be set.
-        <Card tone="crit">
-          <h3 className="text-sm font-semibold text-red-300 mb-3 flex items-center gap-1.5"><AlertOctagon size={15} /> Overdue watchlist ({overdue.length})</h3>
-          <div className="flex flex-wrap gap-2">
-            {sortBySoonest(overdue, now).slice(0, 12).map((r) => (
-              <button key={r.id} type="button" onClick={() => openEdit(r)} className="text-left rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 min-h-[44px] hover:bg-red-500/20" aria-label={`Edit overdue plan for ${r.asset_no}`}>
-                <p className="text-sm font-medium text-[var(--text-primary)]">{r.asset_no}</p>
-                <p className="text-xs text-red-500">{Math.abs(daysUntil(r.target_replace_date, now) || 0)} day(s) overdue</p>
-              </button>
-            ))}
-          </div>
-          <button type="button" onClick={() => setOverdueOnly(true)} className="btn-secondary text-sm mt-3 min-h-[44px] sm:min-h-0">Show all {overdue.length} overdue in the register</button>
-        </Card>
-      )}
-
-      {/* Filters. No `clip`: the controls here are native <select> and
-          <input type="date">, whose popups the browser paints outside the page's
-          overflow context, so nothing in this card needs cropping. */}
-      <Card>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <label htmlFor="fr-search" className="sr-only">Search renewal plans</label>
-            <input id="fr-search" className="input pl-9 w-full" placeholder="Search asset, type, recommendation, site..." value={search} onChange={(e) => setSearch(e.target.value)} />
-          </div>
-          <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
-            <option value="all">All statuses</option>
-            {RENEWAL_STATUSES.map((s) => <option key={s} value={s}>{RENEWAL_STATUS_META[s].label}</option>)}
-          </select>
-          <select className="input" value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} aria-label="Priority">
-            <option value="all">All priorities</option>
-            {RENEWAL_PRIORITIES.map((p) => <option key={p} value={p}>{RENEWAL_PRIORITY_META[p].label}</option>)}
-          </select>
-          <select className="input" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} aria-label="Site" disabled={!siteOptions.length}>
-            <option value="all">All sites</option>
-            {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-          <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] min-h-[44px] cursor-pointer">
-            <input type="checkbox" className="h-4 w-4" checked={overdueOnly} onChange={(e) => setOverdueOnly(e.target.checked)} />
-            Overdue only
-          </label>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 mt-2">
-          <label htmlFor="fr-from" className="text-xs text-[var(--text-muted)] flex items-center gap-1.5"><Calendar size={13} aria-hidden="true" /> Target from</label>
-          <input id="fr-from" type="date" className="input" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
-          <label htmlFor="fr-to" className="text-xs text-[var(--text-muted)]">to</label>
-          <input id="fr-to" type="date" className="input" value={toDateVal} onChange={(e) => setToDateVal(e.target.value)} />
-          {hasFilters && <button type="button" onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] sm:min-h-0"><X size={14} aria-hidden="true" /> Clear</button>}
-          <span className="text-xs text-[var(--text-muted)] ml-auto" aria-live="polite">{filtered.length} of {kpi.total}</span>
-        </div>
-      </Card>
-
-      <EnterpriseTable
-        columns={columns}
-        data={register}
-        getRowId={(r) => String(r.id)}
-        loading={loading}
-        enableGlobalFilter={false}
-        enableColumnFilters={false}
-        enableExport={false}
-        viewKey="fleet-renewal"
-        initialPageSize={25}
-        emptyMessage={error === 'missing' ? 'Fleet renewal planning is not enabled yet.' : error ? 'Plans could not be loaded. Use Retry above.' : kpi.total === 0 ? 'No renewal plans yet. Create the first to start planning.' : 'No plans match these filters.'}
-      />
-
-      {/* Create / Edit modal. The submit button stays INSIDE the <form> rather
-          than moving to Modal's `footer`: a footer button would need a
-          `form="..."` association to keep submitting, which is a behaviour
-          change, not a migration. Modal already owns the height cap, the focus
-          trap, the scroll lock and escape-to-close. */}
       {modalOpen && (
         <Modal
           open
@@ -615,71 +631,80 @@ export default function FleetRenewal() {
             </span>
           }
         >
-            <form onSubmit={submit} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="label">Asset number *</label>
-                  <input className="input w-full" value={form.asset_no} onChange={(e) => setField('asset_no', e.target.value)} placeholder="e.g. TRK-1042" maxLength={120} />
-                </div>
-                <div>
-                  <label className="label">Site</label>
-                  <input className="input w-full" value={form.site} onChange={(e) => setField('site', e.target.value)} placeholder="Depot / branch" />
-                </div>
-                <div>
-                  <label className="label">Current km</label>
-                  <input type="number" className="input w-full" value={form.current_km} onChange={(e) => setField('current_km', e.target.value)} placeholder="e.g. 385000" />
-                </div>
-                <div>
-                  <label className="label">Age (years)</label>
-                  <input type="number" step="0.1" className="input w-full" value={form.age_years} onChange={(e) => setField('age_years', e.target.value)} placeholder="e.g. 8" />
-                </div>
-                <div>
-                  <label className="label">Priority</label>
-                  <select className="input w-full" value={form.priority} onChange={(e) => setField('priority', e.target.value)}>
-                    {RENEWAL_PRIORITIES.map((p) => <option key={p} value={p}>{RENEWAL_PRIORITY_META[p].label}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="label">Status</label>
-                  <select className="input w-full" value={form.status} onChange={(e) => setField('status', e.target.value)}>
-                    {RENEWAL_STATUSES.map((s) => <option key={s} value={s}>{RENEWAL_STATUS_META[s].label}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="label">Target replace date</label>
-                  <input type="date" className="input w-full" value={form.target_replace_date} onChange={(e) => setField('target_replace_date', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Estimated cost ({activeCurrency})</label>
-                  <input type="number" className="input w-full" value={form.est_cost} onChange={(e) => setField('est_cost', e.target.value)} placeholder="e.g. 250000" />
-                </div>
+          <form onSubmit={submit} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="label" htmlFor="frf-asset">Asset number *</label>
+                <input id="frf-asset" className="input w-full" value={form.asset_no} onChange={(e) => setField('asset_no', e.target.value)} placeholder="e.g. TRK-1042" maxLength={120} />
               </div>
               <div>
-                <label className="label">Recommended action</label>
-                <input className="input w-full" value={form.recommendation} onChange={(e) => setField('recommendation', e.target.value)} placeholder="e.g. Replace with EV tractor unit" maxLength={8000} />
+                <label className="label" htmlFor="frf-site">Site</label>
+                <input id="frf-site" className="input w-full" value={form.site} onChange={(e) => setField('site', e.target.value)} placeholder="Depot / branch" />
               </div>
               <div>
-                <label className="label">Notes</label>
-                <textarea className="input w-full min-h-[80px] resize-y" value={form.notes} onChange={(e) => setField('notes', e.target.value)} placeholder="Justification, TCO context, procurement notes..." maxLength={8000} />
+                <label className="label" htmlFor="frf-km">Current km</label>
+                <input id="frf-km" type="number" className="input w-full" value={form.current_km} onChange={(e) => setField('current_km', e.target.value)} placeholder="e.g. 385000" />
               </div>
-              {formError && (
-                <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
-                  <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {formError}
-                </div>
-              )}
-              <div className="flex items-center justify-end gap-3 pt-1">
-                <button type="button" onClick={closeForm} className="btn-secondary text-sm" disabled={saving}>Cancel</button>
-                <button type="submit" className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={saving}>
-                  {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-                  {saving ? 'Saving...' : (editing ? 'Save changes' : 'Create plan')}
-                </button>
+              <div>
+                <label className="label" htmlFor="frf-age">Age (years)</label>
+                <input id="frf-age" type="number" step="0.1" className="input w-full" value={form.age_years} onChange={(e) => setField('age_years', e.target.value)} placeholder="e.g. 8" />
               </div>
-            </form>
+              <div>
+                <label className="label" htmlFor="frf-pri">Priority</label>
+                <select id="frf-pri" className="input w-full" value={form.priority} onChange={(e) => setField('priority', e.target.value)}>
+                  {RENEWAL_PRIORITIES.map((p) => <option key={p} value={p}>{RENEWAL_PRIORITY_META[p].label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label" htmlFor="frf-status">Status</label>
+                <select id="frf-status" className="input w-full" value={form.status} onChange={(e) => setField('status', e.target.value)}>
+                  {RENEWAL_STATUSES.map((s) => <option key={s} value={s}>{RENEWAL_STATUS_META[s].label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label" htmlFor="frf-date">Target replace date</label>
+                <input id="frf-date" type="date" className="input w-full" value={form.target_replace_date} onChange={(e) => setField('target_replace_date', e.target.value)} />
+              </div>
+              <div>
+                <label className="label" htmlFor="frf-cost">Estimated cost ({formCurrency})</label>
+                <input id="frf-cost" type="number" className="input w-full" value={form.est_cost} onChange={(e) => setField('est_cost', e.target.value)} placeholder="e.g. 250000" />
+              </div>
+              <div>
+                <label className="label" htmlFor="frf-year">Planned year</label>
+                <input id="frf-year" type="number" min="2000" max="2100" step="1" className="input w-full" value={form.planned_year} onChange={(e) => setField('planned_year', e.target.value)} placeholder={form.target_replace_date ? String(form.target_replace_date).slice(0, 4) : 'e.g. 2027'} />
+              </div>
+              <div>
+                <label className="label" htmlFor="frf-cur">Currency</label>
+                <select id="frf-cur" className="input w-full" value={form.currency} onChange={(e) => setField('currency', e.target.value)}>
+                  <option value="">Country currency</option>
+                  {RENEWAL_CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="label" htmlFor="frf-rec">Recommended action</label>
+              <input id="frf-rec" className="input w-full" value={form.recommendation} onChange={(e) => setField('recommendation', e.target.value)} placeholder="e.g. Replace with EV tractor unit" maxLength={8000} />
+            </div>
+            <div>
+              <label className="label" htmlFor="frf-notes">Notes</label>
+              <textarea id="frf-notes" className="input w-full min-h-[80px] resize-y" value={form.notes} onChange={(e) => setField('notes', e.target.value)} placeholder="Justification, TCO context, procurement notes..." maxLength={8000} />
+            </div>
+            {formError && (
+              <div role="alert" className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
+                <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {formError}
+              </div>
+            )}
+            <div className="flex items-center justify-end gap-3 pt-1">
+              <button type="button" onClick={closeForm} className="btn-secondary text-sm" disabled={saving}>Cancel</button>
+              <button type="submit" className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={saving}>
+                {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+                {saving ? 'Saving...' : (editing ? 'Save changes' : 'Create plan')}
+              </button>
+            </div>
+          </form>
         </Modal>
       )}
 
-      {/* Delete confirm. No <form> here, so the actions belong in Modal's
-          `footer`, which pins them where a user can always reach them. */}
       {confirmDelete && (
         <Modal
           open
@@ -688,18 +713,15 @@ export default function FleetRenewal() {
           title="Delete renewal plan?"
           footer={
             <>
-              <button onClick={closeDelete} className="btn-secondary text-sm" disabled={deleting}>Cancel</button>
-              <button onClick={doDelete} className="btn-danger text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={deleting}>
+              <button type="button" onClick={closeDelete} className="btn-secondary text-sm" disabled={deleting}>Cancel</button>
+              <button type="button" onClick={doDelete} className="btn-danger text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={deleting}>
                 {deleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
                 {deleting ? 'Deleting...' : 'Delete'}
               </button>
             </>
           }
         >
-          <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-full bg-red-900/30 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" /></div>
-            <p className="text-sm text-[var(--text-muted)]">Plan for <span className="font-medium text-[var(--text-secondary)]">{confirmDelete.asset_no}</span> will be permanently removed.</p>
-          </div>
+          <p className="text-sm text-[var(--text-muted)]">The plan for <span className="font-medium text-[var(--text-secondary)]">{confirmDelete.asset_no}</span> will be permanently removed.</p>
           {deleteError && (
             <p role="alert" className="flex items-start gap-2 text-sm text-red-400" style={{ marginTop: 'var(--space-3)' }}>
               <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {deleteError}

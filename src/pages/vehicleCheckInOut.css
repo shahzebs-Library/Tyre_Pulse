@@ -1,0 +1,51 @@
+/* Vehicle Check In/Out page. Only --cc-* tokens, so light and dark share one sheet. */
+.vcio-page { display: flex; flex-direction: column; gap: 14px; }
+.vcio-hero { position: relative; }
+.vcio-hero .cc-hero { min-height: 150px; }
+.vcio-hero-actions { position: absolute; top: 14px; right: 14px; display: flex; gap: 8px; flex-wrap: wrap; }
+.vcio-banner { flex-direction: row; align-items: flex-start; gap: 10px; font-size: 13px; }
+.vcio-banner > svg { flex: none; margin-top: 2px; }
+.vcio-banner > div { flex: 1; min-width: 0; }
+.vcio-banner p { margin: 3px 0 0; color: var(--cc-ink-2); font-size: 12.5px; }
+.vcio-banner.warn > svg { color: var(--cc-amber); }
+.vcio-banner.bad > svg { color: var(--cc-red); }
+.vcio-page .vcio-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.vcio-page .vcio-kpis-8 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.vcio-filters { gap: 8px; }
+.vcio-filters .cc-select, .vcio-filters .vcio-date { padding-top: 9px; padding-bottom: 9px; font-size: 12.5px; }
+.vcio-date { font-size: 12.5px; color: var(--cc-ink); background: var(--cc-inner); border: 1px solid var(--cc-inner-border); border-radius: 8px; padding: 8px 10px; }
+html.light .vcio-date { background: #fff; }
+.vcio-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.vcio-quick-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; }
+.vcio-quick-form .full { grid-column: 1 / -1; }
+.vcio-quick-form label { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; color: var(--cc-ink-2); font-weight: 500; }
+.vcio-quick-form input, .vcio-quick-form select { font-size: 13px; color: var(--cc-ink); background: var(--cc-inner); border: 1px solid var(--cc-inner-border); border-radius: 8px; padding: 9px 10px; width: 100%; min-height: 40px; }
+html.light .vcio-quick-form input, html.light .vcio-quick-form select { background: #fff; }
+.vcio-quick-form input:focus, .vcio-quick-form select:focus { outline: 2px solid var(--cc-green); outline-offset: 1px; }
+.vcio-msg { font-size: 12.5px; border-radius: 8px; padding: 8px 10px; margin: 0; }
+.vcio-msg.bad { color: var(--cc-red); background: var(--cc-red-tint); }
+.vcio-msg.warn { color: var(--cc-amber); background: var(--cc-amber-tint); }
+.vcio-msg.good { color: var(--cc-green); background: var(--cc-green-tint); }
+.vcio-quick-foot { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.vcio-quick-foot .cc-btn-primary { justify-content: center; }
+.vcio-vehicle { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
+.vcio-vehicle b { font-weight: 600; color: var(--cc-ink); }
+.vcio-vehicle small { display: block; color: var(--cc-ink-3); font-size: 11.5px; }
+.vcio-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.vcio-row-actions { display: inline-flex; gap: 4px; align-items: center; justify-content: flex-end; }
+.vcio-row-actions .btn-secondary { padding: 4px 8px; font-size: 12px; }
+.vcio-chart { height: 240px; }
+.vcio-note { font-size: 12px; color: var(--cc-ink-3); margin: 0; }
+.vcio-settings { display: grid; gap: 10px; }
+.vcio-settings dl { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr); gap: 8px 14px; margin: 0; font-size: 13px; }
+.vcio-settings dt { color: var(--cc-ink-2); font-weight: 500; }
+.vcio-settings dd { margin: 0; color: var(--cc-ink); }
+@media (max-width: 1100px) {
+  .vcio-page .vcio-kpis, .vcio-page .vcio-kpis-8 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .vcio-two { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .vcio-hero-actions { position: static; margin-top: 8px; }
+  .vcio-quick-form { grid-template-columns: minmax(0, 1fr); }
+  .vcio-settings dl { grid-template-columns: minmax(0, 1fr); }
+}

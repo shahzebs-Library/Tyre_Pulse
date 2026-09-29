@@ -10,6 +10,7 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
+import 'package:tyre_pulse/core/permissions/access_resolver.dart';
 import 'package:tyre_pulse/core/permissions/permission_providers.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_scope.dart';
@@ -58,6 +59,23 @@ final class WorkspaceController extends Notifier<WorkspaceState> {
   /// profile the caller has just read.
   void adopt(WorkspaceContext workspace) {
     state = WorkspaceState(workspace: workspace);
+  }
+
+  /// Replaces the access inputs of the adopted workspace in place.
+  ///
+  /// Used when the per-user grants and role matrix finish loading after
+  /// sign-in, and again on every foreground revalidation, so a change an
+  /// administrator makes in the web Access Manager reaches the tab bar, the
+  /// Home hub and every route guard at once - they all read
+  /// `accessStateProvider`, which derives from this. A no-op before adoption.
+  void updatePermissions(AccessState access) {
+    final WorkspaceContext? current = state.workspace;
+    if (current == null || current.effectivePermissions == access) {
+      return;
+    }
+    state = state.copyWith(
+      workspace: current.copyWith(effectivePermissions: access),
+    );
   }
 
   /// Clears the workspace on sign-out. Nothing scoped may survive it.

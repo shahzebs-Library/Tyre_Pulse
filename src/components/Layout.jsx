@@ -111,7 +111,7 @@ const NAV_GROUPS = [
   {
     label: 'Overview',
     items: [
-      { to: '/',      label: 'Dashboard',    icon: LayoutDashboard, end: true },
+      { to: '/',      label: 'Command Center',    icon: LayoutDashboard, end: true },
       { to: '/action-center',       label: 'Action Center',      icon: ListTodo, adminOnly: A },
       { to: '/approvals',         label: 'Approvals',          icon: CheckSquare, roles: ANALYTICS_ROLES, flag: 'automation_platform' },
       { to: '/my-checklists',          label: 'My Checklists',       icon: ClipboardList },

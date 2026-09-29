@@ -1,6 +1,6 @@
 import { supabase, unwrap, applyCountry, fetchAllPages } from './_client'
 
-const FLEET_COLS = 'id,organisation_id,asset_no,fleet_number,registration_no,vehicle_type,country,region,site,current_km,current_engine_hours,current_hours,updated_at'
+const FLEET_COLS = 'id,organisation_id,asset_no,fleet_number,registration_no,make,model,vehicle_type,country,region,site,current_km,current_engine_hours,current_hours,updated_at'
 const COMMON_COLS = 'id,organisation_id,asset_no,country,site,reading_date,source,notes,created_at,updated_at,created_by,flagged,flag_reason,reviewed'
 async function all(table, columns, country) {
   const result = await fetchAllPages((from, to) => applyCountry(supabase.from(table).select(columns), country).order('id').range(from, to))
@@ -15,6 +15,11 @@ export async function loadVehicleMeters(country) {
     supabase.rpc('vehicle_meter_permissions').then(rpcResult),
   ])
   return { fleet, odometer, hours, permissions }
+}
+/** Photos, signature and note of one reading, fetched only when someone opens it. */
+export async function getMeterReadingDetail(row) {
+  const table = row.kind === 'hours' ? 'engine_hours_logs' : 'odometer_logs'
+  return unwrap(await supabase.from(table).select('id,photos,signature,notes,flag_reason').eq('id', row.id).maybeSingle())
 }
 function rpcResult(result) {
   if (result.error?.code === '42501') throw new Error('Meter Logs access is required to add or correct readings for vehicles in your assigned scope.')

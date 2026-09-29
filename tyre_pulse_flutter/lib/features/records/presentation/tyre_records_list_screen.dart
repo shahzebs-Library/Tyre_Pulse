@@ -59,6 +59,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart' show NumberFormat;
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import 'package:tyre_pulse/app/localization/tp_direction.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
@@ -75,6 +77,8 @@ import 'package:tyre_pulse/features/records/domain/tyre_risk.dart';
 import 'package:tyre_pulse/features/records/presentation/controllers/tyre_records_list_controller.dart';
 import 'package:tyre_pulse/features/records/presentation/state/tyre_records_list_state.dart';
 import 'package:tyre_pulse/features/records/presentation/tyre_detail_sheet.dart';
+import 'package:tyre_pulse/features/records/presentation/tyre_records_export.dart';
+import 'package:tyre_pulse/features/records/presentation/tyre_risk_label.dart';
 
 /// How close to the bottom (in logical pixels of remaining scroll extent)
 /// triggers the next page. Loading a little before the true bottom keeps the
@@ -140,6 +144,7 @@ class _TyreRecordsListBody extends ConsumerWidget {
             tooltip: l10n.tyreMockScanSerial,
             onPressed: () => context.push(const SerialSearchRoute().location),
           ),
+          _ExportButton(state: state),
           _FilterButton(
             activeCount: state.query.activeFilterCount,
             onPressed: () => _openFilterSheet(context),
@@ -403,6 +408,7 @@ class _PagingFooter extends StatelessWidget {
 abstract final class TyreRecordsListKeys {
   static const Key scanAction = Key('records.scan_action');
   static const Key scanBar = Key('records.scan_bar');
+  static const Key exportAction = Key('records.export');
   static const Key statusTabs = Key('records.status_tabs');
   static const Key statusLine = Key('records.status_line');
   static const Key sortButton = Key('records.sort');
@@ -491,7 +497,7 @@ class _TyreRecordCard extends StatelessWidget {
                           const SizedBox(width: TpSpace.sm),
                           TpStatusChip(
                             status: riskStatus,
-                            label: record.riskLevel,
+                            label: tyreRiskLabel(l10n, record.riskLevel!),
                             isCompact: true,
                           ),
                         ],
@@ -738,9 +744,12 @@ class _Metric extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
+          // Two lines: the Arabic labels ("الكيلومترات المقطوعة") are twice
+          // the English width and were cut to "الكيلومترات المقـ..." in a
+          // third-width column.
           Text(
             label,
-            maxLines: 1,
+            maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: text.labelSmall?.copyWith(color: palette.textMuted),
           ),
@@ -805,7 +814,9 @@ class _FilterPillsRow extends StatelessWidget {
             _DropdownPill(
               key: TyreRecordsListKeys.riskPill,
               label: l10n.tyreMockRiskPill(
-                query.riskLevel ?? l10n.tyreMockTabAll,
+                query.riskLevel == null
+                    ? l10n.tyreMockTabAll
+                    : tyreRiskLabel(l10n, query.riskLevel!),
               ),
               isActive: query.riskLevel != null,
               onTap: onOpenSheet,
@@ -1022,9 +1033,12 @@ class _ListStatusLine extends StatelessWidget {
           ),
           const SizedBox(width: TpSpace.xs),
           Expanded(
+            // Two lines, not one: the load time is the fact this line
+            // exists to give, and at 360 to 390dp one line cut it to
+            // "Loaded 4:...".
             child: Text(
               line,
-              maxLines: 1,
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: text.labelMedium?.copyWith(color: palette.textSecondary),
             ),
@@ -1252,7 +1266,7 @@ class _FilterSheet extends ConsumerWidget {
             children: <Widget>[
               for (final String level in kTyreRiskLevels)
                 _TogglePill(
-                  label: level,
+                  label: tyreRiskLabel(l10n, level),
                   status: tyreRiskStatus(level),
                   isSelected: state.query.riskLevel == level,
                   onTap: () => controller.setRiskFilter(
@@ -1337,6 +1351,64 @@ class _TogglePill extends StatelessWidget {
           icon: isSelected ? Icons.check : null,
         ),
       ),
+    );
+  }
+}
+
+/// The app-bar Export action from the owner's mock. Shares a PDF of the rows
+/// loaded on this device under the active filters, and the file says how many
+/// of the server's total that is (see `tyre_records_export.dart`). Disabled
+/// until at least one row has loaded - there is nothing honest to export
+/// before that.
+class _ExportButton extends StatefulWidget {
+  const _ExportButton({required this.state});
+
+  final TyreRecordsListState state;
+
+  @override
+  State<_ExportButton> createState() => _ExportButtonState();
+}
+
+class _ExportButtonState extends State<_ExportButton> {
+  bool _busy = false;
+
+  Future<void> _export() async {
+    if (_busy) return;
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final ScaffoldMessengerState? messenger =
+        ScaffoldMessenger.maybeOf(context);
+    final List<TyreRecord> records = widget.state.items;
+    final int? total = widget.state.totalCount;
+    setState(() => _busy = true);
+    try {
+      final AppLocalizations en =
+          await AppLocalizations.delegate.load(const Locale('en'));
+      final pw.Document document = buildTyreRecordsPdf(
+        records: records,
+        totalCount: total,
+        l10n: en,
+      );
+      await Printing.sharePdf(
+        bytes: await document.save(),
+        filename: 'tyre-records.pdf',
+      );
+    } on Object {
+      messenger?.showSnackBar(
+        SnackBar(content: Text(l10n.tyreRecordsExportError)),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    return IconButton(
+      key: TyreRecordsListKeys.exportAction,
+      icon: const Icon(Icons.ios_share_rounded),
+      tooltip: l10n.tyreRecordsExportAction,
+      onPressed: widget.state.hasContent && !_busy ? _export : null,
     );
   }
 }

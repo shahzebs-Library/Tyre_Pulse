@@ -1,140 +1,134 @@
 /**
  * FleetUtilization (route /fleet-utilization) - Fleet Utilization & Telematics.
  *
- * Surfaces the telematics snapshot loaded into `asset_utilization` (V406): per
- * asset how hard it worked (utilization %), how far it ran (distance km), how
- * much it sat (idle %), working hours, max speed and the latest odometer, which
- * also feeds each asset's current km. Real data only, honest empty/error states,
- * never fabricated. Maths live in the pure engines `src/lib/fleetUtilization.js`
- * (bands, idle, summaries) and `src/lib/fleetUtilizationAnalytics.js` (register
- * join, site comparison, coverage gap, sorting, export rows);
- * `src/lib/api/assetUtilization.js` is the only telematics Supabase seam.
+ * Built on the shared page kit (src/components/commandCenter/kit.jsx) to the
+ * owner's light mockup: hero, five KPIs, tabs (overview, site comparison, asset
+ * utilization, idle analysis, reports), a filter bar, the utilization trend,
+ * site-wise utilization and the asset utilization details register.
+ *
+ * Data is the telematics snapshot in `asset_utilization` (V406), one row per
+ * asset per capture date. It is NOT a daily series, so hours are totals over
+ * the loaded captures and the trend only draws columns for real capture dates.
+ * Real data only; an unmeasured figure reads N/A. Maths live in the pure engines
+ * src/lib/fleetUtilization.js, src/lib/fleetUtilizationAnalytics.js and
+ * src/lib/fleetUtilizationView.js; src/lib/api/assetUtilization.js is the only
+ * telematics Supabase seam.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import {
+  Truck, Gauge, Timer, Hourglass, Milestone, Search, X, FileSpreadsheet, FileText,
+  RefreshCw, AlertTriangle, ChevronUp, ChevronDown, ChevronsUpDown, Link2,
+} from 'lucide-react'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import {
-  Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement,
-  Tooltip, Legend,
-} from 'chart.js'
-import { Bar, Doughnut } from 'react-chartjs-2'
-import {
-  Activity, Gauge, Truck, TrendingUp, Timer, Search, X, FileSpreadsheet,
-  FileText, RefreshCcw, MapPin, AlertTriangle, Link2, ChevronUp, ChevronDown, ChevronsUpDown, Radar,
-} from 'lucide-react'
-import PageHeader from '../components/ui/PageHeader'
-import EnterpriseTable from '../components/ui/EnterpriseTable'
+  Card, CardState, Kpi, PageHero, Tabs, Donut, MeterCell, KitTable, VehicleThumb, fmtInt,
+} from '../components/commandCenter/kit'
 import { useSettings } from '../contexts/SettingsContext'
 import { listAssetUtilization } from '../lib/api/assetUtilization'
-import {
-  summarizeUtilization, filterUtilization, bandDistribution, byCountry,
-  topBy, bandOf, idlePct, secondsToHours, num,
-} from '../lib/fleetUtilization'
-import { toUserMessage } from '../lib/safeError'
-import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
-import { colorAt, withAlpha } from '../lib/reportColors'
 import { listAssetOptions } from '../lib/api/assetHistory'
-import { nextSort, sortRows } from '../lib/consoleTable'
+import { filterUtilization, bandDistribution, byCountry, bandOf, idlePct, secondsToHours, num } from '../lib/fleetUtilization'
 import {
-  attachRegister, siteComparison, telematicsCoverage, captureTimeline, filterByRegister, NO_SITE, NO_TYPE,
+  attachRegister, siteComparison, telematicsCoverage, filterByRegister, idleRanking, NO_SITE, NO_TYPE,
   UTILIZATION_SORT_ACCESSORS, UTILIZATION_EXPORT_COLS, UTILIZATION_EXPORT_HEADERS, utilizationExportRows,
   COVERAGE_GAP_COLS, COVERAGE_GAP_HEADERS, coverageGapExportRows, readingCoverage,
 } from '../lib/fleetUtilizationAnalytics'
+import {
+  ACTIVITY, ACTIVITY_KEYS, PERIODS, activityOf, filterByPeriod, filterByActivity, utilizationKpis,
+  activityByCapture, activitySplit, siteBars, totalHours, optionsOf,
+} from '../lib/fleetUtilizationView'
+import { nextSort, sortRows } from '../lib/consoleTable'
+import { toUserMessage } from '../lib/safeError'
+import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
+import './FleetUtilization.css'
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
-
-const fmtNum = (v) => (v == null || !Number.isFinite(Number(v)) ? 'N/A' : Number(v).toLocaleString())
-const fmtKm = (v) => (num(v) == null ? 'N/A' : `${Number(v).toLocaleString()} km`)
-const fmtPct = (v) => (num(v) == null ? 'N/A' : `${Math.round(Number(v) * 10) / 10}%`)
-const fmtHrs = (v) => (num(v) == null ? 'N/A' : `${Number(v).toLocaleString()} h`)
-function fmtDate(v) {
+const fmtHrs = (v) => (num(v) == null ? 'N/A' : `${Number(v).toLocaleString('en-US')} h`)
+const fmtKm = (v) => (num(v) == null ? 'N/A' : `${Math.round(Number(v)).toLocaleString('en-US')} km`)
+const fmtP = (v) => (num(v) == null ? 'N/A' : `${Math.round(Number(v) * 10) / 10}%`)
+const fmtDate = (v) => {
   if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+const NA = <span className="cc-na">N/A</span>
+
+const TABS = [
+  { key: 'overview', label: 'Utilization Overview' },
+  { key: 'sites', label: 'Site Comparison' },
+  { key: 'assets', label: 'Asset Utilization' },
+  { key: 'idle', label: 'Idle Analysis' },
+  { key: 'reports', label: 'Reports' },
+]
+
+const BAND_COLOR = { High: 'var(--cc-green)', Medium: 'var(--cc-amber)', Low: 'var(--cc-red)', Unknown: 'var(--cc-ink-3)' }
+
+const SORT_ACCESSORS = {
+  ...UTILIZATION_SORT_ACCESSORS,
+  make: (r) => ([r.make, r.model].filter(Boolean).join(' ') || null),
+  total: (r) => totalHours(r),
+  site: (r) => r.site || null,
+  status: (r) => ACTIVITY_KEYS.indexOf(activityOf(r)),
 }
 
-/** Band tones are semantic (the colour carries meaning), so they stay fixed. */
-const BAND_TONE = { High: '#16a34a', Medium: '#f59e0b', Low: '#ef4444', Unknown: '#94a3b8' }
-const TICK = { color: 'var(--text-muted)' }
-const GRID = { color: 'var(--panel-2)' }
-const LEGEND = { labels: { color: 'var(--text-secondary)' } }
-const FOCUS = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-bright,#22c55e)]'
-const BTN = `btn-ghost gap-1 min-h-[44px] ${FOCUS}`
-
-function trendChartData(timeline) {
-  if (!timeline?.trendable) return null
-  return {
-    labels: timeline.points.map((p) => p.date),
-    datasets: [{ label: 'Avg utilization %', data: timeline.points.map((p) => (p.avgUtilization == null ? null : Math.round(p.avgUtilization * 10) / 10)), backgroundColor: withAlpha(colorAt(0), 0.85) }],
-  }
-}
-
-function Stat({ icon: Icon, label, value, sub, warn = false }) {
+function SortHead({ label, k, sort, onSort, first = 'desc' }) {
+  const active = sort.key === k
+  const Icon = !active ? ChevronsUpDown : sort.dir === 'asc' ? ChevronUp : ChevronDown
   return (
-    <div className="card p-4 flex items-start gap-3 min-w-0">
-      <div className="rounded-lg bg-[var(--input-bg)] p-2 shrink-0"><Icon className="w-5 h-5 text-emerald-500" aria-hidden="true" /></div>
-      <div className="min-w-0">
-        <div className="text-xs uppercase tracking-wide text-[var(--text-muted)]">{label}</div>
-        <div className={`text-xl font-semibold tabular-nums ${warn ? 'text-amber-500' : 'text-[var(--text-primary)]'}`}>{value}</div>
-        {sub && <div className="text-xs text-[var(--text-muted)] mt-0.5">{sub}</div>}
-      </div>
-    </div>
-  )
-}
-
-function SortButton({ label, active, dir, onClick, align }) {
-  const Icon = !active ? ChevronsUpDown : dir === 'asc' ? ChevronUp : ChevronDown
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`inline-flex items-center gap-1 min-h-[32px] rounded ${FOCUS} ${align === 'right' ? 'flex-row-reverse' : ''} ${active ? 'text-[var(--text-primary)]' : ''}`}
-      aria-label={`Sort by ${label}${active ? `, currently ${dir === 'asc' ? 'ascending' : 'descending'}` : ''}`}
-    >
-      {label}
-      <Icon size={12} aria-hidden="true" />
+    <button type="button" className="fu-sort" onClick={() => onSort(k, first)}
+      aria-label={`Sort by ${label}${active ? `, currently ${sort.dir === 'asc' ? 'ascending' : 'descending'}` : ''}`}>
+      {label} <Icon size={12} aria-hidden="true" />
     </button>
   )
 }
 
-/**
- * EnterpriseTable over the shared pager. Sorting runs over the FULL row set
- * before paging, so a column sort never re-orders only the visible page.
- */
-function SortedPagedTable({ columns, rows, sort, onSort, getRowId, emptyMessage, loading, error, onRetry, maxHeight = 600 }) {
-  const sorted = useMemo(() => {
-    const col = columns.find((c) => c.id === sort?.key)
-    return col?.sort ? sortRows(rows, sort, { [col.id]: col.sort }) : rows
-  }, [rows, columns, sort])
-  const pager = usePagedRows(sorted)
-  const tableColumns = useMemo(() => columns.map((c) => ({
-    id: c.id,
-    accessorFn: c.sort || ((r) => r[c.id]),
-    header: c.sort
-      ? () => <SortButton label={c.header} align={c.align} active={sort?.key === c.id} dir={sort?.dir} onClick={() => onSort(c.id, c.firstDir || 'desc')} />
-      : c.header,
-    cell: c.cell ? ({ row }) => c.cell(row.original) : undefined,
-    size: c.size,
-    enableSorting: false,
-    meta: { align: c.align },
-  })), [columns, sort, onSort])
+/** Stacked columns of asset counts per real capture date. */
+function ActivityColumns({ points }) {
+  const shown = points.slice(-30)
+  const max = Math.max(1, ...shown.map((p) => p.total))
+  const W = 560; const H = 170; const pad = 26
+  const bw = Math.max(6, Math.min(34, (W - pad) / shown.length - 6))
+  const step = (W - pad) / shown.length
+  const label = shown.map((p) => `${p.date}: ${ACTIVITY_KEYS.map((k) => `${ACTIVITY[k].label} ${p[k]}`).join(', ')}`).join('; ')
   return (
-    <div className="space-y-2">
-      <EnterpriseTable
-        columns={tableColumns}
-        data={pager.pageRows}
-        getRowId={getRowId}
-        loading={loading}
-        error={error || null}
-        onRetry={onRetry}
-        enableGlobalFilter={false}
-        enableColumnFilters={false}
-        enableSorting={false}
-        enableExport={false}
-        virtual
-        maxHeight={maxHeight}
-        emptyMessage={emptyMessage}
-      />
-      {!loading && !error && <TablePagination {...pager} />}
+    <div className="cc-chart fu-cols">
+      <svg viewBox={`0 0 ${W} ${H + 22}`} role="img" aria-label={`Assets by activity per capture date. ${label}`} preserveAspectRatio="none">
+        <line x1={pad} y1={H} x2={W} y2={H} stroke="var(--cc-inner-border)" />
+        <text x={pad - 4} y={10} textAnchor="end" className="cc-axis">{max}</text>
+        <text x={pad - 4} y={H} textAnchor="end" className="cc-axis">0</text>
+        {shown.map((p, i) => {
+          let y = H
+          const x = pad + i * step + (step - bw) / 2
+          return (
+            <g key={p.date}>
+              {ACTIVITY_KEYS.map((k) => {
+                const h = (p[k] / max) * (H - 12)
+                y -= h
+                return h > 0 ? <rect key={k} x={x} y={y} width={bw} height={h} fill={ACTIVITY[k].color} rx="2"><title>{`${p.date} ${ACTIVITY[k].label}: ${p[k]}`}</title></rect> : null
+              })}
+              {(shown.length <= 12 || i % Math.ceil(shown.length / 10) === 0) && (
+                <text x={x + bw / 2} y={H + 15} textAnchor="middle" className="cc-axis">{p.date.slice(5)}</text>
+              )}
+            </g>
+          )
+        })}
+      </svg>
+    </div>
+  )
+}
+
+function ActivityLegend({ split }) {
+  return (
+    <div className="fu-legend">
+      {split.map((s) => <span key={s.key}><i style={{ background: s.color }} aria-hidden="true" />{s.label} <b>{fmtInt(s.count)}</b></span>)}
+    </div>
+  )
+}
+
+function SplitBar({ split }) {
+  const total = split.reduce((a, s) => a + s.count, 0)
+  if (!total) return null
+  return (
+    <div className="fu-split" role="img" aria-label={split.map((s) => `${s.label} ${s.count}`).join(', ')}>
+      {split.filter((s) => s.count > 0).map((s) => <span key={s.key} style={{ width: `${(s.count / total) * 100}%`, background: s.color }} title={`${s.label}: ${s.count}`} />)}
     </div>
   )
 }
@@ -144,15 +138,18 @@ export default function FleetUtilization() {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [fleet, setFleet] = useState([])
+  const [fleetError, setFleetError] = useState('')
+  const [tab, setTab] = useState('overview')
+  const [period, setPeriod] = useState('all')
+  const [site, setSite] = useState('')
+  const [vehicleType, setVehicleType] = useState('')
+  const [status, setStatus] = useState('')
   const [search, setSearch] = useState('')
   const [band, setBand] = useState('All')
   const [linkedOnly, setLinkedOnly] = useState(false)
   const [idleHeavy, setIdleHeavy] = useState(false)
   const [sort, setSort] = useState({ key: 'utilization', dir: 'desc' })
-  const [fleet, setFleet] = useState([])
-  const [fleetError, setFleetError] = useState('')
-  const [site, setSite] = useState('')
-  const [vehicleType, setVehicleType] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true); setError(''); setFleetError('')
@@ -163,7 +160,7 @@ export default function FleetUtilization() {
     if (util.status === 'fulfilled') setRows(util.value)
     else { setRows([]); setError(toUserMessage(util.reason, 'Telematics utilization could not be loaded.')) }
     if (reg.status === 'fulfilled' && reg.value?.ok) setFleet(reg.value.rows || [])
-    else { setFleet([]); setFleetError('The fleet register could not be read, so site, vehicle type and the coverage gap are unavailable.') }
+    else { setFleet([]); setFleetError('The fleet register could not be read, so total fleet, site, asset type and the coverage gap are unavailable.') }
     setLoading(false)
   }, [activeCountry])
 
@@ -171,32 +168,42 @@ export default function FleetUtilization() {
 
   const failed = !!error
   const enriched = useMemo(() => attachRegister(rows, fleet), [rows, fleet])
-  const filtered = useMemo(
-    () => filterByRegister(filterUtilization(enriched, {
-      search, band, linkedOnly, minIdle: idleHeavy ? 50 : null,
-    }), { site, vehicleType }),
-    [enriched, search, band, linkedOnly, idleHeavy, site, vehicleType],
+  // Period, site, type and status shape the whole page; search, band and the
+  // two toggles only narrow the details register.
+  const scoped = useMemo(
+    () => filterByActivity(filterByRegister(filterByPeriod(enriched, period, new Date()), { site, vehicleType }), status),
+    [enriched, period, site, vehicleType, status],
   )
-  const siteOptions = useMemo(() => [...new Set(enriched.map((r) => r.site || NO_SITE))].sort(), [enriched])
-  const typeOptions = useMemo(() => [...new Set(enriched.map((r) => r.vehicle_type || NO_TYPE))].sort(), [enriched])
-  const sites = useMemo(() => siteComparison(filtered), [filtered])
+  const filtered = useMemo(
+    () => filterUtilization(scoped, { search, band, linkedOnly, minIdle: idleHeavy ? 50 : null }),
+    [scoped, search, band, linkedOnly, idleHeavy],
+  )
+  const siteOptions = useMemo(() => optionsOf(enriched, 'site', NO_SITE), [enriched])
+  const typeOptions = useMemo(() => optionsOf(enriched, 'vehicle_type', NO_TYPE), [enriched])
+
+  const scopedFleet = useMemo(() => {
+    if (fleetError) return null
+    return fleet.filter((f) => (!site || (f.site || NO_SITE) === site) && (!vehicleType || (f.vehicle_type || NO_TYPE) === vehicleType))
+  }, [fleet, fleetError, site, vehicleType])
+  const kpis = useMemo(() => utilizationKpis(scoped, scopedFleet), [scoped, scopedFleet])
   const coverage = useMemo(() => (fleet.length ? telematicsCoverage(rows, fleet) : null), [rows, fleet])
-  const timeline = useMemo(() => captureTimeline(rows), [rows])
+  const trend = useMemo(() => activityByCapture(scoped), [scoped])
+  const split = useMemo(() => activitySplit(scoped), [scoped])
+  const sites = useMemo(() => siteComparison(scoped), [scoped])
+  const bars = useMemo(() => siteBars(sites, 10), [sites])
+  const bands = useMemo(() => bandDistribution(scoped), [scoped])
+  const countries = useMemo(() => byCountry(scoped), [scoped])
+  const idleTop = useMemo(() => idleRanking(scoped, { limit: 15 }), [scoped])
+  const readPct = useMemo(() => readingCoverage(scoped), [scoped])
 
-  const kpis = useMemo(() => summarizeUtilization(filtered), [filtered])
-  const readPct = useMemo(() => readingCoverage(filtered), [filtered])
-  const bands = useMemo(() => bandDistribution(filtered), [filtered])
-  const countries = useMemo(() => byCountry(filtered), [filtered])
-  const topIdle = useMemo(() => topBy(filtered, 'idleHours', 10), [filtered])
+  const sorted = useMemo(() => sortRows(filtered, sort, { [sort.key]: SORT_ACCESSORS[sort.key] }), [filtered, sort])
+  const pager = usePagedRows(sorted)
+  const onSort = useCallback((key, first) => setSort((s) => nextSort(s, key, first)), [])
 
-  const onSort = useCallback((key, firstDir) => setSort((s) => nextSort(s, key, firstDir)), [])
-  const sortedForExport = useMemo(() => {
-    const get = UTILIZATION_SORT_ACCESSORS[sort.key]
-    return get ? sortRows(filtered, sort, { [sort.key]: get }) : filtered
-  }, [filtered, sort])
-  const exportRows = useMemo(() => utilizationExportRows(sortedForExport), [sortedForExport])
+  const exportRows = useMemo(() => utilizationExportRows(sorted), [sorted])
   const fileBase = reportFileName('Fleet Utilization', activeCountry)
-
+  const doExcel = () => exportToExcel(exportRows, UTILIZATION_EXPORT_COLS, UTILIZATION_EXPORT_HEADERS, fileBase)
+  const doPdf = () => exportToPdf(exportRows, UTILIZATION_EXPORT_COLS.map((k, i) => ({ key: k, header: UTILIZATION_EXPORT_HEADERS[i] })), 'Fleet Utilization', fileBase, 'landscape')
   function exportGap(kind) {
     const out = coverageGapExportRows(coverage)
     if (!out.length) return
@@ -204,282 +211,323 @@ export default function FleetUtilization() {
     if (kind === 'excel') exportToExcel(out, COVERAGE_GAP_COLS, COVERAGE_GAP_HEADERS, name)
     else exportToPdf(out, COVERAGE_GAP_COLS.map((k, i) => ({ key: k, header: COVERAGE_GAP_HEADERS[i] })), 'Telematics coverage gap', name, 'portrait')
   }
+  const SITE_COLS = ['site', 'assets', 'avgUtilization', 'avgIdlePct', 'distanceKm', 'workingHours', 'idleHours', 'highIdle']
+  const SITE_HEADERS = ['Site', 'Assets', 'Avg utilization %', 'Avg idle %', 'Distance km', 'Working h', 'Idle h', 'High idle assets']
+  const siteExportRows = () => sites.map((s) => ({ ...s, avgUtilization: s.avgUtilization == null ? null : Math.round(s.avgUtilization * 10) / 10, avgIdlePct: s.avgIdlePct == null ? null : Math.round(s.avgIdlePct * 10) / 10 }))
+  const exportSites = () => exportToExcel(siteExportRows(), SITE_COLS, SITE_HEADERS, reportFileName('Fleet Utilization by Site', activeCountry))
 
-  const filtersActive = search || band !== 'All' || linkedOnly || idleHeavy || site || vehicleType
-  const clearFilters = () => { setSearch(''); setBand('All'); setLinkedOnly(false); setIdleHeavy(false); setSite(''); setVehicleType('') }
+  const pageFilters = period !== 'all' || site || vehicleType || status
+  const tableFilters = search || band !== 'All' || linkedOnly || idleHeavy
+  const clearAll = () => { setPeriod('all'); setSite(''); setVehicleType(''); setStatus(''); setSearch(''); setBand('All'); setLinkedOnly(false); setIdleHeavy(false) }
 
-  const siteChart = {
-    labels: sites.slice(0, 15).map((x) => x.site),
-    datasets: [{ label: 'Avg utilization %', data: sites.slice(0, 15).map((x) => (x.avgUtilization == null ? null : Math.round(x.avgUtilization * 10) / 10)), backgroundColor: withAlpha(colorAt(1), 0.85) }],
-  }
-  const bandChart = {
-    labels: bands.map((b) => b.band),
-    datasets: [{ data: bands.map((b) => b.count), backgroundColor: bands.map((b) => BAND_TONE[b.band]), borderWidth: 0 }],
-  }
-  const countryChart = {
-    labels: countries.map((c) => c.country),
-    datasets: [
-      { label: 'Assets', data: countries.map((c) => c.assets), backgroundColor: withAlpha(colorAt(0), 0.85), yAxisID: 'y' },
-      { label: 'Avg utilization %', data: countries.map((c) => (c.avgUtilization == null ? null : Math.round(c.avgUtilization * 10) / 10)), backgroundColor: withAlpha(colorAt(2), 0.85), yAxisID: 'y1' },
-    ],
-  }
+  const cardState = { loading, data: loading ? null : rows, error: error || null, retry: load }
+  const na = (v) => (loading || failed ? null : v)
+  const scopeNote = kpis.tracked ? `${fmtInt(kpis.tracked)} telematics record${kpis.tracked === 1 ? '' : 's'} in view` : null
 
-  const registerColumns = useMemo(() => [
-    { id: 'asset_no', header: 'Asset', sort: UTILIZATION_SORT_ACCESSORS.asset_no, firstDir: 'asc', size: 230,
+  const detailColumns = [
+    { key: 'asset_no', header: <SortHead label="Fleet no." k="asset_no" first="asc" sort={sort} onSort={onSort} />,
       cell: (r) => (
-        <div className="min-w-0">
-          <div className="font-medium text-[var(--text-primary)]">{r.asset_no}</div>
-          <div className="text-xs text-[var(--text-muted)] truncate">
-            {[[r.make, r.model].filter(Boolean).join(' ') || null, r.country, r.site, r.vehicle_type].filter(Boolean).join(', ') || 'N/A'}
-            {!r.linked_to_fleet && <span className="text-amber-500">, unregistered</span>}
-          </div>
-        </div>
-      ) },
-    { id: 'utilization', header: 'Utilization', sort: UTILIZATION_SORT_ACCESSORS.utilization, align: 'right', size: 140,
-      cell: (r) => {
-        const b = bandOf(r)
-        return (
-          <span className="px-2 py-0.5 rounded text-xs font-medium tabular-nums whitespace-nowrap" style={{ background: withAlpha(BAND_TONE[b], 0.18), color: BAND_TONE[b] }}>
-            {fmtPct(r.utilization_pct)}{b !== 'Unknown' ? ` ${b}` : ''}
+        <span className="cc-vehicle">
+          <VehicleThumb row={r} size="sm" />
+          <span>
+            <span className="cc-strong">{r.asset_no}</span>
+            <span className="cc-sub">{[r.country, r.vehicle_type].filter(Boolean).join(', ') || 'Type not recorded'}{!r.linked_to_fleet && <span className="fu-warn">, unregistered</span>}</span>
           </span>
-        )
-      } },
-    { id: 'distance', header: 'Distance', sort: UTILIZATION_SORT_ACCESSORS.distance, align: 'right', size: 120, cell: (r) => <span className="tabular-nums">{fmtKm(r.distance_km)}</span> },
-    { id: 'idle', header: 'Idle', sort: UTILIZATION_SORT_ACCESSORS.idle, align: 'right', size: 90,
-      cell: (r) => { const ip = idlePct(r); return <span className={`tabular-nums ${ip != null && ip >= 50 ? 'text-amber-500 font-medium' : ''}`}>{fmtPct(ip)}</span> } },
-    { id: 'working', header: 'Working', sort: UTILIZATION_SORT_ACCESSORS.working, align: 'right', size: 100, cell: (r) => <span className="tabular-nums">{fmtHrs(secondsToHours(r.working_seconds))}</span> },
-    { id: 'current_km', header: 'Current km', sort: UTILIZATION_SORT_ACCESSORS.current_km, align: 'right', size: 120, cell: (r) => <span className="tabular-nums">{fmtKm(r.current_km)}</span> },
-    { id: 'max_speed', header: 'Max speed', sort: UTILIZATION_SORT_ACCESSORS.max_speed, align: 'right', size: 100, cell: (r) => <span className="tabular-nums">{num(r.max_speed) == null ? 'N/A' : `${r.max_speed} km/h`}</span> },
-    { id: 'captured', header: 'Captured', sort: UTILIZATION_SORT_ACCESSORS.captured, size: 110, cell: (r) => <span className="text-[var(--text-muted)] tabular-nums">{fmtDate(r.captured_at)}</span> },
-  ], [])
+        </span>
+      ) },
+    { key: 'make', header: <SortHead label="Make / model" k="make" first="asc" sort={sort} onSort={onSort} />, cell: (r) => [r.make, r.model].filter(Boolean).join(' ') || NA },
+    { key: 'working', header: <SortHead label="Working hours" k="working" sort={sort} onSort={onSort} />, align: 'right', cell: (r) => fmtHrs(secondsToHours(r.working_seconds)) },
+    { key: 'idle_hours', header: <SortHead label="Idle hours" k="idle_hours" sort={sort} onSort={onSort} />, align: 'right',
+      cell: (r) => { const ip = idlePct(r); return <span className={ip != null && ip >= 50 ? 'fu-warn' : ''} title={ip == null ? undefined : `Idle ${fmtP(ip)}`}>{fmtHrs(secondsToHours(r.idle_seconds))}</span> } },
+    { key: 'total', header: <SortHead label="Total hours" k="total" sort={sort} onSort={onSort} />, align: 'right', cell: (r) => fmtHrs(totalHours(r)) },
+    { key: 'utilization', header: <SortHead label="Utilization" k="utilization" sort={sort} onSort={onSort} />,
+      cell: (r) => <span title={`Band: ${bandOf(r)}`}><MeterCell value={num(r.utilization_pct)} suffix="%" /></span> },
+    { key: 'distance', header: <SortHead label="Distance (km)" k="distance" sort={sort} onSort={onSort} />, align: 'right', cell: (r) => fmtKm(r.distance_km) },
+    { key: 'site', header: <SortHead label="Site" k="site" first="asc" sort={sort} onSort={onSort} />, cell: (r) => r.site || NA },
+    { key: 'status', header: <SortHead label="Status" k="status" first="asc" sort={sort} onSort={onSort} />,
+      cell: (r) => { const a = ACTIVITY[activityOf(r)]; return <span className={`cc-pill ${a.tone}`}>{a.label}</span> } },
+    { key: 'current_km', header: <SortHead label="Current km" k="current_km" sort={sort} onSort={onSort} />, align: 'right', cell: (r) => fmtKm(r.current_km) },
+    { key: 'captured', header: <SortHead label="Captured" k="captured" sort={sort} onSort={onSort} />, cell: (r) => fmtDate(r.captured_at) },
+  ]
 
-  const siteColumns = useMemo(() => [
-    { id: 'site', header: 'Site', accessorFn: (x) => x.site, cell: ({ row }) => <span className="text-[var(--text-primary)]">{row.original.site}</span> },
-    { id: 'assets', header: 'Assets', accessorFn: (x) => x.assets, meta: { align: 'right' } },
-    { id: 'util', header: 'Avg util', accessorFn: (x) => x.avgUtilization, meta: { align: 'right' }, cell: ({ row }) => fmtPct(row.original.avgUtilization) },
-    { id: 'idle', header: 'Avg idle', accessorFn: (x) => x.avgIdlePct, meta: { align: 'right' }, cell: ({ row }) => fmtPct(row.original.avgIdlePct) },
-    { id: 'distance', header: 'Distance', accessorFn: (x) => x.distanceKm, meta: { align: 'right' }, cell: ({ row }) => fmtKm(row.original.distanceKm) },
-    { id: 'idle_h', header: 'Idle h', accessorFn: (x) => x.idleHours, meta: { align: 'right' }, cell: ({ row }) => fmtHrs(row.original.idleHours) },
-    { id: 'high', header: 'High idle', accessorFn: (x) => x.highIdle, meta: { align: 'right' } },
-  ], [])
+  const detailsCard = (
+    <Card
+      title="Asset utilization details"
+      sub="Utilization register. Sort any column; exports cover every filtered asset in this order."
+      action={
+        <div className="fu-actions">
+          <button type="button" className="cc-btn-ghost" onClick={doExcel} disabled={!exportRows.length}><FileSpreadsheet size={14} aria-hidden="true" /> Excel</button>
+          <button type="button" className="cc-btn-ghost" onClick={doPdf} disabled={!exportRows.length}><FileText size={14} aria-hidden="true" /> PDF</button>
+        </div>
+      }
+    >
+      <div className="cc-filters fu-table-filters">
+        <div className="cc-search">
+          <Search size={15} aria-hidden="true" />
+          <label htmlFor="util-search" className="sr-only">Search assets</label>
+          <input id="util-search" type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search fleet no., make, model..." />
+        </div>
+        <select className="cc-select" aria-label="Utilization band" value={band} onChange={(e) => setBand(e.target.value)}>
+          <option value="All">All bands</option>
+          <option value="High">High (75% and above)</option>
+          <option value="Medium">Medium (40 to 75%)</option>
+          <option value="Low">Low (below 40%)</option>
+          <option value="Unknown">Unknown</option>
+        </select>
+        <label className="fu-check"><input type="checkbox" checked={linkedOnly} onChange={(e) => setLinkedOnly(e.target.checked)} /> <Link2 size={13} aria-hidden="true" /> Linked to fleet only</label>
+        <label className="fu-check"><input type="checkbox" checked={idleHeavy} onChange={(e) => setIdleHeavy(e.target.checked)} /> Idle at or above 50%</label>
+        <span className="fu-count" aria-live="polite">{failed ? 'N/A' : `${fmtInt(filtered.length)} of ${fmtInt(scoped.length)} records`}</span>
+      </div>
+      <KitTable
+        columns={detailColumns}
+        rows={pager.pageRows}
+        getRowId={(r) => String(r.id)}
+        loading={loading}
+        error={error || null}
+        onRetry={load}
+        manualPagination
+        showPagination={false}
+        enableSorting={false}
+        empty={rows.length === 0 ? 'No telematics utilization has been loaded for this scope yet.' : 'No assets match the current filters.'}
+      />
+      {!loading && !error && <TablePagination {...pager} />}
+    </Card>
+  )
 
-  const coverageColumns = useMemo(() => [
-    { id: 'site', header: 'Site', accessorFn: (x) => x.site, cell: ({ row }) => <span className="text-[var(--text-primary)]">{row.original.site}</span> },
-    { id: 'active', header: 'Active', accessorFn: (x) => x.active, meta: { align: 'right' } },
-    { id: 'covered', header: 'Tracked', accessorFn: (x) => x.covered, meta: { align: 'right' } },
-    { id: 'gap', header: 'Gap', accessorFn: (x) => x.gap, meta: { align: 'right' }, cell: ({ row }) => <span className={row.original.gap ? 'text-amber-500 font-medium' : ''}>{row.original.gap}</span> },
-    { id: 'pct', header: 'Coverage', accessorFn: (x) => x.coveragePct, meta: { align: 'right' }, cell: ({ row }) => fmtPct(row.original.coveragePct) },
-  ], [])
+  const trendCard = (
+    <Card
+      title="Utilization trend"
+      sub={trend.trendable
+        ? `Assets by activity for each telematics capture date (${trend.points[0].date} to ${trend.points[trend.points.length - 1].date}).`
+        : 'Assets by activity in the loaded telematics snapshot.'}
+    >
+      <CardState state={cardState} empty={!scoped.length ? 'No telematics records in this view.' : null}>
+        {trend.trendable ? <ActivityColumns points={trend.points} /> : (
+          <div className="fu-snapshot">
+            <p className="fu-note">
+              {trend.points.length === 1
+                ? `Only one telematics capture is loaded (${fmtDate(trend.points[0].date)}). The data is a snapshot, not a daily series, so a day by day trend appears once more captures are loaded.`
+                : 'These records carry no capture date, so they cannot be placed on any day.'}
+            </p>
+            <SplitBar split={split} />
+          </div>
+        )}
+        <ActivityLegend split={split} />
+        {trend.undated > 0 && trend.trendable && <p className="fu-note">{fmtInt(trend.undated)} record(s) have no capture date and are not shown by day.</p>}
+      </CardState>
+    </Card>
+  )
 
-  const na = (v) => (loading || failed ? 'N/A' : v)
+  const siteCard = (
+    <Card title="Site-wise utilization" sub="Average utilization per site, highest first (top 10)." action={bars.length ? <button type="button" className="cc-link cc-link-btn" onClick={() => setTab('sites')}>Compare sites</button> : null}>
+      <CardState
+        state={cardState}
+        empty={fleetError ? 'Site needs the fleet register, which could not be read.' : !bars.length ? 'No site in this view has a measured utilization.' : null}
+      >
+        <div className="fu-hbars">
+          {bars.map((b) => (
+            <div key={b.site} className="fu-hbar" title={`${b.site}: ${b.pct}% over ${b.assets} asset(s)`}>
+              <span className="fu-hbar-label">{b.site}</span>
+              <span className="cc-bar-track"><i style={{ width: `${Math.max(0, Math.min(100, b.pct))}%`, background: b.pct >= 70 ? 'var(--cc-green)' : b.pct >= 40 ? 'var(--cc-amber)' : 'var(--cc-red)' }} /></span>
+              <b>{b.pct}%</b>
+            </div>
+          ))}
+        </div>
+      </CardState>
+    </Card>
+  )
 
   return (
-    <div className="space-y-5">
-      <PageHeader
+    <div className="cc fu-page">
+      <PageHero
         title="Fleet Utilization"
-        subtitle="Telematics: how hard each asset works, how far it runs, how much it sits idle, and its current km."
-        icon={Activity}
-        actions={
-          <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={load} disabled={loading} className={BTN} aria-label="Refresh utilization"><RefreshCcw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" /></button>
-            <button type="button" onClick={() => exportToExcel(exportRows, UTILIZATION_EXPORT_COLS, UTILIZATION_EXPORT_HEADERS, fileBase)}
-              disabled={!exportRows.length} className={BTN}><FileSpreadsheet className="w-4 h-4" aria-hidden="true" /> Excel</button>
-            <button type="button" onClick={() => exportToPdf(exportRows, UTILIZATION_EXPORT_COLS.map((k, i) => ({ key: k, header: UTILIZATION_EXPORT_HEADERS[i] })), 'Fleet Utilization', fileBase, 'landscape')}
-              disabled={!exportRows.length} className={BTN}><FileText className="w-4 h-4" aria-hidden="true" /> PDF</button>
-          </div>
-        }
+        lead="Measure actual working hours, idle time and distance to optimize performance."
+        imgLight="/dashboard/hero-renewal-light.webp"
+        imgDark="/dashboard/hero-renewal-dark.webp"
+        stat={!loading && coverage?.coveragePct != null ? { value: fmtP(coverage.coveragePct), lines: ['Telematics', `${fmtInt(coverage.covered)} of ${fmtInt(coverage.activeAssets)} active`] } : null}
       />
 
       {error && (
-        <div className="card p-4 border border-red-500/40 flex flex-wrap items-center justify-between gap-2" role="alert">
-          <div className="flex items-center gap-2 text-red-400 min-w-0"><AlertTriangle className="w-4 h-4 shrink-0" aria-hidden="true" /> <span>{error} Figures read N/A until it loads.</span></div>
-          <button type="button" onClick={load} className={BTN}><RefreshCcw className="w-4 h-4" aria-hidden="true" /> Retry</button>
+        <div className="cc-card fu-banner bad" role="alert">
+          <AlertTriangle size={17} aria-hidden="true" />
+          <div><p>{error} Figures read N/A until it loads.</p></div>
+          <button type="button" className="cc-btn-ghost" onClick={load}><RefreshCw size={14} aria-hidden="true" /> Retry</button>
         </div>
       )}
-
       {fleetError && (
-        <div className="card p-3 text-sm text-amber-500 flex flex-wrap items-center justify-between gap-2" role="status">
-          <span className="min-w-0">{fleetError}</span>
-          <button type="button" onClick={load} className={BTN}><RefreshCcw className="w-4 h-4" aria-hidden="true" /> Retry</button>
+        <div className="cc-card fu-banner warn" role="status">
+          <AlertTriangle size={17} aria-hidden="true" />
+          <div><p>{fleetError}</p></div>
+          <button type="button" className="cc-btn-ghost" onClick={load}><RefreshCw size={14} aria-hidden="true" /> Retry</button>
         </div>
       )}
-      {!loading && timeline.points.length > 0 && (
-        <p className="text-xs text-[var(--text-muted)]">
-          {timeline.trendable
-            ? `${timeline.points.length} telematics captures loaded, from ${timeline.points[0].date} to ${timeline.points[timeline.points.length - 1].date}.`
-            : `One telematics capture is loaded (${timeline.points[0].date}). Figures are a snapshot; a utilization trend appears once further captures are loaded.`}
-        </p>
-      )}
 
-      {/* KPI strip (follows the filters) */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3" aria-busy={loading}>
-        <Stat icon={Truck} label="Assets tracked" value={na(fmtNum(kpis.assets))} sub={loading || failed ? null : `${fmtNum(kpis.linked)} linked to fleet`} />
-        <Stat icon={Gauge} label="Avg utilization" value={na(fmtPct(kpis.avgUtilization))} sub={loading || failed ? null : readPct == null ? 'no readings' : `${fmtPct(readPct)} of assets reporting`} />
-        <Stat icon={TrendingUp} label="Total distance" value={na(fmtKm(kpis.totalDistanceKm))} sub={loading || failed ? null : `${fmtNum(kpis.withCurrentKm)} with current km`} />
-        <Stat icon={Timer} label="Working hours" value={na(fmtHrs(kpis.totalWorkingHours))} sub={loading || failed ? null : `${fmtHrs(kpis.totalIdleHours)} idle`} />
-        <Stat icon={AlertTriangle} label="High idle assets" value={na(fmtNum(kpis.highIdle))} sub="idle at or above 50%" warn={!loading && !failed && kpis.highIdle > 0} />
-        <Stat icon={Radar} label="Telematics coverage" value={loading ? 'N/A' : coverage ? fmtPct(coverage.coveragePct) : 'N/A'}
-          sub={loading ? null : coverage ? `${fmtNum(coverage.covered)} of ${fmtNum(coverage.activeAssets)} active assets` : 'fleet register unavailable'} />
+      <div className="cc-kpis fu-kpis" aria-busy={loading}>
+        <Kpi icon={Truck} tone="t-green" loading={loading} value={na(kpis.totalFleet)} label="Total fleet"
+          title={kpis.totalFleet == null ? 'The fleet register could not be read.' : `${fmtInt(kpis.totalFleet)} register assets in scope; ${scopeNote || 'no telematics records'}.`} />
+        <Kpi icon={Gauge} tone="t-blue" loading={loading} display={failed ? 'N/A' : fmtP(kpis.avgUtilization)} label="Avg utilization"
+          title={readPct == null ? 'No utilization readings in view.' : `${fmtP(readPct)} of records report a utilization.`} />
+        <Kpi icon={Timer} tone="t-green" loading={loading} display={failed ? 'N/A' : fmtHrs(kpis.workingHours)} label="Working hours"
+          title="Total working time over the loaded captures. A per day figure is not measurable: the capture period length is not recorded." />
+        <Kpi icon={Hourglass} tone="t-amber" loading={loading} display={failed ? 'N/A' : fmtHrs(kpis.idleHours)} label="Idle hours"
+          title="Total idle time over the loaded captures. A per day figure is not measurable: the capture period length is not recorded." />
+        <Kpi icon={Milestone} tone="t-purple" loading={loading} display={failed ? 'N/A' : fmtKm(kpis.distanceKm)} label="Distance (km)"
+          title="Total distance reported by telematics over the loaded captures." />
       </div>
 
-      {/* Filters */}
-      <div className="card p-3 space-y-2">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(220px,2fr)_repeat(3,minmax(0,1fr))] gap-2">
-          <div className="relative">
-            <label htmlFor="util-search" className="sr-only">Search assets</label>
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
-            <input id="util-search" type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search asset, make, model..."
-              className="input pl-9 w-full min-h-[44px]" />
-          </div>
-          <select aria-label="Utilization band" value={band} onChange={(e) => setBand(e.target.value)} className="input min-h-[44px]">
-            <option value="All">All bands</option>
-            <option value="High">High (75% and above)</option>
-            <option value="Medium">Medium (40 to 75%)</option>
-            <option value="Low">Low (below 40%)</option>
-            <option value="Unknown">Unknown</option>
+      <div className="fu-toolbar">
+        <Tabs tabs={TABS} value={tab} onChange={setTab} label="Fleet utilization views" variant="line" />
+        <div className="cc-filters fu-filters">
+          <select className="cc-select" aria-label="Period" value={period} onChange={(e) => setPeriod(e.target.value)}>
+            {PERIODS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
           </select>
-          <select aria-label="Site" value={site} onChange={(e) => setSite(e.target.value)} className="input min-h-[44px]" disabled={!fleet.length} title={fleet.length ? undefined : 'Needs the fleet register'}>
+          <select className="cc-select" aria-label="Site" value={site} onChange={(e) => setSite(e.target.value)} disabled={!fleet.length} title={fleet.length ? undefined : 'Needs the fleet register'}>
             <option value="">All sites</option>
             {siteOptions.map((o) => <option key={o} value={o}>{o}</option>)}
           </select>
-          <select aria-label="Vehicle type" value={vehicleType} onChange={(e) => setVehicleType(e.target.value)} className="input min-h-[44px]" disabled={!fleet.length} title={fleet.length ? undefined : 'Needs the fleet register'}>
-            <option value="">All vehicle types</option>
+          <select className="cc-select" aria-label="Asset type" value={vehicleType} onChange={(e) => setVehicleType(e.target.value)} disabled={!fleet.length} title={fleet.length ? undefined : 'Needs the fleet register'}>
+            <option value="">All asset types</option>
             {typeOptions.map((o) => <option key={o} value={o}>{o}</option>)}
           </select>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] px-2 min-h-[44px] cursor-pointer">
-            <input type="checkbox" className="w-4 h-4" checked={linkedOnly} onChange={(e) => setLinkedOnly(e.target.checked)} /> <Link2 className="w-3.5 h-3.5" aria-hidden="true" /> Linked to fleet only
-          </label>
-          <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] px-2 min-h-[44px] cursor-pointer">
-            <input type="checkbox" className="w-4 h-4" checked={idleHeavy} onChange={(e) => setIdleHeavy(e.target.checked)} /> Idle at or above 50%
-          </label>
-          {filtersActive && <button type="button" onClick={clearFilters} className={BTN}><X className="w-4 h-4" aria-hidden="true" /> Clear filters</button>}
-          <span className="text-xs text-[var(--text-muted)] ml-auto" aria-live="polite">{failed ? 'N/A' : `${filtered.length} of ${rows.length} assets`}</span>
+          <select className="cc-select" aria-label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="">All status</option>
+            {ACTIVITY_KEYS.map((k) => <option key={k} value={k}>{ACTIVITY[k].label}</option>)}
+          </select>
+          {(pageFilters || tableFilters) && <button type="button" className="cc-btn-ghost" onClick={clearAll}><X size={13} aria-hidden="true" /> Clear</button>}
+          <button type="button" className="cc-icon-btn" onClick={load} disabled={loading} aria-label="Refresh utilization"><RefreshCw size={14} className={loading ? 'fu-spin' : ''} aria-hidden="true" /></button>
         </div>
       </div>
 
-      {/* Charts */}
-      {!loading && filtered.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="card p-4 min-w-0">
-            <h2 className="text-sm font-medium text-[var(--text-primary)] mb-3">Utilization bands</h2>
-            <div className="h-56" role="img" aria-label={`Utilization bands: ${bands.map((b) => `${b.band} ${b.count}`).join(', ')}`}>
-              <Doughnut data={bandChart} options={{ maintainAspectRatio: false, plugins: { legend: { position: 'right', ...LEGEND } } }} />
-            </div>
-          </div>
-          <div className="card p-4 min-w-0">
-            <h2 className="text-sm font-medium text-[var(--text-primary)] mb-3">By country</h2>
-            <div className="h-56" role="img" aria-label={`By country: ${countries.map((c) => `${c.country} ${c.assets} assets`).join(', ')}`}>
-              <Bar data={countryChart} options={{
-                maintainAspectRatio: false,
-                plugins: { legend: LEGEND },
-                scales: {
-                  x: { ticks: TICK, grid: GRID },
-                  y: { position: 'left', ticks: TICK, grid: GRID, title: { display: true, text: 'Assets', ...TICK } },
-                  y1: { position: 'right', ticks: TICK, grid: { drawOnChartArea: false }, title: { display: true, text: 'Avg util %', ...TICK }, min: 0, max: 100 },
-                },
-              }} />
-            </div>
-          </div>
+      {tab === 'overview' && (
+        <>
+          <div className="fu-row">{trendCard}{siteCard}</div>
+          {detailsCard}
+        </>
+      )}
+
+      {tab === 'sites' && (
+        <div className="fu-row">
+          <Card title="Site comparison" sub="Utilization, idle and distance per site in view."
+            action={<button type="button" className="cc-btn-ghost" onClick={exportSites} disabled={!sites.length}><FileSpreadsheet size={14} aria-hidden="true" /> Excel</button>}>
+            <CardState state={cardState} empty={fleetError ? 'Site needs the fleet register, which could not be read.' : !sites.length ? 'No sites in this view.' : null}>
+              <KitTable compact getRowId={(x) => String(x.site)} rows={sites} columns={[
+                { key: 'site', header: 'Site', cell: (x) => <span className="cc-strong">{x.site}</span> },
+                { key: 'assets', header: 'Assets', align: 'right', cell: (x) => fmtInt(x.assets) },
+                { key: 'util', header: 'Avg utilization', cell: (x) => <MeterCell value={x.avgUtilization} suffix="%" /> },
+                { key: 'idle', header: 'Avg idle', align: 'right', cell: (x) => fmtP(x.avgIdlePct) },
+                { key: 'distance', header: 'Distance', align: 'right', cell: (x) => fmtKm(x.distanceKm) },
+                { key: 'working', header: 'Working', align: 'right', cell: (x) => fmtHrs(x.workingHours) },
+                { key: 'idle_h', header: 'Idle', align: 'right', cell: (x) => fmtHrs(x.idleHours) },
+                { key: 'high', header: 'High idle', align: 'right', cell: (x) => fmtInt(x.highIdle) },
+              ]} />
+            </CardState>
+          </Card>
+          <Card title="Telematics coverage gap" sub="Active register assets with no telematics record in this country scope."
+            action={
+              <div className="fu-actions">
+                <button type="button" className="cc-btn-ghost" onClick={() => exportGap('excel')} disabled={!coverage?.uncovered.length}><FileSpreadsheet size={14} aria-hidden="true" /> Excel</button>
+                <button type="button" className="cc-btn-ghost" onClick={() => exportGap('pdf')} disabled={!coverage?.uncovered.length}><FileText size={14} aria-hidden="true" /> PDF</button>
+              </div>
+            }>
+            <CardState state={cardState} empty={!coverage ? (fleetError ? 'The coverage gap needs the fleet register, which could not be read.' : 'No register assets in this scope.') : null}>
+              {coverage && (
+                <>
+                  <div className="fu-stats">
+                    <div><span>Active assets</span><b>{fmtInt(coverage.activeAssets)}</b></div>
+                    <div><span>With telematics</span><b>{fmtInt(coverage.covered)}</b></div>
+                    <div><span>Coverage</span><b>{fmtP(coverage.coveragePct)}</b></div>
+                  </div>
+                  {coverage.unregistered > 0 && <p className="fu-note">{fmtInt(coverage.unregistered)} telematics record(s) name an asset the register does not hold.</p>}
+                  <KitTable compact getRowId={(x) => String(x.site)} rows={coverage.bySite} empty="No active register assets in this scope." columns={[
+                    { key: 'site', header: 'Site', cell: (x) => <span className="cc-strong">{x.site}</span> },
+                    { key: 'active', header: 'Active', align: 'right', cell: (x) => fmtInt(x.active) },
+                    { key: 'covered', header: 'Tracked', align: 'right', cell: (x) => fmtInt(x.covered) },
+                    { key: 'gap', header: 'Gap', align: 'right', cell: (x) => <span className={x.gap ? 'fu-warn' : ''}>{fmtInt(x.gap)}</span> },
+                    { key: 'pct', header: 'Coverage', cell: (x) => <MeterCell value={x.coveragePct} suffix="%" /> },
+                  ]} />
+                </>
+              )}
+            </CardState>
+          </Card>
         </div>
       )}
 
-      {!loading && trendChartData(timeline) && (
-        <div className="card p-4">
-          <h2 className="text-sm font-medium text-[var(--text-primary)] mb-3">Utilization by capture</h2>
-          <div className="h-56" role="img" aria-label="Average utilization per telematics capture"><Bar data={trendChartData(timeline)} options={{ maintainAspectRatio: false, plugins: { legend: LEGEND }, scales: { x: { ticks: TICK, grid: GRID }, y: { min: 0, max: 100, ticks: TICK, grid: GRID } } }} /></div>
+      {tab === 'assets' && (
+        <>
+          <div className="fu-row">
+            <Card title="Utilization bands" sub="High 75% and above, medium 40 to 75%, low below 40%.">
+              <CardState state={cardState} empty={!scoped.length ? 'No telematics records in this view.' : null}>
+                <Donut segments={bands.map((b) => ({ label: b.band, count: b.count, color: BAND_COLOR[b.band] }))} centerLabel="records"
+                  onSelect={(s) => { setBand(s.label) }} />
+              </CardState>
+            </Card>
+            <Card title="By country" sub="Records and average utilization per country.">
+              <CardState state={cardState} empty={!countries.length ? 'No telematics records in this view.' : null}>
+                <KitTable compact getRowId={(x) => String(x.country)} rows={countries} columns={[
+                  { key: 'country', header: 'Country', cell: (x) => <span className="cc-strong">{x.country}</span> },
+                  { key: 'assets', header: 'Records', align: 'right', cell: (x) => fmtInt(x.assets) },
+                  { key: 'util', header: 'Avg utilization', cell: (x) => <MeterCell value={x.avgUtilization} suffix="%" /> },
+                  { key: 'distance', header: 'Distance', align: 'right', cell: (x) => fmtKm(x.distance) },
+                ]} />
+              </CardState>
+            </Card>
+          </div>
+          {detailsCard}
+        </>
+      )}
+
+      {tab === 'idle' && (
+        <div className="fu-row">
+          <Card title="Activity split" sub="What each record reported in its capture period.">
+            <CardState state={cardState} empty={!scoped.length ? 'No telematics records in this view.' : null}>
+              <Donut segments={split.map((s) => ({ label: s.label, count: s.count, color: s.color }))} centerLabel="records"
+                onSelect={(s) => { const k = ACTIVITY_KEYS.find((x) => ACTIVITY[x].label === s.label); if (k) setStatus(k) }} />
+            </CardState>
+          </Card>
+          <Card title="Most idle time" sub="Records with the most idle hours in view (top 15).">
+            <CardState state={cardState} empty={!idleTop.length ? 'No idle time is recorded in this view.' : null}>
+              <KitTable compact getRowId={(r) => String(r.id)} rows={idleTop} columns={[
+                { key: 'asset_no', header: 'Fleet no.', cell: (r) => <span className="cc-strong">{r.asset_no}</span> },
+                { key: 'site', header: 'Site', cell: (r) => r.site || NA },
+                { key: 'idle_h', header: 'Idle hours', align: 'right', cell: (r) => <span className="fu-warn">{fmtHrs(r.idleHours)}</span> },
+                { key: 'idle', header: 'Idle share', align: 'right', cell: (r) => fmtP(r.idle) },
+                { key: 'util', header: 'Utilization', cell: (r) => <MeterCell value={num(r.utilization_pct)} suffix="%" /> },
+              ]} />
+            </CardState>
+          </Card>
         </div>
       )}
 
-      {!loading && fleet.length > 0 && sites.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="card p-4 min-w-0">
-            <h2 className="text-sm font-medium text-[var(--text-primary)] mb-3">Site comparison</h2>
-            <div className="h-56" role="img" aria-label="Average utilization by site, top 15"><Bar data={siteChart} options={{ maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { min: 0, max: 100, ticks: TICK, grid: GRID }, y: { ticks: TICK, grid: GRID } } }} /></div>
-            <div className="mt-3">
-              <EnterpriseTable
-                columns={siteColumns}
-                data={sites}
-                getRowId={(x) => String(x.site)}
-                enableGlobalFilter={false}
-                enableColumnFilters={false}
-                enableExport={false}
-                virtual
-                maxHeight={260}
-                emptyMessage="No sites in this view."
-              />
-            </div>
-          </div>
-          {coverage && (
-            <div className="card p-4 min-w-0">
-              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                <h2 className="text-sm font-medium text-[var(--text-primary)]">Telematics coverage gap</h2>
-                <div className="flex gap-1">
-                  <button type="button" onClick={() => exportGap('excel')} disabled={!coverage.uncovered.length} className={`${BTN} text-xs`}><FileSpreadsheet className="w-3.5 h-3.5" aria-hidden="true" /> Excel</button>
-                  <button type="button" onClick={() => exportGap('pdf')} disabled={!coverage.uncovered.length} className={`${BTN} text-xs`}><FileText className="w-3.5 h-3.5" aria-hidden="true" /> PDF</button>
+      {tab === 'reports' && (
+        <Card title="Reports" sub="Every download follows the filters above.">
+          <CardState state={cardState}>
+            <div className="fu-reports">
+              <div className="fu-report">
+                <div><b>Utilization register</b><p>{fmtInt(exportRows.length)} record(s): utilization, distance, idle, working and idle hours, current km and capture date.</p></div>
+                <div className="fu-actions">
+                  <button type="button" className="cc-btn-ghost" onClick={doExcel} disabled={!exportRows.length}><FileSpreadsheet size={14} aria-hidden="true" /> Excel</button>
+                  <button type="button" className="cc-btn-ghost" onClick={doPdf} disabled={!exportRows.length}><FileText size={14} aria-hidden="true" /> PDF</button>
                 </div>
               </div>
-              <p className="text-xs text-[var(--text-muted)] mb-3">Active fleet-register assets with no telematics row in this scope. {coverage.unregistered > 0 ? `${coverage.unregistered} telematics row(s) name an asset the register does not hold.` : ''}</p>
-              <div className="grid grid-cols-3 gap-2 mb-3">
-                <div><div className="text-xs text-[var(--text-muted)]">Active assets</div><div className="text-lg font-semibold tabular-nums text-[var(--text-primary)]">{fmtNum(coverage.activeAssets)}</div></div>
-                <div><div className="text-xs text-[var(--text-muted)]">With telematics</div><div className="text-lg font-semibold tabular-nums text-[var(--text-primary)]">{fmtNum(coverage.covered)}</div></div>
-                <div><div className="text-xs text-[var(--text-muted)]">Coverage</div><div className="text-lg font-semibold tabular-nums text-[var(--text-primary)]">{fmtPct(coverage.coveragePct)}</div></div>
+              <div className="fu-report">
+                <div><b>Site comparison</b><p>{fmtInt(sites.length)} site(s) with utilization, idle, distance and hours.</p></div>
+                <div className="fu-actions"><button type="button" className="cc-btn-ghost" onClick={exportSites} disabled={!sites.length}><FileSpreadsheet size={14} aria-hidden="true" /> Excel</button></div>
               </div>
-              <EnterpriseTable
-                columns={coverageColumns}
-                data={coverage.bySite}
-                getRowId={(x) => String(x.site)}
-                enableGlobalFilter={false}
-                enableColumnFilters={false}
-                enableExport={false}
-                virtual
-                maxHeight={260}
-                emptyMessage="No active register assets in this scope."
-              />
+              <div className="fu-report">
+                <div><b>Telematics coverage gap</b><p>{coverage ? `${fmtInt(coverage.uncovered.length)} active register asset(s) with no telematics record.` : 'Needs the fleet register.'}</p></div>
+                <div className="fu-actions">
+                  <button type="button" className="cc-btn-ghost" onClick={() => exportGap('excel')} disabled={!coverage?.uncovered.length}><FileSpreadsheet size={14} aria-hidden="true" /> Excel</button>
+                  <button type="button" className="cc-btn-ghost" onClick={() => exportGap('pdf')} disabled={!coverage?.uncovered.length}><FileText size={14} aria-hidden="true" /> PDF</button>
+                </div>
+              </div>
+              <p className="fu-note">
+                {trend.points.length
+                  ? `${fmtInt(trend.points.length)} capture date(s) loaded, from ${fmtDate(trend.points[0].date)} to ${fmtDate(trend.points[trend.points.length - 1].date)}.`
+                  : 'No dated telematics captures in this view.'}
+              </p>
             </div>
-          )}
-        </div>
-      )}
-
-      {/* Register */}
-      <section className="card p-2 sm:p-3 min-w-0" aria-labelledby="util-register-h">
-        <div className="flex flex-wrap items-center gap-2 px-1 pb-2">
-          <h2 id="util-register-h" className="text-sm font-medium text-[var(--text-primary)]">Utilization register</h2>
-          <span className="text-xs text-[var(--text-muted)] ml-auto">Sort any column; exports cover every filtered asset in this order.</span>
-        </div>
-        <SortedPagedTable
-          columns={registerColumns}
-          rows={filtered}
-          sort={sort}
-          onSort={onSort}
-          getRowId={(r) => String(r.id)}
-          loading={loading}
-          error={error}
-          onRetry={load}
-          emptyMessage={rows.length === 0 ? 'No telematics utilization has been loaded for this scope yet.' : 'No assets match the current filters.'}
-        />
-      </section>
-
-      {/* Top idle */}
-      {!loading && topIdle.length > 0 && (
-        <div className="card p-4">
-          <h2 className="text-sm font-medium text-[var(--text-primary)] mb-3 flex items-center gap-2"><Timer className="w-4 h-4 text-amber-500" aria-hidden="true" /> Most idle time</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
-            {topIdle.map((r) => (
-              <div key={r.id} className="rounded-lg bg-[var(--input-bg)] p-3 min-w-0">
-                <div className="font-medium text-[var(--text-primary)] text-sm">{r.asset_no}</div>
-                <div className="text-amber-500 text-lg font-semibold tabular-nums">{fmtHrs(r._v)}</div>
-                <div className="text-xs text-[var(--text-muted)]">idle {fmtPct(idlePct(r))}, util {fmtPct(r.utilization_pct)}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Site / type need the register; say so rather than hiding it silently. */}
-      {!loading && !fleet.length && !fleetError && rows.length > 0 && (
-        <p className="text-xs text-[var(--text-muted)] flex items-center gap-1"><MapPin className="w-3.5 h-3.5" aria-hidden="true" /> No fleet register rows in this scope, so site comparison and the coverage gap are not shown.</p>
+          </CardState>
+        </Card>
       )}
     </div>
   )

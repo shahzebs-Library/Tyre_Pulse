@@ -3784,6 +3784,24 @@ abstract class AppLocalizations {
   /// **'No site on file'**
   String get homeSiteStatUnavailable;
 
+  /// No description provided for @homeSiteAllSites.
+  ///
+  /// In en, this message translates to:
+  /// **'All sites'**
+  String get homeSiteAllSites;
+
+  /// No description provided for @homeAccessLoadFailedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your access could not be loaded'**
+  String get homeAccessLoadFailedTitle;
+
+  /// No description provided for @homeAccessLoadFailedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Some sections may be hidden until it loads. Tap to retry.'**
+  String get homeAccessLoadFailedBody;
+
   /// No description provided for @homeFleetSizeStatLabel.
   ///
   /// In en, this message translates to:
@@ -4843,7 +4861,7 @@ abstract class AppLocalizations {
   /// No description provided for @loginIdentifierLabel.
   ///
   /// In en, this message translates to:
-  /// **'Email or employee ID'**
+  /// **'Employee ID or email'**
   String get loginIdentifierLabel;
 
   /// No description provided for @loginIdentifierPlaceholder.
@@ -5083,7 +5101,7 @@ abstract class AppLocalizations {
   /// No description provided for @alertsCopyCatalog.
   ///
   /// In en, this message translates to:
-  /// **'title=Tyre Alerts~all=All~critical=Critical~warnings=Warnings~info=Info~flagged=flagged~criticalCount=critical~emptyTitle=No active alerts~emptyFilter=No alerts match this filter.~loadError=Could not load alerts. Pull down to retry.~unknownAsset=Unknown asset~pressureLow=Tyre pressure is low~treadLow=Tread depth is low~position=Position~serial=Serial~tread=Tread~retry=Retry'**
+  /// **'title=Tyre Alerts~all=All~critical=Critical~warnings=Warnings~info=Info~flagged=flagged~criticalCount=critical~emptyTitle=No active alerts~emptyFilter=No alerts match this filter.~loadError=Could not load alerts. Pull down to retry.~unknownAsset=Unknown asset~pressureLow=Tyre pressure is low~treadLow=Tread depth is low~position=Position~serial=Serial~tread=Tread~retry=Retry~acknowledge=Acknowledge~ackTitle=Acknowledge alert~ackBody=Mark this alert as reviewed? It will be removed from the list.~ackFailed=Could not acknowledge. Please try again.~cancel=Cancel'**
   String get alertsCopyCatalog;
 
   /// No description provided for @notificationInboxCopyCatalog.
@@ -5113,7 +5131,7 @@ abstract class AppLocalizations {
   /// No description provided for @stockCountCopyCatalog.
   ///
   /// In en, this message translates to:
-  /// **'title=Stock Count~items=Items~reorder=Need reorder~notToday=Not counted~search=Search description or site~all=All~low=Low stock~stale=Not counted today~empty=No stock items~emptyBody=No stock records match these filters.~count=Count~stockItem=Stock item~physicalCount=Physical count~reason=Reason (optional)~cancel=Cancel~save=Save count~invalid=Enter a count of zero or more.~offlineSaved=Count saved offline and queued for sync.~saveFailed=The stock count could not be saved.~loadFailed=Stock records could not be loaded.~Critical=Critical~Low=Low~OK=OK~onHand=on hand'**
+  /// **'title=Stock Count~items=Items~reorder=Need reorder~notToday=Not counted~search=Search description or site~all=All~low=Low stock~stale=Not counted today~empty=No stock items~emptyBody=No stock records match these filters.~count=Count~stockItem=Stock item~physicalCount=Physical count~reason=Reason (optional)~cancel=Cancel~save=Save count~invalid=Enter a count of zero or more.~offlineSaved=Count saved offline and queued for sync.~saveFailed=The stock count could not be saved.~loadFailed=Stock records could not be loaded.~Critical=Critical~Low=Low~OK=OK~onHand=on hand~add=Add stock~addTitle=Add stock~size=Tyre size~description=Description (optional)~site=Location (site)~quantity=Quantity~minLevel=Minimum level~criticalLevel=Critical level~sizeRequired=Enter a tyre size for this stock.~siteRequired=Enter a location (site) for this stock.~addFailed=Could not add stock. Please try again.~increase=Increase~decrease=Decrease'**
   String get stockCountCopyCatalog;
 
   /// No description provided for @calendarCopyCatalog.
@@ -12514,6 +12532,408 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Report Accident'**
   String get accRptTitle;
+
+  /// No description provided for @accountDeletionCopyCatalog.
+  ///
+  /// In en, this message translates to:
+  /// **'title=Delete my account~subtitle=Request deletion of your account and personal data~intro=This submits a request for an administrator to delete your account and the personal data associated with it. It does not delete your account instantly.~what=Your access to the app is revoked on request. Personal profile data is deleted; some fleet records created for your organisation may be retained as business or audit records and de-identified from your profile.~timeline=Verified requests are completed within about 30 days.~reason=Reason (optional)~confirm=Type DELETE to confirm~word=DELETE~submit=Submit deletion request~cancel=Cancel~successTitle=Request submitted~successBody=Your account deletion request has been recorded. An administrator will action it within about 30 days.~errorTitle=Could not submit request~mismatch=Type DELETE exactly to confirm.~unavailable=Account deletion is not available right now. Please email us to request deletion.~failed=Could not submit your request. Please try again.~ok=OK'**
+  String get accountDeletionCopyCatalog;
+
+  /// Heading of Home's section of live operational counts.
+  ///
+  /// In en, this message translates to:
+  /// **'Operational summary'**
+  String get homeOperationalSummary;
+
+  /// Home summary tile: inspection plans assigned to you that are due today, overdue or in progress.
+  ///
+  /// In en, this message translates to:
+  /// **'Inspections due'**
+  String get homeInspectionsDue;
+
+  /// Home summary tile: active high or critical risk tyre records.
+  ///
+  /// In en, this message translates to:
+  /// **'Tyres need attention'**
+  String get homeTyresNeedAttention;
+
+  /// Home summary tile: inspections waiting for your signature.
+  ///
+  /// In en, this message translates to:
+  /// **'Approvals awaiting you'**
+  String get homeApprovalsAwaitingYou;
+
+  /// Home timeline: how many more items are on today's plan besides the one shown.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 more today} other{{count} more today}}'**
+  String homePlanMoreToday(int count);
+
+  /// Profile status tile: open work assigned to the signed-in person.
+  ///
+  /// In en, this message translates to:
+  /// **'Assigned tasks'**
+  String get profileAssignedTasks;
+
+  /// Profile button that opens the person's activity history.
+  ///
+  /// In en, this message translates to:
+  /// **'My activity'**
+  String get profileMyActivity;
+
+  /// Tooltip of the tyre records register export (share PDF) action.
+  ///
+  /// In en, this message translates to:
+  /// **'Export'**
+  String get tyreRecordsExportAction;
+
+  /// Status column header in the tyre records PDF export.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get tyreRecordsExportStatus;
+
+  /// Line under the tyre records PDF title: how many loaded rows of the server total are in the file.
+  ///
+  /// In en, this message translates to:
+  /// **'{shown} of {total} tyre records loaded on this device'**
+  String tyreRecordsExportNote(int shown, int total);
+
+  /// Snackbar when the tyre records PDF could not be built or shared.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not create the export. Please try again.'**
+  String get tyreRecordsExportError;
+
+  /// Vehicle 360 tab listing the asset's recorded permits
+  ///
+  /// In en, this message translates to:
+  /// **'Documents'**
+  String get fleet360TabDocuments;
+
+  /// Next preventive maintenance by odometer
+  ///
+  /// In en, this message translates to:
+  /// **'Service due in {km} km'**
+  String fleet360AlertServiceDueKm(String km);
+
+  /// Next preventive maintenance by engine hours
+  ///
+  /// In en, this message translates to:
+  /// **'Service due in {hours} h'**
+  String fleet360AlertServiceDueHours(String hours);
+
+  /// Next preventive maintenance by calendar date
+  ///
+  /// In en, this message translates to:
+  /// **'{days, plural, =0{Service due today} =1{Service due tomorrow} other{Service due in {days} days}}'**
+  String fleet360AlertServiceDueDays(int days);
+
+  /// A preventive maintenance plan is past due
+  ///
+  /// In en, this message translates to:
+  /// **'Service overdue'**
+  String get fleet360AlertServiceOverdue;
+
+  /// Open corrective actions raised from tyre inspections
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 tyre action} other{{count} tyre actions}}'**
+  String fleet360AlertTyreActions(int count);
+
+  /// Timeline row title for a completed inspection
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre inspection completed'**
+  String get fleet360EventInspectionDone;
+
+  /// Timeline row title for a completed wash
+  ///
+  /// In en, this message translates to:
+  /// **'Wash completed'**
+  String get fleet360EventWashDone;
+
+  /// Timeline row title for a tyre fitment
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre fitted at {position}'**
+  String fleet360EventTyreFittedAt(String position);
+
+  /// Timeline row title for a tyre removal
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre removed from {position}'**
+  String fleet360EventTyreRemovedFrom(String position);
+
+  /// Tyre serial on a timeline row
+  ///
+  /// In en, this message translates to:
+  /// **'Serial: {serial}'**
+  String fleet360EventSerial(String serial);
+
+  /// Timeline row title for an open accident case
+  ///
+  /// In en, this message translates to:
+  /// **'Accident case {reference}'**
+  String fleet360EventAccidentCase(String reference);
+
+  /// Timeline row title for a closed accident case
+  ///
+  /// In en, this message translates to:
+  /// **'Accident case {reference} closed'**
+  String fleet360EventAccidentCaseClosed(String reference);
+
+  /// Vehicle 360 cost card title
+  ///
+  /// In en, this message translates to:
+  /// **'Financial snapshot, {year} year to date'**
+  String fleet360SnapshotTitle(String year);
+
+  /// Vehicle 360 cost card KPI
+  ///
+  /// In en, this message translates to:
+  /// **'Total maintenance'**
+  String get fleet360TotalMaintenance;
+
+  /// Cost composition bucket for outside repairs
+  ///
+  /// In en, this message translates to:
+  /// **'External repairs'**
+  String get fleet360BucketExternal;
+
+  /// Vehicle 360 share failure
+  ///
+  /// In en, this message translates to:
+  /// **'The summary could not be shared. Try again.'**
+  String get fleet360ShareError;
+
+  /// Permit kind
+  ///
+  /// In en, this message translates to:
+  /// **'Registration'**
+  String get fleet360DocRegistration;
+
+  /// Permit kind
+  ///
+  /// In en, this message translates to:
+  /// **'Insurance'**
+  String get fleet360DocInsurance;
+
+  /// Permit kind
+  ///
+  /// In en, this message translates to:
+  /// **'Operating card'**
+  String get fleet360DocOperatingCard;
+
+  /// Permit kind
+  ///
+  /// In en, this message translates to:
+  /// **'Driver licence'**
+  String get fleet360DocDriverLicence;
+
+  /// Permit issue date
+  ///
+  /// In en, this message translates to:
+  /// **'Issued {date}'**
+  String fleet360DocIssued(String date);
+
+  /// Permit expiry date
+  ///
+  /// In en, this message translates to:
+  /// **'Expires {date}'**
+  String fleet360DocExpires(String date);
+
+  /// Permit expiry state
+  ///
+  /// In en, this message translates to:
+  /// **'Expired'**
+  String get fleet360DocExpired;
+
+  /// Permit expiry state
+  ///
+  /// In en, this message translates to:
+  /// **'Expiring soon'**
+  String get fleet360DocExpiringSoon;
+
+  /// Permit expiry state
+  ///
+  /// In en, this message translates to:
+  /// **'Valid'**
+  String get fleet360DocValid;
+
+  /// Permit with no expiry date
+  ///
+  /// In en, this message translates to:
+  /// **'No expiry recorded'**
+  String get fleet360DocNoExpiry;
+
+  /// Documents tab empty title
+  ///
+  /// In en, this message translates to:
+  /// **'No documents recorded'**
+  String get fleet360DocsEmptyTitle;
+
+  /// Documents tab empty body
+  ///
+  /// In en, this message translates to:
+  /// **'No registration, insurance, operating card or licence details are recorded for this asset.'**
+  String get fleet360DocsEmptyBody;
+
+  /// Tyre inspection module tab on the tyre capture screen
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre inspection'**
+  String get inspectionModuleTyre;
+
+  /// Machine inspection module tab, opens the checklists hub
+  ///
+  /// In en, this message translates to:
+  /// **'Machine inspection'**
+  String get inspectionModuleMachine;
+
+  /// Fleet list filter: only assets with a service overdue or due soon
+  ///
+  /// In en, this message translates to:
+  /// **'Due soon'**
+  String get fleetListDueSoon;
+
+  /// Shown when the PM plan and tyre action read failed
+  ///
+  /// In en, this message translates to:
+  /// **'Due items could not be checked'**
+  String get fleetListDueSoonUnavailable;
+
+  /// Title of the Fleet list filter sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Filters'**
+  String get fleetListFiltersTitle;
+
+  /// Accessible label of the Fleet list filter button
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{Filters} =1{Filters, 1 active} other{Filters, {count} active}}'**
+  String fleetListFiltersActive(int count);
+
+  /// Fleet list sort option: register order by asset number
+  ///
+  /// In en, this message translates to:
+  /// **'Asset number'**
+  String get fleetListSortAssetNo;
+
+  /// Fleet list sort option: overdue and nearest service first
+  ///
+  /// In en, this message translates to:
+  /// **'Service due first'**
+  String get fleetListSortServiceDue;
+
+  /// Fleet list sort option: most open tyre actions first
+  ///
+  /// In en, this message translates to:
+  /// **'Most tyre actions'**
+  String get fleetListSortTyreActions;
+
+  /// Action on the in-app banner shown when a push notification arrives while the app is open
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get pushNotificationOpen;
+
+  /// Banner title when a push notification arrives without a title
+  ///
+  /// In en, this message translates to:
+  /// **'New notification'**
+  String get pushNotificationFallbackTitle;
+
+  /// Maintenance Control Center: work order status chip for the canonical status "New".
+  ///
+  /// In en, this message translates to:
+  /// **'New'**
+  String get pmWoStatusNew;
+
+  /// Maintenance Control Center: work order status chip for the canonical status "Assigned".
+  ///
+  /// In en, this message translates to:
+  /// **'Assigned'**
+  String get pmWoStatusAssigned;
+
+  /// Maintenance Control Center: work order status chip for the canonical status "In Progress".
+  ///
+  /// In en, this message translates to:
+  /// **'In Progress'**
+  String get pmWoStatusInProgress;
+
+  /// Maintenance Control Center: work order status chip for the canonical status "Waiting for Parts".
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for Parts'**
+  String get pmWoStatusWaitingForParts;
+
+  /// Maintenance Control Center: work order status chip for the canonical status "Quality Inspection".
+  ///
+  /// In en, this message translates to:
+  /// **'Quality Inspection'**
+  String get pmWoStatusQualityInspection;
+
+  /// Maintenance Control Center: work order status chip for the canonical status "Completed".
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get pmWoStatusCompleted;
+
+  /// Maintenance Control Center: work order status chip for the canonical status "Closed".
+  ///
+  /// In en, this message translates to:
+  /// **'Closed'**
+  String get pmWoStatusClosed;
+
+  /// Maintenance Control Center: work order status chip for the canonical status "Cancelled".
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get pmWoStatusCancelled;
+
+  /// Maintenance Control Center: work order status chip for the canonical status "Overdue".
+  ///
+  /// In en, this message translates to:
+  /// **'Overdue'**
+  String get pmWoStatusOverdue;
+
+  /// Maintenance Control Center: work order status chip for the canonical status "On Hold".
+  ///
+  /// In en, this message translates to:
+  /// **'On Hold'**
+  String get pmWoStatusOnHold;
+
+  /// Maintenance Control Center: work order status chip for the canonical status "Open".
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get pmWoStatusOpen;
+
+  /// Tyre records: the Low risk level shown on a tyre card and the risk filter, in the reader's language (the stored value stays English).
+  ///
+  /// In en, this message translates to:
+  /// **'Low'**
+  String get recordsRiskLow;
+
+  /// Tyre records: the Medium risk level shown on a tyre card and the risk filter, in the reader's language (the stored value stays English).
+  ///
+  /// In en, this message translates to:
+  /// **'Medium'**
+  String get recordsRiskMedium;
+
+  /// Tyre records: the High risk level shown on a tyre card and the risk filter, in the reader's language (the stored value stays English).
+  ///
+  /// In en, this message translates to:
+  /// **'High'**
+  String get recordsRiskHigh;
+
+  /// Tyre records: the Critical risk level shown on a tyre card and the risk filter, in the reader's language (the stored value stays English).
+  ///
+  /// In en, this message translates to:
+  /// **'Critical'**
+  String get recordsRiskCritical;
 }
 
 class _AppLocalizationsDelegate

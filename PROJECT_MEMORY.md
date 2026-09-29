@@ -94,7 +94,7 @@ batching stops them being started at all.
 
 ---
 
-# ⚑ SESSION 2026-09-29 (part 3) — FLUTTER MOCK PARITY (8 agents) + FCM PUSH + BROWSER QA (2 rounds). 13 LOCAL COMMITS, NOT PUSHED (owner: push only on "push"; PR #370 still NOT to be merged).
+# ⚑ SESSION 2026-09-29 (part 3) — FLUTTER MOCK PARITY (8 agents) + FCM PUSH + BROWSER QA (2 rounds). **MERGED to main as PR #370 (squash d236a700) on owner go-ahead.** workflow-notify v10 DEPLOYED (verify_jwt=false; wrong secret -> 401, right -> 200). user_devices: 132 Expo, 0 FCM tokens (Flutter tokens appear only after a new Flutter build is installed).
 - **Approval "old data" bug FIXED:** approval queues loaded once and kept rows across tabs, so a supervisor opened an OLDER
   pending sheet of the same asset. Queues now re-read when shown/on return/on resume (`approvals/presentation/widgets/
   refresh_when_shown.dart`); review screen resets on id change. Same code on main, so every build had it.

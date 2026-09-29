@@ -4,6 +4,15 @@
  */
 import { supabase, unwrap, applyCountry, ServiceError, fetchAllPages, fetchAllRpcPages } from './_client'
 import { toUserMessage } from '../safeError'
+import { growthPct } from '../commandCenter'
+
+// Fleet Master extras (type list, bulk edit, last service, PM due, utilisation)
+// live in their own module and are re-exported so the page reaches them
+// through the one `assets` namespace.
+export {
+  listFleetTypes, bulkUpdateFleetRecords, BULK_EDITABLE, getLastServiceByAsset,
+  countPmDueSoon, getUtilisationSummary,
+} from './fleetMasterData'
 
 // ops_status is the OPERATIONAL state from the owner's monthly asset sheet
 // (running / breakdown / idle / planned scrap / being reallocated). It is a
@@ -149,6 +158,28 @@ export async function getAssetByNo(assetNo, country) {
   return row
 }
 
+/**
+ * Quick filters the Fleet Master KPI tiles apply, answered by the server so a
+ * filtered register is the whole matching set. Each mirrors the count the tile
+ * shows in getFleetSummary (a blank string counts as missing, like `!r.make`).
+ */
+function applyFleetFlag(query, flag) {
+  switch (flag) {
+    case 'maintenance':
+      return query.eq('status', 'Active').ilike('ops_status', 'breakdown')
+    case 'missing_specs':
+      return query.or('make.is.null,make.eq."",model.is.null,model.eq.""')
+    case 'no_policy':
+      return query
+        .or('expected_km_per_tyre.is.null,expected_km_per_tyre.eq.0')
+        .or('min_days_between_changes.is.null,min_days_between_changes.eq.0')
+    case 'inactive':
+      return query.or('status.is.null,status.neq.Active')
+    default:
+      return query
+  }
+}
+
 // Quoted, literal case-insensitive substring search. imatch avoids PostgREST's
 // special '*' alias for LIKE wildcards; escaping regex metacharacters keeps
 // typed asset numbers and make/model punctuation literal too.
@@ -157,11 +188,11 @@ function applyFleetSearch(query, search) {
   if (!term) return query
   const pattern = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const quoted = JSON.stringify(pattern)
-  return query.or(['asset_no', 'fleet_number', 'make', 'model']
+  return query.or(['asset_no', 'fleet_number', 'make', 'model', 'operator_name']
     .map(column => `${column}.imatch.${quoted}`).join(','))
 }
 
-export async function listFleetRecords({ page, pageSize, search, site, status, country } = {}) {
+export async function listFleetRecords({ page, pageSize, search, site, status, type, flag, country } = {}) {
   let q = supabase
     .from('vehicle_fleet')
     .select('*', { count: 'exact' })
@@ -175,6 +206,8 @@ export async function listFleetRecords({ page, pageSize, search, site, status, c
   if (search) q = applyFleetSearch(q, search)
   if (site) q = q.eq('site', site)
   if (status) q = q.eq('status', status)
+  if (type) q = q.eq('vehicle_type', type)
+  if (flag) q = applyFleetFlag(q, flag)
   q = applyCountry(q, country)
 
   const { data, count, error } = await q
@@ -197,27 +230,40 @@ export async function listSites({ country } = {}) {
   return [...new Set((data ?? []).map(r => r.site))].sort()
 }
 
-export async function getFleetSummary({ country, search, site } = {}) {
+export async function getFleetSummary({ country, search, site, type } = {}) {
   const { data, truncated, error } = await fetchAllPages((from, to) => {
     let q = supabase
       .from('vehicle_fleet')
-      .select('status,make,model,expected_km_per_tyre,min_days_between_changes')
+      .select('status,ops_status,make,model,expected_km_per_tyre,min_days_between_changes,site,country,created_at')
       .order('asset_no')
       .order('id')
       .range(from, to)
     if (search) q = applyFleetSearch(q, search)
     if (site) q = q.eq('site', site)
+    if (type) q = q.eq('vehicle_type', type)
     q = applyCountry(q, country)
     return q
   }, { max: MAX_ASSET_ROWS })
 
   if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   const rows = data ?? []
+  const isActive = r => r.status === 'Active'
+  // Under maintenance = on the current fleet (status Active) AND broken down
+  // today (ops_status 'breakdown'). An inactive machine is not "in the
+  // workshop", it is off the fleet, so it is counted once, as inactive.
+  const inMaintenance = r => isActive(r) && String(r.ops_status || '').toLowerCase() === 'breakdown'
+  const sites = new Set(rows.map(r => String(r.site || '').trim().toUpperCase()).filter(Boolean))
+  const countries = new Set(rows.map(r => String(r.country || '').trim()).filter(Boolean))
   return {
     total:        rows.length,
-    active:       rows.filter(r => r.status === 'Active').length,
+    active:       rows.filter(isActive).length,
+    maintenance:  rows.filter(inMaintenance).length,
+    inactive:     rows.filter(r => !isActive(r)).length,
     missingSpecs: rows.filter(r => !r.make || !r.model).length,
     noPolicy:     rows.filter(r => !r.expected_km_per_tyre && !r.min_days_between_changes).length,
+    sites:        sites.size,
+    countries:    countries.size,
+    growth:       { total: growthPct(rows), active: growthPct(rows, Date.now(), isActive) },
     truncated:    Boolean(truncated),
   }
 }
@@ -261,7 +307,7 @@ export async function deleteFleetRecords(ids) {
   return deleted
 }
 
-export async function fetchAllFleetRecords({ search, site, status, country } = {}) {
+export async function fetchAllFleetRecords({ search, site, status, type, flag, country } = {}) {
   const { data, error } = await fetchAllPages((from, to) => {
     let q = supabase
       .from('vehicle_fleet')
@@ -272,6 +318,8 @@ export async function fetchAllFleetRecords({ search, site, status, country } = {
     if (search) q = applyFleetSearch(q, search)
     if (site) q = q.eq('site', site)
     if (status) q = q.eq('status', status)
+    if (type) q = q.eq('vehicle_type', type)
+    if (flag) q = applyFleetFlag(q, flag)
     q = applyCountry(q, country)
     return q
   }, { max: MAX_ASSET_ROWS })

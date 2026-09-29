@@ -34,8 +34,10 @@ import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
+import 'package:tyre_pulse/features/assets/data/fleet_signals_repository.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
 import 'package:tyre_pulse/features/assets/domain/fleet_class_groups.dart';
+import 'package:tyre_pulse/features/assets/domain/fleet_signals.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicles_list_screen.dart';
@@ -45,6 +47,7 @@ Future<void> _pump(
   Override override, {
   String? initialSearchTerm,
   bool dark = false,
+  List<Override> extra = const <Override>[],
 }) async {
   // A tall default surface: the list now carries the mock's group tabs,
   // scope line and bottom scan bar, so the default 600pt test surface
@@ -58,7 +61,7 @@ Future<void> _pump(
   }
   await tester.pumpWidget(
     ProviderScope(
-      overrides: <Override>[override],
+      overrides: <Override>[override, ...extra],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: dark ? TpTheme.dark : TpTheme.light,
@@ -616,5 +619,214 @@ void main() {
       ),
     );
     semantics.dispose();
+  });
+
+  group('Fleet & assets mock parity (Fleet_&_Assets.jpg)', () {
+    // Next PM for "pump" is 320 km away (68,740 - 68,420); "gen" is a
+    // calendar plan a year out; "bus" has no plan at all.
+    final DateTime inAYear = DateTime.now().add(const Duration(days: 365));
+    final String inAYearIso =
+        '${inAYear.year}-${inAYear.month.toString().padLeft(2, '0')}-'
+        '${inAYear.day.toString().padLeft(2, '0')}';
+    final FleetSignals signals = FleetSignals.fromRows(
+      pmRows: <Map<String, dynamic>>[
+        const <String, dynamic>{
+          'id': 'p1',
+          'asset_no': 'cp-045',
+          'status': 'active',
+          'meter_source': 'odometer',
+          'next_due_meter': 68740,
+        },
+        <String, dynamic>{
+          'id': 'p2',
+          'asset_no': 'GEN-021',
+          'status': 'active',
+          'next_due': inAYearIso,
+        },
+      ],
+      actionRows: const <Map<String, dynamic>>[
+        <String, dynamic>{'id': 'a1', 'asset_no': 'CP-045', 'status': 'open'},
+        <String, dynamic>{'id': 'a2', 'asset_no': 'CP-045', 'status': null},
+        <String, dynamic>{
+          'id': 'a3',
+          'asset_no': 'CP-045',
+          'status': 'closed',
+        },
+      ],
+    );
+    const VehicleFleetListLoaded register = VehicleFleetListLoaded(
+      assets: <VehicleAsset>[
+        VehicleAsset(id: 'bus', assetNo: 'BUS-062', status: 'Active'),
+        VehicleAsset(id: 'gen', assetNo: 'GEN-021', status: 'Active'),
+        VehicleAsset(
+          id: 'pump',
+          assetNo: 'CP-045',
+          status: 'Active',
+          currentKm: 68420,
+        ),
+      ],
+      truncated: false,
+    );
+
+    Override signalsOverride(FleetSignalsOutcome outcome) =>
+        fleetSignalsProvider.overrideWith((Ref ref) async => outcome);
+
+    testWidgets(
+        'rows carry the real service-due and open tyre-action lines, and '
+        'an asset with neither carries no line at all', (
+      WidgetTester tester,
+    ) async {
+      await _pump(
+        tester,
+        _resolved(register),
+        extra: <Override>[signalsOverride(FleetSignalsLoaded(signals))],
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.descendant(
+          of: find.byKey(VehiclesListScreenKeys.serviceDue('pump')),
+          matching: find.text('Service due in 320 km'),
+        ),
+        findsOneWidget,
+      );
+      // Two open (one with a blank status, which V496 treats as open) and
+      // one closed: the closed one is never counted.
+      expect(
+        find.descendant(
+          of: find.byKey(VehiclesListScreenKeys.tyreActions('pump')),
+          matching: find.text('2 tyre actions'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(VehiclesListScreenKeys.serviceDue('bus')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(VehiclesListScreenKeys.tyreActions('bus')),
+        findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
+        'Due soon narrows to overdue or near services and the filter badge '
+        'counts it', (WidgetTester tester) async {
+      await _pump(
+        tester,
+        _resolved(register),
+        extra: <Override>[signalsOverride(FleetSignalsLoaded(signals))],
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(VehiclesListScreenKeys.dueSoon));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(VehiclesListScreenKeys.asset('pump')), findsOneWidget);
+      // A plan a year out is not due soon; no plan is not due at all.
+      expect(find.byKey(VehiclesListScreenKeys.asset('gen')), findsNothing);
+      expect(find.byKey(VehiclesListScreenKeys.asset('bus')), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byKey(VehiclesListScreenKeys.filter),
+          matching: find.text('1'),
+        ),
+        findsOneWidget,
+      );
+
+      // The sheet's Clear filters widens the list back.
+      await tester.tap(find.byKey(VehiclesListScreenKeys.filter));
+      await tester.pumpAndSettle();
+      expect(find.byKey(VehiclesListScreenKeys.filterSheet), findsOneWidget);
+      await tester.tap(find.text('Clear filters'));
+      await tester.pumpAndSettle();
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle();
+      expect(find.byKey(VehiclesListScreenKeys.asset('bus')), findsOneWidget);
+    });
+
+    testWidgets(
+        'an unavailable due read disables Due soon instead of showing an '
+        'empty "nothing due" list, and draws no due lines', (
+      WidgetTester tester,
+    ) async {
+      await _pump(
+        tester,
+        _resolved(register),
+        extra: <Override>[signalsOverride(const FleetSignalsUnavailable())],
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(VehiclesListScreenKeys.dueSoon));
+      await tester.pumpAndSettle();
+      expect(find.byKey(VehiclesListScreenKeys.asset('bus')), findsOneWidget);
+      expect(
+        find.byKey(VehiclesListScreenKeys.serviceDue('pump')),
+        findsNothing,
+      );
+      final SemanticsHandle handle = tester.ensureSemantics();
+      await tester.pump();
+      // The disabled pill says WHY it cannot filter, not just that it is off.
+      expect(
+        find.bySemanticsLabel(
+          RegExp('Due soon. Due items could not be checked'),
+        ),
+        findsOneWidget,
+      );
+      handle.dispose();
+    });
+
+    testWidgets('Service due first puts the nearest service at the top', (
+      WidgetTester tester,
+    ) async {
+      await _pump(
+        tester,
+        _resolved(register),
+        extra: <Override>[signalsOverride(FleetSignalsLoaded(signals))],
+      );
+      await tester.pumpAndSettle();
+      double top(String id) =>
+          tester.getTopLeft(find.byKey(VehiclesListScreenKeys.asset(id))).dy;
+      expect(top('bus'), lessThan(top('pump')));
+
+      await tester.tap(find.byKey(VehiclesListScreenKeys.sort));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.widgetWithText(
+          CheckedPopupMenuItem<FleetSortOrder>,
+          'Service due first',
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(top('pump'), lessThan(top('gen')));
+      expect(top('gen'), lessThan(top('bus')));
+    });
+
+    testWidgets(
+        'the header shows the real queue state - a waiting count, never a '
+        'hard-coded Synced', (
+      WidgetTester tester,
+    ) async {
+      await _pump(
+        tester,
+        _resolved(register),
+        extra: <Override>[
+          fleetPendingSyncCountProvider.overrideWith(
+            (Ref ref) => Stream<int>.value(3),
+          ),
+        ],
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byKey(VehiclesListScreenKeys.sync),
+          matching: find.text('3 waiting to sync'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Synced'), findsNothing);
+    });
   });
 }

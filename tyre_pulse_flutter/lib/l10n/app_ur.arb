@@ -3114,5 +3114,14 @@
   "fleet360DocValid": "درست",
   "fleet360DocNoExpiry": "میعاد کی تاریخ درج نہیں",
   "fleet360DocsEmptyTitle": "کوئی دستاویز درج نہیں",
-  "fleet360DocsEmptyBody": "اس اثاثے کے لیے رجسٹریشن، انشورنس، آپریٹنگ کارڈ یا لائسنس کی کوئی تفصیل درج نہیں۔"
+  "fleet360DocsEmptyBody": "اس اثاثے کے لیے رجسٹریشن، انشورنس، آپریٹنگ کارڈ یا لائسنس کی کوئی تفصیل درج نہیں۔",
+  "inspectionModuleTyre": "ٹائر معائنہ",
+  "inspectionModuleMachine": "مشین معائنہ",
+  "fleetListDueSoon": "جلد واجب",
+  "fleetListDueSoonUnavailable": "واجب اشیاء چیک نہیں ہو سکیں",
+  "fleetListFiltersTitle": "فلٹرز",
+  "fleetListFiltersActive": "{count, plural, =0{فلٹرز} =1{فلٹرز، 1 فعال} other{فلٹرز، {count} فعال}}",
+  "fleetListSortAssetNo": "اثاثہ نمبر",
+  "fleetListSortServiceDue": "پہلے واجب سروس",
+  "fleetListSortTyreActions": "سب سے زیادہ ٹائر اقدامات"
 }

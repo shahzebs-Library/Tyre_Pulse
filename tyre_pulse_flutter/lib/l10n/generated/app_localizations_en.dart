@@ -7312,4 +7312,40 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get fleet360DocsEmptyBody =>
       'No registration, insurance, operating card or licence details are recorded for this asset.';
+
+  @override
+  String get inspectionModuleTyre => 'Tyre inspection';
+
+  @override
+  String get inspectionModuleMachine => 'Machine inspection';
+
+  @override
+  String get fleetListDueSoon => 'Due soon';
+
+  @override
+  String get fleetListDueSoonUnavailable => 'Due items could not be checked';
+
+  @override
+  String get fleetListFiltersTitle => 'Filters';
+
+  @override
+  String fleetListFiltersActive(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Filters, $count active',
+      one: 'Filters, 1 active',
+      zero: 'Filters',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fleetListSortAssetNo => 'Asset number';
+
+  @override
+  String get fleetListSortServiceDue => 'Service due first';
+
+  @override
+  String get fleetListSortTyreActions => 'Most tyre actions';
 }

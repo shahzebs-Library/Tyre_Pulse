@@ -544,10 +544,19 @@ void main() {
     // homeTyresNeedAttention, homeApprovalsAwaitingYou), the today's-plan
     // timeline count (homePlanMoreToday), and Profile's Assigned tasks tile
     // and My activity button (profileAssignedTasks, profileMyActivity).
-    test('en, ar and ur each carry exactly 2113 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2113);
-      expect(_translatableKeys(ar).length, 2113);
-      expect(_translatableKeys(ur).length, 2113);
+    // 2113 + 2 = 2115. Wheel-loader inspection mock 16: the Tyre inspection /
+    // Machine inspection module switch (inspectionModuleTyre,
+    // inspectionModuleMachine).
+    // 2115 + 7 = 2122. Fleet & assets mock parity: the Due soon filter and
+    // its could-not-check line (fleetListDueSoon,
+    // fleetListDueSoonUnavailable), the filter sheet title and badge label
+    // (fleetListFiltersTitle, fleetListFiltersActive) and the three sort
+    // options (fleetListSortAssetNo, fleetListSortServiceDue,
+    // fleetListSortTyreActions).
+    test('en, ar and ur each carry exactly 2122 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2122);
+      expect(_translatableKeys(ar).length, 2122);
+      expect(_translatableKeys(ur).length, 2122);
     });
   });
 

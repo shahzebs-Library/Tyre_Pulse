@@ -24,6 +24,7 @@ import 'package:tyre_pulse/core/network/supabase_client_provider.dart';
 import 'package:tyre_pulse/core/sync/sync_workspace_id.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
+import 'package:tyre_pulse/features/assets/data/fleet_signals_repository.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_draft_repository.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_draft_summary.dart';
@@ -183,3 +184,36 @@ String? _normalisedCountry(String? value) {
   final String trimmed = value?.trim().toUpperCase() ?? '';
   return trimmed.isEmpty ? null : trimmed;
 }
+
+/// The register-wide PM plan + tyre-action read behind the Fleet & assets
+/// due lines. See `fleet_signals_repository.dart`.
+final Provider<FleetSignalsSource> fleetSignalsSourceProvider =
+    Provider<FleetSignalsSource>(
+  (ref) => SupabaseFleetSignalsSource(ref.watch(supabaseClientProvider)),
+);
+
+/// Loaded once per workspace. Never errors for an expected failure: those
+/// are [FleetSignalsUnavailable] values, so the list can say "could not
+/// check" instead of implying nothing is due.
+final FutureProvider<FleetSignalsOutcome> fleetSignalsProvider =
+    FutureProvider<FleetSignalsOutcome>((ref) {
+  final workspace = ref.watch(workspaceContextProvider);
+  return loadFleetSignals(
+    ref.watch(fleetSignalsSourceProvider),
+    country: workspace?.activeCountry,
+  );
+});
+
+/// Every queued command not yet synced for the active workspace, live, for
+/// the header's Synced label. The same Drift watch Profile reads
+/// ([QueueDao.watchPendingCount]); a read failure stays an [AsyncError] so
+/// the header shows nothing rather than a false "Synced".
+final StreamProvider<int> fleetPendingSyncCountProvider =
+    StreamProvider<int>((ref) {
+  final WorkspaceContext? workspace = ref.watch(workspaceContextProvider);
+  if (workspace == null) return Stream<int>.value(0);
+  final AppDatabase db = ref.watch(appDatabaseProvider);
+  return db.queueDao.watchPendingCount(
+    workspaceId: workspaceIdFor(workspace),
+  );
+});

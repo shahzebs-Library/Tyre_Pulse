@@ -7330,4 +7330,40 @@ class AppLocalizationsUr extends AppLocalizations {
   @override
   String get fleet360DocsEmptyBody =>
       'اس اثاثے کے لیے رجسٹریشن، انشورنس، آپریٹنگ کارڈ یا لائسنس کی کوئی تفصیل درج نہیں۔';
+
+  @override
+  String get inspectionModuleTyre => 'ٹائر معائنہ';
+
+  @override
+  String get inspectionModuleMachine => 'مشین معائنہ';
+
+  @override
+  String get fleetListDueSoon => 'جلد واجب';
+
+  @override
+  String get fleetListDueSoonUnavailable => 'واجب اشیاء چیک نہیں ہو سکیں';
+
+  @override
+  String get fleetListFiltersTitle => 'فلٹرز';
+
+  @override
+  String fleetListFiltersActive(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'فلٹرز، $count فعال',
+      one: 'فلٹرز، 1 فعال',
+      zero: 'فلٹرز',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fleetListSortAssetNo => 'اثاثہ نمبر';
+
+  @override
+  String get fleetListSortServiceDue => 'پہلے واجب سروس';
+
+  @override
+  String get fleetListSortTyreActions => 'سب سے زیادہ ٹائر اقدامات';
 }

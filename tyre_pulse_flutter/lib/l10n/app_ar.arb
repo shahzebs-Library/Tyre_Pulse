@@ -3114,5 +3114,14 @@
   "fleet360DocValid": "ساري",
   "fleet360DocNoExpiry": "لا يوجد تاريخ انتهاء مسجل",
   "fleet360DocsEmptyTitle": "لا توجد مستندات مسجلة",
-  "fleet360DocsEmptyBody": "لا توجد تفاصيل تسجيل أو تأمين أو بطاقة تشغيل أو رخصة مسجلة لهذا الأصل."
+  "fleet360DocsEmptyBody": "لا توجد تفاصيل تسجيل أو تأمين أو بطاقة تشغيل أو رخصة مسجلة لهذا الأصل.",
+  "inspectionModuleTyre": "فحص الإطارات",
+  "inspectionModuleMachine": "فحص المعدة",
+  "fleetListDueSoon": "مستحق قريبا",
+  "fleetListDueSoonUnavailable": "تعذر التحقق من البنود المستحقة",
+  "fleetListFiltersTitle": "عوامل التصفية",
+  "fleetListFiltersActive": "{count, plural, =0{عوامل التصفية} =1{عوامل التصفية، 1 مفعل} other{عوامل التصفية، {count} مفعلة}}",
+  "fleetListSortAssetNo": "رقم الأصل",
+  "fleetListSortServiceDue": "الصيانة المستحقة أولا",
+  "fleetListSortTyreActions": "الأكثر إجراءات إطارات"
 }

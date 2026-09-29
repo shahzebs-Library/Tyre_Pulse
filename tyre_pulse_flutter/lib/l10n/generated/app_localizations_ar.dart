@@ -7334,4 +7334,40 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get fleet360DocsEmptyBody =>
       'لا توجد تفاصيل تسجيل أو تأمين أو بطاقة تشغيل أو رخصة مسجلة لهذا الأصل.';
+
+  @override
+  String get inspectionModuleTyre => 'فحص الإطارات';
+
+  @override
+  String get inspectionModuleMachine => 'فحص المعدة';
+
+  @override
+  String get fleetListDueSoon => 'مستحق قريبا';
+
+  @override
+  String get fleetListDueSoonUnavailable => 'تعذر التحقق من البنود المستحقة';
+
+  @override
+  String get fleetListFiltersTitle => 'عوامل التصفية';
+
+  @override
+  String fleetListFiltersActive(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'عوامل التصفية، $count مفعلة',
+      one: 'عوامل التصفية، 1 مفعل',
+      zero: 'عوامل التصفية',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fleetListSortAssetNo => 'رقم الأصل';
+
+  @override
+  String get fleetListSortServiceDue => 'الصيانة المستحقة أولا';
+
+  @override
+  String get fleetListSortTyreActions => 'الأكثر إجراءات إطارات';
 }

@@ -12778,6 +12778,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No registration, insurance, operating card or licence details are recorded for this asset.'**
   String get fleet360DocsEmptyBody;
+
+  /// Tyre inspection module tab on the tyre capture screen
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre inspection'**
+  String get inspectionModuleTyre;
+
+  /// Machine inspection module tab, opens the checklists hub
+  ///
+  /// In en, this message translates to:
+  /// **'Machine inspection'**
+  String get inspectionModuleMachine;
+
+  /// Fleet list filter: only assets with a service overdue or due soon
+  ///
+  /// In en, this message translates to:
+  /// **'Due soon'**
+  String get fleetListDueSoon;
+
+  /// Shown when the PM plan and tyre action read failed
+  ///
+  /// In en, this message translates to:
+  /// **'Due items could not be checked'**
+  String get fleetListDueSoonUnavailable;
+
+  /// Title of the Fleet list filter sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Filters'**
+  String get fleetListFiltersTitle;
+
+  /// Accessible label of the Fleet list filter button
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{Filters} =1{Filters, 1 active} other{Filters, {count} active}}'**
+  String fleetListFiltersActive(int count);
+
+  /// Fleet list sort option: register order by asset number
+  ///
+  /// In en, this message translates to:
+  /// **'Asset number'**
+  String get fleetListSortAssetNo;
+
+  /// Fleet list sort option: overdue and nearest service first
+  ///
+  /// In en, this message translates to:
+  /// **'Service due first'**
+  String get fleetListSortServiceDue;
+
+  /// Fleet list sort option: most open tyre actions first
+  ///
+  /// In en, this message translates to:
+  /// **'Most tyre actions'**
+  String get fleetListSortTyreActions;
 }
 
 class _AppLocalizationsDelegate

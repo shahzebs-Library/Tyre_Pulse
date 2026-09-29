@@ -550,9 +550,12 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
             TpSpace.lg,
             TpSpace.sm,
           ),
-          child: Row(
-            children: <Widget>[
-              Expanded(
+          // Four controls do not fit one row on a 360dp phone: the two menus
+          // were squeezed below their icon + arrow width and overflowed.
+          // Narrow screens put the menus on one row and the toggles below.
+          child: LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              final Widget site = Expanded(
                 child: _FleetFilterMenu(
                   icon: Icons.location_on_outlined,
                   label: _siteFilter == null
@@ -563,9 +566,8 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
                   onSelect: (String? value) =>
                       setState(() => _siteFilter = value),
                 ),
-              ),
-              const SizedBox(width: TpSpace.sm),
-              Expanded(
+              );
+              final Widget status = Expanded(
                 child: _FleetFilterMenu(
                   icon: Icons.tune_rounded,
                   label: _statusFilter == null
@@ -576,9 +578,8 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
                   onSelect: (String? value) =>
                       setState(() => _statusFilter = value),
                 ),
-              ),
-              const SizedBox(width: TpSpace.sm),
-              _DueSoonToggle(
+              );
+              final Widget dueSoon = _DueSoonToggle(
                 key: VehiclesListScreenKeys.dueSoon,
                 label: l10n.fleetListDueSoon,
                 unavailableLabel: l10n.fleetListDueSoonUnavailable,
@@ -587,9 +588,8 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
                 // disabled rather than returning an empty "nothing due" list.
                 available: signals != null,
                 onChanged: (bool on) => setState(() => _dueSoonOnly = on),
-              ),
-              const SizedBox(width: TpSpace.sm),
-              _FilterButton(
+              );
+              final Widget filter = _FilterButton(
                 key: VehiclesListScreenKeys.filter,
                 count: _activeFilterCount,
                 label: l10n.fleetListFiltersActive(_activeFilterCount),
@@ -599,8 +599,31 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
                   vehicleTypes: vehicleTypes,
                   dueSoonAvailable: signals != null,
                 ),
-              ),
-            ],
+              );
+              const Widget gap = SizedBox(width: TpSpace.sm);
+              if (constraints.maxWidth >= 480) {
+                return Row(
+                  children: <Widget>[
+                    site,
+                    gap,
+                    status,
+                    gap,
+                    dueSoon,
+                    gap,
+                    filter,
+                  ],
+                );
+              }
+              return Column(
+                children: <Widget>[
+                  Row(children: <Widget>[site, gap, status]),
+                  const SizedBox(height: TpSpace.sm),
+                  Row(
+                    children: <Widget>[Expanded(child: dueSoon), gap, filter],
+                  ),
+                ],
+              );
+            },
           ),
         ),
         _ScopeLine(

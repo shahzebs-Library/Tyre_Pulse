@@ -94,7 +94,7 @@ batching stops them being started at all.
 
 ---
 
-# ⚑ SESSION 2026-09-29 (part 3) — FLUTTER MOCK PARITY (8 agents) + FCM PUSH + BROWSER QA. 10 LOCAL COMMITS, NOT PUSHED (owner: show first).
+# ⚑ SESSION 2026-09-29 (part 3) — FLUTTER MOCK PARITY (8 agents) + FCM PUSH + BROWSER QA (2 rounds). 13 LOCAL COMMITS, NOT PUSHED (owner: push only on "push"; PR #370 still NOT to be merged).
 - **Approval "old data" bug FIXED:** approval queues loaded once and kept rows across tabs, so a supervisor opened an OLDER
   pending sheet of the same asset. Queues now re-read when shown/on return/on resume (`approvals/presentation/widgets/
   refresh_when_shown.dart`); review screen resets on id change. Same code on main, so every build had it.
@@ -110,7 +110,15 @@ batching stops them being started at all.
   logo box on light chrome, 0pt-tall cost bar, cut labels, fleet 14px overflow at 360dp.
 - Tests: `flutter test`/`very_good test` via shell are BLOCKED by a vgv plugin hook; the very-good MCP test tool times out
   at 60s. Analyze clean on HEAD. Goldens changed (Windows regen needed): asset_overview_light, inspection_tyres_selected.
-- ARB parity pin 2124.
+- **QA round 2 (Playwright, concrete fixes + before/after screenshots):** dea737f7 home/profile/my work/PM/checklists,
+  3076fc9c Vehicle 360/fleet/tyre records, 40578d18 accidents + translations. More goldens to regen: accident_case_overview_light
+  (+ my_work at 360 possibly).
+- ARB parity pin **2139**.
+- **ALL DATA SHOWN IS FROM REAL TABLES**; anything with no source (health score, downtime cost, fleet pulse, Online, tyre
+  pressure/predicted life, engine hours on fleet rows, Add asset / Add tyre record) was OMITTED, not faked.
+- **OPEN (not 100% ready):** tests unverified locally (hook) -> CI after push; goldens -> flutter-ci `update_goldens` input
+  after push; workflow-notify deploy (verify_jwt=false, diff vs repo) after owner OK; Gradle plugin unverified; on-device
+  push untested; mock 12 empty; testers need merge + a new Flutter build (owner's call). QA harness copies in scratchpad qa_a/b/c.
 
 ---
 

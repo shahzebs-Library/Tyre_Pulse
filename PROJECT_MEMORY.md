@@ -106,8 +106,14 @@ batching stops them being started at all.
   darkened light. Keys: renewal battery history disposal customers rfid reservations tyres gatepass (+ older ones).
   When a mockup is only pasted (not on disk) there is no art: reuse an existing hero and say so.
 
-**IN PROGRESS (agents, uncommitted when this was written):** Vehicle Reservations (/reservations, clash check),
-Tyre Records (keep server paging, get_tyre_filter_options, scrap RPC, real head counts), Gate Pass (initials not
+- Vehicle Reservations /reservations (786dcedd): calendar day/week/month with lane packing, live clash check
+  (save blocked unless "Save anyway" -> flagged double-booked), availability check, Excel/CSV import. No columns for
+  type/project/driver/attachments (omitted, stated). Map view = honest empty (sites has no coordinates). 0 rows live.
+- Gate Pass (f9086298): inward + outward (outward = the existing safety-gated clearance, kept whole). Direction/driver/
+  purpose/expected times/check-in-out stored in `gate_passes.custom_data` (no CHECK on status; verified). New statuses
+  Checked in/Approved/Checked out; 'Cleared' counts elsewhere unchanged. Pass no = GP-<year>-<8 hex of id>. No photos
+  or driver phone (no column). Overstay = checked in, not out, past expected out.
+**IN PROGRESS (agents, uncommitted when this was written):** Tyre Records (keep server paging, get_tyre_filter_options, scrap RPC, real head counts), Gate Pass (initials not
 photos, overstay = past expected out), Serial Tracker (keep scrap/unscrap tab; reuses hero-tyres).
 If the session was cleared: check `git status`, finish/verify those four, commit by pathspec, push once, keep PR open.
 

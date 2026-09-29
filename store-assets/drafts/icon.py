@@ -16,22 +16,6 @@ def bg():
     glow=glow.filter(ImageFilter.GaussianBlur(260))
     im=Image.composite(Image.new('RGB',(N,N),(74,222,128)),im,glow)
     return im
-def mark(im, scale=1.0, cx=N/2, cy=N/2):
-    d=ImageDraw.Draw(im)
-    W=(255,255,255); L=(190,242,100)
-    R=640*scale; th=150*scale
-    # tyre ring
-    d.ellipse((cx-R,cy-R,cx+R,cy+R),outline=W,width=int(th))
-    # tread notches: cut small gaps on outer edge
-    bgc=None
-    n=28
-    for k in range(n):
-        a=2*math.pi*k/n
-        r1=R-th*0.02; r2=R-th*0.42
-        x1,y1=cx+r1*math.cos(a),cy+r1*math.sin(a)
-        x2,y2=cx+r2*math.cos(a),cy+r2*math.sin(a)
-        d.line([(x1,y1),(x2,y2)],fill=(0,0,0,0) if False else None,width=1)
-    return d
 im=bg()
 # draw mark on RGBA layer for tread cut-outs
 layer=Image.new('RGBA',(N,N),(0,0,0,0)); d=ImageDraw.Draw(layer)

@@ -34,6 +34,10 @@ no-build-unless-the-owner-asks rule above still applies to the Flutter workflow 
 
 ---
 
+# ⚑ UPDATE 2026-09-29: THE OWNER PUT THE FLUTTER APP ON PLAY CLOSED TESTING HIMSELF.
+The internal-only note below is superseded for Closed testing (owner's own action). Production is still the owner's call only.
+Parity pass Expo -> Flutter (every Expo feature/access in Flutter) IN PROGRESS (agent, code only, no build).
+
 # ⚑ FLUTTER = INTERNAL TESTING ONLY. OWNER INSTRUCTION 2026-09-27, STANDING.
 
 **Never publish the Flutter app to Closed/Open/Production, and never into the production app listing.**

@@ -46,7 +46,11 @@
 library;
 
 /// The `system_config` key an administrator sets. Absent means no minimum.
-const String minVersionConfigKey = 'mobile_min_version';
+///
+/// Deliberately NOT `mobile_min_version`: that key gates the retired Expo app,
+/// which numbers its builds 1.x while this app numbers 0.x. Sharing one key
+/// would let a minimum meant for one app lock the other out.
+const String minVersionConfigKey = 'flutter_min_version';
 
 /// Matches the leading integer of a version segment, the way JavaScript's
 /// `parseInt(segment, 10)` does.
@@ -145,7 +149,7 @@ enum VersionGateReason {
   /// is not evidence that a build is too old.
   notChecked(allows: true),
 
-  /// No `mobile_min_version` row, or it is blank. The normal state.
+  /// No `flutter_min_version` row, or it is blank. The normal state.
   noMinimumConfigured(allows: true),
 
   /// A value is set but carries no digit, so it is a typo rather than a

@@ -203,10 +203,18 @@ jobs:
           SUPABASE_URL: ${{ vars.SUPABASE_URL || 'https://jhssdmeruxtrlqnwfksc.supabase.co' }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY_PROD || 'sb_publishable_UDEH7EeHA9S5-NNu4T-9Ug_R60IinrW' }}
         run: |
+          # APP_VERSION is the pubspec version name (before the +build). It is
+          # what the forced-update gate compares against
+          # system_config.flutter_min_version. Without it the app defaults to
+          # 999.0.0 and the gate can never block anything.
+          APP_VERSION="$(grep -E '^version:' pubspec.yaml | sed -E 's/^version:[[:space:]]*([^+[:space:]]+).*/\1/')"
+          if [ -z "$APP_VERSION" ]; then echo "::error::Could not read version from pubspec.yaml"; exit 1; fi
+          echo "Building APP_VERSION=$APP_VERSION"
           flutter build appbundle --release \
             --dart-define=SUPABASE_URL="$SUPABASE_URL" \
             --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
-            --dart-define=APP_ENV=staging
+            --dart-define=APP_ENV=staging \
+            --dart-define=APP_VERSION="$APP_VERSION"
 
       # OWNER RULE 2026-09-29: Flutter publishes straight to Closed testing
       # (Play track id 'alpha'). Production stays the owner's call only; the

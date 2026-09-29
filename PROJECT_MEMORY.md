@@ -37,6 +37,12 @@ no-build-unless-the-owner-asks rule above still applies to the Flutter workflow 
 # ⚑ UPDATE 2026-09-29: THE OWNER PUT THE FLUTTER APP ON PLAY CLOSED TESTING HIMSELF.
 **UPDATE 2026-09-29 (later): `flutter-release-play.yml` now publishes STRAIGHT to Closed testing (track `alpha`),
 owner request. Guard allows only `alpha` + package `com.shahzebrahman.tyrepulse`; production still owner-only.**
+**FORCED UPDATE (Flutter, 2026-09-29):** set `system_config.flutter_min_version` (e.g. `0.1.1`); any Flutter build
+below it sees "Update required" (Open the store -> Play listing of com.shahzebrahman.tyrepulse, or Sign out). SEPARATE
+key from Expo's `mobile_min_version` (Expo is 1.x, Flutter 0.x). Checked after sign-in; FAILS OPEN on blank/junk.
+The release workflow now passes `--dart-define=APP_VERSION=<pubspec version name>`; builds before this fix default to
+999.0.0 and can NEVER be blocked. RULE: bump `version:` in tyre_pulse_flutter/pubspec.yaml before each release, set the
+minimum only AFTER the new build is live on the track.
 The internal-only note below is superseded for Closed testing (owner's own action). Production is still the owner's call only.
 Parity pass Expo -> Flutter DONE (code only): every Expo route has a Flutter screen; added alert Acknowledge (+hides
 acknowledged), stock +/- (post_stock_movement, offline fallback) + Add stock, Profile "Delete my account" request

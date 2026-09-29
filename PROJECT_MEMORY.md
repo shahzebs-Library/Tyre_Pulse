@@ -117,7 +117,7 @@ batching stops them being started at all.
   (server-paged register, handheld scan, history built from records; stock/repair/expected life/DOT/temperature
   N/A = no column) DONE. Gate Pass profiles name read bounded (.limit(200)) for rowCapGuard.
 - ALL 4 of the last batch done + pushed once. PR #370 still UNMERGED (owner rule).
-**IN PROGRESS (agents, uncommitted):** Tyre Exchange (src/pages/TyreExchange.jsx) + Tyre Specifications
+**IN PROGRESS (agents, uncommitted):** Rotation Schedule (/rotation, hero-rotation; RotationOptimizer untouched), Tyre Exchange (now hero-exchange) (src/pages/TyreExchange.jsx) + Tyre Specifications
 (src/pages/TyreSpecifications.jsx, 2,680 lines: heavy tabs moved to src/components/tyreSpec/*). Mockups were only
 pasted, so both reuse hero-tyres. If cleared: git status, verify, commit by pathspec, push once.
 **Flutter / Play (owner is moving Internal -> Closed testing):**

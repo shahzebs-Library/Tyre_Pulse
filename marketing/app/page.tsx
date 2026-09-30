@@ -8,9 +8,10 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { CtaBand } from "@/components/CtaBand";
 import { Tabs } from "@/components/Tabs";
+import { HeroCarousel, type HeroSlide } from "@/components/HeroCarousel";
 import { Photo } from "@/components/art/Photos";
 import {
-  ApprovalCard, AssetRecord, CompleteCard, FleetCostPanel, NewInspectionCard, OfflineInspectionPhone,
+  ApprovalCard, AssetRecord, AssetStats, SignOffCard, CompleteCard, FleetCostPanel, NewInspectionCard, OfflineInspectionPhone,
   OpsOverview, PartsCard,
 } from "@/components/mock/Screens";
 import { alternatesFor } from "./schema";
@@ -60,28 +61,50 @@ const MODULES = [
   { icon: BarChart3, title: "Approvals and reporting", text: "Manage approvals and get clear reports across your operations.", href: "/platform/inventory" },
 ];
 
+const HERO_SLIDES: HeroSlide[] = [
+  {
+    id: "ops", tab: "Operations", kicker: "Plant, machinery and vehicles",
+    title: "Complete control of your PMV operations.",
+    lead: "Connect your assets, workshop, field teams and stores in one operational workspace.",
+    link: { href: "/platform", label: "Explore the platform" },
+    visual: <OpsOverview />,
+  },
+  {
+    id: "assets", tab: "Fleet and assets", kicker: "Fleet and asset lifecycle",
+    title: "Every machine, one complete record.",
+    lead: "Meters, tyres, documents, costs and history for each asset, from purchase to disposal.",
+    link: { href: "/platform/fleet-assets", label: "See fleet and assets" },
+    visual: <div className="hc-photo hc-zoom"><Photo name="fleetLineup" position="50% 60%" sizes="(max-width: 900px) 100vw, 640px" /><div className="hc-float hc-float-wide"><AssetStats /></div></div>,
+  },
+  {
+    id: "workshop", tab: "Workshop", kicker: "Maintenance and workshop",
+    title: "Breakdowns back on site, sooner.",
+    lead: "Job cards, technicians, parts and outside repairs in one queue your workshop runs from.",
+    link: { href: "/platform/maintenance", label: "See maintenance" },
+    visual: <div className="hc-photo"><Photo name="technicianGenerator" position="45% 40%" sizes="(max-width: 900px) 100vw, 640px" /><div className="hc-float"><PartsCard /></div></div>,
+  },
+  {
+    id: "inspections", tab: "Inspections", kicker: "Field inspections and safety",
+    title: "Inspect in the field, even without signal.",
+    lead: "Checklists, photos, meter readings and signatures on the phone. It syncs when the connection returns.",
+    link: { href: "/platform/inspections", label: "See inspections" },
+    visual: <div className="hc-photo"><Photo name="engineer" position="50% 35%" sizes="(max-width: 900px) 100vw, 640px" /><div className="hc-float"><SignOffCard /></div></div>,
+  },
+  {
+    id: "costs", tab: "Costs", kicker: "Costs and reporting",
+    title: "Know what every machine costs to run.",
+    lead: "Maintenance, tyres, parts and fuel roll up by asset, site and project from the records your teams enter.",
+    link: { href: "/platform/inventory", label: "See costs and reporting" },
+    visual: <div className="hc-panel"><FleetCostPanel /></div>,
+  },
+];
+
 export default function HomePage() {
   return (
     <>
       <Header />
       <main id="main-content" tabIndex={-1}>
-        <section className="home-hero">
-          <div className="site-shell home-hero-grid">
-            <div>
-              <span className="kicker">Plant, machinery and vehicles</span>
-              <h1 className="hero-h1">Complete control of your PMV operations.</h1>
-              <p className="hero-lead">Connect your assets, workshop, field teams and stores in one operational workspace.</p>
-              <div className="hero-cta">
-                <Link className="btn btn-primary" href="/contact">Book a demo <ArrowRight size={18} aria-hidden="true" /></Link>
-                <Link className="btn-text" href="/platform">Explore the platform <ArrowRight size={17} aria-hidden="true" /></Link>
-              </div>
-              <ul className="segments" aria-label="Industries we serve">
-                <li>Construction</li><li>Ready-mix</li><li>Transport</li><li>Equipment rental</li>
-              </ul>
-            </div>
-            <OpsOverview />
-          </div>
-        </section>
+        <HeroCarousel slides={HERO_SLIDES} />
 
         <section className="section-pad" aria-labelledby="one-asset">
           <div className="site-shell">

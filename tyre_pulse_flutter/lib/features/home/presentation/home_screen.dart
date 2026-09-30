@@ -1622,45 +1622,56 @@ class _HomeSectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
-    return Row(
-      children: <Widget>[
-        Expanded(
-          child: Semantics(
-            header: true,
-            child: Text(
-              title,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: palette.text,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 19,
-                  ),
+    // The action is capped at half the row so a large text scale ellipsises
+    // "View all" instead of pushing the button past the screen edge.
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) => Row(
+        children: <Widget>[
+          Expanded(
+            child: Semantics(
+              header: true,
+              child: Text(
+                title,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: palette.text,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 19,
+                    ),
+              ),
             ),
           ),
-        ),
-        if (action != null && onAction != null)
-          TextButton(
-            onPressed: onAction,
-            style: TextButton.styleFrom(
-              visualDensity: VisualDensity.compact,
-              foregroundColor: palette.primary,
-              padding: const EdgeInsetsDirectional.fromSTEB(10, 4, 4, 4),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Text(
-                  action!,
-                  style: const TextStyle(fontWeight: FontWeight.w800),
+          if (action != null && onAction != null)
+            ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: constraints.maxWidth / 2),
+              child: TextButton(
+                onPressed: onAction,
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  foregroundColor: palette.primary,
+                  padding: const EdgeInsetsDirectional.fromSTEB(10, 4, 4, 4),
                 ),
-                const Icon(
-                  // Mirrors itself under RTL (matchTextDirection).
-                  Icons.chevron_right_rounded,
-                  size: 20,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Flexible(
+                      child: Text(
+                        action!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    const Icon(
+                      // Mirrors itself under RTL (matchTextDirection).
+                      Icons.chevron_right_rounded,
+                      size: 20,
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 }

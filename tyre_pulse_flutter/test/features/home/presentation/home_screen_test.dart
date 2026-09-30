@@ -511,6 +511,35 @@ void main() {
     },
   );
 
+  testWidgets(
+    'section headers keep "View all" on screen at a large text scale',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(320, 720);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      // No work items: this pins the header row only. The Today's work
+      // timeline row has its own, separately tracked, large-scale issue.
+      await _pumpHome(
+        tester,
+        access: _admin,
+        locale: const Locale('ur'),
+        wrap: (Widget home) => Builder(
+          builder: (BuildContext context) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: const TextScaler.linear(2),
+            ),
+            child: home,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('dark theme renders the same hierarchy', (
     WidgetTester tester,
   ) async {

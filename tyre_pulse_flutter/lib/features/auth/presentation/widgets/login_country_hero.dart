@@ -177,33 +177,50 @@ class LoginCountryHero extends StatelessWidget {
                               horizontal: TpSpace.md,
                               vertical: TpSpace.sm,
                             ),
-                            child: Row(
-                              children: <Widget>[
-                                Icon(
-                                  Icons.location_on_outlined,
-                                  color: palette.primaryDark,
-                                  size: TpSizing.iconMd,
-                                ),
-                                const SizedBox(width: TpSpace.sm),
-                                Expanded(
-                                  child: Text(
-                                    countryName,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: text.labelLarge?.copyWith(
-                                      color: palette.text,
+                            // The action label is capped at half the row
+                            // (wrapping to two lines) so a large text scale
+                            // cannot push it past the card edge.
+                            child: LayoutBuilder(
+                              builder: (
+                                BuildContext context,
+                                BoxConstraints constraints,
+                              ) =>
+                                  Row(
+                                children: <Widget>[
+                                  Icon(
+                                    Icons.location_on_outlined,
+                                    color: palette.primaryDark,
+                                    size: TpSizing.iconMd,
+                                  ),
+                                  const SizedBox(width: TpSpace.sm),
+                                  Expanded(
+                                    child: Text(
+                                      countryName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: text.labelLarge?.copyWith(
+                                        color: palette.text,
+                                      ),
                                     ),
                                   ),
-                                ),
-                                const SizedBox(width: TpSpace.sm),
-                                Text(
-                                  l10n.loginChangeCountryAction,
-                                  style: text.labelMedium?.copyWith(
-                                    color: palette.primaryDark,
-                                    fontWeight: FontWeight.w700,
+                                  const SizedBox(width: TpSpace.sm),
+                                  ConstrainedBox(
+                                    constraints: BoxConstraints(
+                                      maxWidth: constraints.maxWidth / 2,
+                                    ),
+                                    child: Text(
+                                      l10n.loginChangeCountryAction,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      textAlign: TextAlign.end,
+                                      style: text.labelMedium?.copyWith(
+                                        color: palette.primaryDark,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                         ),

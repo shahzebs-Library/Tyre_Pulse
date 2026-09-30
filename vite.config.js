@@ -3,16 +3,55 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { readFileSync } from 'fs'
+import { execSync } from 'child_process'
 import { releaseBuild } from './scripts/release-build.mjs'
 import { assertPublicEnv } from './src/lib/publicEnvSecurity.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
+/**
+ * The build's release string: `<package.json version>+<short git sha>`.
+ * Precedence: an explicit VITE_APP_VERSION wins; otherwise the sha comes from
+ * Vercel (VERCEL_GIT_COMMIT_SHA), then `git rev-parse`, and when neither is
+ * available it is just the version. It NEVER throws - a missing git binary or
+ * a tarball checkout must not fail a production build. Exported for tests.
+ */
+export function resolveAppVersion({ env = process.env, pkgVersion, gitSha } = {}) {
+  const explicit = typeof env.VITE_APP_VERSION === 'string' ? env.VITE_APP_VERSION.trim() : ''
+  if (explicit) return explicit.slice(0, 40)
+  let version = pkgVersion
+  if (version === undefined) {
+    try { version = JSON.parse(readFileSync(path.resolve(__dirname, 'package.json'), 'utf8')).version } catch { version = '' }
+  }
+  version = typeof version === 'string' ? version.trim() : ''
+  let sha = typeof env.VERCEL_GIT_COMMIT_SHA === 'string' ? env.VERCEL_GIT_COMMIT_SHA.trim() : ''
+  if (!sha && gitSha === undefined) {
+    try {
+      sha = execSync('git rev-parse --short HEAD', { cwd: __dirname, stdio: ['ignore', 'pipe', 'ignore'], timeout: 5000 }).toString().trim()
+    } catch { sha = '' }
+  } else if (!sha) {
+    sha = typeof gitSha === 'string' ? gitSha.trim() : ''
+  }
+  sha = /^[0-9a-f]{4,40}$/i.test(sha) ? sha.slice(0, 7).toLowerCase() : ''
+  if (version && sha) return `${version}+${sha}`
+  return version || sha || ''
+}
+
 export default defineConfig(({ mode }) => {
   assertPublicEnv(loadEnv(mode, process.cwd(), 'VITE_'))
   const release = releaseBuild()
+  const env = { ...process.env, ...loadEnv(mode, process.cwd(), '') }
+  const appVersion = resolveAppVersion({ env })
+  // Deployment tier for Sentry: Vercel's production/preview/development when
+  // present, otherwise the Vite mode.
+  const appEnv = (env.VITE_APP_ENV || env.VERCEL_ENV || mode || '').trim()
   return {
-  define: { 'import.meta.env.TP_RELEASE': JSON.stringify(release.manifest) },
+  define: {
+    'import.meta.env.TP_RELEASE': JSON.stringify(release.manifest),
+    'import.meta.env.VITE_APP_VERSION': JSON.stringify(appVersion),
+    'import.meta.env.VITE_APP_ENV': JSON.stringify(appEnv),
+  },
   plugins: [
     react(),
     release.plugin,

@@ -5,6 +5,22 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
+# ⚑ SESSION 2026-09-30 — MARKETING HOME HERO AUTO-ROTATES (owner: "go live"). No migration.
+- `marketing/components/HeroCarousel.tsx`: 5 slides (Operations, Fleet and assets, Workshop, Inspections, Costs); each
+  swaps kicker + headline + lead + link + visual, 7 s each. **NO pause button (owner order).** Holds on hover/focus,
+  hidden tab and prefers-reduced-motion. Timer = the CSS progress bar in the slide picker (`animationend`).
+  Slide 1 keeps the only `<h1>`; inactive slides are `inert` + visibility hidden.
+- **CLASS PREFIX IS `hc-`**: `globals.css` still carries the LEGACY `.hero-stage { height: 540/460/360px }` used by
+  `/ar`; my first cut reused the name and the mobile hero clipped. Never name new hero parts `hero-stage/hero-copy`.
+- Hero spacing tokens `--hero-pad-top/-bottom/-gap/-cta-space` in `pmv.css`, width x height clamped; hero ends above
+  the fold at 1280x720, 1366x768, 1024x768 and 768x1024. Mobile: every slide in one 4:3 frame (16:10 tablet),
+  visual pinned bottom. The industries line was removed from the hero (still on /industries).
+- Taste skills installed (`npx skills add Leonxlnx/taste-skill`) into `.claude/skills/` (GITIGNORED, container only);
+  `skills-lock.json` is committed and excluded from the app build trigger.
+- OPEN: `/ar` hero is the old green design with `min-height: 680px` + fixed stage heights (not touched).
+
+---
+
 # ⚑ NO MOBILE BUILDS. OWNER INSTRUCTION 2026-08-19, STANDING.
 
 **Do not create an EAS build and do not release to Play.** Not `release-play.yml`,

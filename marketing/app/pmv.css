@@ -54,13 +54,48 @@ a:focus-visible, button:focus-visible, [tabindex="0"]:focus-visible { outline: 3
 .muted-xs { font-size: .7rem; color: var(--muted); display: block; }
 
 /* ---------- Home hero ---------- */
-.home-hero { background: #fafaf8; border-bottom: 1px solid var(--line); padding: 56px 0 44px; overflow: hidden; }
-.home-hero-grid { display: grid; grid-template-columns: minmax(0, .82fr) minmax(0, 1.18fr); gap: 44px; align-items: center; }
-.hero-cta { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; margin: 32px 0 44px; }
-.hero-cta .btn-primary { min-height: 54px; padding: 0 26px; font-size: 1.02rem; }
-.segments { display: flex; flex-wrap: wrap; gap: 0; font-size: .86rem; color: #3b3b35; margin: 0; padding: 0; list-style: none; }
-.segments li { padding: 0 14px; border-left: 1px solid #c9c9c2; }
-.segments li:first-child { padding-left: 0; border-left: 0; }
+/*
+ * Spacing tokens for the hero. Each one is sized by the viewport WIDTH and
+ * capped by its HEIGHT, so a 1366x768 or 1280x720 laptop keeps the headline,
+ * the CTA and the slide selector above the fold instead of spending it on padding.
+ */
+:root {
+  --hero-pad-top: clamp(20px, min(4vw, 5vh), 48px);
+  --hero-pad-bottom: clamp(16px, min(3vw, 3.5vh), 32px);
+  --hero-gap: clamp(24px, 3.4vw, 48px);
+  --hero-cta-space: clamp(18px, min(2.6vw, 3.4vh), 30px);
+}
+.home-hero { background: #fafaf8; border-bottom: 1px solid var(--line); padding: var(--hero-pad-top) 0 var(--hero-pad-bottom); overflow: hidden; }
+.hc-stage { display: grid; }
+.hc-slide {
+  grid-area: 1 / 1; display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
+  gap: var(--hero-gap); align-items: center;
+  opacity: 0; visibility: hidden; transition: opacity .6s ease, visibility 0s linear .6s;
+}
+.hc-slide.is-on { opacity: 1; visibility: visible; transition: opacity .6s ease, visibility 0s; }
+.home-hero .hero-h1 { font-size: clamp(2.3rem, min(5vw, 7.4vh), 4.1rem); text-wrap: balance; margin-bottom: clamp(12px, 2vh, 20px); }
+.home-hero .hero-lead { max-width: 38ch; }
+.hero-cta { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; margin: var(--hero-cta-space) 0 0; }
+.hero-cta .btn-primary { min-height: 52px; padding: 0 26px; font-size: 1.02rem; }
+.hc-visual { align-self: stretch; display: grid; align-items: center; min-width: 0; }
+.hc-photo { position: relative; height: 100%; min-height: 300px; border-radius: 12px; overflow: hidden; background: #e8e8e2; }
+.hc-photo > img { position: absolute; inset: 0; width: 100%; height: 100%; }
+.hc-float { position: absolute; right: 16px; bottom: 16px; width: min(300px, calc(100% - 32px)); background: #fff; border-radius: 10px; box-shadow: 0 18px 40px rgba(22,22,22,.22); }
+.hc-float-wide { width: min(360px, calc(100% - 32px)); padding: 12px; }
+.hc-float .asset-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 0; }
+.hc-zoom > img { transform: scale(1.1); transform-origin: 70% 20%; }
+.hc-float .panel, .hc-float .flow-card { box-shadow: none; margin: 0; }
+.hc-panel { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px; box-shadow: 0 24px 50px rgba(22,22,22,.12); }
+
+/* Slide selector: labelled tabs, the active one fills a yellow bar that times the rotation. */
+.hc-picker { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: clamp(8px, 1.4vw, 20px); margin-top: clamp(18px, 3vh, 32px); }
+.hc-pick { display: grid; gap: 8px; text-align: left; background: none; border: 0; padding: 6px 0; min-height: 44px; cursor: pointer; color: #6b6b64; font-weight: 700; font-size: .86rem; }
+.hc-pick.is-on, .hc-pick:hover { color: var(--ink); }
+.hc-pick-track { display: block; height: 3px; background: #deded8; border-radius: 2px; overflow: hidden; }
+.hc-pick-fill { display: block; height: 100%; width: 100%; background: var(--brand); transform-origin: left; animation-name: hc-fill; animation-timing-function: linear; animation-fill-mode: both; }
+@keyframes hc-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@media (prefers-reduced-motion: reduce) { .hc-pick-fill { animation: none; transform: none; } }
+
 
 /* ---------- App window mock ---------- */
 .app-window { margin: 0; background: #1f1f1f; border-radius: 10px; box-shadow: 0 30px 70px rgba(22,22,22,.28); overflow: hidden; font-size: 11px; }
@@ -75,7 +110,7 @@ a:focus-visible, button:focus-visible, [tabindex="0"]:focus-visible { outline: 3
 .app-side span.on { background: var(--brand); color: #161616; font-weight: 700; }
 .app-main { background: #fff; color: var(--ink); padding: 10px 14px 14px; border-top-left-radius: 8px; min-width: 0; }
 .app-top { display: flex; align-items: center; gap: 8px; color: #56564f; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
-.app-select { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line); padding: 3px 7px; border-radius: 5px; font-size: 10px; }
+.app-select { white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line); padding: 3px 7px; border-radius: 5px; font-size: 10px; }
 .app-search { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); border-radius: 5px; padding: 3px 8px; font-size: 10px; min-width: 0; overflow: hidden; white-space: nowrap; flex: 0 1 190px; }
 .app-avatar { width: 20px; height: 20px; border-radius: 50%; background: #161616; color: #fff; display: grid; place-items: center; font-size: 8px; font-weight: 700; flex: 0 0 auto; }
 .app-head { display: flex; justify-content: space-between; align-items: center; margin: 12px 0 10px; }
@@ -325,7 +360,7 @@ a:focus-visible, button:focus-visible, [tabindex="0"]:focus-visible { outline: 3
 @media (max-width: 1080px) {
   .topnav, .lang, .topbar-login { display: none; }
   .topbar .mobile-menu { display: inline-flex; }
-  .home-hero-grid, .tab-panel, .people, .overview, .ov-main, .split, .insp-hero { grid-template-columns: minmax(0,1fr); }
+  .tab-panel, .people, .overview, .ov-main, .split, .insp-hero { grid-template-columns: minmax(0,1fr); }
   .people-art, .sig-standalone { min-height: 320px; }
   .flow { grid-template-columns: repeat(2, minmax(0,1fr)); }
   .module-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
@@ -335,6 +370,25 @@ a:focus-visible, button:focus-visible, [tabindex="0"]:focus-visible { outline: 3
   .grid-4p { grid-template-columns: repeat(2, minmax(0,1fr)); }
   .ov-nav { grid-auto-flow: column; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); }
   .ov-nav a { white-space: nowrap; }
+}
+@media (max-width: 900px) {
+  /* Copy on top, visual pinned to the bottom of the stage: a slide with shorter copy
+     gives its slack to the space above the picture, never below it. */
+  .hc-slide { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; align-items: start; gap: 20px; }
+  .hc-visual { align-self: end; }
+  /* One frame for every slide on narrow screens, so a tall product screen on one
+     slide cannot leave a blank block under the photo on the others. */
+  .hc-visual { aspect-ratio: 4 / 3; overflow: hidden; align-items: start; border-radius: 12px; }
+  .hc-visual > :not(.hc-photo) { -webkit-mask-image: linear-gradient(#000 78%, transparent); mask-image: linear-gradient(#000 78%, transparent); }
+  .hc-photo { min-height: 0; }
+  .hc-picker { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+@media (min-width: 600px) and (max-width: 900px) {
+  .hc-visual { aspect-ratio: 16 / 10; }
+}
+@media (max-width: 560px) {
+  .hc-pick-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .hc-float { display: none; }
 }
 @media (max-width: 720px) {
   .ar-body { grid-template-columns: minmax(0,1fr); }

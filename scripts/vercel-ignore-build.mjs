@@ -18,6 +18,8 @@ const result = spawnSync('git', [
   // marketing-only push was starting a production build that could not contain
   // any of the change. Same reasoning as the two mobile apps above.
   ':(exclude)marketing',
+  // Agent skill lockfile (npx skills); the web bundle never reads it.
+  ':(exclude)skills-lock.json',
 ], { stdio: 'inherit' });
 
 // Missing shallow-clone history or any Git error must also request a build.

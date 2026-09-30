@@ -31,6 +31,35 @@ Always optimize for:
 
 ---
 
+# Skill Routing (use the skill; do not restate it here)
+
+Project skills: `.claude/skills/` (committed). Reusable skills: `~/.claude/skills/`, installed/pinned by
+`bash scripts/install-claude-skills.sh` (`--check` to verify). Pick every skill relevant to the task, not all of them.
+
+| Request | Skills |
+|---|---|
+| "check the complete app", full audit, production ready? | `complete-app-audit` (runs the 28-stage sequence) |
+| "fix responsive problems", layout, overflow | `responsive-design`, `frontend-visual-qa`, `visual-regression` |
+| UI/design change | `frontend-design`, `design-system`, `visual-regression`, `accessibility-audit` |
+| "review security" | `owasp-security`, `supabase-review`, `auth-testing`, `rbac-testing`, `api-testing`; mobile: `auth-assessment`, `secure-storage-audit`, `network-security-check`, `platform-interaction-review`, `privacy-audit` |
+| "review Supabase", RLS, RPC, edge fn | `supabase-review`, `database-migration-safety`, `api-testing` |
+| migration / backfill / data fix | `database-migration-safety` (mandatory) |
+| "check Flutter" | `flutter-qa`, `flutter-app`, `localization-rtl` |
+| Expo mobile UI | `mobile-ui-design` |
+| "test release", go live, store | `release-readiness`, `git-safety` |
+| web flows / browser tests | `webapp-testing`, `edge-case-testing` |
+| slow / bundle / queries | `performance-review`, `performance-audit` |
+| Arabic / RTL / strings | `localization-rtl` |
+| packages / dependabot | `dependency-audit` |
+| code review / before merge | `full-review`, `git-safety` |
+| any commit, push, merge | `git-safety` (mandatory) |
+
+Every stage: DETECT, REPORT, FIX, TEST, VERIFY AGAIN. Render UI before calling it fixed. Verify security at the
+database, never by hidden UI. Never skip tests, weaken security, delete features, touch production data or run
+destructive git/database commands to get a clean result.
+
+---
+
 # Default Behavior
 
 Do not explain what you are about to do.

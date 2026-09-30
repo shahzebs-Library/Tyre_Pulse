@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, Suspense } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import {
   Shield, LayoutDashboard, Building2, Users, Settings2,
   ClipboardList, Zap, Megaphone, Lock, LogOut, ChevronDown,
@@ -7,112 +7,122 @@ import {
   DatabaseBackup, UserCog, History, BellRing, Boxes, HeartPulse, Search, Truck, Trash2, CopyX, FileClock,
   LayoutList, Bug, Wand2, LifeBuoy, Eye, UserX, Brain, ShieldCheck, Sparkles, Scale, GitBranch, Rocket,
   Map, Command, UserCheck, Fingerprint, KeyRound, ClipboardCheck, PackageOpen, Siren, Timer, Network,
+  Flag, ChevronRight,
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import Console2FAModal from './Console2FAModal'
 import ThemeToggle from '../../components/ui/ThemeToggle'
 import { getCurrentSupportSession, endSupportSession } from '../../lib/api/supportSessions'
 import ConsoleCommandPalette from './ConsoleCommandPalette'
+import ConsoleTopBarActions from './ConsoleTopBarActions'
 
 /**
- * Grouped, because a flat list of thirty-three links is a list nobody reads.
- * The groups are by WHAT YOU CAME TO DO, not by which table the page reads:
- * someone chasing a bad import does not care that Material Master and Import
- * History are different subsystems.
+ * The Control Center sidebar: five AREAS (Monitor, Platform, Trust, Runtime,
+ * Engineering), each split into SECTIONS by what you came to do. Every console
+ * route is listed exactly once; nothing was removed when the areas replaced
+ * the old seven flat groups, and every route is unchanged.
  *
- * Order is deliberate - the first group is what a console visit is usually for.
+ * `section` groups consecutive items under a collapsible sub-heading. Items
+ * are still written as plain object literals because the module
+ * coverage test reads this file as text to prove every route has an entry.
  */
 export const NAV_GROUPS = [
   {
-    label: 'Overview',
+    label: 'Monitor',
     items: [
-      { to: '/console',               label: 'Dashboard',      icon: LayoutDashboard, end: true },
-      { to: '/console/health',        label: 'System Health',  icon: Activity },
-      { to: '/console/platform-map',  label: 'Platform Map',   icon: Map },
-      { to: '/console/crash-reports', label: 'Crash Reports',  icon: Bug },
+      { to: '/console',               label: 'Overview',        icon: LayoutDashboard, end: true, section: 'Overview' },
+      { to: '/console/health',        label: 'System Health',   icon: Activity,        section: 'Overview' },
+      { to: '/console/platform-map',  label: 'Platform Map',    icon: Map,             section: 'Overview' },
+      { to: '/console/incidents',     label: 'Incidents',       icon: Siren,           section: 'Alert Center' },
+      { to: '/console/alert-rules',   label: 'Alert Rules',     icon: BellRing,        section: 'Alert Center' },
+      { to: '/console/trust-alerts',  label: 'Trust Alerts',    icon: BellRing,        section: 'Alert Center' },
+      { to: '/console/self-healing',  label: 'Self-Healing',    icon: HeartPulse,      section: 'Alert Center' },
+      { to: '/console/ai-usage',      label: 'AI Usage',        icon: Zap,             section: 'Analytics' },
+      { to: '/console/metric-catalogue', label: 'Metric Catalogue', icon: LayoutList,  section: 'Analytics' },
     ],
   },
   {
-    label: 'Security',
+    label: 'Platform',
     items: [
-      { to: '/console/security-audit', label: 'Security Audit',   icon: ShieldCheck },
-      { to: '/console/audit-trail',    label: 'Audit Trail',      icon: History },
-      { to: '/console/audit-integrity', label: 'Audit Integrity', icon: Fingerprint },
-      { to: '/console/sessions',       label: 'Sessions & Devices', icon: Smartphone },
-      { to: '/console/security',       label: 'Sign-in & SSO',    icon: AlertTriangle },
-      { to: '/console/support-sessions', label: 'Support Sessions', icon: LifeBuoy },
-      { to: '/console/api-keys',       label: 'API Keys',         icon: KeyRound },
-      { to: '/console/compliance',     label: 'Compliance',       icon: ClipboardCheck },
-      { to: '/console/approvals',      label: 'Approvals',        icon: Scale },
-      { to: '/console/incidents',      label: 'Incidents',        icon: Siren },
-      { to: '/console/jit-elevation',  label: 'JIT Elevation',    icon: Timer },
-      { to: '/console/access-policies', label: 'Access Policies', icon: Network },
+      { to: '/console/users',             label: 'Users',              icon: Users,       section: 'Users' },
+      { to: '/console/sessions',          label: 'Sessions & Devices', icon: Smartphone,  section: 'Users' },
+      { to: '/console/support-sessions',  label: 'Support Sessions',   icon: LifeBuoy,    section: 'Users' },
+      { to: '/console/account-deletions', label: 'Account Deletions',  icon: UserX,       section: 'Users' },
+      { to: '/console/organisations',     label: 'Organizations',      icon: Building2,   section: 'Organizations' },
+      { to: '/console/tenant-export',     label: 'Tenant Export',      icon: PackageOpen, section: 'Organizations' },
+      { to: '/console/data-ops',          label: 'Data Operations',    icon: Layers,      section: 'Operations' },
+      { to: '/console/import-history',    label: 'Import History',     icon: FileClock,   section: 'Operations' },
+      { to: '/console/smart-import',      label: 'Smart Import',       icon: Wand2,       section: 'Operations' },
+      { to: '/console/material-master',   label: 'Material Master',    icon: Boxes,       section: 'Operations' },
+      { to: '/console/classification-learning', label: 'Teach the Classifier', icon: Brain, section: 'Operations' },
+      { to: '/console/data-learning',     label: 'Data Learning',      icon: Sparkles,    section: 'Operations' },
+      { to: '/console/duplicates',        label: 'Duplicate Control',  icon: CopyX,       section: 'Operations' },
+      { to: '/console/data-cleanup',      label: 'Data Cleanup',       icon: Trash2,      section: 'Operations' },
     ],
   },
   {
-    label: 'People and access',
+    label: 'Trust',
     items: [
-      { to: '/console/users',             label: 'Users',            icon: Users },
-      { to: '/console/access',            label: 'Access Control',   icon: Lock },
-      { to: '/console/access-reviews',    label: 'Access Reviews',   icon: UserCheck },
-      { to: '/console/organisations',     label: 'Organisations',    icon: Building2 },
-      { to: '/console/account-deletions', label: 'Account Deletions', icon: UserX },
+      { to: '/console/access',            label: 'Access Control',   icon: Lock,           section: 'Access Control' },
+      { to: '/console/access-reviews',    label: 'Access Reviews',   icon: UserCheck,      section: 'Access Control' },
+      { to: '/console/jit-elevation',     label: 'JIT Elevation',    icon: Timer,          section: 'Access Control' },
+      { to: '/console/access-policies',   label: 'Access Policies',  icon: Network,        section: 'Access Control' },
+      { to: '/console/approvals',         label: 'Approvals',        icon: Scale,          section: 'Access Control' },
+      { to: '/console/security-audit',    label: 'Security Audit',   icon: ShieldCheck,    section: 'Security' },
+      { to: '/console/security',          label: 'Sign-in & SSO',    icon: AlertTriangle,  section: 'Security' },
+      { to: '/console/compliance',        label: 'Compliance',       icon: ClipboardCheck, section: 'Security' },
+      { to: '/console/audit-trail',       label: 'Audit Trail',      icon: History,        section: 'Audit Logs' },
+      { to: '/console/audit-integrity',   label: 'Audit Integrity',  icon: Fingerprint,    section: 'Audit Logs' },
     ],
   },
   {
-    label: 'Data trust',
+    label: 'Runtime',
     items: [
-      { to: '/console/control-center',   label: 'Data Trust & Control', icon: ShieldCheck },
-      { to: '/console/data-quality',     label: 'Data Quality',     icon: ShieldCheck },
-      { to: '/console/reconciliation',   label: 'Reconciliation',   icon: Scale },
-      { to: '/console/trust-alerts',     label: 'Trust Alerts',     icon: BellRing },
-      { to: '/console/correction-center', label: 'Correction Center', icon: ClipboardList },
-      { to: '/console/lineage',          label: 'Lineage Explorer', icon: GitBranch },
-      { to: '/console/metric-catalogue', label: 'Metric Catalogue', icon: LayoutList },
-      { to: '/console/pipeline-monitor', label: 'Pipeline Monitor', icon: Activity },
-      { to: '/console/releases',         label: 'Releases',         icon: Rocket },
+      { to: '/console/delivery',          label: 'Delivery & Alerts', icon: BellRing,       section: 'Notifications' },
+      { to: '/console/announcements',     label: 'Announcements',     icon: Megaphone,      section: 'Notifications' },
+      { to: '/console/api-keys',          label: 'API Monitor',       icon: KeyRound,       section: 'API Monitor' },
+      { to: '/console/data-browser',      label: 'Data Browser',      icon: Search,         section: 'Database' },
+      { to: '/console/backups',           label: 'Backups',           icon: DatabaseBackup, section: 'Database' },
+      { to: '/console/control-center',    label: 'Data Trust & Control', icon: ShieldCheck, section: 'Database' },
+      { to: '/console/data-quality',      label: 'Data Quality',      icon: ShieldCheck,    section: 'Database' },
+      { to: '/console/reconciliation',    label: 'Reconciliation',    icon: Scale,          section: 'Database' },
+      { to: '/console/correction-center', label: 'Correction Center', icon: ClipboardList,  section: 'Database' },
+      { to: '/console/lineage',           label: 'Lineage Explorer',  icon: GitBranch,      section: 'Database' },
+      { to: '/console/crash-reports',     label: 'Error Center',      icon: Bug,            section: 'Error Center' },
     ],
   },
   {
-    label: 'Data operations',
+    label: 'Engineering',
     items: [
-      { to: '/console/data-ops',        label: 'Data Operations',  icon: Layers },
-      { to: '/console/import-history',  label: 'Import History',   icon: FileClock },
-      { to: '/console/smart-import',    label: 'Smart Import',     icon: Wand2 },
-      { to: '/console/material-master', label: 'Material Master',  icon: Boxes },
-      { to: '/console/classification-learning', label: 'Teach the Classifier', icon: Brain },
-      { to: '/console/data-learning',   label: 'Data Learning',    icon: Sparkles },
-      { to: '/console/duplicates',      label: 'Duplicate Control', icon: CopyX },
-      { to: '/console/data-browser',    label: 'Data Browser',     icon: Search },
-      { to: '/console/data-cleanup',    label: 'Data Cleanup',     icon: Trash2 },
-      { to: '/console/tenant-export',  label: 'Tenant Export',    icon: PackageOpen },
-      { to: '/console/backups',         label: 'Backups',          icon: DatabaseBackup },
-    ],
-  },
-  {
-    label: 'Automation and AI',
-    items: [
-      { to: '/console/alert-rules',   label: 'Alert Rules',       icon: BellRing },
-      { to: '/console/automation',    label: 'Automation Health', icon: Activity },
-      { to: '/console/delivery',      label: 'Delivery & Alerts', icon: BellRing },
-      { to: '/console/self-healing',  label: 'Self-Healing',      icon: HeartPulse },
-      { to: '/console/announcements', label: 'Announcements',     icon: Megaphone },
-      { to: '/console/ai-usage',      label: 'AI Usage',          icon: Zap },
-      { to: '/console/ai-admin',      label: 'AI Admin',          icon: Zap },
-    ],
-  },
-  {
-    label: 'Configuration',
-    items: [
-      { to: '/console/config',           label: 'System Config',    icon: Settings2 },
-      { to: '/console/module-control',   label: 'Module Control',   icon: Boxes },
-      { to: '/console/navigation',       label: 'Navigation',       icon: LayoutList },
-      { to: '/console/mobile-app',       label: 'Mobile App',       icon: Smartphone },
-      { to: '/console/appearance',       label: 'Report Colors',    icon: Palette },
-      { to: '/console/vehicle-designer', label: 'Vehicle Designer', icon: Truck },
+      { to: '/console/mobile-app',        label: 'Mobile App',        icon: Smartphone, section: 'Developer' },
+      { to: '/console/ai-admin',          label: 'AI Admin',          icon: Zap,        section: 'Developer' },
+      { to: '/console/automation',        label: 'Automation Health', icon: Activity,   section: 'Developer' },
+      { to: '/console/pipeline-monitor',  label: 'Pipeline Monitor',  icon: Activity,   section: 'Developer' },
+      { to: '/console/releases',          label: 'Releases',          icon: Rocket,     section: 'Releases' },
+      { to: '/console/module-control',    label: 'Feature Flags',     icon: Flag,       section: 'Feature Flags' },
+      { to: '/console/config',            label: 'System Config',     icon: Settings2,  section: 'System Settings' },
+      { to: '/console/navigation',        label: 'Navigation',        icon: LayoutList, section: 'System Settings' },
+      { to: '/console/appearance',        label: 'Report Colors',     icon: Palette,    section: 'System Settings' },
+      { to: '/console/vehicle-designer',  label: 'Vehicle Designer',  icon: Truck,      section: 'System Settings' },
     ],
   },
 ]
+
+/**
+ * Split an area's items into consecutive sections. A section holding one item
+ * whose label equals the section name renders as a plain link; the rest get a
+ * collapsible sub-heading.
+ */
+export function sectionsOf(items = []) {
+  const out = []
+  for (const it of items) {
+    const name = it.section || it.label
+    const last = out[out.length - 1]
+    if (last && last.name === name) last.items.push(it)
+    else out.push({ name, items: [it] })
+  }
+  return out
+}
 
 // Icon-free descriptor of the console nav for the Platform Map page. Derived
 // from NAV_GROUPS so the map can never drift from the real sidebar - a page
@@ -120,7 +130,7 @@ export const NAV_GROUPS = [
 // fails the platformMap coverage test until one is written).
 export const CONSOLE_NAV = NAV_GROUPS.map((g) => ({
   label: g.label,
-  items: g.items.map((it) => ({ to: it.to, label: it.label })),
+  items: g.items.map((it) => ({ to: it.to, label: it.label, section: it.section || null })),
 }))
 
 /** Filter the groups by a typed term, dropping groups that end up empty. */
@@ -128,10 +138,36 @@ function filterGroups(groups, term) {
   const q = String(term || '').trim().toLowerCase()
   if (!q) return groups
   return groups
-    .map((g) => ({ ...g, items: g.items.filter((i) => i.label.toLowerCase().includes(q)) }))
+    .map((g) => ({ ...g, items: g.items.filter((i) => `${i.label} ${i.section || ''}`.toLowerCase().includes(q)) }))
     .filter((g) => g.items.length)
 }
 
+
+/** Per-viewer sidebar state (collapsed areas, open sections). Never required. */
+function readNavState(key) {
+  try { const v = JSON.parse(window.localStorage.getItem(key) || '{}'); return v && typeof v === 'object' ? v : {} } catch { return {} }
+}
+function writeNavState(key, value) {
+  try { window.localStorage.setItem(key, JSON.stringify(value)) } catch { /* storage unavailable: state stays in memory */ }
+}
+
+function NavItem({ item, sidebarOpen, compact = false }) {
+  const Icon = item.icon
+  return (
+    <NavLink to={item.to} end={item.end} title={item.label}
+      aria-label={sidebarOpen ? undefined : item.label}
+      className={({ isActive }) =>
+        `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 flex items-center gap-2.5 px-2.5 ${compact ? 'py-1.5' : 'py-2'} rounded-lg transition-all text-xs font-medium group ${
+          isActive
+            ? 'bg-orange-950/60 text-orange-300 border border-orange-800/40'
+            : 'text-gray-500 hover:text-gray-200 hover:bg-gray-800/60'
+        }`
+      }>
+      {!compact && <Icon size={15} className="flex-shrink-0" aria-hidden="true" />}
+      {sidebarOpen && <span className="truncate">{item.label}</span>}
+    </NavLink>
+  )
+}
 
 export default function ConsoleLayout() {
   const { admin, signOut, activeOrg, setActiveOrg, orgs } = useConsoleAuth()
@@ -140,6 +176,23 @@ export default function ConsoleLayout() {
   const [navFilter, setNavFilter]     = useState('')
   // A collapsed sidebar has no filter box, so it must never render a filtered set.
   const visibleGroups = sidebarOpen ? filterGroups(NAV_GROUPS, navFilter) : NAV_GROUPS
+  const filtering = sidebarOpen && navFilter.trim() !== ''
+  const location = useLocation()
+  const [collapsedAreas, setCollapsedAreas] = useState(() => readNavState('tp_console_nav_areas'))
+  const [openSections, setOpenSections]     = useState(() => readNavState('tp_console_nav_sections'))
+  const isActiveRoute = useCallback((item) => (item.end
+    ? location.pathname === item.to || location.pathname === `${item.to}/`
+    : location.pathname === item.to || location.pathname.startsWith(`${item.to}/`)), [location.pathname])
+  const toggleArea = (label) => setCollapsedAreas((prev) => {
+    const next = { ...prev, [label]: !prev[label] }
+    writeNavState('tp_console_nav_areas', next)
+    return next
+  })
+  const toggleSection = (key, currentlyOpen) => setOpenSections((prev) => {
+    const next = { ...prev, [key]: !currentlyOpen }
+    writeNavState('tp_console_nav_sections', next)
+    return next
+  })
   const [orgOpen, setOrgOpen]         = useState(false)
   const [show2FA, setShow2FA]         = useState(false)
   const [commandOpen, setCommandOpen] = useState(false)
@@ -214,8 +267,8 @@ export default function ConsoleLayout() {
           </div>
           {sidebarOpen && (
             <div className="min-w-0">
-              <p className="text-xs font-bold text-white truncate">System Console</p>
-              <p className="text-[10px] text-orange-400 font-semibold">RESTRICTED</p>
+              <p className="text-xs font-bold text-white truncate">Tyre Pulse</p>
+              <p className="text-[10px] text-orange-400 font-semibold">CONTROL CENTER</p>
             </div>
           )}
           <button type="button" onClick={() => setSidebarOpen(s => !s)}
@@ -280,34 +333,48 @@ export default function ConsoleLayout() {
           {visibleGroups.length === 0 && sidebarOpen && (
             <p className="text-[11px] text-gray-500 px-2 py-4 text-center" role="status">No page matches that.</p>
           )}
-          {visibleGroups.map(group => (
-            <div key={group.label} className="mb-3 last:mb-0">
-              {sidebarOpen && (
-                <p className="px-2.5 pb-1 text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
-                  {group.label}
-                </p>
-              )}
-              <div className="space-y-0.5">
-                {group.items.map(item => {
-                  const Icon = item.icon
-                  return (
-                    <NavLink key={item.to} to={item.to} end={item.end} title={item.label}
-                      aria-label={sidebarOpen ? undefined : item.label}
-                      className={({ isActive }) =>
-                        `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all text-xs font-medium group ${
-                          isActive
-                            ? 'bg-orange-950/60 text-orange-300 border border-orange-800/40'
-                            : 'text-gray-500 hover:text-gray-200 hover:bg-gray-800/60'
-                        }`
-                      }>
-                      <Icon size={15} className="flex-shrink-0" aria-hidden="true" />
-                      {sidebarOpen && <span className="truncate">{item.label}</span>}
-                    </NavLink>
-                  )
-                })}
+          {visibleGroups.map(group => {
+            const areaOpen = filtering || !collapsedAreas[group.label]
+            return (
+              <div key={group.label} className="mb-2 last:mb-0">
+                {sidebarOpen && (
+                  <button type="button" onClick={() => toggleArea(group.label)} aria-expanded={areaOpen}
+                    className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 w-full flex items-center gap-1 px-2.5 pb-1 pt-1 rounded text-[10px] uppercase tracking-wider text-gray-500 font-semibold hover:text-gray-300">
+                    <span className="flex-1 text-left">{group.label}</span>
+                    <ChevronDown size={11} className={`transition-transform ${areaOpen ? '' : '-rotate-90'}`} aria-hidden="true" />
+                  </button>
+                )}
+                {(areaOpen || !sidebarOpen) && (
+                  <div className="space-y-0.5">
+                    {sidebarOpen ? sectionsOf(group.items).map((sec) => {
+                      const single = sec.items.length === 1 && sec.items[0].label === sec.name
+                      if (single) return <NavItem key={sec.name} item={sec.items[0]} sidebarOpen />
+                      const secKey = `${group.label}/${sec.name}`
+                      const hasActive = sec.items.some((i) => isActiveRoute(i))
+                      const secOpen = filtering || (openSections[secKey] ?? hasActive)
+                      const SecIcon = sec.items[0].icon
+                      return (
+                        <div key={secKey}>
+                          <button type="button" onClick={() => toggleSection(secKey, secOpen)} aria-expanded={secOpen}
+                            className={`focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium transition-all ${hasActive ? 'text-gray-200' : 'text-gray-500 hover:text-gray-200 hover:bg-gray-800/60'}`}>
+                            <SecIcon size={15} className="flex-shrink-0" aria-hidden="true" />
+                            <span className="flex-1 text-left truncate">{sec.name}</span>
+                            <span className="text-[10px] text-gray-600 tabular-nums">{sec.items.length}</span>
+                            <ChevronRight size={11} className={`transition-transform ${secOpen ? 'rotate-90' : ''}`} aria-hidden="true" />
+                          </button>
+                          {secOpen && (
+                            <div className="ml-4 pl-2 border-l border-gray-800 space-y-0.5 my-0.5">
+                              {sec.items.map((item) => <NavItem key={item.to} item={item} sidebarOpen compact />)}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    }) : group.items.map((item) => <NavItem key={item.to} item={item} sidebarOpen={false} />)}
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            )
+          })}
         </nav>
 
         {/* Admin info + sign out */}
@@ -362,12 +429,7 @@ export default function ConsoleLayout() {
             <span className="flex-1 text-left truncate hidden sm:inline">Search all capabilities</span>
             <kbd className="rounded border border-gray-700 px-1.5 py-0.5 text-[9px] text-gray-500">Ctrl K</kbd>
           </button>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5 text-xs text-gray-500">
-              <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse motion-reduce:animate-none" aria-hidden="true" />
-              Live
-            </div>
-          </div>
+          <ConsoleTopBarActions />
         </header>
 
         {/* Active support-session banner (always visible while a session is open) */}

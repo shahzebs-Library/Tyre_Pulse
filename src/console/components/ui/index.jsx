@@ -406,3 +406,5 @@ export function Modal({ open, title, subtitle, onClose, children, footer, width 
     document.body
   )
 }
+
+export { default as ImpactBox, ConfirmImpactDialog } from './ImpactBox'

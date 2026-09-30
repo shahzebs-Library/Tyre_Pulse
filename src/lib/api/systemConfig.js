@@ -313,3 +313,23 @@ export const ENFORCEMENT_STATUS = Object.freeze({
   // (accidents / tyres / fleet). Enabling that needs a reviewed, backed-up action.
   data_retention_months: { status: 'saved', where: 'Protected: business records are never auto-deleted (data safety)' },
 })
+
+/**
+ * Write one or more system_config keys ({ key: value }) and re-prime the cache.
+ * The single writer for surfaces outside the System Configuration page (the
+ * console Overview switches and quick actions). Values are stored as strings,
+ * booleans as 'true'/'false', matching every existing reader. Throws a
+ * sanitised ServiceError on failure so the caller can say nothing changed.
+ * Row-level security still decides who may write (super admin only).
+ */
+export async function saveSystemConfigValues(values) {
+  const now = new Date().toISOString()
+  const rows = Object.entries(values || {})
+    .filter(([k]) => typeof k === 'string' && k.trim())
+    .map(([key, v]) => ({ key, value: typeof v === 'boolean' ? (v ? 'true' : 'false') : String(v ?? ''), updated_at: now }))
+  if (!rows.length) return []
+  const { error } = await supabase.from('system_config').upsert(rows, { onConflict: 'key', ignoreDuplicates: false })
+  if (error) throw new ServiceError(toUserMessage(error, 'Could not save the setting. Nothing was changed.'), error.code, error)
+  _cache = { ..._cache, ...Object.fromEntries(rows.map((r) => [r.key, r.value])) }
+  return rows.map((r) => r.key)
+}

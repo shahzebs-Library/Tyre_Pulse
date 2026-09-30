@@ -5,6 +5,24 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
+# ⚑ SESSION 2026-09-30 (part 2) — MARKETING AUDIT vs EVERY TASTE SKILL (Playwright, measured). No migration.
+- **REMOVED `public/screenshots/*.png`**: a raw desktop capture served publicly (owner's browser tabs incl. GitHub
+  account, username, a customer name, Windows taskbar, a raw i18n key, all-zero KPIs). Never ship raw screen captures.
+- `/ar` rebuilt to PMV messaging on the `hc-` hero system; Header/Footer take `locale="ar"` (labels in `lib/nav.ts`
+  `labelAr/textAr`); IBM Plex Sans Arabic via next/font; `.sec-h::after` uses inset-inline-start (RTL-correct).
+- Branded `app/not-found.tsx` (noindex, no canonical; old default 404 claimed the home canonical).
+- Footer column labels are no longer h2 (they polluted every page outline); current-section underline on header menus;
+  all tap targets >=44px; `.footer-note` was a leftover slate `#8799ae` (now warm gray).
+- Pricing: no lifted featured card (lists now align), ink checkmarks (was retired green), CTA band added.
+  Security + Industries: the banned "equal 3-col cards" replaced (divider list; photo list with our own photos).
+- Page-hero H1 max-width 920 = 2 lines desktop. CSS-only scroll reveal (`animation-timeline: view()`, reduced-motion safe).
+- Skill rules deliberately NOT applied (conflict with owner-approved PMV brand/mockups): font swaps away from Inter/Archivo,
+  GSAP, pill buttons, glass nav, icon-set swap from Lucide. Generator/mobile skills (imagegen, image-to-code, brandkit,
+  flutter, native-android, mobile-ui-design) do not apply to the marketing site.
+- OPEN (owner): CAT/Perkins logos visible on fleetLineup + technicianGenerator photos (also in the hero).
+
+---
+
 # ⚑ SESSION 2026-09-30 — MARKETING HOME HERO AUTO-ROTATES (owner: "go live"). No migration.
 - `marketing/components/HeroCarousel.tsx`: 5 slides (Operations, Fleet and assets, Workshop, Inspections, Costs); each
   swaps kicker + headline + lead + link + visual, 7 s each. **NO pause button (owner order).** Holds on hover/focus,

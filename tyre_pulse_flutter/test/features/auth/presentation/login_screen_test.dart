@@ -913,4 +913,29 @@ void main() {
       matchesGoldenFile('goldens/login_wide_ar.png'),
     );
   });
+
+  for (final Size size in const <Size>[
+    Size(320, 568),
+    Size(412, 915),
+    Size(800, 1280),
+    Size(915, 412),
+  ]) {
+    testWidgets(
+      'login fits a ${size.width.toInt()}x${size.height.toInt()} screen at '
+      'a 2x accessibility text scale',
+      (WidgetTester tester) async {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1;
+        tester.platformDispatcher.textScaleFactorTestValue = 2;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+        await _pump(tester, locale: const Locale('ar'));
+        await tester.pump(const Duration(milliseconds: 500));
+
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 }

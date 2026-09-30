@@ -165,3 +165,16 @@ export function comparisonExportRows(rows = []) {
     movement: r.movement,
   }))
 }
+
+/**
+ * The metric the comparison may actually use for a country scope. Each country
+ * reports in its own currency (KSA SAR, UAE AED, Egypt EGP), so a COST total
+ * over "All" countries adds three currencies and labels the sum with one of
+ * them - a figure that is not a quantity of anything. Cost is therefore only
+ * offered for a single country; the All view falls back to replacement counts,
+ * which are currency-free.
+ */
+export function comparisonMetricFor(country, requested) {
+  if (requested === 'cost' && (!country || country === 'All')) return 'count'
+  return requested === 'cost' ? 'cost' : 'count'
+}

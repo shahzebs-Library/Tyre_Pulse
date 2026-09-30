@@ -35,3 +35,7 @@ fi
 
 ux stats >/dev/null && echo "ux-skill ready"
 "$HOME/.local/bin/codebase-memory-mcp" --version
+
+# Reusable Claude Code skills (pinned). A failure is reported, not fatal, so one
+# unreachable repo never blocks the rest of the environment.
+bash "$(dirname "$0")/install-claude-skills.sh" || echo "WARNING: some Claude skills failed to install (see above)"

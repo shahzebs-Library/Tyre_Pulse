@@ -5,47 +5,78 @@ import { PLATFORM_PAGES } from "@/lib/nav";
 import { Logo } from "./Logo";
 import { StoreBadges } from "./StoreBadges";
 
-export function Footer() {
+const COPY = {
+  en: {
+    about: "One operational workspace for plant, machinery and vehicles: assets, workshop, field teams and stores.",
+    mobile: "Mobile app",
+    mobileText: "Inspections, meter readings and job cards from the yard, online or offline.",
+    platform: "Platform",
+    company: "Company",
+    access: "Access",
+    login: "Customer login",
+    adminNote: "Company administration is inside the app.",
+    company_links: [["/industries", "Industries"], ["/pricing", "Pricing"], ["/security", "Security"], ["/contact", "Contact"]],
+    rights: "Tyre Pulse. All rights reserved.",
+    sample: "Product screens on this site show illustrative sample data. Module availability depends on your plan.",
+  },
+  ar: {
+    about: "مساحة عمل تشغيلية واحدة للمعدات والآليات والمركبات: الأصول والورشة والفرق الميدانية والمستودعات.",
+    mobile: "تطبيق الجوال",
+    mobileText: "الفحوصات وقراءات العدادات وبطاقات العمل من الموقع، مع الاتصال أو بدونه.",
+    platform: "المنصة",
+    company: "الشركة",
+    access: "الدخول",
+    login: "دخول العملاء",
+    adminNote: "إدارة الشركة تتم داخل التطبيق.",
+    company_links: [["/industries", "القطاعات"], ["/pricing", "الأسعار"], ["/security", "الأمان"], ["/contact", "تواصل معنا"]],
+    rights: "تاير بالس. جميع الحقوق محفوظة.",
+    sample: "شاشات المنتج في هذا الموقع تعرض بيانات توضيحية. توفر الوحدات يعتمد على خطتك.",
+  },
+} as const;
+
+/**
+ * The column labels are not headings: every page's outline should be its own
+ * content, not four copies of "Platform / Company / Access". Each column is a
+ * labelled nav landmark instead, which is what a screen reader lists.
+ */
+export function Footer({ locale = "en" }: { locale?: "en" | "ar" }) {
+  const ar = locale === "ar";
+  const c = COPY[locale];
   return (
     <footer className="footer">
       <div className="site-shell">
         <div className="footer-grid">
           <div>
             <Logo />
-            <p className="footer-text">
-              One operational workspace for plant, machinery and vehicles: assets, workshop, field teams and stores.
-            </p>
-            <h2 className="footer-heading">Mobile app</h2>
-            <p className="footer-text">Inspections, meter readings and job cards from the yard, online or offline.</p>
+            <p className="footer-text">{c.about}</p>
+            <p className="footer-heading">{c.mobile}</p>
+            <p className="footer-text">{c.mobileText}</p>
             <StoreBadges tone="dark" appStoreUrl={APP_STORE_URL} />
           </div>
-          <nav aria-labelledby="footer-platform">
-            <h2 className="footer-heading" id="footer-platform">Platform</h2>
+          <nav aria-label={c.platform}>
+            <p className="footer-heading" aria-hidden="true">{c.platform}</p>
             <div className="footer-links">
-              {PLATFORM_PAGES.map((p) => <Link key={p.href} href={p.href}>{p.label}</Link>)}
+              {PLATFORM_PAGES.map((p) => <Link key={p.href} href={p.href}>{ar ? p.labelAr : p.label}</Link>)}
             </div>
           </nav>
-          <nav aria-labelledby="footer-company">
-            <h2 className="footer-heading" id="footer-company">Company</h2>
+          <nav aria-label={c.company}>
+            <p className="footer-heading" aria-hidden="true">{c.company}</p>
             <div className="footer-links">
-              <Link href="/industries">Industries</Link>
-              <Link href="/pricing">Pricing</Link>
-              <Link href="/security">Security</Link>
-              <Link href="/contact">Contact</Link>
-              <Link href="/ar" lang="ar">العربية</Link>
+              {c.company_links.map(([href, label]) => <Link key={href} href={href}>{label}</Link>)}
+              {ar ? <Link href="/" lang="en">English</Link> : <Link href="/ar" lang="ar">العربية</Link>}
             </div>
           </nav>
-          <nav aria-labelledby="footer-access">
-            <h2 className="footer-heading" id="footer-access">Access</h2>
+          <nav aria-label={c.access}>
+            <p className="footer-heading" aria-hidden="true">{c.access}</p>
             <div className="footer-links">
-              <a href={APP_URL}>Customer login</a>
-              <span className="footer-note">Company administration is inside the app.</span>
+              <a href={APP_URL}>{c.login}</a>
+              <span className="footer-note">{c.adminNote}</span>
             </div>
           </nav>
         </div>
         <div className="footer-bottom">
-          <span>&copy; {new Date().getFullYear()} Tyre Pulse. All rights reserved.</span>
-          <span>Product screens on this site show illustrative sample data. Module availability depends on your plan.</span>
+          <span><bdi>&copy; {new Date().getFullYear()}</bdi> {c.rights}</span>
+          <span>{c.sample}</span>
         </div>
       </div>
     </footer>

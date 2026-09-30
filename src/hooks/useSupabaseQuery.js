@@ -1,5 +1,17 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
+import { toServiceError } from '../lib/api/_client'
+
+// PostgREST caps every response at 1000 rows; tyre_records (~11k) and
+// vehicle_fleet (~1.6k) exceed it, so a bare select silently truncates. Read
+// them in ordered pages with an `id` tiebreak (a non-unique sort drops or
+// repeats rows at a page boundary). `max` is a safety ceiling.
+async function pageAll(build) {
+  const { data, error } = await fetchAllPages((a, b) => build().range(a, b), { max: 50000 })
+  if (error) throw toServiceError(error)
+  return data ?? []
+}
 
 // Generic hook - callers pass a queryKey and a fetcher fn
 export function useSupabaseQuery(queryKey, fetcher, options = {}) {
@@ -11,13 +23,13 @@ export function useTyres(filters = {}) {
   return useQuery({
     queryKey: ['tyres', filters],
     queryFn: async () => {
-      let q = supabase.from('tyre_records').select('*')
-      if (filters.status)  q = q.eq('status', filters.status)
-      if (filters.country) q = q.eq('country', filters.country)
-      if (filters.site)    q = q.eq('site', filters.site)
-      const { data, error } = await q.order('updated_at', { ascending: false })
-      if (error) throw error
-      return data ?? []
+      return pageAll(() => {
+        let q = supabase.from('tyre_records').select('*')
+        if (filters.status)  q = q.eq('status', filters.status)
+        if (filters.country) q = q.eq('country', filters.country)
+        if (filters.site)    q = q.eq('site', filters.site)
+        return q.order('updated_at', { ascending: false }).order('id')
+      })
     },
     staleTime: 2 * 60 * 1000,
   })
@@ -59,12 +71,12 @@ export function useVehicles(filters = {}) {
   return useQuery({
     queryKey: ['vehicles', filters],
     queryFn: async () => {
-      let q = supabase.from('vehicle_fleet').select('*')
-      if (filters.status)  q = q.eq('status', filters.status)
-      if (filters.country) q = q.eq('country', filters.country)
-      const { data, error } = await q.order('fleet_number')
-      if (error) throw error
-      return data ?? []
+      return pageAll(() => {
+        let q = supabase.from('vehicle_fleet').select('*')
+        if (filters.status)  q = q.eq('status', filters.status)
+        if (filters.country) q = q.eq('country', filters.country)
+        return q.order('fleet_number').order('id')
+      })
     },
     staleTime: 5 * 60 * 1000,
   })
@@ -90,11 +102,11 @@ export function useDashboardData(country) {
   const tyresQ = useQuery({
     queryKey: ['tyres', { country }],
     queryFn: async () => {
-      let q = supabase.from('tyre_records').select('*')
-      if (country && country !== 'All') q = q.eq('country', country)
-      const { data, error } = await q
-      if (error) throw error
-      return data ?? []
+      return pageAll(() => {
+        let q = supabase.from('tyre_records').select('*')
+        if (country && country !== 'All') q = q.eq('country', country)
+        return q.order('id')
+      })
     },
     staleTime: 2 * 60 * 1000,
   })
@@ -112,11 +124,11 @@ export function useDashboardData(country) {
   const vehiclesQ = useQuery({
     queryKey: ['vehicles', { country }],
     queryFn: async () => {
-      let q = supabase.from('vehicle_fleet').select('*')
-      if (country && country !== 'All') q = q.eq('country', country)
-      const { data, error } = await q
-      if (error) throw error
-      return data ?? []
+      return pageAll(() => {
+        let q = supabase.from('vehicle_fleet').select('*')
+        if (country && country !== 'All') q = q.eq('country', country)
+        return q.order('id')
+      })
     },
     staleTime: 5 * 60 * 1000,
   })

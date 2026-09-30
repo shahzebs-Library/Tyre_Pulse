@@ -604,22 +604,31 @@ class _ExactLoginHero extends StatelessWidget {
                           excludeFromSemantics: true,
                         ),
                         const SizedBox(width: 6),
-                        Semantics(
-                          key: const Key('login.brand.title'),
-                          container: true,
-                          header: true,
-                          label: l10n.appTitle,
-                          child: ExcludeSemantics(
-                            child: Text(
-                              'TYRE\nPULSE',
-                              textDirection: TextDirection.ltr,
-                              style: text.titleLarge?.copyWith(
-                                color: Colors.white,
-                                fontSize: 27,
-                                height: 0.94,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 0.6,
-                                shadows: _kHeroTextShadow,
+                        // Flexible + scaleDown: the wordmark keeps its size
+                        // normally and shrinks, never overflows, under a
+                        // large accessibility text scale.
+                        Flexible(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: AlignmentDirectional.centerStart,
+                            child: Semantics(
+                              key: const Key('login.brand.title'),
+                              container: true,
+                              header: true,
+                              label: l10n.appTitle,
+                              child: ExcludeSemantics(
+                                child: Text(
+                                  'TYRE\nPULSE',
+                                  textDirection: TextDirection.ltr,
+                                  style: text.titleLarge?.copyWith(
+                                    color: Colors.white,
+                                    fontSize: 27,
+                                    height: 0.94,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.6,
+                                    shadows: _kHeroTextShadow,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
@@ -1570,16 +1579,23 @@ class _CountryFooter extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 4),
-              Text(
-                countryName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: palette.text,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.2,
-                    ),
+              // The footer has a fixed 52dp slot; scaleDown keeps the country
+              // name inside it under a large text scale instead of clipping.
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    countryName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: palette.text,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.2,
+                        ),
+                  ),
+                ),
               ),
             ],
           ),

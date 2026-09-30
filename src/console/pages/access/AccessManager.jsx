@@ -33,8 +33,9 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../../../contexts/AuthContext'
 import {
-  MODULE_GROUPS, SUBMODULES, ACCESS_ROLES, REGISTRY_LABEL, isSubmoduleKey,
+  SUBMODULES, ACCESS_ROLES, isSubmoduleKey,
 } from '../../../lib/moduleCatalog'
+import { ACCESS_MODULE_GROUPS as MODULE_GROUPS } from '../../../lib/accessCatalog'
 import {
   CAPABILITIES, defaultViewAccess, resolveCapability,
   getPermissionOverrides,

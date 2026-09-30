@@ -204,18 +204,18 @@ export default function AccidentPortalView() {
   useEffect(() => { load() }, [load])
 
   const page = (children, wide = false) => (
-    <div className="acp-shell" style={{ minHeight: '100vh', background: '#f1f5f9', padding: '32px 16px', fontFamily: 'Calibri, Carlito, "Segoe UI", Arial, sans-serif', colorScheme: 'light' }}>
+    <main className="acp-shell" style={{ minHeight: '100vh', background: '#f1f5f9', padding: '32px 16px', fontFamily: 'Calibri, Carlito, "Segoe UI", Arial, sans-serif', colorScheme: 'light' }}>
       <style>{PRINT_CSS}</style>
       <div style={{ maxWidth: wide ? 760 : 520, margin: '0 auto' }}>
         <div className="acp-card" style={{ background: '#ffffff', borderRadius: 16, border: `1px solid ${C.line}`, boxShadow: '0 1px 3px rgba(15,23,42,0.08)', padding: 28 }}>
           {children}
         </div>
-        <p style={{ textAlign: 'center', color: C.faint, fontSize: 11, marginTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+        <p style={{ textAlign: 'center', color: '#475569', fontSize: 11, marginTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
           <ShieldCheck size={13} aria-hidden="true" />
           Shared securely by TyrePulse. Read-only case summary with no personal or financial details.
         </p>
       </div>
-    </div>
+    </main>
   )
 
   if (snap === null) {
@@ -238,9 +238,9 @@ export default function AccidentPortalView() {
           <input
             type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password"
             aria-label="Password" autoComplete="off" autoFocus
-            style={{ flex: 1, border: '1px solid #cbd5e1', borderRadius: 10, padding: '10px 12px', fontSize: 14 }}
+            style={{ flex: 1, minWidth: 0, minHeight: 44, border: '1px solid #cbd5e1', borderRadius: 10, padding: '10px 12px', fontSize: 14 }}
           />
-          <button type="submit" disabled={busy || !password} style={{ ...btn(true, busy || !password), padding: '10px 18px', fontSize: 14 }}>
+          <button type="submit" disabled={busy || !password} style={{ ...btn(true, busy || !password), minHeight: 44, padding: '10px 18px', fontSize: 14 }}>
             {busy ? 'Checking' : 'Open'}
           </button>
         </form>
@@ -261,7 +261,7 @@ export default function AccidentPortalView() {
         <p style={{ color: C.muted, fontSize: 13 }}>{copy.body}</p>
         {(snap.reason === 'unavailable' || !REASON_COPY[snap.reason]) && (
           <button type="button" onClick={() => load(password || undefined)} disabled={busy}
-            style={{ ...btn(false, busy), marginTop: 14 }}>
+            style={{ ...btn(false, busy), marginTop: 14, minHeight: 44, padding: '10px 16px', fontSize: 13 }}>
             <RefreshCcw size={13} aria-hidden="true" /> {busy ? 'Trying again' : 'Try again'}
           </button>
         )}

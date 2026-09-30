@@ -66,3 +66,14 @@ describe('comparisonAnalytics', () => {
     expect(out.find((x) => x.label === 'JED').pct_change).toBe('N/A')
   })
 })
+
+describe('comparisonMetricFor (currency scope, audit 2026-09-30)', () => {
+  it('never allows a cost total across all countries (SAR+AED+EGP)', async () => {
+    const { comparisonMetricFor } = await import('../lib/comparisonAnalytics')
+    expect(comparisonMetricFor('All', 'cost')).toBe('count')
+    expect(comparisonMetricFor(undefined, 'cost')).toBe('count')
+    expect(comparisonMetricFor('KSA', 'cost')).toBe('cost')
+    expect(comparisonMetricFor('All', 'count')).toBe('count')
+    expect(comparisonMetricFor('UAE', 'bogus')).toBe('count')
+  })
+})

@@ -2029,7 +2029,9 @@ export default function Accidents() {
       setSelectedIds(new Set())
       loadRecords()
     } catch (e) {
-      setBulkError(e.message || 'Bulk delete failed. Please try again.')
+      // Route through toUserMessage: a raw PostgREST error (FK/constraint text) must
+      // never reach the user; our own plain "No rows were deleted" message passes through.
+      setBulkError(toUserMessage(e, 'Bulk delete failed. Please try again.'))
     } finally {
       setBulkBusy(false)
     }

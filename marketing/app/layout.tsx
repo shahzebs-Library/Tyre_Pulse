@@ -12,7 +12,7 @@ import { OG_IMAGES } from "@/lib/site";
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "Tyre Pulse | PMV operations: assets, workshop, inspections and stores",
+    default: "Tyre Pulse | PMV assets, workshop, inspections and stores",
     template: "%s | Tyre Pulse",
   },
   description:

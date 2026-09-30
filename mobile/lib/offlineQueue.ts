@@ -59,6 +59,32 @@ async function saveQueue(queue: OfflineInspection[]): Promise<void> {
   await secureStorage.setItem(QUEUE_KEY, JSON.stringify(queue))
 }
 
+/**
+ * ONE WRITER AT A TIME. The sync loop awaits photo uploads and the network
+ * between reading the queue and writing it back; without this lock an
+ * inspection queued DURING a sync (the normal offline-submit path) was
+ * overwritten by the sync's older snapshot and lost with no error. Held only
+ * around storage work, never across network calls.
+ */
+let queueLock: Promise<void> = Promise.resolve()
+function withQueueLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = queueLock.then(fn, fn)
+  queueLock = run.then(() => undefined, () => undefined)
+  return run
+}
+
+/** Write ONE item's sync outcome into the CURRENT stored queue, by id. An item
+ *  no longer stored (the queue was wiped meanwhile) is NOT re-added. */
+async function commitItem(item: OfflineInspection): Promise<void> {
+  await withQueueLock(async () => {
+    const fresh = await loadQueueForWrite()
+    const idx = fresh.findIndex(i => i.id === item.id)
+    if (idx === -1) return
+    fresh[idx] = item
+    await saveQueue(fresh)
+  })
+}
+
 export async function enqueueInspection(payload: InspectionPayload, clientUuid?: string): Promise<string> {
   // Reuse a client id shared with the online attempt (if any) so a lost response
   // can't create a duplicate — the queued retry upserts on the same key.
@@ -71,9 +97,16 @@ export async function enqueueInspection(payload: InspectionPayload, clientUuid?:
     synced_at: null,
     error: null,
   }
-  const queue = await loadQueueForWrite()
-  queue.unshift(item)
-  await saveQueue(queue)
+  await withQueueLock(async () => {
+    const queue = await loadQueueForWrite()
+    // Same client id already queued (a double tap on Submit, or the online
+    // attempt's fallback firing twice): keep the one entry. The server upsert is
+    // idempotent on client_uuid too, but a duplicate row here would still show
+    // the technician two pending inspections for one piece of work.
+    if (queue.some(q => q.id === id)) return
+    queue.unshift(item)
+    await saveQueue(queue)
+  })
   return id
 }
 
@@ -159,10 +192,9 @@ async function doSyncQueue(): Promise<{ synced: number; failed: number }> {
       failed++
     }
     // Persist after EACH item so a crash mid-loop can't lose a 'synced' marking.
-    await saveQueue(queue)
+    // Merged by id into the CURRENT queue, never a blind overwrite.
+    await commitItem(item)
   }
-
-  await saveQueue(queue)
 
   // Fire local notifications so the user knows sync outcome even if the app
   // is backgrounded when SyncBanner triggers an auto-sync on reconnect.
@@ -175,20 +207,24 @@ async function doSyncQueue(): Promise<{ synced: number; failed: number }> {
 }
 
 export async function retryFailed(): Promise<void> {
-  const queue = await loadQueueForWrite()
-  for (const item of queue) {
-    if (item.sync_status === 'failed') {
-      item.sync_status = 'pending'
-      item.error = null
+  await withQueueLock(async () => {
+    const queue = await loadQueueForWrite()
+    for (const item of queue) {
+      if (item.sync_status === 'failed') {
+        item.sync_status = 'pending'
+        item.error = null
+      }
     }
-  }
-  await saveQueue(queue)
+    await saveQueue(queue)
+  })
 }
 
 export async function clearSynced(): Promise<void> {
-  const queue = await loadQueueForWrite()
-  const filtered = queue.filter(i => i.sync_status !== 'synced')
-  await saveQueue(filtered)
+  await withQueueLock(async () => {
+    const queue = await loadQueueForWrite()
+    const filtered = queue.filter(i => i.sync_status !== 'synced')
+    await saveQueue(filtered)
+  })
 }
 
 /**
@@ -196,5 +232,5 @@ export async function clearSynced(): Promise<void> {
  * different account on a shared device cannot inherit this user's queued work.
  */
 export async function clearQueue(): Promise<void> {
-  await secureStorage.removeItem(QUEUE_KEY)
+  await withQueueLock(() => secureStorage.removeItem(QUEUE_KEY))
 }

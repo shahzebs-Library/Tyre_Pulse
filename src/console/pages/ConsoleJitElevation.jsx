@@ -28,7 +28,7 @@ import {
   clampMinutes, durationError, reasonError, validateRequest, remainingMs, effectiveStatus,
   formatRemaining, formatMinutes, elapsedPct, summarize, partition, filterRows,
 } from '../../lib/jitElevation'
-import { ALL_MODULES, MODULE_LABEL } from '../../lib/moduleCatalog'
+import { ACCESS_MODULES as ALL_MODULES, ACCESS_MODULE_LABEL as MODULE_LABEL } from '../../lib/accessCatalog'
 import { toUserMessage } from '../../lib/safeError'
 import { exportConsoleRows, sortRows, useTableSort } from '../../lib/consoleTable'
 import { PageHeader, useUrlTab, useRefreshStamp, usePaged, Pager, AttentionList } from './shared/pageKit'

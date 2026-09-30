@@ -65,7 +65,7 @@ const MAX_BODY_LINES = 20
 // were mobile-only (the admin sites fleet count, the add-stock location picker,
 // the tyre-records site chips).
 const SCAN_DIRS = [
-  'src/pages', 'src/lib/api', 'src/components', 'src/console', 'src/lib',
+  'src/pages', 'src/lib/api', 'src/components', 'src/console', 'src/lib', 'src/hooks', 'src/contexts',
   'mobile/app', 'mobile/lib', 'mobile/components', 'mobile/contexts', 'mobile/hooks',
 ]
 

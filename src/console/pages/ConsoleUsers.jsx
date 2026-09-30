@@ -34,7 +34,8 @@ import { sanitizeSearchTerm } from '../../lib/searchFilter'
 import { toUserMessage } from '../../lib/safeError'
 import { exportConsoleRows } from '../../lib/consoleTable'
 import { useConsoleAuth } from '../ConsoleAuthContext'
-import { ACCESS_ROLES, ALL_MODULES } from '../../lib/moduleCatalog'
+import { ACCESS_ROLES } from '../../lib/moduleCatalog'
+import { ACCESS_MODULES as ALL_MODULES } from '../../lib/accessCatalog'
 import { listCustomRoles } from '../../lib/api/customRoles'
 import {
   setUserCountry, bulkSetRole, bulkSetGrant, adminSetUserSites, adminSetWebAccess,

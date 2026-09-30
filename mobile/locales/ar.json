@@ -385,7 +385,13 @@
       "mechanical": "عطل ميكانيكي",
       "near_miss": "اقتراب من حادثة",
       "property_damage": "أضرار ممتلكات",
-      "other": "أخرى"
+      "other": "أخرى",
+      "rear_end": "اصطدام من الخلف",
+      "side_swipe": "احتكاك جانبي",
+      "reversing": "أثناء الرجوع للخلف",
+      "fire": "حريق",
+      "vandalism": "تخريب متعمد",
+      "weather": "أحوال جوية"
     },
     "severities": {
       "minor": "طفيفة",
@@ -400,7 +406,8 @@
       "awaiting_approval": "بانتظار الموافقة",
       "insurance_claim": "مطالبة تأمين",
       "repair_in_progress": "قيد الإصلاح",
-      "released": "تم الإفراج"
+      "released": "تم الإفراج",
+      "awaiting_parts": "بانتظار قطع الغيار"
     },
     "stats": {
       "total": "الإجمالي",

@@ -126,7 +126,7 @@ summary:focus-visible,
 }
 /* Plain text sitting inside a list of links must not look like one. */
 .footer-note {
-  color: #8799ae;
+  color: #a3a39c;
   cursor: default;
 }
 `;

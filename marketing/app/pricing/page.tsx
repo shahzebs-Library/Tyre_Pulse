@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CheckCircle2 } from "lucide-react";
+import { Check } from "lucide-react";
+import { CTA } from "@/components/CTA";
 import { PageFrame } from "@/components/PageFrame";
 import { JsonLd, alternatesFor, pageBreadcrumb } from "../schema";
 import { OG_IMAGES } from "@/lib/site";
@@ -29,8 +30,19 @@ export default function PricingPage() {
   return <PageFrame>
     <JsonLd data={pageBreadcrumb("Pricing", "/pricing")} />
     <section className="page-hero"><div className="site-shell"><span className="eyebrow">Commercial plans</span><h1 className="display">Start with the control you need. Expand when you are ready.</h1><p className="lead">Pricing is based on fleet size, users, modules, countries and integration requirements. We do not publish invented one-size-fits-all savings.</p></div></section>
-    <section className="page-content"><div className="site-shell price-grid">
-      {plans.map(([name, text, features], i) => <article className={`card price-card ${i === 2 ? "featured" : ""}`} key={String(name)}><span className="eyebrow">{i === 2 ? "Most flexible" : "Plan"}</span><h2 className="h2" style={{ fontSize: "2rem" }}>{String(name)}</h2><p className="muted">{String(text)}</p><ul>{(features as string[]).map(f => <li key={f}><CheckCircle2 size={17} color="#0b9b6c" style={{ verticalAlign: "middle", marginRight: 8 }} />{f}</li>)}</ul><Link className={`btn ${i === 2 ? "btn-primary" : "btn-secondary"}`} href="/contact">Request pricing</Link></article>)}
+    <section className="page-content"><div className="site-shell">
+      <div className="price-grid">
+        {plans.map(([name, text, features], i) => (
+          <article className={`card price-card ${i === 2 ? "featured" : ""}`} key={String(name)} aria-label={i === 2 ? `${name}, most flexible` : String(name)}>
+            <span className="eyebrow">{i === 2 ? "Most flexible" : "\u00a0"}</span>
+            <h2 className="h2 price-name">{String(name)}</h2>
+            <p className="muted price-for">{String(text)}</p>
+            <ul>{(features as string[]).map(f => <li key={f}><Check className="price-check" size={17} strokeWidth={2.4} aria-hidden="true" />{f}</li>)}</ul>
+            <Link className={`btn ${i === 2 ? "btn-primary" : "btn-secondary"}`} href="/contact">Request pricing</Link>
+          </article>
+        ))}
+      </div>
     </div></section>
+    <CTA />
   </PageFrame>;
 }

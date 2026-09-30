@@ -161,10 +161,10 @@ function Card({ title, icon: Icon, empty, emptyText, children, className = '' })
 
 function CenterShell({ children }) {
   return (
-    <div className="wt-root wt-center tp-report-paper">
+    <main className="wt-root wt-center tp-report-paper">
       <ScopedStyle />
       <div className="wt-center-box">{children}</div>
-    </div>
+    </main>
   )
 }
 
@@ -291,7 +291,7 @@ export default function WorkshopTv() {
     return (
       <CenterShell>
         <Loader2 size={40} className="wt-spin" aria-hidden="true" />
-        <p className="wt-center-title">Loading workshop board</p>
+        <h1 className="wt-center-title">Loading workshop board</h1>
         <p className="wt-center-body">Preparing the latest snapshot.</p>
       </CenterShell>
     )
@@ -302,19 +302,20 @@ export default function WorkshopTv() {
     return (
       <CenterShell>
         <KeyRound size={38} className="wt-center-ic" aria-hidden="true" />
-        <p className="wt-center-title">This board is protected.</p>
+        <h1 className="wt-center-title">This board is protected.</h1>
         <p className="wt-center-body">Enter the viewer password to continue.</p>
         <form onSubmit={submitPassword} className="wt-pwform">
           <input
             type="password" value={pwInput} onChange={(e) => setPwInput(e.target.value)}
             placeholder="Viewer password" aria-label="Viewer password" autoFocus className="wt-pwinput"
+            aria-invalid={pwError ? true : undefined} aria-describedby={pwError ? 'wt-pwerror' : undefined}
           />
           <button type="submit" disabled={pwBusy || !pwInput} className="wt-pwbtn">
             {pwBusy ? <Loader2 size={16} className="wt-spin" /> : <Lock size={16} />}
             <span>View board</span>
           </button>
         </form>
-        {pwError && <p className="wt-pwerror">{pwError}</p>}
+        {pwError && <p id="wt-pwerror" role="alert" className="wt-pwerror">{pwError}</p>}
       </CenterShell>
     )
   }
@@ -325,7 +326,7 @@ export default function WorkshopTv() {
     return (
       <CenterShell>
         <AlertTriangle size={38} className="wt-center-ic" aria-hidden="true" />
-        <p className="wt-center-title">{copy.title}</p>
+        <h1 className="wt-center-title">{copy.title}</h1>
         <p className="wt-center-body">{copy.body}</p>
         {reason === 'unavailable' && (
           <button type="button" onClick={() => load(pwRef.current)} className="wt-pwbtn wt-retry">
@@ -478,17 +479,17 @@ function ScopedStyle() {
       .wt-center { align-items: center; justify-content: center; }
       .wt-center-box { text-align: center; max-width: 420px; padding: 32px; }
       .wt-center-title { font-size: 1.25rem; font-weight: 700; margin: 14px 0 6px; }
-      .wt-center-body { color: var(--wt-muted); font-size: 0.98rem; }
+      .wt-center-body { color: var(--wt-sub); font-size: 0.98rem; }
       .wt-center-ic { color: #ef4444; }
       .wt-spin { animation: wt-spin 1s linear infinite; }
       @keyframes wt-spin { to { transform: rotate(360deg); } }
 
       .wt-pwform { display: flex; gap: 8px; margin-top: 18px; justify-content: center; flex-wrap: wrap; }
-      .wt-pwinput { padding: 10px 14px; border: 1px solid var(--wt-border); border-radius: 10px; font-size: 1rem; background: #fff; color: var(--wt-text); }
-      .wt-pwbtn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 10px; border: none; background: #4f46e5; color: #fff; font-weight: 600; cursor: pointer; }
+      .wt-pwinput { min-height: 44px; padding: 10px 14px; border: 1px solid var(--wt-border); border-radius: 10px; font-size: 1rem; background: #fff; color: var(--wt-text); }
+      .wt-pwbtn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 10px 16px; border-radius: 10px; border: none; background: #4f46e5; color: #fff; font-weight: 600; cursor: pointer; }
       .wt-pwbtn:disabled { opacity: 0.6; cursor: not-allowed; }
       .wt-retry { background: #334155; margin-top: 16px; }
-      .wt-pwerror { color: #ef4444; margin-top: 12px; font-size: 0.92rem; }
+      .wt-pwerror { color: #b91c1c; margin-top: 12px; font-size: 0.92rem; }
 
       .wt-header {
         display: flex; align-items: center; justify-content: space-between; gap: 16px;

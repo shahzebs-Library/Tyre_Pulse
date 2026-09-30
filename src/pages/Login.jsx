@@ -84,6 +84,49 @@ const STYLES = `
 .tp-feature-card {
   animation: tp-fade-up 0.4s ease-out both;
 }
+@media (prefers-reduced-motion: reduce) {
+  .tp-feature-card, .tp-btn-shine::after, .tp-pulse-ring { animation: none !important; }
+}
+/* RTL: directional arrows point the reading way. */
+[dir="rtl"] .tp-login-shell .tp-dir-icon { transform: scaleX(-1); }
+/* Visible keyboard focus on every control of the auth screen. */
+.tp-login-shell button:focus-visible,
+.tp-login-shell a:focus-visible,
+.tp-login-shell input:focus-visible {
+  outline: 2px solid var(--brand-on-tint);
+  outline-offset: 2px;
+}
+/* Readable secondary text (WCAG AA 4.5:1) on the auth screen in both themes. */
+.tp-login-shell { --login-text-faint: rgba(255,255,255,0.52); }
+html.light .tp-login-shell {
+  --login-text-dim: rgba(15,23,42,0.72);
+  --login-text-faint: rgba(15,23,42,0.64);
+}
+/* Touch devices and narrow screens: every control is at least 44x44 px. */
+@media (pointer: coarse), (max-width: 1024px) {
+  .tp-login-shell .tp-login-tab,
+  .tp-login-shell .tp-login-controls button { min-height: 44px; }
+  .tp-login-shell .tp-login-controls button { min-width: 44px; }
+  .tp-login-shell .tp-login-controls > div { min-width: 44px; min-height: 44px; width: auto !important; height: auto !important; }
+  .tp-login-shell .tp-login-link { min-height: 44px; display: inline-flex; align-items: center; }
+  .tp-login-shell .tp-login-eye { min-width: 44px; min-height: 44px; justify-content: center; align-items: center; inset-inline-end: 0 !important; }
+  .tp-login-shell .tp-login-footer-links a { min-height: 44px; min-width: 44px; display: inline-flex; align-items: center; justify-content: center; }
+  .tp-login-shell .tp-login-footer-links { gap: 4px !important; flex-wrap: wrap; }
+}
+/* Single-column layout: keep the fixed top bar clear of the brand block. */
+@media (max-width: 1023px) {
+  .tp-login-shell #main-content { padding-top: 84px !important; }
+}
+/* Narrow phones: the 44px language/theme controls need the top bar's width, so
+   the connection pill moves to the opposite (reading-start) corner. */
+@media (max-width: 480px) {
+  .tp-login-shell .tp-login-netpill { left: 16px !important; right: auto; transform: none !important; }
+  [dir="rtl"] .tp-login-shell .tp-login-netpill { left: auto !important; right: 16px; }
+}
+@media (max-width: 360px) {
+  .tp-login-shell .tp-login-netpill { padding: 5px 8px !important; }
+  .tp-login-shell .tp-login-controls { gap: 4px !important; }
+}
 `
 
 /* ── Spinning Tyre ───────────────────────────────────────────────────────── */
@@ -543,7 +586,7 @@ export default function Login() {
         }}/>
 
         {/* Network status pill */}
-        <div style={{
+        <div className="tp-login-netpill" style={{
           position:'fixed', top:16, left:'50%', transform:'translateX(-50%)',
           zIndex:100, display:'flex', alignItems:'center', gap:6,
           padding:'5px 12px', borderRadius:999,
@@ -560,8 +603,8 @@ export default function Login() {
         {/* Theme + language controls - fixed top-right, reachable before signing
             in and on every viewport (the desktop layout otherwise has nowhere to
             switch either). */}
-        <div style={{
-          position:'fixed', top:16, right:16, zIndex:100,
+        <div className="tp-login-controls" style={{
+          position:'fixed', top:16, insetInlineEnd:16, zIndex:100,
           display:'flex', alignItems:'center', gap:8,
         }}>
           <LanguageSwitcher />
@@ -603,7 +646,7 @@ export default function Login() {
                 <BrandIcon src={loginLogo} custom={loginLogo !== TpLogo} chip={false} size={30} />
               </div>
               <div>
-                <div style={{fontSize:26, fontWeight:800, color:'var(--login-text)', letterSpacing:'-0.03em', lineHeight:1}}>TyrePulse</div>
+                <h1 style={{fontSize:26, fontWeight:800, color:'var(--login-text)', letterSpacing:'-0.03em', lineHeight:1, margin:0}}>TyrePulse</h1>
                 <div style={{fontSize:11, color:'var(--brand-on-tint)', letterSpacing:'0.12em', textTransform:'uppercase', fontWeight:600, marginTop:2}}>{t('auth.login.brandTagline')}</div>
               </div>
             </div>
@@ -644,7 +687,7 @@ export default function Login() {
         </div>
 
         {/* ── RIGHT PANEL / Single Column Mobile ──────────────────────────── */}
-        <div style={{
+        <main id="main-content" style={{
           flex:1, display:'flex', flexDirection:'column',
           alignItems:'center', justifyContent:'center',
           padding:'24px 20px',
@@ -665,7 +708,7 @@ export default function Login() {
                 <Tyre size={76} opacity={0.95}/>
               </div>
             </div>
-            <div style={{fontSize:24, fontWeight:800, color:'var(--login-text)', letterSpacing:'-0.03em'}}>TyrePulse</div>
+            <h1 style={{fontSize:24, fontWeight:800, color:'var(--login-text)', letterSpacing:'-0.03em', margin:0}}>TyrePulse</h1>
             <div style={{fontSize:11, color:'var(--brand-on-tint)', letterSpacing:'0.12em', textTransform:'uppercase', fontWeight:600, marginTop:3}}>{t('auth.login.brandTaglinePlatform')}</div>
           </motion.div>
 
@@ -741,7 +784,7 @@ export default function Login() {
               {!forgotMode && !pendingApproval && (
                 <div style={{ display:'flex', marginBottom:24, gap:4 }}>
                   {[['login',t('auth.login.tabSignIn')],['signup',t('auth.login.tabCreateAccount')]].map(([val,label]) => (
-                    <button key={val} onClick={() => switchTab(val)} style={{
+                    <button key={val} type="button" className="tp-login-tab" aria-pressed={tab===val} onClick={() => switchTab(val)} style={{
                       flex:1, padding:'9px 0', fontSize:13, fontWeight:700,
                       border:'none', borderRadius:10,
                       background: tab===val ? 'rgba(22,163,74,0.18)' : 'var(--login-tab-bg)',
@@ -759,6 +802,7 @@ export default function Login() {
               <AnimatePresence>
                 {error && (
                   <motion.div
+                    id="login-error" role="alert"
                     initial={{ opacity:0, height:0, marginBottom:0 }}
                     animate={{ opacity:1, height:'auto', marginBottom:16 }}
                     exit={{ opacity:0, height:0, marginBottom:0 }}
@@ -818,7 +862,7 @@ export default function Login() {
                     <label htmlFor="login-identifier" style={labelStyle}>{t('auth.login.idAnyLabel')}</label>
                     <div style={{ position:'relative' }}>
                       <div style={{
-                        position:'absolute', left:13, top:'50%', transform:'translateY(-50%)',
+                        position:'absolute', insetInlineStart:13, top:'50%', transform:'translateY(-50%)',
                         color: focusedField==='id' ? 'var(--brand-on-tint)' : 'var(--login-icon)',
                         transition:'color 0.2s', pointerEvents:'none',
                       }}>
@@ -828,7 +872,9 @@ export default function Login() {
                         id="login-identifier"
                         name="identifier"
                         type="text"
-                        style={{ ...inputStyle('id'), paddingLeft:40 }}
+                        style={{ ...inputStyle('id'), paddingInlineStart:40 }}
+                        aria-invalid={error ? true : undefined}
+                        aria-describedby={error ? 'login-error' : undefined}
                         placeholder={t('auth.login.idAnyPlaceholder')}
                         value={identifier}
                         onChange={e => setIdentifier(e.target.value)}
@@ -851,6 +897,7 @@ export default function Login() {
                           setForgotDestination(typed.includes('@') || looksLikePhone ? typed : '')
                           setForgotMode(true); setError('')
                         }}
+                        className="tp-login-link"
                         style={{ fontSize:11, color:'var(--brand-on-tint)', opacity:0.75, background:'none', border:'none', cursor:'pointer', padding:0, fontWeight:600, transition:'opacity 0.2s', letterSpacing:'0.02em' }}
                         onMouseEnter={e => { e.currentTarget.style.opacity = '1' }}
                         onMouseLeave={e => { e.currentTarget.style.opacity = '0.75' }}
@@ -863,7 +910,9 @@ export default function Login() {
                         id="login-password"
                         name="password"
                         type={showLoginPw ? 'text' : 'password'}
-                        style={{ ...inputStyle('pw'), paddingRight:44 }}
+                        style={{ ...inputStyle('pw'), paddingInlineEnd:44 }}
+                        aria-invalid={error ? true : undefined}
+                        aria-describedby={error ? 'login-error' : undefined}
                         placeholder="••••••••"
                         value={password}
                         onChange={e => setPassword(e.target.value)}
@@ -871,8 +920,8 @@ export default function Login() {
                         onBlur={() => setFocusedField(null)}
                         required autoComplete="current-password"
                       />
-                      <button type="button" aria-label={showLoginPw ? 'Hide password' : 'Show password'} onClick={() => setShowLoginPw(v => !v)} style={{
-                        position:'absolute', right:13, top:'50%', transform:'translateY(-50%)',
+                      <button type="button" className="tp-login-eye" aria-label={showLoginPw ? 'Hide password' : 'Show password'} aria-pressed={showLoginPw} onClick={() => setShowLoginPw(v => !v)} style={{
+                        position:'absolute', insetInlineEnd:13, top:'50%', transform:'translateY(-50%)',
                         color:'var(--login-icon)', background:'none', border:'none',
                         cursor:'pointer', padding:4, transition:'color 0.2s', display:'flex',
                       }}
@@ -904,7 +953,7 @@ export default function Login() {
                   }}>
                     {loading ? <Loader2 size={16} className="animate-spin"/> : <Zap size={16}/>}
                     {loading ? t('auth.login.signingIn') : !isOnline ? t('auth.login.noConnection') : t('auth.login.tabSignIn')}
-                    {!loading && isOnline && <ArrowRight size={15}/>}
+                    {!loading && isOnline && <ArrowRight size={15} className="tp-dir-icon" aria-hidden="true"/>}
                   </button>
 
                   {/* Enterprise SSO */}
@@ -914,7 +963,7 @@ export default function Login() {
                     <div style={{ flex:1, height:1, background:'var(--login-divider)' }}/>
                   </div>
                   <button type="button" onClick={handleSso} disabled={ssoLoading || !isOnline} style={{
-                    width:'100%', padding:'11px', borderRadius:14,
+                    width:'100%', padding:'11px', minHeight:44, borderRadius:14,
                     border:'1.5px solid rgba(74,222,128,0.28)', background:'rgba(22,163,74,0.08)',
                     color:'var(--brand-on-tint)', fontSize:13, fontWeight:700,
                     cursor:(ssoLoading || !isOnline) ? 'not-allowed' : 'pointer',
@@ -936,7 +985,7 @@ export default function Login() {
                   style={{ display:'flex', flexDirection:'column', gap:16 }}
                 >
                   <div>
-                    <button type="button" onClick={() => { setForgotMode(false); setError('') }}
+                    <button type="button" className="tp-login-link" onClick={() => { setForgotMode(false); setError('') }}
                       style={{ fontSize:12, color:'var(--brand-on-tint)', background:'none', border:'none', cursor:'pointer', padding:0, marginBottom:14, fontWeight:600 }}>
                       {t('auth.login.backToSignIn')}
                     </button>
@@ -955,7 +1004,7 @@ export default function Login() {
                       <button key={value} type="button" aria-pressed={forgotChannel === value}
                         onClick={() => { setForgotChannel(value); setForgotDestination(''); setError('') }}
                         style={{
-                          padding:'10px', borderRadius:12, cursor:'pointer', fontSize:13, fontWeight:700,
+                          padding:'10px', minHeight:44, borderRadius:12, cursor:'pointer', fontSize:13, fontWeight:700,
                           display:'flex', alignItems:'center', justifyContent:'center', gap:7,
                           color:forgotChannel === value ? 'var(--brand-on-tint)' : 'var(--login-text-dim)',
                           background:forgotChannel === value ? 'rgba(22,163,74,0.12)' : 'var(--login-input-bg)',
@@ -968,6 +1017,8 @@ export default function Login() {
                   <div>
                     <label htmlFor="recovery-destination" style={labelStyle}>{forgotChannel === 'email' ? 'Verified recovery email' : 'Verified mobile number'}</label>
                     <input id="recovery-destination" type={forgotChannel === 'email' ? 'email' : 'tel'} style={inputStyle('forgot')}
+                      aria-invalid={error ? true : undefined}
+                      aria-describedby={error ? 'login-error' : undefined}
                       autoComplete={forgotChannel === 'email' ? 'email' : 'tel'}
                       inputMode={forgotChannel === 'email' ? 'email' : 'tel'}
                       placeholder={forgotChannel === 'email' ? 'you@company.com' : '+966501234567'}
@@ -989,7 +1040,7 @@ export default function Login() {
                     For security, TyrePulse gives the same response whether or not an account exists. Codes expire after 10 minutes.
                   </p>
                   <p style={{ margin:0, fontSize:11, color:'var(--login-text-faint)', lineHeight:1.5 }}>
-                    Cannot access your verified contact? <Link to="/support" style={{ color:'var(--brand-on-tint)', fontWeight:700 }}>Contact support</Link>.
+                    Cannot access your verified contact? <Link to="/support" style={{ color:'var(--brand-on-tint)', fontWeight:700, textDecoration:'underline' }}>Contact support</Link>.
                   </p>
                 </motion.form>
               )}
@@ -1047,21 +1098,21 @@ export default function Login() {
                   )}
                   <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
                     <div>
-                      <div style={labelStyle}>{t('auth.login.fullName')}</div>
-                      <input style={inputStyle('fname')} placeholder={t('auth.login.fullNamePlaceholder')}
+                      <label htmlFor="signup-fullname" style={labelStyle}>{t('auth.login.fullName')}</label>
+                      <input id="signup-fullname" autoComplete="name" style={inputStyle('fname')} placeholder={t('auth.login.fullNamePlaceholder')}
                         value={fullName} onChange={e => setFullName(e.target.value)}
                         onFocus={() => setFocusedField('fname')} onBlur={() => setFocusedField(null)}/>
                     </div>
                     <div>
-                      <div style={labelStyle}>{t('auth.login.usernameRequired')}</div>
-                      <input style={inputStyle('uname')} placeholder={t('auth.login.usernamePlaceholder')}
+                      <label htmlFor="signup-username" style={labelStyle}>{t('auth.login.usernameRequired')}</label>
+                      <input id="signup-username" autoComplete="username" style={inputStyle('uname')} placeholder={t('auth.login.usernamePlaceholder')}
                         value={signupUsername} onChange={e => setSignupUsername(e.target.value)}
                         onFocus={() => setFocusedField('uname')} onBlur={() => setFocusedField(null)} required/>
                     </div>
                   </div>
                   <div>
-                    <div style={labelStyle}>{t('auth.login.employeeIdRequired')}</div>
-                    <input style={inputStyle('empid')} placeholder="EMP-1042"
+                    <label htmlFor="signup-employee-id" style={labelStyle}>{t('auth.login.employeeIdRequired')}</label>
+                    <input id="signup-employee-id" style={inputStyle('empid')} placeholder="EMP-1042"
                       value={employeeId} onChange={e => setEmployeeId(e.target.value)}
                       onFocus={() => setFocusedField('empid')} onBlur={() => setFocusedField(null)} required/>
                   </div>
@@ -1070,13 +1121,15 @@ export default function Login() {
                     { field:'scpw', show:showConfirmPw, set:setShowConfirmPw, val:confirm,   setVal:setConfirm,   label:t('auth.login.confirmPasswordRequired') },
                   ].map(({ field, show, set, val, setVal, label }) => (
                     <div key={field}>
-                      <div style={labelStyle}>{label}</div>
+                      <label htmlFor={`signup-${field}`} style={labelStyle}>{label}</label>
                       <div style={{ position:'relative' }}>
-                        <input type={show ? 'text' : 'password'} style={{ ...inputStyle(field), paddingRight:44 }}
+                        <input id={`signup-${field}`} autoComplete="new-password" type={show ? 'text' : 'password'} style={{ ...inputStyle(field), paddingInlineEnd:44 }}
+                          aria-invalid={error ? true : undefined}
+                          aria-describedby={error ? 'login-error' : undefined}
                           placeholder="••••••••" value={val} onChange={e => setVal(e.target.value)}
                           onFocus={() => setFocusedField(field)} onBlur={() => setFocusedField(null)} required/>
-                        <button type="button" onClick={() => set(v => !v)} style={{
-                          position:'absolute', right:13, top:'50%', transform:'translateY(-50%)',
+                        <button type="button" className="tp-login-eye" aria-label={show ? 'Hide password' : 'Show password'} aria-pressed={show} onClick={() => set(v => !v)} style={{
+                          position:'absolute', insetInlineEnd:13, top:'50%', transform:'translateY(-50%)',
                           color:'var(--login-icon)', background:'none', border:'none', cursor:'pointer', padding:4, display:'flex',
                         }}>
                           {show ? <EyeOff size={15}/> : <Eye size={15}/>}
@@ -1130,7 +1183,7 @@ export default function Login() {
                   }}>
                     {loading && <Loader2 size={16} className="animate-spin"/>}
                     {loading ? t('auth.login.creatingAccount') : signupClosed ? t('auth.login.signupClosed') : t('auth.login.createAccount')}
-                    {!loading && !signupClosed && <ArrowRight size={15}/>}
+                    {!loading && !signupClosed && <ArrowRight size={15} className="tp-dir-icon" aria-hidden="true"/>}
                   </button>
                 </motion.form>
               )}
@@ -1167,21 +1220,21 @@ export default function Login() {
               <p style={{ fontSize:11, color:'var(--login-text-faint)', letterSpacing:'0.04em' }}>
                 {t('auth.login.footerCopyright')}
               </p>
-              <div style={{ display:'flex', justifyContent:'center', gap:16 }}>
+              <div className="tp-login-footer-links" style={{ display:'flex', justifyContent:'center', gap:16 }}>
                 {[
                   [t('auth.login.footerPrivacy'), '/privacy'],
                   [t('auth.login.footerTerms'), '/terms'],
                   [t('auth.login.footerSupport'), '/support'],
                   ['Status', '/status'],
                 ].map(([label, to]) => (
-                  <Link key={to} to={to} style={{ fontSize:10, color:'var(--login-text-faint)', fontWeight:600, letterSpacing:'0.04em', textDecoration:'none' }}>
+                  <Link key={to} to={to} style={{ fontSize:11, color:'var(--login-text-faint)', fontWeight:600, letterSpacing:'0.04em', textDecoration:'none' }}>
                     {label}
                   </Link>
                 ))}
               </div>
             </motion.div>
           </motion.div>
-        </div>
+        </main>
       </div>
 
       {/* Responsive split - show left panel on large screens */}

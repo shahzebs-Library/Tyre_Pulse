@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback, useMemo, useSyncExternalStore } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo, useSyncExternalStore } from 'react'
 
 // Core namespaces are imported statically (never lazily) because every module
 // in the app's synchronous startup graph can render before any lazy chunk
@@ -16,7 +16,11 @@ import pwaNs from '../locales/en/pwa.json'
 import rolesNs from '../locales/en/roles.json'
 import shellNs from '../locales/en/shell.json'
 import uiNs from '../locales/en/ui.json'
-import { observeLegacyDom, localiseLegacyDom } from '../lib/uiTranslationMemory'
+// The legacy Arabic DOM bridge carries a ~366 KB phrase memory. It is loaded
+// ONLY when Arabic is (or was) active: importing it statically put ~100 KB gzip
+// on the first paint of every English user, and attached a whole-document
+// MutationObserver that did nothing but walk every added node for them.
+const loadLegacyBridge = () => import('../lib/uiTranslationMemory')
 
 /**
  * Web i18n for the TyrePulse PWA.
@@ -235,11 +239,28 @@ export function LanguageProvider({ children }) {
   // A number of older, role-specific screens render values from the locale
   // catalog directly. Keep those screens in sync as well, including content
   // added later by dialogs, lazy routes and table pagination.
+  // English with nothing previously translated has nothing to translate or
+  // restore, so neither the bridge nor an observer is loaded. After Arabic, one
+  // restore walk runs; the bridge only restores values it still owns.
+  const legacyOwnedRef = useRef(false)
   useEffect(() => {
     const root = document.getElementById('root') || document.body
     const enabled = language === 'ar'
-    localiseLegacyDom(root, enabled)
-    return observeLegacyDom(root, enabled)
+    if (!enabled && !legacyOwnedRef.current) return undefined
+    let cancelled = false
+    let stop = null
+    loadLegacyBridge().then(({ observeLegacyDom, localiseLegacyDom }) => {
+      if (cancelled) return
+      if (enabled) {
+        legacyOwnedRef.current = true
+        // observeLegacyDom performs the initial walk itself.
+        stop = observeLegacyDom(root, true)
+      } else {
+        localiseLegacyDom(root, false)
+        legacyOwnedRef.current = false
+      }
+    }).catch(() => { /* bridge chunk unavailable: t() still localises */ })
+    return () => { cancelled = true; if (stop) stop() }
   }, [language, dictVersion])
 
   const setLanguage = useCallback((lang) => {

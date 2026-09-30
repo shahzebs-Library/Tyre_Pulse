@@ -352,7 +352,13 @@
       "mechanical": "Mechanical Failure",
       "near_miss": "Near Miss",
       "property_damage": "Property Damage",
-      "other": "Other"
+      "other": "Other",
+      "rear_end": "Rear-end",
+      "side_swipe": "Side Swipe",
+      "reversing": "Reversing",
+      "fire": "Fire",
+      "vandalism": "Vandalism",
+      "weather": "Weather"
     },
     "severities": {
       "minor": "Minor",
@@ -367,7 +373,8 @@
       "awaiting_approval": "Awaiting Approval",
       "insurance_claim": "Insurance Claim",
       "repair_in_progress": "Repair In Progress",
-      "released": "Released"
+      "released": "Released",
+      "awaiting_parts": "Awaiting Parts"
     },
     "stats": {
       "total": "Total",

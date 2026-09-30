@@ -864,7 +864,7 @@ function MainApp() {
                       <Route path="/suppliers/:supplierId"             element={<Safe><ModuleRoute moduleKey="stock"><SupplierDetail /></ModuleRoute></Safe>} />
                       <Route path="/driver-management/:driverId"       element={<Safe><ModuleRoute moduleKey="fleet_master"><DriverDetail /></ModuleRoute></Safe>} />
                       <Route path="/workshop/:jobId"                   element={<Safe><ModuleRoute moduleKey="work_orders"><WorkshopJobDetail /></ModuleRoute></Safe>} />
-                      <Route path="/recalls/:recallId"                 element={<Safe><RecallDetail /></Safe>} />
+                      <Route path="/recalls/:recallId"                 element={<Safe><RoleRoute allowed={['Admin']} moduleKey="recall_tracker"><RecallDetail /></RoleRoute></Safe>} />
                       <Route path="/workflow-settings/builder/:defId?" element={<Safe><FlagRoute flag="automation_platform"><WorkflowBuilder /></FlagRoute></Safe>} />
                       <Route path="/automation-rules/builder"          element={<Safe><FlagRoute flag="automation_platform"><RuleBuilder /></FlagRoute></Safe>} />
                       <Route path="/automation-rules/builder/:ruleId"  element={<Safe><FlagRoute flag="automation_platform"><RuleBuilder /></FlagRoute></Safe>} />

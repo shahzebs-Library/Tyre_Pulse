@@ -31,7 +31,10 @@ import {
   ChevronRight, Check, Ban, RotateCcw,
 } from 'lucide-react'
 
-import { MODULE_GROUPS, ALL_MODULES, MODULE_LABEL, ACCESS_ROLES } from '../../../lib/moduleCatalog'
+import { ACCESS_ROLES } from '../../../lib/moduleCatalog'
+import {
+  ACCESS_MODULE_GROUPS as MODULE_GROUPS, ACCESS_MODULES as ALL_MODULES, ACCESS_MODULE_LABEL as MODULE_LABEL,
+} from '../../../lib/accessCatalog'
 import { listProfiles } from '../../../lib/api/users'
 import { getEffectiveAccess } from '../../../lib/api/adminAccess'
 import {

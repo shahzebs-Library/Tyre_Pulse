@@ -13,7 +13,7 @@ import { fetchAllPages } from '../lib/fetchAll'
 import { toUserMessage } from '../lib/safeError'
 import { colorAt, withAlpha } from '../lib/reportColors'
 import {
-  MONTHS, MOVEMENTS, buildComparison, filterRows, formatPct, periodText, comparisonExportRows,
+  MONTHS, MOVEMENTS, buildComparison, comparisonMetricFor, filterRows, formatPct, periodText, comparisonExportRows,
 } from '../lib/comparisonAnalytics'
 import {
   GitCompare, Download, FileText, TrendingUp, TrendingDown,
@@ -148,7 +148,10 @@ export default function Comparison() {
 
   const [periodA, setPeriodA] = useState({ months: [0,1,2,3,4,5,6,7,8,9,10,11], year: now.getFullYear() - 1 })
   const [periodB, setPeriodB] = useState({ months: [0,1,2,3,4,5,6,7,8,9,10,11], year: now.getFullYear() })
-  const [metric, setMetric]   = useState('count')
+  const [metricChoice, setMetric] = useState('count')
+  // Cost is single-country only: SAR + AED + EGP must never be summed.
+  const costBlended = !activeCountry || activeCountry === 'All'
+  const metric = comparisonMetricFor(activeCountry, metricChoice)
   const [dimension, setDimension] = useState('overall')
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(false)
@@ -365,9 +368,14 @@ export default function Comparison() {
           onChange={setMetric}
           options={[
             { value: 'count', label: t('comparison.metric.replacements') },
-            { value: 'cost', label: t('comparison.metric.cost', { currency: activeCurrency }) },
+            ...(costBlended ? [] : [{ value: 'cost', label: t('comparison.metric.cost', { currency: activeCurrency }) }]),
           ]}
         />
+        {costBlended && (
+          <span className="text-xs text-[var(--text-muted)]">
+            Cost comparison needs one country: each country reports in its own currency.
+          </span>
+        )}
         <SegmentedControl
           ariaLabel={t('comparison.dimension.ariaLabel')}
           size="sm"

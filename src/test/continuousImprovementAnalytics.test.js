@@ -110,3 +110,28 @@ describe('continuousImprovementAnalytics actions, trends and targets', () => {
     expect(tr.values[0]).toBeNull()
   })
 })
+
+describe('continuousImprovementAnalytics inspection + failure vocabulary (audit 2026-09-30)', () => {
+  it('counts a Done inspection as complete (the CHECK has no "Completed" value)', () => {
+    const m = computeMetrics([], [
+      { status: 'Done' }, { status: 'Done' }, { status: 'In Progress' }, { status: 'Cancelled' },
+    ], [])
+    // Cancelled is neither done nor due: 2 of the 3 live inspections are done.
+    expect(m.inspectionCompliance).toBeCloseTo((2 / 3) * 100, 5)
+  })
+
+  it('does not flag Done or Cancelled inspections as overdue', () => {
+    const insp = [
+      { status: 'Done', scheduled_date: '2026-01-01', site: 'NHC' },
+      { status: 'Cancelled', scheduled_date: '2026-01-01', site: 'NHC' },
+      { status: 'Scheduled', scheduled_date: '2026-01-01', site: 'NHC' },
+    ]
+    const opp = buildOpportunities({ records: [tyre({ site: 'NHC' })], inspections: insp, actions: [], metrics: computeMetrics([], insp, []), now: NOW })
+    const overdue = opp.inspection.find((o) => o.key === 'overdue-inspections')
+    expect(overdue?.title).toMatch(/^1 scheduled inspections are overdue/)
+  })
+
+  it('treats a Critical tyre as a failure, like the fleet-wide definition', () => {
+    expect(failureRateOf([tyre({ risk_level: 'Critical' }), tyre()])).toBe(50)
+  })
+})

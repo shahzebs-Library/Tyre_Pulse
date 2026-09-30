@@ -16,6 +16,17 @@
  *   - every time-dependent function takes an explicit `now`.
  */
 
+import { isCompletedInspection } from './inspectionCoverage'
+
+// An inspection's status CHECK allows Scheduled|In Progress|Done|Overdue|Cancelled
+// - 'Completed' is not a value the database can hold, so testing only for it
+// counted every Done inspection without a completed_date as NOT done (a site
+// looked non-compliant, a finished inspection looked overdue). Completion is
+// decided by the shared rule; 'Completed' is kept for legacy/imported rows.
+// A Cancelled inspection is neither done nor overdue.
+const inspectionDone = (i) => isCompletedInspection(i) || i?.status === 'Completed'
+const inspectionCancelled = (i) => i?.status === 'Cancelled'
+
 export const OVERDUE_ACTION_DAYS = 14
 export const RETREAD_TARGET_SHARE = 0.25
 export const VENDOR_CONSOLIDATION_SAVING = 0.05
@@ -62,8 +73,11 @@ export function monthLabel(key) {
   return `${MONTH_LABELS[parseInt(mo, 10) - 1]} ${yr.slice(2)}`
 }
 
-const isFailure = (r) => r?.risk_level === 'High' || r?.category === 'Scrap'
-const isInspectionDone = (i) => i?.status === 'Completed' || !!i?.completed_date
+// 'Critical' (blowout/separation) is the MOST severe failure; the fleet-wide
+// definition (analyticsEngine / kpiEngine) is High + Critical. Leaving it out
+// reported a fleet whose tyres all blew out as 0% failure.
+const isFailure = (r) => r?.risk_level === 'High' || r?.risk_level === 'Critical' || r?.category === 'Scrap'
+const isInspectionDone = (i) => inspectionDone(i)
 
 /** Measured tyre life in km, or null. */
 export function lifeKmOf(r) {
@@ -124,7 +138,10 @@ export function computeMetrics(records = [], inspections = [], actions = []) {
     avgCostPerTyre: priced.length ? priced.reduce((s, r) => s + Number(r.cost_per_tyre), 0) / priced.length : null,
     totalCost,
     failureRate: failureRateOf(records),
-    inspectionCompliance: inspections.length ? (inspections.filter(isInspectionDone).length / inspections.length) * 100 : null,
+    inspectionCompliance: (() => {
+      const live = inspections.filter((i) => !inspectionCancelled(i))
+      return live.length ? (live.filter(isInspectionDone).length / live.length) * 100 : null
+    })(),
     closeRate: actions.length ? (actions.filter((a) => a.status === 'Closed').length / actions.length) * 100 : null,
     records: records.length,
   }
@@ -348,8 +365,9 @@ export function buildOpportunities({ records = [], actions = [], inspections = [
     inspections.forEach(i => {
       if (!i.site) return
       if (!siteInspComp[i.site]) siteInspComp[i.site] = { total: 0, done: 0 }
+      if (inspectionCancelled(i)) return
       siteInspComp[i.site].total++
-      if (i.status === 'Completed' || i.completed_date) siteInspComp[i.site].done++
+      if (inspectionDone(i)) siteInspComp[i.site].done++
     })
     const lowComplianceSites = Object.entries(siteInspComp)
       .map(([site, v]) => ({ site, pct: v.total > 2 ? (v.done / v.total) * 100 : 100 }))
@@ -393,7 +411,7 @@ export function buildOpportunities({ records = [], actions = [], inspections = [
     }
 
     const overdueInspections = inspections.filter(i => {
-      if (i.status === 'Completed' || i.completed_date) return false
+      if (inspectionDone(i) || inspectionCancelled(i)) return false
       if (!i.scheduled_date) return false
       return new Date(i.scheduled_date) < now
     })

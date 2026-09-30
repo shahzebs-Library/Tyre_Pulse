@@ -501,7 +501,17 @@ async function resolveCommandPhotos(
  * call after any sync or on app start; only files this app wrote live there.
  */
 export async function sweepOrphanQueuedPhotos(queue?: QueuedRecord[]): Promise<void> {
-  const q = queue ?? (await getRecordQueue())
+  if (queue) { sweepWithQueue(queue); return }
+  await withQueueLock(async () => {
+    // Never sweep against an UNREADABLE queue: getRecordQueue() would answer []
+    // and every pending record's durable photos would be deleted as orphans.
+    let q: QueuedRecord[]
+    try { q = await loadRecordQueueForWrite() } catch { return }
+    sweepWithQueue(q)
+  })
+}
+
+function sweepWithQueue(q: QueuedRecord[]): void {
   const active = new Set<string>()
   for (const it of q) {
     if (it.sync_status === 'synced') continue
@@ -559,6 +569,37 @@ async function save(queue: QueuedRecord[]): Promise<void> {
   await secureStorage.setItem(KEY, JSON.stringify(queue))
 }
 
+/**
+ * ONE WRITER AT A TIME. Every read-modify-write on the stored queue runs inside
+ * this lock, because the sync loop awaits the network between reading and
+ * writing: before the lock, a record queued WHILE a sync was uploading (the
+ * normal case - saveCommand falls back to enqueueCommand on any failure) was
+ * overwritten by the sync's older snapshot, and its durable photos were then
+ * deleted by the orphan sweep. A lost accident report with no error shown.
+ *
+ * The lock is held only around storage work, never across network calls, so a
+ * slow upload can never block a new save.
+ */
+let queueLock: Promise<void> = Promise.resolve()
+function withQueueLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = queueLock.then(fn, fn)
+  queueLock = run.then(() => undefined, () => undefined)
+  return run
+}
+
+/** Write ONE item's sync outcome into the CURRENT stored queue, by id, so an
+ *  entry added or removed since the sync began is left exactly as it is. An
+ *  item that is no longer stored (the queue was wiped) is NOT re-added. */
+async function commitItem(item: QueuedRecord): Promise<void> {
+  await withQueueLock(async () => {
+    const fresh = await loadRecordQueueForWrite()
+    const idx = fresh.findIndex(i => i.id === item.id)
+    if (idx === -1) return
+    fresh[idx] = item
+    await save(fresh)
+  })
+}
+
 /** Enqueue a typed command. Throws on unknown type. */
 export async function enqueueCommand(
   type: CommandType,
@@ -570,6 +611,10 @@ export async function enqueueCommand(
   // Persist any raw cache photo into durable document storage BEFORE it is queued,
   // so an OS cache eviction before sync can never lose it (finding #14). This is
   // the single durability seam: every path that queues a command routes here.
+  return withQueueLock(async () => {
+  // Photos are persisted INSIDE the lock so the orphan sweep (also locked) can
+  // never run between the copy and the commit and delete a file nobody yet
+  // references.
   const { payload: durablePayload, meta } = await persistPayloadPhotos(sanitize(type, payload))
   const queue = await loadRecordQueueForWrite()
   queue.unshift({
@@ -588,6 +633,7 @@ export async function enqueueCommand(
   })
   await save(queue)
   return id
+  })
 }
 
 export async function getPendingRecordCount(): Promise<number> {
@@ -682,6 +728,7 @@ async function doSyncRecordQueue(): Promise<{ synced: number; failed: number }> 
       item.sync_status = 'failed'
       item.error = 'Unknown command type'
       failed++
+      await commitItem(item)
       continue
     }
     if (item.next_attempt_at && Date.parse(item.next_attempt_at) > now) continue
@@ -732,23 +779,28 @@ async function doSyncRecordQueue(): Promise<{ synced: number; failed: number }> 
       failed++
     }
     // Persist after EACH item so a crash mid-loop can't lose a 'synced' marking
-    // and replay an already-committed insert.
-    await save(queue)
+    // and replay an already-committed insert. Merged by id into the CURRENT
+    // queue, never a blind overwrite with this run's snapshot.
+    await commitItem(item)
   }
-  await save(queue)
   // Prune synced entries - they are safely in the database, and keeping them
   // would grow SecureStore without bound. Pending/failed entries are preserved
-  // so retries and manual "retry failed" still work.
-  const remaining = queue.filter(i => i.sync_status !== 'synced')
-  if (remaining.length !== queue.length) await save(remaining)
-  // Opportunistic cleanup: drop durable photo files no remaining entry references
-  // (synced records already deleted their copies on confirmed upload). Runs on the
-  // reconnect/poll-driven sync, so the folder can never grow without bound.
-  await sweepOrphanQueuedPhotos(remaining)
+  // so retries and manual "retry failed" still work. Read FRESH under the lock
+  // so anything queued during this run survives.
+  await withQueueLock(async () => {
+    const fresh = await loadRecordQueueForWrite()
+    const remaining = fresh.filter(i => i.sync_status !== 'synced')
+    if (remaining.length !== fresh.length) await save(remaining)
+    // Opportunistic cleanup: drop durable photo files no remaining entry
+    // references. Inside the lock, against the queue just read, so a record
+    // being enqueued cannot have its photos swept out from under it.
+    sweepWithQueue(remaining)
+  })
   return { synced, failed }
 }
 
 export async function retryFailedRecords(): Promise<void> {
+  return withQueueLock(async () => {
   const queue = await loadRecordQueueForWrite()
   const nowIso = new Date().toISOString()
   for (const i of queue) {
@@ -760,11 +812,14 @@ export async function retryFailedRecords(): Promise<void> {
     }
   }
   await save(queue)
+  })
 }
 
 export async function clearSyncedRecords(): Promise<void> {
-  const queue = await loadRecordQueueForWrite()
-  await save(queue.filter(i => i.sync_status !== 'synced'))
+  return withQueueLock(async () => {
+    const queue = await loadRecordQueueForWrite()
+    await save(queue.filter(i => i.sync_status !== 'synced'))
+  })
 }
 
 /**
@@ -772,7 +827,7 @@ export async function clearSyncedRecords(): Promise<void> {
  * different account on a shared device cannot inherit this user's queued work.
  */
 export async function clearRecordQueue(): Promise<void> {
-  await secureStorage.removeItem(KEY)
+  await withQueueLock(() => secureStorage.removeItem(KEY))
   // The queue is gone, so every durable queued-photo file is now an orphan; purge
   // them (empty active set) so a shared device does not retain this user's images.
   cleanupOrphanDurablePhotos([])

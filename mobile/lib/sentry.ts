@@ -127,6 +127,24 @@ if (dsn) {
     sendDefaultPii: false,
     // Strip credentials / tokens / photo payloads before anything leaves the device.
     beforeSend: (event) => sanitizeEvent(event),
+    // Performance transactions (tracesSampleRate above) carry spans whose
+    // description / data hold request URLs - including storage signed URLs whose
+    // `token=` query value is a JWT. beforeSend never sees transactions, so they
+    // need their own scrub or those tokens leave the device.
+    beforeSendTransaction: (event) => {
+      const clean = sanitizeEvent(event)
+      try {
+        if (Array.isArray(clean.spans)) {
+          for (const span of clean.spans as Array<{ description?: string; data?: unknown }>) {
+            if (typeof span.description === 'string') span.description = scrubString(span.description)
+            if (span.data) span.data = sanitizeValue(span.data, false, 0) as typeof span.data
+          }
+        }
+      } catch {
+        // Never drop a transaction because scrubbing hit an unexpected shape.
+      }
+      return clean
+    },
     beforeBreadcrumb: (breadcrumb) => {
       try {
         if (typeof breadcrumb.message === 'string') breadcrumb.message = scrubString(breadcrumb.message)

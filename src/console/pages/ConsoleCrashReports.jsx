@@ -34,6 +34,7 @@ import { sortRows } from '../../lib/consoleTable'
 import ExportButtons from './shared/ExportButtons'
 import { PageHeader as OpsPageHeader, Pager, usePaged, PAGE_SIZE, Drawer, AttentionList, useUrlTab } from './shared/pageKit'
 import { BarsChart, STATUS, useChartTheme } from '../components/ui/charts'
+import ReportedProblemsPanel from './crashReports/ReportedProblemsPanel'
 
 const PERIODS = [
   { key: '24h', label: 'Last 24h' }, { key: '7d', label: 'Last 7 days' },
@@ -185,7 +186,7 @@ export default function ConsoleCrashReports() {
   useEffect(() => { if (status?.configured) { loadIssues(); loadProjects(); loadMembers() } }, [status?.configured, loadIssues, loadProjects, loadMembers])
 
   const [issueOrder, setIssueOrder] = useState('lastSeen')
-  const [tab, setTab] = useUrlTab(['issues', 'insights'], 'issues')
+  const [tab, setTab] = useUrlTab(['issues', 'insights', 'reported'], 'issues')
   // Sentry returns its own order; the reader can re-rank the loaded page locally.
   const sortedIssues = useMemo(() => {
     const spec = ISSUE_ORDERS.find(o => o.key === issueOrder) || ISSUE_ORDERS[0]
@@ -404,6 +405,16 @@ export default function ConsoleCrashReports() {
         actions={<Btn icon={Settings} onClick={() => setShowSetup(s => !s)} aria-expanded={setupOpen}>Connection</Btn>}
       />
 
+      {/* Two sources side by side: Sentry crash reports and what people told us
+          themselves. The reported inbox does not need the Sentry connection. */}
+      <Segmented value={tab === 'reported' ? 'reported' : 'sentry'}
+        onChange={(v) => setTab(v === 'reported' ? 'reported' : 'issues')}
+        ariaLabel="Error Center sources" options={[
+          { key: 'sentry', label: 'Crash reports' },
+          { key: 'reported', label: 'Reported problems' },
+        ]} />
+
+      {tab === 'reported' ? <ReportedProblemsPanel /> : (<>
       {notice && <Note icon={CheckCircle2} tone="accent">{notice}</Note>}
       <ErrorState message={error} onRetry={connected ? loadIssues : loadStatus} />
 
@@ -608,6 +619,8 @@ export default function ConsoleCrashReports() {
       )}
 
       {/* Detail drawer */}
+      </>)}
+
       <Drawer
         open={!!detailFor}
         onClose={closeDetail}

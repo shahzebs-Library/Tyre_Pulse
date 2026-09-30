@@ -62,5 +62,6 @@
   "closeMenu": "Close menu",
   "primaryNav": "Main navigation",
   "commandSearchLabel": "Search pages, actions and records",
-  "notificationsPanel": "Notifications"
+  "notificationsPanel": "Notifications",
+  "reportProblem": "Report a problem"
 }

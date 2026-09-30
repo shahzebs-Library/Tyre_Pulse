@@ -62,5 +62,6 @@
   "closeMenu": "إغلاق القائمة",
   "primaryNav": "التنقل الرئيسي",
   "commandSearchLabel": "ابحث في الصفحات والإجراءات والسجلات",
-  "notificationsPanel": "الإشعارات"
+  "notificationsPanel": "الإشعارات",
+  "reportProblem": "الإبلاغ عن مشكلة"
 }

@@ -242,3 +242,54 @@ export async function adminSetUserPassword(userId, password, reason) {
   if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data || { ok: false, reason: 'unknown' }
 }
+
+// ── Console Access Control headline figures + the new-areas policy ─────────
+
+/**
+ * Number of access changes recorded in the immutable trail over the last N
+ * days (super admin read). Returns null when it cannot be read, never 0, so an
+ * unreadable trail is not shown as "nothing changed".
+ * @param {number} [days=30]
+ * @returns {Promise<number|null>}
+ */
+export async function countAccessChanges(days = 30) {
+  try {
+    const since = new Date(Date.now() - days * 86400000).toISOString()
+    const { count, error } = await supabase
+      .from('access_audit')
+      .select('id', { count: 'exact', head: true })
+      .gte('at', since)
+    if (error) return null
+    return typeof count === 'number' ? count : null
+  } catch {
+    return null
+  }
+}
+
+export const NEW_FEATURES_POLICY_KEY = 'new_features_admin_only'
+
+/**
+ * Read the opt-in "new areas are Admin only until shared" switch.
+ * @returns {Promise<{ enabled: boolean, known: boolean }>} known=false when unreadable
+ */
+export async function getNewFeaturesPolicy() {
+  try {
+    const { data, error } = await supabase
+      .from('system_config').select('value').eq('key', NEW_FEATURES_POLICY_KEY).maybeSingle()
+    if (error) return { enabled: false, known: false }
+    const v = String(data?.value ?? '').replace(/"/g, '').trim().toLowerCase()
+    return { enabled: v === 'true', known: true }
+  } catch {
+    return { enabled: false, known: false }
+  }
+}
+
+/** Turn the new-areas policy on or off (super admin write via system_config RLS). */
+export async function setNewFeaturesPolicy(enabled) {
+  const { error } = await supabase
+    .from('system_config')
+    .upsert([{ key: NEW_FEATURES_POLICY_KEY, value: enabled ? 'true' : 'false', updated_at: new Date().toISOString() }],
+      { onConflict: 'key', ignoreDuplicates: false })
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
+  return Boolean(enabled)
+}

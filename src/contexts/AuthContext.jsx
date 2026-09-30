@@ -4,11 +4,11 @@ import { queryClient } from '../lib/queryClient'
 import { setMonitoringUser, clearMonitoringUser } from '../lib/monitoring'
 import { identifyUser, resetAnalyticsUser } from '../lib/analytics'
 import { audit } from '../lib/auditLogger'
-import { getPermissionOverrides, resolveCapability, resolvePermissions } from '../lib/permissionMatrix'
+import { getPermissionOverrides, resolveCapability, resolvePermissions, baseRoleAllows, NEW_FEATURES_ADMIN_ONLY_KEY } from '../lib/permissionMatrix'
 import { resolveAccess, overrideToFlags } from '../lib/accessResolver'
 import { hasUnmetMfa } from '../lib/authAssurance'
 import { listModuleStatuses } from '../lib/api/modulesRegistry'
-import { configNum } from '../lib/api/systemConfig'
+import { configNum, configBool } from '../lib/api/systemConfig'
 import { checkSsoPasswordLogin } from '../lib/api/accessPolicies'
 
 // Exported so the isolated System Console can supply its own Provider value via
@@ -502,12 +502,15 @@ export function AuthProvider({ children }) {
     // for a role (enabled=false) actually hides/blocks it. A module NOT configured
     // for the role falls back to the hardcoded ROLE_DEFAULTS, so a sparse matrix
     // never mass-hides modules the role should keep.
-    let roleAllows
-    if (modulePerms && Object.prototype.hasOwnProperty.call(modulePerms, moduleKey)) {
-      roleAllows = modulePerms[moduleKey] === true
-    } else {
-      roleAllows = (ROLE_DEFAULTS[profile.role] ?? (() => false))(moduleKey)
-    }
+    // Opt-in policy (system_config new_features_admin_only, default off): when
+    // on, a module with no saved row for this role is denied instead of falling
+    // back to ROLE_DEFAULTS, so a brand new area stays Admin only until shared.
+    const roleAllows = baseRoleAllows({
+      moduleKey,
+      modulePerms,
+      roleDefault: ROLE_DEFAULTS[profile.role] ?? (() => false),
+      adminOnlyNew: configBool(NEW_FEATURES_ADMIN_ONLY_KEY, false),
+    })
     return resolvePermission({
       role: profile.role,
       isSuperAdmin,

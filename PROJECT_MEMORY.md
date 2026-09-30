@@ -5,6 +5,40 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
+# ⚑ SESSION 2026-09-30 (part 3) — SKILL STACK + 6-AGENT FULL AUDIT + ADMIN-ONLY WRITES. PR #372 merged (3bcfd286), both prod deploys READY.
+- **Skill stack:** 14 project skills in `.claude/skills/` (complete-app-audit runs the 28-stage sequence) + 25 reusable
+  skills pinned by `scripts/install-claude-skills.sh` (`--check` verifies). Routing table in CLAUDE.md "Skill Routing".
+- **DB applied live + verified by impersonation:** `20260930120000` AI answer cache (`ai_response_cache`,
+  `document_chunks`) no client read (was USING(true), cross-tenant: 39 rows readable by another org); `20260930120002`
+  photo overwrite/delete only uploader or elevated same-org (Driver could overwrite 13,084 photos -> 0);
+  `20260930120001` **asset register + job cards writable by ADMIN ONLY (owner decision)** - dropped the "any signed-in
+  user" policies; the existing `*_cap_*` policies (app_user_can) keep Admin/super + explicit per-user grants.
+  Managers/Directors now get 42501 on Vehicle 360 photo/GPS save and Workshop Live / Predictive "New Job" unless granted
+  fleet_master / work_orders edit in Console -> Access Control.
+- **Console Access Control lists EVERY module** (Tyre Passport was missing): new `src/lib/accessCatalog.js` merges
+  NAV_CATALOG onto MODULE_GROUPS via buildNavModuleCatalog (same as Module Control). Used by AccessManager,
+  AccessPreviewOverride, BulkOperations, JitElevation, ConsoleUsers, AccessGrantsManager. The old Role Permissions grid
+  (PermissionMatrix) still shows the curated 37. `src/test/consoleModuleCoverage.test.js` fails if a routed page is not in
+  the console catalog (or not justified in NOT_A_MODULE).
+- **Web fixes:** /recalls/:id guarded Admin (was open to every role); Arabic legacy phrase bridge lazy (eager JS 557 -> 454 KB
+  gz); inspection compliance counted 'Done' as not done (no 'Completed' in the CHECK); failure rate now includes Critical;
+  Comparison page no longer sums SAR+AED+EGP under All; Accidents bulk-delete error sanitised; rowCapGuard scans
+  src/hooks + src/contexts. Anonymous pages (login, data-deletion, report/workshop-tv/accident-portal) a11y: labelled
+  sign-up inputs, role=alert errors, contrast, 44px targets, RTL logical props, main/h1 landmarks.
+- **Expo (code only, no build):** offline queues serialised with a lock (work queued mid-sync was silently lost + its photo
+  swept); Sentry transactions scrubbed; 7 accident label keys added.
+- **Flutter (code only, no build):** login + home header overflow at 2x text fixed. Flutter CI is RED on main from 4
+  stale Windows goldens (asset_overview_light 69%, home_screen_full_data, pm_compact_en, tasks_compact_en) - main was
+  already red at d236a700. An `update_goldens` flutter-ci dispatch ran on the branch; land its golden commit next.
+- **OPEN (owner):** complete password-reset flow (email or mobile) - `/reset-password` currently accepts any signed-in
+  session; profiles readable by all 726 org members incl. 105 push tokens; Drivers can read the whole KSA ledger
+  (113,847 lines) - product decision; 24 applied migrations (20260929203627..215747) have no repo file; chat-ai live
+  version older/looser than repo (redeploy); billing-webhook ignores DB write errors; public-api /accidents /inspections
+  select missing columns; Flutter release: default launcher icon, label "tyre_pulse", no SENTRY_DSN, APP_ENV=staging,
+  Android allowBackup on; Expo RECORD_AUDIO permission from plugin defaults.
+
+---
+
 # ⚑ SESSION 2026-09-30 (part 2) — MARKETING AUDIT vs EVERY TASTE SKILL (Playwright, measured). No migration.
 - **REMOVED `public/screenshots/*.png`**: a raw desktop capture served publicly (owner's browser tabs incl. GitHub
   account, username, a customer name, Windows taskbar, a raw i18n key, all-zero KPIs). Never ship raw screen captures.

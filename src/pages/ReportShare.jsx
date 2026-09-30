@@ -651,10 +651,10 @@ function CustomBoard({ board, snapshot }) {
 
 function CenterShell({ children }) {
   return (
-    <div className="rs-root rs-center">
+    <main className="rs-root rs-center">
       <ScopedStyle />
       <div className="rs-center-box">{children}</div>
-    </div>
+    </main>
   )
 }
 
@@ -935,7 +935,7 @@ export default function ReportShare() {
     return (
       <CenterShell>
         <Loader2 size={40} className="rs-spin" aria-hidden="true" />
-        <p className="rs-center-title">Loading report</p>
+        <h1 className="rs-center-title">Loading report</h1>
         <p className="rs-center-body">Preparing the latest snapshot.</p>
       </CenterShell>
     )
@@ -946,7 +946,7 @@ export default function ReportShare() {
     return (
       <CenterShell>
         <KeyRound size={38} className="rs-center-ic" aria-hidden="true" />
-        <p className="rs-center-title">This report is protected.</p>
+        <h1 className="rs-center-title">This report is protected.</h1>
         <p className="rs-center-body">Enter the viewer password to continue.</p>
         <form onSubmit={submitPassword} className="rs-pwform">
           <input
@@ -955,6 +955,8 @@ export default function ReportShare() {
             onChange={(e) => setPwInput(e.target.value)}
             placeholder="Viewer password"
             aria-label="Viewer password"
+            aria-invalid={pwError ? true : undefined}
+            aria-describedby={pwError ? 'rs-pwerror' : undefined}
             autoFocus
             className="rs-pwinput"
           />
@@ -963,7 +965,7 @@ export default function ReportShare() {
             <span>View report</span>
           </button>
         </form>
-        {pwError && <p className="rs-pwerror">{pwError}</p>}
+        {pwError && <p id="rs-pwerror" role="alert" className="rs-pwerror">{pwError}</p>}
       </CenterShell>
     )
   }
@@ -974,7 +976,7 @@ export default function ReportShare() {
     return (
       <CenterShell>
         <AlertTriangle size={38} className="rs-center-ic" aria-hidden="true" />
-        <p className="rs-center-title">{copy.title}</p>
+        <h1 className="rs-center-title">{copy.title}</h1>
         <p className="rs-center-body">{copy.body}</p>
         {(reason === 'unavailable') && (
           <button type="button" onClick={() => load(pwRef.current)} className="rs-pwbtn rs-retry">
@@ -1896,20 +1898,20 @@ function ScopedStyle() {
         display:flex; flex-direction:column; align-items:center; gap:8px;
       }
       .rs-center-ic { color:#94a3b8; margin-bottom:6px; }
-      .rs-center-title { font-size:22px; font-weight:700; margin:6px 0 0; }
+      .rs-center-title { font-size:22px; font-weight:700; margin:6px 0 0; line-height:1.35; }
       .rs-center-body { font-size:15px; color:var(--rs-muted); margin:0; line-height:1.5; }
       .rs-spin { animation:rs-rotate 1s linear infinite; color:var(--rs-accent); }
       @keyframes rs-rotate { to { transform:rotate(360deg); } }
 
       .rs-pwform { display:flex; gap:10px; width:100%; margin-top:18px; }
       .rs-pwinput {
-        flex:1; padding:11px 14px; border:1px solid var(--rs-border); border-radius:12px;
+        flex:1; min-height:44px; padding:11px 14px; border:1px solid var(--rs-border); border-radius:12px;
         font-size:15px; color:var(--rs-text); background:#f8fafc; outline:none;
       }
       .rs-pwinput:focus { border-color:var(--rs-accent); box-shadow:0 0 0 3px rgba(99,102,241,0.15); }
       .rs-pwbtn {
-        display:inline-flex; align-items:center; gap:8px; padding:11px 18px; border:none;
-        border-radius:12px; background:var(--rs-accent); color:#ffffff; font-size:14px;
+        display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:11px 18px; border:none;
+        min-height:44px; border-radius:12px; background:#4f46e5; color:#ffffff; font-size:14px;
         font-weight:600; cursor:pointer; transition:opacity .15s;
       }
       .rs-pwbtn:disabled { opacity:.5; cursor:not-allowed; }

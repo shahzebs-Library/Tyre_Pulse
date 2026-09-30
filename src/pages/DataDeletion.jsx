@@ -36,7 +36,7 @@ export default function DataDeletion() {
   }
 
   return (
-    <div style={S.page}>
+    <main style={S.page}>
       <div style={S.card}>
         <header style={S.head}>
           <div style={S.badge}>{APP_NAME}</div>
@@ -55,7 +55,7 @@ export default function DataDeletion() {
           </p>
           <div style={S.actions}>
             <a href={mailto} style={S.btnPrimary}>Email a deletion request</a>
-            <button type="button" onClick={copyEmail} style={S.btnGhost}>
+            <button type="button" onClick={copyEmail} style={S.btnGhost} aria-live="polite">
               {copied ? 'Copied' : `Copy ${SUPPORT_EMAIL}`}
             </button>
           </div>
@@ -106,7 +106,7 @@ export default function DataDeletion() {
           </p>
         </footer>
       </div>
-    </div>
+    </main>
   )
 }
 
@@ -115,17 +115,17 @@ const S = {
   page: { minHeight: '100vh', background: '#f1f5f9', color: '#0f172a', padding: '32px 16px', fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif', WebkitFontSmoothing: 'antialiased' },
   card: { maxWidth: 760, margin: '0 auto', background: '#fff', borderRadius: 18, border: '1px solid #e2e8f0', boxShadow: '0 10px 30px rgba(2,6,23,0.06)', overflow: 'hidden' },
   head: { padding: '28px 28px 8px' },
-  badge: { display: 'inline-block', fontSize: 12, fontWeight: 700, letterSpacing: 0.4, color: '#16a34a', background: '#dcfce7', padding: '4px 10px', borderRadius: 999, marginBottom: 12 },
+  badge: { display: 'inline-block', fontSize: 12, fontWeight: 700, letterSpacing: 0.4, color: '#166534', background: '#dcfce7', padding: '4px 10px', borderRadius: 999, marginBottom: 12 },
   h1: { fontSize: 26, fontWeight: 800, margin: '0 0 6px', letterSpacing: -0.4 },
   sub: { fontSize: 15, color: '#475569', margin: 0, lineHeight: 1.5 },
   section: { padding: '18px 28px', borderTop: '1px solid #f1f5f9' },
   h2: { fontSize: 16, fontWeight: 700, margin: '0 0 8px' },
   p: { fontSize: 14.5, color: '#334155', lineHeight: 1.65, margin: '0 0 8px' },
-  ul: { margin: '0', paddingLeft: 18, color: '#334155', fontSize: 14.5, lineHeight: 1.7 },
+  ul: { margin: '0', paddingLeft: 18, listStyle: 'disc', color: '#334155', fontSize: 14.5, lineHeight: 1.7 },
   link: { color: '#15803d', fontWeight: 600, textDecoration: 'none' },
   actions: { display: 'flex', flexWrap: 'wrap', gap: 10, margin: '12px 0 6px' },
-  btnPrimary: { background: '#16a34a', color: '#fff', fontWeight: 700, fontSize: 14, padding: '10px 16px', borderRadius: 10, textDecoration: 'none' },
-  btnGhost: { background: '#f1f5f9', color: '#0f172a', fontWeight: 600, fontSize: 14, padding: '10px 16px', borderRadius: 10, border: '1px solid #e2e8f0', cursor: 'pointer' },
+  btnPrimary: { display: 'inline-flex', alignItems: 'center', minHeight: 44, background: '#15803d', color: '#fff', fontWeight: 700, fontSize: 14, padding: '10px 16px', borderRadius: 10, textDecoration: 'none' },
+  btnGhost: { minHeight: 44, background: '#f1f5f9', color: '#0f172a', fontWeight: 600, fontSize: 14, padding: '10px 16px', borderRadius: 10, border: '1px solid #e2e8f0', cursor: 'pointer' },
   note: { fontSize: 13, color: '#64748b', margin: '6px 0 0', lineHeight: 1.5 },
   foot: { padding: '18px 28px 26px', borderTop: '1px solid #f1f5f9', background: '#f8fafc' },
   footText: { fontSize: 13, color: '#64748b', margin: 0, lineHeight: 1.6 },

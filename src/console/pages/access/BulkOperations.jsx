@@ -20,7 +20,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Users, RefreshCw, Crown, Check, Layers, ShieldCheck, UserCog, KeyRound, Ban, CheckCircle2, AlertTriangle,
 } from 'lucide-react'
-import { ACCESS_ROLES, MODULE_GROUPS, MODULE_LABEL } from '../../../lib/moduleCatalog'
+import { ACCESS_ROLES } from '../../../lib/moduleCatalog'
+import { ACCESS_MODULE_GROUPS as MODULE_GROUPS, ACCESS_MODULE_LABEL as MODULE_LABEL } from '../../../lib/accessCatalog'
 import { CAPABILITIES } from '../../../lib/permissionMatrix'
 import { listProfiles } from '../../../lib/api/users'
 import { listCustomRoles } from '../../../lib/api/customRoles'

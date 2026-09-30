@@ -28,7 +28,7 @@ import {
   Hourglass, FileSpreadsheet, FileText,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-import { MODULE_GROUPS, MODULE_LABEL } from '../lib/moduleCatalog'
+import { ACCESS_MODULE_GROUPS as MODULE_GROUPS, ACCESS_MODULE_LABEL as MODULE_LABEL } from '../lib/accessCatalog'
 import { CAPABILITIES } from '../lib/permissionMatrix'
 import { listProfiles } from '../lib/api/users'
 import {

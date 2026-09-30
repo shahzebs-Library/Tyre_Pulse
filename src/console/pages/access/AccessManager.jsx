@@ -33,8 +33,12 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../../../contexts/AuthContext'
 import {
-  MODULE_GROUPS, SUBMODULES, ACCESS_ROLES, REGISTRY_LABEL, isSubmoduleKey,
+  SUBMODULES, ACCESS_ROLES, REGISTRY_LABEL as CURATED_REGISTRY_LABEL, isSubmoduleKey,
 } from '../../../lib/moduleCatalog'
+import { ACCESS_MODULE_GROUPS as MODULE_GROUPS, ACCESS_MODULE_LABEL } from '../../../lib/accessCatalog'
+
+// Full registry label: every sidebar module plus curated sub-modules.
+const REGISTRY_LABEL = { ...ACCESS_MODULE_LABEL, ...CURATED_REGISTRY_LABEL }
 import {
   CAPABILITIES, defaultViewAccess, resolveCapability,
   getPermissionOverrides,

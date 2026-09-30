@@ -1,6 +1,6 @@
 -- ============================================================================
 -- 20260930120001_fleet_workorder_write_gates
--- STATUS: AUTHORED, NOT APPLIED. Behaviour change - needs owner sign-off.
+-- STATUS: APPLIED LIVE 2026-09-30 on owner instruction: restrict to admin only.
 --
 -- FINDING (audit 2026-09-30, AUD-01, HIGH): write access to the asset register
 -- and to job cards is open to EVERY approved account, including the 674
@@ -26,7 +26,7 @@
 --   Cross-org (Demo org Manager c2f9a806) insert into org A -> 42501 (org wall holds).
 --
 -- WHO KEEPS WRITE ACCESS AFTER THIS MIGRATION
---   * app_is_elevated() (admin/manager/director) - new policies below.
+--   * Admin / super admin (app_user_can is TRUE for them) via the existing *_cap_* policies.
 --   * Anyone the capability matrix / a per-user grant gives fleet_master or
 --     work_orders create/edit (existing *_cap_* policies, untouched).
 --   * SECURITY DEFINER paths (sync_asset_current_km trigger, recon_* backfills,
@@ -49,37 +49,18 @@
 
 begin;
 
--- vehicle_fleet ---------------------------------------------------------------
+-- OWNER DECISION 2026-09-30: writes are ADMIN ONLY (not admin/manager/director).
+-- No new policy is needed: the existing permissive *_cap_* policies call
+-- app_user_can(), which is TRUE for Admin / super admin, and TRUE for any user an
+-- admin explicitly grants fleet_master / work_orders create or edit. Dropping the
+-- "any signed-in user" policies (and the dead lowercase one) is the whole fix.
 drop policy if exists vehicle_fleet_insert on public.vehicle_fleet;
 drop policy if exists vehicle_fleet_update on public.vehicle_fleet;
 drop policy if exists vehicle_fleet_delete on public.vehicle_fleet;
-drop policy if exists vf_write_elevated    on public.vehicle_fleet;   -- dead (lowercase role literals)
+drop policy if exists vf_write_elevated    on public.vehicle_fleet;
 
-create policy vehicle_fleet_insert_elevated on public.vehicle_fleet
-  for insert to authenticated
-  with check ((select public.app_is_elevated()));
-
-create policy vehicle_fleet_update_elevated on public.vehicle_fleet
-  for update to authenticated
-  using ((select public.app_is_elevated()))
-  with check ((select public.app_is_elevated()));
-
-create policy vehicle_fleet_delete_elevated on public.vehicle_fleet
-  for delete to authenticated
-  using ((select public.app_is_elevated()));   -- still ANDed with admin_only_delete_guard
-
--- work_orders -----------------------------------------------------------------
 drop policy if exists work_orders_insert_authenticated on public.work_orders;
 drop policy if exists work_orders_update               on public.work_orders;
-
-create policy work_orders_insert_elevated on public.work_orders
-  for insert to authenticated
-  with check ((select public.app_is_elevated()));
-
-create policy work_orders_update_elevated on public.work_orders
-  for update to authenticated
-  using ((select public.app_is_elevated()))
-  with check ((select public.app_is_elevated()));
 
 commit;
 

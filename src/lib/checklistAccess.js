@@ -36,6 +36,9 @@ export const CHECKLIST_PATH_PREFIXES = [
   '/request-access',
   '/help',
   '/profile',
+  // A person's own problem reports: every signed-in user can report one, so
+  // every signed-in user must be able to follow it. Reads are RLS-scoped to own rows.
+  '/my-problems',
 ]
 
 export function isChecklistPathAllowed(pathname) {

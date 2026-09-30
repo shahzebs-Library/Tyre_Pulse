@@ -39,6 +39,7 @@ const NOT_A_MODULE = {
   '/upload': 'legacy step of Data Intake (flag data_intake)',
   '/rfid-registry': 'alias of /rfid',
   '/design-system': 'admin reference page, reachable from search',
+  '/my-problems': 'personal page of every user (profile menu), not a module',
 }
 
 function appRoutes() {

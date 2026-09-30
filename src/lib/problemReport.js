@@ -162,6 +162,7 @@ export const SAFE_SERVER_MESSAGES = new Set([
   'Only an administrator of this company can own a problem',
   'Write a note first',
   'Only an administrator can read linked errors',
+  'Only a super admin can read the problem summary',
 ])
 
 /** SLA state for a report: 'met' | 'breached' | 'due' | 'none'. */
@@ -193,4 +194,93 @@ export function filterIssues(rows, { status, category, severity, platform, org, 
     }
     return true
   })
+}
+
+/**
+ * Plain-English line for one history row, as the REPORTER sees it. Ids are
+ * never shown: an assignment says someone took it, not who by uuid.
+ */
+export function describeIssueEvent(ev) {
+  if (!ev || typeof ev !== 'object') return 'N/A'
+  switch (ev.event_type) {
+    case 'created':
+      return 'Report sent'
+    case 'status':
+      return `Status changed from ${statusLabel(ev.from_value)} to ${statusLabel(ev.to_value)}`
+    case 'assign':
+      return ev.to_value ? 'An owner was assigned' : 'The owner was removed'
+    case 'fixed_version':
+      return ev.to_value ? `Fix planned for version ${ev.to_value}` : 'Fix version cleared'
+    case 'comment':
+      return 'Note added by the support team'
+    case 'sla_breach':
+      return 'Past its target time. The support team was alerted'
+    default:
+      return ev.event_type ? String(ev.event_type) : 'N/A'
+  }
+}
+
+/** Counts for the "My reported problems" page. */
+export function myIssueCounts(rows, now = Date.now()) {
+  const list = Array.isArray(rows) ? rows : []
+  let open = 0
+  let fixed = 0
+  let late = 0
+  for (const r of list) {
+    if (isOpenStatus(r.status)) open += 1
+    if (r.status === 'fixed') fixed += 1
+    if (isOpenStatus(r.status) && slaState(r, now) === 'breached') late += 1
+  }
+  return { total: list.length, open, fixed, late }
+}
+
+const toCount = (v) => {
+  const n = Number(v)
+  return Number.isFinite(n) && n >= 0 ? n : 0
+}
+const toHours = (v) => {
+  if (v === null || v === undefined || v === '') return null
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
+const toCountMap = (obj) => {
+  const out = {}
+  if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+    for (const [k, v] of Object.entries(obj)) out[k] = toCount(v)
+  }
+  return out
+}
+
+/**
+ * Normalise get_user_issue_summary(). Medians stay null when nothing was
+ * measurable (never 0); a median with a zero sample is forced to null.
+ */
+export function shapeIssueSummary(raw) {
+  const r = raw && typeof raw === 'object' ? raw : {}
+  const frN = toCount(r.first_response_measured)
+  const fxN = toCount(r.fix_measured)
+  return {
+    generatedAt: r.generated_at || null,
+    total: toCount(r.total),
+    open: toCount(r.open),
+    byStatus: toCountMap(r.by_status),
+    bySeverity: toCountMap(r.by_severity),
+    byPlatform: toCountMap(r.by_platform),
+    medianFirstResponseHours: frN > 0 ? toHours(r.median_first_response_hours) : null,
+    firstResponseMeasured: frN,
+    medianFixHours: fxN > 0 ? toHours(r.median_fix_hours) : null,
+    fixMeasured: fxN,
+    breaches7d: toCount(r.breaches_7d),
+    breachAlerts7d: toCount(r.breach_alerts_7d),
+    openPastTarget: toCount(r.open_past_target),
+  }
+}
+
+/** Hours as a short readable duration, or N/A. */
+export function formatHours(h) {
+  if (h === null || h === undefined || !Number.isFinite(Number(h))) return 'N/A'
+  const n = Number(h)
+  if (n < 1) return `${Math.max(1, Math.round(n * 60))} min`
+  if (n < 48) return `${Math.round(n * 10) / 10} h`
+  return `${Math.round((n / 24) * 10) / 10} days`
 }

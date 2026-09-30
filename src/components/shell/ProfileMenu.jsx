@@ -28,7 +28,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import { ChevronDown, LogOut, User, HelpCircle, Info, MapPin, Building2, LifeBuoy } from 'lucide-react'
+import { ChevronDown, LogOut, User, HelpCircle, Info, MapPin, Building2, LifeBuoy, ListChecks } from 'lucide-react'
 import useAnchoredPopover from '../ui/useAnchoredPopover'
 import ThemeToggle from '../ui/ThemeToggle'
 import LanguageSwitcher from '../LanguageSwitcher'
@@ -116,7 +116,7 @@ export default function ProfileMenu({
   // the hook owns it so all five shell menus behave identically.
   const { triggerRef, panelRef, coords } = useAnchoredPopover(open, {
     width: 268,
-    height: 380,
+    height: 420,
     align: 'right',
     nav: 'menu',
     onRequestClose: () => setOpen(false),
@@ -246,6 +246,11 @@ export default function ProfileMenu({
               icon={LifeBuoy}
               label={tx(t, 'shell.reportProblem', 'Report a problem')}
               onClick={() => { setOpen(false); setReporting(true) }}
+            />
+            <MenuItem
+              icon={ListChecks}
+              label={tx(t, 'shell.myProblems', 'My reported problems')}
+              onClick={() => go('/my-problems')}
             />
           </div>
 

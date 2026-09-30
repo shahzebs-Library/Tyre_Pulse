@@ -12,12 +12,12 @@
  */
 import { supabase } from './_client'
 import { toUserMessage } from '../safeError'
-import { SAFE_SERVER_MESSAGES, describeClient, webAppVersion, validateIssueInput } from '../problemReport'
+import { SAFE_SERVER_MESSAGES, describeClient, webAppVersion, validateIssueInput, shapeIssueSummary } from '../problemReport'
 
 export const USER_ISSUE_COLS =
   'id,organisation_id,country,site,reporter_id,platform,app_version,device,os,page_or_screen,' +
   'description,category,severity,reference_id,linked_log_ids,linked_sentry_ids,status,assignee_id,' +
-  'fixed_in_version,sla_due_at,first_response_at,resolved_at,created_at,updated_at'
+  'fixed_in_version,sla_due_at,first_response_at,resolved_at,sla_breach_notified_at,created_at,updated_at'
 
 export const USER_ISSUE_EVENT_COLS = 'id,issue_id,actor_id,event_type,from_value,to_value,note,created_at'
 
@@ -170,4 +170,32 @@ export async function listIssueOwners() {
   } catch {
     return []
   }
+}
+
+/** Columns the reporter's own page needs (no linked log ids, no owner id). */
+export const MY_ISSUE_COLS =
+  'id,platform,app_version,page_or_screen,description,category,severity,reference_id,status,' +
+  'fixed_in_version,sla_due_at,first_response_at,resolved_at,created_at,updated_at'
+
+/**
+ * The signed-in user's OWN reports, newest first. RLS already limits a normal
+ * user to their own rows, but an Admin also sees the company's, so the page
+ * filters on reporter_id explicitly: "my problems" means mine.
+ */
+export async function listMyIssues(userId, { limit = 200 } = {}) {
+  if (!userId) return []
+  const { data, error } = await supabase.from('user_issues')
+    .select(MY_ISSUE_COLS)
+    .eq('reporter_id', userId)
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(limit)
+  if (error) throw issueError(error, 'Your reported problems could not be loaded.')
+  return Array.isArray(data) ? data : []
+}
+
+/** Super-admin summary for the Error Center (read only). */
+export async function getUserIssueSummary() {
+  const data = await rpc('get_user_issue_summary', {}, 'The problem summary could not be loaded.')
+  return shapeIssueSummary(data)
 }

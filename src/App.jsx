@@ -136,6 +136,7 @@ const UploadApprovals        = lazy(() => import('./pages/UploadApprovals'))
 const Settings               = lazy(() => import('./pages/Settings'))
 const RequestAccess          = lazy(() => import('./pages/RequestAccess'))
 const HelpCenter             = lazy(() => import('./pages/HelpCenter'))
+const MyProblems             = lazy(() => import('./pages/MyProblems'))
 const TyreAgeCompliance      = lazy(() => import('./pages/TyreAgeCompliance'))
 const RoiCalculator          = lazy(() => import('./pages/RoiCalculator'))
 const TyrePassport           = lazy(() => import('./pages/TyrePassport'))
@@ -743,6 +744,7 @@ function MainApp() {
                       <Route path="/settings"    element={<Safe><Settings /></Safe>} />
                       <Route path="/request-access" element={<Safe><RequestAccess /></Safe>} />
                       <Route path="/help"        element={<Safe><HelpCenter /></Safe>} />
+                      <Route path="/my-problems" element={<Safe><MyProblems /></Safe>} />
                       <Route path="/tyre-age-compliance" element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><TyreAgeCompliance /></RoleRoute></Safe>} />
                       <Route path="/roi-calculator"      element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><RoiCalculator /></RoleRoute></Safe>} />
                       <Route path="/tyre-passport"         element={<Safe><ModuleRoute moduleKey="tyre_passport"><TyrePassport /></ModuleRoute></Safe>} />

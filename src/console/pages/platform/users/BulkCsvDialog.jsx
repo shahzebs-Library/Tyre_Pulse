@@ -47,7 +47,7 @@ export function diffCsv(rows = [], people = [], roles = []) {
 }
 
 export default function BulkCsvDialog({ open, onClose, people = [], roles = [], onDone }) {
-  const { logAction } = useConsoleAuth() || {}
+  const { logAction } = useConsoleAuth()
   const [diff, setDiff] = useState(null)
   const [error, setError] = useState('')
   const [reason, setReason] = useState('')

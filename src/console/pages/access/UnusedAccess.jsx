@@ -53,7 +53,7 @@ function quarterName(now = new Date()) {
 }
 
 export function ReviewDrawer({ open, onClose, summary, initialScope = 'all', onStarted }) {
-  const { logAction } = useConsoleAuth() || {}
+  const { logAction } = useConsoleAuth()
   const [scope, setScope] = useState(initialScope)
   const [decisions, setDecisions] = useState({})
   const [name, setName] = useState(quarterName())

@@ -46,7 +46,7 @@ const EXPORT_COLUMNS = [
 ]
 
 export default function JobsPanel({ health, loading, error, onRetry, onChanged, emailSummary }) {
-  const { logAction } = useConsoleAuth() || {}
+  const { logAction } = useConsoleAuth()
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
   const [picked, setPicked] = useState(() => new Set())

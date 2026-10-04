@@ -180,7 +180,7 @@ export function BucketDrawer({ bucket, folders = [], rules, tenantExportDays, on
 const DAY_OPTS = [30, 60, 180]
 
 export function RetentionDialog({ open, buckets = [], rules = [], tenantExportDays, initialBucket, onClose, onSaved }) {
-  const { logAction } = useConsoleAuth() || {}
+  const { logAction } = useConsoleAuth()
   const choosable = useMemo(() => buckets.map((b) => b.id), [buckets])
   const [bucket, setBucket] = useState('')
   const [days, setDays] = useState(60)

@@ -69,7 +69,7 @@ function FacetCheck({ label, count, checked, onChange, type = 'checkbox', name, 
 }
 
 export default function PeopleTab({ data, onOpenManage }) {
-  const { logAction } = useConsoleAuth() || {}
+  const { logAction } = useConsoleAuth()
   const navigate = useNavigate()
   const { people = [], directoryOk, minVersion, orphans, orgs = [], deletions, supportCount } = data
   const [filters, setFilters] = useState({})

@@ -79,7 +79,7 @@ export default function ConsoleReleases() {
   const recorded = useLoad(listRecordedReleases, 'Recorded releases could not be read.')
   const adoption = useLoad(getAppAdoption, 'App adoption could not be read.')
   const errors24 = useLoad(countErrors24h, 'Errors could not be counted.')
-  const { logAction } = useConsoleAuth() || {}
+  const { logAction } = useConsoleAuth()
 
   const [platform, setPlatform] = useState('all')
   const [days, setDays] = useState(30)

@@ -27,7 +27,7 @@ export function useAdoption(adoption, config) {
 }
 
 export default function GatePanel({ config, adoption, loading, error, onRetry, onChanged, raiseOpen, setRaiseOpen }) {
-  const { logAction } = useConsoleAuth() || {}
+  const { logAction } = useConsoleAuth()
   const [recordOpen, setRecordOpen] = useState(false)
   const [flash, setFlash] = useState('')
   const min = config?.mobile_min_version?.value || ''

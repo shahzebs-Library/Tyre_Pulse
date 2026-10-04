@@ -142,7 +142,7 @@ function StartTile({ icon: Icon, title, body, cta, onClick }) {
 function fmt(v) { return v === null || v === undefined ? 'N/A' : String(v) }
 
 export default function ConsoleAccessControl() {
-  const { logAction } = useConsoleAuth() || {}
+  const { logAction } = useConsoleAuth()
   const [params, setParams] = useSearchParams()
   const requested = ALIASES[params.get('tab')] || params.get('tab')
   const active = ALL_KEYS.has(requested) ? requested : 'roles'

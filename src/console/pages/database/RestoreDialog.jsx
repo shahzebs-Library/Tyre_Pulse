@@ -14,7 +14,7 @@ import { toUserMessage } from '../../../lib/safeError'
 import { useConsoleAuth } from '../../ConsoleAuthContext'
 
 export default function RestoreDialog({ snapshot, onClose, onRestored }) {
-  const { logAction } = useConsoleAuth() || {}
+  const { logAction } = useConsoleAuth()
   const [rows, setRows] = useState(null)
   const [error, setError] = useState('')
   const [reason, setReason] = useState('')

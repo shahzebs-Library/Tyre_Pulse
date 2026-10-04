@@ -34,7 +34,7 @@ export function useNewAreas(permMap) {
 }
 
 export default function NewNotShared({ permMap, columns, peopleCounts, onShared }) {
-  const { logAction } = useConsoleAuth() || {}
+  const { logAction } = useConsoleAuth()
   const items = useNewAreas(permMap)
   const [search, setSearch] = useState('')
   const [sharing, setSharing] = useState(null)

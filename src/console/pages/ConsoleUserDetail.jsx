@@ -95,7 +95,7 @@ function TimelineList({ items = [], empty = 'Nothing recorded.' }) {
 export default function ConsoleUserDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { logAction, admin } = useConsoleAuth() || {}
+  const { logAction, admin } = useConsoleAuth()
   const [tab, setTab] = useUrlTab(TABS, 'overview')
   const profileQ = useAsync(() => getPlatformProfile(id), [id])
   const healthQ = useAsync(() => getUserHealth(id), [id])

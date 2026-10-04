@@ -275,7 +275,7 @@ const AI_FIELDS = [
 ]
 
 function AiPanel({ ai, config }) {
-  const { logAction } = useConsoleAuth() || {}
+  const { logAction } = useConsoleAuth()
   const cfg = config.data || {}
   const on = String(cfg.ai_enabled?.value || '').toLowerCase() === 'true'
   const [dialog, setDialog] = useState(null) // 'toggle' | 'limits'

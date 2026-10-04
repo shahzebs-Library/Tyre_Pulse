@@ -43,7 +43,7 @@ function pct(a, b) {
 }
 
 export default function OrgsOverview({ data, onTab }) {
-  const { logAction } = useConsoleAuth() || {}
+  const { logAction } = useConsoleAuth()
   const navigate = useNavigate()
   const { loading, orgs = [], orgsError, stats, statsError, subs, platformCap, reload } = data
   const [search, setSearch] = useState('')

@@ -29,7 +29,7 @@ export function Switch({ on, onClick, label, disabled }) {
 }
 
 export default function BackupsPanel({ snaps, tests, backupEnabled, cronJob, onChanged }) {
-  const { logAction } = useConsoleAuth() || {}
+  const { logAction } = useConsoleAuth()
   const [busy, setBusy] = useState('')
   const [dlg, setDlg] = useState(null) // 'backup' | 'nightly' | 'test'
   const [err, setErr] = useState('')

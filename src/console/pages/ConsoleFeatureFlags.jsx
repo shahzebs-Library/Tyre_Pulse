@@ -81,7 +81,7 @@ const toLocalInput = (d) => {
 
 export default function ConsoleFeatureFlags() {
   const [tab, setTab] = useUrlTab(TABS, 'flags')
-  const { logAction } = useConsoleAuth() || {}
+  const { logAction } = useConsoleAuth()
   const [data, setData] = useState({ loading: true, error: '', modules: [], permMap: {}, orgFlags: null, config: [], usage: null, changes: [] })
   const [policy, setPolicy] = useState({ enabled: false, known: false })
   const [readAt, setReadAt] = useState(null)

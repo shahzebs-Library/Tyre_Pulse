@@ -20,8 +20,13 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   execute_sql + manual schema_migrations row because apply_migration timed out.
 - Facts found: alert rules never email (in-app only, 23h cooldown); Alert Center wait/remind/recover settings stored not used; no app
   reads announcements; Flutter release has no Sentry DSN; Flutter app does not read module status (web only).
+- GIT STATE (checked 2026-10-04 after owner said "pushed and merged to main"): round 2 = local commit e0af97c, branch ahead 1,
+  origin/main still 1f2f356. It is NOT on main and NOT live. To ship: push branch, open PR, CI green, squash-merge, verify the
+  Vercel production deploy on the merged sha, realign branch. Do it only on the owner's explicit "push".
+- OWNER DECISIONS STILL OPEN: org suspend not enforced; billing go-live; duplicate file removal; retention auto-run; PostHog key;
+  Vercel token for rollback; an earlier truncated message ("explain me mobile related ...") never clarified.
 
-# ⚑ SESSION 2026-09-30/10-04 — CONSOLE CONTROL CENTER REBUILT (local commits, NOT pushed). Owner rule: push only on "push".
+# ⚑ SESSION 2026-09-30/10-04 — CONSOLE CONTROL CENTER REBUILT. MERGED as PR #374 (1f2f356), live.
 - Commits on claude/modest-hopper-5bnq8c: 410fb1f shell+Overview, 169eb4c Access Control, 6897fd1/720040d/570380b/01303ab
   problem tracking (user_issues, submit_user_issue, Error Center inbox), 3f57935 Flutter Report a problem (code only,
   adds device_info_plus; platform sent as 'flutter'), b7dfcfe Monitor/Platform/Trust/Runtime/Engineering screens.

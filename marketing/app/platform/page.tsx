@@ -15,14 +15,14 @@ export const metadata: Metadata = {
   description:
     "PMV management platform: fleet and assets, maintenance, inspections, tyres, accidents, stores, fuel, costs and approvals in one connected system.",
   alternates: alternatesFor("/platform"),
-  openGraph: { images: OG_IMAGES, title: "Platform | Tyre Pulse", description: "All your assets, teams and data in one connected system.", url: "/platform", type: "website" },
+  openGraph: { images: OG_IMAGES, title: "Platform | Tyre Pulse", description: "One record per machine, shared by the field, workshop, stores and finance.", url: "/platform", type: "website" },
 };
 
 const SIDE = [
   [Truck, "Fleet and assets", "/platform/fleet-assets"],
   [Wrench, "Maintenance and workshop", "/platform/maintenance"],
   [ClipboardCheck, "Inspections and safety", "/platform/inspections"],
-  [CircleDot, "Tyre lifecycle", "/platform/inspections"],
+  [CircleDot, "Tyre lifecycle", "/platform/inspections#tyres"],
   [Box, "Stores and procurement", "/platform/inventory"],
   [BarChart3, "Costs and reporting", "/platform/inventory"],
 ] as const;
@@ -31,7 +31,7 @@ const ECO = [
   [Truck, "Fleet and assets", "Complete asset records, lifecycle, meters and utilisation.", "/platform/fleet-assets"],
   [Wrench, "Maintenance and workshop", "Plan, schedule and manage maintenance and repairs.", "/platform/maintenance"],
   [ClipboardCheck, "Inspections and safety", "Digitise inspections, capture defects and track actions.", "/platform/inspections"],
-  [CircleDot, "Tyre lifecycle", "Track tyre inspections, fitments, rotations and costs.", "/platform/inspections"],
+  [CircleDot, "Tyre lifecycle", "Track tyre inspections, fitments, rotations and costs.", "/platform/inspections#tyres"],
   [ShieldAlert, "Accidents and insurance", "Record incidents, manage claims and track recoveries.", null],
   [Box, "Stores and procurement", "Control inventory, purchases and suppliers.", "/platform/inventory"],
   [Fuel, "Fuel", "Monitor fuel use, efficiency and refuelling activity.", null],
@@ -47,9 +47,9 @@ export default function PlatformPage() {
       <PageTop
         crumbs={[{ href: "/", label: "Home" }, { label: "Platform" }]}
         title="A complete PMV management platform."
-        lead="All your assets, teams and data in one connected system, from the field to the workshop, stores and finance."
+        lead="Mixers, pumps, loaders and generators: one record per machine, shared by the field, workshop, stores and finance."
       />
-      <section className="section-pad" style={{ paddingTop: 10 }}>
+      <section className="section-pad tight-sm">
         <div className="site-shell overview">
           <ul className="ov-nav" aria-label="Platform areas">
             {SIDE.map(([Icon, label, href], i) => (
@@ -61,7 +61,7 @@ export default function PlatformPage() {
               <h2>Fleet and asset management</h2>
               <p>Track all your plant, machinery and vehicles. Keep asset data, history, documents and costs in one place.</p>
               <ul className="tick-list">
-                {["Complete asset records and specifications", "Meter readings and utilisation", "Service history, costs and documents", "Site, ownership and cost centre structure", "Lifecycle from acquisition to disposal"].map((t) => (
+                {["Meter readings and utilisation, kept current", "Service history, costs and documents per machine", "Site, ownership and cost centre on every record"].map((t) => (
                   <li key={t}><CheckCircle2 size={18} aria-hidden="true" />{t}</li>
                 ))}
               </ul>
@@ -71,9 +71,9 @@ export default function PlatformPage() {
           </div>
         </div>
       </section>
-      <section className="section-pad" style={{ paddingTop: 10 }} aria-labelledby="eco">
+      <section className="section-pad tight-sm" aria-labelledby="eco">
         <div className="site-shell">
-          <h2 className="sec-h" id="eco">A connected ecosystem for every part of your operation.</h2>
+          <h2 className="sec-h" id="eco">Every area, on the same asset record.</h2>
           <ul className="eco-grid">
             {ECO.map(([Icon, t, d, href]) => (
               <li key={t}>
@@ -88,7 +88,7 @@ export default function PlatformPage() {
           </ul>
         </div>
       </section>
-      <CtaBand title="See how it all fits together." text="Book a personalised demo and explore the full platform." />
+      <CtaBand title="See your own fleet in Tyre Pulse." text="Bring an asset list and a month of job cards. We load them before the call." button="Book a demo on your data" />
     </PageFrame>
   );
 }

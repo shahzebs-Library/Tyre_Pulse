@@ -37,6 +37,14 @@ export function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
   const [active, setActive] = useState(0);
   const [hold, setHold] = useState(false);
   const [reduced, setReduced] = useState(false);
+  const [hidden, setHidden] = useState(false);
+
+  useEffect(() => {
+    const sync = () => setHidden(document.hidden);
+    sync();
+    document.addEventListener("visibilitychange", sync);
+    return () => document.removeEventListener("visibilitychange", sync);
+  }, []);
 
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -47,7 +55,7 @@ export function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
   }, []);
 
   const next = useCallback(() => setActive((i) => (i + 1) % slides.length), [slides.length]);
-  const running = !hold && !reduced;
+  const running = !hold && !reduced && !hidden;
 
   return (
     <section

@@ -30,17 +30,17 @@ export default function ContactPage() {
 
   return <PageFrame>
     <section className="page-hero"><div className="site-shell"><span className="eyebrow">Talk to Tyre Pulse</span><h1 className="display">Book a demo around your real operation.</h1><p className="lead">Tell us how many assets, countries, sites and users you manage. The walkthrough will focus on the workflows and controls that matter to you.</p></div></section>
-    <section className="page-content"><div className="site-shell"><div className="card" style={{ maxWidth: 860, margin: "0 auto", padding: 30 }}>
+    <section className="page-content"><div className="site-shell"><div className="card form-card">
       <form onSubmit={submit} className="form-grid">
         <div className="field"><label htmlFor="name">Full name</label><input id="name" name="name" required autoComplete="name" /></div>
         <div className="field"><label htmlFor="email">Work email</label><input id="email" name="email" type="email" required autoComplete="email" /></div>
         <div className="field"><label htmlFor="company">Company</label><input id="company" name="company" required autoComplete="organization" /></div>
         <div className="field"><label htmlFor="country">Country</label><select id="country" name="country" required defaultValue=""><option value="" disabled>Select country</option><option>Saudi Arabia</option><option>United Arab Emirates</option><option>Egypt</option><option>Other</option></select></div>
-        <div className="field"><label htmlFor="fleetSize">Fleet size</label><select id="fleetSize" name="fleetSize" defaultValue=""><option value="" disabled>Select range</option><option>1 to 25 assets</option><option>26 to 100 assets</option><option>101 to 500 assets</option><option>501 to 2,000 assets</option><option>2,000+ assets</option></select></div>
+        <div className="field"><label htmlFor="fleetSize">Fleet size</label><select id="fleetSize" name="fleetSize" required defaultValue=""><option value="" disabled>Select range</option><option>1 to 25 assets</option><option>26 to 100 assets</option><option>101 to 500 assets</option><option>501 to 2,000 assets</option><option>2,000+ assets</option></select></div>
         <div className="field"><label htmlFor="industry">Industry</label><select id="industry" name="industry" defaultValue=""><option value="" disabled>Select industry</option><option>Construction</option><option>Transport & Logistics</option><option>Ready-Mix Concrete</option><option>Heavy Equipment Rental</option><option>Workshop / Service Centre</option><option>Other</option></select></div>
-        <div className="field full"><label htmlFor="message">What do you want to improve?</label><textarea id="message" name="message" placeholder="Tyre cost, inspections, workshops, approvals, reports, multi-country control..." /></div>
+        <div className="field full"><label htmlFor="message">Which machines, and what problem?</label><textarea id="message" name="message" placeholder="For example: 120 mixers, tyre cost per km rising, inspections still on paper" /></div>
         <div className="field full" aria-hidden="true" style={{ position: "absolute", left: -10000 }}><label htmlFor="website">Website</label><input id="website" name="website" tabIndex={-1} autoComplete="off" /></div>
-        <div className="field full"><button className="btn btn-primary" type="submit" disabled={sending}>Request a tailored demo</button><p className="form-note">Your information is used only to respond to this request.</p>{WHATSAPP_URL && <p className="form-note">Prefer WhatsApp? <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer">Message us on WhatsApp</a>.</p>}<p aria-live="polite">{status}</p></div>
+        <div className="field full"><button className="btn btn-primary" type="submit" disabled={sending}>Request a demo</button><p className="form-note">Your information is used only to respond to this request.</p>{WHATSAPP_URL && <p className="form-note">Prefer WhatsApp? <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer">Message us on WhatsApp</a>.</p>}<p aria-live="polite">{status}</p></div>
       </form>
     </div></div></section>
   </PageFrame>;

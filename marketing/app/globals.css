@@ -245,7 +245,7 @@ img { max-width: 100%; height: auto; }
 }
 
 @media (max-width: 640px) {
-  .site-shell { width: min(100% - 20px, 1180px); }
+  .site-shell { width: min(100% - 32px, 1180px); }
   .section { padding: 70px 0; }
   .nav-logo img { width: 148px; }
   .nav-actions .btn-secondary { display: none; }

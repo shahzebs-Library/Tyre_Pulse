@@ -39,8 +39,11 @@ describe('qr flow', () => {
   it('startQrLogin passes the server reason through', async () => {
     h.rpc.mockResolvedValue({ data: { ok: false, reason: 'disabled' }, error: null })
     expect(await startQrLogin()).toEqual({ ok: false, reason: 'disabled' })
+    h.rpc.mockResolvedValue({ data: { ok: true, id: 'i', secret: 's', browser_secret: 'b', match_code: '42', expires_at: 't' }, error: null })
+    expect(await startQrLogin()).toEqual({ ok: true, id: 'i', secret: 's', browserSecret: 'b', matchCode: '42', expiresAt: 't' })
+    // An older server without a separate browser secret is refused, never redeemed with the QR secret.
     h.rpc.mockResolvedValue({ data: { ok: true, id: 'i', secret: 's', expires_at: 't' }, error: null })
-    expect(await startQrLogin()).toEqual({ ok: true, id: 'i', secret: 's', expiresAt: 't' })
+    expect(await startQrLogin()).toEqual({ ok: false, reason: 'unavailable' })
   })
   it('pollQrLogin reports error on a failed read', async () => {
     h.rpc.mockResolvedValue({ data: null, error: { message: 'x' } })

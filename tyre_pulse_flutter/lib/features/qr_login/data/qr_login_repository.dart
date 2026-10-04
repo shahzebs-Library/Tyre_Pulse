@@ -7,6 +7,13 @@
 /// `{ok:false,reason:'invalid'|'expired'|'consumed'|'approved'|'denied'}`, and
 /// raises SQLSTATE 42501 when the phone user is not approved or is locked.
 ///
+/// HARDENED by `supabase/migrations/20261004150000_qr_login_hardening.sql`:
+/// `qr_login_peek(p_id uuid, p_secret text)` (authenticated only) returns
+/// `{ok:true, user_agent, ip, age_seconds, options:[3 two-digit strings]}` or
+/// `{ok:false, reason}`; `qr_login_approve` gained `p_match text default
+/// null` and, when approving, returns `reason:'mismatch'` (code cancelled)
+/// for a wrong number and `reason:'admin'` for an administrator account.
+///
 /// ONLINE ONLY, deliberately. The code expires after two minutes and the
 /// decision depends on the request's CURRENT server state (spec section 14:
 /// decisions that depend on server state are never blindly queued). A
@@ -22,13 +29,23 @@ import 'package:tyre_pulse/core/network/supabase_tables.dart';
 import 'package:tyre_pulse/features/qr_login/domain/qr_login.dart';
 
 abstract interface class QrLoginRepository {
+  /// Reads which browser is asking and the three numbers to choose from.
+  /// Changes nothing on the server. Never throws: every failure comes back
+  /// as [QrLoginPeekRefused].
+  Future<QrLoginPeekResult> peek({
+    required String id,
+    required String secret,
+  });
+
   /// Records [approve] (true = sign the computer in, false = decline) for the
-  /// code ([id], [secret]). Never throws: every failure comes back as
+  /// code ([id], [secret]). Approving must carry [match], the number the
+  /// person tapped. Never throws: every failure comes back as
   /// [QrLoginRefused].
   Future<QrLoginOutcome> decide({
     required String id,
     required String secret,
     required bool approve,
+    String? match,
   });
 }
 
@@ -74,17 +91,46 @@ final class SupabaseQrLoginRepository
   final bool Function() _hasSession;
 
   @override
+  Future<QrLoginPeekResult> peek({
+    required String id,
+    required String secret,
+  }) async {
+    if (!_hasSession()) {
+      return const QrLoginPeekRefused(QrLoginFailure.signedOut);
+    }
+    try {
+      final Object? reply = await guard<Object?>(
+        () => _rpc(
+          SupabaseRpcs.qrLoginPeek,
+          qrLoginPeekParams(id: id, secret: secret),
+        ),
+      );
+      return qrLoginPeekFromReply(reply);
+    } on SupabaseFailure catch (failure) {
+      return QrLoginPeekRefused(qrLoginFailureFor(failure));
+    } on Object {
+      return const QrLoginPeekRefused(QrLoginFailure.failed);
+    }
+  }
+
+  @override
   Future<QrLoginOutcome> decide({
     required String id,
     required String secret,
     required bool approve,
+    String? match,
   }) async {
     if (!_hasSession()) return const QrLoginRefused(QrLoginFailure.signedOut);
     try {
       final Object? reply = await guard<Object?>(
         () => _rpc(
           SupabaseRpcs.qrLoginApprove,
-          qrLoginApproveParams(id: id, secret: secret, approve: approve),
+          qrLoginApproveParams(
+            id: id,
+            secret: secret,
+            approve: approve,
+            match: match,
+          ),
         ),
       );
       return qrLoginOutcomeFromReply(reply, approve: approve);

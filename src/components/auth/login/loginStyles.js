@@ -160,6 +160,8 @@ html.light .tpl-card { box-shadow: 0 18px 50px rgba(15,23,42,0.10); }
 .tpl-qr-text p { margin: 4px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--tpl-dim); }
 .tpl-qr-status { margin-top: 4px; font-size: 12px; color: var(--tpl-text); min-height: 16px; }
 .tpl-qr-status .tpl-muted { color: var(--tpl-faint); }
+.tpl-qr-match { display: block; margin-top: 6px; }
+.tpl-qr-match strong { font-size: 1.6rem; letter-spacing: .08em; font-variant-numeric: tabular-nums; }
 .tpl-qr-btn { margin-top: 4px; min-height: 44px; display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; padding: 0; color: var(--tpl-link); font-weight: 700; font-size: 13px; cursor: pointer; }
 .tpl-qr-phone { color: var(--tpl-faint); }
 .tpl-request { margin-top: 16px; padding: 12px 14px; border-radius: 12px; border: 1px dashed var(--tpl-input-border); display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; font-size: 13px; color: var(--tpl-dim); }

@@ -39,3 +39,10 @@ ux stats >/dev/null && echo "ux-skill ready"
 # Reusable Claude Code skills (pinned). A failure is reported, not fatal, so one
 # unreachable repo never blocks the rest of the environment.
 bash "$(dirname "$0")/install-claude-skills.sh" || echo "WARNING: some Claude skills failed to install (see above)"
+
+# Security + code-graph tools (owner request 2026-10-04). Non-fatal.
+command -v uv >/dev/null || pip install --quiet uv || true
+uv tool install --python 3.12 strix-agent==1.6.2 >/dev/null 2>&1 || echo "WARNING: strix-agent install failed"
+uv tool install graphifyy==0.9.75 >/dev/null 2>&1 && "$HOME/.local/bin/graphify" install --platform claude >/dev/null 2>&1 || echo "WARNING: graphify install failed"
+claude plugin marketplace add obra/superpowers-marketplace >/dev/null 2>&1 || true
+claude plugin install superpowers@superpowers-marketplace >/dev/null 2>&1 || echo "WARNING: superpowers plugin install failed"

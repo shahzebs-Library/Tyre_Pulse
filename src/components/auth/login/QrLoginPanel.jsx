@@ -20,6 +20,7 @@ export default function QrLoginPanel({ onError }) {
   const q = (k) => t(`auth.login.page.qr.${k}`)
   const [state, setState] = useState('loading') // loading | ready | approved | expired | denied | unavailable
   const [img, setImg] = useState('')
+  const [match, setMatch] = useState('')
   const codeRef = useRef(null) // { id, secret, expiresAt }
   const busyRef = useRef(false)
   const autoRef = useRef(0)
@@ -38,8 +39,9 @@ export default function QrLoginPanel({ onError }) {
       const url = await toDataURL(qrPayload(res.id, res.secret), { margin: 1, width: 360, errorCorrectionLevel: 'M' })
       if (!aliveRef.current) return
       const expires = Date.parse(res.expiresAt)
-      codeRef.current = { id: res.id, secret: res.secret, expiresAt: Number.isFinite(expires) ? expires : Date.now() + FALLBACK_TTL_MS }
+      codeRef.current = { id: res.id, browserSecret: res.browserSecret, expiresAt: Number.isFinite(expires) ? expires : Date.now() + FALLBACK_TTL_MS }
       setImg(url)
+      setMatch(res.matchCode || '')
       setState('ready')
     } catch {
       if (aliveRef.current) setState('unavailable')
@@ -66,12 +68,12 @@ export default function QrLoginPanel({ onError }) {
       }
       busyRef.current = true
       try {
-        const status = await pollQrLogin(code.id, code.secret)
+        const status = await pollQrLogin(code.id, code.browserSecret)
         if (!aliveRef.current || codeRef.current !== code) return
         if (status === 'approved') {
           setState('approved')
           try {
-            await redeemQrLogin(code.id, code.secret)
+            await redeemQrLogin(code.id, code.browserSecret)
           } catch (err) {
             if (aliveRef.current) { setState('expired'); onError?.(err?.message) }
           }
@@ -116,6 +118,7 @@ export default function QrLoginPanel({ onError }) {
         <div aria-live="polite" className="tpl-qr-status">
           {state === 'approved' && <span>{q('approved')}</span>}
           {state === 'ready' && <span className="tpl-muted">{q('expiresIn')}</span>}
+          {state === 'ready' && match && <span className="tpl-qr-match">{q('matchHint')} <strong>{match}</strong></span>}
           {message && <span>{message}</span>}
         </div>
         {(state === 'expired' || state === 'denied' || state === 'unavailable') && (

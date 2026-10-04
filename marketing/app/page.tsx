@@ -54,18 +54,24 @@ const MODULES = [
   { icon: Truck, title: "Fleet and asset lifecycle", text: "Track plant, machinery and vehicles from acquisition to disposal.", href: "/platform/fleet-assets" },
   { icon: Wrench, title: "Preventive maintenance", text: "Plan and manage maintenance to keep assets working and compliant.", href: "/platform/maintenance" },
   { icon: Settings, title: "Workshop and job cards", text: "Manage jobs, labour, parts and third-party services.", href: "/platform/maintenance" },
-  { icon: CircleDot, title: "Tyre lifecycle", text: "Track tyre inspections, fitments, rotations and cost per kilometre or hour.", href: "/platform/inspections" },
-  { icon: ShieldCheck, title: "Accidents and insurance", text: "Record incidents, manage claims and track insurance details.", href: "/platform" },
+  { icon: CircleDot, title: "Tyre lifecycle", text: "Track tyre inspections, fitments, rotations and cost per kilometre or hour.", href: "/platform/inspections#tyres" },
+  { icon: ShieldCheck, title: "Accidents and insurance", text: "Record incidents, manage claims and track insurance details.", href: "/contact" },
   { icon: Box, title: "Stores and procurement", text: "Control inventory, purchases and suppliers across all sites.", href: "/platform/inventory" },
-  { icon: Fuel, title: "Fuel and operating costs", text: "See operating costs by asset, site or project.", href: "/platform/inventory" },
-  { icon: BarChart3, title: "Approvals and reporting", text: "Manage approvals and get clear reports across your operations.", href: "/platform/inventory" },
+  { icon: Fuel, title: "Fuel and operating costs", text: "See operating costs by asset, site or project.", href: "/contact" },
+  { icon: BarChart3, title: "Approvals and reporting", text: "Route work orders and purchases to the right approver, with the history kept.", href: "/contact" },
 ];
+
+const FAQ = [
+  ["Our sites have weak signal.", "Inspections, photos, meter readings and signatures save on the phone and sync when the connection returns."],
+  ["Our data is in the ERP and in Excel.", "Job cards, expenses, tyre records and asset lists import from the files you already export, with duplicates checked before they land."],
+  ["We run more than one country.", "Each country and site sees only its own records, in its own currency, enforced in the database. Arabic and English are both supported."],
+] as const;
 
 const HERO_SLIDES: HeroSlide[] = [
   {
-    id: "ops", tab: "Operations", kicker: "Plant, machinery and vehicles",
-    title: "Complete control of your PMV operations.",
-    lead: "Connect your assets, workshop, field teams and stores in one operational workspace.",
+    id: "ops", tab: "Operations", kicker: "PMV: plant, machinery and vehicles",
+    title: "Know which machines are down, why, and what they cost.",
+    lead: "Your workshop, field teams and stores work from one record per machine, so nothing is retyped.",
     link: { href: "/platform", label: "Explore the platform" },
     visual: <OpsOverview />,
   },
@@ -74,7 +80,7 @@ const HERO_SLIDES: HeroSlide[] = [
     title: "Every machine, one complete record.",
     lead: "Meters, tyres, documents, costs and history for each asset, from purchase to disposal.",
     link: { href: "/platform/fleet-assets", label: "See fleet and assets" },
-    visual: <div className="hc-photo hc-zoom"><Photo name="fleetLineup" position="50% 60%" sizes="(max-width: 900px) 100vw, 640px" /><div className="hc-float hc-float-wide"><AssetStats /></div></div>,
+    visual: <div className="hc-photo hc-zoom"><Photo name="fleetLineup" position="50% 60%" sizes="(max-width: 900px) 110vw, 720px" /><div className="hc-float hc-float-wide"><AssetStats /></div></div>,
   },
   {
     id: "workshop", tab: "Workshop", kicker: "Maintenance and workshop",
@@ -108,7 +114,7 @@ export default function HomePage() {
 
         <section className="section-pad" aria-labelledby="one-asset">
           <div className="site-shell">
-            <h2 className="sec-h" id="one-asset">One asset. Every record. Every team.</h2>
+            <h2 className="sec-h" id="one-asset">Workshop, field and stores share one record per machine.</h2>
             <Tabs
               label="Platform areas"
               items={[
@@ -119,7 +125,7 @@ export default function HomePage() {
                 },
                 {
                   id: "insp", label: "Inspections and safety", icon: <ShieldCheck size={20} aria-hidden="true" />,
-                  panel: <div className="tab-panel"><TabCopy title="Inspect anything, anywhere." text="Field teams run checklists on the phone, with photos, readings and a signature, even without signal." points={["Configurable checklists by asset type", "Defects raise actions and work orders", "Offline capture that syncs later"]} href="/platform/inspections" /><div style={{ padding: 24, background: "#fafaf8" }}><NewInspectionCard /></div></div>,
+                  panel: <div className="tab-panel"><TabCopy title="Daily checks on the phone, even without signal." text="Field teams run checklists on the phone, with photos, readings and a signature, even without signal." points={["Configurable checklists by asset type", "Defects raise actions and work orders", "Offline capture that syncs later"]} href="/platform/inspections" /><div className="tab-media"><NewInspectionCard /></div></div>,
                 },
                 {
                   id: "inv", label: "Inventory and procurement", icon: <Box size={20} aria-hidden="true" />,
@@ -127,7 +133,7 @@ export default function HomePage() {
                 },
                 {
                   id: "cost", label: "Costs and reporting", icon: <BarChart3 size={20} aria-hidden="true" />,
-                  panel: <div className="tab-panel"><TabCopy title="Know what every asset costs." text="Maintenance, tyres, parts and fuel roll up by asset, site and category, from the same records your teams entered." points={["Cost by asset, site and category", "Availability and utilisation", "Scheduled reports and exports"]} href="/platform/inventory" /><div style={{ padding: 20 }}><FleetCostPanel /></div></div>,
+                  panel: <div className="tab-panel"><TabCopy title="Know what every asset costs." text="Maintenance, tyres, parts and fuel roll up by asset, site and category, from the same records your teams entered." points={["Cost by asset, site and category", "Availability and utilisation", "Scheduled reports and exports"]} href="/platform/inventory" /><div className="tab-media"><FleetCostPanel /></div></div>,
                 },
               ]}
             />
@@ -154,7 +160,7 @@ export default function HomePage() {
 
         <section className="section-pad" aria-labelledby="people">
           <div className="site-shell">
-            <h2 className="sec-h" id="people">Built for the people doing the work.</h2>
+            <h2 className="sec-h" id="people">Each role sees the work it owns.</h2>
             <div className="people">
               <div className="people-art">
                 <Photo name="technicianPhone" position="40% 30%" />
@@ -175,21 +181,30 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="section-pad" style={{ paddingTop: 0 }} aria-labelledby="full-picture">
+        <section className="section-pad tight" aria-labelledby="full-picture">
           <div className="site-shell">
-            <h2 className="sec-h" id="full-picture">The full PMV picture.</h2>
+            <h2 className="sec-h" id="full-picture">Everything a PMV department runs on.</h2>
             <ul className="module-grid">
               {MODULES.map(({ icon: Icon, title, text, href }) => (
                 <li key={title}>
                   <Icon size={32} strokeWidth={1.6} aria-hidden="true" />
-                  <div><h3>{title}</h3><p>{text}</p><Link href={href} aria-label={`Learn more about ${title.toLowerCase()}`}>Learn more <ArrowRight size={14} aria-hidden="true" /></Link></div>
+                  <div><h3>{title}</h3><p>{text}</p><Link href={href} aria-label={href === "/contact" ? `Ask about ${title.toLowerCase()} in a demo` : `Learn more about ${title.toLowerCase()}`}>{href === "/contact" ? "Ask in a demo" : "Learn more"} <ArrowRight size={14} aria-hidden="true" /></Link></div>
                 </li>
               ))}
             </ul>
           </div>
         </section>
 
-        <CtaBand title="Bring every site into view." text="Unite your assets, people and processes in one platform." />
+        <section className="section-pad tight" aria-labelledby="questions">
+          <div className="site-shell">
+            <h2 className="sec-h" id="questions">What fleet teams ask before a demo.</h2>
+            <dl className="faq-list">
+              {FAQ.map(([q, a]) => <div key={q}><dt>{q}</dt><dd>{a}</dd></div>)}
+            </dl>
+          </div>
+        </section>
+
+        <CtaBand title="See your cost per km, asset by asset." text="Send one month of job cards and tyre records. We walk through them with you, on your own data." button="Book a demo on your data" />
       </main>
       <Footer />
     </>

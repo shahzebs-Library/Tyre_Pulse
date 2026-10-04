@@ -3177,7 +3177,7 @@
   "qrLoginAction": "کمپیوٹر پر سائن ان کریں",
   "qrLoginScanIntro": "کمپیوٹر پر TyrePulse کا سائن ان صفحہ کھولیں اور فون کوڈ منتخب کریں، پھر اس کیمرے کو اسکرین پر موجود کوڈ کی طرف کریں۔",
   "qrLoginConfirmTitle": "اس کمپیوٹر پر سائن ان کریں؟",
-  "qrLoginConfirmMessage": "کیا اس کمپیوٹر پر TyrePulse میں {name} کے طور پر سائن ان کریں؟ صرف اسی کوڈ کو منظور کریں جو آپ نے ابھی خود کھولا ہو۔",
+  "qrLoginConfirmMessage": "کیا اس کمپیوٹر پر TyrePulse میں {name} کے طور پر سائن ان کریں؟",
   "qrLoginYourAccount": "آپ کا اکاؤنٹ",
   "qrLoginApprove": "منظور کریں",
   "qrLoginSending": "آپ کا جواب بھیجا جا رہا ہے...",
@@ -3198,5 +3198,16 @@
   "qrLoginNeedsSignal": "کوئی کنکشن نہیں۔ سگنل والی جگہ پر جائیں اور کوڈ کی مدت ختم ہونے سے پہلے دوبارہ اسکین کریں۔",
   "qrLoginUnavailable": "کمپیوٹر سائن ان ابھی اس سرور پر دستیاب نہیں ہے۔",
   "qrLoginFailed": "کچھ غلط ہو گیا۔ کمپیوٹر پر کوڈ تازہ کریں اور دوبارہ کوشش کریں۔",
-  "qrLoginScanAgain": "دوسرا کوڈ اسکین کریں"
+  "qrLoginScanAgain": "دوسرا کوڈ اسکین کریں",
+  "qrLoginChecking": "کوڈ کی جانچ ہو رہی ہے...",
+  "qrLoginBrowserOnOs": "{os} پر {browser}",
+  "qrLoginUnknownBrowser": "نامعلوم براؤزر",
+  "qrLoginIpAddress": "IP پتہ: {ip}",
+  "qrLoginRequestedAgo": "{seconds, plural, =1{1 سیکنڈ پہلے درخواست کی گئی} other{{seconds} سیکنڈ پہلے درخواست کی گئی}}",
+  "qrLoginWarning": "صرف اسی صورت میں منظور کریں جب آپ خود ابھی اس کمپیوٹر پر سائن ان کر رہے ہوں۔",
+  "qrLoginPickNumber": "کمپیوٹر پر دکھایا گیا نمبر دبائیں",
+  "qrLoginApproveNumber": "نمبر {number} کے ساتھ منظور کریں",
+  "qrLoginDecline": "مسترد کریں",
+  "qrLoginMismatch": "یہ نمبر مماثل نہیں تھا۔ کوڈ منسوخ ہو گیا ہے؛ کمپیوٹر پر نیا کوڈ بنائیں۔",
+  "qrLoginAdmin": "QR سائن ان ایڈمنسٹریٹر اکاؤنٹس کے لیے دستیاب نہیں ہے۔ اپنے پاس ورڈ سے سائن ان کریں۔"
 }

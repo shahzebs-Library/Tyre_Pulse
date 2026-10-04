@@ -5,6 +5,53 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
+# ⚑ SESSION 2026-10-04 (part 6) — SECURITY REVIEW + QR SIGN-IN HARDENING (applied live, feature still OFF).
+- Console migrations (1f2f356/91ef59f) reviewed vs live DB: clean (74 DEFINER fns pinned, all console fns is_super_admin gated,
+  12 new tables RLS on). Leftover grants revoked. OPEN owner call: _user_issue_admin() also admits plain org Admins (Error Center).
+- QR sign-in (migration 20261004150000 + qr_login_purge_job + login_showcase_users_org_scope; edge fn qr-login v2):
+  two secrets (QR = scan secret for phone; browser_secret only in the page, required by qr_login_status + edge redeem);
+  number matching via NEW qr_login_peek (3 options, one wrong pick kills the code); qr_login_approve now 4 args
+  (p_match), old 3-arg RENAMED qr_login_approve_v1_retired + revoked (not dropped: MCP drop/delete waits for approval
+  and times out); Admin/super-admin cannot approve; edge fn refuses users with verified 2FA; per-IP start limit 10/min;
+  cron qr-login-purge every 15 min (unconsumed >1h, all >30d). Verified by rolled-back live test.
+- Flutter (code only): peek + browser/IP/age + 3 number buttons; ARB parity now 2208; 55/55 qr tests pass.
+- RULE: keep system_config.qr_login_enabled OFF until a Flutter build with this change is on phones (old builds cannot
+  approve: they send no p_match).
+- Contact form (marketing): same-site check, per-IP throttle 5/10min, fleetSize required server-side. Tool versions pinned.
+- GOTCHA: in an MCP migration, `drop function` and any `delete` statement trigger the approval wait -> 60s timeout and
+  full rollback. Rename+revoke instead of drop; put deletes inside a function body created separately.
+
+# ⚑ SESSION 2026-10-04 (part 5) — MARKETING SITE: COPY RULES + IMPECCABLE + EMIL KOWALSKI + TASTE PASS (local commit, not pushed).
+- Skills installed: impeccable (pbakaus), Emil Kowalski set (emilkowalski/skill: emil-design-eng, improve/review-animations...),
+  taste re-installed; pinned in skills-lock.json. 3 read-only audits ran in parallel, fixes applied by hand.
+- OWNER COPY RULES (screenshot, 2026-10-04) now apply to ALL marketing copy: benefit before feature, specific headlines, CTA =
+  verb + outcome, proof next to the claim, handle objections before the CTA, 1-3 bullets per section, one idea per section,
+  no generic openers, no aphorism formulas ("One X. Every Y."), no two-beat antithesis, no fabricated claims, no em dashes.
+- Done: hero/section headlines rewritten; CTA bands now "Book a demo on your data" with a concrete offer; home FAQ block
+  (offline / ERP+Excel import / multi-country) before the CTA; NEW /platform/inspections#tyres section (tyre links used to land
+  on a page that never mentioned tyres); accidents/fuel/approvals links -> "Ask in a demo" (no page exists); industries lead
+  states it was built inside a ready-mix operation in KSA/UAE/Egypt (client NOT named), rental + government marked
+  "Configured on request"; pricing negative lead + blank eyebrow spacers removed; contact fleet size required.
+- Fixes measured in Chromium: focus ring was yellow-on-white 1.6:1 (A11yStyles leftover) -> pmv.css ink ring wins; side gutter
+  10px -> 16px at 390; WhatsApp FAB overlapped hero picker; Good chip 3.4:1 -> #1d7a44; EN link 19px wide; SubNav first link
+  falsely "selected"; hero now holds on hidden tab (visibilitychange); crossfade no longer overlaps two headlines; dropdown
+  inset-inline-start for /ar; press 100ms; tap highlight off; scroll-padding-top 80px. Inline styles moved to classes.
+- Not done (design choices for owner): "Book a demo" appears 3x per module page; 8 identical "Learn more" links; sample
+  tables still clipped at 390 inside their own scroll box.
+
+# ⚑ SESSION 2026-10-04 (part 4) — TOOLS: STRIX + GRAPHIFY + SUPERPOWERS INSTALLED; GRAPH RUN ON src/.
+- Installed (container, user scope): superpowers plugin (obra/superpowers-marketplace), Strix (`uv tool install --python 3.12
+  strix-agent`, needs py3.12), Graphify (`uv tool install graphifyy` + `graphify install --platform claude`). Persisted in
+  scripts/claude-env-setup.sh (commit e12cd84, local). Manus.im: NO connector in the MCP registry; needs owner's API key via env var.
+- STRIX CANNOT RUN YET: no LLM API key in the environment (only ANTHROPIC_BASE_URL). Owner must add STRIX_LLM + LLM_API_KEY as env
+  secrets (never in repo). Docker is present. Scan only targets we own.
+- GRAPHIFY: `graphify update src --no-cluster` (AST only, no LLM) -> src/graphify-out/graph.json (26,232 nodes / 97,845 edges).
+  graphify-out/ is gitignored (40 MB). Hub modules: safeError 540 importers, api/_client 423, exportUtils 357, SettingsContext 247,
+  EnterpriseTable 238. Query: `graphify query "<q>" --graph src/graphify-out/graph.json`.
+- DEAD-CODE CANDIDATES (no importer, grep-verified): components/BulkActionBar.jsx, components/permissions/Can.jsx,
+  hooks/useCapabilities.js, hooks/useCapability.js, hooks/useRealtime.js, lib/apiClient.js. NOT deleted (dup-file removal is an
+  open owner decision). src/stubs/empty.js is a build alias, keep. Icon/illustration "orphans" are false (barrels yield no symbols).
+
 # ⚑ SESSION 2026-10-04 (part 3) — BOTH SIGN-IN PAGES REBUILT TO OWNER MOCKUPS + QR SIGN-IN + PR #375 REVIEW FIXES. Next free migration after 20261004121000.
 - /login (src/pages/Login.jsx + src/components/auth/login/) and /console/login (ConsoleLogin.jsx + consoleLogin.css) rebuilt to the
   owner's two mockups, dark + light, own fleet photos in public/login-art/ (brand badges avoided/blurred).

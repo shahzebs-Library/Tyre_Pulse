@@ -38,9 +38,7 @@ select:focus-visible,
 textarea:focus-visible,
 summary:focus-visible,
 [tabindex]:focus-visible {
-  outline: 3px solid var(--brand, #15803d);
   outline-offset: 2px;
-  box-shadow: 0 0 0 5px rgba(255, 255, 255, .95);
 }
 /*
  * The skip link in app/layout.tsx paints its own ring against the navy pill, so

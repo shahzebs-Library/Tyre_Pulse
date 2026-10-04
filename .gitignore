@@ -70,3 +70,4 @@ supabase/.temp/
 
 # ux-skill local state (lint runs, decisions ledger)
 .ux/
+graphify-out/

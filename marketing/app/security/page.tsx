@@ -19,7 +19,7 @@ export const metadata: Metadata = {
 };
 
 const items = [
-  [ShieldCheck, "Tenant separation", "Each organization is scoped across database access, APIs, reports, files, background jobs and shared links."],
+  [ShieldCheck, "Tenant separation", "A KSA site manager sees KSA rows only. The database enforces it, not a hidden button."],
   [KeyRound, "Role and location control", "Users receive exact permissions by organization, location, role, duration and approval authority."],
   [Fingerprint, "Privileged access", "Platform and company administration stay separate, with MFA, session controls and protected changes."],
   [Database, "Data protection", "Row-level security, safe file policies, controlled exports, backups and recovery planning protect operational data."],

@@ -7542,7 +7542,7 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String qrLoginConfirmMessage(String name) {
-    return 'کیا اس کمپیوٹر پر TyrePulse میں $name کے طور پر سائن ان کریں؟ صرف اسی کوڈ کو منظور کریں جو آپ نے ابھی خود کھولا ہو۔';
+    return 'کیا اس کمپیوٹر پر TyrePulse میں $name کے طور پر سائن ان کریں؟';
   }
 
   @override
@@ -7619,4 +7619,54 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get qrLoginScanAgain => 'دوسرا کوڈ اسکین کریں';
+
+  @override
+  String get qrLoginChecking => 'کوڈ کی جانچ ہو رہی ہے...';
+
+  @override
+  String qrLoginBrowserOnOs(String browser, String os) {
+    return '$os پر $browser';
+  }
+
+  @override
+  String get qrLoginUnknownBrowser => 'نامعلوم براؤزر';
+
+  @override
+  String qrLoginIpAddress(String ip) {
+    return 'IP پتہ: $ip';
+  }
+
+  @override
+  String qrLoginRequestedAgo(int seconds) {
+    String _temp0 = intl.Intl.pluralLogic(
+      seconds,
+      locale: localeName,
+      other: '$seconds سیکنڈ پہلے درخواست کی گئی',
+      one: '1 سیکنڈ پہلے درخواست کی گئی',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get qrLoginWarning =>
+      'صرف اسی صورت میں منظور کریں جب آپ خود ابھی اس کمپیوٹر پر سائن ان کر رہے ہوں۔';
+
+  @override
+  String get qrLoginPickNumber => 'کمپیوٹر پر دکھایا گیا نمبر دبائیں';
+
+  @override
+  String qrLoginApproveNumber(String number) {
+    return 'نمبر $number کے ساتھ منظور کریں';
+  }
+
+  @override
+  String get qrLoginDecline => 'مسترد کریں';
+
+  @override
+  String get qrLoginMismatch =>
+      'یہ نمبر مماثل نہیں تھا۔ کوڈ منسوخ ہو گیا ہے؛ کمپیوٹر پر نیا کوڈ بنائیں۔';
+
+  @override
+  String get qrLoginAdmin =>
+      'QR سائن ان ایڈمنسٹریٹر اکاؤنٹس کے لیے دستیاب نہیں ہے۔ اپنے پاس ورڈ سے سائن ان کریں۔';
 }

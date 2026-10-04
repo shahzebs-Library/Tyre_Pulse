@@ -8199,7 +8199,7 @@
   "@qrLoginConfirmTitle": {
     "description": "Sign in on a computer: title of the confirm sheet."
   },
-  "qrLoginConfirmMessage": "Sign in to TyrePulse on this computer as {name}? Only approve a code you just opened yourself.",
+  "qrLoginConfirmMessage": "Sign in to TyrePulse on this computer as {name}?",
   "@qrLoginConfirmMessage": {
     "description": "Sign in on a computer: confirm sheet body. {name} is the signed-in person's name.",
     "placeholders": {
@@ -8292,5 +8292,77 @@
   "qrLoginScanAgain": "Scan another code",
   "@qrLoginScanAgain": {
     "description": "Sign in on a computer: button to return to the camera."
+  },
+  "qrLoginChecking": "Checking the code...",
+  "@qrLoginChecking": {
+    "description": "Sign in on a computer: shown while the phone reads which browser is asking."
+  },
+  "qrLoginBrowserOnOs": "{browser} on {os}",
+  "@qrLoginBrowserOnOs": {
+    "description": "Sign in on a computer: the requesting browser, e.g. Chrome on Windows. {browser} and {os} are product names.",
+    "placeholders": {
+      "browser": {
+        "type": "String",
+        "example": "Chrome"
+      },
+      "os": {
+        "type": "String",
+        "example": "Windows"
+      }
+    }
+  },
+  "qrLoginUnknownBrowser": "Unknown browser",
+  "@qrLoginUnknownBrowser": {
+    "description": "Sign in on a computer: shown when the requesting browser cannot be identified."
+  },
+  "qrLoginIpAddress": "IP address: {ip}",
+  "@qrLoginIpAddress": {
+    "description": "Sign in on a computer: the network address the request came from. {ip} is an IP address.",
+    "placeholders": {
+      "ip": {
+        "type": "String",
+        "example": "203.0.113.7"
+      }
+    }
+  },
+  "qrLoginRequestedAgo": "{seconds, plural, =1{Requested 1 second ago} other{Requested {seconds} seconds ago}}",
+  "@qrLoginRequestedAgo": {
+    "description": "Sign in on a computer: how long ago the computer asked. {seconds} is a whole number.",
+    "placeholders": {
+      "seconds": {
+        "type": "int",
+        "example": "12"
+      }
+    }
+  },
+  "qrLoginWarning": "Only approve if you are signing in on this computer yourself right now.",
+  "@qrLoginWarning": {
+    "description": "Sign in on a computer: safety warning on the confirm sheet."
+  },
+  "qrLoginPickNumber": "Tap the number shown on the computer",
+  "@qrLoginPickNumber": {
+    "description": "Sign in on a computer: instruction above the three number buttons."
+  },
+  "qrLoginApproveNumber": "Approve with number {number}",
+  "@qrLoginApproveNumber": {
+    "description": "Sign in on a computer: screen-reader label of a number button. {number} is a 2-digit number.",
+    "placeholders": {
+      "number": {
+        "type": "String",
+        "example": "37"
+      }
+    }
+  },
+  "qrLoginDecline": "Decline",
+  "@qrLoginDecline": {
+    "description": "Sign in on a computer: button that declines the sign-in."
+  },
+  "qrLoginMismatch": "That number did not match. The code is cancelled; make a new one on the computer.",
+  "@qrLoginMismatch": {
+    "description": "Sign in on a computer: the tapped number did not match; the server cancelled the code."
+  },
+  "qrLoginAdmin": "QR sign-in is not available for administrator accounts. Sign in with your password.",
+  "@qrLoginAdmin": {
+    "description": "Sign in on a computer: administrator accounts cannot approve a QR sign-in."
   }
 }

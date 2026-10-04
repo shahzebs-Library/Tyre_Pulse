@@ -202,4 +202,4 @@ mirrors the Expo write exactly (same table, columns, RPC and parameters).
 
 | Module | Writes | Verdict | Why |
 |---|---|---|---|
-| Sign in on a computer (`features/qr_login/`) | RPC `qr_login_approve(p_id, p_secret, p_approve)` | Online only | The code expires after two minutes and the decision depends on the request's current server state (spec section 14). A queued approval would either arrive expired or sign a browser in long after the person stopped looking at it. With no signal the screen says so and asks for a fresh scan |
+| Sign in on a computer (`features/qr_login/`) | RPCs `qr_login_peek(p_id, p_secret)` then `qr_login_approve(p_id, p_secret, p_approve, p_match)` | Online only | The code expires after two minutes and the decision depends on the request's current server state (spec section 14). A queued approval would either arrive expired or sign a browser in long after the person stopped looking at it. With no signal the screen says so and asks for a fresh scan |

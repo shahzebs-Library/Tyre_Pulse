@@ -2,23 +2,25 @@ import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Eye, EyeOff, ArrowRight, Mail, Phone, KeyRound, AlertCircle, CheckCircle2,
-  Loader2, User, Zap, Wifi, WifiOff, Clock,
-  BarChart3, Shield, Smartphone, Brain, TrendingUp, Bell,
+  Eye, EyeOff, ArrowRight, Mail, Phone, KeyRound, AlertCircle,
+  Loader2, Lock, Clock, Shield, Crown, Wifi, WifiOff,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
-import LanguageSwitcher from '../components/LanguageSwitcher'
 import { supabase } from '../lib/supabase'
 import { getPublicConfig } from '../lib/api/systemConfig'
+import { getLoginShowcase, signInOptions, signInWithProvider } from '../lib/api/loginShowcase'
 import { loginAttemptStatus, recordLoginFailure, resetLoginAttempts, lockMinutes } from '../lib/api/loginGuard'
 import TpLogo from '../assets/logo.svg'
 import { readCachedLogo } from '../lib/brand/library'
 import TwoFactorChallenge from '../components/TwoFactorChallenge'
-import { Illustration } from '../components/illustrations'
 import BrandIcon from '../components/ui/BrandIcon'
 import ThemeToggle from '../components/ui/ThemeToggle'
 import TurnstileWidget, { captchaEnabled } from '../components/auth/TurnstileWidget'
+import LoginHero from '../components/auth/login/LoginHero'
+import QrLoginPanel from '../components/auth/login/QrLoginPanel'
+import { LOGIN_PAGE_CSS } from '../components/auth/login/loginStyles'
+import { MARKETING_URL, readRememberedId, writeRememberedId } from '../components/auth/login/loginContent'
 import {
   RECOVERY_GENERIC_MESSAGE,
   RECOVERY_SMS_ENABLED,
@@ -32,217 +34,32 @@ import {
 // Read at render time (not module load) so it reflects the latest cached value
 // even after a client-side navigation from an authenticated session to /login.
 
-/* ── CSS injected once ────────────────────────────────────────────────────── */
-const STYLES = `
-@keyframes tp-spin       { to { transform: rotate(360deg); } }
-@keyframes tp-spin-rev   { to { transform: rotate(-360deg); } }
-@keyframes tp-pulse-ring {
-  0%,100% { transform: scale(1);   opacity: 0.5; }
-  50%      { transform: scale(1.3); opacity: 0; }
-}
-@keyframes tp-float {
-  0%,100% { transform: translateY(0); }
-  50%      { transform: translateY(-12px); }
-}
-@keyframes tp-scan {
-  0%   { transform: translateY(-100%); opacity:0; }
-  10%  { opacity: 0.5; }
-  90%  { opacity: 0.5; }
-  100% { transform: translateY(100vh); opacity:0; }
-}
-@keyframes tp-shimmer {
-  0%   { background-position: -400px 0; }
-  100% { background-position:  400px 0; }
-}
-@keyframes tp-fade-up {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-@keyframes tp-counter {
-  0%   { content: '127'; }
-  50%  { content: '128'; }
-  100% { content: '129'; }
-}
-.tp-spin     { animation: tp-spin     4s  linear       infinite; transform-origin: center; }
-.tp-spin-rev { animation: tp-spin-rev 6s  linear       infinite; transform-origin: center; }
-.tp-float    { animation: tp-float    4s  ease-in-out  infinite; }
-.tp-btn-shine {
-  position: relative; overflow: hidden;
-}
-.tp-btn-shine::after {
-  content: ''; position: absolute;
-  top: 0; left: -100%; width: 60%; height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent);
-  animation: tp-shimmer 2.8s ease-in-out infinite;
-  pointer-events: none;
-}
-.tp-pulse-ring {
-  position: absolute; inset: -6px; border-radius: 50%;
-  border: 2px solid rgba(22,163,74,0.5);
-  animation: tp-pulse-ring 2.2s ease-out infinite;
-}
-.tp-feature-card {
-  animation: tp-fade-up 0.4s ease-out both;
-}
-@media (prefers-reduced-motion: reduce) {
-  .tp-feature-card, .tp-btn-shine::after, .tp-pulse-ring { animation: none !important; }
-}
-/* RTL: directional arrows point the reading way. */
-[dir="rtl"] .tp-login-shell .tp-dir-icon { transform: scaleX(-1); }
-/* Visible keyboard focus on every control of the auth screen. */
-.tp-login-shell button:focus-visible,
-.tp-login-shell a:focus-visible,
-.tp-login-shell input:focus-visible {
-  outline: 2px solid var(--brand-on-tint);
-  outline-offset: 2px;
-}
-/* Readable secondary text (WCAG AA 4.5:1) on the auth screen in both themes. */
-.tp-login-shell { --login-text-faint: rgba(255,255,255,0.52); }
-html.light .tp-login-shell {
-  --login-text-dim: rgba(15,23,42,0.72);
-  --login-text-faint: rgba(15,23,42,0.64);
-}
-/* Touch devices and narrow screens: every control is at least 44x44 px. */
-@media (pointer: coarse), (max-width: 1024px) {
-  .tp-login-shell .tp-login-tab,
-  .tp-login-shell .tp-login-controls button { min-height: 44px; }
-  .tp-login-shell .tp-login-controls button { min-width: 44px; }
-  .tp-login-shell .tp-login-controls > div { min-width: 44px; min-height: 44px; width: auto !important; height: auto !important; }
-  .tp-login-shell .tp-login-link { min-height: 44px; display: inline-flex; align-items: center; }
-  .tp-login-shell .tp-login-eye { min-width: 44px; min-height: 44px; justify-content: center; align-items: center; inset-inline-end: 0 !important; }
-  .tp-login-shell .tp-login-footer-links a { min-height: 44px; min-width: 44px; display: inline-flex; align-items: center; justify-content: center; }
-  .tp-login-shell .tp-login-footer-links { gap: 4px !important; flex-wrap: wrap; }
-}
-/* Single-column layout: keep the fixed top bar clear of the brand block. */
-@media (max-width: 1023px) {
-  .tp-login-shell #main-content { padding-top: 84px !important; }
-}
-/* Narrow phones: the 44px language/theme controls need the top bar's width, so
-   the connection pill moves to the opposite (reading-start) corner. */
-@media (max-width: 480px) {
-  .tp-login-shell .tp-login-netpill { left: 16px !important; right: auto; transform: none !important; }
-  [dir="rtl"] .tp-login-shell .tp-login-netpill { left: auto !important; right: 16px; }
-}
-@media (max-width: 360px) {
-  .tp-login-shell .tp-login-netpill { padding: 5px 8px !important; }
-  .tp-login-shell .tp-login-controls { gap: 4px !important; }
-}
-`
-
-/* ── Spinning Tyre ───────────────────────────────────────────────────────── */
-function Tyre({ size = 120, reverse = false, opacity = 1, className = '' }) {
-  const cx = size / 2
-  const R  = size / 2 - 2
-  const r1 = R * 0.76
-  const r2 = R * 0.54
-  const r3 = R * 0.17
-  const spokes = 5
-  const treads = 24
-  const id = `t-${size}-${reverse ? 'r' : 'f'}`
+/** Google "G" and Microsoft squares, drawn inline (no external asset). */
+function GoogleMark() {
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}
-      className={className}
-      style={{ display:'block', opacity, filter:`drop-shadow(0 0 10px rgba(22,163,74,0.6))` }}>
-      <defs>
-        <radialGradient id={`rb-${id}`} cx="50%" cy="35%" r="65%">
-          <stop offset="0%"   stopColor="#1a2e1a"/>
-          <stop offset="100%" stopColor="#060c06"/>
-        </radialGradient>
-        <radialGradient id={`rm-${id}`} cx="40%" cy="30%" r="70%">
-          <stop offset="0%"   stopColor="#4ade80" stopOpacity="0.85"/>
-          <stop offset="45%"  stopColor="#16a34a" stopOpacity="0.8"/>
-          <stop offset="100%" stopColor="#052010"/>
-        </radialGradient>
-        <radialGradient id={`rh-${id}`} cx="35%" cy="30%" r="65%">
-          <stop offset="0%"  stopColor="#86efac"/>
-          <stop offset="100%" stopColor="#16a34a"/>
-        </radialGradient>
-      </defs>
-      <g className={reverse ? 'tp-spin-rev' : 'tp-spin'}>
-        {/* rubber */}
-        <circle cx={cx} cy={cx} r={R} fill={`url(#rb-${id})`}/>
-        {/* treads */}
-        {Array.from({length:treads}).map((_,i) => {
-          const a1 = (i/treads)*360, a2 = ((i+0.58)/treads)*360
-          const toRad = a => a*Math.PI/180
-          const oR = R, iR = r1+1
-          const pts = [
-            [cx+oR*Math.cos(toRad(a1)), cx+oR*Math.sin(toRad(a1))],
-            [cx+oR*Math.cos(toRad(a2)), cx+oR*Math.sin(toRad(a2))],
-            [cx+iR*Math.cos(toRad(a2)), cx+iR*Math.sin(toRad(a2))],
-            [cx+iR*Math.cos(toRad(a1)), cx+iR*Math.sin(toRad(a1))],
-          ]
-          return (
-            <path key={i}
-              d={`M${pts[0].join(',')} A${oR},${oR} 0 0,1 ${pts[1].join(',')} L${pts[2].join(',')} A${iR},${iR} 0 0,0 ${pts[3].join(',')} Z`}
-              fill={i%2===0 ? 'rgba(74,222,128,0.22)' : 'rgba(0,0,0,0.35)'}
-            />
-          )
-        })}
-        {/* rim */}
-        <circle cx={cx} cy={cx} r={r1} fill={`url(#rm-${id})`}/>
-        <circle cx={cx} cy={cx} r={r1+1} fill="none" stroke="rgba(0,0,0,0.7)" strokeWidth="2.5"/>
-        {/* spokes */}
-        {Array.from({length:spokes}).map((_,i) => {
-          const a = (i/spokes)*360*Math.PI/180
-          const w = r1*0.13
-          const perp = a + Math.PI/2
-          const x1 = cx+r3*1.1*Math.cos(a), y1 = cx+r3*1.1*Math.sin(a)
-          const x2 = cx+r2*0.95*Math.cos(a), y2 = cx+r2*0.95*Math.sin(a)
-          return (
-            <polygon key={i}
-              points={`${x1+w*0.6*Math.cos(perp)},${y1+w*0.6*Math.sin(perp)} ${x1-w*0.6*Math.cos(perp)},${y1-w*0.6*Math.sin(perp)} ${x2-w*0.35*Math.cos(perp)},${y2-w*0.35*Math.sin(perp)} ${x2+w*0.35*Math.cos(perp)},${y2+w*0.35*Math.sin(perp)}`}
-              fill="rgba(74,222,128,0.75)" stroke="rgba(134,239,172,0.4)" strokeWidth="0.5"
-            />
-          )
-        })}
-        {/* inner */}
-        <circle cx={cx} cy={cx} r={r2} fill="rgba(2,12,5,0.96)" stroke="rgba(74,222,128,0.35)" strokeWidth="1.5"/>
-        {Array.from({length:8}).map((_,i) => {
-          const a = (i/8)*360*Math.PI/180
-          return <line key={i} x1={cx+(r3+1)*Math.cos(a)} y1={cx+(r3+1)*Math.sin(a)} x2={cx+r2*0.82*Math.cos(a)} y2={cx+r2*0.82*Math.sin(a)} stroke="rgba(22,163,74,0.15)" strokeWidth="0.8"/>
-        })}
-        {/* hub */}
-        <circle cx={cx} cy={cx} r={r3+2} fill="rgba(3,12,4,0.98)" stroke="rgba(74,222,128,0.5)" strokeWidth="1.2"/>
-        <circle cx={cx} cy={cx} r={r3}   fill={`url(#rh-${id})`}/>
-        <circle cx={cx} cy={cx} r={r3*0.5} fill="rgba(2,8,3,0.9)"/>
-        <circle cx={cx-r3*0.18} cy={cx-r3*0.18} r={r3*0.2} fill="rgba(255,255,255,0.28)"/>
-      </g>
+    <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true" style={{ flexShrink: 0 }}>
+      <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/>
+      <path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/>
+      <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/>
+      <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/>
+    </svg>
+  )
+}
+function MicrosoftMark() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 23 23" aria-hidden="true" style={{ flexShrink: 0 }}>
+      <path fill="#f35325" d="M1 1h10v10H1z"/><path fill="#81bc06" d="M12 1h10v10H12z"/>
+      <path fill="#05a6f0" d="M1 12h10v10H1z"/><path fill="#ffba08" d="M12 12h10v10H12z"/>
     </svg>
   )
 }
 
-/* ── Feature pill ────────────────────────────────────────────────────────── */
-function FeatureChip({ icon: Icon, label, delay = 0 }) {
-  return (
-    <div className="tp-feature-card flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl"
-      style={{
-        background: 'rgba(22,163,74,0.1)',
-        border: '1px solid rgba(22,163,74,0.22)',
-        animationDelay: `${delay}s`,
-      }}>
-      <div className="w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0"
-        style={{ background: 'rgba(22,163,74,0.18)', border: '1px solid rgba(22,163,74,0.3)' }}>
-        <Icon size={14} style={{ color: 'var(--brand-on-tint)' }} strokeWidth={2}/>
-      </div>
-      <span style={{ fontSize:12, fontWeight:600, color:'var(--login-text)' }}>{label}</span>
-    </div>
-  )
-}
-
-const FEATURES = [
-  { icon: BarChart3,  labelKey: 'auth.login.features.analytics' },
-  { icon: Brain,      labelKey: 'auth.login.features.predictive' },
-  { icon: Bell,       labelKey: 'auth.login.features.alerts' },
-  { icon: Shield,     labelKey: 'auth.login.features.rca' },
-  { icon: TrendingUp, labelKey: 'auth.login.features.cpk' },
-  { icon: Smartphone, labelKey: 'auth.login.features.mobile' },
-]
-
 export default function Login() {
   const loginLogo = readCachedLogo('login') || TpLogo
+  const customLogo = loginLogo !== TpLogo
   const { signIn, user, loading: authLoading } = useAuth()
   const { t }               = useLanguage()
+  const p = (k, v) => t(`auth.login.page.${k}`, v)
   const navigate            = useNavigate()
 
   // Navigate to dashboard once auth state resolves - avoids race with async fetchProfile
@@ -251,7 +68,8 @@ export default function Login() {
   }, [user, authLoading, navigate])
 
   const [tab, setTab]                 = useState('login')
-  const [identifier, setIdentifier]   = useState('')
+  const [identifier, setIdentifier]   = useState(() => readRememberedId())
+  const [rememberMe, setRememberMe]   = useState(() => !!readRememberedId())
   const [password, setPassword]       = useState('')
   const [confirm, setConfirm]         = useState('')
   const [fullName, setFullName]       = useState('')
@@ -269,7 +87,10 @@ export default function Login() {
   const [showLoginPw, setShowLoginPw] = useState(false)
   const [showSignupPw, setShowSignupPw] = useState(false)
   const [showConfirmPw, setShowConfirmPw] = useState(false)
-  const [forgotMode, setForgotMode]   = useState(false)
+  // /login?forgot=1 (linked from the console sign-in) opens the reset view directly.
+  const [forgotMode, setForgotMode]   = useState(() => {
+    try { return new URLSearchParams(window.location.search).get('forgot') === '1' } catch { return false }
+  })
   const [forgotChannel, setForgotChannel] = useState('email')
   const [forgotDestination, setForgotDestination] = useState('')
   const [forgotChallengeId, setForgotChallengeId] = useState('')
@@ -282,10 +103,17 @@ export default function Login() {
   const [loginAttempts, setLoginAttempts] = useState(0)
   const [cooldownUntil, setCooldownUntil] = useState(0)
   const [ssoLoading, setSsoLoading]   = useState(false)
+  const [providerLoading, setProviderLoading] = useState('')
   // Registration switch (registration_open / legacy allow_signups). When OFF,
   // self-service signup is blocked. Read via the anon-safe get_public_config RPC
   // before any session exists. Defaults to OPEN so a transient read never blocks.
   const [signupClosed, setSignupClosed] = useState(false)
+  // Optional sign-in methods (Google / Microsoft / QR): hidden until an admin
+  // switches them on, so the page never shows a button that cannot work.
+  const [signInOpts, setSignInOpts] = useState({ google: false, microsoft: false, qr: false })
+  const [appVersion, setAppVersion] = useState('')
+  // Real platform figures for the hero (counts only). null = show N/A.
+  const [showcase, setShowcase] = useState(null)
 
   // Pre-auth read of the registration switch on mount. getPublicConfig never
   // throws (returns {} on failure), so a read miss leaves signup permissively open.
@@ -294,7 +122,11 @@ export default function Login() {
     getPublicConfig().then((cfg) => {
       if (!alive) return
       if (cfg?.registration_open === 'false' || cfg?.allow_signups === 'false') setSignupClosed(true)
+      setSignInOpts(signInOptions(cfg))
+      const v = typeof cfg?.app_version === 'string' ? cfg.app_version.replace(/^"|"$/g, '').trim() : ''
+      if (v) setAppVersion(v)
     })
+    getLoginShowcase().then((s) => { if (alive) setShowcase(s) })
     return () => { alive = false }
   }, [])
 
@@ -410,6 +242,9 @@ export default function Login() {
     setLoginAttempts(0)
     setCooldownUntil(0)
     resetLoginAttempts()
+    // "Remember me" keeps only the typed identifier on this device (never the
+    // password, never the session lifetime).
+    writeRememberedId(rememberMe ? identifier.trim() : '')
     // on success: useEffect above handles navigation once AuthContext resolves user + profile
   }
 
@@ -536,6 +371,7 @@ export default function Login() {
   const inputStyle = (field) => ({
     width: '100%',
     padding: '11px 14px',
+    minHeight: 46,
     background: 'var(--login-input-bg)',
     border: `1.5px solid ${focusedField === field ? 'var(--login-input-border-focus)' : 'var(--login-input-border)'}`,
     borderRadius: 12,
@@ -546,257 +382,113 @@ export default function Login() {
     transition: 'border-color 0.2s, box-shadow 0.2s, background 0.2s',
     boxShadow: focusedField === field ? '0 0 0 3px rgba(22,163,74,0.15), 0 0 20px rgba(22,163,74,0.08)' : 'none',
     outline: 'none',
-    backdropFilter: 'blur(8px)',
   })
 
   const labelStyle = {
-    display: 'block', fontSize: 11, fontWeight: 700,
-    color: 'var(--login-text-dim)', letterSpacing: '0.08em',
-    textTransform: 'uppercase', marginBottom: 7,
+    display: 'block', fontSize: 13, fontWeight: 600,
+    color: 'var(--login-text)', marginBottom: 7,
   }
+
+  // Google / Microsoft OAuth. Only reachable when the admin switched the
+  // provider on (auth_google_enabled / auth_microsoft_enabled).
+  async function handleProvider(provider) {
+    if (!isOnline) { setError(t('auth.login.errNoInternet')); return }
+    setError(''); setProviderLoading(provider)
+    try {
+      await signInWithProvider(provider)
+    } catch (err) {
+      setError(err?.message || t('auth.login.errUnexpected'))
+      setProviderLoading('')
+    }
+  }
+
+  // The Super Admin Console runs in its OWN tab: its session is tab-local and
+  // isolated from this one (see IS_CONSOLE_SURFACE in lib/supabase.js), so it is
+  // never opened in place.
+  function openConsole() {
+    window.open('/console/login', '_blank', 'noopener,noreferrer')
+  }
+
+  const showWelcome = tab === 'login' && !forgotMode && !pendingApproval
+  const footerLinks = [
+    [t('auth.login.footerPrivacy'), '/privacy'],
+    [t('auth.login.footerTerms'), '/terms'],
+    [t('auth.login.footerSupport'), '/support'],
+    ['Status', '/status'],
+  ]
 
   return (
     <>
-      <style>{STYLES}</style>
+      <style>{LOGIN_PAGE_CSS}</style>
 
-      {/* The auth screen now genuinely follows the app's light/dark theme - every
-          surface reads from the --login-* tokens in index.css (dark and light
-          both fully defined), and the reader can flip it right here via the
-          Theme control below without ever having to sign in first. */}
-      <div className="tp-login-shell" style={{ minHeight:'100vh', display:'flex', background:'var(--login-bg)', position:'relative', overflow:'hidden' }}>
+      {/* Dark photographic hero (both themes) + the sign-in panel, which follows
+          the light/dark theme through the tokens in loginStyles.js. */}
+      <div className="tpl-shell tp-login-shell">
+        <LoginHero logoSrc={loginLogo} customLogo={customLogo} showcase={showcase} />
 
-        {/* ── Background layers ──────────────────────────────────────────── */}
-        {/* Deep radial glow */}
-        <div style={{
-          position:'fixed', inset:0, pointerEvents:'none',
-          background:'radial-gradient(ellipse 80% 60% at 20% 50%, var(--login-glow-a) 0%, transparent 60%), radial-gradient(ellipse 60% 50% at 80% 50%, var(--login-glow-b) 0%, transparent 55%)',
-        }}/>
-        {/* Grid */}
-        <div style={{
-          position:'fixed', inset:0, pointerEvents:'none',
-          backgroundImage: 'linear-gradient(var(--login-grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--login-grid-line) 1px, transparent 1px)',
-          backgroundSize: '44px 44px',
-        }}/>
-        {/* Scan line */}
-        <div style={{
-          position:'fixed', left:0, right:0, height:2, top:0,
-          background:'linear-gradient(90deg, transparent, rgba(22,163,74,0.5), rgba(74,222,128,0.7), rgba(22,163,74,0.5), transparent)',
-          animation:'tp-scan 9s ease-in-out infinite',
-          pointerEvents:'none',
-        }}/>
-
-        {/* Network status pill */}
-        <div className="tp-login-netpill" style={{
-          position:'fixed', top:16, left:'50%', transform:'translateX(-50%)',
-          zIndex:100, display:'flex', alignItems:'center', gap:6,
-          padding:'5px 12px', borderRadius:999,
-          background: isOnline ? 'rgba(22,163,74,0.12)' : 'rgba(239,68,68,0.12)',
-          border: `1px solid ${isOnline ? 'rgba(22,163,74,0.25)' : 'rgba(239,68,68,0.3)'}`,
-          transition:'all 0.4s',
-        }}>
-          {isOnline
-            ? <><Wifi size={11} style={{ color: 'var(--brand-on-tint)' }}/><span style={{fontSize:10, fontWeight:700, color:'var(--brand-on-tint)', letterSpacing:'0.06em'}}>{t('auth.login.connected')}</span></>
-            : <><WifiOff size={11} style={{ color: 'var(--login-danger-text)' }}/><span style={{fontSize:10, fontWeight:700, color:'var(--login-danger-text)', letterSpacing:'0.06em'}}>{t('auth.login.offline')}</span></>
-          }
-        </div>
-
-        {/* Theme + language controls - fixed top-right, reachable before signing
-            in and on every viewport (the desktop layout otherwise has nowhere to
-            switch either). */}
-        <div className="tp-login-controls" style={{
-          position:'fixed', top:16, insetInlineEnd:16, zIndex:100,
-          display:'flex', alignItems:'center', gap:8,
-        }}>
-          <LanguageSwitcher />
-          <div style={{
-            display:'flex', alignItems:'center', justifyContent:'center',
-            width:32, height:32, borderRadius:999,
-            background: 'var(--login-card-bg)', border: '1px solid var(--login-card-border)',
-            color: 'var(--login-text-dim)',
-          }}>
-            <ThemeToggle size={15} />
-          </div>
-        </div>
-
-        {/* ── LEFT PANEL (desktop) ─────────────────────────────────────────── */}
-        <div style={{
-          display:'none',
-          flexDirection:'column',
-          justifyContent:'center',
-          padding:'60px 56px',
-          flex:'0 0 48%',
-          position:'relative',
-        }}
-          className="lg-panel">
-
-          {/* Big background tyre */}
-          <div style={{ position:'absolute', right:-60, top:'50%', transform:'translateY(-50%)', opacity:0.08, pointerEvents:'none' }}>
-            <Tyre size={500} reverse/>
-          </div>
-
-          {/* Brand */}
-          <div style={{ marginBottom:48 }}>
-            <div style={{ display:'flex', alignItems:'center', gap:14, marginBottom:20 }}>
-              <div style={{
-                width:52, height:52, borderRadius:16, display:'flex', alignItems:'center', justifyContent:'center',
-                background:'linear-gradient(135deg, rgba(22,163,74,0.22), rgba(4,20,10,0.9))',
-                border:'1.5px solid rgba(22,163,74,0.4)',
-                boxShadow:'0 0 30px rgba(22,163,74,0.3)',
-              }}>
-                <BrandIcon src={loginLogo} custom={loginLogo !== TpLogo} chip={false} size={30} />
-              </div>
-              <div>
-                <h1 style={{fontSize:26, fontWeight:800, color:'var(--login-text)', letterSpacing:'-0.03em', lineHeight:1, margin:0}}>TyrePulse</h1>
-                <div style={{fontSize:11, color:'var(--brand-on-tint)', letterSpacing:'0.12em', textTransform:'uppercase', fontWeight:600, marginTop:2}}>{t('auth.login.brandTagline')}</div>
-              </div>
-            </div>
-
-            <h2 style={{ fontSize:36, fontWeight:800, color:'var(--login-text)', lineHeight:1.2, letterSpacing:'-0.03em', margin:'0 0 12px' }}>
-              {t('auth.login.heroLine1')}<br/>
-              <span style={{ background:'linear-gradient(135deg, var(--login-hero-accent-1), var(--login-hero-accent-2))', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text' }}>
-                {t('auth.login.heroLine2')}
-              </span>
-            </h2>
-            <p style={{ fontSize:14, color:'var(--login-text-dim)', lineHeight:1.6, margin:0, maxWidth:340 }}>
-              {t('auth.login.heroDesc')}
-            </p>
-
-            {/* Premium marketing hero — reinforces the brand moment without
-                touching the centered auth card on the right */}
-            <div style={{ marginTop:28, opacity:0.96, pointerEvents:'none' }}>
-              <Illustration name="marketing/hero-platform" size={300} title={t('auth.login.brandTagline')} />
-            </div>
-          </div>
-
-          {/* Features grid */}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, maxWidth:380 }}>
-            {FEATURES.map((f, i) => (
-              <FeatureChip key={f.labelKey} icon={f.icon} label={t(f.labelKey)} delay={i * 0.08}/>
-            ))}
-          </div>
-
-          {/* Product capabilities — avoid unsupported operational statistics on the public surface. */}
-          <div style={{ display:'flex', gap:32, marginTop:40 }}>
-            {[['auth.login.stats.lifecycle','auth.login.stats.tyresTracked'],['auth.login.stats.scoped','auth.login.stats.uptime'],['auth.login.stats.actionable','auth.login.stats.alertTime']].map(([valKey, lblKey]) => (
-              <div key={lblKey}>
-                <div style={{fontSize:22, fontWeight:800, color:'var(--brand-on-tint)', letterSpacing:'-0.02em'}}>{t(valKey)}</div>
-                <div style={{fontSize:11, color:'var(--login-text-dim)', fontWeight:500, marginTop:2}}>{t(lblKey)}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* ── RIGHT PANEL / Single Column Mobile ──────────────────────────── */}
-        <main id="main-content" style={{
-          flex:1, display:'flex', flexDirection:'column',
-          alignItems:'center', justifyContent:'center',
-          padding:'24px 20px',
-          minHeight:'100vh',
-        }}>
-
-          {/* Mobile-only brand */}
+        <main id="main-content" className="tpl-side">
           <motion.div
-            initial={{ opacity:1, y:-16 }}
+            initial={{ opacity:1, y:12 }}
             animate={{ opacity:1, y:0 }}
-            transition={{ duration:0.45, ease:[0.22,1,0.36,1] }}
-            style={{ textAlign:'center', marginBottom:24 }}
-            className="mobile-brand"
+            transition={{ duration:0.4, ease:[0.22,1,0.36,1] }}
+            className="tpl-card"
           >
-            <div style={{ display:'flex', justifyContent:'center', marginBottom:10 }}>
-              <div style={{ position:'relative' }}>
-                <div className="tp-pulse-ring" style={{ inset:-10 }}/>
-                <Tyre size={76} opacity={0.95}/>
+            <div className="tpl-card-top">
+              <div className="tpl-card-brand">
+                <span className="tpl-emblem" aria-hidden="true">
+                  <BrandIcon src={loginLogo} custom={customLogo} chip={customLogo} size={22} />
+                </span>
+                <span className="tpl-wordmark" role="img" aria-label="TyrePulse" data-a="Tyre" data-b="Pulse" />
+              </div>
+              <div style={{ display:'flex', alignItems:'center', gap:10, marginInlineStart:'auto' }}>
+                <span className={`tpl-net${isOnline ? '' : ' off'}`}>
+                  {isOnline
+                    ? <><Wifi size={12} aria-hidden="true"/>{t('auth.login.connected')}</>
+                    : <><WifiOff size={12} aria-hidden="true"/>{t('auth.login.offline')}</>}
+                </span>
+                <span className="tpl-theme"><ThemeToggle size={17} includeSystem={false} /></span>
               </div>
             </div>
-            <h1 style={{fontSize:24, fontWeight:800, color:'var(--login-text)', letterSpacing:'-0.03em', margin:0}}>TyrePulse</h1>
-            <div style={{fontSize:11, color:'var(--brand-on-tint)', letterSpacing:'0.12em', textTransform:'uppercase', fontWeight:600, marginTop:3}}>{t('auth.login.brandTaglinePlatform')}</div>
-          </motion.div>
 
-          {/* Session expired banner */}
-          <AnimatePresence>
-            {sessionExpired && (
-              <motion.div
-                initial={{ opacity:0, y:-8, height:0 }}
-                animate={{ opacity:1, y:0, height:'auto' }}
-                exit={{ opacity:0, height:0 }}
-                style={{
-                  display:'flex', alignItems:'center', gap:8,
-                  padding:'10px 14px', borderRadius:12, marginBottom:12,
-                  fontSize:13, color:'var(--login-warn-text)',
-                  background:'rgba(234,179,8,0.08)',
-                  border:'1px solid rgba(234,179,8,0.2)',
-                  width:'100%', maxWidth:420,
-                }}
-              >
-                <AlertCircle size={14} style={{flexShrink:0}}/>
-                {t('auth.login.sessionExpiredBanner')}
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Access revoked banner */}
-          <AnimatePresence>
-            {accessRevoked && (
-              <motion.div
-                initial={{ opacity:0, y:-8, height:0 }}
-                animate={{ opacity:1, y:0, height:'auto' }}
-                exit={{ opacity:0, height:0 }}
-                style={{
-                  display:'flex', alignItems:'center', gap:8,
-                  padding:'10px 14px', borderRadius:12, marginBottom:12,
-                  fontSize:13, color:'var(--login-danger-text)',
-                  background:'rgba(239,68,68,0.08)',
-                  border:'1px solid rgba(239,68,68,0.25)',
-                  width:'100%', maxWidth:420,
-                }}
-              >
-                <AlertCircle size={14} style={{flexShrink:0}}/>
-                Your account access has been suspended. Contact your administrator.
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Main card */}
-          <motion.div
-            initial={{ opacity:1, y:20, scale:0.98 }}
-            animate={{ opacity:1, y:0, scale:1 }}
-            transition={{ duration:0.5, ease:[0.22,1,0.36,1] }}
-            style={{ width:'100%', maxWidth:420 }}
-          >
-            <div style={{
-              background:'var(--login-card-bg)',
-              border:'1.5px solid var(--login-card-border)',
-              borderRadius:24,
-              padding:'28px 28px 32px',
-              boxShadow:'var(--login-card-shadow)',
-              backdropFilter:'blur(32px)',
-              position:'relative',
-              overflow:'hidden',
-            }}>
-
-              {/* Top glow stripe */}
-              <div style={{
-                position:'absolute', top:0, left:'15%', right:'15%', height:1,
-                background:'linear-gradient(90deg, transparent, rgba(74,222,128,0.7), transparent)',
-              }}/>
-
-              {/* Tabs */}
-              {!forgotMode && !pendingApproval && (
-                <div style={{ display:'flex', marginBottom:24, gap:4 }}>
-                  {[['login',t('auth.login.tabSignIn')],['signup',t('auth.login.tabCreateAccount')]].map(([val,label]) => (
-                    <button key={val} type="button" className="tp-login-tab" aria-pressed={tab===val} onClick={() => switchTab(val)} style={{
-                      flex:1, padding:'9px 0', fontSize:13, fontWeight:700,
-                      border:'none', borderRadius:10,
-                      background: tab===val ? 'rgba(22,163,74,0.18)' : 'var(--login-tab-bg)',
-                      boxShadow: tab===val ? 'inset 0 0 0 1.5px rgba(22,163,74,0.45)' : `inset 0 0 0 1.5px var(--login-tab-border)`,
-                      color: tab===val ? 'var(--brand-on-tint)' : 'var(--login-text-dim)',
-                      cursor:'pointer', transition:'all 0.2s',
-                    }}>
-                      {label}
-                    </button>
-                  ))}
+            {showWelcome && (
+              <>
+                <h2 className="tpl-welcome">{p('welcome')}</h2>
+                <p className="tpl-welcome-sub">{p('welcomeSub')}</p>
+                <div className="tpl-seg" role="group" aria-label={p('modeLabel')}>
+                  <button type="button" aria-pressed="true">{p('tabUser')}</button>
+                  <button type="button" aria-pressed="false" onClick={openConsole} title={p('consoleNewTab')} aria-describedby="tpl-console-hint">
+                    <Crown size={15} aria-hidden="true"/>{p('tabConsole')}
+                  </button>
                 </div>
-              )}
+                <span id="tpl-console-hint" className="tpl-sr">{p('consoleNewTab')}</span>
+              </>
+            )}
+
+            {tab === 'signup' && (
+              <div style={{ marginBottom:16 }}>
+                <button type="button" className="tpl-link-btn" onClick={() => switchTab('login')}>
+                  {t('auth.login.backToSignIn')}
+                </button>
+                <h2 className="tpl-welcome" style={{ fontSize:22 }}>{p('requestTitle')}</h2>
+                <p className="tpl-welcome-sub" style={{ marginBottom:0 }}>{p('requestSub')}</p>
+              </div>
+            )}
+
+            {/* Session expired banner */}
+            {sessionExpired && (
+              <div className="tpl-banner warn" role="status">
+                <AlertCircle size={14} style={{flexShrink:0, marginTop:2}} aria-hidden="true"/>
+                {t('auth.login.sessionExpiredBanner')}
+              </div>
+            )}
+
+            {/* Access revoked banner */}
+            {accessRevoked && (
+              <div className="tpl-banner danger" role="alert">
+                <AlertCircle size={14} style={{flexShrink:0, marginTop:2}} aria-hidden="true"/>
+                {t('auth.login.accessRevokedBanner')}
+              </div>
+            )}
 
               {/* Error */}
               <AnimatePresence>
@@ -855,27 +547,23 @@ export default function Login() {
                   initial={{ opacity:0, x:12 }} animate={{ opacity:1, x:0 }} exit={{ opacity:0, x:-12 }}
                   transition={{ duration:0.2 }}
                   onSubmit={handleLogin}
-                  style={{ display:'flex', flexDirection:'column', gap:18 }}
+                  style={{ display:'flex', flexDirection:'column', gap:14 }}
                 >
                   {/* Unified identifier input - accepts email, username, or employee ID */}
                   <div>
-                    <label htmlFor="login-identifier" style={labelStyle}>{t('auth.login.idAnyLabel')}</label>
+                    <label htmlFor="login-identifier" style={labelStyle}>{p('idLabel')}</label>
                     <div style={{ position:'relative' }}>
-                      <div style={{
-                        position:'absolute', insetInlineStart:13, top:'50%', transform:'translateY(-50%)',
-                        color: focusedField==='id' ? 'var(--brand-on-tint)' : 'var(--login-icon)',
-                        transition:'color 0.2s', pointerEvents:'none',
-                      }}>
-                        <User size={15}/>
-                      </div>
+                      <span className="tpl-field-icon" style={{ color: focusedField==='id' ? 'var(--brand-on-tint)' : 'var(--login-icon)' }}>
+                        <Mail size={16} aria-hidden="true"/>
+                      </span>
                       <input
                         id="login-identifier"
                         name="identifier"
                         type="text"
-                        style={{ ...inputStyle('id'), paddingInlineStart:40 }}
+                        style={{ ...inputStyle('id'), paddingInlineStart:42 }}
                         aria-invalid={error ? true : undefined}
                         aria-describedby={error ? 'login-error' : undefined}
-                        placeholder={t('auth.login.idAnyPlaceholder')}
+                        placeholder={p('idPlaceholder')}
                         value={identifier}
                         onChange={e => setIdentifier(e.target.value)}
                         onFocus={() => setFocusedField('id')}
@@ -887,30 +575,16 @@ export default function Login() {
 
                   {/* Password */}
                   <div>
-                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:7 }}>
-                      <label htmlFor="login-password" style={labelStyle}>{t('auth.passwordLabel')}</label>
-                      <button type="button"
-                        onClick={() => {
-                          const typed = identifier.trim()
-                          const looksLikePhone = /^(?:\+|00)[\d\s().-]+$/.test(typed)
-                          setForgotChannel(looksLikePhone ? 'sms' : 'email')
-                          setForgotDestination(typed.includes('@') || looksLikePhone ? typed : '')
-                          setForgotMode(true); setError('')
-                        }}
-                        className="tp-login-link"
-                        style={{ fontSize:11, color:'var(--brand-on-tint)', opacity:0.75, background:'none', border:'none', cursor:'pointer', padding:0, fontWeight:600, transition:'opacity 0.2s', letterSpacing:'0.02em' }}
-                        onMouseEnter={e => { e.currentTarget.style.opacity = '1' }}
-                        onMouseLeave={e => { e.currentTarget.style.opacity = '0.75' }}
-                      >
-                        {t('auth.forgotPassword')}
-                      </button>
-                    </div>
+                    <label htmlFor="login-password" style={labelStyle}>{t('auth.passwordLabel')}</label>
                     <div style={{ position:'relative' }}>
+                      <span className="tpl-field-icon" style={{ color: focusedField==='pw' ? 'var(--brand-on-tint)' : 'var(--login-icon)' }}>
+                        <Lock size={16} aria-hidden="true"/>
+                      </span>
                       <input
                         id="login-password"
                         name="password"
                         type={showLoginPw ? 'text' : 'password'}
-                        style={{ ...inputStyle('pw'), paddingInlineEnd:44 }}
+                        style={{ ...inputStyle('pw'), paddingInlineStart:42, paddingInlineEnd:48 }}
                         aria-invalid={error ? true : undefined}
                         aria-describedby={error ? 'login-error' : undefined}
                         placeholder="••••••••"
@@ -921,59 +595,75 @@ export default function Login() {
                         required autoComplete="current-password"
                       />
                       <button type="button" className="tp-login-eye" aria-label={showLoginPw ? 'Hide password' : 'Show password'} aria-pressed={showLoginPw} onClick={() => setShowLoginPw(v => !v)} style={{
-                        position:'absolute', insetInlineEnd:13, top:'50%', transform:'translateY(-50%)',
-                        color:'var(--login-icon)', background:'none', border:'none',
-                        cursor:'pointer', padding:4, transition:'color 0.2s', display:'flex',
-                      }}
-                        onMouseEnter={e => { e.currentTarget.style.color = 'var(--login-icon-hover)' }}
-                        onMouseLeave={e => { e.currentTarget.style.color = 'var(--login-icon)' }}
-                      >
-                        {showLoginPw ? <EyeOff size={15}/> : <Eye size={15}/>}
+                        position:'absolute', insetInlineEnd:2, top:'50%', transform:'translateY(-50%)',
+                        color:'var(--login-icon)', background:'none', border:'none', minWidth:44, minHeight:44,
+                        cursor:'pointer', padding:0, display:'flex', alignItems:'center', justifyContent:'center',
+                      }}>
+                        {showLoginPw ? <EyeOff size={16}/> : <Eye size={16}/>}
                       </button>
                     </div>
+                  </div>
+
+                  <div className="tpl-row">
+                    <label className="tpl-check">
+                      <input type="checkbox" checked={rememberMe} onChange={e => setRememberMe(e.target.checked)} />
+                      {p('rememberMe')}
+                    </label>
+                    <button type="button" className="tpl-link-btn"
+                      onClick={() => {
+                        const typed = identifier.trim()
+                        const looksLikePhone = /^(?:\+|00)[\d\s().-]+$/.test(typed)
+                        setForgotChannel(looksLikePhone ? 'sms' : 'email')
+                        setForgotDestination(typed.includes('@') || looksLikePhone ? typed : '')
+                        setForgotMode(true); setError('')
+                      }}
+                    >
+                      {t('auth.forgotPassword')}
+                    </button>
                   </div>
 
                   <TurnstileWidget ref={captchaRef} onToken={setCaptchaToken} onError={setError}
                     className="flex justify-center" />
 
                   {/* Submit */}
-                  <button type="submit" disabled={loading || !isOnline || (needsCaptcha && !captchaToken)} className="tp-btn-shine" style={{
-                    width:'100%', padding:'13px', borderRadius:14, border:'none',
-                    background: loading
-                      ? 'rgba(22,163,74,0.3)'
-                      : !isOnline
-                        ? 'rgba(107,114,128,0.3)'
-                        : 'linear-gradient(135deg, #16a34a 0%, #15803d 55%, #166534 100%)',
-                    color:'#fff', fontSize:14, fontWeight:700,
-                    cursor: (loading || !isOnline) ? 'not-allowed' : 'pointer',
-                    display:'flex', alignItems:'center', justifyContent:'center', gap:8,
-                    boxShadow: loading || !isOnline ? 'none' : '0 4px 28px rgba(22,163,74,0.4), 0 0 0 1px rgba(74,222,128,0.12)',
-                    transition:'all 0.2s', letterSpacing:'0.01em',
-                    marginTop:4,
-                  }}>
-                    {loading ? <Loader2 size={16} className="animate-spin"/> : <Zap size={16}/>}
-                    {loading ? t('auth.login.signingIn') : !isOnline ? t('auth.login.noConnection') : t('auth.login.tabSignIn')}
-                    {!loading && isOnline && <ArrowRight size={15} className="tp-dir-icon" aria-hidden="true"/>}
+                  <button type="submit" className="tpl-primary" disabled={loading || !isOnline || (needsCaptcha && !captchaToken)}>
+                    {loading && <Loader2 size={17} className="animate-spin" aria-hidden="true"/>}
+                    {loading ? t('auth.login.signingIn') : !isOnline ? t('auth.login.noConnection') : p('signIn')}
+                    {!loading && isOnline && <ArrowRight size={17} className="tp-dir-icon" aria-hidden="true"/>}
                   </button>
 
-                  {/* Enterprise SSO */}
-                  <div style={{ display:'flex', alignItems:'center', gap:10, margin:'2px 0' }}>
-                    <div style={{ flex:1, height:1, background:'var(--login-divider)' }}/>
-                    <span style={{ fontSize:10, fontWeight:700, color:'var(--login-text-faint)', letterSpacing:'0.08em' }}>{t('auth.login.or')}</span>
-                    <div style={{ flex:1, height:1, background:'var(--login-divider)' }}/>
+                  <div className="tpl-divider">{p('orContinue')}</div>
+                  <div className="tpl-providers">
+                    {signInOpts.google && (
+                      <button type="button" className="tpl-provider" onClick={() => handleProvider('google')} disabled={!!providerLoading || !isOnline}>
+                        {providerLoading === 'google' ? <Loader2 size={15} className="animate-spin" aria-hidden="true"/> : <GoogleMark/>}{p('google')}
+                      </button>
+                    )}
+                    {signInOpts.microsoft && (
+                      <button type="button" className="tpl-provider" onClick={() => handleProvider('azure')} disabled={!!providerLoading || !isOnline}>
+                        {providerLoading === 'azure' ? <Loader2 size={15} className="animate-spin" aria-hidden="true"/> : <MicrosoftMark/>}{p('microsoft')}
+                      </button>
+                    )}
+                    {/* Enterprise SSO (existing flow: resolves the work-email domain). */}
+                    <button type="button" className="tpl-provider" onClick={handleSso} disabled={ssoLoading || !isOnline} aria-label={p('ssoAria')}>
+                      {ssoLoading ? <Loader2 size={15} className="animate-spin" aria-hidden="true"/> : <Shield size={15} aria-hidden="true"/>}
+                      {ssoLoading ? t('auth.login.redirecting') : p('sso')}
+                    </button>
                   </div>
-                  <button type="button" onClick={handleSso} disabled={ssoLoading || !isOnline} style={{
-                    width:'100%', padding:'11px', minHeight:44, borderRadius:14,
-                    border:'1.5px solid rgba(74,222,128,0.28)', background:'rgba(22,163,74,0.08)',
-                    color:'var(--brand-on-tint)', fontSize:13, fontWeight:700,
-                    cursor:(ssoLoading || !isOnline) ? 'not-allowed' : 'pointer',
-                    display:'flex', alignItems:'center', justifyContent:'center', gap:8,
-                    transition:'all 0.2s',
-                  }}>
-                    {ssoLoading ? <Loader2 size={15} className="animate-spin"/> : <Shield size={15}/>}
-                    {ssoLoading ? t('auth.login.redirecting') : t('auth.login.signInWithSso')}
-                  </button>
                 </motion.form>
+              )}
+
+              {tab === 'login' && !forgotMode && !pendingApproval && signInOpts.qr && (
+                <QrLoginPanel onError={(m) => setError(m || t('auth.login.errUnexpected'))} />
+              )}
+
+              {tab === 'login' && !forgotMode && !pendingApproval && (
+                <div className="tpl-request">
+                  {p('newTo')}
+                  <button type="button" onClick={() => switchTab('signup')}>
+                    {p('requestAccess')}<ArrowRight size={14} className="tp-dir-icon" aria-hidden="true"/>
+                  </button>
+                </div>
               )}
 
               {/* ── FORGOT PASSWORD ───────────────────────────────────────── */}
@@ -1210,40 +900,20 @@ export default function Login() {
                   }}>{t('auth.login.backToSignInBtn')}</button>
                 </motion.div>
               )}
-            </div>
-
-            {/* Footer */}
-            <motion.div
-              initial={{ opacity:1 }} animate={{ opacity:1 }} transition={{ delay:0.55 }}
-              style={{ textAlign:'center', marginTop:20, display:'flex', flexDirection:'column', gap:6 }}
-            >
-              <p style={{ fontSize:11, color:'var(--login-text-faint)', letterSpacing:'0.04em' }}>
-                {t('auth.login.footerCopyright')}
-              </p>
-              <div className="tp-login-footer-links" style={{ display:'flex', justifyContent:'center', gap:16 }}>
-                {[
-                  [t('auth.login.footerPrivacy'), '/privacy'],
-                  [t('auth.login.footerTerms'), '/terms'],
-                  [t('auth.login.footerSupport'), '/support'],
-                  ['Status', '/status'],
-                ].map(([label, to]) => (
-                  <Link key={to} to={to} style={{ fontSize:11, color:'var(--login-text-faint)', fontWeight:600, letterSpacing:'0.04em', textDecoration:'none' }}>
-                    {label}
-                  </Link>
-                ))}
-              </div>
-            </motion.div>
           </motion.div>
+
+          {/* Footer */}
+          <footer className="tpl-footer">
+            <nav className="tp-login-footer-links" aria-label={p('footerNav')}>
+              {footerLinks.map(([label, to]) => (
+                <Link key={to} to={to}>{label}</Link>
+              ))}
+              <a href={`${MARKETING_URL}/contact`}>{p('contact')}</a>
+            </nav>
+            <small>{t('auth.login.footerCopyright')}{appVersion ? ` | ${p('version', { v: appVersion })}` : ''}</small>
+          </footer>
         </main>
       </div>
-
-      {/* Responsive split - show left panel on large screens */}
-      <style>{`
-        @media (min-width: 1024px) {
-          .lg-panel { display: flex !important; }
-          .mobile-brand { display: none !important; }
-        }
-      `}</style>
 
       {/* MFA challenge modal - shown after password succeeds but AAL2 is required */}
       <TwoFactorChallenge

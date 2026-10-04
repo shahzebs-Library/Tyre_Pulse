@@ -53,13 +53,15 @@ describe('dataCleanup — service wrappers', () => {
   })
 
   it('runCleanup returns {deleted, snapshot}', async () => {
-    h.state.rpc.admin_data_cleanup_run = { data: { deleted: 10, snapshot: 's1' }, error: null }
-    const r = await api.runCleanup('audit_logs', '2024-01-01')
+    h.state.rpc.admin_data_cleanup_run_with_reason = { data: { deleted: 10, snapshot: 's1' }, error: null }
+    const r = await api.runCleanup('audit_logs', '2024-01-01', 'old logs')
     expect(r).toEqual({ deleted: 10, snapshot: 's1' })
+    // The reason travels with the delete so both commit in one transaction.
+    expect(h.supabase.rpc).toHaveBeenCalledWith('admin_data_cleanup_run_with_reason', { p_key: 'audit_logs', p_before: '2024-01-01', p_reason: 'old logs' })
   })
 
   it('surfaces a safe error message on RPC error', async () => {
-    h.state.rpc.admin_data_cleanup_run = { data: null, error: { message: 'super admin only' } }
+    h.state.rpc.admin_data_cleanup_run_with_reason = { data: null, error: { message: 'super admin only' } }
     await expect(api.runCleanup('accidents', '2020-01-01')).rejects.toThrow(/could not run the cleanup/i)
   })
 })

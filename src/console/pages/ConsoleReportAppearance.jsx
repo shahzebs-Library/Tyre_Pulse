@@ -16,7 +16,7 @@ import {
   Note, Badge, Code, Btn, LoadingState, ErrorState,
   StatTile, ConfirmImpactDialog, Panel, PanelHeader,
 } from '../components/ui'
-import { PageHeader, useUrlTab, AttentionList, Collapsible, fmtRelative, fmtDateTime } from './shared/pageKit'
+import { PageHeader, useUrlTab, AttentionList, Collapsible, fmtRelative } from './shared/pageKit'
 import { auditPalette, isLightBackground, contrastRatio, darkenToContrast, fixPalette, colourName } from './appearance/paletteCheck'
 import { prepareLogo, LOGO_TYPES } from './appearance/logoUpload'
 import { listConfigHistory, namesFor } from '../../lib/api/consolePlatform'

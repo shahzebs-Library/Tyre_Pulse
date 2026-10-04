@@ -7524,7 +7524,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String qrLoginConfirmMessage(String name) {
-    return 'Sign in to TyrePulse on this computer as $name? Only approve a code you just opened yourself.';
+    return 'Sign in to TyrePulse on this computer as $name?';
   }
 
   @override
@@ -7601,4 +7601,54 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get qrLoginScanAgain => 'Scan another code';
+
+  @override
+  String get qrLoginChecking => 'Checking the code...';
+
+  @override
+  String qrLoginBrowserOnOs(String browser, String os) {
+    return '$browser on $os';
+  }
+
+  @override
+  String get qrLoginUnknownBrowser => 'Unknown browser';
+
+  @override
+  String qrLoginIpAddress(String ip) {
+    return 'IP address: $ip';
+  }
+
+  @override
+  String qrLoginRequestedAgo(int seconds) {
+    String _temp0 = intl.Intl.pluralLogic(
+      seconds,
+      locale: localeName,
+      other: 'Requested $seconds seconds ago',
+      one: 'Requested 1 second ago',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get qrLoginWarning =>
+      'Only approve if you are signing in on this computer yourself right now.';
+
+  @override
+  String get qrLoginPickNumber => 'Tap the number shown on the computer';
+
+  @override
+  String qrLoginApproveNumber(String number) {
+    return 'Approve with number $number';
+  }
+
+  @override
+  String get qrLoginDecline => 'Decline';
+
+  @override
+  String get qrLoginMismatch =>
+      'That number did not match. The code is cancelled; make a new one on the computer.';
+
+  @override
+  String get qrLoginAdmin =>
+      'QR sign-in is not available for administrator accounts. Sign in with your password.';
 }

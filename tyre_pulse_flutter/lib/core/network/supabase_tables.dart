@@ -368,11 +368,20 @@ abstract final class SupabaseRpcs {
   /// one-time code the web sign-in page shows as a QR. VERIFIED 2026-10-04:
   /// created by `supabase/migrations/20261004121000_login_showcase_and_qr_login.sql`,
   /// SECURITY DEFINER, granted to `authenticated` only (anon revoked).
-  /// Signature `(p_id uuid, p_secret text, p_approve boolean default true)`;
+  /// Signature `(p_id uuid, p_secret text, p_approve boolean default true,
+  /// p_match text default null)` (p_match since the 20261004150000 hardening);
   /// returns jsonb `{ok, status}` or `{ok:false, reason}`; raises 42501 for an
   /// unapproved or locked caller. Online only - see
   /// `features/qr_login/data/qr_login_repository.dart`.
   static const String qrLoginApprove = 'qr_login_approve';
+
+  /// Hardened QR sign-in (`supabase/migrations/20261004150000_qr_login_hardening.sql`):
+  /// the phone reads which browser is asking plus three 2-digit options
+  /// before approving. Signature `(p_id uuid, p_secret text)`, authenticated
+  /// only; returns jsonb `{ok:true, user_agent, ip, age_seconds, options}` or
+  /// `{ok:false, reason}`. `qr_login_approve` now also takes
+  /// `p_match text default null`.
+  static const String qrLoginPeek = 'qr_login_peek';
 
   static const String getReportSnapshotAuthed = 'get_report_snapshot_authed';
   static const String getAccidentAudit = 'get_accident_audit';
@@ -411,6 +420,7 @@ abstract final class SupabaseRpcs {
     submitUserIssue,
     getAccidentAudit,
     qrLoginApprove,
+    qrLoginPeek,
   };
 
   /// Set-returning RPCs, which are capped at 1000 rows exactly as a table read

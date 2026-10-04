@@ -5,6 +5,22 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
+# ⚑ SESSION 2026-10-04 (part 6) — SECURITY REVIEW + QR SIGN-IN HARDENING (applied live, feature still OFF).
+- Console migrations (1f2f356/91ef59f) reviewed vs live DB: clean (74 DEFINER fns pinned, all console fns is_super_admin gated,
+  12 new tables RLS on). Leftover grants revoked. OPEN owner call: _user_issue_admin() also admits plain org Admins (Error Center).
+- QR sign-in (migration 20261004150000 + qr_login_purge_job + login_showcase_users_org_scope; edge fn qr-login v2):
+  two secrets (QR = scan secret for phone; browser_secret only in the page, required by qr_login_status + edge redeem);
+  number matching via NEW qr_login_peek (3 options, one wrong pick kills the code); qr_login_approve now 4 args
+  (p_match), old 3-arg RENAMED qr_login_approve_v1_retired + revoked (not dropped: MCP drop/delete waits for approval
+  and times out); Admin/super-admin cannot approve; edge fn refuses users with verified 2FA; per-IP start limit 10/min;
+  cron qr-login-purge every 15 min (unconsumed >1h, all >30d). Verified by rolled-back live test.
+- Flutter (code only): peek + browser/IP/age + 3 number buttons; ARB parity now 2208; 55/55 qr tests pass.
+- RULE: keep system_config.qr_login_enabled OFF until a Flutter build with this change is on phones (old builds cannot
+  approve: they send no p_match).
+- Contact form (marketing): same-site check, per-IP throttle 5/10min, fleetSize required server-side. Tool versions pinned.
+- GOTCHA: in an MCP migration, `drop function` and any `delete` statement trigger the approval wait -> 60s timeout and
+  full rollback. Rename+revoke instead of drop; put deletes inside a function body created separately.
+
 # ⚑ SESSION 2026-10-04 (part 5) — MARKETING SITE: COPY RULES + IMPECCABLE + EMIL KOWALSKI + TASTE PASS (local commit, not pushed).
 - Skills installed: impeccable (pbakaus), Emil Kowalski set (emilkowalski/skill: emil-design-eng, improve/review-animations...),
   taste re-installed; pinned in skills-lock.json. 3 read-only audits ran in parallel, fixes applied by hand.

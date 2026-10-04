@@ -10,6 +10,11 @@
 /// The decision is ONLINE ONLY (see `qr_login_repository.dart`): a code lasts
 /// two minutes and a queued approval would sign a browser in long after the
 /// person stopped looking at it.
+///
+/// Number matching (QR sign-in hardening): after the scan the phone first
+/// PEEKS at the request - which browser, from which address, how long ago -
+/// and approves only by tapping the 2-digit number the computer shows. A
+/// wrong number cancels the code on the server.
 library;
 
 import 'dart:async';
@@ -21,6 +26,7 @@ import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/features/qr_login/data/qr_login_repository.dart';
 import 'package:tyre_pulse/features/qr_login/domain/qr_login.dart';
 import 'package:tyre_pulse/features/qr_login/qr_login_providers.dart';
 import 'package:tyre_pulse/features/scanning/presentation/camera_access.dart';
@@ -42,9 +48,13 @@ abstract final class QrLoginKeys {
   static const ValueKey<String> camera = ValueKey<String>('qrLogin.camera');
   static const ValueKey<String> confirmSheet =
       ValueKey<String>('qrLogin.confirmSheet');
-  static const ValueKey<String> approve = ValueKey<String>('qrLogin.approve');
-  static const ValueKey<String> cancel = ValueKey<String>('qrLogin.cancel');
+  static const ValueKey<String> decline = ValueKey<String>('qrLogin.decline');
+  static const ValueKey<String> checking = ValueKey<String>('qrLogin.checking');
   static const ValueKey<String> waiting = ValueKey<String>('qrLogin.waiting');
+
+  /// One number option on the confirm sheet.
+  static ValueKey<String> option(String number) =>
+      ValueKey<String>('qrLogin.option.$number');
   static const ValueKey<String> sending = ValueKey<String>('qrLogin.sending');
   static const ValueKey<String> result = ValueKey<String>('qrLogin.result');
 }
@@ -60,6 +70,10 @@ final class _Scanning extends _Phase {
 
 final class _NotACode extends _Phase {
   const _NotACode();
+}
+
+final class _Checking extends _Phase {
+  const _Checking();
 }
 
 final class _Confirming extends _Phase {
@@ -87,7 +101,7 @@ class QrLoginScreen extends ConsumerStatefulWidget {
 
 class _QrLoginScreenState extends ConsumerState<QrLoginScreen> {
   late _Phase _phase =
-      widget.initialPayload == null ? const _Scanning() : const _Confirming();
+      widget.initialPayload == null ? const _Scanning() : const _Checking();
 
   /// True while one payload is being handled, so a second detection or a
   /// double tap can never send two decisions for one scan.
@@ -124,26 +138,44 @@ class _QrLoginScreenState extends ConsumerState<QrLoginScreen> {
       setState(() => _phase = const _NotACode());
       return;
     }
+    setState(() => _phase = const _Checking());
+    final QrLoginRepository repo = ref.read(qrLoginRepositoryProvider);
+    final QrLoginPeekResult peek =
+        await repo.peek(id: code.id, secret: code.secret);
+    if (!mounted) return;
+    final QrLoginRequestInfo info;
+    switch (peek) {
+      case QrLoginPeekRefused(:final QrLoginFailure reason):
+        // Nothing was decided, so nothing is sent: the person is told why.
+        setState(() => _phase = _Done(QrLoginRefused(reason)));
+        return;
+      case QrLoginPeekReady(info: final QrLoginRequestInfo ready):
+        info = ready;
+    }
     setState(() => _phase = const _Confirming());
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final bool? answer = await showModalBottomSheet<bool>(
+    final String? picked = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       builder: (BuildContext sheetContext) => QrLoginConfirmSheet(
         personName: _personName(l10n),
-        onApprove: () => Navigator.of(sheetContext).pop(true),
-        onCancel: () => Navigator.of(sheetContext).pop(false),
+        info: info,
+        onPick: (String number) => Navigator.of(sheetContext).pop(number),
+        onDecline: () => Navigator.of(sheetContext).pop(),
       ),
     );
     if (!mounted) return;
     // Dismissing the sheet is a decline too: the code is spent either way,
     // so nobody else can approve it while the person looks away.
-    final bool approve = answer ?? false;
+    final bool approve = picked != null;
     setState(() => _phase = const _Sending());
-    final QrLoginOutcome outcome = await ref
-        .read(qrLoginRepositoryProvider)
-        .decide(id: code.id, secret: code.secret, approve: approve);
+    final QrLoginOutcome outcome = await repo.decide(
+      id: code.id,
+      secret: code.secret,
+      approve: approve,
+      match: picked,
+    );
     if (!mounted) return;
     setState(() => _phase = _Done(outcome));
   }
@@ -172,6 +204,10 @@ class _QrLoginScreenState extends ConsumerState<QrLoginScreen> {
               onPrimaryAction: _scanAgain,
               secondaryActionLabel: l10n.actionClose,
               onSecondaryAction: _close,
+            ),
+          _Checking() => TpLoadingState(
+              key: QrLoginKeys.checking,
+              message: l10n.qrLoginChecking,
             ),
           _Confirming() => TpStateView(
               // Not a spinner: nothing is in flight until the person answers
@@ -311,26 +347,44 @@ class _ScanStepState extends ConsumerState<_ScanStep> {
   }
 }
 
-/// The confirmation shown before anything is sent. Public so the widget
+/// The requesting browser in plain words, e.g. "Chrome on Windows", or
+/// "Unknown browser" when the user agent does not say.
+String qrLoginBrowserLabel(AppLocalizations l10n, String? userAgent) {
+  final ({String? browser, String? os}) d = describeUserAgent(userAgent);
+  final String? browser = d.browser;
+  final String? os = d.os;
+  if (browser == null) return l10n.qrLoginUnknownBrowser;
+  // Product names are isolated so they stay in order inside RTL text.
+  if (os == null) return '\u2068$browser\u2069';
+  return l10n.qrLoginBrowserOnOs('\u2068$browser\u2069', '\u2068$os\u2069');
+}
+
+/// The confirmation shown before anything is decided. Public so the widget
 /// test can render it on its own.
 class QrLoginConfirmSheet extends StatelessWidget {
   const QrLoginConfirmSheet({
     required this.personName,
-    required this.onApprove,
-    required this.onCancel,
+    required this.info,
+    required this.onPick,
+    required this.onDecline,
     super.key,
   });
 
   final String personName;
-  final VoidCallback onApprove;
-  final VoidCallback onCancel;
+  final QrLoginRequestInfo info;
+
+  /// Approves with the tapped number.
+  final ValueChanged<String> onPick;
+  final VoidCallback onDecline;
 
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final TpPalette palette = TpPalette.of(context);
     final TextTheme text = Theme.of(context).textTheme;
-    return Padding(
+    final String? ip = info.ip;
+    final int? age = info.ageSeconds;
+    return SingleChildScrollView(
       key: QrLoginKeys.confirmSheet,
       padding: const EdgeInsets.fromLTRB(
         TpSpace.lg,
@@ -361,22 +415,157 @@ class QrLoginConfirmSheet extends StatelessWidget {
             style: text.bodyMedium,
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: TpSpace.xl),
-          TpButton.primary(
-            key: QrLoginKeys.approve,
-            label: l10n.qrLoginApprove,
-            icon: Icons.check_rounded,
-            isFullWidth: true,
-            onPressed: onApprove,
+          const SizedBox(height: TpSpace.lg),
+          // Which computer is asking.
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: palette.surfaceAlt,
+              borderRadius: BorderRadius.circular(TpRadius.md),
+              border: Border.all(color: palette.border),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(TpSpace.md),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    qrLoginBrowserLabel(l10n, info.userAgent),
+                    style: text.titleMedium,
+                  ),
+                  if (ip != null) ...<Widget>[
+                    const SizedBox(height: TpSpace.xs),
+                    Text(
+                      // The address is isolated so its digits stay in order
+                      // inside RTL text.
+                      l10n.qrLoginIpAddress('\u2066$ip\u2069'),
+                      style: text.bodyMedium,
+                    ),
+                  ],
+                  if (age != null) ...<Widget>[
+                    const SizedBox(height: TpSpace.xs),
+                    Text(
+                      l10n.qrLoginRequestedAgo(age),
+                      style: text.bodyMedium,
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ),
-          const SizedBox(height: TpSpace.sm),
+          const SizedBox(height: TpSpace.md),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: palette.warning.soft,
+              borderRadius: BorderRadius.circular(TpRadius.md),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(TpSpace.md),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Icon(
+                    Icons.warning_amber_rounded,
+                    size: TpSizing.iconMd,
+                    color: palette.warning.onSoft,
+                  ),
+                  const SizedBox(width: TpSpace.sm),
+                  Expanded(
+                    child: Text(
+                      l10n.qrLoginWarning,
+                      style: text.bodyMedium
+                          ?.copyWith(color: palette.warning.onSoft),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: TpSpace.lg),
+          Text(
+            l10n.qrLoginPickNumber,
+            style: text.titleMedium,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: TpSpace.md),
+          Row(
+            children: <Widget>[
+              for (int i = 0; i < info.options.length; i++) ...<Widget>[
+                if (i > 0) const SizedBox(width: TpSpace.sm),
+                Expanded(
+                  child: _NumberOption(
+                    number: info.options[i],
+                    onTap: () => onPick(info.options[i]),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: TpSpace.lg),
           TpButton.secondary(
-            key: QrLoginKeys.cancel,
-            label: l10n.actionCancel,
+            key: QrLoginKeys.decline,
+            label: l10n.qrLoginDecline,
+            icon: Icons.block_rounded,
             isFullWidth: true,
-            onPressed: onCancel,
+            onPressed: onDecline,
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// One big number to tap. At least 64 logical pixels tall (the 48 minimum
+/// touch target, with room for a gloved thumb), read out as "Approve with
+/// number 37" by a screen reader.
+class _NumberOption extends StatelessWidget {
+  const _NumberOption({required this.number, required this.onTap});
+
+  final String number;
+  final VoidCallback onTap;
+
+  static const double _height = 64;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    final TextTheme text = Theme.of(context).textTheme;
+    final BorderRadius radius = BorderRadius.circular(TpRadius.lg);
+    return Semantics(
+      button: true,
+      label: l10n.qrLoginApproveNumber(number),
+      excludeSemantics: true,
+      child: Material(
+        color: palette.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: radius,
+          side: BorderSide(
+            color: palette.controlBorder,
+            width: TpBorderWidth.strong,
+          ),
+        ),
+        child: InkWell(
+          key: QrLoginKeys.option(number),
+          borderRadius: radius,
+          onTap: onTap,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              minHeight: _height,
+              minWidth: TpSizing.minTouchTarget,
+            ),
+            child: Center(
+              child: Text(
+                // Digits are always shown left to right.
+                number,
+                textDirection: TextDirection.ltr,
+                style: text.headlineMedium?.copyWith(
+                  color: palette.text,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -454,6 +643,8 @@ String qrLoginFailureText(AppLocalizations l10n, QrLoginFailure reason) {
     QrLoginFailure.signedOut => l10n.qrLoginSignedOut,
     QrLoginFailure.needsSignal => l10n.qrLoginNeedsSignal,
     QrLoginFailure.unavailable => l10n.qrLoginUnavailable,
+    QrLoginFailure.mismatch => l10n.qrLoginMismatch,
+    QrLoginFailure.admin => l10n.qrLoginAdmin,
     QrLoginFailure.failed => l10n.qrLoginFailed,
   };
 }

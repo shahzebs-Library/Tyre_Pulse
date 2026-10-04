@@ -3177,7 +3177,7 @@
   "qrLoginAction": "تسجيل الدخول على جهاز كمبيوتر",
   "qrLoginScanIntro": "على جهاز الكمبيوتر، افتح صفحة تسجيل الدخول إلى TyrePulse واختر رمز الهاتف، ثم وجّه هذه الكاميرا نحو الرمز الظاهر على الشاشة.",
   "qrLoginConfirmTitle": "تسجيل الدخول على هذا الكمبيوتر؟",
-  "qrLoginConfirmMessage": "هل تريد تسجيل الدخول إلى TyrePulse على هذا الكمبيوتر باسم {name}؟ وافق فقط على رمز فتحته أنت للتو.",
+  "qrLoginConfirmMessage": "هل تريد تسجيل الدخول إلى TyrePulse على هذا الكمبيوتر باسم {name}؟",
   "qrLoginYourAccount": "حسابك",
   "qrLoginApprove": "موافقة",
   "qrLoginSending": "جارٍ إرسال ردّك...",
@@ -3198,5 +3198,16 @@
   "qrLoginNeedsSignal": "لا يوجد اتصال. انتقل إلى مكان فيه إشارة وامسح الرمز مرة أخرى قبل انتهاء صلاحيته.",
   "qrLoginUnavailable": "تسجيل الدخول على الكمبيوتر غير متاح على هذا الخادم بعد.",
   "qrLoginFailed": "حدث خطأ ما. حدّث الرمز على الكمبيوتر وحاول مرة أخرى.",
-  "qrLoginScanAgain": "امسح رمزاً آخر"
+  "qrLoginScanAgain": "امسح رمزاً آخر",
+  "qrLoginChecking": "جارٍ التحقق من الرمز...",
+  "qrLoginBrowserOnOs": "{browser} على {os}",
+  "qrLoginUnknownBrowser": "متصفح غير معروف",
+  "qrLoginIpAddress": "عنوان IP: {ip}",
+  "qrLoginRequestedAgo": "{seconds, plural, =1{طُلب قبل ثانية واحدة} other{طُلب قبل {seconds} ثانية}}",
+  "qrLoginWarning": "وافق فقط إذا كنت تسجّل الدخول على هذا الكمبيوتر بنفسك الآن.",
+  "qrLoginPickNumber": "اضغط على الرقم الظاهر على الكمبيوتر",
+  "qrLoginApproveNumber": "موافقة بالرقم {number}",
+  "qrLoginDecline": "رفض",
+  "qrLoginMismatch": "هذا الرقم غير مطابق. تم إلغاء الرمز؛ أنشئ رمزاً جديداً على الكمبيوتر.",
+  "qrLoginAdmin": "تسجيل الدخول عبر رمز QR غير متاح لحسابات المسؤولين. سجّل الدخول بكلمة المرور."
 }

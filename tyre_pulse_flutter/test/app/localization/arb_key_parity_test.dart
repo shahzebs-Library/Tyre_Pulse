@@ -572,10 +572,15 @@ void main() {
     // and sending lines, the approved / declined / failed / not-a-code
     // states, the nine failure sentences and Scan another code
     // (qrLoginAction ... qrLoginScanAgain).
-    test('en, ar and ur each carry exactly 2197 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2197);
-      expect(_translatableKeys(ar).length, 2197);
-      expect(_translatableKeys(ur).length, 2197);
+    // 2197 + 11 = 2208. QR sign-in hardening (qr_login_peek + number
+    // matching): the checking line, the requesting browser / IP / age, the
+    // safety warning, the pick-a-number instruction and its button label,
+    // Decline, and the mismatch and admin failure sentences
+    // (qrLoginChecking ... qrLoginAdmin).
+    test('en, ar and ur each carry exactly 2208 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2208);
+      expect(_translatableKeys(ar).length, 2208);
+      expect(_translatableKeys(ur).length, 2208);
     });
   });
 

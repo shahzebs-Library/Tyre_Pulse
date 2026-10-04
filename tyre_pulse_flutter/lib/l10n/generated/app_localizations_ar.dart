@@ -7543,7 +7543,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String qrLoginConfirmMessage(String name) {
-    return 'هل تريد تسجيل الدخول إلى TyrePulse على هذا الكمبيوتر باسم $name؟ وافق فقط على رمز فتحته أنت للتو.';
+    return 'هل تريد تسجيل الدخول إلى TyrePulse على هذا الكمبيوتر باسم $name؟';
   }
 
   @override
@@ -7620,4 +7620,54 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get qrLoginScanAgain => 'امسح رمزاً آخر';
+
+  @override
+  String get qrLoginChecking => 'جارٍ التحقق من الرمز...';
+
+  @override
+  String qrLoginBrowserOnOs(String browser, String os) {
+    return '$browser على $os';
+  }
+
+  @override
+  String get qrLoginUnknownBrowser => 'متصفح غير معروف';
+
+  @override
+  String qrLoginIpAddress(String ip) {
+    return 'عنوان IP: $ip';
+  }
+
+  @override
+  String qrLoginRequestedAgo(int seconds) {
+    String _temp0 = intl.Intl.pluralLogic(
+      seconds,
+      locale: localeName,
+      other: 'طُلب قبل $seconds ثانية',
+      one: 'طُلب قبل ثانية واحدة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get qrLoginWarning =>
+      'وافق فقط إذا كنت تسجّل الدخول على هذا الكمبيوتر بنفسك الآن.';
+
+  @override
+  String get qrLoginPickNumber => 'اضغط على الرقم الظاهر على الكمبيوتر';
+
+  @override
+  String qrLoginApproveNumber(String number) {
+    return 'موافقة بالرقم $number';
+  }
+
+  @override
+  String get qrLoginDecline => 'رفض';
+
+  @override
+  String get qrLoginMismatch =>
+      'هذا الرقم غير مطابق. تم إلغاء الرمز؛ أنشئ رمزاً جديداً على الكمبيوتر.';
+
+  @override
+  String get qrLoginAdmin =>
+      'تسجيل الدخول عبر رمز QR غير متاح لحسابات المسؤولين. سجّل الدخول بكلمة المرور.';
 }

@@ -13154,7 +13154,7 @@ abstract class AppLocalizations {
   /// Sign in on a computer: confirm sheet body. {name} is the signed-in person's name.
   ///
   /// In en, this message translates to:
-  /// **'Sign in to TyrePulse on this computer as {name}? Only approve a code you just opened yourself.'**
+  /// **'Sign in to TyrePulse on this computer as {name}?'**
   String qrLoginConfirmMessage(String name);
 
   /// Sign in on a computer: used as {name} when the profile has no full name.
@@ -13282,6 +13282,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Scan another code'**
   String get qrLoginScanAgain;
+
+  /// Sign in on a computer: shown while the phone reads which browser is asking.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking the code...'**
+  String get qrLoginChecking;
+
+  /// Sign in on a computer: the requesting browser, e.g. Chrome on Windows. {browser} and {os} are product names.
+  ///
+  /// In en, this message translates to:
+  /// **'{browser} on {os}'**
+  String qrLoginBrowserOnOs(String browser, String os);
+
+  /// Sign in on a computer: shown when the requesting browser cannot be identified.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown browser'**
+  String get qrLoginUnknownBrowser;
+
+  /// Sign in on a computer: the network address the request came from. {ip} is an IP address.
+  ///
+  /// In en, this message translates to:
+  /// **'IP address: {ip}'**
+  String qrLoginIpAddress(String ip);
+
+  /// Sign in on a computer: how long ago the computer asked. {seconds} is a whole number.
+  ///
+  /// In en, this message translates to:
+  /// **'{seconds, plural, =1{Requested 1 second ago} other{Requested {seconds} seconds ago}}'**
+  String qrLoginRequestedAgo(int seconds);
+
+  /// Sign in on a computer: safety warning on the confirm sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Only approve if you are signing in on this computer yourself right now.'**
+  String get qrLoginWarning;
+
+  /// Sign in on a computer: instruction above the three number buttons.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap the number shown on the computer'**
+  String get qrLoginPickNumber;
+
+  /// Sign in on a computer: screen-reader label of a number button. {number} is a 2-digit number.
+  ///
+  /// In en, this message translates to:
+  /// **'Approve with number {number}'**
+  String qrLoginApproveNumber(String number);
+
+  /// Sign in on a computer: button that declines the sign-in.
+  ///
+  /// In en, this message translates to:
+  /// **'Decline'**
+  String get qrLoginDecline;
+
+  /// Sign in on a computer: the tapped number did not match; the server cancelled the code.
+  ///
+  /// In en, this message translates to:
+  /// **'That number did not match. The code is cancelled; make a new one on the computer.'**
+  String get qrLoginMismatch;
+
+  /// Sign in on a computer: administrator accounts cannot approve a QR sign-in.
+  ///
+  /// In en, this message translates to:
+  /// **'QR sign-in is not available for administrator accounts. Sign in with your password.'**
+  String get qrLoginAdmin;
 }
 
 class _AppLocalizationsDelegate

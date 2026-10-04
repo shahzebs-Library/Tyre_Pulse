@@ -79,7 +79,7 @@ const fmtMoney = (n) => (Number.isFinite(Number(n))
 
 const BUCKET_TONE = { tyre: 'good', oil: 'warning', spare: 'info' }
 
-export default function ConsoleMaterialMaster() {
+export default function ConsoleMaterialMaster({ tabParam = 'tab' } = {}) {
   const [rows, setRows] = useState([])
   const [coverage, setCoverage] = useState({})
   const [loading, setLoading] = useState(true)
@@ -93,7 +93,7 @@ export default function ConsoleMaterialMaster() {
   const [view, setView] = useState('all')      // all | unreviewed | reviewed | conflicting
   const [agree, setAgree] = useState('any')     // any | agree | differ
   const [selected, setSelected] = useState(() => new Set())
-  const [tab, setTab] = useUrlTab(TAB_KEYS, 'review')
+  const [tab, setTab] = useUrlTab(TAB_KEYS, 'review', tabParam)
   const [refreshedAt, setRefreshedAt] = useState(null)
 
   const [detail, setDetail] = useState(null)      // the item being reviewed

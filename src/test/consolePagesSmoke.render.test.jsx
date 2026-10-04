@@ -145,6 +145,10 @@ const PAGES = {
   '/console/health': () => import('../console/pages/ConsoleSystemHealth'),
   '/console/platform-map': () => import('../console/pages/ConsolePlatformMap'),
   '/console/crash-reports': () => import('../console/pages/ConsoleCrashReports'),
+  '/console/alerts': () => import('../console/pages/ConsoleAlertCenter'),
+  '/console/analytics': () => import('../console/pages/ConsoleAnalytics'),
+  '/console/notifications': () => import('../console/pages/ConsoleNotifications'),
+  '/console/operations': () => import('../console/pages/ConsoleOperations'),
   '/console/security-audit': () => import('../console/pages/ConsoleSecurityAudit'),
   '/console/audit-trail': () => import('../console/pages/ConsoleAuditTrail'),
   '/console/audit-integrity': () => import('../console/pages/ConsoleAuditIntegrity'),
@@ -157,10 +161,11 @@ const PAGES = {
   '/console/incidents': () => import('../console/pages/ConsoleIncidents'),
   '/console/jit-elevation': () => import('../console/pages/ConsoleJitElevation'),
   '/console/access-policies': () => import('../console/pages/ConsoleAccessPolicies'),
-  '/console/users': () => import('../console/pages/ConsoleUsers'),
+  '/console/users': () => import('../console/pages/ConsoleUsersHome'),
+  '/console/billing': () => import('../console/pages/ConsoleBilling'),
   '/console/access': () => import('../console/pages/ConsoleAccessControl'),
   '/console/access-reviews': () => import('../console/pages/ConsoleAccessReviews'),
-  '/console/organisations': () => import('../console/pages/ConsoleOrganisations'),
+  '/console/organisations': () => import('../console/pages/ConsoleOrganizationsHome'),
   '/console/account-deletions': () => import('../console/pages/ConsoleAccountDeletions'),
   '/console/control-center': () => import('../console/pages/ConsoleControlCenter'),
   '/console/data-quality': () => import('../console/pages/ConsoleDataQuality'),
@@ -169,8 +174,9 @@ const PAGES = {
   '/console/correction-center': () => import('../console/pages/ConsoleCorrectionCenter'),
   '/console/lineage': () => import('../console/pages/ConsoleLineageExplorer'),
   '/console/metric-catalogue': () => import('../console/pages/ConsoleMetricCatalogue'),
-  '/console/pipeline-monitor': () => import('../console/pages/ConsolePipelineMonitor'),
   '/console/releases': () => import('../console/pages/ConsoleReleases'),
+  '/console/developer': () => import('../console/pages/ConsoleDeveloper'),
+  '/console/flags': () => import('../console/pages/ConsoleFeatureFlags'),
   '/console/data-ops': () => import('../console/pages/ConsoleDataOps'),
   '/console/import-history': () => import('../console/pages/ConsoleImportHistory'),
   '/console/smart-import': () => import('../console/pages/ConsoleSmartImport'),
@@ -182,17 +188,15 @@ const PAGES = {
   '/console/data-cleanup': () => import('../console/pages/ConsoleDataCleanup'),
   '/console/tenant-export': () => import('../console/pages/ConsoleTenantExport'),
   '/console/backups': () => import('../console/pages/ConsoleBackups'),
+  '/console/database': () => import('../console/pages/ConsoleDatabase'),
+  '/console/storage': () => import('../console/pages/ConsoleStorage'),
   '/console/alert-rules': () => import('../console/pages/ConsoleAlertRules'),
-  '/console/automation': () => import('../console/pages/ConsoleAutomation'),
   '/console/delivery': () => import('../console/pages/ConsoleDelivery'),
   '/console/self-healing': () => import('../console/pages/ConsoleSelfHealing'),
   '/console/announcements': () => import('../console/pages/ConsoleAnnouncements'),
   '/console/ai-usage': () => import('../console/pages/ConsoleAIUsage'),
-  '/console/ai-admin': () => import('../pages/AiAdministration'),
-  '/console/config': () => import('../console/pages/ConsoleSystemConfig'),
-  '/console/module-control': () => import('../console/pages/ConsoleModuleControl'),
+  '/console/config': () => import('../console/pages/ConsoleSettings'),
   '/console/navigation': () => import('../console/pages/ConsoleNavigation'),
-  '/console/mobile-app': () => import('../console/pages/ConsoleMobileApp'),
   '/console/appearance': () => import('../console/pages/ConsoleReportAppearance'),
   '/console/vehicle-designer': () => import('../console/pages/ConsoleVehicleDesigner'),
 }
@@ -270,7 +274,9 @@ describe('console pages smoke', () => {
   it('covers every console sidebar entry', () => {
     const missing = NAV_ITEMS.map((i) => i.to).filter((to) => !PAGES[to])
     expect(missing).toEqual([])
-    expect(NAV_ITEMS.length).toBeGreaterThan(40)
+    // The Control Center consolidation folded many pages into tabs of fewer screens,
+    // so the sidebar is shorter; this only guards against an empty or broken nav.
+    expect(NAV_ITEMS.length).toBeGreaterThan(25)
   })
 
   describe.each(NAV_ITEMS.map((i) => [i.label, i.to]))('%s (%s)', (_label, path) => {

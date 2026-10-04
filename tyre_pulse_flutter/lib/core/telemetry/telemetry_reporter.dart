@@ -13,6 +13,7 @@ library;
 import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/telemetry/telemetry_sync_failure.dart';
+import 'package:tyre_pulse/core/telemetry/telemetry_user.dart';
 
 /// Reports failures to telemetry, using only fields already declared safe to
 /// log.
@@ -65,4 +66,12 @@ abstract class TelemetryReporter {
   /// this tag, before a workspace exists, is itself the privacy-safe choice,
   /// not an omission to fix.
   void setWorkspaceId(String? workspaceId);
+
+  /// Ties every later event - including native crashes the SDK captures on
+  /// its own - to the signed-in person: the Sentry user id plus `role`,
+  /// `country` and `app_version` tags. Pass null on sign-out so the next
+  /// person on a shared device is never reported under the previous one.
+  ///
+  /// Never carries an email or a name; see [TelemetryUser]. Never throws.
+  Future<void> setUser(TelemetryUser? user);
 }

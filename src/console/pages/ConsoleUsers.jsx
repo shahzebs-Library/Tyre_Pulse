@@ -121,11 +121,11 @@ export function userCountryLabel(u) {
   return arr.length ? arr.join(', ') : 'No country access'
 }
 
-export default function ConsoleUsers() {
+export default function ConsoleUsers({ tabParam = 'tab' } = {}) {
   const { logAction, activeOrg } = useConsoleAuth()
   const navigate = useNavigate()
   const [params] = useSearchParams()
-  const [tab, setTab] = useUrlTab(TABS, 'register')
+  const [tab, setTab] = useUrlTab(TABS, 'register', tabParam)
   const { refreshedAt, stamp } = useRefreshStamp()
   const [detailUser, setDetailUser] = useState(null)
   const [users, setUsers]     = useState([])

@@ -135,7 +135,7 @@ function formatUntil(value) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default function ConsoleModuleControl() {
+export default function ConsoleModuleControl({ tabParam = 'tab' } = {}) {
   const { admin } = useConsoleAuth()
   const theme = useChartTheme()
   const [modules, setModules] = useState([])
@@ -158,7 +158,7 @@ export default function ConsoleModuleControl() {
   const [maintModal, setMaintModal] = useState(null)
   const [maintUntil, setMaintUntil] = useState('')
   const [maintNote, setMaintNote] = useState('')
-  const [tab, setTab] = useUrlTab(TABS, 'modules')
+  const [tab, setTab] = useUrlTab(TABS, 'modules', tabParam)
   const [openId, setOpenId] = useState(null)
   const [readAt, setReadAt] = useState(null)
 

@@ -53,7 +53,7 @@ const daysSince = (v) => {
   return Number.isFinite(t) ? Math.floor((Date.now() - t) / 86400000) : null
 }
 
-export default function ConsoleDataCleanup() {
+export default function ConsoleDataCleanup({ tabParam = 'tab' } = {}) {
   const { logAction } = useConsoleAuth()
   const theme = useChartTheme()
   const [targets, setTargets] = useState([])
@@ -70,7 +70,7 @@ export default function ConsoleDataCleanup() {
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState(null)        // { deleted, snapshot } | null
   const [refreshedAt, setRefreshedAt] = useState(null)
-  const [tab, setTab] = useUrlTab(TAB_KEYS, 'targets')
+  const [tab, setTab] = useUrlTab(TAB_KEYS, 'targets', tabParam)
 
   const load = useCallback(async () => {
     setLoading(true); setLoadError('')

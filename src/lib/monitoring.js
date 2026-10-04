@@ -149,13 +149,31 @@ export function initMonitoring() {
   return loading
 }
 
+/**
+ * Release + environment for Sentry. The release is the build's VITE_APP_VERSION
+ * (`<package version>+<short sha>`, injected by vite.config), the SAME string
+ * system_logs.app_version carries, so Sentry and the console compare releases
+ * by one key. Environment is
+ * VITE_APP_ENV (Vercel production/preview) falling back to the Vite mode.
+ * Pure + exported for tests.
+ */
+export function sentryReleaseConfig(env = import.meta.env) {
+  const version = typeof env?.VITE_APP_VERSION === 'string' ? env.VITE_APP_VERSION.trim() : ''
+  const tier = typeof env?.VITE_APP_ENV === 'string' && env.VITE_APP_ENV.trim()
+    ? env.VITE_APP_ENV.trim()
+    : (typeof env?.MODE === 'string' && env.MODE.trim() ? env.MODE.trim() : undefined)
+  return {
+    release: version || undefined,
+    environment: tier,
+  }
+}
+
 /** Init against an already-loaded SDK. Split out so initMonitoring stays readable. */
 function initWithSdk(dsn) {
   try {
     Sentry.init({
       dsn,
-      environment: import.meta.env.MODE,
-      release: import.meta.env.VITE_APP_VERSION || undefined,
+      ...sentryReleaseConfig(),
       sendDefaultPii: false,
       integrations: [
         Sentry.browserTracingIntegration(),
@@ -166,6 +184,10 @@ function initWithSdk(dsn) {
       replaysOnErrorSampleRate: 1.0,
       beforeSend: scrubEvent,
     })
+    try {
+      const { release } = sentryReleaseConfig()
+      if (release) Sentry.setTag('app_version', release)
+    } catch { /* no-op */ }
     initialized = true
     return true
   } catch (err) {

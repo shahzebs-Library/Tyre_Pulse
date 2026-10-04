@@ -105,7 +105,7 @@ function StateBadges({ f }) {
 
 // ── Page ────────────────────────────────────────────────────────────────────
 
-export default function ConsoleAutomation() {
+export default function ConsoleAutomation({ tabParam = 'tab' } = {}) {
   const { admin } = useConsoleAuth()
   const theme = useChartTheme()
   const [schedules, setSchedules] = useState([])
@@ -117,7 +117,7 @@ export default function ConsoleAutomation() {
   // The reference time is fixed at each load, so "overdue" is judged against
   // the moment the data was read and the memos below stay stable between renders.
   const [now, setNow] = useState(() => Date.now())
-  const [tab, setTab] = useUrlTab(TABS, 'overview')
+  const [tab, setTab] = useUrlTab(TABS, 'overview', tabParam)
   const [stateFilter, setStateFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [jobFilter, setJobFilter] = useState('all')

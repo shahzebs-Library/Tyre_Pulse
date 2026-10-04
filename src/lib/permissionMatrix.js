@@ -108,6 +108,34 @@ export function defaultViewAccess(role, moduleKey) {
 }
 
 /**
+ * system_config key for the opt-in "new areas are Admin only until shared"
+ * policy. Default FALSE, so nothing changes until a super admin turns it on.
+ */
+export const NEW_FEATURES_ADMIN_ONLY_KEY = 'new_features_admin_only'
+
+/**
+ * The role's base verdict for one module (before per-user grants), per key:
+ *   - a saved matrix row for this role and module wins;
+ *   - otherwise, with the policy OFF, the built-in role default decides;
+ *   - with the policy ON, a module this role has no saved row for is DENIED
+ *     (Admin never reaches here: resolvePermission lets Admin through first).
+ *
+ * @param {object}   p
+ * @param {string}   p.moduleKey
+ * @param {Record<string, boolean>|null} p.modulePerms  this role's saved rows
+ * @param {(key:string)=>boolean} p.roleDefault         built-in default
+ * @param {boolean}  [p.adminOnlyNew=false]             the opt-in policy
+ * @returns {boolean}
+ */
+export function baseRoleAllows({ moduleKey, modulePerms, roleDefault, adminOnlyNew = false }) {
+  if (modulePerms && Object.prototype.hasOwnProperty.call(modulePerms, moduleKey)) {
+    return modulePerms[moduleKey] === true
+  }
+  if (adminOnlyNew) return false
+  return typeof roleDefault === 'function' ? roleDefault(moduleKey) === true : false
+}
+
+/**
  * Build the full default matrix: { [role]: { [moduleKey]: { view, create, … } } }.
  * Today the app has NO per-capability enforcement inside a module — a role that
  * can open a module can use all of its actions. The defaults mirror that:

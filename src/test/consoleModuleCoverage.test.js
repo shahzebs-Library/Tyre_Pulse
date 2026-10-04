@@ -39,6 +39,7 @@ const NOT_A_MODULE = {
   '/upload': 'legacy step of Data Intake (flag data_intake)',
   '/rfid-registry': 'alias of /rfid',
   '/design-system': 'admin reference page, reachable from search',
+  '/my-problems': 'personal page of every user (profile menu), not a module',
 }
 
 function appRoutes() {
@@ -75,7 +76,12 @@ describe('console module coverage', () => {
     const consolePaths = new Set(
       [...CONSOLE_LAYOUT.matchAll(/to:\s*'\/console\/([^']*)'/g)].map((m) => m[1]),
     )
-    const RETIRED = new Set(['admin-roles', 'audit', 'permissions', 'system'])
+    const RETIRED = new Set(['admin-roles', 'audit', 'permissions', 'system', 'module-control', 'mobile-app', 'ai-admin', 'automation', 'pipeline-monitor',
+      // PLATFORM redirects: each now a tab of Users, Organizations or System Settings.
+      'appearance', 'tenant-export', 'vehicle-designer', 'navigation', 'sessions', 'support-sessions', 'account-deletions',
+      // MONITOR redirects: each now a tab of Alert Center, Analytics, Notifications or Operations.
+      'incidents', 'alert-rules', 'trust-alerts', 'self-healing', 'ai-usage', 'metric-catalogue', 'delivery', 'announcements',
+      'data-ops', 'import-history', 'smart-import', 'material-master', 'classification-learning', 'data-learning', 'duplicates', 'data-cleanup'])
     const routed = new Set(
       [...APP.matchAll(/<Route\s+path="([a-z][^":]*)"/g)].map((m) => m[1]),
     )

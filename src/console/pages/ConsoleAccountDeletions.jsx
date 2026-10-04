@@ -68,7 +68,7 @@ const CONFIRM_TITLE = {
   rejected: 'Reject request?',
 }
 
-export default function ConsoleAccountDeletions() {
+export default function ConsoleAccountDeletions({ tabParam = 'tab' } = {}) {
   const [rows, setRows]         = useState([])
   const [filter, setFilter]     = useState('all')
   const [search, setSearch]     = useState('')
@@ -80,7 +80,7 @@ export default function ConsoleAccountDeletions() {
   const [busyId, setBusyId]     = useState(null)   // row being advanced
   const [confirm, setConfirm]   = useState(null)   // { id, status, email }
   const [detail, setDetail]     = useState(null)   // row open in the side drawer
-  const [tab, setTab] = useUrlTab(TABS, 'queue')
+  const [tab, setTab] = useUrlTab(TABS, 'queue', tabParam)
   const { refreshedAt, stamp } = useRefreshStamp()
 
   const load = useCallback(async () => {

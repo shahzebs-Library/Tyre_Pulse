@@ -98,7 +98,7 @@ export function recencyBuckets(users = [], now = Date.now()) {
 
 // ── Page ────────────────────────────────────────────────────────────────────────
 
-export default function ConsoleSessions() {
+export default function ConsoleSessions({ tabParam = 'tab' } = {}) {
   const { admin } = useConsoleAuth()
 
   const [devices, setDevices] = useState([])
@@ -121,7 +121,7 @@ export default function ConsoleSessions() {
   const [confirmClear, setConfirmClear] = useState(null)
   const [detail, setDetail] = useState(null)
   const [activitySearch, setActivitySearch] = useState('')
-  const [tab, setTab] = useUrlTab(TABS, 'users')
+  const [tab, setTab] = useUrlTab(TABS, 'users', tabParam)
   const { refreshedAt, stamp } = useRefreshStamp()
 
   const load = useCallback(async () => {

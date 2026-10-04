@@ -63,11 +63,11 @@ function parseBudget(raw) {
   return Number.isFinite(n) ? n : null
 }
 
-export default function ConsoleAIUsage() {
+export default function ConsoleAIUsage({ tabParam = 'tab' } = {}) {
   const [range, setRange] = useState('30')
   const [country, setCountry] = useState('')
   const [metric, setMetric] = useState('calls')
-  const [tab, setTab] = useUrlTab(TABS, 'trend')
+  const [tab, setTab] = useUrlTab(TABS, 'trend', tabParam)
   const [state, setState] = useState({ loading: true, error: null, data: null, readAt: null })
   const [budget, setBudget] = useState({ value: null, error: false })
   const [failQuery, setFailQuery] = useState('')

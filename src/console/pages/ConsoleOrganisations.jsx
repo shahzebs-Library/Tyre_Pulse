@@ -54,7 +54,7 @@ const EMPTY_FORM = {
   contact_email: '', active: true, locked: false,
 }
 
-export default function ConsoleOrganisations() {
+export default function ConsoleOrganisations({ tabParam = 'tab' } = {}) {
   const { logAction } = useConsoleAuth()
   const [orgs, setOrgs]           = useState([])
   const [loading, setLoading]     = useState(true)
@@ -63,7 +63,7 @@ export default function ConsoleOrganisations() {
   const [filterPlan, setFilterPlan] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [expanded, setExpanded]   = useUrlParam('org')
-  const [tab, setTab] = useUrlTab(TABS, 'register')
+  const [tab, setTab] = useUrlTab(TABS, 'register', tabParam)
   const { refreshedAt, stamp } = useRefreshStamp()
   const [modal, setModal]         = useState(null)   // null | 'create' | 'edit'
   const [form, setForm]           = useState(EMPTY_FORM)

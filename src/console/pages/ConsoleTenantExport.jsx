@@ -70,7 +70,7 @@ function downloadJson(obj, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
-export default function ConsoleTenantExport() {
+export default function ConsoleTenantExport({ tabParam = 'tab' } = {}) {
   const [orgs, setOrgs] = useState([])
   const [orgsErr, setOrgsErr] = useState('')
   const [orgId, setOrgId] = useState('')
@@ -82,7 +82,7 @@ export default function ConsoleTenantExport() {
   const [jobs, setJobs] = useState([])
   const [jobsLoading, setJobsLoading] = useState(true)
   const [jobsErr, setJobsErr] = useState('')
-  const [tab, setTab] = useUrlTab(TAB_KEYS, 'export')
+  const [tab, setTab] = useUrlTab(TAB_KEYS, 'export', tabParam)
   const [refreshedAt, setRefreshedAt] = useState(null)
   const [jobQuery, setJobQuery] = useState('')
   const [jobStatus, setJobStatus] = useState('')

@@ -8054,5 +8054,137 @@
   "recordsRiskCritical": "Critical",
   "@recordsRiskCritical": {
     "description": "Tyre records: the Critical risk level shown on a tyre card and the risk filter, in the reader's language (the stored value stays English)."
+  },
+  "problemReportAction": "Report a problem",
+  "@problemReportAction": {
+    "description": "Opens the Report a problem screen: the Profile Help row, the screen title and the quiet action under Retry on an error state."
+  },
+  "problemReportSectionHelp": "Help",
+  "@problemReportSectionHelp": {
+    "description": "Profile: the section heading above the Report a problem row."
+  },
+  "problemReportIntro": "Tell us in one sentence what went wrong. The app version, your phone model and this screen are sent with it automatically.",
+  "@problemReportIntro": {
+    "description": "Report a problem: the short explanation at the top of the form."
+  },
+  "problemReportDescriptionLabel": "What went wrong?",
+  "@problemReportDescriptionLabel": {
+    "description": "Report a problem: label of the required description field."
+  },
+  "problemReportDescriptionHint": "For example: the tyre list stays empty after I choose a site",
+  "@problemReportDescriptionHint": {
+    "description": "Report a problem: example placeholder inside the description field."
+  },
+  "problemReportDescriptionTooShort": "Write at least 10 characters so the team can understand the problem.",
+  "@problemReportDescriptionTooShort": {
+    "description": "Report a problem: shown when the description is shorter than 10 characters."
+  },
+  "problemReportDescriptionTooLong": "Keep it under 2000 characters.",
+  "@problemReportDescriptionTooLong": {
+    "description": "Report a problem: shown when the description is longer than 2000 characters."
+  },
+  "problemReportTypeLabel": "Type of problem",
+  "@problemReportTypeLabel": {
+    "description": "Report a problem: label of the required problem type choice."
+  },
+  "problemReportTypeRequired": "Choose the type of problem.",
+  "@problemReportTypeRequired": {
+    "description": "Report a problem: shown when Send is pressed with no type chosen."
+  },
+  "problemReportTypeBug": "Something is broken",
+  "@problemReportTypeBug": {
+    "description": "Report a problem type: bug."
+  },
+  "problemReportTypeData": "The data looks wrong",
+  "@problemReportTypeData": {
+    "description": "Report a problem type: wrong data."
+  },
+  "problemReportTypeAccess": "I cannot open something",
+  "@problemReportTypeAccess": {
+    "description": "Report a problem type: access."
+  },
+  "problemReportTypeSlow": "It is too slow",
+  "@problemReportTypeSlow": {
+    "description": "Report a problem type: slow."
+  },
+  "problemReportTypeOther": "Something else",
+  "@problemReportTypeOther": {
+    "description": "Report a problem type: other."
+  },
+  "problemReportSeverityLabel": "How much does it block you? (optional)",
+  "@problemReportSeverityLabel": {
+    "description": "Report a problem: label of the optional severity choice."
+  },
+  "problemReportSeverityLow": "Low: a small annoyance",
+  "@problemReportSeverityLow": {
+    "description": "Report a problem severity: low."
+  },
+  "problemReportSeverityMedium": "Medium: slows my work",
+  "@problemReportSeverityMedium": {
+    "description": "Report a problem severity: medium."
+  },
+  "problemReportSeverityHigh": "High: I cannot finish my work",
+  "@problemReportSeverityHigh": {
+    "description": "Report a problem severity: high."
+  },
+  "problemReportSeverityCritical": "Critical: many people are blocked",
+  "@problemReportSeverityCritical": {
+    "description": "Report a problem severity: critical."
+  },
+  "problemReportAttachedTitle": "Sent with your report",
+  "@problemReportAttachedTitle": {
+    "description": "Report a problem: heading of the automatically attached details."
+  },
+  "problemReportAttachedVersion": "App version",
+  "@problemReportAttachedVersion": {
+    "description": "Report a problem: attached detail label, the app version."
+  },
+  "problemReportAttachedDevice": "Phone",
+  "@problemReportAttachedDevice": {
+    "description": "Report a problem: attached detail label, the phone model and operating system."
+  },
+  "problemReportAttachedScreen": "Screen",
+  "@problemReportAttachedScreen": {
+    "description": "Report a problem: attached detail label, the screen the report was opened from."
+  },
+  "problemReportSend": "Send report",
+  "@problemReportSend": {
+    "description": "Report a problem: the submit button."
+  },
+  "problemReportSentTitle": "Report sent",
+  "@problemReportSentTitle": {
+    "description": "Report a problem: title of the success state."
+  },
+  "problemReportSentMessage": "Thank you. The team will look at it, and you will get a message in the app when it is fixed.",
+  "@problemReportSentMessage": {
+    "description": "Report a problem: body of the success state."
+  },
+  "problemReportNeedsSignal": "No signal. Your report was not sent. Send it again when you have signal.",
+  "@problemReportNeedsSignal": {
+    "description": "Report a problem: shown when there is no connection. Reports are not queued offline."
+  },
+  "problemReportSignedOut": "Please sign in again to send a report.",
+  "@problemReportSignedOut": {
+    "description": "Report a problem: shown when there is no signed-in session."
+  },
+  "problemReportNotAllowed": "Your account cannot send reports. Please speak to your administrator.",
+  "@problemReportNotAllowed": {
+    "description": "Report a problem: shown when the server refuses the account (locked, or not linked to a company)."
+  },
+  "problemReportTooMany": "You have sent many reports in the last hour. Please try again later.",
+  "@problemReportTooMany": {
+    "description": "Report a problem: shown when the hourly report limit is reached."
+  },
+  "problemReportInvalid": "The report could not be accepted. Check the description and try again.",
+  "@problemReportInvalid": {
+    "description": "Report a problem: shown when the server rejects the content."
+  },
+  "problemReportUnavailable": "Reporting is not available on this server yet.",
+  "@problemReportUnavailable": {
+    "description": "Report a problem: shown when the reporting function is not deployed on the server."
+  },
+  "problemReportFailed": "Your report could not be sent. Please try again.",
+  "@problemReportFailed": {
+    "description": "Report a problem: any other failure; safe to retry."
   }
 }

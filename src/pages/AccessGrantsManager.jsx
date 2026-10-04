@@ -38,6 +38,7 @@ import { toUserMessage } from '../lib/safeError'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import Modal from '../components/ui/Modal'
 import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
+import { defaultGrantEndDate } from '../lib/accessUnused'
 import {
   displayName, initials, filterUsers, roleOptions as buildRoleOptions, grantState, grantSummary,
   directorySummary, grantExportRows, GRANT_STATE_LABEL, GRANT_EXPORT_COLS, GRANT_EXPORT_HEADERS,
@@ -155,7 +156,8 @@ function ModulePicker({ value, onPick }) {
   )
 }
 
-const EMPTY_FORM = { moduleKey: '', effect: 'grant', capability: 'view', expiry: '', note: '' }
+// New grants end by themselves after 90 days unless the admin clears the date.
+const emptyForm = () => ({ moduleKey: '', effect: 'grant', capability: 'view', expiry: defaultGrantEndDate(), note: '' })
 
 export default function AccessGrantsManager() {
   const { profile, isSuperAdmin } = useAuth()
@@ -174,7 +176,7 @@ export default function AccessGrantsManager() {
   const [nowMs, setNowMs] = useState(() => Date.now())
 
   // Add-grant form
-  const [form, setForm] = useState(EMPTY_FORM)
+  const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
 
@@ -240,7 +242,7 @@ export default function AccessGrantsManager() {
 
   function selectUser(id) {
     setSelectedId(id)
-    setForm(EMPTY_FORM)
+    setForm(emptyForm())
     setFormError('')
   }
 
@@ -340,7 +342,7 @@ export default function AccessGrantsManager() {
       })
       const label = MODULE_LABEL[form.moduleKey] || form.moduleKey
       pushToast('success', `${form.effect === 'revoke' ? 'Revoke' : 'Grant'} saved: ${label} for ${displayName(selectedUser)}.`)
-      setForm(EMPTY_FORM)
+      setForm(emptyForm())
       await loadGrants(selectedUser.id)
     } catch (err) {
       const msg = toUserMessage(err, 'Could not save the grant.')
@@ -623,7 +625,7 @@ export default function AccessGrantsManager() {
                         onChange={(e) => setForm((f) => ({ ...f, expiry: e.target.value }))}
                       />
                     </div>
-                    <p className="text-[11px] text-[var(--text-muted)] mt-1">Leave blank for no expiry.</p>
+                    <p className="text-[11px] text-[var(--text-muted)] mt-1">Set to 90 days by default. Clear it for no expiry.</p>
                   </div>
                 </div>
 

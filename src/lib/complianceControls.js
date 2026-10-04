@@ -185,7 +185,8 @@ export const CONTROLS = [
         .sort((a, b) => toTime(b.closed_at) - toTime(a.closed_at))
       if (!closed.length) {
         const open = reviews.filter((c) => c.status !== 'closed').length
-        return result('fail', open ? `No access review has been completed yet (${open} in progress).` : 'No access review has ever been run.', ['admin_list_access_reviews'])
+        // A gap, not evidence: with 0 completed campaigns there is nothing to show an auditor.
+        return result('fail', open ? `Gap: no access review has been completed yet (${open} in progress), so there is no evidence.` : 'Gap: no access review has ever been run, so there is no evidence. Owner: not assigned.', ['admin_list_access_reviews'])
       }
       const last = closed[0]
       const age = ageDays(last.closed_at, now)

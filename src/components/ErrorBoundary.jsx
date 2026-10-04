@@ -1,7 +1,10 @@
-import { Component } from 'react'
-import { RefreshCw, Send } from 'lucide-react'
+import { Component, Suspense, lazy } from 'react'
+import { RefreshCw, Send, MessageSquare } from 'lucide-react'
 import { captureError } from '../lib/monitoring'
 import { isChunkLoadError, recoverFromChunkError } from '../lib/chunkRecovery'
+
+// Loaded only when someone opens it, so the error screen stays light.
+const ReportProblemDialog = lazy(() => import('./support/ReportProblemDialog'))
 
 /**
  * Generate a short, human-quotable error reference id (e.g. "ERR-1A2B3C4D").
@@ -21,7 +24,7 @@ function makeReferenceId() {
 export default class ErrorBoundary extends Component {
   constructor(props) {
     super(props)
-    this.state = { hasError: false, error: null, componentStack: null, referenceId: null, copied: false, reported: false, reporting: false, recovering: false }
+    this.state = { hasError: false, error: null, componentStack: null, referenceId: null, copied: false, reported: false, reporting: false, recovering: false, describing: false }
   }
 
   static getDerivedStateFromError(error) {
@@ -219,7 +222,29 @@ export default class ErrorBoundary extends Component {
             <Send size={14} />
             {this.state.reported ? 'Reported' : this.state.reporting ? 'Reporting...' : 'Report this to me'}
           </button>
+          <button
+            type="button"
+            onClick={() => this.setState({ describing: true })}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '11px 20px', borderRadius: 12,
+              border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.05)',
+              color: 'var(--panel-ink)', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            <MessageSquare size={14} />
+            Tell us what happened
+          </button>
         </div>
+        {this.state.describing && (
+          <Suspense fallback={null}>
+            <ReportProblemDialog
+              open
+              referenceId={this.state.referenceId}
+              onClose={() => this.setState({ describing: false })}
+            />
+          </Suspense>
+        )}
       </div>
     )
   }

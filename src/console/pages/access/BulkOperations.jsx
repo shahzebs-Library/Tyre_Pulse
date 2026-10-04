@@ -26,6 +26,7 @@ import { CAPABILITIES } from '../../../lib/permissionMatrix'
 import { listProfiles } from '../../../lib/api/users'
 import { listCustomRoles } from '../../../lib/api/customRoles'
 import { bulkSetRole, bulkSetGrant } from '../../../lib/api/adminAccess'
+import { defaultGrantEndDate } from '../../../lib/accessUnused'
 import { toUserMessage } from '../../../lib/safeError'
 import { displayName } from './UserDirectory'
 import {
@@ -52,7 +53,8 @@ export default function BulkOperations() {
   const [moduleKey, setModuleKey] = useState('')
   const [capability, setCapability] = useState('view')
   const [effect, setEffect] = useState('grant')
-  const [expiry, setExpiry] = useState('')
+  const [expiry, setExpiry] = useState(() => defaultGrantEndDate())
+  const [reason, setReason] = useState('')
 
   const [confirming, setConfirming] = useState(false)
   const [applying, setApplying] = useState(false)
@@ -143,7 +145,7 @@ export default function BulkOperations() {
     try {
       let count
       if (mode === 'role') {
-        count = await bulkSetRole(selectedIds, roleValue)
+        count = await bulkSetRole(selectedIds, roleValue, reason.trim())
         setResult(`${count} of ${plural(selectedCount)} set to ${roleValue}.`)
       } else {
         count = await bulkSetGrant({
@@ -152,6 +154,7 @@ export default function BulkOperations() {
           capability,
           effect,
           expiresAt: expiry ? new Date(`${expiry}T23:59:59`).toISOString() : null,
+          reason: reason.trim(),
         })
         const label = MODULE_LABEL[moduleKey] || moduleKey
         setResult(`${effect === 'revoke' ? 'Revoke' : 'Grant'} applied to ${plural(count)}: ${capability} on ${label}.`)
@@ -163,7 +166,7 @@ export default function BulkOperations() {
     } finally {
       setApplying(false)
     }
-  }, [mode, selectedIds, selectedCount, roleValue, moduleKey, capability, effect, expiry, loadUsers])
+  }, [mode, selectedIds, selectedCount, roleValue, moduleKey, capability, effect, expiry, reason, loadUsers])
 
   const na = users === null || !!usersError
   const destructive = mode === 'role' || effect === 'revoke'
@@ -331,7 +334,7 @@ export default function BulkOperations() {
         footer={(
           <>
             <Btn onClick={() => setConfirming(false)} disabled={applying}>Cancel</Btn>
-            <Btn variant={destructive ? 'danger' : 'primary'} icon={Check} onClick={applyChange} busy={applying}>
+            <Btn variant={destructive ? 'danger' : 'primary'} icon={Check} onClick={applyChange} busy={applying} disabled={reason.trim().length < 3}>
               {applying ? 'Applying...' : 'Apply change'}
             </Btn>
           </>
@@ -350,6 +353,12 @@ export default function BulkOperations() {
               {expiry ? <> until <span className="text-gray-100 font-medium">{expiry}</span></> : ''}.</>
           )}
         </p>
+        <label className="block mt-3">
+          <span className="block text-[11px] font-semibold text-gray-400 mb-1">Reason (goes to the audit log)</span>
+          <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} autoComplete="off"
+            placeholder="Why are you making this change?"
+            className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
+        </label>
         {mode === 'role' && selectedSupers > 0 && (
           <p className="text-xs text-amber-200 mt-2">{plural(selectedSupers)} in the selection {selectedSupers === 1 ? 'is a super admin and' : 'are super admins and'} will be skipped.</p>
         )}

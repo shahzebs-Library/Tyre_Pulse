@@ -157,6 +157,9 @@ describe('systemLogs.logSystemEvent', () => {
     expect(h.state.lastRpc.args).toEqual({
       p_severity: 'warning', p_source: 'login', p_message: 'boom', p_module_id: 'auth',
       p_detail: { step: 1 }, p_reference_id: 'ERR-1', p_url: 'https://x/login',
+      // Phase 0 attribution: surface, build, browser, screen and grouping key.
+      p_platform: 'web', p_app_version: import.meta.env.VITE_APP_VERSION || null, p_device: null, p_screen: '/',
+      p_fingerprint: 'login|boom',
     })
     // the server derives identity; a caller-supplied email is never forwarded
     expect(JSON.stringify(h.state.lastRpc.args)).not.toContain('spoof@x')

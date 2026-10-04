@@ -7,7 +7,8 @@ describe('Super Admin command palette', () => {
 
   it('exposes every governed console capability once', () => {
     const routes = commands.map((item) => item.to)
-    expect(commands.length).toBeGreaterThan(40)
+    // Consolidation moved several old pages into tabs of their new homes (Users, Organizations, System Settings, Developer...).
+    expect(commands.length).toBeGreaterThan(30)
     expect(new Set(routes).size).toBe(routes.length)
     expect(commands.every((item) => item.description.length > 20)).toBe(true)
   })

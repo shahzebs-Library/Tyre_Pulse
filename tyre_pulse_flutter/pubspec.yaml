@@ -75,6 +75,7 @@ dependencies:
   # no generated firebase_options.dart. See lib/core/push/.
   firebase_core: ^4.15.0
   firebase_messaging: ^16.7.0
+  device_info_plus: ^13.2.0
 
   # Packages for later phases (PDF and sharing) are added at
   # the phase that needs them. Spec section 64: do not add a package to

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/material.dart';
@@ -10,6 +11,7 @@ import 'package:tyre_pulse/app/router/app_router.dart';
 import 'package:tyre_pulse/app/router/module_access_resolver_impl.dart';
 import 'package:tyre_pulse/app/router/route_access.dart';
 import 'package:tyre_pulse/app/router/screen_registry.dart';
+import 'package:tyre_pulse/app/telemetry/telemetry_user_binding.dart';
 import 'package:tyre_pulse/app/theme/tp_display_settings.dart';
 import 'package:tyre_pulse/app/theme/tp_display_settings_prefs_store.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
@@ -17,6 +19,7 @@ import 'package:tyre_pulse/core/auth/auth_dependency_providers.dart';
 import 'package:tyre_pulse/core/auth/auth_providers.dart';
 import 'package:tyre_pulse/core/database/app_database.dart';
 import 'package:tyre_pulse/core/database/app_database_provider.dart';
+import 'package:tyre_pulse/core/design_system/tp_report_problem_scope.dart';
 import 'package:tyre_pulse/core/network/supabase_bootstrap.dart';
 import 'package:tyre_pulse/core/permissions/access_resolver.dart';
 import 'package:tyre_pulse/core/permissions/permission_providers.dart';
@@ -55,6 +58,8 @@ import 'package:tyre_pulse/features/notifications/'
     'notifications_screen_registrations.dart';
 import 'package:tyre_pulse/features/preventive_maintenance/'
     'pm_screen_registrations.dart';
+import 'package:tyre_pulse/features/problem_report/presentation/'
+    'report_problem_screen.dart';
 import 'package:tyre_pulse/features/profile/'
     'profile_screen_registrations.dart';
 import 'package:tyre_pulse/features/rca/rca_screen_registrations.dart';
@@ -404,8 +409,18 @@ class TyrePulseApp extends ConsumerWidget {
       // Below the app's ScaffoldMessenger and Localizations, above every
       // route: push token lifecycle, notification taps and the foreground
       // banner.
-      builder: (BuildContext context, Widget? child) =>
-          PushBinding(child: child ?? const SizedBox.shrink()),
+      //
+      // Also here: the Sentry user binding (who is signed in, id only) and
+      // the scope that lets the shared error states offer "Report a
+      // problem". The handler receives the error state's own context, which
+      // sits below the Navigator, so it can push the report screen.
+      builder: (BuildContext context, Widget? child) => TpReportProblemScope(
+        onReport: (BuildContext stateContext) =>
+            unawaited(openReportProblem(stateContext)),
+        child: TelemetryUserBinding(
+          child: PushBinding(child: child ?? const SizedBox.shrink()),
+        ),
+      ),
       theme: TpTheme.light,
       darkTheme: TpTheme.dark,
       // Light unless the user chose otherwise. Spec section 53: this

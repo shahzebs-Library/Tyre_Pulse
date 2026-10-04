@@ -134,7 +134,7 @@ const DETAIL_SPECS = {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default function ConsoleSelfHealing() {
+export default function ConsoleSelfHealing({ tabParam = 'tab' } = {}) {
   const { admin } = useConsoleAuth()
   const theme = useChartTheme()
 
@@ -151,7 +151,7 @@ export default function ConsoleSelfHealing() {
   const [pending, setPending]     = useState(null) // fix awaiting confirmation
   const [history, setHistory]     = useState([])   // this session's scan totals, newest first
   const [detailKey, setDetailKey] = useState(null) // which check's full list is open
-  const [tab, setTab] = useUrlTab(['findings', 'summary'], 'findings')
+  const [tab, setTab] = useUrlTab(['findings', 'summary'], 'findings', tabParam)
 
   const mountedRef = useRef(true)
 

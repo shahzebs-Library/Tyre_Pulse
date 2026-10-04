@@ -69,7 +69,7 @@ function VerifyResult({ result }) {
           : <Badge tone="danger" icon={XCircle}>Failed</Badge>}
         <span className="text-xs text-gray-300">
           {s.passed
-            ? `All ${fmtNum(s.checked)} sealed days are unaltered.`
+            ? `All ${fmtNum(s.checked)} sealed days match their seals.`
             : `${fmtNum(s.mismatched.length)} of ${fmtNum(s.checked)} sealed days were changed after sealing.`}
           {s.purged > 0 && ` ${fmtNum(s.purged)} day(s) were emptied by the retention policy, as expected.`}
         </span>
@@ -340,13 +340,27 @@ export default function ConsoleAuditIntegrity() {
   return (
     <div className="space-y-5 max-w-7xl">
       <PageHeader icon={Fingerprint} title="Audit Integrity"
-        purpose="Every closed day of the audit logs is sealed with a chained fingerprint at 00:45 UTC. Verify proves nothing was changed or deleted since."
+        purpose="Every closed day of the audit logs is sealed with a chained fingerprint at 00:45 UTC. Verify recomputes each day and checks it still matches its seal."
         refreshedAt={readAt} onRefresh={load} refreshing={state.loading}
         actions={<Btn variant="primary" icon={ShieldCheck} onClick={verifyAll} busy={anyBusy}>Verify all</Btn>} />
 
       <Note icon={Archive}>
         Days older than the audit retention window (Console, System Configuration) are deleted by the retention job. Those days show as emptied by retention, not as tampering. Today is sealed tomorrow.
       </Note>
+
+      <Panel>
+        <PanelHeader icon={Info} title="What Verify can and cannot prove" subtitle="Read this before you rely on a pass as evidence." />
+        <ul className="text-xs text-gray-400 space-y-1.5 list-disc pl-4 max-w-4xl">
+          <li>A pass means every sealed day still matches the fingerprint written for it, and each fingerprint still links to the day before. A changed or deleted row in a sealed day shows as a failure.</li>
+          <li>The fingerprints are stored in the same database as the logs and are not signed with a separate key. Someone with full database access could rewrite a day and its seal together, and Verify would not see it.</li>
+          <li>Copying each night's fingerprint out of the database (for example by email) is not set up yet. That is the step that would let the proof be checked from outside.</li>
+          <li>Rows written before sealing started were never sealed, and today stays unsealed until tonight's job runs.</li>
+        </ul>
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+          <Badge tone="quiet">Not set up</Badge>
+          <span className="text-gray-400">Copy the daily fingerprint out of the database</span>
+        </div>
+      </Panel>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatTile label="Sealed days" icon={CalendarDays} value={state.loading ? '...' : failedTiles ? 'N/A' : fmtNum(totals.days)}

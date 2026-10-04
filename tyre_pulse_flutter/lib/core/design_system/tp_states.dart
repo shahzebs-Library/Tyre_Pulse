@@ -34,6 +34,7 @@ import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/tp_button.dart';
+import 'package:tyre_pulse/core/design_system/tp_report_problem_scope.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
 
 /// Keys that identify each state in a widget tree.
@@ -309,6 +310,8 @@ class TpBackendUnavailableState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpReportProblemHandler? report =
+        TpReportProblemScope.maybeOf(context);
     return TpStateView(
       key: TpStateKeys.backendUnavailable,
       icon: Icons.cloud_queue,
@@ -318,6 +321,8 @@ class TpBackendUnavailableState extends StatelessWidget {
       detail: detail,
       primaryActionLabel: onRetry == null ? null : l10n.actionRetry,
       onPrimaryAction: onRetry,
+      secondaryActionLabel: report == null ? null : l10n.problemReportAction,
+      onSecondaryAction: report == null ? null : () => report(context),
     );
   }
 }
@@ -363,6 +368,8 @@ class TpErrorState extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final bool canRetry = onRetry != null && error.isRetryable;
+    final TpReportProblemHandler? report =
+        TpReportProblemScope.maybeOf(context);
     return TpStateView(
       key: TpStateKeys.error,
       icon: Icons.error_outline,
@@ -371,6 +378,8 @@ class TpErrorState extends StatelessWidget {
       message: error.message,
       primaryActionLabel: canRetry ? l10n.actionRetry : null,
       onPrimaryAction: canRetry ? onRetry : null,
+      secondaryActionLabel: report == null ? null : l10n.problemReportAction,
+      onSecondaryAction: report == null ? null : () => report(context),
     );
   }
 }

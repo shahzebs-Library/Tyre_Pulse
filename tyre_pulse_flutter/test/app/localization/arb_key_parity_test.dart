@@ -562,10 +562,14 @@ void main() {
     // 2135 + 4 = 2139. Tyre records: the four risk levels on the tyre card and
     // the risk filter in the reader's language (recordsRiskLow ...
     // recordsRiskCritical).
-    test('en, ar and ur each carry exactly 2139 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2139);
-      expect(_translatableKeys(ar).length, 2139);
-      expect(_translatableKeys(ur).length, 2139);
+    // 2139 + 33 = 2172. Report a problem (Problem Tracking, Phase 1): the
+    // Profile Help row and error-state action, the form (description, type,
+    // optional severity), the attached details, the success state and the
+    // seven failure sentences (problemReportAction ... problemReportFailed).
+    test('en, ar and ur each carry exactly 2172 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2172);
+      expect(_translatableKeys(ar).length, 2172);
+      expect(_translatableKeys(ur).length, 2172);
     });
   });
 

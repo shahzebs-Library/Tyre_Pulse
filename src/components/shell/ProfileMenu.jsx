@@ -28,7 +28,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import { ChevronDown, LogOut, User, HelpCircle, Info, MapPin, Building2 } from 'lucide-react'
+import { ChevronDown, LogOut, User, HelpCircle, Info, MapPin, Building2, LifeBuoy, ListChecks } from 'lucide-react'
 import useAnchoredPopover from '../ui/useAnchoredPopover'
 import ThemeToggle from '../ui/ThemeToggle'
 import LanguageSwitcher from '../LanguageSwitcher'
@@ -36,6 +36,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useSettings } from '../../contexts/SettingsContext'
 import { contextLabel } from '../../lib/workingContext'
+import ReportProblemDialog from '../support/ReportProblemDialog'
 
 /**
  * Translate with an honest English fallback. `t(key, vars)` takes interpolation
@@ -109,12 +110,13 @@ export default function ProfileMenu({
 
   const [open, setOpen] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
+  const [reporting, setReporting] = useState(false)
   const rootRef = useRef(null)
   // nav:'menu' gives the panel the arrow-key model its role=menu advertises;
   // the hook owns it so all five shell menus behave identically.
   const { triggerRef, panelRef, coords } = useAnchoredPopover(open, {
     width: 268,
-    height: 380,
+    height: 420,
     align: 'right',
     nav: 'menu',
     onRequestClose: () => setOpen(false),
@@ -240,6 +242,16 @@ export default function ProfileMenu({
           <div className="p-1.5">
             <MenuItem icon={User} label={tx(t, 'common.profile', 'Profile')} onClick={() => go('/settings')} />
             <MenuItem icon={HelpCircle} label={tx(t, 'common.help', 'Help')} onClick={() => go('/help')} />
+            <MenuItem
+              icon={LifeBuoy}
+              label={tx(t, 'shell.reportProblem', 'Report a problem')}
+              onClick={() => { setOpen(false); setReporting(true) }}
+            />
+            <MenuItem
+              icon={ListChecks}
+              label={tx(t, 'shell.myProblems', 'My reported problems')}
+              onClick={() => go('/my-problems')}
+            />
           </div>
 
           {/* ── Preferences: the single home for theme and language ───────── */}
@@ -303,6 +315,7 @@ export default function ProfileMenu({
         </div>,
         document.body,
       )}
+      <ReportProblemDialog open={reporting} onClose={() => setReporting(false)} />
     </div>
   )
 }

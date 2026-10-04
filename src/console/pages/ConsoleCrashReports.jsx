@@ -12,7 +12,7 @@
  * Every Sentry call goes through the `sentry-issues` edge proxy which self-gates to
  * super-admin and reads the token via the service role.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Bug, RefreshCw, Settings, ExternalLink, Users, Activity,
   ShieldAlert, CheckCircle2, Save, Info, Check, EyeOff, RotateCcw,
@@ -34,6 +34,11 @@ import { sortRows } from '../../lib/consoleTable'
 import ExportButtons from './shared/ExportButtons'
 import { PageHeader as OpsPageHeader, Pager, usePaged, PAGE_SIZE, Drawer, AttentionList, useUrlTab } from './shared/pageKit'
 import { BarsChart, STATUS, useChartTheme } from '../components/ui/charts'
+import ReportedProblemsPanel from './crashReports/ReportedProblemsPanel'
+import ErrorOverview from './errorCenter/ErrorOverview'
+
+// Incidents moved into the Error Center as a tab; the page itself is kept whole.
+const ConsoleIncidents = lazy(() => import('./ConsoleIncidents'))
 
 const PERIODS = [
   { key: '24h', label: 'Last 24h' }, { key: '7d', label: 'Last 7 days' },
@@ -103,7 +108,7 @@ function shorten(text, n = 48) {
   return s.length > n ? `${s.slice(0, n - 3)}...` : s
 }
 
-export default function ConsoleCrashReports() {
+export default function ConsoleCrashReports({ defaultTab = 'issues' } = {}) {
   const { admin } = useConsoleAuth()
   const theme = useChartTheme()
 
@@ -185,7 +190,7 @@ export default function ConsoleCrashReports() {
   useEffect(() => { if (status?.configured) { loadIssues(); loadProjects(); loadMembers() } }, [status?.configured, loadIssues, loadProjects, loadMembers])
 
   const [issueOrder, setIssueOrder] = useState('lastSeen')
-  const [tab, setTab] = useUrlTab(['issues', 'insights'], 'issues')
+  const [tab, setTab] = useUrlTab(['overview', 'issues', 'insights', 'reported', 'incidents'], defaultTab)
   // Sentry returns its own order; the reader can re-rank the loaded page locally.
   const sortedIssues = useMemo(() => {
     const spec = ISSUE_ORDERS.find(o => o.key === issueOrder) || ISSUE_ORDERS[0]
@@ -396,14 +401,28 @@ export default function ConsoleCrashReports() {
     <div className="space-y-5 max-w-7xl">
       <OpsPageHeader
         icon={Bug}
-        title={<>Crash &amp; Error Reports</>}
-        purpose={`Live Sentry issues from the mobile app and web, with triage.${connected && status?.org ? ` Connected to ${status.org}.` : ''}`}
+        title="Error Center"
+        purpose={`Every error from the web app, the phone app and background jobs, grouped so the same fault counts once. Assign, resolve, or link the release that fixed it. Live Sentry issues and the Report a problem inbox sit in their own tabs.${connected && status?.org ? ` Sentry connected to ${status.org}.` : ''}`}
         refreshedAt={connected ? refreshedAt : null}
         onRefresh={connected ? loadIssues : undefined}
         busy={loading}
         actions={<Btn icon={Settings} onClick={() => setShowSetup(s => !s)} aria-expanded={setupOpen}>Connection</Btn>}
       />
 
+      {/* Two sources side by side: Sentry crash reports and what people told us
+          themselves. The reported inbox does not need the Sentry connection. */}
+      <Segmented value={['overview', 'reported', 'incidents'].includes(tab) ? tab : 'sentry'}
+        onChange={(v) => setTab(v === 'sentry' ? 'issues' : v)}
+        ariaLabel="Error Center sources" options={[
+          { key: 'overview', label: 'Overview' },
+          { key: 'sentry', label: 'Crash reports' },
+          { key: 'reported', label: 'Reported problems' },
+          { key: 'incidents', label: 'Incidents' },
+        ]} />
+
+      {tab === 'overview' ? <ErrorOverview onOpenTab={setTab} />
+        : tab === 'incidents' ? <Suspense fallback={<LoadingState label="Loading incidents" rows={3} />}><ConsoleIncidents tabParam="itab" /></Suspense>
+        : tab === 'reported' ? <ReportedProblemsPanel /> : (<>
       {notice && <Note icon={CheckCircle2} tone="accent">{notice}</Note>}
       <ErrorState message={error} onRetry={connected ? loadIssues : loadStatus} />
 
@@ -608,6 +627,8 @@ export default function ConsoleCrashReports() {
       )}
 
       {/* Detail drawer */}
+      </>)}
+
       <Drawer
         open={!!detailFor}
         onClose={closeDetail}

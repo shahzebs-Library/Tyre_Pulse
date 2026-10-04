@@ -12934,6 +12934,204 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Critical'**
   String get recordsRiskCritical;
+
+  /// Opens the Report a problem screen: the Profile Help row, the screen title and the quiet action under Retry on an error state.
+  ///
+  /// In en, this message translates to:
+  /// **'Report a problem'**
+  String get problemReportAction;
+
+  /// Profile: the section heading above the Report a problem row.
+  ///
+  /// In en, this message translates to:
+  /// **'Help'**
+  String get problemReportSectionHelp;
+
+  /// Report a problem: the short explanation at the top of the form.
+  ///
+  /// In en, this message translates to:
+  /// **'Tell us in one sentence what went wrong. The app version, your phone model and this screen are sent with it automatically.'**
+  String get problemReportIntro;
+
+  /// Report a problem: label of the required description field.
+  ///
+  /// In en, this message translates to:
+  /// **'What went wrong?'**
+  String get problemReportDescriptionLabel;
+
+  /// Report a problem: example placeholder inside the description field.
+  ///
+  /// In en, this message translates to:
+  /// **'For example: the tyre list stays empty after I choose a site'**
+  String get problemReportDescriptionHint;
+
+  /// Report a problem: shown when the description is shorter than 10 characters.
+  ///
+  /// In en, this message translates to:
+  /// **'Write at least 10 characters so the team can understand the problem.'**
+  String get problemReportDescriptionTooShort;
+
+  /// Report a problem: shown when the description is longer than 2000 characters.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep it under 2000 characters.'**
+  String get problemReportDescriptionTooLong;
+
+  /// Report a problem: label of the required problem type choice.
+  ///
+  /// In en, this message translates to:
+  /// **'Type of problem'**
+  String get problemReportTypeLabel;
+
+  /// Report a problem: shown when Send is pressed with no type chosen.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the type of problem.'**
+  String get problemReportTypeRequired;
+
+  /// Report a problem type: bug.
+  ///
+  /// In en, this message translates to:
+  /// **'Something is broken'**
+  String get problemReportTypeBug;
+
+  /// Report a problem type: wrong data.
+  ///
+  /// In en, this message translates to:
+  /// **'The data looks wrong'**
+  String get problemReportTypeData;
+
+  /// Report a problem type: access.
+  ///
+  /// In en, this message translates to:
+  /// **'I cannot open something'**
+  String get problemReportTypeAccess;
+
+  /// Report a problem type: slow.
+  ///
+  /// In en, this message translates to:
+  /// **'It is too slow'**
+  String get problemReportTypeSlow;
+
+  /// Report a problem type: other.
+  ///
+  /// In en, this message translates to:
+  /// **'Something else'**
+  String get problemReportTypeOther;
+
+  /// Report a problem: label of the optional severity choice.
+  ///
+  /// In en, this message translates to:
+  /// **'How much does it block you? (optional)'**
+  String get problemReportSeverityLabel;
+
+  /// Report a problem severity: low.
+  ///
+  /// In en, this message translates to:
+  /// **'Low: a small annoyance'**
+  String get problemReportSeverityLow;
+
+  /// Report a problem severity: medium.
+  ///
+  /// In en, this message translates to:
+  /// **'Medium: slows my work'**
+  String get problemReportSeverityMedium;
+
+  /// Report a problem severity: high.
+  ///
+  /// In en, this message translates to:
+  /// **'High: I cannot finish my work'**
+  String get problemReportSeverityHigh;
+
+  /// Report a problem severity: critical.
+  ///
+  /// In en, this message translates to:
+  /// **'Critical: many people are blocked'**
+  String get problemReportSeverityCritical;
+
+  /// Report a problem: heading of the automatically attached details.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent with your report'**
+  String get problemReportAttachedTitle;
+
+  /// Report a problem: attached detail label, the app version.
+  ///
+  /// In en, this message translates to:
+  /// **'App version'**
+  String get problemReportAttachedVersion;
+
+  /// Report a problem: attached detail label, the phone model and operating system.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone'**
+  String get problemReportAttachedDevice;
+
+  /// Report a problem: attached detail label, the screen the report was opened from.
+  ///
+  /// In en, this message translates to:
+  /// **'Screen'**
+  String get problemReportAttachedScreen;
+
+  /// Report a problem: the submit button.
+  ///
+  /// In en, this message translates to:
+  /// **'Send report'**
+  String get problemReportSend;
+
+  /// Report a problem: title of the success state.
+  ///
+  /// In en, this message translates to:
+  /// **'Report sent'**
+  String get problemReportSentTitle;
+
+  /// Report a problem: body of the success state.
+  ///
+  /// In en, this message translates to:
+  /// **'Thank you. The team will look at it, and you will get a message in the app when it is fixed.'**
+  String get problemReportSentMessage;
+
+  /// Report a problem: shown when there is no connection. Reports are not queued offline.
+  ///
+  /// In en, this message translates to:
+  /// **'No signal. Your report was not sent. Send it again when you have signal.'**
+  String get problemReportNeedsSignal;
+
+  /// Report a problem: shown when there is no signed-in session.
+  ///
+  /// In en, this message translates to:
+  /// **'Please sign in again to send a report.'**
+  String get problemReportSignedOut;
+
+  /// Report a problem: shown when the server refuses the account (locked, or not linked to a company).
+  ///
+  /// In en, this message translates to:
+  /// **'Your account cannot send reports. Please speak to your administrator.'**
+  String get problemReportNotAllowed;
+
+  /// Report a problem: shown when the hourly report limit is reached.
+  ///
+  /// In en, this message translates to:
+  /// **'You have sent many reports in the last hour. Please try again later.'**
+  String get problemReportTooMany;
+
+  /// Report a problem: shown when the server rejects the content.
+  ///
+  /// In en, this message translates to:
+  /// **'The report could not be accepted. Check the description and try again.'**
+  String get problemReportInvalid;
+
+  /// Report a problem: shown when the reporting function is not deployed on the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Reporting is not available on this server yet.'**
+  String get problemReportUnavailable;
+
+  /// Report a problem: any other failure; safe to retry.
+  ///
+  /// In en, this message translates to:
+  /// **'Your report could not be sent. Please try again.'**
+  String get problemReportFailed;
 }
 
 class _AppLocalizationsDelegate

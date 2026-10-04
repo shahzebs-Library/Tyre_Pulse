@@ -7417,4 +7417,116 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get recordsRiskCritical => 'سنگین';
+
+  @override
+  String get problemReportAction => 'مسئلہ رپورٹ کریں';
+
+  @override
+  String get problemReportSectionHelp => 'مدد';
+
+  @override
+  String get problemReportIntro =>
+      'ایک جملے میں بتائیں کہ کیا غلط ہوا۔ ایپ کا ورژن، آپ کے فون کا ماڈل اور یہ اسکرین خود بخود ساتھ بھیجے جاتے ہیں۔';
+
+  @override
+  String get problemReportDescriptionLabel => 'کیا غلط ہوا؟';
+
+  @override
+  String get problemReportDescriptionHint =>
+      'مثال: سائٹ چننے کے بعد ٹائروں کی فہرست خالی رہتی ہے';
+
+  @override
+  String get problemReportDescriptionTooShort =>
+      'کم از کم 10 حروف لکھیں تاکہ ٹیم مسئلہ سمجھ سکے۔';
+
+  @override
+  String get problemReportDescriptionTooLong => 'اسے 2000 حروف سے کم رکھیں۔';
+
+  @override
+  String get problemReportTypeLabel => 'مسئلے کی قسم';
+
+  @override
+  String get problemReportTypeRequired => 'مسئلے کی قسم چنیں۔';
+
+  @override
+  String get problemReportTypeBug => 'کچھ خراب ہے';
+
+  @override
+  String get problemReportTypeData => 'ڈیٹا غلط لگ رہا ہے';
+
+  @override
+  String get problemReportTypeAccess => 'میں کچھ نہیں کھول سکتا';
+
+  @override
+  String get problemReportTypeSlow => 'یہ بہت سست ہے';
+
+  @override
+  String get problemReportTypeOther => 'کچھ اور';
+
+  @override
+  String get problemReportSeverityLabel =>
+      'یہ آپ کا کام کتنا روکتا ہے؟ (اختیاری)';
+
+  @override
+  String get problemReportSeverityLow => 'کم: معمولی پریشانی';
+
+  @override
+  String get problemReportSeverityMedium => 'درمیانہ: میرا کام سست ہوتا ہے';
+
+  @override
+  String get problemReportSeverityHigh =>
+      'زیادہ: میں اپنا کام مکمل نہیں کر سکتا';
+
+  @override
+  String get problemReportSeverityCritical => 'سنگین: بہت سے لوگ رکے ہوئے ہیں';
+
+  @override
+  String get problemReportAttachedTitle => 'آپ کی رپورٹ کے ساتھ بھیجا جائے گا';
+
+  @override
+  String get problemReportAttachedVersion => 'ایپ ورژن';
+
+  @override
+  String get problemReportAttachedDevice => 'فون';
+
+  @override
+  String get problemReportAttachedScreen => 'اسکرین';
+
+  @override
+  String get problemReportSend => 'رپورٹ بھیجیں';
+
+  @override
+  String get problemReportSentTitle => 'رپورٹ بھیج دی گئی';
+
+  @override
+  String get problemReportSentMessage =>
+      'شکریہ۔ ٹیم اسے دیکھے گی، اور ٹھیک ہونے پر آپ کو ایپ میں پیغام ملے گا۔';
+
+  @override
+  String get problemReportNeedsSignal =>
+      'سگنل نہیں ہے۔ آپ کی رپورٹ نہیں بھیجی گئی۔ سگنل ملنے پر دوبارہ بھیجیں۔';
+
+  @override
+  String get problemReportSignedOut =>
+      'رپورٹ بھیجنے کے لیے دوبارہ سائن ان کریں۔';
+
+  @override
+  String get problemReportNotAllowed =>
+      'آپ کا اکاؤنٹ رپورٹ نہیں بھیج سکتا۔ براہ کرم اپنے منتظم سے بات کریں۔';
+
+  @override
+  String get problemReportTooMany =>
+      'آپ نے پچھلے ایک گھنٹے میں بہت سی رپورٹس بھیجی ہیں۔ براہ کرم بعد میں کوشش کریں۔';
+
+  @override
+  String get problemReportInvalid =>
+      'رپورٹ قبول نہیں ہو سکی۔ تفصیل دیکھ کر دوبارہ کوشش کریں۔';
+
+  @override
+  String get problemReportUnavailable =>
+      'اس سرور پر رپورٹنگ ابھی دستیاب نہیں ہے۔';
+
+  @override
+  String get problemReportFailed =>
+      'آپ کی رپورٹ نہیں بھیجی جا سکی۔ براہ کرم دوبارہ کوشش کریں۔';
 }

@@ -66,7 +66,7 @@ const isCritical = (r) => ['critical', 'error'].includes(String(r.severity || ''
 const isActive = (r) => r.status === 'open' || r.status === 'ack'
 const sourceLabel = (s) => SOURCE_LABEL[s] || s || 'N/A'
 
-export default function ConsoleTrustAlerts() {
+export default function ConsoleTrustAlerts({ tabParam = 'tab' } = {}) {
   const [state, setState] = useState({ loading: true, error: null, rows: [], readAt: null })
   const [country, setCountry] = useState('all')
   const [status, setStatus] = useState('active')
@@ -76,7 +76,7 @@ export default function ConsoleTrustAlerts() {
   const [busy, setBusy] = useState('')     // `${id}:${action}`
   const [flash, setFlash] = useState(null) // {tone, text}
   const [detail, setDetail] = useState(null)
-  const [tab, setTab] = useUrlTab(TABS, 'alerts')
+  const [tab, setTab] = useUrlTab(TABS, 'alerts', tabParam)
 
   // One read of the newest window for every status: the tiles and the trend
   // must describe the same rows, so the status filter is applied on screen.

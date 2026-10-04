@@ -70,7 +70,7 @@ function fmtWhen(v) {
   return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString()
 }
 
-export default function ConsoleAlertRules() {
+export default function ConsoleAlertRules({ tabParam = 'tab' } = {}) {
   const [rules, setRules]     = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState(null)
@@ -87,7 +87,7 @@ export default function ConsoleAlertRules() {
   const [builderOpen, setBuilderOpen] = useState(false)
   const [openRule, setOpenRule] = useState(null)
   const [readAt, setReadAt] = useState(null)
-  const [tab, setTab] = useUrlTab(TABS, 'rules')
+  const [tab, setTab] = useUrlTab(TABS, 'rules', tabParam)
 
   const load = useCallback(async () => {
     setLoading(true)

@@ -48,7 +48,7 @@ const EMPTY = {
 const isExpired = (a, now = Date.now()) => !!a.show_until && new Date(a.show_until).getTime() < now
 const isLive = (a, now = Date.now()) => !!a.active && !isExpired(a, now)
 
-export default function ConsoleAnnouncements() {
+export default function ConsoleAnnouncements({ tabParam = 'tab' } = {}) {
   const { logAction, activeOrg } = useConsoleAuth()
   const [list, setList] = useState([])
   const [loading, setLoading] = useState(true)
@@ -68,7 +68,7 @@ export default function ConsoleAnnouncements() {
   const [detail, setDetail] = useState(null)
   const [query, setQuery] = useState('')
   const [targetedOnly, setTargetedOnly] = useState(false)
-  const [tab, setTab] = useUrlTab(TABS, 'live')
+  const [tab, setTab] = useUrlTab(TABS, 'live', tabParam)
 
   // Company names are only labels here, but a failed read must not look like
   // "every announcement goes to all companies".

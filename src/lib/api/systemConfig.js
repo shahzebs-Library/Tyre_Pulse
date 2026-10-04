@@ -59,6 +59,10 @@ export const CONFIG_DEFAULTS = Object.freeze({
   // this flag exists to switch it OFF in a hurry, not to hide it behind an
   // opt-in. Turning it off falls back to the frozen LegacyLayout.
   new_shell: true,
+  // Opt-in: areas with no saved role rule are Admin only until shared from
+  // Console > Access Control > New and not yet shared. Off keeps the built-in
+  // role defaults (Manager and Director see new areas).
+  new_features_admin_only: false,
 })
 
 /** system_config key for the app-shell rollout flag. */
@@ -303,6 +307,7 @@ export const ENFORCEMENT_STATUS = Object.freeze({
   email_notifications:   { status: 'active', where: 'send-email edge function (skips when off)' },
   push_notifications:    { status: 'active', where: 'workflow-notify edge push channel (skips when off)' },
   max_login_attempts:    { status: 'active', where: 'Account lockout on repeated failed logins (login guard, V287)' },
+  new_features_admin_only: { status: 'active', where: 'Web permission resolver (AuthContext hasPermission): areas with no saved role rule are Admin only' },
   new_shell:             { status: 'active', where: 'App shell picker in App.jsx (on = Layout, off = LegacyLayout fallback); applies on the next page load' },
   // Honestly still SAVED ONLY (stored; not yet enforced) - never claimed active:
   ai_model:              { status: 'saved', where: 'Model is locked server-side for safety; this value is not used' },
@@ -313,3 +318,23 @@ export const ENFORCEMENT_STATUS = Object.freeze({
   // (accidents / tyres / fleet). Enabling that needs a reviewed, backed-up action.
   data_retention_months: { status: 'saved', where: 'Protected: business records are never auto-deleted (data safety)' },
 })
+
+/**
+ * Write one or more system_config keys ({ key: value }) and re-prime the cache.
+ * The single writer for surfaces outside the System Configuration page (the
+ * console Overview switches and quick actions). Values are stored as strings,
+ * booleans as 'true'/'false', matching every existing reader. Throws a
+ * sanitised ServiceError on failure so the caller can say nothing changed.
+ * Row-level security still decides who may write (super admin only).
+ */
+export async function saveSystemConfigValues(values) {
+  const now = new Date().toISOString()
+  const rows = Object.entries(values || {})
+    .filter(([k]) => typeof k === 'string' && k.trim())
+    .map(([key, v]) => ({ key, value: typeof v === 'boolean' ? (v ? 'true' : 'false') : String(v ?? ''), updated_at: now }))
+  if (!rows.length) return []
+  const { error } = await supabase.from('system_config').upsert(rows, { onConflict: 'key', ignoreDuplicates: false })
+  if (error) throw new ServiceError(toUserMessage(error, 'Could not save the setting. Nothing was changed.'), error.code, error)
+  _cache = { ..._cache, ...Object.fromEntries(rows.map((r) => [r.key, r.value])) }
+  return rows.map((r) => r.key)
+}

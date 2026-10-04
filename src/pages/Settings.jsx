@@ -927,7 +927,7 @@ export default function Settings() {
           <CardHeader level={2} title="About" icon={Info} />
           <CardBody className="space-y-1 text-sm text-[var(--text-secondary)]">
             <p><span className="text-[var(--text-muted)]">App:</span> <span className="text-[var(--text-primary)] font-medium">TyrePulse</span></p>
-            <p><span className="text-[var(--text-muted)]">Version:</span> <span className="text-[var(--text-primary)] font-medium">v2.5.0</span></p>
+            <p><span className="text-[var(--text-muted)]">Version:</span> <span className="text-[var(--text-primary)] font-medium">{import.meta.env.VITE_APP_VERSION ? `v${import.meta.env.VITE_APP_VERSION}` : 'Not set'}</span></p>
             <p><span className="text-[var(--text-muted)]">Support:</span> Contact your tyre planning engineer</p>
           </CardBody>
         </Card>
@@ -1743,7 +1743,7 @@ export default function Settings() {
       <Card>
         <CardHeader level={2} title="About" icon={Info} />
         <CardBody className="space-y-1 text-sm text-[var(--text-secondary)]">
-          <p><span className="text-[var(--text-muted)]">Version:</span> <span className="text-[var(--text-primary)] font-medium">v2.5.0</span></p>
+          <p><span className="text-[var(--text-muted)]">Version:</span> <span className="text-[var(--text-primary)] font-medium">{import.meta.env.VITE_APP_VERSION ? `v${import.meta.env.VITE_APP_VERSION}` : 'Not set'}</span></p>
           <p><span className="text-[var(--text-muted)]">Support:</span> Report an issue via the help menu</p>
         </CardBody>
       </Card>

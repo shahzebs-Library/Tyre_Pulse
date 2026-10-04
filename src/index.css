@@ -1510,6 +1510,7 @@ html.light .console-root .text-gray-700 { color: #475569 !important; }
 /* Orange ACCENT stays orange — but the light-orange 300 tone is illegible on a
    white ground, so darken it to orange-700/600 while fills keep an orange tint. */
 html.light .console-root [class*="text-orange-300"] { color: #c2410c !important; }
+html.light .console-root [class*="text-orange-200"] { color: #c2410c !important; }
 html.light .console-root [class*="text-orange-400"] { color: #ea580c !important; }
 
 /* Active nav item + accent badges: deep-orange fills → light orange tints. */

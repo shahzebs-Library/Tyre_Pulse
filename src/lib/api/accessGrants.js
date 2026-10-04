@@ -13,7 +13,7 @@
  * and role checks live in the database, this layer only relocates the call and
  * normalises error surfacing.
  */
-import { supabase, unwrap } from './_client'
+import { supabase, unwrap, fetchAllOrThrow } from './_client'
 
 // Least-privilege column set for the access-grant ledger. Covers every field the
 // access-control UI reads (who/what/effect/why/when) without leaking internal
@@ -96,6 +96,7 @@ export async function setUserAccessGrant({
   effect = 'grant',
   note = null,
   expiresAt = null,
+  reason = null,
 }) {
   return unwrap(
     await supabase.rpc('set_user_access_grant', {
@@ -105,6 +106,7 @@ export async function setUserAccessGrant({
       p_effect: effect,
       p_note: note,
       p_expires_at: expiresAt,
+      ...(reason ? { p_reason: String(reason).trim() } : {}),
     }),
   )
 }
@@ -117,8 +119,8 @@ export async function setUserAccessGrant({
  * @param {string} id  the grant row's uuid
  * @returns {Promise<void>}
  */
-export async function revokeUserAccessGrant(id) {
-  return unwrap(await supabase.rpc('revoke_user_access_grant', { p_id: id }))
+export async function revokeUserAccessGrant(id, reason = null) {
+  return unwrap(await supabase.rpc('revoke_user_access_grant', { p_id: id, ...(reason ? { p_reason: String(reason).trim() } : {}) }))
 }
 
 // ── Web / Mobile scope (surface partitioning) ────────────────────────────────
@@ -386,4 +388,69 @@ export async function setUserAccessGrantScoped(userId, moduleKey, {
     )
   }
   return ids
+}
+
+// ── Console People tab: every grant across every user ───────────────────────
+
+/**
+ * Every per-user grant/deny row (super admin reads all via RLS), newest first,
+ * paged so a large ledger is never silently cut at the server cap. [] when the
+ * table is not provisioned.
+ * @returns {Promise<Array<object>>}
+ */
+export async function listAllGrants({ max = 20000 } = {}) {
+  try {
+    return await fetchAllOrThrow((from, to) => supabase
+      .from('user_access_grants')
+      .select(COLS)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: true })
+      .range(from, to), { max })
+  } catch (err) {
+    if (isMissingRelation(err)) return []
+    throw err
+  }
+}
+
+/**
+ * Edit one grant row in place from the People table.
+ *
+ * Writes the NEW row(s) first (one per surface in `scope`) and only then removes
+ * the old row, and only when the old row is not one of the rows just written
+ * (the RPC upserts on user+key+capability+effect and can return the same id).
+ * A failed write therefore never loses the existing rule.
+ *
+ * @param {object} row   the existing user_access_grants row
+ * @param {{effect?:string, capability?:string, scope?:'web'|'mobile'|'both', expiresAt?:string|null, note?:string|null}} next
+ * @returns {Promise<string[]>} ids now carrying the rule
+ */
+export async function editUserGrant(row, next = {}) {
+  if (!row?.id || !row?.user_id) throw new Error('A saved rule is required.')
+  const key = String(row.module_key || '')
+  const baseKey = isMobileGrantKey(key) ? key.slice(MOBILE_GRANT_PREFIX.length) : key
+  const currentScope = isMobileGrantKey(key) ? 'mobile' : 'web'
+  const ids = await setUserAccessGrantScoped(row.user_id, baseKey, {
+    capability: next.capability || row.capability || 'view',
+    effect: next.effect || row.effect || 'grant',
+    scope: next.scope || currentScope,
+    note: next.note !== undefined ? next.note : (row.note ?? null),
+    expiresAt: next.expiresAt !== undefined ? next.expiresAt : (row.expires_at ?? null),
+  })
+  if (!ids.includes(row.id)) await revokeUserAccessGrant(row.id)
+  return ids
+}
+
+/**
+ * Delete several grant rows. Reports every outcome separately so a partial
+ * failure is never shown as full success.
+ * @param {string[]} ids
+ * @returns {Promise<{ removed: string[], failed: {id:string, error:unknown}[] }>}
+ */
+export async function deleteUserGrants(ids = []) {
+  const removed = []
+  const failed = []
+  for (const id of ids || []) {
+    try { await revokeUserAccessGrant(id); removed.push(id) } catch (error) { failed.push({ id, error }) }
+  }
+  return { removed, failed }
 }

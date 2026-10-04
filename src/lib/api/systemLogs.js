@@ -13,11 +13,13 @@
  */
 import { supabase, unwrap } from './_client'
 import { fetchAllPages } from '../fetchAll'
+import { errorFingerprint, webAppVersion, describeClient } from '../problemReport'
 
 /** Explicit least-privilege column list (no SELECT *). */
 export const SYSTEM_LOG_COLS =
   'id,organisation_id,module_id,severity,source,message,detail,reference_id,url,' +
-  'user_id,user_email,resolved,resolved_by,resolved_at,created_at'
+  'user_id,user_email,resolved,resolved_by,resolved_at,created_at,' +
+  'platform,app_version,device,screen,error_fingerprint'
 
 /**
  * True when the failure is "table does not exist yet" (pre-migration) so callers
@@ -129,7 +131,13 @@ export async function resolveAllSystemLogs({ module, severity } = {}) {
  * @param {string}  [event.reference_id]
  * @param {string}  [event.url]
  * @param {string}  [event.user_email]
+ * @param {string}  [event.screen]           defaults to location.pathname
+ * @param {string}  [event.fingerprint]      defaults to source + normalised message
  * @returns {Promise<{ok: boolean}>}
+ *
+ * Attribution (Phase 0): every row carries platform='web', the build version
+ * (VITE_APP_VERSION, null when the build does not set one), the browser, the
+ * screen and a fingerprint so identical errors group together.
  */
 export async function logSystemEvent({
   module_id,
@@ -140,10 +148,14 @@ export async function logSystemEvent({
   reference_id,
   url,
   user_email,
+  screen,
+  fingerprint,
 } = {}) {
   const msg = message == null ? '' : String(message).trim()
   if (!msg) return { ok: false }
   try {
+    const client = describeClient(typeof navigator !== 'undefined' ? navigator.userAgent : '')
+    const here = typeof location !== 'undefined' ? location.pathname : null
     const payload = {
       module_id: module_id || null,
       severity: severity || 'error',
@@ -153,6 +165,11 @@ export async function logSystemEvent({
       reference_id: reference_id || null,
       url: url || null,
       user_email: user_email || null,
+      platform: 'web',
+      app_version: webAppVersion(),
+      device: client.device ? `${client.device}${client.os ? ` on ${client.os}` : ''}`.slice(0, 200) : null,
+      screen: (screen || here || null) ? String(screen || here).slice(0, 300) : null,
+      error_fingerprint: fingerprint || errorFingerprint(source, msg),
     }
     const { error } = await supabase.from('system_logs').insert(payload)
     if (!error) return { ok: true }
@@ -178,6 +195,11 @@ async function logViaRpc(payload) {
       p_detail: detail && typeof detail === 'object' && !Array.isArray(detail) ? detail : null,
       p_reference_id: payload.reference_id,
       p_url: payload.url,
+      p_platform: payload.platform,
+      p_app_version: payload.app_version,
+      p_device: payload.device,
+      p_screen: payload.screen,
+      p_fingerprint: payload.error_fingerprint,
     })
     if (error || data !== true) return { ok: false }
     return { ok: true }

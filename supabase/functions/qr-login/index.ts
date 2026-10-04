@@ -3,7 +3,8 @@
 //
 // Flow: the sign-in page calls the qr_login_start RPC (anon) and shows the code
 // as a QR. A signed-in phone scans it and calls qr_login_approve. The page polls
-// qr_login_status; once 'approved' it POSTs { id, secret } here. This function
+// qr_login_status; once 'approved' it POSTs { id, secret } here, where secret
+// is the BROWSER secret (never shown in the QR; the QR carries the scan secret). This function
 // (service role) checks the request is approved, unexpired and unused, marks it
 // consumed in one conditional update (so a code works once), re-checks the
 // approving account is approved and unlocked, and returns a one-time magic-link
@@ -42,6 +43,11 @@ async function sha256Hex(s: string): Promise<string> {
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
+function clientIp(req: Request): string | null {
+  const raw = req.headers.get('cf-connecting-ip') || req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || ''
+  return raw.split(',')[0].trim().slice(0, 64) || null
+}
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 serve(async (req) => {
@@ -61,16 +67,13 @@ serve(async (req) => {
   const secret = String(body.secret || '')
   if (!UUID_RE.test(id) || secret.length < 32 || secret.length > 128) return reply(400, { ok: false, reason: 'invalid' })
 
-  // Housekeeping: codes are worthless after a few minutes; keep the table small.
-  await admin.from('qr_login_requests').delete().lt('created_at', new Date(Date.now() - 86_400_000).toISOString())
-
   const hash = await sha256Hex(secret)
   // Single use: only an approved, unexpired, matching row flips to consumed.
   const { data: rows, error } = await admin
     .from('qr_login_requests')
-    .update({ status: 'consumed', consumed_at: new Date().toISOString() })
+    .update({ status: 'consumed', consumed_at: new Date().toISOString(), redeem_ip: clientIp(req) })
     .eq('id', id)
-    .eq('secret_hash', hash)
+    .eq('browser_hash', hash)
     .eq('status', 'approved')
     .gt('expires_at', new Date().toISOString())
     .select('approved_by')
@@ -80,6 +83,11 @@ serve(async (req) => {
 
   const { data: profile } = await admin.from('profiles').select('approved, locked').eq('id', userId).maybeSingle()
   if (!profile || profile.approved !== true || profile.locked === true) return reply(403, { ok: false, reason: 'account' })
+
+  // A QR session is single-factor. Users with 2FA enrolled must sign in with
+  // their password and code instead, so QR never weakens their second factor.
+  const { data: factors } = await admin.auth.admin.mfa.listFactors({ userId })
+  if (factors?.factors?.some((f: { status?: string }) => f.status === 'verified')) return reply(403, { ok: false, reason: 'mfa' })
 
   const { data: userRes, error: userErr } = await admin.auth.admin.getUserById(userId)
   const email = userRes?.user?.email

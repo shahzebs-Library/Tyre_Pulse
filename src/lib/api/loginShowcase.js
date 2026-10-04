@@ -66,14 +66,20 @@ export function qrPayload(id, secret) {
   return `${QR_PREFIX}?id=${encodeURIComponent(id)}&s=${encodeURIComponent(secret)}`
 }
 
-/** -> { ok:true, id, secret, expiresAt } | { ok:false, reason } */
+/**
+ * -> { ok:true, id, secret, browserSecret, matchCode, expiresAt } | { ok:false, reason }
+ * `secret` (scan secret) goes in the QR for the phone. `browserSecret` stays in
+ * this page only: status polling and redeem require it, so a photographed QR
+ * cannot be redeemed by someone else. `matchCode` is shown for number matching.
+ */
 export async function startQrLogin() {
   try {
     const ua = typeof navigator !== 'undefined' ? navigator.userAgent : null
     const { data, error } = await supabase.rpc('qr_login_start', { p_user_agent: ua })
     if (error || !data) return { ok: false, reason: 'unavailable' }
     if (!data.ok) return { ok: false, reason: data.reason || 'unavailable' }
-    return { ok: true, id: data.id, secret: data.secret, expiresAt: data.expires_at }
+    if (!data.browser_secret) return { ok: false, reason: 'unavailable' }
+    return { ok: true, id: data.id, secret: data.secret, browserSecret: data.browser_secret, matchCode: data.match_code, expiresAt: data.expires_at }
   } catch {
     return { ok: false, reason: 'unavailable' }
   }

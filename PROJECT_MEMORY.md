@@ -15,7 +15,8 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   refuses guarded switches), error group state, alert state, backups.restore_tests, storage retention rules (not run).
 - Opt-in system_config new_features_admin_only (default false, web only).
 - INCIDENT: query counters (pg_stat_statements) reset 2026-09-30 10:34 UTC by a test; history since 20 Aug lost.
-- Owner decisions open: lock 581 never-signed-in Drivers; org suspend not enforced; member cap 100 vs 500; billing
+- OWNER RULED 2026-10-04: do NOT lock the 581 never-signed-in Drivers; member cap = big org, not the small 100, NOT enforced until billing goes live.
+- Owner decisions open: org suspend not enforced; billing
   go-live; dup file removal; retention auto-run; PostHog key; Vercel token for rollback; announcements table is read
   by no client (composer uses broadcast_send).
 - Mockups + per-screen research: scratchpad cc/research/*.md, review artifact RQ5PD2duLXBoysFNbvzqRw.

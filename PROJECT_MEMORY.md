@@ -5,6 +5,23 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
+# ⚑ SESSION 2026-09-30/10-04 — CONSOLE CONTROL CENTER REBUILT (local commits, NOT pushed). Owner rule: push only on "push".
+- Commits on claude/modest-hopper-5bnq8c: 410fb1f shell+Overview, 169eb4c Access Control, 6897fd1/720040d/570380b/01303ab
+  problem tracking (user_issues, submit_user_issue, Error Center inbox), 3f57935 Flutter Report a problem (code only,
+  adds device_info_plus; platform sent as 'flutter'), b7dfcfe Monitor/Platform/Trust/Runtime/Engineering screens.
+- Sidebar = 5 areas (Monitor, Platform, Trust, Runtime, Engineering); old routes redirect to tabs (?tab=, inner ?sub=).
+- ~25 migrations 20260930* applied live, all super-admin DEFINER, anon closed. Key: system_config_history +
+  admin_set_config(reason), access writers take p_reason -> access_audit.reason, flag_changes (scheduled, dual control,
+  refuses guarded switches), error group state, alert state, backups.restore_tests, storage retention rules (not run).
+- Opt-in system_config new_features_admin_only (default false, web only).
+- INCIDENT: query counters (pg_stat_statements) reset 2026-09-30 10:34 UTC by a test; history since 20 Aug lost.
+- Owner decisions open: lock 581 never-signed-in Drivers; org suspend not enforced; member cap 100 vs 500; billing
+  go-live; dup file removal; retention auto-run; PostHog key; Vercel token for rollback; announcements table is read
+  by no client (composer uses broadcast_send).
+- Mockups + per-screen research: scratchpad cc/research/*.md, review artifact RQ5PD2duLXBoysFNbvzqRw.
+
+---
+
 # ⚑ SESSION 2026-09-30 (part 3) — SKILL STACK + 6-AGENT FULL AUDIT + ADMIN-ONLY WRITES. PR #372 merged (3bcfd286), both prod deploys READY.
 - **Skill stack:** 14 project skills in `.claude/skills/` (complete-app-audit runs the 28-stage sequence) + 25 reusable
   skills pinned by `scripts/install-claude-skills.sh` (`--check` verifies). Routing table in CLAUDE.md "Skill Routing".

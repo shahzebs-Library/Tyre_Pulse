@@ -20,25 +20,25 @@ export default function InventoryPage() {
       <PageTop
         crumbs={[{ href: "/", label: "Home" }, { href: "/platform", label: "Platform" }, { label: "Inventory, procurement and reports" }]}
         title="Inventory, procurement and reporting"
-        lead="Control your inventory, manage procurement and get clear visibility of costs and performance across your fleet."
+        lead="See which parts each job consumed and what every machine costs to run, by site and by month."
       />
-      <section className="section-pad" style={{ paddingTop: 0 }}>
+      <section className="section-pad tight">
         <div className="site-shell">
           <SubNav items={[["#inventory", "Inventory and parts"], ["#purchasing", "Purchase requests"], ["#suppliers", "Suppliers"], ["#costs", "Costs and reporting"], ["#dashboards", "Dashboards"]]} />
           <div id="inventory" className="anchor-sec"><InventoryTable /></div>
-          <div className="split" style={{ marginTop: 16, alignItems: "start", gap: 16 }}>
+          <div className="split split-top">
             <div id="purchasing" className="anchor-sec">
               <PurchaseRequest />
-              <div id="suppliers" className="anchor-sec panel" style={{ marginTop: 16 }}>
+              <div id="suppliers" className="anchor-sec panel stack-gap">
                 <div className="panel-head"><strong>Suppliers</strong></div>
-                <p style={{ margin: 0, color: "#3b3b35" }}>Keep supplier details, price history and delivery performance next to every purchase, so the next request goes to the supplier that actually delivered.</p>
+                <p className="panel-text">Keep supplier details, price history and delivery performance next to every purchase, so the next request goes to the supplier that actually delivered.</p>
               </div>
             </div>
             <div id="costs" className="anchor-sec"><div id="dashboards" className="anchor-sec"><FleetCostPanel /></div></div>
           </div>
         </div>
       </section>
-      <CtaBand title="Control costs. Keep your fleet moving." text="See how Tyre Pulse can help you manage inventory and procurement." />
+      <CtaBand title="See which parts each job actually consumed." text="Send a month of store issues. We tie them to job cards and machines in the demo." button="Book a demo on your data" />
     </PageFrame>
   );
 }

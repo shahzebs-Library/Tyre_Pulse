@@ -5,6 +5,24 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
+# ⚑ SESSION 2026-10-04 (part 5) — MARKETING SITE: COPY RULES + IMPECCABLE + EMIL KOWALSKI + TASTE PASS (local commit, not pushed).
+- Skills installed: impeccable (pbakaus), Emil Kowalski set (emilkowalski/skill: emil-design-eng, improve/review-animations...),
+  taste re-installed; pinned in skills-lock.json. 3 read-only audits ran in parallel, fixes applied by hand.
+- OWNER COPY RULES (screenshot, 2026-10-04) now apply to ALL marketing copy: benefit before feature, specific headlines, CTA =
+  verb + outcome, proof next to the claim, handle objections before the CTA, 1-3 bullets per section, one idea per section,
+  no generic openers, no aphorism formulas ("One X. Every Y."), no two-beat antithesis, no fabricated claims, no em dashes.
+- Done: hero/section headlines rewritten; CTA bands now "Book a demo on your data" with a concrete offer; home FAQ block
+  (offline / ERP+Excel import / multi-country) before the CTA; NEW /platform/inspections#tyres section (tyre links used to land
+  on a page that never mentioned tyres); accidents/fuel/approvals links -> "Ask in a demo" (no page exists); industries lead
+  states it was built inside a ready-mix operation in KSA/UAE/Egypt (client NOT named), rental + government marked
+  "Configured on request"; pricing negative lead + blank eyebrow spacers removed; contact fleet size required.
+- Fixes measured in Chromium: focus ring was yellow-on-white 1.6:1 (A11yStyles leftover) -> pmv.css ink ring wins; side gutter
+  10px -> 16px at 390; WhatsApp FAB overlapped hero picker; Good chip 3.4:1 -> #1d7a44; EN link 19px wide; SubNav first link
+  falsely "selected"; hero now holds on hidden tab (visibilitychange); crossfade no longer overlaps two headlines; dropdown
+  inset-inline-start for /ar; press 100ms; tap highlight off; scroll-padding-top 80px. Inline styles moved to classes.
+- Not done (design choices for owner): "Book a demo" appears 3x per module page; 8 identical "Learn more" links; sample
+  tables still clipped at 390 inside their own scroll box.
+
 # ⚑ SESSION 2026-10-04 (part 4) — TOOLS: STRIX + GRAPHIFY + SUPERPOWERS INSTALLED; GRAPH RUN ON src/.
 - Installed (container, user scope): superpowers plugin (obra/superpowers-marketplace), Strix (`uv tool install --python 3.12
   strix-agent`, needs py3.12), Graphify (`uv tool install graphifyy` + `graphify install --platform claude`). Persisted in

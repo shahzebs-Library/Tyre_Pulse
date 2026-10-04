@@ -22,9 +22,9 @@ export default function MaintenancePage() {
       <PageTop
         crumbs={[{ href: "/", label: "Home" }, { href: "/platform", label: "Platform" }, { label: "Maintenance and workshop" }]}
         title="Maintenance and workshop"
-        lead="Plan, schedule and manage all maintenance activities. Keep your workshop, teams and spare parts in sync."
+        lead="Get breakdowns back on site sooner. Job cards, technicians, parts and outside repairs run from one queue."
       />
-      <section className="section-pad" style={{ paddingTop: 0 }}>
+      <section className="section-pad tight">
         <div className="site-shell">
           <SubNav items={[["#work-orders", "Work orders"], ["#preventive", "Preventive maintenance"], ["#job-cards", "Job cards"], ["#technicians", "Technicians"], ["#parts", "Parts and labour"]]} />
           <div id="work-orders" className="anchor-sec"><WorkOrdersTable /></div>
@@ -40,13 +40,13 @@ export default function MaintenancePage() {
           <div>
             <h2 className="sec-h" id="pm-h">Preventive maintenance that follows the meter.</h2>
             <ul className="tick-list">
-              {["Service plans by engine hours, kilometres or calendar", "Due and overdue work surfaced before it becomes a breakdown", "Recording a service advances the next due date automatically", "Compliance by site, asset type and plan"].map((t) => <li key={t}><CheckCircle2 size={18} aria-hidden="true" />{t}</li>)}
+              {["Service plans by engine hours, kilometres or calendar", "Overdue work surfaced before it becomes a breakdown", "Recording a service sets the next due date automatically"].map((t) => <li key={t}><CheckCircle2 size={18} aria-hidden="true" />{t}</li>)}
             </ul>
           </div>
           <Photo name="technicianGenerator" position="45% 40%" />
         </div>
       </section>
-      <CtaBand title="Streamline your maintenance operations." text="See how Tyre Pulse can support your workshop and field teams." />
+      <CtaBand title="Find the breakdowns your PM plan should have caught." text="Send a month of job cards. We split planned work from breakdowns, machine by machine." button="Book a demo on your data" />
     </PageFrame>
   );
 }

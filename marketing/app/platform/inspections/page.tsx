@@ -23,18 +23,18 @@ export default function InspectionsPage() {
       <PageTop
         crumbs={[{ href: "/", label: "Home" }, { href: "/platform", label: "Platform" }, { label: "Inspections and safety" }]}
         title="Field inspections and safety"
-        lead="Digitise your inspections, capture defects, add photos and track actions. Keep your assets and people safe and compliant."
+        lead="Catch tyre and safety defects on the daily walk-round, and turn each one into a tracked action."
       />
-      <section className="section-pad" style={{ paddingTop: 0 }}>
+      <section className="section-pad tight">
         <div className="site-shell">
-          <SubNav items={[["#daily", "Daily inspections"], ["#forms", "Safety forms"], ["#defects", "Defect management"], ["#actions", "Actions and approvals"], ["#history", "Inspection history"]]} />
+          <SubNav items={[["#daily", "Daily checks"], ["#tyres", "Tyres"], ["#defects", "Defects"], ["#actions", "Conditions"], ["#history", "Sign-off"]]} />
           <div id="daily" className="anchor-sec insp-hero">
             <OfflineInspectionPhone withConditions />
             <div id="forms" className="anchor-sec">
-              <h2 className="sec-h">Inspect anything. Anywhere.</h2>
-              <p style={{ color: "#3b3b35", marginTop: 0 }}>Use the mobile app to complete inspections offline, capture photos, record meter readings and conditions, and raise actions, even without a network connection.</p>
+              <h2 className="sec-h">Daily walk-round checks on the phone, offline.</h2>
+              <p className="panel-text">Photos, meter readings and conditions save on the phone and sync when the signal returns.</p>
               <ul className="tick-list">
-                {["Configurable inspection templates", "Capture photos and defect details", "Record meter readings and condition", "Create actions and work orders", "Offline mode with automatic sync", "Digital signatures"].map((t) => <li key={t}><CheckCircle2 size={18} aria-hidden="true" />{t}</li>)}
+                {["Checklists configured by asset type", "Defects raise actions and work orders", "Signed off by the supervisor on the phone"].map((t) => <li key={t}><CheckCircle2 size={18} aria-hidden="true" />{t}</li>)}
               </ul>
               <Link className="btn-text" href="/contact">Book a demo <ArrowRight size={16} aria-hidden="true" /></Link>
             </div>
@@ -51,7 +51,18 @@ export default function InspectionsPage() {
           </div>
         </div>
       </section>
-      <CtaBand title="Improve safety and asset availability." text="Digitise your inspections with Tyre Pulse." />
+      <section className="section-pad soft-bg anchor-sec" id="tyres" aria-labelledby="tyres-h">
+        <div className="site-shell split">
+          <div>
+            <h2 className="sec-h" id="tyres-h">Every tyre, from fitment to scrap.</h2>
+            <ul className="tick-list">
+              {["Fitment by serial, wheel position and odometer", "Removals and scraps with the reason and who recorded it", "Cost per kilometre or per engine hour, by brand and size"].map((t) => <li key={t}><CheckCircle2 size={18} aria-hidden="true" />{t}</li>)}
+            </ul>
+          </div>
+          <Photo name="fleetLineup" className="art art-frame" fit="contain" />
+        </div>
+      </section>
+      <CtaBand title="Put your tyre men's checklist on their phone." text="We set up your vehicle types and wheel positions before the demo." button="Book a demo on your data" />
     </PageFrame>
   );
 }

@@ -24,7 +24,7 @@ export default function FleetPage() {
         title="Fleet and asset management"
         lead="Keep complete records for all your plant, machinery and vehicles. Track utilisation, service history, costs and documents in one place."
       />
-      <section className="section-pad" style={{ paddingTop: 0 }}>
+      <section className="section-pad tight">
         <div className="site-shell">
           <SubNav items={[["#records", "Asset records"], ["#utilisation", "Utilisation"], ["#history", "Service history"], ["#documents", "Documents"], ["#lifecycle", "Lifecycle"]]} />
           <div id="records" className="anchor-sec">
@@ -42,7 +42,7 @@ export default function FleetPage() {
           <div>
             <h2 className="sec-h" id="util-h">Meters that keep themselves current.</h2>
             <ul className="tick-list">
-              {["Hour and kilometre readings from inspections, job cards and telematics", "Readings that go backwards are flagged, never silently accepted", "Utilisation by asset, site and asset type", "Preventive schedules driven by the real meter"].map((t) => <li key={t}><CheckCircle2 size={18} aria-hidden="true" />{t}</li>)}
+              {["Hour and kilometre readings from inspections, job cards and telematics", "Readings that go backwards are flagged, never silently accepted", "Preventive schedules driven by the real meter"].map((t) => <li key={t}><CheckCircle2 size={18} aria-hidden="true" />{t}</li>)}
             </ul>
           </div>
           <Photo name="fleetLineup" className="art art-frame" fit="contain" />
@@ -54,12 +54,12 @@ export default function FleetPage() {
           <div id="lifecycle" className="anchor-sec">
             <h2 className="sec-h" id="docs-h">Documents and lifecycle in the same record.</h2>
             <ul className="tick-list">
-              {["Registration, insurance and operating permits with expiry reminders", "Ownership, cost centre, department and current site", "Transfers between sites and countries with full history", "Acquisition, depreciation and disposal decisions"].map((t) => <li key={t}><CheckCircle2 size={18} aria-hidden="true" />{t}</li>)}
+              {["Registration, insurance and permits with expiry reminders", "Transfers between sites and countries with full history", "Disposal decisions backed by downtime and repair cost"].map((t) => <li key={t}><CheckCircle2 size={18} aria-hidden="true" />{t}</li>)}
             </ul>
           </div>
         </div>
       </section>
-      <CtaBand title="Keep your assets working harder." text="Get complete visibility across your fleet, on every site." />
+      <CtaBand title="Find the machines that cost more than they earn." text="Send your asset list. We show downtime and repair cost for each one in the demo." button="Book a demo on your data" />
     </PageFrame>
   );
 }

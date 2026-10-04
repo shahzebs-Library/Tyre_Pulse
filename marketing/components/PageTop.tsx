@@ -7,9 +7,9 @@ export function PageTop({ crumbs, title, lead }: { crumbs: { href?: string; labe
     <section className="page-top">
       <div className="site-shell">
         <nav aria-label="Breadcrumb">
-          <ol className="crumbs" style={{ listStyle: "none", padding: 0 }}>
+          <ol className="crumbs">
             {crumbs.map((c, i) => (
-              <li key={c.label} style={{ display: "flex", gap: 8 }}>
+              <li key={c.label}>
                 {i > 0 && <span aria-hidden="true">/</span>}
                 {c.href ? <Link href={c.href}>{c.label}</Link> : <span aria-current="page">{c.label}</span>}
               </li>
@@ -32,7 +32,7 @@ export function PageTop({ crumbs, title, lead }: { crumbs: { href?: string; labe
 export function SubNav({ items }: { items: [string, string][] }) {
   return (
     <nav className="subnav" aria-label="On this page">
-      {items.map(([href, label], i) => <a key={href} href={href} className={i === 0 ? "on" : undefined}>{label}</a>)}
+      {items.map(([href, label]) => <a key={href} href={href}>{label}</a>)}
     </nav>
   );
 }

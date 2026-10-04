@@ -5,6 +5,19 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
+# ⚑ SESSION 2026-10-04 (part 4) — TOOLS: STRIX + GRAPHIFY + SUPERPOWERS INSTALLED; GRAPH RUN ON src/.
+- Installed (container, user scope): superpowers plugin (obra/superpowers-marketplace), Strix (`uv tool install --python 3.12
+  strix-agent`, needs py3.12), Graphify (`uv tool install graphifyy` + `graphify install --platform claude`). Persisted in
+  scripts/claude-env-setup.sh (commit e12cd84, local). Manus.im: NO connector in the MCP registry; needs owner's API key via env var.
+- STRIX CANNOT RUN YET: no LLM API key in the environment (only ANTHROPIC_BASE_URL). Owner must add STRIX_LLM + LLM_API_KEY as env
+  secrets (never in repo). Docker is present. Scan only targets we own.
+- GRAPHIFY: `graphify update src --no-cluster` (AST only, no LLM) -> src/graphify-out/graph.json (26,232 nodes / 97,845 edges).
+  graphify-out/ is gitignored (40 MB). Hub modules: safeError 540 importers, api/_client 423, exportUtils 357, SettingsContext 247,
+  EnterpriseTable 238. Query: `graphify query "<q>" --graph src/graphify-out/graph.json`.
+- DEAD-CODE CANDIDATES (no importer, grep-verified): components/BulkActionBar.jsx, components/permissions/Can.jsx,
+  hooks/useCapabilities.js, hooks/useCapability.js, hooks/useRealtime.js, lib/apiClient.js. NOT deleted (dup-file removal is an
+  open owner decision). src/stubs/empty.js is a build alias, keep. Icon/illustration "orphans" are false (barrels yield no symbols).
+
 # ⚑ SESSION 2026-10-04 (part 3) — BOTH SIGN-IN PAGES REBUILT TO OWNER MOCKUPS + QR SIGN-IN + PR #375 REVIEW FIXES. Next free migration after 20261004121000.
 - /login (src/pages/Login.jsx + src/components/auth/login/) and /console/login (ConsoleLogin.jsx + consoleLogin.css) rebuilt to the
   owner's two mockups, dark + light, own fleet photos in public/login-art/ (brand badges avoided/blurred).

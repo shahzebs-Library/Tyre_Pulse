@@ -82,6 +82,29 @@ export async function listTrustAlerts({ status = null } = {}) {
 export async function ackTrustAlert(id, status = 'resolved') {
   return unwrap(await supabase.rpc('ack_trust_alert', { p_id: id, p_status: status }))
 }
+/**
+ * Acknowledge / resolve / reopen with a reason (decide_trust_alert, Admin or
+ * super admin only, reason of 3+ characters). Writes the trust_alert_events
+ * timeline server-side.
+ */
+export async function decideTrustAlert(id, status, note) {
+  return unwrap(await supabase.rpc('decide_trust_alert', { p_id: id, p_status: status, p_note: note }))
+}
+/** The decision timeline of one alert, newest first. [] when not provisioned. */
+export async function listTrustAlertEvents(alertId) {
+  const res = await supabase.from('trust_alert_events').select('id, alert_id, from_status, to_status, note, actor, at')
+    .eq('alert_id', alertId).order('at', { ascending: false }).limit(100)
+  if (res.error && isNotProvisioned(res.error)) return []
+  return readRows(res)
+}
+/** Display names for actor ids (bounded read, never emails). */
+export async function listActorNames(ids) {
+  const list = [...new Set((ids || []).filter(Boolean))].slice(0, 200)
+  if (!list.length) return {}
+  const res = await supabase.from('profiles').select('id, full_name').in('id', list).limit(200)
+  if (res.error) return {}
+  return Object.fromEntries((res.data || []).map((p) => [p.id, p.full_name || 'Unnamed user']))
+}
 
 // ── Releases ─────────────────────────────────────────────────────────────────
 /**

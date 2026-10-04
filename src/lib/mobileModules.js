@@ -1,34 +1,35 @@
 /**
- * Mobile app module catalog, mirrored for the WEB Access Manager.
+ * Flutter field app module catalog, mirrored for the WEB Access Manager.
  *
- * KEEP IN SYNC with mobile/lib/permissions.ts MODULES. This is a web-safe (plain
- * JS, no React/TS) mirror of the mobile app's module registry so a super-admin can
- * allow / deny mobile modules from the web Access Manager.
+ * SOURCE OF TRUTH: tyre_pulse_flutter/lib/core/permissions/module_registry.dart
+ * (ModuleRegistry.all + flutterRoleDefaultExtensions). Owner rule 2026-10-04:
+ * every mobile control refers to the Flutter app; the Expo registry in
+ * mobile/lib/permissions.ts is retired and is no longer what this mirrors.
+ * src/test/mobileModules.test.js parses the Dart file and fails on any drift.
  *
  * WHY THIS EXISTS: the web catalog (src/lib/moduleCatalog.js) uses WEB module keys
- * (e.g. `tyre_records`). The web Access Manager stores a mobile override as
- * `mobile:<webKey>` (e.g. `mobile:tyre_records`). But the mobile app's
- * resolveModuleAccess matches the EXACT mobile ModuleKey (e.g. `records`, `scan`,
- * `checklists`), so a web deny only ever reached mobile when the two strings
- * happened to be identical (a handful of keys). Exposing the real mobile keys here
- * lets the web UI write `mobile:<mobileKey>` rows/grants that the mobile app
- * actually reads. The `key` strings below are the match target and MUST equal the
- * mobile ModuleKey exactly.
+ * (e.g. `tyre_records`), while the Flutter app matches its OWN wire key (the
+ * ModuleKey enum name, e.g. `records`, `scan`, `checklists`). Exposing the real
+ * phone keys here lets the web UI write `mobile:<phoneKey>` rows/grants the
+ * Flutter app reads directly. The `key` strings below MUST equal the Dart
+ * ModuleKey names exactly. The Flutter app ALSO accepts a handful of
+ * `mobile:<webKey>` rows through webModuleKeyAliases (tyre_records -> records,
+ * inspections -> inspect, ...); a row on the phone's own key wins over an alias.
  *
- * The mobile app already enforces these keys with NO change required:
+ * How the Flutter app enforces these keys (no app change needed):
  *   - ROLE deny  -> a `module_permissions` row `mobile:<key>` = false, read via
- *     get_user_module_permissions -> mobileRoleMatrixFromRaw -> resolveModuleAccess
- *     (matrix false => deny).
+ *     get_user_module_permissions by core/auth/access_permissions_repository.dart.
  *   - USER deny  -> a `user_access_grants` row on `mobile:<key>` effect=revoke,
- *     read via get_my_access_grants -> mobileGrantsFromRaw -> resolveModuleAccess
- *     (grant revoke => deny). A grant likewise adds access.
- * See mobile/lib/permissions.ts resolveModuleAccess for the precedence.
+ *     read via get_my_access_grants. A grant likewise adds access.
+ * Precedence lives in tyre_pulse_flutter/lib/core/permissions/access_resolver.dart.
  */
 
 /**
- * Mirror of mobile/lib/permissions.ts MODULES. Each entry keeps the EXACT mobile
- * `key` plus `label`, `group` and the default `roles` (mobile role tokens) so the
- * UI can show what a role gets by default. Order preserved from the mobile file.
+ * Mirror of the Flutter ModuleRegistry. Each entry keeps the EXACT phone `key`
+ * plus `label`, `group` and the default `roles` (role tokens, RoleId.token) the
+ * Flutter app applies BY DEFAULT: ModuleDef.defaultRoles plus any
+ * flutterRoleDefaultExtensions. Admin-only modules (ModuleDef.adminOnly) carry
+ * `roles: []`. Order preserved from the Dart registry.
  * @type {{ key: string, label: string, group: string, roles: string[] }[]}
  */
 export const MOBILE_MODULES = [
@@ -49,16 +50,16 @@ export const MOBILE_MODULES = [
   { key: 'alerts',         label: 'Alerts',           group: 'Fleet',       roles: ['manager', 'director', 'inspector'] },
   { key: 'calendar',       label: 'Calendar',         group: 'Fleet',       roles: ['manager', 'director', 'tyre_man', 'reporter', 'maintenance_supervisor', 'workshop_supervisor', 'pmv_manager', 'workshop_area_manager', 'workshop_maintenance_area_manager'] },
   // Maintenance ---------------------------------------------------------------
-  { key: 'accidents',      label: 'Accidents',        group: 'Maintenance', roles: ['manager', 'director', 'inspector'] },
-  { key: 'reportAccident', label: 'File Accident',    group: 'Maintenance', roles: ['manager', 'director', 'inspector'] },
+  // fleet_supervisor comes from flutterRoleDefaultExtensions (the accident
+  // report wizard is that role's job on the Flutter app).
+  { key: 'accidents',      label: 'Accidents',        group: 'Maintenance', roles: ['manager', 'director', 'inspector', 'fleet_supervisor'] },
+  { key: 'reportAccident', label: 'File Accident',    group: 'Maintenance', roles: ['manager', 'director', 'inspector', 'fleet_supervisor'] },
   { key: 'workorders',     label: 'Work Orders',      group: 'Maintenance', roles: [] },
   { key: 'rca',            label: 'Root Cause',       group: 'Maintenance', roles: ['manager', 'director', 'inspector'] },
   { key: 'tasks',          label: 'Tasks',            group: 'Maintenance', roles: ['manager', 'director', 'inspector'] },
   { key: 'stock',          label: 'Stock Count',      group: 'Maintenance', roles: ['manager', 'inspector'] },
   { key: 'pm',             label: 'Maintenance Due',  group: 'Maintenance', roles: ['manager', 'director'] },
-  // The app has no dedicated technician/mechanic/foreman role, so the shop-floor
-  // roles for My Jobs are tyre_man + inspector, with supervisors (manager,
-  // director) and admin also seeing it. Per-user grants can extend it.
+  // My Jobs: the shop-floor roles plus supervisors; admin always sees it.
   { key: 'workshop',       label: 'My Jobs',          group: 'Maintenance', roles: ['manager', 'director', 'inspector', 'tyre_man', 'mechanic', 'electrician'] },
   // Management ----------------------------------------------------------------
   { key: 'overview',       label: 'Overview',         group: 'Management',  roles: [] },
@@ -68,17 +69,11 @@ export const MOBILE_MODULES = [
   { key: 'ai',             label: 'Fleet AI',         group: 'Management',  roles: [] },
   { key: 'team',           label: 'Team',             group: 'Management',  roles: [] },
   // Admin ---------------------------------------------------------------------
-  // V600 - who signs: area manager / PMV manager / the trades' supervisors.
-  // Director stays for the checklist FINAL rung only. Mirrors
-  // mobile/lib/permissions.ts; change both.
-  // tyre_data_collector signs too: the live database lets that role approve
-  // checklists and tyre inspections (checklist_is_supervisor /
-  // decide_inspection_approval, see MIGRATIONS_V606). The phone already granted
-  // it this module and this mirror had not caught up, so the web Access Manager
-  // was reasoning about a different default from the one the device applies -
-  // exactly the drift this mirror exists to prevent.
+  // Approvals gates three queues, so its role list is the union of who the
+  // server lets act (V600 / V606). Director is there for the checklist FINAL
+  // rung only. Mirrors module_registry.dart; the drift test pins it.
   { key: 'approvals',      label: 'Approvals',        group: 'Admin',       roles: ['director', 'maintenance_supervisor', 'workshop_supervisor', 'pmv_manager', 'workshop_area_manager', 'workshop_maintenance_area_manager', 'tyre_data_collector'] },
-  // ADMIN ONLY - no leakage. Mirrors mobile/lib/permissions.ts; change both.
+  // ADMIN ONLY (ModuleDef.adminOnly) - no leakage.
   { key: 'admin',          label: 'Admin Console',    group: 'Admin',       roles: [] },
   { key: 'users',          label: 'User Management',  group: 'Admin',       roles: [] },
 ]
@@ -88,7 +83,7 @@ export const MOBILE_MODULE_BY_KEY = Object.fromEntries(MOBILE_MODULES.map((m) =>
 
 /**
  * Ordered, de-duplicated list of the mobile module groups (Field / Fleet /
- * Maintenance / Management / Admin) for a grouped editor.
+ * Maintenance / Management / Admin, ModuleGroup.registryName) for a grouped editor.
  * @type {string[]}
  */
 export const MOBILE_MODULE_GROUPS = MOBILE_MODULES.reduce(
@@ -104,7 +99,7 @@ export const MOBILE_MODULES_BY_GROUP = MOBILE_MODULE_GROUPS.map((group) => ({
 
 /**
  * The default mobile roles for a module (mobile role tokens). Empty array for an
- * unknown key. This is the same data the mobile app's moduleAllowedByRole reads.
+ * unknown key. This is the same default the Flutter app's ModuleDef.allowsByRoleDefault applies.
  * @param {string} key mobile module key
  * @returns {string[]}
  */
@@ -114,10 +109,10 @@ export function mobileModuleRoles(key) {
 
 /**
  * Map a WEB access role label (as used by the web Access Manager, e.g. 'Tyre Man')
- * to the MOBILE role token (e.g. 'tyre_man'). Lowercase + spaces to underscores.
+ * to the Flutter role token (RoleId.token, e.g. 'tyre_man'). Lowercase + spaces to underscores.
  * Web-only roles with no mobile equivalent (Integration Admin, Data Engineer,
  * Automation, Data Monitor Officer) map to a token that is in no module's roles,
- * so they default to denied on mobile - which is honest (those roles are web-only).
+ * so they default to denied on the Flutter app - which is honest (those roles are web-only).
  * @param {string} webRole
  * @returns {string}
  */
@@ -126,9 +121,9 @@ export function webRoleToMobileRole(webRole) {
 }
 
 /**
- * Whether a mobile module is allowed BY DEFAULT for a web role (before any
+ * Whether a Flutter app module is allowed BY DEFAULT for a web role (before any
  * `mobile:` role matrix row or per-user grant). Admin (and thus super-admin) is
- * always allowed, mirroring mobile moduleAllowedByRole / isAdmin.
+ * always allowed, mirroring the admin break-glass in access_resolver.dart.
  * @param {string} key      mobile module key
  * @param {string} webRole  web role label (e.g. 'Manager', 'Tyre Man')
  * @returns {boolean}

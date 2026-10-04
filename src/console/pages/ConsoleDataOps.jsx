@@ -6,6 +6,7 @@ import {
   UploadCloud, History, Wand2, Layers,
   Database, AlertTriangle, BarChart3,
   LayoutList, Scale, ClipboardList, GitBranch, BellRing, Rocket, Sparkles, ArrowRight,
+  Clock3, Eye, PencilLine,
 } from 'lucide-react'
 import {
   getControlCenterSummary, openIssueCount, rankIssues, ISSUE_ROUTE, ISSUE_SEVERITY_TONE,
@@ -19,7 +20,10 @@ import {
 import { BarsChart } from '../components/ui/charts'
 import { searchRows, sortRows, useTableSort } from '../../lib/consoleTable'
 import ExportButtons from './shared/ExportButtons'
-import { PageHeader, TabBar, useUrlTab, usePager, Pager, AttentionList } from './shared/pageKit'
+import { PageHeader, TabBar, useUrlTab, usePager, Pager, AttentionList, fmtDateTime } from './shared/pageKit'
+import { StatusStrip, ImpactLine, ActivityList } from './dataOps/DataOpsParts'
+import { listDataActivity } from '../../lib/api/dataOpsCenter'
+import { activityCounts, pushRecent } from '../../lib/dataOpsCenter'
 
 /**
  * Data Operations hub.
@@ -31,6 +35,11 @@ import { PageHeader, TabBar, useUrlTab, usePager, Pager, AttentionList } from '.
  *
  * The headline strip is a best-effort read of the diagnostics summary; if it
  * cannot load, the link cards still render (they are the point of the page).
+ *
+ * Control Center round 2 added: the status strip, a "Recent data changes"
+ * feed (every console action that changed data, with who and why, read from
+ * the console audit), a reads-only / can-change-data label and impact line on
+ * every tool, and a per-viewer "Recently opened" row.
  */
 
 const GROUPS = [
@@ -40,13 +49,13 @@ const GROUPS = [
     subtitle: 'Find and fix data-quality problems before they reach a report.',
     icon: ShieldCheck,
     cards: [
-      { icon: ShieldCheck, title: 'Data Trust & Control', route: '/console/control-center',
+      { icon: ShieldCheck, title: 'Data Trust & Control', route: '/console/control-center', effect: 'change',
         desc: 'Trust scores, figure lineage and one-call diagnostics for every KPI.' },
-      { icon: ListTree, title: 'Data Reconciliation', route: '/data-reconciliation',
+      { icon: ListTree, title: 'Data Reconciliation', route: '/data-reconciliation', effect: 'change',
         desc: 'Orphan assets, duplicate tyres and serial conflicts, with safe fixes.' },
-      { icon: CopyX, title: 'Duplicate Control', route: '/console/duplicates',
+      { icon: CopyX, title: 'Duplicate Control', route: '/console/duplicates', effect: 'change',
         desc: 'Detect and remove re-inserted rows, with a full undo archive.' },
-      { icon: Brain, title: 'Teach the Classifier', route: '/console/classification-learning',
+      { icon: Brain, title: 'Teach the Classifier', route: '/console/classification-learning', effect: 'change',
         desc: 'Review corrections so the expense classifier learns from your edits.' },
     ],
   },
@@ -56,23 +65,23 @@ const GROUPS = [
     subtitle: 'Governed metric definitions, quality checks and where every number comes from.',
     icon: ShieldCheck,
     cards: [
-      { icon: Sparkles, title: 'Data Learning', route: '/console/data-learning',
+      { icon: Sparkles, title: 'Data Learning', route: '/console/data-learning', effect: 'change',
         desc: 'Confirm a fact once and fix current plus future data across the fleet.' },
-      { icon: LayoutList, title: 'Metric Catalogue', route: '/console/metric-catalogue',
+      { icon: LayoutList, title: 'Metric Catalogue', route: '/console/metric-catalogue', effect: 'change',
         desc: 'Every governed KPI: formula, owner, source and Explain This Number.' },
-      { icon: ShieldCheck, title: 'Data Quality', route: '/console/data-quality',
+      { icon: ShieldCheck, title: 'Data Quality', route: '/console/data-quality', effect: 'read',
         desc: 'Run the registered checks and see failing rows worst-first.' },
-      { icon: Scale, title: 'Reconciliation', route: '/console/reconciliation',
+      { icon: Scale, title: 'Reconciliation', route: '/console/reconciliation', effect: 'read',
         desc: 'Expected vs actual across cost, fleet and production, with the gap.' },
-      { icon: Activity, title: 'Pipeline Monitor', route: '/console/pipeline-monitor',
+      { icon: Activity, title: 'Pipeline Monitor', route: '/console/pipeline-monitor', effect: 'read',
         desc: 'Import jobs and integration events: what ran and what failed.' },
-      { icon: ClipboardList, title: 'Correction Center', route: '/console/correction-center',
+      { icon: ClipboardList, title: 'Correction Center', route: '/console/correction-center', effect: 'change',
         desc: 'Governed correction cases from reported through to reconciled.' },
-      { icon: GitBranch, title: 'Lineage Explorer', route: '/console/lineage',
+      { icon: GitBranch, title: 'Lineage Explorer', route: '/console/lineage', effect: 'read',
         desc: 'Visualize where a number comes from and what a change would affect.' },
-      { icon: BellRing, title: 'Trust Alerts', route: '/console/trust-alerts',
+      { icon: BellRing, title: 'Trust Alerts', route: '/console/trust-alerts', effect: 'change',
         desc: 'Quality and reconciliation breaches raised for acknowledgement.' },
-      { icon: Rocket, title: 'Releases', route: '/console/releases',
+      { icon: Rocket, title: 'Releases', route: '/console/releases', effect: 'change',
         desc: 'Recorded releases and the data assets each one impacts.' },
     ],
   },
@@ -82,17 +91,17 @@ const GROUPS = [
     subtitle: 'Operating cost per unit and the production data behind it.',
     icon: DollarSign,
     cards: [
-      { icon: DollarSign, title: 'Cost per M3', route: '/cost-per-m3',
+      { icon: DollarSign, title: 'Cost per M3', route: '/cost-per-m3', effect: 'read',
         desc: 'Internal plus SCO plus SANY cost over approved production, by region.' },
-      { icon: TrendingUp, title: 'CPK Intelligence', route: '/cpk-intelligence',
+      { icon: TrendingUp, title: 'CPK Intelligence', route: '/cpk-intelligence', effect: 'read',
         desc: 'Cost per km and per engine-hour, split movable versus non-movable.' },
-      { icon: Boxes, title: 'Production M3', route: '/production-m3',
+      { icon: Boxes, title: 'Production M3', route: '/production-m3', effect: 'change',
         desc: 'Approved and rejected concrete production by site and period.' },
-      { icon: Archive, title: 'SCO Costs', route: '/sco-costs',
+      { icon: Archive, title: 'SCO Costs', route: '/sco-costs', effect: 'change',
         desc: 'Sub-contracted operating cost ledger feeding the cost per M3.' },
-      { icon: Table2, title: 'SANY Invoices', route: '/sany-invoices',
+      { icon: Table2, title: 'SANY Invoices', route: '/sany-invoices', effect: 'change',
         desc: 'SANY summary and parts-detail invoices, linked by quotation number.' },
-      { icon: Activity, title: 'Expenses & CPK', route: '/expense-report',
+      { icon: Activity, title: 'Expenses & CPK', route: '/expense-report', effect: 'read',
         desc: 'Real expense grid with cost per km trends and what moved.' },
     ],
   },
@@ -102,13 +111,13 @@ const GROUPS = [
     subtitle: 'Load data and keep the reference masters clean.',
     icon: UploadCloud,
     cards: [
-      { icon: UploadCloud, title: 'Data Intake', route: '/data-intake',
+      { icon: UploadCloud, title: 'Data Intake', route: '/data-intake', effect: 'change',
         desc: 'Upload ERP, production, SCO and SANY files through the intake wizard.' },
-      { icon: History, title: 'Import History', route: '/console/import-history',
+      { icon: History, title: 'Import History', route: '/console/import-history', effect: 'change',
         desc: 'Every upload, its rows, duplicates and errors, plus repeat-file flags.' },
-      { icon: Wand2, title: 'Smart Import', route: '/console/smart-import',
+      { icon: Wand2, title: 'Smart Import', route: '/console/smart-import', effect: 'change',
         desc: 'Drop any Excel or CSV and it auto-detects the module and maps columns.' },
-      { icon: Layers, title: 'Material Master', route: '/console/material-master',
+      { icon: Layers, title: 'Material Master', route: '/console/material-master', effect: 'change',
         desc: 'Review and confirm item categories that drive expense classification.' },
     ],
   },
@@ -126,6 +135,21 @@ const ISSUE_COLUMNS = [
   { key: 'route', header: 'Fix on', value: (r) => ISSUE_ROUTE[r.action] || '' },
 ]
 const SEV_RANK = { critical: 0, warning: 1, info: 2 }
+const ALL_CARDS = GROUPS.flatMap((g) => g.cards)
+const RECENTS_KEY = 'tp_console_dataops_recents'
+const ACTIVITY_COLUMNS = [
+  { key: 'at', header: 'When', value: (a) => (a.at ? fmtDateTime(a.at) : 'N/A') },
+  { key: 'label', header: 'Change' },
+  { key: 'who', header: 'By' },
+  { key: 'detail', header: 'Detail', value: (a) => a.detail || '' },
+  { key: 'reason', header: 'Reason', value: (a) => a.reason || 'Not recorded' },
+]
+function readRecents() {
+  try { const v = JSON.parse(window.localStorage.getItem(RECENTS_KEY) || '[]'); return Array.isArray(v) ? v : [] } catch { return [] }
+}
+function writeRecents(list) {
+  try { window.localStorage.setItem(RECENTS_KEY, JSON.stringify(list)) } catch { /* a per-viewer convenience only */ }
+}
 const ISSUE_ACCESSORS = { severity: (r) => SEV_RANK[r.severity] ?? 9, label: (r) => r.label || r.key, count: (r) => Number(r.count) || 0 }
 
 export default function ConsoleDataOps({ tabParam = 'tab' } = {}) {
@@ -138,6 +162,24 @@ export default function ConsoleDataOps({ tabParam = 'tab' } = {}) {
   const [tab, setTab] = useUrlTab(TAB_KEYS, 'overview', tabParam)
   const [issueQuery, setIssueQuery] = useState('')
   const [sevFilter, setSevFilter] = useState('')
+  const [activity, setActivity] = useState({ items: [], loading: true, error: '' })
+  const [riskyOnly, setRiskyOnly] = useState(false)
+  const [recents, setRecents] = useState(readRecents)
+
+  const loadActivity = useCallback(async () => {
+    setActivity((a) => ({ ...a, loading: true, error: '' }))
+    try {
+      setActivity({ items: await listDataActivity(60), loading: false, error: '' })
+    } catch (e) {
+      setActivity({ items: [], loading: false, error: toUserMessage(e, 'Could not read the recent data changes.') })
+    }
+  }, [])
+  useEffect(() => { loadActivity() }, [loadActivity])
+
+  const openTool = useCallback((route) => {
+    setRecents((cur) => { const next = pushRecent(cur, route); writeRecents(next); return next })
+    openConsoleRoute(route, navigate)
+  }, [navigate])
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
@@ -198,13 +240,44 @@ export default function ConsoleDataOps({ tabParam = 'tab' } = {}) {
     })), [issues, navigate])
 
   const group = GROUPS.find((g) => g.key === tab)
+  const weekCounts = useMemo(() => activityCounts(activity.items, Date.now() - 7 * 86400000), [activity.items])
+  const shownActivity = useMemo(() => (riskyOnly ? activity.items.filter((a) => a.tone !== 'info') : activity.items), [activity.items, riskyOnly])
+  const recentCards = useMemo(() => recents.map((r) => ALL_CARDS.find((c) => c.route === r)).filter(Boolean), [recents])
+  const na = error ? 'N/A' : loading && !summary ? '...' : null
+  const strip = [
+    { label: 'Open issues', value: na || fmtInt(openIssues), tone: summary ? (openIssues ? 'warning' : 'good') : undefined },
+    { label: 'Critical', value: na || fmtInt(sevCounts.critical || 0), tone: sevCounts.critical ? 'danger' : undefined },
+    { label: 'Expense rows', value: na || fmtInt(vol.expense_rows) },
+    { label: 'Tyre rows', value: na || fmtInt(vol.tyre_rows) },
+    { label: 'Fleet rows', value: na || fmtInt(vol.fleet_rows) },
+    { label: 'Work orders', value: na || fmtInt(vol.work_orders) },
+    { label: 'Data changes, 7 days', value: activity.error ? 'N/A' : activity.loading ? '...' : fmtInt(weekCounts.total), sub: activity.error ? 'Audit could not be read' : `${fmtInt(weekCounts.danger + weekCounts.warning)} risky` },
+    { label: 'Data tools', value: fmtInt(ALL_CARDS.length), sub: `${fmtInt(ALL_CARDS.filter((c) => c.effect === 'change').length)} can change data` },
+  ]
 
   return (
     <div className="space-y-5 max-w-7xl">
       <PageHeader icon={Layers} title="Data Operations"
         purpose="One launchpad for every data-management surface, with the open data-quality issues that need a fix."
-        refreshedAt={refreshedAt} onRefresh={load} refreshing={loading}
+        refreshedAt={refreshedAt} onRefresh={() => { load(); loadActivity() }} refreshing={loading}
         actions={<Btn variant="primary" icon={ShieldCheck} onClick={() => navigate('/console/control-center')}>Open Control Center</Btn>} />
+
+      <StatusStrip label="Data operations status" cells={strip} />
+
+      {recentCards.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 text-[11px]" aria-label="Recently opened tools">
+          <Clock3 size={12} className="text-gray-500" aria-hidden="true" />
+          <span className="font-semibold text-gray-400">Recently opened:</span>
+          {recentCards.map((c) => (
+            <button key={c.route} type="button" onClick={() => openTool(c.route)}
+              className="px-1.5 py-0.5 rounded border border-gray-800 text-gray-400 hover:text-gray-200 hover:border-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
+              {c.title}
+            </button>
+          ))}
+          <button type="button" onClick={() => { setRecents([]); writeRecents([]) }}
+            className="text-gray-500 hover:text-gray-300 underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">Clear</button>
+        </div>
+      )}
 
       {/* ── KPI row ── */}
       {loading && !summary ? (
@@ -242,7 +315,7 @@ export default function ConsoleDataOps({ tabParam = 'tab' } = {}) {
           {matches.length === 0 && (
             <EmptyState title="No data tool matches that search" reason="Try a module name such as Import, Cost or Lineage." />
           )}
-          {matches.map((g) => <ToolGroup key={g.key} group={g} navigate={navigate} />)}
+          {matches.map((g) => <ToolGroup key={g.key} group={g} onOpen={openTool} />)}
         </>
       ) : tab === 'overview' ? (
         <div className="space-y-4">
@@ -310,21 +383,39 @@ export default function ConsoleDataOps({ tabParam = 'tab' } = {}) {
               ) : <EmptyState title="Volumes not available" reason={error ? 'The diagnostics summary could not be read.' : 'Loading.'} />}
             </Panel>
           </div>
+          <Panel flush>
+            <div className="px-4 pt-4">
+              <PanelHeader icon={Clock3} title="Recent data changes"
+                subtitle="Every console action that changed data: removed duplicates, cleanups, applied decisions, learned rules. Who, when and why."
+                actions={(
+                  <span className="flex flex-wrap items-center gap-2">
+                    <Segmented role="group" ariaLabel="Change filter" value={riskyOnly ? 'risky' : 'all'} onChange={(k) => setRiskyOnly(k === 'risky')}
+                      options={[{ key: 'all', label: 'All', count: activity.items.length }, { key: 'risky', label: 'Risky only', count: activity.items.filter((a) => a.tone !== 'info').length }]} />
+                    <ExportButtons rows={shownActivity} columns={ACTIVITY_COLUMNS} title="TyrePulse Recent Data Changes" disabled={!!activity.error} />
+                  </span>
+                )} />
+              <ImpactLine className="mb-2" change="Nothing. This feed only reads the console audit." who="Nobody. Names are shown, e-mail addresses are not." />
+            </div>
+            {activity.loading && !activity.items.length ? <div className="px-4 pb-4"><LoadingState label="Loading recent data changes" rows={3} /></div>
+              : activity.error ? <div className="px-4 pb-4"><ErrorState message={activity.error} onRetry={loadActivity} /></div>
+                : <ActivityList items={shownActivity.slice(0, 20)} fmtTime={(v) => (v ? fmtDateTime(v) : 'N/A')}
+                    empty={riskyOnly ? 'No risky data change has been recorded.' : 'No data change has been recorded in the console audit yet.'} />}
+          </Panel>
         </div>
       ) : group ? (
-        <ToolGroup group={group} navigate={navigate} />
+        <ToolGroup group={group} onOpen={openTool} />
       ) : null}
     </div>
   )
 }
 
-function ToolGroup({ group, navigate }) {
+function ToolGroup({ group, onOpen }) {
   return (
     <Panel>
       <PanelHeader icon={group.icon} title={group.title} subtitle={group.subtitle} />
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
         {group.cards.map((c) => (
-          <LinkCard key={c.route} card={c} onOpen={() => openConsoleRoute(c.route, navigate)} />
+          <LinkCard key={c.route} card={c} onOpen={() => onOpen(c.route)} />
         ))}
       </div>
     </Panel>
@@ -349,6 +440,10 @@ function LinkCard({ card, onOpen }) {
         </div>
       </div>
       <p className="text-xs text-gray-400 flex-1">{desc}</p>
+      <span className={`inline-flex items-center gap-1 text-[10px] font-semibold ${card.effect === 'change' ? 'text-amber-300' : 'text-gray-500'}`}>
+        {card.effect === 'change' ? <PencilLine size={10} aria-hidden="true" /> : <Eye size={10} aria-hidden="true" />}
+        {card.effect === 'change' ? 'Can change data. Each change there asks first and is audited.' : 'Reads only. Opening it changes nothing.'}
+      </span>
       <span className="text-xs text-orange-400 font-medium mt-1">{isConsoleRoute(route) ? 'Open' : 'Open in new tab'}</span>
     </button>
   )

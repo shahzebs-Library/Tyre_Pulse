@@ -28,6 +28,8 @@ import { useConsoleAuth } from '../ConsoleAuthContext'
 import {
   getPlatformProfile, getUserHealth, listOrgsFull, getMobileMinVersion, setPersonLocked, sendPersonReminder, listPlatformProfiles,
 } from '../../lib/api/consolePlatform'
+import { getUserSigninFacts } from '../../lib/api/consoleDataGaps'
+import { signinSummary } from '../../lib/consoleDataGaps'
 import { getEffectiveAccess, listAccessAudit, bulkSetRole } from '../../lib/api/adminAccess'
 import { revokeUserSessions } from '../../lib/api/sessionRevocation'
 import { clearPushToken } from '../../lib/api/consoleSessions'
@@ -99,6 +101,7 @@ export default function ConsoleUserDetail() {
   const [tab, setTab] = useUrlTab(TABS, 'overview')
   const profileQ = useAsync(() => getPlatformProfile(id), [id])
   const healthQ = useAsync(() => getUserHealth(id), [id])
+  const signinQ = useAsync(() => getUserSigninFacts(id), [id])
   const accessQ = useAsync(() => getEffectiveAccess(id), [id])
   const auditQ = useAsync(() => listAccessAudit({ limit: 200, target: id }), [id])
   const orgsQ = useAsync(() => listOrgsFull(), [])
@@ -306,7 +309,8 @@ export default function ConsoleUserDetail() {
               <Facts rows={[
                 ['2FA', h ? (mfaOn ? 'On' : `Off. ${p.is_super_admin || p.role === 'Admin' ? 'Required for admins.' : 'Not required for this role.'}`) : 'N/A'],
                 ['Last sign-in', h ? (fmtRiyadh(h.auth?.last_sign_in_at, { year: true }) || 'Never') : 'N/A', h?.auth?.last_sign_in_at ? 'Riyadh' : ''],
-                ['Failed sign-ins', 'Not recorded per person yet'],
+                ['Successful sign-ins', signinQ.error ? 'N/A (sign-in log could not be read)' : signinQ.loading ? 'Loading' : (signinSummary(signinQ.data, (d) => fmtRiyadh(d, { year: true }))?.logins || 'N/A')],
+                ['Failed sign-ins', signinQ.error ? 'N/A (lockout counter could not be read)' : signinQ.loading ? 'Loading' : (signinSummary(signinQ.data, (d) => fmtRiyadh(d, { year: true }))?.failed || 'N/A')],
                 ['Sessions', devices.length ? `Phone session (last seen ${fmtRiyadh(devices[0].last_seen_at) || 'N/A'})` : 'No phone session'],
                 ['Locked', locked ? 'Yes' : 'No'],
                 ['Deletion request', h?.deletion_request ? `${h.deletion_request.status}, ${fmtRiyadh(h.deletion_request.requested_at, { year: true })}` : 'None'],

@@ -5,6 +5,22 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
+# ⚑ SESSION 2026-10-04 (part 2) — CONSOLE ROUND 2: THE OTHER 29 PAGES REBUILT + MOBILE = FLUTTER ONLY. Local commit, NOT pushed (owner says "push").
+- PR #374 (console Control Center round 1) MERGED as 1f2f356, production READY verified. It rebuilt 20 screens; the other 29
+  console pages were only re-wired. Owner: "i give u many screen why u fixed 5 only" -> round 2 rebuilt all 29 to the same
+  standard (impact lines, reason+typed confirm on risky actions, audit, real KPIs, light/dark, 390px). Brief: scratchpad r2/BRIEF.md.
+- OWNER RULE: "mobile things must relate to the Flutter app only". Console Mobile App / Developer gate / Releases now control
+  system_config.flutter_min_version + NEW flutter_latest_version (admin_set_flutter_version, interlock min<=latest). Expo keys
+  mobile_min/latest_version shown read-only "Retired app". Flutter devices = user_devices rows with NON-Expo (FCM) tokens: 0 live,
+  130 Expo. src/lib/mobileModules.js now mirrors tyre_pulse_flutter/lib/core/permissions/module_registry.dart (test parses the Dart).
+- OWNER RULE: "for web you must give all the data there": N/A only when the DB truly lacks the value, with the reason.
+- Migrations applied live: 20261004090000 (status note -> private comment event), 091000 admin_archive_empty_org, 101000 trust
+  alert decisions, 102000 delivery reach/retry, 103000 module_status_history, 104000 people controls (incl. admin_delete_empty_org,
+  checks every org table), 105000/105100 Flutter app control + adoption, 110100 org storage + sign-in facts. Some agents applied via
+  execute_sql + manual schema_migrations row because apply_migration timed out.
+- Facts found: alert rules never email (in-app only, 23h cooldown); Alert Center wait/remind/recover settings stored not used; no app
+  reads announcements; Flutter release has no Sentry DSN; Flutter app does not read module status (web only).
+
 # ⚑ SESSION 2026-09-30/10-04 — CONSOLE CONTROL CENTER REBUILT (local commits, NOT pushed). Owner rule: push only on "push".
 - Commits on claude/modest-hopper-5bnq8c: 410fb1f shell+Overview, 169eb4c Access Control, 6897fd1/720040d/570380b/01303ab
   problem tracking (user_issues, submit_user_issue, Error Center inbox), 3f57935 Flutter Report a problem (code only,

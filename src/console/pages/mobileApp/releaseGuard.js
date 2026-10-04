@@ -15,7 +15,7 @@ import { parseVersion, compareVersions } from '../../../lib/mobileOps'
 export function latestRisk(proposedLatest, currentMin, currentLatest) {
   const v = String(proposedLatest ?? '').trim()
   if (!v) return { level: 'blocked', reason: 'Enter the version number that is live on Google Play.' }
-  if (!parseVersion(v)) return { level: 'blocked', reason: `"${v}" is not a version number (expected something like 1.6.0).` }
+  if (!parseVersion(v)) return { level: 'blocked', reason: `"${v}" is not a version number (expected something like 0.1.1).` }
   const min = String(currentMin ?? '').trim()
   if (min && parseVersion(min) && compareVersions(min, v) > 0) {
     return {

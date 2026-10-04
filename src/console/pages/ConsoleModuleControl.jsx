@@ -25,15 +25,23 @@
  *                    windows first, one action each (bring it back Live).
  *   Categories     - live / maintenance / off counts per category, sortable
  *                    and exportable.
+ *   History        - every recorded status change (module_status_history,
+ *                    from 4 Oct 2026): who, when, from what to what and why.
+ *
+ * Safety (Round 2): switching a module Off needs a reason and the typed word
+ * OFF, maintenance needs a reason, and every change is audited. Changes go
+ * through admin_set_module_status so the reason is stored; an older database
+ * falls back to the plain writer. Phones (the Flutter app) do not read module
+ * state today, so Off and Maintenance apply to the web app only.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Boxes, RefreshCw, Info, AlertTriangle, CheckCircle2,
-  Power, Wrench, Rocket, Sparkles, ShieldCheck, Clock, Layers, PanelRightOpen,
+  Power, Wrench, Rocket, Sparkles, ShieldCheck, Clock, Layers, PanelRightOpen, History, Table2, LayoutGrid, Smartphone,
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import {
-  listModules, seedFromCatalog, setModuleStatus, bulkSetStatus,
+  listModules, seedFromCatalog,
   dependencyWarnings, MODULE_STATUS_META,
 } from '../../lib/api/modulesRegistry'
 import { buildNavModuleCatalog } from '../../lib/moduleCatalog'
@@ -42,14 +50,34 @@ import { toUserMessage } from '../../lib/safeError'
 import {
   Panel, PanelHeader, Note, StatTile, Badge, Code, Btn, Segmented, SearchInput,
   Select, Toolbar, LoadingState, EmptyState, ErrorState, Modal,
-  Table, THead, Th, Tr, Td,
+  Table, THead, Th, Tr, Td, ConfirmImpactDialog,
 } from '../components/ui'
+import { governingModuleKey } from '../../lib/navAccess'
+import { listModuleHistory, setModuleStatusWithReason } from '../../lib/api/moduleHistory'
+import { namesFor } from '../../lib/api/consolePlatform'
 import { sortRows, useTableSort } from '../../lib/consoleTable'
 import ExportButtons from './shared/ExportButtons'
 import { ShareChart, STATUS, useChartTheme } from '../components/ui/charts'
-import { PageHeader, TabBar, useUrlTab, usePaged, Pager, SideDrawer, Field, Collapsible } from './shared/pageKit'
+import { PageHeader, TabBar, useUrlTab, usePaged, Pager, SideDrawer, Field, Collapsible, fmtRelative, fmtDateTime } from './shared/pageKit'
 
-const TABS = ['modules', 'service', 'categories']
+const TABS = ['modules', 'service', 'categories', 'history']
+
+/** How many sidebar pages each module key governs (who an Off change reaches). */
+const NAV_PAGES = (() => {
+  const out = {}
+  try {
+    for (const g of NAV_CATALOG || []) for (const it of g.items || []) {
+      const k = governingModuleKey(it.key || it.to)
+      if (k) out[k] = (out[k] || 0) + 1
+    }
+  } catch { /* no catalog: counts stay unknown */ }
+  return out
+})()
+
+const HISTORY_EXPORT = [
+  { key: 'when', header: 'When' }, { key: 'module', header: 'Module' }, { key: 'from', header: 'From' },
+  { key: 'to', header: 'To' }, { key: 'by', header: 'Changed by' }, { key: 'reason', header: 'Reason' },
+]
 const CATEGORY_EXPORT_COLUMNS = [
   { key: 'category', header: 'Category' },
   { key: 'total', header: 'Modules' },
@@ -136,7 +164,13 @@ function formatUntil(value) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function ConsoleModuleControl({ tabParam = 'tab' } = {}) {
-  const { admin } = useConsoleAuth()
+  const { admin, logAction } = useConsoleAuth()
+  const [view, setView] = useState('table')
+  const [history, setHistory] = useState({ state: 'loading', rows: [], names: {} })
+  const [offReq, setOffReq] = useState(null) // { scope, ids, warnings }
+  const [maintReason, setMaintReason] = useState('')
+  const [actionError, setActionError] = useState('')
+  const [flash, setFlash] = useState('')
   const theme = useChartTheme()
   const [modules, setModules] = useState([])
   const [loading, setLoading] = useState(true)
@@ -180,6 +214,24 @@ export default function ConsoleModuleControl({ tabParam = 'tab' } = {}) {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  // Status history is read on its own: a failure only hides "changed by".
+  const loadHistory = useCallback(async () => {
+    try {
+      const rows = await listModuleHistory({ limit: 500 })
+      const names = await namesFor(rows.map((r) => r.changed_by)).catch(() => ({}))
+      setHistory({ state: 'ok', rows, names })
+    } catch {
+      setHistory({ state: 'error', rows: [], names: {} })
+    }
+  }, [])
+  useEffect(() => { loadHistory() }, [loadHistory])
+  const lastChange = useMemo(() => {
+    const m = {}
+    for (const r of history.rows) if (!m[r.module_id]) m[r.module_id] = r
+    return m
+  }, [history.rows])
+  const whoText = (r) => (r ? (history.names[r.changed_by] || (r.changed_by ? 'Unknown person' : 'Scheduled change')) : null)
 
   const categories = useMemo(() => {
     const set = new Set()
@@ -279,6 +331,8 @@ export default function ConsoleModuleControl({ tabParam = 'tab' } = {}) {
     if (status === 'maintenance') {
       setMaintUntil('')
       setMaintNote('')
+      setMaintReason('')
+      setActionError('')
       setMaintModal({ scope, ids })
       return
     }
@@ -290,8 +344,13 @@ export default function ConsoleModuleControl({ tabParam = 'tab' } = {}) {
       }
     }
     // Switching a module Off hides it from every user, so it always asks first,
-    // even when nothing depends on it.
-    if (warnings.length > 0 || status === 'disabled') {
+    // even when nothing depends on it, with a reason and the typed word OFF.
+    if (status === 'disabled') {
+      setActionError('')
+      setOffReq({ scope, ids, warnings })
+      return
+    }
+    if (warnings.length > 0) {
       setConfirm({ scope, ids, status, warnings })
     } else {
       applyStatus(scope, ids, status)
@@ -299,22 +358,21 @@ export default function ConsoleModuleControl({ tabParam = 'tab' } = {}) {
   }
 
   async function applyStatus(scope, ids, status, opts = {}) {
-    setConfirm(null)
-    setMaintModal(null)
     setError(null)
+    setActionError('')
+    const reason = (opts.reason || '').trim() || (status === 'live' ? 'Brought back live from Module Control' : '')
     try {
-      if (scope === 'bulk') {
-        setSavingBulk(true)
-        if (status === 'maintenance') {
-          // Per-module so the shared window (ETA + note) persists on each row.
-          for (const id of ids) await setModuleStatus(id, status, opts)
-        } else {
-          await bulkSetStatus(ids, status)
-        }
-      } else {
-        setBusyId(ids[0])
-        await setModuleStatus(ids[0], status, opts)
-      }
+      if (scope === 'bulk') setSavingBulk(true)
+      else setBusyId(ids[0])
+      const res = await setModuleStatusWithReason(ids, status, { until: opts.until, note: opts.note, reason })
+      setConfirm(null)
+      setMaintModal(null)
+      setOffReq(null)
+      try {
+        await logAction?.('module_status', null, 'module', { modules: ids.slice(0, 50), count: ids.length, to: status, reason, recorded: res.recorded })
+      } catch { /* audit is best effort */ }
+      setFlash(`${ids.length === 1 ? (byId.get(ids[0])?.name || ids[0]) : `${ids.length} modules`} set to ${(MODULE_STATUS_META[status] || { label: status }).label}.${res.recorded ? '' : ' The reason could not be stored (older database); the change is in the console audit log.'}`)
+      loadHistory()
       // Optimistic local update so the board reflects the change immediately,
       // including the maintenance window (cleared when not in maintenance).
       const maintenance = status === 'maintenance'
@@ -335,7 +393,9 @@ export default function ConsoleModuleControl({ tabParam = 'tab' } = {}) {
       )))
       if (scope === 'bulk') setSelected(new Set())
     } catch (err) {
-      setError(toUserMessage(err))
+      const msg = toUserMessage(err)
+      if (offReq || maintModal) setActionError(msg)
+      else setError(msg)
     } finally {
       setBusyId(null)
       setSavingBulk(false)
@@ -393,9 +453,16 @@ export default function ConsoleModuleControl({ tabParam = 'tab' } = {}) {
           guarded by that module. Admins and Super Admins always pass so they can verify it. The
           "Visible to" audience on each card is recorded only and is not enforced.
         </Note>
+        <div className="mt-2">
+          <Note icon={Smartphone}>
+            Phones: the Flutter app does not read module status today, so Maintenance and Off apply to the web
+            app only. The phone screens are controlled from Access Control and Mobile App.
+          </Note>
+        </div>
       </Collapsible>
 
       <ErrorState message={!loading ? error : null} onRetry={load} />
+      {flash && <Note icon={CheckCircle2} tone="accent">{flash}</Note>}
 
       {/* Status overview */}
       <div className="grid gap-3 lg:grid-cols-3">
@@ -442,6 +509,7 @@ export default function ConsoleModuleControl({ tabParam = 'tab' } = {}) {
         { key: 'modules', label: 'Modules', count: loading ? undefined : modules.length },
         { key: 'service', label: 'Out of service', count: loading ? undefined : outOfService },
         { key: 'categories', label: 'Categories', count: loading ? undefined : categoryRows.length },
+        { key: 'history', label: 'History', count: history.state === 'ok' ? history.rows.length : undefined },
       ]} value={tab} onChange={setTab} label="Module control sections" />
 
       {tab === 'modules' && (<>
@@ -470,6 +538,10 @@ export default function ConsoleModuleControl({ tabParam = 'tab' } = {}) {
         />
         <Select value={order} onChange={setOrder} ariaLabel="Sort modules by" className="w-full sm:w-40"
           options={MODULE_ORDERS.map((o) => ({ value: o.key, label: `Sort: ${o.label}` }))} />
+        <Segmented value={view} onChange={setView} ariaLabel="Board layout" role="group" options={[
+          { key: 'table', label: <><Table2 size={13} aria-hidden="true" />Table</> },
+          { key: 'cards', label: <><LayoutGrid size={13} aria-hidden="true" />Cards</> },
+        ]} />
         <ExportButtons rows={filtered} columns={MODULE_EXPORT_COLUMNS} title="Module Control" />
       </Toolbar>
       <p className="sr-only" aria-live="polite">
@@ -494,6 +566,9 @@ export default function ConsoleModuleControl({ tabParam = 'tab' } = {}) {
               </Btn>
               <Btn icon={Rocket} variant="good" onClick={() => requestStatus('bulk', selectedIds, 'live')} busy={savingBulk}>
                 Set Live
+              </Btn>
+              <Btn icon={Power} variant="danger" onClick={() => requestStatus('bulk', selectedIds, 'disabled')} busy={savingBulk}>
+                Turn off
               </Btn>
               <Btn variant="quiet" onClick={() => setSelected(new Set())}>Clear</Btn>
             </Toolbar>
@@ -523,6 +598,60 @@ export default function ConsoleModuleControl({ tabParam = 'tab' } = {}) {
             reason={`${modules.length} modules are registered; none match the current status, category or search.`}
             action={filtersActive ? <Btn onClick={clearFilters}>Clear filters</Btn> : null}
           />
+        </Panel>
+      ) : view === 'table' ? (
+        <Panel flush>
+          <Table>
+            <THead>
+              <Th><span className="sr-only">Select</span></Th>
+              <Th>Module</Th><Th>Status</Th><Th>Category</Th><Th>Back by</Th><Th>Last change</Th>
+              <Th align="right">Pages</Th><Th align="right">Action</Th>
+            </THead>
+            <tbody>
+              {paged.rows.map((m) => {
+                const last = lastChange[m.module_id]
+                const pages = NAV_PAGES[m.module_id]
+                const overdue = m.status === 'maintenance' && m.maintenance_until && readAt && new Date(m.maintenance_until).getTime() < readAt
+                return (
+                  <Tr key={m.module_id}>
+                    <Td>
+                      <input type="checkbox" checked={selected.has(m.module_id)} onChange={() => toggleSelected(m.module_id)}
+                        aria-label={`Select ${m.name || m.module_id}`} className="accent-orange-500" />
+                    </Td>
+                    <Td className="min-w-[11rem]">
+                      <p className="text-gray-100">{m.name || m.module_id}</p>
+                      <p className="text-[11px] text-gray-500 font-mono">{m.module_id}</p>
+                    </Td>
+                    <Td nowrap><StatusBadge status={m.status} />{overdue && <span className="block mt-0.5"><Badge tone="danger" icon={Clock}>Past return</Badge></span>}</Td>
+                    <Td className="text-gray-400">{m.category || 'N/A'}</Td>
+                    <Td nowrap className="text-gray-400">{m.status === 'maintenance' ? (formatUntil(m.maintenance_until) || 'Not set') : 'N/A'}</Td>
+                    <Td className="text-gray-400">
+                      {last
+                        ? <>{fmtRelative(last.changed_at)}<span className="block text-[11px] text-gray-500">{whoText(last)}</span></>
+                        : m.last_updated
+                          ? <>{fmtRelative(m.last_updated)}<span className="block text-[11px] text-gray-500" title="Status changes were not attributed to a person before 4 Oct 2026">Person not recorded</span></>
+                          : 'Not stored'}
+                    </Td>
+                    <Td align="right" className="tabular-nums text-gray-400">{pages ?? 'N/A'}</Td>
+                    <Td align="right" nowrap>
+                      <span className="inline-flex gap-1">
+                        {m.status !== 'live' && (
+                          <Btn size="xs" variant="good" icon={Rocket} busy={busyId === m.module_id}
+                            onClick={() => requestStatus('one', [m.module_id], 'live')}>Live</Btn>
+                        )}
+                        {m.status !== 'maintenance' && (
+                          <Btn size="xs" icon={Wrench} onClick={() => requestStatus('one', [m.module_id], 'maintenance')}>Maint</Btn>
+                        )}
+                        <Btn size="xs" variant="quiet" icon={PanelRightOpen} onClick={() => setOpenId(m.module_id)}
+                          aria-label={`Details for ${m.name || m.module_id}`}>Details</Btn>
+                      </span>
+                    </Td>
+                  </Tr>
+                )
+              })}
+            </tbody>
+          </Table>
+          <Pager paged={paged} label="modules" />
         </Panel>
       ) : (
         <div>
@@ -616,6 +745,10 @@ export default function ConsoleModuleControl({ tabParam = 'tab' } = {}) {
         </Panel>
       )}
 
+      {tab === 'history' && (
+        <HistoryPanel history={history} byId={byId} whoText={whoText} onRetry={loadHistory} />
+      )}
+
       <SideDrawer open={!!openModule} onClose={() => setOpenId(null)} title={openModule?.name || openModule?.module_id || 'Module'}
         subtitle={openModule ? `Module ${openModule.module_id}` : ''}>
         {openModule && (
@@ -633,7 +766,18 @@ export default function ConsoleModuleControl({ tabParam = 'tab' } = {}) {
               <Field label="Maintenance until">{formatUntil(openModule.maintenance_until) || 'N/A'}</Field>
               <Field label="Maintenance note">{openModule.maintenance_note || 'N/A'}</Field>
               <Field label="Last changed">{formatUntil(openModule.last_updated) || 'N/A'}</Field>
+              <Field label="Changed by">{whoText(lastChange[openModule.module_id]) || (history.state === 'error' ? 'N/A (history not readable)' : 'Not recorded: no status change since attribution started on 4 Oct 2026')}</Field>
+              <Field label="Sidebar pages it governs">{NAV_PAGES[openModule.module_id] ?? 'N/A (not a sidebar module)'}</Field>
             </dl>
+            <div className="rounded-lg border border-red-900/40 bg-red-950/15 p-3 space-y-2">
+              <p className="text-xs font-semibold text-red-300">Switch off</p>
+              <p className="text-[11px] text-gray-400">
+                Regular users on {NAV_PAGES[openModule.module_id] ?? 'its'} {NAV_PAGES[openModule.module_id] === 1 ? 'page' : 'pages'} see an unavailable screen.
+                Admins still get in. Needs a reason and the typed word OFF.
+              </p>
+              <Btn size="xs" variant="danger" icon={Power} disabled={openModule.status === 'disabled'}
+                onClick={() => requestStatus('one', [openModule.module_id], 'disabled')}>Turn off</Btn>
+            </div>
             <div>
               <p className="text-[11px] uppercase tracking-wide text-gray-500 mb-1.5">Depends on</p>
               {openDeps.length === 0 ? <p className="text-xs text-gray-500">Nothing recorded.</p> : (
@@ -664,6 +808,27 @@ export default function ConsoleModuleControl({ tabParam = 'tab' } = {}) {
         onConfirm={() => confirm && applyStatus(confirm.scope, confirm.ids, confirm.status)}
       />
 
+      <ConfirmImpactDialog open={!!offReq} danger requireReason typedWord="OFF" busy={savingBulk || busyId != null}
+        error={actionError}
+        title={offReq && offReq.ids.length > 1 ? `Turn off ${offReq.ids.length} modules?` : 'Turn this module off?'}
+        confirmLabel="Turn off"
+        onCancel={() => setOffReq(null)}
+        onConfirm={({ reason }) => offReq && applyStatus(offReq.scope, offReq.ids, 'disabled', { reason })}
+        impact={offReq ? {
+          tone: 'danger',
+          what: offReq.ids.length > 1 ? `${offReq.ids.length} modules will be switched off.` : `${byId.get(offReq.ids[0])?.name || offReq.ids[0]} will be switched off.`,
+          change: 'Regular users get an unavailable screen on every page guarded by these modules until they are set back to Live.',
+          who: `Every non-admin web user of ${offReq.ids.reduce((n, id) => n + (NAV_PAGES[id] || 0), 0)} sidebar pages. Admins and super admins still get in. The Flutter app is not affected.`,
+          undo: 'Yes. Set it back to Live from the Out of service tab. The change and your reason are kept in History.',
+        } : null}>
+        {offReq?.warnings?.length > 0 && (
+          <Note icon={AlertTriangle} tone="warning">
+            <p className="font-semibold mb-1">Other Live modules depend on this:</p>
+            <ul className="space-y-0.5">{offReq.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>
+          </Note>
+        )}
+      </ConfirmImpactDialog>
+
       {/* Maintenance window modal */}
       <MaintenanceModal
         open={!!maintModal}
@@ -674,8 +839,11 @@ export default function ConsoleModuleControl({ tabParam = 'tab' } = {}) {
         busy={savingBulk || busyId != null}
         onUntil={setMaintUntil}
         onNote={setMaintNote}
+        reason={maintReason}
+        onReason={setMaintReason}
+        error={actionError}
         onCancel={() => setMaintModal(null)}
-        onConfirm={() => maintModal && applyStatus(maintModal.scope, maintModal.ids, 'maintenance', { until: maintUntil, note: maintNote })}
+        onConfirm={() => maintModal && applyStatus(maintModal.scope, maintModal.ids, 'maintenance', { until: maintUntil, note: maintNote, reason: maintReason })}
       />
     </div>
   )
@@ -733,10 +901,10 @@ function ModuleCard({ module: m, busy, checked, onToggleSelect, onPick, onOpen }
   )
 }
 
-const FIELD_LABEL = 'block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1'
+const FIELD_LABEL = 'block text-[11px] font-semibold text-gray-400 mb-1'
 const FIELD_INPUT = 'w-full h-9 bg-gray-900 border border-gray-800 rounded-lg px-3 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-gray-700 focus-visible:ring-2 focus-visible:ring-orange-500'
 
-function MaintenanceModal({ open, count, until, note, warnings, busy, onUntil, onNote, onCancel, onConfirm }) {
+function MaintenanceModal({ open, count, until, note, warnings, busy, onUntil, onNote, onCancel, onConfirm, reason = '', onReason, error }) {
   return (
     <Modal
       open={open}
@@ -747,7 +915,7 @@ function MaintenanceModal({ open, count, until, note, warnings, busy, onUntil, o
       footer={(
         <>
           <Btn onClick={onCancel} disabled={busy}>Cancel</Btn>
-          <Btn variant="primary" icon={Wrench} onClick={onConfirm} busy={busy}>Set maintenance</Btn>
+          <Btn variant="primary" icon={Wrench} onClick={onConfirm} busy={busy} disabled={onReason ? reason.trim().length < 3 : false}>Set maintenance</Btn>
         </>
       )}
     >
@@ -767,6 +935,15 @@ function MaintenanceModal({ open, count, until, note, warnings, busy, onUntil, o
             onChange={(e) => onNote(e.target.value)}
             placeholder="e.g. Upgrading the analytics engine" className={FIELD_INPUT} />
         </div>
+        {onReason && (
+          <div>
+            <label className={FIELD_LABEL} htmlFor="maint-reason">Reason (required, kept in History)</label>
+            <input id="maint-reason" type="text" value={reason} maxLength={500}
+              onChange={(e) => onReason(e.target.value)} placeholder="Why is it going into maintenance?" className={FIELD_INPUT} />
+          </div>
+        )}
+        <p className="text-[11px] text-gray-400">Who is affected: regular web users of {count > 1 ? 'these modules' : 'this module'}. Admins still get in. The Flutter app is not affected.</p>
+        {error && <p role="alert" className="text-xs text-red-300">{error}</p>}
         {warnings.length > 0 && (
           <Note icon={AlertTriangle} tone="warning">
             <p className="font-semibold mb-1">Other Live modules depend on this:</p>
@@ -823,5 +1000,61 @@ function ConfirmModal({ confirm, onCancel, onConfirm }) {
         </div>
       )}
     </Modal>
+  )
+}
+
+function HistoryPanel({ history, byId, whoText, onRetry }) {
+  const [q, setQ] = useState('')
+  const [to, setTo] = useState('all')
+  const rows = useMemo(() => {
+    const needle = q.trim().toLowerCase()
+    return history.rows.filter((r) => (to === 'all' || r.new_status === to)
+      && (!needle || [r.module_id, byId.get(r.module_id)?.name, r.reason].some((t) => String(t || '').toLowerCase().includes(needle))))
+  }, [history.rows, q, to, byId])
+  const paged = usePaged(rows, 25, `${q}|${to}`)
+  const label = (st) => (MODULE_STATUS_META[st] || { label: st || 'N/A' }).label
+  const exportRows = rows.map((r) => ({
+    when: fmtDateTime(r.changed_at), module: byId.get(r.module_id)?.name || r.module_id,
+    from: label(r.old_status), to: label(r.new_status), by: whoText(r), reason: r.reason || 'Not recorded',
+  }))
+  return (
+    <Panel>
+      <PanelHeader icon={History} title="Status history"
+        subtitle="Every recorded status change since 4 Oct 2026: who made it, when and why. Scheduled changes from Feature Flags show as Scheduled change."
+        actions={(
+          <Toolbar>
+            <SearchInput value={q} onChange={setQ} placeholder="Search module or reason" className="w-full sm:w-52" ariaLabel="Search history" />
+            <Select value={to} onChange={setTo} ariaLabel="Changed to" className="w-40" options={[
+              { value: 'all', label: 'Any new status' }, { value: 'live', label: 'To Live' },
+              { value: 'maintenance', label: 'To Maintenance' }, { value: 'disabled', label: 'To Off' },
+            ]} />
+            <ExportButtons rows={exportRows} columns={HISTORY_EXPORT} title="Module status history" />
+          </Toolbar>
+        )} />
+      {history.state === 'loading' ? <LoadingState label="Reading history" rows={4} /> : history.state === 'error' ? (
+        <ErrorState message="The status history could not be read. Only Admins and super admins can read it." onRetry={onRetry} />
+      ) : rows.length === 0 ? (
+        <EmptyState icon={History} title={history.rows.length ? 'No change matches' : 'No status change recorded yet'}
+          reason={history.rows.length ? 'Clear the search or the filter.' : 'Recording started on 4 Oct 2026. Changes made from now on appear here.'} />
+      ) : (
+        <>
+          <Table>
+            <THead><Th>When</Th><Th>Module</Th><Th>Change</Th><Th>By</Th><Th>Reason</Th></THead>
+            <tbody>
+              {paged.rows.map((r) => (
+                <Tr key={r.id}>
+                  <Td nowrap className="text-gray-300">{fmtDateTime(r.changed_at)}</Td>
+                  <Td className="text-gray-200">{byId.get(r.module_id)?.name || r.module_id}</Td>
+                  <Td nowrap><StatusBadge status={r.old_status} /> <span className="text-gray-500">to</span> <StatusBadge status={r.new_status} /></Td>
+                  <Td className="text-gray-400">{whoText(r)}</Td>
+                  <Td className="text-gray-400">{r.reason || 'Not recorded'}</Td>
+                </Tr>
+              ))}
+            </tbody>
+          </Table>
+          <Pager paged={paged} label="changes" />
+        </>
+      )}
+    </Panel>
   )
 }

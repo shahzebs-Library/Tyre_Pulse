@@ -13,10 +13,17 @@
  *
  * The two reads are independent: a failure of one no longer blanks the other,
  * and each tab states its own failure instead of showing an empty table.
+ *
+ * Job health (?tab=health) rolls the run history up per job, the way Datadog
+ * and Vercel show a cron: success rate, last success, last failure, average
+ * duration and whether the job is failing right now (consecutive failures
+ * from the newest run). The window control (24 h / 7 / 30 days / all loaded)
+ * and the read size (200 / 500 / 1,000 newest) apply to every tab. This page
+ * only reads; it changes nothing.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  Activity, Plug, AlertTriangle, CheckCircle2, Clock, TrendingUp, Timer,
+  Activity, Plug, AlertTriangle, CheckCircle2, Clock, TrendingUp, Timer, HeartPulse,
 } from 'lucide-react'
 import {
   Panel, PanelHeader, Note, StatTile, Badge, Btn, Select, SearchInput,
@@ -29,13 +36,32 @@ import { dailySeries } from '../../lib/consoleCharts'
 import ExportButtons from './shared/ExportButtons'
 import { getPipelineRuns, getIntegrationEvents } from '../../lib/api/dataTrustOps'
 import { pipelineSummary } from '../../lib/dataTrustOps'
+import { jobHealth, healthCounts, withinDays, fmtDuration } from '../../lib/pipelineHealth'
 import { COUNTRIES } from '../../contexts/SettingsContext'
 import { toUserMessage } from '../../lib/safeError'
 import { PageHeader, useUrlTab, usePaged, Pager, AttentionList, ConsoleLink, TabPanel, whenText } from './shared/pageKit'
 
 const nf = new Intl.NumberFormat('en-US')
 const num = (v) => (v === null || v === undefined || v === '' ? 'N/A' : nf.format(Number(v)))
-const READ_LIMIT = 200
+const READ_LIMITS = [200, 500, 1000]
+const WINDOW_OPTS = [
+  { value: '1', label: 'Last 24 hours' },
+  { value: '7', label: 'Last 7 days' },
+  { value: '30', label: 'Last 30 days' },
+  { value: '0', label: 'Everything loaded' },
+]
+const HEALTH_TONE = { failing: 'danger', flaky: 'warning', healthy: 'good', unknown: 'quiet' }
+const HEALTH_LABEL = { failing: 'Failing now', flaky: 'Flaky', healthy: 'Healthy', unknown: 'No outcome' }
+const HEALTH_EXPORT_COLUMNS = [
+  { key: 'job', header: 'Job' }, { key: 'source', header: 'Source' },
+  { key: 'health', header: 'Health', value: (r) => HEALTH_LABEL[r.health] },
+  { key: 'total', header: 'Runs' }, { key: 'failed', header: 'Failed' },
+  { key: 'successRate', header: 'Success rate', value: (r) => (r.successRate == null ? 'N/A' : `${(r.successRate * 100).toFixed(1)}%`) },
+  { key: 'failingStreak', header: 'Failures in a row' },
+  { key: 'lastSuccess', header: 'Last success', value: (r) => r.lastSuccess || 'N/A' },
+  { key: 'lastFailure', header: 'Last failure', value: (r) => r.lastFailure || 'N/A' },
+  { key: 'avgDurationMs', header: 'Average duration', value: (r) => fmtDuration(r.avgDurationMs) },
+]
 const SLOW_MS = 10000
 const PAGE_SIZE = 25
 
@@ -67,7 +93,7 @@ const OUTCOME_OPTS = [
   { value: 'ok', label: 'Succeeded only' },
   { value: 'other', label: 'Other states' },
 ]
-const TABS = ['jobs', 'integrations', 'trends']
+const TABS = ['jobs', 'health', 'integrations', 'trends']
 
 function outcomeOf(status) {
   if (isFail(status)) return 'failed'
@@ -81,77 +107,97 @@ export default function ConsolePipelineMonitor({ tabParam = 'tab' } = {}) {
   const [search, setSearch] = useState('')
   const [outcome, setOutcome] = useState('all')
   const [detail, setDetail] = useState(null) // { kind: 'run'|'event', row }
+  const [windowDays, setWindowDays] = useState('7')
+  const [readLimit, setReadLimit] = useState(READ_LIMITS[0])
   const [state, setState] = useState({
-    loading: true, runs: [], events: [], runsError: null, eventsError: null, readAt: null,
+    loading: true, allRuns: [], allEvents: [], runsError: null, eventsError: null, readAt: null,
   })
 
   const load = useCallback(async () => {
     setState((s) => ({ ...s, loading: true }))
     const [r, e] = await Promise.allSettled([
-      getPipelineRuns({ country, limit: READ_LIMIT }),
-      getIntegrationEvents({ country, limit: READ_LIMIT }),
+      getPipelineRuns({ country, limit: readLimit }),
+      getIntegrationEvents({ country, limit: readLimit }),
     ])
     setState({
       loading: false,
-      runs: r.status === 'fulfilled' ? r.value : [],
-      events: e.status === 'fulfilled' ? e.value : [],
+      allRuns: r.status === 'fulfilled' && Array.isArray(r.value) ? r.value : [],
+      allEvents: e.status === 'fulfilled' && Array.isArray(e.value) ? e.value : [],
       runsError: r.status === 'rejected' ? toUserMessage(r.reason, 'The pipeline run history could not be read.') : null,
       eventsError: e.status === 'rejected' ? toUserMessage(e.reason, 'The integration events could not be read.') : null,
       readAt: Date.now(),
     })
-  }, [country])
+  }, [country, readLimit])
 
   useEffect(() => { load() }, [load])
 
-  const summary = useMemo(() => pipelineSummary(state.runs), [state.runs])
+  // The window applies on screen so the tiles, tables and trends describe the same rows.
+  const days = Number(windowDays) || 0
+  const runsInWindow = useMemo(() => withinDays(state.allRuns, days, Date.now(), 'started_at'), [state.allRuns, days])
+  const eventsInWindow = useMemo(() => withinDays(state.allEvents, days, Date.now(), 'occurred_at'), [state.allEvents, days])
+  const health = useMemo(() => jobHealth(runsInWindow), [runsInWindow])
+  const hCounts = useMemo(() => healthCounts(health), [health])
+  const shownHealth = useMemo(() => searchRows(health, search, ['job', 'source', 'lastStatus']), [health, search])
+  const healthPaged = usePaged(shownHealth, PAGE_SIZE, `${search}|${windowDays}|${country}`)
+  const readCapped = state.allRuns.length >= readLimit || state.allEvents.length >= readLimit
+
+  const summary = useMemo(() => pipelineSummary(runsInWindow), [runsInWindow])
   const eventStats = useMemo(() => {
-    const ev = state.events
+    const ev = eventsInWindow
     const failed = ev.filter((x) => isFail(x.status)).length
     const lat = ev.map((x) => Number(x.latency_ms)).filter((n) => Number.isFinite(n) && n >= 0).sort((a, b) => a - b)
     const p95 = lat.length ? lat[Math.min(lat.length - 1, Math.floor(lat.length * 0.95))] : null
     return { total: ev.length, failed, rate: ev.length ? failed / ev.length : null, p95, slow: lat.filter((n) => n >= SLOW_MS).length }
-  }, [state.events])
+  }, [eventsInWindow])
 
   const { sort: runSort, setSort: setRunSort, onSort: onRunSort } = useTableSort({ key: 'started_at', dir: 'desc' })
   const { sort: evtSort, setSort: setEvtSort, onSort: onEvtSort } = useTableSort({ key: 'occurred_at', dir: 'desc' })
 
   const runs = useMemo(() => {
-    const byOutcome = outcome === 'all' ? state.runs : state.runs.filter((r) => outcomeOf(r.status) === outcome)
+    const byOutcome = outcome === 'all' ? runsInWindow : runsInWindow.filter((r) => outcomeOf(r.status) === outcome)
     return sortRows(searchRows(byOutcome, search, ['job_key', 'status', 'trigger', 'source', 'error_reason']), runSort)
-  }, [state.runs, search, outcome, runSort])
+  }, [runsInWindow, search, outcome, runSort])
 
   const events = useMemo(() => {
-    const byOutcome = outcome === 'all' ? state.events : state.events.filter((x) => outcomeOf(x.status) === outcome)
+    const byOutcome = outcome === 'all' ? eventsInWindow : eventsInWindow.filter((x) => outcomeOf(x.status) === outcome)
     return sortRows(searchRows(byOutcome, search, ['event_type', 'integration', 'status', 'error_reason']), evtSort)
-  }, [state.events, search, outcome, evtSort])
+  }, [eventsInWindow, search, outcome, evtSort])
 
   const runPaged = usePaged(runs, PAGE_SIZE, `${search}|${outcome}|${country}|${runSort?.key}|${runSort?.dir}`)
   const evtPaged = usePaged(events, PAGE_SIZE, `${search}|${outcome}|${country}|${evtSort?.key}|${evtSort?.dir}`)
 
   // Daily lines for the trends tab.
   const runTrend = useMemo(() => {
-    const ok = dailySeries(state.runs.filter((r) => !isFail(r.status)), (r) => r.started_at, 14)
-    const bad = dailySeries(state.runs.filter((r) => isFail(r.status)), (r) => r.started_at, 14)
+    const ok = dailySeries(runsInWindow.filter((r) => !isFail(r.status)), (r) => r.started_at, 14)
+    const bad = dailySeries(runsInWindow.filter((r) => isFail(r.status)), (r) => r.started_at, 14)
     return { labels: ok.labels, ok: ok.values, bad: bad.values, total: ok.total + bad.total }
-  }, [state.runs])
+  }, [runsInWindow])
   const eventTrend = useMemo(() => {
-    const all = dailySeries(state.events, (x) => x.occurred_at, 14)
-    const bad = dailySeries(state.events.filter((x) => isFail(x.status)), (x) => x.occurred_at, 14)
+    const all = dailySeries(eventsInWindow, (x) => x.occurred_at, 14)
+    const bad = dailySeries(eventsInWindow.filter((x) => isFail(x.status)), (x) => x.occurred_at, 14)
     return { labels: all.labels, all: all.values, bad: bad.values, total: all.total }
-  }, [state.events])
+  }, [eventsInWindow])
   const failingJobs = useMemo(() => {
     const m = new Map()
-    for (const r of state.runs) if (isFail(r.status)) m.set(r.job_key || 'Unnamed job', (m.get(r.job_key || 'Unnamed job') || 0) + 1)
+    for (const r of runsInWindow) if (isFail(r.status)) m.set(r.job_key || 'Unnamed job', (m.get(r.job_key || 'Unnamed job') || 0) + 1)
     return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([label, value]) => ({ label, value }))
-  }, [state.runs])
+  }, [runsInWindow])
 
   const showFailures = (which) => { setOutcome('failed'); setSearch(''); setTab(which) }
 
   const attention = useMemo(() => {
     const out = []
     if (state.runsError || state.eventsError) return out
+    const failingNow = health.filter((h) => h.health === 'failing')
+    if (failingNow.length) {
+      out.push({
+        key: 'failingNow', tone: 'danger',
+        text: `${nf.format(failingNow.length)} ${failingNow.length === 1 ? 'job is' : 'jobs are'} failing right now (newest run failed): ${failingNow.slice(0, 3).map((h) => h.job).join(', ')}${failingNow.length > 3 ? ' and more' : ''}.`,
+        actionLabel: 'Job health', onAction: () => setTab('health'),
+      })
+    }
     if (summary.failed) {
-      const newest = [...state.runs].filter((r) => isFail(r.status))
+      const newest = [...runsInWindow].filter((r) => isFail(r.status))
         .sort((a, b) => String(b.started_at || '').localeCompare(String(a.started_at || '')))[0]
       out.push({
         key: 'runs', tone: 'danger',
@@ -173,14 +219,14 @@ export default function ConsolePipelineMonitor({ tabParam = 'tab' } = {}) {
         actionLabel: 'Slowest first', onAction: () => { setOutcome('all'); setTab('integrations'); setEvtSort({ key: 'latency_ms', dir: 'desc' }) },
       })
     }
-    const dupes = state.runs.reduce((a, r) => a + (Number(r.duplicates) || 0), 0)
+    const dupes = runsInWindow.reduce((a, r) => a + (Number(r.duplicates) || 0), 0)
     if (dupes) {
       out.push({ key: 'dupes', tone: 'info', text: `${nf.format(dupes)} duplicate rows were skipped across recent imports.`, to: '/console/duplicates', actionLabel: 'Duplicate Control' })
     }
     return out
     // showFailures only calls stable setters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [summary, eventStats, state.runs, state.runsError, state.eventsError, setEvtSort])
+  }, [summary, eventStats, runsInWindow, health, state.runsError, state.eventsError, setEvtSort])
 
   const loadingFirst = state.loading && !state.readAt
   const tile = (n, err) => (err ? 'N/A' : loadingFirst ? '...' : nf.format(n))
@@ -195,11 +241,22 @@ export default function ConsolePipelineMonitor({ tabParam = 'tab' } = {}) {
         refreshedAt={state.readAt}
         onRefresh={load}
         refreshing={state.loading}
-        meta={<span>Last {READ_LIMIT} runs and {READ_LIMIT} integration events for the selected country.</span>}
-        actions={<Select ariaLabel="Country" value={country} onChange={setCountry} options={COUNTRY_OPTS} className="w-40" />}
+        meta={<span>Newest {nf.format(readLimit)} runs and {nf.format(readLimit)} integration events for the selected country, shown for {WINDOW_OPTS.find((w) => w.value === windowDays)?.label.toLowerCase()}. Changing these only changes what you see; nothing is re-run.</span>}
+        actions={(
+          <>
+            <Select ariaLabel="Country" value={country} onChange={setCountry} options={COUNTRY_OPTS} className="w-40" />
+            <Select ariaLabel="Time window" value={windowDays} onChange={setWindowDays} options={WINDOW_OPTS} className="w-40" />
+            <Select ariaLabel="Rows to read" value={String(readLimit)} onChange={(v) => setReadLimit(Number(v) || READ_LIMITS[0])}
+              options={READ_LIMITS.map((n) => ({ value: String(n), label: `Newest ${nf.format(n)}` }))} className="w-36" />
+          </>
+        )}
       />
 
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+      {readCapped && !state.loading && (
+        <Note icon={Clock}>The newest {nf.format(readLimit)} rows were read and older ones exist. Read more above for a longer history.</Note>
+      )}
+
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <StatTile label="Runs" icon={Activity} value={tile(summary.total, state.runsError)}
           onClick={() => { setOutcome('all'); setTab('jobs') }} active={tab === 'jobs' && outcome === 'all'} />
         <StatTile label="Runs OK" icon={CheckCircle2} value={tile(summary.ok, state.runsError)} tone="good"
@@ -215,6 +272,10 @@ export default function ConsolePipelineMonitor({ tabParam = 'tab' } = {}) {
         <StatTile label="Slowest 5% of calls" icon={Timer}
           value={state.eventsError || eventStats.p95 == null ? 'N/A' : `${nf.format(eventStats.p95)} ms`}
           sub="95th percentile latency" tone="muted" />
+        <StatTile label="Jobs failing now" icon={HeartPulse} value={tile(hCounts.failing, state.runsError)}
+          tone={!state.runsError && hCounts.failing ? 'danger' : 'default'}
+          sub={state.runsError ? undefined : `${nf.format(hCounts.flaky)} flaky, ${nf.format(hCounts.healthy)} healthy`}
+          onClick={() => setTab('health')} active={tab === 'health'} />
       </div>
 
       {bothFailed ? (
@@ -226,15 +287,16 @@ export default function ConsolePipelineMonitor({ tabParam = 'tab' } = {}) {
       <nav aria-label="Monitor views" className="flex flex-wrap items-center justify-between gap-2">
         <Segmented ariaLabel="Monitor views" value={tab} onChange={setTab} options={[
           { key: 'jobs', label: <><Activity size={13} aria-hidden="true" />Jobs</>, count: state.runsError ? null : runs.length },
+          { key: 'health', label: <><HeartPulse size={13} aria-hidden="true" />Job health</>, count: state.runsError ? null : health.length },
           { key: 'integrations', label: <><Plug size={13} aria-hidden="true" />Integrations</>, count: state.eventsError ? null : events.length },
           { key: 'trends', label: <><TrendingUp size={13} aria-hidden="true" />Trends</> },
         ]} />
         {tab !== 'trends' && (
           <Toolbar>
             <SearchInput value={search} onChange={setSearch}
-              placeholder={tab === 'jobs' ? 'Search job, status or error' : 'Search event, status or error'}
+              placeholder={tab === 'integrations' ? 'Search event, status or error' : 'Search job, status or error'}
               className="w-full sm:w-60" ariaLabel="Search runs and events" />
-            <Select ariaLabel="Outcome" value={outcome} onChange={setOutcome} options={OUTCOME_OPTS} className="w-36" />
+            {tab !== 'health' && <Select ariaLabel="Outcome" value={outcome} onChange={setOutcome} options={OUTCOME_OPTS} className="w-36" />}
           </Toolbar>
         )}
       </nav>
@@ -291,6 +353,54 @@ export default function ConsolePipelineMonitor({ tabParam = 'tab' } = {}) {
                 <Pager paged={runPaged} label="runs" />
               </>
             )}
+          </Panel>
+        </TabPanel>
+      )}
+
+      {tab === 'health' && (
+        <TabPanel label="Job health">
+          <Panel>
+            <PanelHeader icon={HeartPulse} title="Job health"
+              subtitle="One row per job in the window. Failing now means the newest run failed; flaky means under 90% of decided runs succeeded. Click a job to see its runs."
+              actions={<ExportButtons rows={shownHealth} columns={HEALTH_EXPORT_COLUMNS} title="Pipeline Job Health" disabled={!!state.runsError} />} />
+            {loadingFirst ? <LoadingState label="Reading run history" rows={5} />
+              : state.runsError ? <ErrorState message={state.runsError} onRetry={load} />
+                : shownHealth.length === 0 ? (
+                  <EmptyState icon={HeartPulse} title="No jobs in this window"
+                    reason={search ? 'No job matches the search.' : 'No import or report ran in the selected window. Widen the window above.'}
+                    action={search ? <Btn onClick={() => setSearch('')}>Clear search</Btn> : <Btn onClick={() => setWindowDays('0')}>Show everything loaded</Btn>} />
+                ) : (
+                  <>
+                    <Table>
+                      <THead>
+                        <Th>Job</Th><Th>Health</Th><Th align="right">Runs</Th><Th align="right">Failed</Th>
+                        <Th align="right">Success rate</Th><Th align="right">Failures in a row</Th>
+                        <Th>Last success</Th><Th>Last failure</Th><Th align="right">Average duration</Th>
+                      </THead>
+                      <tbody>
+                        {healthPaged.rows.map((h) => (
+                          <Tr key={h.job} tone={h.health === 'failing' ? 'warning' : undefined}
+                            onClick={() => { setSearch(h.job === 'Unnamed job' ? '' : h.job); setOutcome('all'); setTab('jobs') }}
+                            ariaLabel={`Show runs of ${h.job}`}>
+                            <Td className="min-w-[10rem]">
+                              <p className="text-gray-200 break-words">{h.job}</p>
+                              <p className="text-[11px] text-gray-500">{h.source || 'run'}</p>
+                            </Td>
+                            <Td><Badge tone={HEALTH_TONE[h.health]}>{HEALTH_LABEL[h.health]}</Badge></Td>
+                            <Td align="right">{nf.format(h.total)}</Td>
+                            <Td align="right">{nf.format(h.failed)}</Td>
+                            <Td align="right">{h.successRate == null ? 'N/A' : `${(h.successRate * 100).toFixed(1)}%`}</Td>
+                            <Td align="right">{nf.format(h.failingStreak)}</Td>
+                            <Td nowrap>{h.lastSuccess ? whenText(h.lastSuccess) : 'None in window'}</Td>
+                            <Td nowrap>{h.lastFailure ? whenText(h.lastFailure) : 'None in window'}</Td>
+                            <Td align="right" nowrap>{fmtDuration(h.avgDurationMs)}</Td>
+                          </Tr>
+                        ))}
+                      </tbody>
+                    </Table>
+                    <Pager paged={healthPaged} label="jobs" />
+                  </>
+                )}
           </Panel>
         </TabPanel>
       )}

@@ -9,7 +9,7 @@
  *     console page ships without one
  *   - web app areas come from Layout's NAV_CATALOG (the real app sidebar)
  *   - mobile modules come from src/lib/mobileModules.js (the mirror of the
- *     phone app's own registry)
+ *     Flutter field app's registry, tyre_pulse_flutter/lib/core/permissions/module_registry.dart)
  *
  * NOT_BUILT is the part most inventories lie about: the known gaps, stated
  * plainly, each with WHO can move it forward. An owner who can see what is
@@ -80,7 +80,7 @@ export const CONSOLE_DESCRIPTIONS = {
   '/console/appearance': 'The report colour theme every chart and shared board follows.',
   '/console/vehicle-designer': 'Design how each vehicle type is drawn (axles, tyres, body) across the app.',
   '/console/platform-map': 'This page: everything the platform has, and the honest list of what it does not.',
-  '/console/mobile-app': 'The field phones: released version, forced-update rule, and device counts.',
+  '/console/mobile-app': 'The Flutter field app (com.shahzebrahman.tyrepulse): newest release, forced-update rule, devices by version, release path and change history. The retired Expo app is shown read-only.',
 }
 
 /**
@@ -105,9 +105,9 @@ export const NOT_BUILT = [
     what: 'The last production (m3) upload was 9 July, so Cost per M3 for recent weeks runs on an old denominator until the next file is uploaded.',
   },
   {
-    title: 'Mobile crash symbol upload',
-    who: 'you',
-    what: 'Crash reports arrive but without full detail. Turning on symbol upload needs the Sentry token ticked for Production in the Expo build settings.',
+    title: 'Flutter app crash reports',
+    who: 'build',
+    what: 'The Flutter release workflow (flutter-release-play.yml) passes no Sentry DSN, so crashes from the Flutter field app are not reported yet. A SENTRY_DSN secret has to be added to the workflow and a new build released.',
   },
   {
     title: 'UAE and Egypt tyre prices',

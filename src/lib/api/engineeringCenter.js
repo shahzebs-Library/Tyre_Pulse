@@ -59,12 +59,22 @@ export async function getAppAdoption() {
   return readJson(await supabase.rpc('admin_app_version_adoption'), 'App adoption')
 }
 
+/** Adoption of the Flutter field app only (migration 20261004105100). Same shape as getAppAdoption. */
+export async function getFlutterAdoption() {
+  return readJson(await supabase.rpc('admin_app_flutter_adoption', { p_app: 'flutter' }), 'Flutter app adoption')
+}
+
+/** Adoption of the retired Expo app, for the read-only "Retired app" figures. */
+export async function getExpoAdoption() {
+  return readJson(await supabase.rpc('admin_app_flutter_adoption', { p_app: 'expo' }), 'Retired app adoption')
+}
+
 export async function getRecentMigrations(limit = 12) {
   return readJson(await supabase.rpc('admin_recent_migrations', { p_limit: limit }), 'Migration history')
 }
 
 const CONFIG_KEYS = [
-  'mobile_min_version', 'mobile_latest_version', 'flutter_min_version',
+  'mobile_min_version', 'mobile_latest_version', 'flutter_min_version', 'flutter_latest_version',
   'ai_enabled', 'ai_model', 'ai_monthly_budget_usd', 'ai_rate_limit_per_min', 'ai_cache_ttl_hours',
   'dual_control_enabled',
 ]

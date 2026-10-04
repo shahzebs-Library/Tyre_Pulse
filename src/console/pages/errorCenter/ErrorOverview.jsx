@@ -270,18 +270,19 @@ export default function ErrorOverview({ onOpenTab }) {
           )}
           {Number(cov.android_crashes) > 0 && Number(cov.android_with_user) === 0 && (
             <div className="mt-3"><Note icon={Info} tone="warning">
-              Android crashes do not say who crashed. The phone app sends crashes without a user id, so a customer
-              could be crashing without appearing here. That fix needs a new app build, which is the owner&apos;s call.
+              Android crashes do not say who crashed. These come from the retired Expo app, which sends crashes without
+              a user id, so a customer could be crashing without appearing here. The Flutter field app does not report
+              crashes yet (its release workflow has no Sentry DSN); adding it needs a new Flutter build, which is the owner&apos;s call.
             </Note></div>
           )}
           {customersHit === 0 && (
-            <p className="text-[11px] text-gray-500 mt-2">No customer account has a logged error. That may mean customers are fine, or that their errors are not reaching us (see the Android gap).</p>
+            <p className="text-[11px] text-gray-500 mt-2">No customer account has a logged error. That may mean customers are fine, or that their errors are not reaching us (see the Android crash gap).</p>
           )}
         </Panel>
 
         <div className="space-y-4">
           <Panel>
-            <PanelHeader icon={Smartphone} title="Phone crashes" subtitle="Grouped Android crashes mirrored from Sentry." />
+            <PanelHeader icon={Smartphone} title="Phone crashes" subtitle="Grouped Android crashes mirrored from Sentry (today from the retired Expo app; the Flutter app does not report crashes yet)." />
             {phoneGroups.length === 0 ? (
               <EmptyState title="No phone crashes logged" reason="No Android crash has reached the error log." />
             ) : (

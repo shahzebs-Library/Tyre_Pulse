@@ -12,13 +12,25 @@
  * the month-to-date spend against the monthly budget from System Configuration),
  * then tabs (?tab=trend | breakdown | failures). Every table is sortable, paged
  * and exportable; a failure opens in a drawer with its full error.
+ *
+ * Controls (super admin): pause or resume every AI feature (system_config
+ * ai_enabled, red, typed confirm), change the monthly spend cap and the per
+ * person rate limit. All go through admin_set_config, which needs a reason
+ * and records who, old value, new value and why; each is also written to the
+ * console audit log. Added measures: month-end spend projection and response
+ * time (p50 / p95), stated as "Not recorded" when the log has no latency.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Zap, DollarSign, AlertTriangle, Cpu, Download, Layers, TrendingUp, ListChecks } from 'lucide-react'
+import { Zap, DollarSign, AlertTriangle, Cpu, Download, Layers, TrendingUp, ListChecks, Power, Gauge, Timer, CheckCircle2, SlidersHorizontal } from 'lucide-react'
 import {
   Panel, PanelHeader, StatTile, Badge, Btn, Segmented, Select, Toolbar, SearchInput,
-  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Note, Modal,
+  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Note, Modal, ConfirmImpactDialog,
 } from '../components/ui'
+import { setConfigWithReason } from '../../lib/api/consolePlatform'
+import { useConsoleAuth } from '../ConsoleAuthContext'
+import {
+  parseConfigNumber, parseConfigBool, projectMonthEnd, percentile, validateCap, aiControlImpact,
+} from '../../lib/aiUsageControls'
 import { sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
 import { TrendChart, BarsChart } from '../components/ui/charts'
 import { getUsageOverview } from '../../lib/api/aiOps'
@@ -55,13 +67,7 @@ const FAILURE_EXPORT = [
   { key: 'http_status', header: 'HTTP' }, { key: 'error', header: 'Error' }, { key: 'country', header: 'Country' },
 ]
 
-function parseBudget(raw) {
-  if (raw === undefined || raw === null) return null
-  let v = raw
-  try { v = JSON.parse(raw) } catch { /* stored bare */ }
-  const n = Number(v)
-  return Number.isFinite(n) ? n : null
-}
+const parseBudget = parseConfigNumber
 
 export default function ConsoleAIUsage({ tabParam = 'tab' } = {}) {
   const [range, setRange] = useState('30')
@@ -70,6 +76,13 @@ export default function ConsoleAIUsage({ tabParam = 'tab' } = {}) {
   const [tab, setTab] = useUrlTab(TABS, 'trend', tabParam)
   const [state, setState] = useState({ loading: true, error: null, data: null, readAt: null })
   const [budget, setBudget] = useState({ value: null, error: false })
+  const [aiCfg, setAiCfg] = useState({ enabled: null, rateLimit: null, error: false })
+  const { logAction } = useConsoleAuth() || {}
+  const [control, setControl] = useState(null) // { kind: 'pause'|'resume'|'budget'|'rate' }
+  const [controlValue, setControlValue] = useState('')
+  const [controlBusy, setControlBusy] = useState(false)
+  const [controlError, setControlError] = useState('')
+  const [flash, setFlash] = useState('')
   const [failQuery, setFailQuery] = useState('')
   const [detail, setDetail] = useState(null)
 
@@ -84,11 +97,17 @@ export default function ConsoleAIUsage({ tabParam = 'tab' } = {}) {
     // The monthly budget lives in System Configuration; read it alongside so
     // the spend can be judged against it. A failed read is stated, not zeroed.
     try {
-      const { data, error } = await supabase.from('system_config').select('value').eq('key', 'ai_monthly_budget_usd').maybeSingle()
+      const { data, error } = await supabase.from('system_config').select('key,value')
+        .in('key', ['ai_monthly_budget_usd', 'ai_enabled', 'ai_rate_limit_per_min']).limit(10)
       if (error) throw error
-      setBudget({ value: parseBudget(data?.value), error: false })
+      const map = Object.fromEntries((data || []).map((r) => [r.key, r.value]))
+      setBudget({ value: parseBudget(map.ai_monthly_budget_usd), error: false })
+      // ai_enabled defaults to on when the key was never written (CONFIG_DEFAULTS).
+      const enabled = parseConfigBool(map.ai_enabled)
+      setAiCfg({ enabled: enabled === null ? true : enabled, rateLimit: parseConfigNumber(map.ai_rate_limit_per_min), error: false })
     } catch {
       setBudget({ value: null, error: true })
+      setAiCfg({ enabled: null, rateLimit: null, error: true })
     }
   }, [range, country])
 
@@ -146,6 +165,48 @@ export default function ConsoleAIUsage({ tabParam = 'tab' } = {}) {
     return { covered, spend: (s.byDay || []).filter((d) => d.date >= key).reduce((a, d) => a + d.cost, 0) }
   }, [s, range])
 
+  const projection = useMemo(() => projectMonthEnd(mtd.spend), [mtd.spend])
+  const latency = useMemo(() => {
+    const vals = rows.filter(isOkRow).map((r) => r.latency_ms)
+    return { p50: percentile(vals, 50), p95: percentile(vals, 95) }
+  }, [rows])
+
+  function openControl(kind) {
+    setControlError('')
+    setControlValue(kind === 'budget' ? String(budget.value ?? 0) : kind === 'rate' ? String(aiCfg.rateLimit ?? 0) : '')
+    setControl({ kind })
+  }
+  const controlProblem = control?.kind === 'budget' ? validateCap(controlValue, { max: 100000 })
+    : control?.kind === 'rate' ? validateCap(controlValue, { max: 1000, integer: true }) : null
+
+  async function applyControl({ reason }) {
+    const kind = control?.kind
+    if (!kind) return
+    setControlBusy(true); setControlError('')
+    try {
+      if (kind === 'pause' || kind === 'resume') {
+        const next = kind === 'resume'
+        await setConfigWithReason('ai_enabled', next, reason)
+        await logAction?.(next ? 'ai_resume' : 'ai_pause', null, 'system_config', { key: 'ai_enabled', value: next, reason })
+        setFlash(next ? 'AI features are on again.' : 'AI features are paused for everyone. The copilot refuses new requests until you resume.')
+      } else {
+        const key = kind === 'budget' ? 'ai_monthly_budget_usd' : 'ai_rate_limit_per_min'
+        const value = String(Number(controlValue))
+        await setConfigWithReason(key, value, reason)
+        await logAction?.('ai_config_change', null, 'system_config', { key, value, reason })
+        setFlash(kind === 'budget'
+          ? (Number(value) > 0 ? `Monthly AI cap set to ${usd(Number(value))}.` : 'Monthly AI cap removed.')
+          : (Number(value) > 0 ? `Rate limit set to ${value} requests a minute per person.` : 'Per person rate limit removed.'))
+      }
+      setControl(null)
+      await load()
+    } catch (e) {
+      setControlError(toUserMessage(e, 'The setting could not be saved. Nothing was changed.'))
+    } finally {
+      setControlBusy(false)
+    }
+  }
+
   const [exportError, setExportError] = useState(null)
   const exportRows = async () => {
     setExportError(null)
@@ -194,7 +255,7 @@ export default function ConsoleAIUsage({ tabParam = 'tab' } = {}) {
       <PageHeader
         icon={Zap}
         title="AI Usage"
-        purpose="Calls, tokens, spend and failures for every AI feature, from the AI request log."
+        purpose="Calls, tokens, spend and failures for every AI feature, from the AI request log. Pause AI, or change the monthly cap and rate limit, from here."
         refreshedAt={state.readAt}
         onRefresh={load}
         refreshing={state.loading}
@@ -207,13 +268,54 @@ export default function ConsoleAIUsage({ tabParam = 'tab' } = {}) {
         )}
       />
 
+      {flash && <Note icon={CheckCircle2} tone="accent">{flash}</Note>}
+
+      <Panel>
+        <PanelHeader icon={SlidersHorizontal} title="AI controls"
+          subtitle="Platform-wide. Each change needs a reason and is recorded with the old and new value." />
+        {aiCfg.error ? (
+          <ErrorState message="The AI settings could not be read, so they cannot be changed here right now." onRetry={load} />
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg border border-gray-800 p-3">
+              <p className="text-[11px] text-gray-500">AI features</p>
+              <p className="text-sm font-semibold text-gray-100 mt-0.5">
+                {aiCfg.enabled == null ? 'N/A' : aiCfg.enabled ? <Badge tone="good">On</Badge> : <Badge tone="danger">Paused</Badge>}
+              </p>
+              <p className="text-[11px] text-gray-500 mt-1">Pausing stops the copilot and AI jobs for every user.</p>
+              <div className="mt-2">
+                {aiCfg.enabled === false ? (
+                  <Btn size="xs" variant="primary" icon={Power} onClick={() => openControl('resume')}>Resume AI</Btn>
+                ) : (
+                  <Btn size="xs" variant="danger" icon={Power} disabled={aiCfg.enabled == null} onClick={() => openControl('pause')}>Pause all AI</Btn>
+                )}
+              </div>
+            </div>
+            <div className="rounded-lg border border-gray-800 p-3">
+              <p className="text-[11px] text-gray-500">Monthly spend cap</p>
+              <p className="text-sm font-semibold text-gray-100 mt-0.5 tabular-nums">{budget.error ? 'N/A' : budget.value ? usd(budget.value) : 'No cap'}</p>
+              <p className="text-[11px] text-gray-500 mt-1">
+                {projection.projected == null ? 'Month-end projection: N/A (widen the range to cover this month).' : `Projected month end: ${usd(projection.projected)}.`}
+              </p>
+              <div className="mt-2"><Btn size="xs" icon={DollarSign} disabled={budget.error} onClick={() => openControl('budget')}>Change cap</Btn></div>
+            </div>
+            <div className="rounded-lg border border-gray-800 p-3">
+              <p className="text-[11px] text-gray-500">Rate limit per person</p>
+              <p className="text-sm font-semibold text-gray-100 mt-0.5 tabular-nums">{aiCfg.rateLimit == null ? 'N/A' : aiCfg.rateLimit ? `${aiCfg.rateLimit} a minute` : 'No limit'}</p>
+              <p className="text-[11px] text-gray-500 mt-1">Requests over the limit are refused and shown below as rate limited.</p>
+              <div className="mt-2"><Btn size="xs" icon={Gauge} disabled={aiCfg.rateLimit == null} onClick={() => openControl('rate')}>Change limit</Btn></div>
+            </div>
+          </div>
+        )}
+      </Panel>
+
       {state.error && <ErrorState message={state.error} onRetry={load} />}
       {exportError && <Note tone="danger" icon={AlertTriangle}><span role="alert">{exportError}</span></Note>}
       {state.loading && !s && <LoadingState label="Loading AI usage" rows={4} />}
 
       {s && (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <StatTile icon={Zap} label="Successful calls" value={nf.format(s.totalCalls)} onClick={() => { setMetric('calls'); setTab('trend') }} active={tab === 'trend' && metric === 'calls'} />
             <StatTile icon={Layers} label="Tokens" value={nf.format(s.totalTokens)}
               sub={`${nf.format(s.promptTokens)} in, ${nf.format(s.completionTokens)} out`} />
@@ -224,6 +326,11 @@ export default function ConsoleAIUsage({ tabParam = 'tab' } = {}) {
               tone={s.failedCalls ? 'warning' : 'default'} onClick={() => setTab('failures')} active={tab === 'failures'} />
             <StatTile icon={Cpu} label="Failure rate" value={rows.length ? pct(s.failureRate) : 'N/A'}
               tone={s.failureRate > FAILURE_WARN ? 'danger' : 'default'} />
+            <StatTile icon={TrendingUp} label="Projected month end" value={projection.projected == null ? 'N/A' : usd(projection.projected)}
+              tone={budget.value && projection.projected != null && projection.projected > budget.value ? 'danger' : 'default'}
+              sub={projection.projected == null ? 'Needs this month in range' : budget.value ? `Cap ${usd(budget.value)}` : 'Straight line from this month'} />
+            <StatTile icon={Timer} label="Response time" value={latency.p50 == null ? 'N/A' : `${nf.format(latency.p50)} ms`}
+              sub={latency.p50 == null ? 'Not recorded by the AI functions yet' : `p95 ${nf.format(latency.p95)} ms`} />
           </div>
 
           {/* The service pages past the server's 1,000-row cap and reports when its
@@ -353,6 +460,33 @@ export default function ConsoleAIUsage({ tabParam = 'tab' } = {}) {
           )}
         </>
       )}
+
+      <ConfirmImpactDialog
+        open={!!control}
+        title={control?.kind === 'pause' ? 'Pause all AI?' : control?.kind === 'resume' ? 'Resume AI?' : control?.kind === 'budget' ? 'Change the monthly AI cap?' : 'Change the AI rate limit?'}
+        impact={control ? aiControlImpact(control.kind, { budget: budget.value, rateLimit: aiCfg.rateLimit, next: controlValue }) : null}
+        confirmLabel={control?.kind === 'pause' ? 'Pause all AI' : control?.kind === 'resume' ? 'Resume AI' : 'Save'}
+        danger={control?.kind === 'pause'}
+        typedWord={control?.kind === 'pause' ? 'PAUSE AI' : undefined}
+        requireReason
+        busy={controlBusy}
+        error={controlError}
+        readyExtra={!controlProblem}
+        onCancel={() => { if (!controlBusy) setControl(null) }}
+        onConfirm={applyControl}
+      >
+        {(control?.kind === 'budget' || control?.kind === 'rate') && (
+          <label className="block">
+            <span className="block text-[11px] font-semibold text-gray-400 mb-1">
+              {control.kind === 'budget' ? 'Monthly cap in US dollars (0 = no cap)' : 'Requests per person per minute (0 = no limit)'}
+            </span>
+            <input type="number" min="0" step={control.kind === 'budget' ? '0.01' : '1'} value={controlValue}
+              onChange={(e) => setControlValue(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
+            {controlProblem && <span className="block text-[11px] text-amber-300 mt-1">{controlProblem}</span>}
+          </label>
+        )}
+      </ConfirmImpactDialog>
 
       <Modal open={!!detail} onClose={() => setDetail(null)} width="max-w-lg"
         title={detail ? `Failed request: ${detail.feature || 'other'}` : ''}

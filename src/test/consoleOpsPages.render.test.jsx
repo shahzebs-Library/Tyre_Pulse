@@ -229,7 +229,11 @@ describe('console operations pages on the kit', () => {
     expect(screen.getAllByTestId('bars')[0].textContent).toMatch(/High-risk tyres 1/)
     fireEvent.click(screen.getAllByRole('button', { name: /Delete/ })[0])
     expect(h.deleteAlertRule).not.toHaveBeenCalled()
-    fireEvent.click(await screen.findByRole('button', { name: /Delete rule/ }))
+    const confirm = await screen.findByRole('button', { name: /Delete rule/ })
+    // Delete is a dangerous action now: it needs a reason for the audit log.
+    expect(confirm.disabled).toBe(true)
+    fireEvent.change(screen.getByPlaceholderText('Why are you doing this?'), { target: { value: 'No longer needed' } })
+    fireEvent.click(confirm)
     await waitFor(() => expect(h.deleteAlertRule).toHaveBeenCalledWith('r1'))
   })
 

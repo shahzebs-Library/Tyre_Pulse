@@ -71,7 +71,7 @@ export function severityCounts(rows = []) {
 }
 
 /**
- * Turn the attention items + security posture + mobile versions into one
+ * Turn the attention items + security posture + Flutter app versions into one
  * ranked action queue: critical, high, medium, low. Each item keeps the page
  * that clears it. Pure.
  */
@@ -102,10 +102,10 @@ export function buildActionQueue({ attention, posture, mobile } = {}) {
   }
   if (mobile && mobile.configOk !== false) {
     if (!mobile.minVersion) {
-      items.push({ key: 'mobile:min', level: 'low', title: 'No minimum app version is set', detail: 'Phones on any old build can still sign in.', to: '/console/mobile-app', action: 'Open' })
+      items.push({ key: 'mobile:min', level: 'low', title: 'No minimum Flutter app version is set', detail: 'Phones on any old Flutter build can still sign in.', to: '/console/mobile-app', action: 'Open' })
     }
     if (!mobile.latestVersion) {
-      items.push({ key: 'mobile:latest', level: 'low', title: 'The newest released app version is not recorded', detail: 'Record it after each release so the minimum can be checked against it.', to: '/console/mobile-app', action: 'Open' })
+      items.push({ key: 'mobile:latest', level: 'low', title: 'The newest released Flutter app version is not recorded', detail: 'Record it after each Flutter release so the minimum can be checked against it.', to: '/console/mobile-app', action: 'Open' })
     }
   }
   const rank = { critical: 0, high: 1, medium: 2, low: 3 }

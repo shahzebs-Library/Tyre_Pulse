@@ -281,8 +281,8 @@ export const EDGE_FUNCTIONS = Object.freeze([
 export const PLATFORMS = Object.freeze([
   { key: 'web', label: 'Web app' },
   { key: 'marketing', label: 'Marketing' },
-  { key: 'android', label: 'Android' },
-  { key: 'flutter', label: 'Flutter' },
+  { key: 'flutter', label: 'Flutter app' },
+  { key: 'android', label: 'Retired Expo app' },
   { key: 'database', label: 'Database' },
 ])
 
@@ -304,11 +304,13 @@ export function errorVerdict(w) {
  * One timeline from what is actually recorded:
  *  - editorial web release notes shipped with the build (date only, no time);
  *  - applied database migrations, one entry per Riyadh day;
- *  - the Android minimum / latest setting change;
+ *  - the Flutter app minimum / latest setting change (flutter_min_version /
+ *    flutter_latest_version);
+ *  - the retired Expo app's minimum / latest setting change (read-only history);
  *  - releases and rollbacks recorded by hand (public.releases).
  * The Vercel deploy list is NOT connected, so web entries have no commit time.
  */
-export function buildReleaseTimeline({ notes = [], migrations = [], android = null, recorded = [], liveBuild = null } = {}) {
+export function buildReleaseTimeline({ notes = [], migrations = [], android = null, flutter = null, recorded = [], liveBuild = null } = {}) {
   const out = []
   const liveShort = liveBuild && liveBuild !== 'local' && liveBuild !== 'development' ? String(liveBuild).slice(0, 7) : null
   ;(notes || []).forEach((n, i) => {
@@ -350,6 +352,19 @@ export function buildReleaseTimeline({ notes = [], migrations = [], android = nu
       source: 'Applied migrations',
     })
   }
+  if (flutter && flutter.updatedAt && (flutter.min || flutter.latest)) {
+    out.push({
+      id: 'flutter-gate',
+      platform: 'flutter',
+      at: new Date(flutter.updatedAt),
+      timeKnown: true,
+      version: flutter.latest || flutter.min,
+      title: `Flutter app ${flutter.latest || 'N/A'} recorded as released, minimum ${flutter.min || 'not set'}`,
+      detail: 'Flutter phones below the minimum see Update required after sign-in.',
+      status: 'Current',
+      source: 'Flutter app version settings',
+    })
+  }
   if (android && android.updatedAt && (android.min || android.latest)) {
     out.push({
       id: 'android-gate',
@@ -357,10 +372,10 @@ export function buildReleaseTimeline({ notes = [], migrations = [], android = nu
       at: new Date(android.updatedAt),
       timeKnown: true,
       version: android.latest || android.min,
-      title: `Android ${android.latest || 'N/A'} recorded as released, minimum ${android.min || 'not set'}`,
-      detail: 'Phones below the minimum must update before they can sign in.',
-      status: 'Current',
-      source: 'App version settings',
+      title: `Retired Expo app ${android.latest || 'N/A'} last recorded release, minimum ${android.min || 'not set'}`,
+      detail: 'The Expo app is retired. Its settings are history only and no longer change.',
+      status: 'Retired',
+      source: 'Retired app settings (read-only)',
     })
   }
   for (const r of recorded || []) {

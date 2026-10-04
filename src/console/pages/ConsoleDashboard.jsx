@@ -31,7 +31,7 @@ import { TrendChart, BarsChart, ShareChart, ScoreRing } from '../components/ui/c
 import { loadAttentionInputs } from '../../lib/api/consoleAttention'
 import { buildAttention } from '../../lib/consoleAttention'
 import { getSecurityPosture } from '../../lib/api/securityAudit'
-import { getMobileOps } from '../../lib/api/mobileOps'
+import { getFlutterOps } from '../../lib/api/mobileOps'
 import { listBackupSnapshots } from '../../lib/api/backups'
 import { listCronJobs, summarizeCron } from '../../lib/api/automationHealth'
 import { runAllChecks } from '../../lib/systemHealth'
@@ -111,7 +111,7 @@ export default function ConsoleDashboard() {
   }, [])
   const [attention, loadAttention] = useLoader(async () => buildAttention(await loadAttentionInputs()), [])
   const [security, loadSecurity] = useLoader(() => getSecurityPosture(), [])
-  const [mobile, loadMobile] = useLoader(() => getMobileOps(), [])
+  const [mobile, loadMobile] = useLoader(() => getFlutterOps(), [])
   const [backups, loadBackups] = useLoader(() => listBackupSnapshots(1), [])
   const [cron, loadCron] = useLoader(async () => summarizeCron(await listCronJobs()), [])
   const [health, loadHealth] = useLoader(() => runAllChecks(), [])
@@ -247,7 +247,7 @@ export default function ConsoleDashboard() {
   const statusCells = [
     { label: 'Environment', value: 'PRODUCTION', tone: 'danger' },
     { label: 'Web build', value: buildLabel, sub: latestRelease ? `notes ${latestRelease.date}` : 'No release notes' },
-    { label: 'Android minimum', value: mobile.error ? 'N/A' : mobile.loading && !mobile.data ? '...' : (mobile.data?.minVersion || 'Not set'), sub: mobile.data?.latestVersion ? `latest ${mobile.data.latestVersion}` : 'latest not recorded' },
+    { label: 'Flutter app minimum', value: mobile.error ? 'N/A' : mobile.loading && !mobile.data ? '...' : (mobile.data?.minVersion || 'Not set'), sub: mobile.data?.latestVersion ? `latest ${mobile.data.latestVersion}` : 'latest not recorded' },
     { label: 'Database', value: 'Not connected', sub: 'Size is not readable from the browser' },
     { label: 'Latest migration', value: 'Not connected', sub: 'Migration history is not exposed' },
     { label: 'Backups', value: backups.error ? 'N/A' : backups.loading && !backups.data ? '...' : snap ? (ageText(snap.taken_at) || fmtWhen(snap.taken_at)) : 'None yet', sub: snap ? `${fmt(snap.total_rows)} rows` : backups.error ? 'Could not read' : 'No snapshot recorded' },
@@ -374,7 +374,7 @@ export default function ConsoleDashboard() {
                 })}
               </ul>
             )}
-          <p className="text-[10px] text-gray-500 mt-2">Mobile app gate (minimum version) lives on <ConsoleLink to="/console/mobile-app" plain>Mobile App</ConsoleLink>.</p>
+          <p className="text-[10px] text-gray-500 mt-2">Flutter app gate (minimum version) lives on <ConsoleLink to="/console/mobile-app" plain>Mobile App</ConsoleLink>.</p>
         </Panel>
       </div>
 

@@ -19,14 +19,17 @@ import {
   Users, Lock, Unlock, CheckCircle, RefreshCw, Edit2, Key, AlertTriangle,
   Shield, MoreVertical, UserCheck, UserX, Globe, CheckSquare, Square, UserCog,
   ShieldCheck, MapPin, Plus, Smartphone, Monitor, UserPlus, PieChart, LogOut,
-  FileSpreadsheet, FileText, BarChart3,
+  FileSpreadsheet, FileText, BarChart3, Archive,
 } from 'lucide-react'
 import {
   Panel, PanelHeader, Note, StatTile, ProportionBar, Badge, Code, Btn, SearchInput, Select, Toolbar, Segmented,
-  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Modal,
+  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Modal, ConfirmImpactDialog,
 } from '../components/ui'
 import { TrendChart, ShareChart, BarsChart } from '../components/ui/charts'
-import { PageHeader, useUrlTab, useRefreshStamp, Pager, Drawer, DetailList, AttentionList } from './shared/pageKit'
+import { useUrlTab, useRefreshStamp, Pager, Drawer, DetailList, AttentionList } from './shared/pageKit'
+import { SectionTop, ImpactLine, isEmbedded } from './platform/SectionKit'
+import { listAllDevices } from '../../lib/api/consolePeopleControls'
+import { maskEmail } from '../../lib/consolePlatform'
 import { dailySeries, topShare } from '../../lib/consoleCharts'
 import { supabase } from '../../lib/supabase'
 import { fetchAllPages } from '../../lib/fetchAll'
@@ -121,8 +124,20 @@ export function userCountryLabel(u) {
   return arr.length ? arr.join(', ') : 'No country access'
 }
 
+const shownEmail = (e) => maskEmail(e) || (e ? 'Hidden' : 'N/A')
+
 export default function ConsoleUsers({ tabParam = 'tab' } = {}) {
+  const embedded = isEmbedded(tabParam)
   const { logAction, activeOrg } = useConsoleAuth()
+  // Phones from user_devices: Flutter app = FCM token, an Expo token = the retired app.
+  const [phones, setPhones] = useState(null)
+  useEffect(() => { listAllDevices().then(setPhones).catch(() => setPhones(null)) }, [])
+  const phoneCount = useCallback((userId) => {
+    if (!phones) return null
+    const c = { flutter: 0, retired: 0 }
+    for (const p of phones) if (p.user_id === userId && !p.revoked) { if (p.app === 'flutter') c.flutter += 1; else if (p.app === 'retired_expo') c.retired += 1 }
+    return c
+  }, [phones])
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const [tab, setTab] = useUrlTab(TABS, 'register', tabParam)
@@ -253,7 +268,7 @@ export default function ConsoleUsers({ tabParam = 'tab' } = {}) {
         format,
         columns: [
           { key: 'full_name', header: 'Name' },
-          { key: 'email', header: 'Email' },
+          { key: 'email', header: 'Email (masked)', value: (u) => shownEmail(u.email) },
           { key: 'role', header: 'Role' },
           { key: 'country', header: 'Countries', value: userCountryLabel },
           { key: 'sites', header: 'Site access', value: (u) => {
@@ -262,7 +277,7 @@ export default function ConsoleUsers({ tabParam = 'tab' } = {}) {
           } },
           { key: 'site', header: 'Site' },
           { key: 'status', header: 'Status', value: (u) => ({ locked: 'Locked', approved: 'Approved', pending: 'Pending' }[userStatus(u)]) },
-          { key: 'web_access', header: 'Web login', value: (u) => (u.web_access === false ? 'Blocked (mobile only)' : 'Allowed') },
+          { key: 'web_access', header: 'Web login', value: (u) => (u.web_access === false ? 'Blocked (Flutter app only)' : 'Allowed') },
           { key: 'created_at', header: 'Joined', value: (u) => (u.created_at ? new Date(u.created_at).toLocaleDateString() : '') },
         ],
       })
@@ -446,18 +461,18 @@ export default function ConsoleUsers({ tabParam = 'tab' } = {}) {
 
   // Approving and unlocking are one click. Revoking approval and locking take
   // someone out of the app, so they go through a confirm dialog first.
-  async function setApproval(user, approved) {
+  async function setApproval(user, approved, reason) {
     const { error: err } = await supabase.from('profiles').update({ approved }).eq('id', user.id)
     if (err) throw err
-    await logAction(approved ? 'approve_user' : 'unapprove_user', user.id, 'user', { email: user.email })
+    await logAction(approved ? 'approve_user' : 'unapprove_user', user.id, 'user', { email: user.email, reason: reason || null })
     flashToast(approved ? 'User approved' : 'Approval revoked')
     refreshAll()
   }
 
-  async function setLocked(user, locked) {
+  async function setLocked(user, locked, reason) {
     const { error: err } = await supabase.from('profiles').update({ locked }).eq('id', user.id)
     if (err) throw err
-    await logAction(locked ? 'lock_user' : 'unlock_user', user.id, 'user', { email: user.email })
+    await logAction(locked ? 'lock_user' : 'unlock_user', user.id, 'user', { email: user.email, reason: reason || null })
     flashToast(locked ? 'Account locked' : 'Account unlocked')
     refreshAll()
   }
@@ -472,12 +487,12 @@ export default function ConsoleUsers({ tabParam = 'tab' } = {}) {
     try { await setLocked(user, false) } catch (e) { setLoadError(toUserMessage(e, 'Could not change the lock.')) }
   }
 
-  async function runConfirmedAction() {
+  async function runConfirmedAction(reason) {
     if (!confirmAction) return
     setConfirmBusy(true); setConfirmError('')
     try {
-      if (confirmAction.kind === 'lock') await setLocked(confirmAction.user, true)
-      else await setApproval(confirmAction.user, false)
+      if (confirmAction.kind === 'lock') await setLocked(confirmAction.user, true, reason)
+      else await setApproval(confirmAction.user, false, reason)
       setConfirmAction(null)
     } catch (e) {
       setConfirmError(toUserMessage(e, confirmAction.kind === 'lock' ? 'Could not lock the account.' : 'Could not revoke approval.'))
@@ -498,7 +513,7 @@ export default function ConsoleUsers({ tabParam = 'tab' } = {}) {
       setUsers(prev => prev.map(u => (u.id === user.id ? { ...u, web_access: web } : u)))
       setStatRows(prev => prev.map(u => (u.id === user.id ? { ...u, web_access: web } : u)))
       setWebModal(null)
-      flashToast(web ? 'Web login allowed' : 'Web login blocked (mobile app only)')
+      flashToast(web ? 'Web login allowed' : 'Web login blocked (Flutter app only)')
     } catch (e) {
       setWebError(toUserMessage(e, 'Could not change web access.'))
     } finally {
@@ -738,7 +753,7 @@ export default function ConsoleUsers({ tabParam = 'tab' } = {}) {
     if (noScope) attention.push({ key: 'scope', tone: 'warning', title: `${noScope} user${noScope === 1 ? ' has' : 's have'} no country or no site access`,
       detail: 'They can sign in but every scoped screen is empty. Edit each one to give a country and site scope.' })
     if (dormant) attention.push({ key: 'dormant', tone: 'info', title: `${dormant} approved user${dormant === 1 ? ' has' : 's have'} not signed in for ${DORMANT_DAYS} days`,
-      detail: 'Dormant accounts are the usual candidates to lock in an access review.', action: { label: 'Access reviews', onClick: () => navigate('/console/access-reviews') } })
+      detail: 'Counts only people who signed in before. Accounts that never signed in (mostly drivers waiting for the Flutter app) are left alone by owner ruling.', action: { label: 'Access reviews', onClick: () => navigate('/console/access-reviews') } })
     if (stats.locked) attention.push({ key: 'locked', tone: 'info', title: `${stats.locked} account${stats.locked === 1 ? ' is' : 's are'} locked`,
       detail: 'Confirm each lock is still intended.', action: { label: 'Show locked', onClick: () => { setFilterStatus('locked'); setPage(0); setTab('register') } } })
   }
@@ -748,7 +763,7 @@ export default function ConsoleUsers({ tabParam = 'tab' } = {}) {
 
   return (
     <div className="space-y-4 max-w-7xl" onClick={closeMenu}>
-      <PageHeader icon={Users} title="Users"
+      <SectionTop embedded={embedded} icon={Users} title={embedded ? 'Edit and grants' : 'Users'}
         purpose={`Approve, lock and scope every account in ${scopeLabel}. Figures cover the whole user base, not just the page shown.`}
         primary={statsReady && stats.pending > 0 ? (
           <Btn variant="primary" icon={UserCheck}
@@ -783,7 +798,7 @@ export default function ConsoleUsers({ tabParam = 'tab' } = {}) {
           onClick={() => { pickStatus('pending'); setTab('register') }} active={filterStatus === 'pending'} sub="Cannot use the app yet" />
         <StatTile label="Locked" value={tileVal(stats.locked)} tone={stats.locked ? 'danger' : 'default'} icon={Lock}
           onClick={() => { pickStatus('locked'); setTab('register') }} active={filterStatus === 'locked'} />
-        <StatTile label="Mobile only" value={tileVal(stats.mobileOnly)} icon={Smartphone} sub="Web login blocked"
+        <StatTile label="Flutter app only" value={tileVal(stats.mobileOnly)} icon={Smartphone} sub="Web login blocked"
           onClick={() => { pickStatus('mobile'); setTab('register') }} active={filterStatus === 'mobile'} />
       </div>
 
@@ -855,7 +870,7 @@ export default function ConsoleUsers({ tabParam = 'tab' } = {}) {
                 { value: 'approved', label: 'Approved' },
                 { value: 'pending', label: 'Pending' },
                 { value: 'locked', label: 'Locked' },
-                { value: 'mobile', label: 'Mobile only' },
+                { value: 'mobile', label: 'Flutter app only' },
               ]} />
             {!activeOrg && (
               <Select value={filterOrg} onChange={(v) => { setFilterOrg(v); setPage(0) }} placeholder="All organisations" ariaLabel="Filter by organisation" className="w-full sm:w-48"
@@ -931,10 +946,10 @@ export default function ConsoleUsers({ tabParam = 'tab' } = {}) {
                               <p className="font-medium text-gray-100 truncate">{user.full_name ?? 'N/A'}</p>
                               {user.is_super_admin && <Badge tone="accent" icon={Shield} title="Super admin">Super</Badge>}
                               {user.web_access === false && (
-                                <Badge tone="info" icon={Smartphone} title="Mobile app only (web login blocked)">Mobile only</Badge>
+                                <Badge tone="info" icon={Smartphone} title="Flutter app only (web login blocked)">App only</Badge>
                               )}
                             </div>
-                            <p className="text-gray-400 truncate">{user.email ?? 'N/A'}</p>
+                            <p className="text-gray-400 truncate">{shownEmail(user.email)}</p>
                           </div>
                         </div>
                       </Td>
@@ -997,7 +1012,7 @@ export default function ConsoleUsers({ tabParam = 'tab' } = {}) {
       </div>
       )}
 
-      <Drawer open={!!detail} title={detail ? (detail.full_name || detail.email || 'User') : ''} subtitle={detail?.email}
+      <Drawer open={!!detail} title={detail ? (detail.full_name || shownEmail(detail.email)) : ''} subtitle={detail ? shownEmail(detail.email) : undefined}
         onClose={() => setDetailUser(null)}
         footer={detail && (
           <>
@@ -1017,7 +1032,9 @@ export default function ConsoleUsers({ tabParam = 'tab' } = {}) {
                 return ss.length === 0 ? 'No access' : isOrgWideSites(ss) ? 'All sites' : ss.join(', ')
               })()],
               ['Home site', detail.site],
-              ['Web login', detail.web_access === false ? 'Blocked (mobile app only)' : 'Allowed'],
+              ['Web login', detail.web_access === false ? 'Blocked (Flutter app only)' : 'Allowed'],
+              ['Flutter app phones', phoneCount(detail.id) ? String(phoneCount(detail.id).flutter) : 'N/A'],
+              ['Retired app phones', phoneCount(detail.id) ? `${phoneCount(detail.id).retired} (read-only history)` : 'N/A'],
               ['Super admin', detail.is_super_admin ? 'Yes' : 'No'],
               ['Joined', detail.created_at ? new Date(detail.created_at).toLocaleString() : null],
               ['Organisation', orgs.find((o) => o.id === detail.organisation_id)?.name || null],
@@ -1052,7 +1069,7 @@ export default function ConsoleUsers({ tabParam = 'tab' } = {}) {
             onClick={() => { toggleLock(menuUser); closeMenu() }}
             danger={!menuUser.locked} />
           <MenuItem icon={menuUser.web_access === false ? Monitor : Smartphone}
-            label={menuUser.web_access === false ? 'Allow web login' : 'Block web login (mobile only)'}
+            label={menuUser.web_access === false ? 'Allow web login' : 'Block web login (app only)'}
             onClick={() => toggleWeb(menuUser)}
             danger={menuUser.web_access !== false} />
           <MenuItem icon={Key} label="Reset password"
@@ -1065,7 +1082,7 @@ export default function ConsoleUsers({ tabParam = 'tab' } = {}) {
       )}
 
       {/* Edit user modal */}
-      <Modal open={!!editModal} width="max-w-lg" title="Edit user" subtitle={editModal?.email}
+      <Modal open={!!editModal} width="max-w-lg" title="Edit user" subtitle={editModal ? shownEmail(editModal.email) : undefined}
         onClose={() => setEditModal(null)}
         footer={(
           <>
@@ -1172,6 +1189,7 @@ export default function ConsoleUsers({ tabParam = 'tab' } = {}) {
             <Select value={bulkRole} onChange={setBulkRole} options={roles.map(r => ({ value: r, label: r }))} />
           </Field>
           <p className="text-[11px] text-gray-400">Super admins are never demoted and the last admin is protected, so the applied count may be lower than selected.</p>
+          <ImpactLine change={`Every selected account gets the role ${bulkRole || 'you pick'}, which changes what modules they see.`} who={`${selected.size} selected people. Written to the audit log.`} />
         </div>
       </Modal>
 
@@ -1205,6 +1223,7 @@ export default function ConsoleUsers({ tabParam = 'tab' } = {}) {
           <Note>
             {bulkEffect === 'grant' ? 'Grant' : 'Revoke'} <Code>{bulkCapability}</Code> on <Code>{moduleLabel(bulkModule)}</Code> for {selected.size} users. Only view is enforced today; other capabilities are stored.
           </Note>
+          <ImpactLine change="A per-person override on top of their role. A revoke beats the role." who={`${selected.size} selected people, web only. Written to the audit log.`} />
         </div>
       </Modal>
 
@@ -1223,7 +1242,7 @@ export default function ConsoleUsers({ tabParam = 'tab' } = {}) {
         {revokeModal && (
           <div className="space-y-3">
             <p className="text-xs text-gray-400">
-              Ends every web and mobile session for this user. They must sign in again.
+              Ends every web and Flutter app session for this user. They must sign in again.
             </p>
             <Note icon={AlertTriangle} tone="warning">{ACCESS_TOKEN_NOTE}</Note>
             <label className="block">
@@ -1242,7 +1261,7 @@ export default function ConsoleUsers({ tabParam = 'tab' } = {}) {
       </Modal>
 
       {/* Password reset modal */}
-      <Modal open={!!resetModal} width="max-w-md" title="Reset password" subtitle={resetModal?.email}
+      <Modal open={!!resetModal} width="max-w-md" title="Reset password" subtitle={resetModal ? shownEmail(resetModal.email) : undefined}
         onClose={() => { setResetModal(null); setNewPassword(''); setResetError(''); setResetSent(false) }}
         footer={resetModal && (
           <>
@@ -1281,7 +1300,7 @@ export default function ConsoleUsers({ tabParam = 'tab' } = {}) {
               <>
                 <Note icon={AlertTriangle} tone="warning">
                   This account signs in with a username, and its address
-                  (<span className="font-medium">{resetModal.email}</span>) cannot receive
+                  (<span className="font-medium">{shownEmail(resetModal.email)}</span>) cannot receive
                   email. A reset link would never arrive, so set the password here instead.
                 </Note>
                 <label className="block">
@@ -1307,7 +1326,7 @@ export default function ConsoleUsers({ tabParam = 'tab' } = {}) {
       </Modal>
 
       {/* Block web login confirm modal */}
-      <Modal open={!!webModal} width="max-w-md" title="Block web login" subtitle={webModal?.email}
+      <Modal open={!!webModal} width="max-w-md" title="Block web login" subtitle={webModal ? shownEmail(webModal.email) : undefined}
         onClose={() => { if (!webBusy) setWebModal(null) }}
         footer={webModal && (
           <>
@@ -1320,33 +1339,35 @@ export default function ConsoleUsers({ tabParam = 'tab' } = {}) {
         <div className="space-y-3">
           <ErrorState message={webError} />
           <p className="text-xs text-gray-400">
-            This account will be set to mobile app only. The user will not be able to sign in to the web
-            app and will be asked to use the mobile app instead. Mobile access is not affected. You can
-            re-enable web login at any time.
+            This account will be set to Flutter app only. The user will not be able to sign in to the web
+            app and will be asked to use the Flutter app on their phone instead. App access is not affected.
+            You can re-enable web login at any time.
           </p>
         </div>
       </Modal>
 
       {/* Lock / revoke-approval confirmation */}
-      <Modal open={!!confirmAction} width="max-w-md"
-        title={confirmAction?.kind === 'lock' ? 'Lock this account?' : 'Revoke approval?'}
-        subtitle={confirmAction ? (confirmAction.user.full_name || confirmAction.user.email || 'This user') : undefined}
-        onClose={() => { if (!confirmBusy) setConfirmAction(null) }}
-        footer={(
-          <>
-            <Btn onClick={() => setConfirmAction(null)} disabled={confirmBusy}>Cancel</Btn>
-            <Btn variant="danger" icon={confirmAction?.kind === 'lock' ? Lock : UserX} busy={confirmBusy} onClick={runConfirmedAction}>
-              {confirmAction?.kind === 'lock' ? 'Lock account' : 'Revoke approval'}
-            </Btn>
-          </>
-        )}>
-        <ErrorState message={confirmError} />
-        <p className="text-xs text-gray-300 leading-relaxed mt-2">
-          {confirmAction?.kind === 'lock'
-            ? 'They cannot use the app until the account is unlocked. The change is recorded in the audit trail.'
-            : 'They lose access to the app until an administrator approves them again. The change is recorded in the audit trail.'}
-        </p>
-      </Modal>
+      <ConfirmImpactDialog
+        open={!!confirmAction}
+        title={confirmAction?.kind === 'lock' ? 'Lock this account' : 'Revoke approval'}
+        confirmLabel={confirmAction?.kind === 'lock' ? 'Lock account' : 'Revoke approval'}
+        danger
+        requireReason
+        typedWord={confirmAction?.kind === 'lock' ? 'LOCK' : undefined}
+        busy={confirmBusy}
+        error={confirmError}
+        impact={confirmAction ? {
+          tone: 'danger',
+          what: `${confirmAction.kind === 'lock' ? 'Lock' : 'Revoke approval for'} ${confirmAction.user.full_name || shownEmail(confirmAction.user.email)}.`,
+          change: confirmAction.kind === 'lock'
+            ? 'They cannot sign in to the web or the Flutter app until unlocked. An open session can keep working until its token expires; use Sign out everywhere to end it now.'
+            : 'They lose access to the app until an administrator approves them again.',
+          who: `${confirmAction.user.full_name || 'This person'}${confirmAction.user.role ? ` (${confirmAction.user.role})` : ''}.`,
+          undo: confirmAction.kind === 'lock' ? 'Yes. Unlock at any time.' : 'Yes. Approve them again.',
+        } : undefined}
+        onCancel={() => { if (!confirmBusy) setConfirmAction(null) }}
+        onConfirm={({ reason }) => runConfirmedAction(reason)}
+      />
 
       {/* Success toast */}
       {toast && (

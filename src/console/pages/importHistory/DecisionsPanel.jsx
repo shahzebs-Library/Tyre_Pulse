@@ -51,8 +51,9 @@ import { toUserMessage } from '../../../lib/safeError'
 import {
   Panel, PanelHeader, Note, ProportionBar, Badge, Code, Btn, Segmented,
   SearchInput, Select, Toolbar, Table, THead, Th, Tr, Td, LoadingState, EmptyState,
-  ErrorState, Modal,
+  ErrorState, Modal, ConfirmImpactDialog,
 } from '../../components/ui'
+import { useConsoleAuth } from '../../ConsoleAuthContext'
 
 const VIEWS = [
   { key: 'moved', label: 'Moved', hint: 'We put these somewhere other than your file did' },
@@ -150,6 +151,9 @@ export default function DecisionsPanel() {
   const [preview, setPreview] = useState(null)
   const [applying, setApplying] = useState(false)
   const [lastBatch, setLastBatch] = useState(null)
+  const [applyOpen, setApplyOpen] = useState(false)
+  const [undoOpen, setUndoOpen] = useState(false)
+  const { logAction } = useConsoleAuth() || {}
 
   // Debounced: this reads every expense row, so a query per keystroke would be
   // a full scan per keystroke.
@@ -215,6 +219,7 @@ export default function DecisionsPanel() {
         ok += 1
       }
       setStaged({})
+      try { await logAction?.('decisions_save', null, 'material_master', { count: ok, moves_money: stagedThatMove }) } catch { /* audit best effort */ }
       setNotice(stagedThatMove
         ? `${ok} decision(s) saved. ${stagedThatMove} of them change a cost bucket - use "Apply to my data" to move the lines already loaded.`
         : `${ok} decision(s) saved. None of them change a cost bucket, so no total moves.`)
@@ -233,12 +238,13 @@ export default function DecisionsPanel() {
     } finally { setApplying(false) }
   }
 
-  async function confirmApply() {
+  async function confirmApply({ reason } = {}) {
     setApplying(true); setError('')
     try {
       const res = await applyReviewedDecisions(false)
-      setPreview(null)
+      setPreview(null); setApplyOpen(false)
       setLastBatch(res?.batch_id || null)
+      try { await logAction?.('decisions_apply', res?.batch_id || null, 'parts_consumption', { rows: res?.rows_updated, reason: reason || null }) } catch { /* audit best effort */ }
       setNotice(`${num(res?.rows_updated)} line(s) moved. You can undo this while you are on this page.`)
       await load()
     } catch (e) {
@@ -246,11 +252,12 @@ export default function DecisionsPanel() {
     } finally { setApplying(false) }
   }
 
-  async function undoLast() {
+  async function undoLast({ reason } = {}) {
     setApplying(true); setError('')
     try {
       const res = await revertDecisionBatch(lastBatch)
-      setLastBatch(null)
+      try { await logAction?.('decisions_revert', lastBatch, 'parts_consumption', { rows: res?.rows_reverted ?? res?.rows_updated, reason: reason || null }) } catch { /* audit best effort */ }
+      setLastBatch(null); setUndoOpen(false)
       setNotice(`Undone. ${num(res?.rows_reverted ?? res?.rows_updated)} line(s) put back.`)
       await load()
     } catch (e) {
@@ -398,7 +405,7 @@ export default function DecisionsPanel() {
           <p className="text-xs text-gray-400 flex-1 min-w-[220px]">
             Saved decisions apply to new uploads immediately. Lines already loaded only move when you apply them.
           </p>
-          {lastBatch && <Btn icon={Undo2} onClick={undoLast} busy={applying}>Undo last apply</Btn>}
+          {lastBatch && <Btn icon={Undo2} onClick={() => setUndoOpen(true)} busy={applying}>Undo last apply</Btn>}
           <Btn variant="primary" icon={Shuffle} onClick={runPreview} busy={applying}>Apply to my data</Btn>
         </div>
       </Panel>
@@ -411,7 +418,7 @@ export default function DecisionsPanel() {
         width="max-w-xl"
         footer={<>
           <Btn onClick={() => setPreview(null)} disabled={applying}>Cancel</Btn>
-          <Btn variant="primary" onClick={confirmApply} busy={applying} disabled={!preview?.rows_that_change}>
+          <Btn variant="danger" onClick={() => setApplyOpen(true)} busy={applying} disabled={!preview?.rows_that_change}>
             Yes, move them
           </Btn>
         </>}
@@ -439,6 +446,31 @@ export default function DecisionsPanel() {
           </ul>
         )}
       </Modal>
+
+      <ConfirmImpactDialog open={applyOpen} onCancel={() => { if (!applying) setApplyOpen(false) }} onConfirm={confirmApply}
+        danger title="Move loaded lines" confirmLabel="Move them" typedWord="APPLY" requireReason busy={applying} error={applyOpen ? error : ''}
+        impact={{
+          tone: 'danger',
+          what: `${num(preview?.rows_that_change)} expense line(s) already loaded move to the cost bucket you decided for their item.`,
+          change: 'Tyre, Spare and Oil totals change for each affected country. No line is deleted and no amount changes, only its bucket.',
+          who: 'Every cost report, KPI and export for the affected countries.',
+          undo: 'Yes, "Undo last apply" puts the lines back while you stay on this page.',
+          stats: [
+            { label: 'Lines moving', value: num(preview?.rows_that_change) },
+            { label: 'Countries', value: num(new Set((preview?.moves || []).map((m) => m.country)).size) },
+            { label: 'Moves', value: num((preview?.moves || []).length) },
+          ],
+        }} />
+
+      <ConfirmImpactDialog open={undoOpen} onCancel={() => { if (!applying) setUndoOpen(false) }} onConfirm={undoLast}
+        title="Undo the last apply" confirmLabel="Put lines back" requireReason busy={applying} error={undoOpen ? error : ''}
+        impact={{
+          tone: 'warning',
+          what: 'The lines moved by the last apply go back to the bucket they had before it.',
+          change: 'Tyre, Spare and Oil totals return to what they were. Your saved item decisions stay, so new uploads still follow them.',
+          who: 'Every cost report for the affected countries.',
+          undo: 'Apply again from this page.',
+        }} />
 
       {loading ? (
         <LoadingState label="Reading the decisions behind your data" rows={6} />

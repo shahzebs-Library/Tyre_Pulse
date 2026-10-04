@@ -171,3 +171,55 @@ export function summarizeCron(rows = []) {
   })
   return { total: list.length, active, inactive, failing, jobs }
 }
+
+/* ── Console controls (super admin) ──────────────────────────────────────── */
+
+/**
+ * Pause or resume one scheduled report. RLS (report_schedules_update) lets a
+ * super admin change any schedule. Resuming leaves next_run_at untouched so
+ * the cron loop computes the next slot itself. Throws a sanitised error.
+ */
+export async function setScheduleActive(id, active) {
+  const { data, error } = await supabase
+    .from('report_schedules')
+    .update({ active: !!active })
+    .eq('id', id)
+    .select('id,active')
+    .maybeSingle()
+  if (error) throw new ServiceError(toUserMessage(error, 'The schedule could not be changed. Nothing was changed.'), error.code, error)
+  if (!data) throw new ServiceError('The schedule could not be changed. It may have been deleted.')
+  return data
+}
+
+/**
+ * Email one scheduled report to its recipients now, through the same edge
+ * function the cron uses ("Send now" path). Does not move next_run_at.
+ * @returns {Promise<{recipients:number|null}>}
+ */
+export async function sendScheduleNow(id) {
+  const { data, error } = await supabase.functions.invoke('send-scheduled-reports', { body: { schedule_id: id } })
+  if (error) {
+    let msg = ''
+    try { const body = await error.context?.json?.(); if (body?.error) msg = String(body.error) } catch { /* keep generic */ }
+    throw new ServiceError(toUserMessage(msg ? new Error(msg) : error, 'The report could not be sent. Nothing was sent.'))
+  }
+  if (data?.error) throw new ServiceError(toUserMessage(new Error(String(data.error)), 'The report could not be sent.'))
+  const n = Number(data?.recipients)
+  return { recipients: Number.isFinite(n) ? n : null }
+}
+
+/**
+ * Plain-English impact of pausing a schedule. Pure.
+ * @returns {{change:string, who:string, undo:string}}
+ */
+export function schedulePauseImpact(row = {}, recipients = 0) {
+  const name = row?.name || 'this report'
+  const pausing = row?.active === true
+  return {
+    change: pausing
+      ? `${name} stops emailing on its ${row?.frequency || 'set'} cadence. Nothing is deleted.`
+      : `${name} starts emailing again on its ${row?.frequency || 'set'} cadence from the next due slot.`,
+    who: recipients > 0 ? `${recipients} recipient${recipients === 1 ? '' : 's'} on this schedule.` : 'No recipients are recorded on this schedule.',
+    undo: pausing ? 'Yes. Resume it here at any time.' : 'Yes. Pause it again here.',
+  }
+}

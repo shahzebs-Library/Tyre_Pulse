@@ -8,23 +8,35 @@
  * A scan is a deliberate press, not a background poll: running it here reruns
  * both scans and shows exactly how many alerts are open afterward.
  *
- * Layout: a compact header, five status tiles that double as filters, a short
+ * Layout: a compact header, status tiles that double as filters, a short
  * "needs attention" list, then two tabs (?tab=alerts | trends). Row detail and
  * the acknowledge / resolve actions live in a drawer as well as on the row.
+ *
+ * Every decision (acknowledge, resolve, reopen, single or bulk) goes through a
+ * ConfirmImpactDialog with a required reason: decide_trust_alert writes the
+ * reason and the actor into the trust_alert_events timeline (Admin or super
+ * admin only, 20261004101000) and the console audit log records it too.
+ * Response time (median time to acknowledge / resolve) is measured only from
+ * alerts that carry both timestamps; otherwise it reads N/A.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   BellRing, ShieldAlert, CheckCircle2, Play, AlertTriangle, Clock, TrendingUp, Eye, ListChecks,
+  RotateCcw, Timer, History, X,
 } from 'lucide-react'
 import {
   Panel, PanelHeader, Note, StatTile, Badge, Btn, Select, Toolbar, SearchInput, Segmented,
-  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Modal,
+  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Modal, ConfirmImpactDialog,
 } from '../components/ui'
 import { TrendChart, ShareChart, BarsChart } from '../components/ui/charts'
 import { sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
 import { dailySeries, topShare } from '../../lib/consoleCharts'
 import ExportButtons from './shared/ExportButtons'
-import { scanDataTrust, listTrustAlerts, ackTrustAlert, TRUST_ALERTS_WINDOW } from '../../lib/api/lineageOps'
+import {
+  scanDataTrust, listTrustAlerts, decideTrustAlert, listTrustAlertEvents, listActorNames, TRUST_ALERTS_WINDOW,
+} from '../../lib/api/lineageOps'
+import { responseTimes, fmtHours, allowedDecisions, decisionImpact, DECISION_LABEL } from '../../lib/trustAlertOps'
+import { useConsoleAuth } from '../ConsoleAuthContext'
 import { alertTone } from '../../lib/lineageOps'
 import { COUNTRIES } from '../../contexts/SettingsContext'
 import { toUserMessage } from '../../lib/safeError'
@@ -45,6 +57,7 @@ const EXPORT_COLUMNS = [
   { key: 'message', header: 'Message' },
   { key: 'status', header: 'Status' },
   { key: 'created_at', header: 'Raised' },
+  { key: 'resolution_note', header: 'Last reason', value: (r) => r.resolution_note || 'N/A' },
 ]
 
 const SOURCE_TONE = { quality: 'warning', reconciliation: 'info' }
@@ -77,6 +90,11 @@ export default function ConsoleTrustAlerts({ tabParam = 'tab' } = {}) {
   const [flash, setFlash] = useState(null) // {tone, text}
   const [detail, setDetail] = useState(null)
   const [tab, setTab] = useUrlTab(TABS, 'alerts', tabParam)
+  const { logAction } = useConsoleAuth()
+  const [selected, setSelected] = useState(() => new Set())
+  const [pending, setPending] = useState(null) // { rows, next }
+  const [decideErr, setDecideErr] = useState('')
+  const [timeline, setTimeline] = useState({ loading: false, error: '', rows: [], names: {} })
 
   // One read of the newest window for every status: the tiles and the trend
   // must describe the same rows, so the status filter is applied on screen.
@@ -156,19 +174,51 @@ export default function ConsoleTrustAlerts({ tabParam = 'tab' } = {}) {
     }
   }
 
-  const decide = async (row, next) => {
-    setBusy(`${row.id}:${next}`)
-    try {
-      await ackTrustAlert(row.id, next)
-      setFlash({ tone: 'ok', text: `Alert ${next === 'resolved' ? 'resolved' : 'acknowledged'}.` })
-      setDetail((d) => (d && d.id === row.id ? { ...d, status: next } : d))
-      await load()
-    } catch (e) {
-      setFlash({ tone: 'bad', text: toUserMessage(e) })
-    } finally {
-      setBusy('')
-    }
+  // Every decision is confirmed with a reason; the reason lands in the
+  // alert timeline (server) and in the console audit log.
+  const decide = (row, next) => { setDecideErr(''); setPending({ rows: [row], next }) }
+  const decideMany = (next) => {
+    const rows = state.rows.filter((r) => selected.has(r.id) && allowedDecisions(r.status).includes(next))
+    if (rows.length) { setDecideErr(''); setPending({ rows, next }) }
   }
+  const confirmDecision = async ({ reason }) => {
+    if (!pending) return
+    const { rows, next } = pending
+    setBusy(`bulk:${next}`)
+    let ok = 0
+    const failed = []
+    for (const row of rows) {
+      try {
+        await decideTrustAlert(row.id, next, reason)
+        ok += 1
+        logAction?.(`trust_alert_${next}`, null, 'trust_alert', { alert_id: row.id, ref: row.ref_key || null, reason })
+      } catch (e) {
+        failed.push(toUserMessage(e))
+      }
+    }
+    setBusy('')
+    if (failed.length && !ok) { setDecideErr(failed[0]); return }
+    setPending(null)
+    setSelected(new Set())
+    const verb = next === 'resolved' ? 'resolved' : next === 'ack' ? 'acknowledged' : 'reopened'
+    setFlash({ tone: failed.length ? 'bad' : 'ok', text: `${nf.format(ok)} alert${ok === 1 ? '' : 's'} ${verb}.${failed.length ? ` ${failed.length} could not be changed: ${failed[0]}` : ''}` })
+    setDetail((d) => (d && rows.some((r) => r.id === d.id) ? { ...d, status: next, resolution_note: reason } : d))
+    await load()
+  }
+
+  // Timeline + actor names for the open alert.
+  useEffect(() => {
+    if (!detail?.id) return undefined
+    let stop = false
+    setTimeline({ loading: true, error: '', rows: [], names: {} })
+    listTrustAlertEvents(detail.id)
+      .then(async (rows) => {
+        const names = await listActorNames([...rows.map((r) => r.actor), detail.acked_by, detail.resolved_by])
+        if (!stop) setTimeline({ loading: false, error: '', rows, names })
+      })
+      .catch((e) => { if (!stop) setTimeline({ loading: false, error: toUserMessage(e, 'The timeline could not be read.'), rows: [], names: {} }) })
+    return () => { stop = true }
+  }, [detail?.id, detail?.status, detail?.acked_by, detail?.resolved_by])
 
   const pickStatus = (s) => { setStatus(s); setSource('all'); setTab('alerts') }
   const pickSource = (s) => { setStatus('active'); setSource(s); setTab('alerts') }
@@ -194,6 +244,16 @@ export default function ConsoleTrustAlerts({ tabParam = 'tab' } = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [counts, repeats, state.error, state.loading, setSort])
 
+  const times = useMemo(() => responseTimes(scoped), [scoped])
+  const selectedRows = useMemo(() => state.rows.filter((r) => selected.has(r.id)), [state.rows, selected])
+  const toggleRow = (id) => setSelected((s0) => { const n = new Set(s0); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const allOnPage = paged.rows.length > 0 && paged.rows.every((r) => selected.has(r.id))
+  const togglePage = () => setSelected((s0) => {
+    const n = new Set(s0)
+    if (allOnPage) paged.rows.forEach((r) => n.delete(r.id)); else paged.rows.forEach((r) => n.add(r.id))
+    return n
+  })
+
   const tileValue = (n) => (state.error ? 'N/A' : state.loading && !state.readAt ? '...' : nf.format(n))
   const truncated = state.rows.length >= TRUST_ALERTS_WINDOW
 
@@ -206,6 +266,7 @@ export default function ConsoleTrustAlerts({ tabParam = 'tab' } = {}) {
         refreshedAt={state.readAt}
         onRefresh={load}
         refreshing={state.loading}
+        meta={<span>Run scan now: reruns the quality and reconciliation rules for the selected country and raises new alerts. It changes no business data.</span>}
         actions={(
           <>
             <Select ariaLabel="Country" value={country} onChange={setCountry} options={COUNTRY_OPTS} className="w-40" />
@@ -220,7 +281,7 @@ export default function ConsoleTrustAlerts({ tabParam = 'tab' } = {}) {
         </Note>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
         <StatTile label="Open" icon={ShieldAlert} value={tileValue(counts.open)}
           tone={state.error ? 'default' : counts.open ? 'danger' : 'good'} sub="Not yet owned"
           onClick={() => pickStatus('open')} active={status === 'open' && source === 'all'} />
@@ -232,6 +293,10 @@ export default function ConsoleTrustAlerts({ tabParam = 'tab' } = {}) {
           sub="Rule breaches" onClick={() => pickSource('quality')} active={source === 'quality'} />
         <StatTile label="Reconciliation, active" value={tileValue(counts.reconciliation)} tone={!state.error && counts.reconciliation ? 'warning' : 'default'}
           sub="Totals that disagree" onClick={() => pickSource('reconciliation')} active={source === 'reconciliation'} />
+        <StatTile label="Time to acknowledge" icon={Timer} value={state.error ? 'N/A' : fmtHours(times.mtta)}
+          sub={times.ackSample ? `Median of ${nf.format(times.ackSample)} alerts` : 'No alert carries both times yet'} />
+        <StatTile label="Time to resolve" icon={Clock} value={state.error ? 'N/A' : fmtHours(times.mttr)}
+          sub={times.resolveSample ? `Median of ${nf.format(times.resolveSample)} alerts` : 'Recorded from now on'} />
       </div>
 
       {state.error ? (
@@ -281,6 +346,16 @@ export default function ConsoleTrustAlerts({ tabParam = 'tab' } = {}) {
               </div>
             )}
 
+            {selectedRows.length > 0 && (
+              <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-gray-800 bg-gray-900/60 px-3 py-2">
+                <span className="text-xs text-gray-300">{selectedRows.length} selected</span>
+                <Btn size="xs" onClick={() => decideMany('ack')} disabled={!selectedRows.some((r) => r.status === 'open')}>Acknowledge</Btn>
+                <Btn size="xs" variant="good" icon={CheckCircle2} onClick={() => decideMany('resolved')} disabled={!selectedRows.some((r) => isActive(r))}>Resolve</Btn>
+                <Btn size="xs" icon={RotateCcw} onClick={() => decideMany('open')} disabled={!selectedRows.some((r) => r.status !== 'open')}>Reopen</Btn>
+                <Btn size="xs" variant="quiet" icon={X} onClick={() => setSelected(new Set())}>Clear</Btn>
+                <span className="text-[11px] text-gray-500">Each alert gets the same reason. Alerts already in the target state are skipped.</span>
+              </div>
+            )}
             {state.loading && !state.readAt ? (
               <LoadingState label="Reading trust alerts" rows={5} />
             ) : state.error ? (
@@ -302,6 +377,7 @@ export default function ConsoleTrustAlerts({ tabParam = 'tab' } = {}) {
               <>
                 <Table>
                   <THead>
+                    <Th><input type="checkbox" aria-label="Select every alert on this page" className="accent-orange-500" checked={allOnPage} onChange={togglePage} /></Th>
                     <Th sortKey="severity" sort={sort} onSort={onSort}>Severity</Th>
                     <Th sortKey="source" sort={sort} onSort={onSort}>Source</Th>
                     <Th sortKey="ref_key" sort={sort} onSort={onSort}>Ref</Th>
@@ -317,6 +393,10 @@ export default function ConsoleTrustAlerts({ tabParam = 'tab' } = {}) {
                       return (
                         <Tr key={r.id} tone={r.status === 'open' ? 'warning' : undefined}
                           onClick={() => setDetail(r)} ariaLabel={`Alert ${r.ref_key || ''} ${r.message || ''}`.trim()}>
+                          <Td>
+                            <input type="checkbox" aria-label={`Select alert ${r.ref_key || r.id}`} className="accent-orange-500"
+                              checked={selected.has(r.id)} onClick={(e) => e.stopPropagation()} onChange={() => toggleRow(r.id)} />
+                          </Td>
                           <Td><Badge tone={alertTone(r.severity)}>{r.severity || 'N/A'}</Badge></Td>
                           <Td><Badge tone={SOURCE_TONE[r.source] || 'default'}>{sourceLabel(r.source)}</Badge></Td>
                           <Td nowrap><span className="font-mono text-gray-400">{r.ref_key || 'N/A'}</span></Td>
@@ -338,7 +418,8 @@ export default function ConsoleTrustAlerts({ tabParam = 'tab' } = {}) {
                                   busy={busy === `${r.id}:resolved`} disabled={acting}>Resolve</Btn>
                               </Toolbar>
                             ) : (
-                              <span className="text-gray-400">Done</span>
+                              <Btn size="xs" icon={RotateCcw} onClick={(e) => { e.stopPropagation(); decide(r, 'open') }}
+                                disabled={acting}>Reopen</Btn>
                             )}
                           </Td>
                         </Tr>
@@ -396,6 +477,9 @@ export default function ConsoleTrustAlerts({ tabParam = 'tab' } = {}) {
               <Btn variant="good" icon={CheckCircle2} onClick={() => decide(detail, 'resolved')}
                 busy={busy === `${detail.id}:resolved`} disabled={!!busy}>Resolve</Btn>
             )}
+            {detail.status === 'resolved' && (
+              <Btn icon={RotateCcw} onClick={() => decide(detail, 'open')} disabled={!!busy}>Reopen</Btn>
+            )}
           </>
         )}
       >
@@ -412,13 +496,50 @@ export default function ConsoleTrustAlerts({ tabParam = 'tab' } = {}) {
               <dt className="text-gray-500">Reference</dt><dd className="col-span-2 font-mono break-all">{detail.ref_key || 'N/A'}</dd>
               <dt className="text-gray-500">Raised</dt><dd className="col-span-2">{whenText(detail.created_at)}</dd>
               {detail.updated_at && (<><dt className="text-gray-500">Last change</dt><dd className="col-span-2">{whenText(detail.updated_at)}</dd></>)}
+              <dt className="text-gray-500">Acknowledged</dt>
+              <dd className="col-span-2">{detail.acked_at ? `${whenText(detail.acked_at)} by ${timeline.names[detail.acked_by] || 'a past admin'}` : 'Not yet'}</dd>
+              <dt className="text-gray-500">Resolved</dt>
+              <dd className="col-span-2">{detail.resolved_at ? `${whenText(detail.resolved_at)} by ${timeline.names[detail.resolved_by] || 'a past admin'}` : detail.status === 'resolved' ? 'Before reasons were recorded' : 'Not yet'}</dd>
+              <dt className="text-gray-500">Last reason</dt><dd className="col-span-2 break-words">{detail.resolution_note || 'N/A'}</dd>
             </dl>
+            <div>
+              <p className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-gray-500 mb-1.5"><History size={12} aria-hidden="true" />Timeline</p>
+              {timeline.loading ? <LoadingState label="Reading the timeline" rows={2} />
+                : timeline.error ? <ErrorState message={timeline.error} />
+                  : timeline.rows.length === 0 ? <p className="text-gray-400">No decision with a reason has been recorded for this alert yet.</p>
+                    : (
+                      <ol className="space-y-1.5">
+                        {timeline.rows.map((ev) => (
+                          <li key={ev.id} className="rounded-lg border border-gray-800 bg-gray-900/40 px-2.5 py-1.5">
+                            <p className="text-gray-200">
+                              {STATUS_LABEL[ev.from_status] || ev.from_status || 'New'} to {STATUS_LABEL[ev.to_status] || ev.to_status}
+                              <span className="text-gray-500"> by {timeline.names[ev.actor] || 'a past admin'}, {whenText(ev.at)}</span>
+                            </p>
+                            <p className="text-gray-400 break-words">{ev.note}</p>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
+            </div>
             {SOURCE_PAGE[detail.source] && (
               <p>Investigate the cause in <ConsoleLink plain to={SOURCE_PAGE[detail.source]}>{sourceLabel(detail.source)}</ConsoleLink>.</p>
             )}
           </div>
         )}
       </Modal>
+
+      <ConfirmImpactDialog
+        open={!!pending}
+        title={pending ? `${DECISION_LABEL[pending.next]} ${pending.rows.length === 1 ? 'alert' : `${pending.rows.length} alerts`}` : ''}
+        impact={pending ? decisionImpact(pending.next, pending.rows.length) : undefined}
+        confirmLabel={pending ? DECISION_LABEL[pending.next] : 'Confirm'}
+        requireReason
+        busy={busy.startsWith('bulk:')}
+        error={decideErr}
+        danger={pending?.next === 'open'}
+        onCancel={() => setPending(null)}
+        onConfirm={confirmDecision}
+      />
     </div>
   )
 }

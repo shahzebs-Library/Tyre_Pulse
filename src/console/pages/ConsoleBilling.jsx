@@ -23,6 +23,9 @@ import {
 } from '../../lib/api/consolePlatform'
 import { limitLabel, planFit, planPriceLabel, isCustomPlan, invoicePreview, fmtMoney, isEmptyOrg, fmtRiyadh } from '../../lib/consolePlatform'
 import { exportConsoleRows } from '../../lib/consoleTable'
+import { getOrgStorage } from '../../lib/api/consoleDataGaps'
+import { orgStorageMap, storageFor } from '../../lib/consoleDataGaps'
+import { fmtBytes } from '../../lib/databaseCenter'
 import { toUserMessage } from '../../lib/safeError'
 import { DecisionTag, Pill, fmtNum } from './platform/PlatformKit'
 
@@ -42,8 +45,8 @@ function useBillingData() {
   const load = useCallback(async () => {
     setState((s) => ({ ...s, loading: true }))
     const settle = async (p) => { try { return { ok: true, data: await p } } catch (e) { return { ok: false, error: toUserMessage(e, 'Could not load this part.') } } }
-    const [plans, orgs, stats, subs, counts, keys] = await Promise.all([
-      settle(listPlans()), settle(listOrgsFull()), settle(getOrgOverview()), settle(listOrgSubscriptions()), settle(billingCounts()), settle(apiKeysByOrg()),
+    const [plans, orgs, stats, subs, counts, keys, storage] = await Promise.all([
+      settle(listPlans()), settle(listOrgsFull()), settle(getOrgOverview()), settle(listOrgSubscriptions()), settle(billingCounts()), settle(apiKeysByOrg()), settle(getOrgStorage()),
     ])
     setState({
       loading: false, loadedAt: Date.now(),
@@ -51,6 +54,7 @@ function useBillingData() {
       orgs: orgs.ok ? orgs.data || [] : [], orgsError: orgs.ok ? null : orgs.error,
       stats: stats.ok ? stats.data : null, subs: subs.ok ? subs.data : null,
       counts: counts.ok ? counts.data : null, keys: keys.ok ? keys.data : null,
+      storage: storage.ok ? orgStorageMap(storage.data) : null, storageError: storage.ok ? null : storage.error,
     })
   }, [])
   useEffect(() => { load() }, [load])
@@ -59,7 +63,8 @@ function useBillingData() {
 
 export default function ConsoleBilling() {
   const data = useBillingData()
-  const { loading, plans = [], plansError, orgs = [], orgsError, stats, subs, counts, keys, reload } = data
+  const { loading, plans = [], plansError, orgs = [], orgsError, stats, subs, counts, keys, storage, storageError, reload } = data
+  const storageText = (orgId) => { const st = storageFor(storage, orgId); return st ? `${fmtBytes(st.bytes)} (${fmtNum(st.files)} files)` : 'N/A' }
   const [params] = useSearchParams()
   const [assign, setAssign] = useState(null) // { orgId, planCode }
   const [setup, setSetup] = useState(false)
@@ -101,6 +106,7 @@ export default function ConsoleBilling() {
         { key: 'old', header: 'Old label', value: (o) => o.plan || '' },
         { key: 'users', header: 'Users', value: (o) => usageFor(o).users ?? 'N/A' },
         { key: 'vehicles', header: 'Vehicles', value: (o) => usageFor(o).vehicles ?? 'N/A' },
+        { key: 'storage', header: 'Storage', value: (o) => storageText(o.id) },
         { key: 'keys', header: 'API keys', value: (o) => usageFor(o).apiKeys ?? 'N/A' },
         { key: 'fits', header: 'Plans it fits', value: (o) => plans.filter((p) => planFit(p, usageFor(o)).fits).map((p) => p.name).join(', ') },
       ],
@@ -193,7 +199,7 @@ export default function ConsoleBilling() {
                     <td className="px-3 py-2 text-gray-400">{subByOrg[o.id]?.plan_code || 'None'}{o.plan ? <span className="text-gray-500"> (old: {o.plan})</span> : null}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{fmtNum(u.users)}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{fmtNum(u.vehicles)}</td>
-                    <td className="px-3 py-2 text-gray-500">Not recorded</td>
+                    <td className="px-3 py-2 text-gray-300 tabular-nums whitespace-nowrap" title={storageError ? `Storage could not be read: ${storageError}` : "Uploaded files owned by this organization's people"}>{storageText(o.id)}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{fmtNum(u.apiKeys)}</td>
                     <td className="px-3 py-2">
                       {empty ? <span className="text-gray-500">Empty organization</span> : (
@@ -211,7 +217,7 @@ export default function ConsoleBilling() {
           </table>
         </div>
         <div className="px-4 py-3 flex flex-wrap items-center gap-2 border-t border-gray-800">
-          <p className="text-[11px] text-gray-500 flex-1 min-w-[16rem]">Storage is measured for the whole platform only. Green plans fit today&apos;s usage; red plans would block new vehicles or users the moment they are assigned. The old words on each organization (standard, starter) are leftover labels that nothing bills or limits.</p>
+          <p className="text-[11px] text-gray-500 flex-1 min-w-[16rem]">Storage counts uploaded files owned by each organization&apos;s people (photos, import files); plan storage limits are not checked against it yet. Green plans fit today&apos;s usage; red plans would block new vehicles or users the moment they are assigned. The old words on each organization (standard, starter) are leftover labels that nothing bills or limits.</p>
           <Btn size="xs" onClick={() => setTrial(true)}>Set trial end</Btn>
         </div>
       </Panel>

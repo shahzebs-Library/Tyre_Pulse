@@ -5,10 +5,13 @@
  * storage forever. A daily job (02:40 UTC) deletes the files of every export
  * older than the retention window; "Delete expired now" queues the same job.
  * Both the setting and the purge are super-admin only and audited server-side.
+ * The purge also needs the word DELETE typed and a reason (console audit log);
+ * changing the window shows what it does to files already in storage first.
  */
 import { useCallback, useEffect, useState } from 'react'
 import { Timer, Trash2, Save, RefreshCw } from 'lucide-react'
-import { Panel, PanelHeader, Note, StatTile, Btn, LoadingState, ErrorState, Modal } from '../../components/ui'
+import { Panel, PanelHeader, Note, StatTile, Btn, LoadingState, ErrorState, ConfirmImpactDialog } from '../../components/ui'
+import { useConsoleAuth } from '../../ConsoleAuthContext'
 import { getRetentionStatus, setRetentionDays, purgeExpiredNow } from '../../../lib/api/tenantExport'
 import { validateRetentionDays, RETENTION_MIN, RETENTION_MAX } from '../../../lib/tenantExport'
 import { toUserMessage } from '../../../lib/safeError'
@@ -27,6 +30,8 @@ export default function RetentionPanel({ onPurged }) {
   const [purging, setPurging] = useState(false)
   const [msg, setMsg] = useState('')
   const [confirmPurge, setConfirmPurge] = useState(false)
+  const [confirmSave, setConfirmSave] = useState(false)
+  const { logAction } = useConsoleAuth()
 
   const load = useCallback(async () => {
     setLoading(true); setErr('')
@@ -44,12 +49,14 @@ export default function RetentionPanel({ onPurged }) {
   const draftError = draft === '' ? '' : validateRetentionDays(draft)
   const changed = status && status.days != null && String(status.days) !== draft.trim()
 
-  async function save() {
+  async function save({ reason } = {}) {
     const v = validateRetentionDays(draft)
     if (v) { setErr(v); return }
+    setConfirmSave(false)
     setSaving(true); setErr(''); setMsg('')
     try {
       await setRetentionDays(Number(draft.trim()))
+      logAction?.('tenant_export_retention_set', null, 'system', { from: status?.days ?? null, to: Number(draft.trim()), reason: reason || null })
       setMsg(`Exports are now kept for ${Number(draft.trim())} day(s).`)
       await load()
     } catch (e) {
@@ -57,11 +64,12 @@ export default function RetentionPanel({ onPurged }) {
     } finally { setSaving(false) }
   }
 
-  async function purge() {
+  async function purge({ reason } = {}) {
     setConfirmPurge(false)
     setPurging(true); setErr(''); setMsg('')
     try {
       const r = await purgeExpiredNow()
+      logAction?.('tenant_export_purge', null, 'system', { due: status?.dueCount ?? null, reason: reason || null })
       setMsg(r.queued
         ? `Deleting ${r.due} expired export(s). This runs on the server and takes a few seconds.`
         : 'Nothing has expired yet. No files were deleted.')
@@ -97,7 +105,7 @@ export default function RetentionPanel({ onPurged }) {
                 className="w-28 bg-gray-900 border border-gray-800 rounded-lg px-2 py-1.5 text-sm text-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
               />
             </label>
-            <Btn variant="primary" icon={Save} busy={saving} disabled={!changed || !!draftError} onClick={save}>Save</Btn>
+            <Btn variant="primary" icon={Save} busy={saving} disabled={!changed || !!draftError} onClick={() => setConfirmSave(true)}>Save</Btn>
             <Btn variant="danger" icon={Trash2} busy={purging} disabled={!status.dueCount} onClick={() => setConfirmPurge(true)}
               title={status.dueCount ? 'Delete the files of every expired export now' : 'Nothing has expired yet'}>
               Delete expired now
@@ -108,19 +116,43 @@ export default function RetentionPanel({ onPurged }) {
           <Note>Deletion cannot be undone. An expired export can no longer be downloaded; run a new export if the data is needed again. Every change and every deletion is recorded in the console audit trail.</Note>
         </div>
       )}
-      <Modal open={confirmPurge} title="Delete expired exports now?" width="max-w-md"
-        onClose={() => setConfirmPurge(false)}
-        footer={(
-          <>
-            <Btn onClick={() => setConfirmPurge(false)}>Cancel</Btn>
-            <Btn variant="danger" icon={Trash2} busy={purging} onClick={purge}>Delete {status?.dueCount || ''} expired</Btn>
-          </>
-        )}>
-        <p className="text-sm text-gray-300">
-          The files of {status?.dueCount || 0} expired export(s) are deleted from storage. This cannot be undone; the
-          export records stay, marked Expired.
-        </p>
-      </Modal>
+      <ConfirmImpactDialog
+        open={confirmPurge}
+        title="Delete expired exports now?"
+        danger
+        typedWord="DELETE"
+        requireReason
+        busy={purging}
+        confirmLabel={`Delete ${status?.dueCount || ''} expired`}
+        impact={{
+          tone: 'danger',
+          what: `Delete the files of ${status?.dueCount || 0} expired export(s) from private storage`,
+          change: 'The compressed export files are removed. The export records stay in the history, marked Expired.',
+          who: 'Anyone who still needed one of those files; they can no longer be downloaded.',
+          undo: 'No. Run a new export if the data is needed again.',
+          stats: [{ label: 'Files due', value: status?.dueCount ?? null }, { label: 'Stored', value: status?.storedJobs ?? null }, { label: 'Kept for', value: status?.days == null ? null : `${status.days} d` }],
+        }}
+        onCancel={() => setConfirmPurge(false)}
+        onConfirm={purge}
+      />
+      <ConfirmImpactDialog
+        open={confirmSave}
+        title="Change export retention?"
+        requireReason
+        busy={saving}
+        confirmLabel="Save"
+        impact={{
+          tone: status?.days != null && /^\d+$/.test(draft.trim()) && Number(draft.trim()) < status.days ? 'warning' : 'info',
+          what: `Keep server export files for ${draft.trim() || 'N/A'} day(s) instead of ${status?.days ?? 'N/A'}`,
+          change: status?.days != null && /^\d+$/.test(draft.trim()) && Number(draft.trim()) < status.days
+            ? 'A shorter window: the next daily run (02:40 UTC) deletes any stored export that is now past it.'
+            : 'A longer window: export files stay in storage longer before the daily run deletes them.',
+          who: 'Super admins who download server exports, and the tenants whose data the files hold.',
+          undo: 'The setting can be changed back; files already deleted cannot be brought back.',
+        }}
+        onCancel={() => setConfirmSave(false)}
+        onConfirm={save}
+      />
     </Panel>
   )
 }

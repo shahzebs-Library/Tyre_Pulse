@@ -32,3 +32,47 @@ export function navChanges(defaults = [], model = []) {
   })
   return out
 }
+
+/**
+ * Move an item to a new place (drag and drop). `from` and `to` are
+ * { g: groupIndex, i: itemIndex }; `to.i` may equal the target group's length
+ * to append. Returns a new model; the input is never mutated. Invalid
+ * positions return the model unchanged.
+ */
+export function moveItemTo(model = [], from, to) {
+  if (!from || !to || !model[from.g] || !model[to.g]) return model
+  const src = model[from.g].items
+  if (from.i < 0 || from.i >= src.length) return model
+  const next = model.map((g) => ({ ...g, items: g.items.slice() }))
+  const [item] = next[from.g].items.splice(from.i, 1)
+  let at = from.g === to.g && from.i < to.i ? to.i - 1 : to.i
+  at = Math.max(0, Math.min(at, next[to.g].items.length))
+  next[to.g].items.splice(at, 0, item)
+  return next
+}
+
+/** Move a whole group from one index to another. Returns a new model. */
+export function moveGroupTo(model = [], from, to) {
+  if (from === to || from < 0 || to < 0 || from >= model.length || to >= model.length) return model
+  const next = model.slice()
+  const [g] = next.splice(from, 1)
+  next.splice(to, 0, g)
+  return next
+}
+
+/**
+ * One line describing a stored nav_layout value (from the change history):
+ * how many groups and items it arranges and how many it hides. A blank or
+ * unreadable value is the built-in sidebar.
+ */
+export function describeLayout(raw) {
+  if (raw == null || raw === '') return 'Built-in sidebar'
+  let v = raw
+  try { v = typeof raw === 'string' ? JSON.parse(raw) : raw } catch { return 'Unreadable layout' }
+  const groups = Array.isArray(v?.groups) ? v.groups : []
+  const items = Array.isArray(v?.items) ? v.items : []
+  if (!groups.length && !items.length) return 'Built-in sidebar'
+  const hidden = items.filter((i) => i && i.hidden).length + groups.filter((g) => g && g.hidden).length
+  const renamed = groups.filter((g) => g && typeof g.label === 'string' && g.label).length
+  return `${groups.length} groups, ${items.length} items arranged, ${hidden} hidden, ${renamed} renamed`
+}

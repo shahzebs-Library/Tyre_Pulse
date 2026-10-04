@@ -9,6 +9,11 @@
  * The page never claims completeness it cannot prove: a failed table, a table
  * cut at the ceiling, or a count that changed mid-export all mark the export
  * PARTIAL, in the file itself and in the job record.
+ *
+ * Every export dialog states in plain English what leaves the system and who
+ * it concerns (ImpactBox); the full server export also needs the word EXPORT
+ * typed. History can be filtered by organisation, read further back (25 or
+ * 100 jobs) and opened per job to see each table's row count and files.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -17,7 +22,7 @@ import {
 } from 'lucide-react'
 import {
   Panel, PanelHeader, Note, StatTile, Badge, Btn, Select, Table, THead, Th, Tr, Td,
-  Modal, LoadingState, EmptyState, ErrorState, SearchInput, Segmented, Toolbar,
+  Modal, LoadingState, EmptyState, ErrorState, SearchInput, Segmented, Toolbar, ImpactBox,
 } from '../components/ui'
 import { BarsChart } from '../components/ui/charts'
 import {
@@ -33,7 +38,7 @@ import { configNum } from '../../lib/api/systemConfig'
 import { exportSheetsToExcel } from '../../lib/exportUtils'
 import { searchRows, sortRows, useTableSort } from '../../lib/consoleTable'
 import ExportButtons from './shared/ExportButtons'
-import { PageHeader, TabBar, useUrlTab, usePager, Pager, AttentionList } from './shared/pageKit'
+import { PageHeader, TabBar, useUrlTab, usePager, Pager, AttentionList, Drawer, DetailList } from './shared/pageKit'
 import { toUserMessage } from '../../lib/safeError'
 import RetentionPanel from './tenantExport/RetentionPanel'
 
@@ -86,6 +91,10 @@ export default function ConsoleTenantExport({ tabParam = 'tab' } = {}) {
   const [refreshedAt, setRefreshedAt] = useState(null)
   const [jobQuery, setJobQuery] = useState('')
   const [jobStatus, setJobStatus] = useState('')
+  const [jobOrg, setJobOrg] = useState('')
+  const [jobLimit, setJobLimit] = useState(25)
+  const [jobDetail, setJobDetail] = useState(null)
+  const [srvTyped, setSrvTyped] = useState('')
 
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [format, setFormat] = useState('xlsx')
@@ -115,8 +124,8 @@ export default function ConsoleTenantExport({ tabParam = 'tab' } = {}) {
   }, [])
   const loadJobs = useCallback(async () => {
     setJobsLoading(true); setJobsErr('')
-    try { setJobs(await listExportJobs(25)); setRefreshedAt(Date.now()) } catch (e) { setJobsErr(toUserMessage(e, 'Could not load export history.')) } finally { setJobsLoading(false) }
-  }, [])
+    try { setJobs(await listExportJobs(jobLimit)); setRefreshedAt(Date.now()) } catch (e) { setJobsErr(toUserMessage(e, 'Could not load export history.')) } finally { setJobsLoading(false) }
+  }, [jobLimit])
   const loadManifest = useCallback(async (id) => {
     if (!id) { setManifest(null); return }
     setManLoading(true); setManErr(''); setResult(null); setProgress({})
@@ -154,7 +163,7 @@ export default function ConsoleTenantExport({ tabParam = 'tab' } = {}) {
   }, [srvJobId, loadJobs])
 
   const runServerExport = async () => {
-    if (validateReason(srvReason) || !plan.items.length) return
+    if (validateReason(srvReason) || !plan.items.length || srvTyped.trim() !== 'EXPORT') return
     setSrvBusy(true); setSrvErr('')
     try {
       const id = await startServerExport(orgId, srvReason.trim(), plan.items.map((i) => i.table))
@@ -162,6 +171,7 @@ export default function ConsoleTenantExport({ tabParam = 'tab' } = {}) {
       setSrvJobId(id)
       setSrvOpen(false)
       setSrvReason('')
+      setSrvTyped('')
       loadJobs()
     } catch (e) {
       setSrvErr(toUserMessage(e, 'The server export could not be started.'))
@@ -252,8 +262,9 @@ export default function ConsoleTenantExport({ tabParam = 'tab' } = {}) {
   const shownJobs = useMemo(() => {
     const base = searchRows(jobs, jobQuery, ['reason', (j) => orgNameById[j.org_id] || j.org_id])
       .filter((j) => !jobStatus || j.status === jobStatus)
+      .filter((j) => !jobOrg || j.org_id === jobOrg)
     return sortRows(base, jobSort.sort, JOB_ACCESSORS)
-  }, [jobs, jobQuery, jobStatus, jobSort.sort, orgNameById])
+  }, [jobs, jobQuery, jobStatus, jobOrg, jobSort.sort, orgNameById])
   const jobPager = usePager(shownJobs, 25)
   const tableSort = useTableSort(null)
   const sortedTables = useMemo(() => {
@@ -270,6 +281,10 @@ export default function ConsoleTenantExport({ tabParam = 'tab' } = {}) {
     { key: 'mode', header: 'Path', value: (j) => (j.mode === 'server' ? 'Server' : 'Browser') },
   ], [orgNameById])
   const jobCounts = useMemo(() => jobs.reduce((a, j) => { a[j.status] = (a[j.status] || 0) + 1; return a }, {}), [jobs])
+  const rowsExported = useMemo(() => jobs.reduce((a, j) => a + jobRows(j), 0), [jobs])
+  const orgsExported = useMemo(() => new Set(jobs.map((j) => j.org_id).filter(Boolean)).size, [jobs])
+  const jobOrgOptions = useMemo(() => [...new Set(jobs.map((j) => j.org_id).filter(Boolean))]
+    .map((id) => ({ value: id, label: orgNameById[id] || 'Unnamed organisation' })), [jobs, orgNameById])
   const trackJob = (id) => { setSrvJob(null); setSrvJobId(id); setTab('export') }
   const runningJob = jobs.find((j) => j.status === 'running' && j.mode === 'server' && j.id !== srvJobId)
   const attention = [
@@ -293,9 +308,9 @@ export default function ConsoleTenantExport({ tabParam = 'tab' } = {}) {
         purpose="Export one organisation's full dataset for portability, offboarding or legal hold. Every export is recorded with its reason."
         refreshedAt={refreshedAt} onRefresh={() => { loadOrgs(); loadJobs(); if (orgId) loadManifest(orgId) }} refreshing={jobsLoading} />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <StatTile label="Exports recorded" icon={History} value={jobsErr ? 'N/A' : jobsLoading && !jobs.length ? 'N/A' : fmt(jobs.length)}
-          sub={jobsErr ? 'History could not be read' : 'The last 25 kept here'}
+          sub={jobsErr ? 'History could not be read' : `The newest ${jobLimit} read`}
           onClick={() => { setJobStatus(''); setTab('history') }} active={tab === 'history' && !jobStatus} />
         <StatTile label="Partial or failed" icon={AlertTriangle}
           value={jobsErr ? 'N/A' : fmt((jobCounts.partial || 0) + (jobCounts.failed || 0))}
@@ -305,6 +320,10 @@ export default function ConsoleTenantExport({ tabParam = 'tab' } = {}) {
           tone={jobCounts.running ? 'accent' : 'default'} />
         <StatTile label="Newest export" icon={Timer} value={jobs[0] ? fmtWhen(jobs[0].created_at) : 'N/A'}
           sub={jobs[0] ? (orgNameById[jobs[0].org_id] || 'Organisation') : 'Nothing exported yet'} />
+        <StatTile label="Rows that left the system" icon={Download} value={jobsErr ? 'N/A' : fmt(rowsExported)}
+          sub={`Across the ${fmt(jobs.length)} exports read`} />
+        <StatTile label="Organisations exported" icon={Building2} value={jobsErr ? 'N/A' : fmt(orgsExported)}
+          sub="Distinct tenants in the history read" />
       </div>
 
       <AttentionList quiet items={attention} />
@@ -508,10 +527,13 @@ export default function ConsoleTenantExport({ tabParam = 'tab' } = {}) {
       {tab === 'history' && (
       <Panel flush>
         <div className="p-4 pb-2">
-          <PanelHeader icon={History} title="Recent exports" subtitle="The last 25 tenant exports, newest first."
+          <PanelHeader icon={History} title="Recent exports" subtitle={`The newest ${jobLimit} tenant exports. Click a row for each table's row count and the files.`}
             actions={<ExportButtons rows={shownJobs} columns={jobColumns} title="TyrePulse Tenant Export History" disabled={!!jobsErr} />} />
           <Toolbar>
             <SearchInput value={jobQuery} onChange={setJobQuery} placeholder="Search reason or organisation" className="w-full sm:w-64" />
+            <Select ariaLabel="Organisation filter" className="w-full sm:w-52" value={jobOrg} onChange={setJobOrg} placeholder="Every organisation" options={jobOrgOptions} />
+            <Select ariaLabel="History depth" className="w-full sm:w-40" value={String(jobLimit)} onChange={(v) => setJobLimit(Number(v) || 25)}
+              options={[{ value: '25', label: 'Newest 25' }, { value: '100', label: 'Newest 100' }]} />
             <Segmented role="group" ariaLabel="Export status" value={jobStatus} onChange={setJobStatus} options={[
               { key: '', label: 'All', count: jobs.length },
               ...['completed', 'partial', 'failed', 'running', 'expired'].filter((k) => jobCounts[k]).map((k) => ({ key: k, label: STATUS_TEXT[k], count: jobCounts[k] })),
@@ -540,7 +562,7 @@ export default function ConsoleTenantExport({ tabParam = 'tab' } = {}) {
                     {jobPager.pageRows.map((j) => {
                       const rows = jobRows(j)
                       return (
-                        <Tr key={j.id}>
+                        <Tr key={j.id} onClick={() => setJobDetail(j)} ariaLabel={`Open export of ${orgNameById[j.org_id] || 'organisation'} on ${fmtWhen(j.created_at)}`}>
                           <Td nowrap>{fmtWhen(j.created_at)}</Td>
                           <Td>{orgNameById[j.org_id] || j.org_id}</Td>
                           <Td className="max-w-xs"><span className="text-gray-300">{j.reason}</span></Td>
@@ -553,9 +575,9 @@ export default function ConsoleTenantExport({ tabParam = 'tab' } = {}) {
                               : j.status === 'expired'
                                 ? <span className="text-gray-400" title={j.expired_at ? `Files deleted ${fmtWhen(j.expired_at)}` : 'Files deleted'}>Deleted</span>
                               : j.status === 'running'
-                                ? <Btn size="xs" onClick={() => trackJob(j.id)}>Track</Btn>
+                                ? <Btn size="xs" onClick={(e) => { e.stopPropagation(); trackJob(j.id) }}>Track</Btn>
                                 : (Array.isArray(j.files) && j.files.length > 0)
-                                  ? <Btn size="xs" icon={Download} busy={linksBusy === j.id} onClick={() => openLinks(j.id)}>Download</Btn>
+                                  ? <Btn size="xs" icon={Download} busy={linksBusy === j.id} onClick={(e) => { e.stopPropagation(); openLinks(j.id) }}>Download</Btn>
                                   : <span className="text-gray-400">None</span>}
                           </Td>
                         </Tr>
@@ -583,9 +605,12 @@ export default function ConsoleTenantExport({ tabParam = 'tab' } = {}) {
           </Btn>
         </>}>
         <div className="space-y-3">
-          <Note tone="warning" icon={ShieldAlert}>
-            This hands a copy of a customer&apos;s data to you. It is recorded in the audit trail with your name and the reason below.
-          </Note>
+          <ImpactBox tone="warning"
+            what={`Download a copy of ${manifest?.orgName || orgName || 'this organisation'}'s data to this browser`}
+            change="Nothing in the database changes. A file with the selected tables is saved on this computer."
+            who={`${manifest?.orgName || orgName || 'This organisation'} and every person whose records are in those tables. Treat the file as confidential.`}
+            undo="No. Once downloaded, the copy is outside the system. The export record stays in the history with your reason."
+            stats={[{ label: 'Tables', value: fmt(plan.tables) }, { label: 'Rows', value: fmt(plan.fetchRows) }, { label: 'Truncated', value: fmt(plan.truncating.length) }]} />
           {plan.truncating.length > 0 && (
             <Note tone="warning" icon={AlertTriangle}>
               {plan.truncating.length} table(s) exceed the ceiling and will be exported partially. The file and the job record will say so.
@@ -612,14 +637,17 @@ export default function ConsoleTenantExport({ tabParam = 'tab' } = {}) {
         subtitle={`${plan.tables} tables, about ${fmt(plan.expectedRows)} rows, no ceiling`}
         footer={<>
           <Btn onClick={() => setSrvOpen(false)} disabled={srvBusy}>Cancel</Btn>
-          <Btn variant="primary" icon={Server} busy={srvBusy} disabled={!!validateReason(srvReason)} onClick={runServerExport}>
+          <Btn variant="danger" icon={Server} busy={srvBusy} disabled={!!validateReason(srvReason) || srvTyped.trim() !== 'EXPORT'} onClick={runServerExport}>
             Start server export
           </Btn>
         </>}>
         <div className="space-y-3">
-          <Note tone="warning" icon={ShieldAlert}>
-            This writes a complete copy of a customer&apos;s data to private storage. It is recorded in the audit trail with your name and the reason below, and every download is recorded again.
-          </Note>
+          <ImpactBox tone="danger"
+            what={`Write a complete copy of ${manifest?.orgName || orgName || 'this organisation'}'s data to private storage`}
+            change="Compressed files are written to a private bucket and offered as short-lived download links. Business data is not changed."
+            who={`${manifest?.orgName || orgName || 'This organisation'} and every person whose records are in the selected tables. Every download is recorded again.`}
+            undo={`The files are deleted automatically by the retention window (Retention tab). The export record stays.`}
+            stats={[{ label: 'Tables', value: fmt(plan.tables) }, { label: 'About rows', value: fmt(plan.expectedRows) }, { label: 'Ceiling', value: 'None' }]} />
           <label className="block">
             <span className="text-xs text-gray-400">Reason (required, at least {MIN_REASON} characters)</span>
             <textarea value={srvReason} onChange={(e) => setSrvReason(e.target.value)} disabled={srvBusy} rows={3}
@@ -627,6 +655,12 @@ export default function ConsoleTenantExport({ tabParam = 'tab' } = {}) {
               className="mt-1 w-full rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 p-2 placeholder-gray-600 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
           </label>
           {srvReason && validateReason(srvReason) && <p className="text-[11px] text-amber-300">{validateReason(srvReason)}</p>}
+          <label className="block">
+            <span className="text-xs text-gray-400">Type <span className="font-mono text-gray-200">EXPORT</span> to confirm</span>
+            <input value={srvTyped} onChange={(e) => setSrvTyped(e.target.value)} disabled={srvBusy} autoComplete="off" spellCheck={false}
+              aria-label="Type EXPORT to confirm"
+              className="mt-1 w-full rounded-lg bg-gray-900 border border-gray-800 text-xs font-mono text-gray-200 p-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
+          </label>
           <ErrorState message={srvErr} />
         </div>
       </Modal>
@@ -666,6 +700,45 @@ export default function ConsoleTenantExport({ tabParam = 'tab' } = {}) {
           </div>
         )}
       </Modal>
+
+      <Drawer open={!!jobDetail} onClose={() => setJobDetail(null)}
+        title={jobDetail ? `Export of ${orgNameById[jobDetail.org_id] || 'organisation'}` : ''}
+        subtitle={jobDetail ? `${fmtWhen(jobDetail.created_at)}, ${jobDetail.mode === 'server' ? 'server' : 'browser'} path` : ''}>
+        {jobDetail && (
+          <div className="space-y-4 text-xs">
+            <div className="flex flex-wrap gap-2">
+              <Badge tone={STATUS_TONE[jobDetail.status] || 'quiet'}>{STATUS_TEXT[jobDetail.status] || jobDetail.status}</Badge>
+              <Badge>{fmt(jobRows(jobDetail))} rows</Badge>
+              <Badge>{fmt(JOB_ACCESSORS.tables(jobDetail))} tables</Badge>
+            </div>
+            <DetailList items={[
+              ['Reason', jobDetail.reason || 'N/A'],
+              ['Organisation', orgNameById[jobDetail.org_id] || 'Unnamed organisation'],
+              ['Started', fmtWhen(jobDetail.created_at)],
+              ['Files deleted', jobDetail.expired_at ? fmtWhen(jobDetail.expired_at) : jobDetail.mode === 'server' ? 'Not yet' : 'Not applicable (browser download)'],
+            ]} />
+            <div>
+              <p className="text-[11px] uppercase tracking-wide text-gray-500 mb-1.5">Rows per table</p>
+              {Array.isArray(jobDetail.tables) && jobDetail.tables.length ? (
+                <Table>
+                  <THead><Th>Table</Th><Th align="right">Rows exported</Th></THead>
+                  <tbody>
+                    {jobDetail.tables.map((t) => (
+                      <Tr key={t}>
+                        <Td><span className="font-mono text-[11px] text-gray-300">{t}</span></Td>
+                        <Td align="right">{jobDetail.row_counts && jobDetail.row_counts[t] != null ? fmt(jobDetail.row_counts[t]) : 'N/A'}</Td>
+                      </Tr>
+                    ))}
+                  </tbody>
+                </Table>
+              ) : <p className="text-gray-400">No table list was recorded for this export.</p>}
+            </div>
+            {jobDetail.mode === 'server' && jobDetail.status !== 'expired' && Array.isArray(jobDetail.files) && jobDetail.files.length > 0 && (
+              <Btn icon={Download} busy={linksBusy === jobDetail.id} onClick={() => openLinks(jobDetail.id)}>Get download links</Btn>
+            )}
+          </div>
+        )}
+      </Drawer>
     </div>
   )
 }

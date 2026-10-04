@@ -18,18 +18,21 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import {
   Settings2, Save, AlertTriangle, CheckCircle, CheckCircle2, Shield, Zap, Bell, Database,
-  RotateCcw, Coins, ListChecks, Search,
+  RotateCcw, Coins, ListChecks, Search, History, Users,
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { toUserMessage } from '../../lib/safeError'
 import {
   ErrorState, Modal, Btn, Badge, StatTile, Note, Panel, PanelHeader, SearchInput, Select, Segmented,
-  Toolbar, EmptyState, LoadingState, Code, Table, THead, Th, Tr, Td,
+  Toolbar, EmptyState, LoadingState, Code, Table, THead, Th, Tr, Td, ImpactBox,
 } from '../components/ui'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import { ENFORCEMENT_STATUS, CONFIG_DEFAULTS } from '../../lib/api/systemConfig'
 import FxRatesPanel from './config/FxRatesPanel'
-import { PageHeader, useUrlTab, usePaged, Pager, AttentionList, ConsoleLink, TabPanel } from './shared/pageKit'
+import { PageHeader, useUrlTab, usePaged, Pager, AttentionList, ConsoleLink, TabPanel, Drawer, fmtRelative, fmtDateTime } from './shared/pageKit'
+import ExportButtons from './shared/ExportButtons'
+import { CONTROL_META, riskFor, rangeError, rangeHint, summarizeHistory, maskEmails } from './config/configMeta'
+import { listConfigHistory, setConfigWithReason, namesFor } from '../../lib/api/consolePlatform'
 import { sortRows, useTableSort } from '../../lib/consoleTable'
 
 const CONFIG_GROUPS = [
@@ -38,11 +41,11 @@ const CONFIG_GROUPS = [
     label: 'System',
     icon: Settings2,
     configs: [
-      { key: 'maintenance_mode',      type: 'bool',   label: 'Maintenance Mode',         desc: 'When ON, regular users see the maintenance screen. Super-admins can still access the console.' },
-      { key: 'registration_open',     type: 'bool',   label: 'Open Registration',        desc: 'Allow new users to self-register from the mobile app.' },
-      { key: 'require_approval',      type: 'bool',   label: 'Require User Approval',    desc: 'New users must be approved by an admin before they can log in.' },
-      { key: 'app_version',           type: 'string', label: 'Current App Version',      desc: 'Displayed in the app footer and used for update prompts.' },
-      { key: 'max_upload_rows',       type: 'number', label: 'Max Upload Rows',          desc: 'Maximum number of rows allowed per Excel upload.' },
+      { key: 'maintenance_mode',      type: 'bool',   label: 'Maintenance mode',         desc: 'When ON, regular users see the maintenance screen. Super-admins can still access the console.' },
+      { key: 'registration_open',     type: 'bool',   label: 'Open registration',        desc: 'Allow new users to self-register from the web app and the Flutter app.' },
+      { key: 'require_approval',      type: 'bool',   label: 'Require user approval',    desc: 'New users must be approved by an admin before they can log in.' },
+      { key: 'app_version',           type: 'string', label: 'Current app version',      desc: 'Displayed in the app footer and used for update prompts.' },
+      { key: 'max_upload_rows',       type: 'number', label: 'Max upload rows',          desc: 'Maximum number of rows allowed per Excel upload.' },
     ],
   },
   {
@@ -50,11 +53,11 @@ const CONFIG_GROUPS = [
     label: 'AI',
     icon: Zap,
     configs: [
-      { key: 'ai_enabled',            type: 'bool',   label: 'AI Features Enabled',      desc: 'Master toggle for all AI-powered features across the platform.' },
-      { key: 'ai_model',              type: 'string', label: 'Default AI Model',         desc: 'The LLM model used for analysis. E.g. claude-3-5-sonnet-20241022' },
-      { key: 'ai_monthly_budget_usd', type: 'number', label: 'Monthly AI Budget (USD)',  desc: 'Alert when cumulative AI spend exceeds this amount.' },
-      { key: 'ai_rate_limit_per_min', type: 'number', label: 'AI Rate Limit (req/min)',  desc: 'Maximum AI requests per minute per organisation.' },
-      { key: 'ai_cache_ttl_hours',    type: 'number', label: 'Cache TTL (hours)',        desc: 'How long AI responses are cached before a fresh call is made.' },
+      { key: 'ai_enabled',            type: 'bool',   label: 'AI features enabled',      desc: 'Master toggle for all AI-powered features across the platform.' },
+      { key: 'ai_model',              type: 'string', label: 'Default AI model',         desc: 'The LLM model used for analysis. E.g. claude-3-5-sonnet-20241022' },
+      { key: 'ai_monthly_budget_usd', type: 'number', label: 'Monthly AI budget (USD)',  desc: 'Alert when cumulative AI spend exceeds this amount.' },
+      { key: 'ai_rate_limit_per_min', type: 'number', label: 'AI rate limit (requests a minute)',  desc: 'Maximum AI requests per minute per organisation.' },
+      { key: 'ai_cache_ttl_hours',    type: 'number', label: 'AI answer cache (hours)',        desc: 'How long AI responses are cached before a fresh call is made.' },
     ],
   },
   {
@@ -62,11 +65,11 @@ const CONFIG_GROUPS = [
     label: 'Security',
     icon: Shield,
     configs: [
-      { key: 'session_timeout_hours', type: 'number', label: 'Session Timeout (hours)',  desc: 'Automatically sign out inactive users after this many hours.' },
-      { key: 'max_login_attempts',    type: 'number', label: 'Max Login Attempts',       desc: 'Lock account after this many failed login attempts.' },
-      { key: 'password_min_length',   type: 'number', label: 'Minimum Password Length', desc: 'Enforce a minimum password length for all users.' },
-      { key: 'two_factor_required',   type: 'bool',   label: 'Require 2FA (Admins)',     desc: 'Require two-factor authentication for Admin role users.' },
-      { key: 'audit_retention_days',  type: 'number', label: 'Audit Retention (days)',   desc: 'How long to keep audit log entries. 0 = keep forever.' },
+      { key: 'session_timeout_hours', type: 'number', label: 'Session timeout (hours)',  desc: 'Automatically sign out inactive users after this many hours.' },
+      { key: 'max_login_attempts',    type: 'number', label: 'Max login attempts',       desc: 'Lock account after this many failed login attempts.' },
+      { key: 'password_min_length',   type: 'number', label: 'Minimum password length', desc: 'Enforce a minimum password length for all users.' },
+      { key: 'two_factor_required',   type: 'bool',   label: 'Require 2FA for Admins',     desc: 'Require two-factor authentication for Admin role users.' },
+      { key: 'audit_retention_days',  type: 'number', label: 'Audit log retention (days)',   desc: 'How long to keep audit log entries. 0 = keep forever.' },
     ],
   },
   {
@@ -74,10 +77,10 @@ const CONFIG_GROUPS = [
     label: 'Notifications',
     icon: Bell,
     configs: [
-      { key: 'email_notifications',   type: 'bool',   label: 'Email Notifications',      desc: 'Enable transactional emails (approvals, alerts, resets).' },
-      { key: 'alert_email',           type: 'string', label: 'System Alert Email',       desc: 'Where to send system alerts and error notifications.' },
-      { key: 'digest_frequency',      type: 'string', label: 'Digest Frequency',         desc: 'How often to send fleet digest emails. Options: daily, weekly, monthly.' },
-      { key: 'push_notifications',    type: 'bool',   label: 'Push Notifications',       desc: 'Enable push notifications to mobile app users.' },
+      { key: 'email_notifications',   type: 'bool',   label: 'Email notifications',      desc: 'Enable transactional emails (approvals, alerts, resets).' },
+      { key: 'alert_email',           type: 'string', label: 'System alert email',       desc: 'Where to send system alerts and error notifications.' },
+      { key: 'digest_frequency',      type: 'string', label: 'Digest frequency',         desc: 'How often to send fleet digest emails. Options: daily, weekly, monthly.' },
+      { key: 'push_notifications',    type: 'bool',   label: 'Push notifications',       desc: 'Enable push notifications to Flutter app users.' },
     ],
   },
   {
@@ -85,10 +88,10 @@ const CONFIG_GROUPS = [
     label: 'Data',
     icon: Database,
     configs: [
-      { key: 'data_retention_months', type: 'number', label: 'Data Retention (months)', desc: 'Archive records older than this many months. 0 = keep forever.' },
-      { key: 'backup_enabled',        type: 'bool',   label: 'Automated Backups',       desc: 'Enable daily automated database backups.' },
-      { key: 'export_enabled',        type: 'bool',   label: 'CSV/Excel Export',        desc: 'Allow users to export data to CSV and Excel.' },
-      { key: 'max_export_rows',       type: 'number', label: 'Max Export Rows',         desc: 'Maximum rows per export operation.' },
+      { key: 'data_retention_months', type: 'number', label: 'Data retention (months)', desc: 'Archive records older than this many months. 0 = keep forever.' },
+      { key: 'backup_enabled',        type: 'bool',   label: 'Automated backups',       desc: 'Enable daily automated database backups.' },
+      { key: 'export_enabled',        type: 'bool',   label: 'CSV and Excel export',        desc: 'Allow users to export data to CSV and Excel.' },
+      { key: 'max_export_rows',       type: 'number', label: 'Max export rows',         desc: 'Maximum rows per export operation.' },
     ],
   },
 ]
@@ -110,8 +113,10 @@ const OWNER_PAGE = {
   company_logo: ['/console/appearance', 'Report Appearance'],
   report_diagram_bg: ['/console/appearance', 'Report Appearance'],
   nav_layout: ['/console/navigation', 'Navigation'],
-  mobile_min_version: ['/console/mobile-app', 'Mobile App'],
-  mobile_latest_version: ['/console/mobile-app', 'Mobile App'],
+  mobile_min_version: [null, 'Retired app (read-only)'],
+  mobile_latest_version: [null, 'Retired app (read-only)'],
+  flutter_min_version: ['/console/mobile-app?tab=gate', 'Mobile App (Flutter gate)'],
+  flutter_latest_version: ['/console/mobile-app?tab=releases', 'Mobile App (Flutter release)'],
 }
 
 function enforcementOf(key) {
@@ -137,7 +142,7 @@ function validate(cfg, raw) {
   const n = Number(raw)
   if (!Number.isFinite(n)) return 'Must be a number.'
   if (n < 0) return 'Cannot be negative.'
-  return null
+  return rangeError(cfg.key, raw)
 }
 
 export default function ConsoleSystemConfig({ tabParam = 'tab' } = {}) {
@@ -154,11 +159,31 @@ export default function ConsoleSystemConfig({ tabParam = 'tab' } = {}) {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
   const [tab, setTab] = useUrlTab(TABS, 'system', tabParam)
+  const [reason, setReason] = useState('')
+  const [typed, setTyped] = useState('')
+  const [history, setHistory] = useState({ state: 'loading', rows: [], names: {} })
+  const [histKey, setHistKey] = useState(null)
+  const [stamps, setStamps] = useState({})
+  const [stampNames, setStampNames] = useState({})
+
+  // Recorded change history (system_config_history, super admin read). Loaded
+  // on its own so a failed read only hides "last changed", never the settings.
+  const loadHistory = useCallback(async () => {
+    try {
+      const rows = await listConfigHistory({ limit: 500 })
+      const names = await namesFor(rows.map((r) => r.changed_by)).catch(() => ({}))
+      setHistory({ state: 'ok', rows: rows || [], names })
+    } catch {
+      setHistory({ state: 'error', rows: [], names: {} })
+    }
+  }, [])
+  useEffect(() => { loadHistory() }, [loadHistory])
+  const histSummary = useMemo(() => summarizeHistory(history.rows), [history.rows])
 
   const load = useCallback(async () => {
     setLoading(true); setSaved(false); setLoadError(''); setSaveError('')
     try {
-      const { data, error } = await supabase.from('system_config').select('key, value')
+      const { data, error } = await supabase.from('system_config').select('key, value, updated_at, updated_by')
       // Critical here: an unread error would render every switch at its default,
       // which looks exactly like a deliberate configuration and invites someone
       // to "fix" settings that were never actually read.
@@ -167,6 +192,10 @@ export default function ConsoleSystemConfig({ tabParam = 'tab' } = {}) {
       ;(data ?? []).forEach((row) => { map[row.key] = row.value })
       setConfigs(map)
       setOriginal(map)
+      const st = {}
+      ;(data ?? []).forEach((row) => { st[row.key] = { updated_at: row.updated_at || null, updated_by: row.updated_by || null } })
+      setStamps(st)
+      namesFor(Object.values(st).map((x) => x.updated_by)).then(setStampNames).catch(() => setStampNames({}))
       setReadAt(Date.now())
     } catch (e) {
       setLoadError(toUserMessage(e, 'Could not load the configuration.'))
@@ -210,11 +239,16 @@ export default function ConsoleSystemConfig({ tabParam = 'tab' } = {}) {
     .filter((k) => String(configs[k] ?? '') !== String(original[k] ?? '') || (original[k] === undefined && configs[k] !== undefined))
     .map((k) => {
       const cfg = ALL_CONFIGS.find((c) => c.key === k) || { key: k, type: 'string', label: k }
-      return { key: k, cfg, from: original[k], to: configs[k], error: validate(cfg, configs[k]) }
+      return { key: k, cfg, from: original[k], to: configs[k], error: validate(cfg, configs[k]), risk: riskFor(k, original[k], configs[k]) }
     }), [configs, original])
   const dirty = changes.length > 0
   const changedKeys = useMemo(() => new Set(changes.map((c) => c.key)), [changes])
   const invalid = changes.filter((c) => c.error)
+  const risky = changes.filter((c) => c.risk)
+  const typedWord = risky.map((c) => c.risk.word).find(Boolean) || null
+  const reasonNeeded = risky.length > 0
+  const reasonOk = !reasonNeeded || reason.trim().length >= 3
+  const typedOk = !typedWord || typed.trim() === typedWord
 
   // Turning maintenance mode ON locks every regular user out, so it asks first.
   const maintenanceOn = configs.maintenance_mode === 'true'
@@ -225,12 +259,20 @@ export default function ConsoleSystemConfig({ tabParam = 'tab' } = {}) {
     try {
       const now = new Date().toISOString()
       const rows = changes.map((c) => ({ key: c.key, value: String(c.to ?? ''), updated_at: now }))
-      const { error } = await supabase
-        .from('system_config')
-        .upsert(rows, { onConflict: 'key', ignoreDuplicates: false })
-      // A failed save used to be silent: the button simply stopped spinning.
-      if (error) throw error
-      try { await logAction('update_config', null, 'system', { keys: rows.map((r) => r.key) }) } catch { /* audit is best effort */ }
+      const why = reason.trim()
+      if (why.length >= 3) {
+        // With a reason every key goes through admin_set_config, so the
+        // reason lands in the change history beside the old and new value.
+        for (const r of rows) await setConfigWithReason(r.key, r.value, why)
+      } else {
+        const { error } = await supabase
+          .from('system_config')
+          .upsert(rows, { onConflict: 'key', ignoreDuplicates: false })
+        // A failed save used to be silent: the button simply stopped spinning.
+        if (error) throw error
+      }
+      try { await logAction('update_config', null, 'system', { keys: rows.map((r) => r.key), reason: why || null, risky: risky.map((c) => c.key) }) } catch { /* audit is best effort */ }
+      loadHistory()
       setOriginal((o) => ({ ...o, ...Object.fromEntries(rows.map((r) => [r.key, r.value])) }))
       setSaved(true); setReviewOpen(false)
     } catch (e) {
@@ -288,7 +330,21 @@ export default function ConsoleSystemConfig({ tabParam = 'tab' } = {}) {
     }
   }
 
-  const openReview = () => { setSaveError(''); setReviewOpen(true) }
+  const openReview = () => { setSaveError(''); setReason(''); setTyped(''); setReviewOpen(true) }
+
+  const exportRows = ALL_CONFIGS.map((c) => {
+    const last = histSummary.latest[c.key]
+    const enf = enforcementOf(c.key)
+    return {
+      group: c.groupLabel, setting: c.label, key: c.key,
+      value: isSet(c.key) ? displayValue(original[c.key], c.type) : `Not set (default ${defaultText(c.key, c.type)})`,
+      enforced: enf.active ? 'Enforced' : 'Saved only',
+      range: rangeHint(c.key) || 'N/A',
+      changed: last ? fmtDateTime(last.changed_at) : stamps[c.key]?.updated_at ? fmtDateTime(stamps[c.key].updated_at) : (isSet(c.key) ? 'Not stored' : 'Never saved'),
+      by: last ? (history.names[last.changed_by] || (last.changed_by ? 'Unknown person' : 'System'))
+        : stamps[c.key]?.updated_by ? (stampNames[stamps[c.key].updated_by] || 'Unknown person') : 'Not recorded before 30 Sep 2026',
+    }
+  })
   const tile = (n) => (loadError ? 'N/A' : loading && !readAt ? '...' : n)
 
   return (
@@ -306,12 +362,17 @@ export default function ConsoleSystemConfig({ tabParam = 'tab' } = {}) {
             <span className="inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-gray-500" aria-hidden="true" /> Saved only (stored, not yet enforced)</span>
           </>
         )}
-        actions={(
+        actions={(<>
+          <ExportButtons rows={loadError ? [] : exportRows} title="System configuration" disabled={!!loadError} columns={[
+            { key: 'group', header: 'Group' }, { key: 'setting', header: 'Setting' }, { key: 'key', header: 'Key' },
+            { key: 'value', header: 'Value' }, { key: 'enforced', header: 'Enforcement' }, { key: 'range', header: 'Allowed range' },
+            { key: 'changed', header: 'Last changed' }, { key: 'by', header: 'Changed by' },
+          ]} />
           <Btn variant={saved && !dirty ? 'good' : 'primary'} icon={saved && !dirty ? CheckCircle : Save} onClick={openReview}
             busy={saving} disabled={!dirty || saving || !!loadError}>
             {saving ? 'Saving...' : saved && !dirty ? 'Saved' : dirty ? `Review ${changes.length} change${changes.length === 1 ? '' : 's'}` : 'Save Changes'}
           </Btn>
-        )}
+        </>)}
       />
 
       <ErrorState message={loadError} onRetry={load} />
@@ -334,7 +395,7 @@ export default function ConsoleSystemConfig({ tabParam = 'tab' } = {}) {
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <StatTile icon={CheckCircle2} label="Enforced" value={tile(stats.active)} tone="good" sub="Read and acted on"
           onClick={() => setFilter('active')} active={filter === 'active'} />
         <StatTile label="Saved only" value={tile(stats.savedOnly)} sub="Stored, not enforced" tone="muted"
@@ -345,6 +406,9 @@ export default function ConsoleSystemConfig({ tabParam = 'tab' } = {}) {
           onClick={() => setFilter('changed')} active={filter === 'changed'} />
         <StatTile icon={AlertTriangle} label="Maintenance" value={loadError ? 'N/A' : original.maintenance_mode === 'true' ? 'On' : 'Off'}
           tone={original.maintenance_mode === 'true' ? 'danger' : 'good'} sub={original.maintenance_mode === 'true' ? 'Users locked out' : 'App open to users'} />
+        <StatTile icon={History} label="Changed in 30 days"
+          value={history.state === 'ok' ? histSummary.changed30 : 'N/A'}
+          sub={history.state === 'ok' ? `${histSummary.authors} ${histSummary.authors === 1 ? 'person' : 'people'} recorded` : history.state === 'error' ? 'History could not be read' : 'Reading history'} />
       </div>
 
       {!loadError && <AttentionList items={attention} clear={loading ? 'Checking...' : 'Nothing in the configuration needs attention.'} />}
@@ -391,6 +455,7 @@ export default function ConsoleSystemConfig({ tabParam = 'tab' } = {}) {
                     <Th>Value</Th>
                     <Th>Enforcement</Th>
                     <Th>Managed in</Th>
+                    <Th>Last written</Th>
                   </THead>
                   <tbody>
                     {storedPaged.rows.map((r) => {
@@ -401,7 +466,8 @@ export default function ConsoleSystemConfig({ tabParam = 'tab' } = {}) {
                           <Td nowrap><Code>{r.key}</Code></Td>
                           <Td><span className="text-gray-400 break-all" title={v.length > 80 ? `${v.length} characters` : undefined}>{v.length > 80 ? `${v.slice(0, 80)}... (${v.length} characters)` : v || '(blank)'}</span></Td>
                           <Td>{r.enf.known ? <Badge tone={r.enf.active ? 'good' : 'quiet'} title={r.enf.where || undefined}>{r.enf.active ? 'Active and enforced' : 'Saved only'}</Badge> : <span className="text-gray-500">Not tracked</span>}</Td>
-                          <Td>{owner ? <ConsoleLink plain to={owner[0]}>{owner[1]}</ConsoleLink> : <span className="text-gray-500">Platform</span>}</Td>
+                          <Td>{owner ? (owner[0] ? <ConsoleLink plain to={owner[0]}>{owner[1]}</ConsoleLink> : <Badge tone="quiet" title="The Expo app is retired. This key is kept read-only for old installs.">{owner[1]}</Badge>) : <span className="text-gray-500">Platform</span>}</Td>
+                          <Td nowrap className="text-gray-400">{stamps[r.key]?.updated_at ? fmtRelative(stamps[r.key].updated_at) : 'Not stored'}</Td>
                         </Tr>
                       )
                     })}
@@ -429,7 +495,10 @@ export default function ConsoleSystemConfig({ tabParam = 'tab' } = {}) {
                   <ConfigRow key={cfg.key} cfg={cfg} showGroup={crossGroup}
                     value={getVal(cfg.key, cfg.type)} set={isSet(cfg.key)} changed={changedKeys.has(cfg.key)}
                     original={original[cfg.key]} error={changedKeys.has(cfg.key) ? validate(cfg, configs[cfg.key]) : null}
-                    onChange={(v) => setVal(cfg.key, cfg.type, v)} onRevert={() => revertKey(cfg.key)} />
+                    onChange={(v) => setVal(cfg.key, cfg.type, v)} onRevert={() => revertKey(cfg.key)}
+                    last={histSummary.latest[cfg.key]} historyState={history.state} names={history.names}
+                    stamp={stamps[cfg.key]} stampNames={stampNames}
+                    onHistory={() => setHistKey(cfg.key)} />
                 ))}
               </div>
             </Panel>
@@ -443,8 +512,8 @@ export default function ConsoleSystemConfig({ tabParam = 'tab' } = {}) {
         footer={(
           <>
             <Btn onClick={() => setReviewOpen(false)} disabled={saving}>Cancel</Btn>
-            <Btn variant={turningMaintenanceOn ? 'danger' : 'primary'} icon={Save} onClick={handleSave} busy={saving}
-              disabled={invalid.length > 0 || !dirty}>
+            <Btn variant={turningMaintenanceOn || risky.some((c) => c.risk.tone === 'danger') ? 'danger' : 'primary'} icon={Save} onClick={handleSave} busy={saving}
+              disabled={invalid.length > 0 || !dirty || !reasonOk || !typedOk}>
               {turningMaintenanceOn ? 'Save and lock users out' : 'Save changes'}
             </Btn>
           </>
@@ -471,17 +540,90 @@ export default function ConsoleSystemConfig({ tabParam = 'tab' } = {}) {
                   <span className="text-gray-500" aria-hidden="true">to</span>
                   <span className="text-orange-300 font-semibold break-all">{displayValue(c.to, c.cfg.type)}</span>
                   <Badge tone={enf.active ? 'good' : 'quiet'}>{enf.active ? 'Takes effect' : 'Stored only'}</Badge>
+                  {c.risk && <Badge tone={c.risk.tone}>Risky</Badge>}
                 </li>
               )
             })}
           </ul>
+          {risky.map((c) => (
+            <ImpactBox key={`impact-${c.key}`} tone={c.risk.tone}
+              what={`${c.cfg.label}: ${displayValue(c.from, c.cfg.type)} to ${displayValue(c.to, c.cfg.type)}.`}
+              change={c.risk.why}
+              who={CONTROL_META[c.key]?.who || 'Every organisation on the platform.'}
+              undo={`Yes. Set it back to ${displayValue(c.from, c.cfg.type)}; the old value is kept in the change history.`} />
+          ))}
+          <label className="block">
+            <span className="block text-[11px] font-semibold text-gray-400 mb-1">
+              Reason {reasonNeeded ? '(required for a risky change)' : '(optional, recorded in the change history)'}
+            </span>
+            <input value={reason} onChange={(e) => setReason(e.target.value)} autoComplete="off" maxLength={500}
+              aria-label="Reason for this change"
+              className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+              placeholder="Why are you changing this?" />
+          </label>
+          {typedWord && (
+            <label className="block">
+              <span className="block text-[11px] font-semibold text-gray-400 mb-1">Type <span className="font-mono text-gray-200">{typedWord}</span> to confirm</span>
+              <input value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" spellCheck={false}
+                aria-label={`Type ${typedWord} to confirm`}
+                className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-800 text-xs font-mono text-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
+            </label>
+          )}
         </div>
       </Modal>
+
+      <HistoryDrawer histKey={histKey} onClose={() => setHistKey(null)} history={history}
+        cfg={ALL_CONFIGS.find((c) => c.key === histKey)}
+        onUse={(value) => {
+          const cfg = ALL_CONFIGS.find((c) => c.key === histKey)
+          if (cfg) setConfigs((prev) => ({ ...prev, [cfg.key]: value ?? '' }))
+          setHistKey(null)
+        }} />
     </div>
   )
 }
 
-function ConfigRow({ cfg, value, set, changed, original, error, showGroup, onChange, onRevert }) {
+function HistoryDrawer({ histKey, cfg, history, onClose, onUse }) {
+  const rows = histKey ? history.rows.filter((r) => r.key === histKey) : []
+  return (
+    <Drawer open={!!histKey} onClose={onClose} title={cfg ? `History: ${cfg.label}` : 'History'}
+      subtitle="Recorded from 30 Sep 2026. Use a value to stage it for review; nothing is saved until you save.">
+      {history.state === 'error' ? (
+        <EmptyState icon={History} title="History could not be read" reason="Only a super admin can read the change history, or the read failed." />
+      ) : history.state === 'loading' ? <LoadingState label="Reading history" rows={3} /> : rows.length === 0 ? (
+        <EmptyState icon={History} title="No recorded change" reason="This setting has not changed since history recording started on 30 Sep 2026." />
+      ) : (
+        <ul className="space-y-2">
+          {rows.map((r) => (
+            <li key={r.id} className="rounded-lg border border-gray-800 bg-gray-900/40 px-3 py-2 text-xs">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-gray-200 font-medium">{fmtDateTime(r.changed_at)}</span>
+                <Badge tone="quiet">{r.action}</Badge>
+                <span className="text-gray-500 inline-flex items-center gap-1"><Users size={11} aria-hidden="true" />{history.names[r.changed_by] || (r.changed_by ? 'Unknown person' : 'System or scheduled job')}</span>
+              </div>
+              <p className="mt-1 text-gray-400 break-all">
+                <span className="line-through text-gray-500">{displayValue(r.old_value, cfg?.type)}</span> to <span className="text-orange-300">{displayValue(r.new_value, cfg?.type)}</span>
+              </p>
+              <p className="mt-0.5 text-gray-500">{r.reason ? `Reason: ${maskEmails(r.reason)}` : 'No reason recorded'}</p>
+              {r.old_value != null && (
+                <div className="mt-1.5"><Btn size="xs" icon={RotateCcw} onClick={() => onUse(r.old_value)}>Use the earlier value</Btn></div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Drawer>
+  )
+}
+
+function ConfigRow({ cfg, value, set, changed, original, error, showGroup, onChange, onRevert, last, historyState, names = {}, onHistory, stamp, stampNames = {} }) {
+  // The row's own updated_at is the real last write when history has no entry
+  // (history starts 30 Sep 2026; updated_by was not stamped before that).
+  const stampText = stamp?.updated_at
+    ? `Last written ${fmtRelative(stamp.updated_at)}${stamp.updated_by ? ` by ${stampNames[stamp.updated_by] || 'unknown person'}` : ' (person not recorded before 30 Sep 2026)'}`
+    : null
+  const meta = CONTROL_META[cfg.key]
+  const hint = rangeHint(cfg.key)
   const enf = enforcementOf(cfg.key)
   const labelId = `cfg-${cfg.key}`
   const inputCls = `w-full h-8 bg-gray-800/80 border rounded-lg px-3 text-xs text-gray-100 focus:outline-none focus:border-orange-500 focus-visible:ring-2 focus-visible:ring-orange-500 ${error ? 'border-red-600' : 'border-gray-700'}`
@@ -505,6 +647,19 @@ function ConfigRow({ cfg, value, set, changed, original, error, showGroup, onCha
           {changed && <Badge tone="warning">Changed from {displayValue(original, cfg.type)}</Badge>}
         </div>
         <p className="text-[11px] text-gray-500 mt-0.5">{cfg.desc}</p>
+        {meta?.who && <p className="text-[11px] text-gray-400 mt-0.5">Who is affected: {meta.who}</p>}
+        <p className="text-[10px] text-gray-500 mt-0.5 flex flex-wrap items-center gap-x-2">
+          {hint && <span>Allowed: {hint}</span>}
+          <span>
+            {historyState === 'ok' && last
+              ? `Last changed ${fmtRelative(last.changed_at)} by ${names[last.changed_by] || (last.changed_by ? 'unknown person' : 'system')}`
+              : stampText || (set ? 'Last write time not stored for this key' : 'Never saved')}
+          </span>
+          {onHistory && historyState === 'ok' && (
+            <button type="button" onClick={onHistory} aria-label={`History of ${cfg.label}`}
+              className="underline text-orange-300 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">History</button>
+          )}
+        </p>
         {enf.where && (
           <p className="text-[10px] text-gray-500 mt-0.5 break-words">Checked at: {enf.where}</p>
         )}
@@ -524,6 +679,7 @@ function ConfigRow({ cfg, value, set, changed, original, error, showGroup, onCha
           <input
             type={cfg.type === 'number' ? 'number' : 'text'}
             min={cfg.type === 'number' ? 0 : undefined}
+            max={cfg.type === 'number' && meta?.max != null ? meta.max : undefined}
             aria-labelledby={labelId}
             aria-invalid={error ? true : undefined}
             value={value}

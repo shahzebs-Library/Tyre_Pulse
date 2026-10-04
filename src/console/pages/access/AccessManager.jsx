@@ -1183,7 +1183,7 @@ export default function AccessManager() {
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[var(--text-muted)] px-1">
                   <span className="inline-flex items-center gap-1.5 font-semibold text-[var(--text-secondary)]">Access surface:</span>
                   <span className="inline-flex items-center gap-1.5"><Monitor size={12} className="text-[var(--brand-bright)]" /> Web applies to the web app only.</span>
-                  <span className="inline-flex items-center gap-1.5"><Smartphone size={12} className="text-[var(--brand-bright)]" /> Mobile applies to the inspector app only.</span>
+                  <span className="inline-flex items-center gap-1.5"><Smartphone size={12} className="text-[var(--brand-bright)]" /> Mobile applies to the Flutter field app only.</span>
                   <span className="inline-flex items-center gap-1.5"><Layers size={12} className="text-[var(--brand-bright)]" /> Both applies to web and mobile.</span>
                   {mode === 'role' && (
                     <span className="inline-flex items-center gap-1.5">Picking Web or Mobile now turns the other surface off for you, so the saved state always matches what is shown.</span>
@@ -1275,10 +1275,10 @@ export default function AccessManager() {
       {/* Mobile app access - the REAL mobile module keys (src/lib/mobileModules.js),
           separate from the web tree above (which is keyed on the web catalog). This
           is how a mobile module is actually closed for a role or a user: writes land
-          on `mobile:<mobileKey>` rows the phone app enforces. Self-contained load/save. */}
+          on `mobile:<mobileKey>` rows the Flutter app enforces. Self-contained load/save. */}
       {!loading && !loadError && (mode === 'role' || selectedUser) && (
         <Collapsible icon={Smartphone} title="Mobile app access" keepMounted
-          subtitle={`Open or close the phone app's own modules for this ${mode === 'role' ? 'role' : 'user'}. Saved separately from the web modules above.`}>
+          subtitle={`Open or close the Flutter field app's own modules for this ${mode === 'role' ? 'role' : 'user'}. Saved separately from the web modules above.`}>
           <MobileAccessPanel
             mode={mode}
             role={selectedRole}

@@ -3,17 +3,22 @@ import { Link } from 'react-router-dom'
 import {
   Building2, Plus, Edit2, Lock, Unlock, Trash2, Globe,
   CheckCircle, XCircle, Save,
-  Users, Database, Eye, FileSpreadsheet, FileText, BarChart3, ArrowUpRight,
+  Users, Database, Eye, FileSpreadsheet, FileText, BarChart3, ArrowUpRight, Info,
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { toUserMessage } from '../../lib/safeError'
 import {
   Badge, Btn, ErrorState, LoadingState, EmptyState, Modal, SearchInput, Select, Toolbar,
-  StatTile, Table, THead, Th, Tr, Td, Panel, PanelHeader, Segmented,
+  StatTile, Table, THead, Th, Tr, Td, Panel, PanelHeader, Segmented, Note, ConfirmImpactDialog,
 } from '../components/ui'
 import { BarsChart, TrendChart } from '../components/ui/charts'
 import { topShare } from '../../lib/consoleCharts'
-import { PageHeader, useUrlTab, useUrlParam, useRefreshStamp, usePaged, Pager, Drawer, AttentionList } from './shared/pageKit'
+import { useUrlTab, useUrlParam, useRefreshStamp, usePaged, Pager, Drawer, AttentionList } from './shared/pageKit'
+import { SectionTop, ImpactLine, isEmbedded } from './platform/SectionKit'
+import { getOrgOverview } from '../../lib/api/consolePlatform'
+import { deleteEmptyOrg } from '../../lib/api/consolePeopleControls'
+import { canOfferOrgDelete } from '../../lib/consolePeopleControls'
+import { maskEmail } from '../../lib/consolePlatform'
 import { exportConsoleRows, sortRows, useTableSort } from '../../lib/consoleTable'
 import { orgStatus, summarizeOrgs } from '../../lib/consoleOrganisations'
 import { useConsoleAuth } from '../ConsoleAuthContext'
@@ -54,8 +59,13 @@ const EMPTY_FORM = {
   contact_email: '', active: true, locked: false,
 }
 
+const shownEmail = (e) => maskEmail(e) || (e ? 'Hidden' : null)
+const recordTotal = (st) => (st ? ['vehicles', 'tyre_records', 'job_cards', 'expense_lines', 'inspections'].reduce((a, k) => a + (Number(st[k]) || 0), 0) : null)
+
 export default function ConsoleOrganisations({ tabParam = 'tab' } = {}) {
+  const embedded = isEmbedded(tabParam)
   const { logAction } = useConsoleAuth()
+  const [overview, setOverview] = useState(null)   // id -> admin_org_overview row, null = not readable
   const [orgs, setOrgs]           = useState([])
   const [loading, setLoading]     = useState(true)
   const [loadError, setLoadError] = useState('')
@@ -90,6 +100,9 @@ export default function ConsoleOrganisations({ tabParam = 'tab' } = {}) {
         .order('name')
       if (error) throw error
       setOrgs(data ?? [])
+      getOrgOverview()
+        .then((rows) => setOverview(Object.fromEntries((rows || []).map((o) => [o.id || o.organisation_id, o]))))
+        .catch(() => setOverview(null))
       stamp()
     } catch (e) {
       setLoadError(toUserMessage(e, 'Could not load organisations.'))
@@ -158,13 +171,13 @@ export default function ConsoleOrganisations({ tabParam = 'tab' } = {}) {
     }
   }
 
-  async function toggleLock(org) {
+  async function toggleLock(org, reason) {
     const locked = !org.locked
     setBusyId(org.id); setLockError(null)
     try {
       const { error: err } = await supabase.from('organisations').update({ locked }).eq('id', org.id)
       if (err) throw err
-      await logAction(locked ? 'lock_org' : 'unlock_org', org.id, 'organisation', { name: org.name })
+      await logAction(locked ? 'lock_org' : 'unlock_org', org.id, 'organisation', { name: org.name, reason: reason || null })
       setConfirmLock(null)
       await load()
     } catch (e) {
@@ -188,7 +201,10 @@ export default function ConsoleOrganisations({ tabParam = 'tab' } = {}) {
           { key: 'status', header: 'Status', value: r => orgStatus(r) },
           { key: 'country', header: 'Primary country' },
           { key: 'countries', header: 'Countries', value: r => (r.countries ?? []).join(', ') },
-          { key: 'contact_email', header: 'Contact email' },
+          { key: 'contact_email', header: 'Contact email (masked)', value: r => shownEmail(r.contact_email) || '' },
+          { key: 'members', header: 'Members', value: r => (overview?.[r.id] ? overview[r.id].members ?? '' : 'N/A') },
+          { key: 'records', header: 'Records', value: r => (overview?.[r.id] ? recordTotal(overview[r.id]) : 'N/A') },
+          { key: 'max_users', header: 'Stored member cap (not enforced)', value: r => r.max_users ?? '' },
           { key: 'created_at', header: 'Created', value: r => fmtDate(r.created_at) },
         ],
       })
@@ -199,12 +215,11 @@ export default function ConsoleOrganisations({ tabParam = 'tab' } = {}) {
     }
   }
 
-  async function handleDelete(org) {
+  async function handleDelete(org, reason) {
     setDeleting(true); setDeleteError(null)
     try {
-      const { error: err } = await supabase.from('organisations').delete().eq('id', org.id)
-      if (err) throw err
-      await logAction('delete_org', org.id, 'organisation', { name: org.name })
+      // The server re-checks members and every tenant table, deletes atomically and audits.
+      await deleteEmptyOrg(org.id, reason)
       setConfirmDelete(null); load()
     } catch (e) {
       setDeleteError(toUserMessage(e, 'Could not delete the organisation.'))
@@ -261,7 +276,8 @@ export default function ConsoleOrganisations({ tabParam = 'tab' } = {}) {
         <Btn size="xs" variant="quiet" icon={org.locked ? Unlock : Lock} title={org.locked ? 'Unlock' : 'Lock'}
           ariaLabel={`${org.locked ? 'Unlock' : 'Lock'} ${org.name}`} busy={busyId === org.id}
           onClick={() => { setExpanded(null); setLockError(null); setConfirmLock(org) }} />
-        <Btn size="xs" variant="quiet" icon={Trash2} title="Delete" ariaLabel={`Delete ${org.name}`} disabled={busyId === org.id}
+        <Btn size="xs" variant="quiet" icon={Trash2} ariaLabel={`Delete ${org.name}`} disabled={busyId === org.id || !canOfferOrgDelete(overview?.[org.id]).ok}
+          title={canOfferOrgDelete(overview?.[org.id]).ok ? 'Delete (empty organisation)' : `Delete not offered: ${canOfferOrgDelete(overview?.[org.id]).reason}`}
           onClick={() => { setExpanded(null); setDeleteError(null); setConfirmDelete(org) }} />
       </div>
     )
@@ -279,8 +295,8 @@ export default function ConsoleOrganisations({ tabParam = 'tab' } = {}) {
 
   return (
     <div className="space-y-5 max-w-7xl">
-      <PageHeader icon={Building2} title="Organisations"
-        purpose="Companies on the platform, their plan, countries and access state."
+      <SectionTop embedded={embedded} icon={Building2} title="Organisations"
+        purpose="Create, edit, lock and delete customer companies. Delete is only offered for an organisation with no members and no records."
         primary={<Btn variant="primary" icon={Plus} onClick={openCreate}>New Organisation</Btn>}
         actions={(
           <>
@@ -291,8 +307,12 @@ export default function ConsoleOrganisations({ tabParam = 'tab' } = {}) {
         refreshedAt={refreshedAt} onRefresh={load} refreshing={loading} />
 
       {exportError && <ErrorState message={exportError} />}
+      <Note icon={Info}>
+        Locking an organisation is recorded, but the database does not yet block its members (owner decision open). The stored member cap is
+        not enforced until billing goes live. To block people now, lock their accounts in Users.
+      </Note>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <StatTile label="Organisations" icon={Building2} value={loading || loadError ? 'N/A' : summary.total}
           sub={loading ? 'Loading' : loadError ? 'Could not load' : 'All plans'} onClick={() => { setFilterStatus(''); setTab('register') }} active={!filterStatus} />
         <StatTile label="Active" tone="good" value={loading || loadError ? 'N/A' : summary.active}
@@ -301,6 +321,8 @@ export default function ConsoleOrganisations({ tabParam = 'tab' } = {}) {
           sub="Access blocked" onClick={() => statusTile('locked')} active={filterStatus === 'locked'} />
         <StatTile label="Inactive" tone="muted" value={loading || loadError ? 'N/A' : summary.inactive}
           sub="Switched off" onClick={() => statusTile('inactive')} active={filterStatus === 'inactive'} />
+        <StatTile label="Empty, can be deleted" icon={Trash2} value={loading || loadError || !overview ? 'N/A' : orgs.filter((o) => canOfferOrgDelete(overview[o.id]).ok).length}
+          sub={overview ? 'No members, no records' : 'Counts could not be read'} />
         <StatTile label="Enterprise plan" tone="accent" value={loading || loadError ? 'N/A' : (summary.byPlan.enterprise ?? 0)}
           sub={loading || loadError ? '' : `${summary.countries} countries covered`}
           onClick={() => { setFilterPlan(filterPlan === 'enterprise' ? '' : 'enterprise'); setTab('register') }} active={filterPlan === 'enterprise'} />
@@ -338,6 +360,8 @@ export default function ConsoleOrganisations({ tabParam = 'tab' } = {}) {
                   <Th sortKey="name" sort={sort} onSort={onSort}>Organisation</Th>
                   <Th sortKey="plan" sort={sort} onSort={onSort}>Plan</Th>
                   <Th>Countries</Th>
+                  <Th align="right">Members</Th>
+                  <Th align="right">Records</Th>
                   <Th sortKey="status" sort={sort} onSort={onSort}>Status</Th>
                   <Th sortKey="created_at" sort={sort} onSort={onSort}>Created</Th>
                   <Th align="right"><span className="sr-only">Actions</span></Th>
@@ -366,6 +390,8 @@ export default function ConsoleOrganisations({ tabParam = 'tab' } = {}) {
                             {countries.length === 0 && (org.country ? <Badge>{org.country}</Badge> : <span className="text-gray-400">None set</span>)}
                           </div>
                         </Td>
+                        <Td align="right" className="tabular-nums text-gray-300">{overview?.[org.id] ? (overview[org.id].members ?? 'N/A') : 'N/A'}</Td>
+                        <Td align="right" className="tabular-nums text-gray-300">{overview?.[org.id] ? recordTotal(overview[org.id]).toLocaleString() : 'N/A'}</Td>
                         <Td nowrap><OrgStatusBadge org={org} /></Td>
                         <Td nowrap className="text-gray-400">{fmtDate(org.created_at)}</Td>
                         <Td align="right">{orgActions(org)}</Td>
@@ -413,7 +439,9 @@ export default function ConsoleOrganisations({ tabParam = 'tab' } = {}) {
             <div className="grid grid-cols-2 gap-4">
               <Stat label="Users" value={orgStats[openOrg.id]?.users ?? 'Loading...'} icon={Users} />
               <Stat label="Tyre records" value={orgStats[openOrg.id]?.tyres ?? 'Loading...'} icon={Database} />
-              <Stat label="Contact" value={openOrg.contact_email ?? 'N/A'} icon={Globe} />
+              <Stat label="Contact" value={shownEmail(openOrg.contact_email) ?? 'N/A'} icon={Globe} />
+              <Stat label="Stored member cap" value={openOrg.max_users ? `${openOrg.max_users} (not enforced until billing goes live)` : 'None stored'} icon={Users} />
+              <Stat label="Records held" value={overview?.[openOrg.id] ? recordTotal(overview[openOrg.id]).toLocaleString() : 'N/A'} icon={Database} />
               <Stat label="Plan" value={openOrg.plan ?? 'N/A'} icon={Eye} />
             </div>
             <div>
@@ -423,6 +451,7 @@ export default function ConsoleOrganisations({ tabParam = 'tab' } = {}) {
               ) : <p className="text-xs text-gray-400">{openOrg.country ? `Primary only: ${openOrg.country}` : 'None set'}</p>}
             </div>
             <p className="text-xs text-gray-400">Created {fmtDate(openOrg.created_at)}</p>
+            <ImpactLine change={canOfferOrgDelete(overview?.[openOrg.id]).ok ? 'Delete is available: this organisation holds nothing.' : `Delete is not offered. ${canOfferOrgDelete(overview?.[openOrg.id]).reason}`} />
             <Link to={`/console/users?org=${openOrg.id}`} className="inline-flex items-center gap-1 text-xs text-orange-300 hover:text-orange-200 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
               Manage this organisation&apos;s users <ArrowUpRight size={11} aria-hidden="true" />
             </Link>
@@ -509,51 +538,52 @@ export default function ConsoleOrganisations({ tabParam = 'tab' } = {}) {
         </div>
       </Modal>
 
-      {/* Delete confirm */}
-      <Modal
+      <ConfirmImpactDialog
         open={!!confirmDelete}
-        title="Delete Organisation?"
-        subtitle="This action is irreversible"
-        onClose={() => { if (!deleting) setConfirmDelete(null) }}
-        width="max-w-md"
-        footer={(
-          <>
-            <Btn onClick={() => setConfirmDelete(null)} disabled={deleting}>Cancel</Btn>
-            <Btn variant="danger" icon={Trash2} onClick={() => handleDelete(confirmDelete)} busy={deleting}>{deleting ? 'Deleting...' : 'Delete'}</Btn>
-          </>
-        )}
-      >
-        {deleteError && <div className="mb-3"><ErrorState message={deleteError} /></div>}
-        <p className="text-sm text-gray-300 break-words">
-          Are you sure you want to delete <strong className="text-white">{confirmDelete?.name}</strong>?
-          All associated data may be affected.
-        </p>
-      </Modal>
+        title="Delete organisation"
+        confirmLabel="Delete organisation"
+        danger
+        requireReason
+        typedWord="DELETE"
+        busy={deleting}
+        error={deleteError}
+        impact={confirmDelete ? {
+          tone: 'danger',
+          what: `Delete ${confirmDelete.name}.`,
+          change: 'The organisation row is removed. The server refuses if it still has any member or record.',
+          who: 'No one: it has 0 members and 0 records.',
+          undo: 'No. Create it again if needed.',
+          stats: overview?.[confirmDelete.id] ? [
+            { label: 'Members', value: overview[confirmDelete.id].members },
+            { label: 'Records', value: recordTotal(overview[confirmDelete.id]) },
+            { label: 'Plan', value: confirmDelete.plan || 'N/A' },
+          ] : undefined,
+        } : undefined}
+        onCancel={() => { if (!deleting) setConfirmDelete(null) }}
+        onConfirm={({ reason }) => handleDelete(confirmDelete, reason)}
+      />
 
-      {/* Lock / unlock confirm */}
-      <Modal
+      <ConfirmImpactDialog
         open={!!confirmLock}
-        title={confirmLock?.locked ? 'Unlock organisation?' : 'Lock organisation?'}
-        subtitle={confirmLock?.name}
-        onClose={() => { if (!busyId) setConfirmLock(null) }}
-        width="max-w-md"
-        footer={(
-          <>
-            <Btn onClick={() => setConfirmLock(null)} disabled={!!busyId}>Cancel</Btn>
-            <Btn variant={confirmLock?.locked ? 'primary' : 'danger'} icon={confirmLock?.locked ? Unlock : Lock}
-              onClick={() => toggleLock(confirmLock)} busy={!!busyId}>
-              {confirmLock?.locked ? 'Unlock' : 'Lock'}
-            </Btn>
-          </>
-        )}
-      >
-        {lockError && <div className="mb-3"><ErrorState message={lockError} /></div>}
-        <p className="text-sm text-gray-300 break-words">
-          {confirmLock?.locked
-            ? 'Members of this organisation will be able to sign in and use the app again.'
-            : 'Every member of this organisation will be blocked from the app until it is unlocked. The action is recorded in the audit trail.'}
-        </p>
-      </Modal>
+        title={confirmLock?.locked ? 'Unlock organisation' : 'Lock organisation'}
+        confirmLabel={confirmLock?.locked ? 'Unlock' : 'Lock'}
+        danger={!confirmLock?.locked}
+        requireReason
+        typedWord={confirmLock?.locked ? undefined : 'LOCK'}
+        busy={!!busyId}
+        error={lockError}
+        impact={confirmLock ? {
+          tone: confirmLock.locked ? 'info' : 'warning',
+          what: `${confirmLock.locked ? 'Unlock' : 'Lock'} ${confirmLock.name}.`,
+          change: confirmLock.locked
+            ? 'The organisation is marked unlocked.'
+            : 'The organisation is marked locked and listed as locked everywhere in the console. The database does not yet block its members (owner decision open).',
+          who: overview?.[confirmLock.id] ? `${overview[confirmLock.id].members ?? 'N/A'} member(s), once enforcement exists.` : 'Its members, once enforcement exists.',
+          undo: 'Yes. Unlock or lock again at any time.',
+        } : undefined}
+        onCancel={() => { if (!busyId) setConfirmLock(null) }}
+        onConfirm={({ reason }) => toggleLock(confirmLock, reason)}
+      />
     </div>
   )
 }

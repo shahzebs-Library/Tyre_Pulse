@@ -51,6 +51,8 @@ function impactFor(item, cur, next) {
   if (item.key === 'maintenance_mode' && isOn(next)) return { ...base, tone: 'danger', who: 'Every non-admin account on web and phone is blocked at once.' }
   if (item.key === 'export_enabled' && !isOn(next)) return { ...base, tone: 'danger', who: 'Every Excel and PDF download stops working for everyone.' }
   if (item.key === 'registration_open' && !isOn(next)) return { ...base, tone: 'warning', who: 'New people can no longer sign up. Existing accounts are not affected.' }
+  if ((item.key === 'auth_google_enabled' || item.key === 'auth_microsoft_enabled') && isOn(next)) return { ...base, tone: 'warning', who: 'Everyone on the web sign-in and console sign-in pages sees the button. It fails until the provider is set up in Supabase Auth.' }
+  if (item.key === 'qr_login_enabled' && isOn(next)) return { ...base, tone: 'warning', who: 'Everyone on the web sign-in page sees the QR code. It only works for phones running a Flutter build with Scan to sign in.' }
   if (item.key === 'session_timeout_hours') return { ...base, tone: 'warning', who: 'Web app users only. Phones and the console (10-minute idle) are not changed.' }
   return { ...base, who: 'Every organization on the platform.' }
 }

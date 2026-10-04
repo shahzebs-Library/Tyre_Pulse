@@ -86,8 +86,11 @@ serve(async (req) => {
 
   // A QR session is single-factor. Users with 2FA enrolled must sign in with
   // their password and code instead, so QR never weakens their second factor.
-  const { data: factors } = await admin.auth.admin.mfa.listFactors({ userId })
-  if (factors?.factors?.some((f: { status?: string }) => f.status === 'verified')) return reply(403, { ok: false, reason: 'mfa' })
+  // Fail closed: if the factor list cannot be read, refuse rather than risk
+  // issuing a single-factor session to an account that has 2FA.
+  const { data: factors, error: factorErr } = await admin.auth.admin.mfa.listFactors({ userId })
+  if (factorErr || !Array.isArray(factors?.factors)) return reply(503, { ok: false, reason: 'unavailable' })
+  if (factors.factors.some((f: { status?: string }) => f.status === 'verified')) return reply(403, { ok: false, reason: 'mfa' })
 
   const { data: userRes, error: userErr } = await admin.auth.admin.getUserById(userId)
   const email = userRes?.user?.email

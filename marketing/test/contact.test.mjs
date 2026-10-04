@@ -16,7 +16,7 @@ function handler(env, fetch) {
   new Function('require', 'exports', 'process', 'fetch', source)(dependencies, compiledModule.exports, { env }, fetch);
   return compiledModule.exports.POST;
 }
-const input = { name: 'Test User', email: 'test@example.invalid', company: 'Example', country: 'Saudi Arabia' };
+const input = { name: 'Test User', email: 'test@example.invalid', company: 'Example', country: 'Saudi Arabia', fleetSize: '26 to 100 assets' };
 const request = value => ({ json: async () => value });
 const configured = { RESEND_API_KEY: 'test-only', CONTACT_TO_EMAIL: 'sales@example.invalid', CONTACT_FROM_EMAIL: 'site@example.invalid' };
 
@@ -109,4 +109,25 @@ test('contact form preserves input and exits sending state on network failure', 
   const form = contactForm(async () => { throw new Error('offline'); });
   await form.submit({ preventDefault() {}, currentTarget: { reset() { throw new Error('must not reset'); } } });
   assert.deepEqual(form.states, ['Unable to send the request. Please try again.', false]);
+});
+
+const withHeaders = (value, headers) => ({ json: async () => value, headers: new Headers(headers) });
+
+test('a cross-site browser post is refused before delivery', async () => {
+  const post = handler(configured, () => { throw new Error('must not send'); });
+  const res = await post(withHeaders(input, { origin: 'https://evil.example', host: 'tyrepulse.app' }));
+  assert.equal(res.status, 403);
+});
+
+test('one client is throttled after five requests in the window', async () => {
+  const post = handler({}, () => { throw new Error('must not send'); });
+  const req = () => withHeaders(input, { 'x-forwarded-for': '203.0.113.9' });
+  for (let i = 0; i < 5; i++) assert.equal((await post(req())).status, 503);
+  assert.equal((await post(req())).status, 429);
+});
+
+test('fleet size is required server-side', async () => {
+  const post = handler(configured, () => { throw new Error('must not send'); });
+  const rest = { ...input }; delete rest.fleetSize;
+  assert.equal((await post(request(rest))).status, 400);
 });

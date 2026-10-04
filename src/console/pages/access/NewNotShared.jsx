@@ -64,7 +64,7 @@ export default function NewNotShared({ permMap, columns, peopleCounts, onShared 
       let n = 0
       for (const m of CATALOG) {
         const w = webCell(permMap, c.name, m.key)
-        if (w && !w.saved && w.on) n += 1
+        if (!w.saved && w.on) n += 1
       }
       if (n) out.push({ role: c.name, areas: n, people: peopleCounts?.[c.name] })
     }

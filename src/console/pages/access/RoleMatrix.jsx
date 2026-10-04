@@ -63,7 +63,7 @@ export default function RoleMatrix({ permMap, columns, peopleCounts, staged, onT
         return cols.some((c) => {
           const w = webCell(permMap, c.name, m.key)
           const p = phoneCell(permMap, c.name, mk)
-          return (w && w.saved) || (p && p.saved) || staged[stageKey(c.name, m.key)] !== undefined
+          return w.saved || (p && p.saved) || staged[stageKey(c.name, m.key)] !== undefined
             || (mk && staged[stageKey(c.name, MOBILE_PREFIX + mk)] !== undefined)
         })
       }),

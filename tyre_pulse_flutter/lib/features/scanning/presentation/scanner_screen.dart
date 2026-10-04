@@ -23,6 +23,8 @@ import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
+import 'package:tyre_pulse/features/qr_login/domain/qr_login.dart';
+import 'package:tyre_pulse/features/qr_login/presentation/qr_login_screen.dart';
 import 'package:tyre_pulse/features/scanning/domain/scan_lookup.dart';
 import 'package:tyre_pulse/features/scanning/domain/scan_route_resolver.dart';
 import 'package:tyre_pulse/features/scanning/presentation/camera_access.dart';
@@ -57,6 +59,13 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
       return;
     }
     FocusScope.of(context).unfocus();
+    // A web sign-in code is not an asset or tyre code: hand it to the
+    // "Sign in on a computer" flow instead of searching for it.
+    if (looksLikeQrLoginPayload(value)) {
+      _codeController.clear();
+      unawaited(openQrLogin(context, initialPayload: value));
+      return;
+    }
     // A fire-and-forget kick-off, not a swallowed failure: `submit` cannot
     // throw (see its own doc comment), and the RESULT it produces is read
     // back through `scannerControllerProvider`'s state, not through this
@@ -187,7 +196,19 @@ class _LiveCameraScannerState extends ConsumerState<_LiveCameraScanner> {
     final String? code = firstScannedCode(capture);
     if (code == null) return;
     _submitted = true;
+    // A web sign-in QR (`tyrepulse://qr-login?...`) goes to the sign-in
+    // approval flow, never into the asset/tyre lookup. Scanning resumes when
+    // that flow is closed.
+    if (looksLikeQrLoginPayload(code)) {
+      unawaited(_openQrLogin(code));
+      return;
+    }
     unawaited(ref.read(scannerControllerProvider.notifier).submit(code));
+  }
+
+  Future<void> _openQrLogin(String payload) async {
+    await openQrLogin(context, initialPayload: payload);
+    if (mounted) _submitted = false;
   }
 
   @override

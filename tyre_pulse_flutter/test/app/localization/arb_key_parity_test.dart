@@ -566,10 +566,16 @@ void main() {
     // Profile Help row and error-state action, the form (description, type,
     // optional severity), the attached details, the success state and the
     // seven failure sentences (problemReportAction ... problemReportFailed).
-    test('en, ar and ur each carry exactly 2172 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2172);
-      expect(_translatableKeys(ar).length, 2172);
-      expect(_translatableKeys(ur).length, 2172);
+    // 2172 + 25 = 2197. Scan to sign in on the web (qr_login_approve): the
+    // Profile row and screen title, the scan intro, the confirm sheet (title,
+    // message with the person's name, its fallback, Approve), the waiting
+    // and sending lines, the approved / declined / failed / not-a-code
+    // states, the nine failure sentences and Scan another code
+    // (qrLoginAction ... qrLoginScanAgain).
+    test('en, ar and ur each carry exactly 2197 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2197);
+      expect(_translatableKeys(ar).length, 2197);
+      expect(_translatableKeys(ur).length, 2197);
     });
   });
 

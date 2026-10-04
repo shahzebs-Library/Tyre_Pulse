@@ -7511,4 +7511,94 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get problemReportFailed =>
       'Your report could not be sent. Please try again.';
+
+  @override
+  String get qrLoginAction => 'Sign in on a computer';
+
+  @override
+  String get qrLoginScanIntro =>
+      'On the computer, open the TyrePulse sign-in page and choose the phone code. Then point this camera at the code on the screen.';
+
+  @override
+  String get qrLoginConfirmTitle => 'Sign in on this computer?';
+
+  @override
+  String qrLoginConfirmMessage(String name) {
+    return 'Sign in to TyrePulse on this computer as $name? Only approve a code you just opened yourself.';
+  }
+
+  @override
+  String get qrLoginYourAccount => 'your account';
+
+  @override
+  String get qrLoginApprove => 'Approve';
+
+  @override
+  String get qrLoginSending => 'Sending your answer...';
+
+  @override
+  String get qrLoginWaiting => 'Waiting for your answer';
+
+  @override
+  String get qrLoginApprovedTitle => 'Computer signed in';
+
+  @override
+  String get qrLoginApprovedMessage =>
+      'TyrePulse will open on the computer in a few seconds. If you did not mean to do this, sign out on the computer.';
+
+  @override
+  String get qrLoginDeclinedTitle => 'Sign-in declined';
+
+  @override
+  String get qrLoginDeclinedMessage =>
+      'The computer was not signed in, and this code cannot be used again.';
+
+  @override
+  String get qrLoginFailedTitle => 'Computer not signed in';
+
+  @override
+  String get qrLoginNotACodeTitle => 'Not a sign-in code';
+
+  @override
+  String get qrLoginNotACodeMessage =>
+      'This is not a TyrePulse computer sign-in code. Scan the code shown on the TyrePulse sign-in page.';
+
+  @override
+  String get qrLoginExpired =>
+      'This code has expired. Codes last two minutes. Refresh the code on the computer and scan again.';
+
+  @override
+  String get qrLoginInvalid =>
+      'This code was not recognised. Refresh the code on the computer and scan again.';
+
+  @override
+  String get qrLoginConsumed =>
+      'This code was already used to sign in. Refresh the code on the computer if you need to sign in again.';
+
+  @override
+  String get qrLoginAlreadyDecided =>
+      'This code was already answered. Refresh the code on the computer and scan again.';
+
+  @override
+  String get qrLoginNotAllowed =>
+      'Your account is not approved or is locked, so it cannot sign in a computer. Please speak to your administrator.';
+
+  @override
+  String get qrLoginSignedOut =>
+      'You are signed out on this phone. Sign in here first, then scan the code again.';
+
+  @override
+  String get qrLoginNeedsSignal =>
+      'No connection. Move to an area with signal and scan the code again before it expires.';
+
+  @override
+  String get qrLoginUnavailable =>
+      'Computer sign-in is not available on this server yet.';
+
+  @override
+  String get qrLoginFailed =>
+      'Something went wrong. Refresh the code on the computer and try again.';
+
+  @override
+  String get qrLoginScanAgain => 'Scan another code';
 }

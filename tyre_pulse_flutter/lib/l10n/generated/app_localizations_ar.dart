@@ -7530,4 +7530,94 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get problemReportFailed =>
       'تعذّر إرسال بلاغك. يُرجى المحاولة مرة أخرى.';
+
+  @override
+  String get qrLoginAction => 'تسجيل الدخول على جهاز كمبيوتر';
+
+  @override
+  String get qrLoginScanIntro =>
+      'على جهاز الكمبيوتر، افتح صفحة تسجيل الدخول إلى TyrePulse واختر رمز الهاتف، ثم وجّه هذه الكاميرا نحو الرمز الظاهر على الشاشة.';
+
+  @override
+  String get qrLoginConfirmTitle => 'تسجيل الدخول على هذا الكمبيوتر؟';
+
+  @override
+  String qrLoginConfirmMessage(String name) {
+    return 'هل تريد تسجيل الدخول إلى TyrePulse على هذا الكمبيوتر باسم $name؟ وافق فقط على رمز فتحته أنت للتو.';
+  }
+
+  @override
+  String get qrLoginYourAccount => 'حسابك';
+
+  @override
+  String get qrLoginApprove => 'موافقة';
+
+  @override
+  String get qrLoginSending => 'جارٍ إرسال ردّك...';
+
+  @override
+  String get qrLoginWaiting => 'بانتظار ردّك';
+
+  @override
+  String get qrLoginApprovedTitle => 'تم تسجيل الدخول على الكمبيوتر';
+
+  @override
+  String get qrLoginApprovedMessage =>
+      'سيفتح TyrePulse على الكمبيوتر خلال ثوانٍ. إذا لم تقصد ذلك، سجّل الخروج على الكمبيوتر.';
+
+  @override
+  String get qrLoginDeclinedTitle => 'تم رفض تسجيل الدخول';
+
+  @override
+  String get qrLoginDeclinedMessage =>
+      'لم يتم تسجيل الدخول على الكمبيوتر، ولا يمكن استخدام هذا الرمز مرة أخرى.';
+
+  @override
+  String get qrLoginFailedTitle => 'لم يتم تسجيل الدخول على الكمبيوتر';
+
+  @override
+  String get qrLoginNotACodeTitle => 'ليس رمز تسجيل دخول';
+
+  @override
+  String get qrLoginNotACodeMessage =>
+      'هذا ليس رمز تسجيل دخول TyrePulse للكمبيوتر. امسح الرمز الظاهر في صفحة تسجيل الدخول إلى TyrePulse.';
+
+  @override
+  String get qrLoginExpired =>
+      'انتهت صلاحية هذا الرمز. صلاحية الرمز دقيقتان. حدّث الرمز على الكمبيوتر وامسحه مرة أخرى.';
+
+  @override
+  String get qrLoginInvalid =>
+      'لم يتم التعرّف على هذا الرمز. حدّث الرمز على الكمبيوتر وامسحه مرة أخرى.';
+
+  @override
+  String get qrLoginConsumed =>
+      'تم استخدام هذا الرمز لتسجيل الدخول من قبل. حدّث الرمز على الكمبيوتر إذا أردت تسجيل الدخول مرة أخرى.';
+
+  @override
+  String get qrLoginAlreadyDecided =>
+      'تم الرد على هذا الرمز من قبل. حدّث الرمز على الكمبيوتر وامسحه مرة أخرى.';
+
+  @override
+  String get qrLoginNotAllowed =>
+      'حسابك غير معتمد أو مقفل، لذا لا يمكنه تسجيل الدخول على كمبيوتر. يُرجى التواصل مع المسؤول.';
+
+  @override
+  String get qrLoginSignedOut =>
+      'أنت غير مسجّل الدخول على هذا الهاتف. سجّل الدخول هنا أولاً ثم امسح الرمز مرة أخرى.';
+
+  @override
+  String get qrLoginNeedsSignal =>
+      'لا يوجد اتصال. انتقل إلى مكان فيه إشارة وامسح الرمز مرة أخرى قبل انتهاء صلاحيته.';
+
+  @override
+  String get qrLoginUnavailable =>
+      'تسجيل الدخول على الكمبيوتر غير متاح على هذا الخادم بعد.';
+
+  @override
+  String get qrLoginFailed =>
+      'حدث خطأ ما. حدّث الرمز على الكمبيوتر وحاول مرة أخرى.';
+
+  @override
+  String get qrLoginScanAgain => 'امسح رمزاً آخر';
 }

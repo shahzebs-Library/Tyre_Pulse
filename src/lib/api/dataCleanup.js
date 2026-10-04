@@ -26,8 +26,8 @@ export async function previewCleanup(key, before) {
 }
 
 /** Delete rows of `key` older than `before`. Snapshots first; returns {deleted, snapshot}. */
-export async function runCleanup(key, before) {
-  const { data, error } = await supabase.rpc('admin_data_cleanup_run', { p_key: key, p_before: before })
+export async function runCleanup(key, before, reason) {
+  const { data, error } = await supabase.rpc('admin_data_cleanup_run_with_reason', { p_key: key, p_before: before, p_reason: reason || '' })
   if (error) {
     // Dual control: say plainly that a second super admin must approve first.
     if (isApprovalRequiredError(error)) throw new Error(APPROVAL_REQUIRED_MESSAGE)

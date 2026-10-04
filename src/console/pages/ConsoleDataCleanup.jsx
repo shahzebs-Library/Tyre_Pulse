@@ -23,7 +23,6 @@ import {
   Trash2, AlertTriangle, Info, Database, ShieldCheck, Eye, CheckCircle2, BarChart3, ArrowRight,
   History, Clock, SearchCheck,
 } from 'lucide-react'
-import { useConsoleAuth } from '../ConsoleAuthContext'
 import {
   Panel, PanelHeader, Note, StatTile, Badge, Btn, Segmented, Table, THead, Th, Tr, Td, SearchInput, Toolbar,
   LoadingState, EmptyState, ErrorState, ConfirmImpactDialog,
@@ -69,7 +68,6 @@ const daysSince = (v) => {
 }
 
 export default function ConsoleDataCleanup({ tabParam = 'tab' } = {}) {
-  const { logAction } = useConsoleAuth()
   const theme = useChartTheme()
   const [targets, setTargets] = useState([])
   const [loading, setLoading] = useState(true)
@@ -128,7 +126,8 @@ export default function ConsoleDataCleanup({ tabParam = 'tab' } = {}) {
   }
 
   function changeCutoff(d) {
-    setBefore(d); setPreview(null); setResult(null)
+    // A sweep counted for the old cutoff must not be selectable for the new one.
+    setBefore(d); setPreview(null); setResult(null); setSweep(null)
   }
 
   async function doPreview() {
@@ -147,10 +146,11 @@ export default function ConsoleDataCleanup({ tabParam = 'tab' } = {}) {
     if (!selected) return
     setRunning(true); setError('')
     try {
-      const res = await runCleanup(selected.key, before)
+      // The reason is written in the same server transaction as the delete,
+      // so a cleanup can never land without its audit row.
+      const res = await runCleanup(selected.key, before, reason)
       setResult(res)
       setConfirmOpen(false)
-      try { await logAction?.('data_cleanup', null, selected.key, { before, deleted: res?.deleted, reason: reason || null }) } catch { /* audit best effort */ }
       // Refresh totals so the table reflects the deletion.
       load()
       loadRuns()
@@ -385,7 +385,7 @@ export default function ConsoleDataCleanup({ tabParam = 'tab' } = {}) {
                           <Td><Badge tone={r.kind === 'business' ? 'danger' : 'default'}>{r.kind === 'business' ? 'Business data' : 'Logs'}</Badge></Td>
                           <Td align="right"><span className="tabular-nums text-gray-200">{r.error ? 'N/A' : fmtNum(r.count)}</span></Td>
                           <Td align="right">
-                            <Btn size="xs" disabled={!r.count} onClick={() => { const t = targets.find((x) => x.key === r.key); if (t) { setSelected(t); setPreview({ count: r.count }); setResult(null); setError('') } }}>Select</Btn>
+                            <Btn size="xs" disabled={!r.count} onClick={() => { const t = targets.find((x) => x.key === r.key); if (t) { setSelected(t); setBefore(sweep.cutoff); setPreview({ count: r.count }); setResult(null); setError('') } }}>Select</Btn>
                           </Td>
                         </Tr>
                       ))}

@@ -55,10 +55,13 @@ export function percentile(values = [], p = 50) {
  * Validate a budget or rate-limit input. 0 means "no cap".
  * @returns {string|null} a plain-English problem, or null when valid
  */
-export function validateCap(raw, { max = 1_000_000, integer = false } = {}) {
-  if (raw === '' || raw === null || raw === undefined) return 'Enter a number. Use 0 for no cap.'
+export function validateCap(raw, { max = 1_000_000, integer = false, min = 0 } = {}) {
+  if (raw === '' || raw === null || raw === undefined) return min > 0 ? `Enter a number of at least ${min}.` : 'Enter a number. Use 0 for no cap.'
   const n = Number(raw)
   if (!Number.isFinite(n) || n < 0) return 'Enter zero or a positive number.'
+  // The AI edge functions ignore a rate limit of 0 and fall back to their own
+  // default, so 0 cannot mean "no limit" there.
+  if (n < min) return `Enter at least ${min}. The AI service has no unlimited setting; 0 falls back to its built-in default.`
   if (integer && !Number.isInteger(n)) return 'Enter a whole number.'
   if (n > max) return `Enter a number no larger than ${max.toLocaleString('en-US')}.`
   return null
@@ -90,7 +93,7 @@ export function aiControlImpact(kind, { budget, rateLimit, next } = {}) {
   }
   return {
     what: 'Change how many AI requests one person may make a minute.', tone: 'warning',
-    change: `From ${rateLimit ? `${rateLimit} a minute` : 'no limit'} to ${Number(next) > 0 ? `${next} a minute` : 'no limit'}. Requests over the limit are refused and logged as rate limited.`,
+    change: `From ${rateLimit ? `${rateLimit} a minute` : 'the service default'} to ${Number(next) > 0 ? `${next} a minute` : 'the service default'}. Requests over the limit are refused and logged as rate limited.`,
     who: 'Each person using AI features.', undo: 'Yes. Change it again here.',
   }
 }

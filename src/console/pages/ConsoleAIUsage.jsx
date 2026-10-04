@@ -173,11 +173,11 @@ export default function ConsoleAIUsage({ tabParam = 'tab' } = {}) {
 
   function openControl(kind) {
     setControlError('')
-    setControlValue(kind === 'budget' ? String(budget.value ?? 0) : kind === 'rate' ? String(aiCfg.rateLimit ?? 0) : '')
+    setControlValue(kind === 'budget' ? String(budget.value ?? 0) : kind === 'rate' ? String(aiCfg.rateLimit || '') : '')
     setControl({ kind })
   }
   const controlProblem = control?.kind === 'budget' ? validateCap(controlValue, { max: 100000 })
-    : control?.kind === 'rate' ? validateCap(controlValue, { max: 1000, integer: true }) : null
+    : control?.kind === 'rate' ? validateCap(controlValue, { max: 1000, integer: true, min: 1 }) : null
 
   async function applyControl({ reason }) {
     const kind = control?.kind
@@ -196,7 +196,7 @@ export default function ConsoleAIUsage({ tabParam = 'tab' } = {}) {
         await logAction?.('ai_config_change', null, 'system_config', { key, value, reason })
         setFlash(kind === 'budget'
           ? (Number(value) > 0 ? `Monthly AI cap set to ${usd(Number(value))}.` : 'Monthly AI cap removed.')
-          : (Number(value) > 0 ? `Rate limit set to ${value} requests a minute per person.` : 'Per person rate limit removed.'))
+          : `Rate limit set to ${value} requests a minute per person.`)
       }
       setControl(null)
       await load()
@@ -301,7 +301,7 @@ export default function ConsoleAIUsage({ tabParam = 'tab' } = {}) {
             </div>
             <div className="rounded-lg border border-gray-800 p-3">
               <p className="text-[11px] text-gray-500">Rate limit per person</p>
-              <p className="text-sm font-semibold text-gray-100 mt-0.5 tabular-nums">{aiCfg.rateLimit == null ? 'N/A' : aiCfg.rateLimit ? `${aiCfg.rateLimit} a minute` : 'No limit'}</p>
+              <p className="text-sm font-semibold text-gray-100 mt-0.5 tabular-nums">{aiCfg.rateLimit == null ? 'N/A' : aiCfg.rateLimit ? `${aiCfg.rateLimit} a minute` : 'Service default'}</p>
               <p className="text-[11px] text-gray-500 mt-1">Requests over the limit are refused and shown below as rate limited.</p>
               <div className="mt-2"><Btn size="xs" icon={Gauge} disabled={aiCfg.rateLimit == null} onClick={() => openControl('rate')}>Change limit</Btn></div>
             </div>
@@ -478,9 +478,9 @@ export default function ConsoleAIUsage({ tabParam = 'tab' } = {}) {
         {(control?.kind === 'budget' || control?.kind === 'rate') && (
           <label className="block">
             <span className="block text-[11px] font-semibold text-gray-400 mb-1">
-              {control.kind === 'budget' ? 'Monthly cap in US dollars (0 = no cap)' : 'Requests per person per minute (0 = no limit)'}
+              {control.kind === 'budget' ? 'Monthly cap in US dollars (0 = no cap)' : 'Requests per person per minute (1 or more)'}
             </span>
-            <input type="number" min="0" step={control.kind === 'budget' ? '0.01' : '1'} value={controlValue}
+            <input type="number" min={control.kind === 'rate' ? '1' : '0'} step={control.kind === 'budget' ? '0.01' : '1'} value={controlValue}
               onChange={(e) => setControlValue(e.target.value)}
               className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
             {controlProblem && <span className="block text-[11px] text-amber-300 mt-1">{controlProblem}</span>}

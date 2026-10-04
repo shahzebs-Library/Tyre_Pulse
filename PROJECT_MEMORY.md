@@ -5,6 +5,25 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
+# ⚑ SESSION 2026-10-04 (part 3) — BOTH SIGN-IN PAGES REBUILT TO OWNER MOCKUPS + QR SIGN-IN + PR #375 REVIEW FIXES. Next free migration after 20261004121000.
+- /login (src/pages/Login.jsx + src/components/auth/login/) and /console/login (ConsoleLogin.jsx + consoleLogin.css) rebuilt to the
+  owner's two mockups, dark + light, own fleet photos in public/login-art/ (brand badges avoided/blurred).
+- OWNER RULE CHANGE: the user login now shows a "Super Admin Console" tab (owner mockup). It opens /console/login in a NEW TAB so the
+  console session stays tab-local. This SUPERSEDES "the main app surfaces NO console entry" for the sign-in page only.
+- Real counts: get_login_showcase() (anon, counts only, main tenant). No uptime figure, no fake console charts.
+- get_public_config += auth_google_enabled / auth_microsoft_enabled / qr_login_enabled (all OFF). Buttons render only when ON; toggles in
+  Console settings "Sign-in". Google/Microsoft need the provider set up in Supabase Auth first (owner action).
+- QR sign-in: qr_login_requests (RLS on, no policies, no FK to auth.users - creating one blocked on a lock), qr_login_start/status (anon),
+  qr_login_approve (signed-in phone), edge fn qr-login v1 (verify_jwt=false, single-use redeem -> magiclink token_hash -> verifyOtp).
+  Verified live via pg_net: right code 200, wrong 409. Flutter "Sign in on a computer" (Profile row + global scanner) is CODE ONLY -
+  turn qr_login_enabled on only after a Flutter build ships.
+- Mobile-number sign-in does NOT work (get_email_by_identifier matches username/employee id only); label says so.
+- Review fixes: admin_data_cleanup_run_with_reason (reason + delete in one txn), AI rate limit min 1 (0 = service default, not unlimited),
+  advisory lock on admin_set_flutter_version.
+- GOTCHA: Supabase MCP execute_sql with a DELETE statement waits for approval and times out at 60s - keep deletes out of MCP DDL batches.
+- GIT STATE: everything on PR #375 (branch claude/modest-hopper-5bnq8c, now in vercel.json deploymentEnabled=false). Plan: full suite
+  green -> push -> CI green -> squash-merge -> verify tyre-pulse production READY on merged sha -> realign branch.
+
 # ⚑ SESSION 2026-10-04 (part 2) — CONSOLE ROUND 2: THE OTHER 29 PAGES REBUILT + MOBILE = FLUTTER ONLY. PUSHED as PR #375 (owner approved merge).
 - PR #374 (console Control Center round 1) MERGED as 1f2f356, production READY verified. It rebuilt 20 screens; the other 29
   console pages were only re-wired. Owner: "i give u many screen why u fixed 5 only" -> round 2 rebuilt all 29 to the same

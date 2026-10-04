@@ -153,7 +153,7 @@ export default function DecisionsPanel() {
   const [lastBatch, setLastBatch] = useState(null)
   const [applyOpen, setApplyOpen] = useState(false)
   const [undoOpen, setUndoOpen] = useState(false)
-  const { logAction } = useConsoleAuth() || {}
+  const { logAction } = useConsoleAuth()
 
   // Debounced: this reads every expense row, so a query per keystroke would be
   // a full scan per keystroke.

@@ -91,7 +91,7 @@ export default function ConsoleClassificationLearning({ tabParam = 'tab' } = {})
   const [flash, setFlash] = useState(null)
   const [ruleView, setRuleView] = useState('all')
   const [pending, setPending] = useState(null)   // { kind: accept|reject|retire|reapply, p, dry, dryError }
-  const { logAction } = useConsoleAuth() || {}
+  const { logAction } = useConsoleAuth()
 
   const load = useCallback(async () => {
     setState((s) => ({ ...s, loading: true, error: null }))

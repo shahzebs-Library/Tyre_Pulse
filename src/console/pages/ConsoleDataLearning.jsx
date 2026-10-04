@@ -112,7 +112,7 @@ export default function ConsoleDataLearning({ tabParam = 'tab' } = {}) {
   const [factSearch, setFactSearch] = useState('')
   const [lowFillOnly, setLowFillOnly] = useState(false)
 
-  const { logAction } = useConsoleAuth() || {}
+  const { logAction } = useConsoleAuth()
   const [history, setHistory] = useState({ batches: [], capped: false, loading: false, error: '' })
   const [teachPreview, setTeachPreview] = useState(null)   // dry-run result for the teach form
   const [dialog, setDialog] = useState(null)               // { kind: teach|off|undo|undoBatch, fact?, batchId?, rows? }

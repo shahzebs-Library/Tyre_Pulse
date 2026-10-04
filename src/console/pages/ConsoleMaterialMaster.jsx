@@ -88,7 +88,7 @@ const fmtMoney = (n) => (Number.isFinite(Number(n))
 const BUCKET_TONE = { tyre: 'good', oil: 'warning', spare: 'info' }
 
 export default function ConsoleMaterialMaster({ tabParam = 'tab' } = {}) {
-  const { logAction } = useConsoleAuth() || {}
+  const { logAction } = useConsoleAuth()
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false)
   const [bulkCategory, setBulkCategory] = useState('')
   const [bulkChangeOpen, setBulkChangeOpen] = useState(false)

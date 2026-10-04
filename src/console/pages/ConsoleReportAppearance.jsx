@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { Palette, Save, RotateCcw, CheckCircle2, Sparkles, Image as ImageIcon, Trash2, Layers, Upload, Wand2, History, FileText } from 'lucide-react'
+import { Palette, Save, RotateCcw, CheckCircle2, Sparkles, Image as ImageIcon, Trash2, Layers, Upload, Wand2, FileText } from 'lucide-react'
 import {
   Chart as ChartJS, ArcElement, BarElement, CategoryScale, LinearScale, Tooltip,
 } from 'chart.js'

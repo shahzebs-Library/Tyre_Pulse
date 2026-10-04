@@ -213,7 +213,7 @@ export default function SettingsAll({ onTab }) {
           <div className="border-t border-gray-800 pt-2 space-y-1">
             {groups.map((g) => <a key={g.key} href={`#set-${g.key}`} className="block px-2.5 py-1 text-[11px] text-gray-500 hover:text-gray-300">{g.label} <span className="text-gray-600">{g.items.length}</span></a>)}
           </div>
-          <p className="text-[11px] text-gray-500">{defDiff && !rowsError ? `Changed from the app default: ${fmtNum(defDiff.changed)} of ${fmtNum(defDiff.withDefault)} settings that have one. The others have no built-in default, so there is nothing to compare.` : 'Changed from default: N/A (settings could not be read).'}</p>
+          <p className="text-[11px] text-gray-500">{defDiff ? `Changed from the app default: ${fmtNum(defDiff.changed)} of ${fmtNum(defDiff.withDefault)} settings that have one. The others have no built-in default, so there is nothing to compare.` : 'Changed from default: N/A (settings could not be read).'}</p>
         </aside>
 
         <div className="space-y-4 min-w-0">

@@ -84,7 +84,7 @@ function fmtWhen(v) {
 }
 
 export default function ConsoleAlertRules({ tabParam = 'tab' } = {}) {
-  const { logAction } = useConsoleAuth() || {}
+  const { logAction } = useConsoleAuth()
   const [selected, setSelected] = useState(() => new Set())
   const [bulk, setBulk] = useState(null) // 'pause' | 'activate'
   const [bulkBusy, setBulkBusy] = useState(false)

@@ -229,7 +229,7 @@ export default function UploadFeedManager() {
   // it, so the feeds stay visible while the reason is shown.
   // Pausing stops missed-upload alerts for that table, so it asks first and
   // records a reason. Resuming is safe and runs at once.
-  const { logAction } = useConsoleAuth() || {}
+  const { logAction } = useConsoleAuth()
   const [pauseFor, setPauseFor] = useState(null)
   const toggle = async (f, reason = null) => {
     if (f.active && reason == null) { setPauseFor(f); return }

@@ -77,7 +77,7 @@ export default function ConsoleAIUsage({ tabParam = 'tab' } = {}) {
   const [state, setState] = useState({ loading: true, error: null, data: null, readAt: null })
   const [budget, setBudget] = useState({ value: null, error: false })
   const [aiCfg, setAiCfg] = useState({ enabled: null, rateLimit: null, error: false })
-  const { logAction } = useConsoleAuth() || {}
+  const { logAction } = useConsoleAuth()
   const [control, setControl] = useState(null) // { kind: 'pause'|'resume'|'budget'|'rate' }
   const [controlValue, setControlValue] = useState('')
   const [controlBusy, setControlBusy] = useState(false)

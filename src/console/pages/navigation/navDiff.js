@@ -67,7 +67,7 @@ export function moveGroupTo(model = [], from, to) {
  */
 export function describeLayout(raw) {
   if (raw == null || raw === '') return 'Built-in sidebar'
-  let v = raw
+  let v
   try { v = typeof raw === 'string' ? JSON.parse(raw) : raw } catch { return 'Unreadable layout' }
   const groups = Array.isArray(v?.groups) ? v.groups : []
   const items = Array.isArray(v?.items) ? v.items : []

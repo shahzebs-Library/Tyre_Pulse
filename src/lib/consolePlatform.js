@@ -550,6 +550,9 @@ export const SETTING_GROUPS = [
     { key: 'password_min_length', label: 'Minimum password length', help: 'Checked at sign-up and reset', type: 'number' },
     { key: 'console_ip_allowlist_enabled', label: 'Console IP allowlist', help: 'Only listed networks reach the console', type: 'toggle', managed: '/console/access-policies', review: true },
     { key: 'dual_control_enabled', label: 'Dual control', help: 'A second admin approves bulk role change, cleanup and restore', type: 'toggle', managed: '/console/approvals', review: true },
+    { key: 'auth_google_enabled', label: 'Sign in with Google', help: 'Shows the Google button on the sign-in pages. Turn on only after the provider is set up in Supabase Auth, or the button will fail', type: 'toggle' },
+    { key: 'auth_microsoft_enabled', label: 'Sign in with Microsoft', help: 'Shows the Microsoft button on the sign-in pages. Turn on only after the provider is set up in Supabase Auth, or the button will fail', type: 'toggle' },
+    { key: 'qr_login_enabled', label: 'Scan to sign in (QR)', help: 'Shows a QR code on the web sign-in page that the phone app approves. Turn on only after a Flutter build with Scan to sign in is on phones', type: 'toggle' },
   ] },
   { key: 'notifications', label: 'Notifications', items: [
     { key: 'email_notifications', label: 'Email notifications', help: 'Reports and workflow emails', type: 'toggle' },

@@ -95,6 +95,9 @@ describe('Data Cleanup keeps the typed CLEAN gate', () => {
     expect(confirm.disabled).toBe(true)
     expect(h.runCleanup).not.toHaveBeenCalled()
     fireEvent.change(screen.getByLabelText(/Type CLEAN/), { target: { value: 'CLEAN' } })
+    // A reason is required too, and it goes to the audit log.
+    expect(confirm.disabled).toBe(true)
+    fireEvent.change(screen.getByPlaceholderText('Why are you doing this?'), { target: { value: 'Old test data' } })
     expect(confirm.disabled).toBe(false)
     fireEvent.click(confirm)
     await waitFor(() => expect(h.runCleanup).toHaveBeenCalledTimes(1))

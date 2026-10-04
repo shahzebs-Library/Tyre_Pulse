@@ -16,17 +16,22 @@
  * them. Those are shown as "protected" so that a deletable count of 0 never
  * reads as "nothing found".
  *
+ * Control Center round 2 added: the status strip, a "scan every table" pass
+ * (one preview per table for the chosen country, nothing removed), a required
+ * reason on every removal and every undo (sent to the server and the console
+ * audit), and a plain impact line under each control.
+ *
  * No raw SQL, no em/en dashes. Super-admin only (the whole /console is gated).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   CopyX, AlertTriangle, ShieldCheck, Database, Undo2, Search,
-  Upload, Download, Info, Lock, CheckCircle2, BarChart3, History, ArrowRight,
+  Upload, Download, Info, Lock, CheckCircle2, BarChart3, History, ArrowRight, SearchCheck,
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import {
   Panel, PanelHeader, Note, StatTile, ProportionBar, Badge, Code, Btn, Segmented, SearchInput, Toolbar,
-  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Modal,
+  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, ConfirmImpactDialog,
 } from '../components/ui'
 import { BarsChart } from '../components/ui/charts'
 import {
@@ -39,6 +44,8 @@ import { toUserMessage } from '../../lib/safeError'
 import { searchRows, sortRows, useTableSort } from '../../lib/consoleTable'
 import ExportButtons from './shared/ExportButtons'
 import { PageHeader, TabBar, useUrlTab, usePager, Pager, Section, AttentionList } from './shared/pageKit'
+import { StatusStrip, ImpactLine } from './dataOps/DataOpsParts'
+import { scanAllSummary } from '../../lib/dataOpsCenter'
 
 const COUNTRIES = ['KSA', 'UAE', 'Egypt']
 const CONFIRM_WORD = 'REMOVE'
@@ -88,9 +95,12 @@ export default function ConsoleDuplicateControl({ tabParam = 'tab' } = {}) {
   const [busy, setBusy] = useState(false)
   const [groups, setGroups] = useState([])
   const [confirmOpen, setConfirmOpen] = useState(false)
-  const [confirmText, setConfirmText] = useState('')
   const [result, setResult] = useState(null)
   const [batches, setBatches] = useState([])
+  const [restoreFor, setRestoreFor] = useState(null)   // batch waiting for an undo confirmation
+  const [scanAll, setScanAll] = useState(null)         // scanAllSummary result
+  const [scanning, setScanning] = useState(false)
+  const [scanCountry, setScanCountry] = useState('KSA')
 
   // Each check is numbered so a slow answer for the previous target or country
   // can never land under the one now on screen.
@@ -139,15 +149,15 @@ export default function ConsoleDuplicateControl({ tabParam = 'tab' } = {}) {
     }
   }, [selected, country])
 
-  async function doRemove() {
-    if (busy || !selected || confirmText.trim().toUpperCase() !== CONFIRM_WORD) return
+  async function doRemove({ reason } = {}) {
+    if (busy || !selected) return
     setBusy(true); setError('')
     try {
       const r = await resolveDuplicates(selected.key, country || null,
-        `Removed via Console Duplicate Control (${selected.tbl})`)
-      setConfirmOpen(false); setConfirmText('')
+        `Removed via Console Duplicate Control (${selected.tbl}): ${reason || 'no reason given'}`)
+      setConfirmOpen(false)
       logAction?.('duplicate_resolve', r?.batch_id, selected.tbl,
-        { deleted: r?.deleted, country: country || 'all' })
+        { deleted: r?.deleted, country: country || 'all', reason: reason || null })
       await Promise.all([runPreview(), listDuplicateBatches().then(setBatches)])
       // Set after the refresh: runPreview clears `result` when it starts.
       setResult(r)
@@ -158,11 +168,12 @@ export default function ConsoleDuplicateControl({ tabParam = 'tab' } = {}) {
     }
   }
 
-  async function doRestore(batchId) {
+  async function doRestore(batchId, reason = null) {
     setBusy(true); setError('')
     try {
       const r = await restoreDuplicateBatch(batchId)
-      logAction?.('duplicate_restore', batchId, r?.tbl, { restored: r?.restored })
+      setRestoreFor(null)
+      logAction?.('duplicate_restore', batchId, r?.tbl, { restored: r?.restored, reason })
       await Promise.all([
         listDuplicateBatches().then(setBatches),
         selected ? runPreview() : Promise.resolve(),
@@ -177,7 +188,24 @@ export default function ConsoleDuplicateControl({ tabParam = 'tab' } = {}) {
 
   function closeConfirm() {
     if (busy) return
-    setConfirmOpen(false); setConfirmText('')
+    setConfirmOpen(false)
+  }
+
+  // Scan every table for one country: previews only, nothing is removed.
+  async function runScanAll() {
+    setScanning(true); setError('')
+    const results = []
+    for (const t of targets) {
+      try {
+        results.push({ target: t, preview: await previewDuplicates(t.key, scanCountry || null) })
+      } catch (e) {
+        results.push({ target: t, error: toUserMessage(e, 'Could not check this table.') })
+      }
+    }
+    const sum = scanAllSummary(results, scanCountry || null)
+    setScanAll({ ...sum, country: scanCountry || null, at: Date.now() })
+    setScanning(false)
+    logAction?.('duplicate_scan_all', null, 'duplicates', { country: scanCountry || 'all', rows: sum.deletable })
   }
 
   const deletable = Number(preview?.extra_deletable) || 0
@@ -214,12 +242,26 @@ export default function ConsoleDuplicateControl({ tabParam = 'tab' } = {}) {
   }, [batches])
 
   const removedTotal = removedBars.reduce((a, b) => a + b.value, 0)
+  const lastRemoval = batches.reduce((m, b) => (b.created_at && (!m || b.created_at > m) ? b.created_at : m), null)
+  const dash = loadError ? 'N/A' : loading && !targets.length ? '...' : null
+  const strip = [
+    { label: 'Tables checked', value: dash || fmtNum(targets.length) },
+    { label: 'Money tables', value: dash || fmtNum(targets.filter((t) => t.kind === 'money').length) },
+    { label: 'Without line numbers', value: dash || fmtNum(targets.filter((t) => !t.has_source_row).length), sub: 'Repeats cannot be told apart' },
+    { label: 'Extra rows found', value: scanAll ? fmtNum(scanAll.deletable) : 'Not scanned', sub: scanAll ? `${scanAll.country || 'All countries'}, ${fmtNum(scanAll.tablesWithDuplicates)} tables` : 'Use Scan every table', tone: scanAll?.deletable ? 'warning' : undefined },
+    { label: 'Removals undoable', value: dash || fmtNum(openBatches.length) },
+    { label: 'Rows in archive', value: dash || fmtNum(removedTotal) },
+    { label: 'Last removal', value: dash || (lastRemoval ? fmtTime(lastRemoval).slice(0, 10) : 'Never') },
+    { label: 'Import tables', value: fmtNum(IMPORT_TARGETS.length) },
+  ]
 
   return (
     <div className="space-y-5 max-w-7xl">
       <PageHeader icon={CopyX} title="Duplicate Control"
         purpose="Find and remove rows that got imported twice, and see where each file should be uploaded."
         refreshedAt={refreshedAt} onRefresh={load} refreshing={loading} />
+
+      <StatusStrip label="Duplicate control status" cells={strip} />
 
       <TabBar ariaLabel="Duplicate control view" value={tab} onChange={setTab} tabs={[
         { key: 'duplicates', label: 'Duplicates', icon: CopyX },
@@ -235,7 +277,7 @@ export default function ConsoleDuplicateControl({ tabParam = 'tab' } = {}) {
         <HistoryTab loading={loading} loadError={loadError} batches={batches} shownBatches={shownBatches}
           pager={batchPager} sort={batchSort.sort} onSort={batchSort.onSort} busy={busy}
           query={historyQuery} onQuery={setHistoryQuery} state={historyState} onState={setHistoryState}
-          removedBars={removedBars} openCount={openBatches.length} onRestore={doRestore} result={result} error={error} />
+          removedBars={removedBars} openCount={openBatches.length} onRestore={(id) => setRestoreFor(batches.find((b) => b.batch_id === id) || { batch_id: id })} result={result} error={error} />
       ) : (
         <>
           <Note icon={ShieldCheck} tone="accent">
@@ -258,6 +300,47 @@ export default function ConsoleDuplicateControl({ tabParam = 'tab' } = {}) {
                 <StatTile label="Removals put back" value={fmtNum(batches.length - openBatches.length)} tone="muted"
                   onClick={() => { setHistoryState('restored'); setTab('history') }} />
               </div>
+
+              <Panel>
+                <PanelHeader icon={SearchCheck} title="Scan every table"
+                  subtitle="One preview per table for the country you pick, so you see where the extra rows are before choosing a table."
+                  actions={(
+                    <span className="flex flex-wrap items-center gap-2">
+                      <Segmented ariaLabel="Country to scan" role="group" value={scanCountry} onChange={setScanCountry}
+                        options={['', ...COUNTRIES].map((c) => ({ key: c, label: c || 'All countries' }))} />
+                      <Btn icon={SearchCheck} onClick={runScanAll} busy={scanning} disabled={!targets.length}>Scan every table</Btn>
+                    </span>
+                  )} />
+                <ImpactLine change="Nothing. Each table is counted with the same check the remove button uses." who="Nobody. The scan is recorded in the console audit." />
+                {scanAll && (
+                  <div className="mt-3 space-y-2">
+                    <p className="text-[11px] text-gray-400" aria-live="polite">
+                      {scanAll.country || 'All countries'}: {fmtNum(scanAll.deletable)} extra rows can be removed across {fmtNum(scanAll.tablesWithDuplicates)} of {fmtNum(scanAll.tablesScanned)} tables;
+                      {' '}{fmtNum(scanAll.protectedRows)} repeated rows are protected.
+                      {scanAll.money != null && scanAll.money > 0 ? ` Money tables carry ${fmtMoney(scanAll.money)} ${scanAll.currency || ''} of duplicate spend.` : ''}
+                      {scanAll.country ? '' : ' Pick one country to see money: currencies are never added together.'}
+                      {scanAll.tablesFailed ? ` ${fmtNum(scanAll.tablesFailed)} tables could not be checked.` : ''}
+                    </p>
+                    <Table>
+                      <THead><Th>Table</Th><Th align="right">Can be removed</Th><Th align="right">Protected</Th><Th align="right">Money</Th><Th align="right">Action</Th></THead>
+                      <tbody>
+                        {scanAll.rows.map((r) => (
+                          <Tr key={r.key} tone={r.deletable ? 'warning' : undefined}>
+                            <Td><span className="text-gray-200">{r.label}</span> <Code>{r.tbl}</Code></Td>
+                            <Td align="right"><span className="tabular-nums">{r.error ? 'N/A' : fmtNum(r.deletable)}</span></Td>
+                            <Td align="right"><span className="tabular-nums text-gray-400">{r.error ? 'N/A' : fmtNum(r.protectedRows)}</span></Td>
+                            <Td align="right"><span className="tabular-nums text-gray-400">{r.money != null ? `${fmtMoney(r.money)} ${r.currency || ''}` : 'N/A'}</span></Td>
+                            <Td align="right">
+                              <Btn size="xs" icon={ArrowRight} disabled={!r.deletable}
+                                onClick={() => { const t = targets.find((x) => x.key === r.key); if (t) { selectTarget(t); selectCountry(scanAll.country || ''); runPreview(t, scanAll.country || '') } }}>Open</Btn>
+                            </Td>
+                          </Tr>
+                        ))}
+                      </tbody>
+                    </Table>
+                  </div>
+                )}
+              </Panel>
 
               <div className="grid gap-4 lg:grid-cols-2">
                 <Panel flush>
@@ -318,6 +401,9 @@ export default function ConsoleDuplicateControl({ tabParam = 'tab' } = {}) {
                       </div>
 
                       <Btn icon={Search} onClick={() => runPreview()} busy={busy}>Check for duplicates</Btn>
+                      <ImpactLine change="Checking only counts and lists groups. Removing keeps the first copy of each group and archives every other copy in full."
+                        who={selected.kind === 'money' ? 'Spend reports for the chosen country drop by the duplicate amount, which is the correction.' : 'Anyone reading this table sees one row where there were several.'}
+                        undo="Removal history tab, one click per batch." />
 
                       <ErrorState message={error} />
 
@@ -361,7 +447,7 @@ export default function ConsoleDuplicateControl({ tabParam = 'tab' } = {}) {
 
                           {deletable > 0 && (
                             <Btn variant="danger" icon={CopyX} disabled={busy}
-                              onClick={() => { setConfirmOpen(true); setConfirmText('') }}>
+                              onClick={() => setConfirmOpen(true)}>
                               Remove {fmtNum(deletable)} extra row(s)
                             </Btn>
                           )}
@@ -425,36 +511,33 @@ export default function ConsoleDuplicateControl({ tabParam = 'tab' } = {}) {
         </>
       )}
 
-      <Modal open={confirmOpen && !!selected} onClose={closeConfirm} width="max-w-md"
-        title="Remove duplicate rows" subtitle={selected?.tbl}
-        footer={(
-          <>
-            <Btn onClick={closeConfirm} disabled={busy}>Cancel</Btn>
-            <Btn variant="danger" icon={CopyX} onClick={doRemove} busy={busy}
-              disabled={confirmText.trim().toUpperCase() !== CONFIRM_WORD}>Remove</Btn>
-          </>
-        )}>
-        {selected && (
-          <div className="space-y-4">
-            <p className="text-xs text-gray-300 leading-relaxed">
-              This removes {fmtNum(deletable)} extra row(s) from {selected.tbl}
-              {country ? ` for ${country}` : ''}, keeping the first copy of each.
-              {selected.kind === 'money' && deletable > 0 && country
-                && ` Reported ${country} spend will drop by ${fmtMoney(money)} `
-                   + `${CURRENCY[country] || ''}, which is the correction.`}
-              {' '}Every removed row is saved and can be put back from the Removal history tab.
-            </p>
-            <label className="block">
-              <span className="block text-[11px] font-semibold text-gray-400 mb-1.5">Type {CONFIRM_WORD} to confirm</span>
-              <input value={confirmText} onChange={(e) => setConfirmText(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') doRemove() }}
-                autoFocus placeholder={CONFIRM_WORD}
-                className="w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 focus:border-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
-            </label>
-            <ErrorState message={error} />
-          </div>
-        )}
-      </Modal>
+      <ConfirmImpactDialog open={confirmOpen && !!selected} onCancel={closeConfirm} onConfirm={doRemove}
+        danger title="Remove duplicate rows" confirmLabel="Remove" typedWord={CONFIRM_WORD} requireReason busy={busy} error={error}
+        impact={selected ? {
+          tone: 'danger',
+          what: `Remove ${fmtNum(deletable)} extra row(s) from ${selected.tbl}${country ? ` for ${country}` : ''}, keeping the first copy of each.`,
+          change: selected.kind === 'money' && country
+            ? `Reported ${country} spend drops by ${fmtMoney(money)} ${CURRENCY[country] || ''}, which is the correction.`
+            : 'The extra copies leave the live table. Protected (genuine) repeats are never touched.',
+          who: 'Everyone who reads this table, in every report and export.',
+          undo: 'Yes. Every removed row is archived in full and can be put back from the Removal history tab.',
+          stats: [
+            { label: 'Rows removed', value: fmtNum(deletable) },
+            { label: 'Protected, kept', value: fmtNum(protectedRows) },
+            { label: 'Country', value: country || 'All' },
+          ],
+        } : null} />
+
+      <ConfirmImpactDialog open={!!restoreFor} onCancel={() => { if (!busy) setRestoreFor(null) }}
+        onConfirm={({ reason }) => doRestore(restoreFor.batch_id, reason)}
+        title="Undo this removal" confirmLabel="Put rows back" requireReason busy={busy} error={error}
+        impact={restoreFor ? {
+          tone: 'warning',
+          what: `Put ${fmtNum(restoreFor.rows)} archived row(s) back into ${restoreFor.tbl || 'their table'}${restoreFor.country ? ` for ${restoreFor.country}` : ''}.`,
+          change: 'The removed copies return to the live table. If they were duplicates, reported totals go back up by their amount.',
+          who: 'Everyone who reads this table.',
+          undo: 'Remove them again from the Duplicates tab.',
+        } : null} />
     </div>
   )
 }
@@ -472,6 +555,7 @@ function HistoryTab({ loading, loadError, batches, shownBatches, pager, sort, on
           <div className="px-4 pt-4">
             <PanelHeader icon={Undo2} title="Removal history" subtitle="Every removal stays undoable."
               actions={<ExportButtons rows={shownBatches} columns={HISTORY_COLUMNS} title="TyrePulse Duplicate Removals" disabled={!!loadError} />} />
+            <ImpactLine className="mb-3" change="Undo puts the archived copies of that batch back into the live table." who="Everyone who reads that table; totals rise by the restored rows." undo="Remove them again from the Duplicates tab." />
             <Toolbar className="mb-3">
               <SearchInput value={query} onChange={onQuery} placeholder="Search table or country" className="w-full sm:w-56" />
               <Segmented role="group" ariaLabel="Removal state" value={state} onChange={onState} options={[

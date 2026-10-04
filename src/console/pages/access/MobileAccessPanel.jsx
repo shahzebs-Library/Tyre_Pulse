@@ -1,23 +1,26 @@
 /**
- * MobileAccessPanel.jsx - close (or open) the MOBILE app's modules for a ROLE or
- * a USER, from the web Access Manager.
+ * MobileAccessPanel.jsx - close (or open) the Flutter field app's modules for a
+ * ROLE or a USER, from the web Access Manager. The module list mirrors
+ * tyre_pulse_flutter/lib/core/permissions/module_registry.dart (see
+ * src/lib/mobileModules.js); the retired Expo app is no longer the target.
  *
  * WHY SEPARATE: the main AccessManager tree is keyed on the WEB catalog
  * (src/lib/moduleCatalog.js). Its `mobile:` writes therefore used WEB keys
- * (`mobile:tyre_records`) which the mobile app never reads (its key is `records`).
+ * (`mobile:tyre_records`), which the Flutter app reads only through its small
+ * webModuleKeyAliases table (its own key is `records`).
  * This panel iterates the REAL mobile module keys (src/lib/mobileModules.js) so a
- * deny lands on `mobile:<mobileKey>` - the exact row the mobile app enforces via
- * resolveModuleAccess. It is deliberately self-contained (its own load + save)
+ * deny lands on `mobile:<mobileKey>` - the exact row the Flutter app enforces via
+ * core/permissions/access_resolver.dart. It is deliberately self-contained (its own load + save)
  * so it does not entangle the web tree's elaborate draft/scope reconciliation.
  *
  * STORAGE (no schema change, reuses the surface-partitioned convention):
  *   - ROLE:  a `module_permissions` row  role + `mobile:<key>` + enabled (true/false),
  *            written via set_module_permissions (Admin / super only).
- *            Read by mobile get_user_module_permissions -> mobileRoleMatrixFromRaw.
+ *            Read by the Flutter app via get_user_module_permissions.
  *   - USER:  a `user_access_grants` row on `mobile:<key>` effect grant|revoke,
  *            written via set_user_access_grant (super-admin only).
- *            Read by mobile get_my_access_grants -> mobileGrantsFromRaw.
- * The mobile precedence is: per-user grant > role matrix > client role default,
+ *            Read by the Flutter app via get_my_access_grants.
+ * The Flutter app's precedence is: per-user grant > role matrix > client role default,
  * with admin / super-admin never lockable. So this panel's writes are authoritative.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -219,7 +222,7 @@ export default function MobileAccessPanel({ mode, role, user, canWriteRole, canW
     <Panel flush className="overflow-hidden">
       <div className="px-4 pt-3 border-b border-gray-800">
         <PanelHeader icon={Smartphone} title="Mobile app access"
-          subtitle={loading || loadError || alwaysAllowed ? 'Phone app only, separate from web access' : `${enabledCount} of ${ALL_KEYS.length} modules on`}
+          subtitle={loading || loadError || alwaysAllowed ? 'Flutter field app only, separate from web access' : `${enabledCount} of ${ALL_KEYS.length} modules on`}
           actions={(
             <>
               {!readOnly && !alwaysAllowed && !loading && !loadError && (
@@ -236,8 +239,8 @@ export default function MobileAccessPanel({ mode, role, user, canWriteRole, canW
 
       <div className="px-4 py-2.5 border-b border-gray-800">
         <p className="text-[11px] text-gray-400">
-          Controls what {isUser ? 'this person' : `the ${subjectRole || 'role'}`} sees in the phone app only. Turning a module
-          off hides it in the mobile app on the user's next load. Web access is unchanged.
+          Controls what {isUser ? 'this person' : `the ${subjectRole || 'role'}`} sees in the Flutter field app only. Turning a module
+          off hides it in the Flutter app the next time it loads access (sign-in or return to the app). Web access is unchanged.
         </p>
       </div>
 

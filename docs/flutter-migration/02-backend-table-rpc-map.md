@@ -319,3 +319,13 @@ NULL, so the exact server-side `not in` is complete. A breakdown is
 reuses `workOrderCountryFilter` (`country.eq.X,country.is.null`), never a
 strict `.eq`. A failed count renders `-`, never `0`. Fleet availability, the
 mock's fourth tile, has no source and is not shown; the tile is Overdue PM.
+
+### 7.7 Scan to sign in on the web (added 2026-10-04)
+
+| RPC | Created in | Security | Flutter use |
+|---|---|---|---|
+| `qr_login_approve(p_id uuid, p_secret text, p_approve boolean default true)` | `supabase/migrations/20261004121000_login_showcase_and_qr_login.sql` | DEFINER, `search_path public, extensions`; EXECUTE granted to `authenticated` only (anon revoked); raises 42501 unless the caller is approved and unlocked (`is_approved_and_unlocked()`) | "Sign in on a computer" (`features/qr_login/`). The web sign-in page shows a QR `tyrepulse://qr-login?id=<uuid>&s=<hex>`; the signed-in phone approves (`p_approve=true`) or declines (`false`). Returns jsonb `{ok:true,status:'approved'\|'denied'}` or `{ok:false,reason:'invalid'\|'expired'\|'consumed'\|'approved'\|'denied'}`. Codes live 2 minutes and the secret is compared by sha256. Named `SupabaseRpcs.qrLoginApprove` (in `all`); caller `features/qr_login/data/qr_login_repository.dart` |
+
+The same migration creates `qr_login_start`, `qr_login_status` and the table
+`qr_login_requests` (RLS on, no policies, no client grants); the browser and
+the `qr-login` edge function use those, the phone never does.

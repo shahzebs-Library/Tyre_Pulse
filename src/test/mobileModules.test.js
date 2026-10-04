@@ -7,7 +7,7 @@ import {
 } from '../lib/mobileModules'
 
 describe('mobileModules catalog', () => {
-  it('mirrors the mobile registry: 31 modules, unique keys, grouped', () => {
+  it('mirrors the Flutter registry: 31 modules, unique keys, grouped', () => {
     expect(MOBILE_MODULES).toHaveLength(31)
     const keys = MOBILE_MODULES.map((m) => m.key)
     expect(new Set(keys).size).toBe(keys.length)
@@ -74,50 +74,81 @@ describe('mobileModules catalog', () => {
 })
 
 /**
- * DRIFT GUARD. This mirror is hand-maintained, and it HAD already drifted: the
- * `serial` module listed tyre_data_collector on the phone and not here, so the
- * web Access Manager was reasoning about a different default from the one the
- * device applies. Comparing the two sources catches that automatically instead
- * of relying on somebody remembering to edit both.
+ * DRIFT GUARD. The Flutter app is the only field app (owner rule 2026-10-04),
+ * so this mirror is compared against its registry:
+ * tyre_pulse_flutter/lib/core/permissions/module_registry.dart. The retired
+ * Expo registry (mobile/lib/permissions.ts) is no longer the source of truth.
+ * Effective role defaults = ModuleDef.defaultRoles + flutterRoleDefaultExtensions.
  */
-describe('mirror does not drift from mobile/lib/permissions.ts', () => {
-  const src = readFileSync(resolve(__dirname, '../../mobile/lib/permissions.ts'), 'utf8').replace(/\r\n/g, '\n')
+describe('mirror does not drift from the Flutter module registry', () => {
+  const root = resolve(__dirname, '../../tyre_pulse_flutter/lib/core/permissions')
+  const registry = readFileSync(resolve(root, 'module_registry.dart'), 'utf8').replace(/\r\n/g, '\n')
+  const roles = readFileSync(resolve(root, 'roles.dart'), 'utf8').replace(/\r\n/g, '\n')
 
-  // Each entry is  M('key', 'Label', 'icon', 'Group', ['role', ...]),  possibly
-  // wrapped across lines.
-  const mobileRoles = Object.fromEntries(
-    [...src.matchAll(/M\(\s*'([a-zA-Z]+)'[^[]*\[([^\]]*)\]\s*\)/g)].map(([, key, roles]) => [
-      key,
-      roles.split(',').map((r) => r.trim().replace(/^'|'$/g, '')).filter(Boolean),
-    ]),
-  )
+  // RoleId enum: camelName(token: 'snake', ...)
+  const token = Object.fromEntries([...roles.matchAll(/^\s*([a-zA-Z]+)\(\s*token:\s*'([a-z_]+)'/gm)].map(([, n, t]) => [n, t]))
+  const roleSet = (body) => [...body.matchAll(/RoleId\.([a-zA-Z]+)/g)].map(([, n]) => token[n] || `?${n}`)
 
-  it('found the mobile registry to compare against', () => {
-    // If the M(...) shape ever changes this parse silently yields {} and every
-    // assertion below would vacuously pass, so prove it actually read something.
-    expect(Object.keys(mobileRoles).length).toBeGreaterThanOrEqual(25)
-    expect(mobileRoles.checklists).toBeDefined()
+  // Only the ModuleRegistry.all list, not the doc comments above it.
+  const allBlock = registry.slice(registry.indexOf('static const List<ModuleDef> all'), registry.indexOf('static const Set<ModuleKey> sensitive'))
+  const flutter = {}
+  for (const [, kind, body] of allBlock.matchAll(/ModuleDef\.(forRoles|adminOnly)\(([\s\S]*?)\),\n/g)) {
+    const key = body.match(/key:\s*ModuleKey\.([a-zA-Z]+)/)[1]
+    const label = body.match(/defaultLabel:\s*'([^']*)'/)[1]
+    const group = body.match(/group:\s*ModuleGroup\.([a-zA-Z]+)/)[1]
+    flutter[key] = { label, group, roles: kind === 'adminOnly' ? [] : roleSet(body.slice(body.indexOf('defaultRoles'))) }
+  }
+  const extBlock = registry.slice(registry.indexOf('flutterRoleDefaultExtensions ='), registry.indexOf('/// The registry itself.'))
+  for (const [, key, body] of extBlock.matchAll(/ModuleKey\.([a-zA-Z]+):\s*<RoleId>\{([^}]*)\}/g)) {
+    flutter[key].roles = [...new Set([...flutter[key].roles, ...roleSet(body)])]
+  }
+  const groupName = Object.fromEntries([...registry.matchAll(/^\s*([a-z]+)\('([A-Za-z]+)'\)[,;]/gm)].map(([, n, label]) => [n, label]))
+  const aliasBlock = registry.slice(registry.indexOf('webModuleKeyAliases ='), registry.indexOf('ModuleKey? moduleKeyFromMobileAliasKey'))
+  const aliases = Object.fromEntries([...aliasBlock.matchAll(/'([a-z_]+)':\s*ModuleKey\.([a-zA-Z]+)/g)].map(([, w, k]) => [w, k]))
+
+  it('found the Flutter registry to compare against', () => {
+    // If the Dart shape ever changes this parse yields {} and every assertion
+    // below would vacuously pass, so prove it actually read something.
+    expect(Object.keys(flutter)).toHaveLength(31)
+    expect(flutter.checklists.roles.length).toBeGreaterThan(5)
+    expect(Object.keys(token).length).toBeGreaterThanOrEqual(15)
+    expect(Object.keys(aliases).length).toBeGreaterThanOrEqual(8)
   })
 
-  it('every mirrored module has the same role defaults as the phone', () => {
+  it('same keys, in the same order, as the Flutter ModuleRegistry', () => {
+    expect(MOBILE_MODULES.map((m) => m.key)).toEqual(Object.keys(flutter))
+  })
+
+  it('every mirrored module has the same label, group and role defaults as the Flutter app', () => {
     const drift = []
     for (const m of MOBILE_MODULES) {
-      const theirs = mobileRoles[m.key]
-      if (!theirs) { drift.push(`${m.key}: missing from mobile/lib/permissions.ts`); continue }
+      const theirs = flutter[m.key]
+      if (!theirs) { drift.push(`${m.key}: missing from module_registry.dart`); continue }
+      if (m.label !== theirs.label) drift.push(`${m.key}: label "${m.label}" vs "${theirs.label}"`)
+      if (m.group !== groupName[theirs.group]) drift.push(`${m.key}: group ${m.group} vs ${groupName[theirs.group]}`)
       const a = [...m.roles].sort().join(',')
-      const b = [...theirs].sort().join(',')
-      if (a !== b) drift.push(`${m.key}: web [${a}] vs mobile [${b}]`)
+      const b = [...theirs.roles].sort().join(',')
+      if (a !== b) drift.push(`${m.key}: web [${a}] vs flutter [${b}]`)
     }
     expect(drift).toEqual([])
   })
 
+  it("every webModuleKeyAliases target is a key in this catalog (so a mobile:<webKey> row lands on a real module)", () => {
+    for (const target of Object.values(aliases)) expect(MOBILE_MODULE_BY_KEY[target]).toBeDefined()
+    // and no alias shadows a phone key (an alias only fills a gap)
+    for (const webKey of Object.keys(aliases)) expect(MOBILE_MODULE_BY_KEY[webKey]).toBeUndefined()
+  })
+
   it('the trades and the driver can reach checklists on both sides', () => {
-    // The owner's ask: mechanics and electricians fill workshop checklists, and
-    // the driver has one of their own. Driver had NO checklists module at all
-    // before V591, so a driver-targeted checklist was unreachable on the phone.
     for (const role of ['mechanic', 'electrician', 'driver']) {
-      expect(mobileRoles.checklists).toContain(role)
+      expect(flutter.checklists.roles).toContain(role)
       expect(MOBILE_MODULE_BY_KEY.checklists.roles).toContain(role)
     }
+  })
+
+  it('Fleet Supervisor files accidents on the Flutter app (flutterRoleDefaultExtensions)', () => {
+    expect(mobileModuleDefaultAllows('reportAccident', 'Fleet Supervisor')).toBe(true)
+    expect(mobileModuleDefaultAllows('accidents', 'Fleet Supervisor')).toBe(true)
+    expect(mobileModuleDefaultAllows('records', 'Fleet Supervisor')).toBe(false)
   })
 })

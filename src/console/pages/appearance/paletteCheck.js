@@ -75,3 +75,68 @@ export function isLightBackground(hex) {
   const l = luminance(hex)
   return l != null && l > 0.35
 }
+
+function toHex({ r, g, b }) {
+  const h = (n) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0')
+  return `#${h(r)}${h(g)}${h(b)}`
+}
+
+/**
+ * The nearest darker shade of `hex` that reaches `target` contrast on `bg`
+ * (keeps the hue by scaling the channels down). Returns the colour unchanged
+ * when it already passes, or null when it cannot be read.
+ */
+export function darkenToContrast(hex, target = MIN_GRAPHIC_CONTRAST, bg = '#ffffff') {
+  const c = parseHex(hex)
+  if (!c) return null
+  const start = contrastRatio(hex, bg)
+  if (start != null && start >= target) return toHex(c)
+  for (let f = 0.98; f > 0; f -= 0.02) {
+    const next = toHex({ r: c.r * f, g: c.g * f, b: c.b * f })
+    const ratio = contrastRatio(next, bg)
+    if (ratio != null && ratio >= target) return next
+  }
+  return '#000000'
+}
+
+/** Replace every pale colour in a palette with its darker suggestion. */
+export function fixPalette(colors = [], target = MIN_GRAPHIC_CONTRAST) {
+  return (Array.isArray(colors) ? colors : []).map((hex) => darkenToContrast(hex, target) || hex)
+}
+
+/**
+ * Plain-English name for a colour so a pale swatch can be named in a list
+ * ("pale yellow"). Based on hue and lightness; good enough to point at it.
+ */
+export function colourName(hex) {
+  const c = parseHex(hex)
+  if (!c) return 'unreadable colour'
+  const r = c.r / 255; const g = c.g / 255; const b = c.b / 255
+  const max = Math.max(r, g, b); const min = Math.min(r, g, b)
+  const l = (max + min) / 2
+  const d = max - min
+  if (d < 0.08) return l > 0.85 ? 'white' : l < 0.15 ? 'black' : 'grey'
+  let h
+  if (max === r) h = ((g - b) / d) % 6
+  else if (max === g) h = (b - r) / d + 2
+  else h = (r - g) / d + 4
+  h = (h * 60 + 360) % 360
+  const names = [[15, 'red'], [45, 'orange'], [70, 'yellow'], [160, 'green'], [200, 'teal'], [255, 'blue'], [290, 'purple'], [335, 'pink'], [360, 'red']]
+  const base = names.find(([edge]) => h < edge)[1]
+  return l > 0.7 ? `pale ${base}` : l < 0.3 ? `dark ${base}` : base
+}
+
+/**
+ * Average lightness of the visible pixels of an image (0 dark to 1 light),
+ * from RGBA bytes. Transparent pixels are ignored. null when nothing is visible.
+ */
+export function averageLightness(rgba) {
+  if (!rgba || !rgba.length) return null
+  let sum = 0; let n = 0
+  for (let i = 0; i + 3 < rgba.length; i += 4) {
+    if (rgba[i + 3] < 32) continue
+    sum += (0.2126 * rgba[i] + 0.7152 * rgba[i + 1] + 0.0722 * rgba[i + 2]) / 255
+    n += 1
+  }
+  return n ? sum / n : null
+}

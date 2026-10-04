@@ -86,3 +86,18 @@ describe('engineering center helpers', () => {
     expect(validateCronPolicy({ grace_min: 0, fail_streak: 2, stuck_min: 5, recover_ok: 2 })).toMatch(/Grace/)
   })
 })
+
+describe('release timeline: Flutter app is the live mobile gate', () => {
+  it('adds a Flutter gate event and marks the Expo gate as retired history', async () => {
+    const { buildReleaseTimeline: build, PLATFORMS: P } = await import('../lib/engineeringCenter')
+    const events = build({
+      flutter: { min: '0.1.0', latest: '0.1.1', updatedAt: '2026-10-04T08:00:00Z' },
+      android: { min: '1.6.0', latest: '1.6.0', updatedAt: '2026-08-31T05:56:38Z' },
+    })
+    const f = events.find((e) => e.id === 'flutter-gate')
+    expect(f.platform).toBe('flutter')
+    expect(f.version).toBe('0.1.1')
+    expect(events.find((e) => e.id === 'android-gate').status).toBe('Retired')
+    expect(P.find((p) => p.key === 'android').label).toMatch(/Retired/)
+  })
+})

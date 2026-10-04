@@ -28,8 +28,9 @@ import {
 import { toUserMessage } from '../../../lib/safeError'
 import {
   Panel, PanelHeader, Note, Badge, Btn, Select, Toolbar, Modal, SearchInput, Segmented,
-  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState,
+  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, ConfirmImpactDialog,
 } from '../../components/ui'
+import { useConsoleAuth } from '../../ConsoleAuthContext'
 import { sortRows, searchRows, useTableSort } from '../../../lib/consoleTable'
 import ExportButtons from '../shared/ExportButtons'
 
@@ -226,9 +227,19 @@ export default function UploadFeedManager() {
 
   // A failed pause/resume is reported beside the list rather than replacing
   // it, so the feeds stay visible while the reason is shown.
-  const toggle = async (f) => {
+  // Pausing stops missed-upload alerts for that table, so it asks first and
+  // records a reason. Resuming is safe and runs at once.
+  const { logAction } = useConsoleAuth()
+  const [pauseFor, setPauseFor] = useState(null)
+  const toggle = async (f, reason = null) => {
+    if (f.active && reason == null) { setPauseFor(f); return }
     setTogglingId(f.id); setToggleErr('')
-    try { await setUploadFeedActive(f.id, !f.active); await load() } catch (e) {
+    try {
+      await setUploadFeedActive(f.id, !f.active)
+      try { await logAction?.(f.active ? 'upload_feed_pause' : 'upload_feed_resume', null, 'upload_feeds', { feed: f.src || f.label, reason }) } catch { /* audit best effort */ }
+      setPauseFor(null)
+      await load()
+    } catch (e) {
       setToggleErr(toUserMessage(e, 'Could not change this feed.'))
     } finally { setTogglingId(null) }
   }
@@ -256,6 +267,17 @@ export default function UploadFeedManager() {
           </Toolbar>
         )}
       />
+
+      <ConfirmImpactDialog open={!!pauseFor} onCancel={() => { if (togglingId == null) setPauseFor(null) }}
+        onConfirm={({ reason }) => toggle(pauseFor, reason)} title={pauseFor ? `Pause ${pauseFor.label}` : ''}
+        confirmLabel="Pause feed" requireReason busy={togglingId != null} error={pauseFor ? toggleErr : ''}
+        impact={pauseFor ? {
+          tone: 'warning',
+          what: `Stop watching ${pauseFor.table_name} for missed uploads.`,
+          change: 'This table drops off the coverage page and out of the morning missed-upload alert. Its data is not touched.',
+          who: 'Everyone who relies on the missed-upload alert for this feed.',
+          undo: 'Yes, Resume puts it back at once.',
+        } : null} />
 
       {loading ? <LoadingState label="Loading watched feeds" rows={3} />
         : error ? <ErrorState message={error} onRetry={load} />

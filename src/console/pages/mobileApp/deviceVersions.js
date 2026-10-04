@@ -27,3 +27,24 @@ export async function getDeviceVersions() {
     byVersion: Array.isArray(data.by_version) ? data.by_version : [],
   }
 }
+
+/**
+ * Install base of the FLUTTER app only (push tokens that are not Expo tokens),
+ * via console_flutter_device_versions (migration 20261004105000). Also returns
+ * expoActive: devices still registered by the retired Expo app.
+ */
+export async function getFlutterDeviceVersions() {
+  const { data, error } = await supabase.rpc('console_flutter_device_versions')
+  if (error) throw new ServiceError(toUserMessage(error, 'The Flutter install base could not be read.'), error?.code, error)
+  if (!data || data.ok !== true) throw new ServiceError('The Flutter install base could not be read.')
+  return {
+    total: Number(data.total) || 0,
+    active: Number(data.active) || 0,
+    revoked: Number(data.revoked) || 0,
+    seen7d: Number(data.seen_7d) || 0,
+    seen30d: Number(data.seen_30d) || 0,
+    users: Number(data.users) || 0,
+    expoActive: Number(data.expo_active) || 0,
+    byVersion: Array.isArray(data.by_version) ? data.by_version : [],
+  }
+}

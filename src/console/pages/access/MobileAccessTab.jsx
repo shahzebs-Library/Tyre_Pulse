@@ -23,7 +23,7 @@ export default function MobileAccessTab({ columns, profiles }) {
     <div className="space-y-3">
       <Panel>
         <PanelHeader icon={Smartphone} title="Mobile app access"
-          subtitle="The phone app has its own screens and keys. Switch a screen off for a whole role or for one person." />
+          subtitle="The Flutter field app has its own screens and keys. Switch a screen off for a whole role or for one person. Applies on the person's next sign-in or return to the app." />
         <Toolbar>
           <Segmented role="group" ariaLabel="Role or person" value={mode} onChange={setMode}
             options={[{ key: 'role', label: 'A role' }, { key: 'user', label: 'One person' }]} />

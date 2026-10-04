@@ -1,8 +1,10 @@
 /**
  * ConsoleReleases.jsx - Releases (/console/releases).
  *
- * One timeline across web, Android, database and releases recorded by hand,
- * with what is running now, Android adoption on installs AND active phones,
+ * One timeline across web, the Flutter field app, database and releases
+ * recorded by hand, with what is running now, Flutter app adoption on installs
+ * AND active phones (flutter_min_version / flutter_latest_version; the retired
+ * Expo app's settings appear only as read-only history),
  * app errors before vs after each release in equal windows, and a guarded
  * web rollback that RECORDS the decision and sends you to Vercel. The console
  * never deploys or rolls anything back on its own.
@@ -12,7 +14,7 @@
  *
  * Honest gaps stated on screen: web adoption is not measured (browsers do not
  * report a build), the Vercel and marketing deploy lists are not connected,
- * Flutter does not report its version, crash-free rate needs Sentry release
+ * only Flutter phones registered for push report a version, crash-free rate needs Sentry release
  * tags, database changes cannot be rolled back from here, and the error
  * source is app-logged errors (no request count, so no error rate).
  */
@@ -30,7 +32,7 @@ import { PageHeader, useUrlTab, TabBar, TabPanel, Drawer, DetailList } from './s
 import ExportButtons from './shared/ExportButtons'
 import ReleaseLedger from './releases/ReleaseLedger'
 import {
-  getRecentMigrations, getEngineeringConfig, listRecordedReleases, getAppAdoption,
+  getRecentMigrations, getEngineeringConfig, listRecordedReleases, getFlutterAdoption,
   countErrors24h, getReleaseErrorWindows, recordRollback,
 } from '../../lib/api/engineeringCenter'
 import {
@@ -77,7 +79,7 @@ export default function ConsoleReleases() {
   const migrations = useLoad(loadMigrations, 'Migration history could not be read.')
   const config = useLoad(getEngineeringConfig, 'App version settings could not be read.')
   const recorded = useLoad(listRecordedReleases, 'Recorded releases could not be read.')
-  const adoption = useLoad(getAppAdoption, 'App adoption could not be read.')
+  const adoption = useLoad(getFlutterAdoption, 'Flutter app adoption could not be read.')
   const errors24 = useLoad(countErrors24h, 'Errors could not be counted.')
   const { logAction } = useConsoleAuth()
 
@@ -95,6 +97,14 @@ export default function ConsoleReleases() {
   }
 
   const cfg = config.data || {}
+  // Flutter app gate: the live mobile setting (owner rule 2026-10-04).
+  const flutter = useMemo(() => {
+    const min = cfg.flutter_min_version; const latest = cfg.flutter_latest_version
+    if (!min && !latest) return null
+    const times = [min?.updatedAt, latest?.updatedAt].filter(Boolean).sort()
+    return { min: min?.value || null, latest: latest?.value || null, updatedAt: times[times.length - 1] || null }
+  }, [cfg.flutter_min_version, cfg.flutter_latest_version])
+  // Retired Expo app gate: read-only history on the timeline.
   const android = useMemo(() => {
     const min = cfg.mobile_min_version; const latest = cfg.mobile_latest_version
     if (!min && !latest) return null
@@ -106,9 +116,10 @@ export default function ConsoleReleases() {
     notes: installedRelease?.releases || [],
     migrations: migrations.data?.items || [],
     android,
+    flutter,
     recorded: recorded.data || [],
     liveBuild: liveBuildId,
-  }), [migrations.data, android, recorded.data])
+  }), [migrations.data, android, flutter, recorded.data])
 
   const inPeriod = useMemo(() => filterTimeline(events, { platform: 'all', days }), [events, days])
   const counts = useMemo(() => platformCounts(inPeriod), [inPeriod])
@@ -134,7 +145,7 @@ export default function ConsoleReleases() {
     return () => { alive = false }
   }, [timedKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const summary = useMemo(() => adoptionSummary(adoption.data?.by_version || [], android?.min, android?.latest), [adoption.data, android])
+  const summary = useMemo(() => adoptionSummary(adoption.data?.by_version || [], flutter?.min, flutter?.latest), [adoption.data, flutter])
   const recorded30 = useMemo(() => (recorded.data || []).filter((r) => r.released_at && Date.now() - new Date(r.released_at).getTime() < 30 * 86400000), [recorded.data])
   const rollbacks30 = recorded30.filter((r) => r.kind === 'rollback').length
   const releases30 = useMemo(() => filterTimeline(events, { days: 30 }).length, [events])
@@ -163,7 +174,7 @@ export default function ConsoleReleases() {
   return (
     <div className="space-y-5 max-w-7xl">
       <PageHeader icon={Rocket} title="Releases"
-        purpose="What shipped, where, and whether errors went up afterwards. One timeline for web, Android and the database."
+        purpose="What shipped, where, and whether errors went up afterwards. One timeline for web, the Flutter field app and the database."
         refreshedAt={readAt} onRefresh={reloadAll}
         refreshing={migrations.loading || config.loading || recorded.loading}
         actions={(<>
@@ -177,12 +188,12 @@ export default function ConsoleReleases() {
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <StatTile label="Releases, 30 days" icon={Rocket}
           value={migrations.loading || recorded.loading ? 'N/A' : fmtInt(releases30)}
-          sub="Web notes, database days, Android, recorded" />
+          sub="Web notes, database days, Flutter app, recorded" />
         <StatTile label="Live web build" icon={Globe} value={liveShort || 'N/A'}
           sub={liveShort ? 'Build this console runs' : 'Build id not set on this build'} />
-        <StatTile label="Android on latest" icon={Smartphone}
+        <StatTile label="Flutter on latest" icon={Smartphone}
           value={adoption.loading || adoption.error || summary.pctActive === null ? 'N/A' : `${summary.pctActive}%`}
-          sub={adoption.error ? 'Could not be read' : summary.pctActive === null ? 'No latest version recorded'
+          sub={adoption.error ? 'Could not be read' : summary.installs === 0 ? 'No Flutter phone registered yet' : summary.pctActive === null ? 'No latest Flutter version recorded or no phone active in 7 days'
             : `${fmtInt(summary.latestActive)} of ${fmtInt(summary.active)} active phones, ${fmtInt(summary.latestInstalls)} of ${fmtInt(summary.installs)} installs`} />
         <StatTile label="App errors, 24 hours" icon={Activity}
           tone={errors24.data > 0 ? 'warning' : 'default'}
@@ -283,16 +294,16 @@ export default function ConsoleReleases() {
             </div>
 
             <div className="space-y-4 min-w-0">
-              <RunningNow android={android} adoption={summary} adoptionError={adoption.error}
-                migrations={migrations.data} flutterMin={cfg.flutter_min_version?.value} onRollback={openRollback} />
+              <RunningNow android={android} flutter={flutter} adoption={summary} adoptionError={adoption.error}
+                migrations={migrations.data} onRollback={openRollback} />
               <AndroidAdoption summary={summary} loading={adoption.loading} error={adoption.error} onRetry={adoption.reload}
-                latest={android?.latest} min={android?.min} />
+                latest={flutter?.latest} min={flutter?.min} />
               <Panel>
                 <PanelHeader icon={Info} title="Not measured yet" />
                 <ul className="px-4 pb-4 space-y-1.5 text-xs text-gray-400 list-disc pl-8">
                   <li>Web adoption: browsers do not report which build they run.</li>
                   <li>Crash-free rate per build: needs Sentry release tags on the web build.</li>
-                  <li>Flutter version: the Flutter app does not report its version yet.</li>
+                  <li>Flutter version: only phones that registered for push notifications report a version.</li>
                   <li>Marketing site deploys: that project is not connected.</li>
                   <li>Error rate: app errors are logged, requests are not counted, so only counts are shown.</li>
                 </ul>
@@ -323,15 +334,17 @@ export default function ConsoleReleases() {
 
 /* ── running now ───────────────────────────────────────────────────────── */
 
-function RunningNow({ android, adoption, adoptionError, migrations, flutterMin, onRollback }) {
+function RunningNow({ android, flutter, adoption, adoptionError, migrations, onRollback }) {
   const rows = [
     { key: 'web', icon: Globe, label: 'Web app', version: liveShort || 'N/A', note: liveShort ? 'Adoption not measured' : 'Build id not set on this build' },
     { key: 'marketing', icon: Megaphone, label: 'Marketing site', version: 'N/A', note: 'Deploy list not connected' },
     {
-      key: 'android', icon: Smartphone, label: 'Android', version: android?.latest || 'N/A',
-      note: adoptionError ? 'Adoption could not be read' : adoption.pctActive === null ? 'Latest version not recorded' : `${adoption.pctActive}% of active phones`,
+      key: 'flutter', icon: Smartphone, label: 'Flutter app (Closed testing)', version: flutter?.latest || 'N/A',
+      note: adoptionError ? 'Adoption could not be read'
+        : adoption.installs === 0 ? `No Flutter phone registered yet; minimum ${flutter?.min || 'not set'}`
+          : adoption.pctActive === null ? `Minimum ${flutter?.min || 'not set'}; no phone active in 7 days or latest not recorded` : `${adoption.pctActive}% of active phones; minimum ${flutter?.min || 'not set'}`,
     },
-    { key: 'flutter', icon: Smartphone, label: 'Flutter', version: 'N/A', note: flutterMin ? `Minimum ${flutterMin}; running version not reported` : 'Running version not reported' },
+    { key: 'android', icon: Smartphone, label: 'Retired app (Expo, read-only)', version: android?.latest || 'N/A', note: `Retired. Minimum ${android?.min || 'not set'}; no longer released` },
     { key: 'ios', icon: Apple, label: 'iOS', version: 'N/A', note: 'There is no iOS app' },
     { key: 'database', icon: Database, label: 'Database', version: migrations?.latest?.version || 'N/A', note: migrations ? `${fmtInt(migrations.total)} migrations applied` : 'Could not be read' },
   ]
@@ -360,10 +373,10 @@ function RunningNow({ android, adoption, adoptionError, migrations, flutterMin, 
 function AndroidAdoption({ summary, loading, error, onRetry, latest, min }) {
   return (
     <Panel>
-      <PanelHeader icon={Smartphone} title="Android adoption"
-        subtitle="Installs, and phones opened in the last 7 days. Active phones are the fair measure." />
+      <PanelHeader icon={Smartphone} title="Flutter app adoption"
+        subtitle="Flutter installs, and phones opened in the last 7 days. Active phones are the fair measure." />
       {loading ? <LoadingState rows={3} /> : error ? <div className="px-4 pb-4"><ErrorState message={error} onRetry={onRetry} /></div>
-        : summary.rows.length === 0 ? <EmptyState icon={Smartphone} title="No phones have reported a version" reason="Phones report their version after signing in." />
+        : summary.rows.length === 0 ? <EmptyState icon={Smartphone} title="No Flutter phone has reported a version" reason="Flutter phones report their version when they register for notifications after signing in." />
           : (
             <div className="px-4 pb-4 space-y-3">
               <ProportionBar total={summary.installs} segments={summary.rows.slice(0, 5).map((r, i) => ({

@@ -1,35 +1,31 @@
 /**
- * ConsoleSessions - super-admin "Sessions & Devices" console page.
+ * ConsoleSessions - "Sessions & Devices" (also the Sessions and devices tab of
+ * Users, tabParam="stab", where it shows a compact section header).
  *
- * A pure console page (navy + orange theme, useConsoleAuth for the admin gate).
- * Two sections:
- *   1. Users & Devices - every user's login + device (push token) state, with
- *      Lock / Unlock (via the existing admin_update_profile path) and Clear push
- *      token (V273 admin_clear_push_token RPC) row actions. Search + role /
- *      locked / device filters. Excel export.
- *   2. Recent console activity - the console_sessions audit trail (who did what,
- *      when, to which target).
+ *   Users and devices  every account's sign-in state and phones, with Lock /
+ *                      Unlock (reason + typed confirm, audited) and Stop push.
+ *   Phones (new)       every row of user_devices via admin_list_user_devices
+ *                      (migration 20261004104000). MOBILE = FLUTTER ONLY: a
+ *                      non-Expo (FCM) token is the Flutter app; an Expo token is
+ *                      shown as "Retired app (read-only)". Stop push to ONE
+ *                      phone (admin_revoke_user_device, reason required).
+ *   Console activity   the console_sessions audit trail.
+ *   Known console devices, Insights.
  *
- * HONESTY: "Clear push token" removes the push notification channel for a device;
- * it does NOT revoke the user's auth session. True session revocation needs a
- * service-role edge function and is NOT built here - the banner says so.
- *
- * Both reads throw on failure and are loaded independently, so a failed read
- * shows its own error with Retry and never renders as "no users" or "no
- * activity"; the headline tiles read N/A until the user list has loaded. The
- * Admin column used to print a raw uuid; it now resolves the admin's
- * name from the same profiles read and falls back to the id.
+ * HONESTY: stopping push does NOT end an open session; "Sign out everywhere"
+ * in Users does. Every read fails on its own with Retry and never renders as
+ * "no users" or "no phones"; an unreadable figure reads N/A.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   MonitorSmartphone, ShieldAlert, Lock, Unlock, Smartphone, BellOff,
-  FileSpreadsheet, FileText, History, CheckCircle2, Users, Clock, ArrowUpRight,
+  FileSpreadsheet, FileText, History, CheckCircle2, Users, Clock, ArrowUpRight, Archive, BellRing,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import {
   Panel, PanelHeader, Note, StatTile, ProportionBar, Badge, Btn, SearchInput, Select, Toolbar, Segmented,
-  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Modal, Code,
+  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Code, ConfirmImpactDialog,
 } from '../components/ui'
 import { TrendChart, BarsChart } from '../components/ui/charts'
 import { dailySeries } from '../../lib/consoleCharts'
@@ -39,10 +35,13 @@ import {
 import { toUserMessage } from '../../lib/safeError'
 import KnownConsoleDevices from './sessions/KnownConsoleDevices'
 import { exportConsoleRows, sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
-import { PageHeader, useUrlTab, useRefreshStamp, usePaged, Pager, Drawer, DetailList, AttentionList } from './shared/pageKit'
+import { useUrlTab, useRefreshStamp, usePaged, Pager, Drawer, DetailList, AttentionList } from './shared/pageKit'
+import { SectionTop, ImpactLine, isEmbedded } from './platform/SectionKit'
+import { listAllDevices, revokeDevice } from '../../lib/api/consolePeopleControls'
+import { APP_LABEL, DEVICE_IDLE_DAYS, deviceSummary, filterDevices, daysSince, deviceTail } from '../../lib/consolePeopleControls'
 import ExportButtons from './shared/ExportButtons'
 
-const TABS = ['users', 'activity', 'devices', 'insights']
+const TABS = ['users', 'phones', 'activity', 'devices', 'insights']
 
 const ACTIVITY_LIMIT = 200
 const TREND_DAYS = 30
@@ -99,7 +98,16 @@ export function recencyBuckets(users = [], now = Date.now()) {
 // ── Page ────────────────────────────────────────────────────────────────────────
 
 export default function ConsoleSessions({ tabParam = 'tab' } = {}) {
-  const { admin } = useConsoleAuth()
+  const embedded = isEmbedded(tabParam)
+  const { admin, logAction } = useConsoleAuth()
+  const [phones, setPhones] = useState([])
+  const [phonesError, setPhonesError] = useState(null)
+  const [phoneApp, setPhoneApp] = useState('all')
+  const [phoneState, setPhoneState] = useState('all')
+  const [phoneSearch, setPhoneSearch] = useState('')
+  const [stopPhone, setStopPhone] = useState(null)
+  const [phoneBusy, setPhoneBusy] = useState(false)
+  const [notice, setNotice] = useState('')
 
   const [devices, setDevices] = useState([])
   const [sessions, setSessions] = useState([])
@@ -128,7 +136,9 @@ export default function ConsoleSessions({ tabParam = 'tab' } = {}) {
     setLoading(true)
     setError(null); setActivityError(null)
     // Independent reads: one failing must not blank the other.
-    const [d, s] = await Promise.allSettled([listUserDevices(), listConsoleSessions({ limit: ACTIVITY_LIMIT })])
+    const [d, s, ph] = await Promise.allSettled([listUserDevices(), listConsoleSessions({ limit: ACTIVITY_LIMIT }), listAllDevices()])
+    if (ph.status === 'fulfilled') { setPhones(ph.value); setPhonesError(null) }
+    else { setPhones([]); setPhonesError(toUserMessage(ph.reason, 'Could not load the phone list.')) }
     if (d.status === 'fulfilled') setDevices(d.value)
     else { setDevices([]); setError(toUserMessage(d.reason, 'Could not load users and devices.')) }
     if (s.status === 'fulfilled') setSessions(s.value)
@@ -138,6 +148,23 @@ export default function ConsoleSessions({ tabParam = 'tab' } = {}) {
   }, [stamp])
 
   useEffect(() => { load() }, [load])
+
+  // Phones per person, from user_devices (Flutter = FCM token; an Expo token is the retired app).
+  const phoneByUser = useMemo(() => {
+    const m = new Map()
+    for (const p of phones) {
+      if (!p.user_id || p.revoked) continue
+      const cur = m.get(p.user_id) || { flutter: 0, retired: 0 }
+      if (p.app === 'flutter') cur.flutter += 1
+      else if (p.app === 'retired_expo') cur.retired += 1
+      m.set(p.user_id, cur)
+    }
+    return m
+  }, [phones])
+  const phoneOf = useCallback((d) => (phonesError ? null : (phoneByUser.get(d.id) || { flutter: 0, retired: 0 })), [phoneByUser, phonesError])
+  const phoneStats = useMemo(() => deviceSummary(phones), [phones])
+  const visiblePhones = useMemo(() => filterDevices(phones, { app: phoneApp, state: phoneState, search: phoneSearch }), [phones, phoneApp, phoneState, phoneSearch])
+  const pagedPhones = usePaged(visiblePhones, 25, `${phoneApp}|${phoneState}|${phoneSearch}`)
 
   const roles = useMemo(() => {
     const set = new Set()
@@ -151,31 +178,34 @@ export default function ConsoleSessions({ tabParam = 'tab' } = {}) {
       if (roleFilter !== 'all' && d.role !== roleFilter) return false
       if (lockedFilter === 'locked' && !d.locked) return false
       if (lockedFilter === 'active' && d.locked) return false
-      if (deviceFilter === 'with' && !d.has_device) return false
-      if (deviceFilter === 'without' && d.has_device) return false
+      const ph = phoneOf(d)
+      if (deviceFilter === 'with' && !(ph && ph.flutter > 0)) return false
+      if (deviceFilter === 'without' && ph && ph.flutter > 0) return false
+      if (deviceFilter === 'retired' && !(ph && ph.retired > 0)) return false
       if (!q) return true
       return (
         String(d.full_name || '').toLowerCase().includes(q) ||
         String(d.username || '').toLowerCase().includes(q)
       )
     })
-  }, [devices, search, roleFilter, lockedFilter, deviceFilter])
+  }, [devices, search, roleFilter, lockedFilter, deviceFilter, phoneOf])
   const sorted = useMemo(() => sortRows(filtered, sort, {
     name: (d) => d.full_name || d.username,
     country: (d) => countryLabel(d.country, d.role),
     status: (d) => (d.locked ? 1 : 0),
-    device: (d) => (d.has_device ? d.push_token_updated_at || '1' : null),
-  }), [filtered, sort])
+    device: (d) => { const ph = phoneOf(d); return ph ? ph.flutter * 1000 + ph.retired : null },
+  }), [filtered, sort, phoneOf])
 
   const counts = useMemo(() => ({
     total: devices.length,
     locked: devices.filter((d) => d.locked).length,
-    withDevice: devices.filter((d) => d.has_device).length,
+    withDevice: phonesError ? null : devices.filter((d) => (phoneByUser.get(d.id)?.flutter || 0) > 0).length,
+    retiredDevice: phonesError ? null : devices.filter((d) => (phoneByUser.get(d.id)?.retired || 0) > 0).length,
     active7: devices.filter((d) => {
       const t = d.last_login_at ? new Date(d.last_login_at).getTime() : NaN
       return Number.isFinite(t) && Date.now() - t <= 7 * 86400000
     }).length,
-  }), [devices])
+  }), [devices, phoneByUser, phonesError])
 
   const nameById = useMemo(() => {
     const m = new Map()
@@ -191,11 +221,12 @@ export default function ConsoleSessions({ tabParam = 'tab' } = {}) {
 
   // ── Actions ───────────────────────────────────────────────────────────────────
 
-  async function handleLock(row, locked) {
+  async function handleLock(row, locked, reason) {
     setBusyId(row.id)
     setActionError(null)
     try {
       await lockUser(row.id, locked)
+      await logAction?.(locked ? 'lock_user' : 'unlock_user', row.id, 'user', { reason: reason || null, from: 'sessions' })
       setDevices((prev) => prev.map((d) => (d.id === row.id ? { ...d, locked } : d)))
       setDetail((d) => (d && d.id === row.id ? { ...d, locked } : d))
       setConfirmLock(null)
@@ -206,7 +237,7 @@ export default function ConsoleSessions({ tabParam = 'tab' } = {}) {
     }
   }
 
-  async function handleClearPush() {
+  async function handleClearPush(reason) {
     const row = confirmClear
     if (!row) return
     setConfirmClear(null)
@@ -214,6 +245,8 @@ export default function ConsoleSessions({ tabParam = 'tab' } = {}) {
     setActionError(null)
     try {
       await clearPushToken(row.id)
+      await logAction?.('clear_push_token', row.id, 'user', { reason: reason || null })
+      setPhones((prev) => prev.map((p) => (p.user_id === row.id ? { ...p, revoked: true } : p)))
       setDevices((prev) => prev.map((d) => (
         d.id === row.id ? { ...d, has_device: false, push_token_updated_at: new Date().toISOString() } : d
       )))
@@ -221,6 +254,21 @@ export default function ConsoleSessions({ tabParam = 'tab' } = {}) {
       setActionError(toUserMessage(err, 'Could not clear the device.'))
     } finally {
       setBusyId(null)
+    }
+  }
+
+  async function handleStopPhone(reason) {
+    if (!stopPhone) return
+    setPhoneBusy(true); setActionError(null); setNotice('')
+    try {
+      await revokeDevice(stopPhone.id, reason)
+      setPhones((prev) => prev.map((p) => (p.id === stopPhone.id ? { ...p, revoked: true } : p)))
+      setNotice(`Push stopped for one ${APP_LABEL[stopPhone.app] || 'device'} of ${stopPhone.full_name || 'this person'}.`)
+      setStopPhone(null)
+    } catch (err) {
+      setActionError(toUserMessage(err, 'Could not stop push to this device.'))
+    } finally {
+      setPhoneBusy(false)
     }
   }
 
@@ -237,8 +285,8 @@ export default function ConsoleSessions({ tabParam = 'tab' } = {}) {
           { key: 'role', header: 'Role' },
           { key: 'country', header: 'Country', value: (d) => countryLabel(d.country, d.role) },
           { key: 'locked', header: 'Status', value: (d) => (d.locked ? 'Locked' : 'Active') },
-          { key: 'has_device', header: 'Has device', value: (d) => (d.has_device ? 'Yes' : 'No') },
-          { key: 'push_token_updated_at', header: 'Device updated', value: (d) => (d.has_device ? fmtDateTime(d.push_token_updated_at) : '') },
+          { key: 'flutter', header: 'Flutter app devices', value: (d) => { const ph = phoneOf(d); return ph ? ph.flutter : 'N/A' } },
+          { key: 'retired', header: 'Retired app devices', value: (d) => { const ph = phoneOf(d); return ph ? ph.retired : 'N/A' } },
           { key: 'last_login_at', header: 'Last login', value: (d) => fmtDateTime(d.last_login_at) },
           { key: 'login_count', header: 'Login count', value: (d) => d.login_count ?? 0 },
         ],
@@ -273,7 +321,11 @@ export default function ConsoleSessions({ tabParam = 'tab' } = {}) {
       detail: 'Dormant accounts are the usual first candidates in an access review.',
       action: { label: 'Review', onClick: () => { setSort({ key: 'last_login_at', dir: 'asc' }); setTab('users') } } })
     if (neverSignedIn) attention.push({ key: 'never', tone: 'info', title: `${neverSignedIn} user${neverSignedIn === 1 ? ' has' : 's have'} never signed in`,
-      detail: 'Often an account set up for someone who never started, or who uses a different login.' })
+      detail: 'Most are drivers set up ahead of the Flutter app. Owner ruling: do not lock these accounts.' })
+    if (!phonesError && phoneStats.retiredActive > 0 && phoneStats.flutterActive === 0) attention.push({ key: 'flutter', tone: 'warning',
+      title: 'No phone has the Flutter app registered yet',
+      detail: `${phoneStats.retiredActive} phone${phoneStats.retiredActive === 1 ? ' still carries' : 's still carry'} only the retired app. Push reaches Flutter phones once people install the new build and sign in.`,
+      action: { label: 'Show phones', onClick: () => setTab('phones') } })
   }
 
   function actionsFor(d) {
@@ -281,12 +333,12 @@ export default function ConsoleSessions({ tabParam = 'tab' } = {}) {
     return (
       <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
         {d.locked ? (
-          <Btn size="xs" variant="good" icon={Unlock} busy={busy} onClick={() => handleLock(d, false)}>Unlock</Btn>
+          <Btn size="xs" variant="good" icon={Unlock} busy={busy} onClick={() => handleLock(d, false, 'unlocked from sessions')}>Unlock</Btn>
         ) : (
           <Btn size="xs" variant="danger" icon={Lock} busy={busy} onClick={() => { setActionError(null); setDetail(null); setConfirmLock(d) }}>Lock</Btn>
         )}
-        <Btn size="xs" icon={BellOff} disabled={busy || !d.has_device}
-          title={d.has_device ? 'Clear push token' : 'No device to clear'}
+        <Btn size="xs" icon={BellOff} disabled={busy || !(d.has_device || (phoneOf(d) && (phoneOf(d).flutter + phoneOf(d).retired) > 0))}
+          title="Stop push to every phone of this person"
           onClick={() => { setDetail(null); setConfirmClear(d) }}>Clear device</Btn>
       </div>
     )
@@ -294,8 +346,8 @@ export default function ConsoleSessions({ tabParam = 'tab' } = {}) {
 
   return (
     <div className="space-y-5 max-w-7xl">
-      <PageHeader icon={MonitorSmartphone} title="Sessions & Devices"
-        purpose={`${admin?.full_name ? `Signed in as ${admin.full_name}. ` : ''}Review who is signing in, which devices carry a push token, and lock accounts or clear devices.`}
+      <SectionTop embedded={embedded} icon={MonitorSmartphone} title="Sessions & Devices"
+        purpose={`${admin?.full_name ? `Signed in as ${admin.full_name}. ` : ''}Who is signing in, which phones can receive push (Flutter app), and lock accounts or stop push to a phone.`}
         actions={(
           <>
             <Btn icon={FileSpreadsheet} onClick={() => handleExport('excel')} busy={exporting === 'excel'} disabled={loading || !!error || filtered.length === 0}>Export Excel</Btn>
@@ -306,22 +358,27 @@ export default function ConsoleSessions({ tabParam = 'tab' } = {}) {
 
       {error && !loading && <ErrorState message={error} onRetry={load} />}
       {actionError && <ErrorState message={actionError} />}
+      {notice && <Note icon={CheckCircle2} tone="accent">{notice}</Note>}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <StatTile label="Users" value={val(counts.total)} icon={Users}
           onClick={() => { setLockedFilter('all'); setDeviceFilter('all'); setTab('users') }} />
         <StatTile label="Signed in, last 7 days" value={val(counts.active7)} tone="good" icon={Clock}
           sub={loading || error || !counts.total ? undefined : `${Math.round((counts.active7 / counts.total) * 100)}% of users`}
           onClick={() => setTab('insights')} />
-        <StatTile label="With a device" value={val(counts.withDevice)} icon={Smartphone}
+        <StatTile label="On the Flutter app" value={counts.withDevice == null ? 'N/A' : val(counts.withDevice)} icon={Smartphone}
           onClick={() => { setDeviceFilter(deviceFilter === 'with' ? 'all' : 'with'); setTab('users') }} active={deviceFilter === 'with'}
-          sub="Carry a push token" />
+          sub={phonesError ? 'Phone list could not be read' : 'People with a Flutter phone that gets push'} />
+        <StatTile label="Retired app only" value={counts.retiredDevice == null ? 'N/A' : val(counts.retiredDevice)} icon={Archive}
+          onClick={() => { setDeviceFilter(deviceFilter === 'retired' ? 'all' : 'retired'); setTab('users') }} active={deviceFilter === 'retired'}
+          sub="Read-only history, the old app" />
         <StatTile label="Locked" value={val(counts.locked)} tone={counts.locked ? 'danger' : 'default'} icon={Lock}
           onClick={() => { setLockedFilter(lockedFilter === 'locked' ? 'all' : 'locked'); setTab('users') }} active={lockedFilter === 'locked'} />
       </div>
 
       <Segmented ariaLabel="Sessions views" value={tab} onChange={setTab} options={[
         { key: 'users', label: 'Users and devices', count: loading || error ? null : counts.total },
+        { key: 'phones', label: 'Phones', count: loading || phonesError ? null : phoneStats.total },
         { key: 'activity', label: 'Console activity', count: loading || activityError ? null : sessions.length },
         { key: 'devices', label: 'Known console devices' },
         { key: 'insights', label: 'Insights' },
@@ -331,8 +388,8 @@ export default function ConsoleSessions({ tabParam = 'tab' } = {}) {
         <div role="tabpanel" aria-label="Users and devices" className="space-y-4">
           <AttentionList ready={!loading && !error} items={attention} />
           <Note icon={ShieldAlert} tone="accent">
-            Locking an account blocks future sign-in. Clearing a push token stops server-sent notifications to
-            that device. Neither ends an already-open browser session: to sign someone out everywhere, use
+            Locking an account blocks future sign-in. Stopping push ends server-sent notifications to that
+            person&apos;s phones (Flutter app, and any retired-app token still on record). Neither ends an already-open browser session: to sign someone out everywhere, use
             {' '}<Link to="/console/users" className="text-orange-300 underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">Users</Link>, Sign out everywhere.
           </Note>
           <Panel flush>
@@ -349,8 +406,9 @@ export default function ConsoleSessions({ tabParam = 'tab' } = {}) {
                 ]} />
                 <Select value={deviceFilter} onChange={setDeviceFilter} ariaLabel="Filter by device" className="w-36" options={[
                   { value: 'all', label: 'Any device' },
-                  { value: 'with', label: 'Has device' },
-                  { value: 'without', label: 'No device' },
+                  { value: 'with', label: 'Flutter phone' },
+                  { value: 'without', label: 'No Flutter phone' },
+                  { value: 'retired', label: 'Retired app phone' },
                 ]} />
                 {hasFilters && <Btn variant="quiet" onClick={clearFilters}>Clear</Btn>}
               </Toolbar>
@@ -388,11 +446,7 @@ export default function ConsoleSessions({ tabParam = 'tab' } = {}) {
                         <Td className="text-gray-300">{d.role || 'N/A'}</Td>
                         <Td className="text-gray-300">{countryLabel(d.country, d.role)}</Td>
                         <Td>{d.locked ? <Badge tone="danger" icon={Lock}>Locked</Badge> : <Badge tone="good">Active</Badge>}</Td>
-                        <Td nowrap>
-                          {d.has_device
-                            ? <Badge tone="good" icon={Smartphone} title={`Updated ${fmtDateTime(d.push_token_updated_at)}`}>{fmtDateTime(d.push_token_updated_at)}</Badge>
-                            : <Badge tone="quiet">None</Badge>}
-                        </Td>
+                        <Td nowrap><PhoneCell ph={phoneOf(d)} /></Td>
                         <Td nowrap className="text-gray-400">{fmtDateTime(d.last_login_at)}</Td>
                         <Td align="right" className="text-gray-300 tabular-nums">{d.login_count ?? 0}</Td>
                         <Td align="right">{actionsFor(d)}</Td>
@@ -404,6 +458,95 @@ export default function ConsoleSessions({ tabParam = 'tab' } = {}) {
               </>
             )}
           </Panel>
+        </div>
+      )}
+
+      {tab === 'phones' && (
+        <div role="tabpanel" aria-label="Phones" className="space-y-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <StatTile label="Flutter phones getting push" icon={BellRing} value={phonesError ? 'N/A' : phoneStats.flutterActive}
+              tone={!phonesError && phoneStats.flutterActive === 0 ? 'warning' : 'good'}
+              sub={phonesError ? 'Could not be read' : phoneStats.flutterActive === 0 ? 'Nobody has signed in on a Flutter build yet' : `${phoneStats.flutterPeople} people`}
+              onClick={() => { setPhoneApp('flutter'); setPhoneState('active') }} active={phoneApp === 'flutter' && phoneState === 'active'} />
+            <StatTile label="Retired app phones" icon={Archive} value={phonesError ? 'N/A' : phoneStats.retiredActive}
+              sub="Read-only: the old app, no new builds" onClick={() => { setPhoneApp('retired_expo'); setPhoneState('active') }}
+              active={phoneApp === 'retired_expo' && phoneState === 'active'} />
+            <StatTile label={`Idle over ${DEVICE_IDLE_DAYS} days`} icon={Clock} value={phonesError ? 'N/A' : phoneStats.idle}
+              tone={phoneStats.idle ? 'warning' : 'default'} sub="Still registered, not seen lately"
+              onClick={() => { setPhoneApp('all'); setPhoneState('idle') }} active={phoneState === 'idle'} />
+            <StatTile label="Push stopped" icon={BellOff} value={phonesError ? 'N/A' : phoneStats.stopped}
+              onClick={() => { setPhoneApp('all'); setPhoneState('stopped') }} active={phoneState === 'stopped'} />
+          </div>
+          <Panel flush>
+            <div className="p-4 pb-3 space-y-3">
+              <PanelHeader icon={Smartphone} title="Registered phones"
+                subtitle={phonesError ? undefined : `${visiblePhones.length} of ${phoneStats.total} shown. Phones register when someone signs in on the app.`}
+                actions={!phonesError && (
+                  <ExportButtons rows={visiblePhones} title="Registered phones" columns={[
+                    { key: 'full_name', header: 'Person', value: (x) => x.full_name || x.username || 'N/A' },
+                    { key: 'role', header: 'Role' },
+                    { key: 'app', header: 'App', value: (x) => APP_LABEL[x.app] || x.app },
+                    { key: 'app_version', header: 'Version', value: (x) => x.app_version || 'Not reported' },
+                    { key: 'last_seen_at', header: 'Last seen', value: (x) => fmtDateTime(x.last_seen_at) },
+                    { key: 'revoked', header: 'Push', value: (x) => (x.revoked ? 'Stopped' : 'On') },
+                  ]} />
+                )} />
+              <Toolbar>
+                <SearchInput value={phoneSearch} onChange={setPhoneSearch} placeholder="Search person or role" className="w-full sm:flex-1 sm:min-w-[180px]" />
+                <Select value={phoneApp} onChange={setPhoneApp} ariaLabel="Filter by app" className="w-full sm:w-44" options={[
+                  { value: 'all', label: 'Any app' }, { value: 'flutter', label: 'Flutter app' }, { value: 'retired_expo', label: 'Retired app' },
+                ]} />
+                <Select value={phoneState} onChange={setPhoneState} ariaLabel="Filter by push state" className="w-full sm:w-40" options={[
+                  { value: 'all', label: 'Any state' }, { value: 'active', label: 'Push on' }, { value: 'idle', label: 'Idle' }, { value: 'stopped', label: 'Push stopped' },
+                ]} />
+              </Toolbar>
+              <ImpactLine change="Stop push removes one phone from server-sent notifications. The account, its data and its sign-in are untouched."
+                who="Only the person who owns that phone." />
+            </div>
+            {loading ? <div className="px-4"><LoadingState label="Loading phones" rows={5} /></div> : phonesError ? (
+              <div className="px-4 pb-4"><ErrorState message={phonesError} onRetry={load} /></div>
+            ) : phones.length === 0 ? (
+              <EmptyState icon={Smartphone} title="No phones registered" reason="No one has signed in on the mobile app with notifications allowed." />
+            ) : visiblePhones.length === 0 ? (
+              <EmptyState title="No phones match" reason="Clear the search or filters to see every phone."
+                action={<Btn onClick={() => { setPhoneApp('all'); setPhoneState('all'); setPhoneSearch('') }}>Clear filters</Btn>} />
+            ) : (
+              <>
+                <Table className="border-0 rounded-none">
+                  <THead><Th>Person</Th><Th>App</Th><Th>Version</Th><Th>Device</Th><Th>Last seen</Th><Th>Push</Th><Th align="right">Action</Th></THead>
+                  <tbody>
+                    {pagedPhones.pageRows.map((x) => {
+                      const age = daysSince(x.last_seen_at)
+                      return (
+                        <Tr key={x.id}>
+                          <Td>
+                            <p className="text-gray-100 font-medium">{x.full_name || 'Unnamed'}</p>
+                            <p className="text-[11px] text-gray-400">{x.role || 'No role'}</p>
+                          </Td>
+                          <Td>{x.app === 'flutter' ? <Badge tone="good" icon={Smartphone}>Flutter app</Badge> : x.app === 'retired_expo' ? <Badge tone="quiet" icon={Archive}>Retired app (read-only)</Badge> : <Badge tone="quiet">Unknown</Badge>}</Td>
+                          <Td className="text-gray-300 tabular-nums">{x.app_version || 'Not reported'}</Td>
+                          <Td className="text-gray-400">{deviceTail(x.device_tail) || 'N/A'}</Td>
+                          <Td nowrap className={age !== null && age > DEVICE_IDLE_DAYS ? 'text-amber-300' : 'text-gray-400'}>{fmtDateTime(x.last_seen_at)}</Td>
+                          <Td>{x.revoked ? <Badge tone="quiet">Stopped</Badge> : <Badge tone="good">On</Badge>}</Td>
+                          <Td align="right">
+                            <Btn size="xs" icon={BellOff} variant="danger" disabled={x.revoked} onClick={() => { setActionError(null); setStopPhone(x) }}>Stop push</Btn>
+                          </Td>
+                        </Tr>
+                      )
+                    })}
+                  </tbody>
+                </Table>
+                <Pager {...pagedPhones} onPage={pagedPhones.setPage} />
+              </>
+            )}
+          </Panel>
+          {!phonesError && Object.keys(phoneStats.versions).length > 0 && (
+            <Panel>
+              <PanelHeader icon={Smartphone} title="Flutter app versions in use" subtitle="Phones getting push, by the version they report" />
+              <BarsChart bars={Object.entries(phoneStats.versions).map(([label, value]) => ({ label, value }))}
+                summary={Object.entries(phoneStats.versions).map(([k, v]) => `${k} ${v}`).join(', ')} emptyText="No Flutter phones yet." />
+            </Panel>
+          )}
         </div>
       )}
 
@@ -481,11 +624,18 @@ export default function ConsoleSessions({ tabParam = 'tab' } = {}) {
                   emptyText="No users to show." />
                 {counts.total > 0 && (
                   <div className="mt-3 space-y-1.5">
-                    <p className="text-[11px] text-gray-400">Device coverage: {counts.withDevice} of {counts.total} users carry a push token</p>
-                    <ProportionBar total={counts.total} segments={[
-                      { label: 'With a device', value: counts.withDevice, tone: 'good' },
-                      { label: 'No device', value: counts.total - counts.withDevice, tone: 'muted' },
-                    ]} />
+                    {counts.withDevice == null ? (
+                      <p className="text-[11px] text-gray-400">Phone coverage: N/A, the phone list could not be read.</p>
+                    ) : (
+                      <>
+                        <p className="text-[11px] text-gray-400">Phone coverage: {counts.withDevice} of {counts.total} users have a Flutter phone that gets push; {counts.retiredDevice} still only have the retired app.</p>
+                        <ProportionBar total={counts.total} segments={[
+                          { label: 'Flutter app', value: counts.withDevice, tone: 'good' },
+                          { label: 'Retired app only', value: Math.max(0, counts.retiredDevice - counts.withDevice), tone: 'warning' },
+                          { label: 'No phone', value: Math.max(0, counts.total - Math.max(counts.withDevice, counts.retiredDevice)), tone: 'muted' },
+                        ]} />
+                      </>
+                    )}
                   </div>
                 )}
               </>
@@ -517,7 +667,9 @@ export default function ConsoleSessions({ tabParam = 'tab' } = {}) {
               ['Status', detail.locked ? 'Locked' : 'Active'],
               ['Last login', fmtDateTime(detail.last_login_at)],
               ['Logins', String(detail.login_count ?? 0)],
-              ['Device', detail.has_device ? `Push token, updated ${fmtDateTime(detail.push_token_updated_at)}` : 'None'],
+              ['Flutter app phones', phoneOf(detail) ? String(phoneOf(detail).flutter) : 'N/A'],
+              ['Retired app phones', phoneOf(detail) ? String(phoneOf(detail).retired) : 'N/A'],
+              ['Retired app token on profile', detail.has_device ? `Yes, updated ${fmtDateTime(detail.push_token_updated_at)}` : 'No'],
             ]} />
             <Link to="/console/users" className="inline-flex items-center gap-1 text-xs text-orange-300 hover:text-orange-200 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
               Manage role, scope or sign out everywhere in Users <ArrowUpRight size={11} aria-hidden="true" />
@@ -526,48 +678,67 @@ export default function ConsoleSessions({ tabParam = 'tab' } = {}) {
         )}
       </Drawer>
 
-      <Modal
+      <ConfirmImpactDialog
         open={!!confirmClear}
-        width="max-w-md"
-        title="Clear push token"
-        onClose={() => setConfirmClear(null)}
-        footer={(
-          <>
-            <Btn onClick={() => setConfirmClear(null)}>Cancel</Btn>
-            <Btn variant="primary" icon={CheckCircle2} onClick={handleClearPush}>Clear device</Btn>
-          </>
-        )}
-      >
-        {confirmClear && (
-          <div className="space-y-3">
-            <p className="text-xs text-gray-300 leading-relaxed">
-              Remove the push notification token for{' '}
-              <span className="font-semibold text-gray-100">{confirmClear.full_name || confirmClear.username || 'this user'}</span>?
-              Their device will stop receiving server-sent notifications until they sign in again on that device.
-            </p>
-            <p className="text-[11px] text-gray-400">This does not lock the account or end an open session.</p>
-          </div>
-        )}
-      </Modal>
+        title="Stop push to every phone of this person"
+        confirmLabel="Stop push"
+        danger
+        requireReason
+        impact={confirmClear ? {
+          what: `Stop server-sent notifications for ${confirmClear.full_name || confirmClear.username || 'this user'}.`,
+          change: 'Every registered phone of theirs stops receiving push, and the retired-app token on their profile is cleared.',
+          who: 'Only this person. They keep their account and can still sign in.',
+          undo: 'Yes. Push comes back the next time they sign in on the app.',
+        } : undefined}
+        onCancel={() => setConfirmClear(null)}
+        onConfirm={({ reason }) => handleClearPush(reason)}
+      />
 
-      <Modal
+      <ConfirmImpactDialog
         open={!!confirmLock}
-        width="max-w-md"
         title="Lock this account?"
-        subtitle={confirmLock ? (confirmLock.full_name || confirmLock.username || 'This user') : undefined}
-        onClose={() => { if (!busyId) setConfirmLock(null) }}
-        footer={(
-          <>
-            <Btn onClick={() => setConfirmLock(null)} disabled={!!busyId}>Cancel</Btn>
-            <Btn variant="danger" icon={Lock} busy={!!busyId} onClick={() => handleLock(confirmLock, true)}>Lock account</Btn>
-          </>
-        )}
-      >
-        {actionError && <div className="mb-3"><ErrorState message={actionError} /></div>}
-        <p className="text-xs text-gray-300 leading-relaxed">
-          They cannot sign in to the app until the account is unlocked. The change is recorded in the audit trail.
-        </p>
-      </Modal>
+        confirmLabel="Lock account"
+        danger
+        requireReason
+        typedWord="LOCK"
+        busy={!!busyId}
+        error={actionError}
+        impact={confirmLock ? {
+          tone: 'danger',
+          what: `Lock ${confirmLock.full_name || confirmLock.username || 'this user'}.`,
+          change: 'They cannot sign in to the web or the app until unlocked. An open session can keep working until its token expires; use Sign out everywhere in Users to end it now.',
+          who: `${confirmLock.full_name || 'This person'}${confirmLock.role ? ` (${confirmLock.role})` : ''}.`,
+          undo: 'Yes. Unlock at any time.',
+        } : undefined}
+        onCancel={() => { if (!busyId) setConfirmLock(null) }}
+        onConfirm={({ reason }) => handleLock(confirmLock, true, reason)}
+      />
+
+      <ConfirmImpactDialog
+        open={!!stopPhone}
+        title="Stop push to this phone"
+        confirmLabel="Stop push"
+        danger
+        requireReason
+        busy={phoneBusy}
+        error={actionError}
+        impact={stopPhone ? {
+          what: `One ${APP_LABEL[stopPhone.app] || 'phone'} of ${stopPhone.full_name || 'this person'}, last seen ${fmtDateTime(stopPhone.last_seen_at)}.`,
+          change: 'This phone stops receiving server-sent notifications. Their other phones are not touched.',
+          who: 'Only this person, on this phone.',
+          undo: 'Yes. The phone registers again the next time they sign in on it.',
+        } : undefined}
+        onCancel={() => { if (!phoneBusy) setStopPhone(null) }}
+        onConfirm={({ reason }) => handleStopPhone(reason)}
+      />
     </div>
   )
+}
+
+/** Phone column: Flutter devices first, the retired app shown as read-only history. */
+function PhoneCell({ ph }) {
+  if (!ph) return <span className="text-[11px] text-gray-500">N/A</span>
+  if (ph.flutter > 0) return <Badge tone="good" icon={Smartphone}>Flutter app{ph.flutter > 1 ? ` x${ph.flutter}` : ''}</Badge>
+  if (ph.retired > 0) return <Badge tone="quiet" icon={Archive}>Retired app</Badge>
+  return <Badge tone="quiet">None</Badge>
 }

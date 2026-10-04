@@ -105,6 +105,59 @@ export async function pushReach() {
   }
 }
 
+/**
+ * Push reach split by app (admin_delivery_reach, super admin only). A token
+ * that starts 'ExponentPushToken' belongs to the RETIRED Expo app; any other
+ * token is an FCM token from the Flutter app. Throws on failure so the page
+ * shows "N/A" with the reason instead of a fake zero.
+ * @returns {Promise<{flutterDevices:number, flutterPeople:number, flutterSeen7d:number, retiredDevices:number, retiredPeople:number, totalDevices:number, totalPeople:number}>}
+ */
+export async function getDeliveryReach() {
+  const { data, error } = await supabase.rpc('admin_delivery_reach')
+  if (error) throw toServiceError(error)
+  return shapeReach(data)
+}
+
+/** Pure: map the RPC jsonb onto camelCase numbers; a missing field is null, never 0. */
+export function shapeReach(d) {
+  if (!d || d.ok === false) return null
+  const n = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v))
+  return {
+    flutterDevices: n(d.flutter_devices),
+    flutterPeople: n(d.flutter_people),
+    flutterSeen7d: n(d.flutter_seen_7d),
+    retiredDevices: n(d.retired_devices),
+    retiredPeople: n(d.retired_people),
+    totalDevices: n(d.total_devices),
+    totalPeople: n(d.total_people),
+  }
+}
+
+/**
+ * Put FAILED push deliveries back in the queue (super admin, reason required,
+ * audited server side). Only rows still in 'failed' are touched.
+ * @returns {Promise<{requeued:number, requested:number}>}
+ */
+export async function retryFailedPushes(ids = [], reason = '') {
+  const list = [...new Set((ids || []).map(Number).filter(Number.isFinite))].slice(0, 500)
+  const { data, error } = await supabase.rpc('admin_retry_failed_notifications', { p_ids: list, p_reason: reason })
+  if (error) throw toServiceError(error)
+  return { requeued: Number(data?.requeued) || 0, requested: Number(data?.requested) || list.length }
+}
+
+/** Plain-English impact of retrying failed pushes. Pure. */
+export function retryImpact(count, flutterDevices) {
+  return {
+    what: `Try again to deliver ${count} failed push${count === 1 ? '' : 'es'}.`,
+    tone: 'warning',
+    change: 'Each chosen delivery goes back in the queue with a fresh set of 6 attempts. Only deliveries still marked failed are touched.',
+    who: flutterDevices == null
+      ? 'The people each notification was meant for. Device reach could not be read.'
+      : `The people each notification was meant for. ${flutterDevices} Flutter app device${flutterDevices === 1 ? '' : 's'} can receive FCM pushes now.`,
+    undo: 'No. A delivered push cannot be recalled. People may see a late notification.',
+  }
+}
+
 /* ── Pure summarizers ─────────────────────────────────────────────────────────── */
 
 const num = (v) => (v == null || v === '' || Number.isNaN(Number(v)) ? 0 : Number(v))
@@ -158,6 +211,7 @@ export function emailStats(rows = []) {
       id: r.id,
       channel: 'email',
       name: r.schedule_name || r.report_type || 'Report',
+      scheduleId: r.schedule_id || null,
       status: r.status || 'error',
       error: r.error || null,
       at: r.sent_at || null,
@@ -183,16 +237,21 @@ function pushFailed(r) {
   const s = String(r?.status || '').toLowerCase()
   return s === 'failed' || s === 'error'
 }
+/** 'skipped' = nobody to deliver to (no reachable device). Not queued, not failed. */
+function pushSkipped(r) {
+  return String(r?.status || '').toLowerCase() === 'skipped'
+}
 
 /**
  * Aggregate workflow_notifications rows into push delivery KPIs + breakdowns. Pure.
- * @returns {{queued, delivered, failed, total, recipients, failureRate, byDay, recentFailures}}
+ * @returns {{queued, skipped, delivered, failed, total, recipients, failureRate, byDay, recentFailures}}
  */
 export function pushStats(rows = []) {
   const list = Array.isArray(rows) ? rows : []
   let delivered = 0
   let failed = 0
   let queued = 0
+  let skipped = 0
   let recipients = 0
   const byDay = {}
 
@@ -200,15 +259,18 @@ export function pushStats(rows = []) {
     recipients += num(r?.recipient_count)
     const isDelivered = pushDelivered(r)
     const isFailed = pushFailed(r)
+    const isSkipped = !isDelivered && !isFailed && pushSkipped(r)
     if (isDelivered) delivered += 1
     else if (isFailed) failed += 1
+    else if (isSkipped) skipped += 1
     else queued += 1
 
     const day = String(r?.created_at || '').slice(0, 10)
     if (day) {
-      const d = (byDay[day] ||= { date: day, delivered: 0, failed: 0, queued: 0 })
+      const d = (byDay[day] ||= { date: day, delivered: 0, failed: 0, queued: 0, skipped: 0 })
       if (isDelivered) d.delivered += 1
       else if (isFailed) d.failed += 1
+      else if (isSkipped) d.skipped += 1
       else d.queued += 1
     }
   }
@@ -230,6 +292,7 @@ export function pushStats(rows = []) {
 
   return {
     queued,
+    skipped,
     delivered,
     failed,
     total,

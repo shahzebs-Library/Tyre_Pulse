@@ -60,3 +60,43 @@ describe('gateSummary - plain English for the owner', () => {
     expect(gateSummary('1.3.2', '1.3.2')).toMatch(/newest release/)
   })
 })
+
+describe('Flutter app helpers', () => {
+  it('targets the Flutter package and keys, not the retired Expo ones', async () => {
+    const { FLUTTER_APP, RETIRED_EXPO_APP } = await import('../lib/mobileOps')
+    expect(FLUTTER_APP.packageId).toBe('com.shahzebrahman.tyrepulse')
+    expect(FLUTTER_APP.minKey).toBe('flutter_min_version')
+    expect(FLUTTER_APP.latestKey).toBe('flutter_latest_version')
+    expect(FLUTTER_APP.workflow).toBe('flutter-release-play.yml')
+    expect(RETIRED_EXPO_APP.minKey).toBe('mobile_min_version')
+  })
+
+  it('versionName drops the pubspec build number and refuses junk', async () => {
+    const { versionName } = await import('../lib/mobileOps')
+    expect(versionName('0.1.0+5')).toBe('0.1.0')
+    expect(versionName('0.2.3')).toBe('0.2.3')
+    expect(versionName('beta')).toBe('')
+  })
+
+  it('compares 0.x the way the Flutter app does (0.1.10 is above 0.1.9)', () => {
+    expect(compareVersions('0.1.10', '0.1.9')).toBe(1)
+    expect(gateRisk('0.2.0', '0.1.0').level).toBe('blocked')
+  })
+
+  it('filterVersionRows searches and filters against the saved gate', async () => {
+    const { filterVersionRows } = await import('../lib/mobileOps')
+    const rows = [
+      { app_version: '0.1.1', platform: 'android', devices: 3 },
+      { app_version: '0.1.0', platform: 'android', devices: 2 },
+      { app_version: null, platform: 'android', devices: 1 },
+    ]
+    const opts = { min: '0.1.1', latest: '0.1.1' }
+    expect(filterVersionRows(rows, { ...opts, filter: 'latest' }).map((r) => r.app_version)).toEqual(['0.1.1'])
+    expect(filterVersionRows(rows, { ...opts, filter: 'behind' }).map((r) => r.app_version)).toEqual(['0.1.0'])
+    expect(filterVersionRows(rows, { ...opts, filter: 'blocked' }).map((r) => r.app_version)).toEqual(['0.1.0'])
+    expect(filterVersionRows(rows, { ...opts, filter: 'unknown' })).toHaveLength(1)
+    expect(filterVersionRows(rows, { ...opts, search: '0.1.0' })).toHaveLength(1)
+    // No release recorded: "behind" cannot be judged, so it matches nothing.
+    expect(filterVersionRows(rows, { filter: 'behind' })).toHaveLength(0)
+  })
+})

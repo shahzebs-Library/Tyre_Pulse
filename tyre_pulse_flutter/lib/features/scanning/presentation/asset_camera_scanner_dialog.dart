@@ -17,6 +17,7 @@ import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/features/qr_login/domain/qr_login.dart';
 import 'package:tyre_pulse/features/scanning/domain/scan_payload.dart';
 import 'package:tyre_pulse/features/scanning/presentation/camera_access.dart';
 
@@ -53,6 +54,10 @@ class _AssetCameraScannerDialogState
   void _onDetect(BarcodeCapture capture) {
     if (_accepted) return;
     for (final Barcode barcode in capture.barcodes) {
+      // A web sign-in QR is never an asset code; filling a form field with it
+      // would be wrong. Ignore it and keep scanning (sign-in approval lives on
+      // the main scanner and on Profile).
+      if (looksLikeQrLoginPayload(barcode.rawValue ?? '')) continue;
       final String code = extractScanCode(barcode.rawValue ?? '');
       if (code.isEmpty) continue;
       _accepted = true;

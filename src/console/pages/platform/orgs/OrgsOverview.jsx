@@ -9,7 +9,7 @@
  *   - Suspending a company for real (blocking sign-in) waits on the owner.
  * The only write on this tab is archiving an EMPTY organization (reversible).
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Building2, Users, Activity, Database, CreditCard, Lock, Download, Plus, Archive, Info,
@@ -22,6 +22,9 @@ import {
 import { Drawer } from '../../shared/pageKit'
 import { orgState, orgRecords, isEmptyOrg, orgNeedsAttention, fmtRiyadh, initials } from '../../../../lib/consolePlatform'
 import { archiveEmptyOrg } from '../../../../lib/api/consolePlatform'
+import { getOrgStorage } from '../../../../lib/api/consoleDataGaps'
+import { orgStorageMap, storageFor } from '../../../../lib/consoleDataGaps'
+import { fmtBytes } from '../../../../lib/databaseCenter'
 import { exportConsoleRows } from '../../../../lib/consoleTable'
 import { toUserMessage } from '../../../../lib/safeError'
 import { useConsoleAuth } from '../../../ConsoleAuthContext'
@@ -55,6 +58,21 @@ export default function OrgsOverview({ data, onTab }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [flash, setFlash] = useState('')
+
+  const [storage, setStorage] = useState({ loading: true })
+  useEffect(() => {
+    let live = true
+    getOrgStorage()
+      .then((d) => { if (live) setStorage({ loading: false, map: orgStorageMap(d) }) })
+      .catch((e) => { if (live) setStorage({ loading: false, error: toUserMessage(e, 'Could not read storage per organization.') }) })
+    return () => { live = false }
+  }, [])
+  const storageText = (orgId) => {
+    if (storage.loading) return 'Loading'
+    const st = storageFor(storage.map, orgId)
+    if (!st) return 'N/A'
+    return `${fmtBytes(st.bytes)} (${fmtNum(st.files)} files)`
+  }
 
   const statsById = useMemo(() => Object.fromEntries((stats || []).map((s) => [s.id, s])), [stats])
   const subByOrg = useMemo(() => Object.fromEntries((subs || []).map((s) => [s.organisation_id, s])), [subs])
@@ -123,6 +141,7 @@ export default function OrgsOverview({ data, onTab }) {
         { key: 'jobs', header: 'Job cards', value: (o) => statsById[o.id]?.job_cards ?? 'N/A' },
         { key: 'exp', header: 'Expense lines', value: (o) => statsById[o.id]?.expense_lines ?? 'N/A' },
         { key: 'ins', header: 'Inspections', value: (o) => statsById[o.id]?.inspections ?? 'N/A' },
+        { key: 'storage', header: 'Storage', value: (o) => storageText(o.id) },
         { key: 'plan', header: 'Plan', value: (o) => subByOrg[o.id]?.plan_code || 'None' },
         { key: 'oldplan', header: 'Old plan label', value: (o) => o.plan || '' },
         { key: 'cap', header: 'Stored member cap (not enforced)', value: (o) => o.max_users ?? '' },
@@ -277,13 +296,13 @@ export default function OrgsOverview({ data, onTab }) {
       </Panel>
 
       <Panel>
-        <PanelHeader title="Data volume by organization" subtitle="All-time rows. Storage per organization is not recorded."
+        <PanelHeader title="Data volume by organization" subtitle={storage.error ? `All-time rows. Storage could not be read (${storage.error}).` : storage.map?.unattributed?.files ? `All-time rows. Storage = uploaded files owned by each organization's people; ${fmtNum(storage.map.unattributed.files)} files (${fmtBytes(storage.map.unattributed.bytes)}) have no owning profile and are not counted.` : 'All-time rows. Storage = uploaded files owned by each organization\'s people.'}
           actions={<Btn size="xs" icon={Download} onClick={() => exportList()}>Excel</Btn>} />
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead className="text-[11px] text-gray-500 border-b border-gray-800">
-              <tr>{['Organization', 'Members', 'Vehicles', 'Tyre records', 'Job cards', 'Expense lines', 'Inspections', 'Plan', 'State'].map((h, i) => (
-                <th key={h} className={`px-3 py-2 ${i > 0 && i < 7 ? 'text-right' : 'text-left'}`}>{h}</th>))}</tr>
+              <tr>{['Organization', 'Members', 'Vehicles', 'Tyre records', 'Job cards', 'Expense lines', 'Inspections', 'Storage', 'Plan', 'State'].map((h, i) => (
+                <th key={h} className={`px-3 py-2 ${i > 0 && i < 8 ? 'text-right' : 'text-left'}`}>{h}</th>))}</tr>
             </thead>
             <tbody className="divide-y divide-gray-800/70">
               {orgs.map((o) => {
@@ -294,6 +313,7 @@ export default function OrgsOverview({ data, onTab }) {
                     <td className="px-3 py-2 text-gray-200">{o.name}</td>
                     {['members', 'vehicles', 'tyre_records', 'job_cards', 'expense_lines', 'inspections'].map((k) => (
                       <td key={k} className="px-3 py-2 text-right tabular-nums text-gray-300">{fmtNum(s?.[k])}</td>))}
+                    <td className="px-3 py-2 text-right tabular-nums text-gray-300 whitespace-nowrap">{storageText(o.id)}</td>
                     <td className="px-3 py-2 text-gray-400">{subByOrg[o.id]?.plan_code || 'None'}{o.plan ? <span className="text-gray-500"> (old: {o.plan})</span> : null}</td>
                     <td className="px-3 py-2"><Pill tone={tone}>{label}</Pill></td>
                   </tr>

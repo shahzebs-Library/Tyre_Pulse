@@ -13,6 +13,14 @@
  * evaluated hourly by an existing cron job; severity routing (immediate vs
  * daily digest) follows the owner's notification preferences.
  *
+ * Honest limits stated on screen (read from evaluate_alert_thresholds): a rule
+ * fires at most once every 23 hours, the in-app notification goes to the rule
+ * owner only, and email is stored on the rule but not sent by the hourly check.
+ *
+ * Controls: every save shows what it changes and who is told; create, edit,
+ * duplicate, pause / activate (one or many) and delete are written to the
+ * console audit log; delete and bulk changes need a reason.
+ *
  * Layout: the builder lives in a dialog opened from "New rule" (or a row's
  * Edit), so the page is the rule list and not a long form. Two tabs, synced to
  * ?tab=: Rules (what needs attention, rules per metric, the paged rule table)
@@ -22,16 +30,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   BellRing, Plus, Pencil, Trash2, AlertTriangle, Info,
-  Power, Save, Clock, Mail, MonitorSmartphone, BarChart3, Flame,
+  Power, Save, Clock, Mail, MonitorSmartphone, BarChart3, Flame, Copy, CheckCircle2, PauseCircle,
 } from 'lucide-react'
 import { toUserMessage } from '../../lib/safeError'
 import {
   ALERT_METRICS, ALERT_OPERATORS, metricLabel, operatorLabel,
   listAlertRules, createAlertRule, updateAlertRule, toggleAlertRule, deleteAlertRule,
+  setAlertRulesActive, ruleImpact, isEvaluatedMetric,
 } from '../../lib/api/alertRules'
+import { ruleSentence } from '../../lib/monitorCenter'
+import { useConsoleAuth } from '../ConsoleAuthContext'
 import {
   Panel, PanelHeader, Note, StatTile, Badge, Btn, Segmented, SearchInput, Select, Toolbar,
-  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Modal,
+  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Modal, ImpactBox, ConfirmImpactDialog,
 } from '../components/ui'
 import { sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
 import ExportButtons from './shared/ExportButtons'
@@ -39,7 +50,9 @@ import { BarsChart } from '../components/ui/charts'
 import { PageHeader, TabBar, useUrlTab, usePaged, Pager, SideDrawer, Field, AttentionList } from './shared/pageKit'
 
 const TABS = ['rules', 'insights']
-const hasNoChannel = (r) => r.notify_in_app === false && !r.notify_email
+// Email is stored on a rule but the hourly check only sends the in-app
+// notification, so a rule without in-app tells nobody today.
+const hasNoChannel = (r) => r.notify_in_app === false
 
 const EMPTY_FORM = {
   name: '',
@@ -71,6 +84,13 @@ function fmtWhen(v) {
 }
 
 export default function ConsoleAlertRules({ tabParam = 'tab' } = {}) {
+  const { logAction } = useConsoleAuth()
+  const [selected, setSelected] = useState(() => new Set())
+  const [bulk, setBulk] = useState(null) // 'pause' | 'activate'
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [bulkError, setBulkError] = useState('')
+  const [deleteError, setDeleteError] = useState('')
+  const [flash, setFlash] = useState('')
   const [rules, setRules]     = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState(null)
@@ -161,8 +181,14 @@ export default function ConsoleAlertRules({ tabParam = 'tab' } = {}) {
         notifyEmail: form.notifyEmail,
         active: form.active,
       }
-      if (editId) await updateAlertRule(editId, payload)
-      else await createAlertRule(payload)
+      if (editId) {
+        await updateAlertRule(editId, payload)
+        await logAction?.('alert_rule_update', editId, 'alert_rule', { name: payload.name, metric: payload.metric })
+      } else {
+        const row = await createAlertRule(payload)
+        await logAction?.('alert_rule_create', row?.id || null, 'alert_rule', { name: payload.name, metric: payload.metric })
+      }
+      setFlash(editId ? `Rule "${payload.name}" saved.` : `Rule "${payload.name}" added. It is checked from the next hourly run.`)
       resetForm()
       await load()
     } catch (err) {
@@ -176,6 +202,7 @@ export default function ConsoleAlertRules({ tabParam = 'tab' } = {}) {
     setBusyId(r.id)
     try {
       await toggleAlertRule(r.id, !(r.active !== false))
+      await logAction?.(r.active !== false ? 'alert_rule_pause' : 'alert_rule_activate', r.id, 'alert_rule', { name: r.name })
       await load()
     } catch (err) {
       setError(toUserMessage(err))
@@ -184,17 +211,48 @@ export default function ConsoleAlertRules({ tabParam = 'tab' } = {}) {
     }
   }
 
-  async function onDelete(r) {
-    setConfirmDelete(null)
-    setBusyId(r.id)
+  async function onDelete(r, reason) {
+    setBusyId(r.id); setDeleteError('')
     try {
       await deleteAlertRule(r.id)
+      await logAction?.('alert_rule_delete', r.id, 'alert_rule', { name: r.name, metric: r.metric, reason })
       if (editId === r.id) resetForm()
+      setConfirmDelete(null)
+      setFlash(`Rule "${r.name || 'Untitled rule'}" deleted.`)
       await load()
     } catch (err) {
-      setError(toUserMessage(err))
+      setDeleteError(toUserMessage(err, 'The rule could not be deleted. Nothing was changed.'))
     } finally {
       setBusyId(null)
+    }
+  }
+
+  function duplicate(r) {
+    setOpenRule(null)
+    setEditId(null); setFormError(null)
+    setForm({
+      name: `${r.name || 'Untitled rule'} (copy)`, metric: isEvaluatedMetric(r.metric) ? r.metric : (ALERT_METRICS[0]?.key || ''),
+      operator: r.operator || 'gte', threshold: r.threshold ?? '', siteFilter: r.site_filter || '', brandFilter: r.brand_filter || '',
+      notifyInApp: r.notify_in_app !== false, notifyEmail: !!r.notify_email, active: false,
+    })
+    setBuilderOpen(true)
+  }
+
+  const toggleSel = (id) => setSelected((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
+
+  async function runBulk({ reason }) {
+    const ids = [...selected]
+    setBulkBusy(true); setBulkError('')
+    try {
+      const n = await setAlertRulesActive(ids, bulk === 'activate')
+      await logAction?.(bulk === 'activate' ? 'alert_rule_bulk_activate' : 'alert_rule_bulk_pause', null, 'alert_rule', { count: ids.length, changed: n, reason })
+      setFlash(`${n} rule${n === 1 ? '' : 's'} ${bulk === 'activate' ? 'activated' : 'paused'}.`)
+      setBulk(null); setSelected(new Set())
+      await load()
+    } catch (err) {
+      setBulkError(toUserMessage(err, 'The rules could not be changed. Nothing was changed.'))
+    } finally {
+      setBulkBusy(false)
     }
   }
 
@@ -258,20 +316,28 @@ export default function ConsoleAlertRules({ tabParam = 'tab' } = {}) {
   const filterTo = useCallback((f) => { setStatusFilter(f); setSearch(''); setTab('rules') }, [setTab])
   const attention = useMemo(() => {
     const items = []
-    if (noChannelCount) items.push({ key: 'nochannel', tone: 'danger', title: `${noChannelCount} rule${noChannelCount === 1 ? '' : 's'} with no notification channel`, detail: 'They can fire, but nobody is told. Add in-app or email.', action: { label: 'Show', onClick: () => filterTo('nochannel') } })
+    if (noChannelCount) items.push({ key: 'nochannel', tone: 'danger', title: `${noChannelCount} rule${noChannelCount === 1 ? '' : 's'} that tell nobody`, detail: 'They have no in-app channel. Email is not sent by the hourly check yet, so turn in-app on.', action: { label: 'Show', onClick: () => filterTo('nochannel') } })
+    const notChecked = rules.filter((r) => !isEvaluatedMetric(r.metric)).length
+    if (notChecked) items.push({ key: 'notchecked', tone: 'danger', title: `${notChecked} rule${notChecked === 1 ? '' : 's'} on a metric that is never checked`, detail: 'The hourly check does not compute this metric, so the rule can never fire. Edit it to pick a supported metric.', action: { label: 'Show', onClick: () => { setStatusFilter('all'); setSearch(''); setTab('rules') } } })
     if (neverActive) items.push({ key: 'never', tone: 'info', title: `${neverActive} active rule${neverActive === 1 ? ' has' : 's have'} never fired`, detail: 'Check the threshold is reachable, or that it is simply a healthy fleet.', action: { label: 'Show', onClick: () => filterTo('never') } })
     const paused = rules.length - activeCount
     if (paused) items.push({ key: 'paused', tone: 'warning', title: `${paused} rule${paused === 1 ? ' is' : 's are'} paused`, detail: 'Paused rules are kept but never evaluated.', action: { label: 'Show', onClick: () => filterTo('paused') } })
     return items
-  }, [noChannelCount, neverActive, rules.length, activeCount, filterTo])
+  }, [noChannelCount, neverActive, rules, activeCount, filterTo, setTab])
 
   const na = loading || error
   return (
     <div className="space-y-5 max-w-7xl">
       <PageHeader icon={BellRing} title="Alert Rules"
-        purpose="No-code rules that watch your fleet and notify you when a threshold is crossed. Evaluated hourly."
+        purpose="No-code rules that watch your fleet and notify you in the app when a threshold is crossed. Checked every hour; a rule fires at most once a day."
         refreshedAt={readAt} onRefresh={load} refreshing={loading}
         actions={<Btn variant="primary" icon={Plus} onClick={startNew}>New rule</Btn>} />
+
+      {flash && <Note icon={CheckCircle2} tone="accent">{flash}</Note>}
+      <Note icon={Info}>
+        What fires today: the in-app notification to the rule owner. Email is saved on a rule but the hourly check does not send it yet.
+        Rules are personal: each admin sees and manages their own.
+      </Note>
 
       {/* KPI tiles: each one filters the rule list */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -284,8 +350,8 @@ export default function ConsoleAlertRules({ tabParam = 'tab' } = {}) {
           onClick={() => setTab('insights')} active={tab === 'insights'} />
         <StatTile label="Never fired" value={na ? 'N/A' : neverFired} tone="muted" icon={Clock}
           onClick={() => filterTo('never')} active={tab === 'rules' && statusFilter === 'never'} />
-        <StatTile label="No channel" value={na ? 'N/A' : noChannelCount} tone={noChannelCount ? 'danger' : 'default'} icon={MonitorSmartphone}
-          sub="Fires but tells nobody" onClick={() => filterTo('nochannel')} active={tab === 'rules' && statusFilter === 'nochannel'} />
+        <StatTile label="Tells nobody" value={na ? 'N/A' : noChannelCount} tone={noChannelCount ? 'danger' : 'default'} icon={MonitorSmartphone}
+          sub="No in-app channel" onClick={() => filterTo('nochannel')} active={tab === 'rules' && statusFilter === 'nochannel'} />
       </div>
 
       <TabBar tabs={[
@@ -322,9 +388,17 @@ export default function ConsoleAlertRules({ tabParam = 'tab' } = {}) {
                   { key: 'active', label: 'Active', count: activeCount },
                   { key: 'paused', label: 'Paused', count: rules.length - activeCount },
                   { key: 'never', label: 'Never fired', count: neverFired },
-                  { key: 'nochannel', label: 'No channel', count: noChannelCount },
+                  { key: 'nochannel', label: 'Tells nobody', count: noChannelCount },
                 ]}
               />
+              {selected.size > 0 && (
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="text-[11px] text-gray-400">{selected.size} selected</span>
+                  <Btn size="xs" icon={Power} onClick={() => { setBulkError(''); setBulk('activate') }}>Activate</Btn>
+                  <Btn size="xs" icon={PauseCircle} onClick={() => { setBulkError(''); setBulk('pause') }}>Pause</Btn>
+                  <Btn size="xs" onClick={() => setSelected(new Set())}>Clear</Btn>
+                </span>
+              )}
               <SearchInput value={search} onChange={setSearch} placeholder="Search name, metric, site or brand" className="w-full sm:w-64" />
               <div className="ml-auto flex flex-wrap items-center gap-2">
                 <ExportButtons rows={visibleRules} columns={exportColumns} title="Alert Rules" />
@@ -344,6 +418,7 @@ export default function ConsoleAlertRules({ tabParam = 'tab' } = {}) {
           <>
           <Table>
             <THead>
+              <Th><span className="sr-only">Select</span></Th>
               <Th sortKey="name" sort={sort} onSort={onSort}>Rule</Th>
               <Th sortKey="condition" sort={sort} onSort={onSort}>Condition</Th>
               <Th>Channels</Th>
@@ -358,8 +433,13 @@ export default function ConsoleAlertRules({ tabParam = 'tab' } = {}) {
                 const noChannel = r.notify_in_app === false && !r.notify_email
                 return (
                   <Tr key={r.id} className={isActive ? '' : 'opacity-70'} onClick={() => setOpenRule(r)} ariaLabel={`Open rule ${r.name || 'Untitled rule'}`}>
+                    <Td>
+                      <input type="checkbox" className="accent-orange-500" checked={selected.has(r.id)}
+                        onClick={(e) => e.stopPropagation()} onChange={() => toggleSel(r.id)} aria-label={`Select rule ${r.name || 'Untitled rule'}`} />
+                    </Td>
                     <Td className="max-w-[220px]">
                       <span className="text-gray-200 font-medium line-clamp-2" title={r.name || ''}>{r.name || 'Untitled rule'}</span>
+                      {!isEvaluatedMetric(r.metric) && <span className="block mt-0.5"><Badge tone="danger">Never checked</Badge></span>}
                     </Td>
                     <Td>
                       <span className="text-gray-400">
@@ -380,13 +460,14 @@ export default function ConsoleAlertRules({ tabParam = 'tab' } = {}) {
                         {r.notify_in_app !== false && <Badge tone="default" icon={MonitorSmartphone}>In-app</Badge>}
                         {r.notify_email && <Badge tone="default" icon={Mail}>Email</Badge>}
                         {noChannel && <Badge tone="warning">No channel</Badge>}
+                        {!noChannel && r.notify_in_app === false && <Badge tone="warning">Tells nobody</Badge>}
                       </div>
                     </Td>
                     <Td align="right"><span className="tabular-nums text-gray-300">{r.triggered_count ?? 0}</span></Td>
                     <Td nowrap><span className="text-gray-500">{fmtWhen(r.last_triggered_at)}</span></Td>
                     <Td>{isActive ? <Badge tone="good">Active</Badge> : <Badge tone="quiet">Paused</Badge>}</Td>
                     <Td align="right" nowrap>
-                      <div className="inline-flex items-center gap-1">
+                      <div className="inline-flex items-center gap-1" onClick={(e) => e.stopPropagation()} role="presentation">
                         <Btn size="xs" variant="ghost" icon={Power} onClick={() => onToggle(r)} busy={busyId === r.id}
                           title={isActive ? 'Pause rule' : 'Activate rule'}>
                           {isActive ? 'Pause' : 'Activate'}
@@ -394,7 +475,7 @@ export default function ConsoleAlertRules({ tabParam = 'tab' } = {}) {
                         <Btn size="xs" variant="ghost" icon={Pencil} onClick={() => startEdit(r)} disabled={busyId === r.id} title="Edit rule">
                           Edit
                         </Btn>
-                        <Btn size="xs" variant="quiet" icon={Trash2} onClick={() => setConfirmDelete(r)} disabled={busyId === r.id} title="Delete rule">
+                        <Btn size="xs" variant="danger" icon={Trash2} onClick={() => { setDeleteError(''); setConfirmDelete(r) }} disabled={busyId === r.id} title="Delete rule">
                           Delete
                         </Btn>
                       </div>
@@ -459,8 +540,8 @@ export default function ConsoleAlertRules({ tabParam = 'tab' } = {}) {
       >
         <form id="alert-rule-form" onSubmit={save} className="space-y-4">
           <Note icon={Clock} tone="accent">
-            Rules are evaluated hourly. Critical alerts notify immediately, warnings batch into a daily
-            digest (severity routing via your notification preferences).
+            Rules are checked every hour and each rule fires at most once a day. When it fires you get an
+            in-app notification. Email is saved on the rule but not sent by the hourly check yet.
           </Note>
           {/* Name */}
           <div>
@@ -556,6 +637,7 @@ export default function ConsoleAlertRules({ tabParam = 'tab' } = {}) {
             </div>
           </div>
 
+          <ImpactBox what="What saving this rule does" {...ruleImpact(form)} tone={!form.notifyInApp ? 'warning' : 'info'} />
           <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
             <input type="checkbox" checked={form.active}
               onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))}
@@ -575,13 +657,19 @@ export default function ConsoleAlertRules({ tabParam = 'tab' } = {}) {
         footer={openRule && (
           <>
             <Btn icon={Power} onClick={() => { onToggle(openRule); setOpenRule(null) }}>{openRule.active !== false ? 'Pause' : 'Activate'}</Btn>
+            <Btn icon={Copy} onClick={() => duplicate(openRule)}>Duplicate</Btn>
             <Btn icon={Pencil} onClick={() => startEdit(openRule)}>Edit</Btn>
-            <Btn variant="danger" icon={Trash2} onClick={() => { setConfirmDelete(openRule); setOpenRule(null) }}>Delete</Btn>
+            <Btn variant="danger" icon={Trash2} onClick={() => { setDeleteError(''); setConfirmDelete(openRule); setOpenRule(null) }}>Delete</Btn>
           </>
         )}>
         {openRule && (
           <>
-            {hasNoChannel(openRule) && <Note icon={AlertTriangle} tone="danger">This rule has no notification channel, so nobody is told when it fires.</Note>}
+            {hasNoChannel(openRule) && <Note icon={AlertTriangle} tone="danger">This rule has no in-app channel, so nobody is told when it fires.</Note>}
+            {!isEvaluatedMetric(openRule.metric) && <Note icon={AlertTriangle} tone="danger">The hourly check does not compute this metric, so this rule can never fire. Edit it and pick a supported metric.</Note>}
+            <p className="text-xs text-gray-300">{ruleSentence({ ...openRule, metric: metricLabel(openRule.metric) })}</p>
+            {(Number(openRule.pending_checks) > 0 || Number(openRule.renotify_minutes) > 0 || Number(openRule.recover_after_hours) > 0) && (
+              <p className="text-[11px] text-gray-500">The wait, remind and recover settings are saved but the hourly check does not use them yet.</p>
+            )}
             <dl>
               <Field label="Condition">If {metricLabel(openRule.metric)} is {operatorLabel(openRule.operator)} {openRule.threshold ?? 'N/A'}</Field>
               <Field label="Site">{openRule.site_filter || 'All sites'}</Field>
@@ -592,29 +680,47 @@ export default function ConsoleAlertRules({ tabParam = 'tab' } = {}) {
               <Field label="Last fired">{fmtWhen(openRule.last_triggered_at)}</Field>
               {openRule.created_at && <Field label="Created">{fmtWhen(openRule.created_at)}</Field>}
             </dl>
-            <Note icon={Clock} tone="accent">Evaluated hourly. Critical alerts notify immediately, warnings batch into a daily digest.</Note>
+            <Note icon={Clock} tone="accent">Checked every hour, fires at most once a day, and notifies the rule owner in the app.</Note>
           </>
         )}
       </SideDrawer>
 
-      <Modal
+      <ConfirmImpactDialog
         open={!!confirmDelete}
         title="Delete alert rule?"
-        subtitle="This cannot be undone."
-        onClose={() => setConfirmDelete(null)}
-        width="max-w-md"
-        footer={(
-          <>
-            <Btn onClick={() => setConfirmDelete(null)}>Cancel</Btn>
-            <Btn variant="danger" icon={Trash2} onClick={() => onDelete(confirmDelete)} busy={!!confirmDelete && busyId === confirmDelete.id}>Delete rule</Btn>
-          </>
-        )}
-      >
-        <p className="text-sm text-gray-300">
-          The rule <span className="text-gray-100 font-medium">{confirmDelete?.name || 'Untitled rule'}</span> will
-          stop being evaluated and its firing history on this rule is removed with it.
-        </p>
-      </Modal>
+        danger
+        requireReason
+        confirmLabel="Delete rule"
+        busy={!!confirmDelete && busyId === confirmDelete.id}
+        error={deleteError}
+        onCancel={() => { if (!busyId) setConfirmDelete(null) }}
+        onConfirm={({ reason }) => onDelete(confirmDelete, reason)}
+        impact={{
+          what: `Delete the rule "${confirmDelete?.name || 'Untitled rule'}".`, tone: 'danger',
+          change: 'The rule stops being checked and its firing count is removed with it. Notifications already sent stay in people\'s bells.',
+          who: 'You, the rule owner. Nobody else receives this rule.',
+          undo: 'No. Pause the rule instead if you may want it back.',
+        }}
+      />
+
+      <ConfirmImpactDialog
+        open={!!bulk}
+        title={bulk === 'activate' ? `Activate ${selected.size} rules?` : `Pause ${selected.size} rules?`}
+        requireReason
+        confirmLabel={bulk === 'activate' ? 'Activate rules' : 'Pause rules'}
+        busy={bulkBusy}
+        error={bulkError}
+        readyExtra={selected.size > 0}
+        onCancel={() => { if (!bulkBusy) setBulk(null) }}
+        onConfirm={runBulk}
+        impact={{
+          what: bulk === 'activate' ? 'Start checking the selected rules every hour.' : 'Stop checking the selected rules.',
+          tone: bulk === 'activate' ? 'info' : 'warning',
+          change: bulk === 'activate' ? 'Each selected rule is checked from the next hourly run.' : 'Each selected rule is kept but not checked, so it cannot fire.',
+          who: 'You, the owner of these rules.',
+          undo: 'Yes. Reverse it here at any time.',
+        }}
+      />
     </div>
   )
 }

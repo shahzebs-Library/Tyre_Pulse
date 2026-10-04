@@ -4,6 +4,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 vi.mock('../console/components/ui/charts', () => ({ BarsChart: ({ summary }) => <div data-testid="bars">{summary}</div> }))
 vi.mock('../lib/exportUtils', () => ({ exportSheetsToExcel: vi.fn(async () => true) }))
 vi.mock('../lib/api/systemConfig', () => ({ configNum: () => 0 }))
+vi.mock('../console/ConsoleAuthContext', () => ({ useConsoleAuth: () => ({ logAction: vi.fn() }) }))
 const log = vi.fn(async () => 'job-1')
 vi.mock('../lib/api/tenantExport', () => ({
   listExportOrganisations: vi.fn(async () => [{ id: 'o1', name: 'Company A', active: true }]),

@@ -64,3 +64,70 @@ export async function getMobileLoginArt() {
 
 /** Save the login picture map. Caller passes the already-serialised JSON. */
 export async function setMobileLoginArt(json) { await upsertConfig('mobile_login_hero', json) }
+
+/* ------------------------------------------------------------------ */
+/* Flutter app (the only field app the console controls)              */
+/* ------------------------------------------------------------------ */
+
+const F_MIN = 'flutter_min_version'
+const F_LATEST = 'flutter_latest_version'
+
+/**
+ * Flutter gate + the retired Expo gate (read-only) in one read. configOk is
+ * false when system_config could not be read, so the page never shows
+ * "Gate off" for a value it simply could not see.
+ */
+export async function getFlutterOps() {
+  const { data, error } = await supabase
+    .from('system_config').select('key, value, updated_at').in('key', [F_MIN, F_LATEST, KEY_MIN, KEY_LATEST])
+  const rows = error ? [] : (data || [])
+  const at = (k) => (rows.find((r) => r.key === k) || {}).updated_at || null
+  return {
+    minVersion: val(rows, F_MIN),
+    latestVersion: val(rows, F_LATEST),
+    updatedAt: at(F_MIN),
+    latestUpdatedAt: at(F_LATEST),
+    configOk: !error,
+    retired: {
+      minVersion: val(rows, KEY_MIN),
+      latestVersion: val(rows, KEY_LATEST),
+      updatedAt: at(KEY_MIN) || at(KEY_LATEST),
+    },
+  }
+}
+
+/**
+ * Save the Flutter minimum ('min', blank = gate off) or record the newest
+ * released version ('latest'). The server RPC admin_set_flutter_version
+ * (migration 20261004105000) enforces the same interlock as the page and
+ * writes through admin_set_config, so the reason lands in system_config_history.
+ */
+export async function setFlutterVersion(which, value, reason) {
+  const { data, error } = await supabase.rpc('admin_set_flutter_version', {
+    p_which: which, p_value: String(value ?? '').trim(), p_reason: String(reason ?? '').trim(),
+  })
+  if (error) throw new ServiceError(toUserMessage(error, 'Could not save the version.'), error?.code, error)
+  return data
+}
+
+/**
+ * Recent changes to the two Flutter version keys, newest first, with the
+ * changer's display name (never an email). Super-admin read via RLS.
+ */
+export async function listFlutterVersionHistory(limit = 20) {
+  const { data, error } = await supabase
+    .from('system_config_history')
+    .select('id, key, action, old_value, new_value, changed_by, reason, changed_at')
+    .in('key', [F_MIN, F_LATEST])
+    .order('changed_at', { ascending: false })
+    .limit(Math.min(Math.max(Number(limit) || 20, 1), 100))
+  if (error) throw new ServiceError(toUserMessage(error, 'Could not read the change history.'), error?.code, error)
+  const rows = data || []
+  const ids = [...new Set(rows.map((r) => r.changed_by).filter(Boolean))]
+  let names = {}
+  if (ids.length) {
+    const { data: people } = await supabase.from('profiles').select('id, full_name, username').in('id', ids).limit(100)
+    names = Object.fromEntries((people || []).map((p) => [p.id, p.full_name || p.username || 'Admin']))
+  }
+  return rows.map((r) => ({ ...r, changed_by_name: r.changed_by ? (names[r.changed_by] || 'Admin') : 'Not recorded' }))
+}

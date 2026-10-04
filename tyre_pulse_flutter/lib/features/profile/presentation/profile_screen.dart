@@ -148,6 +148,7 @@ import 'package:tyre_pulse/features/problem_report/presentation/report_problem_s
 import 'package:tyre_pulse/features/profile/data/account_deletion_repository.dart';
 import 'package:tyre_pulse/features/profile/data/saved_signature_repository.dart';
 import 'package:tyre_pulse/features/profile/profile_providers.dart';
+import 'package:tyre_pulse/features/qr_login/presentation/qr_login_screen.dart';
 
 /// Stable finders for Profile's responsive visual regions.
 @visibleForTesting
@@ -182,6 +183,7 @@ abstract final class ProfileScreenKeys {
   static const Key signatureRemove = Key('profile.signatureSheet.remove');
   static const Key signatureRetry = Key('profile.signatureSheet.retry');
   static const Key reportProblemRow = Key('profile.reportProblem');
+  static const Key signInOnComputerRow = Key('profile.signInOnComputer');
 }
 
 /// The three languages the app ships (en/ar/ur ARB catalogs). Names are the
@@ -518,6 +520,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             sourceScreen: const ProfileRoute().location,
                           ),
                         ),
+                        onSignInOnComputer: () =>
+                            unawaited(openQrLogin(context)),
                       ),
                       account: _AccountBlock(
                         isSigningOut: _isSigningOut,
@@ -1139,6 +1143,7 @@ class _SettingsColumn extends StatelessWidget {
     required this.onChooseChecklistLanguage,
     required this.onOpenSignature,
     required this.onReportProblem,
+    required this.onSignInOnComputer,
   });
 
   final WorkspaceProfile profile;
@@ -1159,6 +1164,10 @@ class _SettingsColumn extends StatelessWidget {
   final VoidCallback onChooseChecklistLanguage;
   final VoidCallback onOpenSignature;
   final VoidCallback onReportProblem;
+
+  /// Opens "Sign in on a computer" (scan the web sign-in QR). Offered to
+  /// every signed-in role: it only ever signs the SAME person in on the web.
+  final VoidCallback onSignInOnComputer;
 
   @override
   Widget build(BuildContext context) {
@@ -1315,6 +1324,13 @@ class _SettingsColumn extends StatelessWidget {
         _SettingsSection(
           title: l10n.problemReportSectionHelp,
           rows: <Widget>[
+            _SettingsRow(
+              key: ProfileScreenKeys.signInOnComputerRow,
+              icon: Icons.qr_code_scanner_rounded,
+              tone: palette.info,
+              label: l10n.qrLoginAction,
+              onTap: onSignInOnComputer,
+            ),
             _SettingsRow(
               key: ProfileScreenKeys.reportProblemRow,
               icon: Icons.support_agent_rounded,

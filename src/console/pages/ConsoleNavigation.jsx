@@ -1,23 +1,27 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ListTree, Save, RotateCcw, ArrowUp, ArrowDown, Eye, EyeOff,
-  FolderInput, Pencil, CheckCircle2, Menu, Undo2, ChevronDown, ChevronRight, GitCompare,
+  FolderInput, Pencil, CheckCircle2, Menu, Undo2, ChevronDown, ChevronRight, GitCompare, History, GripVertical, Users,
 } from 'lucide-react'
 import { NAV_CATALOG } from '../../components/Layout'
 import {
   buildNavEditorModel, editorModelToLayout, applyNavLayout,
 } from '../../lib/navLayout'
-import { getNavLayout, saveNavLayout } from '../../lib/api/navLayout'
+import { getNavLayout, saveNavLayout, invalidateNavLayout } from '../../lib/api/navLayout'
+import { listConfigHistory, setConfigWithReason, namesFor } from '../../lib/api/consolePlatform'
+import { rolesAllowedByModule } from './navigation/navReach'
+import { fetchConfigStamps } from './config/configStamps'
+import { governingModuleKey } from '../../lib/navAccess'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import { toUserMessage } from '../../lib/safeError'
 import {
   Panel, PanelHeader, Note, StatTile, Badge, Code, Btn, SearchInput, Toolbar, Segmented, Select,
-  LoadingState, EmptyState, ErrorState, Modal, Table, THead, Th, Tr, Td,
+  LoadingState, EmptyState, ErrorState, Table, THead, Th, Tr, Td, ConfirmImpactDialog,
 } from '../components/ui'
 import ExportButtons from './shared/ExportButtons'
-import { PageHeader, useUrlTab, TabPanel, usePaged, Pager } from './shared/pageKit'
+import { PageHeader, useUrlTab, TabPanel, usePaged, Pager, fmtDateTime, fmtRelative } from './shared/pageKit'
 import { sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
-import { navChanges } from './navigation/navDiff'
+import { navChanges, moveItemTo, moveGroupTo, describeLayout } from './navigation/navDiff'
 
 /**
  * Navigation Customizer (super-admin, console). Reorder nav groups, reorder items
@@ -37,7 +41,8 @@ import { navChanges } from './navigation/navDiff'
 // Small square icon button in the console gray family (slate stays dark in
 // light mode, so it is not used here).
 const ICON_BTN = 'w-7 h-7 flex items-center justify-center rounded-md border border-gray-800 text-gray-400 hover:bg-gray-800 hover:text-gray-200 transition-colors disabled:opacity-30 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500'
-const TABS = ['editor', 'changes']
+const TABS = ['editor', 'changes', 'versions']
+const EMPTY_LAYOUT = { version: 1, groups: [], items: [] }
 const SHOW_OPTS = [
   { value: 'all', label: 'Every item' },
   { value: 'hidden', label: 'Hidden items' },
@@ -63,6 +68,41 @@ export default function ConsoleNavigation({ tabParam = 'tab' } = {}) {
   const [confirmReset, setConfirmReset] = useState(false)
   const [readAt, setReadAt] = useState(null)
   const [tab, setTab] = useUrlTab(TABS, 'editor', tabParam)
+  const [versions, setVersions] = useState({ state: 'loading', rows: [], names: {} })
+  const [restore, setRestore] = useState(null) // { row, value, label } or { reset: true }
+  const [restoreBusy, setRestoreBusy] = useState(false)
+  const [restoreError, setRestoreError] = useState('')
+  const [reach, setReach] = useState(null) // { moduleKey: roles allowed } or null when unread
+  const [drag, setDrag] = useState(null) // { type: 'item', g, i } | { type: 'group', g }
+  const [stamp, setStamp] = useState(null)
+  useEffect(() => {
+    let alive = true
+    Promise.resolve().then(() => fetchConfigStamps(['nav_layout'])).then((m) => { if (alive) setStamp(m.nav_layout || null) }).catch(() => {})
+    return () => { alive = false }
+  }, [versions])
+
+  // Every saved layout is in system_config_history (old and new value), so a
+  // save can be undone and any earlier layout restored.
+  const loadVersions = useCallback(async () => {
+    try {
+      const rows = await listConfigHistory({ key: 'nav_layout', limit: 50 })
+      const names = await namesFor(rows.map((r) => r.changed_by)).catch(() => ({}))
+      setVersions({ state: 'ok', rows, names })
+    } catch {
+      setVersions({ state: 'error', rows: [], names: {} })
+    }
+  }, [])
+  useEffect(() => { loadVersions() }, [loadVersions])
+  useEffect(() => {
+    let alive = true
+    Promise.resolve().then(rolesAllowedByModule).then((out) => { if (alive) setReach(out) })
+      .catch(() => { if (alive) setReach(null) })
+    return () => { alive = false }
+  }, [])
+  const rolesFor = (routeKey) => {
+    if (!reach) return null
+    try { return reach[governingModuleKey(routeKey)] ?? 0 } catch { return null }
+  }
 
   const defaults = useMemo(() => buildNavEditorModel(NAV_CATALOG, {}), [])
   const defaultGroupOf = useMemo(() => {
@@ -199,6 +239,7 @@ export default function ConsoleNavigation({ tabParam = 'tab' } = {}) {
       await saveNavLayout(layout)
       try { await logAction('update_config', null, 'nav_layout', { groups: layout.groups.length, items: layout.items.length, changes: changes.length }) } catch { /* non-fatal */ }
       setSaved(true); setDirty(false)
+      loadVersions()
     } catch (e) {
       setError(toUserMessage(e))
     } finally {
@@ -206,20 +247,64 @@ export default function ConsoleNavigation({ tabParam = 'tab' } = {}) {
     }
   }
 
-  async function handleReset() {
+  async function handleReset(reason) {
     setConfirmReset(false)
     setSaving(true); setError(''); setSaved(false)
     try {
-      await saveNavLayout({ version: 1, groups: [], items: [] })
-      try { await logAction('update_config', null, 'nav_layout', { reset: true }) } catch { /* non-fatal */ }
+      if (reason) {
+        await setConfigWithReason('nav_layout', JSON.stringify(EMPTY_LAYOUT), reason)
+        try { invalidateNavLayout() } catch { /* cache only */ }
+      } else {
+        await saveNavLayout(EMPTY_LAYOUT)
+      }
+      try { await logAction('update_config', null, 'nav_layout', { reset: true, reason: reason || null }) } catch { /* non-fatal */ }
       setModel(buildNavEditorModel(NAV_CATALOG, {}))
       setSaved(true); setDirty(false)
+      loadVersions()
     } catch (e) {
       setError(toUserMessage(e))
     } finally {
       setSaving(false)
     }
   }
+
+  /** Put an earlier layout back for everyone (reason required, audited). */
+  async function handleRestore(reason) {
+    if (!restore) return
+    if (restore.reset) { setRestore(null); await handleReset(reason); return }
+    setRestoreBusy(true); setRestoreError('')
+    try {
+      let parsed = {}
+      try { parsed = restore.value ? JSON.parse(restore.value) : {} } catch { parsed = {} }
+      await setConfigWithReason('nav_layout', restore.value ? JSON.stringify(parsed) : JSON.stringify(EMPTY_LAYOUT), reason)
+      try { invalidateNavLayout() } catch { /* cache only */ }
+      try { await logAction('update_config', null, 'nav_layout', { restored_from: restore.row?.changed_at || null, reason }) } catch { /* non-fatal */ }
+      setRestore(null)
+      setModel(buildNavEditorModel(NAV_CATALOG, parsed))
+      setDirty(false); setSaved(true)
+      loadVersions()
+    } catch (e) {
+      setRestoreError(toUserMessage(e))
+    } finally {
+      setRestoreBusy(false)
+    }
+  }
+
+  function dropOnItem(gIdx, iIdx) {
+    if (!drag) return
+    if (drag.type === 'item') mutate(moveItemTo(model, { g: drag.g, i: drag.i }, { g: gIdx, i: iIdx }))
+    setDrag(null)
+  }
+  function dropOnGroup(gIdx) {
+    if (!drag) return
+    if (drag.type === 'group') mutate(moveGroupTo(model, drag.g, gIdx))
+    else if (drag.type === 'item' && drag.g !== gIdx) {
+      mutate(moveItemTo(model, { g: drag.g, i: drag.i }, { g: gIdx, i: model[gIdx].items.length }))
+      setExpanded((e) => new Set([...e, model[gIdx].key]))
+    }
+    setDrag(null)
+  }
+  const lastSave = versions.rows[0] || null
 
   const allKeys = (model || []).map((g) => g.key)
   const allOpen = allKeys.length > 0 && allKeys.every((k) => expanded.has(k))
@@ -237,7 +322,12 @@ export default function ConsoleNavigation({ tabParam = 'tab' } = {}) {
             <Btn icon={Undo2} onClick={load} disabled={saving || loading || !dirty} title="Discard unsaved changes">
               Discard
             </Btn>
-            <Btn icon={RotateCcw} onClick={() => setConfirmReset(true)} disabled={saving || loading}>
+            <Btn icon={History} disabled={saving || loading || !lastSave}
+              title={lastSave ? `Put back the layout from before ${fmtDateTime(lastSave.changed_at)}` : 'No recorded save to undo'}
+              onClick={() => { setRestoreError(''); setRestore({ row: lastSave, value: lastSave.old_value, label: 'the layout before the last save' }) }}>
+              Undo last save
+            </Btn>
+            <Btn icon={RotateCcw} variant="danger" onClick={() => setConfirmReset(true)} disabled={saving || loading}>
               Reset to defaults
             </Btn>
             <Btn variant="primary" icon={Save} onClick={handleSave} busy={saving} disabled={loading || !dirty}>
@@ -249,7 +339,8 @@ export default function ConsoleNavigation({ tabParam = 'tab' } = {}) {
 
       <Note icon={EyeOff}>
         Hiding is menu tidiness only. A hidden item is still reachable by its address, and access is still
-        governed by roles and permissions.
+        governed by roles and permissions. Drag rows (or use the arrows) to reorder; drop an item on a group
+        header to move it there. Saving applies to every user on the web app; the Flutter app has its own menu.
       </Note>
 
       <ErrorState message={error} onRetry={!model ? load : undefined} />
@@ -291,10 +382,22 @@ export default function ConsoleNavigation({ tabParam = 'tab' } = {}) {
             <Segmented ariaLabel="Navigation views" value={tab} onChange={setTab} options={[
               { key: 'editor', label: <><ListTree size={13} aria-hidden="true" />Editor</> },
               { key: 'changes', label: <><GitCompare size={13} aria-hidden="true" />Changes from default</>, count: changes.length },
+              { key: 'versions', label: <><History size={13} aria-hidden="true" />Saved versions</>, count: versions.state === 'ok' ? versions.rows.length : null },
             ]} />
+            <span className="text-[11px] text-gray-500">
+              {versions.state === 'ok'
+                ? (lastSave ? `Last saved ${fmtRelative(lastSave.changed_at)} by ${versions.names[lastSave.changed_by] || (lastSave.changed_by ? 'unknown person' : 'system')}`
+                  : stamp?.updated_at ? `Last saved ${fmtRelative(stamp.updated_at)} (person not recorded before 30 Sep 2026)` : 'Never saved: the built-in sidebar is in use')
+                : stamp?.updated_at ? `Last saved ${fmtRelative(stamp.updated_at)}` : versions.state === 'error' ? 'Last save: N/A (history not readable)' : ''}
+            </span>
           </nav>
 
-          {tab === 'changes' ? (
+          {tab === 'versions' ? (
+            <TabPanel label="Saved versions">
+              <VersionsPanel versions={versions} onRetry={loadVersions}
+                onRestore={(row, which) => { setRestoreError(''); setRestore({ row, value: which === 'old' ? row.old_value : row.new_value, label: which === 'old' ? `the layout before ${fmtDateTime(row.changed_at)}` : `the layout saved ${fmtDateTime(row.changed_at)}` }) }} />
+            </TabPanel>
+          ) : tab === 'changes' ? (
             <TabPanel label="Changes from default">
               <Panel>
                 <PanelHeader icon={GitCompare} title="Changes from the built-in sidebar"
@@ -326,7 +429,13 @@ export default function ConsoleNavigation({ tabParam = 'tab' } = {}) {
                     const bodyId = `nav-group-${g.key}`
                     return (
                       <Panel key={g.key} flush className={g.hidden ? 'opacity-70' : ''}>
-                        <div className={`flex flex-wrap items-center gap-2 px-3 py-2 ${open ? 'border-b border-gray-800' : ''}`}>
+                        <div className={`flex flex-wrap items-center gap-2 px-3 py-2 ${open ? 'border-b border-gray-800' : ''} ${drag ? 'outline-dashed outline-1 outline-gray-700' : ''}`}
+                          draggable={!filtering && renaming !== g.key}
+                          onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; setDrag({ type: 'group', g: gIdx }) }}
+                          onDragEnd={() => setDrag(null)}
+                          onDragOver={(e) => { if (drag) e.preventDefault() }}
+                          onDrop={(e) => { e.preventDefault(); dropOnGroup(gIdx) }}>
+                          <GripVertical size={13} className="text-gray-500 cursor-grab flex-shrink-0" aria-hidden="true" />
                           <button type="button" className={ICON_BTN} onClick={() => toggleExpanded(g.key)} disabled={filtering}
                             aria-expanded={open} aria-controls={bodyId} aria-label={`${open ? 'Collapse' : 'Expand'} group ${g.label}`}
                             title={filtering ? 'Open while a filter is active' : open ? 'Collapse' : 'Expand'}>
@@ -359,8 +468,9 @@ export default function ConsoleNavigation({ tabParam = 'tab' } = {}) {
                           <div className="flex items-center gap-1 flex-shrink-0">
                             <button className={ICON_BTN} title="Move group up" aria-label={`Move group ${g.label} up`} disabled={gIdx === 0} onClick={() => moveGroup(gIdx, -1)}><ArrowUp size={13} aria-hidden="true" /></button>
                             <button className={ICON_BTN} title="Move group down" aria-label={`Move group ${g.label} down`} disabled={gIdx === model.length - 1} onClick={() => moveGroup(gIdx, 1)}><ArrowDown size={13} aria-hidden="true" /></button>
-                            <button className={ICON_BTN} title={g.hidden ? 'Show group' : 'Hide group'} aria-label={`${g.hidden ? 'Show' : 'Hide'} group ${g.label}`} aria-pressed={!g.hidden} onClick={() => toggleGroupHidden(gIdx)}>
-                              {g.hidden ? <EyeOff size={13} className="text-gray-500" /> : <Eye size={13} className="text-emerald-400" />}
+                            <button className={`${ICON_BTN} w-auto px-2 gap-1 text-[11px]`} title={g.hidden ? 'Show group in the sidebar' : 'Hide group from the sidebar (pages stay reachable by link)'} aria-label={`${g.hidden ? 'Show' : 'Hide'} group ${g.label}`} aria-pressed={!g.hidden} onClick={() => toggleGroupHidden(gIdx)}>
+                              {g.hidden ? <EyeOff size={13} className="text-gray-500" aria-hidden="true" /> : <Eye size={13} className="text-emerald-400" aria-hidden="true" />}
+                              <span aria-hidden="true">{g.hidden ? 'Show' : 'Hide'}</span>
                             </button>
                           </div>
                         </div>
@@ -372,9 +482,20 @@ export default function ConsoleNavigation({ tabParam = 'tab' } = {}) {
                               const homeGroup = defaultGroupOf.get(it.key)
                               const movedFrom = homeGroup && homeGroup !== g.key ? defaults.find((d) => d.key === homeGroup)?.label : null
                               return (
-                                <div key={it.key} className={`flex flex-wrap items-center gap-2 px-2 py-1 rounded-lg ${it.hidden ? 'opacity-50' : 'hover:bg-gray-800/60'}`}>
+                                <div key={it.key} className={`flex flex-wrap items-center gap-2 px-2 py-1 rounded-lg ${it.hidden ? 'opacity-50' : 'hover:bg-gray-800/60'}`}
+                                  draggable={!filtering}
+                                  onDragStart={(e) => { e.stopPropagation(); e.dataTransfer.effectAllowed = 'move'; setDrag({ type: 'item', g: gIdx, i: iIdx }) }}
+                                  onDragEnd={() => setDrag(null)}
+                                  onDragOver={(e) => { if (drag?.type === 'item') e.preventDefault() }}
+                                  onDrop={(e) => { e.preventDefault(); e.stopPropagation(); dropOnItem(gIdx, iIdx) }}>
+                                  {!filtering && <GripVertical size={12} className="text-gray-500 cursor-grab flex-shrink-0" aria-hidden="true" />}
                                   <span className="text-[13px] text-gray-200 truncate flex-1 min-w-0">{it.label}</span>
-                                  {it.hidden && <Badge tone="quiet">Hidden</Badge>}
+                                  {it.hidden && <Badge tone="quiet" title="Still reachable by its address and still governed by access rules">Hidden</Badge>}
+                                  {rolesFor(it.key) != null && (
+                                    <span className="text-[10px] text-gray-500 inline-flex items-center gap-0.5" title="Roles allowed this page in Access Control (other roles follow their defaults)">
+                                      <Users size={10} aria-hidden="true" />{rolesFor(it.key)}
+                                    </span>
+                                  )}
                                   {movedFrom && <Badge tone="info">from {movedFrom}</Badge>}
                                   <span className="hidden sm:inline max-w-[140px] truncate"><Code>{it.key}</Code></span>
                                   <div className="flex items-center gap-1 flex-shrink-0">
@@ -392,8 +513,9 @@ export default function ConsoleNavigation({ tabParam = 'tab' } = {}) {
                                         {groupOptions.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
                                       </select>
                                     </div>
-                                    <button className={ICON_BTN} title={it.hidden ? 'Show item' : 'Hide item'} aria-label={`${it.hidden ? 'Show' : 'Hide'} ${it.label}`} aria-pressed={!it.hidden} onClick={() => toggleItemHidden(gIdx, iIdx)}>
-                                      {it.hidden ? <EyeOff size={12} className="text-gray-500" /> : <Eye size={12} className="text-emerald-400" />}
+                                    <button className={`${ICON_BTN} w-auto px-2 gap-1 text-[11px]`} title={it.hidden ? 'Show item in the sidebar' : 'Hide item from the sidebar (still reachable by link)'} aria-label={`${it.hidden ? 'Show' : 'Hide'} ${it.label}`} aria-pressed={!it.hidden} onClick={() => toggleItemHidden(gIdx, iIdx)}>
+                                      {it.hidden ? <EyeOff size={12} className="text-gray-500" aria-hidden="true" /> : <Eye size={12} className="text-emerald-400" aria-hidden="true" />}
+                                      <span aria-hidden="true">{it.hidden ? 'Show' : 'Hide'}</span>
                                     </button>
                                   </div>
                                 </div>
@@ -439,24 +561,27 @@ export default function ConsoleNavigation({ tabParam = 'tab' } = {}) {
         </>
       )}
 
-      <Modal
-        open={confirmReset}
-        title="Reset navigation to defaults"
-        onClose={() => setConfirmReset(false)}
-        width="max-w-md"
-        footer={(
-          <>
-            <Btn onClick={() => setConfirmReset(false)} disabled={saving}>Cancel</Btn>
-            <Btn variant="danger" icon={RotateCcw} onClick={handleReset} busy={saving}>Reset for everyone</Btn>
-          </>
-        )}
-      >
-        <p className="text-xs text-gray-300 leading-relaxed">
-          This clears every custom group order, rename, move and hidden item for the whole organisation and
-          saves the built-in sidebar straight away. It cannot be undone from here.
-          {changes.length ? ` It removes ${changes.length} ${changes.length === 1 ? 'change' : 'changes'} (see the Changes tab).` : ''}
-        </p>
-      </Modal>
+      <ConfirmImpactDialog open={confirmReset} danger requireReason typedWord="RESET" busy={saving}
+        title="Reset navigation to defaults?" confirmLabel="Reset for everyone"
+        onCancel={() => setConfirmReset(false)} onConfirm={({ reason }) => handleReset(reason)}
+        impact={{
+          tone: 'danger',
+          what: 'The built-in sidebar is saved straight away for the whole platform.',
+          change: `Every custom group order, rename, move and hidden item is removed${changes.length ? ` (${changes.length} ${changes.length === 1 ? 'change' : 'changes'}, see the Changes tab)` : ''}.`,
+          who: 'Every web app user sees the built-in menu on their next load. Access rules do not change.',
+          undo: 'Yes. Saved versions keep the layout you are replacing, so Undo last save puts it back.',
+        }} />
+
+      <ConfirmImpactDialog open={!!restore} requireReason busy={restoreBusy} error={restoreError}
+        title="Restore an earlier navigation?" confirmLabel="Restore for everyone"
+        onCancel={() => setRestore(null)} onConfirm={({ reason }) => handleRestore(reason)}
+        impact={restore ? {
+          tone: 'warning',
+          what: `Put back ${restore.label}.`,
+          change: `The sidebar becomes: ${describeLayout(restore.value)}.${dirty ? ' Your unsaved edits are discarded.' : ''}`,
+          who: 'Every web app user on their next load. Access rules do not change.',
+          undo: 'Yes. The layout you replace is kept in Saved versions.',
+        } : null} />
     </div>
   )
 }
@@ -507,5 +632,53 @@ function ChangesTable({ changes }) {
         </>
       )}
     </>
+  )
+}
+
+/** Every saved navigation layout, from the system_config change history. */
+function VersionsPanel({ versions, onRetry, onRestore }) {
+  const paged = usePaged(versions.rows, 15)
+  const rows = versions.rows.map((r) => ({
+    when: fmtDateTime(r.changed_at), by: versions.names[r.changed_by] || (r.changed_by ? 'Unknown person' : 'System'),
+    before: describeLayout(r.old_value), after: describeLayout(r.new_value), reason: r.reason || 'Not recorded',
+  }))
+  return (
+    <Panel>
+      <PanelHeader icon={History} title="Saved versions"
+        subtitle="Every save since 30 Sep 2026 with the layout before and after. Restoring needs a reason and is recorded too."
+        actions={<ExportButtons rows={rows} title="Navigation saved versions" columns={[
+          { key: 'when', header: 'When' }, { key: 'by', header: 'By' }, { key: 'before', header: 'Before' },
+          { key: 'after', header: 'After' }, { key: 'reason', header: 'Reason' },
+        ]} />} />
+      {versions.state === 'loading' ? <LoadingState label="Reading saved versions" rows={3} /> : versions.state === 'error' ? (
+        <ErrorState message="Saved versions could not be read. Only a super admin can read the change history." onRetry={onRetry} />
+      ) : versions.rows.length === 0 ? (
+        <EmptyState icon={History} title="No save recorded yet" reason="Recording started on 30 Sep 2026. The next save appears here and can be undone." />
+      ) : (
+        <>
+          <Table>
+            <THead><Th>When</Th><Th>By</Th><Th>Before</Th><Th>After</Th><Th>Reason</Th><Th align="right">Restore</Th></THead>
+            <tbody>
+              {paged.rows.map((r) => (
+                <Tr key={r.id}>
+                  <Td nowrap className="text-gray-300">{fmtDateTime(r.changed_at)}</Td>
+                  <Td className="text-gray-400">{versions.names[r.changed_by] || (r.changed_by ? 'Unknown person' : 'System')}</Td>
+                  <Td className="text-gray-400">{describeLayout(r.old_value)}</Td>
+                  <Td className="text-gray-400">{describeLayout(r.new_value)}</Td>
+                  <Td className="text-gray-400">{r.reason || 'Not recorded'}</Td>
+                  <Td align="right" nowrap>
+                    <span className="inline-flex gap-1">
+                      <Btn size="xs" icon={Undo2} onClick={() => onRestore(r, 'old')}>Before</Btn>
+                      <Btn size="xs" icon={History} onClick={() => onRestore(r, 'new')}>After</Btn>
+                    </span>
+                  </Td>
+                </Tr>
+              ))}
+            </tbody>
+          </Table>
+          <Pager paged={paged} label="versions" />
+        </>
+      )}
+    </Panel>
   )
 }

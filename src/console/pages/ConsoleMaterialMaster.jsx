@@ -22,17 +22,25 @@
  * an item's own description lands on the same cost bucket as its category, the two
  * agree and it can be confirmed with confidence; when they differ, look first.
  *
+ * Control Center round 2 added: the status strip, an impact line under every
+ * control, a confirm (with an audited reason) before a bulk confirm, and a
+ * BULK CHANGE: set the selected items to one chosen category in one step,
+ * behind a typed confirmation, because that does move how future lines are
+ * counted. Every write is recorded in the console audit.
+ *
  * Super-admin only (the whole /console is gated). No raw SQL, no em/en dashes.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Boxes, RefreshCw, Check, Info, ArrowRight,
-  ListFilter, CheckCheck, CheckCircle2, HelpCircle, Ban, PieChart, BarChart3,
+  ListFilter, CheckCheck, CheckCircle2, HelpCircle, Ban, PieChart, BarChart3, Replace,
 } from 'lucide-react'
 import {
   Panel, PanelHeader, Note, StatTile, ProportionBar, Badge, Code, Btn, Segmented, SearchInput,
-  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Modal,
+  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Modal, ConfirmImpactDialog, Select,
 } from '../components/ui'
+import { useConsoleAuth } from '../ConsoleAuthContext'
+import { StatusStrip, ImpactLine } from './dataOps/DataOpsParts'
 import { ShareChart, BarsChart, STATUS, useChartTheme } from '../components/ui/charts'
 import {
   listMaterials, deriveMaterials, setMaterial, setMaterialsBulk, materialCoverage,
@@ -80,6 +88,10 @@ const fmtMoney = (n) => (Number.isFinite(Number(n))
 const BUCKET_TONE = { tyre: 'good', oil: 'warning', spare: 'info' }
 
 export default function ConsoleMaterialMaster({ tabParam = 'tab' } = {}) {
+  const { logAction } = useConsoleAuth()
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false)
+  const [bulkCategory, setBulkCategory] = useState('')
+  const [bulkChangeOpen, setBulkChangeOpen] = useState(false)
   const [rows, setRows] = useState([])
   const [coverage, setCoverage] = useState({})
   const [loading, setLoading] = useState(true)
@@ -173,6 +185,7 @@ export default function ConsoleMaterialMaster({ tabParam = 'tab' } = {}) {
     setBusy(true); setError(''); setNotice('')
     try {
       const r = await deriveMaterials()
+      try { await logAction?.('material_derive', null, 'material_master', { rows: (Number(r.inserted) || 0) + (Number(r.updated) || 0) }) } catch { /* audit best effort */ }
       setNotice(`Refreshed from transactions: ${fmtNum(r.inserted)} new, ${fmtNum(r.updated)} updated`
         + `${r.conflicting ? `, ${fmtNum(r.conflicting)} need a decision` : ''}.`
         + ' Items you already reviewed were left untouched.')
@@ -195,6 +208,7 @@ export default function ConsoleMaterialMaster({ tabParam = 'tab' } = {}) {
       setRows((rs) => rs.map((r) => (r.id === row.id
         ? { ...r, reviewed: true, conflicting: false } : r)))
       setSelected((s) => { const n = new Set(s); n.delete(row.id); return n })
+      try { await logAction?.('material_confirm', null, 'material_master', { count: 1, country: row.country, item: row.item_code }) } catch { /* audit best effort */ }
     } catch (e) {
       setError(toUserMessage(e, 'Could not confirm that item.'))
     } finally {
@@ -203,13 +217,28 @@ export default function ConsoleMaterialMaster({ tabParam = 'tab' } = {}) {
   }
 
   // MULTI CONFIRM: the current selection, each as its own current category.
-  async function confirmSelected() {
+  async function confirmSelected({ reason } = {}, category = null) {
     if (selectedRows.length === 0) return
     setBusy(true); setError(''); setNotice('')
     try {
       const res = await setMaterialsBulk(selectedRows.map((r) => ({
-        country: r.country, item_code: r.item_code, category: r.category,
+        country: r.country, item_code: r.item_code, category: category || r.category,
       })))
+      try {
+        await logAction?.(category ? 'material_save' : 'material_confirm', null, 'material_master',
+          { count: res?.confirmed, country, category: category || null, reason: reason || null })
+      } catch { /* audit best effort */ }
+      setBulkConfirmOpen(false); setBulkChangeOpen(false)
+      if (category) {
+        const ids = new Set(selectedRows.map((r) => r.id))
+        setRows((rs) => rs.map((r) => (ids.has(r.id) ? { ...r, category, reviewed: true, conflicting: false } : r)))
+        setSelected(new Set())
+        setNotice(`Set ${fmtNum(res.confirmed)} item${res.confirmed === 1 ? '' : 's'} to ${labelFor(category)}.`
+          + `${res.skipped ? ` ${fmtNum(res.skipped)} skipped.` : ''}`
+          + ' New lines use it at once; lines already loaded move only when you apply reviewed decisions on Import History.')
+        materialCoverage().then(setCoverage).catch(() => {})
+        return
+      }
       const ids = new Set(selectedRows.map((r) => r.id))
       setRows((rs) => rs.map((r) => (ids.has(r.id)
         ? { ...r, reviewed: true, conflicting: false } : r)))
@@ -261,6 +290,10 @@ export default function ConsoleMaterialMaster({ tabParam = 'tab' } = {}) {
         notes: draft.notes || null,
         reviewed: true,
       })
+      try {
+        await logAction?.('material_save', null, 'material_master',
+          { country: detail.country, item: detail.item_code, from: detail.category, category: draft.category, reason: draft.notes || null })
+      } catch { /* audit best effort */ }
       setNotice(`${detail.item_code} confirmed as ${labelFor(draft.category)}. `
         + 'Every transaction with this code now uses that decision.')
       const changed = draft.category !== detail.category
@@ -301,6 +334,18 @@ export default function ConsoleMaterialMaster({ tabParam = 'tab' } = {}) {
     },
   ]
 
+  const covErr = !coverage || Object.keys(coverage).length === 0
+  const strip = [
+    { label: 'Item codes', value: covErr ? (loading ? '...' : 'N/A') : fmtNum(coverage?.codes_total) },
+    { label: 'Reviewed by a person', value: covErr ? 'N/A' : fmtNum(coverage?.codes_reviewed), tone: 'good' },
+    { label: 'Need a decision', value: covErr ? 'N/A' : fmtNum(coverage?.codes_conflicting), tone: Number(coverage?.codes_conflicting) > 0 ? 'warning' : undefined },
+    { label: 'Spend reviewed', value: reviewedShare == null ? 'N/A' : `${reviewedShare}%`, sub: 'A share, currencies never added' },
+    { label: `Loaded, ${country}`, value: loading ? '...' : fmtNum(rows.length), sub: 'Highest spend first, up to 300' },
+    { label: 'Not reviewed here', value: loading ? '...' : fmtNum(rows.filter((r) => !r.reviewed).length) },
+    { label: 'Safe to confirm', value: loading ? '...' : fmtNum(agreeUnreviewed), sub: 'Description agrees', tone: agreeUnreviewed ? 'good' : undefined },
+    { label: 'Look first', value: loading ? '...' : fmtNum(differUnreviewed.length), sub: 'Description differs', tone: differUnreviewed.length ? 'warning' : undefined },
+  ]
+
   return (
     <div className="space-y-5 max-w-7xl pb-24">
       <PageHeader icon={Boxes} title="Material Master"
@@ -308,6 +353,11 @@ export default function ConsoleMaterialMaster({ tabParam = 'tab' } = {}) {
         refreshedAt={refreshedAt} onRefresh={load} refreshing={loading} refreshLabel="Reload list"
         actions={<Btn variant="primary" icon={RefreshCw} onClick={refresh} busy={busy}
           title="Rebuild the master from your expense transactions. Items you already reviewed are left untouched.">Refresh from transactions</Btn>} />
+
+      <StatusStrip label="Material master status" cells={strip} />
+      <ImpactLine change="Refresh from transactions adds new item codes and updates guesses for unreviewed ones. Confirm records a person's decision on an item."
+        who="Cost reports: a reviewed item decides how its future lines are counted. Lines already loaded only move from Import History, What we changed."
+        undo="Change the item again; every decision is audited." />
 
       {/* Coverage: money reviewed, not rows reviewed. Whole scope, every country. */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -495,13 +545,45 @@ export default function ConsoleMaterialMaster({ tabParam = 'tab' } = {}) {
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
               <Btn icon={Ban} onClick={() => setSelected(new Set())} disabled={busy}>Clear</Btn>
-              <Btn variant="primary" icon={CheckCheck} onClick={confirmSelected} busy={busy}>
+              <Btn icon={Replace} onClick={() => { setBulkCategory(''); setBulkChangeOpen(true) }} disabled={busy}
+                title="Set every selected item to one category">Change category</Btn>
+              <Btn variant="primary" icon={CheckCheck} onClick={() => setBulkConfirmOpen(true)} busy={busy}>
                 Confirm {fmtNum(selectedRows.length)}
               </Btn>
             </div>
           </div>
         </div>
       )}
+
+      <ConfirmImpactDialog open={bulkConfirmOpen} onCancel={() => { if (!busy) setBulkConfirmOpen(false) }}
+        onConfirm={(v) => confirmSelected(v)} title={`Confirm ${fmtNum(selectedRows.length)} items`} confirmLabel="Confirm them"
+        requireReason busy={busy} error={bulkConfirmOpen ? error : ''}
+        impact={{
+          tone: 'info',
+          what: `Record a person's decision on ${fmtNum(selectedRows.length)} item(s), each as the category it already has.`,
+          change: 'Nothing is re-bucketed: every item keeps its current category. Your name and the time are recorded against each.',
+          who: 'Nobody sees a figure change.',
+          undo: 'Edit any item later; its new decision replaces this one.',
+          stats: [
+            { label: 'Items', value: fmtNum(selectedRows.length) },
+            { label: 'Description agrees', value: fmtNum(selectedRows.filter((r) => descriptionAgreement(r) === 'agree').length) },
+            { label: 'Description differs', value: fmtNum(selectedRows.filter((r) => descriptionAgreement(r) === 'differ').length) },
+          ],
+        }} />
+
+      <ConfirmImpactDialog open={bulkChangeOpen} onCancel={() => { if (!busy) setBulkChangeOpen(false) }}
+        onConfirm={(v) => confirmSelected(v, bulkCategory)} danger title={`Change ${fmtNum(selectedRows.length)} items to one category`}
+        confirmLabel="Change them" typedWord="CHANGE" requireReason busy={busy} readyExtra={!!bulkCategory} error={bulkChangeOpen ? error : ''}
+        impact={{
+          tone: 'danger',
+          what: `Set ${fmtNum(selectedRows.length)} selected item(s) to ${bulkCategory ? labelFor(bulkCategory) : 'the category you pick'}.`,
+          change: 'From now on every new line with these codes is counted in that cost bucket. Lines already loaded move only when you apply reviewed decisions on Import History.',
+          who: `Tyre, Spare and Oil totals for ${country}.`,
+          undo: 'Change the items back here, then apply again.',
+        }}>
+        <Select label="New category" ariaLabel="New category" value={bulkCategory} onChange={setBulkCategory} placeholder="Pick a category"
+          options={MATERIAL_CATEGORIES.filter((c) => c.key !== 'unclassified').map((c) => ({ value: c.key, label: `${c.label} (counts as ${c.costBucket})` }))} />
+      </ConfirmImpactDialog>
 
       <Modal open={!!detail} onClose={closeDetail} width="max-w-2xl"
         title={detail ? <span className="font-mono">{detail.item_code}</span> : ''}
@@ -516,6 +598,11 @@ export default function ConsoleMaterialMaster({ tabParam = 'tab' } = {}) {
         {detail && (
           <div className="space-y-4">
             <MoneySplit txns={detailTxns} country={detail.country} agreement={descriptionAgreement(detail)} />
+            <ImpactLine
+              change={draft.category && draft.category !== detail.category
+                ? `New lines with ${detail.item_code} will count as ${labelFor(draft.category)} instead of ${labelFor(detail.category)}.`
+                : 'Records your decision; the category stays the same, so no figure moves.'}
+              who={`${detail.country} cost reports.`} undo="Edit the item again." />
 
             <div>
               <p className="text-[11px] font-semibold text-gray-400 mb-1.5">What is this item?</p>

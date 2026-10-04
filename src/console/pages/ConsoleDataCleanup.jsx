@@ -12,15 +12,20 @@
  * Business targets (accidents / tyres / inspections / work orders) are flagged
  * red with an extra warning; log targets are the safe default. No raw SQL, no
  * em/en dashes. Super-admin only (the whole /console is gated).
+ *
+ * Control Center round 2 added: the status strip, a dry run of one cutoff
+ * across EVERY target, the run history (read from the system_logs rows the
+ * server writes on each run), the retention switches that decide what is kept
+ * automatically, and a required reason on every deletion (audited).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Trash2, AlertTriangle, Info, Database, ShieldCheck, Eye, CheckCircle2, BarChart3, ArrowRight,
+  History, Clock, SearchCheck,
 } from 'lucide-react'
-import { useConsoleAuth } from '../ConsoleAuthContext'
 import {
   Panel, PanelHeader, Note, StatTile, Badge, Btn, Segmented, Table, THead, Th, Tr, Td, SearchInput, Toolbar,
-  LoadingState, EmptyState, ErrorState, Modal,
+  LoadingState, EmptyState, ErrorState, ConfirmImpactDialog,
 } from '../components/ui'
 import { BarsChart, STATUS, SERIES, useChartTheme } from '../components/ui/charts'
 import {
@@ -30,6 +35,8 @@ import { toUserMessage } from '../../lib/safeError'
 import { sortRows, useTableSort } from '../../lib/consoleTable'
 import ExportButtons from './shared/ExportButtons'
 import { PageHeader, TabBar, useUrlTab, usePager, Pager, AttentionList } from './shared/pageKit'
+import { StatusStrip, ImpactLine } from './dataOps/DataOpsParts'
+import { listCleanupRuns, getRetentionSettings } from '../../lib/api/dataOpsCenter'
 
 const fmtDate = (v) => {
   if (!v) return 'N/A'
@@ -38,7 +45,7 @@ const fmtDate = (v) => {
 }
 const fmtNum = (n) => (n !== null && n !== undefined && Number.isFinite(Number(n)) ? Number(n).toLocaleString() : 'N/A')
 const CONFIRM_WORD = 'CLEAN'
-const TAB_KEYS = ['targets', 'overview']
+const TAB_KEYS = ['targets', 'overview', 'history', 'retention']
 const TARGET_COLUMNS = [
   { key: 'label', header: 'Target' },
   { key: 'kind', header: 'Kind', value: (t) => (t.kind === 'business' ? 'Business data' : 'Logs') },
@@ -48,13 +55,19 @@ const TARGET_COLUMNS = [
 ]
 // A log target whose oldest record is older than this is a cleanup candidate.
 const STALE_LOG_DAYS = 365
+const RUN_COLUMNS = [
+  { key: 'at', header: 'When', value: (r) => fmtDate(r.at) },
+  { key: 'key', header: 'Target', value: (r) => r.key || 'N/A' },
+  { key: 'before', header: 'Cutoff', value: (r) => r.before || 'N/A' },
+  { key: 'deleted', header: 'Deleted', value: (r) => (r.deleted == null ? 'N/A' : r.deleted) },
+  { key: 'snapshot', header: 'Snapshot', value: (r) => (r.snapshot ? 'Saved' : 'Not recorded') },
+]
 const daysSince = (v) => {
   const t = v ? new Date(v).getTime() : NaN
   return Number.isFinite(t) ? Math.floor((Date.now() - t) / 86400000) : null
 }
 
 export default function ConsoleDataCleanup({ tabParam = 'tab' } = {}) {
-  const { logAction } = useConsoleAuth()
   const theme = useChartTheme()
   const [targets, setTargets] = useState([])
   const [loading, setLoading] = useState(true)
@@ -66,11 +79,29 @@ export default function ConsoleDataCleanup({ tabParam = 'tab' } = {}) {
   const [preview, setPreview] = useState(null)      // { count } | null
   const [previewing, setPreviewing] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
-  const [confirmText, setConfirmText] = useState('')
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState(null)        // { deleted, snapshot } | null
   const [refreshedAt, setRefreshedAt] = useState(null)
   const [tab, setTab] = useUrlTab(TAB_KEYS, 'targets', tabParam)
+  const [runs, setRuns] = useState({ rows: [], loading: true, error: '' })
+  const [retention, setRetention] = useState({ data: null, error: '' })
+  const [sweep, setSweep] = useState(null)          // { rows, cutoff } dry run across every target
+  const [sweeping, setSweeping] = useState(false)
+
+  const loadRuns = useCallback(async () => {
+    setRuns((r) => ({ ...r, loading: true, error: '' }))
+    try {
+      setRuns({ rows: await listCleanupRuns(50), loading: false, error: '' })
+    } catch (e) {
+      setRuns({ rows: [], loading: false, error: toUserMessage(e, 'Could not read the cleanup history.') })
+    }
+    try {
+      setRetention({ data: await getRetentionSettings(), error: '' })
+    } catch (e) {
+      setRetention({ data: null, error: toUserMessage(e, 'Could not read the retention settings.') })
+    }
+  }, [])
+  useEffect(() => { loadRuns() }, [loadRuns])
 
   const load = useCallback(async () => {
     setLoading(true); setLoadError('')
@@ -95,7 +126,8 @@ export default function ConsoleDataCleanup({ tabParam = 'tab' } = {}) {
   }
 
   function changeCutoff(d) {
-    setBefore(d); setPreview(null); setResult(null)
+    // A sweep counted for the old cutoff must not be selectable for the new one.
+    setBefore(d); setPreview(null); setResult(null); setSweep(null)
   }
 
   async function doPreview() {
@@ -110,16 +142,18 @@ export default function ConsoleDataCleanup({ tabParam = 'tab' } = {}) {
     }
   }
 
-  async function doRun() {
+  async function doRun({ reason } = {}) {
     if (!selected) return
     setRunning(true); setError('')
     try {
-      const res = await runCleanup(selected.key, before)
+      // The reason is written in the same server transaction as the delete,
+      // so a cleanup can never land without its audit row.
+      const res = await runCleanup(selected.key, before, reason)
       setResult(res)
-      setConfirmOpen(false); setConfirmText('')
-      logAction?.('data_cleanup', null, selected.key, { before, deleted: res?.deleted })
+      setConfirmOpen(false)
       // Refresh totals so the table reflects the deletion.
       load()
+      loadRuns()
       setPreview(null)
     } catch (e) {
       setError(toUserMessage(e, 'Could not run the cleanup.'))
@@ -131,6 +165,22 @@ export default function ConsoleDataCleanup({ tabParam = 'tab' } = {}) {
   function closeConfirm() {
     if (running) return
     setConfirmOpen(false)
+  }
+
+  // Dry run of one cutoff across every target: counts only, nothing deleted.
+  async function doSweep() {
+    setSweeping(true); setError('')
+    const out = []
+    for (const t of targets) {
+      try {
+        const p = await previewCleanup(t.key, before)
+        out.push({ key: t.key, label: t.label, kind: t.kind, count: Number(p?.count) || 0, error: null })
+      } catch (e) {
+        out.push({ key: t.key, label: t.label, kind: t.kind, count: null, error: toUserMessage(e, 'Could not preview.') })
+      }
+    }
+    setSweep({ rows: out.sort((a, b) => (b.count || 0) - (a.count || 0)), cutoff: before })
+    setSweeping(false)
   }
 
   const isBusiness = selected?.kind === 'business'
@@ -180,14 +230,32 @@ export default function ConsoleDataCleanup({ tabParam = 'tab' } = {}) {
       action: () => { setTab('targets'); selectTarget(t) }, actionLabel: 'Review', actionIcon: ArrowRight,
     })), [targets, setTab])
 
-  const confirmOk = confirmText.trim().toUpperCase() === CONFIRM_WORD
+  const lastRun = runs.rows[0] || null
+  const runs30 = runs.rows.filter((r) => r.at && Date.now() - Date.parse(r.at) < 30 * 86400000).length
+  const ret = retention.data
+  const strip = [
+    { label: 'Targets', value: loading && !targets.length ? '...' : loadError ? 'N/A' : fmtNum(targets.length) },
+    { label: 'Log rows held', value: targets.length ? fmtNum(summary.logRows) : 'N/A' },
+    { label: 'Business rows held', value: targets.length ? fmtNum(summary.bizRows) : 'N/A', tone: summary.bizRows ? 'warning' : undefined },
+    { label: 'Oldest record', value: fmtDate(summary.oldest) },
+    { label: 'Last cleanup', value: runs.error ? 'N/A' : lastRun ? fmtDate(lastRun.at) : runs.loading ? '...' : 'Never', sub: lastRun?.deleted != null ? `${fmtNum(lastRun.deleted)} rows` : undefined },
+    { label: 'Runs, last 30 days', value: runs.error ? 'N/A' : runs.loading ? '...' : fmtNum(runs30) },
+    { label: 'Logs kept', value: ret?.auditRetentionDays != null ? `${fmtNum(ret.auditRetentionDays)} days` : 'N/A', sub: ret?.auditRetentionDays === 0 ? 'Kept for ever' : undefined },
+    { label: 'Second approver', value: ret?.dualControl == null ? 'N/A' : ret.dualControl ? 'Required' : 'Off', tone: ret?.dualControl ? 'good' : 'muted' },
+  ]
+  const runSort = useTableSort({ key: 'at', dir: 'desc' })
+  const runSorted = useMemo(() => sortRows(runs.rows, runSort.sort, { deleted: (r) => r.deleted ?? -1 }), [runs.rows, runSort.sort])
+  const runPager = usePager(runSorted, 25)
+  const sweepTotal = sweep ? sweep.rows.reduce((a, r) => a + (r.count || 0), 0) : 0
   const presetOptions = AGE_PRESETS.map((p) => ({ key: monthsAgoISO(p.months), label: p.label }))
 
   return (
     <div className="space-y-5 max-w-7xl">
       <PageHeader icon={Trash2} title="Data Cleanup"
         purpose="Delete old records you no longer need. A recovery snapshot is taken automatically before anything is removed."
-        refreshedAt={refreshedAt} onRefresh={load} refreshing={loading} />
+        refreshedAt={refreshedAt} onRefresh={() => { load(); loadRuns() }} refreshing={loading} />
+
+      <StatusStrip label="Data cleanup status" cells={strip} />
 
       <Note icon={ShieldCheck} tone="accent">
         Safe by design: pick a target, preview the exact number of old records, then confirm. The system snapshots the data first so a cleanup can be recovered from Backups, and every run is logged.
@@ -217,7 +285,71 @@ export default function ConsoleDataCleanup({ tabParam = 'tab' } = {}) {
           <TabBar ariaLabel="Data cleanup view" value={tab} onChange={setTab} tabs={[
             { key: 'targets', label: 'Targets', icon: Database, count: targets.length },
             { key: 'overview', label: 'Overview', icon: BarChart3 },
+            { key: 'history', label: 'Run history', icon: History, count: runs.error ? undefined : runs.rows.length },
+            { key: 'retention', label: 'Retention', icon: Clock },
           ]} />
+
+          {tab === 'history' && (
+            <Panel flush>
+              <div className="px-4 pt-4">
+                <PanelHeader icon={History} title="Run history"
+                  subtitle="Every cleanup the server ran, newest first. Read from the log row each run writes, so a run from any screen is listed."
+                  actions={<ExportButtons rows={runSorted} columns={RUN_COLUMNS} title="TyrePulse Data Cleanup Runs" disabled={!!runs.error} />} />
+              </div>
+              <div className="px-4 pb-4">
+                {runs.loading && !runs.rows.length ? <LoadingState label="Loading the run history" rows={3} />
+                  : runs.error ? <ErrorState message={runs.error} onRetry={loadRuns} />
+                    : runs.rows.length === 0 ? (
+                      <EmptyState icon={History} title="No cleanup has ever run"
+                        reason="Each run writes a log row with the target, cutoff, rows deleted and snapshot. None has been written yet." />
+                    ) : (
+                      <>
+                        <Table>
+                          <THead>
+                            <Th sortKey="at" sort={runSort.sort} onSort={runSort.onSort}>When</Th>
+                            <Th sortKey="key" sort={runSort.sort} onSort={runSort.onSort}>Target</Th>
+                            <Th sortKey="before" sort={runSort.sort} onSort={runSort.onSort}>Cutoff</Th>
+                            <Th sortKey="deleted" sort={runSort.sort} onSort={runSort.onSort} align="right">Deleted</Th>
+                            <Th>Recovery</Th>
+                          </THead>
+                          <tbody>
+                            {runPager.pageRows.map((r) => (
+                              <Tr key={r.id}>
+                                <Td nowrap><span className="text-gray-400 tabular-nums">{fmtDate(r.at)}</span></Td>
+                                <Td><span className="text-gray-200">{r.key || 'N/A'}</span></Td>
+                                <Td nowrap><span className="text-gray-400">{r.before || 'N/A'}</span></Td>
+                                <Td align="right"><span className="tabular-nums text-gray-200">{r.deleted == null ? 'N/A' : fmtNum(r.deleted)}</span></Td>
+                                <Td>{r.snapshot ? <Badge tone="good">Snapshot saved</Badge> : <Badge tone="warning" title="The snapshot step failed or was not recorded for this run">No snapshot recorded</Badge>}</Td>
+                              </Tr>
+                            ))}
+                          </tbody>
+                        </Table>
+                        <Pager pager={runPager} label="runs" />
+                      </>
+                    )}
+                <ImpactLine className="mt-3" change="Nothing. This list only reads." who="Nobody." undo="To bring rows back, use Backups and pick the snapshot taken just before the run." />
+              </div>
+            </Panel>
+          )}
+
+          {tab === 'retention' && (
+            <Panel>
+              <PanelHeader icon={Clock} title="What is kept automatically"
+                subtitle="These switches decide what the system removes on its own. This page shows them; they are changed in Settings so every change is recorded there." />
+              {retention.error ? <ErrorState message={retention.error} onRetry={loadRuns} /> : (
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <StatTile label="Audit and error logs kept" value={ret?.auditRetentionDays == null ? 'N/A' : ret.auditRetentionDays === 0 ? 'For ever' : `${fmtNum(ret.auditRetentionDays)} days`}
+                    sub="A nightly job removes log rows older than this. Business data is never touched by it." />
+                  <StatTile label="Business data retention" value={ret?.dataRetentionMonths == null ? 'N/A' : `${fmtNum(ret.dataRetentionMonths)} months`}
+                    sub="Saved only. Business records are never deleted automatically; only a person can, on this page." tone="muted" />
+                  <StatTile label="Second super admin approval" value={ret?.dualControl == null ? 'N/A' : ret.dualControl ? 'Required' : 'Off'}
+                    sub={ret?.dualControl ? 'A cleanup waits for another super admin to approve it.' : 'One super admin can run a cleanup alone.'}
+                    tone={ret?.dualControl ? 'good' : 'warning'} />
+                </div>
+              )}
+              <ImpactLine className="mt-3" change="Nothing on this tab changes data." who="Every company: the log retention applies platform wide." />
+            </Panel>
+          )}
 
           {tab === 'overview' && (
             <Panel>
@@ -231,6 +363,38 @@ export default function ConsoleDataCleanup({ tabParam = 'tab' } = {}) {
           )}
 
           {tab === 'targets' && <AttentionList quiet items={attention} title="Safe cleanups to consider" />}
+
+          {tab === 'targets' && (
+            <Panel>
+              <PanelHeader icon={SearchCheck} title="Dry run across every target"
+                subtitle={`Count what one cutoff (${fmtDate(before)}) would remove from each target. Nothing is deleted.`}
+                actions={<Btn icon={SearchCheck} onClick={doSweep} busy={sweeping} disabled={!before || !targets.length}>Count every target</Btn>} />
+              <ImpactLine change="Nothing. Each target is counted with the same preview the delete uses." who="Nobody." />
+              {sweep && (
+                <div className="mt-3">
+                  <p className="text-[11px] text-gray-400 mb-2">
+                    Cutoff {fmtDate(sweep.cutoff)}: {fmtNum(sweepTotal)} rows across {fmtNum(sweep.rows.filter((r) => r.count).length)} targets would be removed.
+                    {sweep.rows.some((r) => r.error) && ` ${sweep.rows.filter((r) => r.error).length} could not be counted.`}
+                  </p>
+                  <Table>
+                    <THead><Th>Target</Th><Th>Kind</Th><Th align="right">Would delete</Th><Th align="right">Action</Th></THead>
+                    <tbody>
+                      {sweep.rows.map((r) => (
+                        <Tr key={r.key}>
+                          <Td><span className="text-gray-200">{r.label}</span></Td>
+                          <Td><Badge tone={r.kind === 'business' ? 'danger' : 'default'}>{r.kind === 'business' ? 'Business data' : 'Logs'}</Badge></Td>
+                          <Td align="right"><span className="tabular-nums text-gray-200">{r.error ? 'N/A' : fmtNum(r.count)}</span></Td>
+                          <Td align="right">
+                            <Btn size="xs" disabled={!r.count} onClick={() => { const t = targets.find((x) => x.key === r.key); if (t) { setSelected(t); setBefore(sweep.cutoff); setPreview({ count: r.count }); setResult(null); setError('') } }}>Select</Btn>
+                          </Td>
+                        </Tr>
+                      ))}
+                    </tbody>
+                  </Table>
+                </div>
+              )}
+            </Panel>
+          )}
 
           {tab === 'targets' && (
           <div className="grid gap-4 lg:grid-cols-2">
@@ -305,11 +469,15 @@ export default function ConsoleDataCleanup({ tabParam = 'tab' } = {}) {
                   <div className="flex flex-wrap items-center gap-2">
                     <Btn icon={Eye} onClick={doPreview} busy={previewing} disabled={!before}>Preview</Btn>
                     <Btn variant="danger" icon={Trash2}
-                      onClick={() => { setConfirmOpen(true); setConfirmText('') }}
+                      onClick={() => { setConfirmOpen(true) }}
                       disabled={!preview || Number(preview.count) === 0}>
                       Delete old records
                     </Btn>
                   </div>
+                  <ImpactLine
+                    change={`Preview only counts. Delete removes ${selected.label.toLowerCase()} dated before the cutoff, after a recovery snapshot.`}
+                    who={isBusiness ? 'Every user who reads these records: reports, KPIs and exports will no longer include them.' : 'Nobody operationally: these are logs. Audit views will show less history.'}
+                    undo="Only from the snapshot in Backups." />
 
                   <ErrorState message={error} />
 
@@ -333,30 +501,21 @@ export default function ConsoleDataCleanup({ tabParam = 'tab' } = {}) {
         </>
       )}
 
-      <Modal open={confirmOpen && !!selected} onClose={closeConfirm} width="max-w-md"
-        title="Confirm cleanup" subtitle="This cannot be undone here. Recovery is only from the Backups snapshot."
-        footer={(
-          <>
-            <Btn onClick={closeConfirm} disabled={running}>Cancel</Btn>
-            <Btn variant="danger" icon={Trash2} onClick={doRun} busy={running} disabled={!confirmOk}>
-              {running ? 'Cleaning' : 'Delete permanently'}
-            </Btn>
-          </>
-        )}>
-        {selected && (
-          <div className="space-y-3">
-            <p className="text-xs text-gray-300 leading-relaxed">
-              This will permanently delete <span className="font-semibold text-gray-100">{fmtNum(preview?.count)}</span> {selected.label.toLowerCase()} dated before <span className="font-semibold text-gray-100">{fmtDate(before)}</span>. A recovery snapshot is saved to Backups first.
-            </p>
-            <div>
-              <p className="text-[11px] text-gray-500 mb-1.5">Type <span className="font-mono text-orange-300">{CONFIRM_WORD}</span> to confirm.</p>
-              <input autoFocus value={confirmText} onChange={(e) => setConfirmText(e.target.value)} aria-label="Type CLEAN to confirm"
-                className="w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 focus:border-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
-            </div>
-            <ErrorState message={error} />
-          </div>
-        )}
-      </Modal>
+      <ConfirmImpactDialog open={confirmOpen && !!selected} onCancel={closeConfirm} onConfirm={doRun}
+        danger title="Confirm cleanup" confirmLabel={running ? 'Cleaning' : 'Delete permanently'}
+        typedWord={CONFIRM_WORD} requireReason busy={running} error={error}
+        impact={selected ? {
+          tone: 'danger',
+          what: `Permanently delete ${fmtNum(preview?.count)} ${selected.label.toLowerCase()} dated before ${fmtDate(before)}.`,
+          change: 'The rows are removed from the live table. A recovery snapshot is saved to Backups first, and the run is logged with your reason.',
+          who: isBusiness ? 'Everyone who reads these records, in every report and export.' : 'Audit and log views lose this history.',
+          undo: 'Not here. Recovery is only from the Backups snapshot.',
+          stats: [
+            { label: 'Rows deleted', value: fmtNum(preview?.count) },
+            { label: 'Rows kept', value: selected.total != null && preview?.count != null ? fmtNum(Math.max(0, Number(selected.total) - Number(preview.count))) : null },
+            { label: 'Second approver', value: ret?.dualControl == null ? null : ret.dualControl ? 'Required' : 'Off' },
+          ],
+        } : null} />
     </div>
   )
 }

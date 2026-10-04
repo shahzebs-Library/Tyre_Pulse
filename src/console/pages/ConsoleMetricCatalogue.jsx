@@ -13,19 +13,32 @@
  *
  * Layout: header, KPI tiles, tabs (?tab=registry|coverage). A metric opens in
  * a modal (?metric=<id> deep-links straight to it) with links to its lineage.
+ *
+ * Governance controls (Admin / super admin, enforced by the registry RLS):
+ * create a metric, edit its definition, add a formula version, set its status
+ * (certified / draft / deprecated, the metric_registry CHECK) and retire or
+ * restore it (active flag; retiring needs a typed word and a reason). Every
+ * write lands in the console audit log. Retired metrics stay readable under
+ * the "Retired" filter, so nothing disappears.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
-import { Ruler, ChevronRight, Database, GitBranch, Users, LayoutDashboard, BarChart3 } from 'lucide-react'
+import {
+  Ruler, ChevronRight, Database, GitBranch, Users, LayoutDashboard, BarChart3, Plus, Pencil, BadgeCheck,
+  Archive, RotateCcw, CheckCircle2, AlertTriangle,
+} from 'lucide-react'
 import {
   Panel, PanelHeader, Note, Badge, Btn, Table, THead, Th, Tr, Td, StatTile, Select, Segmented, Modal,
-  SearchInput, Toolbar, LoadingState, EmptyState, ErrorState,
+  SearchInput, Toolbar, LoadingState, EmptyState, ErrorState, ConfirmImpactDialog,
 } from '../components/ui'
 import { sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
 import { BarsChart } from '../components/ui/charts'
 import ExportButtons from './shared/ExportButtons'
 import { PageHeader, useUrlTab, usePaged, Pager, AttentionList } from './shared/pageKit'
-import { listMetrics, getMetric } from '../../lib/api/metricRegistry'
+import { listAllMetrics, getMetric, patchMetric } from '../../lib/api/metricRegistry'
+import { statusOf, completeness, STATUS_LABEL, STATUS_TONE, METRIC_STATUSES } from '../../lib/metricGovernance'
+import { MetricEditor, VersionEditor } from './metricCatalogue/MetricEditors'
+import { useConsoleAuth } from '../ConsoleAuthContext'
 import { fmtList } from '../../lib/metricExplain'
 import { toUserMessage } from '../../lib/safeError'
 
@@ -63,6 +76,8 @@ const EXPORT_COLUMNS = [
   { key: 'source', header: 'Source table', value: (r) => na(ACCESSORS.source(r)) },
   { key: 'sla', header: 'Refresh SLA', value: (r) => na(ACCESSORS.sla(r)) },
   { key: 'dashboards', header: 'Dashboards', value: dashCount },
+  { key: 'status', header: 'Status', value: (r) => (r.active === false ? 'Retired' : STATUS_LABEL[statusOf(r)]) },
+  { key: 'complete', header: 'Completeness', value: (r) => `${completeness(r).score}%` },
 ]
 const TABS = ['registry', 'coverage']
 function countBy(rows, fn, cap = 10) {
@@ -93,11 +108,20 @@ export default function ConsoleMetricCatalogue({ tabParam = 'tab' } = {}) {
   const [params, setParams] = useSearchParams()
   const selected = params.get('metric') || null
   const [detail, setDetail] = useState({ loading: false, error: null, data: null })
+  const { logAction } = useConsoleAuth()
+  const [lifecycle, setLifecycle] = useState('active') // active | retired | all
+  const [statusFilter, setStatusFilter] = useState('')
+  const [editor, setEditor] = useState(null) // { row|null }
+  const [versionOpen, setVersionOpen] = useState(false)
+  const [lifeAction, setLifeAction] = useState(null) // { kind:'status'|'retire'|'restore', status? }
+  const [actBusy, setActBusy] = useState(false)
+  const [actErr, setActErr] = useState('')
+  const [flash, setFlash] = useState(null)
 
   const load = useCallback(async () => {
     setState((s) => ({ ...s, loading: true, error: null }))
     try {
-      const rows = await listMetrics()
+      const rows = await listAllMetrics()
       setState({ loading: false, error: null, rows: Array.isArray(rows) ? rows : [], at: new Date() })
     } catch (e) {
       setState({ loading: false, error: toUserMessage(e), rows: [], at: null })
@@ -133,6 +157,9 @@ export default function ConsoleMetricCatalogue({ tabParam = 'tab' } = {}) {
 
   const filtered = useMemo(() => {
     const rows = state.rows.filter((r) => {
+      if (lifecycle === 'active' && r.active === false) return false
+      if (lifecycle === 'retired' && r.active !== false) return false
+      if (statusFilter && statusOf(r) !== statusFilter) return false
       if (owner && field(r, 'business_owner', 'owner') !== owner) return false
       if (unusedOnly && dashCount(r) > 0) return false
       if (gapOnly && !hasGap(r)) return false
@@ -142,21 +169,23 @@ export default function ConsoleMetricCatalogue({ tabParam = 'tab' } = {}) {
       (r) => field(r, 'name'), (r) => field(r, 'metric_id', 'id'), (r) => field(r, 'business_owner', 'owner'),
       (r) => field(r, 'source_table'), (r) => field(r, 'source_module'), (r) => field(r, 'unit'),
     ])
-  }, [state.rows, query, owner, unusedOnly, gapOnly])
+  }, [state.rows, query, owner, unusedOnly, gapOnly, lifecycle, statusFilter])
 
   const { sort, onSort } = useTableSort({ key: 'name', dir: 'asc' })
   const sorted = useMemo(() => sortRows(filtered, sort, ACCESSORS), [filtered, sort])
   const paged = usePaged(sorted, 25)
 
   const stats = useMemo(() => {
-    const owners = new Set(); const sources = new Set(); let unused = 0; let gaps = 0
+    const owners = new Set(); const sources = new Set(); let unused = 0; let gaps = 0; let certified = 0; let retired = 0
     for (const r of state.rows) {
+      if (r.active === false) { retired += 1; continue }
+      if (statusOf(r) === 'certified') certified += 1
       const o = field(r, 'business_owner', 'owner'); if (o) owners.add(o)
       const t = field(r, 'source_table'); if (t) sources.add(t)
       if (dashCount(r) === 0) unused += 1
       if (hasGap(r)) gaps += 1
     }
-    return { owners: [...owners].sort(), sources: sources.size, unused, gaps }
+    return { owners: [...owners].sort(), sources: sources.size, unused, gaps, certified, retired, active: state.rows.length - retired }
   }, [state.rows])
 
   const attention = useMemo(() => {
@@ -168,15 +197,61 @@ export default function ConsoleMetricCatalogue({ tabParam = 'tab' } = {}) {
     return out
   }, [stats, setTab])
 
-  const byOwner = useMemo(() => countBy(state.rows, (r) => field(r, 'business_owner', 'owner')), [state.rows])
-  const bySource = useMemo(() => countBy(state.rows, (r) => field(r, 'source_table')), [state.rows])
-  const byDash = useMemo(() => [...state.rows]
+  const activeRows = useMemo(() => state.rows.filter((r) => r.active !== false), [state.rows])
+  const byOwner = useMemo(() => countBy(activeRows, (r) => field(r, 'business_owner', 'owner')), [activeRows])
+  const bySource = useMemo(() => countBy(activeRows, (r) => field(r, 'source_table')), [activeRows])
+  const byDash = useMemo(() => [...activeRows]
     .map((r) => ({ label: na(field(r, 'name')), value: dashCount(r) }))
-    .filter((b) => b.value > 0).sort((a, b) => b.value - a.value).slice(0, 10), [state.rows])
+    .filter((b) => b.value > 0).sort((a, b) => b.value - a.value).slice(0, 10), [activeRows])
 
   const metric = detail.data?.metric || null
   const versions = Array.isArray(detail.data?.versions) ? detail.data.versions : []
   const detailId = metric ? field(metric, 'metric_id', 'id') : selected
+
+  const afterWrite = async (text, action, details) => {
+    logAction?.(action, null, 'metric', details)
+    setFlash({ tone: 'ok', text })
+    await load()
+    if (selected) fetchDetail(selected)
+  }
+  const runLifeAction = async ({ reason }) => {
+    if (!metric || !lifeAction) return
+    setActBusy(true); setActErr('')
+    const id = field(metric, 'metric_id')
+    try {
+      if (lifeAction.kind === 'status') {
+        await patchMetric(id, { status: lifeAction.status || null })
+        await afterWrite(`${na(field(metric, 'name'))} is now ${STATUS_LABEL[lifeAction.status || 'none']}.`, 'metric_set_status', { metric_id: id, status: lifeAction.status || null, reason })
+      } else if (lifeAction.kind === 'retire') {
+        await patchMetric(id, { active: false, status: 'deprecated' })
+        await afterWrite(`${na(field(metric, 'name'))} was retired. It stays readable under Retired.`, 'metric_retire', { metric_id: id, reason })
+      } else {
+        await patchMetric(id, { active: true })
+        await afterWrite(`${na(field(metric, 'name'))} was restored.`, 'metric_restore', { metric_id: id, reason })
+      }
+      setLifeAction(null)
+    } catch (e) {
+      setActErr(toUserMessage(e, 'The change could not be saved.'))
+    } finally { setActBusy(false) }
+  }
+  const metricDash = metric ? dashCount(metric) : 0
+  const lifeImpact = !lifeAction || !metric ? undefined : lifeAction.kind === 'retire' ? {
+    tone: 'danger', what: `Retire ${na(field(metric, 'name'))}`,
+    change: 'The metric leaves the active catalogue and is marked Deprecated. Its definition and every formula version stay readable under Retired.',
+    who: metricDash ? `${metricDash} dashboard${metricDash === 1 ? '' : 's'} still reference it and will point at a retired definition.` : 'No dashboard references it.',
+    undo: 'Yes. Restore it from the Retired filter.',
+    stats: [{ label: 'Dashboards', value: metricDash }, { label: 'Versions', value: versions.length }, { label: 'Status', value: STATUS_LABEL[statusOf(metric)] }],
+  } : lifeAction.kind === 'restore' ? {
+    tone: 'info', what: `Restore ${na(field(metric, 'name'))}`,
+    change: 'The metric returns to the active catalogue with its current status.', who: 'Everyone reading the catalogue.', undo: 'Yes. Retire it again.',
+  } : {
+    tone: lifeAction.status === 'deprecated' ? 'warning' : 'info',
+    what: `Mark ${na(field(metric, 'name'))} as ${STATUS_LABEL[lifeAction.status || 'none']}`,
+    change: lifeAction.status === 'certified' ? 'The definition is marked as reviewed and trustworthy.' : lifeAction.status === 'deprecated' ? 'Readers are told to stop using this number; it stays in the catalogue.' : 'The definition is marked as a draft that is still being worked on.',
+    who: metricDash ? `Readers of ${metricDash} dashboard${metricDash === 1 ? '' : 's'} see the new status in Explain This Number.` : 'Readers of the catalogue.',
+    undo: 'Yes. Change the status again.',
+  }
+  const certifyBlocked = metric ? completeness(metric).missing : []
 
   return (
     <div className="space-y-4">
@@ -187,13 +262,22 @@ export default function ConsoleMetricCatalogue({ tabParam = 'tab' } = {}) {
         refreshedAt={state.at}
         onRefresh={load}
         refreshing={state.loading}
+        meta={<span>Editing here changes the governed definition every dashboard explains itself with. Admin and super admin only; every change is audited.</span>}
+        primary={<Btn icon={Plus} variant="primary" onClick={() => setEditor({ row: null })}>New metric</Btn>}
       />
 
+      {flash && <Note icon={flash.tone === 'ok' ? CheckCircle2 : AlertTriangle} tone={flash.tone === 'ok' ? 'accent' : 'danger'}>{flash.text}</Note>}
+
       {!state.loading && !state.error && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <StatTile label="Governed metrics" value={state.rows.length.toLocaleString()} icon={Ruler}
-            onClick={() => { setUnusedOnly(false); setGapOnly(false); setOwner(''); setTab('registry') }}
-            active={!unusedOnly && !gapOnly && !owner && tab === 'registry'} />
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+          <StatTile label="Governed metrics" value={stats.active.toLocaleString()} icon={Ruler}
+            onClick={() => { setUnusedOnly(false); setGapOnly(false); setOwner(''); setStatusFilter(''); setLifecycle('active'); setTab('registry') }}
+            active={!unusedOnly && !gapOnly && !owner && !statusFilter && lifecycle === 'active' && tab === 'registry'} />
+          <StatTile label="Certified" value={stats.certified.toLocaleString()} icon={BadgeCheck} tone={stats.certified ? 'good' : 'default'}
+            sub={`${(stats.active - stats.certified).toLocaleString()} not certified`}
+            onClick={() => { setStatusFilter('certified'); setLifecycle('active'); setTab('registry') }} active={statusFilter === 'certified'} />
+          <StatTile label="Retired" value={stats.retired.toLocaleString()} icon={Archive}
+            onClick={() => { setLifecycle('retired'); setStatusFilter(''); setTab('registry') }} active={lifecycle === 'retired'} />
           <StatTile label="Business owners" value={stats.owners.length.toLocaleString()} icon={Users}
             onClick={() => setTab('coverage')} active={tab === 'coverage'} />
           <StatTile label="Incomplete definitions" value={stats.gaps.toLocaleString()} icon={Database}
@@ -205,10 +289,13 @@ export default function ConsoleMetricCatalogue({ tabParam = 'tab' } = {}) {
         </div>
       )}
 
+      {!state.loading && !state.error && stats.active > 0 && stats.certified === 0 && (
+        <Note icon={BadgeCheck}>No metric is certified yet. Open a metric, fill the missing fields and mark it Certified so readers know the definition was reviewed.</Note>
+      )}
       {!state.loading && !state.error && state.rows.length > 0 && <AttentionList quiet items={attention} />}
 
       <Segmented ariaLabel="Metric catalogue views" value={tab} onChange={setTab} options={[
-        { key: 'registry', label: 'Registry', count: state.loading || state.error ? undefined : state.rows.length },
+        { key: 'registry', label: 'Registry', count: state.loading || state.error ? undefined : stats.active },
         { key: 'coverage', label: 'Coverage' },
       ]} />
 
@@ -226,8 +313,12 @@ export default function ConsoleMetricCatalogue({ tabParam = 'tab' } = {}) {
               <SearchInput value={query} onChange={setQuery} placeholder="Search by name, id, owner or source table" className="w-full sm:w-96" />
               <Select ariaLabel="Filter by owner" value={owner} onChange={setOwner} placeholder="All owners" className="w-44"
                 options={stats.owners.map((o) => ({ value: o, label: o }))} />
-              {(query || owner || unusedOnly || gapOnly) && (
-                <Btn variant="quiet" onClick={() => { setQuery(''); setOwner(''); setUnusedOnly(false); setGapOnly(false) }}>Clear filters</Btn>
+              <Select ariaLabel="Filter by status" value={statusFilter} onChange={setStatusFilter} placeholder="Every status" className="w-40"
+                options={[...METRIC_STATUSES, 'none'].map((st) => ({ value: st, label: STATUS_LABEL[st] }))} />
+              <Select ariaLabel="Active or retired" value={lifecycle} onChange={setLifecycle} className="w-36"
+                options={[{ value: 'active', label: 'Active' }, { value: 'retired', label: 'Retired' }, { value: 'all', label: 'Active and retired' }]} />
+              {(query || owner || unusedOnly || gapOnly || statusFilter || lifecycle !== 'active') && (
+                <Btn variant="quiet" onClick={() => { setQuery(''); setOwner(''); setUnusedOnly(false); setGapOnly(false); setStatusFilter(''); setLifecycle('active') }}>Clear filters</Btn>
               )}
             </Toolbar>
 
@@ -252,6 +343,8 @@ export default function ConsoleMetricCatalogue({ tabParam = 'tab' } = {}) {
                       <Th sortKey="source" sort={sort} onSort={onSort}>Source table</Th>
                       <Th sortKey="sla" sort={sort} onSort={onSort}>Refresh SLA</Th>
                       <Th sortKey="dashboards" sort={sort} onSort={onSort} align="right">Dashboards</Th>
+                      <Th>Status</Th>
+                      <Th align="right">Complete</Th>
                       <Th align="right"><span className="sr-only">Open</span></Th>
                     </THead>
                     <tbody>
@@ -267,6 +360,8 @@ export default function ConsoleMetricCatalogue({ tabParam = 'tab' } = {}) {
                             <Td nowrap><span className="font-mono text-[11px] text-gray-400">{na(field(r, 'source_table'))}</span></Td>
                             <Td>{na(field(r, 'refresh_sla'))}</Td>
                             <Td align="right"><span className="tabular-nums text-gray-300">{dashCount(r)}</span></Td>
+                            <Td nowrap>{r.active === false ? <Badge tone="quiet" icon={Archive}>Retired</Badge> : <Badge tone={STATUS_TONE[statusOf(r)]}>{STATUS_LABEL[statusOf(r)]}</Badge>}</Td>
+                            <Td align="right"><span className={`tabular-nums ${completeness(r).score < 100 ? 'text-amber-300' : 'text-gray-300'}`}>{completeness(r).score}%</span></Td>
                             <Td align="right"><ChevronRight size={14} className="text-gray-500 inline" aria-hidden="true" /></Td>
                           </Tr>
                         )
@@ -316,6 +411,8 @@ export default function ConsoleMetricCatalogue({ tabParam = 'tab' } = {}) {
               <GitBranch size={13} aria-hidden="true" /> Trace lineage
             </Link>
           )}
+          {metric && <Btn icon={Pencil} onClick={() => setEditor({ row: metric })}>Edit definition</Btn>}
+          {metric && metric.active !== false && <Btn icon={GitBranch} onClick={() => setVersionOpen(true)}>New version</Btn>}
           <Btn onClick={closeDetail}>Close</Btn>
         </>}
       >
@@ -326,6 +423,32 @@ export default function ConsoleMetricCatalogue({ tabParam = 'tab' } = {}) {
           {!detail.loading && !detail.error && metric && (
             <>
               {field(metric, 'description') && <Note>{field(metric, 'description')}</Note>}
+
+              <div className="rounded-lg border border-gray-800 bg-gray-900/40 p-3 space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-semibold text-gray-300">Governance</span>
+                  {metric.active === false ? <Badge tone="quiet" icon={Archive}>Retired</Badge> : <Badge tone={STATUS_TONE[statusOf(metric)]}>{STATUS_LABEL[statusOf(metric)]}</Badge>}
+                  <Badge tone={completeness(metric).score < 100 ? 'warning' : 'good'}>{completeness(metric).score}% complete</Badge>
+                </div>
+                <p className="text-[11px] text-gray-400">Status tells every reader whether to trust this definition. Certifying needs an owner, source table, refresh SLA, unit and description.</p>
+                <div className="flex flex-wrap gap-2">
+                  {metric.active !== false && statusOf(metric) !== 'certified' && (
+                    <Btn size="xs" icon={BadgeCheck} variant="good" disabled={certifyBlocked.length > 0}
+                      title={certifyBlocked.length ? `Missing: ${certifyBlocked.join(', ')}` : 'Mark as reviewed'}
+                      onClick={() => { setActErr(''); setLifeAction({ kind: 'status', status: 'certified' }) }}>Certify</Btn>
+                  )}
+                  {metric.active !== false && statusOf(metric) !== 'draft' && (
+                    <Btn size="xs" onClick={() => { setActErr(''); setLifeAction({ kind: 'status', status: 'draft' }) }}>Mark draft</Btn>
+                  )}
+                  {metric.active !== false && statusOf(metric) !== 'deprecated' && (
+                    <Btn size="xs" onClick={() => { setActErr(''); setLifeAction({ kind: 'status', status: 'deprecated' }) }}>Deprecate</Btn>
+                  )}
+                  {metric.active !== false
+                    ? <Btn size="xs" variant="danger" icon={Archive} onClick={() => { setActErr(''); setLifeAction({ kind: 'retire' }) }}>Retire</Btn>
+                    : <Btn size="xs" icon={RotateCcw} onClick={() => { setActErr(''); setLifeAction({ kind: 'restore' }) }}>Restore</Btn>}
+                </div>
+                {certifyBlocked.length > 0 && metric.active !== false && <p className="text-[11px] text-amber-300">To certify, fill: {certifyBlocked.join(', ')}.</p>}
+              </div>
 
               <div className="rounded-lg border border-gray-800 bg-gray-900/40 p-3">
                 <h4 className="text-xs font-semibold text-gray-300 mb-2.5">Definition and source</h4>
@@ -396,6 +519,34 @@ export default function ConsoleMetricCatalogue({ tabParam = 'tab' } = {}) {
           )}
         </div>
       </Modal>
+
+      <MetricEditor open={!!editor} row={editor?.row || null}
+        existingIds={state.rows.map((r) => field(r, 'metric_id')).filter(Boolean)}
+        onClose={() => setEditor(null)}
+        onSaved={(saved, isNew) => {
+          setEditor(null)
+          afterWrite(isNew ? `Metric ${na(saved?.name)} was created.` : `${na(saved?.name)} was updated.`, isNew ? 'metric_create' : 'metric_update', { metric_id: saved?.metric_id || null })
+          if (isNew && saved?.metric_id) setSelected(saved.metric_id)
+        }} />
+      <VersionEditor open={versionOpen} metric={metric} versions={versions}
+        onClose={() => setVersionOpen(false)}
+        onSaved={(saved) => {
+          setVersionOpen(false)
+          afterWrite(`Version ${saved?.version ?? ''} was added.`, 'metric_version_add', { metric_id: saved?.metric_id || null, version: saved?.version ?? null })
+        }} />
+      <ConfirmImpactDialog
+        open={!!lifeAction && !!metric}
+        title={lifeAction?.kind === 'retire' ? 'Retire metric' : lifeAction?.kind === 'restore' ? 'Restore metric' : 'Change metric status'}
+        impact={lifeImpact}
+        confirmLabel={lifeAction?.kind === 'retire' ? 'Retire' : lifeAction?.kind === 'restore' ? 'Restore' : 'Save status'}
+        requireReason
+        typedWord={lifeAction?.kind === 'retire' ? 'RETIRE' : undefined}
+        danger={lifeAction?.kind === 'retire'}
+        busy={actBusy}
+        error={actErr}
+        onCancel={() => setLifeAction(null)}
+        onConfirm={runLifeAction}
+      />
     </div>
   )
 }

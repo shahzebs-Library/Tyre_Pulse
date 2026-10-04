@@ -28,6 +28,11 @@
  *
  * The active tab lives in ?tab= so a link can open a view directly. The two
  * tables here are paged; an upload opens its full record in a modal.
+ *
+ * Control Center round 2 added: the status strip, country and date-window
+ * filters on uploads, an impact line per view, and (in the panels) a typed
+ * confirmation plus a required, audited reason before applying decisions to
+ * loaded money or pausing an upload feed.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
@@ -43,7 +48,9 @@ import { listDuplicateTargets } from '../../lib/api/duplicateControl'
 import { toUserMessage } from '../../lib/safeError'
 import { sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
 import ExportButtons from './shared/ExportButtons'
-import { PageHeader, useUrlTab, usePaged, Pager, DetailGrid } from './shared/pageKit'
+import { PageHeader, useUrlTab, usePaged, Pager, DetailGrid, TabBar } from './shared/pageKit'
+import { StatusStrip, ImpactLine } from './dataOps/DataOpsParts'
+import { filterByDateWindow } from '../../lib/dataOpsCenter'
 import UploadCoveragePanel from './importHistory/UploadCoveragePanel'
 import DecisionsPanel from './importHistory/DecisionsPanel'
 import {
@@ -109,6 +116,9 @@ export default function ConsoleImportHistory({ tabParam = 'tab' } = {}) {
   const [moduleFilter, setModuleFilter] = useState('')
   const [outcomeFilter, setOutcomeFilter] = useState('')
   const [onlyRepeats, setOnlyRepeats] = useState(false)
+  const [countryFilter, setCountryFilter] = useState('')
+  const [fromDay, setFromDay] = useState('')
+  const [toDay, setToDay] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
@@ -159,15 +169,21 @@ export default function ConsoleImportHistory({ tabParam = 'tab' } = {}) {
     return [...set].sort().map((m) => ({ value: m, label: m }))
   }, [rows])
 
+  const countryOptions = useMemo(() => {
+    const set = new Set(rows.map((r) => r.country).filter(Boolean))
+    return [...set].sort().map((c) => ({ value: c, label: c }))
+  }, [rows])
+
   const filtered = useMemo(() => {
-    const narrowed = rows.filter((r) => {
+    const narrowed = filterByDateWindow(rows, fromDay, toDay).filter((r) => {
+      if (countryFilter && r.country !== countryFilter) return false
       if (moduleFilter && r.module !== moduleFilter) return false
       if (outcomeFilter && importRowOutcome(r) !== outcomeFilter) return false
       if (onlyRepeats && !r.reupload_of) return false
       return true
     })
     return searchRows(narrowed, search, ['filename', 'module', 'country'])
-  }, [rows, search, moduleFilter, outcomeFilter, onlyRepeats])
+  }, [rows, search, moduleFilter, outcomeFilter, onlyRepeats, countryFilter, fromDay, toDay])
 
   const uploadsSort = useTableSort({ key: 'uploaded_at', dir: 'desc' })
   const uploadsSorted = useMemo(() => sortRows(filtered, uploadsSort.sort, UPLOAD_ACCESSORS), [filtered, uploadsSort.sort])
@@ -178,12 +194,30 @@ export default function ConsoleImportHistory({ tabParam = 'tab' } = {}) {
   const activityTarget = targets.find((t) => t.key === targetKey)
 
   const tabs = [
-    { key: 'uploads', label: <><FileUp size={13} aria-hidden="true" /> Uploads</>, count: loading || error ? null : rows.length, hint: 'Files loaded through the app, and repeats of the same file' },
-    { key: 'activity', label: <><Activity size={13} aria-hidden="true" /> Load activity</>, hint: 'Loads done straight through the database, reconstructed' },
-    { key: 'coverage', label: <><CalendarDays size={13} aria-hidden="true" /> Daily coverage</>, hint: 'Which days have data and which are empty' },
-    { key: 'decisions', label: <><Shuffle size={13} aria-hidden="true" /> What we changed</>, hint: 'Where we filed something differently from your file' },
+    { key: 'uploads', label: 'Uploads', icon: FileUp, count: loading || error ? undefined : rows.length, hint: 'Files loaded through the app, and repeats of the same file' },
+    { key: 'activity', label: 'Load activity', icon: Activity, hint: 'Loads done straight through the database, reconstructed' },
+    { key: 'coverage', label: 'Daily coverage', icon: CalendarDays, hint: 'Which days have data and which are empty' },
+    { key: 'decisions', label: 'What we changed', icon: Shuffle, hint: 'Where we filed something differently from your file' },
   ]
-  const filtersActive = search || moduleFilter || outcomeFilter || onlyRepeats
+  const TAB_IMPACT = {
+    uploads: { change: 'Nothing. This list only reads the upload records.', who: 'Nobody.' },
+    activity: { change: 'Nothing. Loads are rebuilt from when rows landed; nothing is written.', who: 'Nobody.' },
+    coverage: { change: 'Reading changes nothing. Adding, editing or pausing a watched table changes which missed uploads raise the morning alert.', who: 'Super admins and managers who get the missed-upload alert.' },
+    decisions: { change: 'Saving an override changes how new uploads are filed. Applying moves lines already loaded between Tyre, Spare and Oil.', who: 'Every cost report for the affected country.', undo: 'Applied moves can be undone from this page.' },
+  }
+  const filtersActive = search || moduleFilter || outcomeFilter || onlyRepeats || countryFilter || fromDay || toDay
+  const lastUpload = rows.reduce((m, r) => (r.uploaded_at && (!m || r.uploaded_at > m) ? r.uploaded_at : m), null)
+  const na = error ? 'N/A' : loading ? '...' : null
+  const strip = [
+    { label: 'Uploads recorded', value: na || fmtNum(stats.files), sub: 'Latest 200 files' },
+    { label: 'Rows imported', value: na || fmtNum(stats.imported) },
+    { label: 'Repeat uploads', value: na || fmtNum(reuploads.length), tone: reuploads.length ? 'warning' : undefined },
+    { label: 'Never approved', value: na || fmtNum(stats.unfinished), tone: stats.unfinished ? 'warning' : undefined },
+    { label: 'Row errors', value: na || fmtNum(stats.errors), tone: stats.errors ? 'danger' : undefined },
+    { label: 'Last upload', value: na || (lastUpload ? fmtTime(lastUpload).slice(0, 10) : 'None recorded') },
+    { label: 'Modules', value: na || fmtNum(moduleOptions.length) },
+    { label: 'Countries', value: na || fmtNum(countryOptions.length) },
+  ]
 
   return (
     <div className="space-y-5">
@@ -199,7 +233,10 @@ export default function ConsoleImportHistory({ tabParam = 'tab' } = {}) {
         refreshing={tab === 'activity' ? clusterLoading : loading}
       />
 
-      <Segmented ariaLabel="Import history views" options={tabs} value={tab} onChange={setTab} />
+      <StatusStrip label="Import history status" cells={strip} />
+
+      <TabBar ariaLabel="Import history views" tabs={tabs} value={tab} onChange={setTab} />
+      <ImpactLine {...TAB_IMPACT[tab]} />
 
       {tab === 'coverage' ? (
         <UploadCoveragePanel />
@@ -248,8 +285,17 @@ export default function ConsoleImportHistory({ tabParam = 'tab' } = {}) {
                   <Select value={moduleFilter} onChange={setModuleFilter} placeholder="All modules" options={moduleOptions} ariaLabel="Filter by module" className="w-40" />
                   <Select value={outcomeFilter} onChange={setOutcomeFilter} placeholder="All outcomes" ariaLabel="Filter by outcome" className="w-44"
                     options={Object.entries(OUTCOME_META).map(([value, m]) => ({ value, label: m.label }))} />
+                  <Select value={countryFilter} onChange={setCountryFilter} placeholder="All countries" options={countryOptions} ariaLabel="Filter by country" className="w-36" />
+                  <label className="flex items-center gap-1 text-[11px] text-gray-400">From
+                    <input type="date" value={fromDay} max={toDay || undefined} onChange={(e) => setFromDay(e.target.value)} aria-label="Uploaded from"
+                      className="px-2 py-1 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
+                  </label>
+                  <label className="flex items-center gap-1 text-[11px] text-gray-400">To
+                    <input type="date" value={toDay} min={fromDay || undefined} onChange={(e) => setToDay(e.target.value)} aria-label="Uploaded to"
+                      className="px-2 py-1 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
+                  </label>
                   {filtersActive && (
-                    <Btn variant="quiet" onClick={() => { setSearch(''); setModuleFilter(''); setOutcomeFilter(''); setOnlyRepeats(false) }}>Clear filters</Btn>
+                    <Btn variant="quiet" onClick={() => { setSearch(''); setModuleFilter(''); setOutcomeFilter(''); setOnlyRepeats(false); setCountryFilter(''); setFromDay(''); setToDay('') }}>Clear filters</Btn>
                   )}
                 </Toolbar>
                 {filtered.length === 0 ? (

@@ -1,12 +1,16 @@
 /**
- * Mobile app gate for the Developer Center: the forced-update minimum, the
- * newest released build, and who a change affects measured on ACTIVE phones
- * (opened in the last 7 days), not only installs (Sentry release health).
+ * Flutter app gate for the Developer Center (owner rule 2026-10-04: mobile =
+ * the Flutter app, com.shahzebrahman.tyrepulse): the forced-update minimum
+ * (system_config.flutter_min_version), the newest released build
+ * (flutter_latest_version), and who a change affects measured on ACTIVE Flutter
+ * phones (opened in the last 7 days), not only installs.
  *
- * The guard (never above the latest released version) is the same gateRisk
- * the old Mobile App page used; the raise dialog needs a reason and the new
- * version typed, and the change is audited. system_config.updated_by is now
- * stamped by a trigger, so "who changed it" is recorded from today.
+ * The guard (never above the latest released version) is gateRisk on the page
+ * AND admin_set_flutter_version on the server (migration 20261004105000). The
+ * raise dialog needs a reason and the new version typed; every change lands in
+ * system_config_history with the reason and is audited with logAction.
+ * The retired Expo app's keys (mobile_min_version / mobile_latest_version) are
+ * shown read-only under "Retired app"; nothing here writes them.
  */
 import { useMemo, useState } from 'react'
 import { Smartphone, ShieldCheck, AlertTriangle, ArrowUpCircle, Bell, Tag } from 'lucide-react'
@@ -15,14 +19,15 @@ import {
 } from '../../components/ui'
 import { gateRisk } from '../../../lib/mobileOps'
 import { latestRisk } from '../mobileApp/releaseGuard'
-import { setMobileMinVersion, setMobileLatestVersion } from '../../../lib/api/mobileOps'
+import { setFlutterVersion } from '../../../lib/api/mobileOps'
 import { adoptionSummary, gateForced, fmtInt, riyadhDay, riyadhTime, compareVersions } from '../../../lib/engineeringCenter'
 import { toUserMessage } from '../../../lib/safeError'
 import { useConsoleAuth } from '../../ConsoleAuthContext'
 
+/** Adoption of the Flutter app against the Flutter gate (pass Flutter adoption rows). */
 export function useAdoption(adoption, config) {
-  const min = config?.mobile_min_version?.value || ''
-  const latest = config?.mobile_latest_version?.value || ''
+  const min = config?.flutter_min_version?.value || ''
+  const latest = config?.flutter_latest_version?.value || ''
   return useMemo(() => adoptionSummary(adoption?.by_version || [], min, latest), [adoption, min, latest])
 }
 
@@ -30,15 +35,16 @@ export default function GatePanel({ config, adoption, loading, error, onRetry, o
   const { logAction } = useConsoleAuth()
   const [recordOpen, setRecordOpen] = useState(false)
   const [flash, setFlash] = useState('')
-  const min = config?.mobile_min_version?.value || ''
-  const latest = config?.mobile_latest_version?.value || ''
-  const flutterMin = config?.flutter_min_version?.value || ''
-  const changedAt = config?.mobile_min_version?.updatedAt
-  const changedBy = config?.mobile_min_version?.updatedBy
+  const min = config?.flutter_min_version?.value || ''
+  const latest = config?.flutter_latest_version?.value || ''
+  const retiredMin = config?.mobile_min_version?.value || ''
+  const retiredLatest = config?.mobile_latest_version?.value || ''
+  const changedAt = config?.flutter_min_version?.updatedAt
+  const changedBy = config?.flutter_min_version?.updatedBy
   const a = useAdoption(adoption, config)
 
   if (loading) return <Panel><LoadingState label="Loading the app gate" rows={6} /></Panel>
-  if (error) return <Panel><PanelHeader icon={Smartphone} title="Mobile app gate" /><ErrorState message={error} onRetry={onRetry} /></Panel>
+  if (error) return <Panel><PanelHeader icon={Smartphone} title="Flutter app gate" /><ErrorState message={error} onRetry={onRetry} /></Panel>
 
   const belowRows = a.belowRows || []
   const belowText = belowRows.map((r) => `${fmtInt(r.installs)} on ${r.version || 'unknown'}`).join(' and ')
@@ -46,23 +52,23 @@ export default function GatePanel({ config, adoption, loading, error, onRetry, o
 
   return (
     <Panel>
-      <PanelHeader icon={Smartphone} title="Mobile app gate" subtitle="Forces old phones to update"
+      <PanelHeader icon={Smartphone} title="Flutter app gate" subtitle="Forces old Flutter phones to update"
         actions={<Badge tone={guardOk ? 'good' : 'danger'}>{guardOk ? 'Guard on' : 'Guard failing'}</Badge>} />
       {flash && <div className="mb-3"><Note tone="accent">{flash}</Note></div>}
       <div className="grid grid-cols-3 gap-3 text-xs mb-3">
-        <div><p className="text-gray-500 text-[11px]">Minimum Android version</p><p className="font-mono text-gray-100 mt-0.5">{min || 'Not set'}</p>
+        <div><p className="text-gray-500 text-[11px]">Minimum Flutter version</p><p className="font-mono text-gray-100 mt-0.5">{min || 'Not set'}</p>
           <p className="text-[10px] text-gray-500 mt-0.5">Changed {changedAt ? `${riyadhDay(changedAt)} ${riyadhTime(changedAt)}` : 'N/A'}. Who: {changedBy ? 'recorded in the audit log' : 'not recorded'}</p></div>
         <div><p className="text-gray-500 text-[11px]">Latest released</p><p className="font-mono text-gray-100 mt-0.5">{latest || 'Not recorded'}</p>
-          <p className="text-[10px] text-gray-500 mt-0.5">{config?.mobile_latest_version?.updatedAt ? `Changed ${riyadhDay(config.mobile_latest_version.updatedAt)}` : 'N/A'}</p></div>
-        <div><p className="text-gray-500 text-[11px]">Minimum Flutter version</p><p className="font-mono text-gray-100 mt-0.5">{flutterMin || 'Not set'}</p>
-          <p className="text-[10px] text-gray-500 mt-0.5">Separate key, fails open</p></div>
+          <p className="text-[10px] text-gray-500 mt-0.5">{config?.flutter_latest_version?.updatedAt ? `Changed ${riyadhDay(config.flutter_latest_version.updatedAt)}` : 'N/A'}</p></div>
+        <div><p className="text-gray-500 text-[11px]">Retired app (read-only)</p><p className="font-mono text-gray-400 mt-0.5">{retiredMin || 'Not set'} / {retiredLatest || 'N/A'}</p>
+          <p className="text-[10px] text-gray-500 mt-0.5">Expo minimum / last release. Not editable.</p></div>
       </div>
 
-      <Note icon={ShieldCheck}>Guard: the minimum can never be saved above the latest released version, so no phone can be locked out with nothing to update to.</Note>
+      <Note icon={ShieldCheck}>Guard, checked here and by the server: the Flutter minimum can never be saved above the latest released Flutter version, so no phone can be locked out with nothing to update to. Blank means the gate is off (the app fails open).</Note>
 
       {a.belowInstalls ? (
         <div className="mt-3"><Note icon={AlertTriangle} tone="warning">
-          <b>{fmtInt(a.belowInstalls)} phone{a.belowInstalls === 1 ? ' is' : 's are'} below the minimum.</b> {belowText}. They see &quot;Update required&quot; at sign-in.
+          <b>{fmtInt(a.belowInstalls)} phone{a.belowInstalls === 1 ? ' is' : 's are'} below the minimum.</b> {belowText}. They see &quot;Update required&quot; after sign-in.
           {a.belowActive === 0 ? ` None of the ${fmtInt(a.belowInstalls)} has opened the app in 7 days;` : ` ${fmtInt(a.belowActive)} opened the app in 7 days;`} {fmtInt(a.latestActive)} of the {fmtInt(a.latestInstalls)} on {latest || 'the latest'} have.
         </Note></div>
       ) : null}
@@ -88,15 +94,15 @@ export default function GatePanel({ config, adoption, loading, error, onRetry, o
 
       <div className="flex flex-wrap gap-2 mt-3">
         <Btn variant="primary" icon={ArrowUpCircle} onClick={() => setRaiseOpen(true)}>Raise minimum</Btn>
-        <Btn icon={Bell} disabled title="No sender for a push aimed at one app version exists yet. Phones below the minimum already see Update required at sign-in.">Notify the {fmtInt(a.belowInstalls)} phones</Btn>
+        <Btn icon={Bell} disabled title="No sender for a push aimed at one app version exists yet. Flutter phones below the minimum already see Update required after sign-in.">Notify the {fmtInt(a.belowInstalls)} phones</Btn>
         <Btn icon={Tag} onClick={() => setRecordOpen(true)}>Record a release</Btn>
       </div>
-      <p className="text-[10px] text-gray-500 mt-2">Notify is not available: there is no version-targeted push sender. A soft &quot;update recommended&quot; prompt needs an app build (builds are frozen by the owner).</p>
+      <p className="text-[10px] text-gray-500 mt-2">Notify is not available: there is no version-targeted push sender. A soft &quot;update recommended&quot; prompt needs a Flutter app build (builds are the owner&apos;s call).</p>
 
       {raiseOpen && <RaiseDialog open={raiseOpen} onClose={() => setRaiseOpen(false)} min={min} latest={latest} adoption={adoption}
-        logAction={logAction} onSaved={(v) => { setRaiseOpen(false); setFlash(`Minimum Android version set to ${v}.`); onChanged?.() }} />}
+        logAction={logAction} onSaved={(v) => { setRaiseOpen(false); setFlash(`Minimum Flutter version set to ${v}.`); onChanged?.() }} />}
       {recordOpen && <RecordDialog open={recordOpen} onClose={() => setRecordOpen(false)} min={min} latest={latest}
-        logAction={logAction} onSaved={(v) => { setRecordOpen(false); setFlash(`${v} recorded as the newest Android release.`); onChanged?.() }} />}
+        logAction={logAction} onSaved={(v) => { setRecordOpen(false); setFlash(`${v} recorded as the newest Flutter release.`); onChanged?.() }} />}
     </Panel>
   )
 }
@@ -123,20 +129,20 @@ export function RaiseDialog({ open, onClose, min, latest, adoption, onSaved, log
   async function save({ reason }) {
     setBusy(true); setErr('')
     try {
-      await setMobileMinVersion(value.trim())
-      try { await logAction?.('update_config', null, 'system_config', { keys: ['mobile_min_version'], from: min, to: value.trim(), reason }) } catch { /* audit best effort */ }
+      await setFlutterVersion('min', value.trim(), reason)
+      try { await logAction?.('update_config', null, 'system_config', { keys: ['flutter_min_version'], from: min, to: value.trim(), reason }) } catch { /* audit best effort */ }
       onSaved?.(value.trim())
     } catch (e) { setErr(toUserMessage(e, 'The minimum could not be saved. Nothing was changed.')) } finally { setBusy(false) }
   }
   return (
-    <ConfirmImpactDialog open={open} title="Raise minimum Android version?" danger requireReason
+    <ConfirmImpactDialog open={open} title="Raise minimum Flutter version?" danger requireReason
       typedWord={blocked ? undefined : value.trim()} readyExtra={!blocked}
       confirmLabel={`Force update on ${fmtInt(f.forced)} phones`} busy={busy} error={err}
       onCancel={onClose} onConfirm={save}
       impact={{
         tone: 'danger',
         what: `${fmtInt(f.forced)} installs run an older app; ${fmtInt(f.forcedActive)} opened it in 7 days.`,
-        change: `These phones show "Update required" and cannot sign in until they update from Play.`,
+        change: `These Flutter phones show "Update required" after sign-in and cannot continue until they update from Play. Their saved work stays on the phone.`,
         who: `${fmtInt(f.forced)} installs, ${fmtInt(f.forcedActive)} active this week. ${fmtInt(f.notAffected)} phones on ${value || 'the new minimum'} or newer keep working.`,
         undo: 'Yes. Lower the minimum again at any time.',
         stats: [{ label: 'Forced to update', value: fmtInt(f.forced) }, { label: 'Of those, active 7 days', value: fmtInt(f.forcedActive) }, { label: 'Not affected', value: fmtInt(f.notAffected) }],
@@ -160,18 +166,18 @@ function RecordDialog({ open, onClose, min, latest, onSaved, logAction }) {
   async function save({ reason }) {
     setBusy(true); setErr('')
     try {
-      await setMobileLatestVersion(value.trim())
-      try { await logAction?.('update_config', null, 'system_config', { keys: ['mobile_latest_version'], from: latest, to: value.trim(), reason }) } catch { /* audit best effort */ }
+      await setFlutterVersion('latest', value.trim(), reason)
+      try { await logAction?.('update_config', null, 'system_config', { keys: ['flutter_latest_version'], from: latest, to: value.trim(), reason }) } catch { /* audit best effort */ }
       onSaved?.(value.trim())
     } catch (e) { setErr(toUserMessage(e, 'The release could not be recorded.')) } finally { setBusy(false) }
   }
   return (
-    <ConfirmImpactDialog open={open} title="Record an Android release" requireReason readyExtra={risk.level !== 'blocked'}
+    <ConfirmImpactDialog open={open} title="Record a Flutter release" requireReason readyExtra={risk.level !== 'blocked'}
       confirmLabel="Record release" busy={busy} error={err} onCancel={onClose} onConfirm={save}
-      impact={{ tone: 'info', what: 'Record the version that is live on Google Play.', change: 'The gate guard uses this as the highest minimum you can set.', who: 'No phone changes; this is a record only.', undo: 'Yes. Record the correct version again.' }}>
+      impact={{ tone: 'info', what: 'Record the Flutter version name that is live on the Google Play Closed testing track.', change: 'The gate guard uses this as the highest minimum you can set.', who: 'No phone changes; this is a record only.', undo: 'Yes. Record the correct version again.' }}>
       <label className="block">
-        <span className="block text-[11px] font-semibold text-gray-400 mb-1">Version live on Google Play</span>
-        <input value={value} onChange={(e) => setValue(e.target.value)} placeholder={latest || '1.6.0'} className={inputCls} aria-label="Released version" />
+        <span className="block text-[11px] font-semibold text-gray-400 mb-1">Flutter version live on Google Play</span>
+        <input value={value} onChange={(e) => setValue(e.target.value)} placeholder={latest || '0.1.1'} className={inputCls} aria-label="Released version" />
       </label>
       {value && <Note tone={risk.level === 'blocked' ? 'danger' : risk.level === 'warn' ? 'warning' : 'default'}>{risk.reason}</Note>}
     </ConfirmImpactDialog>

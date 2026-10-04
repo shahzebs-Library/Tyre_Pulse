@@ -4,7 +4,17 @@
  * Shows how reliably the platform reaches people over its two channels:
  *   - Email  (report_send_log): scheduled-report emails, sent vs failed.
  *   - Push   (workflow_notifications): queued / delivered / failed device pushes.
- *   - Reach  (profiles.push_token): how many devices could receive a push.
+ *   - Reach  (admin_delivery_reach): devices that can receive a push, split
+ *            by app. Flutter app devices use Firebase Cloud Messaging (FCM);
+ *            the retired Expo app (read only) is counted separately and never
+ *            mixed into the Flutter figure. profiles.push_token is kept as the
+ *            legacy count.
+ *
+ * Controls (super admin, reason required, audited):
+ *   - Retry failed pushes: puts chosen FAILED deliveries back in the queue
+ *     (admin_retry_failed_notifications, audited server side).
+ *   - Resend a failed report email now (send-scheduled-reports, audited via
+ *     logAction).
  *
  * Structured as tabs (the active one lives in ?tab=) so it is not a wall:
  *   Overview      - the latest failures and the most-failing names, then one
@@ -15,16 +25,19 @@
  * Super-admin only.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Send, ShieldAlert, Mail, Bell, Users, Info, XCircle, BarChart3, ExternalLink } from 'lucide-react'
+import { Send, ShieldAlert, Mail, Bell, Users, Info, XCircle, BarChart3, ExternalLink, Smartphone, RotateCcw, CheckCircle2, AlertTriangle } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import {
   listEmailLog, listPushLog, pushReach, emailStats, pushStats, DELIVERY_LOG_MAX,
+  getDeliveryReach, retryFailedPushes, retryImpact,
 } from '../../lib/api/deliveryHealth'
+import { sendScheduleNow } from '../../lib/api/automationHealth'
 import { toUserMessage } from '../../lib/safeError'
 import {
-  Panel, PanelHeader, Note, StatTile, Badge, Segmented, SearchInput, Toolbar,
-  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState,
+  Panel, PanelHeader, Note, StatTile, Badge, Btn, Segmented, SearchInput, Toolbar,
+  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, ConfirmImpactDialog,
 } from '../components/ui'
+import { Facts } from './platform/PlatformKit'
 import { sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
 import { TrendChart, STATUS, SERIES, useChartTheme } from '../components/ui/charts'
 import ExportButtons from './shared/ExportButtons'
@@ -77,8 +90,16 @@ const TYPE_EXPORT_COLUMNS = [
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function ConsoleDelivery({ tabParam = 'tab' } = {}) {
-  const { admin } = useConsoleAuth()
+  const { admin, logAction } = useConsoleAuth()
   const theme = useChartTheme()
+  const [appReach, setAppReach] = useState(null)
+  const [appReachError, setAppReachError] = useState('')
+  const [selected, setSelected] = useState(() => new Set())
+  const [retryOpen, setRetryOpen] = useState(false)
+  const [resend, setResend] = useState(null)
+  const [actBusy, setActBusy] = useState(false)
+  const [actError, setActError] = useState('')
+  const [flash, setFlash] = useState(null)
 
   const [emailRows, setEmailRows] = useState([])
   const [pushRows, setPushRows] = useState([])
@@ -107,11 +128,14 @@ export default function ConsoleDelivery({ tabParam = 'tab' } = {}) {
     setPushError(null)
     // End date is inclusive: extend "to" to end-of-day.
     const toEnd = to ? `${to}T23:59:59.999Z` : undefined
-    const [eRes, pRes, rRes] = await Promise.allSettled([
+    const [eRes, pRes, rRes, aRes] = await Promise.allSettled([
       listEmailLog({ from, to: toEnd }),
       listPushLog({ from, to: toEnd }),
       pushReach(),
+      getDeliveryReach(),
     ])
+    if (aRes.status === 'fulfilled' && aRes.value) { setAppReach(aRes.value); setAppReachError('') }
+    else { setAppReach(null); setAppReachError(aRes.status === 'rejected' ? toUserMessage(aRes.reason, 'Device reach could not be read.') : 'Device reach could not be read.') }
     if (eRes.status === 'fulfilled') {
       setEmailRows(eRes.value.rows)
       setEmailTruncated(!!eRes.value.truncated)
@@ -197,6 +221,34 @@ export default function ConsoleDelivery({ tabParam = 'tab' } = {}) {
 
   const openFailures = useCallback((ch) => { setChannel(ch); setSearch(''); setTab('failures') }, [setTab])
 
+  const selectedPush = useMemo(() => failures.filter((f) => f.channel === 'push' && selected.has(f.id)), [failures, selected])
+  const toggleSel = (id) => setSelected((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
+
+  async function doRetry({ reason }) {
+    setActBusy(true); setActError('')
+    try {
+      const r = await retryFailedPushes(selectedPush.map((f) => f.id), reason)
+      setFlash({ tone: 'ok', text: `${r.requeued} of ${r.requested} failed push${r.requested === 1 ? '' : 'es'} put back in the queue. Delivery is tried again within a minute.` })
+      setSelected(new Set()); setRetryOpen(false)
+      await load()
+    } catch (e) { setActError(toUserMessage(e, 'The deliveries could not be retried. Nothing was changed.')) }
+    finally { setActBusy(false) }
+  }
+
+  async function doResend({ reason }) {
+    const f = resend
+    if (!f?.scheduleId) return
+    setActBusy(true); setActError('')
+    try {
+      const r = await sendScheduleNow(f.scheduleId)
+      await logAction?.('schedule_send_now', f.scheduleId, 'report_schedule', { name: f.name, reason, from: 'delivery_failure' })
+      setFlash({ tone: 'ok', text: r.recipients == null ? `${f.name} was sent again.` : `${f.name} was emailed again to ${r.recipients} recipient${r.recipients === 1 ? '' : 's'}.` })
+      setResend(null); setOpenFailure(null)
+      await load()
+    } catch (e) { setActError(toUserMessage(e, 'The report could not be resent. Nothing was sent.')) }
+    finally { setActBusy(false) }
+  }
+
   if (!admin) {
     return (
       <div className="max-w-md mx-auto mt-16">
@@ -220,7 +272,7 @@ export default function ConsoleDelivery({ tabParam = 'tab' } = {}) {
   return (
     <div className="space-y-5 max-w-7xl">
       <PageHeader icon={Send} title="Delivery & Notifications"
-        purpose="How reliably reports and notifications reach people, by email and push."
+        purpose="How reliably reports and notifications reach people: report emails, and push to phones running the Flutter app (Firebase Cloud Messaging). Retry what failed from here."
         refreshedAt={readAt} onRefresh={load} refreshing={refreshing}
         actions={(
           <>
@@ -230,6 +282,7 @@ export default function ConsoleDelivery({ tabParam = 'tab' } = {}) {
         )} />
 
       <ErrorState message={emailError || error} onRetry={load} />
+      {flash && <Note icon={flash.tone === 'ok' ? CheckCircle2 : AlertTriangle} tone={flash.tone === 'ok' ? 'accent' : 'danger'}>{flash.text}</Note>}
       {rangeInvalid && (
         <Note icon={Info} tone="warning">The From date is after the To date, so there is nothing to show. Pick a valid range.</Note>
       )}
@@ -249,12 +302,13 @@ export default function ConsoleDelivery({ tabParam = 'tab' } = {}) {
           sub={loading || emailError ? undefined : `${emailRate} failure rate`}
           onClick={() => openFailures('email')} active={tab === 'failures' && channel === 'email'} />
         <StatTile label="Push delivered" value={loading || pushError ? 'N/A' : push.delivered} tone="good" icon={Bell}
-          sub={pushError ? undefined : `${push.queued} still queued`} />
+          sub={pushError ? undefined : `${push.queued} still queued${push.skipped ? `, ${push.skipped} skipped (no device)` : ''}`} />
         <StatTile label="Push failed" value={loading || pushError ? 'N/A' : push.failed}
           tone={push.failureRate > 0.1 ? 'danger' : push.failed > 0 ? 'warning' : 'default'} icon={Bell}
           sub={loading || pushError ? undefined : pushSettled ? `${pushRate} of ${pushSettled} settled` : 'Nothing settled'}
           onClick={() => openFailures('push')} active={tab === 'failures' && channel === 'push'} />
-        <StatTile label="Push reach" value={reach == null ? 'N/A' : reach} tone="accent" icon={Users} sub="Devices with a token" />
+        <StatTile label="Flutter app reach" value={appReach?.flutterDevices == null ? 'N/A' : appReach.flutterDevices} tone="accent" icon={Smartphone}
+          sub={appReachError ? 'Could not read devices' : appReach ? `FCM devices; retired app (read only): ${appReach.retiredDevices ?? 'N/A'}` : undefined} />
       </div>
 
       <TabBar tabs={tabs} value={tab} onChange={setTab} label="Delivery sections" />
@@ -319,6 +373,29 @@ export default function ConsoleDelivery({ tabParam = 'tab' } = {}) {
             </Panel>
           </div>
 
+          <Panel>
+            <PanelHeader icon={Users} title="Who a push can reach"
+              subtitle="Active devices with a push token, split by app. The Flutter app uses Firebase Cloud Messaging; the retired Expo app is shown for reference only." />
+            {loading ? <LoadingState label="Reading devices" rows={2} /> : appReachError ? (
+              <EmptyState icon={XCircle} title="Device reach is not known" reason={appReachError} />
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2">
+                <Facts rows={[
+                  ['Flutter app devices', appReach?.flutterDevices, '(FCM)'],
+                  ['Flutter app people', appReach?.flutterPeople],
+                  ['Seen in last 7 days', appReach?.flutterSeen7d],
+                  ['Retired app (read only)', appReach?.retiredDevices, appReach?.retiredPeople != null ? `devices, ${appReach.retiredPeople} people` : ''],
+                  ['Legacy profile tokens', reach],
+                ]} />
+                <Note icon={Info} tone={appReach?.flutterDevices ? 'default' : 'warning'}>
+                  {appReach?.flutterDevices
+                    ? 'Pushes reach these Flutter devices through FCM. People who only have the retired app keep getting pushes until they uninstall it.'
+                    : 'No Flutter app device has registered for push yet, so FCM pushes reach nobody. Devices appear here once people sign into a Flutter build. The in-app bell and email still work.'}
+                </Note>
+              </div>
+            )}
+          </Panel>
+
           {/* Trend charts: one per channel, never a second axis */}
           <div className="grid gap-4 lg:grid-cols-2">
             <Panel>
@@ -377,6 +454,10 @@ export default function ConsoleDelivery({ tabParam = 'tab' } = {}) {
             />
             <SearchInput value={search} onChange={setSearch} placeholder="Search name, status or error" className="w-full sm:w-64" />
             <div className="ml-auto flex gap-2">
+              <Btn icon={RotateCcw} disabled={selectedPush.length === 0} onClick={() => { setActError(''); setRetryOpen(true) }}
+                title="Put the ticked failed pushes back in the delivery queue">
+                Retry selected{selectedPush.length ? ` (${selectedPush.length})` : ''}
+              </Btn>
               <ExportButtons rows={visibleFailures} columns={FAILURE_EXPORT_COLUMNS} title={`TyrePulse Delivery Failures ${from} to ${to}`} />
             </div>
           </Toolbar>
@@ -393,8 +474,10 @@ export default function ConsoleDelivery({ tabParam = 'tab' } = {}) {
             <EmptyState icon={Send} title="No failures match" reason="Nothing matches this channel and search. Clear the filters to see every failure." />
           ) : (
             <>
+              <p className="text-[11px] text-gray-500 mb-2">Tick failed pushes to retry them. A failed report email can be resent from its detail.</p>
               <Table>
                 <THead>
+                  <Th><span className="sr-only">Select</span></Th>
                   <Th sortKey="channel" sort={sort} onSort={onSort}>Channel</Th>
                   <Th sortKey="name" sort={sort} onSort={onSort}>Name</Th>
                   <Th sortKey="status" sort={sort} onSort={onSort}>Status</Th>
@@ -404,6 +487,13 @@ export default function ConsoleDelivery({ tabParam = 'tab' } = {}) {
                 <tbody>
                   {failPaged.rows.map((r) => (
                     <Tr key={`${r.channel}-${r.id}`} onClick={() => setOpenFailure(r)} ariaLabel={`Open failure ${r.name}`}>
+                      <Td>
+                        {r.channel === 'push' ? (
+                          <input type="checkbox" className="accent-orange-500" checked={selected.has(r.id)}
+                            onClick={(e) => e.stopPropagation()} onChange={() => toggleSel(r.id)}
+                            aria-label={`Select failed push ${r.name} for retry`} />
+                        ) : null}
+                      </Td>
                       <Td>
                         <Badge tone={r.channel === 'email' ? 'info' : 'accent'} icon={r.channel === 'email' ? Mail : Bell}>
                           <span className="capitalize">{r.channel}</span>
@@ -457,8 +547,34 @@ export default function ConsoleDelivery({ tabParam = 'tab' } = {}) {
         </Panel>
       )}
 
+      <ConfirmImpactDialog open={retryOpen} title="Retry failed pushes?"
+        impact={retryImpact(selectedPush.length, appReach?.flutterDevices ?? null)}
+        confirmLabel="Retry" requireReason busy={actBusy} error={actError}
+        readyExtra={selectedPush.length > 0}
+        onCancel={() => { if (!actBusy) setRetryOpen(false) }}
+        onConfirm={doRetry} />
+
+      <ConfirmImpactDialog open={!!resend} title={`Resend ${resend?.name || 'this report'}?`}
+        impact={{
+          what: 'Email this scheduled report again, right now.', tone: 'info',
+          change: 'The report is rebuilt from current data and emailed. The schedule itself is not changed.',
+          who: 'Everyone on the schedule recipient list.',
+          undo: 'No. A sent email cannot be recalled.',
+        }}
+        confirmLabel="Resend now" requireReason busy={actBusy} error={actError}
+        onCancel={() => { if (!actBusy) setResend(null) }}
+        onConfirm={doResend} />
+
       <SideDrawer open={!!openFailure} onClose={() => setOpenFailure(null)} title={openFailure?.name || 'Failure'}
-        subtitle={openFailure ? `${openFailure.channel === 'email' ? 'Report email' : 'Push notification'} delivery failure` : ''}>
+        subtitle={openFailure ? `${openFailure.channel === 'email' ? 'Report email' : 'Push notification'} delivery failure` : ''}
+        footer={openFailure && (openFailure.channel === 'email' ? (
+          <Btn variant="primary" icon={Send} disabled={!openFailure.scheduleId} onClick={() => { setActError(''); setResend(openFailure) }}
+            title={openFailure.scheduleId ? 'Email this report again now' : 'This failure is not linked to a schedule, so it cannot be resent from here'}>
+            Resend now
+          </Btn>
+        ) : (
+          <Btn variant="primary" icon={RotateCcw} onClick={() => { setSelected(new Set([openFailure.id])); setOpenFailure(null); setActError(''); setRetryOpen(true) }}>Retry this push</Btn>
+        ))}>
         {openFailure && (
           <>
             <Note icon={XCircle} tone="danger">

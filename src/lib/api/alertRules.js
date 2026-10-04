@@ -27,8 +27,22 @@ export const ALERT_METRICS = [
   { key: 'overdue_work_orders', label: 'Overdue work orders' },
   { key: 'open_accidents', label: 'Open accidents' },
   { key: 'pm_overdue', label: 'Overdue PM plans' },
-  { key: 'low_pressure', label: 'Low pressure readings' },
+  { key: 'open_breakdowns', label: 'Machines broken down' },
+  { key: 'stock_below_min', label: 'Stock items at or below minimum' },
+  { key: 'pending_approvals', label: 'Inspections waiting for approval' },
+  { key: 'open_corrective_actions', label: 'Open corrective actions' },
 ]
+
+/**
+ * Metrics an older builder offered that the hourly check (evaluate_alert_thresholds)
+ * never computes. A rule on one of these can never fire, so the page says so.
+ */
+export const LEGACY_METRICS = { low_pressure: 'Low pressure readings (not checked)' }
+
+/** True when the hourly check really computes this metric. */
+export function isEvaluatedMetric(key) {
+  return ALERT_METRICS.some((m) => m.key === key)
+}
 
 /** Comparison operators offered by the rule builder (DB stores the key). */
 export const ALERT_OPERATORS = [
@@ -41,7 +55,7 @@ export const ALERT_OPERATORS = [
 
 /** Human label for a metric key (falls back to the raw key). */
 export function metricLabel(key) {
-  return ALERT_METRICS.find((m) => m.key === key)?.label || key || ''
+  return ALERT_METRICS.find((m) => m.key === key)?.label || LEGACY_METRICS[key] || key || ''
 }
 
 /** Human label for an operator key (falls back to the raw key). */
@@ -55,7 +69,7 @@ export function operatorLabel(key) {
 const COLS =
   'id,name,metric,operator,threshold,site_filter,brand_filter,' +
   'notify_email,notify_in_app,active,triggered_count,last_triggered_at,' +
-  'created_at,updated_at'
+  'created_at,updated_at,pending_checks,renotify_minutes,renotify_max,recover_after_hours'
 
 /** True when the failure is "table does not exist yet" (pre-migration). */
 function isMissingRelation(err) {
@@ -178,6 +192,39 @@ export async function toggleAlertRule(id, active) {
       .select(COLS)
       .maybeSingle(),
   )
+}
+
+/**
+ * Pause or activate several rules at once. Returns how many rows changed.
+ * @param {string[]} ids
+ * @param {boolean} active
+ */
+export async function setAlertRulesActive(ids = [], active) {
+  const list = [...new Set((ids || []).filter(Boolean))].slice(0, 500)
+  if (!list.length) return 0
+  const rows = unwrap(
+    await supabase.from('alert_thresholds').update({ active: !!active }).in('id', list).select('id').limit(500),
+  ) || []
+  return rows.length
+}
+
+/**
+ * Plain-English impact of saving a rule. Pure.
+ * @returns {{change:string, who:string, undo:string}}
+ */
+export function ruleImpact(form = {}) {
+  const scope = [form.siteFilter ? `site ${form.siteFilter}` : 'every site', form.brandFilter ? `brand ${form.brandFilter}` : 'every brand'].join(', ')
+  return {
+    change: form.active === false
+      ? 'The rule is saved switched off. It is not evaluated until you activate it.'
+      : `From the next hourly check, ${metricLabel(form.metric) || 'the metric'} is watched across ${scope}.`,
+    who: form.notifyInApp
+      ? `You, the rule owner, get an in-app notification when it fires (at most once a day per rule). Other admins are not notified by this rule.${form.notifyEmail ? ' Email is saved on the rule but the hourly check does not send email yet.' : ''}`
+      : form.notifyEmail
+        ? 'Nobody yet: only email is chosen, and the hourly check does not send email yet. Add in-app to be told.'
+        : 'Nobody: no channel is chosen, so the rule can fire without telling anyone.',
+    undo: 'Yes. Edit, pause or delete the rule at any time.',
+  }
 }
 
 /**

@@ -8186,5 +8186,111 @@
   "problemReportFailed": "Your report could not be sent. Please try again.",
   "@problemReportFailed": {
     "description": "Report a problem: any other failure; safe to retry."
+  },
+  "qrLoginAction": "Sign in on a computer",
+  "@qrLoginAction": {
+    "description": "Sign in on a computer: Profile row and screen title for approving a web sign-in by scanning a QR code."
+  },
+  "qrLoginScanIntro": "On the computer, open the TyrePulse sign-in page and choose the phone code. Then point this camera at the code on the screen.",
+  "@qrLoginScanIntro": {
+    "description": "Sign in on a computer: explains how to start the computer sign-in."
+  },
+  "qrLoginConfirmTitle": "Sign in on this computer?",
+  "@qrLoginConfirmTitle": {
+    "description": "Sign in on a computer: title of the confirm sheet."
+  },
+  "qrLoginConfirmMessage": "Sign in to TyrePulse on this computer as {name}? Only approve a code you just opened yourself.",
+  "@qrLoginConfirmMessage": {
+    "description": "Sign in on a computer: confirm sheet body. {name} is the signed-in person's name.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Ahmed Ali"
+      }
+    }
+  },
+  "qrLoginYourAccount": "your account",
+  "@qrLoginYourAccount": {
+    "description": "Sign in on a computer: used as {name} when the profile has no full name."
+  },
+  "qrLoginApprove": "Approve",
+  "@qrLoginApprove": {
+    "description": "Sign in on a computer: approve button on the confirm sheet."
+  },
+  "qrLoginSending": "Sending your answer...",
+  "@qrLoginSending": {
+    "description": "Sign in on a computer: shown while the decision is sent."
+  },
+  "qrLoginWaiting": "Waiting for your answer",
+  "@qrLoginWaiting": {
+    "description": "Sign in on a computer: shown behind the confirm sheet."
+  },
+  "qrLoginApprovedTitle": "Computer signed in",
+  "@qrLoginApprovedTitle": {
+    "description": "Sign in on a computer: success title."
+  },
+  "qrLoginApprovedMessage": "TyrePulse will open on the computer in a few seconds. If you did not mean to do this, sign out on the computer.",
+  "@qrLoginApprovedMessage": {
+    "description": "Sign in on a computer: success message."
+  },
+  "qrLoginDeclinedTitle": "Sign-in declined",
+  "@qrLoginDeclinedTitle": {
+    "description": "Sign in on a computer: title after the person pressed Cancel."
+  },
+  "qrLoginDeclinedMessage": "The computer was not signed in, and this code cannot be used again.",
+  "@qrLoginDeclinedMessage": {
+    "description": "Sign in on a computer: message after the person pressed Cancel."
+  },
+  "qrLoginFailedTitle": "Computer not signed in",
+  "@qrLoginFailedTitle": {
+    "description": "Sign in on a computer: title for every failure."
+  },
+  "qrLoginNotACodeTitle": "Not a sign-in code",
+  "@qrLoginNotACodeTitle": {
+    "description": "Sign in on a computer: title when the scanned QR is not a valid sign-in code."
+  },
+  "qrLoginNotACodeMessage": "This is not a TyrePulse computer sign-in code. Scan the code shown on the TyrePulse sign-in page.",
+  "@qrLoginNotACodeMessage": {
+    "description": "Sign in on a computer: message when the scanned QR is not a valid sign-in code."
+  },
+  "qrLoginExpired": "This code has expired. Codes last two minutes. Refresh the code on the computer and scan again.",
+  "@qrLoginExpired": {
+    "description": "Sign in on a computer: failure: code expired."
+  },
+  "qrLoginInvalid": "This code was not recognised. Refresh the code on the computer and scan again.",
+  "@qrLoginInvalid": {
+    "description": "Sign in on a computer: failure: unknown or tampered code."
+  },
+  "qrLoginConsumed": "This code was already used to sign in. Refresh the code on the computer if you need to sign in again.",
+  "@qrLoginConsumed": {
+    "description": "Sign in on a computer: failure: code already redeemed."
+  },
+  "qrLoginAlreadyDecided": "This code was already answered. Refresh the code on the computer and scan again.",
+  "@qrLoginAlreadyDecided": {
+    "description": "Sign in on a computer: failure: code already approved or declined."
+  },
+  "qrLoginNotAllowed": "Your account is not approved or is locked, so it cannot sign in a computer. Please speak to your administrator.",
+  "@qrLoginNotAllowed": {
+    "description": "Sign in on a computer: failure: SQLSTATE 42501."
+  },
+  "qrLoginSignedOut": "You are signed out on this phone. Sign in here first, then scan the code again.",
+  "@qrLoginSignedOut": {
+    "description": "Sign in on a computer: failure: no session on the phone."
+  },
+  "qrLoginNeedsSignal": "No connection. Move to an area with signal and scan the code again before it expires.",
+  "@qrLoginNeedsSignal": {
+    "description": "Sign in on a computer: failure: no signal. The decision is never queued offline."
+  },
+  "qrLoginUnavailable": "Computer sign-in is not available on this server yet.",
+  "@qrLoginUnavailable": {
+    "description": "Sign in on a computer: failure: the RPC is not deployed."
+  },
+  "qrLoginFailed": "Something went wrong. Refresh the code on the computer and try again.",
+  "@qrLoginFailed": {
+    "description": "Sign in on a computer: failure: anything else."
+  },
+  "qrLoginScanAgain": "Scan another code",
+  "@qrLoginScanAgain": {
+    "description": "Sign in on a computer: button to return to the camera."
   }
 }

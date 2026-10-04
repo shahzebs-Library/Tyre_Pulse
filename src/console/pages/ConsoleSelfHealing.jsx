@@ -11,13 +11,18 @@
  *   - Stale sites        -> READ-ONLY (a site gone quiet needs a human/data action)
  *   - Predictive anomaly -> READ-ONLY (surfaced for review only)
  *
- * Every fix asks for confirmation first, and nothing destructive is ever invented
- * here. Findings are also logged to the System Health board.
+ * Every fix states what it changes, who is affected and whether it can be
+ * undone before it runs. Merging duplicates removes rows, so it is red, needs a
+ * reason and the word MERGE typed; backfilling every orphan needs a reason.
+ * Each applied fix is written to the console audit log. Nothing destructive is
+ * ever invented here. Findings are also logged to the System Health board, and
+ * the "Past scans" panel reads them back from there (system_logs), so history
+ * survives a reload.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Wand2, RefreshCw, ShieldAlert, ShieldCheck, CheckCircle2, AlertTriangle,
-  Info, Link2Off, Copy, Shuffle, Clock, Activity, BarChart3, List,
+  Info, Link2Off, Copy, Shuffle, Clock, Activity, BarChart3, List, History,
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import {
@@ -25,10 +30,11 @@ import {
   applyMergeDuplicate, logHealFinding, SCAN_LABELS,
 } from '../../lib/api/selfHealing'
 import { detectStaleGroups, summarizeFindings } from '../../lib/selfHealing'
+import { listSystemLogs } from '../../lib/api/systemLogs'
 import { toUserMessage } from '../../lib/safeError'
 import {
   Panel, PanelHeader, Note, StatTile, Badge, Btn, Code, Segmented, SearchInput, Toolbar,
-  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Modal,
+  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, ConfirmImpactDialog,
 } from '../components/ui'
 import ExportButtons from './shared/ExportButtons'
 import {
@@ -135,8 +141,10 @@ const DETAIL_SPECS = {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function ConsoleSelfHealing({ tabParam = 'tab' } = {}) {
-  const { admin } = useConsoleAuth()
+  const { admin, logAction } = useConsoleAuth()
   const theme = useChartTheme()
+  const [pastScans, setPastScans] = useState({ loading: true, error: '', rows: [] })
+  const [fixError, setFixError] = useState('')
 
   const [scan, setScan]       = useState(null)   // { orphans, duplicates, serialConflicts, stale, anomalies }
   const [summary, setSummary] = useState(null)
@@ -206,27 +214,43 @@ export default function ConsoleSelfHealing({ tabParam = 'tab' } = {}) {
     return () => { mountedRef.current = false }
   }, [runScan])
 
+  // Scans logged to System Health by earlier sessions (logHealFinding writes
+  // only when a scan found something, so a clean scan leaves no row).
+  const loadPast = useCallback(async () => {
+    setPastScans((p) => ({ ...p, loading: true, error: '' }))
+    try {
+      const rows = await listSystemLogs({ module: 'self-healing', limit: 20 })
+      if (mountedRef.current) setPastScans({ loading: false, error: '', rows: (rows || []).filter((r) => r.module_id === 'self-healing') })
+    } catch (e) {
+      if (mountedRef.current) setPastScans({ loading: false, error: toUserMessage(e, 'Past scans could not be read.'), rows: [] })
+    }
+  }, [])
+  useEffect(() => { loadPast() }, [loadPast, scannedAt])
+
   const rescan = () => { setNotice(null); runScan() }
 
   // ── Safe fix handlers (each confirms first, then re-scans) ──
-  function askFix(key, title, message, fn, okMsg) {
+  function askFix(key, title, impact, fn, okMsg, opts = {}) {
     if (busyKey) return
-    setPending({ key, title, message, fn, okMsg })
+    setFixError('')
+    setPending({ key, title, impact, fn, okMsg, ...opts })
   }
 
-  async function confirmFix() {
+  async function confirmFix({ reason } = {}) {
     const p = pending
     if (!p || busyKey) return
-    setPending(null)
     setBusyKey(p.key)
     setError(null)
     setNotice(null)
+    setFixError('')
     try {
       const result = await p.fn()
+      await logAction?.(p.audit || 'self_heal_fix', null, 'self_healing', { fix: p.key, reason: reason || null, result: typeof result === 'number' ? result : null })
+      setPending(null)
       if (mountedRef.current) setNotice(typeof p.okMsg === 'function' ? p.okMsg(result) : p.okMsg)
       await runScan()
     } catch (err) {
-      if (mountedRef.current) setError(toUserMessage(err, 'That fix could not be applied.'))
+      if (mountedRef.current) setFixError(toUserMessage(err, 'That fix could not be applied. Nothing was changed.'))
     } finally {
       if (mountedRef.current) setBusyKey(null)
     }
@@ -235,25 +259,44 @@ export default function ConsoleSelfHealing({ tabParam = 'tab' } = {}) {
   const backfillOne = (assetNo) => askFix(
     `orphan:${assetNo}`,
     'Backfill this asset?',
-    `Create the missing fleet record for asset "${assetNo}"? This is a safe insert and removes nothing.`,
+    {
+      what: `Create the missing fleet record for asset "${assetNo}".`, tone: 'info',
+      change: 'One asset row is added to the fleet list. This is a safe insert and removes nothing.',
+      who: 'Everyone who reads per-asset reports: the tyres on this asset start appearing there.',
+      undo: 'Yes. The new asset can be edited or removed from the fleet list.',
+    },
     () => applyBackfillOrphan(assetNo),
     `Asset "${assetNo}" was added to the fleet list.`,
+    { audit: 'self_heal_backfill' },
   )
 
   const backfillAll = () => askFix(
     'orphan:all',
     'Backfill every orphaned asset?',
-    `Create fleet records for all ${scan?.orphans?.length || 0} orphaned assets? This is a safe insert and removes nothing.`,
+    {
+      what: `Create fleet records for all ${scan?.orphans?.length || 0} orphaned assets.`, tone: 'warning',
+      stats: [{ label: 'Assets added', value: scan?.orphans?.length || 0 }, { label: 'Rows removed', value: 0 }, { label: 'Tyres linked', value: (scan?.orphans || []).reduce((a, r) => a + (Number(r.tyre_count) || 0), 0) }],
+      change: 'One asset row is added per orphan. Nothing is removed or overwritten.',
+      who: 'Every organisation: their tyres start appearing in per-asset reports and fleet counts rise.',
+      undo: 'Yes, one by one from the fleet list. There is no single undo for the batch.',
+    },
     () => applyBackfillAllOrphans(),
     (n) => `${n || 0} asset${n === 1 ? '' : 's'} added to the fleet list.`,
+    { audit: 'self_heal_backfill_all', requireReason: true },
   )
 
   const mergeOne = (row) => askFix(
     `dup:${row.keep_id}`,
     'Merge identical copies?',
-    `Merge ${((row.remove_ids || []).length) + 1} identical copies of tyre "${row.serial_no || row.asset_no || ''}" into one? Only truly identical rows are removed; the server rejects the merge otherwise.`,
+    {
+      what: `Merge ${((row.remove_ids || []).length) + 1} identical copies of tyre "${row.serial_no || row.asset_no || ''}" into one.`, tone: 'danger',
+      change: `${(row.remove_ids || []).length} row${(row.remove_ids || []).length === 1 ? '' : 's'} are deleted and one is kept. The server refuses unless every field is identical.`,
+      who: 'Reports that counted this tyre more than once now count it once (tyre totals and spend can fall).',
+      undo: 'Not from this page. Restore from Backups if needed.',
+    },
     () => applyMergeDuplicate(row.keep_id, row.remove_ids || []),
     (n) => `${n || 0} duplicate row${n === 1 ? '' : 's'} removed.`,
+    { audit: 'self_heal_merge', requireReason: true, typedWord: 'MERGE', danger: true },
   )
 
   const prevTotal = history.length > 1 ? history[1].total : null
@@ -317,7 +360,7 @@ export default function ConsoleSelfHealing({ tabParam = 'tab' } = {}) {
       <OpsPageHeader
         icon={Wand2}
         title="Self-Healing"
-        purpose="Scans for data issues and offers only safe, non-destructive fixes."
+        purpose="Scans for data issues and offers only guarded fixes. Each fix says what it changes before it runs and is written to the audit log."
         refreshedAt={scannedAt}
         actions={(
           <Btn variant="primary" icon={RefreshCw} onClick={rescan} busy={scanning}>
@@ -422,6 +465,24 @@ export default function ConsoleSelfHealing({ tabParam = 'tab' } = {}) {
                       {h.total} finding{h.total === 1 ? '' : 's'}{h.failed ? `, ${h.failed} not run` : ''}
                       {i < history.length - 1 && <span className="text-gray-500"> ({deltaText(h.total, history[i + 1].total)})</span>}
                     </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
+          <Panel className="lg:col-span-3">
+            <PanelHeader icon={History} title="Past scans with findings"
+              subtitle="Read back from System Health. A scan that found nothing leaves no record, so a gap here means clean or not run." />
+            {pastScans.loading ? <LoadingState label="Reading past scans" rows={2} /> : pastScans.error ? (
+              <ErrorState message={pastScans.error} onRetry={loadPast} />
+            ) : pastScans.rows.length === 0 ? (
+              <EmptyState icon={History} title="No past scan is recorded" reason="No earlier scan found anything, or none has run before." />
+            ) : (
+              <ul className="divide-y divide-gray-800/70">
+                {pastScans.rows.map((r) => (
+                  <li key={r.id} className="py-1.5 flex items-center justify-between gap-2 text-xs">
+                    <span className="text-gray-300 min-w-0 break-words">{r.message}</span>
+                    <span className="text-gray-500 whitespace-nowrap">{fmtDateTime(r.created_at)}</span>
                   </li>
                 ))}
               </ul>
@@ -546,21 +607,21 @@ export default function ConsoleSelfHealing({ tabParam = 'tab' } = {}) {
         )}
       </Drawer>
 
-      <Modal
+      <ConfirmImpactDialog
         open={!!pending}
         title={pending?.title || 'Apply fix?'}
-        subtitle="Guarded on the server. The scan runs again once it finishes."
-        onClose={() => setPending(null)}
-        width="max-w-md"
-        footer={(
-          <>
-            <Btn onClick={() => setPending(null)}>Cancel</Btn>
-            <Btn variant="primary" icon={Wand2} onClick={confirmFix}>Apply fix</Btn>
-          </>
-        )}
+        impact={pending?.impact}
+        confirmLabel="Apply fix"
+        danger={!!pending?.danger}
+        requireReason={!!pending?.requireReason}
+        typedWord={pending?.typedWord}
+        busy={!!busyKey}
+        error={fixError}
+        onCancel={() => { if (!busyKey) setPending(null) }}
+        onConfirm={confirmFix}
       >
-        <p className="text-sm text-gray-300 break-words">{pending?.message}</p>
-      </Modal>
+        <p className="text-[11px] text-gray-500">Guarded on the server. The scan runs again once it finishes.</p>
+      </ConfirmImpactDialog>
     </div>
   )
 }

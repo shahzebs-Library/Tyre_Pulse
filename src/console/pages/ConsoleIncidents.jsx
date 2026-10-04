@@ -15,11 +15,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Siren, FileSpreadsheet, Plus, CheckCircle2, AlertTriangle, XCircle,
-  Activity, Timer, Clock, Radio, Send, Database, ListChecks, Flame, UserCog, FileText, Trash2,
+  Activity, Timer, Clock, Radio, Send, Database, ListChecks, Flame, UserCog, FileText, Trash2, Gauge, Hand,
 } from 'lucide-react'
 import {
   Panel, PanelHeader, Note, StatTile, Badge, Btn, Segmented, SearchInput, Select, Toolbar,
-  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Modal,
+  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Modal, ConfirmImpactDialog,
 } from '../components/ui'
 import { TrendChart, BarsChart, STATUS as CHART_STATUS, useChartTheme } from '../components/ui/charts'
 import {
@@ -34,7 +34,10 @@ import {
 } from '../../lib/platformIncidents'
 import { toUserMessage } from '../../lib/safeError'
 import { exportToExcel, exportToPdf, reportFileName } from '../../lib/exportUtils'
-import { PageHeader as OpsPageHeader, Pager, usePaged, PAGE_SIZE, Drawer, AttentionList, useUrlTab } from './shared/pageKit'
+import { Pager, usePaged, PAGE_SIZE, Drawer, AttentionList, useUrlTab } from './shared/pageKit'
+import { SectionTop, ImpactLine, isEmbedded } from './platform/SectionKit'
+import { changeIncidentSeverity } from '../../lib/api/consolePeopleControls'
+import { severityChangeError } from '../../lib/consolePeopleControls'
 import { sortRows, useTableSort } from '../../lib/consoleTable'
 
 const WINDOW_DAYS = 90
@@ -53,9 +56,17 @@ function fmtWhen(v) {
   return d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
+const UPDATE_TEMPLATES = [
+  { key: 'ack', label: 'Acknowledged', text: 'We are aware of the problem and are looking into it. Next update within 30 minutes.' },
+  { key: 'cause', label: 'Cause found', text: 'The cause has been identified and a fix is being prepared. Next update within 1 hour.' },
+  { key: 'fix', label: 'Fix deployed', text: 'A fix has been deployed. We are watching to confirm the problem has stopped.' },
+  { key: 'done', label: 'Resolved', text: 'The problem is fixed and the platform is working normally. A postmortem will follow.' },
+]
+
 const EMPTY_DRAFT = { title: '', severity: 'sev3', impact: '', affected_modules: '', started_at: '', message: '', source_type: 'manual', source_ref: null }
 
 export default function ConsoleIncidents({ tabParam = 'tab' } = {}) {
+  const embedded = isEmbedded(tabParam)
   const theme = useChartTheme()
   const [incidents, setIncidents] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -274,13 +285,14 @@ export default function ConsoleIncidents({ tabParam = 'tab' } = {}) {
 
   return (
     <div className="space-y-4 max-w-7xl">
-      <OpsPageHeader
+      <SectionTop
+        embedded={embedded}
         icon={Siren}
         title={<>Incidents &amp; Status</>}
-        purpose="Platform incidents, their response times and the signals they start from."
+        purpose="Outages and broken modules in Tyre Pulse itself (not fleet accidents): what is open, how fast it was answered, and the signals new ones start from."
         refreshedAt={refreshedAt}
         onRefresh={load}
-        busy={loading}
+        refreshing={loading}
         actions={(<>
           <Btn icon={FileSpreadsheet} onClick={() => exportFile('excel')} busy={exporting === 'excel'} disabled={!all.length || !!exporting}>Excel</Btn>
           <Btn icon={FileText} onClick={() => exportFile('pdf')} busy={exporting === 'pdf'} disabled={!all.length || !!exporting}>PDF</Btn>
@@ -472,12 +484,26 @@ export default function ConsoleIncidents({ tabParam = 'tab' } = {}) {
               )}
             </div>
 
+            <SeverityPanel incident={selected} onSaved={load} />
+
             <CommanderPanel incident={selected} supers={supers} supersError={supersError} onSaved={load} />
 
             <PostmortemPanel incident={selected} onSaved={load} />
 
             <div className="border-t border-gray-800 pt-3 space-y-2">
               <h4 className="text-xs uppercase tracking-wide text-gray-500">Post an update</h4>
+              {isOpen(selected) && !selected.acknowledged_at && (
+                <Note icon={Hand} tone="warning">
+                  Nobody has responded yet. Pick Acknowledged below and post it: the first update stamps the response time (MTTA).
+                </Note>
+              )}
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Update templates">
+                {UPDATE_TEMPLATES.filter((t) => t.key !== 'done' || selected.status !== 'resolved').map((t) => (
+                  <Btn key={t.key} size="xs" variant="quiet" onClick={() => setUpdate((u) => ({
+                    ...u, message: t.text, status: t.key === 'done' && allowedNext(selected.status).includes('resolved') ? 'resolved' : u.status,
+                  }))}>{t.label}</Btn>
+                ))}
+              </div>
               <Select value={update.status} onChange={(v) => setUpdate((u) => ({ ...u, status: v }))}
                 options={allowedNext(selected.status).map((s) => ({
                   value: s, label: s === selected.status ? `${STATUS_LABEL[s]} (no change)` : STATUS_LABEL[s],
@@ -493,6 +519,10 @@ export default function ConsoleIncidents({ tabParam = 'tab' } = {}) {
                   {update.status === 'resolved' && selected.status !== 'resolved' ? 'Resolve incident' : 'Post update'}
                 </Btn>
               </div>
+              <ImpactLine change={update.status === 'resolved' && selected.status !== 'resolved'
+                ? 'Closes the incident and stops its clock. The platform status turns green once nothing else is open.'
+                : 'Adds the message to the timeline; a status change moves the incident on.'}
+                who="Every super admin reading this incident. It is written to the audit log." />
             </div>
           </div>
         )}
@@ -538,10 +568,70 @@ export default function ConsoleIncidents({ tabParam = 'tab' } = {}) {
             {draft.source_type && draft.source_type !== 'manual' && (
               <Note icon={Radio}>Opened from a {draft.source_type.replace('_', ' ')} signal. The link is kept on the incident.</Note>
             )}
+            <ImpactLine change="Adds an open incident and turns the platform status amber or red."
+              who={['sev1', 'sev2'].includes(draft.severity) ? 'Every super admin is notified straight away.' : 'Super admins see it here; nobody is notified for SEV3 or SEV4.'} />
             {formError && <Note icon={XCircle} tone="danger">{formError}</Note>}
           </div>
         )}
       </Modal>
+    </div>
+  )
+}
+
+/** Re-grade an open incident; the change is written to its timeline and the audit log. */
+function SeverityPanel({ incident, onSaved }) {
+  const [to, setTo] = useState('')
+  const [reason, setReason] = useState('')
+  const [confirm, setConfirm] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [done, setDone] = useState('')
+  useEffect(() => { setTo(''); setReason(''); setErr(''); setDone(''); setConfirm(false) }, [incident.id])
+  if (!isOpen(incident)) return null
+  const problem = severityChangeError({ from: incident.severity, to, reason, status: incident.status })
+  const up = to && SEVERITIES.indexOf(to) < SEVERITIES.indexOf(incident.severity)
+
+  async function submit() {
+    setBusy(true); setErr('')
+    try {
+      await changeIncidentSeverity(incident.id, to, reason.trim())
+      setDone(`Severity changed to ${SEVERITY_LABEL[to]}.`)
+      setConfirm(false); setTo(''); setReason('')
+      await onSaved()
+    } catch (e) {
+      setErr(toUserMessage(e, 'Could not change the severity.'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="border-t border-gray-800 pt-3 space-y-2">
+      <h4 className="text-xs uppercase tracking-wide text-gray-500 flex items-center gap-1.5"><Gauge size={12} /> Severity</h4>
+      <p className="text-xs text-gray-400">Graded as <Badge tone={SEV_TONE[incident.severity]}>{SEVERITY_LABEL[incident.severity]}</Badge></p>
+      <div className="grid grid-cols-1 md:grid-cols-[12rem_1fr_auto] gap-2 items-start">
+        <Select value={to} onChange={setTo} placeholder="Change to" ariaLabel="New severity"
+          options={SEVERITIES.filter((s) => s !== incident.severity).map((s) => ({ value: s, label: SEVERITY_LABEL[s] }))} />
+        <input value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)}
+          placeholder="Why the grade changes (required)" aria-label="Severity change reason" className={inputCls} />
+        <Btn icon={Gauge} onClick={() => { setErr(''); setConfirm(true) }} disabled={!!problem}>Change</Btn>
+      </div>
+      <ImpactLine change="Re-grades the incident and writes the change and your reason to its timeline."
+        who="Super admins reading the incident. Nobody is notified by a re-grade." />
+      {err && <Note icon={XCircle} tone="danger">{err}</Note>}
+      {done && <Note icon={CheckCircle2}>{done}</Note>}
+      <ConfirmImpactDialog open={confirm} title={`Change severity to ${SEVERITY_LABEL[to] || ''}`} confirmLabel="Change severity"
+        danger={!!up} busy={busy} error={err}
+        impact={{
+          tone: up ? 'warning' : 'info',
+          what: `${incident.title}: ${SEVERITY_LABEL[incident.severity]} to ${SEVERITY_LABEL[to] || 'N/A'}.`,
+          change: up ? 'The incident is treated as more serious from now on and sorts higher.' : 'The incident is treated as less serious from now on.',
+          who: 'Super admins. Response figures (MTTA, MTTR) are not changed.',
+          undo: 'Yes. Change it back with another reason.',
+        }}
+        onCancel={() => { if (!busy) setConfirm(false) }} onConfirm={submit}>
+        <p className="text-xs text-gray-400">Reason: <span className="text-gray-200">{reason.trim()}</span></p>
+      </ConfirmImpactDialog>
     </div>
   )
 }

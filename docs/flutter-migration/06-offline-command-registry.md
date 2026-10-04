@@ -197,3 +197,9 @@ mirrors the Expo write exactly (same table, columns, RPC and parameters).
 | Module | Writes | Verdict | Why |
 |---|---|---|---|
 | Push notifications (FCM) | RPC `register_user_device` after sign-in and on every token refresh; RPC `revoke_user_device` before a user-initiated sign-out | Online only | A token only matters while the phone can receive pushes, i.e. while online. A failed registration is retried on the next sign-in or token refresh; a failed revoke is abandoned after 5 s so sign-out is never blocked (the next account to sign in on the handset re-points the row anyway). Mirrors Expo `registerPushToken`, which did not queue either |
+
+### 7.4 Scan to sign in on the web (added 2026-10-04)
+
+| Module | Writes | Verdict | Why |
+|---|---|---|---|
+| Sign in on a computer (`features/qr_login/`) | RPC `qr_login_approve(p_id, p_secret, p_approve)` | Online only | The code expires after two minutes and the decision depends on the request's current server state (spec section 14). A queued approval would either arrive expired or sign a browser in long after the person stopped looking at it. With no signal the screen says so and asks for a fresh scan |

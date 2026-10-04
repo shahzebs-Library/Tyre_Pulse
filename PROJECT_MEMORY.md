@@ -5,7 +5,48 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
-# ⚑ SESSION 2026-09-30/10-04 — CONSOLE CONTROL CENTER REBUILT (local commits, NOT pushed). Owner rule: push only on "push".
+# ⚑ SESSION 2026-10-04 (part 3) — BOTH SIGN-IN PAGES REBUILT TO OWNER MOCKUPS + QR SIGN-IN + PR #375 REVIEW FIXES. Next free migration after 20261004121000.
+- /login (src/pages/Login.jsx + src/components/auth/login/) and /console/login (ConsoleLogin.jsx + consoleLogin.css) rebuilt to the
+  owner's two mockups, dark + light, own fleet photos in public/login-art/ (brand badges avoided/blurred).
+- OWNER RULE CHANGE: the user login now shows a "Super Admin Console" tab (owner mockup). It opens /console/login in a NEW TAB so the
+  console session stays tab-local. This SUPERSEDES "the main app surfaces NO console entry" for the sign-in page only.
+- Real counts: get_login_showcase() (anon, counts only, main tenant). No uptime figure, no fake console charts.
+- get_public_config += auth_google_enabled / auth_microsoft_enabled / qr_login_enabled (all OFF). Buttons render only when ON; toggles in
+  Console settings "Sign-in". Google/Microsoft need the provider set up in Supabase Auth first (owner action).
+- QR sign-in: qr_login_requests (RLS on, no policies, no FK to auth.users - creating one blocked on a lock), qr_login_start/status (anon),
+  qr_login_approve (signed-in phone), edge fn qr-login v1 (verify_jwt=false, single-use redeem -> magiclink token_hash -> verifyOtp).
+  Verified live via pg_net: right code 200, wrong 409. Flutter "Sign in on a computer" (Profile row + global scanner) is CODE ONLY -
+  turn qr_login_enabled on only after a Flutter build ships.
+- Mobile-number sign-in does NOT work (get_email_by_identifier matches username/employee id only); label says so.
+- Review fixes: admin_data_cleanup_run_with_reason (reason + delete in one txn), AI rate limit min 1 (0 = service default, not unlimited),
+  advisory lock on admin_set_flutter_version.
+- GOTCHA: Supabase MCP execute_sql with a DELETE statement waits for approval and times out at 60s - keep deletes out of MCP DDL batches.
+- GIT STATE: everything on PR #375 (branch claude/modest-hopper-5bnq8c, now in vercel.json deploymentEnabled=false). Plan: full suite
+  green -> push -> CI green -> squash-merge -> verify tyre-pulse production READY on merged sha -> realign branch.
+
+# ⚑ SESSION 2026-10-04 (part 2) — CONSOLE ROUND 2: THE OTHER 29 PAGES REBUILT + MOBILE = FLUTTER ONLY. PUSHED as PR #375 (owner approved merge).
+- PR #374 (console Control Center round 1) MERGED as 1f2f356, production READY verified. It rebuilt 20 screens; the other 29
+  console pages were only re-wired. Owner: "i give u many screen why u fixed 5 only" -> round 2 rebuilt all 29 to the same
+  standard (impact lines, reason+typed confirm on risky actions, audit, real KPIs, light/dark, 390px). Brief: scratchpad r2/BRIEF.md.
+- OWNER RULE: "mobile things must relate to the Flutter app only". Console Mobile App / Developer gate / Releases now control
+  system_config.flutter_min_version + NEW flutter_latest_version (admin_set_flutter_version, interlock min<=latest). Expo keys
+  mobile_min/latest_version shown read-only "Retired app". Flutter devices = user_devices rows with NON-Expo (FCM) tokens: 0 live,
+  130 Expo. src/lib/mobileModules.js now mirrors tyre_pulse_flutter/lib/core/permissions/module_registry.dart (test parses the Dart).
+- OWNER RULE: "for web you must give all the data there": N/A only when the DB truly lacks the value, with the reason.
+- Migrations applied live: 20261004090000 (status note -> private comment event), 091000 admin_archive_empty_org, 101000 trust
+  alert decisions, 102000 delivery reach/retry, 103000 module_status_history, 104000 people controls (incl. admin_delete_empty_org,
+  checks every org table), 105000/105100 Flutter app control + adoption, 110100 org storage + sign-in facts. Some agents applied via
+  execute_sql + manual schema_migrations row because apply_migration timed out.
+- Facts found: alert rules never email (in-app only, 23h cooldown); Alert Center wait/remind/recover settings stored not used; no app
+  reads announcements; Flutter release has no Sentry DSN; Flutter app does not read module status (web only).
+- GIT STATE (2026-10-04 12:20 UTC): owner said "pushed and merged to main", so branch pushed (e0af97c + memory 1e9ac8d) and
+  PR #375 opened, subscribed, check-in scheduled. Plan: CI green -> squash-merge -> verify Vercel tyre-pulse production deploy
+  READY on the merged sha -> realign branch to origin/main. If this line still says "PR open", check PR #375 before assuming live.
+  A Vercel PREVIEW built for this branch: add claude/modest-hopper-5bnq8c to vercel.json git.deploymentEnabled=false next time.
+- OWNER DECISIONS STILL OPEN: org suspend not enforced; billing go-live; duplicate file removal; retention auto-run; PostHog key;
+  Vercel token for rollback; an earlier truncated message ("explain me mobile related ...") never clarified.
+
+# ⚑ SESSION 2026-09-30/10-04 — CONSOLE CONTROL CENTER REBUILT. MERGED as PR #374 (1f2f356), live.
 - Commits on claude/modest-hopper-5bnq8c: 410fb1f shell+Overview, 169eb4c Access Control, 6897fd1/720040d/570380b/01303ab
   problem tracking (user_issues, submit_user_issue, Error Center inbox), 3f57935 Flutter Report a problem (code only,
   adds device_info_plus; platform sent as 'flutter'), b7dfcfe Monitor/Platform/Trust/Runtime/Engineering screens.

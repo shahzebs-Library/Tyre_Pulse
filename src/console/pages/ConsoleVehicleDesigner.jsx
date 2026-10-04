@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Truck, Plus, Save, Trash2, Pencil, CheckCircle2, Power, AlertTriangle,
-  Copy, LayoutTemplate, Layers, Activity, Bus, Car, Container, Forklift, Construction, PenTool,
+  Copy, LayoutTemplate, Layers, Activity, Bus, Car, Container, Forklift, Construction, PenTool, Gauge, Search,
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { fetchAllPages } from '../../lib/fetchAll'
@@ -21,11 +21,13 @@ import {
 import { CustomDiagramPreview } from '../../components/VehicleDiagramCustomBody'
 import {
   Panel, PanelHeader, Note, StatTile, Badge, Btn, SearchInput, Select, Toolbar, Segmented,
-  LoadingState, EmptyState, ErrorState, Modal, Table, THead, Th, Tr, Td,
+  LoadingState, EmptyState, ErrorState, Modal, Table, THead, Th, Tr, Td, ConfirmImpactDialog, ImpactBox,
 } from '../components/ui'
+import { countByType, vehicleCoverage, biggestGaps, positionsByType, wheelCheck } from './vehicleDesigner/coverage'
 import { sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
 import ExportButtons from './shared/ExportButtons'
-import { PageHeader, useUrlTab, usePaged, Pager, AttentionList, TabPanel } from './shared/pageKit'
+import { PageHeader, useUrlTab, usePaged, Pager, AttentionList, TabPanel, fmtRelative } from './shared/pageKit'
+import { namesFor } from '../../lib/api/consolePlatform'
 
 const CUSTOM_TYPE = '__custom__'
 
@@ -64,8 +66,10 @@ const DESIGN_EXPORT = [
 ]
 const COVERAGE_EXPORT = [
   { key: 'vehicle_type', header: 'Vehicle type' },
+  { key: 'vehicles', header: 'Vehicles' },
   { key: 'state', header: 'Diagram' },
   { key: 'tyres', header: 'Tyres' },
+  { key: 'seen', header: 'Positions in tyre records' },
 ]
 /** What makes a draft different from what was loaded: used for the unsaved guard. */
 function snap(d) {
@@ -112,6 +116,11 @@ export default function ConsoleVehicleDesigner({ tabParam = 'tab' } = {}) {
   const [loading, setLoading] = useState(true)
   const [listError, setListError] = useState('')
   const [fleetTypes, setFleetTypes] = useState([])
+  const [fleetCounts, setFleetCounts] = useState({})
+  const [seen, setSeen] = useState({ state: 'idle', map: {} })
+  const [offTarget, setOffTarget] = useState(null)
+  const [bulkReason, setBulkReason] = useState('')
+  const [authors, setAuthors] = useState({})
   const [fleetState, setFleetState] = useState('loading') // loading | ok | error
   const [readAt, setReadAt] = useState(null)
   const [tab, setTab] = useUrlTab(TABS, 'designer', tabParam)
@@ -142,6 +151,7 @@ export default function ConsoleVehicleDesigner({ tabParam = 'tab' } = {}) {
     try {
       const data = await listVehicleDiagramConfigs()
       setRows(data)
+      namesFor((data || []).map((r) => r.created_by)).then(setAuthors).catch(() => setAuthors({}))
       setReadAt(Date.now())
     } catch (e) {
       setListError(toUserMessage(e))
@@ -174,12 +184,9 @@ export default function ConsoleVehicleDesigner({ tabParam = 'tab' } = {}) {
         )
         if (!isAlive()) return
         if (error) { setFleetState('error'); return }
-        const set = new Set()
-        for (const r of data || []) {
-          const vt = canonVehicleTypeKey(r.vehicle_type)
-          if (vt) set.add(vt)
-        }
-        setFleetTypes([...set].sort())
+        const counts = countByType(data || [], canonVehicleTypeKey)
+        setFleetCounts(counts)
+        setFleetTypes(Object.keys(counts).sort())
         setFleetState('ok')
       } catch {
         // The picker degrades to free text, but coverage must say it could not look.
@@ -307,7 +314,7 @@ export default function ConsoleVehicleDesigner({ tabParam = 'tab' } = {}) {
     }
   }
 
-  async function toggleActive(row) {
+  async function toggleActive(row, reason) {
     setListError('')
     setTogglingId(row.id)
     try {
@@ -318,7 +325,7 @@ export default function ConsoleVehicleDesigner({ tabParam = 'tab' } = {}) {
         active: row.active === false,
       })
       invalidateCustomLayouts()
-      await audit(logAction, 'update_config', null, 'vehicle_diagram', { vehicle_type: row.vehicle_type, active: row.active === false })
+      await audit(logAction, 'update_config', null, 'vehicle_diagram', { vehicle_type: row.vehicle_type, active: row.active === false, reason: reason || null })
       await load()
     } catch (e) {
       setListError(toUserMessage(e))
@@ -327,14 +334,14 @@ export default function ConsoleVehicleDesigner({ tabParam = 'tab' } = {}) {
     }
   }
 
-  async function handleDelete() {
+  async function handleDelete(reason) {
     if (!deleteTarget) return
     setDeleting(true)
     setListError('')
     try {
       await deleteVehicleDiagramConfig(deleteTarget.id)
       invalidateCustomLayouts()
-      await audit(logAction, 'update_config', null, 'vehicle_diagram', { vehicle_type: deleteTarget.vehicle_type, deleted: true })
+      await audit(logAction, 'update_config', null, 'vehicle_diagram', { vehicle_type: deleteTarget.vehicle_type, deleted: true, reason: reason || null })
       if (draft.id === deleteTarget.id) startNew()
       setDeleteTarget(null)
       await load()
@@ -346,6 +353,7 @@ export default function ConsoleVehicleDesigner({ tabParam = 'tab' } = {}) {
   }
 
   function openBulk(row) {
+    setBulkReason('')
     setBulkRow(row)
     setBulkSelected([])
     setBulkError('')
@@ -373,7 +381,7 @@ export default function ConsoleVehicleDesigner({ tabParam = 'tab' } = {}) {
       }
       invalidateCustomLayouts()
       await audit(logAction, 'update_config', null, 'vehicle_diagram', {
-        vehicle_type: bulkRow.vehicle_type, bulk_applied_to: bulkSelected,
+        vehicle_type: bulkRow.vehicle_type, bulk_applied_to: bulkSelected, reason: bulkReason.trim() || null,
       })
       await load()
       setBulkRow(null)
@@ -447,11 +455,39 @@ export default function ConsoleVehicleDesigner({ tabParam = 'tab' } = {}) {
       const r = byType.get(t)
       const inFleet = fleetTypes.includes(t)
       const state = !r ? 'Built-in diagram' : r.active === false ? 'Custom (switched off)' : inFleet ? 'Custom design' : 'Custom, not in fleet'
-      return { vehicle_type: t, state, tyres: r ? positionsFromConfig(r.config).tyres.length : null, row: r || null, inFleet }
+      const tyres = r ? positionsFromConfig(r.config).tyres.length : null
+      const seenN = seen.state === 'ok' ? (seen.map[t] ?? null) : null
+      const check = seen.state === 'ok' ? wheelCheck(tyres, seenN) : { state: 'unknown', text: 'N/A' }
+      return { vehicle_type: t, state, tyres, row: r || null, inFleet, vehicles: fleetCounts[t] ?? 0, seen: seenN ?? 'N/A', check }
     })
-  }, [rows, fleetTypes])
+  }, [rows, fleetTypes, fleetCounts, seen])
+  const designsCanon = useMemo(() => rows.map((r) => ({ vehicle_type: canonVehicleTypeKey(r.vehicle_type), active: r.active !== false })), [rows])
+  const vCover = useMemo(() => vehicleCoverage(fleetCounts, designsCanon), [fleetCounts, designsCanon])
+  const gaps = useMemo(() => biggestGaps(fleetCounts, designsCanon, 5), [fleetCounts, designsCanon])
+
+  // On demand: distinct tyre positions recorded per vehicle type, to check
+  // each design has a slot for every wheel the fleet actually reports.
+  async function checkWheels() {
+    setSeen({ state: 'loading', map: {} })
+    try {
+      const { data, error } = await fetchAllPages(
+        (from, to) => supabase.from('tyre_records').select('vehicle_type,tyre_position')
+          .not('vehicle_type', 'is', null).not('tyre_position', 'is', null)
+          .order('id').range(from, to),
+        { max: 30000 },
+      )
+      if (error) throw error
+      setSeen({ state: 'ok', map: positionsByType(data || [], canonVehicleTypeKey) })
+    } catch {
+      setSeen({ state: 'error', map: {} })
+    }
+  }
   const orphanDesigns = coverageRows.filter((c) => c.row && !c.inFleet && fleetState === 'ok')
-  const { sort: covSort, onSort: onCovSort } = useTableSort({ key: 'vehicle_type', dir: 'asc' })
+  const { sort: covSort, onSort: onCovSort } = useTableSort({ key: 'vehicles', dir: 'desc' })
+  // The positions are in the database, so read them as soon as coverage opens.
+  useEffect(() => {
+    if (tab === 'coverage' && fleetState === 'ok' && seen.state === 'idle') checkWheels()
+  }, [tab, fleetState, seen.state])
   const coverageShown = useMemo(() => {
     const byFilter = coverageRows.filter((c) => (
       covFilter === 'missing' ? !c.row : covFilter === 'custom' ? !!c.row : covFilter === 'orphan' ? (c.row && !c.inFleet) : true))
@@ -486,7 +522,7 @@ export default function ConsoleVehicleDesigner({ tabParam = 'tab' } = {}) {
 
       <ErrorState message={listError} onRetry={load} />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
         <StatTile label="Saved designs" value={loading || listError ? 'N/A' : rows.length}
           onClick={() => setTab('designer')} active={tab === 'designer'} />
         <StatTile label="Active" value={loading || listError ? 'N/A' : activeCount} tone="good"
@@ -496,6 +532,11 @@ export default function ConsoleVehicleDesigner({ tabParam = 'tab' } = {}) {
         <StatTile label="Types with no design" value={fleetState === 'ok' ? missingTypes.length : 'N/A'}
           tone={fleetState === 'ok' && missingTypes.length ? 'warning' : 'good'} sub="Use the built-in diagram"
           onClick={() => { setCovFilter('missing'); setTab('coverage') }} active={tab === 'coverage' && covFilter === 'missing'} />
+        <StatTile icon={Gauge} label="Vehicles on a custom design"
+          value={fleetState === 'ok' && !loading && !listError ? (vCover.pct == null ? 'N/A' : `${vCover.pct}%`) : 'N/A'}
+          sub={fleetState === 'ok' && !loading && !listError ? `${vCover.covered.toLocaleString('en-US')} of ${vCover.total.toLocaleString('en-US')} vehicles` : 'Needs the asset register'}
+          tone={vCover.pct != null && vCover.pct < 50 ? 'warning' : 'default'}
+          onClick={() => setTab('coverage')} />
       </div>
 
       {!listError && <AttentionList items={attention} clear={loading ? 'Checking...' : 'Every fleet vehicle type has an active custom design.'} />}
@@ -528,6 +569,10 @@ export default function ConsoleVehicleDesigner({ tabParam = 'tab' } = {}) {
                     { value: 'custom', label: 'Has a custom design' },
                     { value: 'orphan', label: 'Designed, not in fleet' },
                   ]} />
+                  <Btn icon={Search} onClick={checkWheels} busy={seen.state === 'loading'} disabled={fleetState !== 'ok'}
+                    title="Read the tyre positions recorded for each vehicle type and compare with the design">
+                    {seen.state === 'ok' ? 'Re-check wheel counts' : 'Check wheel counts'}
+                  </Btn>
                   <ExportButtons rows={coverageShown} columns={COVERAGE_EXPORT} title="Vehicle Diagram Coverage" disabled={fleetState !== 'ok'} />
                 </Toolbar>
               )}
@@ -549,16 +594,25 @@ export default function ConsoleVehicleDesigner({ tabParam = 'tab' } = {}) {
                 <Table>
                   <THead>
                     <Th sortKey="vehicle_type" sort={covSort} onSort={onCovSort}>Vehicle type</Th>
+                    <Th align="right" sortKey="vehicles" sort={covSort} onSort={onCovSort}>Vehicles</Th>
                     <Th sortKey="state" sort={covSort} onSort={onCovSort}>Diagram</Th>
                     <Th align="right" sortKey="tyres" sort={covSort} onSort={onCovSort}>Tyres</Th>
+                    <Th>Wheel check</Th>
                     <Th align="right">Action</Th>
                   </THead>
                   <tbody>
                     {covPaged.rows.map((c) => (
                       <Tr key={c.vehicle_type}>
                         <Td><span className="text-gray-200 font-medium">{c.vehicle_type}</span></Td>
+                        <Td align="right" className="tabular-nums">{c.vehicles.toLocaleString('en-US')}</Td>
                         <Td><Badge tone={!c.row ? 'quiet' : c.row.active === false ? 'warning' : c.inFleet ? 'good' : 'warning'}>{c.state}</Badge></Td>
                         <Td align="right">{c.tyres ?? 'Built-in'}</Td>
+                        <Td>
+                          {seen.state === 'ok'
+                            ? <Badge tone={c.check.state === 'short' ? 'warning' : c.check.state === 'ok' ? 'good' : 'quiet'}
+                                title={typeof c.seen === 'number' ? `${c.seen} distinct positions in tyre records` : 'No tyre records for this type'}>{c.check.text}</Badge>
+                            : <span className="text-gray-500 text-[11px]">{seen.state === 'error' ? 'Could not read' : 'Not checked'}</span>}
+                        </Td>
                         <Td align="right">
                           {c.row
                             ? <Btn size="xs" icon={Pencil} onClick={() => guard(() => { startEdit(c.row); setTab('designer') })}>Edit</Btn>
@@ -577,6 +631,20 @@ export default function ConsoleVehicleDesigner({ tabParam = 'tab' } = {}) {
 
       {tab === 'designer' && (
       <TabPanel label="Designer">
+      {fleetState === 'ok' && !loading && !listError && gaps.length > 0 && (
+        <Panel className="mb-4">
+          <PanelHeader icon={Layers} title="Biggest gaps first"
+            subtitle="Fleet vehicle types with no custom design, most vehicles first. Their inspections use the built-in diagram." />
+          <div className="flex flex-wrap gap-2">
+            {gaps.map((g) => (
+              <Btn key={g.vehicle_type} size="xs" icon={Plus}
+                onClick={() => guard(() => startNew(g.vehicle_type))}>
+                {g.vehicle_type} ({g.vehicles.toLocaleString('en-US')} vehicles)
+              </Btn>
+            ))}
+          </div>
+        </Panel>
+      )}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 items-start">
         {/* ── Saved designs ─────────────────────────────────────────────────── */}
         <Panel>
@@ -617,7 +685,11 @@ export default function ConsoleVehicleDesigner({ tabParam = 'tab' } = {}) {
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-semibold text-gray-100 truncate">{row.vehicle_type}</p>
                           <p className="text-xs text-gray-500 truncate">
-                            {row.label ? `${row.label} | ` : ''}{count} tyres
+                            {row.label ? `${row.label} | ` : ''}{count} tyres | {(fleetCounts[canonVehicleTypeKey(row.vehicle_type)] ?? 0).toLocaleString('en-US')} vehicles
+                          </p>
+                          <p className="text-[11px] text-gray-500 truncate">
+                            {row.updated_at ? `Updated ${fmtRelative(row.updated_at)}` : 'Update time not stored'}
+                            {row.created_by ? ` | created by ${authors[row.created_by] || 'unknown person'}` : ''}
                           </p>
                         </div>
                         {editing && <Badge tone="accent" icon={Pencil}>Editing</Badge>}
@@ -629,11 +701,11 @@ export default function ConsoleVehicleDesigner({ tabParam = 'tab' } = {}) {
                           title="Copy this design into a new draft for another vehicle type">Duplicate</Btn>
                         <Btn size="xs" icon={Layers} onClick={() => openBulk(row)}
                           title="Save a copy of this design for several vehicle types">Apply to more types</Btn>
-                        <Btn size="xs" icon={Power} onClick={() => toggleActive(row)} busy={togglingId === row.id}>
+                        <Btn size="xs" icon={Power} onClick={() => (isActive ? setOffTarget(row) : toggleActive(row))} busy={togglingId === row.id}>
                           {isActive ? 'Deactivate' : 'Activate'}
                         </Btn>
                         <span className="ml-auto">
-                          <Btn size="xs" variant="quiet" icon={Trash2} onClick={() => setDeleteTarget(row)}
+                          <Btn size="xs" variant="danger" icon={Trash2} onClick={() => setDeleteTarget(row)}
                             title="Delete this design">Delete</Btn>
                         </span>
                       </div>
@@ -867,8 +939,8 @@ export default function ConsoleVehicleDesigner({ tabParam = 'tab' } = {}) {
               )}
             </div>
 
-            {/* Live preview */}
-            <div className="space-y-2">
+            {/* Live preview (pinned while the controls scroll) */}
+            <div className="space-y-2 lg:sticky lg:top-4 self-start">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Live preview</p>
                 <div className="flex items-center gap-2">
@@ -922,25 +994,27 @@ export default function ConsoleVehicleDesigner({ tabParam = 'tab' } = {}) {
       </Modal>
 
       {/* Delete confirm */}
-      <Modal
-        open={!!deleteTarget}
-        title="Delete this design?"
-        onClose={() => { if (!deleting) setDeleteTarget(null) }}
-        width="max-w-sm"
-        footer={(
-          <>
-            <Btn onClick={() => setDeleteTarget(null)} disabled={deleting}>Cancel</Btn>
-            <Btn variant="danger" icon={Trash2} onClick={handleDelete} busy={deleting}>Delete</Btn>
-          </>
-        )}
-      >
-        {deleteTarget && (
-          <Note icon={AlertTriangle} tone="danger">
-            The custom diagram for <span className="font-semibold">{deleteTarget.vehicle_type}</span> will
-            be removed and the app falls back to its built-in layout for that type.
-          </Note>
-        )}
-      </Modal>
+      <ConfirmImpactDialog open={!!deleteTarget} danger requireReason typedWord={deleteTarget ? canonVehicleTypeKey(deleteTarget.vehicle_type) : undefined}
+        busy={deleting} title="Delete this design?" confirmLabel="Delete design"
+        onCancel={() => setDeleteTarget(null)} onConfirm={({ reason }) => handleDelete(reason)}
+        impact={deleteTarget ? {
+          tone: 'danger',
+          what: `The custom diagram for ${deleteTarget.vehicle_type} is deleted.`,
+          change: 'Inspections and tyre diagrams for this type fall back to the built-in layout.',
+          who: `${(fleetCounts[canonVehicleTypeKey(deleteTarget.vehicle_type)] ?? 0).toLocaleString('en-US')} vehicles of this type, on the web app and in reports.`,
+          undo: 'No. Export the designs first if you may need it again; a deleted design must be rebuilt.',
+        } : null} />
+
+      <ConfirmImpactDialog open={!!offTarget} requireReason busy={togglingId != null}
+        title="Switch this design off?" confirmLabel="Switch off"
+        onCancel={() => setOffTarget(null)} onConfirm={async ({ reason }) => { const r = offTarget; setOffTarget(null); await toggleActive(r, reason) }}
+        impact={offTarget ? {
+          tone: 'warning',
+          what: `The design for ${offTarget.vehicle_type} stays saved but the app stops using it.`,
+          change: 'Diagrams for this type use the built-in layout until it is switched back on.',
+          who: `${(fleetCounts[canonVehicleTypeKey(offTarget.vehicle_type)] ?? 0).toLocaleString('en-US')} vehicles of this type.`,
+          undo: 'Yes. Activate it again from the saved designs list.',
+        } : null} />
 
       {/* Bulk assign */}
       <Modal
@@ -955,13 +1029,29 @@ export default function ConsoleVehicleDesigner({ tabParam = 'tab' } = {}) {
               <span className="text-[11px] text-gray-500 mr-auto self-center">Saving {bulkDone} of {bulkSelected.length}...</span>
             )}
             <Btn onClick={() => setBulkRow(null)} disabled={bulkSaving}>Cancel</Btn>
-            <Btn variant="primary" icon={Save} onClick={handleBulkApply} busy={bulkSaving} disabled={bulkSelected.length === 0}>
+            <Btn variant="primary" icon={Save} onClick={handleBulkApply} busy={bulkSaving}
+              disabled={bulkSelected.length === 0 || (bulkSelected.some((vt) => savedTypeSet.has(vt)) && bulkReason.trim().length < 3)}>
               {`Apply to ${bulkSelected.length || 'selected'} ${bulkSelected.length === 1 ? 'type' : 'types'}`}
             </Btn>
           </>
         )}
       >
         <div className="space-y-3">
+          {bulkSelected.length > 0 && (
+            <ImpactBox tone={bulkSelected.some((vt) => savedTypeSet.has(vt)) ? 'warning' : 'info'}
+              what={`${bulkSelected.length} ${bulkSelected.length === 1 ? 'type gets' : 'types get'} this design.`}
+              change={`${bulkSelected.filter((vt) => savedTypeSet.has(vt)).length} existing ${bulkSelected.filter((vt) => savedTypeSet.has(vt)).length === 1 ? 'design is' : 'designs are'} replaced.`}
+              who={`${bulkSelected.reduce((n, vt) => n + (fleetCounts[vt] || 0), 0).toLocaleString('en-US')} vehicles in the asset register.`}
+              undo="A replaced design is not kept. Export the designs first if you may need them." />
+          )}
+          {bulkSelected.some((vt) => savedTypeSet.has(vt)) && (
+            <label className="block">
+              <span className="block text-[11px] font-semibold text-gray-400 mb-1">Reason (required when replacing a design)</span>
+              <input value={bulkReason} onChange={(e) => setBulkReason(e.target.value)} maxLength={500} aria-label="Reason for replacing designs"
+                className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+                placeholder="Why are you replacing these designs?" />
+            </label>
+          )}
           {bulkOptions.length === 0 ? (
             <EmptyState title="No other vehicle types" reason="No other vehicle types were found in the fleet or among saved designs." />
           ) : (
@@ -981,6 +1071,7 @@ export default function ConsoleVehicleDesigner({ tabParam = 'tab' } = {}) {
                       onChange={() => toggleBulkType(vt)} disabled={bulkSaving}
                       className="accent-orange-500" />
                     <span className="truncate">{vt}</span>
+                    <span className="text-[10px] text-gray-500 tabular-nums">{fleetCounts[vt] ?? 0}</span>
                     {savedTypeSet.has(vt) && <Badge tone="warning" title="This type already has a design; applying replaces it">replaces</Badge>}
                   </label>
                 ))}

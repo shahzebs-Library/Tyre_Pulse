@@ -29,6 +29,7 @@ export const PUBLIC_CONFIG_KEYS = Object.freeze([
   'maintenance_mode', 'maintenance_message', 'registration_open', 'allow_signups',
   'require_approval', 'app_version', 'session_timeout_hours', 'two_factor_required',
   'password_min_length', 'default_currency', 'mobile_login_hero',
+  'auth_google_enabled', 'auth_microsoft_enabled', 'qr_login_enabled',
 ])
 
 /** App defaults — the effective value when a key is unset/unreadable. Enforcement
@@ -63,6 +64,11 @@ export const CONFIG_DEFAULTS = Object.freeze({
   // Console > Access Control > New and not yet shared. Off keeps the built-in
   // role defaults (Manager and Director see new areas).
   new_features_admin_only: false,
+  // Optional sign-in methods. Off until the owner sets each one up, so the
+  // login pages never show a button that cannot work.
+  auth_google_enabled: false,
+  auth_microsoft_enabled: false,
+  qr_login_enabled: false,
 })
 
 /** system_config key for the app-shell rollout flag. */
@@ -308,6 +314,9 @@ export const ENFORCEMENT_STATUS = Object.freeze({
   push_notifications:    { status: 'active', where: 'workflow-notify edge push channel (skips when off)' },
   max_login_attempts:    { status: 'active', where: 'Account lockout on repeated failed logins (login guard, V287)' },
   new_features_admin_only: { status: 'active', where: 'Web permission resolver (AuthContext hasPermission): areas with no saved role rule are Admin only' },
+  auth_google_enabled:   { status: 'active', where: 'Login pages (/login and /console/login): shows the Google sign-in button' },
+  auth_microsoft_enabled: { status: 'active', where: 'Login pages (/login and /console/login): shows the Microsoft sign-in button' },
+  qr_login_enabled:      { status: 'active', where: 'Login page (/login): shows Scan to sign in with the Flutter app' },
   new_shell:             { status: 'active', where: 'App shell picker in App.jsx (on = Layout, off = LegacyLayout fallback); applies on the next page load' },
   // Honestly still SAVED ONLY (stored; not yet enforced) - never claimed active:
   ai_model:              { status: 'saved', where: 'Model is locked server-side for safety; this value is not used' },

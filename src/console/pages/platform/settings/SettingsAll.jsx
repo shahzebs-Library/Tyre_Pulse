@@ -21,7 +21,8 @@ import {
 import {
   listConfigRows, listConfigHistory, listConsoleConfigSaves, setConfigWithReason, namesFor, countVehicleDesigns, getSentryStatusSafe,
 } from '../../../../lib/api/consolePlatform'
-import { ENFORCEMENT_STATUS } from '../../../../lib/api/systemConfig'
+import { ENFORCEMENT_STATUS, CONFIG_DEFAULTS, parseConfigValue } from '../../../../lib/api/systemConfig'
+import { defaultsDiff, defaultLabel } from '../../../../lib/consoleDataGaps'
 import { exportConsoleRows } from '../../../../lib/consoleTable'
 import { toUserMessage } from '../../../../lib/safeError'
 import { Pill, DecisionTag, MovedHere, fmtNum } from '../PlatformKit'
@@ -50,6 +51,8 @@ function impactFor(item, cur, next) {
   if (item.key === 'maintenance_mode' && isOn(next)) return { ...base, tone: 'danger', who: 'Every non-admin account on web and phone is blocked at once.' }
   if (item.key === 'export_enabled' && !isOn(next)) return { ...base, tone: 'danger', who: 'Every Excel and PDF download stops working for everyone.' }
   if (item.key === 'registration_open' && !isOn(next)) return { ...base, tone: 'warning', who: 'New people can no longer sign up. Existing accounts are not affected.' }
+  if ((item.key === 'auth_google_enabled' || item.key === 'auth_microsoft_enabled') && isOn(next)) return { ...base, tone: 'warning', who: 'Everyone on the web sign-in and console sign-in pages sees the button. It fails until the provider is set up in Supabase Auth.' }
+  if (item.key === 'qr_login_enabled' && isOn(next)) return { ...base, tone: 'warning', who: 'Everyone on the web sign-in page sees the QR code. It only works for phones running a Flutter build with Scan to sign in.' }
   if (item.key === 'session_timeout_hours') return { ...base, tone: 'warning', who: 'Web app users only. Phones and the console (10-minute idle) are not changed.' }
   return { ...base, who: 'Every organization on the platform.' }
 }
@@ -98,6 +101,8 @@ export default function SettingsAll({ onTab }) {
 
   const { loading, rows = [], rowsError, history, saves, designs, sentry, names = {} } = state
   const byKey = useMemo(() => Object.fromEntries(rows.map((r) => [r.key, r])), [rows])
+  const defDiff = useMemo(() => defaultsDiff(rows, CONFIG_DEFAULTS, parseConfigValue), [rows])
+  const changedDefault = useMemo(() => new Set(defDiff?.changedKeys || []), [defDiff])
   const now = Date.now()
   const kpis = useMemo(() => settingsKpis(rows, { now }), [rows]) // eslint-disable-line react-hooks/exhaustive-deps
   const histByKey = useMemo(() => {
@@ -210,7 +215,7 @@ export default function SettingsAll({ onTab }) {
           <div className="border-t border-gray-800 pt-2 space-y-1">
             {groups.map((g) => <a key={g.key} href={`#set-${g.key}`} className="block px-2.5 py-1 text-[11px] text-gray-500 hover:text-gray-300">{g.label} <span className="text-gray-600">{g.items.length}</span></a>)}
           </div>
-          <p className="text-[11px] text-gray-500">Changed from default: N/A. A stored default per setting is not recorded yet.</p>
+          <p className="text-[11px] text-gray-500">{defDiff ? `Changed from the app default: ${fmtNum(defDiff.changed)} of ${fmtNum(defDiff.withDefault)} settings that have one. The others have no built-in default, so there is nothing to compare.` : 'Changed from default: N/A (settings could not be read).'}</p>
         </aside>
 
         <div className="space-y-4 min-w-0">
@@ -233,6 +238,7 @@ export default function SettingsAll({ onTab }) {
                           {item.stale && <Pill tone="muted">Stale</Pill>}
                           {saved && <Pill tone="info" title={ENFORCEMENT_STATUS[item.key]?.where}>Not enforced</Pill>}
                           {item.decision && <DecisionTag />}
+                          {changedDefault.has(item.key) && <Pill tone="accent" title={`App default: ${defaultLabel(CONFIG_DEFAULTS[item.key])}`}>Changed from default</Pill>}
                         </p>
                         <p className="text-[11px] text-gray-500">{item.help}{item.key === '__vehicle_designs' ? `. ${designs == null ? 'N/A' : designs} designs saved` : ''}</p>
                         <p className="text-[11px] text-gray-600 font-mono">{item.key.startsWith('__') ? 'vehicle_diagram_configs' : item.key}</p>

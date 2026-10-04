@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { Palette, Save, RotateCcw, CheckCircle2, Sparkles, Image as ImageIcon, Trash2, Layers } from 'lucide-react'
+import { Palette, Save, RotateCcw, CheckCircle2, Sparkles, Image as ImageIcon, Trash2, Layers, Upload, Wand2, FileText } from 'lucide-react'
 import {
   Chart as ChartJS, ArcElement, BarElement, CategoryScale, LinearScale, Tooltip,
 } from 'chart.js'
@@ -14,10 +14,13 @@ import { safeImageSrc } from '../../lib/safeUrl'
 import { toUserMessage } from '../../lib/safeError'
 import {
   Note, Badge, Code, Btn, LoadingState, ErrorState,
-  Modal, StatTile,
+  StatTile, ConfirmImpactDialog, Panel, PanelHeader,
 } from '../components/ui'
-import { PageHeader, useUrlTab, AttentionList, Collapsible } from './shared/pageKit'
-import { auditPalette, isLightBackground, contrastRatio } from './appearance/paletteCheck'
+import { PageHeader, useUrlTab, AttentionList, Collapsible, fmtRelative } from './shared/pageKit'
+import { auditPalette, isLightBackground, contrastRatio, darkenToContrast, fixPalette, colourName } from './appearance/paletteCheck'
+import { prepareLogo, LOGO_TYPES } from './appearance/logoUpload'
+import { listConfigHistory, namesFor } from '../../lib/api/consolePlatform'
+import { fetchConfigStamps } from './config/configStamps'
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip)
 
@@ -32,7 +35,8 @@ const DOUGHNUT_PREVIEW = { responsive: true, maintainAspectRatio: false, cutout:
 
 const SECTIONS = ['theme', 'logo', 'diagram', 'none']
 
-const FIELD_LABEL = 'block text-[11px] font-semibold uppercase tracking-wider text-gray-500 mb-1'
+const FIELD_LABEL = 'block text-xs font-semibold text-gray-400 mb-1'
+const TRACKED_KEYS = ['report_palette', 'company_logo', 'report_diagram_bg']
 
 /** Readable ink over a #rrggbb swatch. Falls back to light ink on anything unparseable. */
 function inkOver(hex) {
@@ -84,7 +88,56 @@ export default function ConsoleReportAppearance({ sectionParam = 'section' } = {
   const [diagBgStored, setDiagBgStored] = useState(DEFAULT_DIAGRAM_BG)
   const [readAt, setReadAt] = useState(null)
   const [section, setSection] = useUrlTab(SECTIONS, 'theme', sectionParam)
+  const [history, setHistory] = useState({ state: 'loading', latest: {}, names: {} })
+  const [stamps, setStamps] = useState({ map: {}, names: {} })
+  const [logoInfo, setLogoInfo] = useState(null) // last prepared upload { width, height, bytes, tooLight }
+  const [uploading, setUploading] = useState(false)
 
+  // Last change of each appearance setting (system_config_history, super admin).
+  const loadHistory = useCallback(async () => {
+    try {
+      const rows = await listConfigHistory({ limit: 300 })
+      const latest = {}
+      for (const r of rows || []) if (TRACKED_KEYS.includes(r.key) && !latest[r.key]) latest[r.key] = r
+      const names = await namesFor(Object.values(latest).map((r) => r.changed_by)).catch(() => ({}))
+      setHistory({ state: 'ok', latest, names })
+    } catch {
+      setHistory({ state: 'error', latest: {}, names: {} })
+    }
+  }, [])
+  useEffect(() => { loadHistory() }, [loadHistory])
+  useEffect(() => {
+    let alive = true
+    Promise.resolve().then(() => fetchConfigStamps(TRACKED_KEYS)).then(async (map) => {
+      const names = await namesFor(Object.values(map).map((x) => x.updated_by)).catch(() => ({}))
+      if (alive) setStamps({ map, names })
+    }).catch(() => { /* fallback only */ })
+    return () => { alive = false }
+  }, [history])
+  const lastText = (key) => {
+    const r = history.latest[key]
+    if (r) return `Last changed ${fmtRelative(r.changed_at)} by ${history.names[r.changed_by] || (r.changed_by ? 'unknown person' : 'system')}`
+    const st = stamps.map[key]
+    if (st?.updated_at) return `Last written ${fmtRelative(st.updated_at)}${st.updated_by ? ` by ${stamps.names[st.updated_by] || 'unknown person'}` : ' (person not recorded before 30 Sep 2026)'}`
+    if (history.state === 'loading') return ''
+    return 'Never saved: the built-in default is in use'
+  }
+
+  async function onLogoFile(e) {
+    const file = e.target.files && e.target.files[0]
+    e.target.value = ''
+    if (!file) return
+    setUploading(true); setLogoError(''); setLogoSaved(false)
+    try {
+      const out = await prepareLogo(file)
+      setLogoInput(out.dataUrl)
+      setLogoInfo(out)
+    } catch (err) {
+      setLogoError(toUserMessage(err, 'The image could not be used.'))
+    } finally {
+      setUploading(false)
+    }
+  }
   const load = useCallback(async () => {
     setLoading(true); setSaved(false); setError(''); setLoadError('')
     try {
@@ -137,8 +190,9 @@ export default function ConsoleReportAppearance({ sectionParam = 'section' } = {
       await setCompanyLogo(logoInput)
       const next = logoInput.trim()
       setLogoUrl(next); setLogoInput(next)
-      await audit(logAction, 'update_config', null, 'company_logo', { set: next !== '' })
+      await audit(logAction, 'update_config', null, 'company_logo', { set: next !== '', uploaded: next.startsWith('data:') })
       setLogoSaved(true)
+      loadHistory()
     } catch (e) {
       setLogoError(toUserMessage(e))
     } finally {
@@ -154,6 +208,7 @@ export default function ConsoleReportAppearance({ sectionParam = 'section' } = {
       setDiagBgStored(value || DEFAULT_DIAGRAM_BG)
       await audit(logAction, 'update_config', null, 'report_diagram_bg', { value: value || 'default' })
       setDiagBgSaved(true)
+      loadHistory()
     } catch (e) {
       setDiagBgError(toUserMessage(e))
     } finally {
@@ -161,14 +216,15 @@ export default function ConsoleReportAppearance({ sectionParam = 'section' } = {
     }
   }
 
-  async function clearLogo() {
+  async function clearLogo(reason) {
     setConfirmClearLogo(false)
     setLogoSaving(true); setLogoError(''); setLogoSaved(false)
     try {
       await setCompanyLogo('')
-      setLogoUrl(''); setLogoInput('')
-      await audit(logAction, 'update_config', null, 'company_logo', { set: false })
+      setLogoUrl(''); setLogoInput(''); setLogoInfo(null)
+      await audit(logAction, 'update_config', null, 'company_logo', { set: false, reason: reason || null })
       setLogoSaved(true)
+      loadHistory()
     } catch (e) {
       setLogoError(toUserMessage(e))
     } finally {
@@ -215,6 +271,7 @@ export default function ConsoleReportAppearance({ sectionParam = 'section' } = {
       setSavedSel(sel)
       await audit(logAction, 'update_config', null, 'report_palette', { theme: isCustom ? 'custom' : sel })
       setSaved(true)
+      loadHistory()
     } catch (e) {
       setError(toUserMessage(e, 'Could not save the palette.'))
     } finally {
@@ -236,6 +293,11 @@ export default function ConsoleReportAppearance({ sectionParam = 'section' } = {
   useEffect(() => { if (!loading && !logoLoading && !readAt) setReadAt(Date.now()) }, [loading, logoLoading, readAt])
 
   const paletteAudit = useMemo(() => auditPalette(activeColors), [activeColors])
+  function useDarkerColours() {
+    const fixed = fixPalette(activeColors)
+    setCustom(fixed); setSel(fixed); setSaved(false)
+  }
+  const logoIsUpload = logoInput.trim().startsWith('data:')
   const diagDirty = diagBg !== diagBgStored
   const diagLight = isLightBackground(diagBg)
   const openSection = (key) => setSection(key)
@@ -287,11 +349,40 @@ export default function ConsoleReportAppearance({ sectionParam = 'section' } = {
 
       <AttentionList items={attention} clear="The theme, logo and diagram colour are all set and readable." />
 
+      <Panel>
+        <PanelHeader icon={FileText} title="Report page preview"
+          subtitle="How a shared report page looks with the selected theme, logo and diagram colour together. Nothing is saved from here." />
+        <div className="rounded-xl border border-gray-800 p-4 space-y-3" style={{ background: '#ffffff', color: '#1f2937' }}>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3 min-w-0">
+              {logoPreview
+                ? <img src={logoPreview} alt="Company logo on the sample report" style={{ maxHeight: 36, maxWidth: 160, objectFit: 'contain' }} />
+                : <span className="text-[11px] px-2 py-1 rounded border" style={{ borderColor: '#d1d5db', color: '#6b7280' }}>No logo</span>}
+              <div className="min-w-0">
+                <p className="text-sm font-semibold" style={{ color: '#111827' }}>Board Overview</p>
+                <p className="text-[11px]" style={{ color: '#6b7280' }}>Sample page, sample numbers</p>
+              </div>
+            </div>
+            <span className="text-[11px]" style={{ color: '#6b7280' }}>Theme: {themeName}</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div style={{ height: 110 }} className="sm:col-span-2"><Bar data={barData} options={PREVIEW_OPTS} /></div>
+            <div style={{ height: 110 }}><Doughnut data={doughnutData} options={DOUGHNUT_PREVIEW} /></div>
+          </div>
+          <div className="rounded-lg px-3 py-2 flex items-center gap-2 flex-wrap" style={{ background: diagBg }}>
+            {[0, 1, 2, 3].map((i) => (
+              <span key={i} className="inline-block rounded-sm" style={{ width: 14, height: 26, background: '#4b5563', border: `2px solid ${inkOver(diagBg)}` }} />
+            ))}
+            <span className="text-[11px] font-semibold" style={{ color: inkOver(diagBg) }}>Diagram background sample</span>
+          </div>
+        </div>
+      </Panel>
+
       {/* ── Colour theme ─────────────────────────────────────────────────── */}
       <Collapsible
         icon={Layers}
         title="Chart colour theme"
-        subtitle={loading ? 'Loading current theme' : `Selected: ${themeName}`}
+        subtitle={loading ? 'Loading current theme' : `Selected: ${themeName}. ${lastText('report_palette')}`}
         open={section === 'theme'}
         onToggle={toggle('theme')}
         actions={(
@@ -369,8 +460,32 @@ export default function ConsoleReportAppearance({ sectionParam = 'section' } = {
                     <p className="text-[11px] text-gray-500 mt-2">The ratio under each colour is its contrast on a white page. Aim for 3:1 or more.</p>
                   </div>
                 )}
-              </div>
 
+                {paletteAudit.weak.length > 0 && (
+                  <div className="rounded-xl border border-amber-800/40 bg-amber-950/20 p-3 space-y-2">
+                    <p className="text-xs font-semibold text-amber-200">
+                      {paletteAudit.weak.length} pale {paletteAudit.weak.length === 1 ? 'colour' : 'colours'} on a white page
+                    </p>
+                    <ul className="space-y-1">
+                      {paletteAudit.weak.map((w) => {
+                        const fix = darkenToContrast(w.hex)
+                        return (
+                          <li key={`${w.index}-${w.hex}`} className="flex flex-wrap items-center gap-2 text-[11px] text-gray-300">
+                            <span className="w-4 h-4 rounded-sm border border-gray-700" style={{ background: w.hex }} aria-hidden="true" />
+                            <span>Colour {w.index + 1}, {colourName(w.hex)} ({w.ratio.toFixed(1)}:1)</span>
+                            <span className="text-gray-500">suggest</span>
+                            <span className="w-4 h-4 rounded-sm border border-gray-700" style={{ background: fix }} aria-hidden="true" />
+                            <Code>{fix}</Code>
+                            <span className="text-gray-500">({contrastRatio(fix, '#ffffff')?.toFixed(1)}:1)</span>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                    <p className="text-[11px] text-gray-400">Who is affected: everyone who reads a chart in a report or PDF. Pale bars and slices are hard to see when printed.</p>
+                    <Btn size="xs" icon={Wand2} onClick={useDarkerColours}>Use the darker colours</Btn>
+                  </div>
+                )}
+              </div>
               {/* Live preview (deliberately white: this is how a printed report looks) */}
               <div className="space-y-2">
                 <p className={FIELD_LABEL}>Live preview</p>
@@ -389,7 +504,7 @@ export default function ConsoleReportAppearance({ sectionParam = 'section' } = {
       <Collapsible
         icon={ImageIcon}
         title="Company logo"
-        subtitle="Shows on every shared TV report and public report link."
+        subtitle={`Shows on every shared TV report and public report link. ${lastText('company_logo')}`}
         open={section === 'logo'}
         onToggle={toggle('logo')}
         actions={(
@@ -415,8 +530,26 @@ export default function ConsoleReportAppearance({ sectionParam = 'section' } = {
             <LoadingState label="Loading current logo" rows={2} />
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
-              <div className="lg:col-span-2">
-                <label htmlFor="company-logo-url" className={FIELD_LABEL}>Logo image URL</label>
+              <div className="lg:col-span-2 space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-800 text-xs text-gray-200 cursor-pointer hover:bg-gray-800/60 focus-within:ring-2 focus-within:ring-orange-500 ${uploading ? 'opacity-60' : ''}`}>
+                    <Upload size={13} aria-hidden="true" />
+                    {uploading ? 'Preparing image...' : 'Upload a logo'}
+                    <input type="file" accept={LOGO_TYPES.join(',')} onChange={onLogoFile} disabled={uploading || logoSaving}
+                      className="sr-only" aria-label="Upload a logo image" />
+                  </label>
+                  <span className="text-[11px] text-gray-500">PNG, JPEG or WebP up to 3 MB. Resized to fit 480 by 160 and stored as a small PNG.</span>
+                </div>
+                {logoIsUpload && (
+                  <Note icon={ImageIcon} tone={logoInfo?.tooLight ? 'warning' : 'default'}>
+                    Uploaded image{logoInfo ? `, ${logoInfo.width} by ${logoInfo.height}, ${Math.round(logoInfo.bytes / 1024)} KB` : ''}.
+                    {logoInfo?.tooLight ? ' It is very light and may disappear on a white report page.' : ''}
+                    {' '}<button type="button" className="underline text-orange-300 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+                      onClick={() => { setLogoInput(''); setLogoInfo(null) }}>Paste a URL instead</button>
+                  </Note>
+                )}
+                {!logoIsUpload && (<>
+                <label htmlFor="company-logo-url" className={FIELD_LABEL}>Or paste a logo image URL</label>
                 <input id="company-logo-url" type="url" inputMode="url" spellCheck={false}
                   value={logoInput} onChange={(e) => { setLogoInput(e.target.value); setLogoSaved(false); setLogoError('') }}
                   placeholder="https://your-company.com/logo.png"
@@ -426,6 +559,8 @@ export default function ConsoleReportAppearance({ sectionParam = 'section' } = {
                   Paste a public image URL (http or https) or a data:image URI. Use a wide, high-contrast mark so it reads on a wall board.
                   {logoInput.trim() && !logoPreview ? ' This address is not a usable image, so it cannot be saved.' : ''}
                 </p>
+                </>)}
+                <p className="text-[11px] text-gray-400">Who is affected: everyone who opens a shared TV board or public report link.</p>
               </div>
 
               <div>
@@ -448,7 +583,7 @@ export default function ConsoleReportAppearance({ sectionParam = 'section' } = {
       {/* ── Inspection diagram background ────────────────────────────────── */}
       <Collapsible
         title="Inspection diagram background"
-        subtitle="The colour behind the tyre map on inspection and checklist reports."
+        subtitle={`The colour behind the tyre map on inspection and checklist reports. ${lastText('report_diagram_bg')}`}
         open={section === 'diagram'}
         onToggle={toggle('diagram')}
         tone={diagLight ? 'warning' : undefined}
@@ -482,17 +617,16 @@ export default function ConsoleReportAppearance({ sectionParam = 'section' } = {
         </div>
       </Collapsible>
 
-      <Modal open={confirmClearLogo} onClose={() => setConfirmClearLogo(false)} width="max-w-md"
-        title="Remove the company logo?"
-        subtitle="Shared TV reports and public report links will show no logo until a new one is saved."
-        footer={(
-          <>
-            <Btn onClick={() => setConfirmClearLogo(false)}>Cancel</Btn>
-            <Btn variant="danger" icon={Trash2} onClick={clearLogo} busy={logoSaving}>Remove logo</Btn>
-          </>
-        )}>
-        <p className="text-sm text-gray-300">This takes effect on every board and link immediately.</p>
-      </Modal>
+      <ConfirmImpactDialog open={confirmClearLogo} danger requireReason busy={logoSaving}
+        title="Remove the company logo?" confirmLabel="Remove logo"
+        onCancel={() => setConfirmClearLogo(false)} onConfirm={({ reason }) => clearLogo(reason)}
+        impact={{
+          tone: 'warning',
+          what: 'The saved company logo is removed.',
+          change: 'Shared TV reports and public report links show no brand mark until a new logo is saved.',
+          who: 'Everyone who opens a shared board or public link, inside and outside the company.',
+          undo: 'Yes. Upload or paste the logo again; the old value is kept in the settings change history.',
+        }} />
     </div>
   )
 }

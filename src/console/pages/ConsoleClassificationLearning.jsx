@@ -14,19 +14,26 @@
  * Layout: header, four KPI tiles (each opens its view), then tabs
  * (?tab=overview|suggestions|weak|rules). Tables are sorted, paged and
  * exportable; the preview stays a modal.
+ *
+ * Control Center round 2 added: the status strip, a required reason on every
+ * accept and reject (stored as the rule's note and in the console audit),
+ * RETIRE for a learned rule and RECONSIDER for a ruled-out word (both through
+ * the existing decide RPC), and a dry-run count before "Apply again".
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  Brain, TrendingUp, TrendingDown, AlertTriangle, Check, X, Eye, Sparkles,
+  Brain, TrendingUp, TrendingDown, AlertTriangle, Check, X, Eye, Sparkles, Archive, RotateCcw,
 } from 'lucide-react'
 import {
   Panel, PanelHeader, Note, StatTile, Badge, Btn, Table, THead, Th, Tr, Td,
-  LoadingState, EmptyState, ErrorState, Modal, Toolbar, Segmented,
+  LoadingState, EmptyState, ErrorState, Modal, Toolbar, Segmented, ConfirmImpactDialog,
 } from '../components/ui'
+import { useConsoleAuth } from '../ConsoleAuthContext'
+import { StatusStrip, ImpactLine } from './dataOps/DataOpsParts'
 import { TrendChart, BarsChart } from '../components/ui/charts'
 import { sortRows, useTableSort } from '../../lib/consoleTable'
 import ExportButtons from './shared/ExportButtons'
-import { PageHeader, useUrlTab, usePaged, Pager, AttentionList } from './shared/pageKit'
+import { PageHeader, useUrlTab, usePaged, Pager, AttentionList, TabBar } from './shared/pageKit'
 import {
   loadLearningOverview, previewLearnedRule, decideRule, applyLearnedRule,
 } from '../../lib/api/classificationLearning'
@@ -83,6 +90,8 @@ export default function ConsoleClassificationLearning({ tabParam = 'tab' } = {})
   const [busy, setBusy] = useState('')
   const [flash, setFlash] = useState(null)
   const [ruleView, setRuleView] = useState('all')
+  const [pending, setPending] = useState(null)   // { kind: accept|reject|retire|reapply, p, dry, dryError }
+  const { logAction } = useConsoleAuth()
 
   const load = useCallback(async () => {
     setState((s) => ({ ...s, loading: true, error: null }))
@@ -135,11 +144,13 @@ export default function ConsoleClassificationLearning({ tabParam = 'tab' } = {})
     }
   }
 
-  const decide = async (p, action) => {
+  const decide = async (p, action, note = null, auditAs = null) => {
     const key = `${p.token}:${p.category}:${action}`
     setBusy(key)
     try {
-      await decideRule(p.token, p.category, action)
+      await decideRule(p.token, p.category, action, note)
+      try { await logAction?.(auditAs || (action === 'accept' ? 'classifier_accept' : 'classifier_reject'), null, 'classification_learned_rules', { token: p.token, category: p.category, reason: note }) } catch { /* audit best effort */ }
+      setPending(null)
       if (action === 'accept') {
         // Accepting records the decision; applying is what moves anything, and
         // it is a separate press so nobody changes the books by accident.
@@ -151,7 +162,9 @@ export default function ConsoleClassificationLearning({ tabParam = 'tab' } = {})
             + 'Run "Apply reviewed decisions" on Import History to move the money already loaded.',
         })
       } else {
-        setFlash({ tone: 'ok', text: `Rejected "${p.token}". It will not be suggested again.` })
+        setFlash({ tone: 'ok', text: auditAs === 'classifier_retire'
+          ? `Retired "${p.token}". Items it already marked keep their decision; it will not mark new ones.`
+          : `Rejected "${p.token}". It will not be suggested again.` })
       }
       setPreview(null)
       await load()
@@ -166,10 +179,22 @@ export default function ConsoleClassificationLearning({ tabParam = 'tab' } = {})
     }
   }
 
-  const reapply = async (r) => {
+  const askReapply = async (r) => {
+    setPending({ kind: 'reapply', p: r, dry: null, dryError: null })
+    try {
+      const dry = await applyLearnedRule(r.token, r.category, true)
+      setPending((cur) => (cur && cur.p === r ? { ...cur, dry } : cur))
+    } catch (e) {
+      setPending((cur) => (cur && cur.p === r ? { ...cur, dryError: toUserMessage(e) } : cur))
+    }
+  }
+
+  const reapply = async (r, reason = null) => {
     setBusy(`${r.token}:${r.category}:reapply`)
     try {
       const res = await applyLearnedRule(r.token, r.category, false)
+      try { await logAction?.('classifier_reapply', null, 'classification_learned_rules', { token: r.token, category: r.category, count: res?.items, reason }) } catch { /* audit best effort */ }
+      setPending(null)
       setFlash({
         tone: 'ok',
         text: res.items
@@ -203,9 +228,24 @@ export default function ConsoleClassificationLearning({ tabParam = 'tab' } = {})
       detail: 'Review recent corrections in Material Master.', action: { label: 'Open Material Master', to: '/console/material-master' } })
   }
 
+  const learnedCount = rules.filter((r) => r.status === 'active').length
+  const strip = [
+    { label: 'Agreement', value: latest ? `${latest.agreement_pct}%` : 'N/A', sub: latest ? String(latest.period) : 'No decisions yet' },
+    { label: 'Direction', value: trend ? `${trend.delta > 0 ? '+' : ''}${trend.delta} pts` : 'N/A', sub: trend ? `over ${trend.periods} months` : 'Needs two months', tone: trend ? (trend.improving ? 'good' : 'warning') : undefined },
+    { label: 'Decisions measured', value: latest ? nf.format(latest.corrections) : 'N/A' },
+    { label: 'Suggestions waiting', value: nf.format(proposals.length), tone: proposals.length ? 'warning' : undefined },
+    { label: 'Weak layers', value: nf.format(spots.length), tone: spots.length ? 'danger' : 'good' },
+    { label: 'Rules learned', value: nf.format(learnedCount) },
+    { label: 'Words ruled out', value: nf.format(rules.length - learnedCount) },
+    { label: 'Sections loaded', value: d?.failed ? `${4 - d.failed} of 4` : '4 of 4', tone: d?.failed ? 'warning' : 'good' },
+  ]
+
   return (
     <div className="space-y-4">
       <PageHead onRefresh={load} busy={state.loading} at={state.at} />
+      <StatusStrip label="Classifier status" cells={strip} />
+      <ImpactLine change="Accepting a word marks matching unreviewed item codes in the Material Master. Money already loaded moves only from Import History, What we changed."
+        who="Cost reports, once decisions are applied." undo="Retire the rule here; items it marked keep their decision until edited." />
 
       {flash && (
         <div role="status">
@@ -250,11 +290,11 @@ export default function ConsoleClassificationLearning({ tabParam = 'tab' } = {})
 
       <AttentionList quiet items={attention} />
 
-      <Segmented ariaLabel="Classifier views" value={tab} onChange={setTab} options={[
-        { key: 'overview', label: 'Learning trend' },
-        { key: 'suggestions', label: 'Suggestions', count: proposals.length },
-        { key: 'weak', label: 'Weak spots', count: spots.length },
-        { key: 'rules', label: 'What it has been taught', count: rules.length },
+      <TabBar ariaLabel="Classifier views" value={tab} onChange={setTab} tabs={[
+        { key: 'overview', label: 'Learning trend', icon: TrendingUp },
+        { key: 'suggestions', label: 'Suggestions', icon: Sparkles, count: proposals.length },
+        { key: 'weak', label: 'Weak spots', icon: AlertTriangle, count: spots.length },
+        { key: 'rules', label: 'What it has been taught', icon: Check, count: rules.length },
       ]} />
 
       {tab === 'overview' && (
@@ -337,7 +377,7 @@ export default function ConsoleClassificationLearning({ tabParam = 'tab' } = {})
                         <Btn icon={Eye} onClick={() => openPreview(p)} title={`Look at the items "${p.token}" would change`}>Look</Btn>
                         <Btn
                           icon={X}
-                          onClick={() => decide(p, 'reject')}
+                          onClick={() => setPending({ kind: 'reject', p })}
                           busy={busy === `${p.token}:${p.category}:reject`}
                           title={`Reject "${p.token}" as ${categoryLabel(p.category)}. It will not be suggested again.`}
                         >
@@ -446,14 +486,23 @@ export default function ConsoleClassificationLearning({ tabParam = 'tab' } = {})
                         to the suggestions - so re-applying has to be reachable
                         from here or it is stranded. Re-applying is safe: it skips
                         anything already reviewed. */}
-                    {r.status === 'active' && (
-                      <Btn
-                        onClick={() => reapply(r)}
-                        busy={busy === `${r.token}:${r.category}:reapply`}
-                      >
-                        Apply again
-                      </Btn>
-                    )}
+                    <span className="inline-flex flex-wrap justify-end gap-1.5">
+                      {r.status === 'active' && (
+                        <Btn
+                          onClick={() => askReapply(r)}
+                          busy={busy === `${r.token}:${r.category}:reapply`}
+                        >
+                          Apply again
+                        </Btn>
+                      )}
+                      {r.status === 'active' ? (
+                        <Btn icon={Archive} variant="danger" onClick={() => setPending({ kind: 'retire', p: r })}
+                          busy={busy === `${r.token}:${r.category}:reject`} title={`Stop "${r.token}" marking new items`}>Retire</Btn>
+                      ) : (
+                        <Btn icon={RotateCcw} onClick={() => openPreview({ token: r.token, category: r.category })}
+                          title={`Look again at what "${r.token}" would change`}>Reconsider</Btn>
+                      )}
+                    </span>
                   </Td>
                 </Tr>
               ))}
@@ -476,7 +525,7 @@ export default function ConsoleClassificationLearning({ tabParam = 'tab' } = {})
           <Toolbar className="justify-end">
             <Btn
               icon={X}
-              onClick={() => decide(preview.proposal, 'reject')}
+              onClick={() => setPending({ kind: 'reject', p: preview.proposal })}
               busy={busy.endsWith(':reject')}
               disabled={!!busy}
             >
@@ -485,7 +534,7 @@ export default function ConsoleClassificationLearning({ tabParam = 'tab' } = {})
             <Btn
               variant="primary"
               icon={Check}
-              onClick={() => decide(preview.proposal, 'accept')}
+              onClick={() => setPending({ kind: 'accept', p: preview.proposal, rows: preview.rows.length })}
               busy={busy.endsWith(':accept')}
               disabled={!!busy || preview.loading || !preview.rows.length}
             >
@@ -537,6 +586,49 @@ export default function ConsoleClassificationLearning({ tabParam = 'tab' } = {})
           )
         )}
       </Modal>
+
+      <ConfirmImpactDialog open={!!pending} onCancel={() => { if (!busy) setPending(null) }} requireReason busy={!!busy}
+        danger={pending?.kind === 'retire'}
+        typedWord={pending?.kind === 'retire' ? 'RETIRE' : undefined}
+        readyExtra={pending?.kind !== 'reapply' || pending?.dry != null || !!pending?.dryError}
+        error={pending && flash?.tone === 'bad' ? flash.text : ''}
+        title={!pending ? '' : pending.kind === 'accept' ? `Learn "${pending.p.token}"` : pending.kind === 'reject' ? `Rule out "${pending.p.token}"`
+          : pending.kind === 'retire' ? `Retire "${pending.p.token}"` : `Apply "${pending.p.token}" again`}
+        confirmLabel={!pending ? 'Confirm' : pending.kind === 'accept' ? 'Learn it' : pending.kind === 'reject' ? 'Rule it out' : pending.kind === 'retire' ? 'Retire rule' : 'Apply again'}
+        onConfirm={({ reason }) => {
+          if (!pending) return
+          if (pending.kind === 'accept') decide(pending.p, 'accept', reason)
+          else if (pending.kind === 'reject') decide(pending.p, 'reject', reason)
+          else if (pending.kind === 'retire') decide(pending.p, 'reject', reason, 'classifier_retire')
+          else reapply(pending.p, reason)
+        }}
+        impact={!pending ? null : pending.kind === 'accept' ? {
+          tone: 'info',
+          what: `"${pending.p.token}" will mean ${categoryLabel(pending.p.category)}.`,
+          change: `${nf.format(pending.rows || 0)} item code(s) shown in the preview are marked in the Material Master. Items you reviewed by hand are left alone.`,
+          who: 'Cost reports, once you apply reviewed decisions on Import History.',
+          undo: 'Retire the rule on the "What it has been taught" tab.',
+        } : pending.kind === 'reject' ? {
+          tone: 'info',
+          what: `"${pending.p.token}" will not be suggested as ${categoryLabel(pending.p.category)} again.`,
+          change: 'Nothing in the data changes. The word is recorded as ruled out, with your reason.',
+          who: 'Nobody.',
+          undo: 'Reconsider it from the "What it has been taught" tab.',
+        } : pending.kind === 'retire' ? {
+          tone: 'danger',
+          what: `"${pending.p.token}" stops marking new items as ${categoryLabel(pending.p.category)}.`,
+          change: 'Items it already marked keep their decision until a person edits them. Apply again stops working for this word.',
+          who: 'Future uploads that would have matched this word.',
+          undo: 'Reconsider it and learn it again.',
+        } : {
+          tone: 'info',
+          what: pending.dryError ? 'The dry run could not be read, so the count is unknown.'
+            : pending.dry == null ? 'Counting what applying again would mark...'
+              : `Applying again would mark ${nf.format(Number(pending.dry.items) || 0)} more item code(s).`,
+          change: 'Matching unreviewed item codes are marked in the Material Master. Anything reviewed by hand is skipped.',
+          who: 'Cost reports, once decisions are applied on Import History.',
+          undo: 'Edit the items in Material Master.',
+        }} />
     </div>
   )
 }

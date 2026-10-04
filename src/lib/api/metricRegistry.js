@@ -120,3 +120,34 @@ export async function upsertMetric(row) {
 export async function saveMetricVersion(row) {
   return unwrap(await supabase.from('metric_versions').insert(row).select('*').single())
 }
+
+/**
+ * Every registry row, active and retired, for the console editor. Same honest
+ * contract as listMetrics: [] only when not provisioned, otherwise throws.
+ *
+ * @returns {Promise<Array<object>>}
+ */
+export async function listAllMetrics() {
+  const res = await supabase.from('metric_registry').select('*').order('metric_id')
+  if (res.error && isNotProvisioned(res.error)) return []
+  const data = unwrap(res)
+  return Array.isArray(data) ? data : []
+}
+
+/**
+ * Patch one registry row (Admin or super admin, enforced by RLS). Used for the
+ * status (certified / draft / deprecated), retire (active=false) and restore.
+ * Throws a sanitised ServiceError on failure.
+ *
+ * @param {string} metricId
+ * @param {object} patch
+ */
+export async function patchMetric(metricId, patch) {
+  return unwrap(
+    await supabase.from('metric_registry')
+      .update({ ...patch, updated_at: new Date().toISOString() })
+      .eq('metric_id', metricId)
+      .select('*')
+      .single(),
+  )
+}

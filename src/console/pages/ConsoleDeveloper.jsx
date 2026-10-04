@@ -12,7 +12,8 @@
  *
  * Honest gaps shown on screen, not hidden: the Vercel deploy list is not
  * connected (no server-side token), per-edge-function calls and deployed
- * versions are not recorded, the Flutter app does not report its version,
+ * versions are not recorded, only Flutter phones that registered for push
+ * report their version (the retired Expo app is shown read-only),
  * the web client build in other people's browsers is not measured.
  */
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
@@ -31,7 +32,7 @@ import JobsPanel from './developer/JobsPanel'
 import GatePanel, { useAdoption } from './developer/GatePanel'
 import ConsoleAuthBridge from '../ConsoleAuthBridge'
 import {
-  getCronHealth, getAppAdoption, getRecentMigrations, getEngineeringConfig, getAiStats,
+  getCronHealth, getFlutterAdoption, getExpoAdoption, getRecentMigrations, getEngineeringConfig, getAiStats,
 } from '../../lib/api/engineeringCenter'
 import { listJobRuns, summarizeJobs } from '../../lib/api/aiOps'
 import { saveSystemConfigValues } from '../../lib/api/systemConfig'
@@ -74,7 +75,8 @@ const loadEmails = async () => summarizeJobs(await listJobRuns({ days: 30 }))
 export default function ConsoleDeveloper() {
   const [tab, setTab] = useUrlTab(TABS.map((t) => t.key), 'overview')
   const health = useLoad(loadHealth, 'Scheduled job health could not be read.')
-  const adoption = useLoad(getAppAdoption, 'App adoption could not be read.')
+  const adoption = useLoad(getFlutterAdoption, 'Flutter app adoption could not be read.')
+  const retired = useLoad(getExpoAdoption, 'Retired app adoption could not be read.')
   const migrations = useLoad(loadMigrations, 'Migration history could not be read.')
   const config = useLoad(getEngineeringConfig, 'The settings could not be read.')
   const ai = useLoad(getAiStats, 'AI usage could not be read.')
@@ -82,7 +84,7 @@ export default function ConsoleDeveloper() {
   const [raiseOpen, setRaiseOpen] = useState(false)
   const navigate = useNavigate()
 
-  const refreshAll = () => Promise.all([health.reload(), adoption.reload(), migrations.reload(), config.reload(), ai.reload(), emails.reload()])
+  const refreshAll = () => Promise.all([health.reload(), adoption.reload(), retired.reload(), migrations.reload(), config.reload(), ai.reload(), emails.reload()])
   const refreshing = health.loading || adoption.loading || migrations.loading || config.loading
 
   return (
@@ -97,7 +99,7 @@ export default function ConsoleDeveloper() {
 
       {tab === 'overview' && (
         <TabPanel label="Overview">
-          <Overview health={health} adoption={adoption} migrations={migrations} config={config} ai={ai} emails={emails}
+          <Overview health={health} adoption={adoption} retired={retired} migrations={migrations} config={config} ai={ai} emails={emails}
             raiseOpen={raiseOpen} setRaiseOpen={setRaiseOpen} onRollback={() => navigate('/console/releases?rollback=1')} />
         </TabPanel>
       )}
@@ -115,7 +117,7 @@ export default function ConsoleDeveloper() {
   )
 }
 
-function Overview({ health, adoption, migrations, config, ai, emails, raiseOpen, setRaiseOpen, onRollback }) {
+function Overview({ health, adoption, retired, migrations, config, ai, emails, raiseOpen, setRaiseOpen, onRollback }) {
   const totals = useMemo(() => jobTotals(health.data?.jobs || []), [health.data])
   const a = useAdoption(adoption.data, config.data)
   const build = installedRelease?.buildId
@@ -123,15 +125,18 @@ function Overview({ health, adoption, migrations, config, ai, emails, raiseOpen,
   const latestNote = installedRelease?.releases?.[0]
   const mig = migrations.data
   const cfg = config.data || {}
-  const minV = cfg.mobile_min_version?.value || ''
-  const latestV = cfg.mobile_latest_version?.value || ''
+  const minV = cfg.flutter_min_version?.value || ''
+  const latestV = cfg.flutter_latest_version?.value || ''
+  const retiredMin = cfg.mobile_min_version?.value || ''
+  const retiredLatest = cfg.mobile_latest_version?.value || ''
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <StatTile icon={Globe} label="Web build" value={buildShort || 'N/A'} sub={buildShort ? 'the build this tab is running' : 'build id not stamped (local build)'} />
-        <StatTile icon={Smartphone} label="Android on minimum" tone={a.pctInstalls !== null && a.pctInstalls < 100 ? 'warning' : 'default'}
-          value={a.pctInstalls === null ? 'N/A' : `${a.pctInstalls}%`} sub={a.pctInstalls === null ? 'versions not readable' : `${fmtInt(a.latestInstalls)} of ${fmtInt(a.installs)} phones; ${fmtInt(a.belowInstalls)} below ${minV}`} />
+        <StatTile icon={Smartphone} label="Flutter on latest" tone={a.pctInstalls !== null && a.pctInstalls < 100 ? 'warning' : 'default'}
+          value={a.pctInstalls === null ? 'N/A' : `${a.pctInstalls}%`}
+          sub={adoption.error ? 'versions not readable' : a.installs === 0 ? 'no Flutter phone registered yet' : a.pctInstalls === null ? 'latest Flutter version not recorded' : `${fmtInt(a.latestInstalls)} of ${fmtInt(a.installs)} phones${minV ? `; ${fmtInt(a.belowInstalls)} below ${minV}` : ''}`} />
         <StatTile icon={Rocket} label="Deploys today" value="N/A" sub="Vercel deploy list not connected" />
         <StatTile icon={Server} label="Jobs 24h" value={health.error ? 'N/A' : fmtInt(totals.runs24h)} sub={health.error ? 'could not read' : `${fmtInt(totals.failed24h)} failed; ${totals.active} of ${totals.total} on`} tone={totals.failed24h ? 'danger' : 'default'} />
         <StatTile icon={Cpu} label="Edge functions" value={fmtInt(EDGE_FUNCTIONS.length)} sub="per-function calls and errors not recorded" />
@@ -141,10 +146,10 @@ function Overview({ health, adoption, migrations, config, ai, emails, raiseOpen,
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
         <VersionCard icon={Globe} title="Web app" badge={<Badge tone="good">Live</Badge>} value={buildShort || 'N/A'}
           lines={[latestNote ? `Latest notes ${latestNote.id}` : 'No release notes in the build', 'Adoption in other browsers not measured']} />
-        <VersionCard icon={Smartphone} title="Android (Expo)" badge={<Badge tone="good">On Play</Badge>} value={latestV || 'N/A'}
-          lines={[`${fmtInt(a.latestInstalls)} of ${fmtInt(a.installs)} phones on it (${a.pctInstalls ?? 'N/A'}%)`, `Minimum ${minV || 'not set'}, latest ${latestV || 'not recorded'}`]} />
-        <VersionCard icon={Layers} title="Flutter app" badge={<Badge tone="warning">Testing</Badge>} value="Closed testing"
-          lines={['Version not reported to the server', `Minimum ${cfg.flutter_min_version?.value || 'not set'}`]} />
+        <VersionCard icon={Smartphone} title="Flutter app" badge={<Badge tone="warning">Closed testing</Badge>} value={latestV || 'N/A'}
+          lines={[a.installs ? `${fmtInt(a.latestInstalls ?? 0)} of ${fmtInt(a.installs)} phones on it (${a.pctInstalls ?? 'N/A'}%)` : 'No Flutter phone registered yet', `Minimum ${minV || 'not set'}, latest ${latestV || 'not recorded'}`]} />
+        <VersionCard icon={Layers} title="Retired app (Expo)" badge={<Badge tone="quiet">Retired</Badge>} value={retiredLatest || 'N/A'}
+          lines={[retired?.error ? 'Devices could not be read' : `${fmtInt(retired?.data?.installs ?? null)} devices still registered`, `Read-only. Minimum ${retiredMin || 'not set'}`]} />
         <VersionCard icon={Database} title="Database" badge={<Badge tone="good">Current</Badge>} value={mig ? `${fmtInt(mig.total)} migrations` : 'N/A'}
           lines={[mig ? `Latest ${mig.latest}` : 'Migration history not readable', mig ? `${fmtInt(mig.today)} applied today` : '']} />
         <VersionCard icon={Megaphone} title="Marketing site" badge={<Badge tone="info">Separate</Badge>} value="tyre-pulse-eezl"

@@ -7529,4 +7529,94 @@ class AppLocalizationsUr extends AppLocalizations {
   @override
   String get problemReportFailed =>
       'آپ کی رپورٹ نہیں بھیجی جا سکی۔ براہ کرم دوبارہ کوشش کریں۔';
+
+  @override
+  String get qrLoginAction => 'کمپیوٹر پر سائن ان کریں';
+
+  @override
+  String get qrLoginScanIntro =>
+      'کمپیوٹر پر TyrePulse کا سائن ان صفحہ کھولیں اور فون کوڈ منتخب کریں، پھر اس کیمرے کو اسکرین پر موجود کوڈ کی طرف کریں۔';
+
+  @override
+  String get qrLoginConfirmTitle => 'اس کمپیوٹر پر سائن ان کریں؟';
+
+  @override
+  String qrLoginConfirmMessage(String name) {
+    return 'کیا اس کمپیوٹر پر TyrePulse میں $name کے طور پر سائن ان کریں؟ صرف اسی کوڈ کو منظور کریں جو آپ نے ابھی خود کھولا ہو۔';
+  }
+
+  @override
+  String get qrLoginYourAccount => 'آپ کا اکاؤنٹ';
+
+  @override
+  String get qrLoginApprove => 'منظور کریں';
+
+  @override
+  String get qrLoginSending => 'آپ کا جواب بھیجا جا رہا ہے...';
+
+  @override
+  String get qrLoginWaiting => 'آپ کے جواب کا انتظار ہے';
+
+  @override
+  String get qrLoginApprovedTitle => 'کمپیوٹر پر سائن ان ہو گیا';
+
+  @override
+  String get qrLoginApprovedMessage =>
+      'چند سیکنڈ میں کمپیوٹر پر TyrePulse کھل جائے گا۔ اگر آپ کا یہ ارادہ نہیں تھا تو کمپیوٹر پر سائن آؤٹ کریں۔';
+
+  @override
+  String get qrLoginDeclinedTitle => 'سائن ان مسترد کر دیا گیا';
+
+  @override
+  String get qrLoginDeclinedMessage =>
+      'کمپیوٹر پر سائن ان نہیں ہوا، اور یہ کوڈ دوبارہ استعمال نہیں ہو سکتا۔';
+
+  @override
+  String get qrLoginFailedTitle => 'کمپیوٹر پر سائن ان نہیں ہوا';
+
+  @override
+  String get qrLoginNotACodeTitle => 'یہ سائن ان کوڈ نہیں ہے';
+
+  @override
+  String get qrLoginNotACodeMessage =>
+      'یہ TyrePulse کمپیوٹر سائن ان کوڈ نہیں ہے۔ TyrePulse کے سائن ان صفحے پر دکھایا گیا کوڈ اسکین کریں۔';
+
+  @override
+  String get qrLoginExpired =>
+      'اس کوڈ کی مدت ختم ہو گئی ہے۔ کوڈ دو منٹ تک چلتا ہے۔ کمپیوٹر پر کوڈ تازہ کریں اور دوبارہ اسکین کریں۔';
+
+  @override
+  String get qrLoginInvalid =>
+      'یہ کوڈ پہچانا نہیں گیا۔ کمپیوٹر پر کوڈ تازہ کریں اور دوبارہ اسکین کریں۔';
+
+  @override
+  String get qrLoginConsumed =>
+      'یہ کوڈ پہلے ہی سائن ان کے لیے استعمال ہو چکا ہے۔ دوبارہ سائن ان کرنا ہو تو کمپیوٹر پر کوڈ تازہ کریں۔';
+
+  @override
+  String get qrLoginAlreadyDecided =>
+      'اس کوڈ کا پہلے ہی جواب دیا جا چکا ہے۔ کمپیوٹر پر کوڈ تازہ کریں اور دوبارہ اسکین کریں۔';
+
+  @override
+  String get qrLoginNotAllowed =>
+      'آپ کا اکاؤنٹ منظور شدہ نہیں یا مقفل ہے، اس لیے یہ کمپیوٹر پر سائن ان نہیں کر سکتا۔ براہ کرم اپنے منتظم سے بات کریں۔';
+
+  @override
+  String get qrLoginSignedOut =>
+      'آپ اس فون پر سائن آؤٹ ہیں۔ پہلے یہاں سائن ان کریں، پھر کوڈ دوبارہ اسکین کریں۔';
+
+  @override
+  String get qrLoginNeedsSignal =>
+      'کوئی کنکشن نہیں۔ سگنل والی جگہ پر جائیں اور کوڈ کی مدت ختم ہونے سے پہلے دوبارہ اسکین کریں۔';
+
+  @override
+  String get qrLoginUnavailable =>
+      'کمپیوٹر سائن ان ابھی اس سرور پر دستیاب نہیں ہے۔';
+
+  @override
+  String get qrLoginFailed =>
+      'کچھ غلط ہو گیا۔ کمپیوٹر پر کوڈ تازہ کریں اور دوبارہ کوشش کریں۔';
+
+  @override
+  String get qrLoginScanAgain => 'دوسرا کوڈ اسکین کریں';
 }

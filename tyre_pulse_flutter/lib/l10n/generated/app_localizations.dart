@@ -13132,6 +13132,156 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Your report could not be sent. Please try again.'**
   String get problemReportFailed;
+
+  /// Sign in on a computer: Profile row and screen title for approving a web sign-in by scanning a QR code.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in on a computer'**
+  String get qrLoginAction;
+
+  /// Sign in on a computer: explains how to start the computer sign-in.
+  ///
+  /// In en, this message translates to:
+  /// **'On the computer, open the TyrePulse sign-in page and choose the phone code. Then point this camera at the code on the screen.'**
+  String get qrLoginScanIntro;
+
+  /// Sign in on a computer: title of the confirm sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in on this computer?'**
+  String get qrLoginConfirmTitle;
+
+  /// Sign in on a computer: confirm sheet body. {name} is the signed-in person's name.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to TyrePulse on this computer as {name}? Only approve a code you just opened yourself.'**
+  String qrLoginConfirmMessage(String name);
+
+  /// Sign in on a computer: used as {name} when the profile has no full name.
+  ///
+  /// In en, this message translates to:
+  /// **'your account'**
+  String get qrLoginYourAccount;
+
+  /// Sign in on a computer: approve button on the confirm sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Approve'**
+  String get qrLoginApprove;
+
+  /// Sign in on a computer: shown while the decision is sent.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending your answer...'**
+  String get qrLoginSending;
+
+  /// Sign in on a computer: shown behind the confirm sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for your answer'**
+  String get qrLoginWaiting;
+
+  /// Sign in on a computer: success title.
+  ///
+  /// In en, this message translates to:
+  /// **'Computer signed in'**
+  String get qrLoginApprovedTitle;
+
+  /// Sign in on a computer: success message.
+  ///
+  /// In en, this message translates to:
+  /// **'TyrePulse will open on the computer in a few seconds. If you did not mean to do this, sign out on the computer.'**
+  String get qrLoginApprovedMessage;
+
+  /// Sign in on a computer: title after the person pressed Cancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign-in declined'**
+  String get qrLoginDeclinedTitle;
+
+  /// Sign in on a computer: message after the person pressed Cancel.
+  ///
+  /// In en, this message translates to:
+  /// **'The computer was not signed in, and this code cannot be used again.'**
+  String get qrLoginDeclinedMessage;
+
+  /// Sign in on a computer: title for every failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Computer not signed in'**
+  String get qrLoginFailedTitle;
+
+  /// Sign in on a computer: title when the scanned QR is not a valid sign-in code.
+  ///
+  /// In en, this message translates to:
+  /// **'Not a sign-in code'**
+  String get qrLoginNotACodeTitle;
+
+  /// Sign in on a computer: message when the scanned QR is not a valid sign-in code.
+  ///
+  /// In en, this message translates to:
+  /// **'This is not a TyrePulse computer sign-in code. Scan the code shown on the TyrePulse sign-in page.'**
+  String get qrLoginNotACodeMessage;
+
+  /// Sign in on a computer: failure: code expired.
+  ///
+  /// In en, this message translates to:
+  /// **'This code has expired. Codes last two minutes. Refresh the code on the computer and scan again.'**
+  String get qrLoginExpired;
+
+  /// Sign in on a computer: failure: unknown or tampered code.
+  ///
+  /// In en, this message translates to:
+  /// **'This code was not recognised. Refresh the code on the computer and scan again.'**
+  String get qrLoginInvalid;
+
+  /// Sign in on a computer: failure: code already redeemed.
+  ///
+  /// In en, this message translates to:
+  /// **'This code was already used to sign in. Refresh the code on the computer if you need to sign in again.'**
+  String get qrLoginConsumed;
+
+  /// Sign in on a computer: failure: code already approved or declined.
+  ///
+  /// In en, this message translates to:
+  /// **'This code was already answered. Refresh the code on the computer and scan again.'**
+  String get qrLoginAlreadyDecided;
+
+  /// Sign in on a computer: failure: SQLSTATE 42501.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account is not approved or is locked, so it cannot sign in a computer. Please speak to your administrator.'**
+  String get qrLoginNotAllowed;
+
+  /// Sign in on a computer: failure: no session on the phone.
+  ///
+  /// In en, this message translates to:
+  /// **'You are signed out on this phone. Sign in here first, then scan the code again.'**
+  String get qrLoginSignedOut;
+
+  /// Sign in on a computer: failure: no signal. The decision is never queued offline.
+  ///
+  /// In en, this message translates to:
+  /// **'No connection. Move to an area with signal and scan the code again before it expires.'**
+  String get qrLoginNeedsSignal;
+
+  /// Sign in on a computer: failure: the RPC is not deployed.
+  ///
+  /// In en, this message translates to:
+  /// **'Computer sign-in is not available on this server yet.'**
+  String get qrLoginUnavailable;
+
+  /// Sign in on a computer: failure: anything else.
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong. Refresh the code on the computer and try again.'**
+  String get qrLoginFailed;
+
+  /// Sign in on a computer: button to return to the camera.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan another code'**
+  String get qrLoginScanAgain;
 }
 
 class _AppLocalizationsDelegate

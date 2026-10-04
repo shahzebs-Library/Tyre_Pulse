@@ -24,16 +24,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   LifeBuoy, ShieldCheck, Clock, Play, Square, Eye, Pencil, Building2, Timer,
-  FileSpreadsheet, FileText, BarChart3,
+  FileSpreadsheet, FileText, BarChart3, UserCog, Ban,
 } from 'lucide-react'
 import {
-  Panel, PanelHeader, Note, StatTile, Badge, Btn, Segmented, Select, Toolbar, SearchInput, Modal,
-  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState,
+  Panel, PanelHeader, Note, StatTile, Badge, Btn, Segmented, Select, Toolbar, SearchInput,
+  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, ConfirmImpactDialog,
 } from '../components/ui'
 import { exportConsoleRows, sortRows, useTableSort } from '../../lib/consoleTable'
 import { TrendChart, BarsChart } from '../components/ui/charts'
 import { dailySeries, topShare } from '../../lib/consoleCharts'
-import { PageHeader, useUrlTab, useRefreshStamp, usePaged, Pager, Drawer, DetailList, AttentionList } from './shared/pageKit'
+import { useUrlTab, useRefreshStamp, usePaged, Pager, Drawer, DetailList, AttentionList } from './shared/pageKit'
+import { SectionTop, ImpactLine, isEmbedded } from './platform/SectionKit'
+import { namesFor } from '../../lib/api/consolePlatform'
+import { endSupportSessions } from '../../lib/api/consolePeopleControls'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import { supabase } from '../../lib/api/_client'
 import {
@@ -82,7 +85,13 @@ function minutesLeft(expiresAt, nowMs) {
 }
 
 export default function ConsoleSupportSessions({ tabParam = 'tab' } = {}) {
-  const { orgs, logAction } = useConsoleAuth()
+  const embedded = isEmbedded(tabParam)
+  const { orgs, logAction, admin } = useConsoleAuth()
+  const [openerNames, setOpenerNames] = useState({})
+  const [closeLapsed, setCloseLapsed] = useState(false)
+  const [forceEnd, setForceEnd] = useState(null)
+  const [adminBusy, setAdminBusy] = useState(false)
+  const [notice, setNotice] = useState('')
 
   const [targetOrg, setTargetOrg] = useState('')
   const [reason, setReason]       = useState('')
@@ -118,7 +127,7 @@ export default function ConsoleSupportSessions({ tabParam = 'tab' } = {}) {
   const loadRecent = useCallback(async () => {
     const { data, error: err } = await supabase
       .from('support_sessions')
-      .select('id, target_org_id, reason, mode, started_at, expires_at, ended_at, active, created_at')
+      .select('id, super_admin_id, target_org_id, reason, mode, started_at, expires_at, ended_at, active, created_at')
       .order('created_at', { ascending: false })
       .order('id', { ascending: true })
       .limit(RECENT_LIMIT)
@@ -132,6 +141,7 @@ export default function ConsoleSupportSessions({ tabParam = 'tab' } = {}) {
       const [cur, rows] = await Promise.all([getCurrentSupportSession(), loadRecent()])
       setCurrent(cur)
       setRecent(rows)
+      namesFor(rows.map((r) => r.super_admin_id)).then(setOpenerNames).catch(() => setOpenerNames({}))
       stamp()
     } catch (e) {
       setCurrent(null); setRecent([])
@@ -187,6 +197,22 @@ export default function ConsoleSupportSessions({ tabParam = 'tab' } = {}) {
     }
   }
 
+  async function runAdminEnd(id, reason) {
+    setAdminBusy(true); setActionError(''); setNotice('')
+    try {
+      const n = await endSupportSessions(id, reason)
+      setNotice(id ? (n ? 'The session was ended.' : 'That session had already ended.') : `${n} lapsed session${n === 1 ? '' : 's'} closed.`)
+      setCloseLapsed(false); setForceEnd(null); setDetail(null)
+      setRecent(await loadRecent())
+      setCurrent(await getCurrentSupportSession())
+    } catch (e) {
+      setActionError(toUserMessage(e, 'Could not end the session.'))
+    } finally {
+      setAdminBusy(false)
+    }
+  }
+  const openerName = (r) => (r?.super_admin_id ? (r.super_admin_id === admin?.id ? 'You' : openerNames[r.super_admin_id] || 'Another super admin') : 'N/A')
+
   const remaining = current ? minutesLeft(current.expires_at, nowMs) : null
 
   const stats = useMemo(() => {
@@ -227,6 +253,7 @@ export default function ConsoleSupportSessions({ tabParam = 'tab' } = {}) {
         format,
         columns: [
           { key: 'org', header: 'Organisation', value: (r) => nameFor(r.target_org_id) },
+          { key: 'opener', header: 'Opened by', value: openerName },
           { key: 'mode', header: 'Mode', value: (r) => (r.mode === 'edit' ? 'Edit' : 'Read only') },
           { key: 'reason', header: 'Reason' },
           { key: 'started_at', header: 'Started', value: (r) => fmtDateTime(r.started_at) },
@@ -249,7 +276,7 @@ export default function ConsoleSupportSessions({ tabParam = 'tab' } = {}) {
   if (lapsed.length) {
     attention.push({ key: 'lapsed', tone: 'warning', title: `${lapsed.length} session${lapsed.length === 1 ? '' : 's'} expired without being ended`,
       detail: 'The authorization lapsed on its own. Ending a session explicitly keeps the audit trail tidy.',
-      action: { label: 'Show', onClick: () => { setStateFilter('expired'); setTab('history') } } })
+      action: { label: 'Close them', onClick: () => { setActionError(''); setCloseLapsed(true) } } })
   }
   if (current && current.mode === 'edit') {
     attention.push({ key: 'edit', tone: 'danger', title: 'Your open session allows changes',
@@ -259,8 +286,8 @@ export default function ConsoleSupportSessions({ tabParam = 'tab' } = {}) {
 
   return (
     <div className="space-y-5 max-w-7xl">
-      <PageHeader icon={LifeBuoy} title="Support Sessions"
-        purpose="Authorize a time-boxed, audited window to inspect one customer organisation during a support engagement."
+      <SectionTop embedded={embedded} icon={LifeBuoy} title="Support Sessions"
+        purpose="Authorize a time-boxed, audited window to inspect one customer organisation during a support engagement. Every start and end is logged."
         actions={(
           <>
             <Btn icon={FileSpreadsheet} onClick={() => runExport('excel')} busy={exporting === 'excel'} disabled={na || visible.length === 0}>Excel</Btn>
@@ -271,6 +298,7 @@ export default function ConsoleSupportSessions({ tabParam = 'tab' } = {}) {
 
       <ErrorState message={error} onRetry={load} />
       <ErrorState message={actionError} />
+      {notice && <Note icon={ShieldCheck} tone="accent">{notice}</Note>}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatTile label="Sessions listed" value={na ? 'N/A' : recent.length}
@@ -337,6 +365,7 @@ export default function ConsoleSupportSessions({ tabParam = 'tab' } = {}) {
                     <p className="block text-[11px] font-semibold text-gray-400 mb-1.5">Duration</p>
                     <Segmented role="group" ariaLabel="Session duration" value={minutes} onChange={setMinutes}
                       options={DURATIONS.map((m) => ({ key: m, label: `${m}m` }))} />
+                    <ImpactLine className="mt-1" change="How long the window stays open before it lapses on its own." />
                   </div>
                 </div>
 
@@ -353,6 +382,8 @@ export default function ConsoleSupportSessions({ tabParam = 'tab' } = {}) {
                     { key: 'read_only', label: 'Read only', hint: 'Inspect without changing anything' },
                     { key: 'edit', label: 'Edit', hint: 'Allows changes; use only when needed' },
                   ]} />
+                  <ImpactLine className="mt-1" change={mode === 'edit' ? 'Records that you may change this customer\'s data. Edit sessions are flagged in Needs attention until ended.' : 'Records that you will only look, not change anything.'}
+                    who="The customer organisation you picked. Its own users see no difference." />
                 </div>
 
                 <Toolbar>
@@ -375,7 +406,10 @@ export default function ConsoleSupportSessions({ tabParam = 'tab' } = {}) {
           <Panel flush>
             <div className="p-4 pb-2">
               <PanelHeader icon={Clock} title="Recent sessions"
-                subtitle={na ? undefined : `${visible.length} of ${recent.length} shown${capped ? `, latest ${RECENT_LIMIT} on record` : ''}. Select a row for the full reason.`} />
+                subtitle={na ? undefined : `${visible.length} of ${recent.length} shown${capped ? `, latest ${RECENT_LIMIT} on record` : ''}. Select a row for the full reason.`}
+                actions={lapsed.length > 0 && (
+                  <Btn size="xs" icon={Ban} onClick={() => { setActionError(''); setCloseLapsed(true) }}>Close {lapsed.length} lapsed</Btn>
+                )} />
               <Toolbar className="mt-1">
                 <SearchInput value={search} onChange={setSearch} placeholder="Search organisation or reason" className="flex-1 min-w-[200px]" />
                 <Select value={stateFilter} onChange={setStateFilter} ariaLabel="Filter by status" className="w-36"
@@ -395,6 +429,7 @@ export default function ConsoleSupportSessions({ tabParam = 'tab' } = {}) {
                 <Table className="border-0 rounded-none">
                   <THead>
                     <Th sortKey="org" sort={sort} onSort={onSort}>Organisation</Th>
+                    <Th>Opened by</Th>
                     <Th sortKey="mode" sort={sort} onSort={onSort}>Mode</Th>
                     <Th sortKey="reason" sort={sort} onSort={onSort}>Reason</Th>
                     <Th sortKey="started_at" sort={sort} onSort={onSort}>Started</Th>
@@ -407,6 +442,7 @@ export default function ConsoleSupportSessions({ tabParam = 'tab' } = {}) {
                       return (
                         <Tr key={r.id} onClick={() => setDetail(r)} ariaLabel={`Open session for ${nameFor(r.target_org_id)}`}>
                           <Td className="text-gray-200 font-medium">{nameFor(r.target_org_id)}</Td>
+                          <Td className="text-gray-300">{openerName(r)}</Td>
                           <Td><ModeBadge mode={r.mode} /></Td>
                           <Td className="text-gray-300 max-w-[240px] truncate"><span title={r.reason || ''}>{r.reason || 'N/A'}</span></Td>
                           <Td nowrap className="text-gray-400">{fmtDateTime(r.started_at)}</Td>
@@ -456,6 +492,7 @@ export default function ConsoleSupportSessions({ tabParam = 'tab' } = {}) {
           <>
             <DetailList items={[
               ['Status', STATE_BADGE[sessionState(detail, nowMs)].label],
+              ['Opened by', openerName(detail)],
               ['Mode', detail.mode === 'edit' ? 'Edit' : 'Read only'],
               ['Started', fmtDateTime(detail.started_at)],
               ['Expires', fmtDateTime(detail.expires_at)],
@@ -465,26 +502,70 @@ export default function ConsoleSupportSessions({ tabParam = 'tab' } = {}) {
               <p className="text-[11px] uppercase tracking-wide text-gray-500 mb-1">Reason</p>
               <p className="text-xs text-gray-200 whitespace-pre-wrap break-words">{detail.reason || 'No reason recorded.'}</p>
             </div>
+            {sessionState(detail, nowMs) !== 'ended' && (
+              <div className="space-y-1.5">
+                <Btn variant="danger" icon={UserCog} onClick={() => { setActionError(''); setForceEnd(detail) }}>End this session now</Btn>
+                <ImpactLine change="Closes the window straight away, even when another super admin opened it." who={`${openerName(detail)}. The end is written to the audit log with your reason.`} />
+              </div>
+            )}
           </>
         )}
       </Drawer>
 
-      <Modal
+      <ConfirmImpactDialog
         open={confirmEnd}
         title="End this support session?"
-        subtitle={current ? `Inspecting ${nameFor(current.target_org_id)}` : undefined}
-        onClose={() => { if (!ending) setConfirmEnd(false) }}
-        width="max-w-md"
-        footer={(
-          <>
-            <Btn onClick={() => setConfirmEnd(false)} disabled={ending}>Cancel</Btn>
-            <Btn variant="danger" icon={Square} busy={ending} onClick={handleEnd}>End now</Btn>
-          </>
-        )}
-      >
-        {actionError && <div className="mb-3"><ErrorState message={actionError} /></div>}
-        <p className="text-sm text-gray-300">Inspection of the organisation stops immediately and the end is recorded in the audit trail.</p>
-      </Modal>
+        confirmLabel="End now"
+        danger
+        busy={ending}
+        error={actionError}
+        impact={current ? {
+          what: `Stop inspecting ${nameFor(current.target_org_id)}.`,
+          change: 'The window closes immediately and the end is recorded in the audit trail.',
+          who: 'Only you. The customer sees no change.',
+          undo: 'Start a new session if you need to look again.',
+        } : undefined}
+        onCancel={() => { if (!ending) setConfirmEnd(false) }}
+        onConfirm={handleEnd}
+      />
+
+      <ConfirmImpactDialog
+        open={closeLapsed}
+        title="Close every lapsed session"
+        confirmLabel={`Close ${lapsed.length}`}
+        requireReason
+        busy={adminBusy}
+        error={actionError}
+        impact={{
+          what: `${lapsed.length} session${lapsed.length === 1 ? '' : 's'} passed their end time without being ended.`,
+          change: 'Each is marked ended at the current time, so the record no longer looks open.',
+          who: 'Nobody loses access: these windows had already lapsed.',
+          undo: 'No, but nothing is lost. The original times stay on each row.',
+          stats: [{ label: 'Lapsed', value: lapsed.length }, { label: 'Open now', value: stats.open }, { label: 'On record', value: recent.length }],
+        }}
+        onCancel={() => { if (!adminBusy) setCloseLapsed(false) }}
+        onConfirm={({ reason }) => runAdminEnd(null, reason)}
+      />
+
+      <ConfirmImpactDialog
+        open={!!forceEnd}
+        title="End this support session now"
+        confirmLabel="End session"
+        danger
+        requireReason
+        typedWord="END"
+        busy={adminBusy}
+        error={actionError}
+        impact={forceEnd ? {
+          tone: 'danger',
+          what: `End the session on ${nameFor(forceEnd.target_org_id)} opened by ${openerName(forceEnd)}.`,
+          change: 'The window closes immediately for whoever opened it.',
+          who: `${openerName(forceEnd)}. They would need to start a new session.`,
+          undo: 'No. A new session can be started.',
+        } : undefined}
+        onCancel={() => { if (!adminBusy) setForceEnd(null) }}
+        onConfirm={({ reason }) => runAdminEnd(forceEnd.id, reason)}
+      />
     </div>
   )
 }

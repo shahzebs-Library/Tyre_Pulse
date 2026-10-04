@@ -14,21 +14,30 @@
  *   Functions  - an HONEST static checklist of the edge functions that power
  *                automation (versions are not fabricated here).
  *
- * Read-only. Refresh re-pulls both reads. Super-admin only.
+ * Controls (super admin, each states what it changes before it runs):
+ *   - pause / resume a scheduled report (report_schedules.active, RLS allows a
+ *     super admin) and "Send now" through the send-scheduled-reports function;
+ *     both need a reason and are written to the console audit log;
+ *   - pause / resume / run now a background job and read its recent runs,
+ *     through the existing super-admin RPCs admin_cron_set_active,
+ *     admin_cron_run_now and admin_cron_job_runs (they audit server side).
+ * Pausing a job is red and needs the job name typed. Refresh re-pulls both reads.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Timer, ShieldAlert, PauseCircle, Clock, CheckCircle2, XCircle,
-  Zap, Mail, Bell, Info, CalendarClock, BarChart3, ExternalLink,
+  Zap, Mail, Bell, Info, CalendarClock, BarChart3, ExternalLink, Play, Pause, Send, History, AlertTriangle,
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import {
   listSchedules, listCronJobs, summarizeSchedules, summarizeCron, scheduleFlags,
+  setScheduleActive, sendScheduleNow, schedulePauseImpact,
 } from '../../lib/api/automationHealth'
+import { getCronJobRuns, setCronJobActive, runCronJobNow } from '../../lib/api/engineeringCenter'
 import { toUserMessage } from '../../lib/safeError'
 import {
-  Panel, PanelHeader, Note, StatTile, Badge, Code, Segmented, SearchInput, Toolbar,
-  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState,
+  Panel, PanelHeader, Note, StatTile, Badge, Btn, Code, Segmented, SearchInput, Toolbar,
+  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, ConfirmImpactDialog,
 } from '../components/ui'
 import { sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
 import ExportButtons from './shared/ExportButtons'
@@ -77,7 +86,8 @@ const STATE_META = {
 // described; the RUNNING version must be confirmed in the Supabase dashboard.
 const EDGE_FUNCTIONS = [
   { name: 'send-scheduled-reports', purpose: 'Renders and emails scheduled + builder reports (cron + on-demand Send Now).' },
-  { name: 'workflow-notify', purpose: 'Delivers queued workflow / approval push notifications to devices via Expo.' },
+  { name: 'workflow-notify', purpose: 'Delivers queued workflow and approval push notifications: Flutter app devices through Firebase Cloud Messaging (FCM); the retired Expo app (read only) still gets Expo pushes until uninstalled.' },
+  { name: 'sentry-crash-alert', purpose: 'Checks Sentry every 15 minutes and raises a console alert for each new fatal crash.' },
   { name: 'chat-ai', purpose: 'Backs the in-app AI copilot; logs token usage and failures.' },
   { name: 'ai-orchestrator', purpose: 'Runs multi-step AI jobs; logs job runs and failures.' },
 ]
@@ -103,10 +113,77 @@ function StateBadges({ f }) {
   )
 }
 
+function cronTone(status) {
+  const s = String(status || '').toLowerCase()
+  if (s === 'succeeded' || s === 'success') return 'green'
+  if (s === 'running' || s === 'starting') return 'amber'
+  if (s === 'failed' || s === 'error') return 'red'
+  return 'gray'
+}
+
+function actionTitle(a) {
+  if (!a) return ''
+  const name = a.s?.row?.name || a.j?.jobname || ''
+  return {
+    'pause-schedule': `Pause ${name || 'this schedule'}?`,
+    'resume-schedule': `Resume ${name || 'this schedule'}?`,
+    send: `Send ${name || 'this report'} now?`,
+    'run-job': `Run ${name || 'this job'} now?`,
+    'pause-job': `Pause ${name || 'this job'}?`,
+    'resume-job': `Resume ${name || 'this job'}?`,
+  }[a.kind] || 'Confirm'
+}
+
+function actionConfirm(a) {
+  return {
+    'pause-schedule': 'Pause schedule', 'resume-schedule': 'Resume schedule', send: 'Send now',
+    'run-job': 'Run now', 'pause-job': 'Pause job', 'resume-job': 'Resume job',
+  }[a?.kind] || 'Confirm'
+}
+
+function actionImpact(a) {
+  if (!a) return null
+  if (a.kind === 'pause-schedule' || a.kind === 'resume-schedule') {
+    const imp = schedulePauseImpact(a.s.row, recipientCount(a.s.row))
+    return { what: actionTitle(a), tone: a.kind === 'pause-schedule' ? 'warning' : 'info', ...imp }
+  }
+  if (a.kind === 'send') {
+    const n = recipientCount(a.s.row)
+    return {
+      what: 'Email this report once, right now.', tone: 'info',
+      change: 'The report is built from current data and emailed. Its regular next run is not moved.',
+      who: n ? `${n} recipient${n === 1 ? '' : 's'} on this schedule get an extra email.` : 'No recipients are recorded, so nothing may be delivered.',
+      undo: 'No. A sent email cannot be recalled.',
+    }
+  }
+  if (a.kind === 'run-job') {
+    return {
+      what: 'Run this background job once, within the next minute.', tone: 'warning',
+      change: 'The job runs one extra time with its normal command. Its schedule does not change.',
+      who: 'Whatever this job touches (reports, backups, notifications, data clean-up) runs early for everyone.',
+      undo: 'No. The run cannot be cancelled once it starts.',
+    }
+  }
+  const pausing = a.kind === 'pause-job'
+  return {
+    what: pausing ? 'Stop this background job running on its schedule.' : 'Start this background job running on its schedule again.',
+    tone: pausing ? 'danger' : 'info',
+    change: pausing ? 'The job stops running until someone resumes it. Work it does (backups, alerts, deliveries) stops too.' : 'The job runs again at its next scheduled time.',
+    who: 'Everyone who depends on what this job produces, across every organisation.',
+    undo: pausing ? 'Yes. Resume it here. Runs missed while paused are not made up.' : 'Yes. Pause it again here.',
+  }
+}
+
 // ── Page ────────────────────────────────────────────────────────────────────
 
 export default function ConsoleAutomation({ tabParam = 'tab' } = {}) {
-  const { admin } = useConsoleAuth()
+  const { admin, logAction } = useConsoleAuth()
+  // { kind: 'pause-schedule'|'resume-schedule'|'send'|'pause-job'|'resume-job'|'run-job', s?, j? }
+  const [action, setAction] = useState(null)
+  const [actionBusy, setActionBusy] = useState(false)
+  const [actionError, setActionError] = useState('')
+  const [flash, setFlash] = useState(null)
+  const [jobRuns, setJobRuns] = useState({ loading: false, error: '', list: [] })
   const theme = useChartTheme()
   const [schedules, setSchedules] = useState([])
   const [cron, setCron] = useState([])
@@ -143,6 +220,48 @@ export default function ConsoleAutomation({ tabParam = 'tab' } = {}) {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  // Recent runs for the job open in the drawer (admin_cron_job_runs, last 8).
+  useEffect(() => {
+    if (!openJob?.jobid && openJob?.jobid !== 0) { setJobRuns({ loading: false, error: '', list: [] }); return undefined }
+    let live = true
+    setJobRuns({ loading: true, error: '', list: [] })
+    getCronJobRuns(openJob.jobid, 8)
+      .then((list) => { if (live) setJobRuns({ loading: false, error: '', list }) })
+      .catch((e) => { if (live) setJobRuns({ loading: false, error: toUserMessage(e, 'Recent runs could not be read.'), list: [] }) })
+    return () => { live = false }
+  }, [openJob])
+
+  async function runAction({ reason }) {
+    const a = action
+    if (!a) return
+    setActionBusy(true); setActionError('')
+    try {
+      if (a.kind === 'pause-schedule' || a.kind === 'resume-schedule') {
+        const next = a.kind === 'resume-schedule'
+        await setScheduleActive(a.s.row.id, next)
+        await logAction?.(next ? 'schedule_resume' : 'schedule_pause', a.s.row.id, 'report_schedule', { name: a.s.row.name, reason })
+        setFlash({ tone: 'ok', text: `${a.s.row.name || 'The schedule'} is ${next ? 'running again' : 'paused'}.` })
+      } else if (a.kind === 'send') {
+        const r = await sendScheduleNow(a.s.row.id)
+        await logAction?.('schedule_send_now', a.s.row.id, 'report_schedule', { name: a.s.row.name, reason, recipients: r.recipients })
+        setFlash({ tone: 'ok', text: r.recipients == null ? `${a.s.row.name || 'The report'} was sent.` : `${a.s.row.name || 'The report'} was emailed to ${r.recipients} recipient${r.recipients === 1 ? '' : 's'}.` })
+      } else if (a.kind === 'run-job') {
+        await runCronJobNow(a.j.jobid, reason)
+        setFlash({ tone: 'ok', text: `${a.j.jobname} is queued to run within a minute. Refresh to see the result.` })
+      } else {
+        const next = a.kind === 'resume-job'
+        await setCronJobActive(a.j.jobid, next, reason)
+        setFlash({ tone: 'ok', text: `${a.j.jobname} is ${next ? 'active again' : 'paused'}.` })
+      }
+      setAction(null); setOpenSchedule(null); setOpenJob(null)
+      await load()
+    } catch (e) {
+      setActionError(toUserMessage(e, 'That could not be done. Nothing was changed.'))
+    } finally {
+      setActionBusy(false)
+    }
+  }
 
   const schedSummary = useMemo(() => summarizeSchedules(schedules, now), [schedules, now])
   const cronSummary = useMemo(() => summarizeCron(cron), [cron])
@@ -259,10 +378,12 @@ export default function ConsoleAutomation({ tabParam = 'tab' } = {}) {
   return (
     <div className="space-y-5 max-w-7xl">
       <PageHeader icon={Timer} title="Automation Health"
-        purpose="Scheduled reports, background jobs and the functions that run them."
+        purpose="Scheduled reports, background jobs and the functions that run them. Pause, resume or run any of them now; every control says what it changes first and is written to the audit log."
         refreshedAt={loading ? null : now} onRefresh={load} refreshing={refreshing}
         actions={<a href="/console/delivery" className="text-xs text-gray-400 hover:text-gray-200 inline-flex items-center gap-1 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
           Delivery history <ExternalLink size={12} aria-hidden="true" /></a>} />
+
+      {flash && <Note icon={flash.tone === 'ok' ? CheckCircle2 : AlertTriangle} tone={flash.tone === 'ok' ? 'accent' : 'danger'}>{flash.text}</Note>}
 
       {/* KPI tiles: each one opens the tab filtered to what it counts */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -394,6 +515,7 @@ export default function ConsoleAutomation({ tabParam = 'tab' } = {}) {
                   <Th sortKey="next" sort={sort} onSort={onSort}>Next run</Th>
                   <Th sortKey="last" sort={sort} onSort={onSort}>Last sent</Th>
                   <Th sortKey="state" sort={sort} onSort={onSort}>State</Th>
+                  <Th align="right">Actions</Th>
                 </THead>
                 <tbody>
                   {schedPaged.rows.map((s) => {
@@ -414,6 +536,15 @@ export default function ConsoleAutomation({ tabParam = 'tab' } = {}) {
                         <Td nowrap><span className="text-gray-400" title={fmtDateTime(r.next_run_at)}>{r.active ? fmtRelative(r.next_run_at, now) : 'Paused'}</span></Td>
                         <Td nowrap><span className="text-gray-500" title={fmtDateTime(r.last_sent_at)}>{fmtRelative(r.last_sent_at, now)}</span></Td>
                         <Td><StateBadges f={f} /></Td>
+                        <Td align="right" nowrap>
+                          <span className="inline-flex gap-1" onClick={(e) => e.stopPropagation()} role="presentation">
+                            <Btn size="xs" icon={r.active ? Pause : Play} onClick={() => setAction({ kind: r.active ? 'pause-schedule' : 'resume-schedule', s })}
+                              title={r.active ? 'Stop this report emailing until resumed' : 'Start this report emailing again'}>
+                              {r.active ? 'Pause' : 'Resume'}
+                            </Btn>
+                            <Btn size="xs" icon={Send} onClick={() => setAction({ kind: 'send', s })} title="Email this report to its recipients now">Send now</Btn>
+                          </span>
+                        </Td>
                       </Tr>
                     )
                   })}
@@ -470,6 +601,7 @@ export default function ConsoleAutomation({ tabParam = 'tab' } = {}) {
                   <Th sortKey="active" sort={jobSort} onSort={onJobSort}>Active</Th>
                   <Th sortKey="run" sort={jobSort} onSort={onJobSort}>Last run</Th>
                   <Th sortKey="lastEnd" sort={jobSort} onSort={onJobSort}>When</Th>
+                  <Th align="right">Actions</Th>
                 </THead>
                 <tbody>
                   {jobPaged.rows.map((j) => (
@@ -484,6 +616,18 @@ export default function ConsoleAutomation({ tabParam = 'tab' } = {}) {
                         </Badge>
                       </Td>
                       <Td nowrap><span className="text-gray-500" title={fmtDateTime(j.lastEnd)}>{fmtRelative(j.lastEnd, now)}</span></Td>
+                      <Td align="right" nowrap>
+                        {j.jobid != null && (
+                          <span className="inline-flex gap-1" onClick={(e) => e.stopPropagation()} role="presentation">
+                            <Btn size="xs" icon={Play} onClick={() => setAction({ kind: 'run-job', j })} title="Run this job once within the next minute">Run now</Btn>
+                            <Btn size="xs" variant={j.active ? 'danger' : 'ghost'} icon={j.active ? Pause : Play}
+                              onClick={() => setAction({ kind: j.active ? 'pause-job' : 'resume-job', j })}
+                              title={j.active ? 'Stop this job running on its schedule' : 'Start this job running on its schedule again'}>
+                              {j.active ? 'Pause' : 'Resume'}
+                            </Btn>
+                          </span>
+                        )}
+                      </Td>
                     </Tr>
                   ))}
                 </tbody>
@@ -520,11 +664,19 @@ export default function ConsoleAutomation({ tabParam = 'tab' } = {}) {
       )}
 
       <p className="text-[11px] text-gray-500 flex items-center gap-1.5">
-        <Bell size={12} aria-hidden="true" /> This board reads live from the database each time you refresh. It never triggers a report or a job.
+        <Bell size={12} aria-hidden="true" /> This board reads live from the database each time you refresh. It only sends a report or runs a job when you press a control and confirm it.
       </p>
 
       <SideDrawer open={!!openSchedule} onClose={() => setOpenSchedule(null)}
-        title={openSchedule?.row.name || 'Unnamed schedule'} subtitle="Scheduled report">
+        title={openSchedule?.row.name || 'Unnamed schedule'} subtitle="Scheduled report"
+        footer={openSchedule && (
+          <>
+            <Btn icon={openSchedule.row.active ? Pause : Play} onClick={() => setAction({ kind: openSchedule.row.active ? 'pause-schedule' : 'resume-schedule', s: openSchedule })}>
+              {openSchedule.row.active ? 'Pause' : 'Resume'}
+            </Btn>
+            <Btn variant="primary" icon={Send} onClick={() => setAction({ kind: 'send', s: openSchedule })}>Send now</Btn>
+          </>
+        )}>
         {openSchedule && (
           <>
             <StateBadges f={openSchedule.flags} />
@@ -553,8 +705,18 @@ export default function ConsoleAutomation({ tabParam = 'tab' } = {}) {
         )}
       </SideDrawer>
 
-      <SideDrawer open={!!openJob} onClose={() => setOpenJob(null)} title={openJob?.jobname || 'Job'} subtitle="Background job (pg_cron)">
+      <SideDrawer open={!!openJob} onClose={() => setOpenJob(null)} title={openJob?.jobname || 'Job'} subtitle="Background job (pg_cron)"
+        footer={openJob && openJob.jobid != null && (
+          <>
+            <Btn icon={Play} onClick={() => setAction({ kind: 'run-job', j: openJob })}>Run now</Btn>
+            <Btn variant={openJob.active ? 'danger' : 'primary'} icon={openJob.active ? Pause : Play}
+              onClick={() => setAction({ kind: openJob.active ? 'pause-job' : 'resume-job', j: openJob })}>
+              {openJob.active ? 'Pause job' : 'Resume job'}
+            </Btn>
+          </>
+        )}>
         {openJob && (
+          <>
           <dl>
             <Field label="Job id">{openJob.jobid ?? 'N/A'}</Field>
             <Field label="Schedule">{openJob.schedule ? <Code>{openJob.schedule}</Code> : 'N/A'}</Field>
@@ -562,8 +724,43 @@ export default function ConsoleAutomation({ tabParam = 'tab' } = {}) {
             <Field label="Last run"><Badge tone={RUN_TONE[openJob.tone] || 'quiet'}><span className="capitalize">{openJob.lastStatus || 'No runs yet'}</span></Badge></Field>
             <Field label="Finished">{`${fmtDateTime(openJob.lastEnd)} (${fmtRelative(openJob.lastEnd, now)})`}</Field>
           </dl>
+          <div className="mt-3">
+            <p className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-400 mb-1.5"><History size={12} aria-hidden="true" /> Recent runs</p>
+            {jobRuns.loading ? <LoadingState label="Reading runs" rows={2} /> : jobRuns.error ? (
+              <p className="text-xs text-red-300" role="alert">{jobRuns.error}</p>
+            ) : jobRuns.list.length === 0 ? (
+              <p className="text-xs text-gray-500">No run is recorded for this job yet.</p>
+            ) : (
+              <ul className="divide-y divide-gray-800/70">
+                {jobRuns.list.map((r, i) => (
+                  <li key={`${r.started}-${i}`} className="py-1.5 text-xs flex items-start gap-2">
+                    <Badge tone={RUN_TONE[cronTone(r.status)] || 'quiet'}><span className="capitalize">{r.status || 'unknown'}</span></Badge>
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-gray-300">{fmtDateTime(r.started)}{Number.isFinite(Number(r.ms)) ? `, ${Number(r.ms).toLocaleString('en-US')} ms` : ''}</span>
+                      {r.output && <span className="block text-gray-500 break-words">{r.output}</span>}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          </>
         )}
       </SideDrawer>
+
+      <ConfirmImpactDialog
+        open={!!action}
+        title={actionTitle(action)}
+        impact={actionImpact(action)}
+        confirmLabel={actionConfirm(action)}
+        danger={action?.kind === 'pause-job'}
+        requireReason
+        typedWord={action?.kind === 'pause-job' ? action.j?.jobname : undefined}
+        busy={actionBusy}
+        error={actionError}
+        onCancel={() => { if (!actionBusy) { setAction(null); setActionError('') } }}
+        onConfirm={runAction}
+      />
     </div>
   )
 }

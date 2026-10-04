@@ -66,7 +66,7 @@ export function estimateRowCost(row, pricing = {}) {
 /* ── Usage summary (ai_token_logs) ──────────────────────────────────────────── */
 
 const USAGE_COLS =
-  'id,model,feature,prompt_tokens,completion_tokens,cost_usd,status,error,http_status,site,country,created_at'
+  'id,model,feature,prompt_tokens,completion_tokens,cost_usd,status,error,http_status,latency_ms,site,country,created_at'
 
 /**
  * Fetch raw token-log rows for a trailing window, PAGED past the 1,000-row

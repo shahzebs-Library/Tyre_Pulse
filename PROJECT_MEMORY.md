@@ -5,7 +5,7 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
-# ⚑ SESSION 2026-10-04 (part 2) — CONSOLE ROUND 2: THE OTHER 29 PAGES REBUILT + MOBILE = FLUTTER ONLY. Local commit, NOT pushed (owner says "push").
+# ⚑ SESSION 2026-10-04 (part 2) — CONSOLE ROUND 2: THE OTHER 29 PAGES REBUILT + MOBILE = FLUTTER ONLY. PUSHED as PR #375 (owner approved merge).
 - PR #374 (console Control Center round 1) MERGED as 1f2f356, production READY verified. It rebuilt 20 screens; the other 29
   console pages were only re-wired. Owner: "i give u many screen why u fixed 5 only" -> round 2 rebuilt all 29 to the same
   standard (impact lines, reason+typed confirm on risky actions, audit, real KPIs, light/dark, 390px). Brief: scratchpad r2/BRIEF.md.
@@ -20,9 +20,10 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   execute_sql + manual schema_migrations row because apply_migration timed out.
 - Facts found: alert rules never email (in-app only, 23h cooldown); Alert Center wait/remind/recover settings stored not used; no app
   reads announcements; Flutter release has no Sentry DSN; Flutter app does not read module status (web only).
-- GIT STATE (checked 2026-10-04 after owner said "pushed and merged to main"): round 2 = local commit e0af97c, branch ahead 1,
-  origin/main still 1f2f356. It is NOT on main and NOT live. To ship: push branch, open PR, CI green, squash-merge, verify the
-  Vercel production deploy on the merged sha, realign branch. Do it only on the owner's explicit "push".
+- GIT STATE (2026-10-04 12:20 UTC): owner said "pushed and merged to main", so branch pushed (e0af97c + memory 1e9ac8d) and
+  PR #375 opened, subscribed, check-in scheduled. Plan: CI green -> squash-merge -> verify Vercel tyre-pulse production deploy
+  READY on the merged sha -> realign branch to origin/main. If this line still says "PR open", check PR #375 before assuming live.
+  A Vercel PREVIEW built for this branch: add claude/modest-hopper-5bnq8c to vercel.json git.deploymentEnabled=false next time.
 - OWNER DECISIONS STILL OPEN: org suspend not enforced; billing go-live; duplicate file removal; retention auto-run; PostHog key;
   Vercel token for rollback; an earlier truncated message ("explain me mobile related ...") never clarified.
 

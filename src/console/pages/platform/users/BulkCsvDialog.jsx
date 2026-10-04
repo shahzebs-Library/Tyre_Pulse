@@ -86,11 +86,11 @@ export default function BulkCsvDialog({ open, onClose, people = [], roles = [], 
     const byRole = {}
     for (const c of diff.changes) if (c.role) (byRole[c.role] ||= []).push(c.id)
     for (const [role, ids] of Object.entries(byRole)) {
-      try { await bulkSetRole(ids, role); ok += ids.length } catch (err) { failed.push(`${role}: ${toUserMessage(err, 'failed')}`) }
+      try { await bulkSetRole(ids, role, reason.trim()); ok += ids.length } catch (err) { failed.push(`${role}: ${toUserMessage(err, 'failed')}`) }
     }
     for (const c of diff.changes) {
       try {
-        if (c.sites) { await adminSetUserSites(c.id, c.sites); ok += 1 }
+        if (c.sites) { await adminSetUserSites(c.id, c.sites, reason.trim()); ok += 1 }
         if (c.approve) { await approvePerson(c.id, reason.trim()); ok += 1 }
       } catch (err) { failed.push(`${c.name}: ${toUserMessage(err, 'failed')}`) }
     }

@@ -214,11 +214,22 @@ export async function getConfigValue(key) {
  * records, so a company with data can never be archived from here.
  */
 export async function archiveEmptyOrg(org, stats) {
+  // Quick client pre-check for a clear message; the server re-checks every tenant table atomically.
   const records = stats ? (stats.vehicles + stats.tyre_records + stats.job_cards + stats.expense_lines + stats.inspections) : null
   if (!stats || stats.members !== 0 || records !== 0) {
     throw new ServiceError('Only an organization with no members and no records can be archived here.')
   }
-  return unwrap(await supabase.from('organisations').update({ active: false }).eq('id', org.id).select('id').single())
+  const res = unwrap(await supabase.rpc('admin_archive_empty_org', { p_org_id: org.id }))
+  if (res?.ok) return res
+  throw new ServiceError(archiveRefusal(res))
+}
+
+/** Plain-English reason the server refused an archive. */
+export function archiveRefusal(res) {
+  if (res?.reason === 'has_members') return 'This organization still has members, so it was not archived.'
+  if (res?.reason === 'has_records') return `This organization still has records (${String(res.table || 'a table').replace(/_/g, ' ')}), so it was not archived.`
+  if (res?.reason === 'not_found') return 'This organization no longer exists.'
+  return 'The organization could not be archived.'
 }
 
 /** Active API keys per organization: { orgId: n }. null on a failed read. */

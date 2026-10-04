@@ -38,6 +38,7 @@ import 'package:tyre_pulse/features/my_work/data/my_work_loader.dart';
 import 'package:tyre_pulse/features/my_work/domain/my_work_item.dart';
 import 'package:tyre_pulse/features/my_work/my_work_providers.dart';
 import 'package:tyre_pulse/features/notifications/notifications_providers.dart';
+import 'package:tyre_pulse/features/problem_report/presentation/report_problem_screen.dart';
 import 'package:tyre_pulse/features/profile/data/saved_signature_repository.dart';
 import 'package:tyre_pulse/features/profile/presentation/profile_screen.dart';
 import 'package:tyre_pulse/features/profile/profile_providers.dart';
@@ -592,6 +593,27 @@ void main() {
       await _pumpSignedIn(tester, appVersion: '999.0.0');
 
       expect(find.byKey(ProfileScreenKeys.appVersionRow), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'the Help section opens Report a problem with the Profile route attached',
+    (WidgetTester tester) async {
+      await _pumpSignedIn(tester);
+
+      final Finder row = find.byKey(ProfileScreenKeys.reportProblemRow);
+      await tester.ensureVisible(row);
+      await tester.pumpAndSettle();
+      await tester.tap(row);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ReportProblemScreen), findsOneWidget);
+      expect(
+        tester
+            .widget<ReportProblemScreen>(find.byType(ReportProblemScreen))
+            .sourceScreen,
+        '/profile',
+      );
     },
   );
 

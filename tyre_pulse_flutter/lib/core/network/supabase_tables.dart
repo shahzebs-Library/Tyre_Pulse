@@ -351,6 +351,19 @@ abstract final class SupabaseRpcs {
   /// not re-derive it.
   static const String getScheduleAdherence = 'get_schedule_adherence';
 
+  // --- Problem tracking ---
+
+  /// "Report a problem". SECURITY DEFINER: stamps reporter, company, country,
+  /// site and time server-side and attaches the reporter's own recent error
+  /// logs. VERIFIED 2026-09-30: created by
+  /// `supabase/migrations/20260930150000_user_issues.sql`, granted to
+  /// `authenticated` (anon has no EXECUTE). Signature `(p_description,
+  /// p_category, p_severity, p_platform, p_app_version, p_device, p_os,
+  /// p_page, p_reference_id)`, all text; returns jsonb `{ok, id,
+  /// linked_logs}`. `p_platform` must be `flutter` - see
+  /// `features/problem_report/domain/problem_report.dart`.
+  static const String submitUserIssue = 'submit_user_issue';
+
   static const String getReportSnapshotAuthed = 'get_report_snapshot_authed';
   static const String getAccidentAudit = 'get_accident_audit';
 
@@ -385,6 +398,7 @@ abstract final class SupabaseRpcs {
     getMobileAnalytics,
     getScheduleAdherence,
     getReportSnapshotAuthed,
+    submitUserIssue,
     getAccidentAudit,
   };
 

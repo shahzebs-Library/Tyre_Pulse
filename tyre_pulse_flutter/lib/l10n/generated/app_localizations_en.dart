@@ -7399,4 +7399,116 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get recordsRiskCritical => 'Critical';
+
+  @override
+  String get problemReportAction => 'Report a problem';
+
+  @override
+  String get problemReportSectionHelp => 'Help';
+
+  @override
+  String get problemReportIntro =>
+      'Tell us in one sentence what went wrong. The app version, your phone model and this screen are sent with it automatically.';
+
+  @override
+  String get problemReportDescriptionLabel => 'What went wrong?';
+
+  @override
+  String get problemReportDescriptionHint =>
+      'For example: the tyre list stays empty after I choose a site';
+
+  @override
+  String get problemReportDescriptionTooShort =>
+      'Write at least 10 characters so the team can understand the problem.';
+
+  @override
+  String get problemReportDescriptionTooLong =>
+      'Keep it under 2000 characters.';
+
+  @override
+  String get problemReportTypeLabel => 'Type of problem';
+
+  @override
+  String get problemReportTypeRequired => 'Choose the type of problem.';
+
+  @override
+  String get problemReportTypeBug => 'Something is broken';
+
+  @override
+  String get problemReportTypeData => 'The data looks wrong';
+
+  @override
+  String get problemReportTypeAccess => 'I cannot open something';
+
+  @override
+  String get problemReportTypeSlow => 'It is too slow';
+
+  @override
+  String get problemReportTypeOther => 'Something else';
+
+  @override
+  String get problemReportSeverityLabel =>
+      'How much does it block you? (optional)';
+
+  @override
+  String get problemReportSeverityLow => 'Low: a small annoyance';
+
+  @override
+  String get problemReportSeverityMedium => 'Medium: slows my work';
+
+  @override
+  String get problemReportSeverityHigh => 'High: I cannot finish my work';
+
+  @override
+  String get problemReportSeverityCritical =>
+      'Critical: many people are blocked';
+
+  @override
+  String get problemReportAttachedTitle => 'Sent with your report';
+
+  @override
+  String get problemReportAttachedVersion => 'App version';
+
+  @override
+  String get problemReportAttachedDevice => 'Phone';
+
+  @override
+  String get problemReportAttachedScreen => 'Screen';
+
+  @override
+  String get problemReportSend => 'Send report';
+
+  @override
+  String get problemReportSentTitle => 'Report sent';
+
+  @override
+  String get problemReportSentMessage =>
+      'Thank you. The team will look at it, and you will get a message in the app when it is fixed.';
+
+  @override
+  String get problemReportNeedsSignal =>
+      'No signal. Your report was not sent. Send it again when you have signal.';
+
+  @override
+  String get problemReportSignedOut => 'Please sign in again to send a report.';
+
+  @override
+  String get problemReportNotAllowed =>
+      'Your account cannot send reports. Please speak to your administrator.';
+
+  @override
+  String get problemReportTooMany =>
+      'You have sent many reports in the last hour. Please try again later.';
+
+  @override
+  String get problemReportInvalid =>
+      'The report could not be accepted. Check the description and try again.';
+
+  @override
+  String get problemReportUnavailable =>
+      'Reporting is not available on this server yet.';
+
+  @override
+  String get problemReportFailed =>
+      'Your report could not be sent. Please try again.';
 }

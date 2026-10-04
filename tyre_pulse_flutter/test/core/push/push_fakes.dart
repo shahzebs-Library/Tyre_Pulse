@@ -7,6 +7,7 @@ import 'package:tyre_pulse/core/push/push_message.dart';
 import 'package:tyre_pulse/core/push/push_messaging_client.dart';
 import 'package:tyre_pulse/core/telemetry/telemetry_reporter.dart';
 import 'package:tyre_pulse/core/telemetry/telemetry_sync_failure.dart';
+import 'package:tyre_pulse/core/telemetry/telemetry_user.dart';
 
 final class FakePushMessagingClient implements PushMessagingClient {
   FakePushMessagingClient({
@@ -126,4 +127,7 @@ final class RecordingTelemetry implements TelemetryReporter {
 
   @override
   void setWorkspaceId(String? workspaceId) {}
+
+  @override
+  Future<void> setUser(TelemetryUser? user) async {}
 }

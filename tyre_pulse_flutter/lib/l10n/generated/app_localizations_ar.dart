@@ -7421,4 +7421,113 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get recordsRiskCritical => 'حرج';
+
+  @override
+  String get problemReportAction => 'الإبلاغ عن مشكلة';
+
+  @override
+  String get problemReportSectionHelp => 'المساعدة';
+
+  @override
+  String get problemReportIntro =>
+      'أخبرنا في جملة واحدة بما حدث. يُرسَل معها تلقائيًا إصدار التطبيق وطراز هاتفك وهذه الشاشة.';
+
+  @override
+  String get problemReportDescriptionLabel => 'ما الذي حدث؟';
+
+  @override
+  String get problemReportDescriptionHint =>
+      'مثال: تبقى قائمة الإطارات فارغة بعد اختيار الموقع';
+
+  @override
+  String get problemReportDescriptionTooShort =>
+      'اكتب 10 أحرف على الأقل ليفهم الفريق المشكلة.';
+
+  @override
+  String get problemReportDescriptionTooLong => 'اجعله أقل من 2000 حرف.';
+
+  @override
+  String get problemReportTypeLabel => 'نوع المشكلة';
+
+  @override
+  String get problemReportTypeRequired => 'اختر نوع المشكلة.';
+
+  @override
+  String get problemReportTypeBug => 'شيء لا يعمل';
+
+  @override
+  String get problemReportTypeData => 'البيانات تبدو خاطئة';
+
+  @override
+  String get problemReportTypeAccess => 'لا أستطيع فتح شيء';
+
+  @override
+  String get problemReportTypeSlow => 'إنه بطيء جدًا';
+
+  @override
+  String get problemReportTypeOther => 'شيء آخر';
+
+  @override
+  String get problemReportSeverityLabel => 'إلى أي حد يعيق عملك؟ (اختياري)';
+
+  @override
+  String get problemReportSeverityLow => 'منخفض: إزعاج بسيط';
+
+  @override
+  String get problemReportSeverityMedium => 'متوسط: يبطئ عملي';
+
+  @override
+  String get problemReportSeverityHigh => 'مرتفع: لا أستطيع إنهاء عملي';
+
+  @override
+  String get problemReportSeverityCritical => 'حرج: كثير من الأشخاص متوقفون';
+
+  @override
+  String get problemReportAttachedTitle => 'يُرسَل مع بلاغك';
+
+  @override
+  String get problemReportAttachedVersion => 'إصدار التطبيق';
+
+  @override
+  String get problemReportAttachedDevice => 'الهاتف';
+
+  @override
+  String get problemReportAttachedScreen => 'الشاشة';
+
+  @override
+  String get problemReportSend => 'إرسال البلاغ';
+
+  @override
+  String get problemReportSentTitle => 'تم إرسال البلاغ';
+
+  @override
+  String get problemReportSentMessage =>
+      'شكرًا لك. سيراجعه الفريق، وستصلك رسالة في التطبيق عند إصلاحه.';
+
+  @override
+  String get problemReportNeedsSignal =>
+      'لا توجد إشارة. لم يُرسَل بلاغك. أرسله مرة أخرى عند توفر الإشارة.';
+
+  @override
+  String get problemReportSignedOut =>
+      'يُرجى تسجيل الدخول مرة أخرى لإرسال بلاغ.';
+
+  @override
+  String get problemReportNotAllowed =>
+      'لا يمكن لحسابك إرسال البلاغات. يُرجى التحدث إلى المسؤول.';
+
+  @override
+  String get problemReportTooMany =>
+      'لقد أرسلت بلاغات كثيرة خلال الساعة الماضية. يُرجى المحاولة لاحقًا.';
+
+  @override
+  String get problemReportInvalid =>
+      'تعذّر قبول البلاغ. راجع الوصف وحاول مرة أخرى.';
+
+  @override
+  String get problemReportUnavailable => 'الإبلاغ غير متاح على هذا الخادم بعد.';
+
+  @override
+  String get problemReportFailed =>
+      'تعذّر إرسال بلاغك. يُرجى المحاولة مرة أخرى.';
 }

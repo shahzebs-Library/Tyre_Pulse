@@ -53,6 +53,7 @@ import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/telemetry/telemetry_reporter.dart';
 import 'package:tyre_pulse/core/telemetry/telemetry_sync_failure.dart';
+import 'package:tyre_pulse/core/telemetry/telemetry_user.dart';
 
 /// The exact call [TelemetryService] makes into the Sentry SDK to deliver one
 /// event. Injectable so a test can capture what would have been sent without
@@ -61,6 +62,15 @@ typedef SentryCaptureFunction = Future<void> Function(
   Object exception, {
   required Map<String, String> tags,
   StackTrace? stackTrace,
+});
+
+/// The exact call [TelemetryService] makes into the Sentry SDK to change who
+/// the current scope belongs to. [userId] null clears the user. Tags whose
+/// value is null are REMOVED, so a signed-out scope carries no stale role or
+/// country. Injectable so a test can assert what would have been set.
+typedef SentryUserScopeFunction = Future<void> Function({
+  required String? userId,
+  required Map<String, String?> tags,
 });
 
 /// A stand-in for an [AppError] that is safe to hand to a telemetry SDK.
@@ -87,21 +97,31 @@ final class _SanitizedFailure {
 final class TelemetryService implements TelemetryReporter {
   /// Builds an INACTIVE reporter. Every method on this class is safe to call
   /// before [initialize] runs, or when it was never called: they do nothing.
-  TelemetryService({SentryCaptureFunction? capture})
-      : _capture = capture ?? _defaultCapture,
-        _staticTags = const <String, String>{};
+  ///
+  /// [_staticTags] must be a MUTABLE map: [initialize] clears and refills it.
+  /// It used to be `const {}`, which would have thrown "Cannot modify
+  /// unmodifiable map" at startup the first time a build carried a DSN.
+  TelemetryService({
+    SentryCaptureFunction? capture,
+    SentryUserScopeFunction? userScope,
+  })  : _capture = capture ?? _defaultCapture,
+        _userScope = userScope ?? _defaultUserScope,
+        _staticTags = <String, String>{};
 
   /// Builds an ALREADY-ACTIVE reporter for tests, bypassing the real Sentry
   /// SDK entirely. [capture] receives exactly what a real capture would send.
   @visibleForTesting
   TelemetryService.forTesting({
     required SentryCaptureFunction capture,
+    SentryUserScopeFunction? userScope,
     Map<String, String> staticTags = const <String, String>{},
   })  : _capture = capture,
+        _userScope = userScope ?? _noUserScope,
         _active = true,
         _staticTags = Map<String, String>.of(staticTags);
 
   final SentryCaptureFunction _capture;
+  final SentryUserScopeFunction _userScope;
   bool _active = false;
   String? _currentRoute;
   String? _currentWorkspaceId;
@@ -254,6 +274,35 @@ final class TelemetryService implements TelemetryReporter {
     _currentWorkspaceId = workspaceId;
   }
 
+  @override
+  Future<void> setUser(TelemetryUser? user) async {
+    if (!_active) {
+      return;
+    }
+    final String? version = _staticTags['app_version'];
+    try {
+      await _userScope(
+        userId: user?.id,
+        tags: <String, String?>{
+          'role': _tagValue(user?.role),
+          'country': _tagValue(user?.country),
+          // Set on the scope (not only on the tags this class adds per
+          // capture) so native crashes the SDK reports by itself carry it.
+          'app_version': _tagValue(version),
+        },
+      );
+    } on Object {
+      // Telemetry failing must never surface as an app error.
+    }
+  }
+
+  /// Sentry tag values are capped at 200 characters; blank means "remove".
+  static String? _tagValue(String? raw) {
+    final String value = (raw ?? '').trim();
+    if (value.isEmpty) return null;
+    return value.length > 200 ? value.substring(0, 200) : value;
+  }
+
   Future<void> _safeCapture(
     Object throwable, {
     required Map<String, String> tags,
@@ -306,6 +355,29 @@ final class TelemetryService implements TelemetryReporter {
     } on Object {
       return 'unknown';
     }
+  }
+
+  static Future<void> _noUserScope({
+    required String? userId,
+    required Map<String, String?> tags,
+  }) async {}
+
+  static Future<void> _defaultUserScope({
+    required String? userId,
+    required Map<String, String?> tags,
+  }) async {
+    await Sentry.configureScope((Scope scope) async {
+      // Id only. No email, username or IP is ever attached here.
+      await scope.setUser(userId == null ? null : SentryUser(id: userId));
+      for (final MapEntry<String, String?> entry in tags.entries) {
+        final String? value = entry.value;
+        if (value == null) {
+          await scope.removeTag(entry.key);
+        } else {
+          await scope.setTag(entry.key, value);
+        }
+      }
+    });
   }
 
   static Future<void> _defaultCapture(

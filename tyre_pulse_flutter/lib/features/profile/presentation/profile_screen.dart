@@ -144,6 +144,7 @@ import 'package:tyre_pulse/features/my_work/data/my_work_loader.dart';
 import 'package:tyre_pulse/features/my_work/my_work_providers.dart';
 import 'package:tyre_pulse/features/notifications/notifications_providers.dart';
 import 'package:tyre_pulse/features/notifications/presentation/notifications_copy.dart';
+import 'package:tyre_pulse/features/problem_report/presentation/report_problem_screen.dart';
 import 'package:tyre_pulse/features/profile/data/account_deletion_repository.dart';
 import 'package:tyre_pulse/features/profile/data/saved_signature_repository.dart';
 import 'package:tyre_pulse/features/profile/profile_providers.dart';
@@ -180,6 +181,7 @@ abstract final class ProfileScreenKeys {
   static const Key signatureCancel = Key('profile.signatureSheet.cancel');
   static const Key signatureRemove = Key('profile.signatureSheet.remove');
   static const Key signatureRetry = Key('profile.signatureSheet.retry');
+  static const Key reportProblemRow = Key('profile.reportProblem');
 }
 
 /// The three languages the app ships (en/ar/ur ARB catalogs). Names are the
@@ -510,6 +512,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           _chooseChecklistLanguage(checklistLanguage),
                         ),
                         onOpenSignature: () => unawaited(_openSavedSignature()),
+                        onReportProblem: () => unawaited(
+                          openReportProblem(
+                            context,
+                            sourceScreen: const ProfileRoute().location,
+                          ),
+                        ),
                       ),
                       account: _AccountBlock(
                         isSigningOut: _isSigningOut,
@@ -1130,6 +1138,7 @@ class _SettingsColumn extends StatelessWidget {
     required this.onChooseTheme,
     required this.onChooseChecklistLanguage,
     required this.onOpenSignature,
+    required this.onReportProblem,
   });
 
   final WorkspaceProfile profile;
@@ -1149,6 +1158,7 @@ class _SettingsColumn extends StatelessWidget {
   final VoidCallback onChooseTheme;
   final VoidCallback onChooseChecklistLanguage;
   final VoidCallback onOpenSignature;
+  final VoidCallback onReportProblem;
 
   @override
   Widget build(BuildContext context) {
@@ -1298,6 +1308,19 @@ class _SettingsColumn extends StatelessWidget {
                   : draftCount > 0
                       ? palette.warning.base
                       : null,
+            ),
+          ],
+        ),
+        const SizedBox(height: TpSpace.lg),
+        _SettingsSection(
+          title: l10n.problemReportSectionHelp,
+          rows: <Widget>[
+            _SettingsRow(
+              key: ProfileScreenKeys.reportProblemRow,
+              icon: Icons.support_agent_rounded,
+              tone: palette.info,
+              label: l10n.problemReportAction,
+              onTap: onReportProblem,
             ),
           ],
         ),
